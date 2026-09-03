@@ -1,10 +1,38 @@
+use std::mem;
+
 use crate::checker::EnvResolve;
-use crate::checker::infer::context::{BindingInference, LoopContext, LoopElementInference};
+use crate::checker::infer::context::{
+    BindingInference, LoopContext, LoopCopyWrite, LoopElementInference,
+};
 use syntax::ast::BindingKind;
-use syntax::ast::{Binding, Expression, Pattern, Span};
+use syntax::ast::{Binding, BindingId, Expression, Pattern, Span};
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
+
+fn collect_nested_loop_and_lambda_spans(
+    expression: &Expression,
+    nested_loops: &mut Vec<Span>,
+    lambdas: &mut Vec<Span>,
+) {
+    match expression {
+        Expression::Loop { span, .. }
+        | Expression::While { span, .. }
+        | Expression::WhileLet { span, .. }
+        | Expression::For { span, .. } => nested_loops.push(*span),
+        Expression::Lambda { span, .. } => lambdas.push(*span),
+        _ => {}
+    }
+    for child in expression.children() {
+        collect_nested_loop_and_lambda_spans(child, nested_loops, lambdas);
+    }
+}
+
+fn span_contains(outer: &Span, inner: &Span) -> bool {
+    outer.file_id == inner.file_id
+        && outer.byte_offset <= inner.byte_offset
+        && inner.end() <= outer.end()
+}
 
 enum IterSeqKind {
     Seq,
@@ -139,6 +167,11 @@ impl InferCtx<'_> {
         }
 
         let mutable = binding.mut_span.is_some();
+        if mutable && !binding.pattern.is_identifier() {
+            self.sink.push(diagnostics::infer::disallowed_mut_use(
+                binding.mut_span.unwrap_or(span),
+            ));
+        }
         let mut demoted_from_writable = false;
         let binding_element_ty = if mutable {
             element_ty.clone()
@@ -159,9 +192,10 @@ impl InferCtx<'_> {
                 BindingKind::Let { mutable },
             );
 
-            if let Some(name) = inferred_pattern.get_identifier()
-                && let Some(binding_id) = this.scopes.lookup_binding_id(&name)
-            {
+            let element_binding_id = inferred_pattern
+                .get_identifier()
+                .and_then(|name| this.scopes.lookup_binding_id(&name));
+            if let Some(binding_id) = element_binding_id {
                 let collection = super::aliasing::place_root_name(new_iterable.unwrap_parens())
                     .map(|root| root.to_string());
                 this.binding_inference.insert(
@@ -197,6 +231,9 @@ impl InferCtx<'_> {
             let new_body = this.with_loop(LoopContext::Statement, |s| {
                 s.infer_expression(*body, &Type::ignored())
             });
+            if let Some(binding_id) = element_binding_id {
+                this.report_dead_loop_copy_writes(binding_id, &new_body);
+            }
             (new_binding, new_body)
         });
 
@@ -205,6 +242,60 @@ impl InferCtx<'_> {
             iterable: new_iterable.into(),
             body: new_body.into(),
             span,
+        }
+    }
+
+    pub(super) fn record_loop_copy_write(&mut self, name: &str, span: Span) {
+        let Some(binding_id) = self.scopes.lookup_binding_id(name) else {
+            return;
+        };
+        let Some(inference) = self
+            .binding_inference
+            .get(&binding_id)
+            .and_then(|binding| binding.as_loop_element())
+        else {
+            return;
+        };
+        self.pending_loop_copy_writes.push(LoopCopyWrite {
+            binding_id,
+            name: name.to_string(),
+            collection: inference.collection.clone(),
+            span,
+        });
+    }
+
+    fn report_dead_loop_copy_writes(&mut self, binding_id: BindingId, body: &Expression) {
+        let (writes, other_writes): (Vec<_>, Vec<_>) =
+            mem::take(&mut self.pending_loop_copy_writes)
+                .into_iter()
+                .partition(|write| write.binding_id == binding_id);
+        self.pending_loop_copy_writes = other_writes;
+        let reads = self
+            .loop_element_reads
+            .remove(&binding_id)
+            .unwrap_or_default();
+        if writes.is_empty() {
+            return;
+        }
+        let mut nested_loops = Vec::new();
+        let mut lambdas = Vec::new();
+        collect_nested_loop_and_lambda_spans(body, &mut nested_loops, &mut lambdas);
+        let observes = |read: &Span, write: &LoopCopyWrite| {
+            read.byte_offset >= write.span.end()
+                || lambdas.iter().any(|lambda| span_contains(lambda, read))
+                || nested_loops.iter().any(|nested_loop| {
+                    span_contains(nested_loop, read) && span_contains(nested_loop, &write.span)
+                })
+        };
+        let dead_write = writes
+            .iter()
+            .find(|write| !reads.iter().any(|read| observes(read, write)));
+        if let Some(write) = dead_write {
+            self.sink.push(diagnostics::infer::loop_copy_write(
+                &write.name,
+                write.collection.as_deref(),
+                write.span,
+            ));
         }
     }
 

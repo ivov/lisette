@@ -571,8 +571,8 @@ pub fn immutable_loop_binding(
             format!("`{variable_name}` binds a copy of each element"),
         )
         .with_help(format!(
-            "Writes to the loop binding do not reach the collection. \
-             Write through {target} to update it"
+            "Bind with `for mut {variable_name}` to write to the copy, \
+             or write through {target} to update the collection"
         ))
 }
 
@@ -583,12 +583,13 @@ pub fn loop_copy_write(
 ) -> LisetteDiagnostic {
     let help = match collection {
         Some(collection) => format!(
-            "`{variable_name}` is a copy of the element, so the collection keeps its \
-             old value. Write through `{collection}[i]` to update it"
+            "`{variable_name}` is a copy of the element, and the loop body does not read it \
+             after this write, so the collection keeps its old value. \
+             Write through `{collection}[i]` to update it"
         ),
         None => format!(
-            "`{variable_name}` is a copy of the element, so the collection keeps its \
-             old value. Index into the collection to update it"
+            "`{variable_name}` is a copy of the element, and the loop body does not read it \
+             after this write, so the write is lost"
         ),
     };
     LisetteDiagnostic::warn("Write to a loop copy")
@@ -675,6 +676,10 @@ pub enum WriteContext {
         binding: String,
         collection: Option<String>,
     },
+    LoopCopy {
+        binding: String,
+        collection: Option<String>,
+    },
     AliasOf {
         binding: String,
         source: String,
@@ -750,6 +755,19 @@ pub fn needs_writable_remedy(
                  Declare `let mut {collection}`"
             ),
             None => format!("`{binding}` binds read-only elements"),
+        },
+        Some(WriteContext::LoopCopy {
+            binding,
+            collection,
+        }) => match collection {
+            Some(collection) => format!(
+                "`{binding}` binds a copy of each element. Bind with `for mut {binding}` \
+                 to write to the copy, or write through `{collection}[i]` to update the collection"
+            ),
+            None => format!(
+                "`{binding}` binds a copy of each element. Bind with `for mut {binding}` \
+                 to write to the copy"
+            ),
         },
         _ => "Make the value writable where it is created, or pass a `.clone()`".to_string(),
     }
@@ -842,6 +860,10 @@ pub fn write_through_read_only(
                 Some(WriteContext::LoopElement { binding, .. }) => format!(
                     "`{binding}` binds read-only elements. \
                      Declare the collection with `let mut`"
+                ),
+                Some(WriteContext::LoopCopy { binding, .. }) => format!(
+                    "`{binding}` binds a copy of each element. Bind with `for mut {binding}` \
+                     to write to the copy"
                 ),
                 Some(WriteContext::AliasOf { binding, source }) => format!(
                     "`{binding}` shares storage with `{source}`, which is read-only. \

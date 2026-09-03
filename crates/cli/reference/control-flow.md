@@ -71,13 +71,42 @@ let value = if let Some(x) = opt {
 Iterates over a collection or range, for its side effects.
 
 ```lisette
+// !callout-above[/item/] an immutable copy of each element
 for item in items {
   fmt.Println(item)
 }
 
-for i in 0..5 {
-  // !callout-right prints `0, 1, 2, 3, 4`
-  fmt.Println(i)
+// !callout-above[/item/] a mutable copy of each element
+for mut item in items {
+  item *= 2
+  fmt.Println(item)
+}
+```
+
+Writing to a mutable copy does not affect the original. To write to the original in the collection, write through the index.
+
+```lisette
+for mut item in items {
+  // !callout-right does not change `items`
+  item *= 2
+  fmt.Println(item)
+}
+
+for i in 0..items.length() {
+  // !callout-right changes `items`
+  items[i] *= 2
+}
+```
+
+If the element is a slice, map or ref, `for mut` allows writing through it.
+
+```lisette
+let mut rows = [[1, 2], [3, 4]]
+
+// !callout-above[/row/] `mut Slice<int>`
+for mut row in rows {
+  // !callout-right changes `rows`
+  row[0] = 99
 }
 ```
 

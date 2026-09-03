@@ -474,6 +474,15 @@ impl InferCtx<'_> {
                 let callee = callee.strip_suffix("()")?;
                 Some(WriteContext::CallResult(callee.to_string()))
             }
+            Expression::Reference { expression, .. } => {
+                let name = expression.unwrap_parens().get_var_name()?;
+                let binding_id = self.scopes.lookup_binding_id(&name)?;
+                let inference = self.binding_inference.get(&binding_id)?.as_loop_element()?;
+                Some(WriteContext::LoopCopy {
+                    binding: name.to_string(),
+                    collection: inference.collection.clone(),
+                })
+            }
             _ => None,
         }
     }

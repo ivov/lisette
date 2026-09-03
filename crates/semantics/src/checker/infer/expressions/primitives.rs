@@ -229,18 +229,8 @@ impl InferCtx<'_> {
                 && let Some(binding_id) = self.scopes.lookup_binding_id(&var_name)
             {
                 self.facts.mark_alias_mutated(binding_id);
-                if ref_ty.is_writable()
-                    && let Some(inference) = self
-                        .binding_inference
-                        .get(&binding_id)
-                        .and_then(|binding| binding.as_loop_element())
-                    && self.reported_immutable.insert(binding_id)
-                {
-                    self.sink.push(diagnostics::infer::loop_copy_write(
-                        &var_name,
-                        inference.collection.as_deref(),
-                        span,
-                    ));
+                if ref_ty.is_writable() && expected_ty.resolve_in(&self.env).is_writable() {
+                    self.record_loop_copy_write(&var_name, span);
                 }
             }
         }
@@ -270,6 +260,13 @@ impl InferCtx<'_> {
             // Don't mark assignment targets as "used" - only mark actual uses
             if !self.is_assignment_target_context() {
                 self.facts.mark_used(id);
+                if self
+                    .binding_inference
+                    .get(&id)
+                    .is_some_and(|binding| binding.as_loop_element().is_some())
+                {
+                    self.loop_element_reads.entry(id).or_default().push(span);
+                }
             }
 
             if let Some(binding_fact) = self.facts.bindings.get(&id) {
@@ -494,18 +491,8 @@ impl InferCtx<'_> {
                 if !self.scopes.lookup_mutable(&name) && self.imports.namespace(&name).is_none() {
                     let rhs_is_ref = store.peel_alias(&value_ty.resolve_in(&self.env)).is_ref();
                     self.report_disallowed_mutation(store, &name, span, rhs_is_ref, None);
-                } else if let Some(id) = self.scopes.lookup_binding_id(&name)
-                    && let Some(inference) = self
-                        .binding_inference
-                        .get(&id)
-                        .and_then(|binding| binding.as_loop_element())
-                    && self.reported_immutable.insert(id)
-                {
-                    self.sink.push(diagnostics::infer::loop_copy_write(
-                        &name,
-                        inference.collection.as_deref(),
-                        span,
-                    ));
+                } else {
+                    self.record_loop_copy_write(&name, span);
                 }
             }
             super::permission::WriteTarget::Other => {}

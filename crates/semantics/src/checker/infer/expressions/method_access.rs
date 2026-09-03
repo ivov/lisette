@@ -394,10 +394,12 @@ impl InferCtx<'_> {
             super::permission::WriteTarget::Through { governing } if !governing.is_writable() => {
                 self.report_write_through_read_only(receiver_expression, &governing, *span);
             }
-            super::permission::WriteTarget::Binding { name }
-                if !self.scopes.lookup_mutable(&name) =>
-            {
-                self.report_disallowed_mutation(store, &name, *span, false, None);
+            super::permission::WriteTarget::Binding { name } => {
+                if self.scopes.lookup_mutable(&name) {
+                    self.record_loop_copy_write(&name, *span);
+                } else {
+                    self.report_disallowed_mutation(store, &name, *span, false, None);
+                }
             }
             _ => {}
         }

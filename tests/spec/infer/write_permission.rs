@@ -1137,6 +1137,159 @@ fn scan(todos: Slice<Todo>) {
 }
 
 #[test]
+fn loop_copy_read_after_write_does_not_warn() {
+    infer(
+        r#"fn show(n: int) {}
+fn main() {
+  let xs = [1, 2, 3]
+  for mut x in xs {
+    x += 1
+    show(x)
+  }
+}"#,
+    )
+    .assert_infer_code_count("loop_copy_write", 0);
+}
+
+#[test]
+fn loop_copy_write_after_last_read_warns() {
+    infer(
+        r#"fn show(n: int) {}
+fn main() {
+  let xs = [1, 2, 3]
+  for mut x in xs {
+    show(x)
+    x += 1
+  }
+}"#,
+    )
+    .assert_infer_code_once("loop_copy_write");
+}
+
+#[test]
+fn loop_copy_method_call_warns() {
+    infer(
+        r#"struct Todo { done: bool }
+impl Todo {
+  fn finish(self: mut Ref<Todo>) { self.done = true }
+}
+fn main() {
+  let todos = [Todo { done: false }]
+  for mut todo in todos { todo.finish() }
+}"#,
+    )
+    .assert_infer_code_once("loop_copy_write");
+}
+
+#[test]
+fn loop_copy_method_call_read_after_does_not_warn() {
+    infer(
+        r#"struct Todo { done: bool }
+impl Todo {
+  fn finish(self: mut Ref<Todo>) { self.done = true }
+}
+fn show(todo: Todo) {}
+fn main() {
+  let todos = [Todo { done: false }]
+  for mut todo in todos {
+    todo.finish()
+    show(todo)
+  }
+}"#,
+    )
+    .assert_infer_code_count("loop_copy_write", 0);
+}
+
+#[test]
+fn loop_copy_read_only_reference_after_write_does_not_warn() {
+    infer(
+        r#"struct Todo { done: bool }
+fn show(todo: Ref<Todo>) {}
+fn main() {
+  let todos = [Todo { done: false }]
+  for mut todo in todos {
+    todo.done = true
+    show(&todo)
+  }
+}"#,
+    )
+    .assert_infer_code_count("loop_copy_write", 0);
+}
+
+#[test]
+fn loop_copy_write_in_nested_loop_read_before_does_not_warn() {
+    infer(
+        r#"fn show(n: int) {}
+fn main() {
+  let xs = [1, 2, 3]
+  for mut x in xs {
+    for _ in 0..2 {
+      show(x)
+      x += 1
+    }
+  }
+}"#,
+    )
+    .assert_infer_code_count("loop_copy_write", 0);
+}
+
+#[test]
+fn loop_copy_write_captured_by_lambda_does_not_warn() {
+    infer(
+        r#"fn main() {
+  let xs = [1, 2, 3]
+  for mut x in xs {
+    let show = || x
+    x += 1
+    let _ = show()
+  }
+}"#,
+    )
+    .assert_infer_code_count("loop_copy_write", 0);
+}
+
+#[test]
+fn immutable_loop_binding_suggests_for_mut() {
+    infer(
+        r#"fn main() {
+  let xs = [1, 2, 3]
+  for x in xs {
+    x += 1
+  }
+}"#,
+    )
+    .assert_infer_code_once("immutable")
+    .assert_error_contains("for mut x");
+}
+
+#[test]
+fn writable_reference_to_immutable_loop_binding_suggests_for_mut() {
+    infer(
+        r#"struct Todo { done: bool }
+fn finish(todo: mut Ref<Todo>) { todo.*.done = true }
+fn main() {
+  let todos = [Todo { done: false }]
+  for todo in todos { finish(&todo) }
+}"#,
+    )
+    .assert_infer_code_once("needs_writable")
+    .assert_error_contains("for mut todo");
+}
+
+#[test]
+fn for_mut_with_destructuring_refused() {
+    infer(
+        r#"fn main() {
+  let pairs = [(1, 2), (3, 4)]
+  for mut (a, b) in pairs {
+    let _ = a + b
+  }
+}"#,
+    )
+    .assert_infer_code_once("mut_not_allowed");
+}
+
+#[test]
 fn mut_on_scalar_refused() {
     infer(
         r#"fn double(n: mut int) -> int {
