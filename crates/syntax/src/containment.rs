@@ -21,12 +21,13 @@ where
     F: Fn(&str) -> Option<&'d Definition>,
 {
     let severed = HashSet::default();
+    let mut wrap_checking = HashSet::default();
     ContainmentWalk {
         lookup: &lookup,
         enum_payloads: EnumPayloads::Traverse,
         severed: &severed,
     }
-    .payload_pointer_wrapped(enum_id, variant, field, payload, &HashSet::default())
+    .payload_pointer_wrapped(enum_id, variant, field, payload, &mut wrap_checking)
 }
 
 pub fn definition_contains_by_value<'d, F>(
@@ -39,6 +40,7 @@ pub fn definition_contains_by_value<'d, F>(
 where
     F: Fn(&str) -> Option<&'d Definition>,
 {
+    let mut wrap_checking = HashSet::default();
     ContainmentWalk {
         lookup: &lookup,
         enum_payloads,
@@ -48,7 +50,7 @@ where
         current_id,
         target_id,
         &mut HashSet::default(),
-        &HashSet::default(),
+        &mut wrap_checking,
     )
 }
 
@@ -64,7 +66,7 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         ty: &Type,
         target_id: &str,
         visited: &mut HashSet<String>,
-        wrap_checking: &HashSet<(String, usize, usize)>,
+        wrap_checking: &mut HashSet<(String, usize, usize)>,
     ) -> bool {
         let peeled = peel_alias(ty, self.lookup);
         match &peeled {
@@ -106,7 +108,7 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         current_id: &str,
         target_id: &str,
         visited: &mut HashSet<String>,
-        wrap_checking: &HashSet<(String, usize, usize)>,
+        wrap_checking: &mut HashSet<(String, usize, usize)>,
     ) -> bool {
         if self.severed.contains(current_id) {
             return false;
@@ -135,7 +137,7 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         id: &str,
         position: usize,
         checking: &mut HashSet<(String, usize)>,
-        wrap_checking: &HashSet<(String, usize, usize)>,
+        wrap_checking: &mut HashSet<(String, usize, usize)>,
     ) -> bool {
         if !checking.insert((id.to_string(), position)) {
             return false;
@@ -204,21 +206,21 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         variant: usize,
         field: usize,
         payload: &Type,
-        wrap_checking: &HashSet<(String, usize, usize)>,
+        wrap_checking: &mut HashSet<(String, usize, usize)>,
     ) -> bool {
         let key = (enum_id.to_string(), variant, field);
-        if wrap_checking.contains(&key) {
+        if !wrap_checking.insert(key.clone()) {
             return false;
         }
-        let mut nested_checking = wrap_checking.clone();
-        nested_checking.insert(key);
         let severed = HashSet::default();
-        ContainmentWalk {
+        let wrapped = ContainmentWalk {
             lookup: self.lookup,
             enum_payloads: EnumPayloads::Traverse,
             severed: &severed,
         }
-        .type_contains(payload, enum_id, &mut HashSet::default(), &nested_checking)
+        .type_contains(payload, enum_id, &mut HashSet::default(), wrap_checking);
+        wrap_checking.remove(&key);
+        wrapped
     }
 
     fn parameter_stored_inline(
@@ -226,7 +228,7 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         ty: &Type,
         parameter: &str,
         checking: &mut HashSet<(String, usize)>,
-        wrap_checking: &HashSet<(String, usize, usize)>,
+        wrap_checking: &mut HashSet<(String, usize, usize)>,
     ) -> bool {
         match ty {
             Type::Parameter(name) => name == parameter,
