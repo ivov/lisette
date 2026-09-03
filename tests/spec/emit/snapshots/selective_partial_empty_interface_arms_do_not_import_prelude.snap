@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/aws"
+  
+  fn main() {
+    if let Partial.Err(_) = aws.Read() {}
+  }
+---
+package main
+
+import "example.com/aws"
+
+func main() {
+	aws.Read()
+}

@@ -1133,6 +1133,35 @@ fn main() {
 }
 
 #[test]
+fn fused_nullable_pointer_match_binds_destination() {
+    let input = r#"
+import "go:flag"
+
+fn main() {
+  let found = match flag.Lookup("verbose") {
+    Some(f) => f,
+    None => { return }
+  }
+  let _ = found.Name
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_nullable_pointer_let_else() {
+    let input = r#"
+import "go:flag"
+
+fn main() {
+  let Some(found) = flag.Lookup("verbose") else { return }
+  let _ = found.Name
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn interop_typed_nil_interface_result_return() {
     let input = r#"
 import "go:fmt"
@@ -2421,6 +2450,60 @@ fn main() {
 "#;
     let typedef = r#"
 pub fn Read() -> Partial<Slice<Option<string>>, error>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
+fn fused_selective_partial_err_checks_nilable_value() {
+    let input = r#"
+import "go:fmt"
+import "go:example.com/aws"
+
+fn main() {
+  match aws.Read() {
+    Partial.Err(e) => fmt.Println("err", e),
+    _ => {},
+  }
+}
+"#;
+    let typedef = r#"
+pub fn Read() -> Partial<Slice<byte>, error>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
+fn selective_partial_err_sentinel_falls_back_to_tagged_match() {
+    let input = r#"
+import "go:example.com/aws"
+import "go:io"
+
+fn main() {
+  match aws.Read() {
+    Partial.Err(io.EOF) => panic("empty"),
+    _ => {},
+  }
+}
+"#;
+    let typedef = r#"
+pub fn Read() -> Partial<Slice<byte>, error>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
+fn selective_partial_empty_interface_arms_do_not_import_prelude() {
+    let input = r#"
+import "go:example.com/aws"
+
+fn main() {
+  if let Partial.Err(_) = aws.Read() {}
+}
+"#;
+    let typedef = r#"
+pub interface Item {}
+pub fn Read() -> Partial<Item, error>
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
 }

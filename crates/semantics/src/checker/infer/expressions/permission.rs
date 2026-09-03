@@ -1,4 +1,7 @@
-use syntax::ast::{BindingId, Expression, Literal, Span, StructFieldDefinition, UnaryOperator};
+use diagnostics::infer::{ReadOnlyComponent, ReadOnlyComponentKind, WriteContext};
+use syntax::ast::{
+    BindingId, Expression, Literal, Span, StructFieldDefinition, UnaryOperator, tuple_field_name,
+};
 use syntax::types::{CompoundKind, Type};
 
 use crate::checker::EnvResolve;
@@ -13,6 +16,19 @@ pub(super) enum WriteTarget {
     Binding { name: String },
     /// Neither a reference nor a binding root.
     Other,
+}
+
+pub(super) enum ConstructionGrant {
+    Writable,
+    /// Empty when no component carries `mut`.
+    ReadOnly(Vec<ReadOnlyComponent>),
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum MissingSupply<'e> {
+    Zero,
+    Spread(&'e Expression),
+    Absent,
 }
 
 impl InferCtx<'_> {
@@ -189,26 +205,105 @@ impl InferCtx<'_> {
     /// Whether every gated component received a value carrying its declared permissions.
     pub(super) fn components_grant_write<'c>(
         &self,
-        components: impl Iterator<Item = (Type, Option<&'c Expression>)>,
-        missing_grants: bool,
-    ) -> bool {
+        components: impl Iterator<Item = (String, Type, Option<&'c Expression>)>,
+        missing: MissingSupply<'_>,
+    ) -> ConstructionGrant {
+        let missing_grants = match missing {
+            MissingSupply::Zero => true,
+            MissingSupply::Spread(base) => self.owner_grants_write(&base.get_type()),
+            MissingSupply::Absent => false,
+        };
         let mut gated = false;
-        for (declared, value) in components {
+        let mut withheld = vec![];
+        let mut unsupplied = vec![];
+        for (name, declared, value) in components {
             if !self.store.demotion_changes(&declared) {
                 continue;
             }
             gated = true;
-            let provides = match value {
+            match value {
                 Some(value) => {
-                    self.value_provides_declared_permissions(&declared, &value.get_type())
+                    let actual = value.get_type();
+                    if !self.value_provides_declared_permissions(&declared, &actual) {
+                        let (declared, actual) =
+                            Type::stringify_pair(&declared, &actual.resolve_in(&self.env));
+                        withheld.push(ReadOnlyComponent {
+                            kind: ReadOnlyComponentKind::Field(name),
+                            declared,
+                            actual,
+                            span: value.get_span(),
+                            context: self.initializer_context(value),
+                        });
+                    }
                 }
-                None => missing_grants,
-            };
-            if !provides {
-                return false;
+                None if !missing_grants => unsupplied.push(name),
+                None => {}
             }
         }
-        gated
+        if gated && withheld.is_empty() && unsupplied.is_empty() {
+            return ConstructionGrant::Writable;
+        }
+        if let MissingSupply::Spread(base) = missing
+            && !unsupplied.is_empty()
+        {
+            let actual = base.get_type().resolve_in(&self.env);
+            let (declared, actual) = Type::stringify_pair(&actual.clone().make_writable(), &actual);
+            withheld.push(ReadOnlyComponent {
+                kind: ReadOnlyComponentKind::Spread(unsupplied),
+                declared,
+                actual,
+                span: base.get_span(),
+                context: self.value_context(base),
+            });
+        }
+        ConstructionGrant::ReadOnly(withheld)
+    }
+
+    /// Returns whether the construction is writable.
+    pub(super) fn record_construction_grant(
+        &mut self,
+        span: Span,
+        grant: ConstructionGrant,
+    ) -> bool {
+        match grant {
+            ConstructionGrant::Writable => {
+                self.read_only_constructions.remove(&span);
+                true
+            }
+            ConstructionGrant::ReadOnly(components) => {
+                if components.is_empty() {
+                    self.read_only_constructions.remove(&span);
+                } else {
+                    self.read_only_constructions.insert(span, components);
+                }
+                false
+            }
+        }
+    }
+
+    fn initializer_context(&self, initializer: &Expression) -> Option<WriteContext> {
+        let initializer = initializer.unwrap_parens();
+        if let Expression::Identifier { value: name, .. } = initializer
+            && let Some(binding_id) = self.scopes.lookup_binding_id(name)
+        {
+            if self
+                .facts
+                .bindings
+                .get(&binding_id)
+                .is_some_and(|binding| binding.kind.is_param())
+            {
+                return Some(WriteContext::Parameter(name.to_string()));
+            }
+            if self
+                .binding_inference
+                .get(&binding_id)
+                .and_then(|binding| binding.as_let())
+                .is_some_and(|inference| inference.mutability.was_demoted())
+            {
+                return Some(WriteContext::ImmutableBinding(name.to_string()));
+            }
+        }
+        self.value_context(initializer)
     }
 
     fn initializer_fits_declared(&mut self, declared: &Type, initializer: &Expression) -> bool {
@@ -339,53 +434,51 @@ impl InferCtx<'_> {
 }
 
 impl InferCtx<'_> {
-    pub(super) fn write_context(
-        &self,
-        target: &Expression,
-    ) -> Option<diagnostics::infer::WriteContext> {
+    pub(super) fn write_context(&self, target: &Expression) -> Option<WriteContext> {
         if let Some(element) = self.element_write_declaration(target) {
-            return Some(diagnostics::infer::WriteContext::Element(element));
+            return Some(WriteContext::Element(element));
         }
         let hop = self.write_hop(target)?;
         self.value_context(hop)
             .or_else(|| self.binding_context(&super::aliasing::place_root_name(target)?))
     }
 
-    pub(super) fn value_context(
-        &self,
-        value: &Expression,
-    ) -> Option<diagnostics::infer::WriteContext> {
+    pub(super) fn value_context(&self, value: &Expression) -> Option<WriteContext> {
         match value.unwrap_parens() {
             Expression::DotAccess {
                 expression: owner,
                 member,
                 ..
-            } => match self.struct_field(owner, member) {
-                Some(field) if !self.store.peel_alias(&field.ty).is_writable() => {
-                    Some(diagnostics::infer::WriteContext::Field(member.to_string()))
+            } => {
+                let field = self.struct_field(owner, member)?;
+                let name = if member.parse::<usize>().is_ok() {
+                    format!(".{member}")
+                } else {
+                    member.to_string()
+                };
+                if !self.store.peel_alias(&field.ty).is_writable() {
+                    Some(WriteContext::Field(name))
+                } else {
+                    Some(WriteContext::ReadOnlyOwner {
+                        owner: super::aliasing::render_place(owner.unwrap_parens()),
+                        field: name,
+                        origin: self.owner_origin(owner),
+                    })
                 }
-                Some(_) => Some(diagnostics::infer::WriteContext::ReadOnlyOwner {
-                    owner: super::aliasing::render_place(owner.unwrap_parens()),
-                    field: member.to_string(),
-                    origin: self.owner_origin(owner),
-                }),
-                None => None,
-            },
+            }
             identifier @ Expression::Identifier { .. } => {
                 self.binding_context(&identifier.get_var_name()?)
             }
             call @ Expression::Call { .. } => {
                 let callee = super::aliasing::render_place(call);
                 let callee = callee.strip_suffix("()")?;
-                Some(diagnostics::infer::WriteContext::CallResult(
-                    callee.to_string(),
-                ))
+                Some(WriteContext::CallResult(callee.to_string()))
             }
             Expression::Reference { expression, .. } => {
                 let name = expression.unwrap_parens().get_var_name()?;
                 let binding_id = self.scopes.lookup_binding_id(&name)?;
                 let inference = self.binding_inference.get(&binding_id)?.as_loop_element()?;
-                Some(diagnostics::infer::WriteContext::LoopCopy {
+                Some(WriteContext::LoopCopy {
                     binding: name.to_string(),
                     collection: inference.collection.clone(),
                 })
@@ -394,14 +487,14 @@ impl InferCtx<'_> {
         }
     }
 
-    fn binding_context(&self, name: &str) -> Option<diagnostics::infer::WriteContext> {
+    fn binding_context(&self, name: &str) -> Option<WriteContext> {
         let binding_id = self.scopes.lookup_binding_id(name)?;
         if let Some(inference) = self
             .binding_inference
             .get(&binding_id)
             .and_then(|binding| binding.as_loop_element())
         {
-            return Some(diagnostics::infer::WriteContext::LoopElement {
+            return Some(WriteContext::LoopElement {
                 binding: name.to_string(),
                 collection: inference.collection.clone(),
             });
@@ -413,9 +506,7 @@ impl InferCtx<'_> {
             .map(|binding| binding.kind)?;
         let declared = self.scopes.lookup_value(name)?;
         if kind.is_param() && !self.store.peel_alias(declared).is_writable() {
-            return Some(diagnostics::infer::WriteContext::Parameter(
-                name.to_string(),
-            ));
+            return Some(WriteContext::Parameter(name.to_string()));
         }
         match self
             .binding_inference
@@ -424,22 +515,21 @@ impl InferCtx<'_> {
             .source
             .as_ref()?
         {
-            ValueSource::Place(source) => Some(diagnostics::infer::WriteContext::AliasOf {
+            ValueSource::Place(source) => Some(WriteContext::AliasOf {
                 binding: name.to_string(),
                 source: source.clone(),
             }),
-            ValueSource::Call(callee) => {
-                Some(diagnostics::infer::WriteContext::CallResult(callee.clone()))
-            }
+            ValueSource::Call(callee) => Some(WriteContext::CallResult(callee.clone())),
         }
     }
 
     fn struct_field(&self, owner: &Expression, member: &str) -> Option<&StructFieldDefinition> {
         let owner_ty = self.owner_type(owner)?;
+        let tuple_name = member.parse::<usize>().ok().map(tuple_field_name);
         self.store
             .fields_of(owner_ty.get_qualified_id()?)?
             .iter()
-            .find(|field| field.name == member)
+            .find(|field| field.name == member || tuple_name.as_ref() == Some(&field.name))
     }
 
     /// An argument is classified before it is inferred.

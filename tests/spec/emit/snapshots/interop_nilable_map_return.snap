@@ -13,15 +13,12 @@ description: |
 ---
 package main
 
-import (
-	"example.com/reg"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/reg"
 
 func main() {
-	raw_1 := reg.Registry(true)
-	option_2 := lisette.OptionFromNilable[map[string]int](raw_1, raw_1 == nil)
-	if option_2.Tag == lisette.OptionSome {
-		_ = len(option_2.SomeVal)
+	ret_1 := reg.Registry(true)
+	if ret_1 != nil {
+		m := ret_1
+		_ = len(m)
 	}
 }

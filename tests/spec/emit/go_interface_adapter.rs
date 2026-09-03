@@ -289,6 +289,41 @@ fn main() {
     assert_emit_snapshot_with_go_typedefs!(input, &[]);
 }
 
+#[test]
+fn nullable_match_destination_preserves_interface_adapter() {
+    let input = r#"
+struct Thing {}
+
+interface Opt {
+  fn find() -> Option<mut Ref<Thing>>
+}
+
+struct Bar<T> {
+  x: Option<T>,
+}
+
+impl<T> Bar<T> {
+  fn find(self) -> Option<T> { self.x }
+}
+
+fn maybe_bar(bar: mut Ref<Bar<mut Ref<Thing>>>) -> Option<mut Ref<Bar<mut Ref<Thing>>>> {
+  Some(bar)
+}
+
+fn main() {
+  let mut bar = Bar { x: Some(&Thing {}) }
+  let opt: Opt = match maybe_bar(&bar) {
+    Some(found) => found,
+    None => { return },
+  }
+  if let Some(thing) = opt.find() {
+    let _ = thing
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
 // Coverage for scenario 9: match arm value. Each arm produces a
 // concrete and the match's result type is a Go interface.
 #[test]

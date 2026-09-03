@@ -197,6 +197,15 @@ impl InferCtx<'_> {
                 Expression::StructCall { .. } | Expression::Call { .. } => true,
                 other => self.place_permits_write(other),
             };
+            let constructed = new_expression.unwrap_parens().get_span();
+            match self.read_only_constructions.remove(&constructed) {
+                Some(components) => {
+                    self.read_only_constructions.insert(span, components);
+                }
+                None => {
+                    self.read_only_constructions.remove(&span);
+                }
+            }
             Type::qualified_compound(CompoundKind::Ref, vec![inner_ty.clone()], writable)
         };
 

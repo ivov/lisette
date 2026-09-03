@@ -690,6 +690,22 @@ pub enum WriteContext {
         field: String,
         origin: Option<String>,
     },
+    ImmutableBinding(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct ReadOnlyComponent {
+    pub kind: ReadOnlyComponentKind,
+    pub declared: String,
+    pub actual: String,
+    pub span: Span,
+    pub context: Option<WriteContext>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ReadOnlyComponentKind {
+    Field(String),
+    Spread(Vec<String>),
 }
 
 #[derive(Debug, Clone)]
@@ -704,7 +720,17 @@ pub struct ElementDeclaration {
 }
 
 pub fn needs_writable_help(expected: &str, actual: &str, context: Option<WriteContext>) -> String {
-    let remedy = match context {
+    let remedy = needs_writable_remedy(expected, actual, context);
+    format!("`{expected}` permits writes, `{actual}` does not. {remedy}")
+}
+
+pub fn needs_writable_remedy(
+    expected: &str,
+    actual: &str,
+    context: Option<WriteContext>,
+) -> String {
+    match context {
+        Some(WriteContext::ImmutableBinding(name)) => format!("Declare `let mut {name}`"),
         Some(WriteContext::Parameter(name)) => {
             format!("Declare the parameter `{name}` as `{expected}`")
         }
@@ -744,8 +770,65 @@ pub fn needs_writable_help(expected: &str, actual: &str, context: Option<WriteCo
             ),
         },
         _ => "Make the value writable where it is created, or pass a `.clone()`".to_string(),
+    }
+}
+
+pub fn read_only_construction(
+    expected: &str,
+    actual: &str,
+    constructed: &str,
+    behind_ref: bool,
+    components: &[ReadOnlyComponent],
+) -> LisetteDiagnostic {
+    let mut diagnostic =
+        LisetteDiagnostic::error("Missing write permission").with_infer_code("needs_writable");
+    let mut fields: Vec<&str> = vec![];
+    let mut remedies: Vec<String> = vec![];
+    for component in components {
+        let ReadOnlyComponent {
+            kind,
+            declared,
+            actual,
+            span,
+            context,
+        } = component;
+        let label = match kind {
+            ReadOnlyComponentKind::Field(name) => {
+                fields.push(name);
+                format!("`{name}` is declared `{declared}`, but receives `{actual}`")
+            }
+            ReadOnlyComponentKind::Spread(supplied) => {
+                fields.extend(supplied.iter().map(String::as_str));
+                let verb = if supplied.len() == 1 { "comes" } else { "come" };
+                format!(
+                    "`{}` {verb} from a read-only `{actual}`",
+                    supplied.join("`, `")
+                )
+            }
+        };
+        diagnostic = diagnostic.with_span_label(span, label);
+        let remedy = needs_writable_remedy(declared, actual, context.clone());
+        if !remedies.contains(&remedy) {
+            remedies.push(remedy);
+        }
+    }
+    let subject = match fields.as_slice() {
+        [field] => format!("`{field}`"),
+        [init @ .., last] => format!("`{}` and `{last}`", init.join("`, `")),
+        [] => unreachable!("a read-only construction names at least one component"),
     };
-    format!("`{expected}` permits writes, `{actual}` does not. {remedy}")
+    let outcome = if behind_ref {
+        format!(
+            "so the new `{constructed}` is read-only. A reference to it is `{actual}` \
+             where `{expected}` is expected."
+        )
+    } else {
+        format!("so the new `{constructed}` is read-only where `{expected}` is expected.")
+    };
+    diagnostic.with_help(format!(
+        "{subject} received less `mut` than declared, {outcome} {}",
+        remedies.join(". ")
+    ))
 }
 
 pub fn write_through_read_only(

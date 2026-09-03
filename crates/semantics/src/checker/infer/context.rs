@@ -293,6 +293,8 @@ pub struct InferCtx<'a> {
     pub(super) loop_element_reads: FxHashMap<BindingId, Vec<Span>>,
     pub(super) pending_loop_copy_writes: Vec<LoopCopyWrite>,
     pub(super) reported_read_only_writes: FxHashSet<(BindingId, String)>,
+    /// By span, for the diagnostic when the construction misses a writable expectation.
+    pub(super) read_only_constructions: FxHashMap<Span, Vec<diagnostics::infer::ReadOnlyComponent>>,
     traversal: TraversalContext,
 }
 
@@ -308,6 +310,7 @@ impl<'a> InferCtx<'a> {
             loop_element_reads: FxHashMap::default(),
             pending_loop_copy_writes: Vec::new(),
             reported_read_only_writes: FxHashSet::default(),
+            read_only_constructions: FxHashMap::default(),
             traversal: TraversalContext::default(),
         }
     }
