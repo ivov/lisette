@@ -631,6 +631,11 @@ impl StructFields {
     }
 }
 
+/// The stored name of the tuple struct field accessed as `.{index}`.
+pub fn tuple_field_name(index: usize) -> EcoString {
+    format!("_{index}").into()
+}
+
 impl Deref for StructFields {
     type Target = [StructFieldDefinition];
 

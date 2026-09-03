@@ -4,7 +4,7 @@ use super::{ParamMode, Parser};
 use crate::ast::{
     Annotation, Attribute, AttributeArg, ConstInitializer, EnumFieldDefinition, EnumVariant,
     Expression, Generic, ParentInterface, Span, StructFieldDefinition, StructFieldKind,
-    StructFields, VariantFields, Visibility,
+    StructFields, VariantFields, Visibility, tuple_field_name,
 };
 use crate::lex::Token;
 use crate::lex::TokenKind::*;
@@ -481,7 +481,7 @@ impl<'source> Parser<'source> {
 
             fields.push(StructFieldDefinition {
                 doc: None,
-                name: format!("_{}", index).into(),
+                name: tuple_field_name(index),
                 name_span: field_span,
                 annotation,
                 visibility: Visibility::Private,

@@ -284,6 +284,8 @@ pub struct InferCtx<'a> {
     pub(super) reported_immutable: FxHashSet<BindingId>,
     pub(super) binding_inference: FxHashMap<BindingId, BindingInference>,
     pub(super) reported_read_only_writes: FxHashSet<(BindingId, String)>,
+    /// By span, for the diagnostic when the construction misses a writable expectation.
+    pub(super) read_only_constructions: FxHashMap<Span, Vec<diagnostics::infer::ReadOnlyComponent>>,
     traversal: TraversalContext,
 }
 
@@ -297,6 +299,7 @@ impl<'a> InferCtx<'a> {
             reported_immutable: FxHashSet::default(),
             binding_inference: FxHashMap::default(),
             reported_read_only_writes: FxHashSet::default(),
+            read_only_constructions: FxHashMap::default(),
             traversal: TraversalContext::default(),
         }
     }

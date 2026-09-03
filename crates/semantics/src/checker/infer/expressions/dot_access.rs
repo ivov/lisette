@@ -1,6 +1,8 @@
 use crate::checker::EnvResolve;
 use ecow::EcoString;
-use syntax::ast::{Expression, IdentifierResolution, Span, StructFields, StructKind};
+use syntax::ast::{
+    Expression, IdentifierResolution, Span, StructFields, StructKind, tuple_field_name,
+};
 use syntax::go_names;
 use syntax::program::{Definition, DefinitionBody, DotAccessResolution, NativeTypeKind};
 use syntax::types::{Symbol, Type, substitute};
@@ -309,7 +311,7 @@ impl InferCtx<'_> {
 
         let field_name = if struct_kind == StructKind::Tuple {
             if let Ok(index) = args.member_name.parse::<usize>() {
-                format!("_{}", index)
+                tuple_field_name(index).to_string()
             } else {
                 args.member_name.to_string()
             }

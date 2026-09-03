@@ -7,6 +7,7 @@ use syntax::ast::{Expression, Span, StructFieldAssignment, StructFields, StructS
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
+use super::permission::{ConstructionGrant, MissingSupply};
 use crate::checker::infer::InferCtx;
 use crate::store::Store;
 use crate::zero;
@@ -413,11 +414,12 @@ impl InferCtx<'_> {
             &new_field_assignments,
         );
 
-        let struct_call_ty = if self.construction_grants_write(
+        let grant = self.construction_grants_write(
             struct_fields.iter().map(|f| (&f.name, &f.ty)),
             &new_field_assignments,
             &new_spread,
-        ) {
+        );
+        let struct_call_ty = if self.record_construction_grant(span, grant) {
             struct_call_ty.make_writable()
         } else {
             struct_call_ty
@@ -459,11 +461,11 @@ impl InferCtx<'_> {
         fields: impl Iterator<Item = (&'f EcoString, &'f Type)>,
         assignments: &[StructFieldAssignment],
         spread: &StructSpread,
-    ) -> bool {
-        let missing_grants = match spread {
-            StructSpread::Autofill { .. } => true,
-            StructSpread::From(base) => self.owner_grants_write(&base.get_type()),
-            StructSpread::None => false,
+    ) -> ConstructionGrant {
+        let missing = match spread {
+            StructSpread::Autofill { .. } => MissingSupply::Zero,
+            StructSpread::From(base) => MissingSupply::Spread(base),
+            StructSpread::None => MissingSupply::Absent,
         };
         self.components_grant_write(
             fields.map(|(name, ty)| {
@@ -471,9 +473,9 @@ impl InferCtx<'_> {
                     .iter()
                     .find(|a| &a.name == name)
                     .map(|a| a.value.as_ref());
-                (ty.clone(), value)
+                (name.to_string(), ty.clone(), value)
             }),
-            missing_grants,
+            missing,
         )
     }
 
@@ -558,11 +560,12 @@ impl InferCtx<'_> {
         );
 
         // The same construction grant as struct literals.
-        let enum_ty = if self.construction_grants_write(
+        let grant = self.construction_grants_write(
             variant_fields.iter().map(|f| (&f.name, &f.ty)),
             &new_field_assignments,
             &new_spread,
-        ) {
+        );
+        let enum_ty = if self.record_construction_grant(span, grant) {
             enum_ty.resolve_in(&self.env).make_writable()
         } else {
             enum_ty

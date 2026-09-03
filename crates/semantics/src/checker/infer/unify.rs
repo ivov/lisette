@@ -793,6 +793,15 @@ impl InferCtx<'_> {
             UnifyError::QualifierMismatch => {
                 let concrete_expected = overlay_qualifiers(expected, actual);
                 let (expected_name, actual_name) = Type::stringify_pair(&concrete_expected, actual);
+                if let Some(components) = self.read_only_constructions.get(span) {
+                    return diagnostics::infer::read_only_construction(
+                        &expected_name,
+                        &actual_name,
+                        &actual.strip_refs().to_string(),
+                        actual.is_ref(),
+                        components,
+                    );
+                }
                 let diagnostic = LisetteDiagnostic::error("Missing write permission")
                     .with_infer_code("needs_writable")
                     .with_span_label(

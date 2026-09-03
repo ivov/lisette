@@ -2024,3 +2024,93 @@ fn main() {
     )
     .assert_infer_code_once("write_through_read_only");
 }
+
+#[test]
+fn read_only_construction_behind_ref_names_the_field() {
+    infer(
+        r#"struct Rock { size: int }
+struct Beam { rocks: mut Ref<mut Slice<mut Ref<Rock>>>, hits: int }
+fn make(rocks: mut Ref<Slice<mut Ref<Rock>>>) -> mut Ref<Beam> {
+  &Beam { rocks, hits: 0 }
+}"#,
+    )
+    .assert_infer_code_once("needs_writable")
+    .assert_error_contains("`rocks` is declared `mut Ref<mut Slice<mut Ref<Rock>>>`")
+    .assert_error_contains("Declare the parameter `rocks` as `mut Ref<mut Slice<mut Ref<Rock>>>`");
+}
+
+#[test]
+fn read_only_construction_names_every_withholding_field() {
+    infer(
+        r#"struct Pair2 { left: mut Slice<int>, right: mut Slice<int> }
+fn make(a: Slice<int>, b: Slice<int>) -> mut Pair2 {
+  Pair2 { left: a, right: b }
+}"#,
+    )
+    .assert_infer_code_once("needs_writable")
+    .assert_error_contains("`left` is declared `mut Slice<int>`, but receives `Slice<int>`")
+    .assert_error_contains("`right` is declared `mut Slice<int>`, but receives `Slice<int>`")
+    .assert_error_contains("`left` and `right` received less `mut` than declared");
+}
+
+#[test]
+fn read_only_construction_names_the_spread_base() {
+    infer(
+        r#"struct Holder { items: mut Slice<int>, name: string }
+fn rename(base: Holder) -> mut Holder {
+  Holder { name: "x", ..base }
+}"#,
+    )
+    .assert_infer_code_once("needs_writable")
+    .assert_error_contains("`items` comes from a read-only `Holder`")
+    .assert_error_contains("Declare the parameter `base` as `mut Holder`");
+}
+
+#[test]
+fn read_only_construction_names_the_immutable_binding() {
+    infer(
+        r#"struct Holder { items: mut Slice<int> }
+fn make() -> mut Holder {
+  let a = [1, 2, 3]
+  Holder { items: a }
+}"#,
+    )
+    .assert_infer_code_once("needs_writable")
+    .assert_error_contains("Declare `let mut a`");
+}
+
+#[test]
+fn read_only_tuple_construction_names_the_component() {
+    infer(
+        r#"struct Pair(mut Slice<int>, int)
+fn make(view: Slice<int>) -> mut Pair {
+  Pair(view, 0)
+}"#,
+    )
+    .assert_infer_code_once("needs_writable")
+    .assert_error_contains("`.0` is declared `mut Slice<int>`, but receives `Slice<int>`");
+}
+
+#[test]
+fn read_only_variant_construction_names_the_field() {
+    infer(
+        r#"enum Load { Heavy { items: mut Slice<int> }, Empty }
+fn make(view: Slice<int>) -> mut Load {
+  Load.Heavy { items: view }
+}"#,
+    )
+    .assert_infer_code_once("needs_writable")
+    .assert_error_contains("`items` is declared `mut Slice<int>`, but receives `Slice<int>`");
+}
+
+#[test]
+fn tuple_component_write_names_the_read_only_owner() {
+    infer(
+        r#"struct Pair(mut Slice<int>, int)
+fn poke(p: Pair) {
+  p.0[0] = 1
+}"#,
+    )
+    .assert_infer_code_once("write_through_read_only")
+    .assert_error_contains("`.0` is declared writable, but `p` is read-only");
+}

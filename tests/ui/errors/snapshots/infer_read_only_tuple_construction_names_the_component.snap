@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing write permission
+   ╭─[test.lis:5:8]
+ 4 │ fn make(view: Slice<int>) -> mut Pair {
+ 5 │   Pair(view, 0)
+   ·        ──┬─
+   ·          ╰── `.0` is declared `mut Slice<int>`, but receives `Slice<int>`
+ 6 │ }
+   ╰────
+  help: `.0` received less `mut` than declared, so the new `Pair` is read-only where `mut Pair` is expected. Declare the parameter `view` as `mut Slice<int>` · code: [infer.needs_writable]
