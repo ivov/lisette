@@ -302,6 +302,14 @@ pub fn conformance_method_if_public<'a>(
     select_by_emitted_name(methods, interface_id, method_name, candidate, true)
 }
 
+struct EmittedMethodMatch<'a> {
+    depth: usize,
+    exact: bool,
+    owner: Option<EcoString>,
+    name: &'a EcoString,
+    ty: &'a Type,
+}
+
 fn select_by_emitted_name<'a>(
     methods: &'a Methods,
     interface_id: &str,
@@ -314,7 +322,7 @@ fn select_by_emitted_name<'a>(
     } else {
         Cow::Owned(snake_to_camel(method_name))
     };
-    let mut matches: Vec<(usize, bool, Option<EcoString>, &EcoString, &Type)> = Vec::new();
+    let mut matches = Vec::new();
     for (name, method) in methods {
         let ty = &method.ty;
         let exported = method.visibility.is_public();
@@ -341,17 +349,26 @@ fn select_by_emitted_name<'a>(
         if !exact && emitted != *want {
             continue;
         }
-        matches.push((depth, exact, owner, name, ty));
+        matches.push(EmittedMethodMatch {
+            depth,
+            exact,
+            owner,
+            name,
+            ty,
+        });
     }
-    let depth = matches.iter().map(|m| m.0).min()?;
-    matches.retain(|m| m.0 == depth);
-    if matches.iter().any(|m| m.2 != matches[0].2) {
+    let depth = matches.iter().map(|candidate| candidate.depth).min()?;
+    matches.retain(|candidate| candidate.depth == depth);
+    if matches
+        .iter()
+        .any(|candidate| candidate.owner.as_ref() != matches[0].owner.as_ref())
+    {
         return None;
     }
     matches
         .into_iter()
-        .min_by_key(|(_, exact, _, name, _)| (!exact, (*name).clone()))
-        .map(|(_, _, _, name, ty)| (name, ty))
+        .min_by_key(|candidate| (!candidate.exact, candidate.name.clone()))
+        .map(|candidate| (candidate.name, candidate.ty))
 }
 
 pub fn is_builtin_enum_member(go_name: &str) -> bool {

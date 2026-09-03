@@ -19,6 +19,13 @@ use super::enum_variant_constructor_type;
 use crate::checker::TaskState;
 use crate::store::Store;
 
+struct EnumFieldSlot<'a> {
+    variant_name: &'a str,
+    field_name: &'a str,
+    shape: EnumFieldShape,
+    field_type: &'a Type,
+}
+
 impl TaskState {
     pub(super) fn populate_enum(&mut self, store: &mut Store, expression: &mut Expression) {
         let Expression::Enum {
@@ -195,9 +202,7 @@ impl TaskState {
 
         let slots = go_names::enum_field_slots(name, variants);
 
-        // (variant_name, field_name, field shape, type, span)
-        let mut seen: FxHashMap<String, (&str, &str, EnumFieldShape, &Type, Span)> =
-            FxHashMap::default();
+        let mut seen: FxHashMap<String, EnumFieldSlot<'_>> = FxHashMap::default();
 
         for (vi, variant) in variants.iter().enumerate() {
             let Some(field_shape) = go_names::enum_field_shape(&variant.fields) else {
@@ -214,15 +219,20 @@ impl TaskState {
                 } else {
                     variant.name_span
                 };
-                let Some(&(v_a, f_a, shape_a, ty_a, _)) = seen.get(&go_name) else {
+                let Some(previous) = seen.get(&go_name) else {
                     seen.insert(
                         go_name,
-                        (&variant.name, &field.name, field_shape, &field.ty, span),
+                        EnumFieldSlot {
+                            variant_name: &variant.name,
+                            field_name: &field.name,
+                            shape: field_shape,
+                            field_type: &field.ty,
+                        },
                     );
                     continue;
                 };
 
-                let ty_a_resolved = ty_a.resolve_in(&self.env);
+                let ty_a_resolved = previous.field_type.resolve_in(&self.env);
                 if matches!(ty_a_resolved, Type::Error)
                     || matches!(resolved, Type::Error)
                     || ty_a_resolved == resolved
@@ -230,10 +240,10 @@ impl TaskState {
                     continue;
                 }
 
-                let loc_a = if shape_a == EnumFieldShape::Struct {
-                    format!("{}.{}.{}", name, v_a, f_a)
+                let loc_a = if previous.shape == EnumFieldShape::Struct {
+                    format!("{}.{}.{}", name, previous.variant_name, previous.field_name)
                 } else {
-                    format!("{}.{}", name, v_a)
+                    format!("{}.{}", name, previous.variant_name)
                 };
                 let loc_b = if field_shape == EnumFieldShape::Struct {
                     format!("{}.{}.{}", name, variant.name, field.name)
