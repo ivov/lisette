@@ -131,10 +131,17 @@ impl Planner<'_> {
                 && !self.scope.is_active_assign_target(&go_identifier)
                 && !self.scope.has_binding_for_go_name(&go_identifier)
                 && value.get_type().demoted() == binding_ty.demoted()
-                && let Some(statements) = self.lower_fused_result_match_into(value, &go_identifier)
             {
-                self.scope.bind(identifier, raw_go_name);
-                return statements;
+                if let Some(statements) = self.lower_fused_result_match_into(value, &go_identifier)
+                {
+                    self.scope.bind(identifier, raw_go_name);
+                    return statements;
+                }
+                if let Some(statements) = self.lower_fused_option_match_into(value, &go_identifier)
+                {
+                    self.scope.bind(identifier, raw_go_name);
+                    return statements;
+                }
             }
             if self.is_declared(&go_identifier) || expression_contains_binding(value, identifier) {
                 let fresh = self.fresh_var(Some(identifier));

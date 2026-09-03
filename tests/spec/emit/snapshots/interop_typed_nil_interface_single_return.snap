@@ -23,10 +23,10 @@ import (
 
 func main() {
 	ctx := context.Background()
-	raw_1 := ctx.Err()
-	option_2 := lisette.OptionFromNilable[error](raw_1, lisette.IsNilInterface(raw_1))
-	if option_2.Tag == lisette.OptionSome {
-		fmt.Println(option_2.SomeVal.Error())
+	ret_1 := ctx.Err()
+	if !lisette.IsNilInterface(ret_1) {
+		e := ret_1
+		fmt.Println(e.Error())
 	} else {
 		fmt.Println("no error")
 	}

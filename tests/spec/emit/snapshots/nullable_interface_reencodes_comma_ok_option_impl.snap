@@ -56,10 +56,10 @@ func (b Bar[T]) find() (T, bool) {
 }
 
 func useOpt(o Opt) {
-	raw_1 := o.find()
-	option_2 := lisette.OptionFromNilable[*Thing](raw_1, raw_1 == nil)
-	if option_2.Tag == lisette.OptionSome {
-		_ = option_2.SomeVal
+	ret_1 := o.find()
+	if ret_1 != nil {
+		t := ret_1
+		_ = t
 	}
 }
 

@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/partial.rs
+description: |
+  
+  import "go:os"
+  
+  fn write(file: Ref<os.File>) {
+    if let Partial.Err(err) = file.Write(['h', 'i']) {
+      panic(err.Error())
+    }
+  }
+---
+package main
+
+import "os"
+
+func write(file *os.File) {
+	file.Write([]byte{'h', 'i'})
+}

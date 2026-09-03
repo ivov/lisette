@@ -390,16 +390,22 @@ impl Planner<'_> {
         self.facts.is_nilable_go_type(ok_ty) || peeled.is_slice()
     }
 
+    pub(crate) fn partial_ok_nil_guard(&self, ok_ty: &Type) -> Option<NilGuard> {
+        self.partial_ok_is_nilable(ok_ty).then(|| {
+            if self.facts.as_interface(ok_ty).is_some() {
+                NilGuard::Interface
+            } else {
+                NilGuard::Pointer
+            }
+        })
+    }
+
     pub(crate) fn partial_ok_nil_check(&mut self, ok_ty: &Type, val: &str) -> Option<String> {
-        if !self.partial_ok_is_nilable(ok_ty) {
-            return None;
-        }
-        if self.facts.as_interface(ok_ty).is_some() {
+        let guard = self.partial_ok_nil_guard(ok_ty)?;
+        if guard.is_interface() {
             self.require_stdlib();
-            Some(format!("lisette.IsNilInterface({val})"))
-        } else {
-            Some(format!("{val} == nil"))
         }
+        Some(guard.is_nil(val))
     }
 
     fn go_result_needs_nil_guard(&self, ok_ty: &Type) -> bool {

@@ -18,18 +18,15 @@ description: |
 ---
 package main
 
-import (
-	"flag"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "flag"
 
 func apply(f func(string) *flag.Flag, name string) bool {
-	raw_1 := f(name)
-	option_2 := lisette.OptionFromNilable[*flag.Flag](raw_1, raw_1 == nil)
-	if option_2.Tag == lisette.OptionSome {
+	ret_1 := f(name)
+	if ret_1 != nil {
 		return true
+	} else {
+		return false
 	}
-	return false
 }
 
 func main() {

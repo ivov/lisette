@@ -119,6 +119,92 @@ fn write_all(file: Ref<os.File>) {
 }
 
 #[test]
+fn fused_selective_partial_both_omits_unused_named_value() {
+    let input = r#"
+import "go:os"
+
+fn write(file: Ref<os.File>) -> Option<error> {
+  if let Partial.Both(written, err) = file.Write(['h', 'i']) {
+    return Some(err)
+  }
+  None
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn impossible_selective_partial_err_keeps_call() {
+    let input = r#"
+import "go:os"
+
+fn write(file: Ref<os.File>) {
+  if let Partial.Err(err) = file.Write(['h', 'i']) {
+    panic(err.Error())
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn selective_partial_with_empty_arms_keeps_call() {
+    let input = r#"
+import "go:os"
+
+fn write(file: Ref<os.File>) {
+  if let Partial.Both(_, _) = file.Write(['h', 'i']) {}
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn selective_partial_literal_payload_falls_back_to_tagged_match() {
+    let input = r#"
+import "go:os"
+
+fn write(file: Ref<os.File>) {
+  match file.Write(['h', 'i']) {
+    Partial.Ok(0) => panic("wrote nothing"),
+    _ => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn selective_partial_ok_wildcard_does_not_bind_nilable_value() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  if let Partial.Ok(_) = os.ReadDir(".") {
+    fmt.Println("ok")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn selective_partial_ok_unused_name_does_not_bind_nilable_value() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  if let Partial.Ok(entries) = os.ReadDir(".") {
+    fmt.Println("ok")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn fused_partial_match_on_lowered_call() {
     let input = r#"
 import "go:errors"
