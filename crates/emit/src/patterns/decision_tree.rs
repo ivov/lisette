@@ -552,7 +552,7 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
     validate_switch_arms(arms, &kind, &switch_path)?;
 
     let grouped = group_switch_branches(arms, &kind);
-    let branches = build_switch_branches(grouped.order, grouped.by_label, &grouped.fallback);
+    let branches = build_switch_branches(grouped.branches, &grouped.fallback);
 
     let fallback = if grouped.fallback.is_empty() {
         None
@@ -628,14 +628,12 @@ fn validate_switch_arms(
 }
 
 struct GroupedBranches {
-    order: Vec<String>,
-    by_label: HashMap<String, Vec<ArmInfo>>,
+    branches: Vec<(String, Vec<ArmInfo>)>,
     fallback: Vec<ArmInfo>,
 }
 
 fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches {
-    let mut by_label: HashMap<String, Vec<ArmInfo>> = HashMap::default();
-    let mut order: Vec<String> = Vec::new();
+    let mut branches: Vec<(String, Vec<ArmInfo>)> = Vec::new();
     let mut fallback = Vec::new();
 
     for arm in arms {
@@ -666,33 +664,25 @@ fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches
             has_guard: arm.has_guard,
         };
 
-        by_label
-            .entry(case_label.clone())
-            .and_modify(|arms| arms.push(inner_arm.clone()))
-            .or_insert_with(|| {
-                order.push(case_label);
-                vec![inner_arm]
-            });
+        if let Some((_, arms)) = branches.iter_mut().find(|(label, _)| label == &case_label) {
+            arms.push(inner_arm);
+        } else {
+            branches.push((case_label, vec![inner_arm]));
+        }
     }
 
-    GroupedBranches {
-        order,
-        by_label,
-        fallback,
-    }
+    GroupedBranches { branches, fallback }
 }
 
 /// Splice the catchall into any fail-prone case body: Go `switch` cases do not
 /// fall through to `default`, so a failed inner check has nowhere else to go.
 fn build_switch_branches(
-    order: Vec<String>,
-    mut by_label: HashMap<String, Vec<ArmInfo>>,
+    branches: Vec<(String, Vec<ArmInfo>)>,
     fallback_arms: &[ArmInfo],
 ) -> Vec<SwitchBranch> {
-    order
+    branches
         .into_iter()
-        .map(|label| {
-            let inner_arms = by_label.remove(&label).unwrap();
+        .map(|(label, inner_arms)| {
             let any_inner_can_fail = inner_arms
                 .iter()
                 .any(|a| a.has_guard || !a.checks.is_empty());
