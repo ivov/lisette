@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788455654957,
+  "lastUpdate": 1788459695183,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -31622,6 +31622,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 8692,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6036,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2911,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 740,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9484,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5744ea171848b3c625df60524639f26826266dd6",
+          "message": "fix: inaccurate write permission error on struct literals (#1384)",
+          "timestamp": "2026-09-03T20:21:08+02:00",
+          "tree_id": "a2426cb59c42e04e544afbbf1e260433e80b283b",
+          "url": "https://github.com/ivov/lisette/commit/5744ea171848b3c625df60524639f26826266dd6"
+        },
+        "date": 1788459693849,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 139293,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32568,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27945,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19187,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14904,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13978,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8771,
             "unit": "lines"
           },
           {
