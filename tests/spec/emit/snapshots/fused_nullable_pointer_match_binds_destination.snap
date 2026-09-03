@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:flag"
+  
+  fn main() {
+    let found = match flag.Lookup("verbose") {
+      Some(f) => f,
+      None => { return }
+    }
+    let _ = found.Name
+  }
+---
+package main
+
+import "flag"
+
+func main() {
+	found := flag.Lookup("verbose")
+	if found == nil {
+		return
+	}
+	_ = found.Name
+}

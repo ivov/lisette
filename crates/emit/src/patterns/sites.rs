@@ -5,7 +5,7 @@ use syntax::ast::{Expression, MatchArm, Pattern, Span};
 use syntax::types::Type;
 
 use crate::Planner;
-use crate::calls::comma_ok::{CommaOkValueSlot, LoweredPair};
+use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::{self, prelude_qualifier, testkit_qualifier};
 use crate::patterns::binding_decls::pattern_binds_name;
@@ -273,17 +273,19 @@ impl Planner<'_> {
             None => CommaOkValueSlot::Unused,
         };
         let bound = fuse.bind(self, slot);
-        Some(self.finish_fused_let_else(bound, binding, else_block))
+        let fail_condition = self.pair_failure_condition(&bound);
+        Some(self.finish_fused_let_else(bound.statements, fail_condition, binding, else_block))
     }
 
-    /// Fuse `let Some(x) = <comma-ok source> else { ... }` into a direct pair test.
+    /// Fuse `let Some(x) = <lowered Option source> else { ... }` into a direct
+    /// physical-ABI test.
     fn lower_fused_option_let_else(
         &mut self,
         pattern: &Pattern,
         scrutinee: &Expression,
         else_block: &Expression,
     ) -> Option<Vec<LoweredStatement>> {
-        let source = self.comma_ok_source(scrutinee)?;
+        let fuse = self.option_fuse_plan(scrutinee)?;
         let field = some_pattern_field(pattern)?;
 
         let binding = self.declare_fused_binding(field);
@@ -291,20 +293,24 @@ impl Planner<'_> {
             Some((_, go_name)) => CommaOkValueSlot::Named(go_name.clone()),
             None => CommaOkValueSlot::Unused,
         };
-        let pair = self.bind_comma_ok_pair(scrutinee, source, slot);
-        Some(self.finish_fused_let_else(pair, binding, else_block))
+        let bound = fuse.bind(self, slot);
+        Some(self.finish_fused_let_else(
+            bound.statements,
+            bound.none_condition,
+            binding,
+            else_block,
+        ))
     }
 
     fn finish_fused_let_else(
         &mut self,
-        pair: LoweredPair,
+        mut statements: Vec<LoweredStatement>,
+        fail_condition: String,
         binding: Option<(String, String)>,
         else_block: &Expression,
     ) -> Vec<LoweredStatement> {
-        let fail_condition = self.pair_failure_condition(&pair);
         // The else block sees the enclosing scope, so it lowers before the binding installs.
         let fail_body = self.lower_block_as_body(else_block);
-        let mut statements = pair.statements;
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
             condition: fail_condition,
@@ -446,14 +452,15 @@ impl Planner<'_> {
         }
     }
 
-    /// Fuse `while let Some(x) = <comma-ok source>` into a per-iteration pair test.
+    /// Fuse `while let Some(x) = <lowered Option source>` into a per-iteration
+    /// physical-ABI test.
     fn lower_fused_option_while_let(
         &mut self,
         pattern: &Pattern,
         scrutinee: &Expression,
         body: &Expression,
     ) -> Option<LoweredBlock> {
-        let source = self.comma_ok_source(scrutinee)?;
+        let fuse = self.option_fuse_plan(scrutinee)?;
         let field = some_pattern_field(pattern)?;
         let binding = field_binding(field).filter(|b| *b != "_");
 
@@ -462,13 +469,12 @@ impl Planner<'_> {
         } else {
             CommaOkValueSlot::Unused
         };
-        let pair = self.bind_comma_ok_pair(scrutinee, source, slot);
+        let bound = fuse.bind(self, slot);
 
-        let condition = self.pair_failure_condition(&pair);
-        let mut loop_body = pair.statements;
+        let mut loop_body = bound.statements;
         loop_body.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
-            condition,
+            condition: bound.none_condition,
             then_body: LoweredBlock {
                 statements: vec![LoweredStatement::Break(
                     self.current_loop_id()
@@ -478,7 +484,7 @@ impl Planner<'_> {
             else_arm: ElseArm::None,
         }));
         let (body_block, _) = self.lower_fused_arm(
-            &[binding.zip(pair.value.as_deref())],
+            &[binding.zip(bound.value.as_deref())],
             body,
             &PlacePlan::Statement,
         );

@@ -1,5 +1,6 @@
 use crate::Planner;
-use crate::abi::callable::CallableReturnAbi;
+use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
+use crate::calls::comma_ok::CommaOkSource;
 use crate::calls::comma_ok::{CommaOkValueSlot, LoweredPair, PairKind};
 use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
@@ -18,6 +19,68 @@ pub(super) struct ResultFusePlan<'a> {
     subject: &'a Expression,
     shape: CallableReturnAbi,
     nil_guard: Option<NilGuard>,
+}
+
+pub(super) enum OptionFusePlan<'a> {
+    CommaOk {
+        subject: &'a Expression,
+        source: CommaOkSource,
+    },
+    Nullable {
+        subject: &'a Expression,
+        nil_guard: NilGuard,
+    },
+}
+
+pub(super) struct BoundOption {
+    pub(super) statements: Vec<LoweredStatement>,
+    pub(super) value: Option<String>,
+    pub(super) some_condition: String,
+    pub(super) none_condition: String,
+}
+
+impl OptionFusePlan<'_> {
+    pub(super) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundOption {
+        match self {
+            Self::CommaOk { subject, source } => {
+                let pair = planner.bind_comma_ok_pair(subject, source, slot);
+                let some_condition = planner.pair_success_condition(&pair);
+                let none_condition = planner.pair_failure_condition(&pair);
+                BoundOption {
+                    statements: pair.statements,
+                    value: pair.value,
+                    some_condition,
+                    none_condition,
+                }
+            }
+            Self::Nullable { subject, nil_guard } => {
+                let (mut statements, call) = planner
+                    .lower_call(subject, None, ExpressionContext::value())
+                    .into_parts();
+                let value = match slot {
+                    CommaOkValueSlot::Named(name) => name,
+                    CommaOkValueSlot::Temp | CommaOkValueSlot::Unused => {
+                        let name = planner.fresh_var(Some("ret"));
+                        planner.declare(&name);
+                        name
+                    }
+                };
+                statements.push(LoweredStatement::TempBind {
+                    name: value.clone(),
+                    value: call,
+                });
+                if nil_guard.is_interface() {
+                    planner.require_stdlib();
+                }
+                BoundOption {
+                    statements,
+                    some_condition: nil_guard.non_nil(&value),
+                    none_condition: nil_guard.is_nil(&value),
+                    value: Some(value),
+                }
+            }
+        }
+    }
 }
 
 impl ResultFusePlan<'_> {
@@ -57,6 +120,21 @@ struct ResultArm<'a> {
     is_catch_all: bool,
 }
 
+#[derive(Clone, Copy)]
+enum PartialVariant {
+    Ok,
+    Both,
+    Err,
+}
+
+struct SelectivePartialArms<'a> {
+    variant: PartialVariant,
+    selected: &'a MatchArm,
+    fallback: &'a MatchArm,
+    value_binding: Option<&'a str>,
+    error_binding: Option<&'a str>,
+}
+
 /// How to render the subject declaration line, based on body usage.
 enum SubjectDeclaration {
     /// Identifier path: emit `_ = <var>` when unused, else nothing.
@@ -91,6 +169,11 @@ impl Planner<'_> {
         }
 
         if let Some(fused) = self.lower_fused_partial_match(subject, arms, place) {
+            statements.extend(fused);
+            return LoweredBlock { statements };
+        }
+
+        if let Some(fused) = self.lower_fused_selective_partial_match(subject, arms, place) {
             statements.extend(fused);
             return LoweredBlock { statements };
         }
@@ -253,6 +336,41 @@ impl Planner<'_> {
         })
     }
 
+    /// Recognize an Option-producing call whose physical Go result can be
+    /// tested directly, without first constructing a tagged Option.
+    pub(super) fn option_fuse_plan<'a>(
+        &self,
+        subject: &'a Expression,
+    ) -> Option<OptionFusePlan<'a>> {
+        if let Some(source) = self.comma_ok_source(subject) {
+            return Some(OptionFusePlan::CommaOk { subject, source });
+        }
+
+        let plan = self.plan_call(subject)?;
+        if !matches!(
+            plan.resolved.abi.result,
+            CallableReturnAbi::Option(OptionReturnAbi::Nullable)
+        ) || self
+            .go_result_layout_bridge(&plan.resolved.abi, &subject.get_type())
+            .is_some()
+            || self
+                .go_return_payload_bridge(&plan.resolved.abi, &subject.get_type())
+                .is_some()
+        {
+            return None;
+        }
+
+        let option_ty = subject.get_type();
+        let nil_guard = if self.is_interface_option(&option_ty) {
+            NilGuard::Interface
+        } else if self.facts.is_nullable_option(&option_ty) {
+            NilGuard::Pointer
+        } else {
+            return None;
+        };
+        Some(OptionFusePlan::Nullable { subject, nil_guard })
+    }
+
     /// Bind `let x = match ...` straight into `x`.
     pub(crate) fn lower_fused_result_match_into(
         &mut self,
@@ -263,6 +381,42 @@ impl Planner<'_> {
             return None;
         };
         self.lower_fused_lowered_match(subject, arms, &PlacePlan::Statement, Some(go_name))
+    }
+
+    /// Bind `let x = match nullable_call() { Some(v) => v, None => diverge }`
+    /// straight into `x` and test the raw Go value for nil.
+    pub(crate) fn lower_fused_option_match_into(
+        &mut self,
+        value: &Expression,
+        go_name: &str,
+    ) -> Option<Vec<LoweredStatement>> {
+        let Expression::Match { subject, arms, .. } = value.unwrap_parens() else {
+            return None;
+        };
+        let fuse = self.option_fuse_plan(subject)?;
+        if !matches!(&fuse, OptionFusePlan::Nullable { .. }) {
+            return None;
+        }
+        let arms = classify_option_arms(arms)?;
+        let payload = arms.some_binding?;
+        if !arms.none_body.get_type().is_never()
+            || arm_body_is_identifier(arms.some_body) != Some(payload)
+            || self.facts.peel_alias(&subject.get_type()).ok_type() != value.get_type()
+        {
+            return None;
+        }
+
+        self.declare(go_name);
+        let bound = fuse.bind(self, CommaOkValueSlot::Named(go_name.to_string()));
+        let fail_body = self.lower_block_as_body(arms.none_body);
+        let mut statements = bound.statements;
+        statements.push(LoweredStatement::If(IfPlan {
+            condition_setup: Vec::new(),
+            condition: bound.none_condition,
+            then_body: fail_body,
+            else_arm: ElseArm::None,
+        }));
+        Some(statements)
     }
 
     /// The payload name an arm binds, or `None` when the body never reads it.
@@ -369,7 +523,7 @@ impl Planner<'_> {
             arm_place,
         );
 
-        if has_nil_guard && err_used {
+        if has_nil_guard && err_used.into_iter().any(|used| used) {
             self.require_errors();
             let error = bound.status();
             else_body.statements.insert(
@@ -512,14 +666,122 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    /// Fuse the wrap+match into a direct pair test for simple `Some`/`None` arms.
+    /// Fuse a single explicit `Partial` variant plus a wildcard directly
+    /// against the physical `(value, error)` result of the call.
+    fn lower_fused_selective_partial_match(
+        &mut self,
+        subject: &Expression,
+        arms: &[MatchArm],
+        place: &PlacePlan,
+    ) -> Option<Vec<LoweredStatement>> {
+        let plan = self.plan_call(subject)?;
+        // Selective fusion relies on the state mapping of a raw Go
+        // `(value, error)` return. Do not infer that mapping for Lisette
+        // functions merely because they share the same lowered shape.
+        if !matches!(plan.resolved.origin, CallableOrigin::GoInterop)
+            || !self.fusable_partial(subject, &plan)
+        {
+            return None;
+        }
+        let arms = classify_selective_partial_arms(arms)?;
+        let ok_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
+        let nil_guard = self.partial_ok_nil_guard(&ok_ty);
+
+        let value_binding = arms.value_binding.filter(|name| *name != "_");
+        let error_binding = arms.error_binding.filter(|name| *name != "_");
+
+        let (mut statements, call) = self
+            .lower_call(subject, None, ExpressionContext::value())
+            .into_parts();
+
+        // A non-nilable value is always present, so its physical ABI has no
+        // distinct Err state. The wildcard arm is therefore unconditional.
+        if matches!(arms.variant, PartialVariant::Err) && nil_guard.is_none() {
+            statements.push(LoweredStatement::RawGo(format!("{call}\n")));
+            let fallback = self
+                .lower_fused_arm(&[], &arms.fallback.expression, place)
+                .0;
+            statements.extend(fallback.statements);
+            return Some(statements);
+        }
+
+        let condition_needs_value = nil_guard.is_some()
+            && matches!(arms.variant, PartialVariant::Both | PartialVariant::Err);
+        let may_need_value = value_binding.is_some() || condition_needs_value;
+        let value = may_need_value.then(|| {
+            let name = self.fresh_var(Some("ret"));
+            self.declare(&name);
+            name
+        });
+        let error = self.fresh_var(Some("err"));
+        self.declare(&error);
+        let (selected, binding_uses) = self.lower_fused_arm(
+            &[
+                value_binding.zip(value.as_deref()),
+                error_binding.map(|name| (name, error.as_str())),
+            ],
+            &arms.selected.expression,
+            place,
+        );
+        let fallback = self
+            .lower_fused_arm(&[], &arms.fallback.expression, place)
+            .0;
+
+        if selected.renders_empty() && fallback.renders_empty() {
+            statements.push(LoweredStatement::RawGo(format!("{call}\n")));
+            return Some(statements);
+        }
+
+        let value_is_used = binding_uses.first().copied().unwrap_or(false);
+        let result_slots = if condition_needs_value || value_is_used {
+            let value = value.as_deref().expect("value use allocates a result slot");
+            format!("{value}, {error}")
+        } else {
+            format!("_, {error}")
+        };
+        let condition = match arms.variant {
+            PartialVariant::Ok => format!("{error} == nil"),
+            PartialVariant::Both => match nil_guard {
+                Some(guard) => {
+                    if guard.is_interface() {
+                        self.require_stdlib();
+                    }
+                    let value = value.as_deref().expect("nil guard captures the value");
+                    format!("{error} != nil && {}", guard.non_nil(value))
+                }
+                None => format!("{error} != nil"),
+            },
+            PartialVariant::Err => {
+                let guard = nil_guard.expect("non-nilable Err returned above");
+                if guard.is_interface() {
+                    self.require_stdlib();
+                }
+                let value = value.as_deref().expect("nil guard captures the value");
+                format!("{error} != nil && {}", guard.is_nil(value))
+            }
+        };
+        statements.push(LoweredStatement::RawGo(format!(
+            "{result_slots} := {call}\n"
+        )));
+        let selected_diverges = selected.ends_with_diverge();
+        statements.push(LoweredStatement::If(IfPlan {
+            condition_setup: Vec::new(),
+            condition,
+            then_body: selected,
+            else_arm: ElseArm::from_body(fallback, selected_diverges),
+        }));
+        Some(statements)
+    }
+
+    /// Fuse the wrap+match into a direct physical-ABI test for simple
+    /// `Some`/`None` arms.
     fn lower_fused_option_match(
         &mut self,
         subject: &Expression,
         arms: &[MatchArm],
         place: &PlacePlan,
     ) -> Option<Vec<LoweredStatement>> {
-        let source = self.comma_ok_source(subject)?;
+        let fuse = self.option_fuse_plan(subject)?;
         let arms = classify_option_arms(arms)?;
 
         let slot = if arms.some_binding.is_some() {
@@ -527,10 +789,10 @@ impl Planner<'_> {
         } else {
             CommaOkValueSlot::Unused
         };
-        let pair = self.bind_comma_ok_pair(subject, source, slot);
+        let bound = fuse.bind(self, slot);
 
         let (then_body, _) = self.lower_fused_arm(
-            &[arms.some_binding.zip(pair.value.as_deref())],
+            &[arms.some_binding.zip(bound.value.as_deref())],
             arms.some_body,
             place,
         );
@@ -538,9 +800,9 @@ impl Planner<'_> {
 
         let invert = then_body.renders_empty() && !else_body.renders_empty();
         let condition = if invert {
-            self.pair_failure_condition(&pair)
+            bound.none_condition
         } else {
-            self.pair_success_condition(&pair)
+            bound.some_condition
         };
         let plan = if invert {
             IfPlan {
@@ -557,7 +819,7 @@ impl Planner<'_> {
                 else_arm: ElseArm::from_body(else_body, false),
             }
         };
-        let mut statements = pair.statements;
+        let mut statements = bound.statements;
         statements.push(LoweredStatement::If(plan));
         Some(statements)
     }
@@ -567,7 +829,7 @@ impl Planner<'_> {
         bindings: &[Option<(&str, &str)>],
         body: &Expression,
         place: &PlacePlan,
-    ) -> (LoweredBlock, bool) {
+    ) -> (LoweredBlock, Vec<bool>) {
         self.with_binding_frame(|this| {
             let bound: Vec<Option<(String, String)>> = bindings
                 .iter()
@@ -582,19 +844,28 @@ impl Planner<'_> {
             let (body_block, used) =
                 this.capture_go_uses(|this| this.lower_block_to_place(body, place));
             let mut statements = Vec::new();
-            let mut any_referenced = false;
-            for (go_name, value) in bound.iter().flatten() {
-                if !used.contains(go_name) {
+            let binding_uses = bound
+                .iter()
+                .map(|binding| {
+                    binding
+                        .as_ref()
+                        .is_some_and(|(go_name, _)| used.contains(go_name))
+                })
+                .collect::<Vec<_>>();
+            for (binding, is_used) in bound.iter().zip(&binding_uses) {
+                let Some((go_name, value)) = binding else {
+                    continue;
+                };
+                if !is_used {
                     continue;
                 }
                 statements.push(LoweredStatement::TempBind {
                     name: go_name.clone(),
                     value: value.clone(),
                 });
-                any_referenced = true;
             }
             statements.extend(body_block.statements);
-            (LoweredBlock { statements }, any_referenced)
+            (LoweredBlock { statements }, binding_uses)
         })
     }
 
@@ -728,6 +999,49 @@ fn classify_partial_arms(arms: &[MatchArm]) -> Option<(&MatchArm, &MatchArm, &Ma
         *slot = Some(arm);
     }
     Some((ok?, both?, err?))
+}
+
+fn classify_selective_partial_arms(arms: &[MatchArm]) -> Option<SelectivePartialArms<'_>> {
+    if arms.len() != 2 || arms.iter().any(MatchArm::has_guard) {
+        return None;
+    }
+    if !matches!(arms[1].pattern, Pattern::WildCard { .. }) {
+        return None;
+    }
+    let (selected, fallback) = (&arms[0], &arms[1]);
+    let Pattern::EnumVariant {
+        identifier,
+        fields,
+        rest,
+        ..
+    } = &selected.pattern
+    else {
+        return None;
+    };
+    if *rest {
+        return None;
+    }
+    let variant = match identifier.as_str() {
+        "Ok" | "Partial.Ok" if fields.len() == 1 => PartialVariant::Ok,
+        "Both" | "Partial.Both" if fields.len() == 2 => PartialVariant::Both,
+        "Err" | "Partial.Err" if fields.len() == 1 => PartialVariant::Err,
+        _ => return None,
+    };
+    let (value_binding, error_binding) = match variant {
+        PartialVariant::Ok => (Some(simple_payload_binding(selected)?), None),
+        PartialVariant::Both => {
+            let (value, error) = partial_both_bindings(selected)?;
+            (Some(value), Some(error))
+        }
+        PartialVariant::Err => (None, Some(simple_payload_binding(selected)?)),
+    };
+    Some(SelectivePartialArms {
+        variant,
+        selected,
+        fallback,
+        value_binding,
+        error_binding,
+    })
 }
 
 struct OptionArms<'a> {
@@ -889,5 +1203,55 @@ fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &CallableReturnAbi) -> bool 
         | CallableReturnAbi::Partial { .. }
         | CallableReturnAbi::Option(_)
         | CallableReturnAbi::Tuple { .. } => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::classify_selective_partial_arms;
+    use syntax::ast::{ConstructorPatternResolution, Expression, MatchArm, Pattern, Span};
+    use syntax::types::Type;
+
+    fn variant(identifier: &str, fields: Vec<Pattern>) -> Pattern {
+        Pattern::EnumVariant {
+            identifier: identifier.into(),
+            fields,
+            rest: false,
+            resolution: ConstructorPatternResolution::Unresolved,
+            ty: Type::uninferred(),
+            span: Span::dummy(),
+        }
+    }
+
+    fn arm(pattern: Pattern) -> MatchArm {
+        MatchArm {
+            pattern,
+            guard: None,
+            expression: Box::new(Expression::Unit {
+                ty: Type::unit(),
+                span: Span::dummy(),
+            }),
+        }
+    }
+
+    #[test]
+    fn selective_partial_classifier_rejects_nested_payload_pattern() {
+        let arms = [
+            arm(variant(
+                "Partial.Ok",
+                vec![variant(
+                    "Some",
+                    vec![Pattern::Identifier {
+                        identifier: "n".into(),
+                        span: Span::dummy(),
+                    }],
+                )],
+            )),
+            arm(Pattern::WildCard {
+                span: Span::dummy(),
+            }),
+        ];
+
+        assert!(classify_selective_partial_arms(&arms).is_none());
     }
 }

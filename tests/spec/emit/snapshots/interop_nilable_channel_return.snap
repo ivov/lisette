@@ -19,9 +19,9 @@ import (
 )
 
 func main() {
-	raw_1 := reg.Events()
-	option_2 := lisette.OptionFromNilable[chan int](raw_1, raw_1 == nil)
-	if option_2.Tag == lisette.OptionSome {
-		_ = lisette.ChannelReceive(option_2.SomeVal)
+	ret_1 := reg.Events()
+	if ret_1 != nil {
+		ch := ret_1
+		_ = lisette.ChannelReceive(ch)
 	}
 }

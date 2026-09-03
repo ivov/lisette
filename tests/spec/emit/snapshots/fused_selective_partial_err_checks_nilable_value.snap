@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:fmt"
+  import "go:example.com/aws"
+  
+  fn main() {
+    match aws.Read() {
+      Partial.Err(e) => fmt.Println("err", e),
+      _ => {},
+    }
+  }
+---
+package main
+
+import (
+	"example.com/aws"
+	"fmt"
+)
+
+func main() {
+	ret_1, err_2 := aws.Read()
+	if err_2 != nil && ret_1 == nil {
+		e := err_2
+		fmt.Println("err", e)
+	}
+}

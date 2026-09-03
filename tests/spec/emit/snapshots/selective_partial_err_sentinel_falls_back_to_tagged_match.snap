@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/aws"
+  import "go:io"
+  
+  fn main() {
+    match aws.Read() {
+      Partial.Err(io.EOF) => panic("empty"),
+      _ => {},
+    }
+  }
+---
+package main
+
+import (
+	"example.com/aws"
+	lisette "github.com/ivov/lisette/prelude"
+	"io"
+)
+
+func main() {
+	ret_1, ret_2 := aws.Read()
+	var result_3 lisette.Partial[[]byte, error]
+	if ret_2 != nil {
+		if ret_1 == nil {
+			result_3 = lisette.MakePartialErr[[]byte, error](ret_2)
+		} else {
+			result_3 = lisette.MakePartialBoth[[]byte, error](ret_1, ret_2)
+		}
+	} else {
+		result_3 = lisette.MakePartialOk[[]byte, error](ret_1)
+	}
+	if result_3.Tag == lisette.PartialErr {
+		if result_3.ErrVal == io.EOF {
+			panic("empty")
+		}
+	}
+}

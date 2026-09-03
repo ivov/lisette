@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/partial.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn main() {
+    if let Partial.Ok(entries) = os.ReadDir(".") {
+      fmt.Println("ok")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	_, err_2 := os.ReadDir(".")
+	if err_2 == nil {
+		fmt.Println("ok")
+	}
+}
