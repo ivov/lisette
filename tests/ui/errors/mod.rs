@@ -15626,3 +15626,77 @@ enum TwiceOnOne {
 "#;
     assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn infer_read_only_construction_behind_ref_names_the_field() {
+    let input = r#"
+struct Rock { size: int }
+
+struct Beam {
+  rocks: mut Ref<mut Slice<mut Ref<Rock>>>,
+  hits: int,
+}
+
+impl Beam {
+  fn new(rocks: mut Ref<Slice<mut Ref<Rock>>>) -> mut Ref<Beam> {
+    &Beam {
+      rocks,
+      hits: 0,
+    }
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_read_only_construction_names_the_spread_base() {
+    let input = r#"
+struct Holder {
+  items: mut Slice<int>,
+  name: string,
+}
+
+fn rename(base: Holder) -> mut Holder {
+  Holder { name: "x", ..base }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_read_only_construction_names_the_immutable_binding() {
+    let input = r#"
+struct Holder { items: mut Slice<int> }
+
+fn make() -> mut Holder {
+  let a = [1, 2, 3]
+  Holder { items: a }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_read_only_tuple_construction_names_the_component() {
+    let input = r#"
+struct Pair(mut Slice<int>, int)
+
+fn make(view: Slice<int>) -> mut Pair {
+  Pair(view, 0)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_tuple_component_write_names_the_read_only_owner() {
+    let input = r#"
+struct Pair(mut Slice<int>, int)
+
+fn poke(p: Pair) {
+  p.0[0] = 1
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}

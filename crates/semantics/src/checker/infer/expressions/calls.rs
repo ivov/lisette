@@ -13,6 +13,7 @@ use syntax::types::{
 
 use super::super::context::{Expectation, ExpectationRole};
 use super::super::unify::Dispatched;
+use super::permission::{ConstructionGrant, MissingSupply};
 use super::struct_call::same_nominal;
 use crate::checker::infer::InferCtx;
 use crate::checker::scopes::DeferredMapKeyCheck;
@@ -267,7 +268,8 @@ impl InferCtx<'_> {
         });
 
         let return_ty = if call_kind == CallKind::TupleStructConstructor {
-            if self.tuple_struct_construction_grants_write(&parameters, &new_args) {
+            let grant = self.tuple_struct_construction_grants_write(&parameters, &new_args);
+            if self.record_construction_grant(span, grant) {
                 return_ty.resolve_in(&self.env).make_writable()
             } else {
                 return_ty
@@ -437,13 +439,13 @@ impl InferCtx<'_> {
         &self,
         parameters: &[FunctionParameter],
         args: &[Expression],
-    ) -> bool {
+    ) -> ConstructionGrant {
         self.components_grant_write(
             parameters
                 .iter()
                 .enumerate()
-                .map(|(i, param)| (param.ty.resolve_in(&self.env), args.get(i))),
-            false,
+                .map(|(i, param)| (format!(".{i}"), param.ty.resolve_in(&self.env), args.get(i))),
+            MissingSupply::Absent,
         )
     }
 

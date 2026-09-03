@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing write permission
+    ╭─[test.lis:12:7]
+ 11 │     &Beam {
+ 12 │       rocks,
+    ·       ──┬──
+    ·         ╰── `rocks` is declared `mut Ref<mut Slice<mut Ref<Rock>>>`, but receives `mut Ref<Slice<Ref<Rock>>>`
+ 13 │       hits: 0,
+    ╰────
+  help: `rocks` received less `mut` than declared, so the new `Beam` is read-only. A reference to it is `mut Ref<Beam>` where `mut Ref<mut Beam>` is expected. Declare the parameter `rocks` as `mut Ref<mut Slice<mut Ref<Rock>>>` · code: [infer.needs_writable]

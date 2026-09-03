@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing write permission
+   ╭─[test.lis:6:19]
+ 5 │   let a = [1, 2, 3]
+ 6 │   Holder { items: a }
+   ·                   ┬
+   ·                   ╰── `items` is declared `mut Slice<int>`, but receives `Slice<int>`
+ 7 │ }
+   ╰────
+  help: `items` received less `mut` than declared, so the new `Holder` is read-only where `mut Holder` is expected. Declare `let mut a` · code: [infer.needs_writable]
