@@ -102,6 +102,22 @@ fn kahn_diamond_dependency() {
 }
 
 #[test]
+fn kahn_ready_package_order_is_stable() {
+    let mut edges = HashMap::default();
+    edges.insert(
+        "a".to_string(),
+        HashSet::from_iter(["b".to_string(), "c".to_string()]),
+    );
+    edges.insert("b".to_string(), HashSet::from_iter(["d".to_string()]));
+    edges.insert("c".to_string(), HashSet::from_iter(["d".to_string()]));
+    edges.insert("d".to_string(), HashSet::default());
+
+    let (order, _) = topological_sort(&DependencyGraph::from(edges));
+
+    assert_eq!(order, ["d", "b", "c", "a"]);
+}
+
+#[test]
 fn kahn_simple_cycle() {
     let mut edges = HashMap::default();
     edges.insert("a".to_string(), HashSet::from_iter(["b".to_string()]));
