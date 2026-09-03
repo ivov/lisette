@@ -19,6 +19,7 @@ use std::path::Path;
 pub(crate) struct AnalysisSnapshot {
     pub(crate) analysis: Analysis,
     sources: HashMap<u32, SnapshotSource>,
+    file_ids_by_uri: HashMap<Url, u32>,
     packages: PackageResolver,
 }
 
@@ -81,9 +82,17 @@ impl AnalysisSnapshot {
             );
         }
 
+        let mut file_ids_by_uri = HashMap::default();
+        for (file_id, source) in &sources {
+            file_ids_by_uri
+                .entry(source.uri.clone())
+                .or_insert(*file_id);
+        }
+
         Self {
             analysis,
             sources,
+            file_ids_by_uri,
             packages,
         }
     }
@@ -93,7 +102,8 @@ impl AnalysisSnapshot {
     }
 
     pub(crate) fn document(&self, uri: &Url) -> Option<SnapshotDocument<'_>> {
-        let (file_id, source) = self.sources.iter().find(|(_, source)| &source.uri == uri)?;
+        let file_id = self.file_ids_by_uri.get(uri)?;
+        let source = self.sources.get(file_id)?;
         Some(SnapshotDocument {
             file_id: *file_id,
             file: self.analysis.emit_input.files.get(file_id)?,
