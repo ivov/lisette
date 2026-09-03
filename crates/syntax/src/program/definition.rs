@@ -37,7 +37,37 @@ pub enum TypeAttribute {
     HiddenFields,
 }
 
-pub type Attributes = HashSet<TypeAttribute>;
+impl TypeAttribute {
+    const fn mask(self) -> u8 {
+        match self {
+            Self::Display => 1 << 0,
+            Self::ClosedDomain => 1 << 1,
+            Self::AnonStruct => 1 << 2,
+            Self::HiddenEmbed => 1 << 3,
+            Self::Serialized => 1 << 4,
+            Self::ZeroSafe => 1 << 5,
+            Self::ZeroUnsafe => 1 << 6,
+            Self::HiddenFields => 1 << 7,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Attributes(u8);
+
+impl Attributes {
+    pub fn insert(&mut self, attribute: TypeAttribute) -> bool {
+        let mask = attribute.mask();
+        let was_absent = self.0 & mask == 0;
+        self.0 |= mask;
+        was_absent
+    }
+
+    pub fn contains(&self, attribute: &TypeAttribute) -> bool {
+        self.0 & attribute.mask() != 0
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -880,6 +910,31 @@ pub struct Interface {
 mod tests {
     use super::*;
     use crate::types::Symbol;
+
+    #[test]
+    fn attributes_track_independent_flags() {
+        let mut attributes = Attributes::default();
+
+        attributes.insert(TypeAttribute::Display);
+        attributes.insert(TypeAttribute::Serialized);
+
+        assert_eq!(
+            [
+                attributes.contains(&TypeAttribute::Display),
+                attributes.contains(&TypeAttribute::Serialized),
+                attributes.contains(&TypeAttribute::HiddenFields),
+            ],
+            [true, true, false]
+        );
+    }
+
+    #[test]
+    fn inserting_an_existing_attribute_reports_it_present() {
+        let mut attributes = Attributes::default();
+
+        assert!(attributes.insert(TypeAttribute::Display));
+        assert!(!attributes.insert(TypeAttribute::Display));
+    }
 
     fn generic(name: &str) -> Generic {
         Generic::new(name, vec![], Span::dummy())
