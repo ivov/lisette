@@ -9,12 +9,34 @@ use toml_edit::de;
 
 #[derive(Debug)]
 pub struct DependencyTable {
-    pub deps: BTreeMap<String, GoDependency>,
-    pub spans: BTreeMap<String, Range<usize>>,
+    entries: BTreeMap<String, DependencyEntry>,
     document: toml_edit::ImDocument<String>,
 }
 
+#[derive(Debug)]
+struct DependencyEntry {
+    dependency: GoDependency,
+    span: Option<Range<usize>>,
+}
+
 impl DependencyTable {
+    pub fn dependencies(&self) -> impl Iterator<Item = (&str, &GoDependency)> {
+        self.entries
+            .iter()
+            .map(|(module_path, entry)| (module_path.as_str(), &entry.dependency))
+    }
+
+    pub fn into_dependencies(self) -> BTreeMap<String, GoDependency> {
+        self.entries
+            .into_iter()
+            .map(|(module_path, entry)| (module_path, entry.dependency))
+            .collect()
+    }
+
+    pub fn dependency_span(&self, module_path: &str) -> Option<&Range<usize>> {
+        self.entries.get(module_path)?.span.as_ref()
+    }
+
     pub fn into_document(self) -> toml_edit::DocumentMut {
         self.document.into_mut()
     }
@@ -54,8 +76,7 @@ pub fn parse_dependency_table(text: &str) -> Result<DependencyTable, TableError>
 
     let Some(dependencies) = document.get(TABLE) else {
         return Ok(DependencyTable {
-            deps: BTreeMap::new(),
-            spans: BTreeMap::new(),
+            entries: BTreeMap::new(),
             document,
         });
     };
@@ -68,16 +89,21 @@ pub fn parse_dependency_table(text: &str) -> Result<DependencyTable, TableError>
         }
     }
 
-    let (deps, spans) = match dependencies.get(GO) {
-        Some(go) => (deserialize_go_table(go)?, entry_spans(go)),
-        None => (BTreeMap::new(), BTreeMap::new()),
+    let entries = match dependencies.get(GO) {
+        Some(go) => {
+            let spans = entry_spans(go);
+            deserialize_go_table(go)?
+                .into_iter()
+                .map(|(module_path, dependency)| {
+                    let span = spans.get(&module_path).cloned();
+                    (module_path, DependencyEntry { dependency, span })
+                })
+                .collect()
+        }
+        None => BTreeMap::new(),
     };
 
-    Ok(DependencyTable {
-        deps,
-        spans,
-        document,
-    })
+    Ok(DependencyTable { entries, document })
 }
 
 pub(crate) fn deserialize_go_table(
@@ -142,7 +168,7 @@ mod tests {
     fn table(text: &str) -> BTreeMap<String, GoDependency> {
         parse_dependency_table(text)
             .unwrap_or_else(|e| panic!("{}", e.message))
-            .deps
+            .into_dependencies()
     }
 
     #[test]
@@ -165,11 +191,11 @@ mod tests {
         let table = parse_dependency_table(text).ok().unwrap();
 
         assert_eq!(
-            &text[table.spans["a.b/c"].clone()],
+            &text[table.dependency_span("a.b/c").unwrap().clone()],
             "\"a.b/c\" = \"v1.0.0\""
         );
         assert_eq!(
-            &text[table.spans["d.e/f"].clone()],
+            &text[table.dependency_span("d.e/f").unwrap().clone()],
             "\"d.e/f\" = { version = \"v2.0.0\" }"
         );
     }

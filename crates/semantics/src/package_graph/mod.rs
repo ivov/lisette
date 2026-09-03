@@ -673,7 +673,7 @@ pub(crate) fn check_dependency_blocks(
             }
         };
 
-        for (module_path, dep) in &table.deps {
+        for (module_path, dep) in table.dependencies() {
             if let Err(message) = deps::validate_script_entry(module_path, dep) {
                 let span = entry_span(first, &table, module_path, *file_id);
                 sink.push(diagnostics::package_graph::invalid_dependency_table(
@@ -690,7 +690,7 @@ fn entry_span(
     module_path: &str,
     file_id: u32,
 ) -> Span {
-    match table.spans.get(module_path) {
+    match table.dependency_span(module_path) {
         Some(range) => block.map_span(range.clone(), file_id),
         None => block.span,
     }
