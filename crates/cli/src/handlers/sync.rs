@@ -74,8 +74,11 @@ pub fn sync(script: Option<&str>) -> i32 {
     let (prewarm_result, needs_separator) = if !non_blank_imports.is_empty() {
         let target = Target::host();
 
-        let locator =
-            deps::TypedefLocator::new(manifest.go_deps(), Some(project_root.clone()), target);
+        let locator = deps::TypedefLocator::new(
+            manifest.go_deps().clone(),
+            Some(project_root.clone()),
+            target,
+        );
         let go_directive = go_cli::project_go_directive(project_root);
         if let Err(msg) =
             go_cli::write_go_mod(target_dir, &manifest.project.name, &locator, &go_directive)

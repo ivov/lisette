@@ -623,7 +623,7 @@ fn enrich_with_parent_hint(workspace: &GoWorkspace, path: &str, msg: String) -> 
 
 /// Write `target/go.mod` from the manifest, plus one `extra` dep not yet in it.
 fn write_target_go_mod(setup: &MutationProject, extra: Option<(&str, deps::GoDependency)>) -> bool {
-    let mut go_deps = setup.manifest.go_deps();
+    let mut go_deps = setup.manifest.go_deps().clone();
     if let Some((module, dep)) = extra {
         go_deps.insert(module.to_string(), dep);
     }
@@ -669,7 +669,7 @@ fn strip_replacement_for(go_deps: &mut BTreeMap<String, deps::GoDependency>, pac
 fn setup_project(parsed_dep: ParsedDependency) -> Result<AddPlan, i32> {
     let setup = MutationProject::open()?;
     print_preview_notice("Third-party Go dependencies", true);
-    let mut go_deps = setup.manifest.go_deps();
+    let mut go_deps = setup.manifest.go_deps().clone();
     strip_replacement_for(&mut go_deps, &parsed_dep.requested_package);
     if !write_target_go_mod_from(&setup, go_deps) {
         return Err(1);

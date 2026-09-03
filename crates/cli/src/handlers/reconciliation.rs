@@ -201,9 +201,9 @@ pub(crate) fn reconcile_declared_replacements(
 ) -> Result<(), i32> {
     let replaced_roots: Vec<(String, deps::ReplacementSource)> = manifest
         .go_deps()
-        .into_iter()
+        .iter()
         .filter_map(|(module, dep)| match dep {
-            deps::GoDependency::Replaced { source, .. } => Some((module, source)),
+            deps::GoDependency::Replaced { source, .. } => Some((module.clone(), source.clone())),
             deps::GoDependency::Remote { .. } => None,
         })
         .collect();
@@ -215,7 +215,7 @@ pub(crate) fn reconcile_declared_replacements(
     // Seed every declared dep so MVS picks the versions the real build sees.
     go_cli::invalidate_go_mod_stamp(target_dir);
     let locator = deps::TypedefLocator::new(
-        manifest.go_deps(),
+        manifest.go_deps().clone(),
         Some(project_root.to_path_buf()),
         Target::host(),
     );
@@ -732,9 +732,9 @@ pub(crate) fn declared_replacements(
 ) -> HashMap<String, deps::ReplacementSource> {
     manifest
         .go_deps()
-        .into_iter()
+        .iter()
         .filter_map(|(module, dep)| match dep {
-            deps::GoDependency::Replaced { source, .. } => Some((module, source)),
+            deps::GoDependency::Replaced { source, .. } => Some((module.clone(), source.clone())),
             deps::GoDependency::Remote { .. } => None,
         })
         .collect()

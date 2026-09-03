@@ -14,7 +14,8 @@ use toml_edit::de as toml_de;
 pub struct Manifest {
     pub project: Project,
     toolchain: Option<Toolchain>,
-    dependencies: Option<Dependencies>,
+    #[serde(default)]
+    dependencies: Dependencies,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -28,7 +29,7 @@ pub struct Toolchain {
     pub lis: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct Dependencies {
     #[serde(default)]
     pub go: BTreeMap<String, GoDependency>,
@@ -168,11 +169,8 @@ fn split_replacement(replacement: &str) -> Result<(String, String), String> {
 }
 
 impl Manifest {
-    pub fn go_deps(&self) -> BTreeMap<String, GoDependency> {
-        self.dependencies
-            .as_ref()
-            .map(|d| d.go.clone())
-            .unwrap_or_default()
+    pub fn go_deps(&self) -> &BTreeMap<String, GoDependency> {
+        &self.dependencies.go
     }
 }
 
@@ -211,7 +209,7 @@ pub fn parse_manifest(project_root: &Path) -> Result<Manifest, String> {
 /// A dotless path is reported first and by name, since it reads as the Go
 /// standard library rather than as a malformed path.
 fn validate_go_dep_paths(manifest: &Manifest) -> Result<(), String> {
-    for (key, dep) in &manifest.go_deps() {
+    for (key, dep) in manifest.go_deps() {
         if let GoDependency::Replaced { source, .. } = dep {
             if !crate::is_third_party(key) {
                 return Err(match source {
@@ -314,7 +312,7 @@ pub fn check_no_subpackage_deps(manifest: &Manifest) -> Result<(), String> {
         )
     };
 
-    for (key, dep) in &deps {
+    for (key, dep) in deps {
         let Some((parent, parent_dep)) = deps
             .iter()
             .find(|(other, _)| other.as_str() != key.as_str() && is_pkg_under(key, other))

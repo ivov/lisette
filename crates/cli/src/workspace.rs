@@ -1065,8 +1065,11 @@ impl BindgenSetup for WorkspaceBindgenSetup {
 
         let lock = lock::acquire_target_lock_quiet(&target_dir)?;
 
-        let manifest_locator =
-            TypedefLocator::new(manifest.go_deps(), Some(project_root.to_path_buf()), target);
+        let manifest_locator = TypedefLocator::new(
+            manifest.go_deps().clone(),
+            Some(project_root.to_path_buf()),
+            target,
+        );
         let go_directive = go_cli::project_go_directive(project_root);
         go_cli::write_go_mod(
             &target_dir,
