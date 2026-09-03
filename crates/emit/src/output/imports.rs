@@ -9,6 +9,8 @@ use syntax::program::{File, FileImport, PackageId};
 use crate::names::packages::{PackageRequirements, PackageUse};
 use syntax::program;
 
+use super::OutputImport;
+
 /// Source imports resolved once during the plan phase. Keeping each import as
 /// one record avoids synchronizing separate lookup and emission collections.
 pub(crate) struct ImportPlan {
@@ -194,11 +196,19 @@ impl<'a> ImportBuilder<'a> {
         }
     }
 
-    pub fn build(mut self) -> (Vec<(String, String)>, Vec<LisetteDiagnostic>) {
+    pub fn build(mut self) -> (Vec<OutputImport>, Vec<LisetteDiagnostic>) {
         self.imports
             .retain(|path, alias| alias == "_" || self.used_packages.contains(path));
-        let mut entries: Vec<(String, String)> = self.imports.into_iter().collect();
-        entries.extend(self.duplicate_imports);
+        let mut entries: Vec<OutputImport> = self
+            .imports
+            .into_iter()
+            .map(|(path, alias)| OutputImport { path, alias })
+            .collect();
+        entries.extend(
+            self.duplicate_imports
+                .into_iter()
+                .map(|(path, alias)| OutputImport { path, alias }),
+        );
         entries.sort();
         entries.dedup();
         let diagnostics = detect_collisions(&entries, self.go_package_ids);
@@ -207,19 +217,22 @@ impl<'a> ImportBuilder<'a> {
 }
 
 fn detect_collisions(
-    entries: &[(String, String)],
+    entries: &[OutputImport],
     go_package_ids: &HashSet<String>,
 ) -> Vec<LisetteDiagnostic> {
     if entries.len() < 2 {
         return Vec::new();
     }
     let mut groups: HashMap<String, Vec<&str>> = HashMap::default();
-    for (path, alias) in entries {
-        if alias == "_" {
+    for entry in entries {
+        if entry.alias == "_" {
             continue;
         }
-        let qualifier = effective_qualifier(path, alias, go_package_ids);
-        groups.entry(qualifier).or_default().push(path.as_str());
+        let qualifier = effective_qualifier(&entry.path, &entry.alias, go_package_ids);
+        groups
+            .entry(qualifier)
+            .or_default()
+            .push(entry.path.as_str());
     }
     let mut groups: Vec<_> = groups.into_iter().filter(|(_, p)| p.len() > 1).collect();
     groups.sort_by(|a, b| a.0.cmp(&b.0));

@@ -367,7 +367,11 @@ pub fn write_go_outputs(dir: &Path, files: &[OutputFile]) -> Result<EmitWriteRes
             });
         }
 
-        let mut imports: Vec<String> = file.imports.iter().map(|(path, _)| path.clone()).collect();
+        let mut imports: Vec<String> = file
+            .imports
+            .iter()
+            .map(|import| import.path.clone())
+            .collect();
         imports.sort();
         imports.dedup();
         new_manifest.push(ManifestEntry {

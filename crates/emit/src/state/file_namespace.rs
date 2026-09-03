@@ -1,6 +1,7 @@
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::names::packages::{PackageRequirements, PackageUse};
+use crate::output::OutputImport;
 use crate::output::imports::{ImportBuilder, ImportPlan};
 use diagnostics::LisetteDiagnostic;
 use ecow::EcoString;
@@ -50,7 +51,7 @@ impl FileNamespace {
         self,
         go_package_names: &HashMap<String, String>,
         go_package_ids: &rustc_hash::FxHashSet<String>,
-    ) -> (Vec<(String, String)>, Vec<LisetteDiagnostic>) {
+    ) -> (Vec<OutputImport>, Vec<LisetteDiagnostic>) {
         let mut builder = ImportBuilder::from_plan(self.imports, go_package_names, go_package_ids);
         builder.extend_with_package_uses(&self.requirements);
         builder.build()
