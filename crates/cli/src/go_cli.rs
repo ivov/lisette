@@ -327,6 +327,21 @@ pub struct ManifestEntry {
     pub imports: Vec<String>,
 }
 
+struct StoredManifestEntry {
+    content_hash: u64,
+    imports: Vec<String>,
+}
+
+impl StoredManifestEntry {
+    fn with_name(self, name: String) -> ManifestEntry {
+        ManifestEntry {
+            name,
+            content_hash: self.content_hash,
+            imports: self.imports,
+        }
+    }
+}
+
 pub struct EmitWriteResult {
     pub changed: Vec<PathBuf>,
     pub new_manifest: Vec<ManifestEntry>,
@@ -341,13 +356,13 @@ pub fn write_go_outputs(dir: &Path, files: &[OutputFile]) -> Result<EmitWriteRes
         let go_file_path = dir.join(&file.name);
         let go_code = file.to_go_unformatted();
         let hash = hash_go_code(&go_code);
-        let prior = prior_manifest.remove(&file.name);
+        let prior = prior_manifest.remove_entry(&file.name);
 
-        if let Some(entry) = prior
+        if let Some((name, entry)) = prior
             && entry.content_hash == hash
             && go_file_path.exists()
         {
-            new_manifest.push(entry);
+            new_manifest.push(entry.with_name(name));
             continue;
         }
 
@@ -385,7 +400,7 @@ pub fn write_go_outputs(dir: &Path, files: &[OutputFile]) -> Result<EmitWriteRes
     // Preserve entries for files emit skipped this build but still on disk.
     for (name, entry) in prior_manifest {
         if dir.join(&name).exists() {
-            new_manifest.push(entry);
+            new_manifest.push(entry.with_name(name));
         }
     }
 
@@ -443,7 +458,7 @@ fn hash_go_code(content: &str) -> u64 {
     h
 }
 
-fn read_emit_manifest(dir: &Path) -> HashMap<String, ManifestEntry> {
+fn read_emit_manifest(dir: &Path) -> HashMap<String, StoredManifestEntry> {
     let Ok(content) = fs::read_to_string(emit_manifest_path(dir)) else {
         return Default::default();
     };
@@ -460,8 +475,7 @@ fn read_emit_manifest(dir: &Path) -> HashMap<String, ManifestEntry> {
                 .unwrap_or_default();
             Some((
                 name.to_string(),
-                ManifestEntry {
-                    name: name.to_string(),
+                StoredManifestEntry {
                     content_hash: hash,
                     imports,
                 },
