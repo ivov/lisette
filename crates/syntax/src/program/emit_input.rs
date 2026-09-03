@@ -105,10 +105,12 @@ impl TestFunction {
 #[derive(Debug, Clone, Default)]
 pub struct TestIndex {
     tests: Vec<TestFunction>,
+    qualified_names: HashSet<Symbol>,
 }
 
 impl TestIndex {
     pub fn push(&mut self, test: TestFunction) {
+        self.qualified_names.insert(test.qualified_name.clone());
         self.tests.push(test);
     }
 
@@ -117,9 +119,7 @@ impl TestIndex {
     }
 
     pub fn contains_qualified(&self, qualified_name: &str) -> bool {
-        self.tests
-            .iter()
-            .any(|test| test.qualified_name == qualified_name)
+        self.qualified_names.contains(qualified_name)
     }
 }
 
