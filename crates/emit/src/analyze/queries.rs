@@ -363,33 +363,13 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn is_enum_field_pointer(&self, ty: &Type, variant: &str, index: usize) -> bool {
+    pub(crate) fn is_enum_field_recursive(&self, ty: &Type, variant: &str, index: usize) -> bool {
         if let Type::Nominal { id, .. } = ty
             && let Some(layout) = self.enum_layout(id.as_ref())
             && let Some(variant_layout) = layout.get_variant(variant)
             && let Some(field) = variant_layout.fields.get(index)
         {
-            return field.go_type.starts_with('*');
-        }
-        false
-    }
-
-    /// True when the field's pointer comes from an explicit `Ref<T>` (not
-    /// from auto-pointer recursion support). User `.*` deref relies on this.
-    pub(crate) fn is_enum_field_source_ref(&self, ty: &Type, variant: &str, index: usize) -> bool {
-        if let Type::Nominal { id, .. } = ty
-            && let Some(Definition {
-                body: DefinitionBody::Enum { variants, .. },
-                ..
-            }) = self.facts.definition(id.as_str())
-        {
-            for v in variants {
-                if v.name == variant
-                    && let Some(field) = v.fields.iter().nth(index)
-                {
-                    return field.ty.is_ref();
-                }
-            }
+            return field.is_recursive;
         }
         false
     }
