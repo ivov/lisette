@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788459695183,
+  "lastUpdate": 1788462821591,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -31711,6 +31711,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 8771,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6036,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2911,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 740,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9484,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "368e74d3c2cde60a952501d9a9383f5ec73cb300",
+          "message": "fix: tighten `for mut` diagnostics (#1385)",
+          "timestamp": "2026-09-03T21:13:11+02:00",
+          "tree_id": "6623ed5d4012d8094caf72321d5854ee3f04137c",
+          "url": "https://github.com/ivov/lisette/commit/368e74d3c2cde60a952501d9a9383f5ec73cb300"
+        },
+        "date": 1788462820445,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 139412,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32568,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28042,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19187,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14904,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13978,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8793,
             "unit": "lines"
           },
           {
