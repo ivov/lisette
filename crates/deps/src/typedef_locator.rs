@@ -216,6 +216,7 @@ pub trait BindgenSetup: Send + Sync {
 #[derive(Debug, Clone, Default)]
 pub struct TypedefLocator {
     deps: BTreeMap<String, GoDependency>,
+    has_local_replacement: bool,
     project_root: Option<PathBuf>,
     target: Target,
     bindgen: Option<Arc<dyn Bindgen>>,
@@ -229,8 +230,18 @@ impl TypedefLocator {
         project_root: Option<PathBuf>,
         target: Target,
     ) -> Self {
+        let has_local_replacement = deps.values().any(|dep| {
+            matches!(
+                dep,
+                GoDependency::Replaced {
+                    source: ReplacementSource::Local { .. },
+                    ..
+                }
+            )
+        });
         Self {
             deps,
+            has_local_replacement,
             project_root,
             target,
             bindgen: None,
@@ -254,16 +265,8 @@ impl TypedefLocator {
         self.local_stamp
             .get_or_init(|| {
                 let project_root = self.project_root.as_deref()?;
-                let has_local = self.deps.values().any(|dep| {
-                    matches!(
-                        dep,
-                        GoDependency::Replaced {
-                            source: ReplacementSource::Local { .. },
-                            ..
-                        }
-                    )
-                });
-                has_local.then(|| local_source::stamp_hash(&self.deps, Some(project_root)))
+                self.has_local_replacement
+                    .then(|| local_source::stamp_hash(&self.deps, Some(project_root)))
             })
             .as_deref()
     }
