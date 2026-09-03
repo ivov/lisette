@@ -270,14 +270,13 @@ impl<'a> Comments<'a> {
     }
 
     pub(crate) fn has_comment_immediately_before(&self, position: u32) -> bool {
-        let Some(comment) = self.line_trivia[self.line_cursor..]
-            .iter()
-            .filter_map(|event| match event {
-                LineTrivia::Comment(comment) if comment.start < position => Some(comment),
-                _ => None,
-            })
-            .next_back()
-        else {
+        let events = &self.line_trivia[self.line_cursor..];
+        let before = events.partition_point(|event| event.start() < position);
+        let comment = events[..before].iter().rev().find_map(|event| match event {
+            LineTrivia::Comment(comment) => Some(comment),
+            _ => None,
+        });
+        let Some(comment) = comment else {
             return false;
         };
         self.source
@@ -456,6 +455,22 @@ mod tests {
 
     fn render(doc: Option<Document<'_>>) -> Option<String> {
         doc.map(|d| d.to_pretty_string(80))
+    }
+
+    #[test]
+    fn immediately_before_ignores_future_comments() {
+        let source = "// old\nmember\n// future\n";
+        let c = comments(source, vec![(0, 6), (14, 23)], Vec::new());
+
+        assert!(c.has_comment_immediately_before(7));
+    }
+
+    #[test]
+    fn immediately_before_rejects_intervening_code() {
+        let source = "// old\nmember\n// future\n";
+        let c = comments(source, vec![(0, 6), (14, 23)], Vec::new());
+
+        assert!(!c.has_comment_immediately_before(14));
     }
 
     #[test]
