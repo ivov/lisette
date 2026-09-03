@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::go_cli;
-use crate::output::{print_progress, print_warning};
+use crate::output::{DependencyGraph, print_progress, print_warning};
 use crate::workspace::{GoWorkspace, UnresolvedTransitive};
 use crate::{cli_error, error};
 use deps::GoModule;
@@ -141,18 +141,8 @@ impl GraphResult {
             .collect()
     }
 
-    pub(crate) fn versions(&self) -> HashMap<String, String> {
-        self.modules
-            .iter()
-            .map(|(module, state)| (module.clone(), state.version().to_string()))
-            .collect()
-    }
-
-    pub(crate) fn edges(&self) -> HashMap<String, Vec<String>> {
-        self.modules
-            .iter()
-            .map(|(module, state)| (module.clone(), state.dependencies().to_vec()))
-            .collect()
+    fn dependencies(&self, module: &str) -> Option<&[String]> {
+        self.modules.get(module).map(ModuleState::dependencies)
     }
 
     /// Invert `edges` into a `module → parents` map, excluding the added root.
@@ -172,6 +162,16 @@ impl GraphResult {
             parents.sort();
         }
         transitives
+    }
+}
+
+impl DependencyGraph for GraphResult {
+    fn version(&self, module: &str) -> Option<&str> {
+        GraphResult::version(self, module)
+    }
+
+    fn dependencies(&self, module: &str) -> Option<&[String]> {
+        GraphResult::dependencies(self, module)
     }
 }
 
@@ -1470,7 +1470,10 @@ mod tests {
             vec!["manifest-child".to_string()],
         );
 
-        assert_eq!(graph.edges()["parent"], ["manifest-child", "typedef-child"]);
+        assert_eq!(
+            graph.dependencies("parent").unwrap(),
+            ["manifest-child", "typedef-child"]
+        );
     }
 
     #[test]
@@ -1484,6 +1487,6 @@ mod tests {
 
         graph.expand("module".to_string(), "v2.0.0".to_string(), Vec::new());
 
-        assert!(graph.edges()["module"].is_empty());
+        assert!(graph.dependencies("module").unwrap().is_empty());
     }
 }

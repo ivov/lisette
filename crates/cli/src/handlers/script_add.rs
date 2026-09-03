@@ -142,8 +142,7 @@ pub(super) fn run(file: &Path, dep_string: &str) -> i32 {
     print_add_success(
         &resolved.canonical_module,
         &version,
-        &graph.edges(),
-        &graph.versions(),
+        &graph,
         &upgraded_tuples,
         None,
     );

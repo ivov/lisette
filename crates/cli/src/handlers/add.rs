@@ -376,13 +376,10 @@ fn run_add_pipeline(plan: AddPlan) -> i32 {
         deps::ReplacementSource::Local { path } => crate::output::ReplacementLabel::Local { path },
     });
 
-    let edges = module_graph.edges();
-    let versions = module_graph.versions();
     print_add_success(
         &resolved_dep.canonical_module,
         &dep_version,
-        &edges,
-        &versions,
+        &module_graph,
         &upgraded_tuples,
         replacement_label,
     );
