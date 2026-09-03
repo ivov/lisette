@@ -7,7 +7,7 @@ use serde::Deserialize;
 use syntax::ast::Span;
 use syntax::program::TestFunction;
 
-use crate::go_cli::GoTestEvent;
+use crate::go_cli::{GoTestAction, GoTestEvent};
 use crate::output::{format_backticks, format_elapsed};
 use diagnostics::LisetteDiagnostic;
 use lisette::pipeline::{Sources, TestIndex};
@@ -349,7 +349,7 @@ pub fn build_report_filtered(
     let mut test_elapsed: f64 = 0.0;
 
     for event in events {
-        if event.action == "attr"
+        if event.action == GoTestAction::Attr
             && let (Some(key), Some(test), Some(value)) =
                 (event.key.as_deref(), &event.test, &event.value)
             && let Some(attribute) = decode_test_attribute(key, value)
@@ -436,8 +436,8 @@ fn handle_package_event(
     packages: &mut HashMap<String, PackageEvents>,
     test_elapsed: &mut f64,
 ) {
-    match event.action.as_str() {
-        "build-output" => {
+    match event.action {
+        GoTestAction::BuildOutput => {
             if let Some(text) = &event.output {
                 build_output.push_str(text);
             }
@@ -448,7 +448,7 @@ fn handle_package_event(
                     .record_build_failure();
             }
         }
-        "build-fail" => {
+        GoTestAction::BuildFail => {
             if let Some(path) = &event.import_path {
                 packages
                     .entry(package_of_import_path(path).to_string())
@@ -456,7 +456,7 @@ fn handle_package_event(
                     .record_build_failure();
             }
         }
-        "output" => {
+        GoTestAction::Output => {
             if let Some(text) = &event.output {
                 packages
                     .entry(event.package.clone())
@@ -465,10 +465,10 @@ fn handle_package_event(
                     .push_str(text);
             }
         }
-        "pass" => {
+        GoTestAction::Pass => {
             *test_elapsed = test_elapsed.max(event.elapsed.unwrap_or(0.0));
         }
-        "fail" => {
+        GoTestAction::Fail => {
             packages
                 .entry(event.package.clone())
                 .or_default()
@@ -480,26 +480,26 @@ fn handle_package_event(
 }
 
 fn handle_test_event(event: &GoTestEvent, state: &mut TestEvents) {
-    match event.action.as_str() {
-        "run" => {
+    match event.action {
+        GoTestAction::Run => {
             state.execution.start();
         }
-        "pass" => {
+        GoTestAction::Pass => {
             state
                 .execution
                 .finish(TerminalStatus::Passed, event.elapsed);
         }
-        "fail" => {
+        GoTestAction::Fail => {
             state
                 .execution
                 .finish(TerminalStatus::Failed, event.elapsed);
         }
-        "skip" => {
+        GoTestAction::Skip => {
             state
                 .execution
                 .finish(TerminalStatus::Skipped, event.elapsed);
         }
-        "output" => {
+        GoTestAction::Output => {
             if let Some(text) = &event.output {
                 state.output.push_str(text);
             }
@@ -1438,7 +1438,7 @@ mod tests {
 
     fn event(action: &str, package: &str, test: Option<&str>, output: Option<&str>) -> GoTestEvent {
         GoTestEvent {
-            action: action.to_string(),
+            action: serde_json::from_value(serde_json::Value::String(action.to_string())).unwrap(),
             package: package.to_string(),
             test: test.map(str::to_string),
             elapsed: Some(0.003),
@@ -1451,7 +1451,7 @@ mod tests {
 
     fn build_output_event(package: &str, output: &str) -> GoTestEvent {
         GoTestEvent {
-            action: "build-output".to_string(),
+            action: GoTestAction::BuildOutput,
             package: String::new(),
             test: None,
             elapsed: None,
@@ -1464,7 +1464,7 @@ mod tests {
 
     fn attr_event(package: &str, test: &str, value: &str) -> GoTestEvent {
         GoTestEvent {
-            action: "attr".to_string(),
+            action: GoTestAction::Attr,
             package: package.to_string(),
             test: Some(test.to_string()),
             elapsed: None,
@@ -1477,7 +1477,7 @@ mod tests {
 
     fn skip_attr_event(package: &str, test: &str, reason: &str) -> GoTestEvent {
         GoTestEvent {
-            action: "attr".to_string(),
+            action: GoTestAction::Attr,
             package: package.to_string(),
             test: Some(test.to_string()),
             elapsed: None,
@@ -1490,7 +1490,7 @@ mod tests {
 
     fn subtest_attr_event(package: &str, test: &str, name: &str) -> GoTestEvent {
         GoTestEvent {
-            action: "attr".to_string(),
+            action: GoTestAction::Attr,
             package: package.to_string(),
             test: Some(test.to_string()),
             elapsed: None,
@@ -1504,7 +1504,7 @@ mod tests {
     fn log_attr_event(package: &str, test: &str, file: u32, value: &str) -> GoTestEvent {
         let record = format!(r#"{{"file":{file},"lo":0,"hi":5,"value":{value:?}}}"#);
         GoTestEvent {
-            action: "attr".to_string(),
+            action: GoTestAction::Attr,
             package: package.to_string(),
             test: Some(test.to_string()),
             elapsed: None,

@@ -740,11 +740,27 @@ pub fn verify_go_packages(
     }
 }
 
+/// An action from one line of `go test -json` output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GoTestAction {
+    Attr,
+    BuildFail,
+    BuildOutput,
+    Fail,
+    Output,
+    Pass,
+    Run,
+    Skip,
+    #[serde(other)]
+    Other,
+}
+
 /// One line of `go test -json` output (`elapsed` is in seconds).
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct GoTestEvent {
-    pub action: String,
+    pub action: GoTestAction,
     #[serde(default)]
     pub package: String,
     pub test: Option<String>,
@@ -839,6 +855,13 @@ mod tests {
 
     fn windows() -> Target {
         Target::new("windows", "amd64")
+    }
+
+    #[test]
+    fn unknown_go_test_action_deserializes_as_other() {
+        let event: GoTestEvent = serde_json::from_str(r#"{"Action":"pause"}"#).unwrap();
+
+        assert_eq!(event.action, GoTestAction::Other);
     }
 
     #[test]
