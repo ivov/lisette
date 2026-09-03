@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::{Arc, PoisonError};
 
 use crate::protocol::*;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
@@ -417,12 +417,13 @@ impl SharedState {
     pub(crate) fn open_document_snapshots(&self) -> Vec<Arc<AnalysisSnapshot>> {
         let uris: Vec<Url> = self.workspace().documents.keys().cloned().collect();
         let mut keys: Vec<AnalysisKey> = Vec::new();
+        let mut seen = FxHashSet::default();
         for uri in uris {
             if self.validate(&uri).is_some() {
                 continue;
             }
             if let Some(key) = self.key_for(&uri)
-                && !keys.contains(&key)
+                && seen.insert(key.clone())
             {
                 keys.push(key);
             }
