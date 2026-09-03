@@ -59,8 +59,8 @@ pub fn check_redundant_comparison(expression: &Expression, ctx: &NodeCtx) {
 
 #[derive(Clone, Copy)]
 struct Interval {
-    low: Bound,
-    high: Bound,
+    low: Option<Bound>,
+    high: Option<Bound>,
 }
 
 /// The interval a `variable OP literal` comparison constrains its operand to,
@@ -72,23 +72,23 @@ fn comparison_interval(expression: &Expression) -> Option<(&Expression, Interval
     let interval = match operator {
         LessThan => Interval {
             low: None,
-            high: Some((bound, false)),
+            high: Some(Bound::new(bound, false)),
         },
         LessThanOrEqual => Interval {
             low: None,
-            high: Some((bound, true)),
+            high: Some(Bound::new(bound, true)),
         },
         GreaterThan => Interval {
-            low: Some((bound, false)),
+            low: Some(Bound::new(bound, false)),
             high: None,
         },
         GreaterThanOrEqual => Interval {
-            low: Some((bound, true)),
+            low: Some(Bound::new(bound, true)),
             high: None,
         },
         Equal => Interval {
-            low: Some((bound, true)),
-            high: Some((bound, true)),
+            low: Some(Bound::new(bound, true)),
+            high: Some(Bound::new(bound, true)),
         },
         _ => return None,
     };

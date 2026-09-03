@@ -88,7 +88,10 @@ fn collect_conjuncts<'a>(
 }
 
 enum Constraint {
-    Bounded { low: Bound, high: Bound },
+    Bounded {
+        low: Option<Bound>,
+        high: Option<Bound>,
+    },
     Excluded(i128),
 }
 
@@ -101,23 +104,23 @@ fn comparison_constraint(expression: &Expression) -> Option<(&Expression, Constr
     let constraint = match operator {
         LessThan => Constraint::Bounded {
             low: None,
-            high: Some((bound, false)),
+            high: Some(Bound::new(bound, false)),
         },
         LessThanOrEqual => Constraint::Bounded {
             low: None,
-            high: Some((bound, true)),
+            high: Some(Bound::new(bound, true)),
         },
         GreaterThan => Constraint::Bounded {
-            low: Some((bound, false)),
+            low: Some(Bound::new(bound, false)),
             high: None,
         },
         GreaterThanOrEqual => Constraint::Bounded {
-            low: Some((bound, true)),
+            low: Some(Bound::new(bound, true)),
             high: None,
         },
         Equal => Constraint::Bounded {
-            low: Some((bound, true)),
-            high: Some((bound, true)),
+            low: Some(Bound::new(bound, true)),
+            high: Some(Bound::new(bound, true)),
         },
         NotEqual => Constraint::Excluded(bound),
         _ => return None,
@@ -129,8 +132,8 @@ fn comparison_constraint(expression: &Expression) -> Option<(&Expression, Constr
 /// The integer constraints on one operand, accumulated across the chain.
 struct Group<'a> {
     operand: &'a Expression,
-    low: Bound,
-    high: Bound,
+    low: Option<Bound>,
+    high: Option<Bound>,
     excluded: Vec<i128>,
 }
 
@@ -157,16 +160,15 @@ impl<'a> Group<'a> {
     // Bounds are a continuous interval: `x > 0 && x < 1` (empty only for
     // integers) is deliberately not flagged, since it holds for `float64`.
     fn is_unsatisfiable(&self) -> bool {
-        let (Some((low, low_inclusive)), Some((high, high_inclusive))) = (self.low, self.high)
-        else {
+        let (Some(low), Some(high)) = (self.low, self.high) else {
             return false;
         };
-        if low > high {
+        if low.value > high.value {
             return true;
         }
-        if low == high {
+        if low.value == high.value {
             // Single point `low`: empty if either side excludes it or a `!=` rules it out.
-            return !(low_inclusive && high_inclusive) || self.excluded.contains(&low);
+            return !(low.inclusive && high.inclusive) || self.excluded.contains(&low.value);
         }
         false
     }

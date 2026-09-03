@@ -2,8 +2,17 @@ use semantics::store::Store;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
 use syntax::types::SimpleKind;
 
-/// A value bound: `(value, inclusive)`, or `None` for an open side.
-pub(crate) type Bound = Option<(i128, bool)>;
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Bound {
+    pub(crate) value: i128,
+    pub(crate) inclusive: bool,
+}
+
+impl Bound {
+    pub(crate) fn new(value: i128, inclusive: bool) -> Self {
+        Self { value, inclusive }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MaskOp {
@@ -339,16 +348,20 @@ pub(crate) fn prelude_min_max(expression: &Expression) -> Option<MinMaxCall<'_>>
 
 /// The more restrictive of two bounds; `first_wins(a, b)` is true when `a`'s
 /// value is tighter. At equal values the bound stays inclusive only if both were.
-pub(crate) fn tighter(a: Bound, b: Bound, first_wins: impl Fn(i128, i128) -> bool) -> Bound {
+pub(crate) fn tighter(
+    a: Option<Bound>,
+    b: Option<Bound>,
+    first_wins: impl Fn(i128, i128) -> bool,
+) -> Option<Bound> {
     match (a, b) {
         (None, other) | (other, None) => other,
-        (Some((av, ai)), Some((bv, bi))) => {
-            if av == bv {
-                Some((av, ai && bi))
-            } else if first_wins(av, bv) {
-                Some((av, ai))
+        (Some(a), Some(b)) => {
+            if a.value == b.value {
+                Some(Bound::new(a.value, a.inclusive && b.inclusive))
+            } else if first_wins(a.value, b.value) {
+                Some(a)
             } else {
-                Some((bv, bi))
+                Some(b)
             }
         }
     }
