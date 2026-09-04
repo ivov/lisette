@@ -154,27 +154,27 @@ pub fn unqualified_name(id: &str) -> &str {
 pub const GO_IMPORT_PREFIX: &str = "go:";
 
 /// Resolve the package of a qualified ID. For `go:` IDs containing `/`,
-/// does a longest-prefix match against `package_ids` to disambiguate paths
+/// does a longest-prefix match against known packages to disambiguate paths
 /// whose package segment contains dots (e.g. `gopkg.in/yaml.v3`). Otherwise
 /// splits on the first dot. Returns `None` when the id has no dot and is
 /// not a registered `go:` package.
-pub fn package_for_qualified_name<'a, I>(id: &'a str, package_ids: I) -> Option<&'a str>
-where
-    I: IntoIterator<Item = &'a str>,
-{
+pub fn package_for_qualified_name(
+    id: &str,
+    mut contains_package: impl FnMut(&str) -> bool,
+) -> Option<&str> {
     if !id.starts_with(GO_IMPORT_PREFIX) || !id.contains('/') {
         return id.split_once('.').map(|(m, _)| m);
     }
-    let mut best: Option<&str> = None;
-    for package_id in package_ids {
-        if id.starts_with(package_id)
-            && id.as_bytes().get(package_id.len()) == Some(&b'.')
-            && best.is_none_or(|prev| package_id.len() > prev.len())
-        {
-            best = Some(package_id);
+
+    let mut end = id.len();
+    while let Some(separator) = id[..end].rfind('.') {
+        let candidate = &id[..separator];
+        if contains_package(candidate) {
+            return Some(candidate);
         }
+        end = separator;
     }
-    best
+    None
 }
 
 fn is_range_type_name(name: &str) -> bool {

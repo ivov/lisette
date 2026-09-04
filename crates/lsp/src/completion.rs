@@ -1,5 +1,4 @@
 use crate::protocol::*;
-use rustc_hash::FxHashSet;
 use semantics::checker::promotion::{self, MemberKind};
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::attributes::{AttributeInfo, AttributeTarget, attributes_for};
@@ -365,12 +364,11 @@ pub(crate) fn get_struct_literal_completions(
     let mut items = Vec::new();
     struct_field_completions(type_id, snapshot, same_package, &mut items);
     enum_variant_field_completions(type_id, call_name, snapshot, &mut items);
-    let assigned_names: FxHashSet<&str> = assigned
-        .iter()
-        .filter(|fa| !cursor_on_name(fa, offset))
-        .map(|fa| fa.name.as_str())
-        .collect();
-    items.retain(|item| !assigned_names.contains(item.label.as_str()));
+    items.retain(|item| {
+        !assigned
+            .iter()
+            .any(|fa| fa.name.as_str() == item.label && !cursor_on_name(fa, offset))
+    });
     items
 }
 
@@ -434,7 +432,6 @@ pub(crate) fn get_type_completions(
     let method_id = target.as_deref().unwrap_or(type_id);
 
     let mut items = enum_variant_items(method_id, snapshot).unwrap_or_default();
-    let mut seen: FxHashSet<String> = items.iter().map(|item| item.label.clone()).collect();
 
     let same_package = id_is_in_package(method_id, current_package);
     let method_prefix = format!("{method_id}.");
@@ -443,10 +440,8 @@ pub(crate) fn get_type_completions(
             && !method_name.contains('.')
             && matches!(definition.body, DefinitionBody::Value { .. })
             && (same_package || definition.visibility.is_public())
+            && !items.iter().any(|item| item.label == method_name)
         {
-            if !seen.insert(method_name.to_string()) {
-                continue;
-            }
             items.push(CompletionItem {
                 label: method_name.to_string(),
                 kind: Some(CompletionItemKind::METHOD),

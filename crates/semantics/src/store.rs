@@ -271,19 +271,9 @@ impl Store {
     }
 
     pub fn package_for_qualified_name<'a>(&'a self, qualified_name: &'a str) -> Option<&'a str> {
-        if !qualified_name.starts_with(types::GO_IMPORT_PREFIX) || !qualified_name.contains('/') {
-            return qualified_name.split_once('.').map(|(package, _)| package);
-        }
-
-        let mut end = qualified_name.len();
-        while let Some(separator) = qualified_name[..end].rfind('.') {
-            let candidate = &qualified_name[..separator];
-            if self.packages.contains_key(candidate) {
-                return Some(candidate);
-            }
-            end = separator;
-        }
-        None
+        types::package_for_qualified_name(qualified_name, |package| {
+            self.packages.contains_key(package)
+        })
     }
 
     pub(crate) fn is_const(&self, qualified_name: &str) -> bool {

@@ -15,73 +15,6 @@ enum Severity {
     Advice,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DiagnosticPhase {
-    Lex,
-    Parse,
-    Resolve,
-    Infer,
-    Lint,
-    Attribute,
-    Emit,
-}
-
-impl DiagnosticPhase {
-    fn name(self) -> &'static str {
-        match self {
-            Self::Lex => "lex",
-            Self::Parse => "parse",
-            Self::Resolve => "resolve",
-            Self::Infer => "infer",
-            Self::Lint => "lint",
-            Self::Attribute => "attribute",
-            Self::Emit => "emit",
-        }
-    }
-
-    fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "lex" => Some(Self::Lex),
-            "parse" => Some(Self::Parse),
-            "resolve" => Some(Self::Resolve),
-            "infer" => Some(Self::Infer),
-            "lint" => Some(Self::Lint),
-            "attribute" => Some(Self::Attribute),
-            "emit" => Some(Self::Emit),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct DiagnosticCode {
-    rendered: String,
-    phase: Option<DiagnosticPhase>,
-}
-
-impl DiagnosticCode {
-    fn new(phase: DiagnosticPhase, name: &str) -> Self {
-        Self {
-            rendered: format!("{}.{}", phase.name(), name),
-            phase: Some(phase),
-        }
-    }
-
-    fn from_rendered(rendered: String) -> Self {
-        let phase = rendered
-            .split_once('.')
-            .and_then(|(phase, _)| DiagnosticPhase::from_name(phase));
-        Self { rendered, phase }
-    }
-
-    fn name(&self) -> &str {
-        let Some(phase) = self.phase else {
-            return &self.rendered;
-        };
-        &self.rendered[phase.name().len() + 1..]
-    }
-}
-
 /// Source text with a precomputed line-offset index for O(log n) span lookups.
 #[derive(Clone, Debug)]
 pub struct IndexedSource {
@@ -223,7 +156,7 @@ pub struct LisetteDiagnostic {
     help: Option<String>,
     note: Option<String>,
     severity: Severity,
-    code: Option<DiagnosticCode>,
+    code: Option<String>,
     fix: Option<crate::Fix>,
     file_location: Option<String>,
 }
@@ -352,17 +285,17 @@ impl LisetteDiagnostic {
     }
 
     pub(crate) fn with_parse_code(mut self, code: &str) -> Self {
-        self.code = Some(DiagnosticCode::new(DiagnosticPhase::Parse, code));
+        self.code = Some(format!("parse.{code}"));
         self
     }
 
     pub fn with_resolve_code(mut self, code: &str) -> Self {
-        self.code = Some(DiagnosticCode::new(DiagnosticPhase::Resolve, code));
+        self.code = Some(format!("resolve.{code}"));
         self
     }
 
     pub fn with_infer_code(mut self, code: &str) -> Self {
-        self.code = Some(DiagnosticCode::new(DiagnosticPhase::Infer, code));
+        self.code = Some(format!("infer.{code}"));
         self
     }
 
@@ -373,22 +306,22 @@ impl LisetteDiagnostic {
              use a phase-specific code constructor for errors",
             self.severity,
         );
-        self.code = Some(DiagnosticCode::new(DiagnosticPhase::Lint, code));
+        self.code = Some(format!("lint.{code}"));
         self
     }
 
     pub(crate) fn with_attribute_code(mut self, code: &str) -> Self {
-        self.code = Some(DiagnosticCode::new(DiagnosticPhase::Attribute, code));
+        self.code = Some(format!("attribute.{code}"));
         self
     }
 
     pub(crate) fn with_emit_code(mut self, code: &str) -> Self {
-        self.code = Some(DiagnosticCode::new(DiagnosticPhase::Emit, code));
+        self.code = Some(format!("emit.{code}"));
         self
     }
 
     fn with_code(mut self, code: impl Into<String>) -> Self {
-        self.code = Some(DiagnosticCode::from_rendered(code.into()));
+        self.code = Some(code.into());
         self
     }
 
@@ -416,7 +349,7 @@ impl LisetteDiagnostic {
             self.code.is_some(),
         )
         .filter(|text| !text.is_empty());
-        let code = self.code.as_ref().map(|code| code.rendered.as_str());
+        let code = self.code.as_deref();
 
         match (combined, code) {
             (None, None) => (None, None),
@@ -494,14 +427,11 @@ impl LisetteDiagnostic {
     }
 
     pub fn code_str(&self) -> Option<&str> {
-        self.code.as_ref().map(|code| code.rendered.as_str())
+        self.code.as_deref()
     }
 
     pub fn lint_name(&self) -> Option<&str> {
-        self.code
-            .as_ref()
-            .filter(|code| code.phase == Some(DiagnosticPhase::Lint))
-            .map(DiagnosticCode::name)
+        self.code.as_deref()?.strip_prefix("lint.")
     }
 
     pub fn primary_offset(&self) -> usize {
@@ -615,19 +545,5 @@ mod tests {
         assert_eq!(diagnostic.label_file_ids(), vec![3, 7]);
         assert_eq!(diagnostic.frame_labels(3, false).len(), 1);
         assert_eq!(diagnostic.frame_labels(7, false).len(), 1);
-    }
-
-    #[test]
-    fn lint_code_retains_structured_name() {
-        let diagnostic = LisetteDiagnostic::warn("warning").with_lint_code("unused_value");
-
-        assert_eq!(diagnostic.lint_name(), Some("unused_value"));
-    }
-
-    #[test]
-    fn non_lint_code_has_no_lint_name() {
-        let diagnostic = LisetteDiagnostic::error("error").with_infer_code("type_mismatch");
-
-        assert_eq!(diagnostic.lint_name(), None);
     }
 }

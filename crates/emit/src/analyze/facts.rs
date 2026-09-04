@@ -78,7 +78,7 @@ impl<'a> EmitFacts<'a> {
     where
         'a: 'b,
     {
-        types::package_for_qualified_name(id, self.go_package_ids.iter().map(String::as_str))
+        types::package_for_qualified_name(id, |package| self.go_package_ids.contains(package))
     }
 
     pub(crate) fn definition(&self, id: &str) -> Option<&'a Definition> {
