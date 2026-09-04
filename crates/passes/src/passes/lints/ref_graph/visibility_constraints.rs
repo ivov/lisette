@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::{Annotation, Expression, Span};
@@ -11,17 +11,20 @@ pub fn check_visibility_constraints(
     files: &HashMap<u32, File>,
     diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
-    for (qualified_name, definition) in &package.definitions {
-        if definition.visibility != Visibility::Public {
-            continue;
-        }
-
-        let item_name = qualified_name
-            .split('.')
-            .next_back()
-            .unwrap_or(qualified_name);
-
-        let annotation = find_function_annotation(files, item_name);
+    let public_definitions: Vec<_> = package
+        .definitions
+        .iter()
+        .filter(|(_, definition)| definition.visibility == Visibility::Public)
+        .collect();
+    let function_annotations = index_function_annotations(
+        files,
+        public_definitions
+            .iter()
+            .map(|(qualified_name, _)| item_name(qualified_name)),
+    );
+    for (qualified_name, definition) in public_definitions {
+        let item_name = item_name(qualified_name);
+        let annotation = function_annotations.get(item_name).copied();
 
         let mut ctx = LeakCtx {
             package,
@@ -29,11 +32,26 @@ pub fn check_visibility_constraints(
             fallback_span: definition.name_span,
             diagnostics,
         };
-        ctx.check(&definition.ty, annotation.as_ref());
+        ctx.check(&definition.ty, annotation);
     }
 }
 
-fn find_function_annotation(files: &HashMap<u32, File>, name: &str) -> Option<Annotation> {
+fn item_name(qualified_name: &str) -> &str {
+    qualified_name
+        .split('.')
+        .next_back()
+        .unwrap_or(qualified_name)
+}
+
+fn index_function_annotations<'files, 'names>(
+    files: &'files HashMap<u32, File>,
+    names: impl IntoIterator<Item = &'names str>,
+) -> HashMap<&'files str, &'files Annotation> {
+    let mut annotations = HashMap::default();
+    let mut pending: HashSet<&str> = names.into_iter().collect();
+    if pending.is_empty() {
+        return annotations;
+    }
     for file in files.values() {
         for item in &file.items {
             if let Expression::Function {
@@ -41,13 +59,16 @@ fn find_function_annotation(files: &HashMap<u32, File>, name: &str) -> Option<An
                 return_annotation,
                 ..
             } = item
-                && fn_name == name
+                && pending.remove(fn_name.as_str())
             {
-                return Some(return_annotation.clone());
+                annotations.insert(fn_name.as_str(), return_annotation);
+                if pending.is_empty() {
+                    return annotations;
+                }
             }
         }
     }
-    None
+    annotations
 }
 
 struct LeakCtx<'a> {
