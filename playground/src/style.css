@@ -77,7 +77,6 @@ body {
   margin-left: auto;
 }
 
-/* The docs header's round icon links. */
 .icon-link {
   display: inline-flex;
   align-items: center;
@@ -183,9 +182,46 @@ select.btn {
   background-size: 10px;
 }
 
+.btn[aria-pressed="true"] {
+  border-color: var(--accent-high);
+  color: var(--accent-high);
+}
+
 .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* The add-on sets display inline, so visibility hides it. */
+.vim-status {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 1.75rem;
+  line-height: 1.75rem;
+  padding: 0 0.65rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.vim-status[hidden],
+.vim-status:not(:has(input)) {
+  visibility: hidden;
+}
+
+.vim-status > span:first-child {
+  display: none;
+}
+
+.vim-status input {
+  width: 80%;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  outline: none;
 }
 
 #status-indicator {
@@ -238,6 +274,7 @@ select.btn {
 
 /* About 76 columns plus the gutter at 14px mono. */
 #editor-pane {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 0 1 45rem;
@@ -374,7 +411,6 @@ select.btn {
   color: var(--text-muted);
 }
 
-/* The docs inline code chip. */
 .output-hint code {
   padding: 0.125rem 0.3rem;
   border-radius: 0.375rem;
@@ -396,7 +432,6 @@ select.btn {
   opacity: 0.4;
 }
 
-/* The docs tint for Go blocks. */
 #go-source-editor-container .monaco-editor {
   --vscode-editor-background: var(--bg-go);
   --vscode-editorGutter-background: var(--bg-go);

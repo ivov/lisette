@@ -6,6 +6,7 @@ import { loadWasmBridge, type Diagnostic, type LisetteBridge } from "./runner/wa
 import { executeGoSource, formatGoSource } from "./runner/executor.js";
 import { readSourceFromHash, copyShareUrl } from "./share.js";
 import { EXAMPLES } from "./examples.js";
+import { initVimMode, type VimAdapterInstance } from "monaco-vim";
 
 function initResizer() {
   const resizer     = document.getElementById("pane-resizer")!;
@@ -45,6 +46,8 @@ const goPane         = document.getElementById("go-source-editor-container")!;
 const btnRun         = document.getElementById("btn-run") as HTMLButtonElement;
 const btnFormat      = document.getElementById("btn-format") as HTMLButtonElement;
 const btnShare       = document.getElementById("btn-share") as HTMLButtonElement;
+const btnVim         = document.getElementById("btn-vim") as HTMLButtonElement;
+const vimStatus      = document.getElementById("vim-status")!;
 const versionTag     = document.getElementById("brand-version")!;
 const statusEl       = document.getElementById("status-indicator")!;
 const outputText     = document.getElementById("output-text")!;
@@ -62,19 +65,20 @@ if (/Mac|iPhone|iPad/.test(navigator.platform)) {
 }
 
 const EXAMPLE_KEY = "lisette:play:example";
+const VIM_KEY = "lisette:play:vim";
 
 // Storage is wrapped, because a browser that blocks it must not take the page down with it.
-function readExample(): string | null {
+function readStored(key: string): string | null {
   try {
-    return localStorage.getItem(EXAMPLE_KEY);
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
-function writeExample(id: string) {
+function writeStored(key: string, value: string) {
   try {
-    localStorage.setItem(EXAMPLE_KEY, id);
+    localStorage.setItem(key, value);
   } catch {}
 }
 
@@ -182,13 +186,13 @@ async function main() {
     option.textContent = example.label;
     examplesSelect.append(option);
   }
-  const remembered = readExample();
+  const remembered = readStored(EXAMPLE_KEY);
   const opened = EXAMPLES.find((example) => example.id === remembered) ?? EXAMPLES[0];
 
   if (sharedCode === null) {
     examplesSelect.value = opened.id;
   } else {
-    // Shared code matches no example, so the menu shows an entry that is not one until the first pick.
+    // Shared code matches no example.
     const shared = document.createElement("option");
     shared.value = "";
     shared.disabled = true;
@@ -203,7 +207,23 @@ async function main() {
     sharedCode ?? opened.code,
   );
 
-  // Both strips indent their text to the code's left edge, past the gutter.
+  let vim: VimAdapterInstance | null = null;
+  const setVim = (on: boolean) => {
+    if (on && !vim) vim = initVimMode(editorResult.mainEditor, vimStatus);
+    if (!on && vim) {
+      vim.dispose();
+      vim = null;
+    }
+    vimStatus.hidden = !on;
+    btnVim.setAttribute("aria-pressed", String(on));
+    writeStored(VIM_KEY, on ? "on" : "off");
+  };
+  setVim(readStored(VIM_KEY) === "on");
+  btnVim.addEventListener("click", () => {
+    setVim(vim === null);
+    editorResult.mainEditor.focus();
+  });
+
   const alignStrips = () => {
     const { contentLeft } = editorResult.mainEditor.getLayoutInfo();
     document.documentElement.style.setProperty("--gutter", `${contentLeft}px`);
@@ -254,7 +274,6 @@ async function main() {
     return result;
   }
 
-  // The Go pane dims from an edit until the Go for that edit arrives.
   function settleGo(goSource: string, mine: number) {
     if (mine !== ticket) return;
     editorResult.setGoSource(goSource);
@@ -285,7 +304,7 @@ async function main() {
     const example = EXAMPLES.find((candidate) => candidate.id === examplesSelect.value);
     if (!example) return;
     editorResult.mainEditor.setValue(example.code);
-    writeExample(example.id);
+    writeStored(EXAMPLE_KEY, example.id);
     examplesSelect.querySelector('option[value=""]')?.remove();
     if (debounceTimer) clearTimeout(debounceTimer);
     void refresh();
@@ -295,7 +314,7 @@ async function main() {
 
   btnShare.addEventListener("click", async () => {
     const ok = await copyShareUrl(editorResult.getCode());
-    setStatus(ok ? "ok" : "error", ok ? "Link copied to clipboard" : "Copy failed");
+    setStatus(ok ? "ok" : "error", ok ? "Link copied" : "Copy failed");
   });
 
   btnFormat.addEventListener("click", async () => {

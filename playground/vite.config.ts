@@ -1,8 +1,15 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import monacoEditorPlugin from "vite-plugin-monaco-editor";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      // The browser entry is a UMD build that wants a global Monaco.
+      "monaco-vim": fileURLToPath(new URL("node_modules/monaco-vim/dist/index.mjs", import.meta.url)),
+    },
+  },
   // Built output goes into the site's public directory, which Astro copies to the root of
   // its own output, so the playground is served at lisette.run/play. The base URL matches.
   base: "/play/",
@@ -23,7 +30,7 @@ export default defineConfig({
     ),
   ],
   optimizeDeps: {
-    exclude: ["monaco-editor"],
+    exclude: ["monaco-editor", "monaco-vim"],
   },
   worker: {
     format: "es",

@@ -157,7 +157,7 @@ export async function setupEditors(
     ...BRACKET_COLOURS_OFF,
     guides: { bracketPairs: false, indentation: true },
     smoothScrolling: true,
-    cursorBlinking: "smooth",
+    cursorBlinking: "solid",
     cursorSmoothCaretAnimation: "on",
     padding: { top: 12, bottom: 12 },
   });
