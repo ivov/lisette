@@ -1,4 +1,3 @@
-use rustc_hash::FxHashMap as HashMap;
 use std::rc::Rc;
 
 use crate::Planner;
@@ -386,7 +385,7 @@ impl Planner<'_> {
                 ..
             }) = self.facts.definition(id.as_str())
         {
-            let sub_map: HashMap<_, _> = generics
+            let sub_map: types::SubstitutionMap = generics
                 .iter()
                 .map(|g| g.name.clone())
                 .zip(args.iter().cloned())

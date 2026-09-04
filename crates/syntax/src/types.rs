@@ -1,5 +1,6 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::borrow::Borrow;
+use std::mem;
 use std::sync::Arc;
 
 use ecow::EcoString;
@@ -193,8 +194,47 @@ where
         .then_some(peeled)
 }
 
-/// type param name -> type variable
-pub type SubstitutionMap = HashMap<EcoString, Type>;
+/// Type parameter name -> concrete type.
+#[derive(Debug, Clone, Default)]
+pub struct SubstitutionMap(Vec<(EcoString, Type)>);
+
+impl SubstitutionMap {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn get(&self, name: &EcoString) -> Option<&Type> {
+        self.0
+            .iter()
+            .find_map(|(candidate, ty)| (candidate == name).then_some(ty))
+    }
+
+    pub fn insert(&mut self, name: EcoString, ty: Type) -> Option<Type> {
+        if let Some((_, existing)) = self.0.iter_mut().find(|(candidate, _)| candidate == &name) {
+            return Some(mem::replace(existing, ty));
+        }
+        self.0.push((name, ty));
+        None
+    }
+
+    fn keys(&self) -> impl Iterator<Item = &EcoString> {
+        self.0.iter().map(|(name, _)| name)
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (&EcoString, &Type)> {
+        self.0.iter().map(|(name, ty)| (name, ty))
+    }
+}
+
+impl FromIterator<(EcoString, Type)> for SubstitutionMap {
+    fn from_iter<T: IntoIterator<Item = (EcoString, Type)>>(iter: T) -> Self {
+        let mut map = Self::default();
+        for (name, ty) in iter {
+            map.insert(name, ty);
+        }
+        map
+    }
+}
 
 /// Build a substitution map from a list of generics and their type arguments,
 /// pairing each generic's name with the type at the same position.
@@ -228,7 +268,7 @@ pub fn type_args_match_params<'a>(
             .all(|(arg, param)| matches!(arg, Type::Parameter(name) if name == param))
 }
 
-pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
+pub fn substitute(ty: &Type, map: &SubstitutionMap) -> Type {
     if map.is_empty() {
         return ty.clone();
     }
@@ -262,7 +302,7 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
         Type::Forall { vars, body } => {
             let has_overlap = map.keys().any(|k| vars.contains(k));
             let substituted_body = if has_overlap {
-                let filtered_map: HashMap<EcoString, Type> = map
+                let filtered_map: SubstitutionMap = map
                     .iter()
                     .filter(|(k, _)| !vars.contains(*k))
                     .map(|(k, v)| (k.clone(), v.clone()))

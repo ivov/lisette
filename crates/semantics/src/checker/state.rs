@@ -274,7 +274,7 @@ impl TaskState {
 
                 (substitute(body, &map), map)
             }
-            _ => (ty.clone(), HashMap::default()),
+            _ => (ty.clone(), SubstitutionMap::default()),
         }
     }
 }
