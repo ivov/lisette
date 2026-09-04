@@ -14,7 +14,7 @@ pub enum ScrutineeSignature {
     WildcardsOrLiterals,
 }
 
-pub fn specialize_by_constructor(rows: &[Row], tag_id: &str, arity: usize) -> Vec<Row> {
+pub fn specialize_by_constructor(rows: &[Row], tag_id: &TagId, arity: usize) -> Vec<Row> {
     rows.iter()
         .filter_map(|row| {
             let first = row.first()?;

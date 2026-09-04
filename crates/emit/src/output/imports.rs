@@ -157,14 +157,14 @@ impl<'a> ImportBuilder<'a> {
         for package_id in package_ids {
             let qualifier = self
                 .dropped_aliases
-                .get(package_id)
+                .get(package_id.as_str())
                 .or_else(|| {
                     self.go_package_names
                         .get(&format!("{}{package_id}", go_name::GO_IMPORT_PREFIX))
                 })
                 .cloned()
                 .unwrap_or_default();
-            self.require_package_use(&PackageUse::new(package_id.clone(), qualifier));
+            self.require_package_use(&PackageUse::new(package_id.to_string(), qualifier));
         }
     }
 

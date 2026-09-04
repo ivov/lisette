@@ -562,14 +562,14 @@ mod tests {
         let mut scopes = Scopes::new();
         scopes
             .current_mut()
-            .insert_binding("value".into(), Type::Error, 1, true);
+            .insert_binding("value".into(), Type::Error, BindingId::new(1), true);
 
         scopes.push();
         scopes
             .current_mut()
-            .insert_binding("value".into(), Type::Error, 2, false);
+            .insert_binding("value".into(), Type::Error, BindingId::new(2), false);
 
-        assert_eq!(scopes.lookup_binding_id("value"), Some(2));
+        assert_eq!(scopes.lookup_binding_id("value"), Some(BindingId::new(2)));
         assert!(!scopes.lookup_mutable("value"));
         assert!(!scopes.lookup_const("value"));
 
@@ -587,7 +587,7 @@ mod tests {
         let mut scopes = Scopes::new();
         scopes
             .current_mut()
-            .insert_binding("value".into(), Type::Error, 1, true);
+            .insert_binding("value".into(), Type::Error, BindingId::new(1), true);
 
         scopes.push();
         scopes.set_fn_return_type(Type::Error);

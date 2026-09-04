@@ -1,7 +1,7 @@
 use crate::_harness::infer;
 use syntax::ast::{
-    Annotation, BinaryOperator, CallTypeArguments, ConstructorPatternResolution, Expression,
-    IfLetAlternative, Pattern, SelectArm, Span, StructFieldKind, StructFields,
+    Annotation, BinaryOperator, BindingId, CallTypeArguments, ConstructorPatternResolution,
+    Expression, IfLetAlternative, Pattern, SelectArm, Span, StructFieldKind, StructFields,
 };
 use syntax::lex::Lexer;
 use syntax::parse::Parser;
@@ -68,11 +68,14 @@ fn function_parameter_metadata_survives_type_substitution() {
 #[test]
 fn alias_mutation_is_not_downgraded_by_a_direct_mark() {
     let mut mutations = MutationInfo::default();
-    mutations.record(7, BindingMutation::ThroughAlias);
-    mutations.record(7, BindingMutation::Direct);
+    mutations.record(BindingId::new(7), BindingMutation::ThroughAlias);
+    mutations.record(BindingId::new(7), BindingMutation::Direct);
 
-    assert_eq!(mutations.mutation(7), Some(BindingMutation::ThroughAlias));
-    assert_eq!(mutations.mutation(8), None);
+    assert_eq!(
+        mutations.mutation(BindingId::new(7)),
+        Some(BindingMutation::ThroughAlias),
+    );
+    assert_eq!(mutations.mutation(BindingId::new(8)), None);
 }
 
 #[test]

@@ -386,13 +386,13 @@ impl<'a> Planner<'a> {
             test_index: config.test_index,
             go_package_names: config.go_package_names,
             go_package_ids: config.go_package_ids,
-            entry_package: config.package_id.to_string(),
+            entry_package: config.package_id.to_string().into(),
             entry_package_name: "main",
             go_module: config.go_module.to_string(),
             emit_tests: false,
             line_indexes,
             globals,
-            current_package: config.package_id.to_string(),
+            current_package: config.package_id.to_string().into(),
         });
         Self::emit_files_with_facts(facts, files, config.package_id)
     }
@@ -744,13 +744,13 @@ fn emit_package<'a>(
         test_index: &analysis.test_index,
         go_package_names: &analysis.go_package_names,
         go_package_ids: &analysis.go_package_ids,
-        entry_package: analysis.entry_package_id.to_string(),
+        entry_package: analysis.entry_package_id.to_string().into(),
         entry_package_name,
         go_module: go_module.to_string(),
         emit_tests: shared_emit_ctx.emit_tests,
         line_indexes: shared_emit_ctx.line_indexes.clone(),
         globals: shared_emit_ctx.globals.clone(),
-        current_package: package_id.to_string(),
+        current_package: package_id.to_string().into(),
     });
     Planner::emit_files_with_facts(facts, files, package_id).map(|mut package_output| {
         if package_id != analysis.entry_package_id.as_str() {

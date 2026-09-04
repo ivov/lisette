@@ -18,11 +18,11 @@ impl BindingIdAllocator {
     }
 
     fn reserve(&self) -> BindingId {
-        self.next.fetch_add(1, Ordering::Relaxed)
+        BindingId::new(self.next.fetch_add(1, Ordering::Relaxed))
     }
 
     fn snapshot(&self) -> BindingId {
-        self.next.load(Ordering::Relaxed)
+        BindingId::new(self.next.load(Ordering::Relaxed))
     }
 }
 

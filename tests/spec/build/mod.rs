@@ -6750,7 +6750,7 @@ fn go_import_collision_flags_shared_last_segment() {
     builder.extend_with_packages(
         &["database/sql", "entgo.io/ent/dialect/sql"]
             .iter()
-            .map(|s| s.to_string())
+            .map(|s| (*s).into())
             .collect(),
     );
 
@@ -6784,7 +6784,7 @@ fn go_import_collision_silent_when_aliases_differ() {
     builder.extend_with_packages(
         &["database/sql", "entgo.io/ent/dialect/sql"]
             .iter()
-            .map(|s| s.to_string())
+            .map(|s| (*s).into())
             .collect(),
     );
 
@@ -6810,7 +6810,7 @@ fn go_import_collision_silent_for_distinct_versioned_packages() {
     builder.extend_with_packages(
         &["github.com/pion/sdp/v3", "github.com/pion/dtls/v3"]
             .iter()
-            .map(|s| s.to_string())
+            .map(|s| (*s).into())
             .collect(),
     );
 
@@ -6832,7 +6832,7 @@ fn go_import_collision_flags_local_packages_sharing_last_segment() {
     builder.extend_with_packages(
         &["myproject/api/v2", "myproject/admin/v2"]
             .iter()
-            .map(|s| s.to_string())
+            .map(|s| (*s).into())
             .collect(),
     );
 
@@ -6858,7 +6858,7 @@ fn go_import_under_project_package_resolves_by_package_not_version() {
     builder.extend_with_packages(
         &["myproject/plugins/v2", "myproject/api/v2"]
             .iter()
-            .map(|s| s.to_string())
+            .map(|s| (*s).into())
             .collect(),
     );
 

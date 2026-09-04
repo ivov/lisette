@@ -1,9 +1,65 @@
 use rustc_hash::FxHashMap as HashMap;
+use std::ops::Deref;
 
 use syntax::ast::Literal;
 
-pub type TagId = String;
-pub type TypeName = String;
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TagId(String);
+
+impl TagId {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<&str> for TagId {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl From<String> for TagId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl Deref for TagId {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TypeName(String);
+
+impl TypeName {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<&str> for TypeName {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl From<String> for TypeName {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl Deref for TypeName {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
 
 pub type Row = Vec<NormalizedPattern>;
 

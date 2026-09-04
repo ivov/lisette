@@ -1,11 +1,71 @@
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::borrow::Borrow;
+use std::fmt;
+use std::ops::Deref;
 
 use super::file::File;
 use super::{Definition, Visibility};
 use crate::types::Symbol;
 
-pub type PackageId = String;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PackageId(String);
+
+impl PackageId {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<&str> for PackageId {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl From<String> for PackageId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl Borrow<str> for PackageId {
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl AsRef<str> for PackageId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for PackageId {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for PackageId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl PartialEq<str> for PackageId {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<&str> for PackageId {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
 
 pub fn is_internal_package_id(id: &str) -> bool {
     id == "prelude" || id == "**test_prelude" || id == "**nominal" || id.starts_with("go:")

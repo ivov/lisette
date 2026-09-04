@@ -29,7 +29,7 @@ fn default_resolver() -> deps::TypedefLocator {
 
 fn roots(entry: &str) -> Roots {
     Roots {
-        primary: vec![entry.to_string()],
+        primary: vec![entry.into()],
         additional: vec![],
     }
 }
@@ -565,8 +565,8 @@ fn additional_roots_widen_graph_but_not_reachable_set() {
     let result = build_package_graph(
         &mut store,
         Roots {
-            primary: vec!["main".to_string()],
-            additional: vec!["orphan".to_string()],
+            primary: vec!["main".into()],
+            additional: vec!["orphan".into()],
         },
         graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
     );
@@ -613,7 +613,7 @@ fn zero_primary_roots_begins_with_additional() {
         &mut store,
         Roots {
             primary: vec![],
-            additional: vec!["lib".to_string()],
+            additional: vec!["lib".into()],
         },
         graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
     );

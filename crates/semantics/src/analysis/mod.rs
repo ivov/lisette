@@ -395,8 +395,14 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     let package_output = infer_all_packages(
         &mut store,
         PackageInferenceInput {
-            order,
-            files,
+            order: order
+                .into_iter()
+                .map(|package_id| package_id.to_string())
+                .collect(),
+            files: files
+                .into_iter()
+                .map(|(package_id, files)| (package_id.to_string(), files))
+                .collect(),
             dependencies,
             sink,
             compile_phase: input.compile_phase,

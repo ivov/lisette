@@ -12,14 +12,13 @@ use crate::loader as semantics_loader;
 use crate::loader::Loader;
 use crate::store::{ENTRY_PACKAGE_ID, Store};
 use diagnostics::LocalSink;
+use std::hash::Hash;
 use std::mem;
 use syntax::dependency_block;
 use syntax::dependency_block::DependencyBlock;
 use syntax::imports::scan_imports;
 use syntax::program;
-use syntax::program::FileImport;
-
-pub type PackageId = String;
+use syntax::program::{FileImport, PackageId};
 
 pub fn root_import_target(name: &str, importer: &str, kind: ProjectKind) -> Option<&'static str> {
     (name == semantics_loader::ROOT_IMPORT
@@ -156,8 +155,11 @@ impl DependencyGraph {
     }
 }
 
-impl From<HashMap<PackageId, HashSet<PackageId>>> for DependencyGraph {
-    fn from(edges: HashMap<PackageId, HashSet<PackageId>>) -> Self {
+impl<T> From<HashMap<T, HashSet<T>>> for DependencyGraph
+where
+    T: Eq + Hash + Into<PackageId>,
+{
+    fn from(edges: HashMap<T, HashSet<T>>) -> Self {
         Self {
             edges: edges
                 .into_iter()
@@ -166,7 +168,7 @@ impl From<HashMap<PackageId, HashSet<PackageId>>> for DependencyGraph {
                         .into_iter()
                         .map(|dependency| {
                             (
-                                dependency,
+                                dependency.into(),
                                 Dependency {
                                     kind: DependencyKind::Production,
                                     usage: ImportUse::Referenced,
@@ -175,7 +177,7 @@ impl From<HashMap<PackageId, HashSet<PackageId>>> for DependencyGraph {
                             )
                         })
                         .collect();
-                    (package_id, dependencies)
+                    (package_id.into(), dependencies)
                 })
                 .collect(),
         }
@@ -783,7 +785,7 @@ fn process_file_imports(
                             span: file_import.name_span,
                         };
                         imports
-                            .entry(entry.to_string())
+                            .entry(entry.into())
                             .and_modify(|existing: &mut Dependency| existing.merge(dependency))
                             .or_insert(dependency);
                     }
@@ -842,7 +844,7 @@ fn process_file_imports(
                 }
             };
             if ok {
-                imports.insert(file_import.name.to_string(), pending);
+                imports.insert(file_import.name.to_string().into(), pending);
             }
             continue;
         }
@@ -885,7 +887,7 @@ fn process_file_imports(
             span: file_import.name_span,
         };
         imports
-            .entry(file_import.name.to_string())
+            .entry(file_import.name.to_string().into())
             .and_modify(|existing: &mut Dependency| existing.merge(dependency))
             .or_insert(dependency);
     }

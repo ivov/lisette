@@ -66,9 +66,12 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
 
     let locator = deps::TypedefLocator::default();
     let discovered = fs.discover_packages();
-    let additional = discovered.test_roots().cloned().collect();
+    let additional = discovered
+        .test_roots()
+        .map(|package_id| package_id.as_str().into())
+        .collect();
     let roots = Roots {
-        primary: vec![package_name.to_string()],
+        primary: vec![package_name.into()],
         additional,
     };
     let mut graph_result = build_package_graph(
@@ -96,7 +99,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
                     file
                 })
                 .collect();
-            (package_id, files)
+            (package_id.to_string(), files)
         })
         .collect();
 
@@ -128,7 +131,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
                 continue;
             }
 
-            let files = parsed.remove(&package_id).unwrap_or_default();
+            let files = parsed.remove(package_id.as_str()).unwrap_or_default();
 
             store.store_package(&package_id, files);
             let package = checker.register_package(&mut store, &package_id);

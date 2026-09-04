@@ -144,25 +144,39 @@ pub(super) fn compute_roots(
     match project_kind {
         ProjectKind::Binary => {
             let mut additional = match compile_phase {
-                CompilePhase::Check => discovered.production_packages().cloned().collect(),
+                CompilePhase::Check => discovered
+                    .production_packages()
+                    .map(|package_id| package_id.as_str().into())
+                    .collect(),
                 CompilePhase::Emit | CompilePhase::Test => Vec::new(),
             };
             if include_test_roots {
-                additional.extend(discovered.test_roots().cloned());
+                additional.extend(
+                    discovered
+                        .test_roots()
+                        .map(|package_id| package_id.as_str().into()),
+                );
             }
             Roots {
-                primary: vec![entry_package],
+                primary: vec![entry_package.into()],
                 additional,
             }
         }
         ProjectKind::Library => {
             let mut additional = Vec::new();
             if include_test_roots {
-                additional.extend(discovered.test_roots().cloned());
+                additional.extend(
+                    discovered
+                        .test_roots()
+                        .map(|package_id| package_id.as_str().into()),
+                );
             }
-            additional.push(entry_package);
+            additional.push(entry_package.into());
             Roots {
-                primary: discovered.production_packages().cloned().collect(),
+                primary: discovered
+                    .production_packages()
+                    .map(|package_id| package_id.as_str().into())
+                    .collect(),
                 additional,
             }
         }
