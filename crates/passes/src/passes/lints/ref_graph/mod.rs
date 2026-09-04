@@ -115,9 +115,9 @@ fn apply_ref_lints(
     }
     let mut diagnostics = result.diagnostics;
     if !diagnostics.is_empty() {
-        let allows: Vec<_> = package
+        let allows: super::suppression::AllowIndex = package
             .source_files()
-            .flat_map(|file| super::suppression::collect_declaration_allows(&file.items))
+            .map(|file| super::suppression::collect_declaration_allows(&file.items))
             .collect();
         diagnostics = super::suppression::filter_unused_allowed(diagnostics, &allows);
     }
