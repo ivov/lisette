@@ -1,7 +1,7 @@
 use rustc_hash::FxHashMap as HashMap;
 use std::fs::{read_dir, read_to_string};
 use std::path::{Path, PathBuf};
-use std::sync::{PoisonError, RwLock, RwLockWriteGuard};
+use std::sync::{Arc, PoisonError, RwLock, RwLockWriteGuard};
 
 use crate::protocol::Url;
 use semantics::loader::{DiscoveredPackages, FileContent, Files, Loader};
@@ -116,14 +116,41 @@ impl ProjectState {
 
 pub(crate) struct OverlayLoader {
     config: ProjectConfig,
-    overlays: HashMap<(bool, String, String), String>,
+    overlays: Arc<Overlays>,
+}
+
+#[derive(Clone, Default)]
+struct Overlays {
+    production: HashMap<String, HashMap<String, String>>,
+    external_tests: HashMap<String, HashMap<String, String>>,
+}
+
+impl Overlays {
+    fn packages(&self, external_test: bool) -> &HashMap<String, HashMap<String, String>> {
+        if external_test {
+            &self.external_tests
+        } else {
+            &self.production
+        }
+    }
+
+    fn packages_mut(
+        &mut self,
+        external_test: bool,
+    ) -> &mut HashMap<String, HashMap<String, String>> {
+        if external_test {
+            &mut self.external_tests
+        } else {
+            &mut self.production
+        }
+    }
 }
 
 impl OverlayLoader {
     pub(crate) fn new(config: ProjectConfig) -> Self {
         Self {
             config,
-            overlays: HashMap::default(),
+            overlays: Arc::default(),
         }
     }
 
@@ -134,15 +161,22 @@ impl OverlayLoader {
         filename: &str,
         content: String,
     ) {
-        self.overlays.insert(
-            (external_test, package_id.to_string(), filename.to_string()),
-            content,
-        );
+        Arc::make_mut(&mut self.overlays)
+            .packages_mut(external_test)
+            .entry(package_id.to_string())
+            .or_default()
+            .insert(filename.to_string(), content);
     }
 
     pub(crate) fn remove_overlay(&mut self, external_test: bool, package_id: &str, filename: &str) {
-        self.overlays
-            .remove(&(external_test, package_id.to_string(), filename.to_string()));
+        let overlays = Arc::make_mut(&mut self.overlays).packages_mut(external_test);
+        let Some(files) = overlays.get_mut(package_id) else {
+            return;
+        };
+        files.remove(filename);
+        if files.is_empty() {
+            overlays.remove(package_id);
+        }
     }
 
     pub(crate) fn for_analysis(
@@ -161,7 +195,7 @@ impl OverlayLoader {
 
 pub(crate) struct AnalysisLoader {
     config: ProjectConfig,
-    overlays: HashMap<(bool, String, String), String>,
+    overlays: Arc<Overlays>,
     entry_package_path: PathBuf,
     external_test_root: Option<String>,
 }
@@ -216,12 +250,13 @@ impl Loader for AnalysisLoader {
             Some((external, package_id.to_string()))
         };
 
-        if let Some((external_test, overlay_package)) = overlay_key {
-            for ((_, _, filename), content) in
-                self.overlays.iter().filter(|((ext, package, _), _)| {
-                    *ext == external_test && package == &overlay_package
-                })
-            {
+        if let Some((external_test, overlay_package)) = overlay_key
+            && let Some(overlays) = self
+                .overlays
+                .packages(external_test)
+                .get(overlay_package.as_str())
+        {
+            for (filename, content) in overlays {
                 files.insert(
                     filename.clone(),
                     FileContent::new(content.clone(), filename.clone()),
@@ -282,6 +317,11 @@ mod tests {
         );
 
         assert!(project.remove_overlay(&first_uri));
+        assert_eq!(
+            analysis.loader.scan_folder(ENTRY_PACKAGE_ID)["main.lis"].source,
+            "memory",
+            "an active analysis keeps its overlay snapshot",
+        );
         let analysis = project.for_key(&key).unwrap();
         assert_eq!(
             analysis.loader.scan_folder(ENTRY_PACKAGE_ID)["main.lis"].source,
