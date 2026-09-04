@@ -17,9 +17,7 @@
     "monaco-editor": "^0.52.2",
     "monaco-editor-textmate": "^4.0.0",
     "monaco-vim": "^0.4.4",
-    "onigasm": "^2.2.5",
-    "vscode-oniguruma": "^2.0.1",
-    "vscode-textmate": "^9.3.2"
+    "onigasm": "^2.2.5"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

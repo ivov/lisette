@@ -6,7 +6,7 @@ import { loadWasmBridge, type Diagnostic, type LisetteBridge } from "./runner/wa
 import { executeGoSource, formatGoSource } from "./runner/executor.js";
 import { readSourceFromHash, copyShareUrl } from "./share.js";
 import { EXAMPLES } from "./examples.js";
-import { initVimMode, type VimAdapterInstance } from "monaco-vim";
+import type { VimAdapterInstance } from "monaco-vim";
 
 function initResizer() {
   const resizer     = document.getElementById("pane-resizer")!;
@@ -208,8 +208,11 @@ async function main() {
   );
 
   let vim: VimAdapterInstance | null = null;
-  const setVim = (on: boolean) => {
-    if (on && !vim) vim = initVimMode(editorResult.mainEditor, vimStatus);
+  const setVim = async (on: boolean) => {
+    if (on && !vim) {
+      const { initVimMode } = await import("monaco-vim");
+      if (!vim) vim = initVimMode(editorResult.mainEditor, vimStatus);
+    }
     if (!on && vim) {
       vim.dispose();
       vim = null;
@@ -218,9 +221,9 @@ async function main() {
     btnVim.setAttribute("aria-pressed", String(on));
     writeStored(VIM_KEY, on ? "on" : "off");
   };
-  setVim(readStored(VIM_KEY) === "on");
-  btnVim.addEventListener("click", () => {
-    setVim(vim === null);
+  void setVim(readStored(VIM_KEY) === "on");
+  btnVim.addEventListener("click", async () => {
+    await setVim(vim === null);
     editorResult.mainEditor.focus();
   });
 

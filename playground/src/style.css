@@ -592,7 +592,3 @@ select.btn {
 .monaco-editor .inputarea {
   font-size: 16px !important;
 }
-
-.monaco-editor .iPadShowKeyboard {
-  display: none !important;
-}

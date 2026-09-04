@@ -35,10 +35,11 @@ export async function setupEditors(
   goSourceContainer: HTMLElement,
   initialCode: string,
 ): Promise<EditorSetupResult> {
-  const monaco = await import("monaco-editor");
+  const monaco = await import("./monaco.js");
 
   registerTheme(monaco);
   registerLanguage(monaco);
+  monaco.editor.addKeybindingRule({ keybinding: monaco.KeyCode.F12, command: null });
 
   let bridge: LisetteBridge | null = null;
 
@@ -126,7 +127,6 @@ export async function setupEditors(
     };
   });
 
-  // The grammar loads in the background and re-tokenizes open models when ready.
   wireTextMateGrammar(monaco).catch((err) => {
     console.warn("[textmate] Failed to load TM grammar, using Monarch fallback:", err);
   });
@@ -139,7 +139,6 @@ export async function setupEditors(
     lineHeight: 22,
     fontFamily: FONT_MONO,
     minimap: { enabled: false },
-    stickyScroll: { enabled: false },
     overviewRulerLanes: 0,
     overviewRulerBorder: false,
     hideCursorInOverviewRuler: true,
@@ -170,7 +169,6 @@ export async function setupEditors(
     lineHeight: 22,
     fontFamily: FONT_MONO,
     minimap: { enabled: false },
-    stickyScroll: { enabled: false },
     overviewRulerLanes: 0,
     overviewRulerBorder: false,
     hideCursorInOverviewRuler: true,
