@@ -167,7 +167,7 @@ impl InferCtx<'_> {
     }
 
     /// Resolve a `type Alias = Struct` name to its underlying struct.
-    fn as_alias_struct(&self, store: &Store, name: &str) -> Option<ResolvedStruct> {
+    fn as_alias_struct(&mut self, store: &Store, name: &str) -> Option<ResolvedStruct> {
         let qualified_name = self.lookup_qualified_name(store, name)?;
         let Definition {
             ty: alias_ty,
