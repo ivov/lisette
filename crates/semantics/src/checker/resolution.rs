@@ -382,7 +382,7 @@ impl TaskState {
         if let Type::Parameter(name) = ty {
             let trait_bounds = self.scopes.collect_all_trait_bounds();
             let qualified_name = self.qualify_name(name);
-            return store.get_methods_from_bounds(&qualified_name, &trait_bounds);
+            return store.get_methods_from_bounds(&qualified_name, trait_bounds);
         }
 
         let resolved = ty.strip_refs().resolve_in(&self.env);
@@ -415,7 +415,7 @@ impl TaskState {
         if let Type::Parameter(parameter) = ty {
             let trait_bounds = self.scopes.collect_all_trait_bounds();
             let qualified_name = self.qualify_name(parameter);
-            return store.get_method_from_bounds(&qualified_name, &trait_bounds, name);
+            return store.get_method_from_bounds(&qualified_name, trait_bounds, name);
         }
 
         let resolved = ty.strip_refs().resolve_in(&self.env);

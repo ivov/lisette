@@ -141,8 +141,8 @@ impl TaskState {
     pub(crate) fn visible_parameter_bounds(&self) -> Vec<(EcoString, Vec<Type>)> {
         self.scopes
             .collect_all_trait_bounds()
-            .into_iter()
-            .map(|(parameter, bounds)| (parameter.last_segment().into(), bounds))
+            .iter()
+            .map(|(parameter, bounds)| (parameter.last_segment().into(), bounds.clone()))
             .collect()
     }
 
