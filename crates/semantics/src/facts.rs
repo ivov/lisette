@@ -39,7 +39,7 @@ pub struct Facts {
     pub always_failing_try_blocks: Vec<Span>,
     pub expression_only_fstrings: Vec<ExpressionOnlyFstringFact>,
     pub unprefixed_fstrings: Vec<UnprefixedFstringFact>,
-    pub interface_satisfied_methods: HashMap<(String, String), InterfaceSatisfactions>,
+    pub interface_satisfied_methods: HashMap<String, HashMap<String, InterfaceSatisfactions>>,
 
     pub(crate) deferred: DeferredChecks,
 
@@ -324,7 +324,9 @@ impl Facts {
         spelling_pinned: bool,
     ) {
         self.interface_satisfied_methods
-            .entry((package_id, method_name))
+            .entry(package_id)
+            .or_default()
+            .entry(method_name)
             .or_default()
             .record(impl_type_name, spelling_pinned);
     }
@@ -338,7 +340,8 @@ impl Facts {
         type_name: &str,
     ) -> bool {
         self.interface_satisfied_methods
-            .get(&(package_id.to_string(), method_name.to_string()))
+            .get(package_id)
+            .and_then(|methods| methods.get(method_name))
             .is_some_and(|satisfactions| satisfactions.spelling_pinned(type_name))
     }
 
@@ -379,11 +382,17 @@ impl Facts {
 
         self.usages.extend(usages);
 
-        for (key, satisfactions) in interface_satisfied_methods {
-            self.interface_satisfied_methods
-                .entry(key)
-                .or_default()
-                .merge(satisfactions);
+        for (package_id, methods) in interface_satisfied_methods {
+            let existing_methods = self
+                .interface_satisfied_methods
+                .entry(package_id)
+                .or_default();
+            for (method_name, satisfactions) in methods {
+                existing_methods
+                    .entry(method_name)
+                    .or_default()
+                    .merge(satisfactions);
+            }
         }
     }
 }
@@ -589,19 +598,10 @@ mod tests {
         b.mark_method_used_for_interface("m".into(), "g".into(), "C".into(), true);
 
         a.merge(b);
-        assert_eq!(a.interface_satisfied_methods.len(), 2);
-        assert_eq!(
-            a.interface_satisfied_methods[&("m".into(), "f".into())]
-                .impl_type_names()
-                .count(),
-            2
-        );
-        assert_eq!(
-            a.interface_satisfied_methods[&("m".into(), "g".into())]
-                .impl_type_names()
-                .count(),
-            1
-        );
+        let methods = &a.interface_satisfied_methods["m"];
+        assert_eq!(methods.len(), 2);
+        assert_eq!(methods["f"].impl_type_names().count(), 2);
+        assert_eq!(methods["g"].impl_type_names().count(), 1);
         assert!(a.method_spelling_pinned_by_interface("m", "f", "A"));
     }
 }
