@@ -16,6 +16,7 @@ use std::iter;
 use std::mem;
 
 type TestKey = (String, String);
+type TestEventsByPackage = HashMap<String, HashMap<String, TestEvents>>;
 
 #[derive(Default)]
 enum Execution {
@@ -343,7 +344,7 @@ pub fn build_report_filtered(
     go_module: &str,
     selected: Option<&HashSet<(String, String)>>,
 ) -> Report {
-    let mut tests: HashMap<TestKey, TestEvents> = HashMap::new();
+    let mut tests = TestEventsByPackage::new();
     let mut build_output = String::new();
     let mut packages: HashMap<String, PackageEvents> = HashMap::new();
     let mut test_elapsed: f64 = 0.0;
@@ -355,7 +356,9 @@ pub fn build_report_filtered(
             && let Some(attribute) = decode_test_attribute(key, value)
         {
             tests
-                .entry((event.package.clone(), test.clone()))
+                .entry(event.package.clone())
+                .or_default()
+                .entry(test.clone())
                 .or_default()
                 .record_attribute(attribute);
             continue;
@@ -365,7 +368,9 @@ pub fn build_report_filtered(
             continue;
         };
         let state = tests
-            .entry((event.package.clone(), test.clone()))
+            .entry(event.package.clone())
+            .or_default()
+            .entry(test.clone())
             .or_default();
         handle_test_event(event, state);
     }
@@ -378,7 +383,9 @@ pub fn build_report_filtered(
         {
             continue;
         }
-        let state = tests.get(&key);
+        let state = tests
+            .get(&key.0)
+            .and_then(|package_tests| package_tests.get(&key.1));
         let outcome = state
             .map(TestEvents::outcome)
             .unwrap_or(TestOutcome::Unreached);
@@ -549,35 +556,32 @@ fn decode_hex(hex: &str) -> Option<Vec<u8>> {
         .collect()
 }
 
-fn collect_children(
-    package: &str,
-    parent: &str,
-    tests: &HashMap<TestKey, TestEvents>,
-) -> Vec<TestRow> {
+fn collect_children(package: &str, parent: &str, tests: &TestEventsByPackage) -> Vec<TestRow> {
     let prefix = format!("{parent}/");
-    let real: HashSet<&str> = tests
+    let Some(package_tests) = tests.get(package) else {
+        return Vec::new();
+    };
+    let real: HashSet<&str> = package_tests
         .iter()
-        .filter(|((pkg, name), state)| {
-            pkg == package && name.starts_with(&prefix) && state.execution.was_observed()
-        })
-        .map(|((_, name), _)| name.as_str())
+        .filter(|(name, state)| name.starts_with(&prefix) && state.execution.was_observed())
+        .map(|(name, _)| name.as_str())
         .chain(iter::once(parent))
         .collect();
 
     let mut children_of: HashMap<&str, Vec<&str>> = HashMap::new();
     for full in real.iter().copied().filter(|&full| full != parent) {
-        if let Some(mother) = subtest_parent(package, full, &real, tests) {
+        if let Some(mother) = subtest_parent(full, &real, package_tests) {
             children_of.entry(mother).or_default().push(full);
         }
     }
-    subtest_rows(package, parent, &children_of, tests)
+    subtest_rows(package, parent, &children_of, package_tests)
 }
 
 fn subtest_rows(
     package: &str,
     parent: &str,
     children_of: &HashMap<&str, Vec<&str>>,
-    tests: &HashMap<TestKey, TestEvents>,
+    tests: &HashMap<String, TestEvents>,
 ) -> Vec<TestRow> {
     let mut children = children_of.get(parent).cloned().unwrap_or_default();
     children.sort_unstable();
@@ -585,8 +589,7 @@ fn subtest_rows(
     children
         .into_iter()
         .map(|full| {
-            let key = (package.to_string(), full.to_string());
-            let state = &tests[&key];
+            let state = &tests[full];
             let name = state
                 .subtest_name
                 .as_ref()
@@ -609,14 +612,12 @@ fn subtest_rows(
 }
 
 fn subtest_parent<'a>(
-    package: &str,
     full: &'a str,
     real: &HashSet<&'a str>,
-    tests: &HashMap<TestKey, TestEvents>,
+    tests: &HashMap<String, TestEvents>,
 ) -> Option<&'a str> {
-    let key = (package.to_string(), full.to_string());
     if let Some(original) = tests
-        .get(&key)
+        .get(full)
         .and_then(|state| state.subtest_name.as_ref())
     {
         let own_segments = original.matches('/').count() + 1;
