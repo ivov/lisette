@@ -568,7 +568,7 @@ where
         interface_ty: &Type,
         parent_of: Option<&Symbol>,
         lookup: F,
-        visited: &mut HashSet<String>,
+        visited: &mut HashSet<Type>,
         visiting: &mut HashSet<Symbol>,
         instances: &mut Vec<InterfaceInstance>,
     ) where
@@ -578,9 +578,7 @@ where
         let Type::Nominal { id, params, .. } = &resolved else {
             return;
         };
-        // `Display` intentionally omits package qualification, so it cannot
-        // distinguish same-named interfaces from different packages.
-        if !visited.insert(format!("{resolved:?}")) || !visiting.insert(id.clone()) {
+        if !visited.insert(resolved.clone()) || !visiting.insert(id.clone()) {
             return;
         }
         let Some(Definition {

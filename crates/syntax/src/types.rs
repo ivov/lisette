@@ -1,5 +1,6 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::borrow::Borrow;
+use std::hash::{Hash, Hasher};
 use std::mem;
 use std::sync::Arc;
 
@@ -642,6 +643,65 @@ impl PartialEq for Type {
                 },
             ) => k1 == k2 && a1 == a2 && w1 == w2,
             _ => false,
+        }
+    }
+}
+
+impl Eq for Type {}
+
+impl Hash for Type {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        mem::discriminant(self).hash(state);
+        match self {
+            Type::Simple(kind) => kind.hash(state),
+            Type::Compound {
+                kind,
+                args,
+                writable,
+            } => {
+                kind.hash(state);
+                args.hash(state);
+                writable.hash(state);
+            }
+            Type::Nominal {
+                id,
+                params,
+                writable,
+            } => {
+                id.hash(state);
+                params.hash(state);
+                writable.hash(state);
+            }
+            Type::ImportNamespace(package_id) => package_id.hash(state),
+            Type::Function(function) => {
+                function.params.len().hash(state);
+                for parameter in &function.params {
+                    parameter.ty.hash(state);
+                }
+                function.bounds.len().hash(state);
+                for bound in &function.bounds {
+                    bound.param_name.hash(state);
+                    bound.generic.hash(state);
+                    bound.ty.hash(state);
+                }
+                function.return_type.hash(state);
+            }
+            Type::Var { id, .. } => id.hash(state),
+            Type::Forall { vars, body } => {
+                vars.hash(state);
+                body.hash(state);
+            }
+            Type::Parameter(name) => name.hash(state),
+            Type::Tuple(elements) => elements.hash(state),
+            Type::Array { length, element } => {
+                length.hash(state);
+                element.hash(state);
+            }
+            Type::Uninferred
+            | Type::Ignored
+            | Type::Never
+            | Type::Error
+            | Type::ReceiverPlaceholder => {}
         }
     }
 }
@@ -2172,7 +2232,15 @@ fn alpha_index(idx: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
     use std::iter;
+
+    fn hash(ty: &Type) -> u64 {
+        let mut state = DefaultHasher::new();
+        ty.hash(&mut state);
+        state.finish()
+    }
 
     #[test]
     fn error_type_equals_itself() {
@@ -2206,6 +2274,36 @@ mod tests {
 
         assert_eq!(named, differently_named);
         assert_eq!(named, unnamed);
+    }
+
+    #[test]
+    fn equal_function_types_have_equal_hashes() {
+        let named = Type::function(
+            vec![FunctionParameter::named(Type::int(), Some("width".into()))],
+            vec![],
+            Box::new(Type::bool()),
+        );
+        let unnamed = Type::function(
+            vec![FunctionParameter::new(Type::int())],
+            vec![],
+            Box::new(Type::bool()),
+        );
+
+        assert_eq!(hash(&named), hash(&unnamed));
+    }
+
+    #[test]
+    fn equal_type_variables_have_equal_hashes() {
+        let named = Type::Var {
+            id: TypeVarId::new(1),
+            hint: Some("value".into()),
+        };
+        let unnamed = Type::Var {
+            id: TypeVarId::new(1),
+            hint: None,
+        };
+
+        assert_eq!(hash(&named), hash(&unnamed));
     }
 
     #[test]

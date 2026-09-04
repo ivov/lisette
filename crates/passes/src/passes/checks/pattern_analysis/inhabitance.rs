@@ -16,47 +16,12 @@ enum InhabitanceState {
 
 #[derive(Default)]
 pub struct InhabitanceCache {
-    states: HashMap<String, InhabitanceState>,
+    states: HashMap<Type, InhabitanceState>,
 }
 
 impl InhabitanceCache {
     pub fn new() -> Self {
         Self::default()
-    }
-}
-
-fn type_key(ty: &Type) -> String {
-    match ty {
-        Type::Never => "Never".to_string(),
-        Type::Nominal { id, params, .. } => {
-            if params.is_empty() {
-                id.to_string()
-            } else {
-                let param_keys: Vec<String> = params.iter().map(type_key).collect();
-                format!("{}<{}>", id, param_keys.join(", "))
-            }
-        }
-        Type::Tuple(elements) => {
-            let elem_keys: Vec<String> = elements.iter().map(type_key).collect();
-            format!("({})", elem_keys.join(", "))
-        }
-        Type::Array { length, element } => format!("[{}]{}", length, type_key(element)),
-        Type::Function(_) => "fn".to_string(),
-        Type::Var { .. } | Type::Uninferred | Type::Ignored | Type::Parameter(_) | Type::Error => {
-            "param".to_string()
-        }
-        Type::Forall { body, .. } => type_key(body),
-        Type::ImportNamespace(m) => format!("<import:{}>", m),
-        Type::ReceiverPlaceholder => "<receiver>".to_string(),
-        Type::Simple(kind) => kind.leaf_name().to_string(),
-        Type::Compound { kind, args, .. } => {
-            if args.is_empty() {
-                kind.leaf_name().to_string()
-            } else {
-                let arg_keys: Vec<String> = args.iter().map(type_key).collect();
-                format!("{}<{}>", kind.leaf_name(), arg_keys.join(", "))
-            }
-        }
     }
 }
 
@@ -72,16 +37,14 @@ pub fn is_inhabited(ty: &Type, store: &Store, cache: &mut InhabitanceCache) -> b
         return elements.iter().all(|e| is_inhabited(e, store, cache));
     }
 
-    let key = type_key(ty);
-
-    if let Some(state) = cache.states.get(&key) {
+    if let Some(state) = cache.states.get(ty) {
         return match state {
             InhabitanceState::Visiting | InhabitanceState::Inhabited => true,
             InhabitanceState::Uninhabited => false,
         };
     }
 
-    cache.states.insert(key.clone(), InhabitanceState::Visiting);
+    cache.states.insert(ty.clone(), InhabitanceState::Visiting);
 
     let result = match ty {
         Type::Nominal { id, params, .. } => check_constructor_inhabited(id, params, store, cache),
@@ -95,7 +58,7 @@ pub fn is_inhabited(ty: &Type, store: &Store, cache: &mut InhabitanceCache) -> b
     } else {
         InhabitanceState::Uninhabited
     };
-    cache.states.insert(key, final_state);
+    cache.states.insert(ty.clone(), final_state);
 
     result
 }
