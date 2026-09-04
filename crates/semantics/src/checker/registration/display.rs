@@ -74,7 +74,7 @@ impl TaskState {
         let Some(generics) = type_generics(definition) else {
             return;
         };
-        let visibility = definition.visibility.clone();
+        let visibility = definition.visibility;
         let name_span = definition.name_span;
 
         if let Some(user_ty) = definition

@@ -350,7 +350,7 @@ impl<'a> Formatter<'a> {
     fn visibility(vis: Visibility) -> Option<Document<'a>> {
         match vis {
             Visibility::Public => Some(Document::str("pub ")),
-            Visibility::Private => None,
+            Visibility::Private | Visibility::Local => None,
         }
     }
 

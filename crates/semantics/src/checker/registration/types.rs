@@ -1,6 +1,5 @@
 use crate::checker::EnvResolve;
 use rustc_hash::{FxHashMap, FxHashSet};
-use syntax::ast;
 use syntax::ast::{
     EnumFieldDefinition, EnumVariant, Expression, Generic, Span, StructFieldDefinition,
     StructFields, VariantFields,
@@ -66,7 +65,7 @@ impl TaskState {
             .current_package(&*store)
             .definitions
             .get(qualified_name.as_str())
-            .map(|definition| definition.visibility.clone())
+            .map(|definition| definition.visibility)
             .unwrap_or(Visibility::Private);
 
         if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
@@ -115,7 +114,7 @@ impl TaskState {
             else {
                 continue;
             };
-            let visibility = definition.visibility.clone();
+            let visibility = definition.visibility;
             let generics = generics.clone();
             let variants = variants.clone();
             let Some(enum_ty) = store.get_type(&qualified_name).cloned() else {
@@ -167,7 +166,7 @@ impl TaskState {
                 variant_definitions
             {
                 let definition = Definition {
-                    visibility: visibility.clone(),
+                    visibility,
                     ty: variant_ty,
                     name_span: Some(variant_name_span),
                     doc: variant_doc,
@@ -429,7 +428,7 @@ impl TaskState {
             .current_package(&*store)
             .definitions
             .get(qualified_name.as_str())
-            .map(|definition| definition.visibility.clone())
+            .map(|definition| definition.visibility)
             .unwrap_or(Visibility::Private);
 
         if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
@@ -613,7 +612,7 @@ impl TaskState {
                 .current_package(&*store)
                 .definitions
                 .get(qualified_name.as_str())
-                .map(|definition| definition.visibility.clone())
+                .map(|definition| definition.visibility)
                 .unwrap_or(Visibility::Private);
 
             let alias_ty = if name == "Never" && generics.is_empty() {
@@ -720,7 +719,7 @@ impl TaskState {
             .current_package(&*store)
             .definitions
             .get(qualified_name.as_str())
-            .map(|definition| definition.visibility.clone())
+            .map(|definition| definition.visibility)
             .unwrap_or(Visibility::Private);
 
         if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
@@ -907,7 +906,7 @@ fn is_pointer_backed_newtype(store: &Store, ty: &Type) -> bool {
 }
 
 // Mirror the written type's own visibility: peel storage (`Option`/`Ref`), not aliases.
-fn embed_field_visibility(store: &Store, field_ty: &Type) -> ast::Visibility {
+fn embed_field_visibility(store: &Store, field_ty: &Type) -> Visibility {
     let mut target = field_ty.clone();
     while target.is_option() || target.is_ref() {
         let Some(inner) = target.inner() else { break };
@@ -916,8 +915,8 @@ fn embed_field_visibility(store: &Store, field_ty: &Type) -> ast::Visibility {
     let public = matches!(&target, Type::Nominal { id, .. }
         if store.get_definition(id.as_str()).is_some_and(|d| d.visibility.is_public()));
     if public {
-        ast::Visibility::Public
+        Visibility::Public
     } else {
-        ast::Visibility::Private
+        Visibility::Private
     }
 }

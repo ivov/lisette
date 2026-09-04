@@ -2490,6 +2490,7 @@ pub struct ParentInterface {
 pub enum Visibility {
     Public,
     Private,
+    Local,
 }
 
 impl Visibility {

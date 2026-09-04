@@ -416,7 +416,7 @@ impl TaskState {
             let method = Method {
                 source_name: fn_name.clone(),
                 ty: method_ty.clone(),
-                visibility: fn_visibility.clone(),
+                visibility: fn_visibility,
                 origin: MethodOrigin::Declared,
                 name_span: Some(*fn_name_span),
                 doc: fn_doc.clone(),
@@ -445,7 +445,7 @@ impl TaskState {
             package.definitions.insert(
                 package_qualified_name,
                 Definition {
-                    visibility: fn_visibility.clone(),
+                    visibility: fn_visibility,
                     ty: method_ty,
                     name_span: Some(*fn_name_span),
                     doc: fn_doc,
@@ -485,7 +485,7 @@ impl TaskState {
             .current_package(&*store)
             .definitions
             .get(qualified_name.as_str())
-            .map(|definition| definition.visibility.clone())
+            .map(|definition| definition.visibility)
             .unwrap_or(Visibility::Private);
         let (generics, new_parents, methods) = self.with_scope(|this| {
             this.put_in_scope(generics);
@@ -571,7 +571,7 @@ impl TaskState {
                         Method {
                             source_name: method_name.clone(),
                             ty: fn_ty,
-                            visibility: visibility.clone(),
+                            visibility,
                             origin: MethodOrigin::Declared,
                             name_span: Some(*method_name_span),
                             doc: fn_doc,
@@ -606,7 +606,7 @@ impl TaskState {
         package.definitions.insert(
             qualified_name.clone(),
             Definition {
-                visibility: visibility.clone(),
+                visibility,
                 ty: interface_ty,
                 name_span: Some(*name_span),
                 doc: doc.clone(),

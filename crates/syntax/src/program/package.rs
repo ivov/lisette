@@ -1,8 +1,8 @@
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use super::definition::{Definition, Visibility};
 use super::file::File;
+use super::{Definition, Visibility};
 use crate::types::Symbol;
 
 pub type PackageId = String;

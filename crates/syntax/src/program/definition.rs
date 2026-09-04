@@ -4,6 +4,7 @@ use ecow::EcoString;
 
 use crate::ast::{
     Annotation, EnumVariant, Generic, Literal, Span, StructFieldDefinition, StructFields,
+    Visibility,
 };
 use crate::types;
 use crate::types::{
@@ -881,20 +882,6 @@ fn method_lookup_key(ty: &Type) -> Option<Symbol> {
         Type::Simple(kind) => Some(Symbol::from_parts("prelude", kind.leaf_name())),
         Type::Array { .. } => Some(Symbol::from_parts("prelude", "Array")),
         _ => None,
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Visibility {
-    Public,
-    Private,
-    Local,
-}
-
-impl Visibility {
-    pub fn is_public(&self) -> bool {
-        matches!(self, Visibility::Public)
     }
 }
 

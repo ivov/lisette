@@ -822,7 +822,6 @@ mod clone_tests {
 #[cfg(test)]
 mod closed_domain_tests {
     use super::*;
-    use syntax::ast;
     use syntax::ast::{
         Annotation, Generic, Span, StructFieldDefinition, StructFieldKind, StructFields,
     };
@@ -868,7 +867,7 @@ mod closed_domain_tests {
                     name: "0".into(),
                     name_span: Span::dummy(),
                     annotation: Annotation::Unknown,
-                    visibility: ast::Visibility::Private,
+                    visibility: Visibility::Private,
                     ty: Type::Simple(SimpleKind::Int),
                     kind: StructFieldKind::Named { attributes: vec![] },
                 }]),
@@ -1098,7 +1097,7 @@ mod closed_domain_tests {
                         name: "0".into(),
                         name_span: Span::dummy(),
                         annotation: Annotation::Unknown,
-                        visibility: ast::Visibility::Private,
+                        visibility: Visibility::Private,
                         ty: field_ty,
                         kind: StructFieldKind::Named { attributes: vec![] },
                     }]),
@@ -1194,7 +1193,7 @@ mod closed_domain_tests {
                         name: "0".into(),
                         name_span: Span::dummy(),
                         annotation: Annotation::Unknown,
-                        visibility: ast::Visibility::Private,
+                        visibility: Visibility::Private,
                         ty: nominal_int("m.Items"),
                         kind: StructFieldKind::Named { attributes: vec![] },
                     }]),
