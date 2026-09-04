@@ -15,6 +15,8 @@ use super::OutputImport;
 /// one record avoids synchronizing separate lookup and emission collections.
 pub(crate) struct ImportPlan {
     imports: Vec<PlannedImport>,
+    package_aliases: HashMap<String, usize>,
+    alias_packages: HashMap<String, usize>,
 }
 
 struct PlannedImport {
@@ -38,6 +40,8 @@ impl ImportPlan {
         go_package_names: &HashMap<String, String>,
     ) -> Self {
         let mut imports = Vec::new();
+        let mut package_aliases = HashMap::default();
+        let mut alias_packages = HashMap::default();
 
         for import in file.imports() {
             let is_blank = matches!(import.alias, Some(ImportAlias::Blank(_)));
@@ -55,8 +59,14 @@ impl ImportPlan {
                 ImportDisposition::Emit
             };
             let (path, go_alias) = resolve_import(&import, go_module, go_package_names);
+            let package = import.name.to_string();
+            let index = imports.len();
+            if let Some(alias) = &source_alias {
+                package_aliases.insert(package.clone(), index);
+                alias_packages.insert(alias.clone(), index);
+            }
             imports.push(PlannedImport {
-                package: import.name.to_string(),
+                package,
                 source_alias,
                 path,
                 go_alias,
@@ -64,23 +74,23 @@ impl ImportPlan {
             });
         }
 
-        Self { imports }
+        Self {
+            imports,
+            package_aliases,
+            alias_packages,
+        }
     }
 
     pub(crate) fn package_alias(&self, package: &str) -> Option<&str> {
-        self.imports
-            .iter()
-            .rev()
-            .filter(|import| import.package == package)
-            .find_map(|import| import.source_alias.as_deref())
+        self.package_aliases
+            .get(package)
+            .and_then(|index| self.imports[*index].source_alias.as_deref())
     }
 
     pub(crate) fn package_for_alias(&self, alias: &str) -> Option<&str> {
-        self.imports
-            .iter()
-            .rev()
-            .find(|import| import.source_alias.as_deref() == Some(alias))
-            .map(|import| import.package.as_str())
+        self.alias_packages
+            .get(alias)
+            .map(|index| self.imports[*index].package.as_str())
     }
 
     fn into_builder_state(self) -> (HashMap<String, String>, HashMap<String, String>) {
@@ -107,7 +117,7 @@ pub struct ImportBuilder<'a> {
     imports: HashMap<String, String>,
     /// Additional qualifiers requested for a path already present under a
     /// different qualifier.
-    duplicate_imports: Vec<(String, String)>,
+    duplicate_imports: HashSet<(String, String)>,
     dropped_aliases: HashMap<String, String>,
     used_packages: HashSet<String>,
 }
@@ -121,7 +131,7 @@ impl<'a> ImportBuilder<'a> {
             go_package_names,
             go_package_ids,
             imports: HashMap::default(),
-            duplicate_imports: Vec::new(),
+            duplicate_imports: HashSet::default(),
             dropped_aliases: HashMap::default(),
             used_packages: HashSet::default(),
         }
@@ -137,7 +147,7 @@ impl<'a> ImportBuilder<'a> {
             go_package_names,
             go_package_ids,
             imports,
-            duplicate_imports: Vec::new(),
+            duplicate_imports: HashSet::default(),
             dropped_aliases,
             used_packages: HashSet::default(),
         }
@@ -171,16 +181,8 @@ impl<'a> ImportBuilder<'a> {
         match self.imports.get(path) {
             Some(alias) if effective_qualifier(path, alias, self.go_package_ids) == qualifier => {}
             Some(_) => {
-                if !self
-                    .duplicate_imports
-                    .iter()
-                    .any(|(duplicate_path, duplicate_alias)| {
-                        duplicate_path == path && duplicate_alias == qualifier
-                    })
-                {
-                    self.duplicate_imports
-                        .push((path.to_string(), qualifier.to_string()));
-                }
+                self.duplicate_imports
+                    .insert((path.to_string(), qualifier.to_string()));
             }
             None => {
                 let alias = self
@@ -294,5 +296,39 @@ pub(crate) fn format_import(path: &str, alias: &str) -> String {
         }
     } else {
         format!("{alias} \"{path}\"")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syntax::FileParseStatus;
+
+    #[test]
+    fn import_plan_indexes_the_last_matching_alias() {
+        let source = r#"
+import early "one"
+import late "one"
+import shared "two"
+import shared "three"
+"#;
+        let parsed = syntax::build_ast(source, 0);
+        assert!(parsed.errors.is_empty());
+        let file = File {
+            id: 0,
+            package_id: "package".to_string(),
+            parse_status: FileParseStatus::Clean,
+            name: "test.lis".to_string(),
+            display_path: "test.lis".to_string(),
+            source_path: None,
+            source: source.to_string(),
+            items: parsed.ast,
+            file_comment: None,
+        };
+
+        let plan = ImportPlan::build(&file, "module", &HashSet::default(), &HashMap::default());
+
+        assert_eq!(plan.package_alias("one"), Some("late"));
+        assert_eq!(plan.package_for_alias("shared"), Some("three"));
     }
 }
