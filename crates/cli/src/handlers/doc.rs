@@ -9,6 +9,7 @@ use stdlib::{
 };
 use syntax::ast::EnumVariant;
 use syntax::ast::{Annotation, Binding, Expression, Generic, Pattern, StructFields, VariantFields};
+use syntax::doc::{dedent, drop_callout_lines, split_example};
 use syntax::program::DefinitionBody;
 
 #[derive(Debug, Clone, Copy)]
@@ -1208,49 +1209,15 @@ fn format_doc_arg(arg: &str) -> String {
         .join(" ")
 }
 
-fn split_doc_and_example(doc: &str) -> (&str, Option<&str>) {
-    if let Some(position) = doc.find("\nExample:\n") {
-        let description = doc[..position].trim_end();
-        let example = doc[position + "\nExample:\n".len()..].trim_end();
-        (description, Some(example))
-    } else {
-        (doc, None)
-    }
-}
-
-fn is_callout_line(line: &str) -> bool {
-    line.trim_start()
-        .strip_prefix("//")
-        .is_some_and(|body| body.trim_start().starts_with("!callout"))
-}
-
-fn drop_callout_lines(text: &str) -> String {
-    text.lines()
-        .filter(|line| !is_callout_line(line))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 fn print_example(example: &str) {
-    let min_indent = example
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| l.len() - l.trim_start().len())
-        .min()
-        .unwrap_or(0);
-    for line in example.lines() {
-        let stripped = if line.len() > min_indent {
-            &line[min_indent..]
-        } else {
-            line.trim_start()
-        };
-        if stripped.trim().is_empty() {
+    for line in dedent(example).lines() {
+        if line.trim().is_empty() {
             println!();
         } else if use_color() {
             use owo_colors::OwoColorize;
-            println!("      {}", stripped.dimmed().italic());
+            println!("      {}", line.dimmed().italic());
         } else {
-            println!("      {}", stripped);
+            println!("      {}", line);
         }
     }
 }
@@ -1269,7 +1236,7 @@ fn print_doc_line(indent: usize, line: &str) {
 
 fn print_doc(doc: &str) {
     let doc = drop_callout_lines(doc);
-    let (description, example) = split_doc_and_example(&doc);
+    let (description, example) = split_example(&doc);
     for line in description.lines() {
         print_doc_line(4, line);
     }
@@ -1288,7 +1255,7 @@ fn print_type_header(type_info: &TypeInfo, include_example: bool) {
         if include_example {
             print_doc(doc);
         } else {
-            let (description, _) = split_doc_and_example(doc);
+            let (description, _) = split_example(doc);
             for line in description.lines() {
                 print_doc_line(4, line);
             }

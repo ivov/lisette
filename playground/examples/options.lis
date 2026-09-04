@@ -1,0 +1,26 @@
+import "go:fmt"
+
+struct User { name: string, email: Option<string> }
+
+fn find(users: Slice<User>, name: string) -> Option<User> {
+  users.find(|u| u.name == name)
+}
+
+fn describe(users: Slice<User>, wanted: string) -> string {
+  match find(users, wanted) {
+    Some(User { name, email: Some(email) }) => f"{name} <{email}>",
+    Some(User { name, email: None }) => f"{name} has no email",
+    None => f"no user named {wanted}",
+  }
+}
+
+fn main() {
+  let users = [
+    User { name: "alice", email: Some("alice@example.com") },
+    User { name: "bob", email: None },
+  ]
+
+  for name in ["alice", "bob", "carol"] {
+    fmt.Println(describe(users, name))
+  }
+}

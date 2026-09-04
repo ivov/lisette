@@ -1,0 +1,29 @@
+import "go:fmt"
+
+interface Metric {
+  fn value() -> float64
+}
+
+struct Latency { ms: float64 }
+
+impl Latency {
+  fn value(self) -> float64 {
+    self.ms
+  }
+}
+
+fn highest<T: Metric>(metrics: Slice<T>) -> Option<T> {
+  let mut best = metrics.get(0)?
+  for metric in metrics {
+    if metric.value() > best.value() { best = metric }
+  }
+  Some(best)
+}
+
+fn main() {
+  let latencies = [Latency { ms: 12.5 }, Latency { ms: 30.0 }]
+  match highest(latencies) {
+    Some(slowest) => fmt.Println("slowest:", slowest.value()),
+    None => fmt.Println("no metrics"),
+  }
+}

@@ -1,11 +1,13 @@
+import "@fontsource-variable/inter";
+import "@fontsource/lexend/latin-600.css";
 import "./style.css";
-import { setupEditors, type DiagnosticItem } from "./editor/index.js";
-import { loadWasmBridge, type Diagnostic } from "./runner/wasm-bridge.js";
+import { setupEditors, GO_PLACEHOLDER } from "./editor/index.js";
+import { loadWasmBridge, type Diagnostic, type LisetteBridge } from "./runner/wasm-bridge.js";
 import { executeGoSource, formatGoSource } from "./runner/executor.js";
-import { THEME_LIGHT, THEME_DARK } from "./editor/theme.js";
-import { readSourceFromHash, writeSourceToHash, copyShareUrl } from "./share.js";
+import { readSourceFromHash, copyShareUrl } from "./share.js";
+import { EXAMPLES } from "./examples.js";
+import type { VimAdapterInstance } from "monaco-vim";
 
-// ─── Pane resizer ─────────────────────────────────────────────────────────────
 function initResizer() {
   const resizer     = document.getElementById("pane-resizer")!;
   const editorPane  = document.getElementById("editor-pane")!;
@@ -38,12 +40,14 @@ function initResizer() {
   });
 }
 
-// ─── DOM refs ─────────────────────────────────────────────────────────────────
 const overlay        = document.getElementById("wasm-loading-overlay")!;
+const examplesSelect = document.getElementById("examples") as HTMLSelectElement;
+const goPane         = document.getElementById("go-source-editor-container")!;
 const btnRun         = document.getElementById("btn-run") as HTMLButtonElement;
 const btnFormat      = document.getElementById("btn-format") as HTMLButtonElement;
-const btnCheck       = document.getElementById("btn-check") as HTMLButtonElement;
 const btnShare       = document.getElementById("btn-share") as HTMLButtonElement;
+const btnVim         = document.getElementById("btn-vim") as HTMLButtonElement;
+const vimStatus      = document.getElementById("vim-status")!;
 const versionTag     = document.getElementById("brand-version")!;
 const statusEl       = document.getElementById("status-indicator")!;
 const outputText     = document.getElementById("output-text")!;
@@ -53,7 +57,31 @@ const drawerToggle   = document.getElementById("drawer-toggle")!;
 const tabBtns        = document.querySelectorAll<HTMLButtonElement>(".tab-btn[data-tab]");
 const tabPanels      = document.querySelectorAll<HTMLElement>(".tab-panel");
 
-// ─── Mobile drawer ─────────────────────────────────────────────────────────────
+const NO_COMPILER = '<span class="output-error">The compiler did not load. Reload the page.</span>';
+
+if (/Mac|iPhone|iPad/.test(navigator.platform)) {
+  btnRun.title = "Run (⌘+Enter)";
+  btnFormat.title = "Format (⇧+⌥+F)";
+}
+
+const EXAMPLE_KEY = "lisette:play:example";
+const VIM_KEY = "lisette:play:vim";
+
+// Storage is wrapped, because a browser that blocks it must not take the page down with it.
+function readStored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
+}
+
 const isMobile = () => window.matchMedia("(max-width: 640px)").matches;
 
 function openDrawer() {
@@ -69,13 +97,11 @@ drawerToggle.addEventListener("click", (e) => {
   toggleDrawer();
 });
 
-// Tapping the tab strip (but not the chevron) on mobile opens the drawer
 document.getElementById("output-tabs")!.addEventListener("click", () => {
   if (!isMobile()) return;
-  openDrawer(); // idempotent — adds class if not already present
+  openDrawer();
 });
 
-// ─── Tab switching ─────────────────────────────────────────────────────────────
 tabBtns.forEach((btn) => {
   btn.addEventListener("click", () => {
     const target = btn.dataset["tab"]!;
@@ -86,12 +112,28 @@ tabBtns.forEach((btn) => {
   });
 });
 
-// ─── Status helpers ───────────────────────────────────────────────────────────
+function selectTab(name: string) {
+  document.querySelector<HTMLButtonElement>(`[data-tab="${name}"]`)?.click();
+}
+
 type StatusKind = "idle" | "running" | "ok" | "error" | "warning" | "info";
 
 function setStatus(kind: StatusKind, label: string) {
+  statusEl.hidden = false;
   statusEl.className = `status-${kind}`;
   statusEl.textContent = label;
+}
+
+function showCounts(diags: Diagnostic[]) {
+  const count = (severity: Diagnostic["severity"]) =>
+    diags.filter((d) => d.severity === severity).length;
+  const errors = count("error");
+  const warnings = count("warning");
+  const info = count("info");
+  if (errors > 0) setStatus("error", `${errors} error${errors === 1 ? "" : "s"}`);
+  else if (warnings > 0) setStatus("warning", `${warnings} warning${warnings === 1 ? "" : "s"}`);
+  else if (info > 0) setStatus("info", `${info} info`);
+  else statusEl.hidden = true;
 }
 
 function setOutput(html: string) {
@@ -102,15 +144,13 @@ function setOutput(html: string) {
 function setButtons(disabled: boolean) {
   btnRun.disabled = disabled;
   btnFormat.disabled = disabled;
-  btnCheck.disabled = disabled;
   btnShare.disabled = disabled;
 }
 
-// ─── Diagnostics panel ────────────────────────────────────────────────────────
 function renderDiagnostics(diags: Diagnostic[]) {
   if (diags.length === 0) {
     diagnosticList.innerHTML =
-      '<p class="diagnostics-empty">No diagnostics — your code looks good!</p>';
+      '<p class="diagnostics-empty">All checks passed.</p>';
     return;
   }
   diagnosticList.innerHTML = diags
@@ -121,7 +161,7 @@ function renderDiagnostics(diags: Diagnostic[]) {
         <div>
           <div>${escapeHtml(d.message)}</div>
           ${d.code ? `<div class="diagnostic-location">${escapeHtml(d.code)}</div>` : ""}
-          <div class="diagnostic-location">Line ${d.line}, Col ${d.col}</div>
+          <div class="diagnostic-location">Line ${d.line}, column ${d.col}</div>
         </div>
       </div>`
     )
@@ -136,23 +176,64 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-// ─── Bootstrap ────────────────────────────────────────────────────────────────
 async function main() {
   initResizer();
+
   const sharedCode = readSourceFromHash();
+  for (const example of EXAMPLES) {
+    const option = document.createElement("option");
+    option.value = example.id;
+    option.textContent = example.label;
+    examplesSelect.append(option);
+  }
+  const remembered = readStored(EXAMPLE_KEY);
+  const opened = EXAMPLES.find((example) => example.id === remembered) ?? EXAMPLES[0];
+
+  if (sharedCode === null) {
+    examplesSelect.value = opened.id;
+  } else {
+    // Shared code matches no example.
+    const shared = document.createElement("option");
+    shared.value = "";
+    shared.disabled = true;
+    shared.selected = true;
+    shared.textContent = "Shared code";
+    examplesSelect.prepend(shared);
+  }
+
   const editorResult = await setupEditors(
     document.getElementById("editor-container")!,
-    document.getElementById("go-source-editor-container")!,
-    sharedCode ?? undefined,
+    goPane,
+    sharedCode ?? opened.code,
   );
 
-  // Switch editor theme when the OS colour scheme changes
-  const darkMq = window.matchMedia("(prefers-color-scheme: dark)");
-  darkMq.addEventListener("change", (e) => {
-    editorResult.setTheme(e.matches ? THEME_DARK : THEME_LIGHT);
+  let vim: VimAdapterInstance | null = null;
+  const setVim = async (on: boolean) => {
+    if (on && !vim) {
+      const { initVimMode } = await import("monaco-vim");
+      if (!vim) vim = initVimMode(editorResult.mainEditor, vimStatus);
+    }
+    if (!on && vim) {
+      vim.dispose();
+      vim = null;
+    }
+    vimStatus.hidden = !on;
+    btnVim.setAttribute("aria-pressed", String(on));
+    writeStored(VIM_KEY, on ? "on" : "off");
+  };
+  void setVim(readStored(VIM_KEY) === "on");
+  btnVim.addEventListener("click", async () => {
+    await setVim(vim === null);
+    editorResult.mainEditor.focus();
   });
 
-  // Click on diagnostics jumps to position in editor
+  const alignStrips = () => {
+    const { contentLeft } = editorResult.mainEditor.getLayoutInfo();
+    document.documentElement.style.setProperty("--gutter", `${contentLeft}px`);
+  };
+  alignStrips();
+  editorResult.mainEditor.onDidLayoutChange(alignStrips);
+
   diagnosticList.addEventListener("click", (e) => {
     const item = (e.target as HTMLElement).closest<HTMLElement>(".diagnostic-item");
     if (!item) return;
@@ -163,7 +244,6 @@ async function main() {
     editorResult.mainEditor.focus();
   });
 
-  // ── Load WASM ──────────────────────────────────────────────────────────────
   let bridge = await (async () => {
     try {
       const b = await loadWasmBridge();
@@ -184,121 +264,113 @@ async function main() {
   setStatus("idle", "Ready");
   setButtons(false);
 
-  // ── Share ─────────────────────────────────────────────────────────────────
+  // A run or a format owns the status pill until it finishes.
+  let busy = false;
+  // Each compile takes a ticket, so a slow result cannot overwrite a newer one.
+  let ticket = 0;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  async function compileWith(compiler: LisetteBridge) {
+    const result = await compiler.compile(editorResult.getCode());
+    editorResult.addMarkers(result.diagnostics);
+    renderDiagnostics(result.diagnostics);
+    return result;
+  }
+
+  function settleGo(goSource: string, mine: number) {
+    if (mine !== ticket) return;
+    editorResult.setGoSource(goSource);
+    goPane.classList.remove("is-stale");
+  }
+
+  function showGo(goSource: string, mine: number) {
+    void formatGoSource(goSource).then((formatted) => settleGo(formatted, mine));
+  }
+
+  async function refresh() {
+    if (!bridge) return;
+    const mine = ++ticket;
+    const result = await compileWith(bridge);
+    if (mine !== ticket) return;
+    if (!busy) showCounts(result.diagnostics);
+    if (result.ok && result.goSource) showGo(result.goSource, mine);
+    else settleGo(GO_PLACEHOLDER, mine);
+  }
+
+  editorResult.mainEditor.onDidChangeModelContent(() => {
+    goPane.classList.add("is-stale");
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(refresh, 1000);
+  });
+
+  examplesSelect.addEventListener("change", () => {
+    const example = EXAMPLES.find((candidate) => candidate.id === examplesSelect.value);
+    if (!example) return;
+    editorResult.mainEditor.setValue(example.code);
+    writeStored(EXAMPLE_KEY, example.id);
+    examplesSelect.querySelector('option[value=""]')?.remove();
+    if (debounceTimer) clearTimeout(debounceTimer);
+    void refresh();
+  });
+
+  void refresh();
+
   btnShare.addEventListener("click", async () => {
-    writeSourceToHash(editorResult.getCode());
-    const ok = await copyShareUrl();
+    const ok = await copyShareUrl(editorResult.getCode());
     setStatus(ok ? "ok" : "error", ok ? "Link copied" : "Copy failed");
   });
 
-  // ── Format ────────────────────────────────────────────────────────────────
   btnFormat.addEventListener("click", async () => {
-    if (!bridge) { setOutput('<span class="output-error">WASM module not loaded.</span>'); return; }
-    setStatus("running", "Formatting…");
+    if (!bridge) { setOutput(NO_COMPILER); return; }
+    busy = true;
     setButtons(true);
-    const code = editorResult.getCode();
-    const result = await bridge.format(code);
-    if (result.ok && result.formatted) {
-      editorResult.mainEditor.setValue(result.formatted);
+    setStatus("running", "Formatting…");
+    const result = await bridge.format(editorResult.getCode());
+    if (result.ok) {
+      // The format action applies minimal edits, which keeps the caret and the undo history.
+      await editorResult.mainEditor.getAction("editor.action.formatDocument")?.run();
       setStatus("ok", "Formatted");
     } else {
       setStatus("error", "Format error");
       setOutput(`<span class="output-error">${escapeHtml(result.error ?? "Unknown error")}</span>`);
     }
+    busy = false;
     setButtons(false);
   });
 
-  // ── Type check ────────────────────────────────────────────────────────────
-  btnCheck.addEventListener("click", async () => {
-    setStatus("running", "Checking…");
-    setButtons(true);
-    const code = editorResult.getCode();
-
-    let diags: Diagnostic[] = [];
-    if (bridge) {
-      diags = await bridge.check(code);
-    }
-
-    const editorDiags: DiagnosticItem[] = diags.map((d) => ({
-      severity: d.severity,
-      message: d.message,
-      line: d.line,
-      col: d.col,
-      endLine: d.endLine,
-      endCol: d.endCol,
-    }));
-    editorResult.addMarkers(editorDiags);
-    renderDiagnostics(diags);
-
-    // Switch to diagnostics tab and open drawer on mobile
-    document.querySelector<HTMLButtonElement>('[data-tab="diagnostics"]')?.click();
-    openDrawer();
-
-    const errors = diags.filter((d) => d.severity === "error").length;
-    const warnings = diags.filter((d) => d.severity === "warning").length;
-    const info = diags.filter((d) => d.severity === "info").length;
-    if (errors > 0) setStatus("error", `${errors} error${errors > 1 ? "s" : ""}`);
-    else if (warnings > 0) setStatus("warning", `${warnings} warning${warnings > 1 ? "s" : ""}`);
-    else if (info > 0) setStatus("info", `${info} info`);
-    else setStatus("ok", "No issues");
-    setButtons(false);
-  });
-
-  // ── Run ───────────────────────────────────────────────────────────────────
   btnRun.addEventListener("click", run);
 
   async function run() {
-    setStatus("running", "Compiling…");
+    if (busy) return;
+    if (!bridge) {
+      setOutput(NO_COMPILER);
+      setStatus("error", "No compiler");
+      return;
+    }
+    busy = true;
     setButtons(true);
+    setStatus("running", "Compiling…");
     setOutput('<span class="output-hint">Compiling…</span>');
 
-    const code = editorResult.getCode();
+    if (debounceTimer) clearTimeout(debounceTimer);
+    const mine = ++ticket;
+    const result = await compileWith(bridge);
 
-    // 1. Compile Lisette → Go
-    let goSource: string;
-    if (bridge) {
-      const compileResult = await bridge.compile(code);
-
-      // Update diagnostics
-      const editorDiags: DiagnosticItem[] = compileResult.diagnostics.map((d) => ({
-        severity: d.severity,
-        message: d.message,
-        line: d.line,
-        col: d.col,
-        endLine: d.endLine,
-        endCol: d.endCol,
-      }));
-      editorResult.addMarkers(editorDiags);
-      renderDiagnostics(compileResult.diagnostics);
-
-      if (!compileResult.ok || !compileResult.goSource) {
-        const errors = compileResult.diagnostics
-          .filter((d) => d.severity === "error")
-          .map((d) => `<span class="output-error">error[${d.code ?? "E"}] at ${d.line}:${d.col}: ${escapeHtml(d.message)}</span>`)
-          .join("\n");
-        setOutput(errors || '<span class="output-error">Compilation failed.</span>');
-        const errCount = compileResult.diagnostics.filter((d) => d.severity === "error").length;
-        setStatus("error", `${errCount} error${errCount !== 1 ? "s" : ""}`);
-        setButtons(false);
-        return;
-      }
-
-      goSource = compileResult.goSource;
-      // Format the Go output via the Playground /fmt endpoint (best-effort, non-blocking)
-      editorResult.setGoSource(await formatGoSource(goSource));
-    } else {
-      // WASM not available – show stub message
-      setOutput('<span class="output-error">WASM compiler not loaded. Run `npm run build:wasm` to build the compiler module.</span>');
-      setStatus("error", "No compiler");
+    if (!result.ok || !result.goSource) {
+      settleGo(GO_PLACEHOLDER, mine);
+      setOutput('<span class="output-hint">The code did not compile.</span>');
+      showCounts(result.diagnostics);
+      selectTab("diagnostics");
+      busy = false;
       setButtons(false);
       return;
     }
 
-    // 2. Execute Go source via Go Playground API
+    showGo(result.goSource, mine);
     setStatus("running", "Running…");
-    setOutput('<span class="output-hint">Sending to Go Playground…</span>');
+    setOutput('<span class="output-hint">Running…</span>');
 
-    const execResult = await executeGoSource(goSource);
+    const execResult = await executeGoSource(result.goSource);
 
     if (!execResult.ok) {
       const msg = execResult.error
@@ -311,40 +383,19 @@ async function main() {
       setOutput(out
         ? escapeHtml(out)
         : '<span class="output-hint">(no output)</span>');
-      setStatus("ok", "Done");
+      statusEl.hidden = true;
     }
 
-    // Switch to output tab
-    document.querySelector<HTMLButtonElement>('[data-tab="output"]')?.click();
+    selectTab("output");
+    busy = false;
     setButtons(false);
   }
 
-  // Keyboard shortcut: Ctrl+Enter to run
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       run();
     }
-  });
-
-  // Live diagnostics: re-check 1 s after user stops typing
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  editorResult.mainEditor.onDidChangeModelContent(() => {
-    if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(async () => {
-      if (!bridge) return;
-      const code = editorResult.getCode();
-      const diags = await bridge.check(code);
-      const editorDiags: DiagnosticItem[] = diags.map((d) => ({
-        severity: d.severity,
-        message: d.message,
-        line: d.line,
-        col: d.col,
-        endLine: d.endLine,
-        endCol: d.endCol,
-      }));
-      editorResult.addMarkers(editorDiags);
-    }, 1000);
   });
 
   // Expose bridge setter so it can be updated if WASM loads lazily

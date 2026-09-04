@@ -1,0 +1,26 @@
+import "go:fmt"
+
+enum Message {
+  Ready,
+  Write(string),
+  Move { x: int, y: int },
+}
+
+fn handle(msg: Message) -> string {
+  match msg {
+    Ready => "ready",
+    Write(text) => f"wrote: {text}",
+    Move { x, y } => f"move to ({x}, {y})",
+  }
+}
+
+fn main() {
+  let messages = [
+    Message.Ready,
+    Message.Write("hello"),
+    Message.Move { x: 3, y: 4 },
+  ]
+  for msg in messages {
+    fmt.Println(handle(msg))
+  }
+}

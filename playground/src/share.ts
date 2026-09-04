@@ -21,18 +21,10 @@ export function readSourceFromHash(): string | null {
   return decodeSource(payload);
 }
 
-export function writeSourceToHash(code: string): void {
-  const newHash = HASH_PREFIX + encodeSource(code);
-  history.replaceState(
-    null,
-    "",
-    `${location.pathname}${location.search}${newHash}`,
-  );
-}
-
-export async function copyShareUrl(): Promise<boolean> {
+export async function copyShareUrl(code: string): Promise<boolean> {
+  const url = `${location.origin}${location.pathname}${location.search}${HASH_PREFIX}${encodeSource(code)}`;
   try {
-    await navigator.clipboard.writeText(window.location.href);
+    await navigator.clipboard.writeText(url);
     return true;
   } catch {
     return false;

@@ -45,12 +45,12 @@ header:has(.topics) > .header-row {
 
 @media (min-width: 50rem) {
   .header {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr max(9.25rem, calc(50% - 30.5rem)) auto;
     column-gap: 0.75rem;
   }
 
   button[data-open-modal] {
-    width: 12rem;
+    width: 100%;
     height: 2.25rem;
   }
 }

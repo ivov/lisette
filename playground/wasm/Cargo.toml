@@ -25,9 +25,10 @@ lisette-diagnostics = { path = "../../crates/diagnostics" }
 lisette-deps        = { path = "../../crates/deps" }
 
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = false
+wasm-opt = ["-Oz"]
 
 [profile.release]
 opt-level = "z"
 lto = true
 codegen-units = 1
+panic = "abort"

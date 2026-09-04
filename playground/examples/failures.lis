@@ -1,0 +1,27 @@
+import "go:fmt"
+import "go:strconv"
+
+fn parse_port(text: string) -> Result<int, error> {
+  let port = strconv.Atoi(text)?
+  if port < 1 || port > 65535 {
+    return Err(fmt.Errorf("port %d is out of range", port))
+  }
+  Ok(port)
+}
+
+fn address(host: string, port: string) -> Result<string, error> {
+  try {
+    let n = parse_port(port)?
+    f"{host}:{n}"
+  }
+}
+
+fn main() {
+  for text in ["8080", "99999", "http"] {
+    let line = match address("localhost", text) {
+      Ok(addr) => f"listening on {addr}",
+      Err(err) => f"error: {err}",
+    }
+    fmt.Println(line)
+  }
+}

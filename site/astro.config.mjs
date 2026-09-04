@@ -48,6 +48,7 @@ export default defineConfig({
         SocialIcons: "./src/components/SocialIcons.astro",
       },
       social: [
+        { icon: "desktop", label: "Playground", href: "/play/" },
         {
           icon: "github",
           label: "GitHub",

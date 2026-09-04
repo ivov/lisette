@@ -437,7 +437,7 @@ export function registerCompletionProvider(
       try {
         wasmItems = await getWasmCompletions(model, position);
       } catch {
-        // WASM not ready – fall back to static completions only
+        // WASM not ready, fall back to static completions only
       }
 
       return {
