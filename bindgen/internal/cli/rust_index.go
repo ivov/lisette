@@ -15,17 +15,17 @@ use std::sync::LazyLock;
 
 use crate::Target;
 
+type TypedefEntries = &'static [(&'static str, &'static str)];
+type PackageTargets = &'static [(&'static str, &'static str)];
+
 static GO_STDLIB_COMMON: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     HashMap::from([
 %s    ])
 });
 
 %s
-static GO_STDLIB_PACKAGE_TARGETS: LazyLock<HashMap<&str, &[(&str, &str)]>> =
-    LazyLock::new(|| {
-        HashMap::from([
-%s        ])
-    });
+static GO_STDLIB_PACKAGE_TARGETS: &[(&str, PackageTargets)] = &[
+%s];
 
 pub fn get_go_stdlib_typedef(package: &str, target: Target) -> Option<&'static str> {
     if !is_available_on(package, target) {
@@ -44,7 +44,7 @@ pub fn get_go_stdlib_packages(target: Target) -> Vec<&'static str> {
         .filter(|pkg| is_available_on(pkg, target))
         .collect();
     if let Some(overlay) = overlay_for(target) {
-        packages.extend(overlay.keys().copied());
+        packages.extend(overlay.iter().map(|(package, _)| *package));
     }
     packages.sort();
     packages
@@ -53,11 +53,14 @@ pub fn get_go_stdlib_packages(target: Target) -> Vec<&'static str> {
 pub fn get_go_stdlib_package_targets(
     package: &str,
 ) -> Option<&'static [(&'static str, &'static str)]> {
-    GO_STDLIB_PACKAGE_TARGETS.get(package).copied()
+    GO_STDLIB_PACKAGE_TARGETS
+        .iter()
+        .find(|(candidate, _)| *candidate == package)
+        .map(|(_, targets)| *targets)
 }
 
 fn is_available_on(package: &str, target: Target) -> bool {
-    match GO_STDLIB_PACKAGE_TARGETS.get(package) {
+    match get_go_stdlib_package_targets(package) {
         Some(targets) => targets
             .iter()
             .any(|(goos, goarch)| *goos == target.goos && *goarch == target.goarch),
@@ -66,10 +69,15 @@ fn is_available_on(package: &str, target: Target) -> bool {
 }
 
 fn lookup_in_overlay(target: Target, package: &str) -> Option<&'static str> {
-    overlay_for(target).and_then(|overlay| overlay.get(package).copied())
+    overlay_for(target).and_then(|overlay| {
+        overlay
+            .iter()
+            .find(|(candidate, _)| *candidate == package)
+            .map(|(_, source)| *source)
+    })
 }
 
-fn overlay_for(target: Target) -> Option<&'static HashMap<&'static str, &'static str>> {
+fn overlay_for(target: Target) -> Option<TypedefEntries> {
     match (target.goos, target.goarch) {
 %s        _ => None,
     }
@@ -89,7 +97,7 @@ func generateRustIndexFile(outDir string, partition partitioned, targets []Targe
 		}
 	}
 	slices.Sort(commonPaths)
-	commonEntries := buildEntries(commonPaths, nil)
+	commonEntries := buildEntries(commonPaths, nil, "        ")
 
 	// Invert variants into per-target entries pointing at canonical files.
 	perTarget := make(map[Target]map[string]Target)
@@ -120,11 +128,11 @@ func generateRustIndexFile(outDir string, partition partitioned, targets []Targe
 		}
 		slices.Sort(paths)
 		staticName := overlayStaticName(target)
-		fmt.Fprintf(&overlayBlocks, "static %s: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {\n    HashMap::from([\n", staticName)
-		overlayBlocks.WriteString(buildEntries(paths, entries))
-		overlayBlocks.WriteString("    ])\n});\n\n")
+		fmt.Fprintf(&overlayBlocks, "static %s: TypedefEntries = &[\n", staticName)
+		overlayBlocks.WriteString(buildEntries(paths, entries, "    "))
+		overlayBlocks.WriteString("];\n\n")
 
-		fmt.Fprintf(&matchArms, "        (%q, %q) => Some(&%s),\n", target.goos, target.goarch, staticName)
+		fmt.Fprintf(&matchArms, "        (%q, %q) => Some(%s),\n", target.goos, target.goarch, staticName)
 	}
 
 	intendedEntries := buildIntendedEntries(partition, len(targets))
@@ -145,10 +153,10 @@ func generateRustIndexFile(outDir string, partition partitioned, targets []Targe
 	return nil
 }
 
-// buildEntries renders HashMap entries for a typedef map. When `canonical`
+// buildEntries renders entries for a typedef table. When `canonical`
 // is nil, paths point at suffixless files (the common map). Otherwise each
 // entry points at the canonical target's file for that package.
-func buildEntries(pkgPaths []string, canonical map[string]Target) string {
+func buildEntries(pkgPaths []string, canonical map[string]Target, indentation string) string {
 	var b strings.Builder
 	for _, pkgPath := range pkgPaths {
 		suffix := ""
@@ -156,8 +164,8 @@ func buildEntries(pkgPaths []string, canonical map[string]Target) string {
 			suffix = "_" + t.Suffix()
 		}
 		fmt.Fprintf(&b,
-			"        (%q, include_str!(\"../typedefs/%s%s.d.lis\")),\n",
-			pkgPath, pkgPath, suffix,
+			"%s(%q, include_str!(\"../typedefs/%s%s.d.lis\")),\n",
+			indentation, pkgPath, pkgPath, suffix,
 		)
 	}
 	return b.String()
@@ -181,7 +189,7 @@ func buildIntendedEntries(partition partitioned, targetCount int) string {
 			}
 			fmt.Fprintf(&pairs, "(%q, %q)", t.goos, t.goarch)
 		}
-		fmt.Fprintf(&b, "            (%q, &[%s][..]),\n", pkgPath, pairs.String())
+		fmt.Fprintf(&b, "    (%q, &[%s]),\n", pkgPath, pairs.String())
 	}
 	return b.String()
 }
