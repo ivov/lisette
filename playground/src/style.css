@@ -1,58 +1,50 @@
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+/* The docs site's values: Catppuccin Mocha through Starlight, the accent from `site/src/styles/custom.css`. */
 :root {
-  --toolbar-height: 48px;
-  --tab-height: 36px;
+  --bg: #181825;
+  --bg-band: #1e1e2e;
+  --bg-go: #0a2538;
+  --border: #313244;
+  --border-strong: #45475a;
+  --text: #cdd6f4;
+  --text-sub: #a6adc8;
+  --text-muted: #9399b2;
+  --accent: hsl(from #b294f0 h s 60%);
+  --accent-hover: hsl(from #b294f0 h s 66%);
+  --accent-high: #b294f0;
+  --error: #f87171;
+  --warning: #fbbf24;
+  --info: #60a5fa;
+  --success: hsl(115, 34%, 76%);
+
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Lexend", var(--font-sans);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+
+  --toolbar-height: 4.75rem;
+  --tab-height: 2.75rem;
   --drawer-open-height: 50vh;
 }
 
-/* ─── GitHub Light ────────────────────────── */
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg-base: #ffffff;
-    --bg-surface: #f6f8fa;
-    --bg-elevated: #eaeef2;
-    --border: #d0d7de;
-    --text-primary: #24292f;
-    --text-secondary: #57606a;
-    --text-muted: #8c959f;
-    --accent: #0969da;
-    --accent-hover: #0860ca;
-    --success: #1a7f37;
-    --warning: #9a6700;
-    --error: #cf222e;
-    --info: #0969da;
-  }
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ─── GitHub Dark ─────────────────────────── */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-base: #0d1117;
-    --bg-surface: #161b22;
-    --bg-elevated: #1f2937;
-    --border: #30363d;
-    --text-primary: #e6edf3;
-    --text-secondary: #8b949e;
-    --text-muted: #484f58;
-    --accent: #58a6ff;
-    --accent-hover: #79b8ff;
-    --success: #3fb950;
-    --warning: #d29922;
-    --error: #f85149;
-    --info: #58a6ff;
-  }
-}
-
-html, body {
+html,
+body {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: var(--bg-base);
-  color: var(--text-primary);
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
   overflow: hidden;
 }
 
@@ -62,103 +54,133 @@ html, body {
   height: 100vh;
 }
 
-/* ─── Toolbar ─────────────────────────────── */
+/* Places the wordmark at the docs offset of 2.375rem. */
 #toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   height: var(--toolbar-height);
-  padding: 0 16px;
-  background: var(--bg-surface);
+  padding: 0 1.5rem;
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  gap: 16px;
-  z-index: 10;
 }
 
-.toolbar-left, .toolbar-right {
-  flex: 1;
+.toolbar-left {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
 }
 
 .toolbar-right {
   display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 12px;
+  gap: 0.25rem;
+  margin-left: auto;
 }
 
-.toolbar-center {
-  display: flex;
+/* The docs header's round icon links. */
+.icon-link {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  color: var(--text-muted);
+  transition:
+    background-color 150ms,
+    color 150ms;
 }
 
-.brand {
+.icon-link:hover,
+.icon-link:focus-visible {
+  background: var(--bg);
+  color: var(--text);
+}
+
+#controls {
   display: flex;
-  align-items: baseline;
-  gap: 6px;
-  text-decoration: none;
+  align-items: center;
+  gap: 0.75rem;
+  height: var(--tab-height);
+  padding: 0 0.65rem 0 calc(var(--gutter, 4.25rem) - 0.7rem - 1px);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .brand-name {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--accent);
-  letter-spacing: -0.3px;
-}
-
-.brand-tag {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 600;
+  /* The docs line height, for the same pixel rounding. */
+  line-height: 1.75;
+  letter-spacing: -0.02em;
+  color: var(--accent-high);
+  text-decoration: none;
 }
 
 .brand-version {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
 }
 
-/* ─── Buttons ─────────────────────────────── */
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border: 1px solid var(--border);
+  gap: 0.4rem;
+  height: 1.75rem;
+  padding: 0 0.7rem;
+  border: 1px solid transparent;
   border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-  outline: none;
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    color 150ms;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent-high);
+  outline-offset: 2px;
 }
 
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: white;
 }
 
-.btn-primary:hover {
+.btn-primary:hover,
+.btn-primary:focus-visible {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
 }
 
-.btn-primary:active {
-  opacity: 0.85;
-}
-
 .btn-secondary {
-  background: var(--bg-elevated);
-  color: var(--text-primary);
+  background-color: transparent;
+  color: var(--text-sub);
 }
 
-.btn-secondary:hover {
-  border-color: var(--text-muted);
+.btn-secondary:hover,
+.btn-secondary:focus-visible {
+  background-color: var(--border);
+  color: var(--text);
+}
+
+select.btn {
+  appearance: none;
+  border-color: var(--border);
+  padding-inline-end: 1.7rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a6adc8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  background-size: 10px;
 }
 
 .btn:disabled {
@@ -166,35 +188,60 @@ html, body {
   cursor: not-allowed;
 }
 
-/* ─── Status ──────────────────────────────── */
 #status-indicator {
-  font-size: 12px;
-  padding: 3px 10px;
-  border-radius: 12px;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  height: 1.75rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
-.status-idle   { background: rgba(139,148,158,.12); color: var(--text-secondary); }
-.status-running{ background: rgba(88,166,255,.15);  color: var(--info); }
-.status-ok     { background: rgba(63,185,80,.15);   color: var(--success); }
-.status-error  { background: rgba(248,81,73,.15);   color: var(--error); }
-.status-warning{ background: rgba(210,153,34,.15);  color: var(--warning); }
-.status-info   { background: rgba(88,166,255,.15);  color: var(--info); }
+#status-indicator[hidden] {
+  display: none;
+}
 
-/* ─── Layout ──────────────────────────────── */
+#status-indicator.status-idle,
+#status-indicator.status-ok {
+  border-color: transparent;
+}
+
+.diagnostics-empty::before {
+  content: "✓ ";
+  color: var(--success);
+}
+
+#status-indicator.status-running,
+#status-indicator.status-info {
+  color: var(--info);
+}
+
+#status-indicator.status-warning {
+  color: var(--warning);
+}
+
+#status-indicator.status-error {
+  color: var(--error);
+}
+
 #main-layout {
   display: flex;
   flex: 1;
   overflow: hidden;
 }
 
+/* About 76 columns plus the gutter at 14px mono. */
 #editor-pane {
-  flex: 1;
-  min-width: 0;
-  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  flex: 0 1 45rem;
+  min-width: 0;
 }
 
 #editor-container {
@@ -202,71 +249,92 @@ html, body {
   overflow: hidden;
 }
 
-#output-pane {
-  width: 45%;
-  min-width: 300px;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-base);
+/* A wider bar than the line, so it can be grabbed. */
+#pane-resizer {
+  --line: var(--border);
+  flex-shrink: 0;
+  width: 5px;
+  background: linear-gradient(to right, var(--bg) 2px, var(--line) 2px 3px, var(--bg-band) 3px);
+  cursor: col-resize;
 }
 
-/* ─── Output tabs ─────────────────────────── */
+#pane-resizer:hover,
+#pane-resizer.dragging {
+  --line: var(--accent-high);
+}
+
+#output-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 300px;
+  background: var(--bg-band);
+}
+
 #output-tabs {
   display: flex;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-surface);
-  flex-shrink: 0;
+  align-items: stretch;
+  gap: 1rem;
   height: var(--tab-height);
+  padding: 0 0.75rem 0 calc(var(--gutter, 4.25rem) - 0.6rem);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .tab-btn {
-  padding: 0 16px;
-  height: 100%;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: none;
-  border: none;
+  display: flex;
+  align-items: center;
+  padding: 0 0.6rem;
+  border: 0;
   border-bottom: 2px solid transparent;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  background: none;
+  color: var(--text-sub);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 150ms,
+    border-color 150ms;
 }
 
-.tab-btn:hover {
-  color: var(--text-primary);
+.tab-btn:hover,
+.tab-btn:focus-visible {
+  color: var(--text);
 }
 
 .tab-btn.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: var(--accent-high);
+  border-bottom-color: var(--accent-high);
 }
 
-/* Drawer toggle – hidden on desktop */
 #drawer-toggle {
   display: none;
   align-items: center;
   justify-content: center;
+  align-self: center;
+  width: 2.25rem;
+  height: 2.25rem;
   margin-left: auto;
-  margin-right: 8px;
-  padding: 4px 8px;
+  border: 0;
+  border-radius: 999px;
   background: none;
-  border: none;
-  color: var(--text-secondary);
+  color: var(--text-sub);
   cursor: pointer;
-  border-radius: 4px;
-  transition: color 0.15s, background 0.15s;
-  flex-shrink: 0;
+  transition:
+    background-color 150ms,
+    color 150ms;
 }
 
 #drawer-toggle:hover {
-  color: var(--text-primary);
-  background: var(--bg-elevated);
+  background: var(--border);
+  color: var(--text);
 }
 
 #drawer-chevron {
-  transition: transform 0.25s ease;
+  transition: transform 250ms ease;
 }
 
 .drawer-open #drawer-chevron {
@@ -274,9 +342,9 @@ html, body {
 }
 
 #output-content {
+  position: relative;
   flex: 1;
   overflow: hidden;
-  position: relative;
 }
 
 .tab-panel {
@@ -289,94 +357,122 @@ html, body {
   flex-direction: column;
 }
 
-/* ─── Output pre ──────────────────────────── */
 .output-pre {
   flex: 1;
-  padding: 14px 16px;
-  font-family: "Fira Code", "Cascadia Code", "JetBrains Mono", ui-monospace, monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text-primary);
+  padding: 1rem 1.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--text);
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  tab-size: 2;
 }
 
 .output-hint {
   color: var(--text-muted);
-  font-style: italic;
 }
 
-.output-error { color: var(--error); }
-.output-success { color: var(--success); }
+/* The docs inline code chip. */
+.output-hint code {
+  padding: 0.125rem 0.3rem;
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--accent) 55%, var(--bg-band));
+  color: var(--text);
+}
+
+.output-error {
+  color: var(--error);
+}
 
 #go-source-editor-container {
   flex: 1;
   overflow: hidden;
+  transition: opacity 150ms;
 }
 
-/* ─── Diagnostics ─────────────────────────── */
+#go-source-editor-container.is-stale {
+  opacity: 0.4;
+}
+
+/* The docs tint for Go blocks. */
+#go-source-editor-container .monaco-editor {
+  --vscode-editor-background: var(--bg-go);
+  --vscode-editorGutter-background: var(--bg-go);
+}
+
 .diagnostics-container {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 0.75rem;
 }
 
 .diagnostic-item {
+  --severity: var(--border);
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  margin-bottom: 4px;
-  border-radius: 6px;
-  font-size: 12px;
-  line-height: 1.5;
-  background: var(--bg-surface);
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.5rem;
   border: 1px solid var(--border);
+  border-left: 3px solid var(--severity);
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 0.8125rem;
+  line-height: 1.5;
   cursor: pointer;
 }
 
 .diagnostic-item:hover {
-  border-color: var(--text-muted);
+  border-color: var(--border-strong);
+  border-left-color: var(--severity);
+}
+
+.diagnostic-error {
+  --severity: var(--error);
+}
+
+.diagnostic-warning {
+  --severity: var(--warning);
+}
+
+.diagnostic-info {
+  --severity: var(--info);
 }
 
 .diagnostic-icon {
   flex-shrink: 0;
-  margin-top: 1px;
-  font-size: 13px;
+  font-weight: 700;
+  color: var(--severity);
 }
 
-.diagnostic-error   { border-left: 3px solid var(--error); }
-.diagnostic-warning { border-left: 3px solid var(--warning); }
-.diagnostic-info    { border-left: 3px solid var(--info); }
-
 .diagnostic-location {
-  color: var(--text-muted);
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
   margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 .diagnostics-empty {
-  color: var(--text-muted);
+  padding: 2.5rem 1.25rem;
   text-align: center;
-  padding: 40px 20px;
-  font-size: 13px;
+  font-size: 0.875rem;
+  color: var(--text-muted);
 }
 
-/* ─── WASM loading overlay ─────────────────── */
 #wasm-loading-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(13, 17, 23, 0.9);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 1rem;
+  background: rgba(24, 24, 37, 0.9);
+  color: var(--text-sub);
+  font-size: 0.875rem;
   z-index: 100;
-  font-size: 14px;
-  color: var(--text-secondary);
 }
 
 #wasm-loading-overlay.hidden {
@@ -387,60 +483,39 @@ html, body {
   width: 32px;
   height: 32px;
   border: 3px solid var(--border);
-  border-top-color: var(--accent);
+  border-top-color: var(--accent-high);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* ─── Resizer ─────────────────────────────── */
-#pane-resizer {
-  width: 4px;
-  cursor: col-resize;
-  background: var(--border);
-  flex-shrink: 0;
-  transition: background 0.15s;
-}
-
-#pane-resizer:hover,
-#pane-resizer.dragging {
-  background: var(--accent);
-}
-
-/* ══════════════════════════════════════════
-   Mobile layout  (≤ 640 px)
-   ══════════════════════════════════════════ */
 @media (max-width: 640px) {
-
-  /* ── Toolbar: two-row ────────────────────── */
   #toolbar {
+    height: 3.5rem;
+    padding: 0 1rem;
+  }
+
+  #controls {
     height: auto;
     flex-wrap: wrap;
-    padding: 8px 12px;
-    gap: 6px;
+    gap: 0.375rem;
+    padding: 0.5rem 0.75rem;
   }
 
-  /* Row 1: brand (left) + status (right) */
-  .toolbar-left  { flex: 1; min-width: 0; }
-  .toolbar-right { flex: none; gap: 8px; }
-
-  /* Row 2: action buttons, full width */
-  .toolbar-center {
-    order: 1;          /* push below brand row */
-    flex: 0 0 100%;
-    gap: 6px;
+  #output-tabs {
+    padding-left: 0.75rem;
   }
 
-  /* Slightly smaller buttons on mobile */
   .btn {
-    padding: 6px 12px;
-    font-size: 13px;
+    flex: 1 1 auto;
+    justify-content: center;
   }
 
-  /* ── Main layout: stack vertically ────────── */
   #main-layout {
     flex-direction: column;
   }
@@ -448,42 +523,29 @@ html, body {
   #editor-pane {
     flex: 1;
     min-height: 0;
-    border-right: none;
   }
 
-  /* Hide the drag-resizer on mobile */
-  #pane-resizer { display: none; }
+  #pane-resizer {
+    display: none;
+  }
 
-  /* ── Output drawer ────────────────────────── */
   #output-pane {
-    /* Reset desktop width */
     width: 100%;
     min-width: 0;
-    /* Collapsed = only the tab-bar height is visible */
     max-height: var(--tab-height);
     overflow: hidden;
-    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border-top: 1px solid var(--border);
+    transition: max-height 300ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   #output-pane.drawer-open {
     max-height: var(--drawer-open-height);
   }
 
-  /* Show the chevron toggle */
   #drawer-toggle {
     display: flex;
   }
 
-  /* When open, flip chevron to point down */
-  #output-pane.drawer-open #drawer-chevron {
-    transform: rotate(180deg);
-  }
-
-  /* ── Editor scroll feel ─────────────────────── */
-  /* Allow the browser to handle vertical panning natively so the
-     editor content scrolls with momentum. Monaco still intercepts
-     horizontal swipes for the minimap / line scrolling. */
   .monaco-editor .overflow-guard,
   .monaco-editor .monaco-scrollable-element {
     touch-action: pan-y !important;
@@ -491,19 +553,11 @@ html, body {
   }
 }
 
-/* ─── Monaco: prevent iOS zoom on editor focus ─────────────────── */
-/* iOS Safari zooms in when focusing any input with font-size < 16px.
-   Monaco's textarea is its invisible input capture mechanism — setting
-   its font-size to 16px prevents zoom without affecting the visual
-   rendering, which Monaco handles through its own DOM layer. */
+/* iOS Safari zooms on focus of any input under 16px, and Monaco's hidden textarea is one. */
 .monaco-editor .inputarea {
   font-size: 16px !important;
 }
 
-/* ─── Monaco: hide the iPad virtual-keyboard trigger button ─── */
-/* Monaco renders a "Show keyboard" button in the bottom-right corner
-   on touch devices. We handle keyboard access through the editor
-   itself, so this button is redundant and visually out of place. */
 .monaco-editor .iPadShowKeyboard {
   display: none !important;
 }

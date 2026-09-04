@@ -1,165 +1,110 @@
 import type * as Monaco from "monaco-editor";
 
-export const THEME_LIGHT = "github-light";
-export const THEME_DARK  = "github-dark";
+export const THEME = "lisette-dark";
 
-/** Returns the preferred theme name based on the OS/browser colour scheme. */
-export function preferredTheme(): string {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? THEME_DARK
-    : THEME_LIGHT;
-}
+// Night Owl as Starlight bundles it, with the overrides from `site/ec.config.mjs`.
+const PLAIN = "d6deeb";
+const KEYWORD = "c792ea";
+const OPERATOR = "7fdbca";
+const TYPE = "c5e478";
+const STRING = "34d399";
+const FUNCTION = "82aaff";
+const NUMBER = "f78c6c";
+const COMMENT = "637777";
+const ATTRIBUTE = "8b9ba8";
+const LITERAL = "ff5874";
 
-export function registerThemes(monaco: typeof Monaco): void {
-  // ─── GitHub Light ─────────────────────────────────────────────────────────
-  monaco.editor.defineTheme(THEME_LIGHT, {
-    base: "vs",
-    inherit: true,
-    rules: [
-      { token: "",                   foreground: "24292f", background: "ffffff" },
-      { token: "keyword",            foreground: "cf222e", fontStyle: "bold" },
-      { token: "keyword.operator",   foreground: "24292f", fontStyle: "" },
-      { token: "keyword.control",    foreground: "cf222e" },
-      { token: "type",               foreground: "8250df" },
-      { token: "type.identifier",    foreground: "8250df" },
-      { token: "identifier",         foreground: "24292f" },
-      { token: "variable",           foreground: "24292f" },
-      { token: "string",             foreground: "0a3069" },
-      { token: "string.escape",      foreground: "0550ae" },
-      { token: "string.invalid",     foreground: "82071e" },
-      { token: "string.interpolated",foreground: "24292f" },
-      { token: "number",             foreground: "0550ae" },
-      { token: "number.float",       foreground: "0550ae" },
-      { token: "number.hex",         foreground: "0550ae" },
-      { token: "comment",            foreground: "57606a", fontStyle: "italic" },
-      { token: "operator",           foreground: "24292f" },
-      { token: "delimiter",          foreground: "57606a" },
-      { token: "brackets",           foreground: "24292f" },
-      { token: "attribute",          foreground: "0550ae" },
-      { token: "storage",            foreground: "cf222e" },
-      { token: "constant",           foreground: "0550ae" },
-      { token: "function",           foreground: "8250df" },
+// Monaco's Go tokenizer emits the builtin types as `keyword.<name>`.
+const GO_TYPES = [
+  "bool", "byte", "complex64", "complex128", "error", "float32", "float64",
+  "int", "int8", "int16", "int32", "int64", "rune", "string",
+  "uint", "uint8", "uint16", "uint32", "uint64", "uintptr",
+];
 
-      // TextMate scope names (used when TM grammar is active)
-      { token: "keyword.control",                    foreground: "cf222e" },
-      { token: "keyword.other",                      foreground: "cf222e" },
-      { token: "entity.name.function",               foreground: "8250df" },
-      { token: "entity.name.type",                   foreground: "8250df" },
-      { token: "variable.other",                     foreground: "24292f" },
-      { token: "variable.language",                  foreground: "0550ae" },
-      { token: "string.quoted",                      foreground: "0a3069" },
-      { token: "string.interpolated",                foreground: "24292f" },
-      { token: "punctuation.definition.string",      foreground: "0a3069" },
-      { token: "constant.numeric",                   foreground: "0550ae" },
-      { token: "constant.language",                  foreground: "0550ae" },
-      { token: "comment.line",                       foreground: "57606a", fontStyle: "italic" },
-      { token: "comment.block",                      foreground: "57606a", fontStyle: "italic" },
-      { token: "storage.type",                       foreground: "cf222e" },
-      { token: "storage.modifier",                   foreground: "cf222e" },
-      { token: "support.type",                       foreground: "8250df" },
-      { token: "meta.attribute",                     foreground: "0550ae" },
-    ],
-    colors: {
-      "editor.background":                  "#ffffff",
-      "editor.foreground":                  "#24292f",
-      "editor.lineHighlightBackground":     "#f6f8fa",
-      "editor.selectionBackground":         "#add6ff",
-      "editor.inactiveSelectionBackground": "#d4d4d4",
-      "editorCursor.foreground":            "#0969da",
-      "editorLineNumber.foreground":        "#8c959f",
-      "editorLineNumber.activeForeground":  "#57606a",
-      "editorIndentGuide.background1":      "#d8dee4",
-      "editorIndentGuide.activeBackground1":"#8c959f",
-      "editorWidget.background":            "#f6f8fa",
-      "editorWidget.border":                "#d0d7de",
-      "editorSuggestWidget.background":     "#ffffff",
-      "editorSuggestWidget.border":         "#d0d7de",
-      "editorSuggestWidget.selectedBackground": "#0969da",
-      "editorSuggestWidget.selectedForeground": "#ffffff",
-      "editorHoverWidget.background":       "#ffffff",
-      "editorHoverWidget.border":           "#d0d7de",
-      "scrollbar.shadow":                   "#00000020",
-      "scrollbarSlider.background":         "#d0d7de80",
-      "scrollbarSlider.hoverBackground":    "#8c959f80",
-      "input.background":                   "#ffffff",
-      "input.border":                       "#d0d7de",
-      "focusBorder":                        "#0969da",
-    },
-  });
+const rules = (foreground: string, tokens: string[]): Monaco.editor.ITokenThemeRule[] =>
+  tokens.map((token) => ({ token, foreground }));
 
-  // ─── GitHub Dark ──────────────────────────────────────────────────────────
-  monaco.editor.defineTheme(THEME_DARK, {
+export function registerTheme(monaco: typeof Monaco): void {
+  monaco.editor.defineTheme(THEME, {
     base: "vs-dark",
-    inherit: true,
+    inherit: false,
     rules: [
-      { token: "",                   foreground: "e6edf3", background: "0d1117" },
-      { token: "keyword",            foreground: "ff7b72", fontStyle: "bold" },
-      { token: "keyword.operator",   foreground: "e6edf3", fontStyle: "" },
-      { token: "keyword.control",    foreground: "ff7b72" },
-      { token: "type",               foreground: "ffa657" },
-      { token: "type.identifier",    foreground: "ffa657" },
-      { token: "identifier",         foreground: "e6edf3" },
-      { token: "variable",           foreground: "ffa657" },
-      { token: "string",             foreground: "a5d6ff" },
-      { token: "string.escape",      foreground: "79c0ff" },
-      { token: "string.invalid",     foreground: "f85149" },
-      { token: "string.interpolated",foreground: "e6edf3" },
-      { token: "number",             foreground: "79c0ff" },
-      { token: "number.float",       foreground: "79c0ff" },
-      { token: "number.hex",         foreground: "79c0ff" },
-      { token: "comment",            foreground: "8b949e", fontStyle: "italic" },
-      { token: "operator",           foreground: "e6edf3" },
-      { token: "delimiter",          foreground: "8b949e" },
-      { token: "brackets",           foreground: "e6edf3" },
-      { token: "attribute",          foreground: "79c0ff" },
-      { token: "storage",            foreground: "ff7b72" },
-      { token: "constant",           foreground: "79c0ff" },
-      { token: "function",           foreground: "d2a8ff" },
-
-      // TextMate scope names
-      { token: "keyword.control",                    foreground: "ff7b72" },
-      { token: "keyword.other",                      foreground: "ff7b72" },
-      { token: "entity.name.function",               foreground: "d2a8ff" },
-      { token: "entity.name.type",                   foreground: "ffa657" },
-      { token: "variable.other",                     foreground: "e6edf3" },
-      { token: "variable.language",                  foreground: "79c0ff" },
-      { token: "string.quoted",                      foreground: "a5d6ff" },
-      { token: "string.interpolated",                foreground: "e6edf3" },
-      { token: "punctuation.definition.string",      foreground: "a5d6ff" },
-      { token: "constant.numeric",                   foreground: "79c0ff" },
-      { token: "constant.language",                  foreground: "79c0ff" },
-      { token: "comment.line",                       foreground: "8b949e", fontStyle: "italic" },
-      { token: "comment.block",                      foreground: "8b949e", fontStyle: "italic" },
-      { token: "storage.type",                       foreground: "ff7b72" },
-      { token: "storage.modifier",                   foreground: "ff7b72" },
-      { token: "support.type",                       foreground: "ffa657" },
-      { token: "meta.attribute",                     foreground: "79c0ff" },
+      { token: "", foreground: PLAIN, background: "181825" },
+      ...rules(COMMENT, ["comment"]),
+      ...rules(STRING, ["string", "constant.character", "punctuation.definition.string"]),
+      ...rules(NUMBER, ["constant.numeric", "constant.character.escape", "number", "string.escape"]),
+      ...rules(LITERAL, ["punctuation.section.interpolation", "string.invalid", "keyword.nil"]),
+      ...rules(PLAIN, [
+        "meta.interpolation",
+        "storage.type.string",
+        "string.interpolation",
+        "keyword.operator.comparison",
+        "identifier",
+        "delimiter",
+        "punctuation",
+      ]),
+      ...rules(KEYWORD, [
+        "keyword",
+        "storage",
+        "constant.language.boolean",
+        "keyword.operator.as",
+        "keyword.operator.arithmetic",
+        "keyword.operator.assignment",
+        "keyword.operator.bitwise",
+        "keyword.operator.logical",
+        "variable.language.self",
+      ]),
+      ...rules(OPERATOR, ["keyword.operator", "operator", "variable.language"]),
+      ...rules(TYPE, [
+        "entity.name.type",
+        "support.type",
+        "constant.language",
+        "type",
+        "constant",
+        ...GO_TYPES.map((name) => `keyword.${name}`),
+      ]),
+      ...rules(FUNCTION, ["entity.name.function", "support.function", "function"]),
+      ...rules(ATTRIBUTE, [
+        "meta.annotation",
+        "punctuation.definition.annotation",
+        "entity.name.tag.annotation",
+        "attribute",
+      ]),
     ],
     colors: {
-      "editor.background":                  "#0d1117",
-      "editor.foreground":                  "#e6edf3",
-      "editor.lineHighlightBackground":     "#161b22",
-      "editor.selectionBackground":         "#264f78",
-      "editor.inactiveSelectionBackground": "#264f7840",
-      "editorCursor.foreground":            "#58a6ff",
-      "editorLineNumber.foreground":        "#484f58",
-      "editorLineNumber.activeForeground":  "#8b949e",
-      "editorIndentGuide.background1":      "#21262d",
-      "editorIndentGuide.activeBackground1":"#444c56",
-      "editorWidget.background":            "#161b22",
-      "editorWidget.border":                "#30363d",
-      "editorSuggestWidget.background":     "#161b22",
-      "editorSuggestWidget.border":         "#30363d",
-      "editorSuggestWidget.selectedBackground": "#264f78",
-      "editorSuggestWidget.selectedForeground": "#e6edf3",
-      "editorHoverWidget.background":       "#161b22",
-      "editorHoverWidget.border":           "#30363d",
-      "scrollbar.shadow":                   "#00000060",
-      "scrollbarSlider.background":         "#30363d80",
-      "scrollbarSlider.hoverBackground":    "#484f5880",
-      "input.background":                   "#0d1117",
-      "input.border":                       "#30363d",
-      "focusBorder":                        "#58a6ff",
+      "editor.background": "#181825",
+      "editor.foreground": "#d6deeb",
+      "editor.lineHighlightBackground": "#1e1e2e",
+      "editor.lineHighlightBorder": "#1e1e2e",
+      "editor.selectionBackground": "#585b7080",
+      "editor.inactiveSelectionBackground": "#585b7040",
+      "editorCursor.foreground": "#b294f0",
+      "editorLineNumber.foreground": "#6c7086",
+      "editorLineNumber.activeForeground": "#a6adc8",
+      "editorIndentGuide.background1": "#313244",
+      "editorIndentGuide.activeBackground1": "#45475a",
+      "editorBracketMatch.background": "#31324480",
+      "editorBracketMatch.border": "#45475a",
+      "editorWidget.background": "#1e1e2e",
+      "editorWidget.border": "#313244",
+      "editorSuggestWidget.background": "#1e1e2e",
+      "editorSuggestWidget.border": "#313244",
+      "editorSuggestWidget.selectedBackground": "#313244",
+      "editorSuggestWidget.selectedForeground": "#cdd6f4",
+      "editorSuggestWidget.highlightForeground": "#b294f0",
+      "editorSuggestWidget.focusHighlightForeground": "#b294f0",
+      "editorHoverWidget.background": "#1e1e2e",
+      "editorHoverWidget.border": "#313244",
+      "editorError.foreground": "#f87171",
+      "editorWarning.foreground": "#fbbf24",
+      "editorInfo.foreground": "#60a5fa",
+      "scrollbar.shadow": "#00000000",
+      "scrollbarSlider.background": "#ffffff17",
+      "scrollbarSlider.hoverBackground": "#ffffff40",
+      "scrollbarSlider.activeBackground": "#ffffff40",
+      "input.background": "#181825",
+      "input.border": "#313244",
+      "focusBorder": "#b294f0",
     },
   });
 }

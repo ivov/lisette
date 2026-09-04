@@ -1,0 +1,20 @@
+import "go:fmt"
+
+fn sum(numbers: Slice<int>) -> int {
+  numbers.fold(0, |a, b| a + b)
+}
+
+fn main() {
+  let ch = Channel.buffered<int>(2)
+  let (tx, rx) = ch.split()
+
+  task {
+    tx.send(sum([1, 2, 3]))
+    tx.send(sum([4, 5]))
+    tx.close()
+  }
+
+  for total in rx {
+    fmt.Println(total)
+  }
+}

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-    <title>Lisette Playground</title>
+    <title>Playground · Lisette</title>
     <meta name="description" content="Write and compile Lisette in the browser." />
     <meta property="og:title" content="Lisette Playground" />
     <meta property="og:description" content="Write and compile Lisette in the browser." />
@@ -22,44 +22,44 @@
     <div id="app">
       <header id="toolbar">
         <div class="toolbar-left">
-          <a href="https://lisette.run" target="_blank" rel="noopener" class="brand">
-            <span class="brand-name">Lisette</span>
-            <span class="brand-tag">Playground</span>
-            <span class="brand-version" id="brand-version" hidden></span>
-          </a>
-        </div>
-        <div class="toolbar-center">
-          <button id="btn-run" class="btn btn-primary" title="Run (Ctrl+Enter)">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M2 1.5v11l10-5.5L2 1.5z"/></svg>
-            Run
-          </button>
-          <button id="btn-format" class="btn btn-secondary" title="Format (Alt+Shift+F)">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h10M2 7h7M2 10h5"/></svg>
-            Format
-          </button>
-          <button id="btn-check" class="btn btn-secondary" title="Type check">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 7l3 3 7-6"/></svg>
-            Check
-          </button>
-          <button id="btn-share" class="btn btn-secondary" title="Copy a shareable link to this snippet">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 8.5L8.5 5.5"/><path d="M6 4l1-1a2.5 2.5 0 113.5 3.5L9.5 7.5"/><path d="M8 10l-1 1a2.5 2.5 0 11-3.5-3.5L4.5 6.5"/></svg>
-            Share
-          </button>
+          <a href="https://lisette.run" target="_blank" rel="noopener" class="brand-name">Lisette</a>
+          <span class="brand-version" id="brand-version" hidden></span>
         </div>
         <div class="toolbar-right">
-          <span id="status-indicator" class="status-idle">Ready</span>
+          <a href="https://lisette.run/docs/" target="_blank" rel="noopener" class="icon-link" aria-label="Docs">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M21.17 2.06A13.1 13.1 0 0 0 19 1.87a12.94 12.94 0 0 0-7 2.05 12.94 12.94 0 0 0-7-2 13.1 13.1 0 0 0-2.17.19 1 1 0 0 0-.83 1v12a1 1 0 0 0 1.17 1 10.9 10.9 0 0 1 8.25 1.91l.12.07h.11a.91.91 0 0 0 .7 0h.11l.12-.07A10.899 10.899 0 0 1 20.83 16 1 1 0 0 0 22 15V3a1 1 0 0 0-.83-.94ZM11 15.35a12.87 12.87 0 0 0-6-1.48H4v-10c.333-.02.667-.02 1 0a10.86 10.86 0 0 1 6 1.8v9.68Zm9-1.44h-1a12.87 12.87 0 0 0-6 1.48V5.67a10.86 10.86 0 0 1 6-1.8c.333-.02.667-.02 1 0v10.04Zm1.17 4.15a13.098 13.098 0 0 0-2.17-.19 12.94 12.94 0 0 0-7 2.05 12.94 12.94 0 0 0-7-2.05c-.727.003-1.453.066-2.17.19A1 1 0 0 0 2 19.21a1 1 0 0 0 1.17.79 10.9 10.9 0 0 1 8.25 1.91 1 1 0 0 0 1.16 0A10.9 10.9 0 0 1 20.83 20a1 1 0 0 0 1.17-.79 1 1 0 0 0-.83-1.15Z"/></svg>
+          </a>
+          <a href="https://github.com/ivov/lisette" target="_blank" rel="noopener" class="icon-link" aria-label="GitHub">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg>
+          </a>
         </div>
       </header>
 
       <main id="main-layout">
         <div id="editor-pane">
+          <div id="controls">
+            <select id="examples" class="btn btn-secondary" aria-label="Examples"></select>
+            <button id="btn-run" class="btn btn-primary" title="Run (Ctrl+Enter)">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M2 1.5v11l10-5.5L2 1.5z"/></svg>
+              Run
+            </button>
+            <button id="btn-format" class="btn btn-secondary" title="Format (Shift+Alt+F)">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h10M2 7h7M2 10h5"/></svg>
+              Format
+            </button>
+            <button id="btn-share" class="btn btn-secondary" title="Copy a link to this code">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 8.5L8.5 5.5"/><path d="M6 4l1-1a2.5 2.5 0 113.5 3.5L9.5 7.5"/><path d="M8 10l-1 1a2.5 2.5 0 11-3.5-3.5L4.5 6.5"/></svg>
+              Share
+            </button>
+            <span id="status-indicator" class="status-idle">Ready</span>
+          </div>
           <div id="editor-container"></div>
         </div>
         <div id="pane-resizer" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
         <div id="output-pane">
           <div id="output-tabs">
-            <button class="tab-btn active" data-tab="output">Output</button>
-            <button class="tab-btn" data-tab="go-source">Go Source</button>
+            <button class="tab-btn active" data-tab="go-source">Go</button>
+            <button class="tab-btn" data-tab="output">Console</button>
             <button class="tab-btn" data-tab="diagnostics">Diagnostics</button>
             <button id="drawer-toggle" aria-label="Toggle output panel">
               <svg id="drawer-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -68,11 +68,11 @@
             </button>
           </div>
           <div id="output-content">
-            <div class="tab-panel active" id="tab-output">
-              <pre id="output-text" class="output-pre"><span class="output-hint">Press Run (Ctrl+Enter) to execute your Lisette code.</span></pre>
-            </div>
-            <div class="tab-panel" id="tab-go-source">
+            <div class="tab-panel active" id="tab-go-source">
               <div id="go-source-editor-container"></div>
+            </div>
+            <div class="tab-panel" id="tab-output">
+              <pre id="output-text" class="output-pre"><span class="output-hint">Press <code>Run</code> to execute your code.</span></pre>
             </div>
             <div class="tab-panel" id="tab-diagnostics">
               <div id="diagnostics-list" class="diagnostics-container"></div>
@@ -83,7 +83,7 @@
 
       <div id="wasm-loading-overlay">
         <div class="loading-spinner"></div>
-        <p>Loading Lisette compiler…</p>
+        <p>Loading…</p>
       </div>
     </div>
 

@@ -1,29 +1,16 @@
 import type * as Monaco from "monaco-editor";
 import { LANG_ID, registerLanguage, registerCompletionProvider, registerHoverProvider, registerFormatProvider, registerDefinitionProvider, registerSignatureHelpProvider } from "./language.js";
-import { registerThemes, preferredTheme } from "./theme.js";
+import { registerTheme, THEME } from "./theme.js";
 import { wireTextMateGrammar } from "./textmate.js";
 import type { LisetteBridge } from "../runner/wasm-bridge.js";
 
-const INITIAL_CODE = `// Welcome to the Lisette Playground!
-// Lisette is a little language with Rust syntax that compiles to Go.
-// Press Ctrl+Enter to run, or use the toolbar buttons above.
+export const GO_PLACEHOLDER = "// The emitted Go appears here once the code compiles.";
 
-import "go:fmt"
+const FONT_MONO =
+  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
 
-fn fibonacci(n: int) -> int {
-  if n <= 1 {
-    n
-  } else {
-    fibonacci(n - 1) + fibonacci(n - 2)
-  }
-}
-
-fn main() {
-  for i in 0..10 {
-    fmt.Printf("fib(%d) = %d\\n", i, fibonacci(i))
-  }
-}
-`;
+// Monaco's configuration accepts only this flat key, not the nested option.
+const BRACKET_COLOURS_OFF = { "bracketPairColorization.enabled": false };
 
 export interface EditorSetupResult {
   mainEditor: Monaco.editor.IStandaloneCodeEditor;
@@ -32,7 +19,6 @@ export interface EditorSetupResult {
   setGoSource: (source: string) => void;
   setBridge: (bridge: LisetteBridge) => void;
   addMarkers: (diagnostics: DiagnosticItem[]) => void;
-  setTheme: (themeName: string) => void;
 }
 
 export interface DiagnosticItem {
@@ -47,17 +33,15 @@ export interface DiagnosticItem {
 export async function setupEditors(
   editorContainer: HTMLElement,
   goSourceContainer: HTMLElement,
-  initialCode?: string,
+  initialCode: string,
 ): Promise<EditorSetupResult> {
   const monaco = await import("monaco-editor");
 
-  registerThemes(monaco);
+  registerTheme(monaco);
   registerLanguage(monaco);
-  const theme = preferredTheme();
 
   let bridge: LisetteBridge | null = null;
 
-  // Completion provider backed by WASM bridge
   registerCompletionProvider(monaco, async (model, position) => {
     if (!bridge) return [];
     const code = model.getValue();
@@ -80,14 +64,12 @@ export async function setupEditors(
     }));
   });
 
-  // Format provider – wires Alt+Shift+F to the WASM formatter
   registerFormatProvider(monaco, async (code) => {
     if (!bridge) return null;
     const result = await bridge.format(code);
     return result.ok ? (result.formatted ?? null) : null;
   });
 
-  // Hover provider backed by WASM bridge
   registerHoverProvider(monaco, async (model, position) => {
     if (!bridge) return null;
     const code = model.getValue();
@@ -108,7 +90,6 @@ export async function setupEditors(
     return result;
   });
 
-  // Go-to-definition provider backed by WASM bridge
   registerDefinitionProvider(monaco, async (model, position) => {
     if (!bridge) return null;
     const code = model.getValue();
@@ -126,7 +107,6 @@ export async function setupEditors(
     };
   });
 
-  // Signature help provider backed by WASM bridge
   registerSignatureHelpProvider(monaco, async (model, position) => {
     if (!bridge) return null;
     const code = model.getValue();
@@ -146,22 +126,24 @@ export async function setupEditors(
     };
   });
 
-  // Upgrade Monarch tokenizer → official TextMate grammar (async, non-blocking).
-  // wireTmGrammars re-tokenizes all open models automatically once loaded.
+  // The grammar loads in the background and re-tokenizes open models when ready.
   wireTextMateGrammar(monaco).catch((err) => {
     console.warn("[textmate] Failed to load TM grammar, using Monarch fallback:", err);
   });
 
-  // Main Lisette editor
   const mainEditor = monaco.editor.create(editorContainer, {
-    value: initialCode ?? INITIAL_CODE,
+    value: initialCode,
     language: LANG_ID,
-    theme,
+    theme: THEME,
     fontSize: 14,
     lineHeight: 22,
-    fontFamily: '"Fira Code", "Cascadia Code", "JetBrains Mono", ui-monospace, monospace',
-    fontLigatures: true,
+    fontFamily: FONT_MONO,
     minimap: { enabled: false },
+    stickyScroll: { enabled: false },
+    overviewRulerLanes: 0,
+    overviewRulerBorder: false,
+    hideCursorInOverviewRuler: true,
+    fixedOverflowWidgets: true,
     scrollBeyondLastLine: false,
     automaticLayout: true,
     tabSize: 2,
@@ -172,7 +154,7 @@ export async function setupEditors(
       showSnippets: true,
     },
     renderLineHighlight: "line",
-    bracketPairColorization: { enabled: true },
+    ...BRACKET_COLOURS_OFF,
     guides: { bracketPairs: false, indentation: true },
     smoothScrolling: true,
     cursorBlinking: "smooth",
@@ -180,16 +162,19 @@ export async function setupEditors(
     padding: { top: 12, bottom: 12 },
   });
 
-  // Read-only Go output editor
   const goSourceEditor = monaco.editor.create(goSourceContainer, {
-    value: "// Compiled Go source will appear here after running your code.",
+    value: GO_PLACEHOLDER,
     language: "go",
-    theme,
-    fontSize: 13,
-    lineHeight: 21,
-    fontFamily: '"Fira Code", "Cascadia Code", "JetBrains Mono", ui-monospace, monospace',
-    fontLigatures: true,
+    theme: THEME,
+    fontSize: 14,
+    lineHeight: 22,
+    fontFamily: FONT_MONO,
     minimap: { enabled: false },
+    stickyScroll: { enabled: false },
+    overviewRulerLanes: 0,
+    overviewRulerBorder: false,
+    hideCursorInOverviewRuler: true,
+    fixedOverflowWidgets: true,
     scrollBeyondLastLine: false,
     automaticLayout: true,
     readOnly: true,
@@ -206,9 +191,6 @@ export async function setupEditors(
     },
     setBridge: (b: LisetteBridge) => {
       bridge = b;
-    },
-    setTheme: (themeName: string) => {
-      monaco.editor.setTheme(themeName);
     },
     addMarkers: (diagnostics: DiagnosticItem[]) => {
       const model = mainEditor.getModel();

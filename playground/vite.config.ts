@@ -22,13 +22,6 @@ export default defineConfig({
       }
     ),
   ],
-  server: {
-    headers: {
-      // Enables SharedArrayBuffer in local dev (Monaco can use it).
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "require-corp",
-    },
-  },
   optimizeDeps: {
     exclude: ["monaco-editor"],
   },

@@ -51,7 +51,7 @@ export async function executeGoSource(goSource: string): Promise<ExecuteResult> 
       stdout: "",
       stderr: "",
       ok: false,
-      error: `Network error: ${String(networkError)}. Is the Go Playground reachable?`,
+      error: `Network error: ${String(networkError)}. The run did not reach the server.`,
     };
   }
 
@@ -60,7 +60,7 @@ export async function executeGoSource(goSource: string): Promise<ExecuteResult> 
       stdout: "",
       stderr: "",
       ok: false,
-      error: `Go Playground returned HTTP ${response.status}`,
+      error: `The run failed with HTTP ${response.status}.`,
     };
   }
 

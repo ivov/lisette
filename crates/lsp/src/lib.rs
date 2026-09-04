@@ -44,6 +44,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use syntax::ast::Expression;
 use syntax::ast::Span;
+use syntax::doc::to_markdown;
 use syntax::program::File;
 use syntax::types;
 
@@ -217,7 +218,7 @@ impl Backend {
         });
 
         let content = match doc {
-            Some(doc) => format!("```lisette\n{ty}\n```\n\n---\n\n{doc}"),
+            Some(doc) => format!("```lisette\n{ty}\n```\n\n---\n\n{}", to_markdown(&doc)),
             None => format!("```lisette\n{ty}\n```"),
         };
 

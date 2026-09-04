@@ -12,6 +12,7 @@ use lisette_semantics::{
     AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind, RecoverTarget,
 };
 use lisette_syntax::ast::{Expression, IdentifierResolution, Span};
+use lisette_syntax::doc::to_markdown;
 use lisette_syntax::program::{Definition, DefinitionBody};
 use lisette_syntax::types::{Type, unqualified_name};
 
@@ -620,7 +621,7 @@ pub fn compile(code: &str) -> String {
         Some(
             files
                 .iter()
-                .map(|f| format!("// === {} ===\n{}", f.name, f.to_go()))
+                .map(|f| f.to_go())
                 .collect::<Vec<_>>()
                 .join("\n\n"),
         )
@@ -728,7 +729,7 @@ pub fn hover(code: &str, offset: u32) -> String {
         && let Some(def) = result.analysis.emit_input.definitions.get(qname.as_str())
         && let Some(doc) = &def.doc
     {
-        full_markdown.push_str(&format!("\n\n---\n\n{}", doc));
+        full_markdown.push_str(&format!("\n\n---\n\n{}", to_markdown(doc)));
     }
 
     let (sl, sc) = offset_to_line_col(code, span.byte_offset as usize);
