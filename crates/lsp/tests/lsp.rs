@@ -476,6 +476,23 @@ fn completion_includes_local_bindings() {
 }
 
 #[test]
+fn completion_uses_the_nearest_shadowed_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct First { first: int }\nstruct Second { second: int }\nfn main() {\n  let value = First { first: 1 }\n  let value = Second { second: 2 }\n  value.\n}",
+    );
+
+    let response = client.completion(TEST_URI, 5, 8).unwrap();
+    let labels = completion_labels(&response);
+
+    assert_eq!(labels, vec!["second"]);
+
+    client.shutdown();
+}
+
+#[test]
 fn completion_includes_defined_functions() {
     let mut client = TestClient::new();
     client.initialize();

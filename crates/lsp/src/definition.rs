@@ -528,15 +528,8 @@ pub(crate) fn resolve_symbol_definition_span(
     offset: u32,
 ) -> Option<Span> {
     snapshot
-        .bindings()
-        .values()
-        .find_map(|binding| {
-            if binding.span.file_id == file_id && offset_in_span(offset, &binding.span) {
-                Some(binding.span)
-            } else {
-                None
-            }
-        })
+        .binding_at(file_id, offset)
+        .map(|binding| binding.span)
         .or_else(|| {
             let expression = find_expression_at(&file.items, offset)?;
             match expression {

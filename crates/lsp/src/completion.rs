@@ -94,10 +94,7 @@ pub(crate) fn resolve_variable_type(
     snapshot: &AnalysisSnapshot,
     indexed: bool,
 ) -> Option<String> {
-    let binding = snapshot
-        .bindings()
-        .values()
-        .find(|b| b.name == var_name && b.span.file_id == file.id && b.span.byte_offset < offset)?;
+    let binding = snapshot.binding_named_before(file.id, var_name, offset)?;
 
     let expression = find_expression_at(&file.items, binding.span.byte_offset)?;
     let borrowed_ty = match expression {

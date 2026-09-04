@@ -281,10 +281,8 @@ impl Backend {
 
         let find_binding = || {
             snapshot
-                .bindings()
-                .values()
-                .find(|b| b.span.file_id == file_id && offset_in_span(offset, &b.span))
-                .map(|b| b.span)
+                .binding_at(file_id, offset)
+                .map(|binding| binding.span)
         };
         let binding_or_word_fallback = |resolved: Option<Span>| {
             resolved
@@ -636,11 +634,8 @@ impl Backend {
                 Ok(None)
             };
 
-        for binding in snapshot.bindings().values() {
-            let span = binding.span;
-            if span.file_id == file_id && offset_in_span(offset, &span) {
-                return rename_response(span, &binding.name);
-            }
+        if let Some(binding) = snapshot.binding_at(file_id, offset) {
+            return rename_response(binding.span, &binding.name);
         }
 
         let Some(expression) = find_expression_at(&file.items, offset) else {
@@ -1223,8 +1218,8 @@ fn general_completions(
         }
     }
 
-    for binding in snapshot.bindings().values() {
-        if binding.span.file_id == document.file_id && binding.span.byte_offset < offset {
+    for binding in snapshot.bindings_in_file(document.file_id) {
+        if binding.span.byte_offset < offset {
             items.push(CompletionItem {
                 label: binding.name.clone(),
                 kind: Some(CompletionItemKind::VARIABLE),
