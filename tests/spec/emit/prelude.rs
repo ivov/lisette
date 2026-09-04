@@ -1371,6 +1371,43 @@ fn test() -> float64 {
 }
 
 #[test]
+fn builtin_min_types_a_literal_of_another_default() {
+    let input = r#"
+fn test() -> float64 {
+  let two: float64 = min(1, 2)
+  let three: float64 = min(1, 2, 3)
+  let narrow: float32 = min(1, 2)
+  two / three + narrow as float64
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn builtin_min_types_a_character_literal_into_an_int_slot() {
+    let input = r#"
+fn test() -> int {
+  let letter: int = min('a', 'b')
+  letter
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+/// One argument Go can already type settles the call, so no wrap is emitted.
+#[test]
+fn builtin_max_leaves_go_inference_alone_when_an_operand_types_it() {
+    let input = r#"
+fn test(measured: float64) -> float64 {
+  let promoted: float64 = max(1, 2.5)
+  let from_operand: float64 = max(1, measured)
+  promoted + from_operand
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn builtin_min_strings() {
     let input = r#"
 fn test() -> string {

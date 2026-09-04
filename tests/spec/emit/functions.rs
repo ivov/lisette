@@ -1772,6 +1772,69 @@ fn test() {
 }
 
 #[test]
+fn generic_call_types_a_literal_of_another_default() {
+    let input = r#"
+fn ident<T>(v: T) -> T { v }
+
+fn test() -> float64 {
+  let widened: float64 = ident(1)
+  let already: float64 = ident(1.5)
+  let narrow: float32 = ident(2)
+  widened / already + narrow as float64
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_call_types_a_negated_literal() {
+    let input = r#"
+fn ident<T>(v: T) -> T { v }
+
+fn test() -> float64 {
+  let parenthesized: float64 = -(1)
+  let negated: float64 = ident(-(1))
+  parenthesized / 2.0 + negated / 2.0
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn method_call_types_a_literal_of_another_default() {
+    let input = r#"
+struct Box { label: string }
+
+impl Box {
+  fn scale<T>(self, v: T) -> T { v }
+}
+
+fn test() -> byte {
+  let b = Box { label: "x" }
+  let widened: float32 = b.scale(1)
+  let letter: byte = b.scale('a')
+  letter + widened as byte
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_call_leaves_a_literal_in_a_concrete_slot_alone() {
+    let input = r#"
+fn scaled<T>(v: T, _factor: float64) -> T { v }
+fn work() -> Result<int, error> { Ok(1) }
+
+fn test() -> int {
+  let r = work()
+  let t: (Result<int, error>, int) = (scaled(r, 1), 0)
+  t.1
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn parenthesized_local_generic_return_only_type_args() {
     let input = r#"
 fn make<T>() -> Slice<T> {

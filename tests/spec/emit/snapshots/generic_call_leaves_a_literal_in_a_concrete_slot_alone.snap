@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn scaled<T>(v: T, _factor: float64) -> T { v }
+  fn work() -> Result<int, error> { Ok(1) }
+  
+  fn test() -> int {
+    let r = work()
+    let t: (Result<int, error>, int) = (scaled(r, 1), 0)
+    t.1
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func scaled[T any](v T, _ float64) T {
+	return v
+}
+
+func work() (int, error) {
+	return 1, nil
+}
+
+func test() int {
+	ret_1, ret_2 := work()
+	var r lisette.Result[int, error]
+	if ret_2 != nil {
+		r = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		r = lisette.MakeResultOk[int, error](ret_1)
+	}
+	t := lisette.MakeTuple2[lisette.Result[int, error], int](scaled(r, 1), 0)
+	return t.Second
+}

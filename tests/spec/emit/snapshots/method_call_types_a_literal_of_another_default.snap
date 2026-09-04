@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Box { label: string }
+  
+  impl Box {
+    fn scale<T>(self, v: T) -> T { v }
+  }
+  
+  fn test() -> byte {
+    let b = Box { label: "x" }
+    let widened: float32 = b.scale(1)
+    let letter: byte = b.scale('a')
+    letter + widened as byte
+  }
+---
+package main
+
+type Box struct {
+	label string
+}
+
+func Box_scale[T any](_ Box, v T) T {
+	return v
+}
+
+func test() byte {
+	b := Box{label: "x"}
+	widened := Box_scale(b, float32(1))
+	letter := Box_scale(b, byte('a'))
+	return letter + byte(widened)
+}

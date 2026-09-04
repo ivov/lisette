@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test() -> int {
+    let letter: int = min('a', 'b')
+    letter
+  }
+---
+package main
+
+func test() int {
+	letter := int(min('a', 'b'))
+	return letter
+}

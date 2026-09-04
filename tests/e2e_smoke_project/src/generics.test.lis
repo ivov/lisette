@@ -173,6 +173,23 @@ fn paren_negated_literal_times_aliased() {
 
 struct Box<T> { value: T }
 
+#[test]
+fn generic_call_keeps_a_literal_at_its_annotated_type() {
+  // Inferring `int` here would make the division integer division.
+  let widened: float64 = echo_value(1)
+  assert widened / 2.0 > 0.4
+
+  let narrow: float32 = echo_value(3)
+  assert narrow > 2.5
+}
+
+#[test]
+fn tuple_field_autofill_keeps_its_element_types() {
+  let p = Measurement { .. }
+  assert p.reading.0 == 0
+  assert p.reading.1 < 0.5
+}
+
 impl<T> Box<T> {
   fn get(self: Box<T>) -> T {
     self.value
@@ -203,3 +220,9 @@ fn make_duo<A, B>(a: A, b: B) -> Duo<A, B> {
 struct Ticket(int)
 
 struct Toggle(bool)
+
+struct Measurement { reading: (int, float64) }
+
+fn echo_value<T>(value: T) -> T {
+  value
+}

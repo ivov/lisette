@@ -2,6 +2,21 @@ import "go:fmt"
 import "go:errors"
 
 #[test]
+#[allow(float_cmp)]
+fn option_some_keeps_a_literal_at_its_annotated_type() {
+  // `Some(1)` inferring `Option[int]` fails to compile at the call below.
+  let widened: Option<float64> = Some(1)
+  assert halved_option(widened) == 0.25
+}
+
+fn halved_option(value: Option<float64>) -> float64 {
+  match value {
+    Some(v) => v / 4.0,
+    None => 0.0,
+  }
+}
+
+#[test]
 fn option_some() {
   let x = Some(42)
   let result = x.unwrap_or(0)

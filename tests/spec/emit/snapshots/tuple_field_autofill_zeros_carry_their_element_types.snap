@@ -1,0 +1,62 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  type Meters = float64
+  type Count = int
+  struct Ticket(int)
+  struct Weight(float64)
+  
+  struct Probe {
+    pub plain: (int, string),
+    pub floaty: (int, float64),
+    pub small: (float32, uint8),
+    pub bytes: (byte, string),
+    pub aliased: (Meters, int),
+    pub alias_of_int: (Count, string),
+    pub newtype: (Ticket, int),
+    pub newtype_float: (Weight, int),
+    pub nested: (int, (int, float64)),
+  }
+  
+  fn make() -> Probe {
+    Probe { .. }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Meters = float64
+
+type Count = int
+
+type Ticket int
+
+type Weight float64
+
+type Probe struct {
+	Plain        lisette.Tuple2[int, string]
+	Floaty       lisette.Tuple2[int, float64]
+	Small        lisette.Tuple2[float32, uint8]
+	Bytes        lisette.Tuple2[byte, string]
+	Aliased      lisette.Tuple2[Meters, int]
+	AliasOfInt   lisette.Tuple2[Count, string]
+	Newtype      lisette.Tuple2[Ticket, int]
+	NewtypeFloat lisette.Tuple2[Weight, int]
+	Nested       lisette.Tuple2[int, lisette.Tuple2[int, float64]]
+}
+
+func make_() Probe {
+	return Probe{
+		Plain:        lisette.MakeTuple2(0, ""),
+		Floaty:       lisette.MakeTuple2(0, float64(0)),
+		Small:        lisette.MakeTuple2(float32(0), uint8(0)),
+		Bytes:        lisette.MakeTuple2(byte(0), ""),
+		Aliased:      lisette.MakeTuple2(Meters(0), 0),
+		AliasOfInt:   lisette.MakeTuple2(0, ""),
+		Newtype:      lisette.MakeTuple2(Ticket(0), 0),
+		NewtypeFloat: lisette.MakeTuple2(Weight(0), 0),
+		Nested:       lisette.MakeTuple2(0, lisette.MakeTuple2(0, float64(0))),
+	}
+}

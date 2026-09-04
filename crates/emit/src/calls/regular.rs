@@ -17,9 +17,13 @@ use crate::plan::calls::{ArgumentPlan, CallPlan, CallableOrigin, ResolvedCallee}
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, SequencedValues, ValuePlan,
 };
-use crate::utils::{reads_mutable_operand, reads_unsequenced_mutable_operand};
+use crate::types::go_type::render_conversion;
+use crate::utils::{
+    reads_mutable_operand, reads_unsequenced_mutable_operand, unwrap_unary_negation,
+};
 use crate::write_line;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
+use syntax::types::SimpleKind;
 use syntax::types::Type;
 
 struct CallTypeArgsRequest<'e, 'c> {
@@ -28,6 +32,7 @@ struct CallTypeArgsRequest<'e, 'c> {
     type_args: ResolvedCallTypeArguments<'e>,
     call_ty: Option<&'e Type>,
     arg_shape: CallArgShape,
+    args: &'e [Expression],
     ctx: ExpressionContext<'e>,
 }
 
@@ -40,6 +45,10 @@ struct CallArgsContext<'plan, 'facts> {
     combine_variadic: Option<VariadicCombine>,
     capture_boundary: CaptureBoundary,
     retired_receiver: Option<&'plan Expression>,
+    /// A builtin wraps the whole call, so its arguments must not also convert.
+    callee_is_builtin: bool,
+    /// Pinned type arguments type every literal, leaving nothing to infer.
+    callee_pins_type_args: bool,
 }
 
 /// Escape-aware close-quote search; plain `find` would collide with `\"` inside the literal.
@@ -245,6 +254,7 @@ impl<'a> Planner<'a> {
                 value_count: args.len(),
                 has_spread: spread.is_some(),
             },
+            args,
             ctx: expression_ctx,
         });
         // A Go builtin takes no type argument, so the instantiated type it would
@@ -271,6 +281,8 @@ impl<'a> Planner<'a> {
                 && self.callee_lowers_to_type_construction(function))
             .then(|| expression_ctx.retired_receiver())
             .flatten(),
+            callee_is_builtin: callee_is_go_builtin(function),
+            callee_pins_type_args: !type_args_string.is_empty(),
         };
         let sequenced_args = self.emit_call_args(args, &args_ctx);
         let args_effect = sequenced_args.effect;
@@ -430,6 +442,7 @@ impl<'a> Planner<'a> {
             type_args,
             call_ty,
             arg_shape,
+            args,
             ctx,
         } = request;
         if callee_curries_receiver(callee) {
@@ -452,7 +465,7 @@ impl<'a> Planner<'a> {
 
         if type_args_string.is_empty()
             && let Some(inferred) =
-                self.infer_return_only_type_args(function, callee.declared_type(), arg_shape)
+                self.infer_return_only_type_args(function, callee.declared_type(), arg_shape, args)
         {
             type_args_string = match slot_ty {
                 Some(t) => self.prelude_container_type_args(t).unwrap_or(inferred),
@@ -614,6 +627,41 @@ impl<'a> Planner<'a> {
         ArgumentPlan::Direct
     }
 
+    /// True when Go would read this literal at another type than its slot:
+    /// `1` filling a `T` bound to `float64` is a Go `int`.
+    pub(super) fn literal_misinfers_type_parameter(
+        &self,
+        arg: &Expression,
+        declared_param_ty: Option<&Type>,
+    ) -> bool {
+        if !declared_param_ty.is_some_and(Type::contains_type_parameter) {
+            return false;
+        }
+        let Expression::Literal { literal, ty, .. } = unwrap_unary_negation(arg) else {
+            return false;
+        };
+        // `string`, `bool` and imaginary always default to the type they fill.
+        let default = match literal {
+            Literal::Integer { .. } => SimpleKind::Int,
+            Literal::Float { .. } => SimpleKind::Float64,
+            Literal::Char(_) => SimpleKind::Rune,
+            _ => return false,
+        };
+        self.facts.underlying_simple_kind(ty) != Some(default)
+    }
+
+    /// The type to convert a misinferring literal to. A variadic slot renders
+    /// as `...T`, so this targets the element type.
+    pub(super) fn literal_pinning_go_type(
+        &mut self,
+        arg: &Expression,
+        declared_param_ty: Option<&Type>,
+        target: &Type,
+    ) -> Option<String> {
+        self.literal_misinfers_type_parameter(arg, declared_param_ty)
+            .then(|| self.use_go_type(&varargs_inner_or_self(target)))
+    }
+
     fn lower_direct_arg(
         &mut self,
         arg: &Expression,
@@ -622,13 +670,14 @@ impl<'a> Planner<'a> {
         declared_param_ty: Option<&Type>,
     ) -> ValuePlan {
         let suppress = would_suppress_tagged_go(&ctx.plan.resolved, declared_param_ty);
+        let call_carries_type = ctx.callee_is_builtin || ctx.callee_pins_type_args;
         let mut arg_ctx = direct_arg_emit_ctx(&self.facts, effective_param_ty, suppress);
         if let Some(retired) = ctx.retired_receiver {
             arg_ctx = arg_ctx.with_retired_receiver(retired);
         }
         let argument = self.lower_composite_value(arg, arg_ctx);
         argument.map_rendered_as_computed(|setup, value, contains_deferred_evaluation| {
-            let final_value = match effective_param_ty {
+            let mut final_value = match effective_param_ty {
                 Some(target) => {
                     let coercion = CoercionPlan::internal(self, &arg.get_type(), target);
                     let (coercion_setup, coerced) = coercion.lower(self, value);
@@ -637,6 +686,12 @@ impl<'a> Planner<'a> {
                 }
                 None => value,
             };
+            if let Some(target) = effective_param_ty
+                && !call_carries_type
+                && let Some(go_type) = self.literal_pinning_go_type(arg, declared_param_ty, target)
+            {
+                final_value = render_conversion(&go_type, &final_value);
+            }
             GoExpression::opaque_with_deferred_evaluation(final_value, contains_deferred_evaluation)
         })
     }

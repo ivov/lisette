@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(measured: float64) -> float64 {
+    let promoted: float64 = max(1, 2.5)
+    let from_operand: float64 = max(1, measured)
+    promoted + from_operand
+  }
+---
+package main
+
+func test(measured float64) float64 {
+	promoted := max(1, 2.5)
+	from_operand := max(1, measured)
+	return promoted + from_operand
+}

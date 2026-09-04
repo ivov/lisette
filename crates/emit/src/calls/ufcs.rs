@@ -11,6 +11,7 @@ use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
+use crate::types::go_type::render_conversion;
 use crate::types::native::NativeGoType;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::program::ReceiverCoercion;
@@ -257,7 +258,19 @@ impl Planner<'_> {
         if let Some(value) = self.try_adapt_lowered_fn_arg_shape(arg, Some(declared)) {
             return value;
         }
-        self.stage_composite(arg, ExpressionContext::value())
+        let staged = self.stage_composite(arg, ExpressionContext::value());
+        let Some(target) = formal_param else {
+            return staged;
+        };
+        let Some(go_type) = self.literal_pinning_go_type(arg, Some(declared), target) else {
+            return staged;
+        };
+        staged.map_rendered(|_setup, value, deferred| {
+            GoExpression::opaque_with_deferred_evaluation(
+                render_conversion(&go_type, &value),
+                deferred,
+            )
+        })
     }
 
     fn build_ufcs_qualified_call(

@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test() -> float64 {
+    let two: float64 = min(1, 2)
+    let three: float64 = min(1, 2, 3)
+    let narrow: float32 = min(1, 2)
+    two / three + narrow as float64
+  }
+---
+package main
+
+func test() float64 {
+	two := float64(min(1, 2))
+	three := float64(min(1, 2, 3))
+	narrow := float32(min(1, 2))
+	return two/three + float64(narrow)
+}

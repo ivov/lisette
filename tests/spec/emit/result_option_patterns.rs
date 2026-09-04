@@ -31,6 +31,35 @@ fn test() -> Option<int> {
 }
 
 #[test]
+fn option_some_types_a_literal_of_another_default() {
+    let input = r#"
+fn halved(value: Option<float64>) -> float64 {
+  match value {
+    Some(v) => v / 4.0,
+    None => 0.0,
+  }
+}
+
+fn test() -> float64 {
+  let widened: Option<float64> = Some(1)
+  halved(widened)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn result_ok_types_a_literal_of_another_default() {
+    let input = r#"
+fn test() -> Result<float64, error> {
+  let widened: Result<float64, error> = Ok(1)
+  widened
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn option_none_construction() {
     let input = r#"
 fn test() -> Option<int> {

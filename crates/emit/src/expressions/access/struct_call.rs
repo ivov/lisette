@@ -406,7 +406,7 @@ impl Planner<'_> {
             (Type::Tuple(_), ValueLayout::Tuple { elements, .. }) => {
                 let parts: Vec<String> = elements
                     .iter()
-                    .map(|element| self.lisette_zero(element.logical_type()))
+                    .map(|element| self.lisette_zero_self_typed(element.logical_type()))
                     .collect();
                 self.require_stdlib();
                 format!(
@@ -424,6 +424,16 @@ impl Planner<'_> {
             ) => self.array_zero(*length, element.logical_type()).rendered(),
             _ => format!("{}{{}}", self.use_go_type(ty)),
         }
+    }
+
+    /// `lisette_zero` where Go infers from the value. Only a bare `0` needs it.
+    fn lisette_zero_self_typed(&mut self, ty: &Type) -> String {
+        let rendered = self.lisette_zero(ty);
+        if rendered != "0" || self.facts.underlying_simple_kind(ty) == Some(SimpleKind::Int) {
+            return rendered;
+        }
+        let go_type = self.use_go_type(ty);
+        render_conversion(&go_type, &rendered)
     }
 
     fn lisette_zero_nominal(&mut self, ty: &Type, id: &str, params: &[Type]) -> String {
