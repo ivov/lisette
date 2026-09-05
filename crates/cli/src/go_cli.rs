@@ -327,6 +327,21 @@ pub struct ManifestEntry {
     pub imports: Vec<String>,
 }
 
+struct StoredManifestEntry {
+    content_hash: u64,
+    imports: Vec<String>,
+}
+
+impl StoredManifestEntry {
+    fn with_name(self, name: String) -> ManifestEntry {
+        ManifestEntry {
+            name,
+            content_hash: self.content_hash,
+            imports: self.imports,
+        }
+    }
+}
+
 pub struct EmitWriteResult {
     pub changed: Vec<PathBuf>,
     pub new_manifest: Vec<ManifestEntry>,
@@ -341,13 +356,13 @@ pub fn write_go_outputs(dir: &Path, files: &[OutputFile]) -> Result<EmitWriteRes
         let go_file_path = dir.join(&file.name);
         let go_code = file.to_go_unformatted();
         let hash = hash_go_code(&go_code);
-        let prior = prior_manifest.remove(&file.name);
+        let prior = prior_manifest.remove_entry(&file.name);
 
-        if let Some(entry) = prior
+        if let Some((name, entry)) = prior
             && entry.content_hash == hash
             && go_file_path.exists()
         {
-            new_manifest.push(entry);
+            new_manifest.push(entry.with_name(name));
             continue;
         }
 
@@ -367,7 +382,11 @@ pub fn write_go_outputs(dir: &Path, files: &[OutputFile]) -> Result<EmitWriteRes
             });
         }
 
-        let mut imports: Vec<String> = file.imports.iter().map(|(path, _)| path.clone()).collect();
+        let mut imports: Vec<String> = file
+            .imports
+            .iter()
+            .map(|import| import.path.clone())
+            .collect();
         imports.sort();
         imports.dedup();
         new_manifest.push(ManifestEntry {
@@ -381,7 +400,7 @@ pub fn write_go_outputs(dir: &Path, files: &[OutputFile]) -> Result<EmitWriteRes
     // Preserve entries for files emit skipped this build but still on disk.
     for (name, entry) in prior_manifest {
         if dir.join(&name).exists() {
-            new_manifest.push(entry);
+            new_manifest.push(entry.with_name(name));
         }
     }
 
@@ -439,7 +458,7 @@ fn hash_go_code(content: &str) -> u64 {
     h
 }
 
-fn read_emit_manifest(dir: &Path) -> HashMap<String, ManifestEntry> {
+fn read_emit_manifest(dir: &Path) -> HashMap<String, StoredManifestEntry> {
     let Ok(content) = fs::read_to_string(emit_manifest_path(dir)) else {
         return Default::default();
     };
@@ -456,8 +475,7 @@ fn read_emit_manifest(dir: &Path) -> HashMap<String, ManifestEntry> {
                 .unwrap_or_default();
             Some((
                 name.to_string(),
-                ManifestEntry {
-                    name: name.to_string(),
+                StoredManifestEntry {
                     content_hash: hash,
                     imports,
                 },
@@ -740,11 +758,27 @@ pub fn verify_go_packages(
     }
 }
 
+/// An action from one line of `go test -json` output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GoTestAction {
+    Attr,
+    BuildFail,
+    BuildOutput,
+    Fail,
+    Output,
+    Pass,
+    Run,
+    Skip,
+    #[serde(other)]
+    Other,
+}
+
 /// One line of `go test -json` output (`elapsed` is in seconds).
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct GoTestEvent {
-    pub action: String,
+    pub action: GoTestAction,
     #[serde(default)]
     pub package: String,
     pub test: Option<String>,
@@ -839,6 +873,13 @@ mod tests {
 
     fn windows() -> Target {
         Target::new("windows", "amd64")
+    }
+
+    #[test]
+    fn unknown_go_test_action_deserializes_as_other() {
+        let event: GoTestEvent = serde_json::from_str(r#"{"Action":"pause"}"#).unwrap();
+
+        assert_eq!(event.action, GoTestAction::Other);
     }
 
     #[test]

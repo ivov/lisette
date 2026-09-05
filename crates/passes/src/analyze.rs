@@ -24,12 +24,28 @@ pub struct Analysis {
     pub unreachable_packages: Vec<String>,
     bindings: HashMap<BindingId, BindingFact>,
     usages: HashSet<Usage>,
-    diagnostics: Vec<LisetteDiagnostic>,
+    errors: Vec<LisetteDiagnostic>,
+    lints: Vec<LisetteDiagnostic>,
+}
+
+#[derive(Clone, Copy)]
+pub struct Diagnostics<'a> {
+    errors: &'a [LisetteDiagnostic],
+    lints: &'a [LisetteDiagnostic],
+}
+
+impl<'a> Diagnostics<'a> {
+    pub fn iter(self) -> impl Iterator<Item = &'a LisetteDiagnostic> {
+        self.errors.iter().chain(self.lints)
+    }
 }
 
 impl Analysis {
-    pub fn diagnostics(&self) -> &[LisetteDiagnostic] {
-        &self.diagnostics
+    pub fn diagnostics(&self) -> Diagnostics<'_> {
+        Diagnostics {
+            errors: &self.errors,
+            lints: &self.lints,
+        }
     }
 
     pub fn bindings(&self) -> &HashMap<BindingId, BindingFact> {
@@ -41,26 +57,22 @@ impl Analysis {
     }
 
     pub fn errors(&self) -> &[LisetteDiagnostic] {
-        &self.diagnostics[..self.error_count()]
+        &self.errors
     }
 
     pub fn lints(&self) -> &[LisetteDiagnostic] {
-        &self.diagnostics[self.error_count()..]
+        &self.lints
     }
 
     pub fn push_error(&mut self, error: LisetteDiagnostic) {
         assert!(error.is_error());
-        let index = self.error_count();
-        self.diagnostics.insert(index, error);
+        self.errors.push(error);
     }
 
     pub fn take_diagnostics(&mut self) -> Vec<LisetteDiagnostic> {
-        mem::take(&mut self.diagnostics)
-    }
-
-    fn error_count(&self) -> usize {
-        self.diagnostics
-            .partition_point(LisetteDiagnostic::is_error)
+        let mut diagnostics = mem::take(&mut self.errors);
+        diagnostics.append(&mut self.lints);
+        diagnostics
     }
 
     pub fn failed(&self) -> bool {
@@ -224,6 +236,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         files.extend(package.files);
     }
 
+    let (errors, lints) = classify_diagnostics(all_diagnostics);
     Analysis {
         emit_input: EmitInput {
             files,
@@ -241,16 +254,17 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         unreachable_packages,
         bindings,
         usages,
-        diagnostics: order_diagnostics_by_severity(all_diagnostics),
+        errors,
+        lints,
     }
 }
 
-fn order_diagnostics_by_severity(diagnostics: Vec<LisetteDiagnostic>) -> Vec<LisetteDiagnostic> {
-    let (mut errors, lints): (Vec<_>, Vec<_>) = diagnostics
+fn classify_diagnostics(
+    diagnostics: Vec<LisetteDiagnostic>,
+) -> (Vec<LisetteDiagnostic>, Vec<LisetteDiagnostic>) {
+    diagnostics
         .into_iter()
-        .partition(LisetteDiagnostic::is_error);
-    errors.extend(lints);
-    errors
+        .partition(LisetteDiagnostic::is_error)
 }
 
 #[cfg(test)]
@@ -262,14 +276,15 @@ mod tests {
 
     #[test]
     fn analysis_classifies_diagnostics_by_severity() {
-        let diagnostics = order_diagnostics_by_severity(vec![
+        let (errors, lints) = classify_diagnostics(vec![
             LisetteDiagnostic::warn("warning"),
             LisetteDiagnostic::error("error"),
             LisetteDiagnostic::info("info"),
         ]);
 
-        let messages = diagnostics
+        let messages = errors
             .iter()
+            .chain(&lints)
             .map(LisetteDiagnostic::plain_message)
             .collect::<Vec<_>>();
         assert_eq!(messages, vec!["error", "warning", "info"]);

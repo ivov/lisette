@@ -7,7 +7,7 @@ use crate::checker::infer::InferCtx;
 use syntax::program::AliasKind;
 
 impl InferCtx<'_> {
-    pub(super) fn classify_call(&self, callee: &Expression) -> CallKind {
+    pub(super) fn classify_call(&mut self, callee: &Expression) -> CallKind {
         let store = self.store;
         let callee = callee.unwrap_parens();
         match callee {
@@ -83,7 +83,7 @@ impl InferCtx<'_> {
 
     /// Classify `Type.method(receiver, args)` as `ReceiverMethodUfcs`.
     /// Uses scope-aware name resolution instead of the old suffix-matching heuristic.
-    pub(super) fn try_classify_receiver_ufcs(&self, value: &str) -> Option<CallKind> {
+    pub(super) fn try_classify_receiver_ufcs(&mut self, value: &str) -> Option<CallKind> {
         let store = self.store;
         let last_dot = value.rfind('.')?;
         let method = &value[last_dot + 1..];

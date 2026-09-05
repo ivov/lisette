@@ -169,6 +169,7 @@ impl Deref for Backend {
 }
 
 pub(crate) struct DocumentState {
+    content: String,
     line_index: LineIndex,
     version: i32,
     last_usable: Option<Arc<AnalysisSnapshot>>,
@@ -178,6 +179,7 @@ impl DocumentState {
     pub(crate) fn new(content: String, version: i32) -> Self {
         Self {
             line_index: LineIndex::new(&content),
+            content,
             version,
             last_usable: None,
         }
@@ -185,11 +187,12 @@ impl DocumentState {
 
     pub(crate) fn update(&mut self, content: String, version: i32) {
         self.line_index = LineIndex::new(&content);
+        self.content = content;
         self.version = version;
     }
 
     pub(crate) fn content(&self) -> &str {
-        self.line_index.source()
+        &self.content
     }
 
     pub(crate) fn line_index(&self) -> &LineIndex {

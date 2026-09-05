@@ -460,7 +460,7 @@ impl InferCtx<'_> {
     }
 
     fn resolve_pattern_constructor(
-        &self,
+        &mut self,
         identifier: &str,
         expected_ty: &Type,
         is_bare_name: bool,
@@ -468,10 +468,11 @@ impl InferCtx<'_> {
         if let Some(ty) = self.resolve_variant_type(identifier, expected_ty) {
             return Some(ty);
         }
+        let accepts_struct = !is_bare_name && self.scrutinee_is_interface(expected_ty);
         let definition = self.resolve_struct_definition(identifier)?;
         if let Some(constructor_ty) = definition.constructor_type() {
             Some(constructor_ty)
-        } else if !is_bare_name && self.scrutinee_is_interface(expected_ty) {
+        } else if accepts_struct {
             Some(definition.ty.clone())
         } else {
             None
@@ -484,7 +485,7 @@ impl InferCtx<'_> {
         store.is_interface(&resolved)
     }
 
-    fn resolve_variant_type(&self, identifier: &str, expected_ty: &Type) -> Option<Type> {
+    fn resolve_variant_type(&mut self, identifier: &str, expected_ty: &Type) -> Option<Type> {
         let store = self.store;
         // A bare name is a variant of the scrutinee's enum, if any.
         if !identifier.contains('.') {
@@ -507,7 +508,7 @@ impl InferCtx<'_> {
             .flatten()
     }
 
-    fn resolve_struct_definition(&self, identifier: &str) -> Option<&Definition> {
+    fn resolve_struct_definition(&mut self, identifier: &str) -> Option<&Definition> {
         let store = self.store;
         let qualified_name = self.lookup_qualified_name(store, identifier)?;
         let definition = store.get_definition(&qualified_name)?;

@@ -175,19 +175,20 @@ pub(crate) fn compute_package_hash(production_hash: u64, dep_hashes: &HashMap<St
     hasher.finish()
 }
 
-pub(crate) fn get_dependency_package_hashes<'a>(
-    dependencies: impl IntoIterator<Item = &'a String>,
+pub(crate) fn get_dependency_package_hashes<'a, T: AsRef<str> + ?Sized + 'a>(
+    dependencies: impl IntoIterator<Item = &'a T>,
     package_hashes: &HashMap<String, u64>,
 ) -> HashMap<String, u64> {
     dependencies
         .into_iter()
         .map(|dep_id| {
+            let dep_id = dep_id.as_ref();
             let hash = if dep_id.starts_with("go:") || dep_id == "prelude" {
                 STDLIB_HASH
             } else {
                 *package_hashes.get(dep_id).unwrap_or(&0)
             };
-            (dep_id.clone(), hash)
+            (dep_id.to_string(), hash)
         })
         .collect()
 }

@@ -41,7 +41,7 @@ impl ScriptTable {
 
         let table = deps::parse_dependency_table(&block.text)
             .map_err(|error| format!("Invalid dependency table: {}", error.message))?;
-        for (module_path, dep) in &table.deps {
+        for (module_path, dep) in table.dependencies() {
             deps::validate_script_entry(module_path, dep)?;
         }
 

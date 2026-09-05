@@ -1,6 +1,5 @@
 use crate::checker::EnvResolve;
 use rustc_hash::{FxHashMap, FxHashSet};
-use syntax::ast;
 use syntax::ast::{
     EnumFieldDefinition, EnumVariant, Expression, Generic, Span, StructFieldDefinition,
     StructFields, VariantFields,
@@ -18,6 +17,13 @@ use syntax::types::Type;
 use super::enum_variant_constructor_type;
 use crate::checker::TaskState;
 use crate::store::Store;
+
+struct EnumFieldSlot<'a> {
+    variant_name: &'a str,
+    field_name: &'a str,
+    shape: EnumFieldShape,
+    field_type: &'a Type,
+}
 
 impl TaskState {
     pub(super) fn populate_enum(&mut self, store: &mut Store, expression: &mut Expression) {
@@ -59,7 +65,7 @@ impl TaskState {
             .current_package(&*store)
             .definitions
             .get(qualified_name.as_str())
-            .map(|definition| definition.visibility.clone())
+            .map(|definition| definition.visibility)
             .unwrap_or(Visibility::Private);
 
         if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
@@ -108,7 +114,7 @@ impl TaskState {
             else {
                 continue;
             };
-            let visibility = definition.visibility.clone();
+            let visibility = definition.visibility;
             let generics = generics.clone();
             let variants = variants.clone();
             let Some(enum_ty) = store.get_type(&qualified_name).cloned() else {
@@ -160,7 +166,7 @@ impl TaskState {
                 variant_definitions
             {
                 let definition = Definition {
-                    visibility: visibility.clone(),
+                    visibility,
                     ty: variant_ty,
                     name_span: Some(variant_name_span),
                     doc: variant_doc,
@@ -195,9 +201,7 @@ impl TaskState {
 
         let slots = go_names::enum_field_slots(name, variants);
 
-        // (variant_name, field_name, field shape, type, span)
-        let mut seen: FxHashMap<String, (&str, &str, EnumFieldShape, &Type, Span)> =
-            FxHashMap::default();
+        let mut seen: FxHashMap<String, EnumFieldSlot<'_>> = FxHashMap::default();
 
         for (vi, variant) in variants.iter().enumerate() {
             let Some(field_shape) = go_names::enum_field_shape(&variant.fields) else {
@@ -214,15 +218,20 @@ impl TaskState {
                 } else {
                     variant.name_span
                 };
-                let Some(&(v_a, f_a, shape_a, ty_a, _)) = seen.get(&go_name) else {
+                let Some(previous) = seen.get(&go_name) else {
                     seen.insert(
                         go_name,
-                        (&variant.name, &field.name, field_shape, &field.ty, span),
+                        EnumFieldSlot {
+                            variant_name: &variant.name,
+                            field_name: &field.name,
+                            shape: field_shape,
+                            field_type: &field.ty,
+                        },
                     );
                     continue;
                 };
 
-                let ty_a_resolved = ty_a.resolve_in(&self.env);
+                let ty_a_resolved = previous.field_type.resolve_in(&self.env);
                 if matches!(ty_a_resolved, Type::Error)
                     || matches!(resolved, Type::Error)
                     || ty_a_resolved == resolved
@@ -230,10 +239,10 @@ impl TaskState {
                     continue;
                 }
 
-                let loc_a = if shape_a == EnumFieldShape::Struct {
-                    format!("{}.{}.{}", name, v_a, f_a)
+                let loc_a = if previous.shape == EnumFieldShape::Struct {
+                    format!("{}.{}.{}", name, previous.variant_name, previous.field_name)
                 } else {
-                    format!("{}.{}", name, v_a)
+                    format!("{}.{}", name, previous.variant_name)
                 };
                 let loc_b = if field_shape == EnumFieldShape::Struct {
                     format!("{}.{}.{}", name, variant.name, field.name)
@@ -419,7 +428,7 @@ impl TaskState {
             .current_package(&*store)
             .definitions
             .get(qualified_name.as_str())
-            .map(|definition| definition.visibility.clone())
+            .map(|definition| definition.visibility)
             .unwrap_or(Visibility::Private);
 
         if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
@@ -603,7 +612,7 @@ impl TaskState {
                 .current_package(&*store)
                 .definitions
                 .get(qualified_name.as_str())
-                .map(|definition| definition.visibility.clone())
+                .map(|definition| definition.visibility)
                 .unwrap_or(Visibility::Private);
 
             let alias_ty = if name == "Never" && generics.is_empty() {
@@ -710,7 +719,7 @@ impl TaskState {
             .current_package(&*store)
             .definitions
             .get(qualified_name.as_str())
-            .map(|definition| definition.visibility.clone())
+            .map(|definition| definition.visibility)
             .unwrap_or(Visibility::Private);
 
         if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
@@ -897,7 +906,7 @@ fn is_pointer_backed_newtype(store: &Store, ty: &Type) -> bool {
 }
 
 // Mirror the written type's own visibility: peel storage (`Option`/`Ref`), not aliases.
-fn embed_field_visibility(store: &Store, field_ty: &Type) -> ast::Visibility {
+fn embed_field_visibility(store: &Store, field_ty: &Type) -> Visibility {
     let mut target = field_ty.clone();
     while target.is_option() || target.is_ref() {
         let Some(inner) = target.inner() else { break };
@@ -906,8 +915,8 @@ fn embed_field_visibility(store: &Store, field_ty: &Type) -> ast::Visibility {
     let public = matches!(&target, Type::Nominal { id, .. }
         if store.get_definition(id.as_str()).is_some_and(|d| d.visibility.is_public()));
     if public {
-        ast::Visibility::Public
+        Visibility::Public
     } else {
-        ast::Visibility::Private
+        Visibility::Private
     }
 }

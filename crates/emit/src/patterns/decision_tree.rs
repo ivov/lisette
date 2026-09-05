@@ -552,7 +552,7 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
     validate_switch_arms(arms, &kind, &switch_path)?;
 
     let grouped = group_switch_branches(arms, &kind);
-    let branches = build_switch_branches(grouped.order, grouped.by_label, &grouped.fallback);
+    let branches = build_switch_branches(grouped.branches, &grouped.fallback);
 
     let fallback = if grouped.fallback.is_empty() {
         None
@@ -628,14 +628,12 @@ fn validate_switch_arms(
 }
 
 struct GroupedBranches {
-    order: Vec<String>,
-    by_label: HashMap<String, Vec<ArmInfo>>,
+    branches: Vec<(String, Vec<ArmInfo>)>,
     fallback: Vec<ArmInfo>,
 }
 
 fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches {
-    let mut by_label: HashMap<String, Vec<ArmInfo>> = HashMap::default();
-    let mut order: Vec<String> = Vec::new();
+    let mut branches: Vec<(String, Vec<ArmInfo>)> = Vec::new();
     let mut fallback = Vec::new();
 
     for arm in arms {
@@ -666,33 +664,25 @@ fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches
             has_guard: arm.has_guard,
         };
 
-        by_label
-            .entry(case_label.clone())
-            .and_modify(|arms| arms.push(inner_arm.clone()))
-            .or_insert_with(|| {
-                order.push(case_label);
-                vec![inner_arm]
-            });
+        if let Some((_, arms)) = branches.iter_mut().find(|(label, _)| label == &case_label) {
+            arms.push(inner_arm);
+        } else {
+            branches.push((case_label, vec![inner_arm]));
+        }
     }
 
-    GroupedBranches {
-        order,
-        by_label,
-        fallback,
-    }
+    GroupedBranches { branches, fallback }
 }
 
 /// Splice the catchall into any fail-prone case body: Go `switch` cases do not
 /// fall through to `default`, so a failed inner check has nowhere else to go.
 fn build_switch_branches(
-    order: Vec<String>,
-    mut by_label: HashMap<String, Vec<ArmInfo>>,
+    branches: Vec<(String, Vec<ArmInfo>)>,
     fallback_arms: &[ArmInfo],
 ) -> Vec<SwitchBranch> {
-    order
+    branches
         .into_iter()
-        .map(|label| {
-            let inner_arms = by_label.remove(&label).unwrap();
+        .map(|(label, inner_arms)| {
             let any_inner_can_fail = inner_arms
                 .iter()
                 .any(|a| a.has_guard || !a.checks.is_empty());
@@ -1001,7 +991,6 @@ fn compute_struct_field_path(
     field: &StructFieldPattern,
     ty: &Type,
     enum_info: Option<&(String, String)>,
-    variant_fields: Option<&[EnumFieldDefinition]>,
 ) -> AccessPath {
     let go_field_name = if let Some((enum_id, variant_name)) = enum_info {
         planner
@@ -1023,17 +1012,11 @@ fn compute_struct_field_path(
     if let Some((_, variant_name)) = enum_info
         && let Some(field_index) =
             planner.get_enum_struct_field_index(ty, variant_name, &field.name)
+        && planner.is_enum_field_recursive(ty, variant_name, field_index)
     {
-        let is_source_ref = variant_fields
-            .and_then(|vf| vf.get(field_index).map(|f| f.ty.is_ref()))
-            .unwrap_or_else(|| planner.is_enum_field_source_ref(ty, variant_name, field_index));
-        let is_auto_pointer =
-            planner.is_enum_field_pointer(ty, variant_name, field_index) && !is_source_ref;
-        if is_auto_pointer {
-            return parent_path
-                .push(PathSegment::Field(go_field_name))
-                .push(PathSegment::Deref);
-        }
+        return parent_path
+            .push(PathSegment::Field(go_field_name))
+            .push(PathSegment::Deref);
     }
 
     parent_path.push(PathSegment::Field(go_field_name))
@@ -1105,17 +1088,13 @@ fn collect_enum_variant_checks(
     let Some(definition) = planner.facts.definition(enum_name) else {
         return;
     };
-    let (variant_fields, field_types): (&[EnumFieldDefinition], Vec<Type>) = match &definition.body
-    {
+    let field_types: Vec<Type> = match &definition.body {
         DefinitionBody::Struct {
             fields, generics, ..
-        } => (
-            &[],
-            fields
-                .iter()
-                .map(|field| generics::resolve_field_type(generics, &params, &field.ty))
-                .collect(),
-        ),
+        } => fields
+            .iter()
+            .map(|field| generics::resolve_field_type(generics, &params, &field.ty))
+            .collect(),
         DefinitionBody::Enum {
             variants, generics, ..
         } => {
@@ -1125,14 +1104,11 @@ fn collect_enum_variant_checks(
             else {
                 return;
             };
-            (
-                variant.fields.as_slice(),
-                variant
-                    .fields
-                    .iter()
-                    .map(|field| generics::resolve_field_type(generics, &params, &field.ty))
-                    .collect(),
-            )
+            variant
+                .fields
+                .iter()
+                .map(|field| generics::resolve_field_type(generics, &params, &field.ty))
+                .collect()
         }
         _ => return,
     };
@@ -1141,7 +1117,6 @@ fn collect_enum_variant_checks(
         identifier,
         fields,
         ty,
-        variant_fields,
         field_types: &field_types,
     };
 
@@ -1270,7 +1245,6 @@ struct EnumVariantData<'a> {
     identifier: &'a str,
     fields: &'a [Pattern],
     ty: &'a Type,
-    variant_fields: &'a [EnumFieldDefinition],
     field_types: &'a [Type],
 }
 
@@ -1317,17 +1291,9 @@ fn collect_tagged_enum_checks(
     for (i, field) in variant.fields.iter().enumerate() {
         let field_name = planner.get_enum_tuple_field_name(variant.ty, variant_name, i);
 
-        let is_source_ref = variant
-            .variant_fields
-            .get(i)
-            .map(|f| f.ty.is_ref())
-            .unwrap_or_else(|| planner.is_enum_field_source_ref(variant.ty, variant_name, i));
-        let is_auto_pointer =
-            planner.is_enum_field_pointer(variant.ty, variant_name, i) && !is_source_ref;
-
         let is_unit = planner.is_enum_field_unit(variant.ty, variant_name, i);
 
-        let field_path = if is_auto_pointer {
+        let field_path = if planner.is_enum_field_recursive(variant.ty, variant_name, i) {
             path.push(PathSegment::Field(field_name))
                 .push(PathSegment::Deref)
         } else {
@@ -1390,17 +1356,10 @@ fn collect_struct_checks(
 
     let (enum_info, child_path) =
         resolve_struct_child_path(planner, path, pattern, path_ty, collector);
-    let variant_fields = record_variant_fields(planner, resolution);
 
     for field in fields {
-        let field_path = compute_struct_field_path(
-            planner,
-            &child_path,
-            field,
-            ty,
-            enum_info.as_ref(),
-            variant_fields,
-        );
+        let field_path =
+            compute_struct_field_path(planner, &child_path, field, ty, enum_info.as_ref());
         let field_ty = record_field_type(planner, resolution, ty, &field.name);
         collect_checks_and_bindings(
             planner,

@@ -5,6 +5,9 @@ use std::sync::LazyLock;
 
 use crate::Target;
 
+type TypedefEntries = &'static [(&'static str, &'static str)];
+type PackageTargets = &'static [(&'static str, &'static str)];
+
 static GO_STDLIB_COMMON: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     HashMap::from([
         ("archive/tar", include_str!("../typedefs/archive/tar.d.lis")),
@@ -400,125 +403,111 @@ static GO_STDLIB_COMMON: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     ])
 });
 
-static GO_STDLIB_LINUX_AMD64: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
-    HashMap::from([
-        ("os", include_str!("../typedefs/os_linux_amd64.d.lis")),
-        (
-            "path/filepath",
-            include_str!("../typedefs/path/filepath_linux_amd64.d.lis"),
-        ),
-        (
-            "runtime",
-            include_str!("../typedefs/runtime_linux_amd64.d.lis"),
-        ),
-        (
-            "syscall",
-            include_str!("../typedefs/syscall_linux_amd64.d.lis"),
-        ),
-    ])
-});
+static GO_STDLIB_LINUX_AMD64: TypedefEntries = &[
+    ("os", include_str!("../typedefs/os_linux_amd64.d.lis")),
+    (
+        "path/filepath",
+        include_str!("../typedefs/path/filepath_linux_amd64.d.lis"),
+    ),
+    (
+        "runtime",
+        include_str!("../typedefs/runtime_linux_amd64.d.lis"),
+    ),
+    (
+        "syscall",
+        include_str!("../typedefs/syscall_linux_amd64.d.lis"),
+    ),
+];
 
-static GO_STDLIB_LINUX_ARM64: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
-    HashMap::from([
-        ("os", include_str!("../typedefs/os_linux_amd64.d.lis")),
-        (
-            "path/filepath",
-            include_str!("../typedefs/path/filepath_linux_amd64.d.lis"),
-        ),
-        (
-            "runtime",
-            include_str!("../typedefs/runtime_linux_arm64.d.lis"),
-        ),
-        (
-            "syscall",
-            include_str!("../typedefs/syscall_linux_arm64.d.lis"),
-        ),
-    ])
-});
+static GO_STDLIB_LINUX_ARM64: TypedefEntries = &[
+    ("os", include_str!("../typedefs/os_linux_amd64.d.lis")),
+    (
+        "path/filepath",
+        include_str!("../typedefs/path/filepath_linux_amd64.d.lis"),
+    ),
+    (
+        "runtime",
+        include_str!("../typedefs/runtime_linux_arm64.d.lis"),
+    ),
+    (
+        "syscall",
+        include_str!("../typedefs/syscall_linux_arm64.d.lis"),
+    ),
+];
 
-static GO_STDLIB_DARWIN_AMD64: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
-    HashMap::from([
-        ("os", include_str!("../typedefs/os_darwin_amd64.d.lis")),
-        (
-            "path/filepath",
-            include_str!("../typedefs/path/filepath_linux_amd64.d.lis"),
-        ),
-        (
-            "runtime",
-            include_str!("../typedefs/runtime_darwin_amd64.d.lis"),
-        ),
-        (
-            "syscall",
-            include_str!("../typedefs/syscall_darwin_amd64.d.lis"),
-        ),
-    ])
-});
+static GO_STDLIB_DARWIN_AMD64: TypedefEntries = &[
+    ("os", include_str!("../typedefs/os_darwin_amd64.d.lis")),
+    (
+        "path/filepath",
+        include_str!("../typedefs/path/filepath_linux_amd64.d.lis"),
+    ),
+    (
+        "runtime",
+        include_str!("../typedefs/runtime_darwin_amd64.d.lis"),
+    ),
+    (
+        "syscall",
+        include_str!("../typedefs/syscall_darwin_amd64.d.lis"),
+    ),
+];
 
-static GO_STDLIB_DARWIN_ARM64: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
-    HashMap::from([
-        ("os", include_str!("../typedefs/os_darwin_amd64.d.lis")),
-        (
-            "path/filepath",
-            include_str!("../typedefs/path/filepath_linux_amd64.d.lis"),
-        ),
-        (
-            "runtime",
-            include_str!("../typedefs/runtime_darwin_arm64.d.lis"),
-        ),
-        (
-            "syscall",
-            include_str!("../typedefs/syscall_darwin_arm64.d.lis"),
-        ),
-    ])
-});
+static GO_STDLIB_DARWIN_ARM64: TypedefEntries = &[
+    ("os", include_str!("../typedefs/os_darwin_amd64.d.lis")),
+    (
+        "path/filepath",
+        include_str!("../typedefs/path/filepath_linux_amd64.d.lis"),
+    ),
+    (
+        "runtime",
+        include_str!("../typedefs/runtime_darwin_arm64.d.lis"),
+    ),
+    (
+        "syscall",
+        include_str!("../typedefs/syscall_darwin_arm64.d.lis"),
+    ),
+];
 
-static GO_STDLIB_WINDOWS_AMD64: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
-    HashMap::from([
-        ("os", include_str!("../typedefs/os_windows_amd64.d.lis")),
-        (
-            "path/filepath",
-            include_str!("../typedefs/path/filepath_windows_amd64.d.lis"),
-        ),
-        (
-            "runtime",
-            include_str!("../typedefs/runtime_windows_amd64.d.lis"),
-        ),
-        (
-            "syscall",
-            include_str!("../typedefs/syscall_windows_amd64.d.lis"),
-        ),
-    ])
-});
+static GO_STDLIB_WINDOWS_AMD64: TypedefEntries = &[
+    ("os", include_str!("../typedefs/os_windows_amd64.d.lis")),
+    (
+        "path/filepath",
+        include_str!("../typedefs/path/filepath_windows_amd64.d.lis"),
+    ),
+    (
+        "runtime",
+        include_str!("../typedefs/runtime_windows_amd64.d.lis"),
+    ),
+    (
+        "syscall",
+        include_str!("../typedefs/syscall_windows_amd64.d.lis"),
+    ),
+];
 
-static GO_STDLIB_WINDOWS_ARM64: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
-    HashMap::from([
-        ("os", include_str!("../typedefs/os_windows_amd64.d.lis")),
-        (
-            "path/filepath",
-            include_str!("../typedefs/path/filepath_windows_amd64.d.lis"),
-        ),
-        (
-            "runtime",
-            include_str!("../typedefs/runtime_windows_arm64.d.lis"),
-        ),
-        (
-            "syscall",
-            include_str!("../typedefs/syscall_windows_amd64.d.lis"),
-        ),
-    ])
-});
+static GO_STDLIB_WINDOWS_ARM64: TypedefEntries = &[
+    ("os", include_str!("../typedefs/os_windows_amd64.d.lis")),
+    (
+        "path/filepath",
+        include_str!("../typedefs/path/filepath_windows_amd64.d.lis"),
+    ),
+    (
+        "runtime",
+        include_str!("../typedefs/runtime_windows_arm64.d.lis"),
+    ),
+    (
+        "syscall",
+        include_str!("../typedefs/syscall_windows_amd64.d.lis"),
+    ),
+];
 
-static GO_STDLIB_PACKAGE_TARGETS: LazyLock<HashMap<&str, &[(&str, &str)]>> = LazyLock::new(|| {
-    HashMap::from([(
-        "log/syslog",
-        &[
-            ("linux", "amd64"),
-            ("linux", "arm64"),
-            ("darwin", "amd64"),
-            ("darwin", "arm64"),
-        ][..],
-    )])
-});
+static GO_STDLIB_PACKAGE_TARGETS: &[(&str, PackageTargets)] = &[(
+    "log/syslog",
+    &[
+        ("linux", "amd64"),
+        ("linux", "arm64"),
+        ("darwin", "amd64"),
+        ("darwin", "arm64"),
+    ],
+)];
 
 pub fn get_go_stdlib_typedef(package: &str, target: Target) -> Option<&'static str> {
     if !is_available_on(package, target) {
@@ -537,7 +526,7 @@ pub fn get_go_stdlib_packages(target: Target) -> Vec<&'static str> {
         .filter(|pkg| is_available_on(pkg, target))
         .collect();
     if let Some(overlay) = overlay_for(target) {
-        packages.extend(overlay.keys().copied());
+        packages.extend(overlay.iter().map(|(package, _)| *package));
     }
     packages.sort();
     packages
@@ -546,11 +535,14 @@ pub fn get_go_stdlib_packages(target: Target) -> Vec<&'static str> {
 pub fn get_go_stdlib_package_targets(
     package: &str,
 ) -> Option<&'static [(&'static str, &'static str)]> {
-    GO_STDLIB_PACKAGE_TARGETS.get(package).copied()
+    GO_STDLIB_PACKAGE_TARGETS
+        .iter()
+        .find(|(candidate, _)| *candidate == package)
+        .map(|(_, targets)| *targets)
 }
 
 fn is_available_on(package: &str, target: Target) -> bool {
-    match GO_STDLIB_PACKAGE_TARGETS.get(package) {
+    match get_go_stdlib_package_targets(package) {
         Some(targets) => targets
             .iter()
             .any(|(goos, goarch)| *goos == target.goos && *goarch == target.goarch),
@@ -559,17 +551,22 @@ fn is_available_on(package: &str, target: Target) -> bool {
 }
 
 fn lookup_in_overlay(target: Target, package: &str) -> Option<&'static str> {
-    overlay_for(target).and_then(|overlay| overlay.get(package).copied())
+    overlay_for(target).and_then(|overlay| {
+        overlay
+            .iter()
+            .find(|(candidate, _)| *candidate == package)
+            .map(|(_, source)| *source)
+    })
 }
 
-fn overlay_for(target: Target) -> Option<&'static HashMap<&'static str, &'static str>> {
+fn overlay_for(target: Target) -> Option<TypedefEntries> {
     match (target.goos, target.goarch) {
-        ("linux", "amd64") => Some(&GO_STDLIB_LINUX_AMD64),
-        ("linux", "arm64") => Some(&GO_STDLIB_LINUX_ARM64),
-        ("darwin", "amd64") => Some(&GO_STDLIB_DARWIN_AMD64),
-        ("darwin", "arm64") => Some(&GO_STDLIB_DARWIN_ARM64),
-        ("windows", "amd64") => Some(&GO_STDLIB_WINDOWS_AMD64),
-        ("windows", "arm64") => Some(&GO_STDLIB_WINDOWS_ARM64),
+        ("linux", "amd64") => Some(GO_STDLIB_LINUX_AMD64),
+        ("linux", "arm64") => Some(GO_STDLIB_LINUX_ARM64),
+        ("darwin", "amd64") => Some(GO_STDLIB_DARWIN_AMD64),
+        ("darwin", "arm64") => Some(GO_STDLIB_DARWIN_ARM64),
+        ("windows", "amd64") => Some(GO_STDLIB_WINDOWS_AMD64),
+        ("windows", "arm64") => Some(GO_STDLIB_WINDOWS_ARM64),
         _ => None,
     }
 }

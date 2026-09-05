@@ -225,12 +225,12 @@ fn push_suppressible(
         .iter()
         .filter_map(LisetteDiagnostic::file_id)
         .collect();
-    let allows: Vec<_> = store
+    let allows: super::suppression::AllowIndex = store
         .packages
         .values()
         .flat_map(|package| package.source_files())
         .filter(|file| reported.contains(&file.id))
-        .flat_map(|file| super::suppression::collect_function_allows(&file.items))
+        .map(|file| super::suppression::collect_function_allows(&file.items))
         .collect();
     out.extend(super::suppression::filter_allowed(produced, &allows));
 }

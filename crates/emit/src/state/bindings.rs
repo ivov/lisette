@@ -41,15 +41,20 @@ pub(crate) enum BindingValue {
     InlineExpr(InlineExpr),
 }
 
-pub(crate) struct BindingSnapshot(HashMap<String, BindingValue>);
+pub(crate) type BindingUndo = Vec<(String, Option<BindingValue>)>;
+
+pub(crate) struct BindingSnapshot {
+    bindings: HashMap<String, BindingValue>,
+    undo: BindingUndo,
+}
 
 impl BindingSnapshot {
-    pub(crate) fn new(bindings: HashMap<String, BindingValue>) -> Self {
-        Self(bindings)
+    pub(crate) fn new(bindings: HashMap<String, BindingValue>, undo: BindingUndo) -> Self {
+        Self { bindings, undo }
     }
 
-    pub(crate) fn into_inner(self) -> HashMap<String, BindingValue> {
-        self.0
+    pub(crate) fn into_inner(self) -> (HashMap<String, BindingValue>, BindingUndo) {
+        (self.bindings, self.undo)
     }
 }
 

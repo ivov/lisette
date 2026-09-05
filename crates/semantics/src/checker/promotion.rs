@@ -162,7 +162,7 @@ where
     F: Copy + Fn(&str) -> Option<&'d Definition>,
 {
     let mut visited: Vec<Entry> = Vec::new();
-    let mut seen: HashSet<String> = HashSet::default();
+    let mut seen: HashSet<Type> = HashSet::default();
 
     let Some(root) = nominal_entry(outer.clone(), 0, false, false, lookup) else {
         return visited;
@@ -175,7 +175,7 @@ where
 
         for entry in &current {
             // Seen at a shallower depth: shadows here, and breaks cycles.
-            if !seen.insert(type_key(&entry.ty)) {
+            if !seen.insert(entry.ty.clone()) {
                 continue;
             }
             visited.push(entry.clone());
@@ -386,29 +386,16 @@ where
 /// one path so its members resolve as ambiguous.
 fn consolidate(list: Vec<Entry>) -> Vec<Entry> {
     let mut result: Vec<Entry> = Vec::with_capacity(list.len());
-    let mut index_of: HashMap<String, usize> = HashMap::default();
+    let mut index_of: HashMap<Type, usize> = HashMap::default();
     for entry in list {
-        let key = type_key(&entry.ty);
-        if let Some(&i) = index_of.get(&key) {
+        if let Some(&i) = index_of.get(&entry.ty) {
             result[i].multiples = true;
         } else {
-            index_of.insert(key, result.len());
+            index_of.insert(entry.ty.clone(), result.len());
             result.push(entry);
         }
     }
     result
-}
-
-/// Type identity for `seen`/`multiples`: qualified id plus any type arguments.
-fn type_key(ty: &Type) -> String {
-    match ty {
-        Type::Nominal { id, params, .. } if params.is_empty() => id.as_str().to_string(),
-        Type::Nominal { id, params, .. } => {
-            let args: Vec<String> = params.iter().map(type_key).collect();
-            format!("{}<{}>", id, args.join(","))
-        }
-        other => other.to_string(),
-    }
 }
 
 /// Strip one `Ref`, reporting whether it was present (a pointer edge).

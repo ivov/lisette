@@ -404,7 +404,7 @@ impl InferCtx<'_> {
     }
 
     fn constructor_call_grants_write(
-        &self,
+        &mut self,
         callee: &Expression,
         parameters: &[FunctionParameter],
     ) -> bool {

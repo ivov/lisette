@@ -285,17 +285,17 @@ impl LisetteDiagnostic {
     }
 
     pub(crate) fn with_parse_code(mut self, code: &str) -> Self {
-        self.code = Some(format!("parse.{}", code));
+        self.code = Some(format!("parse.{code}"));
         self
     }
 
     pub fn with_resolve_code(mut self, code: &str) -> Self {
-        self.code = Some(format!("resolve.{}", code));
+        self.code = Some(format!("resolve.{code}"));
         self
     }
 
     pub fn with_infer_code(mut self, code: &str) -> Self {
-        self.code = Some(format!("infer.{}", code));
+        self.code = Some(format!("infer.{code}"));
         self
     }
 
@@ -306,17 +306,17 @@ impl LisetteDiagnostic {
              use a phase-specific code constructor for errors",
             self.severity,
         );
-        self.code = Some(format!("lint.{}", code));
+        self.code = Some(format!("lint.{code}"));
         self
     }
 
     pub(crate) fn with_attribute_code(mut self, code: &str) -> Self {
-        self.code = Some(format!("attribute.{}", code));
+        self.code = Some(format!("attribute.{code}"));
         self
     }
 
     pub(crate) fn with_emit_code(mut self, code: &str) -> Self {
-        self.code = Some(format!("emit.{}", code));
+        self.code = Some(format!("emit.{code}"));
         self
     }
 

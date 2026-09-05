@@ -7,7 +7,7 @@ use serde::Deserialize;
 use syntax::ast::Span;
 use syntax::program::TestFunction;
 
-use crate::go_cli::GoTestEvent;
+use crate::go_cli::{GoTestAction, GoTestEvent};
 use crate::output::{format_backticks, format_elapsed};
 use diagnostics::LisetteDiagnostic;
 use lisette::pipeline::{Sources, TestIndex};
@@ -16,6 +16,7 @@ use std::iter;
 use std::mem;
 
 type TestKey = (String, String);
+type TestEventsByPackage = HashMap<String, HashMap<String, TestEvents>>;
 
 #[derive(Default)]
 enum Execution {
@@ -343,19 +344,21 @@ pub fn build_report_filtered(
     go_module: &str,
     selected: Option<&HashSet<(String, String)>>,
 ) -> Report {
-    let mut tests: HashMap<TestKey, TestEvents> = HashMap::new();
+    let mut tests = TestEventsByPackage::new();
     let mut build_output = String::new();
     let mut packages: HashMap<String, PackageEvents> = HashMap::new();
     let mut test_elapsed: f64 = 0.0;
 
     for event in events {
-        if event.action == "attr"
+        if event.action == GoTestAction::Attr
             && let (Some(key), Some(test), Some(value)) =
                 (event.key.as_deref(), &event.test, &event.value)
             && let Some(attribute) = decode_test_attribute(key, value)
         {
             tests
-                .entry((event.package.clone(), test.clone()))
+                .entry(event.package.clone())
+                .or_default()
+                .entry(test.clone())
                 .or_default()
                 .record_attribute(attribute);
             continue;
@@ -365,7 +368,9 @@ pub fn build_report_filtered(
             continue;
         };
         let state = tests
-            .entry((event.package.clone(), test.clone()))
+            .entry(event.package.clone())
+            .or_default()
+            .entry(test.clone())
             .or_default();
         handle_test_event(event, state);
     }
@@ -378,7 +383,9 @@ pub fn build_report_filtered(
         {
             continue;
         }
-        let state = tests.get(&key);
+        let state = tests
+            .get(&key.0)
+            .and_then(|package_tests| package_tests.get(&key.1));
         let outcome = state
             .map(TestEvents::outcome)
             .unwrap_or(TestOutcome::Unreached);
@@ -436,8 +443,8 @@ fn handle_package_event(
     packages: &mut HashMap<String, PackageEvents>,
     test_elapsed: &mut f64,
 ) {
-    match event.action.as_str() {
-        "build-output" => {
+    match event.action {
+        GoTestAction::BuildOutput => {
             if let Some(text) = &event.output {
                 build_output.push_str(text);
             }
@@ -448,7 +455,7 @@ fn handle_package_event(
                     .record_build_failure();
             }
         }
-        "build-fail" => {
+        GoTestAction::BuildFail => {
             if let Some(path) = &event.import_path {
                 packages
                     .entry(package_of_import_path(path).to_string())
@@ -456,7 +463,7 @@ fn handle_package_event(
                     .record_build_failure();
             }
         }
-        "output" => {
+        GoTestAction::Output => {
             if let Some(text) = &event.output {
                 packages
                     .entry(event.package.clone())
@@ -465,10 +472,10 @@ fn handle_package_event(
                     .push_str(text);
             }
         }
-        "pass" => {
+        GoTestAction::Pass => {
             *test_elapsed = test_elapsed.max(event.elapsed.unwrap_or(0.0));
         }
-        "fail" => {
+        GoTestAction::Fail => {
             packages
                 .entry(event.package.clone())
                 .or_default()
@@ -480,26 +487,26 @@ fn handle_package_event(
 }
 
 fn handle_test_event(event: &GoTestEvent, state: &mut TestEvents) {
-    match event.action.as_str() {
-        "run" => {
+    match event.action {
+        GoTestAction::Run => {
             state.execution.start();
         }
-        "pass" => {
+        GoTestAction::Pass => {
             state
                 .execution
                 .finish(TerminalStatus::Passed, event.elapsed);
         }
-        "fail" => {
+        GoTestAction::Fail => {
             state
                 .execution
                 .finish(TerminalStatus::Failed, event.elapsed);
         }
-        "skip" => {
+        GoTestAction::Skip => {
             state
                 .execution
                 .finish(TerminalStatus::Skipped, event.elapsed);
         }
-        "output" => {
+        GoTestAction::Output => {
             if let Some(text) = &event.output {
                 state.output.push_str(text);
             }
@@ -549,35 +556,32 @@ fn decode_hex(hex: &str) -> Option<Vec<u8>> {
         .collect()
 }
 
-fn collect_children(
-    package: &str,
-    parent: &str,
-    tests: &HashMap<TestKey, TestEvents>,
-) -> Vec<TestRow> {
+fn collect_children(package: &str, parent: &str, tests: &TestEventsByPackage) -> Vec<TestRow> {
     let prefix = format!("{parent}/");
-    let real: HashSet<&str> = tests
+    let Some(package_tests) = tests.get(package) else {
+        return Vec::new();
+    };
+    let real: HashSet<&str> = package_tests
         .iter()
-        .filter(|((pkg, name), state)| {
-            pkg == package && name.starts_with(&prefix) && state.execution.was_observed()
-        })
-        .map(|((_, name), _)| name.as_str())
+        .filter(|(name, state)| name.starts_with(&prefix) && state.execution.was_observed())
+        .map(|(name, _)| name.as_str())
         .chain(iter::once(parent))
         .collect();
 
     let mut children_of: HashMap<&str, Vec<&str>> = HashMap::new();
     for full in real.iter().copied().filter(|&full| full != parent) {
-        if let Some(mother) = subtest_parent(package, full, &real, tests) {
+        if let Some(mother) = subtest_parent(full, &real, package_tests) {
             children_of.entry(mother).or_default().push(full);
         }
     }
-    subtest_rows(package, parent, &children_of, tests)
+    subtest_rows(package, parent, &children_of, package_tests)
 }
 
 fn subtest_rows(
     package: &str,
     parent: &str,
     children_of: &HashMap<&str, Vec<&str>>,
-    tests: &HashMap<TestKey, TestEvents>,
+    tests: &HashMap<String, TestEvents>,
 ) -> Vec<TestRow> {
     let mut children = children_of.get(parent).cloned().unwrap_or_default();
     children.sort_unstable();
@@ -585,8 +589,7 @@ fn subtest_rows(
     children
         .into_iter()
         .map(|full| {
-            let key = (package.to_string(), full.to_string());
-            let state = &tests[&key];
+            let state = &tests[full];
             let name = state
                 .subtest_name
                 .as_ref()
@@ -609,14 +612,12 @@ fn subtest_rows(
 }
 
 fn subtest_parent<'a>(
-    package: &str,
     full: &'a str,
     real: &HashSet<&'a str>,
-    tests: &HashMap<TestKey, TestEvents>,
+    tests: &HashMap<String, TestEvents>,
 ) -> Option<&'a str> {
-    let key = (package.to_string(), full.to_string());
     if let Some(original) = tests
-        .get(&key)
+        .get(full)
         .and_then(|state| state.subtest_name.as_ref())
     {
         let own_segments = original.matches('/').count() + 1;
@@ -1438,7 +1439,7 @@ mod tests {
 
     fn event(action: &str, package: &str, test: Option<&str>, output: Option<&str>) -> GoTestEvent {
         GoTestEvent {
-            action: action.to_string(),
+            action: serde_json::from_value(serde_json::Value::String(action.to_string())).unwrap(),
             package: package.to_string(),
             test: test.map(str::to_string),
             elapsed: Some(0.003),
@@ -1451,7 +1452,7 @@ mod tests {
 
     fn build_output_event(package: &str, output: &str) -> GoTestEvent {
         GoTestEvent {
-            action: "build-output".to_string(),
+            action: GoTestAction::BuildOutput,
             package: String::new(),
             test: None,
             elapsed: None,
@@ -1464,7 +1465,7 @@ mod tests {
 
     fn attr_event(package: &str, test: &str, value: &str) -> GoTestEvent {
         GoTestEvent {
-            action: "attr".to_string(),
+            action: GoTestAction::Attr,
             package: package.to_string(),
             test: Some(test.to_string()),
             elapsed: None,
@@ -1477,7 +1478,7 @@ mod tests {
 
     fn skip_attr_event(package: &str, test: &str, reason: &str) -> GoTestEvent {
         GoTestEvent {
-            action: "attr".to_string(),
+            action: GoTestAction::Attr,
             package: package.to_string(),
             test: Some(test.to_string()),
             elapsed: None,
@@ -1490,7 +1491,7 @@ mod tests {
 
     fn subtest_attr_event(package: &str, test: &str, name: &str) -> GoTestEvent {
         GoTestEvent {
-            action: "attr".to_string(),
+            action: GoTestAction::Attr,
             package: package.to_string(),
             test: Some(test.to_string()),
             elapsed: None,
@@ -1504,7 +1505,7 @@ mod tests {
     fn log_attr_event(package: &str, test: &str, file: u32, value: &str) -> GoTestEvent {
         let record = format!(r#"{{"file":{file},"lo":0,"hi":5,"value":{value:?}}}"#);
         GoTestEvent {
-            action: "attr".to_string(),
+            action: GoTestAction::Attr,
             package: package.to_string(),
             test: Some(test.to_string()),
             elapsed: None,

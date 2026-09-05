@@ -282,7 +282,11 @@ impl TypedefLocator {
         check_toolchain_version(&manifest)?;
         check_no_subpackage_deps(&manifest)?;
 
-        let locator = Self::new(manifest.go_deps(), Some(project_root.to_path_buf()), target);
+        let locator = Self::new(
+            manifest.go_deps().clone(),
+            Some(project_root.to_path_buf()),
+            target,
+        );
 
         Ok((manifest, locator))
     }

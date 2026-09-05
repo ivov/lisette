@@ -2,7 +2,6 @@ use std::io::IsTerminal;
 use std::sync::LazyLock;
 
 use owo_colors::OwoColorize;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
 use std::io;
@@ -278,11 +277,15 @@ pub enum ReplacementLabel<'a> {
     Local { path: &'a str },
 }
 
+pub trait DependencyGraph {
+    fn version(&self, module: &str) -> Option<&str>;
+    fn dependencies(&self, module: &str) -> Option<&[String]>;
+}
+
 pub fn print_add_success(
     module_path: &str,
     version: &str,
-    edges: &HashMap<String, Vec<String>>,
-    versions: &HashMap<String, String>,
+    graph: &impl DependencyGraph,
     upgraded_directs: &[(&str, &str, &str)],
     replacement: Option<ReplacementLabel<'_>>,
 ) {
@@ -335,8 +338,7 @@ pub fn print_add_success(
     }
 
     let mut printer = TreePrinter {
-        edges,
-        versions,
+        graph,
         colored,
         visited: HashSet::new(),
     };
@@ -344,16 +346,15 @@ pub fn print_add_success(
     printer.print_children(module_path, "    ");
 }
 
-struct TreePrinter<'a> {
-    edges: &'a HashMap<String, Vec<String>>,
-    versions: &'a HashMap<String, String>,
+struct TreePrinter<'a, G> {
+    graph: &'a G,
     colored: bool,
     visited: HashSet<String>,
 }
 
-impl TreePrinter<'_> {
+impl<G: DependencyGraph> TreePrinter<'_, G> {
     fn print_children(&mut self, node: &str, prefix: &str) {
-        let Some(children) = self.edges.get(node) else {
+        let Some(children) = self.graph.dependencies(node) else {
             return;
         };
         let mut sorted: Vec<&String> = children.iter().collect();
@@ -366,7 +367,7 @@ impl TreePrinter<'_> {
 
     fn print_node(&mut self, node: &str, prefix: &str, is_last: bool) {
         let branch = if is_last { "└─ " } else { "├─ " };
-        let version = self.versions.get(node).map(String::as_str).unwrap_or("");
+        let version = self.graph.version(node).unwrap_or("");
         let already_seen = !self.visited.insert(node.to_string());
 
         if self.colored {

@@ -115,9 +115,9 @@ fn apply_ref_lints(
     }
     let mut diagnostics = result.diagnostics;
     if !diagnostics.is_empty() {
-        let allows: Vec<_> = package
+        let allows: super::suppression::AllowIndex = package
             .source_files()
-            .flat_map(|file| super::suppression::collect_declaration_allows(&file.items))
+            .map(|file| super::suppression::collect_declaration_allows(&file.items))
             .collect();
         diagnostics = super::suppression::filter_unused_allowed(diagnostics, &allows);
     }
@@ -152,16 +152,15 @@ fn run_ref_lints(
         }
     }
 
-    for ((method_package_id, method_name), satisfactions) in &facts.interface_satisfied_methods {
-        if method_package_id != &package.id {
-            continue;
-        }
-        if method_name == "equals" {
-            for impl_type_name in satisfactions.impl_type_names() {
-                graph.mark_as_used(PackageItemId::equals_method(impl_type_name));
+    if let Some(methods) = facts.interface_satisfied_methods.get(&package.id) {
+        for (method_name, satisfactions) in methods {
+            if method_name == "equals" {
+                for impl_type_name in satisfactions.impl_type_names() {
+                    graph.mark_as_used(PackageItemId::equals_method(impl_type_name));
+                }
+            } else {
+                graph.mark_as_used(PackageItemId::new(method_name));
             }
-        } else {
-            graph.mark_as_used(PackageItemId::new(method_name));
         }
     }
 

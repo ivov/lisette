@@ -59,7 +59,20 @@ impl fmt::Debug for Binding {
     }
 }
 
-pub type BindingId = u32;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct BindingId(u32);
+
+impl BindingId {
+    pub const fn new(index: u32) -> Self {
+        Self(index)
+    }
+
+    pub const fn index(self) -> u32 {
+        self.0
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdentifierResolution {
@@ -2490,6 +2503,7 @@ pub struct ParentInterface {
 pub enum Visibility {
     Public,
     Private,
+    Local,
 }
 
 impl Visibility {

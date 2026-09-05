@@ -29,7 +29,7 @@ fn default_resolver() -> deps::TypedefLocator {
 
 fn roots(entry: &str) -> Roots {
     Roots {
-        primary: vec![entry.to_string()],
+        primary: vec![entry.into()],
         additional: vec![],
     }
 }
@@ -99,6 +99,22 @@ fn kahn_diamond_dependency() {
     assert!(pos_d < pos_c);
     assert!(pos_b < pos_a);
     assert!(pos_c < pos_a);
+}
+
+#[test]
+fn kahn_ready_package_order_is_stable() {
+    let mut edges = HashMap::default();
+    edges.insert(
+        "a".to_string(),
+        HashSet::from_iter(["b".to_string(), "c".to_string()]),
+    );
+    edges.insert("b".to_string(), HashSet::from_iter(["d".to_string()]));
+    edges.insert("c".to_string(), HashSet::from_iter(["d".to_string()]));
+    edges.insert("d".to_string(), HashSet::default());
+
+    let (order, _) = topological_sort(&DependencyGraph::from(edges));
+
+    assert_eq!(order, ["d", "b", "c", "a"]);
 }
 
 #[test]
@@ -549,8 +565,8 @@ fn additional_roots_widen_graph_but_not_reachable_set() {
     let result = build_package_graph(
         &mut store,
         Roots {
-            primary: vec!["main".to_string()],
-            additional: vec!["orphan".to_string()],
+            primary: vec!["main".into()],
+            additional: vec!["orphan".into()],
         },
         graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
     );
@@ -597,7 +613,7 @@ fn zero_primary_roots_begins_with_additional() {
         &mut store,
         Roots {
             primary: vec![],
-            additional: vec!["lib".to_string()],
+            additional: vec!["lib".into()],
         },
         graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
     );

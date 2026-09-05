@@ -1,5 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::borrow::Borrow;
+use std::hash::{Hash, Hasher};
+use std::mem;
 use std::sync::Arc;
 
 use ecow::EcoString;
@@ -152,27 +154,27 @@ pub fn unqualified_name(id: &str) -> &str {
 pub const GO_IMPORT_PREFIX: &str = "go:";
 
 /// Resolve the package of a qualified ID. For `go:` IDs containing `/`,
-/// does a longest-prefix match against `package_ids` to disambiguate paths
+/// does a longest-prefix match against known packages to disambiguate paths
 /// whose package segment contains dots (e.g. `gopkg.in/yaml.v3`). Otherwise
 /// splits on the first dot. Returns `None` when the id has no dot and is
 /// not a registered `go:` package.
-pub fn package_for_qualified_name<'a, I>(id: &'a str, package_ids: I) -> Option<&'a str>
-where
-    I: IntoIterator<Item = &'a str>,
-{
+pub fn package_for_qualified_name(
+    id: &str,
+    mut contains_package: impl FnMut(&str) -> bool,
+) -> Option<&str> {
     if !id.starts_with(GO_IMPORT_PREFIX) || !id.contains('/') {
         return id.split_once('.').map(|(m, _)| m);
     }
-    let mut best: Option<&str> = None;
-    for package_id in package_ids {
-        if id.starts_with(package_id)
-            && id.as_bytes().get(package_id.len()) == Some(&b'.')
-            && best.is_none_or(|prev| package_id.len() > prev.len())
-        {
-            best = Some(package_id);
+
+    let mut end = id.len();
+    while let Some(separator) = id[..end].rfind('.') {
+        let candidate = &id[..separator];
+        if contains_package(candidate) {
+            return Some(candidate);
         }
+        end = separator;
     }
-    best
+    None
 }
 
 fn is_range_type_name(name: &str) -> bool {
@@ -193,8 +195,47 @@ where
         .then_some(peeled)
 }
 
-/// type param name -> type variable
-pub type SubstitutionMap = HashMap<EcoString, Type>;
+/// Type parameter name -> concrete type.
+#[derive(Debug, Clone, Default)]
+pub struct SubstitutionMap(Vec<(EcoString, Type)>);
+
+impl SubstitutionMap {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn get(&self, name: &EcoString) -> Option<&Type> {
+        self.0
+            .iter()
+            .find_map(|(candidate, ty)| (candidate == name).then_some(ty))
+    }
+
+    pub fn insert(&mut self, name: EcoString, ty: Type) -> Option<Type> {
+        if let Some((_, existing)) = self.0.iter_mut().find(|(candidate, _)| candidate == &name) {
+            return Some(mem::replace(existing, ty));
+        }
+        self.0.push((name, ty));
+        None
+    }
+
+    fn keys(&self) -> impl Iterator<Item = &EcoString> {
+        self.0.iter().map(|(name, _)| name)
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (&EcoString, &Type)> {
+        self.0.iter().map(|(name, ty)| (name, ty))
+    }
+}
+
+impl FromIterator<(EcoString, Type)> for SubstitutionMap {
+    fn from_iter<T: IntoIterator<Item = (EcoString, Type)>>(iter: T) -> Self {
+        let mut map = Self::default();
+        for (name, ty) in iter {
+            map.insert(name, ty);
+        }
+        map
+    }
+}
 
 /// Build a substitution map from a list of generics and their type arguments,
 /// pairing each generic's name with the type at the same position.
@@ -228,7 +269,7 @@ pub fn type_args_match_params<'a>(
             .all(|(arg, param)| matches!(arg, Type::Parameter(name) if name == param))
 }
 
-pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
+pub fn substitute(ty: &Type, map: &SubstitutionMap) -> Type {
     if map.is_empty() {
         return ty.clone();
     }
@@ -262,7 +303,7 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
         Type::Forall { vars, body } => {
             let has_overlap = map.keys().any(|k| vars.contains(k));
             let substituted_body = if has_overlap {
-                let filtered_map: HashMap<EcoString, Type> = map
+                let filtered_map: SubstitutionMap = map
                     .iter()
                     .filter(|(k, _)| !vars.contains(*k))
                     .map(|(k, v)| (k.clone(), v.clone()))
@@ -602,6 +643,65 @@ impl PartialEq for Type {
                 },
             ) => k1 == k2 && a1 == a2 && w1 == w2,
             _ => false,
+        }
+    }
+}
+
+impl Eq for Type {}
+
+impl Hash for Type {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        mem::discriminant(self).hash(state);
+        match self {
+            Type::Simple(kind) => kind.hash(state),
+            Type::Compound {
+                kind,
+                args,
+                writable,
+            } => {
+                kind.hash(state);
+                args.hash(state);
+                writable.hash(state);
+            }
+            Type::Nominal {
+                id,
+                params,
+                writable,
+            } => {
+                id.hash(state);
+                params.hash(state);
+                writable.hash(state);
+            }
+            Type::ImportNamespace(package_id) => package_id.hash(state),
+            Type::Function(function) => {
+                function.params.len().hash(state);
+                for parameter in &function.params {
+                    parameter.ty.hash(state);
+                }
+                function.bounds.len().hash(state);
+                for bound in &function.bounds {
+                    bound.param_name.hash(state);
+                    bound.generic.hash(state);
+                    bound.ty.hash(state);
+                }
+                function.return_type.hash(state);
+            }
+            Type::Var { id, .. } => id.hash(state),
+            Type::Forall { vars, body } => {
+                vars.hash(state);
+                body.hash(state);
+            }
+            Type::Parameter(name) => name.hash(state),
+            Type::Tuple(elements) => elements.hash(state),
+            Type::Array { length, element } => {
+                length.hash(state);
+                element.hash(state);
+            }
+            Type::Uninferred
+            | Type::Ignored
+            | Type::Never
+            | Type::Error
+            | Type::ReceiverPlaceholder => {}
         }
     }
 }
@@ -2132,7 +2232,15 @@ fn alpha_index(idx: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
     use std::iter;
+
+    fn hash(ty: &Type) -> u64 {
+        let mut state = DefaultHasher::new();
+        ty.hash(&mut state);
+        state.finish()
+    }
 
     #[test]
     fn error_type_equals_itself() {
@@ -2166,6 +2274,36 @@ mod tests {
 
         assert_eq!(named, differently_named);
         assert_eq!(named, unnamed);
+    }
+
+    #[test]
+    fn equal_function_types_have_equal_hashes() {
+        let named = Type::function(
+            vec![FunctionParameter::named(Type::int(), Some("width".into()))],
+            vec![],
+            Box::new(Type::bool()),
+        );
+        let unnamed = Type::function(
+            vec![FunctionParameter::new(Type::int())],
+            vec![],
+            Box::new(Type::bool()),
+        );
+
+        assert_eq!(hash(&named), hash(&unnamed));
+    }
+
+    #[test]
+    fn equal_type_variables_have_equal_hashes() {
+        let named = Type::Var {
+            id: TypeVarId::new(1),
+            hint: Some("value".into()),
+        };
+        let unnamed = Type::Var {
+            id: TypeVarId::new(1),
+            hint: None,
+        };
+
+        assert_eq!(hash(&named), hash(&unnamed));
     }
 
     #[test]

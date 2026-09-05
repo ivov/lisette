@@ -129,6 +129,22 @@ impl Store {
     }
 
     pub(crate) fn get_file_mut(&mut self, file_id: u32) -> Option<&mut File> {
+        if let Some(package_id) = self
+            .file_packages
+            .as_deref()
+            .and_then(|packages| packages.get(file_id as usize))
+            .and_then(Option::as_deref)
+            && self
+                .packages
+                .get(package_id)
+                .is_some_and(|package| package.files.contains_key(&file_id))
+        {
+            return self
+                .packages
+                .get_mut(package_id)
+                .and_then(|package| Arc::make_mut(package).files.get_mut(&file_id));
+        }
+
         let package_id = self.packages.iter().find_map(|(package_id, package)| {
             package
                 .files
@@ -255,7 +271,9 @@ impl Store {
     }
 
     pub fn package_for_qualified_name<'a>(&'a self, qualified_name: &'a str) -> Option<&'a str> {
-        types::package_for_qualified_name(qualified_name, self.packages.keys().map(String::as_str))
+        types::package_for_qualified_name(qualified_name, |package| {
+            self.packages.contains_key(package)
+        })
     }
 
     pub(crate) fn is_const(&self, qualified_name: &str) -> bool {
@@ -770,6 +788,18 @@ mod clone_tests {
     }
 
     #[test]
+    fn qualified_go_name_uses_longest_registered_package_prefix() {
+        let mut store = Store::new();
+        store.add_package("go:gopkg.in/yaml");
+        store.add_package("go:gopkg.in/yaml.v3");
+
+        assert_eq!(
+            store.package_for_qualified_name("go:gopkg.in/yaml.v3.Node"),
+            Some("go:gopkg.in/yaml.v3"),
+        );
+    }
+
+    #[test]
     fn stored_files_are_indexed_after_the_threshold() {
         let mut store = Store::new();
         for index in 0..DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD - 3 {
@@ -784,12 +814,28 @@ mod clone_tests {
             Some("large.lis")
         );
     }
+
+    #[test]
+    fn indexed_files_are_mutable_after_the_threshold() {
+        let mut store = Store::new();
+        for index in 0..DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD - 3 {
+            store.add_package(&format!("package{index}"));
+        }
+        store.add_package("large");
+        store.store_file(File::new_cached("large", "before.lis", "", "", 42));
+
+        store.get_file_mut(42).unwrap().name = "after.lis".to_string();
+
+        assert_eq!(
+            store.get_file(42).map(|file| file.name.as_str()),
+            Some("after.lis")
+        );
+    }
 }
 
 #[cfg(test)]
 mod closed_domain_tests {
     use super::*;
-    use syntax::ast;
     use syntax::ast::{
         Annotation, Generic, Span, StructFieldDefinition, StructFieldKind, StructFields,
     };
@@ -835,7 +881,7 @@ mod closed_domain_tests {
                     name: "0".into(),
                     name_span: Span::dummy(),
                     annotation: Annotation::Unknown,
-                    visibility: ast::Visibility::Private,
+                    visibility: Visibility::Private,
                     ty: Type::Simple(SimpleKind::Int),
                     kind: StructFieldKind::Named { attributes: vec![] },
                 }]),
@@ -1065,7 +1111,7 @@ mod closed_domain_tests {
                         name: "0".into(),
                         name_span: Span::dummy(),
                         annotation: Annotation::Unknown,
-                        visibility: ast::Visibility::Private,
+                        visibility: Visibility::Private,
                         ty: field_ty,
                         kind: StructFieldKind::Named { attributes: vec![] },
                     }]),
@@ -1161,7 +1207,7 @@ mod closed_domain_tests {
                         name: "0".into(),
                         name_span: Span::dummy(),
                         annotation: Annotation::Unknown,
-                        visibility: ast::Visibility::Private,
+                        visibility: Visibility::Private,
                         ty: nominal_int("m.Items"),
                         kind: StructFieldKind::Named { attributes: vec![] },
                     }]),

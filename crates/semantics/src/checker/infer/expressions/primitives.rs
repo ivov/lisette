@@ -390,7 +390,7 @@ impl InferCtx<'_> {
         }
     }
 
-    pub(super) fn enum_of_variant(&self, store: &Store, value: &str) -> Option<EcoString> {
+    pub(super) fn enum_of_variant(&mut self, store: &Store, value: &str) -> Option<EcoString> {
         let (type_part, variant_name) = value.rsplit_once('.')?;
         let qualified = self.lookup_qualified_name(store, type_part)?;
         store

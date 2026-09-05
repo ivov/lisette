@@ -41,6 +41,18 @@ struct EnumCallContext {
     pointer_fields: HashSet<String>,
 }
 
+struct StructCallField {
+    name: String,
+    value: String,
+    has_observable_evaluation: bool,
+}
+
+impl StructCallField {
+    fn into_pair(self) -> (String, String) {
+        (self.name, self.value)
+    }
+}
+
 impl Planner<'_> {
     /// Plan a struct/enum-variant construction. Value is the Go struct
     /// literal or update.
@@ -67,23 +79,23 @@ impl Planner<'_> {
             .iter()
             .map(|f| self.stage_composite(&f.value, ExpressionContext::value()))
             .collect();
-        let mut field_side_effects: Vec<bool> = stages
+        let field_evaluations: Vec<bool> = stages
             .iter()
             .map(|value| value.evaluation.stability.is_observable())
             .collect();
-        if ctx.enum_ctx.is_some() {
-            field_side_effects.insert(0, false);
-        }
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "field");
         let mut effect = sequenced.effect;
         let fields_contain_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let (mut setup, emitted_values) = sequenced.into_rendered();
 
-        let mut field_names: Vec<String> = Vec::new();
-        let mut field_values: Vec<String> = Vec::new();
-        for (slot, f) in field_assignments.iter().enumerate() {
+        let mut fields =
+            Vec::with_capacity(field_assignments.len() + usize::from(ctx.enum_ctx.is_some()));
+        for ((f, has_observable_evaluation), mut value) in field_assignments
+            .iter()
+            .zip(field_evaluations)
+            .zip(emitted_values)
+        {
             let field_name = self.resolve_struct_call_field_name(&f.name, &ctx);
-            let mut value = emitted_values[slot].clone();
             value = self.wrap_recursive_enum_field(&mut setup, value, f, &ctx);
             let value_ty = f.value.get_type();
             let field_ty = self.lookup_struct_field_ty(ty, &f.name);
@@ -96,15 +108,22 @@ impl Planner<'_> {
                 field_ty.as_ref(),
                 field_layout.as_ref(),
             );
-            field_names.push(field_name);
-            field_values.push(value);
+            fields.push(StructCallField {
+                name: field_name,
+                value,
+                has_observable_evaluation,
+            });
         }
 
-        let mut field_pairs: Vec<(String, String)> =
-            field_names.into_iter().zip(field_values).collect();
-
-        if let Some(tag) = tag_field {
-            field_pairs.insert(0, tag);
+        if let Some((name, value)) = tag_field {
+            fields.insert(
+                0,
+                StructCallField {
+                    name,
+                    value,
+                    has_observable_evaluation: false,
+                },
+            );
         }
 
         let value = match spread {
@@ -123,8 +142,7 @@ impl Planner<'_> {
                 } else {
                     let base_staged = self.stage_operand(base, ExpressionContext::value());
                     effect = effect.combine(base_staged.evaluation.effect);
-                    let field_pairs =
-                        self.hoist_observable_fields(&mut setup, field_pairs, &field_side_effects);
+                    let field_pairs = self.hoist_observable_fields(&mut setup, fields);
                     let (spread_setup, value) = if ctx.enum_ctx.is_some() {
                         self.lower_enum_variant_spread(
                             SpreadInput {
@@ -147,6 +165,8 @@ impl Planner<'_> {
             StructSpread::Autofill { .. } => match self.go_imported_newtype_zero(ty) {
                 Some(zero) => GoExpression::opaque(zero),
                 None => {
+                    let mut field_pairs =
+                        fields.into_iter().map(StructCallField::into_pair).collect();
                     self.append_autofills(&mut field_pairs, field_assignments, &ctx, is_go_struct);
                     GoExpression::composite_literal(
                         emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
@@ -154,10 +174,14 @@ impl Planner<'_> {
                     )
                 }
             },
-            StructSpread::None => GoExpression::composite_literal(
-                emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
-                fields_contain_deferred_evaluation,
-            ),
+            StructSpread::None => {
+                let field_pairs: Vec<_> =
+                    fields.into_iter().map(StructCallField::into_pair).collect();
+                GoExpression::composite_literal(
+                    emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
+                    fields_contain_deferred_evaluation,
+                )
+            }
         };
 
         ValuePlan::computed(setup, value, effect)
@@ -680,18 +704,16 @@ impl Planner<'_> {
     fn hoist_observable_fields(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        field_pairs: Vec<(String, String)>,
-        field_side_effects: &[bool],
+        fields: Vec<StructCallField>,
     ) -> Vec<(String, String)> {
-        field_pairs
+        fields
             .into_iter()
-            .enumerate()
-            .map(|(i, (name, value))| {
-                if field_side_effects.get(i).copied().unwrap_or(false) {
-                    let temp = self.hoist_tmp_value_statement(statements, "field", &value);
-                    (name, temp)
+            .map(|field| {
+                if field.has_observable_evaluation {
+                    let temp = self.hoist_tmp_value_statement(statements, "field", &field.value);
+                    (field.name, temp)
                 } else {
-                    (name, value)
+                    field.into_pair()
                 }
             })
             .collect()

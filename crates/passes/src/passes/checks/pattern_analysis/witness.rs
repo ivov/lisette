@@ -113,12 +113,12 @@ fn format_array_pattern(
 
     loop {
         match current {
-            NormalizedPattern::Constructor { tag, .. } if tag == "ArrayNil" => break,
+            NormalizedPattern::Constructor { tag, .. } if tag.as_str() == "ArrayNil" => break,
             NormalizedPattern::Constructor {
                 tag,
                 args,
                 type_name,
-            } if tag == "ArrayCons" && args.len() >= 2 => {
+            } if tag.as_str() == "ArrayCons" && args.len() >= 2 => {
                 elements.push(format_element(&args[0]));
                 if matches!(args[1], NormalizedPattern::Wildcard) {
                     ends_with_rest = array_tail_length(type_name) > 0;
@@ -186,10 +186,10 @@ fn format_slice_pattern(pattern: &NormalizedPattern) -> String {
 
     loop {
         match current {
-            NormalizedPattern::Constructor { tag, .. } if tag == "EmptySlice" => {
+            NormalizedPattern::Constructor { tag, .. } if tag.as_str() == "EmptySlice" => {
                 break;
             }
-            NormalizedPattern::Constructor { tag, args, .. } if tag == "NonEmptySlice" => {
+            NormalizedPattern::Constructor { tag, args, .. } if tag.as_str() == "NonEmptySlice" => {
                 if args.len() >= 2 {
                     elements.push(format_witness(&args[0]));
                     current = &args[1];
@@ -222,10 +222,10 @@ fn format_slice_pattern_for_display(pattern: &NormalizedPattern) -> String {
 
     loop {
         match current {
-            NormalizedPattern::Constructor { tag, .. } if tag == "EmptySlice" => {
+            NormalizedPattern::Constructor { tag, .. } if tag.as_str() == "EmptySlice" => {
                 break;
             }
-            NormalizedPattern::Constructor { tag, args, .. } if tag == "NonEmptySlice" => {
+            NormalizedPattern::Constructor { tag, args, .. } if tag.as_str() == "NonEmptySlice" => {
                 if args.len() >= 2 {
                     elements.push(format_pattern(&args[0]));
                     current = &args[1];

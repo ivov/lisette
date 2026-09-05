@@ -94,7 +94,6 @@ struct ScopedValue {
 struct GenericParameter {
     index: usize,
     qualified: Symbol,
-    bounds: Vec<Type>,
 }
 
 #[derive(Debug)]
@@ -143,6 +142,7 @@ impl FunctionContext {
 pub struct Scope {
     values: HashMap<String, ScopedValue>,
     generic_parameters: HashMap<String, GenericParameter>,
+    shadowed_trait_bounds: Vec<(Symbol, Vec<Type>)>,
     function: Option<FunctionContext>,
     propagation_context: PropagationContext,
     impl_receiver_type: Option<Type>,
@@ -160,6 +160,7 @@ impl Scope {
         Scope {
             values: HashMap::default(),
             generic_parameters: HashMap::default(),
+            shadowed_trait_bounds: Vec::new(),
             function: None,
             propagation_context: PropagationContext::None,
             impl_receiver_type: None,
@@ -223,6 +224,7 @@ impl Scope {
 
 pub struct Scopes {
     stack: Vec<Scope>,
+    visible_trait_bounds: HashMap<Symbol, Vec<Type>>,
 }
 
 impl Default for Scopes {
@@ -235,6 +237,7 @@ impl Scopes {
     pub(crate) fn new() -> Self {
         Scopes {
             stack: vec![Scope::new()],
+            visible_trait_bounds: HashMap::default(),
         }
     }
 
@@ -254,7 +257,13 @@ impl Scopes {
 
     pub(crate) fn pop(&mut self) {
         assert!(self.stack.len() > 1, "root scope cannot be popped");
-        self.stack.pop();
+        let scope = self.stack.pop().expect("scope stack must not be empty");
+        for parameter in scope.generic_parameters.values() {
+            self.visible_trait_bounds.remove(&parameter.qualified);
+        }
+        for (qualified, bounds) in scope.shadowed_trait_bounds {
+            self.visible_trait_bounds.insert(qualified, bounds);
+        }
     }
 
     /// Look up a value by walking the scope stack from top to bottom.
@@ -352,23 +361,29 @@ impl Scopes {
 
     pub(crate) fn insert_type_param(&mut self, qualified: Symbol, index: usize) {
         let name = qualified.last_segment().to_string();
-        self.current_mut().generic_parameters.insert(
-            name,
-            GenericParameter {
-                index,
-                qualified,
-                bounds: Vec::new(),
-            },
-        );
+        let shadowed = self
+            .visible_trait_bounds
+            .keys()
+            .find(|visible| visible.last_segment() == name)
+            .cloned()
+            .and_then(|visible| self.visible_trait_bounds.remove_entry(&visible));
+        if let Some(shadowed) = shadowed {
+            self.current_mut().shadowed_trait_bounds.push(shadowed);
+        }
+        self.current_mut()
+            .generic_parameters
+            .insert(name, GenericParameter { index, qualified });
     }
 
     pub(crate) fn insert_trait_bound(&mut self, parameter: &str, bound: Type) {
-        let bounds = &mut self
-            .current_mut()
+        let qualified = self
+            .current()
             .generic_parameters
-            .get_mut(parameter)
+            .get(parameter)
             .expect("a generic parameter must be in scope before recording its bounds")
-            .bounds;
+            .qualified
+            .clone();
+        let bounds = self.visible_trait_bounds.entry(qualified).or_default();
         if !bounds.contains(&bound) {
             bounds.push(bound);
         }
@@ -481,29 +496,17 @@ impl Scopes {
         names
     }
 
-    pub(crate) fn collect_all_trait_bounds(&self) -> HashMap<Symbol, Vec<Type>> {
-        let mut all_bounds: HashMap<Symbol, Vec<Type>> = HashMap::default();
-        // Walk from bottom to top so inner scopes override outer
-        for scope in &self.stack {
-            all_bounds.retain(|parameter, _| {
-                !scope
-                    .generic_parameters
-                    .contains_key(parameter.last_segment())
-            });
-            for parameter in scope.generic_parameters.values() {
-                if !parameter.bounds.is_empty() {
-                    all_bounds.insert(parameter.qualified.clone(), parameter.bounds.clone());
-                }
-            }
-        }
-        all_bounds
+    pub(crate) fn collect_all_trait_bounds(&self) -> &HashMap<Symbol, Vec<Type>> {
+        &self.visible_trait_bounds
     }
 
     pub(crate) fn for_each_bound_on_param<F: FnMut(&Type)>(&self, param_name: &str, mut visit: F) {
         for scope in self.stack.iter().rev() {
             if let Some(parameter) = scope.generic_parameters.get(param_name) {
-                for bound in &parameter.bounds {
-                    visit(bound);
+                if let Some(bounds) = self.visible_trait_bounds.get(&parameter.qualified) {
+                    for bound in bounds {
+                        visit(bound);
+                    }
                 }
                 return;
             }
@@ -559,14 +562,14 @@ mod tests {
         let mut scopes = Scopes::new();
         scopes
             .current_mut()
-            .insert_binding("value".into(), Type::Error, 1, true);
+            .insert_binding("value".into(), Type::Error, BindingId::new(1), true);
 
         scopes.push();
         scopes
             .current_mut()
-            .insert_binding("value".into(), Type::Error, 2, false);
+            .insert_binding("value".into(), Type::Error, BindingId::new(2), false);
 
-        assert_eq!(scopes.lookup_binding_id("value"), Some(2));
+        assert_eq!(scopes.lookup_binding_id("value"), Some(BindingId::new(2)));
         assert!(!scopes.lookup_mutable("value"));
         assert!(!scopes.lookup_const("value"));
 
@@ -584,7 +587,7 @@ mod tests {
         let mut scopes = Scopes::new();
         scopes
             .current_mut()
-            .insert_binding("value".into(), Type::Error, 1, true);
+            .insert_binding("value".into(), Type::Error, BindingId::new(1), true);
 
         scopes.push();
         scopes.set_fn_return_type(Type::Error);
@@ -696,5 +699,19 @@ mod tests {
         let bounds = scopes.collect_all_trait_bounds();
 
         assert!(bounds.is_empty());
+    }
+
+    #[test]
+    fn popping_type_parameter_scope_restores_outer_bounds() {
+        let mut scopes = Scopes::new();
+        let outer = Symbol::from_parts("package", "T");
+        scopes.insert_type_param(outer.clone(), 0);
+        scopes.insert_trait_bound("T", Type::Error);
+        scopes.push();
+        scopes.insert_type_param(Symbol::from_parts("package.function", "T"), 0);
+
+        scopes.pop();
+
+        assert_eq!(scopes.collect_all_trait_bounds()[&outer], [Type::Error]);
     }
 }

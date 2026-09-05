@@ -608,7 +608,7 @@ impl TaskState {
 
     /// Classifies `Enum.Variant` in type position before its constructor value exists.
     fn classify_unregistered_variant(
-        &self,
+        &mut self,
         store: &Store,
         type_name: &str,
     ) -> Option<(&'static str, Option<String>)> {

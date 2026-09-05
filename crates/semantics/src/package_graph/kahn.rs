@@ -1,3 +1,5 @@
+use std::collections::BinaryHeap;
+
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::Span;
@@ -23,13 +25,11 @@ pub fn topological_sort(edges: &DependencyGraph) -> (Vec<PackageId>, Vec<Cycle>)
         }
     }
 
-    let mut queue: Vec<_> = in_degree
+    let mut queue: BinaryHeap<_> = in_degree
         .iter()
         .filter(|&(_, deg)| *deg == 0)
         .map(|(id, _)| id.clone())
         .collect();
-
-    queue.sort();
 
     while let Some(package) = queue.pop() {
         order.push(package.clone());
@@ -39,7 +39,6 @@ pub fn topological_sort(edges: &DependencyGraph) -> (Vec<PackageId>, Vec<Cycle>)
                 *degree -= 1;
                 if *degree == 0 {
                     queue.push(import.clone());
-                    queue.sort();
                 }
             }
         }

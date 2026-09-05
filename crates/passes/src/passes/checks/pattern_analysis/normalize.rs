@@ -12,16 +12,16 @@ use super::inhabitance::{InhabitanceCache, is_inhabited, is_variant_inhabited};
 use super::types::Row;
 use super::types::*;
 
-fn make_type_key(name: &str, type_args: &[Type]) -> String {
+fn make_type_key(name: &str, type_args: &[Type]) -> TypeName {
     if type_args.is_empty() {
-        name.to_string()
+        name.into()
     } else {
         let args = type_args
             .iter()
             .map(|t| t.to_string())
             .collect::<Vec<_>>()
             .join(", ");
-        format!("{}<{}>", name, args)
+        format!("{}<{}>", name, args).into()
     }
 }
 
@@ -67,7 +67,7 @@ fn try_normalize_interface_implementer(
 
     let interface_type_name = make_type_key(interface_id, interface_params);
     let struct_ctor = Constructor {
-        tag_id: struct_name.to_string(),
+        tag_id: struct_name.into(),
         arity,
     };
 
@@ -75,11 +75,11 @@ fn try_normalize_interface_implementer(
         let mut found = false;
         let mut unknown_pos = union.len();
         for (i, c) in union.iter().enumerate() {
-            if c.tag_id == struct_name {
+            if c.tag_id.as_str() == struct_name {
                 found = true;
                 break;
             }
-            if c.tag_id == INTERFACE_UNKNOWN_TAG {
+            if c.tag_id.as_str() == INTERFACE_UNKNOWN_TAG {
                 unknown_pos = i;
             }
         }
@@ -92,7 +92,7 @@ fn try_normalize_interface_implementer(
             vec![
                 struct_ctor,
                 Constructor {
-                    tag_id: INTERFACE_UNKNOWN_TAG.to_string(),
+                    tag_id: INTERFACE_UNKNOWN_TAG.into(),
                     arity: 0,
                 },
             ],
@@ -101,7 +101,7 @@ fn try_normalize_interface_implementer(
 
     Some(NormalizedPattern::Constructor {
         type_name: interface_type_name,
-        tag: struct_name.to_string(),
+        tag: struct_name.into(),
         args,
     })
 }
@@ -287,7 +287,7 @@ fn normalize_enum_variant_pattern(
                     .iter()
                     .filter(|v| is_variant_inhabited(v, &type_args, generics, ctx.store, cache))
                     .map(|v| Constructor {
-                        tag_id: format!("{}.{}", enum_name, v.name),
+                        tag_id: format!("{}.{}", enum_name, v.name).into(),
                         arity: v.fields.len(),
                     })
                     .collect(),
@@ -304,7 +304,7 @@ fn normalize_enum_variant_pattern(
                 ) =>
                 {
                     vec![Constructor {
-                        tag_id: tag.clone(),
+                        tag_id: tag.clone().into(),
                         arity: struct_fields.len(),
                     }]
                 }
@@ -313,7 +313,7 @@ fn normalize_enum_variant_pattern(
 
             NormalizedPattern::Constructor {
                 type_name,
-                tag,
+                tag: tag.into(),
                 args: patterns,
             }
         }
@@ -367,7 +367,7 @@ fn normalize_record_pattern(
                     .iter()
                     .filter(|v| is_variant_inhabited(v, &type_args, generics, ctx.store, cache))
                     .map(|v| Constructor {
-                        tag_id: format!("{}.{}", enum_name, v.name),
+                        tag_id: format!("{}.{}", enum_name, v.name).into(),
                         arity: v.fields.len(),
                     })
                     .collect()
@@ -377,7 +377,7 @@ fn normalize_record_pattern(
 
             NormalizedPattern::Constructor {
                 type_name,
-                tag,
+                tag: tag.into(),
                 args: patterns,
             }
         }
@@ -427,7 +427,7 @@ fn normalize_record_pattern(
                     cache,
                 ) {
                     vec![Constructor {
-                        tag_id: struct_name.to_string(),
+                        tag_id: struct_name.as_str().into(),
                         arity: struct_fields.len(),
                     }]
                 } else {
@@ -437,7 +437,7 @@ fn normalize_record_pattern(
 
             NormalizedPattern::Constructor {
                 type_name,
-                tag: struct_name.to_string(),
+                tag: struct_name.as_str().into(),
                 args: patterns,
             }
         }
@@ -482,9 +482,13 @@ fn find_variant<'a>(variants: &'a [EnumVariant], variant_name: &str) -> Option<&
         .find(|variant| variant.name == unqualified_name(variant_name))
 }
 
-fn register_union(unions: &mut UnionTable, type_name: &str, alternatives: impl FnOnce() -> Union) {
+fn register_union(
+    unions: &mut UnionTable,
+    type_name: &TypeName,
+    alternatives: impl FnOnce() -> Union,
+) {
     if unions.get(type_name).is_none() {
-        unions.insert(type_name.to_string(), alternatives());
+        unions.insert(type_name.clone(), alternatives());
     }
 }
 
@@ -499,13 +503,13 @@ fn normalize_slice(
     let type_name = make_type_key("Slice", slice::from_ref(element_type));
     register_union(unions, &type_name, || {
         let mut constructors = vec![Constructor {
-            tag_id: "EmptySlice".to_string(),
+            tag_id: "EmptySlice".into(),
             arity: 0,
         }];
 
         if is_inhabited(element_type, ctx.store, cache) {
             constructors.push(Constructor {
-                tag_id: "NonEmptySlice".to_string(),
+                tag_id: "NonEmptySlice".into(),
                 arity: 2, // head and tail
             });
         }
@@ -520,7 +524,7 @@ fn normalize_slice(
     if prefix.is_empty() && !has_rest {
         return NormalizedPattern::Constructor {
             type_name,
-            tag: "EmptySlice".to_string(),
+            tag: "EmptySlice".into(),
             args: vec![],
         };
     }
@@ -530,7 +534,7 @@ fn normalize_slice(
     } else {
         NormalizedPattern::Constructor {
             type_name: type_name.clone(),
-            tag: "EmptySlice".to_string(),
+            tag: "EmptySlice".into(),
             args: vec![],
         }
     };
@@ -541,7 +545,7 @@ fn normalize_slice(
         let head = normalize_pattern(element, unions, &element_ctx, cache);
         result = NormalizedPattern::Constructor {
             type_name: type_name.clone(),
-            tag: "NonEmptySlice".to_string(),
+            tag: "NonEmptySlice".into(),
             args: vec![head, result],
         };
     }
@@ -556,11 +560,11 @@ fn normalize_tuple(
     cache: &mut InhabitanceCache,
 ) -> NormalizedPattern {
     let arity = elements.len();
-    let type_name = format!("Tuple{}", arity);
+    let type_name: TypeName = format!("Tuple{}", arity).into();
 
     register_union(unions, &type_name, || {
         vec![Constructor {
-            tag_id: type_name.clone(),
+            tag_id: type_name.as_str().into(),
             arity,
         }]
     });
@@ -581,7 +585,7 @@ fn normalize_tuple(
 
     NormalizedPattern::Constructor {
         type_name: type_name.clone(),
-        tag: type_name,
+        tag: type_name.as_str().into(),
         args: patterns,
     }
 }
@@ -599,13 +603,13 @@ fn normalize_array(
     if length == 0 {
         register_union(unions, &type_name, || {
             vec![Constructor {
-                tag_id: "ArrayNil".to_string(),
+                tag_id: "ArrayNil".into(),
                 arity: 0,
             }]
         });
         return NormalizedPattern::Constructor {
             type_name,
-            tag: "ArrayNil".to_string(),
+            tag: "ArrayNil".into(),
             args: vec![],
         };
     }
@@ -613,7 +617,7 @@ fn normalize_array(
     register_union(unions, &type_name, || {
         if is_inhabited(element_type, ctx.store, cache) {
             vec![Constructor {
-                tag_id: "ArrayCons".to_string(),
+                tag_id: "ArrayCons".into(),
                 arity: 2,
             }]
         } else {
@@ -631,17 +635,17 @@ fn normalize_array(
 
     NormalizedPattern::Constructor {
         type_name,
-        tag: "ArrayCons".to_string(),
+        tag: "ArrayCons".into(),
         args: vec![head, tail],
     }
 }
 
 fn normalize_boolean(boolean: bool, unions: &mut UnionTable) -> NormalizedPattern {
-    let type_name = "Bool".to_string();
+    let type_name: TypeName = "Bool".into();
 
     register_union(unions, &type_name, || {
         let make_alt = |b: bool| Constructor {
-            tag_id: b.to_string(),
+            tag_id: b.to_string().into(),
             arity: 0,
         };
 
@@ -650,7 +654,7 @@ fn normalize_boolean(boolean: bool, unions: &mut UnionTable) -> NormalizedPatter
 
     NormalizedPattern::Constructor {
         type_name,
-        tag: boolean.to_string(),
+        tag: boolean.to_string().into(),
         args: vec![],
     }
 }

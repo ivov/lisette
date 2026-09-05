@@ -84,7 +84,10 @@ fn collect_disjuncts<'a>(
 }
 
 enum Constraint {
-    Bounded { low: Bound, high: Bound },
+    Bounded {
+        low: Option<Bound>,
+        high: Option<Bound>,
+    },
     Excluded(i128),
 }
 
@@ -104,25 +107,25 @@ fn falsifying_constraint(
     // Each arm negates its comparison: `x < b` is false exactly when `x >= b`.
     let constraint = match operator {
         LessThan => Constraint::Bounded {
-            low: Some((bound, true)),
+            low: Some(Bound::new(bound, true)),
             high: None,
         },
         LessThanOrEqual => Constraint::Bounded {
-            low: Some((bound, false)),
+            low: Some(Bound::new(bound, false)),
             high: None,
         },
         GreaterThan => Constraint::Bounded {
             low: None,
-            high: Some((bound, true)),
+            high: Some(Bound::new(bound, true)),
         },
         GreaterThanOrEqual => Constraint::Bounded {
             low: None,
-            high: Some((bound, false)),
+            high: Some(Bound::new(bound, false)),
         },
         Equal => Constraint::Excluded(bound),
         NotEqual => Constraint::Bounded {
-            low: Some((bound, true)),
-            high: Some((bound, true)),
+            low: Some(Bound::new(bound, true)),
+            high: Some(Bound::new(bound, true)),
         },
         _ => return None,
     };
@@ -134,8 +137,8 @@ fn falsifying_constraint(
 /// operand type's range: values outside the domain cannot falsify anything.
 struct FalseSet<'a> {
     operand: &'a Expression,
-    low: (i128, bool),
-    high: (i128, bool),
+    low: Bound,
+    high: Bound,
     excluded: Vec<i128>,
 }
 
@@ -143,8 +146,8 @@ impl<'a> FalseSet<'a> {
     fn new(operand: &'a Expression, (min, max): (i128, i128)) -> Self {
         FalseSet {
             operand,
-            low: (min, true),
-            high: (max, true),
+            low: Bound::new(min, true),
+            high: Bound::new(max, true),
             excluded: Vec::new(),
         }
     }
@@ -161,17 +164,15 @@ impl<'a> FalseSet<'a> {
 
     // Integer operands, so exclusive bounds shrink to the nearest integer.
     fn is_empty(&self) -> bool {
-        let (low_value, low_inclusive) = self.low;
-        let (high_value, high_inclusive) = self.high;
-        let low = if low_inclusive {
-            low_value
+        let low = if self.low.inclusive {
+            self.low.value
         } else {
-            low_value + 1
+            self.low.value + 1
         };
-        let high = if high_inclusive {
-            high_value
+        let high = if self.high.inclusive {
+            self.high.value
         } else {
-            high_value - 1
+            self.high.value - 1
         };
         if low > high {
             return true;

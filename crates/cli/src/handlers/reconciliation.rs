@@ -4,11 +4,11 @@
 //! convergence, replacement-closure reconciliation, and manifest application live here
 //! so neither handler owns them.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::go_cli;
-use crate::output::{print_progress, print_warning};
+use crate::output::{DependencyGraph, print_progress, print_warning};
 use crate::workspace::{GoWorkspace, UnresolvedTransitive};
 use crate::{cli_error, error};
 use deps::GoModule;
@@ -30,13 +30,32 @@ enum ModuleState {
     /// Known through a typedef import, but not yet exhaustively scanned.
     Discovered {
         version: String,
-        known_dependencies: Vec<String>,
+        known_dependencies: Dependencies,
     },
     /// Scanned at this version. An empty dependency list is a real leaf.
     Expanded {
         version: String,
-        dependencies: Vec<String>,
+        dependencies: Dependencies,
     },
+}
+
+#[derive(Default)]
+struct Dependencies {
+    ordered: Vec<String>,
+    members: HashSet<String>,
+}
+
+impl Dependencies {
+    fn from_ordered(ordered: Vec<String>) -> Self {
+        let members = ordered.iter().cloned().collect();
+        Self { ordered, members }
+    }
+
+    fn insert(&mut self, dependency: String) {
+        if self.members.insert(dependency.clone()) {
+            self.ordered.push(dependency);
+        }
+    }
 }
 
 impl ModuleState {
@@ -50,12 +69,12 @@ impl ModuleState {
         match self {
             Self::Discovered {
                 known_dependencies, ..
-            } => known_dependencies,
-            Self::Expanded { dependencies, .. } => dependencies,
+            } => &known_dependencies.ordered,
+            Self::Expanded { dependencies, .. } => &dependencies.ordered,
         }
     }
 
-    fn dependencies_mut(&mut self) -> &mut Vec<String> {
+    fn dependencies_mut(&mut self) -> &mut Dependencies {
         match self {
             Self::Discovered {
                 known_dependencies, ..
@@ -85,19 +104,18 @@ impl GraphResult {
             .entry(module)
             .or_insert_with(|| ModuleState::Discovered {
                 version,
-                known_dependencies: Vec::new(),
+                known_dependencies: Dependencies::default(),
             });
     }
 
-    fn expand(&mut self, module: String, version: String, mut dependencies: Vec<String>) {
+    fn expand(&mut self, module: String, version: String, dependencies: Vec<String>) {
+        let mut dependencies = Dependencies::from_ordered(dependencies);
         if let Some(ModuleState::Discovered {
             known_dependencies, ..
         }) = self.modules.get(&module)
         {
-            for dependency in known_dependencies {
-                if !dependencies.contains(dependency) {
-                    dependencies.push(dependency.clone());
-                }
+            for dependency in &known_dependencies.ordered {
+                dependencies.insert(dependency.clone());
             }
         }
         self.modules.insert(
@@ -114,7 +132,7 @@ impl GraphResult {
             module,
             ModuleState::Discovered {
                 version,
-                known_dependencies: Vec::new(),
+                known_dependencies: Dependencies::default(),
             },
         );
     }
@@ -125,12 +143,9 @@ impl GraphResult {
             .entry(parent)
             .or_insert_with(|| ModuleState::Discovered {
                 version,
-                known_dependencies: Vec::new(),
+                known_dependencies: Dependencies::default(),
             });
-        let dependencies = state.dependencies_mut();
-        if !dependencies.contains(&dependency) {
-            dependencies.push(dependency);
-        }
+        state.dependencies_mut().insert(dependency);
     }
 
     fn discovered_modules(&self) -> Vec<String> {
@@ -141,37 +156,37 @@ impl GraphResult {
             .collect()
     }
 
-    pub(crate) fn versions(&self) -> HashMap<String, String> {
-        self.modules
-            .iter()
-            .map(|(module, state)| (module.clone(), state.version().to_string()))
-            .collect()
-    }
-
-    pub(crate) fn edges(&self) -> HashMap<String, Vec<String>> {
-        self.modules
-            .iter()
-            .map(|(module, state)| (module.clone(), state.dependencies().to_vec()))
-            .collect()
+    fn dependencies(&self, module: &str) -> Option<&[String]> {
+        self.modules.get(module).map(ModuleState::dependencies)
     }
 
     /// Invert `edges` into a `module → parents` map, excluding the added root.
     fn transitive_map(&self, added_module: &str) -> HashMap<String, Vec<String>> {
-        let mut transitives: HashMap<String, Vec<String>> = HashMap::new();
+        let mut transitives: HashMap<String, BTreeSet<String>> = HashMap::new();
         for (parent, state) in &self.modules {
             for child in state.dependencies() {
                 if child != added_module {
-                    let parents = transitives.entry(child.clone()).or_default();
-                    if !parents.contains(parent) {
-                        parents.push(parent.clone());
-                    }
+                    transitives
+                        .entry(child.clone())
+                        .or_default()
+                        .insert(parent.clone());
                 }
             }
         }
-        for parents in transitives.values_mut() {
-            parents.sort();
-        }
         transitives
+            .into_iter()
+            .map(|(module, parents)| (module, parents.into_iter().collect()))
+            .collect()
+    }
+}
+
+impl DependencyGraph for GraphResult {
+    fn version(&self, module: &str) -> Option<&str> {
+        GraphResult::version(self, module)
+    }
+
+    fn dependencies(&self, module: &str) -> Option<&[String]> {
+        GraphResult::dependencies(self, module)
     }
 }
 
@@ -201,9 +216,9 @@ pub(crate) fn reconcile_declared_replacements(
 ) -> Result<(), i32> {
     let replaced_roots: Vec<(String, deps::ReplacementSource)> = manifest
         .go_deps()
-        .into_iter()
+        .iter()
         .filter_map(|(module, dep)| match dep {
-            deps::GoDependency::Replaced { source, .. } => Some((module, source)),
+            deps::GoDependency::Replaced { source, .. } => Some((module.clone(), source.clone())),
             deps::GoDependency::Remote { .. } => None,
         })
         .collect();
@@ -215,7 +230,7 @@ pub(crate) fn reconcile_declared_replacements(
     // Seed every declared dep so MVS picks the versions the real build sees.
     go_cli::invalidate_go_mod_stamp(target_dir);
     let locator = deps::TypedefLocator::new(
-        manifest.go_deps(),
+        manifest.go_deps().clone(),
         Some(project_root.to_path_buf()),
         Target::host(),
     );
@@ -732,9 +747,9 @@ pub(crate) fn declared_replacements(
 ) -> HashMap<String, deps::ReplacementSource> {
     manifest
         .go_deps()
-        .into_iter()
+        .iter()
         .filter_map(|(module, dep)| match dep {
-            deps::GoDependency::Replaced { source, .. } => Some((module, source)),
+            deps::GoDependency::Replaced { source, .. } => Some((module.clone(), source.clone())),
             deps::GoDependency::Remote { .. } => None,
         })
         .collect()
@@ -1470,7 +1485,23 @@ mod tests {
             vec!["manifest-child".to_string()],
         );
 
-        assert_eq!(graph.edges()["parent"], ["manifest-child", "typedef-child"]);
+        assert_eq!(
+            graph.dependencies("parent").unwrap(),
+            ["manifest-child", "typedef-child"]
+        );
+    }
+
+    #[test]
+    fn transitive_parents_remain_sorted_and_unique() {
+        let mut graph = GraphResult::default();
+        graph.record_dependency("z-parent".into(), "v1.0.0".into(), "child".into());
+        graph.record_dependency("a-parent".into(), "v1.0.0".into(), "child".into());
+        graph.record_dependency("a-parent".into(), "v1.0.0".into(), "child".into());
+
+        assert_eq!(
+            graph.transitive_map("root")["child"],
+            ["a-parent", "z-parent"],
+        );
     }
 
     #[test]
@@ -1484,6 +1515,6 @@ mod tests {
 
         graph.expand("module".to_string(), "v2.0.0".to_string(), Vec::new());
 
-        assert!(graph.edges()["module"].is_empty());
+        assert!(graph.dependencies("module").unwrap().is_empty());
     }
 }

@@ -10,11 +10,15 @@ use crate::expressions::top_items::emit_doc;
 pub struct OutputFile {
     pub name: String,
     pub(crate) source: String,
-    /// `(path, alias)` pairs; a path may appear twice when a generated
-    /// import coexists with a source alias of the same package.
-    pub imports: Vec<(String, String)>,
+    pub imports: Vec<OutputImport>,
     pub package_name: String,
     pub(crate) file_comment: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct OutputImport {
+    pub path: String,
+    pub alias: String,
 }
 
 impl OutputFile {
@@ -40,13 +44,16 @@ impl OutputFile {
 
         match self.imports.as_slice() {
             [] => {}
-            [(path, alias)] => {
-                output.collect(format!("import {}", format_import(path, alias)));
+            [entry] => {
+                output.collect(format!(
+                    "import {}",
+                    format_import(&entry.path, &entry.alias)
+                ));
             }
             entries => {
                 output.collect("import (");
-                for (path, alias) in entries {
-                    output.collect(format_import(path, alias));
+                for entry in entries {
+                    output.collect(format_import(&entry.path, &entry.alias));
                 }
                 output.collect(")");
             }

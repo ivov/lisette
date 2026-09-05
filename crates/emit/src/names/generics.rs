@@ -6,9 +6,9 @@ use crate::Planner;
 use crate::names::go_name;
 use syntax::EcoString;
 use syntax::ast::Generic;
-use syntax::types::Type;
+use syntax::types::{SubstitutionMap, Type};
 
-fn build_type_map(generics: &[Generic], type_args: &[Type]) -> HashMap<EcoString, Type> {
+fn build_type_map(generics: &[Generic], type_args: &[Type]) -> SubstitutionMap {
     generics
         .iter()
         .map(|g| g.name.clone())

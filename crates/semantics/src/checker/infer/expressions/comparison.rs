@@ -77,7 +77,7 @@ fn check_not_comparable_impl(
     env: &TypeEnv,
     store: &Store,
     ty: &Type,
-    visiting: &mut HashSet<String>,
+    visiting: &mut HashSet<Type>,
     definite_only: bool,
     comparable_parameter: &mut dyn FnMut(&str) -> bool,
 ) -> Option<&'static str> {
@@ -136,8 +136,7 @@ fn check_not_comparable_impl(
             return Some(RECURSIVE_TYPES);
         }
 
-        let type_key = format!("{ty:?}");
-        if !visiting.insert(type_key.clone()) {
+        if !visiting.insert(ty.clone()) {
             return Some(RECURSIVE_TYPES);
         }
 
@@ -199,7 +198,7 @@ fn check_not_comparable_impl(
             _ => {}
         }
 
-        visiting.remove(&type_key);
+        visiting.remove(ty);
     }
 
     if let Type::Tuple(elems) = ty {
@@ -274,7 +273,7 @@ fn reaches_definition(
     store: &Store,
     ty: &Type,
     target: &str,
-    visited: &mut HashSet<String>,
+    visited: &mut HashSet<Type>,
     depth: usize,
 ) -> bool {
     if depth > REACHES_DEPTH_LIMIT {
@@ -286,7 +285,7 @@ fn reaches_definition(
             if id.as_str() == target {
                 return true;
             }
-            if !visited.insert(format!("{resolved:?}")) {
+            if !visited.insert(resolved.clone()) {
                 return false;
             }
             let field_types: Vec<(Type, &[Generic])> =

@@ -28,7 +28,7 @@ pub(crate) fn script_deps(source: &str) -> BTreeMap<String, GoDependency> {
         return BTreeMap::new();
     };
     table
-        .deps
+        .into_dependencies()
         .into_iter()
         .filter(|(module_path, dep)| deps::validate_script_entry(module_path, dep).is_ok())
         .collect()

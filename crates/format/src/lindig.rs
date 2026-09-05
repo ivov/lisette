@@ -9,6 +9,8 @@ enum Mode {
     ForcedUnbroken,
 }
 
+type PendingDocument<'a, 'doc> = (isize, Mode, &'doc Document<'a>);
+
 /// For ASCII the byte length is already the grapheme count.
 fn grapheme_count(text: &str) -> isize {
     if text.is_ascii() {
@@ -21,41 +23,51 @@ fn grapheme_count(text: &str) -> isize {
 fn fits<'a, 'doc>(
     limit: isize,
     mut current_width: isize,
-    docs: &mut Vec<(isize, Mode, &'doc Document<'a>)>,
+    docs: &[PendingDocument<'a, 'doc>],
+    first: Option<PendingDocument<'a, 'doc>>,
+    expanded: &mut Vec<PendingDocument<'a, 'doc>>,
 ) -> bool {
+    expanded.clear();
+    expanded.extend(first);
+    let mut remaining = docs.len();
+
     loop {
         if current_width > limit {
             return false;
         }
 
-        let (indent, mode, document) = match docs.pop() {
-            Some(x) => x,
+        let (indent, mode, document) = match expanded.pop() {
+            Some(document) => document,
+            None if remaining > 0 => {
+                remaining -= 1;
+                docs[remaining]
+            }
             None => return true,
         };
 
         match document {
             Document::ForceBroken(doc) => match mode {
-                Mode::ForcedBroken => docs.push((indent, mode, doc)),
+                Mode::ForcedBroken => expanded.push((indent, mode, doc)),
                 _ => return false,
             },
 
             Document::Newline => return true,
 
             Document::Nest(i, doc) => {
-                docs.push((indent + i, mode, doc));
+                expanded.push((indent + i, mode, doc));
             }
 
             Document::NestIfBroken(_, doc) => {
-                docs.push((indent, mode, doc));
+                expanded.push((indent, mode, doc));
             }
 
             Document::Group(doc) => match mode {
-                Mode::Broken => docs.push((indent, Mode::Unbroken, doc)),
-                _ => docs.push((indent, mode, doc)),
+                Mode::Broken => expanded.push((indent, Mode::Unbroken, doc)),
+                _ => expanded.push((indent, mode, doc)),
             },
 
             Document::MeasureFlat(doc) => {
-                docs.push((indent, Mode::ForcedUnbroken, doc));
+                expanded.push((indent, Mode::ForcedUnbroken, doc));
             }
 
             Document::Text(s) => {
@@ -79,18 +91,18 @@ fn fits<'a, 'doc>(
             }
 
             Document::NextBreakFits(doc) => match mode {
-                Mode::ForcedUnbroken => docs.push((indent, mode, doc)),
-                _ => docs.push((indent, Mode::ForcedBroken, doc)),
+                Mode::ForcedUnbroken => expanded.push((indent, mode, doc)),
+                _ => expanded.push((indent, Mode::ForcedBroken, doc)),
             },
 
             Document::NextBreakDoesNotFit(doc) => match mode {
-                Mode::ForcedBroken => docs.push((indent, mode, doc)),
-                _ => docs.push((indent, Mode::ForcedUnbroken, doc)),
+                Mode::ForcedBroken => expanded.push((indent, mode, doc)),
+                _ => expanded.push((indent, Mode::ForcedUnbroken, doc)),
             },
 
             Document::Sequence(vec) => {
                 for doc in vec.iter().rev() {
-                    docs.push((indent, mode, doc));
+                    expanded.push((indent, mode, doc));
                 }
             }
         }
@@ -129,9 +141,7 @@ fn format<'a, 'doc>(
             Document::FlexBreak { broken, unbroken } => {
                 let unbroken_width = width + unbroken.len() as isize;
                 let unbroken_fits = mode == Mode::Unbroken || {
-                    fits_buffer.clear();
-                    fits_buffer.extend_from_slice(&docs);
-                    fits(limit, unbroken_width, &mut fits_buffer)
+                    fits(limit, unbroken_width, &docs, None, &mut fits_buffer)
                 };
                 if unbroken_fits {
                     write_pending_indent(output, &mut pending_indent);
@@ -200,9 +210,13 @@ fn format<'a, 'doc>(
             }
 
             Document::Group(doc) => {
-                fits_buffer.clear();
-                fits_buffer.push((indent, Mode::Unbroken, doc.as_ref()));
-                if fits(limit, width, &mut fits_buffer) {
+                if fits(
+                    limit,
+                    width,
+                    &[],
+                    Some((indent, Mode::Unbroken, doc.as_ref())),
+                    &mut fits_buffer,
+                ) {
                     docs.push((indent, Mode::Unbroken, doc));
                 } else {
                     docs.push((indent, Mode::Broken, doc));
@@ -341,4 +355,22 @@ pub fn strict_break<'a>(broken: &'a str, unbroken: &'a str) -> Document<'a> {
 
 pub fn flex_break<'a>(broken: &'a str, unbroken: &'a str) -> Document<'a> {
     Document::FlexBreak { broken, unbroken }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flex_break_considers_remaining_documents() {
+        let document = concat([
+            Document::str("call("),
+            flex_break("", " "),
+            Document::str("argument"),
+            Document::str(")"),
+        ])
+        .group();
+
+        assert_eq!(document.to_pretty_string(10), "call(\nargument)");
+    }
 }

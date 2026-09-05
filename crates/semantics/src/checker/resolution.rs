@@ -7,6 +7,7 @@ pub(super) struct ImportState {
     pub(super) prefixed: HashMap<String, PrefixedImport>,
     /// Packages whose exports are available without prefix (current package and prelude)
     pub(super) unprefixed_imports: HashSet<String>,
+    imported_resolutions: HashMap<EcoString, HashMap<EcoString, Option<Symbol>>>,
 }
 
 #[derive(Debug)]
@@ -79,46 +80,61 @@ impl TaskState {
     /// for nested definitions (e.g., `package_id.Weekday.Sunday`) preferring top-level
     /// over nested when both share the same simple name.
     pub(super) fn resolve_in_imported_package<'m>(
-        &self,
+        &mut self,
         store: &Store,
         package: &'m Package,
         simple_name: &str,
     ) -> Option<(String, &'m Definition)> {
-        let package_prefix = format!("{}.", package.id);
+        if let Some(cached) = self
+            .imports
+            .imported_resolutions
+            .get(package.id.as_str())
+            .and_then(|resolutions| resolutions.get(simple_name))
+        {
+            let qualified_name = cached.as_ref()?;
+            let definition = package.definitions.get(qualified_name)?;
+            return Some((qualified_name.to_string(), definition));
+        }
 
         // Direct match: package_id.simple_name
-        let direct = format!("{}{}", package_prefix, simple_name);
-        if let Some(definition) = package.definitions.get(direct.as_str())
+        let direct = Symbol::from_parts(&package.id, simple_name);
+        let package_prefix = format!("{}.", package.id);
+        let resolved = if let Some(definition) = package.definitions.get(direct.as_str())
             && definition.visibility.is_public()
             && !store.is_test_definition(definition)
         {
-            return Some((direct, definition));
-        }
+            Some(direct)
+        } else {
+            let suffix = format!(".{}", simple_name);
+            package
+                .definitions
+                .iter()
+                .find(|(qualified_name, definition)| {
+                    qualified_name.ends_with(suffix.as_str())
+                        && qualified_name.starts_with(package_prefix.as_str())
+                        && definition.visibility.is_public()
+                        && !store.is_test_definition(definition)
+                        && qualified_name[package_prefix.len()..].contains('.')
+                })
+                .map(|(qualified_name, _)| qualified_name.clone())
+        };
 
-        // Nested match: find a public definition whose simple name matches,
-        // e.g., package_id.EnumType.VariantName where simple_name = "VariantName".
-        // Skip if a top-level definition with the same simple name exists
-        // (handles transitive import collisions like go:net/http).
-        let suffix = format!(".{}", simple_name);
-        for (qn, definition) in &package.definitions {
-            if qn.ends_with(suffix.as_str())
-                && qn.starts_with(package_prefix.as_str())
-                && definition.visibility.is_public()
-                && !store.is_test_definition(definition)
-            {
-                let rest = &qn[package_prefix.len()..];
-                // Only match if it's nested (contains a dot), direct was tried above
-                if rest.contains('.') {
-                    return Some((qn.to_string(), definition));
-                }
-            }
-        }
-
-        None
+        let result = resolved.as_ref().and_then(|qualified_name| {
+            package
+                .definitions
+                .get(qualified_name)
+                .map(|definition| (qualified_name.to_string(), definition))
+        });
+        self.imports
+            .imported_resolutions
+            .entry(package.id.as_str().into())
+            .or_default()
+            .insert(simple_name.into(), resolved);
+        result
     }
 
     pub(super) fn lookup_qualified_name(
-        &self,
+        &mut self,
         store: &Store,
         type_name: &str,
     ) -> Option<EcoString> {
@@ -126,7 +142,7 @@ impl TaskState {
     }
 
     pub(super) fn lookup_qualified_name_in_type_position(
-        &self,
+        &mut self,
         store: &Store,
         type_name: &str,
     ) -> Option<EcoString> {
@@ -153,7 +169,7 @@ impl TaskState {
     }
 
     pub(super) fn lookup_qualified_name_in_scope(
-        &self,
+        &mut self,
         store: &Store,
         type_name: &str,
         prefer_type: bool,
@@ -211,7 +227,7 @@ impl TaskState {
         store.is_const(qualified_name)
     }
 
-    pub(super) fn is_const_var(&self, store: &Store, var_name: &str) -> bool {
+    pub(super) fn is_const_var(&mut self, store: &Store, var_name: &str) -> bool {
         if self.scopes.lookup_value(var_name).is_some() {
             return self.scopes.lookup_const(var_name);
         }
@@ -263,7 +279,7 @@ impl TaskState {
         definition.ty.clone()
     }
 
-    pub(super) fn lookup_type(&self, store: &Store, value_name: &str) -> Option<Type> {
+    pub(super) fn lookup_type(&mut self, store: &Store, value_name: &str) -> Option<Type> {
         if let Some(ty) = self.scopes.lookup_value(value_name) {
             return Some(ty.clone());
         }
@@ -273,8 +289,10 @@ impl TaskState {
         }
 
         if let Some((prefix, rest)) = value_name.split_once('.')
-            && let Some(package_id) = self.imports.package_id(prefix)
-            && let Some(imported_package) = store.get_package(package_id)
+            && let Some(imported_package) = self
+                .imports
+                .package_id(prefix)
+                .and_then(|package_id| store.get_package(package_id))
         {
             if let Some((_, definition)) =
                 self.resolve_in_imported_package(store, imported_package, rest)
@@ -282,7 +300,7 @@ impl TaskState {
                 return Some(self.resolve_definition_value_type(store, definition));
             }
             if let Some((owner, method)) = rest.rsplit_once('.') {
-                let owner = Symbol::from_parts(package_id, owner);
+                let owner = Symbol::from_parts(&imported_package.id, owner);
                 if let Some(method) = store.get_method(&owner, method) {
                     return Some(method.ty.clone());
                 }
@@ -364,7 +382,7 @@ impl TaskState {
         if let Type::Parameter(name) = ty {
             let trait_bounds = self.scopes.collect_all_trait_bounds();
             let qualified_name = self.qualify_name(name);
-            return store.get_methods_from_bounds(&qualified_name, &trait_bounds);
+            return store.get_methods_from_bounds(&qualified_name, trait_bounds);
         }
 
         let resolved = ty.strip_refs().resolve_in(&self.env);
@@ -397,7 +415,7 @@ impl TaskState {
         if let Type::Parameter(parameter) = ty {
             let trait_bounds = self.scopes.collect_all_trait_bounds();
             let qualified_name = self.qualify_name(parameter);
-            return store.get_method_from_bounds(&qualified_name, &trait_bounds, name);
+            return store.get_method_from_bounds(&qualified_name, trait_bounds, name);
         }
 
         let resolved = ty.strip_refs().resolve_in(&self.env);

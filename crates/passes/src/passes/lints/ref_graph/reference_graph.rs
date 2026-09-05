@@ -5,6 +5,7 @@ use syntax::ast::Span;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PackageItemId {
     Definition(EcoString),
+    EqualityMethod(EcoString),
     Import { file_id: u32, alias: EcoString },
 }
 
@@ -21,13 +22,13 @@ impl PackageItemId {
     }
 
     pub fn equals_method(type_name: &str) -> Self {
-        Self::Definition(format!("{type_name}#equals").into())
+        Self::EqualityMethod(type_name.into())
     }
 
     fn import_alias(&self) -> Option<&str> {
         match self {
             Self::Import { alias, .. } => Some(alias),
-            Self::Definition(_) => None,
+            Self::Definition(_) | Self::EqualityMethod(_) => None,
         }
     }
 
@@ -285,5 +286,13 @@ mod tests {
         graph.mark_enum_variant_used(variant);
 
         assert_eq!(graph.unused_members().count(), 0);
+    }
+
+    #[test]
+    fn equality_method_identity_does_not_collide_with_definition_names() {
+        assert_ne!(
+            PackageItemId::equals_method("Thing"),
+            PackageItemId::new("Thing#equals"),
+        );
     }
 }
