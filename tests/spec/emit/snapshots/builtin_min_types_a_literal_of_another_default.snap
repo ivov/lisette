@@ -12,8 +12,8 @@ description: |
 package main
 
 func test() float64 {
-	two := float64(min(1, 2))
-	three := float64(min(1, 2, 3))
-	narrow := float32(min(1, 2))
+	var two float64 = min(1, 2)
+	var three float64 = min(1, 2, 3)
+	var narrow float32 = min(1, 2)
 	return two/three + float64(narrow)
 }

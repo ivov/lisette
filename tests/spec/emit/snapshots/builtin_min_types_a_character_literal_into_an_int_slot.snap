@@ -10,6 +10,6 @@ description: |
 package main
 
 func test() int {
-	letter := int(min('a', 'b'))
+	var letter int = min('a', 'b')
 	return letter
 }

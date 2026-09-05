@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Wrapper<T> { value: T }
+  
+  impl<T> Wrapper<T> {
+    fn replace(self, v: T) -> Wrapper<T> { Wrapper { value: v } }
+    fn with<U>(self, u: U) -> U { u }
+  }
+  
+  fn test() -> float32 {
+    let w: Wrapper<float64> = Wrapper { value: 1 }
+    let r = w.replace(2)
+    let u: float32 = w.with(3)
+    let _ = r
+    u
+  }
+---
+package main
+
+type Wrapper[T any] struct {
+	value T
+}
+
+func (w Wrapper[T]) replace(v T) Wrapper[T] {
+	return Wrapper[T]{value: v}
+}
+
+func Wrapper_with[T any, U any](_ Wrapper[T], u U) U {
+	return u
+}
+
+func test() float32 {
+	w := Wrapper[float64]{value: 1}
+	r := w.replace(2)
+	u := Wrapper_with(w, float32(3))
+	_ = r
+	return u
+}

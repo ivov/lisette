@@ -95,18 +95,6 @@ pub(crate) fn group_params(params: &[(String, String)]) -> String {
     parts.join(", ")
 }
 
-pub(crate) fn unwrap_unary_negation(expression: &Expression) -> &Expression {
-    match expression {
-        Expression::Unary {
-            operator: UnaryOperator::Negative,
-            expression,
-            ..
-        } => unwrap_unary_negation(expression),
-        Expression::Paren { expression, .. } => unwrap_unary_negation(expression),
-        _ => expression,
-    }
-}
-
 fn is_scalar_literal(expression: &Expression) -> bool {
     matches!(
         expression.unwrap_parens(),

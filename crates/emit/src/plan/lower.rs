@@ -627,13 +627,19 @@ impl Planner<'_> {
         literals: LiteralInlining,
         names_inline: bool,
     ) -> Option<String> {
-        let go_type = self.use_go_type(&expression.get_type());
+        let expression_ty = expression.get_type();
+        let go_type = self.use_go_type(&expression_ty);
         let inlines = plan.setup.is_empty()
             && match plan.evaluation.form {
                 OperandForm::Name => names_inline,
+                OperandForm::Call => false,
                 _ => {
+                    let constant = plan.expression.constant_kind();
                     matches!(literals, LiteralInlining::Allowed)
-                        && constant_default_go_type(expression) == Some(go_type.as_str())
+                        && constant.is_some()
+                        && self
+                            .constant_needs_go_type(constant, &expression_ty)
+                            .is_none()
                 }
             };
         (!inlines).then_some(go_type)
@@ -647,6 +653,7 @@ impl Planner<'_> {
         temp_type: Option<String>,
         statements: &mut Vec<LoweredStatement>,
     ) -> AssertOperand {
+        let constant = plan.expression.constant_kind();
         let (setup, value) = plan.into_parts();
         statements.extend(setup);
         let Some(go_type) = temp_type else {
@@ -661,18 +668,23 @@ impl Planner<'_> {
         self.scope.bind(name.clone(), name.clone());
         // Under `:=` a Go constant may take its own default type, so a large
         // `uint64` literal would come back as an overflowing `int`.
-        statements.push(if self.is_go_constant_expression(expression) {
-            LoweredStatement::VarDecl {
-                name: name.clone(),
-                go_type,
-                value: Some(value),
-            }
-        } else {
-            LoweredStatement::TempBind {
-                name: name.clone(),
-                value,
-            }
-        });
+        let constant_needs_type = self
+            .constant_needs_go_type(constant, &expression.get_type())
+            .is_some();
+        statements.push(
+            if constant_needs_type || self.is_go_constant_expression(expression) {
+                LoweredStatement::VarDecl {
+                    name: name.clone(),
+                    go_type,
+                    value: Some(value),
+                }
+            } else {
+                LoweredStatement::TempBind {
+                    name: name.clone(),
+                    value,
+                }
+            },
+        );
         AssertOperand {
             expression: temp_identifier(&name, expression),
             rendered: name,
@@ -1128,27 +1140,6 @@ struct AssertOperand {
 enum LiteralInlining {
     Allowed,
     Denied,
-}
-
-/// The Go type an operand takes on its own when it emits as an untyped
-/// constant. `None` for anything typed, or whose default is not knowable here.
-fn constant_default_go_type(expression: &Expression) -> Option<&'static str> {
-    match expression {
-        Expression::Paren { expression, .. }
-        | Expression::Unary {
-            operator: UnaryOperator::Negative,
-            expression,
-            ..
-        } => constant_default_go_type(expression),
-        Expression::Literal { literal, .. } => match literal {
-            Literal::Integer { .. } => Some("int"),
-            Literal::Float { .. } => Some("float64"),
-            Literal::String { .. } => Some("string"),
-            Literal::Boolean(_) => Some("bool"),
-            _ => None,
-        },
-        _ => None,
-    }
 }
 
 fn paired_operands(lhs: &str, rhs: &str) -> String {

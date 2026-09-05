@@ -18,7 +18,7 @@ type Ticket int
 type Label string
 
 func test() Ticket {
-	label := Label(max("a", "b"))
+	var label Label = max("a", "b")
 	_ = label
-	return Ticket(min(1, 2))
+	return min(1, 2)
 }

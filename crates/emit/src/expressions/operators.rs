@@ -4,7 +4,9 @@ use crate::analyze::facts::EmitFacts;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
-use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::values::{
+    CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
+};
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
 use syntax::program::DefinitionBody;
 use syntax::types::Type;
@@ -199,7 +201,7 @@ impl Planner<'_> {
                 ..
             } = expression
         {
-            return ValuePlan::literal("-9223372036854775808".to_string());
+            return ValuePlan::constant("-9223372036854775808".to_string(), ConstantKind::Int);
         }
 
         if matches!(operator, UnaryOperator::Not) {

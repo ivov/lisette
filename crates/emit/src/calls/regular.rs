@@ -1,7 +1,10 @@
 use crate::abi::is_tagged_shape_fn_value;
 use crate::calls::dispatch::{
-    CallArgShape, all_type_params_inferrable, callee_is_go_builtin, is_prelude_variant_constructor,
+    CallArgShape, all_type_params_inferrable, callee_is_go_builtin, go_builtin_name,
+    is_prelude_variant_constructor,
 };
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use syntax::EcoString;
 use syntax::types::FunctionParameter;
 
 use crate::Planner;
@@ -15,15 +18,11 @@ use crate::names::generics::extract_type_mapping;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{ArgumentPlan, CallPlan, CallableOrigin, ResolvedCallee};
 use crate::plan::values::{
-    CaptureBoundary, EvaluationEffect, GoExpression, SequencedValues, ValuePlan,
+    CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, SequencedValues, ValuePlan,
 };
-use crate::types::go_type::render_conversion;
-use crate::utils::{
-    reads_mutable_operand, reads_unsequenced_mutable_operand, unwrap_unary_negation,
-};
+use crate::utils::{reads_mutable_operand, reads_unsequenced_mutable_operand};
 use crate::write_line;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
-use syntax::types::SimpleKind;
 use syntax::types::Type;
 
 struct CallTypeArgsRequest<'e, 'c> {
@@ -32,8 +31,27 @@ struct CallTypeArgsRequest<'e, 'c> {
     type_args: ResolvedCallTypeArguments<'e>,
     call_ty: Option<&'e Type>,
     arg_shape: CallArgShape,
-    args: &'e [Expression],
     ctx: ExpressionContext<'e>,
+}
+
+fn builtin_constant(builtin: &str, values: &[GoExpression]) -> Option<ConstantKind> {
+    let mut kinds = values.iter().map(GoExpression::constant_kind);
+    let first = kinds.next()??;
+    let joined = kinds.try_fold(first, |joined, kind| {
+        let kind = kind?;
+        joined.join(kind).or((joined == kind).then_some(kind))
+    })?;
+    match builtin {
+        "min" | "max" => Some(joined),
+        "complex" => Some(ConstantKind::Complex),
+        "real" | "imag" => Some(ConstantKind::Float),
+        _ => None,
+    }
+}
+
+fn go_builtin_conversion(type_args: &str) -> Option<String> {
+    let inner = type_args.strip_prefix('[')?.strip_suffix(']')?;
+    (!inner.is_empty() && !inner.contains(',')).then(|| inner.to_string())
 }
 
 struct CallArgsContext<'plan, 'facts> {
@@ -45,10 +63,33 @@ struct CallArgsContext<'plan, 'facts> {
     combine_variadic: Option<VariadicCombine>,
     capture_boundary: CaptureBoundary,
     retired_receiver: Option<&'plan Expression>,
-    /// A builtin wraps the whole call, so its arguments must not also convert.
     callee_is_builtin: bool,
-    /// Pinned type arguments type every literal, leaving nothing to infer.
     callee_pins_type_args: bool,
+    receiver_binding: Option<(Type, Type)>,
+}
+
+fn receiver_type_binding(
+    callee_expression: &Expression,
+    callee: &ResolvedCallee<'_>,
+) -> Option<(Type, Type)> {
+    if callee.receiver_offset != 1 {
+        return None;
+    }
+    let Expression::DotAccess {
+        expression: receiver,
+        ..
+    } = callee_expression.unwrap_parens()
+    else {
+        return None;
+    };
+    let declared = callee
+        .declared_type()?
+        .unwrap_forall()
+        .get_function_params()?
+        .first()?
+        .ty
+        .clone();
+    Some((declared, receiver.get_type().strip_refs()))
 }
 
 /// Escape-aware close-quote search; plain `find` would collide with `\"` inside the literal.
@@ -254,11 +295,8 @@ impl<'a> Planner<'a> {
                 value_count: args.len(),
                 has_spread: spread.is_some(),
             },
-            args,
             ctx: expression_ctx,
         });
-        // A Go builtin takes no type argument, so the instantiated type it would
-        // have pinned becomes a conversion around the call instead.
         let builtin_conversion = callee_is_go_builtin(function)
             .then(|| go_builtin_conversion(&type_args_string))
             .flatten();
@@ -283,9 +321,13 @@ impl<'a> Planner<'a> {
             .flatten(),
             callee_is_builtin: callee_is_go_builtin(function),
             callee_pins_type_args: !type_args_string.is_empty(),
+            receiver_binding: receiver_type_binding(function, &call_plan.resolved),
         };
         let sequenced_args = self.emit_call_args(args, &args_ctx);
         let args_effect = sequenced_args.effect;
+        let constant_result = go_builtin_name(function)
+            .filter(|_| builtin_conversion.is_none())
+            .and_then(|builtin| builtin_constant(builtin, &sequenced_args.values));
         let (args_setup, args_strings) = sequenced_args.into_rendered();
 
         let delayed_after_arg_setup = !args_setup.is_empty() && reads_mutable_operand(function);
@@ -316,18 +358,12 @@ impl<'a> Planner<'a> {
         let effect = self
             .regular_call_effect(function, args_effect)
             .combine(callee_effect);
+        let expression = GoExpression::opaque_with_deferred_evaluation(call_str, true)
+            .with_constant(constant_result);
         if self.callee_lowers_to_type_construction(function) {
-            ValuePlan::computed(
-                setup,
-                GoExpression::opaque_with_deferred_evaluation(call_str, true),
-                effect,
-            )
+            ValuePlan::computed(setup, expression, effect)
         } else {
-            ValuePlan::plain_call(
-                setup,
-                GoExpression::opaque_with_deferred_evaluation(call_str, true),
-                effect,
-            )
+            ValuePlan::plain_call(setup, expression, effect)
         }
     }
 
@@ -442,7 +478,6 @@ impl<'a> Planner<'a> {
             type_args,
             call_ty,
             arg_shape,
-            args,
             ctx,
         } = request;
         if callee_curries_receiver(callee) {
@@ -465,7 +500,7 @@ impl<'a> Planner<'a> {
 
         if type_args_string.is_empty()
             && let Some(inferred) =
-                self.infer_return_only_type_args(function, callee.declared_type(), arg_shape, args)
+                self.infer_return_only_type_args(function, callee.declared_type(), arg_shape)
         {
             type_args_string = match slot_ty {
                 Some(t) => self.prelude_container_type_args(t).unwrap_or(inferred),
@@ -492,11 +527,12 @@ impl<'a> Planner<'a> {
         args: &[Expression],
         ctx: &CallArgsContext<'_, '_>,
     ) -> SequencedValues {
-        let mut stages: Vec<ValuePlan> = args
+        let stages: Vec<ValuePlan> = args
             .iter()
             .enumerate()
             .map(|(i, arg)| self.lower_call_arg(arg, i, ctx))
             .collect();
+        let mut stages = self.type_constant_arguments(stages, ctx);
 
         if let Some(spread) = ctx.spread
             && let Some(stage) =
@@ -627,41 +663,90 @@ impl<'a> Planner<'a> {
         ArgumentPlan::Direct
     }
 
-    /// True when Go would read this literal at another type than its slot:
-    /// `1` filling a `T` bound to `float64` is a Go `int`.
-    pub(super) fn literal_misinfers_type_parameter(
-        &self,
-        arg: &Expression,
-        declared_param_ty: Option<&Type>,
-    ) -> bool {
-        if !declared_param_ty.is_some_and(Type::contains_type_parameter) {
-            return false;
+    pub(super) fn convert_inferred_constants(
+        &mut self,
+        stages: Vec<ValuePlan>,
+        slots: &[Option<(&Type, &Type)>],
+        convertible: &[bool],
+        vars: &[EcoString],
+        receiver: Option<(&Type, &Type)>,
+    ) -> Vec<ValuePlan> {
+        let mut bound: HashSet<String> = HashSet::default();
+        if let Some((declared, instantiated)) = receiver {
+            let mut mapping: HashMap<String, Type> = HashMap::default();
+            extract_type_mapping(declared, instantiated, &mut mapping);
+            bound.extend(mapping.into_keys());
         }
-        let Expression::Literal { literal, ty, .. } = unwrap_unary_negation(arg) else {
-            return false;
-        };
-        let default = match literal {
-            Literal::Integer { .. } => SimpleKind::Int,
-            Literal::Float { .. } => SimpleKind::Float64,
-            Literal::Imaginary(_) => SimpleKind::Complex128,
-            Literal::Char(_) => SimpleKind::Rune,
-            Literal::Boolean(_) => SimpleKind::Bool,
-            Literal::String { .. } => SimpleKind::String,
-            _ => return false,
-        };
-        self.facts.peel_alias(ty).as_simple() != Some(default)
+        for (stage, slot) in stages.iter().zip(slots) {
+            if stage.expression.constant_kind().is_some() {
+                continue;
+            }
+            if let Some((declared, instantiated)) = slot {
+                let mut mapping: HashMap<String, Type> = HashMap::default();
+                extract_type_mapping(declared, instantiated, &mut mapping);
+                bound.extend(mapping.into_keys());
+            }
+        }
+        stages
+            .into_iter()
+            .zip(slots)
+            .zip(convertible)
+            .map(|((stage, slot), convertible)| {
+                let Some((declared, instantiated)) = slot else {
+                    return stage;
+                };
+                let constant = stage.expression.constant_kind();
+                if !convertible || constant.is_none() {
+                    return stage;
+                }
+                let mut mapping: HashMap<String, Type> = HashMap::default();
+                extract_type_mapping(declared, instantiated, &mut mapping);
+                let inferred = mapping.keys().any(|name| {
+                    (vars.is_empty() || vars.iter().any(|var| var == name)) && !bound.contains(name)
+                });
+                if !inferred {
+                    return stage;
+                }
+                let slot_ty = varargs_inner_or_self(instantiated);
+                match self.constant_needs_go_type(constant, &slot_ty) {
+                    Some(go_type) => stage.conversion(go_type),
+                    None => stage,
+                }
+            })
+            .collect()
     }
 
-    /// The type to convert a misinferring literal to. A variadic slot renders
-    /// as `...T`, so this targets the element type.
-    pub(super) fn literal_pinning_go_type(
+    fn type_constant_arguments(
         &mut self,
-        arg: &Expression,
-        declared_param_ty: Option<&Type>,
-        target: &Type,
-    ) -> Option<String> {
-        self.literal_misinfers_type_parameter(arg, declared_param_ty)
-            .then(|| self.use_go_type(&varargs_inner_or_self(target)))
+        stages: Vec<ValuePlan>,
+        ctx: &CallArgsContext<'_, '_>,
+    ) -> Vec<ValuePlan> {
+        if ctx.callee_is_builtin || ctx.callee_pins_type_args {
+            return stages;
+        }
+        let abi = &ctx.plan.resolved.abi;
+        let vars: Vec<EcoString> = match ctx.plan.resolved.declared_type() {
+            Some(Type::Forall { vars, .. }) => vars.clone(),
+            _ => Vec::new(),
+        };
+        let slots: Vec<Option<(&Type, &Type)>> = (0..stages.len())
+            .map(|index| {
+                abi.param(index).and_then(|param| {
+                    param
+                        .declared
+                        .as_ref()
+                        .map(|declared| (declared, &param.instantiated))
+                })
+            })
+            .collect();
+        let convertible: Vec<bool> = (0..stages.len())
+            .map(|index| matches!(ctx.plan.arguments.get(index), Some(ArgumentPlan::Direct)))
+            .collect();
+        let receiver = ctx
+            .receiver_binding
+            .as_ref()
+            .map(|(declared, instantiated)| (declared, instantiated));
+        self.convert_inferred_constants(stages, &slots, &convertible, &vars, receiver)
     }
 
     fn lower_direct_arg(
@@ -672,29 +757,22 @@ impl<'a> Planner<'a> {
         declared_param_ty: Option<&Type>,
     ) -> ValuePlan {
         let suppress = would_suppress_tagged_go(&ctx.plan.resolved, declared_param_ty);
-        let call_carries_type = ctx.callee_is_builtin || ctx.callee_pins_type_args;
         let mut arg_ctx = direct_arg_emit_ctx(&self.facts, effective_param_ty, suppress);
         if let Some(retired) = ctx.retired_receiver {
             arg_ctx = arg_ctx.with_retired_receiver(retired);
         }
         let argument = self.lower_composite_value(arg, arg_ctx);
+        let Some(target) = effective_param_ty else {
+            return argument;
+        };
+        let coercion = CoercionPlan::internal(self, &arg.get_type(), target);
+        if coercion.is_identity() {
+            return argument;
+        }
         argument.map_rendered_as_computed(|setup, value, contains_deferred_evaluation| {
-            let mut final_value = match effective_param_ty {
-                Some(target) => {
-                    let coercion = CoercionPlan::internal(self, &arg.get_type(), target);
-                    let (coercion_setup, coerced) = coercion.lower(self, value);
-                    setup.extend(coercion_setup);
-                    coerced
-                }
-                None => value,
-            };
-            if let Some(target) = effective_param_ty
-                && !call_carries_type
-                && let Some(go_type) = self.literal_pinning_go_type(arg, declared_param_ty, target)
-            {
-                final_value = render_conversion(&go_type, &final_value);
-            }
-            GoExpression::opaque_with_deferred_evaluation(final_value, contains_deferred_evaluation)
+            let (coercion_setup, coerced) = coercion.lower(self, value);
+            setup.extend(coercion_setup);
+            GoExpression::opaque_with_deferred_evaluation(coerced, contains_deferred_evaluation)
         })
     }
 
@@ -1067,11 +1145,6 @@ impl<'a> Planner<'a> {
 
 /// The single Go type inside a rendered `[T]` list, which becomes a conversion
 /// around a builtin call. `None` for an empty or multi-parameter list.
-fn go_builtin_conversion(type_args: &str) -> Option<String> {
-    let inner = type_args.strip_prefix('[')?.strip_suffix(']')?;
-    (!inner.is_empty() && !inner.contains(',')).then(|| inner.to_string())
-}
-
 fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
     let Some(Type::Forall { body, .. }) = callee.declared_type() else {
         return false;

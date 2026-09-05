@@ -5,6 +5,7 @@ use crate::plan::bodies::LoweredStatement;
 use crate::types::go_type::render_conversion;
 use std::fmt::{self, Display, Formatter};
 use syntax::ast::Expression;
+use syntax::types::SimpleKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum OperandForm {
@@ -14,12 +15,70 @@ pub(crate) enum OperandForm {
     Other,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum ConstantKind {
+    Int,
+    Rune,
+    Float,
+    Complex,
+    Bool,
+    String,
+}
+
+impl ConstantKind {
+    pub(crate) fn default_kind(self) -> SimpleKind {
+        match self {
+            Self::Int => SimpleKind::Int,
+            Self::Rune => SimpleKind::Rune,
+            Self::Float => SimpleKind::Float64,
+            Self::Complex => SimpleKind::Complex128,
+            Self::Bool => SimpleKind::Bool,
+            Self::String => SimpleKind::String,
+        }
+    }
+
+    fn is_numeric(self) -> bool {
+        matches!(self, Self::Int | Self::Rune | Self::Float | Self::Complex)
+    }
+
+    pub(crate) fn join(self, other: Self) -> Option<Self> {
+        (self.is_numeric() && other.is_numeric()).then(|| self.max(other))
+    }
+}
+
+fn binary_constant(
+    left: Option<ConstantKind>,
+    operator: &str,
+    right: Option<ConstantKind>,
+) -> Option<ConstantKind> {
+    let (left, right) = (left?, right?);
+    match operator {
+        "==" | "!=" | "<" | "<=" | ">" | ">=" | "&&" | "||" => Some(ConstantKind::Bool),
+        "<<" | ">>" => left.is_numeric().then_some(left),
+        "+" if left == ConstantKind::String && right == ConstantKind::String => {
+            Some(ConstantKind::String)
+        }
+        "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "&^" => left.join(right),
+        _ => None,
+    }
+}
+
+fn unary_constant(operator: &str, value: Option<ConstantKind>) -> Option<ConstantKind> {
+    let value = value?;
+    match operator {
+        "-" | "+" | "^" => value.is_numeric().then_some(value),
+        "!" => (value == ConstantKind::Bool).then_some(value),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GoExpression {
     rendered: String,
     contains_deferred_evaluation: bool,
     composite_literal: bool,
     syntax_form: OperandForm,
+    constant: Option<ConstantKind>,
 }
 
 impl GoExpression {
@@ -34,7 +93,21 @@ impl GoExpression {
             contains_deferred_evaluation,
             composite_literal,
             syntax_form,
+            constant: None,
         }
+    }
+
+    pub(crate) fn constant(rendered: String, kind: ConstantKind) -> Self {
+        Self::literal(rendered).with_constant(Some(kind))
+    }
+
+    pub(crate) fn with_constant(mut self, constant: Option<ConstantKind>) -> Self {
+        self.constant = constant;
+        self
+    }
+
+    pub(crate) fn constant_kind(&self) -> Option<ConstantKind> {
+        self.constant
     }
 
     pub(crate) fn name(value: String) -> Self {
@@ -95,10 +168,12 @@ impl GoExpression {
 
     fn render_binary(left: Self, operator: String, right: Self, separator: &str) -> Self {
         let deferred = left.contains_deferred_evaluation() || right.contains_deferred_evaluation();
+        let constant = binary_constant(left.constant, &operator, right.constant);
         Self::opaque_with_deferred_evaluation(
             format!("{left}{separator}{operator}{separator}{right}"),
             deferred,
         )
+        .with_constant(constant)
     }
 
     pub(crate) fn selector(base: GoExpression, field: String) -> Self {
@@ -116,12 +191,15 @@ impl GoExpression {
     }
 
     fn parenthesized(value: GoExpression) -> Self {
-        Self::opaque_with_deferred_evaluation(format!("({value})"), true)
+        let constant = value.constant;
+        Self::opaque_with_deferred_evaluation(format!("({value})"), true).with_constant(constant)
     }
 
     fn unary(operator: &str, value: GoExpression) -> Self {
         let deferred = value.contains_deferred_evaluation();
+        let constant = unary_constant(operator, value.constant);
         Self::opaque_with_deferred_evaluation(render_unary(operator, &value.rendered()), deferred)
+            .with_constant(constant)
     }
 
     pub(crate) fn slice(
@@ -346,10 +424,10 @@ impl ValuePlan {
         }
     }
 
-    pub(crate) fn literal(rendered: String) -> Self {
+    pub(crate) fn constant(rendered: String, kind: ConstantKind) -> Self {
         Self::from_facts(
             Vec::new(),
-            GoExpression::literal(rendered),
+            GoExpression::constant(rendered, kind),
             EvaluationFacts::literal(),
         )
     }

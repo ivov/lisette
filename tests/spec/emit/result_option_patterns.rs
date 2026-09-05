@@ -75,6 +75,17 @@ fn test() -> (Option<Flag>, Option<Ticket>) {
 }
 
 #[test]
+fn option_some_types_a_constant_builtin_result() {
+    let input = r#"
+fn test() -> Option<float64> {
+  let widened: Option<float64> = Some(min(1, 2))
+  widened
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn option_none_construction() {
     let input = r#"
 fn test() -> Option<int> {

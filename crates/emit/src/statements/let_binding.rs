@@ -12,8 +12,7 @@ use crate::plan::placement::{
     collapse_boolean_branch_assign, collapse_declare_assign, expression_contains_binding,
     is_unit_call, rebind_trailing_temp, requires_temp_var,
 };
-use crate::utils::unwrap_unary_negation;
-use syntax::ast::{Binding, Expression, Literal, Pattern};
+use syntax::ast::{Binding, Expression, Pattern};
 use syntax::types::Type;
 
 #[derive(Clone, Copy)]
@@ -41,16 +40,7 @@ fn needs_explicit_type_declaration(
             return true;
         }
     }
-    match unwrap_unary_negation(value) {
-        Expression::Literal { literal, .. } => match literal {
-            Literal::Integer { .. } => !matches!(binding_ty.get_name(), Some("int") | None),
-            Literal::Float { .. } => !matches!(binding_ty.get_name(), Some("float64") | None),
-            Literal::String { .. } => !matches!(binding_ty.get_name(), Some("string") | None),
-            Literal::Boolean(_) => !matches!(binding_ty.get_name(), Some("bool") | None),
-            _ => false,
-        },
-        _ => false,
-    }
+    false
 }
 
 /// Pick the Go type for a `let` binding's `var X T` temp. Diverging values
@@ -231,10 +221,12 @@ impl Planner<'_> {
             return statements;
         }
 
-        let (mut statements, value_expression) = self
-            .lower_value(value, ExpressionContext::value())
-            .into_parts();
+        let plan = self.lower_value(value, ExpressionContext::value());
+        let constant = plan.expression.constant_kind();
+        let (mut statements, value_expression) = plan.into_parts();
         let coercion = CoercionPlan::internal(self, &value.get_type(), binding_ty);
+        let constant_needs_type =
+            coercion.is_identity() && self.constant_needs_go_type(constant, binding_ty).is_some();
         let (coercion_setup, value_expression) = coercion.lower(self, value_expression);
         statements.extend(coercion_setup);
 
@@ -249,7 +241,7 @@ impl Planner<'_> {
             bound
         };
 
-        if needs_explicit_type_declaration(self, value, binding_ty) {
+        if constant_needs_type || needs_explicit_type_declaration(self, value, binding_ty) {
             let var_ty = self.use_go_type(binding_ty);
             statements.push(LoweredStatement::VarDecl {
                 name: go_identifier,

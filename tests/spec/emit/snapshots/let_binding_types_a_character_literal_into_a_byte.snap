@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/literals.rs
+description: |
+  
+  fn takes_byte(b: byte) -> byte { b }
+  
+  fn test() -> byte {
+    let b: byte = 'a'
+    let i: int = 'a'
+    let r: rune = 'a'
+    let _ = (i, r)
+    takes_byte(b)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func takesByte(b byte) byte {
+	return b
+}
+
+func test() byte {
+	var b byte = 'a'
+	var i int = 'a'
+	r := 'a'
+	_ = lisette.MakeTuple2[int, rune](i, r)
+	return takesByte(b)
+}
