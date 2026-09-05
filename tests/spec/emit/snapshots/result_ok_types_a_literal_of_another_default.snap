@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn test() -> Result<float64, error> {
+    let widened: Result<float64, error> = Ok(1)
+    widened
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() (float64, error) {
+	widened := lisette.MakeResultOk[float64, error](1)
+	v_1 := widened
+	if v_1.Tag == lisette.ResultOk {
+		return v_1.OkVal, nil
+	}
+	return 0.0, v_1.ErrVal
+}

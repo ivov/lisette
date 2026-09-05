@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  struct Ticket(int)
+  struct Label(string)
+  
+  fn test() -> Ticket {
+    let label: Label = max("a", "b")
+    let _ = label
+    min(1, 2)
+  }
+---
+package main
+
+type Ticket int
+
+type Label string
+
+func test() Ticket {
+	label := Label(max("a", "b"))
+	_ = label
+	return Ticket(min(1, 2))
+}

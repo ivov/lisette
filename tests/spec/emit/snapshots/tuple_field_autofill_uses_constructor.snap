@@ -22,7 +22,7 @@ type Probe struct {
 
 func make_() Probe {
 	return Probe{
-		Pair:   lisette.MakeTuple2(0, ""),
-		Nested: lisette.MakeTuple2(lisette.MakeOptionNone[int](), lisette.MakeTuple2(0, 0)),
+		Pair:   lisette.MakeTuple2[int, string](0, ""),
+		Nested: lisette.MakeTuple2[lisette.Option[int], lisette.Tuple2[int, int]](lisette.MakeOptionNone[int](), lisette.MakeTuple2[int, int](0, 0)),
 	}
 }

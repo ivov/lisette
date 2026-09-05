@@ -19,9 +19,7 @@ use crate::types::native::NativeGoType;
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments, StructFields};
 use syntax::program::{CallKind, Definition, DefinitionBody, resolved_definition};
-use syntax::types::{
-    CompoundKind, FunctionParameter, SimpleKind, Type, build_substitution_map, substitute,
-};
+use syntax::types::{CompoundKind, FunctionParameter, Type, build_substitution_map, substitute};
 
 struct TupleStructTarget {
     go_ty: String,
@@ -68,24 +66,17 @@ pub(crate) fn all_type_params_inferrable(
 }
 
 impl Planner<'_> {
-    /// True when Go's inference would lose this alias: function aliases (infer
-    /// as `func(...)`) and non-default numeric aliases (untyped literals default
-    /// to `int`/`float64`/`complex128`).
-    pub(crate) fn needs_explicit_args_for_go_inference(&self, ty: &Type) -> bool {
-        if self.is_function_alias(ty) {
-            return true;
-        }
-        let Some(numeric) = self.facts.underlying_numeric_type(ty) else {
-            return false;
-        };
-        let Some(kind) = numeric.as_simple() else {
-            return false;
-        };
-        kind.is_arithmetic()
-            && !matches!(
-                kind,
-                SimpleKind::Int | SimpleKind::Float64 | SimpleKind::Complex128
-            )
+    /// True when no argument gives Go the right type. A builtin's arguments
+    /// share one type parameter, so one typed argument settles the call.
+    fn builtin_literal_misinfers(&self, params: &[FunctionParameter], args: &[Expression]) -> bool {
+        args.iter().enumerate().all(|(index, arg)| {
+            let param = params.get(index).or_else(|| {
+                params
+                    .last()
+                    .filter(|p| p.ty.is_native(CompoundKind::VarArgs))
+            });
+            self.literal_misinfers_type_parameter(arg, param.map(|param| &param.ty))
+        })
     }
 }
 
@@ -607,6 +598,7 @@ impl<'a> Planner<'a> {
         function: &Expression,
         declared: Option<&Type>,
         arg_shape: CallArgShape,
+        args: &[Expression],
     ) -> Option<String> {
         let Type::Forall { vars, body } = declared? else {
             return None;
@@ -621,11 +613,14 @@ impl<'a> Planner<'a> {
         let mut mapping: HashMap<String, Type> = HashMap::default();
         extract_type_mapping(body, &instantiated_ty, &mut mapping);
 
-        if all_inferrable {
+        // A builtin takes no type argument, so this becomes the conversion.
+        let builtin_needs_conversion =
+            callee_is_go_builtin(function) && self.builtin_literal_misinfers(generic_params, args);
+        if all_inferrable && !builtin_needs_conversion {
             let any_needs_explicit = vars.iter().any(|v| {
                 mapping
                     .get(v.as_str())
-                    .is_some_and(|t| self.needs_explicit_args_for_go_inference(t))
+                    .is_some_and(|t| self.is_function_alias(t))
             });
             if !any_needs_explicit {
                 return None;

@@ -9,6 +9,17 @@ fn builtin_max_int() {
 }
 
 #[test]
+#[allow(float_cmp)]
+fn builtin_min_keeps_a_literal_at_its_annotated_type() {
+  // As `int` these divide to 0, and go reports nothing.
+  let two: float64 = min(1, 2)
+  assert two / 4.0 == 0.25
+
+  let three: float64 = min(1, 2, 3)
+  assert three / 4.0 == 0.25
+}
+
+#[test]
 fn builtin_min_string() {
   assert min("banana", "apple") == "apple"
 }

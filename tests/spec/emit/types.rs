@@ -2365,6 +2365,33 @@ fn make() -> Probe {
 }
 
 #[test]
+fn tuple_field_autofill_zeros_carry_their_element_types() {
+    let input = r#"
+type Meters = float64
+type Count = int
+struct Ticket(int)
+struct Weight(float64)
+
+struct Probe {
+  pub plain: (int, string),
+  pub floaty: (int, float64),
+  pub small: (float32, uint8),
+  pub bytes: (byte, string),
+  pub aliased: (Meters, int),
+  pub alias_of_int: (Count, string),
+  pub newtype: (Ticket, int),
+  pub newtype_float: (Weight, int),
+  pub nested: (int, (int, float64)),
+}
+
+fn make() -> Probe {
+  Probe { .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn tuple_struct_multi_field_def() {
     let input = r#"
 struct Point(int, int)

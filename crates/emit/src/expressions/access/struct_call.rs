@@ -427,18 +427,13 @@ impl Planner<'_> {
             (Type::Nominal { id, params, .. }, _) => {
                 self.lisette_zero_nominal(ty, id.as_str(), params)
             }
-            (Type::Tuple(_), ValueLayout::Tuple { elements, .. }) => {
+            (Type::Tuple(slots), ValueLayout::Tuple { elements, .. }) => {
                 let parts: Vec<String> = elements
                     .iter()
                     .map(|element| self.lisette_zero(element.logical_type()))
                     .collect();
-                self.require_stdlib();
-                format!(
-                    "{}.MakeTuple{}({})",
-                    go_name::GO_STDLIB_PKG,
-                    parts.len(),
-                    parts.join(", ")
-                )
+                let callee = self.make_tuple_callee(slots, parts.len());
+                format!("{}({})", callee, parts.join(", "))
             }
             (
                 Type::Array { .. },

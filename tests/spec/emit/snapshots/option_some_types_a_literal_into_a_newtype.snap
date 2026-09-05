@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct Flag(bool)
+  struct Ticket(int)
+  
+  fn test() -> (Option<Flag>, Option<Ticket>) {
+    let armed: Option<Flag> = Some(true)
+    let ticket: Option<Ticket> = Some(1)
+    (armed, ticket)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Flag bool
+
+type Ticket int
+
+func test() (lisette.Option[Flag], lisette.Option[Ticket]) {
+	armed := lisette.MakeOptionSome(Flag(true))
+	ticket := lisette.MakeOptionSome(Ticket(1))
+	return armed, ticket
+}

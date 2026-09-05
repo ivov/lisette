@@ -12,7 +12,8 @@ use crate::plan::placement::{
     collapse_boolean_branch_assign, collapse_declare_assign, expression_contains_binding,
     is_unit_call, rebind_trailing_temp, requires_temp_var,
 };
-use syntax::ast::{Binding, Expression, Literal, Pattern, UnaryOperator};
+use crate::utils::unwrap_unary_negation;
+use syntax::ast::{Binding, Expression, Literal, Pattern};
 use syntax::types::Type;
 
 #[derive(Clone, Copy)]
@@ -49,18 +50,6 @@ fn needs_explicit_type_declaration(
             _ => false,
         },
         _ => false,
-    }
-}
-
-fn unwrap_unary_negation(expression: &Expression) -> &Expression {
-    match expression {
-        Expression::Unary {
-            operator: UnaryOperator::Negative,
-            expression,
-            ..
-        } => expression.as_ref(),
-        Expression::Paren { expression, .. } => unwrap_unary_negation(expression),
-        _ => expression,
     }
 }
 

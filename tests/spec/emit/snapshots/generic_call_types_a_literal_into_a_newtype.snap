@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Flag(bool)
+  struct Label(string)
+  struct Ticket(int)
+  struct Weight(float64)
+  struct Letter(rune)
+  
+  fn ident<T>(v: T) -> T { v }
+  
+  fn test() -> Flag {
+    let label: Label = ident("x")
+    let ticket: Ticket = ident(1)
+    let weight: Weight = ident(1.5)
+    let letter: Letter = ident('a')
+    let _ = (label, ticket, weight, letter)
+    ident(true)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Flag bool
+
+type Label string
+
+type Ticket int
+
+type Weight float64
+
+type Letter rune
+
+func ident[T any](v T) T {
+	return v
+}
+
+func test() Flag {
+	label := ident(Label("x"))
+	ticket := ident(Ticket(1))
+	weight := ident(Weight(1.5))
+	letter := ident(Letter('a'))
+	_ = lisette.MakeTuple4[Label, Ticket, Weight, Letter](label, ticket, weight, letter)
+	return ident(Flag(true))
+}

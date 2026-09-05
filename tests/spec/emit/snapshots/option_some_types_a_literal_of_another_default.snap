@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn halved(value: Option<float64>) -> float64 {
+    match value {
+      Some(v) => v / 4.0,
+      None => 0.0,
+    }
+  }
+  
+  fn test() -> float64 {
+    let widened: Option<float64> = Some(1)
+    halved(widened)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func halved(value lisette.Option[float64]) float64 {
+	if value.Tag == lisette.OptionSome {
+		return value.SomeVal / 4.0
+	}
+	return 0.0
+}
+
+func test() float64 {
+	widened := lisette.MakeOptionSome(float64(1))
+	return halved(widened)
+}

@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn ident<T>(v: T) -> T { v }
+  
+  fn test() -> float64 {
+    let parenthesized: float64 = -(1)
+    let negated: float64 = ident(-(1))
+    parenthesized / 2.0 + negated / 2.0
+  }
+---
+package main
+
+func ident[T any](v T) T {
+	return v
+}
+
+func test() float64 {
+	var parenthesized float64 = -(1)
+	negated := ident(float64(-(1)))
+	return parenthesized/2.0 + negated/2.0
+}
