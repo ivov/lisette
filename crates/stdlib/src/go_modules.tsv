@@ -1,0 +1,196 @@
+common	archive/tar	archive/tar.d.lis
+common	archive/zip	archive/zip.d.lis
+common	bufio	bufio.d.lis
+common	bytes	bytes.d.lis
+common	cmp	cmp.d.lis
+common	compress/bzip2	compress/bzip2.d.lis
+common	compress/flate	compress/flate.d.lis
+common	compress/gzip	compress/gzip.d.lis
+common	compress/lzw	compress/lzw.d.lis
+common	compress/zlib	compress/zlib.d.lis
+common	container/heap	container/heap.d.lis
+common	container/list	container/list.d.lis
+common	container/ring	container/ring.d.lis
+common	context	context.d.lis
+common	crypto	crypto.d.lis
+common	crypto/aes	crypto/aes.d.lis
+common	crypto/cipher	crypto/cipher.d.lis
+common	crypto/des	crypto/des.d.lis
+common	crypto/dsa	crypto/dsa.d.lis
+common	crypto/ecdh	crypto/ecdh.d.lis
+common	crypto/ecdsa	crypto/ecdsa.d.lis
+common	crypto/ed25519	crypto/ed25519.d.lis
+common	crypto/elliptic	crypto/elliptic.d.lis
+common	crypto/fips140	crypto/fips140.d.lis
+common	crypto/hkdf	crypto/hkdf.d.lis
+common	crypto/hmac	crypto/hmac.d.lis
+common	crypto/hpke	crypto/hpke.d.lis
+common	crypto/md5	crypto/md5.d.lis
+common	crypto/mlkem	crypto/mlkem.d.lis
+common	crypto/mlkem/mlkemtest	crypto/mlkem/mlkemtest.d.lis
+common	crypto/pbkdf2	crypto/pbkdf2.d.lis
+common	crypto/rand	crypto/rand.d.lis
+common	crypto/rc4	crypto/rc4.d.lis
+common	crypto/rsa	crypto/rsa.d.lis
+common	crypto/sha1	crypto/sha1.d.lis
+common	crypto/sha256	crypto/sha256.d.lis
+common	crypto/sha3	crypto/sha3.d.lis
+common	crypto/sha512	crypto/sha512.d.lis
+common	crypto/subtle	crypto/subtle.d.lis
+common	crypto/tls	crypto/tls.d.lis
+common	crypto/x509	crypto/x509.d.lis
+common	crypto/x509/pkix	crypto/x509/pkix.d.lis
+common	database/sql	database/sql.d.lis
+common	database/sql/driver	database/sql/driver.d.lis
+common	debug/buildinfo	debug/buildinfo.d.lis
+common	debug/dwarf	debug/dwarf.d.lis
+common	debug/elf	debug/elf.d.lis
+common	debug/gosym	debug/gosym.d.lis
+common	debug/macho	debug/macho.d.lis
+common	debug/pe	debug/pe.d.lis
+common	debug/plan9obj	debug/plan9obj.d.lis
+common	embed	embed.d.lis
+common	encoding	encoding.d.lis
+common	encoding/ascii85	encoding/ascii85.d.lis
+common	encoding/asn1	encoding/asn1.d.lis
+common	encoding/base32	encoding/base32.d.lis
+common	encoding/base64	encoding/base64.d.lis
+common	encoding/binary	encoding/binary.d.lis
+common	encoding/csv	encoding/csv.d.lis
+common	encoding/gob	encoding/gob.d.lis
+common	encoding/hex	encoding/hex.d.lis
+common	encoding/json	encoding/json.d.lis
+common	encoding/pem	encoding/pem.d.lis
+common	encoding/xml	encoding/xml.d.lis
+common	errors	errors.d.lis
+common	expvar	expvar.d.lis
+common	flag	flag.d.lis
+common	fmt	fmt.d.lis
+common	go/ast	go/ast.d.lis
+common	go/build	go/build.d.lis
+common	go/build/constraint	go/build/constraint.d.lis
+common	go/constant	go/constant.d.lis
+common	go/doc	go/doc.d.lis
+common	go/doc/comment	go/doc/comment.d.lis
+common	go/format	go/format.d.lis
+common	go/importer	go/importer.d.lis
+common	go/parser	go/parser.d.lis
+common	go/printer	go/printer.d.lis
+common	go/scanner	go/scanner.d.lis
+common	go/token	go/token.d.lis
+common	go/types	go/types.d.lis
+common	go/version	go/version.d.lis
+common	hash	hash.d.lis
+common	hash/adler32	hash/adler32.d.lis
+common	hash/crc32	hash/crc32.d.lis
+common	hash/crc64	hash/crc64.d.lis
+common	hash/fnv	hash/fnv.d.lis
+common	hash/maphash	hash/maphash.d.lis
+common	html	html.d.lis
+common	html/template	html/template.d.lis
+common	image	image.d.lis
+common	image/color	image/color.d.lis
+common	image/color/palette	image/color/palette.d.lis
+common	image/draw	image/draw.d.lis
+common	image/gif	image/gif.d.lis
+common	image/jpeg	image/jpeg.d.lis
+common	image/png	image/png.d.lis
+common	index/suffixarray	index/suffixarray.d.lis
+common	io	io.d.lis
+common	io/fs	io/fs.d.lis
+common	io/ioutil	io/ioutil.d.lis
+common	iter	iter.d.lis
+common	log	log.d.lis
+common	log/slog	log/slog.d.lis
+common	log/syslog	log/syslog.d.lis
+targets	log/syslog	linux	amd64	linux	arm64	darwin	amd64	darwin	arm64
+common	maps	maps.d.lis
+common	math	math.d.lis
+common	math/big	math/big.d.lis
+common	math/bits	math/bits.d.lis
+common	math/cmplx	math/cmplx.d.lis
+common	math/rand	math/rand.d.lis
+common	math/rand/v2	math/rand/v2.d.lis
+common	mime	mime.d.lis
+common	mime/multipart	mime/multipart.d.lis
+common	mime/quotedprintable	mime/quotedprintable.d.lis
+common	net	net.d.lis
+common	net/http	net/http.d.lis
+common	net/http/cgi	net/http/cgi.d.lis
+common	net/http/cookiejar	net/http/cookiejar.d.lis
+common	net/http/fcgi	net/http/fcgi.d.lis
+common	net/http/httptest	net/http/httptest.d.lis
+common	net/http/httptrace	net/http/httptrace.d.lis
+common	net/http/httputil	net/http/httputil.d.lis
+common	net/http/pprof	net/http/pprof.d.lis
+common	net/mail	net/mail.d.lis
+common	net/netip	net/netip.d.lis
+common	net/rpc	net/rpc.d.lis
+common	net/rpc/jsonrpc	net/rpc/jsonrpc.d.lis
+common	net/smtp	net/smtp.d.lis
+common	net/textproto	net/textproto.d.lis
+common	net/url	net/url.d.lis
+overlay	linux	amd64	os	os_linux_amd64.d.lis
+overlay	linux	arm64	os	os_linux_amd64.d.lis
+overlay	darwin	amd64	os	os_darwin_amd64.d.lis
+overlay	darwin	arm64	os	os_darwin_amd64.d.lis
+overlay	windows	amd64	os	os_windows_amd64.d.lis
+overlay	windows	arm64	os	os_windows_amd64.d.lis
+common	os/exec	os/exec.d.lis
+common	os/signal	os/signal.d.lis
+common	os/user	os/user.d.lis
+common	path	path.d.lis
+overlay	linux	amd64	path/filepath	path/filepath_linux_amd64.d.lis
+overlay	linux	arm64	path/filepath	path/filepath_linux_amd64.d.lis
+overlay	darwin	amd64	path/filepath	path/filepath_linux_amd64.d.lis
+overlay	darwin	arm64	path/filepath	path/filepath_linux_amd64.d.lis
+overlay	windows	amd64	path/filepath	path/filepath_windows_amd64.d.lis
+overlay	windows	arm64	path/filepath	path/filepath_windows_amd64.d.lis
+common	plugin	plugin.d.lis
+common	reflect	reflect.d.lis
+common	regexp	regexp.d.lis
+common	regexp/syntax	regexp/syntax.d.lis
+overlay	linux	amd64	runtime	runtime_linux_amd64.d.lis
+overlay	linux	arm64	runtime	runtime_linux_arm64.d.lis
+overlay	darwin	amd64	runtime	runtime_darwin_amd64.d.lis
+overlay	darwin	arm64	runtime	runtime_darwin_arm64.d.lis
+overlay	windows	amd64	runtime	runtime_windows_amd64.d.lis
+overlay	windows	arm64	runtime	runtime_windows_arm64.d.lis
+common	runtime/coverage	runtime/coverage.d.lis
+common	runtime/debug	runtime/debug.d.lis
+common	runtime/metrics	runtime/metrics.d.lis
+common	runtime/pprof	runtime/pprof.d.lis
+common	runtime/race	runtime/race.d.lis
+common	runtime/trace	runtime/trace.d.lis
+common	slices	slices.d.lis
+common	sort	sort.d.lis
+common	strconv	strconv.d.lis
+common	strings	strings.d.lis
+common	structs	structs.d.lis
+common	sync	sync.d.lis
+common	sync/atomic	sync/atomic.d.lis
+overlay	linux	amd64	syscall	syscall_linux_amd64.d.lis
+overlay	linux	arm64	syscall	syscall_linux_arm64.d.lis
+overlay	darwin	amd64	syscall	syscall_darwin_amd64.d.lis
+overlay	darwin	arm64	syscall	syscall_darwin_arm64.d.lis
+overlay	windows	amd64	syscall	syscall_windows_amd64.d.lis
+overlay	windows	arm64	syscall	syscall_windows_amd64.d.lis
+common	testing	testing.d.lis
+common	testing/cryptotest	testing/cryptotest.d.lis
+common	testing/fstest	testing/fstest.d.lis
+common	testing/iotest	testing/iotest.d.lis
+common	testing/quick	testing/quick.d.lis
+common	testing/slogtest	testing/slogtest.d.lis
+common	testing/synctest	testing/synctest.d.lis
+common	text/scanner	text/scanner.d.lis
+common	text/tabwriter	text/tabwriter.d.lis
+common	text/template	text/template.d.lis
+common	text/template/parse	text/template/parse.d.lis
+common	time	time.d.lis
+common	time/tzdata	time/tzdata.d.lis
+common	unicode	unicode.d.lis
+common	unicode/utf16	unicode/utf16.d.lis
+common	unicode/utf8	unicode/utf8.d.lis
+common	unique	unique.d.lis
+common	unsafe	unsafe.d.lis
+common	weak	weak.d.lis

@@ -110,18 +110,6 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
             check(body, ctx);
         }
 
-        Expression::Block { items, .. } => {
-            for e in items {
-                check(e, ctx);
-            }
-        }
-
-        Expression::TryBlock { items, .. } | Expression::RecoverBlock { items, .. } => {
-            for e in items {
-                check(e, ctx);
-            }
-        }
-
         Expression::Let {
             binding,
             value,
@@ -142,36 +130,6 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
                 }
             } else {
                 check_refutability(&binding.pattern, ctx);
-            }
-        }
-
-        Expression::Identifier { .. } => {}
-
-        Expression::Call {
-            expression,
-            args,
-            spread,
-            ..
-        } => {
-            check(expression, ctx);
-            for e in args {
-                check(e, ctx);
-            }
-            if let Some(spread_expr) = spread.as_ref() {
-                check(spread_expr, ctx);
-            }
-        }
-
-        Expression::If {
-            condition,
-            consequence,
-            alternative,
-            ..
-        } => {
-            check(condition, ctx);
-            check(consequence, ctx);
-            if let Some(alternative) = alternative {
-                check(alternative, ctx);
             }
         }
 
@@ -239,60 +197,14 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
             }
         }
 
-        Expression::Tuple { elements, .. } => {
-            for e in elements {
-                check(e, ctx);
-            }
-        }
-
-        Expression::Enum { .. } => {}
-        Expression::Struct { .. } => {}
         Expression::StructCall { spread, .. } => {
             if let Some(expression) = spread.as_expression() {
                 check(expression, ctx);
             }
         }
-        Expression::DotAccess { expression, .. } => check(expression, ctx),
         Expression::Assignment { .. } => {}
 
-        Expression::Return { expression, .. } => check(expression, ctx),
-        Expression::Propagate { expression, .. } => check(expression, ctx),
-
         Expression::Interface { .. } => {}
-        Expression::ImplBlock { methods, .. } => {
-            for e in methods {
-                check(e, ctx);
-            }
-        }
-
-        Expression::Binary { left, right, .. } => {
-            check(left, ctx);
-            check(right, ctx);
-        }
-
-        Expression::Paren { expression, .. } => check(expression, ctx),
-        Expression::Unary { expression, .. } => check(expression, ctx),
-        Expression::Const { expression, .. } => {
-            if let Some(value) = expression.value() {
-                check(value, ctx);
-            }
-        }
-        Expression::Reference { expression, .. } => check(expression, ctx),
-        Expression::IndexedAccess {
-            expression, index, ..
-        } => {
-            check(expression, ctx);
-            check(index, ctx);
-        }
-
-        Expression::Loop { body, .. } => check(body, ctx),
-
-        Expression::While {
-            condition, body, ..
-        } => {
-            check(condition, ctx);
-            check(body, ctx);
-        }
 
         Expression::WhileLet {
             pattern,
@@ -322,12 +234,6 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
             check(iterable, ctx);
             check(body, ctx);
         }
-
-        Expression::Task { expression, .. } => check(expression, ctx),
-
-        Expression::Defer { expression, .. } => check(expression, ctx),
-
-        Expression::Assert { expression, .. } => check(expression, ctx),
 
         Expression::Select { arms, .. } => {
             for arm in arms {
@@ -362,30 +268,11 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
                 }
             }
         }
-        Expression::Range { start, end, .. } => {
-            if let Some(start_expression) = start {
-                check(start_expression, ctx);
-            }
-            if let Some(end_expression) = end {
-                check(end_expression, ctx);
+        _ => {
+            for child in expression.children() {
+                check(child, ctx);
             }
         }
-
-        Expression::Cast { expression, .. } => {
-            check(expression, ctx);
-        }
-
-        Expression::TypeAlias { .. } => {}
-        Expression::VariableDeclaration { .. } => {}
-        Expression::PackageImport { .. } => {}
-        Expression::Unit { .. } => {}
-        Expression::RawGo { .. } => {}
-        Expression::Break { value, .. } => {
-            if let Some(v) = value {
-                check(v, ctx);
-            }
-        }
-        Expression::Continue { .. } => {}
     }
 }
 

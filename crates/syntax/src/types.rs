@@ -1457,82 +1457,22 @@ impl Type {
     }
 
     pub fn contains_error(&self) -> bool {
-        match self {
-            Type::Error => true,
-            Type::Nominal { params, .. } => params.iter().any(Type::contains_error),
-            Type::Compound { args, .. } => args.iter().any(Type::contains_error),
-            Type::Function(f) => {
-                f.params.iter().any(|param| param.ty.contains_error())
-                    || f.return_type.contains_error()
-            }
-            Type::Tuple(elements) => elements.iter().any(Type::contains_error),
-            Type::Array { element, .. } => element.contains_error(),
-            Type::Forall { body, .. } => body.contains_error(),
-            _ => false,
-        }
+        self.is_error() || self.children().into_iter().any(Type::contains_error)
     }
 
     pub fn has_unbound_variables(&self) -> bool {
         match self {
             Type::Var { hint, .. } => hint.is_some(),
-            Type::Nominal { params, .. } => params.iter().any(|p| p.has_unbound_variables()),
-            Type::Function(f) => {
-                f.params.iter().any(|p| p.ty.has_unbound_variables())
-                    || f.return_type.has_unbound_variables()
-            }
-            Type::Forall { body, .. } => body.has_unbound_variables(),
-            Type::Tuple(elements) => elements.iter().any(|e| e.has_unbound_variables()),
-            Type::Array { element, .. } => element.has_unbound_variables(),
-            Type::Compound { args, .. } => args.iter().any(|a| a.has_unbound_variables()),
-            Type::Simple(_)
-            | Type::Parameter(_)
-            | Type::Never
-            | Type::Uninferred
-            | Type::Ignored
-            | Type::Error
-            | Type::ImportNamespace(_)
-            | Type::ReceiverPlaceholder => false,
+            _ => self.children().into_iter().any(Type::has_unbound_variables),
         }
     }
 
     pub fn collect_unbound_variables(&self, out: &mut Vec<TypeVarId>) {
-        match self {
-            Type::Var { id, hint } => {
-                if hint.is_some() {
-                    out.push(*id);
-                }
-            }
-            Type::Nominal { params, .. } => {
-                for p in params {
-                    p.collect_unbound_variables(out);
-                }
-            }
-            Type::Function(f) => {
-                for p in &f.params {
-                    p.ty.collect_unbound_variables(out);
-                }
-                f.return_type.collect_unbound_variables(out);
-            }
-            Type::Forall { body, .. } => body.collect_unbound_variables(out),
-            Type::Tuple(elements) => {
-                for e in elements {
-                    e.collect_unbound_variables(out);
-                }
-            }
-            Type::Array { element, .. } => element.collect_unbound_variables(out),
-            Type::Compound { args, .. } => {
-                for a in args {
-                    a.collect_unbound_variables(out);
-                }
-            }
-            Type::Simple(_)
-            | Type::Parameter(_)
-            | Type::Never
-            | Type::Uninferred
-            | Type::Ignored
-            | Type::Error
-            | Type::ImportNamespace(_)
-            | Type::ReceiverPlaceholder => {}
+        if let Type::Var { id, hint: Some(_) } = self {
+            out.push(*id);
+        }
+        for child in self.children() {
+            child.collect_unbound_variables(out);
         }
     }
 
@@ -2185,29 +2125,11 @@ impl Type {
     }
 
     pub fn contains_type(&self, target: &Type) -> bool {
-        if *self == *target {
-            return true;
-        }
-        match self {
-            Type::Nominal { params, .. } => params.iter().any(|p| p.contains_type(target)),
-            Type::Function(f) => {
-                f.params.iter().any(|p| p.ty.contains_type(target))
-                    || f.return_type.contains_type(target)
-            }
-            Type::Var { .. } => false,
-            Type::Forall { body, .. } => body.contains_type(target),
-            Type::Tuple(elements) => elements.iter().any(|e| e.contains_type(target)),
-            Type::Array { element, .. } => element.contains_type(target),
-            Type::Compound { args, .. } => args.iter().any(|a| a.contains_type(target)),
-            Type::Simple(_)
-            | Type::Parameter(_)
-            | Type::Never
-            | Type::Uninferred
-            | Type::Ignored
-            | Type::Error
-            | Type::ImportNamespace(_)
-            | Type::ReceiverPlaceholder => false,
-        }
+        self == target
+            || self
+                .children()
+                .into_iter()
+                .any(|child| child.contains_type(target))
     }
 }
 
@@ -2304,6 +2226,79 @@ mod tests {
         };
 
         assert_eq!(hash(&named), hash(&unnamed));
+    }
+
+    #[test]
+    fn signature_queries_ignore_function_bound_types() {
+        let variable = Type::Var {
+            id: TypeVarId::new(1),
+            hint: Some("value".into()),
+        };
+        let signature = Type::function(
+            vec![FunctionParameter::new(Type::int())],
+            vec![Bound {
+                param_name: "T".into(),
+                generic: variable.clone(),
+                ty: Type::Tuple(vec![variable.clone(), Type::Error]),
+            }],
+            Box::new(Type::bool()),
+        );
+        let mut variables = Vec::new();
+        signature.collect_unbound_variables(&mut variables);
+
+        assert!(!signature.contains_error());
+        assert!(!signature.has_unbound_variables());
+        assert!(!signature.contains_type(&variable));
+        assert!(!signature.contains_type(&Type::Error));
+        assert!(variables.is_empty());
+    }
+
+    #[test]
+    fn unbound_variables_preserve_occurrence_order_through_quantified_signatures() {
+        let first = Type::Var {
+            id: TypeVarId::new(1),
+            hint: Some("first".into()),
+        };
+        let second = Type::Var {
+            id: TypeVarId::new(2),
+            hint: Some("second".into()),
+        };
+        let signature = Type::Forall {
+            vars: vec!["T".into()],
+            body: Box::new(Type::function(
+                vec![
+                    FunctionParameter::new(Type::Tuple(vec![first.clone(), second.clone()])),
+                    FunctionParameter::new(unhinted_var(3)),
+                ],
+                vec![],
+                Box::new(first),
+            )),
+        };
+        let mut variables = Vec::new();
+        signature.collect_unbound_variables(&mut variables);
+
+        assert_eq!(
+            variables,
+            vec![TypeVarId::new(1), TypeVarId::new(2), TypeVarId::new(1)],
+        );
+        assert!(signature.has_unbound_variables());
+        assert!(signature.contains_type(&second));
+        assert!(signature.contains_type(&signature));
+    }
+
+    #[test]
+    fn signature_queries_find_errors_in_nested_return_types() {
+        let signature = Type::function(
+            vec![FunctionParameter::new(Type::int())],
+            vec![],
+            Box::new(Type::Array {
+                length: 1,
+                element: Box::new(Type::Error),
+            }),
+        );
+
+        assert!(signature.contains_error());
+        assert!(signature.contains_type(&Type::Error));
     }
 
     #[test]

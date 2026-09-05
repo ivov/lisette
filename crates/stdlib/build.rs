@@ -27,6 +27,16 @@ fn main() {
         collect_dlis_files(&go_std_dir, &go_std_dir, &mut go_std_contents);
     }
 
+    let metadata_path = manifest_path.join("src/go_modules.tsv");
+    let metadata = fs::read_to_string(&metadata_path).expect("stdlib package metadata not found");
+    let mut bundle = fs::File::create(Path::new(&out_dir).join("go_typedefs.data")).unwrap();
+    write!(bundle, "{}\n\n", metadata.trim_end_matches('\n')).unwrap();
+    for (filename, source) in &go_std_contents {
+        writeln!(bundle, "{}\t{}", filename.replace('\\', "/"), source.len()).unwrap();
+        bundle.write_all(source.as_bytes()).unwrap();
+    }
+    println!("cargo:rerun-if-changed={}", metadata_path.display());
+
     let prelude_hash = compute_hash(&prelude_contents);
     let go_std_hash = compute_hash(&go_std_contents);
 

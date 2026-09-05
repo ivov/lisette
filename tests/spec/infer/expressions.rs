@@ -2834,3 +2834,34 @@ fn sibling_ref_ampersand_before_read_in_short_circuit_is_flagged() {
     );
     infer_package("main", fs).assert_infer_code("reference_aliases_sibling");
 }
+
+#[test]
+fn sibling_ref_spread_errors_precede_argument_errors() {
+    let mut filesystem = MockFileSystem::new();
+    filesystem.add_file(
+        "main",
+        "main.lis",
+        r#"
+fn increment(value: mut Ref<int>) -> int {
+  value.* = value.* + 1
+  value.*
+}
+fn consume(first: (int, int), rest: VarArgs<(int, int)>) {}
+fn main() {
+  let mut first = 1
+  let mut second = 2
+  consume((increment(&first), first), [(increment(&second), second)]...)
+}
+"#,
+    );
+    let result = infer_package("main", filesystem);
+    let offsets: Vec<_> = result
+        .errors
+        .iter()
+        .filter(|error| error.code_str() == Some("infer.reference_aliases_sibling"))
+        .map(|error| error.primary_offset())
+        .collect();
+
+    assert_eq!(offsets.len(), 2, "{:?}", result.errors);
+    assert!(offsets[0] > offsets[1]);
+}

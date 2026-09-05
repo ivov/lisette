@@ -65,43 +65,16 @@ impl InferCtx<'_> {
                     self.walk_check_ref_aliasing(arg);
                 }
             }
-            Expression::Binary { left, right, .. } => {
-                self.check_sibling_ref_aliasing_refs(&[left, right]);
-                self.walk_check_ref_aliasing(left);
-                self.walk_check_ref_aliasing(right);
-            }
-            Expression::Tuple { elements, .. } => {
-                self.check_sibling_ref_aliasing_slice(elements);
-                for e in elements {
-                    self.walk_check_ref_aliasing(e);
+            Expression::Binary { .. }
+            | Expression::Tuple { .. }
+            | Expression::StructCall { .. }
+            | Expression::IndexedAccess { .. }
+            | Expression::Assignment { .. } => {
+                let children = expression.children();
+                self.check_sibling_ref_aliasing_refs(&children);
+                for child in children {
+                    self.walk_check_ref_aliasing(child);
                 }
-            }
-            Expression::StructCall {
-                field_assignments,
-                spread,
-                ..
-            } => {
-                let mut values: Vec<&Expression> =
-                    field_assignments.iter().map(|fa| &*fa.value).collect();
-                if let Some(s) = spread.as_expression() {
-                    values.push(s);
-                }
-                self.check_sibling_ref_aliasing_refs(&values);
-                for v in &values {
-                    self.walk_check_ref_aliasing(v);
-                }
-            }
-            Expression::IndexedAccess {
-                expression, index, ..
-            } => {
-                self.check_sibling_ref_aliasing_refs(&[expression.as_ref(), index.as_ref()]);
-                self.walk_check_ref_aliasing(expression);
-                self.walk_check_ref_aliasing(index);
-            }
-            Expression::Assignment { target, value, .. } => {
-                self.check_sibling_ref_aliasing_refs(&[target.as_ref(), value.as_ref()]);
-                self.walk_check_ref_aliasing(target);
-                self.walk_check_ref_aliasing(value);
             }
             // For all other expressions, just recurse into children.
             _ => {
