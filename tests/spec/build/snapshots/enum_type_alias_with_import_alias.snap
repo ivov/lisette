@@ -8,7 +8,7 @@ func MakeEventClick(arg0 int) Event {
 	return Event{Tag: EventClick, X: arg0}
 }
 
-type EventTag int
+type EventTag uint8
 
 const (
 	EventClick EventTag = iota

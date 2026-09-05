@@ -12,7 +12,7 @@ func Makemap_B() map_ {
 	return map_{Tag: mapB}
 }
 
-type mapTag int
+type mapTag uint8
 
 const (
 	mapA mapTag = iota

@@ -18,7 +18,7 @@ func MakeEitherRight[L any, R any](arg0 R) Either[L, R] {
 	return Either[L, R]{Tag: EitherRight, Right: arg0}
 }
 
-type EitherTag int
+type EitherTag uint8
 
 const (
 	EitherLeft EitherTag = iota

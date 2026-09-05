@@ -19,7 +19,7 @@ type Equatable[T any] interface {
 	equals(T) bool
 }
 
-type PairTag int
+type PairTag uint8
 
 const (
 	PairBoth PairTag = iota

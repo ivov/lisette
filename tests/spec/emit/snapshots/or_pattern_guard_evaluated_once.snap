@@ -21,7 +21,7 @@ func MakeResErr(arg0 int) Res {
 	return Res{Tag: ResErr, Err: arg0}
 }
 
-type ResTag int
+type ResTag uint8
 
 const (
 	ResOk ResTag = iota

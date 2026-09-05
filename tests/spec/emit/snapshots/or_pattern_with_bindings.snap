@@ -20,7 +20,7 @@ func MakeEB(arg0 int) E {
 	return E{Tag: EB, B: arg0}
 }
 
-type ETag int
+type ETag uint8
 
 const (
 	EA ETag = iota

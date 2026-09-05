@@ -23,7 +23,7 @@ func MakeSideRight() Side {
 	return Side{Tag: SideRight}
 }
 
-type SideTag int
+type SideTag uint8
 
 const (
 	SideLeft SideTag = iota

@@ -23,7 +23,7 @@ func MakeListCons(arg0 int, arg1 List) List {
 	return List{Tag: ListCons, Cons0: arg0, Cons1: &arg1}
 }
 
-type ListTag int
+type ListTag uint8
 
 const (
 	ListNil ListTag = iota

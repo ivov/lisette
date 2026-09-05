@@ -41,7 +41,7 @@ func MakeWrapPartial(arg0 int) Wrap {
 	return Wrap{Tag: WrapPartial, Partial: arg0}
 }
 
-type WrapTag int
+type WrapTag uint8
 
 const (
 	WrapEmpty WrapTag = iota

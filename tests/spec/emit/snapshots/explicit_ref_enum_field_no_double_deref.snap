@@ -24,7 +24,7 @@ func MakeListNil[T any]() List[T] {
 	return List[T]{Tag: ListNil}
 }
 
-type ListTag int
+type ListTag uint8
 
 const (
 	ListCons ListTag = iota

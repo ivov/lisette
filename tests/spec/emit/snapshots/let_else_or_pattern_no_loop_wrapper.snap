@@ -29,7 +29,7 @@ func MakeValC() Val {
 	return Val{Tag: ValC}
 }
 
-type ValTag int
+type ValTag uint8
 
 const (
 	ValA ValTag = iota

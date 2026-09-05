@@ -35,7 +35,7 @@ type O struct{}
 
 type P int
 
-type ColorTag int
+type ColorTag uint8
 
 const (
 	ColorRed ColorTag = iota

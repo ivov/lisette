@@ -26,7 +26,7 @@ func MakeShapeRectangle(arg0 int, arg1 int) Shape {
 	return Shape{Tag: ShapeRectangle, Width: arg0, Height: arg1}
 }
 
-type ShapeTag int
+type ShapeTag uint8
 
 const (
 	ShapeCircle ShapeTag = iota

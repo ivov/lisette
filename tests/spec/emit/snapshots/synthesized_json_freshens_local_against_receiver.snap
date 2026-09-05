@@ -25,7 +25,7 @@ func MakeVaultFull(arg0 int, arg1 int) Vault {
 	return Vault{Tag: VaultFull, A: arg0, B: arg1}
 }
 
-type VaultTag int
+type VaultTag uint8
 
 const (
 	VaultFull VaultTag = iota

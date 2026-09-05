@@ -21,7 +21,7 @@ func MakeExprAdd(arg0 *Expr, arg1 *Expr) Expr {
 	return Expr{Tag: ExprAdd, Add0: arg0, Add1: arg1}
 }
 
-type ExprTag int
+type ExprTag uint8
 
 const (
 	ExprNum ExprTag = iota

@@ -31,7 +31,7 @@ func Makemaother() ma {
 	return ma{Tag: maother}
 }
 
-type maTag int
+type maTag uint8
 
 const (
 	make_ maTag = iota

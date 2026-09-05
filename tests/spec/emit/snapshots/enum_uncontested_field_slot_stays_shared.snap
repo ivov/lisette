@@ -24,7 +24,7 @@ func MakeShapeSquare(arg0 float64) Shape {
 	return Shape{Tag: ShapeSquare, W: arg0}
 }
 
-type ShapeTag int
+type ShapeTag uint8
 
 const (
 	ShapeRect ShapeTag = iota

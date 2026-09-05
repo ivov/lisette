@@ -23,7 +23,7 @@ func MakeEventAfter(arg0 t.Duration) Event {
 	return Event{Tag: EventAfter, Delay: arg0}
 }
 
-type EventTag int
+type EventTag uint8
 
 const (
 	EventAt EventTag = iota

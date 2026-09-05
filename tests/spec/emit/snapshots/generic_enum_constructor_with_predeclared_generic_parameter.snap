@@ -29,7 +29,7 @@ func MakeBoxNone[int_ any]() Box[int_] {
 	return Box[int_]{Tag: BoxNone}
 }
 
-type BoxTag int
+type BoxTag uint8
 
 const (
 	BoxSome BoxTag = iota

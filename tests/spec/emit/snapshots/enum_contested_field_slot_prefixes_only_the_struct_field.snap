@@ -24,7 +24,7 @@ func MakeShapeOther(arg0 int) Shape {
 	return Shape{Tag: ShapeOther, OtherCircle: arg0}
 }
 
-type ShapeTag int
+type ShapeTag uint8
 
 const (
 	ShapeCircle ShapeTag = iota

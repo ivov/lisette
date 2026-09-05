@@ -24,7 +24,7 @@ func MakeHolderEmpty[T comparable]() Holder[T] {
 	return Holder[T]{Tag: HolderEmpty}
 }
 
-type HolderTag int
+type HolderTag uint8
 
 const (
 	HolderEmpty HolderTag = iota

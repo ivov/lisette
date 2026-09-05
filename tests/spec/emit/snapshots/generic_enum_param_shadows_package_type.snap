@@ -33,7 +33,7 @@ type T struct {
 	v int
 }
 
-type WrapTag int
+type WrapTag uint8
 
 const (
 	WrapEmpty WrapTag = iota

@@ -30,7 +30,7 @@ func MakeBoxFull[b any](arg0 b) Box[b] {
 	return Box[b]{Tag: BoxFull, Full: arg0}
 }
 
-type BoxTag int
+type BoxTag uint8
 
 const (
 	BoxEmpty BoxTag = iota

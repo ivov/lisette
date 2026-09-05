@@ -29,7 +29,7 @@ func MakeShapeUnknown() Shape {
 	return Shape{Tag: ShapeUnknown}
 }
 
-type ShapeTag int
+type ShapeTag uint8
 
 const (
 	ShapeCircle ShapeTag = iota

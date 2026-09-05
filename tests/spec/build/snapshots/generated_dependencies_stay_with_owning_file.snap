@@ -40,7 +40,7 @@ func MakeMyEnumValue(arg0 f.Foo) MyEnum {
 	return MyEnum{Tag: MyEnumValue, Value: arg0}
 }
 
-type MyEnumTag int
+type MyEnumTag uint8
 
 const (
 	MyEnumEmpty MyEnumTag = iota

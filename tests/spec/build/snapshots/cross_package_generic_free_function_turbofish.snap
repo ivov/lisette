@@ -12,7 +12,7 @@ func MakeResult2Err2[T any, E any](arg0 E) Result2[T, E] {
 	return Result2[T, E]{Tag: Result2Err2, Err2: arg0}
 }
 
-type Result2Tag int
+type Result2Tag uint8
 
 const (
 	Result2Ok2 Result2Tag = iota

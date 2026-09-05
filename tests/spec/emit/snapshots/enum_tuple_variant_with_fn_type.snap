@@ -25,7 +25,7 @@ func MakeTransformApply[T any](arg0 func(T) T) Transform[T] {
 	return Transform[T]{Tag: TransformApply, Apply: arg0}
 }
 
-type TransformTag int
+type TransformTag uint8
 
 const (
 	TransformIdentity TransformTag = iota

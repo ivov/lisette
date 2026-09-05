@@ -33,7 +33,7 @@ func MakeValidatedInvalid[T any](arg0 string) Validated[T] {
 	return Validated[T]{Tag: ValidatedInvalid, Invalid: arg0}
 }
 
-type ValidatedTag int
+type ValidatedTag uint8
 
 const (
 	ValidatedValid ValidatedTag = iota

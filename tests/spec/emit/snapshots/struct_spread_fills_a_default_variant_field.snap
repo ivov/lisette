@@ -27,7 +27,7 @@ func MakeColourGreen() Colour {
 	return Colour{Tag: ColourGreen}
 }
 
-type ColourTag int
+type ColourTag uint8
 
 const (
 	ColourRed   ColourTag = 1

@@ -16,7 +16,7 @@ func MakeMessageMove(arg0 int, arg1 int) Message {
 	return Message{Tag: MessageMove, X: arg0, Y: arg1}
 }
 
-type MessageTag int
+type MessageTag uint8
 
 const (
 	MessageMove MessageTag = iota
