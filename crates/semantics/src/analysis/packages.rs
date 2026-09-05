@@ -608,7 +608,7 @@ fn infer_packages(checker: &mut TaskState, store: &mut Store, packages: Vec<Regi
     let inferred_files = if packages.len() < PARALLEL_THRESHOLD {
         let mut inferred_files = Vec::new();
         for package in packages {
-            inferred_files.extend(InferCtx::new(checker, store).infer_package(package));
+            inferred_files.extend(checker.infer_registered_package(store, package));
         }
         inferred_files
     } else {
@@ -619,7 +619,7 @@ fn infer_packages(checker: &mut TaskState, store: &mut Store, packages: Vec<Regi
             .into_par_iter()
             .map(|package| {
                 let mut worker = seed.spawn();
-                let inferred_files = InferCtx::new(&mut worker, store_ref).infer_package(package);
+                let inferred_files = worker.infer_registered_package(store_ref, package);
                 (worker.into_output(), inferred_files)
             })
             .collect();

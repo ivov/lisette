@@ -1,12 +1,37 @@
 use crate::checker::EnvResolve;
 use syntax::ast::{Expression, Span, StructFields};
-use syntax::program::{CallKind, Definition, DefinitionBody, NativeTypeKind};
+use syntax::program::{CallKind, Definition, DefinitionBody, DotAccessResolution, NativeTypeKind};
 use syntax::types::{FunctionParameter, Symbol, Type, peel_to_range_type};
 
 use crate::checker::infer::InferCtx;
 use syntax::program::AliasKind;
 
 impl InferCtx<'_> {
+    pub(super) fn writable_receiver_place(&mut self, callee: &Expression) -> Option<String> {
+        let Expression::DotAccess {
+            expression: receiver,
+            member,
+            resolution: DotAccessResolution::InstanceMethod { .. },
+            ..
+        } = callee.unwrap_parens()
+        else {
+            return None;
+        };
+        let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
+        let store = self.store;
+        let method = self.method_of_type(store, &receiver_ty, member)?;
+        let Type::Function(function) = method.ty.unwrap_forall() else {
+            return None;
+        };
+        if !self
+            .store
+            .parameter_grants_write(&function.params.first()?.ty)
+        {
+            return None;
+        }
+        super::aliasing::place_key(receiver.unwrap_parens())
+    }
+
     pub(super) fn classify_call(&mut self, callee: &Expression) -> CallKind {
         let store = self.store;
         let callee = callee.unwrap_parens();

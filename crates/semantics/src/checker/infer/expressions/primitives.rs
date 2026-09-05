@@ -260,12 +260,12 @@ impl InferCtx<'_> {
             // Don't mark assignment targets as "used" - only mark actual uses
             if !self.is_assignment_target_context() {
                 self.facts.mark_used(id);
-                if self
+                if let Some(inference) = self
                     .binding_inference
-                    .get(&id)
-                    .is_some_and(|binding| binding.as_loop_element().is_some())
+                    .get_mut(&id)
+                    .and_then(|binding| binding.as_loop_element_mut())
                 {
-                    self.loop_element_reads.entry(id).or_default().push(span);
+                    inference.reads.push(span);
                 }
             }
 

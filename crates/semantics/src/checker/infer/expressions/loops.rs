@@ -1,9 +1,7 @@
 use std::mem;
 
 use crate::checker::EnvResolve;
-use crate::checker::infer::context::{
-    BindingInference, LoopContext, LoopCopyWrite, LoopElementInference,
-};
+use crate::checker::infer::context::{BindingInference, LoopContext, LoopElementInference};
 use syntax::ast::BindingKind;
 use syntax::ast::{Binding, BindingId, Expression, Pattern, Span};
 use syntax::types::Type;
@@ -203,6 +201,8 @@ impl InferCtx<'_> {
                     BindingInference::LoopElement(LoopElementInference {
                         collection,
                         was_demoted: demoted_from_writable,
+                        reads: Vec::new(),
+                        writes: Vec::new(),
                     }),
                 );
             }
@@ -251,51 +251,47 @@ impl InferCtx<'_> {
         };
         let Some(inference) = self
             .binding_inference
-            .get(&binding_id)
-            .and_then(|binding| binding.as_loop_element())
+            .get_mut(&binding_id)
+            .and_then(|binding| binding.as_loop_element_mut())
         else {
             return;
         };
-        self.pending_loop_copy_writes.push(LoopCopyWrite {
-            binding_id,
-            name: name.to_string(),
-            collection: inference.collection.clone(),
-            span,
-        });
+        inference.writes.push(span);
     }
 
     fn report_dead_loop_copy_writes(&mut self, binding_id: BindingId, body: &Expression) {
-        let (writes, other_writes): (Vec<_>, Vec<_>) =
-            mem::take(&mut self.pending_loop_copy_writes)
-                .into_iter()
-                .partition(|write| write.binding_id == binding_id);
-        self.pending_loop_copy_writes = other_writes;
-        let reads = self
-            .loop_element_reads
-            .remove(&binding_id)
-            .unwrap_or_default();
+        let Some(inference) = self
+            .binding_inference
+            .get_mut(&binding_id)
+            .and_then(|binding| binding.as_loop_element_mut())
+        else {
+            return;
+        };
+        let writes = mem::take(&mut inference.writes);
+        let reads = mem::take(&mut inference.reads);
         if writes.is_empty() {
             return;
         }
         let mut nested_loops = Vec::new();
         let mut lambdas = Vec::new();
         collect_nested_loop_and_lambda_spans(body, &mut nested_loops, &mut lambdas);
-        let observes = |read: &Span, write: &LoopCopyWrite| {
-            read.byte_offset >= write.span.end()
+        let observes = |read: &Span, write: &Span| {
+            read.byte_offset >= write.end()
                 || lambdas.iter().any(|lambda| span_contains(lambda, read))
                 || nested_loops.iter().any(|nested_loop| {
-                    span_contains(nested_loop, read) && span_contains(nested_loop, &write.span)
+                    span_contains(nested_loop, read) && span_contains(nested_loop, write)
                 })
         };
         let dead_write = writes
             .iter()
             .find(|write| !reads.iter().any(|read| observes(read, write)));
         if let Some(write) = dead_write {
-            self.sink.push(diagnostics::infer::loop_copy_write(
-                &write.name,
-                write.collection.as_deref(),
-                write.span,
-            ));
+            let diagnostic = diagnostics::infer::loop_copy_write(
+                &self.state.facts.bindings[&binding_id].name,
+                inference.collection.as_deref(),
+                *write,
+            );
+            self.sink.push(diagnostic);
         }
     }
 

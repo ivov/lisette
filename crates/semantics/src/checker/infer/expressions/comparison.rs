@@ -459,21 +459,15 @@ fn bound_satisfies(store: &Store, start: &Type, target: &Type) -> bool {
 }
 
 pub(crate) fn param_is_comparable(scopes: &Scopes, env: &TypeEnv, param_name: &str) -> bool {
-    let mut found = false;
-    scopes.for_each_bound_on_param(param_name, |bound_ty| {
-        if found {
-            return;
-        }
-        if let Some(declared) = bound_ty
+    scopes.bounds_on_param(param_name).iter().any(|bound_ty| {
+        bound_ty
             .resolve_in(env)
             .get_qualified_id()
             .and_then(super::super::unify::BuiltinBound::from_qualified_id)
-            && declared.satisfies(super::super::unify::BuiltinBound::Comparable)
-        {
-            found = true;
-        }
-    });
-    found
+            .is_some_and(|declared| {
+                declared.satisfies(super::super::unify::BuiltinBound::Comparable)
+            })
+    })
 }
 
 fn interface_bound_guarantees_equals(store: &Store, bound: &Type, param_name: &str) -> bool {
@@ -493,16 +487,9 @@ pub(crate) fn param_is_equatable(
     if param_is_comparable(scopes, env, param_name) {
         return true;
     }
-    let mut found = false;
-    scopes.for_each_bound_on_param(param_name, |bound_ty| {
-        if found {
-            return;
-        }
-        if interface_bound_guarantees_equals(store, &bound_ty.resolve_in(env), param_name) {
-            found = true;
-        }
-    });
-    found
+    scopes.bounds_on_param(param_name).iter().any(|bound_ty| {
+        interface_bound_guarantees_equals(store, &bound_ty.resolve_in(env), param_name)
+    })
 }
 
 impl InferCtx<'_> {

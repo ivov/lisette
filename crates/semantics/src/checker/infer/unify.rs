@@ -2,11 +2,10 @@ use crate::checker::EnvResolve;
 use Type::{Function, Nominal};
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::Span;
-use syntax::types::{Bound, CompoundKind, Type, TypeVarId};
+use syntax::types::{Bound, CompoundKind, Type};
 
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::context::{Expectation, ExpectationRole};
-use crate::checker::type_env::VarState;
 use syntax::types::FunctionParameter;
 use syntax::types::SimpleKind;
 
@@ -179,8 +178,14 @@ impl InferCtx<'_> {
                 }
             }
 
-            (Type::Var { id, .. }, _) => self.unify_type_variable(*id, &r2, span, false),
-            (_, Type::Var { id, .. }) => self.unify_type_variable(*id, &r1, span, true),
+            // Shallow resolution above leaves only unbound variables here.
+            (Type::Var { id, .. }, other) | (other, Type::Var { id, .. }) => {
+                if self.env.occurs(*id, other) {
+                    return Err(UnifyError::InfiniteType);
+                }
+                self.env.bind(*id, other.clone());
+                Ok(())
+            }
 
             _ if r1_is_unknown && self.is_inside_invariant_position() => {
                 Err(UnifyError::TypeMismatch)
@@ -201,11 +206,11 @@ impl InferCtx<'_> {
             _ if matches!(r1, Type::Never) => Err(UnifyError::TypeMismatch),
 
             _ if matches!(r1, Type::Error) => {
-                self.collapse_vars_to_error(&r2, span);
+                self.collapse_vars_to_error(&r2);
                 Ok(())
             }
             _ if matches!(r2, Type::Error) => {
-                self.collapse_vars_to_error(&r1, span);
+                self.collapse_vars_to_error(&r1);
                 Ok(())
             }
 
@@ -369,61 +374,13 @@ impl InferCtx<'_> {
         }
     }
 
-    fn collapse_vars_to_error(&mut self, ty: &Type, span: &Span) {
+    fn collapse_vars_to_error(&mut self, ty: &Type) {
         let resolved = self.env.shallow_resolve(ty);
-        match resolved {
-            Type::Var { id, .. } => {
-                let _ = self.unify_type_variable(id, &Type::Error, span, false);
-            }
-            Nominal { params, .. } => {
-                for p in params {
-                    self.collapse_vars_to_error(&p, span);
-                }
-            }
-            Function(f) => {
-                for p in &f.params {
-                    self.collapse_vars_to_error(&p.ty, span);
-                }
-                self.collapse_vars_to_error(&f.return_type, span);
-            }
-            Type::Tuple(elems) => {
-                for e in elems {
-                    self.collapse_vars_to_error(&e, span);
-                }
-            }
-            Type::Compound { args, .. } => {
-                for a in args {
-                    self.collapse_vars_to_error(&a, span);
-                }
-            }
-            Type::Forall { body, .. } => {
-                self.collapse_vars_to_error(&body, span);
-            }
-            _ => {}
-        }
-    }
-
-    fn unify_type_variable(
-        &mut self,
-        id: TypeVarId,
-        other_ty: &Type,
-        span: &Span,
-        var_on_right: bool,
-    ) -> Result<(), UnifyError> {
-        match self.env.state(id).clone() {
-            VarState::Bound(ty) => {
-                if var_on_right {
-                    self.try_unify(other_ty, &ty, span)
-                } else {
-                    self.try_unify(&ty, other_ty, span)
-                }
-            }
-            VarState::Unbound => {
-                if self.env.occurs(id, other_ty) {
-                    return Err(UnifyError::InfiniteType);
-                }
-                self.env.bind(id, other_ty.clone());
-                Ok(())
+        if let Type::Var { id, .. } = resolved {
+            self.env.bind(id, Type::Error);
+        } else {
+            for child in resolved.children() {
+                self.collapse_vars_to_error(child);
             }
         }
     }

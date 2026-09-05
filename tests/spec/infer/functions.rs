@@ -872,6 +872,43 @@ fn load_simple_package_with_function() {
 }
 
 #[test]
+fn deferred_select_checks_are_completed_for_each_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "mylib",
+        "first.lis",
+        r#"
+fn first() -> int {
+  let ch = Channel.new<int>()
+  select { let Some(value) = ch.receive() => value }
+}
+"#,
+    );
+    fs.add_file(
+        "mylib",
+        "second.lis",
+        r#"
+fn second() -> bool {
+  let ch = Channel.new<bool>()
+  select { let Some(value) = ch.receive() => value }
+}
+"#,
+    );
+    fs.add_file(
+        "mylib",
+        "third.lis",
+        r#"
+fn third() {
+  let ch = Channel.new<int>()
+  select { let Some(_) = ch.receive() => {} }
+}
+"#,
+    );
+
+    infer_package("mylib", fs).assert_infer_code_count("non_exhaustive_select_expression", 2);
+}
+
+#[test]
 fn package_with_multiple_files() {
     let mut fs = MockFileSystem::new();
     fs.add_file(

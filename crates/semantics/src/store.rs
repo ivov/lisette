@@ -9,21 +9,19 @@ use syntax::program::{
     TestIndex, UninferredExports, method_for_type, methods_for_type, type_has_any_method,
 };
 use syntax::types;
-use syntax::types::{CompoundKind, SimpleKind, Symbol, Type};
+use syntax::types::{CompoundKind, SimpleKind, Type};
 
 pub use crate::closed_domain::{ClosedDomain, ClosedMember, DomainValue};
 pub use syntax::ENTRY_PACKAGE_ID;
 pub const ENTRY_FILE_ID: u32 = 0;
-// A linear scan wins for small stores by avoiding a second hash lookup.
-const DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD: usize = 16;
 
 #[derive(Clone)]
 pub struct Store {
     /// `Arc` so registration workers share a read view; [`Arc::make_mut`]
     /// writes stay zero-copy while a package has a single owner.
     pub packages: HashMap<String, Arc<Package>>,
-    /// Dense file ID -> owning package ID index, enabled for large stores.
-    file_packages: Option<Arc<Vec<Option<String>>>>,
+    /// Avoids scanning every package on the hot file-lookup path (see #1227).
+    file_packages: HashMap<u32, String>,
     /// Go package ID -> package name from the typedef `// Package:` directive.
     pub go_package_names: HashMap<String, String>,
     /// File ID counter. Starts at 2 because 0 is reserved for entry, 1 for prelude.
@@ -52,7 +50,7 @@ impl Store {
 
         Self {
             packages,
-            file_packages: None,
+            file_packages: HashMap::default(),
             go_package_names: Default::default(),
             next_file_id: 2, // 0 = entrypoint, 1 = prelude
             equality_index: Default::default(),
@@ -102,89 +100,43 @@ impl Store {
     pub fn store_file(&mut self, file: File) {
         let package_id = file.package_id.clone();
         let file_id = file.id;
-
         let package = self
             .get_package_mut(&package_id)
             .expect("package must exist to store file");
         package.files.insert(file_id, file);
-        self.index_file(file_id, package_id);
+        self.file_packages.insert(file_id, package_id);
     }
 
     pub fn get_file(&self, file_id: u32) -> Option<&File> {
-        if let Some(package_id) = self
-            .file_packages
-            .as_deref()
-            .and_then(|packages| packages.get(file_id as usize))
-            .and_then(Option::as_deref)
-            && let Some(file) = self
-                .packages
-                .get(package_id)
-                .and_then(|package| package.get_file(file_id))
-        {
-            return Some(file);
-        }
-        self.packages
-            .values()
-            .find_map(|package| package.get_file(file_id))
+        self.file_packages
+            .get(&file_id)
+            .and_then(|package_id| self.packages.get(package_id))
+            .and_then(|package| package.get_file(file_id))
+            // Public package mutation can bypass the index.
+            .or_else(|| {
+                self.packages
+                    .values()
+                    .find_map(|package| package.get_file(file_id))
+            })
     }
 
     pub(crate) fn get_file_mut(&mut self, file_id: u32) -> Option<&mut File> {
-        if let Some(package_id) = self
-            .file_packages
-            .as_deref()
-            .and_then(|packages| packages.get(file_id as usize))
-            .and_then(Option::as_deref)
+        if let Some(package_id) = self.file_packages.get(&file_id)
             && self
                 .packages
                 .get(package_id)
                 .is_some_and(|package| package.files.contains_key(&file_id))
         {
-            return self
-                .packages
-                .get_mut(package_id)
-                .and_then(|package| Arc::make_mut(package).files.get_mut(&file_id));
-        }
-
-        let package_id = self.packages.iter().find_map(|(package_id, package)| {
-            package
+            return Arc::make_mut(self.packages.get_mut(package_id)?)
                 .files
-                .contains_key(&file_id)
-                .then(|| package_id.clone())
-        })?;
-        let package = Arc::make_mut(self.packages.get_mut(&package_id)?);
-        package.files.get_mut(&file_id)
-    }
-
-    fn index_file(&mut self, file_id: u32, package_id: String) {
-        let Some(file_packages) = self.file_packages.as_mut() else {
-            return;
-        };
-        let index = file_id as usize;
-        let file_packages = Arc::make_mut(file_packages);
-        if file_packages.len() <= index {
-            file_packages.resize_with(index + 1, || None);
-        }
-        file_packages[index] = Some(package_id);
-    }
-
-    fn enable_file_index_if_large(&mut self) {
-        if self.file_packages.is_some()
-            || self.packages.len() < DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD
-        {
-            return;
+                .get_mut(&file_id);
         }
 
-        let mut file_packages = Vec::new();
-        for (package_id, package) in &self.packages {
-            for file_id in package.files.keys().copied() {
-                let index = file_id as usize;
-                if file_packages.len() <= index {
-                    file_packages.resize_with(index + 1, || None);
-                }
-                file_packages[index] = Some(package_id.clone());
-            }
-        }
-        self.file_packages = Some(Arc::new(file_packages));
+        let package = self
+            .packages
+            .values_mut()
+            .find(|package| package.files.contains_key(&file_id))?;
+        Arc::make_mut(package).files.get_mut(&file_id)
     }
 
     pub fn get_package(&self, package_id: &str) -> Option<&Package> {
@@ -209,9 +161,6 @@ impl Store {
 
         self.packages
             .insert(package_id.to_string(), Arc::new(Package::new(package_id)));
-        if self.packages.len() == DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD {
-            self.enable_file_index_if_large();
-        }
     }
 
     pub fn get_package_mut(&mut self, package_id: &str) -> Option<&mut Package> {
@@ -220,20 +169,18 @@ impl Store {
 
     /// Inserts a worker-built package (e.g. cache-decoded).
     pub(crate) fn insert_prebuilt_package(&mut self, package: Package) {
-        if self.file_packages.is_none() {
-            self.packages.insert(package.id.clone(), Arc::new(package));
-            if self.packages.len() == DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD {
-                self.enable_file_index_if_large();
+        if let Some(previous) = self.packages.get(&package.id) {
+            for file_id in previous.files.keys() {
+                self.file_packages.remove(file_id);
             }
-            return;
         }
-
-        let package_id = package.id.clone();
-        let file_ids: Vec<u32> = package.files.keys().copied().collect();
+        self.file_packages.extend(
+            package
+                .files
+                .keys()
+                .map(|&file_id| (file_id, package.id.clone())),
+        );
         self.packages.insert(package.id.clone(), Arc::new(package));
-        for file_id in file_ids {
-            self.index_file(file_id, package_id.clone());
-        }
     }
 
     /// `Arc`-bump snapshot for a registration worker, which inserts its own
@@ -696,52 +643,16 @@ impl Store {
         definition.is_pointer_backed_newtype(|id| self.get_definition(id))
     }
 
-    pub(crate) fn get_all_methods(
-        &self,
-        ty: &Type,
-        trait_bounds: &HashMap<Symbol, Vec<Type>>,
-    ) -> Methods {
-        methods_for_type(ty, trait_bounds, |id| self.get_definition(id))
+    pub(crate) fn get_all_methods(&self, ty: &Type) -> Methods {
+        methods_for_type(ty, &HashMap::default(), |id| self.get_definition(id))
     }
 
-    pub(crate) fn get_method_for_type(
-        &self,
-        ty: &Type,
-        trait_bounds: &HashMap<Symbol, Vec<Type>>,
-        name: &str,
-    ) -> Option<Method> {
-        method_for_type(ty, trait_bounds, |id| self.get_definition(id), name)
+    pub(crate) fn get_method_for_type(&self, ty: &Type, name: &str) -> Option<Method> {
+        method_for_type(ty, &HashMap::default(), |id| self.get_definition(id), name)
     }
 
     pub(crate) fn type_has_any_method(&self, ty: &Type) -> bool {
         type_has_any_method(ty, |id| self.get_definition(id))
-    }
-
-    pub(crate) fn get_method_from_bounds(
-        &self,
-        qualified_name: &str,
-        trait_bounds: &HashMap<Symbol, Vec<Type>>,
-        name: &str,
-    ) -> Option<Method> {
-        trait_bounds
-            .get(qualified_name)?
-            .iter()
-            .filter_map(|interface_ty| self.get_method_for_type(interface_ty, trait_bounds, name))
-            .next_back()
-    }
-
-    pub(crate) fn get_methods_from_bounds(
-        &self,
-        qualified_name: &str,
-        trait_bounds: &HashMap<Symbol, Vec<Type>>,
-    ) -> Methods {
-        if let Some(bound_types) = trait_bounds.get(qualified_name) {
-            return bound_types
-                .iter()
-                .flat_map(|interface_ty| self.get_all_methods(interface_ty, trait_bounds))
-                .collect();
-        }
-        Methods::default()
     }
 }
 
@@ -766,14 +677,45 @@ mod clone_tests {
         cloned.store_file(File::new_cached("m", "cloned.lis", "", "", 42));
 
         assert!(store.get_file(42).is_none());
+        assert!(!store.file_packages.contains_key(&42));
+        assert_eq!(cloned.file_packages[&42], "m");
+    }
+
+    #[test]
+    fn stored_files_are_indexed_without_a_package_threshold_or_dense_ids() {
+        let mut store = Store::new();
+        store.add_package("m");
+
+        for file_id in [42, u32::MAX] {
+            store.store_file(File::new_cached("m", "sample.lis", "", "", file_id));
+
+            assert_eq!(store.file_packages[&file_id], "m");
+            assert_eq!(store.get_file(file_id).unwrap().id, file_id);
+            assert_eq!(store.get_file_mut(file_id).unwrap().id, file_id);
+        }
+        assert_eq!(store.file_packages.len(), 2);
+    }
+
+    #[test]
+    fn registration_view_has_independent_file_ownership() {
+        let mut store = Store::new();
+        store.add_package("m");
+        store.store_file(File::new_cached("m", "original.lis", "", "", 42));
+        let mut view = store.registration_view();
+
+        view.store_file(File::new_cached("m", "worker.lis", "", "", 43));
+
+        assert_eq!(view.file_packages[&42], "m");
+        assert_eq!(view.file_packages[&43], "m");
+        assert_eq!(view.get_file(42).unwrap().name, "original.lis");
+        assert_eq!(view.get_file(43).unwrap().name, "worker.lis");
+        assert!(!store.file_packages.contains_key(&43));
+        assert!(store.get_file(43).is_none());
     }
 
     #[test]
     fn prebuilt_package_files_are_available_by_id() {
         let mut store = Store::new();
-        for index in 0..DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD - 3 {
-            store.add_package(&format!("package{index}"));
-        }
         let mut package = Package::new("cached");
         package
             .files
@@ -781,6 +723,7 @@ mod clone_tests {
 
         store.insert_prebuilt_package(package);
 
+        assert_eq!(store.file_packages[&42], "cached");
         assert_eq!(
             store.get_file(42).map(|file| file.name.as_str()),
             Some("cached.lis")
@@ -800,29 +743,47 @@ mod clone_tests {
     }
 
     #[test]
-    fn stored_files_are_indexed_after_the_threshold() {
+    fn files_added_through_a_package_are_available_by_id() {
         let mut store = Store::new();
-        for index in 0..DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD - 3 {
-            store.add_package(&format!("package{index}"));
-        }
         store.add_package("large");
 
-        store.store_file(File::new_cached("large", "large.lis", "", "", 42));
+        store
+            .get_package_mut("large")
+            .unwrap()
+            .files
+            .insert(42, File::new_cached("large", "large.lis", "", "", 42));
 
         assert_eq!(
             store.get_file(42).map(|file| file.name.as_str()),
             Some("large.lis")
         );
+        assert_eq!(store.get_file_mut(42).unwrap().name, "large.lis");
     }
 
     #[test]
-    fn indexed_files_are_mutable_after_the_threshold() {
+    fn file_lookup_tolerates_ownership_changed_through_public_packages() {
         let mut store = Store::new();
-        for index in 0..DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD - 3 {
-            store.add_package(&format!("package{index}"));
-        }
+        store.add_package("before");
+        store.add_package("after");
+        store.store_file(File::new_cached("before", "before.lis", "", "", 42));
+
+        store.get_package_mut("before").unwrap().files.remove(&42);
+        store
+            .get_package_mut("after")
+            .unwrap()
+            .files
+            .insert(42, File::new_cached("after", "after.lis", "", "", 42));
+
+        assert_eq!(store.get_file(42).unwrap().package_id, "after");
+        assert_eq!(store.get_file_mut(42).unwrap().package_id, "after");
+    }
+
+    #[test]
+    fn mutating_a_file_detaches_only_its_package() {
+        let mut store = Store::new();
         store.add_package("large");
         store.store_file(File::new_cached("large", "before.lis", "", "", 42));
+        let cloned = store.clone();
 
         store.get_file_mut(42).unwrap().name = "after.lis".to_string();
 
@@ -830,6 +791,30 @@ mod clone_tests {
             store.get_file(42).map(|file| file.name.as_str()),
             Some("after.lis")
         );
+        assert_eq!(cloned.get_file(42).unwrap().name, "before.lis");
+        assert!(Arc::ptr_eq(
+            &store.packages["prelude"],
+            &cloned.packages["prelude"]
+        ));
+    }
+
+    #[test]
+    fn replacing_a_package_replaces_its_file_ownership() {
+        let mut store = Store::new();
+        store.add_package("cached");
+        store.store_file(File::new_cached("cached", "before.lis", "", "", 42));
+        let mut replacement = Package::new("cached");
+        replacement
+            .files
+            .insert(43, File::new_cached("cached", "after.lis", "", "", 43));
+
+        store.insert_prebuilt_package(replacement);
+
+        assert!(!store.file_packages.contains_key(&42));
+        assert_eq!(store.file_packages[&43], "cached");
+        assert!(store.get_file(42).is_none());
+        assert!(store.get_file_mut(42).is_none());
+        assert_eq!(store.get_file(43).unwrap().name, "after.lis");
     }
 }
 
@@ -841,7 +826,7 @@ mod closed_domain_tests {
     };
     use syntax::program::{AliasKind, Attributes, TypeAttribute, Visibility};
     use syntax::program::{ConstantValue, ValueKind};
-    use syntax::types::CompoundKind;
+    use syntax::types::{CompoundKind, Symbol};
 
     fn nominal_int(id: &str) -> Type {
         Type::Nominal {

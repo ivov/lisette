@@ -2,11 +2,11 @@ use ecow::EcoString;
 use syntax::ast::Generic;
 use syntax::types::{Symbol, Type, build_substitution_map, substitute, unqualified_name};
 
+use crate::checker::TaskState;
 use crate::checker::infer::BuiltinBound;
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::expressions::comparison;
 use crate::checker::infer::interface::interface_requires_methods;
-use crate::checker::{EnvResolve, TaskState};
 use crate::facts::GenericBoundOrigin;
 use crate::store::Store;
 use std::iter;
@@ -140,9 +140,8 @@ pub fn bound_display_name(store: &Store, bound: &Type) -> EcoString {
 impl TaskState {
     pub(crate) fn visible_parameter_bounds(&self) -> Vec<(EcoString, Vec<Type>)> {
         self.scopes
-            .collect_all_trait_bounds()
-            .iter()
-            .map(|(parameter, bounds)| (parameter.last_segment().into(), bounds.clone()))
+            .visible_parameter_bounds()
+            .map(|(parameter, bounds)| (parameter.into(), bounds.to_vec()))
             .collect()
     }
 
@@ -157,8 +156,9 @@ impl TaskState {
         let mut seen = rustc_hash::FxHashSet::default();
 
         for obligation in obligations {
-            let argument = store.deep_resolve_alias(&obligation.argument.resolve_in(&self.env));
-            let required = store.deep_resolve_alias(&obligation.required.resolve_in(&self.env));
+            // Frozen facts may come from workers with different type-variable tables.
+            let argument = store.deep_resolve_alias(&obligation.argument);
+            let required = store.deep_resolve_alias(&obligation.required);
             let key = (obligation.span, argument.to_string(), required.to_string());
             if !seen.insert(key)
                 || argument.contains_error()
@@ -247,6 +247,8 @@ fn return_type_declares_obligation(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::checker::freeze::FreezeFolder;
+    use crate::facts::GenericBoundObligation;
     use syntax::ast::{Annotation, Span};
     use syntax::program::{AliasKind, Definition, DefinitionBody, Visibility};
 
@@ -299,5 +301,47 @@ mod tests {
             nested_type_obligations(&store, &nominal("m.A", vec![Type::Parameter("E".into())]));
 
         assert!(obligations.is_empty());
+    }
+
+    #[test]
+    fn frozen_worker_obligations_do_not_resolve_in_the_coordinators_environment() {
+        let store = Store::new();
+        let mut coordinator = TaskState::for_package("main");
+        let mut worker = coordinator.worker_seed().spawn();
+        let Type::Var { id, .. } = worker.new_type_var() else {
+            unreachable!()
+        };
+        let argument = Type::Var {
+            id,
+            hint: Some("T".into()),
+        };
+        worker
+            .facts
+            .deferred
+            .generic_bounds
+            .push(GenericBoundObligation {
+                argument: argument.clone(),
+                required: nominal("prelude.Comparable", vec![]),
+                span: Span::dummy(),
+                package_id: "worker".into(),
+                param_name: "T".into(),
+                available_bounds: vec![],
+                origin: GenericBoundOrigin::FunctionReference {
+                    name: "identity".into(),
+                },
+            });
+        FreezeFolder::new(&worker.env, &store).freeze_facts(&mut worker.facts);
+
+        let Type::Var { id, .. } = coordinator.new_type_var() else {
+            unreachable!()
+        };
+        coordinator.env.bind(id, Type::int());
+        coordinator.absorb_outputs(vec![worker.into_output()]);
+
+        coordinator.check_post_inference_bounds(&store);
+
+        let obligations = &coordinator.facts.deferred.generic_bounds;
+        assert_eq!(obligations.len(), 1);
+        assert_eq!(obligations[0].argument, argument);
     }
 }

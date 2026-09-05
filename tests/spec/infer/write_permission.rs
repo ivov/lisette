@@ -735,6 +735,37 @@ fn poke(r: mut Ref<Ref<S3>>) {
 }
 
 #[test]
+fn parenthesized_method_keeps_its_writable_receiver() {
+    infer(
+        r#"fn main() {
+  let mut xs = [1, 2, 3]
+  let _ = (xs.copy_from)(xs)
+}"#,
+    )
+    .assert_infer_code_once("aliased_writable_argument");
+}
+
+#[test]
+fn nested_calls_do_not_supply_the_outer_calls_writable_receiver() {
+    infer(
+        r#"struct Buffer { items: mut Slice<int> }
+impl Buffer {
+  fn read(self, other: Slice<int>) -> int { other.length() }
+  fn update(self: mut Ref<Buffer>, other: Slice<int>) -> Buffer {
+    self.items.copy_from(other)
+    Buffer { items: [1, 2, 3] }
+  }
+}
+fn main() {
+  let mut buffer = Buffer { items: [1, 2, 3] }
+  let xs = [4, 5, 6]
+  let _ = buffer.update(xs).read(xs)
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn receiver_aliased_with_argument_refused() {
     infer(
         r#"fn main() {
@@ -1231,6 +1262,40 @@ fn main() {
 }"#,
     )
     .assert_infer_code_count("loop_copy_write", 0);
+}
+
+#[test]
+fn nested_loop_copy_checks_keep_reads_and_writes_with_their_binding() {
+    infer(
+        r#"fn main() {
+  let xs = [1, 2, 3]
+  for mut x in xs {
+    x += 1
+    for mut y in xs {
+      y += 1
+    }
+    let _ = x
+  }
+}"#,
+    )
+    .assert_infer_code_once("loop_copy_write");
+}
+
+#[test]
+fn shadowed_loop_bindings_do_not_share_observations() {
+    infer(
+        r#"fn main() {
+  let xs = [1, 2, 3]
+  for mut x in xs {
+    x += 1
+    for mut x in xs {
+      x += 1
+      let _ = x
+    }
+  }
+}"#,
+    )
+    .assert_infer_code_once("loop_copy_write");
 }
 
 #[test]

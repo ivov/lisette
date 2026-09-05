@@ -325,11 +325,6 @@ impl InferCtx<'_> {
 
         if self.store.parameter_grants_write(&receiver_ty) {
             self.mark_place_root_mutated(receiver_expression);
-            if self.is_callee_context()
-                && let Some(place) = super::aliasing::place_key(receiver_expression.unwrap_parens())
-            {
-                self.stash_writable_receiver(place);
-            }
         }
 
         match (receiver_is_ref, actual_is_ref) {

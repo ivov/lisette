@@ -7670,6 +7670,53 @@ fn main() {
 }
 
 #[test]
+fn unresolved_constructor_bounds_are_reported_after_parallel_inference() {
+    let mut fs = MockFileSystem::new();
+    for package in ["first", "second", "third"] {
+        fs.add_file(
+            package,
+            "lib.lis",
+            r#"
+struct Box<E: error> {}
+pub fn run() {
+  let value = Box {}
+  let _ = value
+}
+"#,
+        );
+    }
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "first"
+import "second"
+import "third"
+fn main() {
+  first.run()
+  second.run()
+  third.run()
+}
+"#,
+    );
+
+    let result = compile_check(fs);
+
+    assert_eq!(
+        result
+            .errors()
+            .iter()
+            .filter(|diagnostic| {
+                diagnostic.code_str() == Some("infer.cannot_infer_struct_type_argument")
+            })
+            .count(),
+        3,
+        "{:?}",
+        result.errors()
+    );
+}
+
+#[test]
 fn ufcs_method_resolves_across_packages_on_parallel_path() {
     let mut fs = MockFileSystem::new();
 

@@ -33,17 +33,18 @@ impl TaskState {
 
     /// Infer one registered package and install its typed ASTs.
     pub fn infer_package(&mut self, store: &mut Store, package: RegisteredPackage) {
-        let inferred_files = InferCtx::new(self, store).infer_package(package);
+        let inferred_files = self.infer_registered_package(store, package);
         Self::install_inferred_files(store, inferred_files);
     }
-}
 
-impl InferCtx<'_> {
-    pub(crate) fn infer_package(&mut self, package: RegisteredPackage) -> Vec<InferredFile> {
+    pub(crate) fn infer_registered_package(
+        &mut self,
+        store: &Store,
+        package: RegisteredPackage,
+    ) -> Vec<InferredFile> {
         let package_id = package.id;
         let (files, typedefs): (Vec<_>, Vec<_>) = package.files.into_iter().partition(|file| {
-            !self
-                .store
+            !store
                 .get_file(file.id)
                 .expect("registered file must remain in the store")
                 .is_d_lis()
@@ -53,7 +54,7 @@ impl InferCtx<'_> {
 
         let mut inferred: Vec<_> = files
             .into_iter()
-            .map(|file| self.infer_file(&package_id, file))
+            .map(|file| InferCtx::new(self, store).infer_file(&package_id, file))
             .collect();
         inferred.extend(
             typedefs
@@ -65,16 +66,14 @@ impl InferCtx<'_> {
         );
         inferred
     }
+}
 
-    fn infer_file(&mut self, package_id: &str, file: RegistrationFile) -> InferredFile {
-        assert!(
-            self.file_checks.is_empty(),
-            "file checks from the previous file must be resolved"
-        );
+impl InferCtx<'_> {
+    fn infer_file(mut self, package_id: &str, file: RegistrationFile) -> InferredFile {
         let file_id = file.id;
         let imports = file.imports;
 
-        let inferred = self.with_file_context(
+        self.with_file_context(
             FileContext::Standard {
                 package_id,
                 file_id,
@@ -110,12 +109,7 @@ impl InferCtx<'_> {
                     items: frozen_items,
                 }
             },
-        );
-        assert!(
-            self.file_checks.is_empty(),
-            "file checks must be resolved before inference returns"
-        );
-        inferred
+        )
     }
 
     fn check_definition_package_collisions(

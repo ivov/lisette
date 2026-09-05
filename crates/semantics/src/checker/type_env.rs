@@ -14,7 +14,7 @@ use syntax::types::FunctionParameter;
 use syntax::types::{Bound, Type, TypeVarId};
 
 #[derive(Debug, Clone)]
-pub enum VarState {
+enum VarState {
     Unbound,
     Bound(Type),
 }
@@ -57,10 +57,6 @@ impl TypeEnv {
 
     fn slot(id: TypeVarId) -> usize {
         id.index() as usize
-    }
-
-    pub(crate) fn state(&self, id: TypeVarId) -> &VarState {
-        &self.entries[Self::slot(id)]
     }
 
     pub(crate) fn bind(&mut self, id: TypeVarId, ty: Type) {
@@ -241,15 +237,10 @@ impl TypeEnv {
                     VarState::Bound(bound) => self.occurs(id, bound),
                 }
             }
-            Type::Nominal { params, .. } => params.iter().any(|p| self.occurs(id, p)),
-            Type::Compound { args, .. } => args.iter().any(|a| self.occurs(id, a)),
-            Type::Function(f) => {
-                f.params.iter().any(|p| self.occurs(id, &p.ty)) || self.occurs(id, &f.return_type)
-            }
-            Type::Forall { body, .. } => self.occurs(id, body),
-            Type::Tuple(elements) => elements.iter().any(|e| self.occurs(id, e)),
-            Type::Array { element, .. } => self.occurs(id, element),
-            _ => false,
+            _ => ty
+                .children()
+                .into_iter()
+                .any(|child| self.occurs(id, child)),
         }
     }
 
@@ -341,7 +332,7 @@ mod tests {
         env.end_speculation(inner_speculation, SpeculationOutcome::Commit);
         env.end_speculation(outer_speculation, SpeculationOutcome::Rollback);
 
-        assert!(matches!(env.state(outer), VarState::Unbound));
-        assert!(matches!(env.state(inner), VarState::Unbound));
+        assert_eq!(env.shallow_resolve(&var(outer)), var(outer));
+        assert_eq!(env.shallow_resolve(&var(inner)), var(inner));
     }
 }

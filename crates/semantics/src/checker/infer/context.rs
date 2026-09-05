@@ -93,8 +93,6 @@ struct TraversalContext {
     qualifier_invariant: bool,
     /// In parameter position an implementation may demand less permission.
     flipped_qualifier_variance: bool,
-    /// A writable receiver's place key, for the enclosing call's aliased-argument check.
-    pending_writable_receiver: Option<String>,
     use_context: UseContext,
     dot_access_base: bool,
     in_pattern: bool,
@@ -132,13 +130,8 @@ pub(super) struct LetInference {
 pub(super) struct LoopElementInference {
     pub(super) collection: Option<String>,
     pub(super) was_demoted: bool,
-}
-
-pub(super) struct LoopCopyWrite {
-    pub(super) binding_id: BindingId,
-    pub(super) name: String,
-    pub(super) collection: Option<String>,
-    pub(super) span: Span,
+    pub(super) reads: Vec<Span>,
+    pub(super) writes: Vec<Span>,
 }
 
 pub(super) enum BindingInference {
@@ -155,6 +148,13 @@ impl BindingInference {
     }
 
     pub(super) fn as_loop_element(&self) -> Option<&LoopElementInference> {
+        match self {
+            Self::LoopElement(inference) => Some(inference),
+            Self::Let(_) => None,
+        }
+    }
+
+    pub(super) fn as_loop_element_mut(&mut self) -> Option<&mut LoopElementInference> {
         match self {
             Self::LoopElement(inference) => Some(inference),
             Self::Let(_) => None,
@@ -277,12 +277,6 @@ pub(super) struct FileChecks {
     pub(super) select_exhaustiveness: Vec<SelectExhaustivenessCheck>,
 }
 
-impl FileChecks {
-    pub(super) fn is_empty(&self) -> bool {
-        self.branch_subsumptions.is_empty() && self.select_exhaustiveness.is_empty()
-    }
-}
-
 pub struct InferCtx<'a> {
     pub(super) state: &'a mut TaskState,
     pub(crate) store: &'a Store,
@@ -290,8 +284,6 @@ pub struct InferCtx<'a> {
     pub(crate) satisfying_stack: FxHashSet<(String, String)>,
     pub(super) reported_immutable: FxHashSet<BindingId>,
     pub(super) binding_inference: FxHashMap<BindingId, BindingInference>,
-    pub(super) loop_element_reads: FxHashMap<BindingId, Vec<Span>>,
-    pub(super) pending_loop_copy_writes: Vec<LoopCopyWrite>,
     pub(super) reported_read_only_writes: FxHashSet<(BindingId, String)>,
     /// By span, for the diagnostic when the construction misses a writable expectation.
     pub(super) read_only_constructions: FxHashMap<Span, Vec<diagnostics::infer::ReadOnlyComponent>>,
@@ -307,8 +299,6 @@ impl<'a> InferCtx<'a> {
             satisfying_stack: FxHashSet::default(),
             reported_immutable: FxHashSet::default(),
             binding_inference: FxHashMap::default(),
-            loop_element_reads: FxHashMap::default(),
-            pending_loop_copy_writes: Vec::new(),
             reported_read_only_writes: FxHashSet::default(),
             read_only_constructions: FxHashMap::default(),
             traversal: TraversalContext::default(),
@@ -401,19 +391,6 @@ impl<'a> InferCtx<'a> {
 
     pub(super) fn with_value_context<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
         self.with_use_context(UseContext::Value, f)
-    }
-
-    pub(super) fn with_callee_context<T>(
-        &mut self,
-        f: impl FnOnce(&mut Self) -> T,
-    ) -> (T, Option<String>) {
-        debug_assert!(
-            self.traversal.pending_writable_receiver.is_none(),
-            "a writable receiver must be consumed by its enclosing call"
-        );
-        let result = self.with_use_context(UseContext::Callee, f);
-        let writable_receiver = self.traversal.pending_writable_receiver.take();
-        (result, writable_receiver)
     }
 
     pub(super) fn with_expectation<T>(
@@ -559,14 +536,6 @@ impl<'a> InferCtx<'a> {
         self.traversal.flipped_qualifier_variance
     }
 
-    pub(super) fn stash_writable_receiver(&mut self, place: String) {
-        debug_assert!(
-            self.traversal.pending_writable_receiver.is_none(),
-            "one callee cannot register multiple writable receivers"
-        );
-        self.traversal.pending_writable_receiver = Some(place);
-    }
-
     pub(super) fn in_flipped_qualifier_variance<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
         let previous = self.traversal.flipped_qualifier_variance;
         self.traversal.flipped_qualifier_variance = !previous;
@@ -600,6 +569,8 @@ impl DerefMut for InferCtx<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::checker::EnvResolve;
+    use crate::checker::infer::unify::UnifyError;
     use crate::store;
 
     #[test]
@@ -637,5 +608,61 @@ mod tests {
         let diagnostics = task.sink.into_diagnostics();
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].plain_message(), "reported");
+    }
+
+    #[test]
+    fn unification_resolves_bound_variables_before_comparing_either_side() {
+        let mut task = TaskState::for_package(store::ENTRY_PACKAGE_ID);
+        let store = Store::new();
+        let mut ctx = InferCtx::new(&mut task, &store);
+        let a = ctx.new_type_var();
+        let b = ctx.new_type_var();
+        let span = Span::dummy();
+        ctx.try_unify(&a, &b, &span).unwrap();
+        ctx.try_unify(&Type::int(), &b, &span).unwrap();
+
+        assert_eq!(a.resolve_in(&ctx.env), Type::int());
+        assert_eq!(
+            ctx.try_unify(&a, &Type::string(), &span),
+            Err(UnifyError::TypeMismatch)
+        );
+        assert_eq!(
+            ctx.try_unify(&Type::string(), &a, &span),
+            Err(UnifyError::TypeMismatch)
+        );
+    }
+
+    #[test]
+    fn unification_rejects_recursive_bindings_through_variable_chains() {
+        let mut task = TaskState::for_package(store::ENTRY_PACKAGE_ID);
+        let store = Store::new();
+        let mut ctx = InferCtx::new(&mut task, &store);
+        let a = ctx.new_type_var();
+        let b = ctx.new_type_var();
+        let span = Span::dummy();
+        ctx.try_unify(&a, &b, &span).unwrap();
+
+        assert_eq!(
+            ctx.try_unify(&b, &Type::Tuple(vec![a.clone()]), &span),
+            Err(UnifyError::InfiniteType)
+        );
+        assert_eq!(b.resolve_in(&ctx.env), b);
+        assert_eq!(ctx.try_unify(&a, &a, &span), Ok(()));
+    }
+
+    #[test]
+    fn error_unification_reaches_variables_inside_arrays() {
+        let mut task = TaskState::for_package(store::ENTRY_PACKAGE_ID);
+        let store = Store::new();
+        let mut ctx = InferCtx::new(&mut task, &store);
+        let element = ctx.new_type_var();
+        let array = Type::Array {
+            length: 2,
+            element: Box::new(element.clone()),
+        };
+
+        ctx.try_unify(&Type::Error, &array, &Span::dummy()).unwrap();
+
+        assert_eq!(element.resolve_in(&ctx.env), Type::Error);
     }
 }

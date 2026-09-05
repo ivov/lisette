@@ -31,7 +31,7 @@ pub(crate) use registration::PredeclaredPackage;
 pub use registration::RegisteredPackage;
 pub use state::{Cursor, TaskState};
 pub(crate) use state::{InferredFile, TaskOutput};
-pub use type_env::{EnvResolve, TypeEnv, VarState};
+pub use type_env::{EnvResolve, TypeEnv};
 
 impl TaskState {
     fn is_d_lis(&self, store: &Store) -> bool {
@@ -68,8 +68,7 @@ impl TaskState {
 
     pub(crate) fn put_in_scope(&mut self, generics: &[Generic]) {
         for (index, generic) in generics.iter().enumerate() {
-            self.scopes
-                .insert_type_param(self.qualify_name(&generic.name), index);
+            self.scopes.insert_type_param(&generic.name, index);
         }
     }
 
@@ -115,21 +114,16 @@ impl TaskState {
     }
 
     fn parameter_satisfies_bound(&self, parameter: &str, target: infer::BuiltinBound) -> bool {
-        let mut found = false;
-        self.scopes.for_each_bound_on_param(parameter, |bound_ty| {
-            if found {
-                return;
-            }
-            if let Some(declared) = bound_ty
-                .resolve_in(&self.env)
-                .get_qualified_id()
-                .and_then(infer::BuiltinBound::from_qualified_id)
-                && declared.satisfies(target)
-            {
-                found = true;
-            }
-        });
-        found
+        self.scopes
+            .bounds_on_param(parameter)
+            .iter()
+            .any(|bound_ty| {
+                bound_ty
+                    .resolve_in(&self.env)
+                    .get_qualified_id()
+                    .and_then(infer::BuiltinBound::from_qualified_id)
+                    .is_some_and(|declared| declared.satisfies(target))
+            })
     }
 
     fn register_bound_annotation(
