@@ -10,6 +10,7 @@ use passes::analyze;
 use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind, RecoverTarget};
 use syntax::types::{CompoundKind, Type};
 
+use crate::heap;
 use crate::imports::PackageResolver;
 use crate::loader::ProjectAnalysis;
 use crate::paths;
@@ -320,7 +321,7 @@ impl SharedState {
             .workspace()
             .build_lock(key)
             .ok_or(AnalysisError::Superseded)?;
-        let _guard = build.lock().unwrap_or_else(PoisonError::into_inner);
+        let guard = build.lock().unwrap_or_else(PoisonError::into_inner);
 
         let (generation, input) = {
             let workspace = self.workspace();
@@ -340,7 +341,18 @@ impl SharedState {
         };
 
         let built = self.run_analysis(key, input);
+        let installed = self.install_build(key, generation, built);
+        drop(guard);
+        heap::release_freed_pages();
+        installed
+    }
 
+    fn install_build(
+        &self,
+        key: &AnalysisKey,
+        generation: u64,
+        built: Result<AnalysisSnapshot, Vec<Diagnostic>>,
+    ) -> Result<Arc<AnalysisSnapshot>, AnalysisError> {
         let mut workspace = self.workspace_mut();
         if workspace.generation() != generation {
             return Err(AnalysisError::Superseded);

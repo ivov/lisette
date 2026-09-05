@@ -2,6 +2,7 @@ mod analysis;
 mod completion;
 mod definition;
 mod document;
+mod heap;
 mod hover;
 mod imports;
 mod inlay_hints;

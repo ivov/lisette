@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use crate::heap;
 use crate::protocol::Url;
 
 use crate::state::{AnalysisKey, CancellationToken, DocumentState, SharedState};
@@ -11,13 +12,19 @@ impl SharedState {
         let mut workspace = self.workspace_mut();
         self.project.update_overlay(&uri, content.clone());
         let key = self.key_for(&uri);
-        workspace
-            .documents
-            .insert(uri, DocumentState::new(content, version));
+        workspace.invalidate_unseen(&uri, &content);
+        let mut document = DocumentState::new(content, version);
+        if let Some(key) = &key
+            && let Some(snapshot) = workspace.snapshot(key)
+            && self.validate(&uri).is_none()
+            && snapshot.is_usable(&uri)
+        {
+            document.set_last_usable(snapshot);
+        }
+        workspace.documents.insert(uri, document);
         if let Some(key) = key {
             workspace.ensure(&key);
         }
-        workspace.invalidate_all();
         drop(workspace);
 
         self.reschedule_all();
@@ -49,18 +56,23 @@ impl SharedState {
         let key = self.key_for(uri);
         self.project.remove_overlay(uri);
         workspace.documents.remove(uri);
-        if let Some(key) = key {
+        let evicted = key.is_some_and(|key| {
             let still_open = workspace
                 .documents
                 .keys()
                 .any(|open| self.key_for(open).as_ref() == Some(&key));
-            if !still_open {
-                workspace.evict(&key);
+            if still_open {
+                return false;
             }
-        }
+            workspace.evict(&key);
+            true
+        });
         workspace.invalidate_all();
         drop(workspace);
 
+        if evicted {
+            heap::release_freed_pages();
+        }
         self.client.publish_diagnostics(uri.clone(), vec![], None);
         self.reschedule_all();
     }
