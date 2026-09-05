@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788629744453,
+  "lastUpdate": 1788638039626,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -33135,6 +33135,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 8789,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6242,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1874,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9375,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d8badf9d160b81802b74d40f7b1a6c6e1d13eb4a",
+          "message": "feat: diagnostic for eager calls in `task` arguments (#1403)",
+          "timestamp": "2026-09-05T21:53:36+02:00",
+          "tree_id": "83034949ade26f17b4df877070b9698361581f04",
+          "url": "https://github.com/ivov/lisette/commit/d8badf9d160b81802b74d40f7b1a6c6e1d13eb4a"
+        },
+        "date": 1788638037511,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 139120,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32366,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27873,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19300,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15160,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13998,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8797,
             "unit": "lines"
           },
           {
