@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Call evaluated before the `task` starts
+    ╭─[main.lis:18:25]
+ 17 │   task consume(Callback(|| work() + 1))
+ 18 │   task consume(Callback(make()))
+    ·                         ───┬──
+    ·                            ╰── runs on the caller
+ 19 │ }
+    ╰────
+  help: Move the work into a `task { ... }` block to run it in the task, or bind it with `let` first to make the order visible · code: [lint.task_argument_call]

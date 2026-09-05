@@ -1803,6 +1803,15 @@ pub fn manual_waitgroup_go(span: &Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn task_argument_call(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Call evaluated before the `task` starts")
+        .with_lint_code("task_argument_call")
+        .with_span_label(span, "runs on the caller")
+        .with_help(
+            "Move the work into a `task { ... }` block to run it in the task, or bind it with `let` first to make the order visible",
+        )
+}
+
 pub fn deprecated_api(span: &Span, message: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Use of deprecated API")
         .with_lint_code("deprecated")

@@ -27631,6 +27631,7 @@ fn consume(n: int) {
   let _ = n
 }
 
+#[allow(task_argument_call)]
 fn spawn_wrap(n: int) -> int {
   task consume(spawn_wrap(n))
   0
@@ -28851,6 +28852,437 @@ enum GoOnVariant {
   #[go(hidden_embed)]
   A,
   B,
+}
+"#
+    );
+}
+
+#[test]
+fn task_argument_call() {
+    assert_lint_snapshot!(
+        r#"
+fn work() -> string {
+  "done"
+}
+
+fn main() {
+  let ch = Channel.buffered<string>(1)
+  task ch.send(work())
+  let _ = ch.receive()
+}
+"#
+    );
+}
+
+#[test]
+fn task_argument_call_inside_fstring() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn compute() -> int {
+  42
+}
+
+fn main() {
+  task fmt.Println(f"{compute()}")
+}
+"#
+    );
+}
+
+#[test]
+fn task_argument_call_inside_constructor() {
+    assert_lint_snapshot!(
+        r#"
+fn work() -> int {
+  7
+}
+
+fn main() {
+  let ch = Channel.buffered<Option<int>>(1)
+  task ch.send(Some(work()))
+  let _ = ch.receive()
+}
+"#
+    );
+}
+
+#[test]
+fn task_receiver_call() {
+    assert_lint_snapshot!(
+        r#"
+struct Worker {
+  id: int,
+}
+
+impl Worker {
+  fn run(self) {
+    let _ = self.id
+  }
+}
+
+fn make_worker() -> Worker {
+  Worker { id: 1 }
+}
+
+fn main() {
+  task make_worker().run()
+}
+"#
+    );
+}
+
+#[test]
+fn task_argument_call_to_function_named_like_a_variant() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+enum Token {
+  Num(int),
+  Plus,
+}
+
+fn Num() -> Token {
+  Token.Num(1)
+}
+
+fn consume(token: Token) {
+  let _ = token
+}
+
+fn main() {
+  let _ = Token.Plus
+  task consume(Num())
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .lints()
+            .iter()
+            .any(|d| d.code_str() == Some("lint.task_argument_call")),
+        "a user function named like a variant is not a constructor: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn task_alias_constructor_is_transparent() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "geo"
+
+fn work() -> int {
+  7
+}
+
+fn consume(p: geo.Pair) {
+  let _ = p
+}
+
+fn main() {
+  task consume(geo.P(1, 2))
+  task consume(geo.Pair(1, 2))
+  task consume(geo.P(work(), 2))
+}
+"#,
+    );
+    fs.add_file(
+        "geo",
+        "geo.lis",
+        "pub struct Pair(int, int)\n\npub type P = Pair\n",
+    );
+    let result = compile_check(fs);
+    assert!(result.errors().is_empty(), "{:?}", result.errors());
+    let warnings: Vec<_> = result
+        .lints()
+        .iter()
+        .filter(|d| d.code_str() == Some("lint.task_argument_call"))
+        .collect();
+    let [diagnostic] = warnings.as_slice() else {
+        panic!("expected one warning, on `work()`: {warnings:?}");
+    };
+    let output = format_result_diagnostic_for_snapshot(&result, diagnostic);
+    insta::with_settings!({
+        prepend_module_to_snapshot => false,
+        omit_expression => true,
+    }, {
+        insta::assert_snapshot!(output);
+    });
+}
+
+#[test]
+fn task_function_type_conversion_is_transparent() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+type Callback = fn() -> int
+
+fn work() -> int {
+  7
+}
+
+fn make() -> fn() -> int {
+  || 9
+}
+
+fn consume(cb: Callback) {
+  let _ = cb()
+}
+
+fn main() {
+  task consume(Callback(|| work() + 1))
+  task consume(Callback(make()))
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(result.errors().is_empty(), "{:?}", result.errors());
+    let warnings: Vec<_> = result
+        .lints()
+        .iter()
+        .filter(|d| d.code_str() == Some("lint.task_argument_call"))
+        .collect();
+    let [diagnostic] = warnings.as_slice() else {
+        panic!("expected one warning, on `make()`: {warnings:?}");
+    };
+    let output = format_result_diagnostic_for_snapshot(&result, diagnostic);
+    insta::with_settings!({
+        prepend_module_to_snapshot => false,
+        omit_expression => true,
+    }, {
+        insta::assert_snapshot!(output);
+    });
+}
+
+#[test]
+fn task_nested_task_and_defer_bodies_no_warning() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+fn work() {}
+
+fn consume_pair(pair: (int, int)) {
+  let _ = pair
+}
+
+fn main() {
+  task consume_pair(({
+    task { work() }
+    1
+  }, 2))
+  task consume_pair(({
+    defer { work() }
+    1
+  }, 2))
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(result.errors().is_empty(), "{:?}", result.errors());
+    let warnings: Vec<_> = result
+        .lints()
+        .iter()
+        .filter(|d| d.code_str() == Some("lint.task_argument_call"))
+        .collect();
+    assert!(
+        warnings.is_empty(),
+        "a nested task body runs in its own goroutine and a deferred body runs at exit: {warnings:?}"
+    );
+}
+
+#[test]
+fn task_nested_defer_inputs_warn() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+fn name() -> string {
+  "x"
+}
+
+fn log(s: string) {
+  let _ = s
+}
+
+fn consume_pair(pair: (int, int)) {
+  let _ = pair
+}
+
+fn main() {
+  task consume_pair(({
+    defer log(name())
+    1
+  }, 2))
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(result.errors().is_empty(), "{:?}", result.errors());
+    let warnings: Vec<_> = result
+        .lints()
+        .iter()
+        .filter(|d| d.code_str() == Some("lint.task_argument_call"))
+        .collect();
+    let [diagnostic] = warnings.as_slice() else {
+        panic!("expected one warning, on `name()`: {warnings:?}");
+    };
+    let output = format_result_diagnostic_for_snapshot(&result, diagnostic);
+    insta::with_settings!({
+        prepend_module_to_snapshot => false,
+        omit_expression => true,
+    }, {
+        insta::assert_snapshot!(output);
+    });
+}
+
+#[test]
+fn task_nested_call_form_task_warns_once() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+fn compute() -> int {
+  7
+}
+
+fn consume_pair(pair: (int, int)) {
+  let _ = pair
+}
+
+fn main() {
+  let ch = Channel.buffered<int>(1)
+  task consume_pair(({
+    task ch.send(compute())
+    1
+  }, 2))
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(result.errors().is_empty(), "{:?}", result.errors());
+    let warnings: Vec<_> = result
+        .lints()
+        .iter()
+        .filter(|d| d.code_str() == Some("lint.task_argument_call"))
+        .collect();
+    let [diagnostic] = warnings.as_slice() else {
+        panic!("expected one warning, on `compute()`: {warnings:?}");
+    };
+    let output = format_result_diagnostic_for_snapshot(&result, diagnostic);
+    insta::with_settings!({
+        prepend_module_to_snapshot => false,
+        omit_expression => true,
+    }, {
+        insta::assert_snapshot!(output);
+    });
+}
+
+#[test]
+fn task_argument_plain_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let ch = Channel.buffered<int>(1)
+  let value = 7
+  task ch.send(value)
+  let _ = ch.receive()
+}
+"#
+    );
+}
+
+#[test]
+fn task_block_form_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn work() -> int {
+  7
+}
+
+fn main() {
+  let ch = Channel.buffered<int>(1)
+  task { ch.send(work()) }
+  let _ = ch.receive()
+}
+"#
+    );
+}
+
+#[test]
+fn task_lambda_argument_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn work() -> int {
+  7
+}
+
+fn run(f: fn() -> int) {
+  let _ = f()
+}
+
+fn main() {
+  task run(|| work() + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn task_constructor_arguments_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum Token {
+  Num(int),
+  Plus,
+}
+
+struct UserId(int)
+
+fn consume(token: Token, id: UserId, maybe: Option<int>, ok: Result<int, string>, err: Result<int, string>) {
+  let _ = token
+  let _ = id
+  let _ = maybe
+  let _ = ok
+  let _ = err
+}
+
+fn main() {
+  let n = 3
+  task consume(Token.Num(n), UserId(n), Some(n), Ok(n), Err("x"))
+  task consume(Token.Plus, UserId(n), None, Ok(n), Err("x"))
+}
+"#
+    );
+}
+
+#[test]
+fn defer_argument_call_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn name() -> string {
+  "x"
+}
+
+fn log(s: string) {
+  let _ = s
+}
+
+fn main() {
+  defer log(name())
 }
 "#
     );

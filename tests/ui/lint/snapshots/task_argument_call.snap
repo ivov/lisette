@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Call evaluated before the `task` starts
+   ╭─[test.lis:8:16]
+ 7 │   let ch = Channel.buffered<string>(1)
+ 8 │   task ch.send(work())
+   ·                ───┬──
+   ·                   ╰── runs on the caller
+ 9 │   let _ = ch.receive()
+   ╰────
+  help: Move the work into a `task { ... }` block to run it in the task, or bind it with `let` first to make the order visible · code: [lint.task_argument_call]
