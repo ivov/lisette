@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788616120753,
+  "lastUpdate": 1788617906166,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -32398,6 +32398,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 32686,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27900,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19299,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15171,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13998,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8793,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6242,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1874,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9491,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b729f75db637afb5cd7cbb021c682a38e3d00f9e",
+          "message": "refactor: unify literal typing where Go infers a type (#1394)",
+          "timestamp": "2026-09-05T16:18:00+02:00",
+          "tree_id": "95a7cbd38fa140eda3b4f6e02e94e51ae7f1ce69",
+          "url": "https://github.com/ivov/lisette/commit/b729f75db637afb5cd7cbb021c682a38e3d00f9e"
+        },
+        "date": 1788617903848,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 140206,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32861,
             "unit": "lines"
           },
           {
