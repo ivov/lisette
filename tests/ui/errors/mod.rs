@@ -4614,6 +4614,18 @@ fn test(p: MP) -> int {
 }
 
 #[test]
+fn match_non_exhaustive_case_under_matched_constructor() {
+    let input = r#"
+fn test(v: Option<(int, string)>) -> string {
+  match v {
+    Some((42, s)) => s,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_uninferred_binding_type() {
     let input = r#"
 fn test() {

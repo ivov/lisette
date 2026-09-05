@@ -135,48 +135,61 @@ fn find_witnesses(rows: &[Row], unions: &UnionTable) -> Vec<Row> {
                 return vec![];
             }
 
-            let missing: Vec<_> = union
+            let (missing, present): (Vec<_>, Vec<_>) = union
                 .iter()
-                .filter(|c| !seen_tags.contains(&c.tag_id))
-                .map(|c| NormalizedPattern::Constructor {
-                    type_name: type_name.clone(),
-                    tag: c.tag_id.clone(),
-                    args: vec![Wildcard; c.arity],
-                })
-                .collect();
+                .partition(|constructor| !seen_tags.contains(&constructor.tag_id));
 
             let mut result = Vec::new();
-            for pattern in missing {
+            for Constructor { arity, tag_id } in missing {
+                let pattern = NormalizedPattern::Constructor {
+                    type_name: type_name.clone(),
+                    tag: tag_id.clone(),
+                    args: vec![Wildcard; *arity],
+                };
                 for witness in &rest {
                     let mut new_witness = vec![pattern.clone()];
                     new_witness.extend(witness.iter().cloned());
                     result.push(new_witness);
                 }
             }
+            result.extend(witnesses_under_constructors(
+                rows, unions, &type_name, present,
+            ));
             result
         }
 
-        AlgorithmCase::AllConstructors { type_name, union } => union
-            .iter()
-            .flat_map(|Constructor { arity, tag_id, .. }| {
-                let specialized = specialize_by_constructor(rows, tag_id, *arity);
-                find_witnesses(&specialized, unions)
-                    .into_iter()
-                    .map(|witness| {
-                        let (args, rest) = witness.split_at(witness.len().min(*arity));
-                        let constructor = NormalizedPattern::Constructor {
-                            type_name: type_name.clone(),
-                            tag: tag_id.clone(),
-                            args: args.to_vec(),
-                        };
-                        let mut result = vec![constructor];
-                        result.extend(rest.iter().cloned());
-                        result
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect(),
+        AlgorithmCase::AllConstructors { type_name, union } => {
+            witnesses_under_constructors(rows, unions, &type_name, &union)
+        }
     }
+}
+
+fn witnesses_under_constructors<'a>(
+    rows: &[Row],
+    unions: &UnionTable,
+    type_name: &TypeName,
+    constructors: impl IntoIterator<Item = &'a Constructor>,
+) -> Vec<Row> {
+    constructors
+        .into_iter()
+        .flat_map(|Constructor { arity, tag_id }| {
+            let specialized = specialize_by_constructor(rows, tag_id, *arity);
+            find_witnesses(&specialized, unions)
+                .into_iter()
+                .map(|witness| {
+                    let (args, rest) = witness.split_at(witness.len().min(*arity));
+                    let constructor = NormalizedPattern::Constructor {
+                        type_name: type_name.clone(),
+                        tag: tag_id.clone(),
+                        args: args.to_vec(),
+                    };
+                    let mut result = vec![constructor];
+                    result.extend(rest.iter().cloned());
+                    result
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 pub fn is_useful(rows: &[Row], pattern: &Row, unions: &UnionTable) -> bool {

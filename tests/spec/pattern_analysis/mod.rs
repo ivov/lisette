@@ -49,6 +49,42 @@ fn test(opt: Option<Option<int>>) -> int {
 }
 
 #[test]
+fn test_non_exhaustive_reports_gap_under_matched_constructor() {
+    let input = r#"
+fn test(v: Option<(int, string)>) -> string {
+  match v {
+    Some((42, s)) => s,
+  }
+}
+"#;
+    infer(input)
+        .assert_error_contains("Option.None")
+        .assert_error_contains("Option.Some((_, _))");
+}
+
+#[test]
+fn test_non_exhaustive_reports_gaps_under_every_matched_constructor() {
+    let input = r#"
+enum Color {
+  Red,
+  Green,
+  Blue,
+}
+
+fn test(a: Color, b: Color) -> int {
+  match (a, b) {
+    (Color.Red, Color.Red) => 1,
+  }
+}
+"#;
+    infer(input)
+        .assert_error_contains("(Color.Blue, _)")
+        .assert_error_contains("(Color.Green, _)")
+        .assert_error_contains("(Color.Red, Color.Blue)")
+        .assert_error_contains("(Color.Red, Color.Green)");
+}
+
+#[test]
 fn test_exhaustive_with_wildcard() {
     let input = r#"
 enum Color {
