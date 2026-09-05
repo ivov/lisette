@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use syntax::ast::Literal;
-use syntax::lex::string_bytes;
+use syntax::lex::{rune_codepoint, string_bytes};
 
 pub(crate) fn runtime_bytes(literal: &Literal) -> Option<Cow<'_, [u8]>> {
     if let Literal::String { value, raw } = literal {
@@ -10,11 +10,24 @@ pub(crate) fn runtime_bytes(literal: &Literal) -> Option<Cow<'_, [u8]>> {
     }
 }
 
+fn integer_value(literal: &Literal) -> Option<u64> {
+    match literal {
+        Literal::Integer { value, .. } => Some(*value),
+        Literal::Char(text) => rune_codepoint(text).map(u64::from),
+        _ => None,
+    }
+}
+
 pub(crate) fn equals_target(
     candidate: &Literal,
     target: &Literal,
     target_bytes: Option<&[u8]>,
 ) -> bool {
+    if let (Some(candidate_value), Some(target_value)) =
+        (integer_value(candidate), integer_value(target))
+    {
+        return candidate_value == target_value;
+    }
     if let Literal::String { value: cv, raw: cr } = candidate
         && let Literal::String { value: tv, raw: tr } = target
     {
@@ -94,5 +107,53 @@ mod tests {
         let a = s("hello", false);
         let b = s("hello", false);
         assert!(equals_target(&a, &b, None));
+    }
+
+    fn integer(value: u64, text: Option<&str>) -> Literal {
+        Literal::Integer {
+            value,
+            text: text.map(str::to_string),
+        }
+    }
+
+    fn c(text: &str) -> Literal {
+        Literal::Char(text.to_string())
+    }
+
+    #[test]
+    fn integer_spellings_with_same_value_are_equal() {
+        assert!(equal(&integer(1, None), &integer(1, Some("0x1"))));
+        assert!(equal(&integer(1, Some("0b1")), &integer(1, Some("0o1"))));
+        assert!(!equal(&integer(1, None), &integer(2, Some("0x2"))));
+    }
+
+    #[test]
+    fn negative_spellings_with_same_value_are_equal() {
+        let minus_one = 1u64.wrapping_neg();
+        assert!(equal(
+            &integer(minus_one, Some("-1")),
+            &integer(minus_one, Some("-0x1"))
+        ));
+        assert!(!equal(&integer(minus_one, Some("-1")), &integer(1, None)));
+    }
+
+    #[test]
+    fn char_equals_integer_with_its_codepoint() {
+        assert!(equal(&c("a"), &integer(97, None)));
+        assert!(equal(&integer(97, None), &c("a")));
+        assert!(!equal(&c("b"), &integer(97, None)));
+    }
+
+    #[test]
+    fn char_spellings_with_same_codepoint_are_equal() {
+        assert!(equal(&c("a"), &c("\\x61")));
+        assert!(equal(&c("\\n"), &c("\\u{000A}")));
+        assert!(equal(&c("\\n"), &c("\\012")));
+        assert!(!equal(&c("a"), &c("b")));
+    }
+
+    #[test]
+    fn integer_and_string_are_not_equal() {
+        assert!(!equal(&integer(1, None), &s("1", false)));
     }
 }
