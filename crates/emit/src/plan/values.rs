@@ -719,7 +719,7 @@ impl Planner<'_> {
                 let (setup, value) = self.lower_propagate(expression, None);
                 ValuePlan::computed(setup, GoExpression::opaque(value), EvaluationEffect::Pure)
             }
-            Expression::If { ty, .. } => self.plan_if_as_operand_temp(expression, ty),
+            Expression::If { ty, .. } => self.plan_branching_as_operand_temp(expression, ty),
             Expression::Loop { ty, .. } => self.plan_loop_as_operand_temp(expression, ty),
             Expression::IfLet { ty, .. }
             | Expression::Match { ty, .. }

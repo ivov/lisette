@@ -253,15 +253,14 @@ impl<'a> Planner<'a> {
                 }
                 _ => ExpressionContext::value(),
             };
-            let stages: Vec<ValuePlan> = args
-                .iter()
-                .map(|a| self.stage_operand(a, arg_ctx))
-                .collect();
+            let stages: Vec<ValuePlan> =
+                args.iter().map(|a| self.plan_operand(a, arg_ctx)).collect();
             let wrap_to_any = spread_needs_any_wrap(&self.facts, function, spread);
             let combine = call_plan.variadic_combine(0);
             let sequenced = self.sequence_with_spread_values(
                 stages,
                 spread,
+                None,
                 SpreadSequenceOptions {
                     wrap_to_any,
                     combine,
@@ -281,7 +280,7 @@ impl<'a> Planner<'a> {
             };
         }
 
-        let callee_staged = self.stage_operand(function, expression_ctx.callee());
+        let callee_staged = self.plan_operand(function, expression_ctx.callee());
         let callee_effect = callee_staged.evaluation.effect;
         let (mut setup, mut function_string) = callee_staged.into_parts();
 
@@ -395,7 +394,7 @@ impl<'a> Planner<'a> {
         if !self.format_string_lowers_to_sprintf(parts) {
             return None;
         }
-        let staged = self.stage_operand(argument, ExpressionContext::value());
+        let staged = self.plan_operand(argument, ExpressionContext::value());
         let mut sequenced =
             self.sequence_values(vec![staged], expression_ctx.capture_boundary(), "arg");
         let effect = self.regular_call_effect(function, sequenced.effect);
@@ -553,7 +552,7 @@ impl<'a> Planner<'a> {
             return sequenced;
         }
 
-        self.sequence_args_with_spread_adapter_values(
+        self.sequence_with_spread_values(
             stages,
             ctx.spread,
             ctx.plan

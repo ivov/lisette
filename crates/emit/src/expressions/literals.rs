@@ -106,7 +106,7 @@ impl Planner<'_> {
 
         let stages: Vec<ValuePlan> = elements
             .iter()
-            .map(|e| self.stage_composite(e, ExpressionContext::value()))
+            .map(|e| self.lower_composite_value(e, ExpressionContext::value()))
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "v");
         let effect = sequenced.effect;
@@ -156,7 +156,7 @@ impl Planner<'_> {
             .iter()
             .filter_map(|p| {
                 if let FormatStringPart::Expression(e) = p {
-                    Some(self.stage_composite(e, ExpressionContext::value()))
+                    Some(self.lower_composite_value(e, ExpressionContext::value()))
                 } else {
                     None
                 }

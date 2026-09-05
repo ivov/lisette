@@ -147,7 +147,7 @@ impl<'a> Planner<'a> {
     ) -> (Vec<LoweredStatement>, String, EvaluationEffect) {
         match ctx.args.first() {
             Some(a) => {
-                let staged = self.stage_operand(a, ExpressionContext::value());
+                let staged = self.plan_operand(a, ExpressionContext::value());
                 let effect = staged.evaluation.effect;
                 let (setup, value) = staged.into_parts();
                 (setup, value, effect)
@@ -271,7 +271,7 @@ impl<'a> Planner<'a> {
         let element_go = self.use_go_type(&element);
         let array_go = format!("[{length}]{element_go}");
 
-        let staged = self.stage_operand(argument, ExpressionContext::value());
+        let staged = self.plan_operand(argument, ExpressionContext::value());
         let argument_effect = staged.evaluation.effect;
         let (setup, source) = staged.into_parts();
 
@@ -336,7 +336,7 @@ impl<'a> Planner<'a> {
         let stages: Vec<ValuePlan> = pairs
             .iter()
             .flat_map(|(key, value)| [*key, *value])
-            .map(|e| self.stage_composite(e, ExpressionContext::value()))
+            .map(|e| self.lower_composite_value(e, ExpressionContext::value()))
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "entry");
         let effect = sequenced.effect;
@@ -637,7 +637,7 @@ impl<'a> Planner<'a> {
         };
         let stages: Vec<ValuePlan> = args
             .iter()
-            .map(|a| self.stage_composite(a, arg_ctx))
+            .map(|a| self.lower_composite_value(a, arg_ctx))
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "arg");
         let effect = EvaluationEffect::PureCall.combine(sequenced.effect);

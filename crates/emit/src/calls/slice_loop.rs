@@ -134,14 +134,14 @@ impl Planner<'_> {
             .first()?
             .clone();
 
-        let mut source_staged = self.stage_operand(receiver, ExpressionContext::value());
+        let mut source_staged = self.plan_operand(receiver, ExpressionContext::value());
         // `map` reads the source twice, for its length and for the range.
         if kind == SliceLoop::Map && !self.plan_rests_in_stable_name(&source_staged) {
             self.pin_staged(&mut source_staged, "src");
         }
         let mut stages = vec![source_staged];
         if expects_accumulator {
-            stages.push(self.stage_operand(&args[0], ExpressionContext::value()));
+            stages.push(self.plan_operand(&args[0], ExpressionContext::value()));
         }
         let sequenced = self.sequence_values(stages, ctx.capture_boundary, "arg");
         let effect = sequenced.effect;

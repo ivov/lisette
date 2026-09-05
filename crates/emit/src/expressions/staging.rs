@@ -60,10 +60,10 @@ impl Planner<'_> {
             expression,
             Expression::Literal { .. } | Expression::Identifier { .. }
         ) {
-            return self.stage_operand(expression, ExpressionContext::value());
+            return self.plan_operand(expression, ExpressionContext::value());
         }
 
-        let staged = self.stage_operand(expression, ExpressionContext::value());
+        let staged = self.plan_operand(expression, ExpressionContext::value());
         let (mut setup, value) = staged.into_parts();
         let temp_var = self.hoist_tmp_value_statement(&mut setup, prefix, &value);
         ValuePlan::captured(setup, temp_var)
@@ -94,24 +94,6 @@ impl Planner<'_> {
         } else {
             expression_string
         }
-    }
-
-    /// Plan an expression and capture its typed setup and value.
-    pub(crate) fn stage_operand(
-        &mut self,
-        expression: &Expression,
-        ctx: ExpressionContext<'_>,
-    ) -> ValuePlan {
-        self.plan_operand(expression, ctx)
-    }
-
-    /// Stage an expression as a composite value, capturing typed setup.
-    pub(crate) fn stage_composite(
-        &mut self,
-        expression: &Expression,
-        ctx: ExpressionContext<'_>,
-    ) -> ValuePlan {
-        self.lower_composite_value(expression, ctx)
     }
 
     /// `Some`/`Ok`/`Err` lower to prelude constructor calls (their non-call
@@ -198,7 +180,7 @@ impl Planner<'_> {
         let suppress =
             declared_param.is_some_and(|p| matches!(p.unwrap_forall(), Type::Function(_)));
         let arg_ctx = ExpressionContext::value().with_forced_tagged_go_function(suppress);
-        let staged = self.stage_composite(expression, arg_ctx);
+        let staged = self.lower_composite_value(expression, arg_ctx);
 
         if suppress
             && self
@@ -257,14 +239,6 @@ impl Planner<'_> {
             setup.push(LoweredStatement::RawGo(buffer));
         }
         tagged
-    }
-
-    pub(crate) fn stage_native_method_args(
-        &mut self,
-        function: &Expression,
-        args: &[Expression],
-    ) -> Vec<ValuePlan> {
-        self.stage_native_method_args_from(function, args, 0)
     }
 
     pub(crate) fn stage_native_method_args_from(
@@ -409,10 +383,14 @@ impl Planner<'_> {
         &mut self,
         mut stages: Vec<ValuePlan>,
         spread: Option<&Expression>,
+        adapter_params: Option<&[FunctionParameter]>,
         options: SpreadSequenceOptions,
     ) -> SequencedValues {
-        let spread_index = spread.map(|s| {
-            stages.push(self.stage_operand(s, ExpressionContext::value()));
+        let spread_index = spread.map(|spread| {
+            let stage = self
+                .try_emit_variadic_spread_adapter(spread, adapter_params)
+                .unwrap_or_else(|| self.plan_operand(spread, ExpressionContext::value()));
+            stages.push(stage);
             stages.len() - 1
         });
         let mut sequenced = self.sequence_values(stages, options.boundary, "arg");
@@ -425,30 +403,5 @@ impl Planner<'_> {
             );
         }
         sequenced
-    }
-
-    pub(crate) fn sequence_args_with_spread_adapter_values(
-        &mut self,
-        mut stages: Vec<ValuePlan>,
-        spread: Option<&Expression>,
-        adapter_params: Option<&[FunctionParameter]>,
-        options: SpreadSequenceOptions,
-    ) -> SequencedValues {
-        if let Some(spread) = spread
-            && let Some(adapter_stage) =
-                self.try_emit_variadic_spread_adapter(spread, adapter_params)
-        {
-            stages.push(adapter_stage);
-            let spread_index = stages.len() - 1;
-            let mut sequenced = self.sequence_values(stages, options.boundary, "arg");
-            self.finalize_spread_stage(
-                &mut sequenced.values,
-                spread_index,
-                options.wrap_to_any,
-                options.combine,
-            );
-            return sequenced;
-        }
-        self.sequence_with_spread_values(stages, spread, options)
     }
 }

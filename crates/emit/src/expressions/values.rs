@@ -363,7 +363,7 @@ impl Planner<'_> {
             .map(|(i, e)| {
                 let element_ctx =
                     ExpressionContext::value().with_expected_slot_type(slot_types.get(i));
-                self.stage_composite(e, element_ctx)
+                self.lower_composite_value(e, element_ctx)
             })
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "v");
@@ -442,7 +442,7 @@ impl Planner<'_> {
     /// Go-unaddressable.
     pub(crate) fn plan_reference(&mut self, inner: &Expression, ty: &Type) -> ValuePlan {
         if inner.get_type().is_unit() && matches!(inner.unwrap_parens(), Expression::Call { .. }) {
-            let staged = self.stage_operand(inner.unwrap_parens(), ExpressionContext::value());
+            let staged = self.plan_operand(inner.unwrap_parens(), ExpressionContext::value());
             return staged.map_rendered_as_observable_computed(
                 |setup, staged_value, _contains_deferred_evaluation| {
                     if !staged_value.is_empty() {
@@ -500,7 +500,7 @@ impl Planner<'_> {
         target: &Expression,
         value: &Expression,
     ) -> Vec<LoweredStatement> {
-        let right_hand_side = self.stage_composite(value, ExpressionContext::value());
+        let right_hand_side = self.lower_composite_value(value, ExpressionContext::value());
         let mut setup: Vec<LoweredStatement> = Vec::new();
         let target_str = if is_order_sensitive(target) {
             self.emit_left_value_capturing(&mut setup, target, Some(&right_hand_side))
@@ -555,10 +555,10 @@ impl Planner<'_> {
         let mut stages: Vec<ValuePlan> = Vec::new();
         let has_start = start.is_some();
         if let Some(s) = start {
-            stages.push(self.stage_operand(s, ExpressionContext::value()));
+            stages.push(self.plan_operand(s, ExpressionContext::value()));
         }
         if let Some(e) = end {
-            stages.push(self.stage_operand(e, ExpressionContext::value()));
+            stages.push(self.plan_operand(e, ExpressionContext::value()));
         }
 
         if stages.is_empty() {

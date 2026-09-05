@@ -849,7 +849,7 @@ impl Planner<'_> {
     }
 
     fn stage_array_view(&mut self, array: &Expression) -> ValuePlan {
-        let mut staged = self.stage_operand(array, ExpressionContext::value());
+        let mut staged = self.plan_operand(array, ExpressionContext::value());
         if array.get_type().is_ref() {
             staged = staged.unary("*");
         }
@@ -875,9 +875,9 @@ impl Planner<'_> {
             (NativeMethodForm::Dot, Expression::DotAccess { expression, .. }) => {
                 let receiver_stage = self
                     .try_stage_to_slice_view(ctx, expression, ctx.args)
-                    .unwrap_or_else(|| self.stage_operand(expression, ExpressionContext::value()));
+                    .unwrap_or_else(|| self.plan_operand(expression, ExpressionContext::value()));
                 let mut stages = vec![receiver_stage];
-                stages.extend(self.stage_native_method_args(ctx.function, ctx.args));
+                stages.extend(self.stage_native_method_args_from(ctx.function, ctx.args, 0));
                 (expression.as_ref(), stages)
             }
             (NativeMethodForm::Identifier, _) => {
@@ -892,7 +892,7 @@ impl Planner<'_> {
                         ));
                         stages
                     }
-                    None => self.stage_native_method_args(ctx.function, ctx.args),
+                    None => self.stage_native_method_args_from(ctx.function, ctx.args, 0),
                 };
                 (receiver, stages)
             }
@@ -900,7 +900,7 @@ impl Planner<'_> {
         };
         let spread_stage = ctx
             .spread
-            .map(|spread| self.stage_operand(spread, ExpressionContext::value()));
+            .map(|spread| self.plan_operand(spread, ExpressionContext::value()));
         let rest_has_call = stages[1..]
             .iter()
             .chain(spread_stage.iter())
@@ -1001,12 +1001,12 @@ impl Planner<'_> {
             ..
         } = arg
         {
-            let mut stages = vec![self.stage_operand(receiver_expr, ExpressionContext::value())];
+            let mut stages = vec![self.plan_operand(receiver_expr, ExpressionContext::value())];
             if let Some(s) = start.as_deref() {
-                stages.push(self.stage_operand(s, ExpressionContext::value()));
+                stages.push(self.plan_operand(s, ExpressionContext::value()));
             }
             if let Some(e) = end.as_deref() {
-                stages.push(self.stage_operand(e, ExpressionContext::value()));
+                stages.push(self.plan_operand(e, ExpressionContext::value()));
             }
             let sequenced = self.sequence_values(stages, capture_boundary, "arg");
             let effect = sequenced.effect;
@@ -1038,7 +1038,7 @@ impl Planner<'_> {
         let range_kind = peel_to_range_type(&arg_ty, |id| self.facts.definition(id))
             .and_then(|ty| ty.get_name().map(str::to_owned))
             .expect("substring arg should resolve to a known range type");
-        let receiver_staged = self.stage_operand(receiver_expr, ExpressionContext::value());
+        let receiver_staged = self.plan_operand(receiver_expr, ExpressionContext::value());
         let range_staged = self.stage_or_capture(arg, "range");
         let sequenced =
             self.sequence_values(vec![receiver_staged, range_staged], capture_boundary, "arg");

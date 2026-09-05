@@ -133,21 +133,10 @@ impl Planner<'_> {
                 .expect("inlined UFCS receiver has a native type");
             let plain_call =
                 native_method_lowers_to_plain_call(&native_type, member, emitted_args.len());
-            let expression = if plain_call {
-                GoExpression::opaque_with_deferred_evaluation(inlined, true)
-            } else if member == "byte_at" {
-                GoExpression::opaque_with_deferred_evaluation(
-                    inlined,
-                    arguments_contain_deferred_evaluation,
-                )
-            } else if member == "is_empty" {
-                GoExpression::opaque_with_deferred_evaluation(inlined, true)
-            } else {
-                GoExpression::opaque_with_deferred_evaluation(
-                    inlined,
-                    arguments_contain_deferred_evaluation,
-                )
-            };
+            let deferred_evaluation =
+                plain_call || member == "is_empty" || arguments_contain_deferred_evaluation;
+            let expression =
+                GoExpression::opaque_with_deferred_evaluation(inlined, deferred_evaluation);
             return if plain_call {
                 ValuePlan::plain_call(setup, expression, EvaluationEffect::EffectfulCall)
             } else {
@@ -194,7 +183,7 @@ impl Planner<'_> {
         // into prelude helpers like `lisette.OptionAndThen`.
         let mut all_stages: Vec<ValuePlan> =
             Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
-        let mut receiver_stage = self.stage_operand(receiver, ExpressionContext::value());
+        let mut receiver_stage = self.plan_operand(receiver, ExpressionContext::value());
         if coercion == Some(ReceiverCoercion::AutoAddress) {
             receiver_stage = self.coerce_receiver_address_stage(receiver, receiver_stage);
         }
@@ -257,7 +246,7 @@ impl Planner<'_> {
         );
         let combine = plan_variadic_spread(&self.facts, function, spread).map(|p| p.combine(1));
 
-        let sequenced = self.sequence_args_with_spread_adapter_values(
+        let sequenced = self.sequence_with_spread_values(
             all_stages,
             spread,
             (!callee.is_prelude_dispatch)
@@ -298,7 +287,7 @@ impl Planner<'_> {
         if let Some(value) = self.try_adapt_lowered_fn_arg_shape(arg, Some(declared)) {
             return value;
         }
-        self.stage_composite(arg, ExpressionContext::value())
+        self.lower_composite_value(arg, ExpressionContext::value())
     }
 
     fn build_ufcs_qualified_call(
@@ -371,13 +360,14 @@ impl Planner<'_> {
 
         let stages: Vec<ValuePlan> = args
             .iter()
-            .map(|a| self.stage_composite(a, ExpressionContext::value()))
+            .map(|a| self.lower_composite_value(a, ExpressionContext::value()))
             .collect();
 
         let combine = plan_variadic_spread(&self.facts, function, spread).map(|p| p.combine(0));
         let sequenced = self.sequence_with_spread_values(
             stages,
             spread,
+            None,
             SpreadSequenceOptions {
                 wrap_to_any: false,
                 combine,
