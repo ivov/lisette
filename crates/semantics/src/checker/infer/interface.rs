@@ -369,8 +369,7 @@ impl InferCtx<'_> {
     fn own_candidate(&self, resolved: &Type, method: &str) -> Option<ConformanceCandidate> {
         let id = resolved.get_qualified_id()?;
         if self.store.get_interface(id).is_some() {
-            self.store
-                .get_method_for_type(resolved, &Default::default(), method)?;
+            self.store.get_method_for_type(resolved, method)?;
         } else {
             self.store.get_method(id, method)?;
         }
@@ -412,13 +411,11 @@ impl InferCtx<'_> {
         let Type::Parameter(name) = resolved else {
             return None;
         };
-        let bounds = self.scopes.collect_all_trait_bounds();
         let qualified = self.qualify_name(name);
-        bounds.get(&qualified)?.iter().find_map(|bound| {
+        self.scopes.bounds_on_param(name).iter().find_map(|bound| {
             let interface_ty = self.store.deep_resolve_alias(bound);
             interface_ty.get_qualified_id()?;
-            self.store
-                .get_method_for_type(&interface_ty, &Default::default(), method)?;
+            self.store.get_method_for_type(&interface_ty, method)?;
             Some(ConformanceCandidate::Resolved {
                 depth: 0,
                 owner: qualified.as_eco().clone(),

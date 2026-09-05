@@ -201,11 +201,12 @@ impl TaskState {
         own_generics: &[Generic],
     ) -> Option<Vec<Type>> {
         if self.scopes.lookup_type_param(parameter_name).is_some() {
-            let mut bounds = Vec::new();
-            self.scopes
-                .for_each_bound_on_param(parameter_name, |bound| {
-                    bounds.push(bound.resolve_in(&self.env));
-                });
+            let bounds: Vec<_> = self
+                .scopes
+                .bounds_on_param(parameter_name)
+                .iter()
+                .map(|bound| bound.resolve_in(&self.env))
+                .collect();
             return (!bounds.iter().any(Type::contains_error)).then_some(bounds);
         }
         let generic = own_generics

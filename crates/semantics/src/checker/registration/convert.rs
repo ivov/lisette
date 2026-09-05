@@ -791,8 +791,7 @@ impl TaskState {
             .collect();
 
         for (i, (name, param_span)) in undeclared.iter().enumerate() {
-            self.scopes
-                .insert_type_param(self.qualify_name(name), generics.len() + i);
+            self.scopes.insert_type_param(name, generics.len() + i);
             self.sink
                 .push(diagnostics::infer::undeclared_impl_type_param(
                     name,

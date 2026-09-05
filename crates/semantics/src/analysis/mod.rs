@@ -22,7 +22,6 @@ use crate::cache::{
     go_stdlib::{self, load_cached_go_package},
     hash_package_source_pair, is_cache_disabled, prelude as prelude_cache, try_load_cache,
 };
-use crate::checker::infer::InferCtx;
 use crate::checker::{PredeclaredPackage, RegisteredPackage, TaskOutput, TaskState};
 use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use crate::facts::Facts;

@@ -380,9 +380,12 @@ impl TaskState {
 
     pub(super) fn get_all_methods(&mut self, store: &Store, ty: &Type) -> Methods {
         if let Type::Parameter(name) = ty {
-            let trait_bounds = self.scopes.collect_all_trait_bounds();
-            let qualified_name = self.qualify_name(name);
-            return store.get_methods_from_bounds(&qualified_name, trait_bounds);
+            return self
+                .scopes
+                .bounds_on_param(name)
+                .iter()
+                .flat_map(|bound| store.get_all_methods(bound))
+                .collect();
         }
 
         let resolved = ty.strip_refs().resolve_in(&self.env);
@@ -396,13 +399,11 @@ impl TaskState {
         if let Type::Nominal { id, .. } = &peeled
             && store.get_interface(id).is_some()
         {
-            let empty = HashMap::default();
-            store.get_all_methods(&peeled, &empty)
+            store.get_all_methods(&peeled)
         } else if promotion::has_direct_embed(store, &resolved) {
             promotion::promoted_method_set(store, &resolved)
         } else {
-            let empty = HashMap::default();
-            store.get_all_methods(&resolved, &empty)
+            store.get_all_methods(&resolved)
         }
     }
 
@@ -413,9 +414,12 @@ impl TaskState {
         name: &str,
     ) -> Option<Method> {
         if let Type::Parameter(parameter) = ty {
-            let trait_bounds = self.scopes.collect_all_trait_bounds();
-            let qualified_name = self.qualify_name(parameter);
-            return store.get_method_from_bounds(&qualified_name, trait_bounds, name);
+            return self
+                .scopes
+                .bounds_on_param(parameter)
+                .iter()
+                .rev()
+                .find_map(|bound| store.get_method_for_type(bound, name));
         }
 
         let resolved = ty.strip_refs().resolve_in(&self.env);
@@ -429,13 +433,11 @@ impl TaskState {
         if let Type::Nominal { id, .. } = &peeled
             && store.get_interface(id).is_some()
         {
-            let empty = HashMap::default();
-            store.get_method_for_type(&peeled, &empty, name)
+            store.get_method_for_type(&peeled, name)
         } else if promotion::has_direct_embed(store, &resolved) {
             promotion::promoted_method(store, &resolved, name)
         } else {
-            let empty = HashMap::default();
-            store.get_method_for_type(&resolved, &empty, name)
+            store.get_method_for_type(&resolved, name)
         }
     }
 

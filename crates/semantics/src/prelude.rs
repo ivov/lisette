@@ -2,7 +2,6 @@ use diagnostics::LocalSink;
 use stdlib::{LIS_PRELUDE_SOURCE, LIS_TEST_PRELUDE_SOURCE};
 use syntax::program::{File, Visibility};
 
-use crate::checker::registration::normalize_registered_component_types;
 use crate::checker::{FileContext, TaskState};
 use crate::store::Store;
 
@@ -17,6 +16,7 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
     let result = syntax::build_ast(LIS_PRELUDE_SOURCE, PRELUDE_FILE_ID);
 
     sink.extend_parse_errors(result.errors);
+    let mut items = result.ast;
 
     store.store_file(File {
         id: PRELUDE_FILE_ID,
@@ -26,31 +26,13 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
         display_path: "prelude.d.lis".to_string(),
         source_path: deps::prelude_typedef_path(),
         source: LIS_PRELUDE_SOURCE.to_string(),
-        items: result.ast,
+        items: items.clone(),
         file_comment: None,
     });
 
     let mut checker = TaskState::for_package(PRELUDE_PACKAGE_ID);
-    let mut package = store
-        .get_package(PRELUDE_PACKAGE_ID)
-        .cloned()
-        .expect("prelude package must exist");
-
     checker.with_file_context_mut(store, FileContext::Prelude, |checker, store| {
-        for file in package.typedef_files() {
-            checker.register_type_names(store, &file.items, &Visibility::Public);
-        }
-
-        for file in package.files.values_mut().filter(|file| file.is_d_lis()) {
-            checker.register_constants(store, &file.items, &Visibility::Public);
-            checker.register_type_definitions(store, &mut file.items);
-        }
-        normalize_registered_component_types(store, PRELUDE_PACKAGE_ID);
-        for file in package.files.values_mut().filter(|file| file.is_d_lis()) {
-            checker.derive_enum_constructor_values(store, &file.items);
-            checker.register_impl_blocks(store, &mut file.items);
-            checker.register_non_const_values(store, &mut file.items, &Visibility::Public);
-        }
+        checker.register_types_and_values(store, &mut items, &Visibility::Public);
         checker.finalize_registration(store);
     });
     sink.extend(checker.sink.into_diagnostics());
@@ -63,6 +45,7 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
     let result = syntax::build_ast(LIS_TEST_PRELUDE_SOURCE, file_id);
 
     sink.extend_parse_errors(result.errors);
+    let mut items = result.ast;
 
     store.add_package(TEST_PRELUDE_PACKAGE_ID);
     store.store_file(File {
@@ -73,34 +56,16 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
         display_path: "test_prelude.d.lis".to_string(),
         source_path: None,
         source: LIS_TEST_PRELUDE_SOURCE.to_string(),
-        items: result.ast,
+        items: items.clone(),
         file_comment: None,
     });
 
     let mut checker = TaskState::for_package(TEST_PRELUDE_PACKAGE_ID);
-    let mut package = store
-        .get_package(TEST_PRELUDE_PACKAGE_ID)
-        .cloned()
-        .expect("test_prelude package must exist");
-
     checker.with_file_context_mut(
         store,
         FileContext::TestPrelude { file_id },
         |checker, store| {
-            for file in package.typedef_files() {
-                checker.register_type_names(store, &file.items, &Visibility::Public);
-            }
-
-            for file in package.files.values_mut().filter(|file| file.is_d_lis()) {
-                checker.register_constants(store, &file.items, &Visibility::Public);
-                checker.register_type_definitions(store, &mut file.items);
-            }
-            normalize_registered_component_types(store, TEST_PRELUDE_PACKAGE_ID);
-            for file in package.files.values_mut().filter(|file| file.is_d_lis()) {
-                checker.derive_enum_constructor_values(store, &file.items);
-                checker.register_impl_blocks(store, &mut file.items);
-                checker.register_non_const_values(store, &mut file.items, &Visibility::Public);
-            }
+            checker.register_types_and_values(store, &mut items, &Visibility::Public);
             checker.finalize_registration(store);
         },
     );

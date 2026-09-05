@@ -11,7 +11,7 @@ use syntax::types::{
     unqualified_name,
 };
 
-use super::super::context::{Expectation, ExpectationRole};
+use super::super::context::{Expectation, ExpectationRole, UseContext};
 use super::super::unify::Dispatched;
 use super::permission::{ConstructionGrant, MissingSupply};
 use super::struct_call::same_nominal;
@@ -167,8 +167,10 @@ impl InferCtx<'_> {
         let store = self.store;
         let callee_ty = self.new_type_var();
 
-        let (callee_expression, writable_receiver) =
-            self.with_callee_context(|state| state.infer_expression(*expression, &callee_ty));
+        let callee_expression = self.with_use_context(UseContext::Callee, |state| {
+            state.infer_expression(*expression, &callee_ty)
+        });
+        let writable_receiver = self.writable_receiver_place(&callee_expression);
 
         let forall_ty = self.resolve_callee_forall_type(&callee_expression, &type_args);
         let (callee_ty, type_arguments) =

@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use ecow::EcoString;
 use syntax::ast::{Expression, IdentifierResolution, Span};
 
-use crate::checker::infer::InferCtx;
+use crate::checker::TaskState;
 
 struct ConstEntry<'a> {
     name: &'a EcoString,
@@ -16,7 +16,7 @@ struct ConstNode<'a> {
     span: Span,
 }
 
-impl InferCtx<'_> {
+impl TaskState {
     pub fn check_const_cycles(&mut self, items_per_file: &[&[Expression]]) {
         let mut consts: Vec<ConstEntry<'_>> = Vec::new();
         for items in items_per_file {
