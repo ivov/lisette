@@ -190,6 +190,16 @@ fn tuple_field_autofill_keeps_its_element_types() {
   assert p.reading.1 < 0.5
 }
 
+#[test]
+fn generic_call_keeps_a_literal_at_its_newtype() {
+  let toggle: Toggle = echo_value(true)
+  let label: Label = echo_value("on")
+  let ticket: Ticket = echo_value(7)
+  assert toggle.0
+  assert label.0 == "on"
+  assert ticket.0 == 7
+}
+
 impl<T> Box<T> {
   fn get(self: Box<T>) -> T {
     self.value
@@ -220,6 +230,8 @@ fn make_duo<A, B>(a: A, b: B) -> Duo<A, B> {
 struct Ticket(int)
 
 struct Toggle(bool)
+
+struct Label(string)
 
 struct Measurement { reading: (int, float64) }
 

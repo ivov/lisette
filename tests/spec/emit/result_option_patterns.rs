@@ -60,6 +60,21 @@ fn test() -> Result<float64, error> {
 }
 
 #[test]
+fn option_some_types_a_literal_into_a_newtype() {
+    let input = r#"
+struct Flag(bool)
+struct Ticket(int)
+
+fn test() -> (Option<Flag>, Option<Ticket>) {
+  let armed: Option<Flag> = Some(true)
+  let ticket: Option<Ticket> = Some(1)
+  (armed, ticket)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn option_none_construction() {
     let input = r#"
 fn test() -> Option<int> {

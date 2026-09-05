@@ -156,7 +156,7 @@ impl Planner<'_> {
                 .all(|ret| fn_params.iter().any(|param| param.ty.contains_type(ret)));
         let parameters_support_go_inference = fn_params
             .iter()
-            .all(|param| !self.needs_explicit_args_for_go_inference(&param.ty));
+            .all(|param| !self.is_function_alias(&param.ty));
         let inferred_at_call_site =
             ctx.is_callee() && return_params_are_inferrable && parameters_support_go_inference;
         if inferred_at_call_site {

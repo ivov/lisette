@@ -20,6 +20,6 @@ func ident[T any](v T) T {
 func test() float64 {
 	widened := ident(float64(1))
 	already := ident(1.5)
-	narrow := ident[float32](2)
+	narrow := ident(float32(2))
 	return widened/already + float64(narrow)
 }

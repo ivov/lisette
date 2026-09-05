@@ -1408,6 +1408,21 @@ fn test(measured: float64) -> float64 {
 }
 
 #[test]
+fn builtin_min_types_a_literal_into_a_newtype() {
+    let input = r#"
+struct Ticket(int)
+struct Label(string)
+
+fn test() -> Ticket {
+  let label: Label = max("a", "b")
+  let _ = label
+  min(1, 2)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn builtin_min_strings() {
     let input = r#"
 fn test() -> string {

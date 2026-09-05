@@ -19,7 +19,7 @@ import (
 
 func main() {
 	b := aws.ListInput{}
-	opt_1 := lisette.MakeOptionSome[int32](5)
+	opt_1 := lisette.MakeOptionSome(int32(5))
 	var ptr_2 *int32
 	if opt_1.Tag == lisette.OptionSome {
 		ptr_2 = &opt_1.SomeVal

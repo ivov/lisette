@@ -49,14 +49,14 @@ type Probe struct {
 
 func make_() Probe {
 	return Probe{
-		Plain:        lisette.MakeTuple2(0, ""),
-		Floaty:       lisette.MakeTuple2(0, float64(0)),
-		Small:        lisette.MakeTuple2(float32(0), uint8(0)),
-		Bytes:        lisette.MakeTuple2(byte(0), ""),
-		Aliased:      lisette.MakeTuple2(Meters(0), 0),
-		AliasOfInt:   lisette.MakeTuple2(0, ""),
-		Newtype:      lisette.MakeTuple2(Ticket(0), 0),
-		NewtypeFloat: lisette.MakeTuple2(Weight(0), 0),
-		Nested:       lisette.MakeTuple2(0, lisette.MakeTuple2(0, float64(0))),
+		Plain:        lisette.MakeTuple2[int, string](0, ""),
+		Floaty:       lisette.MakeTuple2[int, float64](0, 0),
+		Small:        lisette.MakeTuple2[float32, uint8](0, 0),
+		Bytes:        lisette.MakeTuple2[byte, string](0, ""),
+		Aliased:      lisette.MakeTuple2[Meters, int](0, 0),
+		AliasOfInt:   lisette.MakeTuple2[Count, string](0, ""),
+		Newtype:      lisette.MakeTuple2[Ticket, int](Ticket(0), 0),
+		NewtypeFloat: lisette.MakeTuple2[Weight, int](Weight(0), 0),
+		Nested:       lisette.MakeTuple2[int, lisette.Tuple2[int, float64]](0, lisette.MakeTuple2[int, float64](0, 0)),
 	}
 }

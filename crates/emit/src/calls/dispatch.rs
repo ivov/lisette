@@ -19,9 +19,7 @@ use crate::types::native::NativeGoType;
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments, StructFields};
 use syntax::program::{CallKind, Definition, DefinitionBody, resolved_definition};
-use syntax::types::{
-    CompoundKind, FunctionParameter, SimpleKind, Type, build_substitution_map, substitute,
-};
+use syntax::types::{CompoundKind, FunctionParameter, Type, build_substitution_map, substitute};
 
 struct TupleStructTarget {
     go_ty: String,
@@ -79,26 +77,6 @@ impl Planner<'_> {
             });
             self.literal_misinfers_type_parameter(arg, param.map(|param| &param.ty))
         })
-    }
-
-    /// True when Go's inference would lose this alias: function aliases (infer
-    /// as `func(...)`) and non-default numeric aliases (untyped literals default
-    /// to `int`/`float64`/`complex128`).
-    pub(crate) fn needs_explicit_args_for_go_inference(&self, ty: &Type) -> bool {
-        if self.is_function_alias(ty) {
-            return true;
-        }
-        let Some(numeric) = self.facts.underlying_numeric_type(ty) else {
-            return false;
-        };
-        let Some(kind) = numeric.as_simple() else {
-            return false;
-        };
-        kind.is_arithmetic()
-            && !matches!(
-                kind,
-                SimpleKind::Int | SimpleKind::Float64 | SimpleKind::Complex128
-            )
     }
 }
 
@@ -642,7 +620,7 @@ impl<'a> Planner<'a> {
             let any_needs_explicit = vars.iter().any(|v| {
                 mapping
                     .get(v.as_str())
-                    .is_some_and(|t| self.needs_explicit_args_for_go_inference(t))
+                    .is_some_and(|t| self.is_function_alias(t))
             });
             if !any_needs_explicit {
                 return None;

@@ -640,14 +640,16 @@ impl<'a> Planner<'a> {
         let Expression::Literal { literal, ty, .. } = unwrap_unary_negation(arg) else {
             return false;
         };
-        // `string`, `bool` and imaginary always default to the type they fill.
         let default = match literal {
             Literal::Integer { .. } => SimpleKind::Int,
             Literal::Float { .. } => SimpleKind::Float64,
+            Literal::Imaginary(_) => SimpleKind::Complex128,
             Literal::Char(_) => SimpleKind::Rune,
+            Literal::Boolean(_) => SimpleKind::Bool,
+            Literal::String { .. } => SimpleKind::String,
             _ => return false,
         };
-        self.facts.underlying_simple_kind(ty) != Some(default)
+        self.facts.peel_alias(ty).as_simple() != Some(default)
     }
 
     /// The type to convert a misinferring literal to. A variadic slot renders

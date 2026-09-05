@@ -1835,6 +1835,29 @@ fn test() -> int {
 }
 
 #[test]
+fn generic_call_types_a_literal_into_a_newtype() {
+    let input = r#"
+struct Flag(bool)
+struct Label(string)
+struct Ticket(int)
+struct Weight(float64)
+struct Letter(rune)
+
+fn ident<T>(v: T) -> T { v }
+
+fn test() -> Flag {
+  let label: Label = ident("x")
+  let ticket: Ticket = ident(1)
+  let weight: Weight = ident(1.5)
+  let letter: Letter = ident('a')
+  let _ = (label, ticket, weight, letter)
+  ident(true)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn parenthesized_local_generic_return_only_type_args() {
     let input = r#"
 fn make<T>() -> Slice<T> {

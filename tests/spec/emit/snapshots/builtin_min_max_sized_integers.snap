@@ -10,6 +10,6 @@ description: |
 package main
 
 func test(a, b byte, c, d rune) rune {
-	_ = byte(min(a, b))
-	return rune(max(c, d))
+	_ = min(a, b)
+	return max(c, d)
 }
