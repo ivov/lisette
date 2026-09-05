@@ -5,7 +5,7 @@ use crate::Planner;
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate};
 use crate::context::expression::ExpressionContext;
 use crate::patterns::binding_decls::{is_catchall_pattern, is_unconditional_catchall};
-use crate::patterns::binding_emit::{drop_inline_overlays, tree_binding_statements};
+use crate::patterns::binding_emit::tree_binding_statements;
 use crate::patterns::decision_tree::{
     ChainTest, Decision, PatternBinding, SubjectRoot, SwitchBranch,
     SwitchKind as PatternSwitchKind, SwitchShape, compile_expanded_arms, decision_is_exhaustive,
@@ -16,7 +16,7 @@ use crate::plan::bodies::{
     SwitchCasePlan, SwitchKind, SwitchStatementPlan,
 };
 use crate::plan::placement::unreachable_panic_if_needed;
-use crate::state::bindings::{BindingValue, InlineExpr};
+use crate::state::bindings::InlineExpr;
 use crate::utils::wrap_if_struct_literal;
 
 struct FlatCase<'d> {
@@ -239,6 +239,13 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         result
     }
 
+    fn with_binding_frame<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.planner.scope.push_binding_frame();
+        let result = f(self);
+        self.planner.scope.pop_binding_frame();
+        result
+    }
+
     fn with_optional_scope<R>(&mut self, scoped: bool, f: impl FnOnce(&mut Self) -> R) -> R {
         if scoped { self.with_scope(f) } else { f(self) }
     }
@@ -257,7 +264,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
 
         let (inner, needs_block) = self.with_scope(|this| {
             let mut inner: Vec<LoweredStatement> = Vec::new();
-            this.with_bindings(&mut inner, bindings, &[arm_body], None, |this, inner| {
+            this.with_bindings(&mut inner, bindings, &[arm_body], |this, inner| {
                 this.emit_arm_body(inner, arm_index, place)
             });
             let needs_block =
@@ -301,13 +308,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 bindings,
             } => {
                 let arm_body = &*self.arms[*arm_index].expression;
-                self.with_bindings(
-                    statements,
-                    bindings,
-                    &[arm_body],
-                    None,
-                    |this, statements| this.emit_arm_body(statements, *arm_index, place),
-                );
+                self.with_bindings(statements, bindings, &[arm_body], |this, statements| {
+                    this.emit_arm_body(statements, *arm_index, place)
+                });
             }
             Decision::Chain { tests, fallback } => {
                 self.lower_chain_branch(statements, tests, fallback, place);
@@ -621,9 +624,10 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         arm_index: usize,
         bindings: &[PatternBinding],
     ) -> Option<String> {
-        let overlays = self.install_path_overlays(bindings);
-        let lowered = self.lower_guard_condition(arm_index);
-        drop_inline_overlays(self.planner, &overlays);
+        let lowered = self.with_binding_frame(|this| {
+            this.install_path_overlays(bindings);
+            this.lower_guard_condition(arm_index)
+        });
         let (setup, condition) = lowered?;
         if !setup.is_empty() {
             return None;
@@ -639,20 +643,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         })
     }
 
-    fn install_path_overlays(
-        &mut self,
-        bindings: &[PatternBinding],
-    ) -> Vec<(String, Option<BindingValue>)> {
-        let mut overlays = Vec::with_capacity(bindings.len());
+    fn install_path_overlays(&mut self, bindings: &[PatternBinding]) {
         for binding in bindings {
             if binding.go_name.is_none() {
                 continue;
             }
-            let previous = self
-                .planner
-                .scope
-                .resolve_identifier_binding(&binding.lisette_name)
-                .cloned();
             let text = binding.path.render_composable(self.subject.root());
             self.planner.scope.bind_inline_expr(
                 &binding.lisette_name,
@@ -662,9 +657,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     binding.path.contains_deferred_evaluation(),
                 ),
             );
-            overlays.push((binding.lisette_name.clone(), previous));
         }
-        overlays
     }
 
     fn lower_flat_case_body(&mut self, case: &FlatCase, place: &PlacePlan) -> LoweredBlock {
@@ -685,7 +678,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 })
                 .cloned()
                 .collect();
-            this.with_bindings(&mut body, &bindings, &[arm_body], None, |this, body| {
+            this.with_bindings(&mut body, &bindings, &[arm_body], |this, body| {
                 this.walk(body, case.decision, &ctx);
             });
             LoweredBlock { statements: body }
@@ -702,7 +695,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 let arm_body = &*self.arms[*arm_index].expression;
                 let leaf = self.with_optional_scope(wrap, |this| {
                     let mut leaf: Vec<LoweredStatement> = Vec::new();
-                    this.with_bindings(&mut leaf, bindings, &[arm_body], None, |this, leaf| {
+                    this.with_bindings(&mut leaf, bindings, &[arm_body], |this, leaf| {
                         let mut body_statements: Vec<LoweredStatement> = Vec::new();
                         this.emit_arm_body(&mut body_statements, *arm_index, ctx.arm_place);
                         let body_diverges = capture_diverge(body_statements, leaf);
@@ -878,7 +871,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 &mut guard_statements,
                 bindings,
                 &guard_consumers,
-                Some(failure),
                 |this, _| {
                     let (condition_setup, condition) = this.lower_guard_condition(arm_index)?;
                     let then_body = this.with_scope(|this| {
@@ -1171,7 +1163,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 statements,
                 decision_top_bindings(&tests[ref_index].decision),
                 &consumers,
-                None,
                 |this, statements| {
                     this.emit_chain_group_bodies(statements, indices, tests, ctx);
                 },
@@ -1249,57 +1240,25 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
     }
 
-    /// Returns the overlay pairs installed for inline substitutions; pass to
-    /// `drop_inline_overlays` to roll them back.
-    fn emit_bindings(
-        &mut self,
-        statements: &mut Vec<LoweredStatement>,
-        bindings: &[PatternBinding],
-        consumers: &[&Expression],
-        failure_blocker: Option<&Decision>,
-    ) -> Vec<(String, Option<BindingValue>)> {
-        let failure_trees: Vec<&Expression> = match failure_blocker {
-            Some(failure) => {
-                let mut reached: Vec<usize> = Vec::new();
-                collect_reachable_arms(failure, &mut reached);
-                let mut trees: Vec<&Expression> = Vec::with_capacity(reached.len() * 2);
-                for index in reached {
-                    let arm = &self.arms[index];
-                    if let Some(guard) = arm.guard.as_ref() {
-                        trees.push(guard);
-                    }
-                    trees.push(&arm.expression);
-                }
-                trees
-            }
-            None => Vec::new(),
-        };
-
-        if bindings.is_empty() {
-            return Vec::new();
-        }
-        tree_binding_statements(
-            self.planner,
-            statements,
-            bindings,
-            self.subject.var(),
-            consumers,
-            &failure_trees,
-        )
-    }
-
     fn with_bindings<R>(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         bindings: &[PatternBinding],
         consumers: &[&Expression],
-        failure_blocker: Option<&Decision>,
         f: impl FnOnce(&mut Self, &mut Vec<LoweredStatement>) -> R,
     ) -> R {
-        let overlays = self.emit_bindings(statements, bindings, consumers, failure_blocker);
-        let result = f(self, statements);
-        drop_inline_overlays(self.planner, &overlays);
-        result
+        self.with_binding_frame(|this| {
+            if !bindings.is_empty() {
+                tree_binding_statements(
+                    this.planner,
+                    statements,
+                    bindings,
+                    this.subject.var(),
+                    consumers,
+                );
+            }
+            f(this, statements)
+        })
     }
 
     fn emit_arm_body(
@@ -1400,45 +1359,6 @@ fn decision_top_bindings(decision: &Decision) -> &[PatternBinding] {
     match decision {
         Decision::Guard { bindings, .. } | Decision::Success { bindings, .. } => bindings,
         _ => &[],
-    }
-}
-
-fn collect_reachable_arms(decision: &Decision, out: &mut Vec<usize>) {
-    match decision {
-        Decision::Success { arm_index, .. } => {
-            if !out.contains(arm_index) {
-                out.push(*arm_index);
-            }
-        }
-        Decision::Guard {
-            arm_index,
-            success,
-            failure,
-            ..
-        } => {
-            if !out.contains(arm_index) {
-                out.push(*arm_index);
-            }
-            collect_reachable_arms(success, out);
-            collect_reachable_arms(failure, out);
-        }
-        Decision::Switch {
-            branches, fallback, ..
-        } => {
-            for branch in branches {
-                collect_reachable_arms(&branch.decision, out);
-            }
-            if let Some(fallback) = fallback.as_deref() {
-                collect_reachable_arms(fallback, out);
-            }
-        }
-        Decision::Chain { tests, fallback } => {
-            for test in tests {
-                collect_reachable_arms(&test.decision, out);
-            }
-            collect_reachable_arms(fallback, out);
-        }
-        Decision::Unreachable => {}
     }
 }
 

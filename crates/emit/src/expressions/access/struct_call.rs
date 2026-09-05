@@ -645,7 +645,7 @@ impl Planner<'_> {
                 variant
                     .fields
                     .iter()
-                    .filter(|f| f.is_recursive)
+                    .filter(|f| f.is_recursive())
                     .map(|f| f.source_name.clone())
                     .collect()
             } else {

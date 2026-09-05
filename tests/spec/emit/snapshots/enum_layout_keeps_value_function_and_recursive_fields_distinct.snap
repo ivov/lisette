@@ -1,0 +1,73 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  enum Node {
+    Value(int),
+    Callback(fn() -> int),
+    Child(Node),
+  }
+  
+  fn read(node: Node) -> int {
+    match node {
+      Node.Value(value) => value,
+      Node.Callback(call) => call(),
+      Node.Child(child) => read(child),
+    }
+  }
+  
+  fn main() {
+    if read(Node.Child(Node.Callback(|| 7))) != 7 { panic("wrong field layout") }
+    if read(Node.Value(3)) != 3 { panic("wrong value field") }
+  }
+---
+package main
+
+func MakeNodeValue(arg0 int) Node {
+	return Node{Tag: NodeValue, Value: arg0}
+}
+
+func MakeNodeCallback(arg0 func() int) Node {
+	return Node{Tag: NodeCallback, Callback: arg0}
+}
+
+func MakeNodeChild(arg0 Node) Node {
+	return Node{Tag: NodeChild, Child: &arg0}
+}
+
+type NodeTag int
+
+const (
+	NodeValue NodeTag = iota
+	NodeCallback
+	NodeChild
+)
+
+type Node struct {
+	Tag      NodeTag
+	Value    int
+	Callback func() int
+	Child    *Node
+}
+
+func read(node Node) int {
+	switch node.Tag {
+	case NodeValue:
+		return node.Value
+	case NodeCallback:
+		return node.Callback()
+	default:
+		return read((*node.Child))
+	}
+}
+
+func main() {
+	if read(MakeNodeChild(MakeNodeCallback(func() int {
+		return 7
+	}))) != 7 {
+		panic("wrong field layout")
+	}
+	if read(MakeNodeValue(3)) != 3 {
+		panic("wrong value field")
+	}
+}

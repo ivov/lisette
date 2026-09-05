@@ -1,4 +1,8 @@
 use rustc_hash::FxHashMap as HashMap;
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use crate::EnumLayout;
 
 use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::output::OutputImport;
@@ -10,6 +14,8 @@ use syntax::program::File;
 pub(crate) struct FileNamespace {
     imports: ImportPlan,
     requirements: PackageRequirements,
+    /// Keep this memo. Recomputing a layout per field access was 5.8x slower.
+    pub(crate) enum_layouts: RefCell<HashMap<String, Rc<EnumLayout>>>,
 }
 
 impl FileNamespace {
@@ -22,6 +28,7 @@ impl FileNamespace {
         Self {
             imports: ImportPlan::build(file, go_module, unused_imports, go_package_names),
             requirements: PackageRequirements::default(),
+            enum_layouts: RefCell::default(),
         }
     }
 

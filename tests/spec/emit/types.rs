@@ -3032,6 +3032,31 @@ fn test() -> Tree {
 }
 
 #[test]
+fn enum_layout_keeps_value_function_and_recursive_fields_distinct() {
+    let input = r#"
+enum Node {
+  Value(int),
+  Callback(fn() -> int),
+  Child(Node),
+}
+
+fn read(node: Node) -> int {
+  match node {
+    Node.Value(value) => value,
+    Node.Callback(call) => call(),
+    Node.Child(child) => read(child),
+  }
+}
+
+fn main() {
+  if read(Node.Child(Node.Callback(|| 7))) != 7 { panic("wrong field layout") }
+  if read(Node.Value(3)) != 3 { panic("wrong value field") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn tuple_struct_function_vs_constructor() {
     let input = r#"
 struct Point(int, int)

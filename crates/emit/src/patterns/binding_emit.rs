@@ -1,12 +1,12 @@
 use crate::Planner;
-use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate, region_blocks_inline};
+use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate};
 use crate::patterns::decision_tree::{
     Check, PatternBinding, PatternInfo, SubjectRoot, render_condition,
 };
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::placement::simple_assign;
 use crate::plan::values::ValuePlan;
-use crate::state::bindings::{BindingValue, InlineExpr};
+use crate::state::bindings::InlineExpr;
 use std::borrow::Cow;
 use syntax::ast::Expression;
 
@@ -106,17 +106,14 @@ pub(crate) fn compose_refutable_condition(
     }
 }
 
-/// Push one `name := subject.path` per binding. Inlined bindings produce no
-/// statement; their overlay pairs are returned for `drop_inline_overlays`.
+/// Push one `name := subject.path` per binding. Inlined bindings produce no statement.
 pub(crate) fn tree_binding_statements(
     planner: &mut Planner,
     statements: &mut Vec<LoweredStatement>,
     bindings: &[PatternBinding],
     subject_var: &str,
     consumers: &[&Expression],
-    inline_blockers: &[&Expression],
-) -> Vec<(String, Option<BindingValue>)> {
-    let mut installed_inlines = Vec::new();
+) {
     for binding in bindings {
         let Some(ref go_name) = binding.go_name else {
             planner.scope.bind(&binding.lisette_name, "");
@@ -125,13 +122,7 @@ pub(crate) fn tree_binding_statements(
 
         let access_expression = binding.path.render(SubjectRoot::Var(subject_var));
 
-        if analyze_inline_candidate(&binding.lisette_name, consumers) == InlineDecision::Inline
-            && !region_blocks_inline(inline_blockers.iter().copied(), &binding.lisette_name)
-        {
-            let previous = planner
-                .scope
-                .resolve_identifier_binding(&binding.lisette_name)
-                .cloned();
+        if analyze_inline_candidate(&binding.lisette_name, consumers) == InlineDecision::Inline {
             let safe_text = binding
                 .path
                 .render_composable(SubjectRoot::Var(subject_var));
@@ -143,7 +134,6 @@ pub(crate) fn tree_binding_statements(
                     binding.path.contains_deferred_evaluation(),
                 ),
             );
-            installed_inlines.push((binding.lisette_name.clone(), previous));
             continue;
         }
 
@@ -169,26 +159,6 @@ pub(crate) fn tree_binding_statements(
             value: access_expression,
         });
     }
-    installed_inlines
-}
-
-pub(crate) fn drop_inline_overlays(
-    planner: &mut Planner,
-    installed: &[(String, Option<BindingValue>)],
-) {
-    for (name, previous) in installed {
-        match previous {
-            Some(value @ (BindingValue::GoName(_) | BindingValue::GoConst(_))) => {
-                planner.scope.bind_value(name.as_str(), value.clone());
-            }
-            Some(BindingValue::InlineExpr(expr)) => {
-                planner.scope.bind_inline_expr(name.as_str(), expr.clone());
-            }
-            None => {
-                planner.scope.remove_binding(name);
-            }
-        }
-    }
 }
 
 pub(crate) fn with_tree_bindings<R>(
@@ -199,11 +169,10 @@ pub(crate) fn with_tree_bindings<R>(
     body: &Expression,
     f: impl FnOnce(&mut Planner, &mut Vec<LoweredStatement>) -> R,
 ) -> R {
-    let overlays =
-        tree_binding_statements(planner, statements, bindings, subject_var, &[body], &[]);
-    let result = f(planner, statements);
-    drop_inline_overlays(planner, &overlays);
-    result
+    planner.with_binding_frame(|planner| {
+        tree_binding_statements(planner, statements, bindings, subject_var, &[body]);
+        f(planner, statements)
+    })
 }
 
 /// Push `name = subject.path` leaves for or-pattern alternatives whose

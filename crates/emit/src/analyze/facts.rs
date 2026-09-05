@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
@@ -32,8 +30,8 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) entry_package_name: &'a str,
     pub(crate) go_module: String,
     pub(crate) emit_tests: bool,
-    pub(crate) line_indexes: Option<Arc<HashMap<u32, LineIndex>>>,
-    pub(crate) globals: Arc<GlobalEmitData>,
+    pub(crate) line_indexes: Option<&'a HashMap<u32, LineIndex>>,
+    pub(crate) globals: &'a GlobalEmitData,
     pub(crate) current_package: PackageId,
 }
 
@@ -49,8 +47,8 @@ pub(crate) struct EmitFacts<'a> {
     entry_package_name: &'a str,
     go_module: String,
     emit_tests: bool,
-    line_indexes: Option<Arc<HashMap<u32, LineIndex>>>,
-    globals: Arc<GlobalEmitData>,
+    line_indexes: Option<&'a HashMap<u32, LineIndex>>,
+    globals: &'a GlobalEmitData,
     current_package: PackageId,
 }
 
@@ -333,7 +331,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn line_index(&self, file_id: u32) -> Option<&LineIndex> {
-        self.line_indexes.as_ref()?.get(&file_id)
+        self.line_indexes?.get(&file_id)
     }
 }
 
