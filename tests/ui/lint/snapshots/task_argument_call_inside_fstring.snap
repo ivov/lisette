@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Call evaluated before the `task` starts
+    ╭─[test.lis:9:23]
+  8 │ fn main() {
+  9 │   task fmt.Println(f"{compute()}")
+    ·                       ────┬────
+    ·                           ╰── runs on the caller
+ 10 │ }
+    ╰────
+  help: Move the work into a `task { ... }` block to run it in the task, or bind it with `let` first to make the order visible · code: [lint.task_argument_call]

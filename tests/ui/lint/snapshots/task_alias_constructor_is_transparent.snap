@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Call evaluated before the `task` starts
+    ╭─[main.lis:15:22]
+ 14 │   task consume(geo.Pair(1, 2))
+ 15 │   task consume(geo.P(work(), 2))
+    ·                      ───┬──
+    ·                         ╰── runs on the caller
+ 16 │ }
+    ╰────
+  help: Move the work into a `task { ... }` block to run it in the task, or bind it with `let` first to make the order visible · code: [lint.task_argument_call]

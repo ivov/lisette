@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Call evaluated before the `task` starts
+    ╭─[main.lis:13:18]
+ 12 │   task consume_pair(({
+ 13 │     task ch.send(compute())
+    ·                  ────┬────
+    ·                      ╰── runs on the caller
+ 14 │     1
+    ╰────
+  help: Move the work into a `task { ... }` block to run it in the task, or bind it with `let` first to make the order visible · code: [lint.task_argument_call]
