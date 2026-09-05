@@ -111,7 +111,7 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
     ) -> (Vec<LoweredStatement>, String) {
-        let plan = self.stage_operand(expression, ExpressionContext::value());
+        let plan = self.plan_operand(expression, ExpressionContext::value());
         let requires_capture = !matches!(expression, Expression::Identifier { .. })
             || plan.expression.contains_deferred_evaluation();
         let (mut setup, value) = plan.into_parts();

@@ -130,32 +130,23 @@ pub(crate) fn emit_lowered_result_return(
 ) -> Vec<LoweredStatement> {
     planner.require_stdlib();
     let p = result_value;
-    let ok_zero = |planner: &mut Planner| {
-        let ok_ty = planner.facts.peel_alias(return_ty).ok_type();
-        lowered_zero(planner, &ok_ty)
-    };
     match shape {
-        CallableReturnAbi::BareError => vec![
+        CallableReturnAbi::BareError | CallableReturnAbi::Result { .. } => vec![
             tag_check(
                 format!("{p}.Tag == {RESULT_OK_TAG}"),
                 Vec::new(),
-                vec!["nil".to_string()],
+                lowered_ok_values(shape, &format!("{p}.OkVal")),
             ),
-            multi_value_return(vec![format!("{p}.ErrVal")]),
+            multi_value_return(lowered_err_values(
+                planner,
+                shape,
+                return_ty,
+                &format!("{p}.ErrVal"),
+            )),
         ],
-        CallableReturnAbi::Result { .. } => {
-            let zero = ok_zero(planner);
-            vec![
-                tag_check(
-                    format!("{p}.Tag == {RESULT_OK_TAG}"),
-                    Vec::new(),
-                    vec![format!("{p}.OkVal"), "nil".to_string()],
-                ),
-                multi_value_return(vec![zero, format!("{p}.ErrVal")]),
-            ]
-        }
         CallableReturnAbi::Partial { .. } => {
-            let zero = ok_zero(planner);
+            let ok_ty = planner.facts.peel_alias(return_ty).ok_type();
+            let zero = lowered_zero(planner, &ok_ty);
             vec![
                 tag_check(
                     format!("{p}.Tag == {PARTIAL_OK_TAG}"),
@@ -170,25 +161,16 @@ pub(crate) fn emit_lowered_result_return(
                 multi_value_return(vec![format!("{p}.OkVal"), format!("{p}.ErrVal")]),
             ]
         }
-        CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
-            let zero = ok_zero(planner);
+        CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. } | OptionReturnAbi::Nullable) => {
             vec![
                 tag_check(
                     format!("{p}.Tag == {OPTION_SOME_TAG}"),
                     Vec::new(),
-                    vec![format!("{p}.SomeVal"), "true".to_string()],
+                    lowered_ok_values(shape, &format!("{p}.SomeVal")),
                 ),
-                multi_value_return(vec![zero, "false".to_string()]),
+                multi_value_return(lowered_none_values(planner, shape, return_ty)),
             ]
         }
-        CallableReturnAbi::Option(OptionReturnAbi::Nullable) => vec![
-            tag_check(
-                format!("{p}.Tag == {OPTION_SOME_TAG}"),
-                Vec::new(),
-                vec![format!("{p}.SomeVal")],
-            ),
-            multi_value_return(vec!["nil".to_string()]),
-        ],
         CallableReturnAbi::Tuple { arity, .. } => {
             emit_lowered_tuple_return(planner, result_value, return_ty, *arity)
         }
@@ -307,19 +289,51 @@ fn emit_return_adapter(
 
     if return_type.is_result() {
         planner.require_stdlib();
-        return Some(emit_result_return_adapter(planner, inner_call, return_type));
-    }
-    if return_type.is_partial() {
-        planner.require_stdlib();
-        return Some(emit_partial_return_adapter(
+        let shape = if return_type.ok_type().is_unit() {
+            CallableReturnAbi::BareError
+        } else {
+            CallableReturnAbi::Result {
+                payload: PayloadLayout::Packed,
+            }
+        };
+        return Some(emit_shape_return_adapter(
             planner,
             inner_call,
             return_type,
+            &shape,
+            "res",
+        ));
+    }
+    if return_type.is_partial() {
+        planner.require_stdlib();
+        let shape = CallableReturnAbi::Partial {
+            payload: PayloadLayout::Packed,
+        };
+        return Some(emit_shape_return_adapter(
+            planner,
+            inner_call,
+            return_type,
+            &shape,
+            "res",
         ));
     }
     if return_type.is_option() {
         planner.require_stdlib();
-        return Some(emit_option_return_adapter(planner, inner_call, return_type));
+        let encoding = if planner.facts.is_nilable_go_type(&return_type.ok_type()) {
+            OptionReturnAbi::Nullable
+        } else {
+            OptionReturnAbi::CommaOk {
+                payload: PayloadLayout::Packed,
+            }
+        };
+        let shape = CallableReturnAbi::Option(encoding);
+        return Some(emit_shape_return_adapter(
+            planner,
+            inner_call,
+            return_type,
+            &shape,
+            "opt",
+        ));
     }
     if return_type.tuple_arity().is_some_and(|n| n >= 2) {
         planner.require_stdlib();
@@ -328,92 +342,20 @@ fn emit_return_adapter(
     None
 }
 
-/// `Result<(), error>` → `error`; `Result<T, error>` → `(T, error)`.
-fn emit_result_return_adapter(
+/// Returns `(go_return_type, body)` for a tagged result destructured into `shape`.
+fn emit_shape_return_adapter(
     planner: &mut Planner,
     inner_call: &str,
     return_type: &Type,
+    shape: &CallableReturnAbi,
+    prefix: &str,
 ) -> (String, String) {
-    let ok_ty = return_type.ok_type();
-    let err_ty = return_type.err_type();
-    let err_ty_str = planner.use_go_type(&err_ty);
-    let res = planner.fresh_var(Some("res"));
-    planner.declare(&res);
-
-    let mut b = format!("{res} := {inner_call}\n");
-    let ok_tag = RESULT_OK_TAG;
-    if ok_ty.is_unit() {
-        write_line!(
-            b,
-            "if {res}.Tag == {ok_tag} {{\nreturn nil\n}}\nreturn {res}.ErrVal"
-        );
-        return (err_ty_str, b);
-    }
-    let ok_ty_str = planner.use_go_type(&ok_ty);
-    let ok_zero = lowered_zero(planner, &ok_ty);
-    write_line!(
-        b,
-        "if {res}.Tag == {ok_tag} {{\nreturn {res}.OkVal, nil\n}}\n\
-         return {ok_zero}, {res}.ErrVal"
-    );
-    (format!("({ok_ty_str}, {err_ty_str})"), b)
-}
-
-/// `Partial<T, error>` → `(T, error)`, distinguishing Ok/Err/both branches.
-fn emit_partial_return_adapter(
-    planner: &mut Planner,
-    inner_call: &str,
-    return_type: &Type,
-) -> (String, String) {
-    let ok_ty = return_type.ok_type();
-    let err_ty = return_type.err_type();
-    let ok_ty_str = planner.use_go_type(&ok_ty);
-    let err_ty_str = planner.use_go_type(&err_ty);
-    let ok_zero = lowered_zero(planner, &ok_ty);
-    let res = planner.fresh_var(Some("res"));
-    planner.declare(&res);
-
-    let b = format!(
-        "{res} := {inner_call}\n\
-         if {res}.Tag == {PARTIAL_OK_TAG} {{\nreturn {res}.OkVal, nil\n}}\n\
-         if {res}.Tag == {PARTIAL_ERR_TAG} {{\nreturn {ok_zero}, {res}.ErrVal\n}}\n\
-         return {res}.OkVal, {res}.ErrVal\n"
-    );
-    (format!("({ok_ty_str}, {err_ty_str})"), b)
-}
-
-/// `Option<fn>`/`Option<Ref<T>>`/`Option<Interface>` → bare nilable Go type
-/// (collapsed because Go's nil already encodes absence). Other payloads use
-/// the Go-idiomatic `(T, bool)` comma-ok convention.
-fn emit_option_return_adapter(
-    planner: &mut Planner,
-    inner_call: &str,
-    return_type: &Type,
-) -> (String, String) {
-    let inner = return_type.ok_type();
-    let some_tag = OPTION_SOME_TAG;
-    let opt = planner.fresh_var(Some("opt"));
-    planner.declare(&opt);
-
-    let is_nilable = planner.facts.is_nilable_go_type(&inner);
-    if is_nilable {
-        let go_ret = planner.use_go_type(&inner);
-        let b = format!(
-            "{opt} := {inner_call}\n\
-             if {opt}.Tag == {some_tag} {{\nreturn {opt}.SomeVal\n}}\n\
-             return nil\n"
-        );
-        return (go_ret, b);
-    }
-
-    let inner_ty_str = planner.use_go_type(&inner);
-    let inner_zero = lowered_zero(planner, &inner);
-    let b = format!(
-        "{opt} := {inner_call}\n\
-         if {opt}.Tag == {some_tag} {{\nreturn {opt}.SomeVal, true\n}}\n\
-         return {inner_zero}, false\n"
-    );
-    (format!("({inner_ty_str}, bool)"), b)
+    let go_return = planner.render_lowered_return_ty(shape, return_type);
+    let result = planner.fresh_var(Some(prefix));
+    planner.declare(&result);
+    let mut body = format!("{result} := {inner_call}\n");
+    render_lowered_result_return(planner, &mut body, &result, return_type, shape);
+    (go_return, body)
 }
 
 /// Arity-2+ tuple → Go multi-return. Each slot recurses through
@@ -640,7 +582,7 @@ fn emit_lowered_tuple_tail(
                 Some(slot_ty) if planner.facts.is_nullable_option(slot_ty) => {
                     lower_nullable_slot_value(planner, e, slot_ty)
                 }
-                _ => planner.stage_composite(e, ExpressionContext::value()),
+                _ => planner.lower_composite_value(e, ExpressionContext::value()),
             })
             .collect();
         let (mut statements, parts) = planner

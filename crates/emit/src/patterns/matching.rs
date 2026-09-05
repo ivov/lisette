@@ -257,7 +257,7 @@ impl Planner<'_> {
         let mut statements: Vec<LoweredStatement> = Vec::new();
         let mut stages: Vec<ValuePlan> = elements
             .iter()
-            .map(|element| self.stage_composite(element, ExpressionContext::value()))
+            .map(|element| self.lower_composite_value(element, ExpressionContext::value()))
             .collect();
         for ((stage, tested), element) in stages.iter_mut().zip(&tested).zip(elements) {
             let rereadable = is_inert_value(element, &stage.expression)
@@ -889,12 +889,12 @@ impl Planner<'_> {
             }
         }
         if matches!(subject, Expression::Literal { .. }) {
-            let staged = self.stage_operand(subject, ExpressionContext::value());
+            let staged = self.plan_operand(subject, ExpressionContext::value());
             let (subject_setup, value) = staged.into_parts();
             setup.extend(subject_setup);
             return (value, SubjectDeclaration::None);
         }
-        let staged = self.stage_composite(subject, ExpressionContext::value());
+        let staged = self.lower_composite_value(subject, ExpressionContext::value());
         let rests_in_stable_name = self.plan_rests_in_stable_name(&staged);
         let (subject_setup, value) = staged.into_parts();
         setup.extend(subject_setup);

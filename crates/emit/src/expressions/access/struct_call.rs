@@ -77,7 +77,7 @@ impl Planner<'_> {
 
         let stages: Vec<ValuePlan> = field_assignments
             .iter()
-            .map(|f| self.stage_composite(&f.value, ExpressionContext::value()))
+            .map(|f| self.lower_composite_value(&f.value, ExpressionContext::value()))
             .collect();
         let field_evaluations: Vec<bool> = stages
             .iter()
@@ -140,7 +140,7 @@ impl Planner<'_> {
                         fields_contain_deferred_evaluation,
                     )
                 } else {
-                    let base_staged = self.stage_operand(base, ExpressionContext::value());
+                    let base_staged = self.plan_operand(base, ExpressionContext::value());
                     effect = effect.combine(base_staged.evaluation.effect);
                     let field_pairs = self.hoist_observable_fields(&mut setup, fields);
                     let (spread_setup, value) = if ctx.enum_ctx.is_some() {

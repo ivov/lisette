@@ -75,84 +75,66 @@ pub(crate) fn rebind_trailing_temp(
 
 /// Collapse `var x T` + one unconditional `x = v` into `x := v`, when `:=`
 /// infers T identically (a `float64` context can hold an untyped int literal).
-pub(crate) fn collapse_declare_assign(statements: &mut Vec<LoweredStatement>, name: &str) {
+/// Collapse `var x T` plus the one statement that fills it into `x := value`.
+pub(crate) fn collapse_declared_temp(statements: &mut Vec<LoweredStatement>, name: &str) {
     let [
         LoweredStatement::VarDecl {
             name: declared,
             go_type,
             value: None,
         },
-        LoweredStatement::Assign(assign),
+        filler,
     ] = statements.as_slice()
     else {
         return;
     };
-    if declared != name || !matches!(go_type.as_str(), "int" | "string" | "bool") {
+    if declared != name {
         return;
     }
-    let AssignForm::Simple {
-        target_capture,
-        target_str,
-        value,
-    } = assign
-    else {
-        return;
-    };
-    if target_str != name
-        || !target_capture.is_empty()
-        || !value.setup.is_empty()
-        || value.expression.contains_deferred_evaluation()
-    {
-        return;
-    }
-    let Some(LoweredStatement::Assign(assign)) = statements.pop() else {
-        unreachable!("shape checked above");
-    };
-    let AssignForm::Simple { value, .. } = assign else {
-        unreachable!("shape checked above");
-    };
-    statements[0] = LoweredStatement::TempBind {
-        name: name.to_string(),
-        value: value.expression.rendered(),
-    };
-}
-
-/// Collapse `var x bool` + `if c { x = a } else { x = b }` with a literal arm
-/// into `x := <condition>`. Short-circuit keeps the other arm conditional.
-pub(crate) fn collapse_boolean_branch_assign(statements: &mut Vec<LoweredStatement>, name: &str) {
-    let [
-        LoweredStatement::VarDecl {
-            name: declared,
-            go_type,
-            value: None,
-        },
-        LoweredStatement::If(plan),
-    ] = statements.as_slice()
-    else {
-        return;
-    };
-    if declared != name || go_type != "bool" || !plan.condition_setup.is_empty() {
-        return;
-    }
-    let ElseArm::Else {
-        body: else_body, ..
-    } = &plan.else_arm
-    else {
-        return;
-    };
-    let Some(then_value) = single_simple_assign_value(&plan.then_body, name) else {
-        return;
-    };
-    let Some(else_value) = single_simple_assign_value(else_body, name) else {
-        return;
-    };
-    let Some(joined) = join_boolean_branches(&plan.condition, &then_value, &else_value) else {
-        return;
+    let value = match filler {
+        LoweredStatement::Assign(AssignForm::Simple {
+            target_capture,
+            target_str,
+            value,
+        }) => {
+            if !matches!(go_type.as_str(), "int" | "string" | "bool")
+                || target_str != name
+                || !target_capture.is_empty()
+                || !value.setup.is_empty()
+                || value.expression.contains_deferred_evaluation()
+            {
+                return;
+            }
+            value.expression.rendered()
+        }
+        LoweredStatement::If(plan) => {
+            if go_type != "bool" || !plan.condition_setup.is_empty() {
+                return;
+            }
+            let ElseArm::Else {
+                body: else_body, ..
+            } = &plan.else_arm
+            else {
+                return;
+            };
+            let Some(then_value) = single_simple_assign_value(&plan.then_body, name) else {
+                return;
+            };
+            let Some(else_value) = single_simple_assign_value(else_body, name) else {
+                return;
+            };
+            let Some(joined) = join_boolean_branches(&plan.condition, &then_value, &else_value)
+            else {
+                return;
+            };
+            joined
+        }
+        _ => return,
     };
     statements.pop();
     statements[0] = LoweredStatement::TempBind {
         name: name.to_string(),
-        value: joined,
+        value,
     };
 }
 
@@ -333,7 +315,7 @@ impl Planner<'_> {
             || value_ty.is_placeholder()
             || value_ty.is_never()
         {
-            let staged = self.stage_operand(value, ExpressionContext::value());
+            let staged = self.plan_operand(value, ExpressionContext::value());
             let (mut statements, staged_value) = staged.into_parts();
             if !staged_value.is_empty() {
                 if matches!(unwrapped, Expression::Call { .. }) {
@@ -359,7 +341,7 @@ impl Planner<'_> {
             }
         }
 
-        let staged = self.stage_operand(value, ExpressionContext::value());
+        let staged = self.plan_operand(value, ExpressionContext::value());
         let (mut statements, staged_value) = staged.into_parts();
         statements.push(LoweredStatement::RawGo(format!("_ = {}\n", staged_value)));
         statements
@@ -708,12 +690,13 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let stages: Vec<ValuePlan> = args
             .iter()
-            .map(|a| self.stage_composite(a, ExpressionContext::value()))
+            .map(|a| self.lower_composite_value(a, ExpressionContext::value()))
             .collect();
         let combine = plan_variadic_spread(&self.facts, function, spread).map(|p| p.combine(0));
         let sequenced = self.sequence_with_spread_values(
             stages,
             spread,
+            None,
             SpreadSequenceOptions {
                 wrap_to_any: false,
                 combine,

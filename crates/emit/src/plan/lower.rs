@@ -12,9 +12,7 @@ use crate::plan::bodies::{
     ElseArm, ExpressionStatementForm, IfPlan, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
     LoweredStatement, PlacePlan, directed,
 };
-use crate::plan::placement::{
-    collapse_boolean_branch_assign, collapse_declare_assign, requires_temp_var, try_elide_tail_let,
-};
+use crate::plan::placement::{collapse_declared_temp, requires_temp_var, try_elide_tail_let};
 use crate::plan::values::{OperandForm, ValuePlan};
 use crate::utils::wrap_if_struct_literal;
 use std::slice;
@@ -68,41 +66,9 @@ impl Planner<'_> {
         (result_var, declaration)
     }
 
-    /// Plan a value-position `if` as a fresh operand-temp variable: a `var V T`
-    /// declaration leaf plus a typed `If` statement that assigns `V`. Returns
-    /// the setup statements and `V`.
-    pub(crate) fn plan_if_as_operand_temp(
-        &mut self,
-        expression: &Expression,
-        ty: &Type,
-    ) -> ValuePlan {
-        let Expression::If {
-            condition,
-            consequence,
-            alternative,
-            ..
-        } = expression
-        else {
-            unreachable!("plan_if_as_operand_temp called on non-If expression");
-        };
-        let (result_var, declaration) = self.operand_temp_declaration(ty);
-        let plan = self.lower_if(
-            condition,
-            consequence,
-            alternative.as_deref(),
-            &PlacePlan::Assign {
-                local: &result_var,
-                target_ty: Some(ty),
-            },
-        );
-        let mut setup = vec![declaration, LoweredStatement::If(plan)];
-        collapse_boolean_branch_assign(&mut setup, &result_var);
-        ValuePlan::captured(setup, result_var)
-    }
-
-    /// Lower a value-position `if let`/`match`/`select` to a fresh operand-temp
-    /// variable. Only valid for non-never result types; never-typed branches
-    /// route through `lower_to_operand_temp` as a diverging statement.
+    /// Lower a value-position `if`/`if let`/`match`/`select` to a fresh
+    /// operand-temp variable. Only valid for non-never result types; never-typed
+    /// branches route through `lower_to_operand_temp` as a diverging statement.
     pub(crate) fn plan_branching_as_operand_temp(
         &mut self,
         expression: &Expression,
@@ -118,8 +84,7 @@ impl Planner<'_> {
         );
         let mut setup = vec![declaration];
         setup.extend(block.statements);
-        collapse_declare_assign(&mut setup, &result_var);
-        collapse_boolean_branch_assign(&mut setup, &result_var);
+        collapse_declared_temp(&mut setup, &result_var);
         ValuePlan::captured(setup, result_var)
     }
 
@@ -931,45 +896,20 @@ impl Planner<'_> {
 
         let directive = self.maybe_line_directive(&return_span);
         match last {
-            Expression::If {
-                condition,
-                consequence,
-                alternative,
-                ..
-            } => {
-                let plan = self.lower_if(
-                    condition,
-                    consequence,
-                    alternative.as_deref(),
-                    &PlacePlan::Return,
-                );
-                statements.push(directed(directive, LoweredStatement::If(plan)));
+            Expression::If { .. } | Expression::Select { .. } => {
+                let mut block = self.lower_branching_to_block(last, &PlacePlan::Return);
+                let statement = block
+                    .statements
+                    .pop()
+                    .expect("if and select lower to one statement");
+                statements.push(directed(directive, statement));
             }
-            Expression::IfLet {
-                pattern,
-                scrutinee,
-                consequence,
-                alternative,
-                span,
-                ..
-            } => {
+            Expression::IfLet { .. } | Expression::Match { .. } => {
                 if !directive.is_empty() {
                     statements.push(LoweredStatement::RawGo(directive));
                 }
-                let arms = if_let_match_arms(pattern, consequence, alternative, *span);
-                let block = self.lower_match_to_block(scrutinee, &arms, &PlacePlan::Return);
+                let block = self.lower_branching_to_block(last, &PlacePlan::Return);
                 statements.extend(block.statements);
-            }
-            Expression::Match { subject, arms, .. } => {
-                if !directive.is_empty() {
-                    statements.push(LoweredStatement::RawGo(directive));
-                }
-                let block = self.lower_match_to_block(subject, arms, &PlacePlan::Return);
-                statements.extend(block.statements);
-            }
-            Expression::Select { arms, .. } => {
-                let plan = self.lower_select(arms, &PlacePlan::Return);
-                statements.push(directed(directive, LoweredStatement::Select(plan)));
             }
             _ => {
                 if !directive.is_empty() {
@@ -1009,7 +949,7 @@ impl Planner<'_> {
     /// flatten the enclosing `else` for a multi-line return value.
     fn lower_plain_return_tail(&mut self, last: &Expression) -> Vec<LoweredStatement> {
         if requires_temp_var(last) {
-            let staged = self.stage_operand(last, ExpressionContext::value());
+            let staged = self.plan_operand(last, ExpressionContext::value());
             let (mut statements, value) = staged.into_parts();
             if !value.is_empty() {
                 statements.push(plain_return(value));

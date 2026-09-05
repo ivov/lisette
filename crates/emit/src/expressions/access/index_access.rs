@@ -64,7 +64,7 @@ impl Planner<'_> {
         index: &Expression,
         prefix: &str,
     ) -> ValuePlan {
-        let index_staged = self.stage_composite(index, ExpressionContext::value());
+        let index_staged = self.lower_composite_value(index, ExpressionContext::value());
         if base_staged.setup.is_empty()
             && is_order_sensitive(base)
             && (base_staged.evaluation.effect.has_call()
@@ -87,10 +87,10 @@ impl Planner<'_> {
 
     pub(crate) fn stage_base_with_deref(&mut self, expression: &Expression) -> ValuePlan {
         let Some(inner) = expression.deref_inner() else {
-            return self.stage_operand(expression, ExpressionContext::value());
+            return self.plan_operand(expression, ExpressionContext::value());
         };
         let mut staged = self
-            .stage_operand(inner, ExpressionContext::value())
+            .plan_operand(inner, ExpressionContext::value())
             .unary("*")
             .parenthesized();
         staged.make_observable();
@@ -112,10 +112,10 @@ impl Planner<'_> {
 
         let mut all_stages = vec![base_staged];
         if let Some(s) = start {
-            all_stages.push(self.stage_operand(s, ExpressionContext::value()));
+            all_stages.push(self.plan_operand(s, ExpressionContext::value()));
         }
         if let Some(e) = end {
-            all_stages.push(self.stage_operand(e, ExpressionContext::value()));
+            all_stages.push(self.plan_operand(e, ExpressionContext::value()));
         }
         let sequenced = self.sequence_values(all_stages, CaptureBoundary::SiblingSequence, "base");
         let effect = sequenced.effect;

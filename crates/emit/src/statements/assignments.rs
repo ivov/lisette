@@ -55,7 +55,7 @@ impl Planner<'_> {
         // `target = value`. Stage RHS first (so the target capture knows
         // whether RHS produced setup), capture the target, then fold RHS
         // setup + coercion setup into the value plan in emission order.
-        let right_hand_side = self.stage_composite(
+        let right_hand_side = self.lower_composite_value(
             value,
             ExpressionContext::value().with_retired_receiver(target),
         );
@@ -108,7 +108,7 @@ impl Planner<'_> {
             };
         }
 
-        let right_hand_side = self.stage_operand(rhs, ExpressionContext::value());
+        let right_hand_side = self.plan_operand(rhs, ExpressionContext::value());
         let right_hand_side_has_setup = !right_hand_side.setup.is_empty();
         let right_hand_side_has_effectful_call =
             right_hand_side.evaluation.effect.has_effectful_call();
@@ -382,7 +382,7 @@ impl Planner<'_> {
             let inner_str = self.emit_base_operand(setup, inner, true);
             format!("(*{})", inner_str)
         } else {
-            let base_plan = self.stage_composite(base, ExpressionContext::value());
+            let base_plan = self.lower_composite_value(base, ExpressionContext::value());
             let force = base_plan.evaluation.stability.is_observable()
                 && (assignment_has_setup(right_hand_side)
                     || !self.identifier_immune_to_calls(base.unwrap_parens()));

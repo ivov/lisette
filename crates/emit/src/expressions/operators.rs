@@ -65,7 +65,7 @@ impl Planner<'_> {
                 && left_ty.is_float()
                 && !left_ty.is_complex()
             {
-                let staged = self.stage_operand(left_expression, ctx);
+                let staged = self.plan_operand(left_expression, ctx);
                 return staged.map_rendered_as_computed(|_, value, _| {
                     GoExpression::call(
                         GoExpression::name("complex".to_string()),
@@ -87,7 +87,7 @@ impl Planner<'_> {
                 && right_ty.is_float()
                 && !right_ty.is_complex()
             {
-                let staged = self.stage_operand(right_expression, ctx);
+                let staged = self.plan_operand(right_expression, ctx);
                 return staged.map_rendered_as_computed(|_, value, _| {
                     GoExpression::call(
                         GoExpression::name("complex".to_string()),
@@ -114,8 +114,8 @@ impl Planner<'_> {
         }
 
         let stages = vec![
-            self.stage_composite(left_expression, ctx),
-            self.stage_composite(right_expression, ctx),
+            self.lower_composite_value(left_expression, ctx),
+            self.lower_composite_value(right_expression, ctx),
         ];
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "left");
         let effect = sequenced.effect;
@@ -141,7 +141,7 @@ impl Planner<'_> {
         right_expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        let left_staged = self.stage_composite(left_expression, ctx);
+        let left_staged = self.lower_composite_value(left_expression, ctx);
         let left_effect = left_staged.evaluation.effect;
         let left_contains_deferred_evaluation =
             left_staged.expression.contains_deferred_evaluation();
@@ -149,7 +149,7 @@ impl Planner<'_> {
 
         // Wrap RHS setup in an IIFE so it runs only when control reaches the
         // RHS. Hoisting it before the operator would defeat short-circuit.
-        let right_staged = self.stage_composite(right_expression, ctx);
+        let right_staged = self.lower_composite_value(right_expression, ctx);
         let right_effect = right_staged.evaluation.effect;
         let right_contains_deferred_evaluation =
             right_staged.expression.contains_deferred_evaluation();
@@ -260,7 +260,7 @@ impl Planner<'_> {
             }
         }
 
-        let staged = self.stage_operand(expression, ctx);
+        let staged = self.plan_operand(expression, ctx);
         staged.unary("!")
     }
 
@@ -273,8 +273,8 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         let stages = vec![
-            self.stage_operand(left_expression, ctx),
-            self.stage_operand(right_expression, ctx),
+            self.plan_operand(left_expression, ctx),
+            self.plan_operand(right_expression, ctx),
         ];
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "left");
         let effect = sequenced.effect;

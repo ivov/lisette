@@ -316,9 +316,9 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         let (staged, had_explicit_deref) = if let Some(inner) = expression.deref_inner() {
-            (self.stage_operand(inner, ctx), true)
+            (self.plan_operand(inner, ctx), true)
         } else {
-            (self.stage_operand(expression, ctx), false)
+            (self.plan_operand(expression, ctx), false)
         };
         let is_absorbed_ref = self.is_absorbed_ref_generic(expression);
         staged.map_rendered(
