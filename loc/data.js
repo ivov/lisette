@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788617906166,
+  "lastUpdate": 1788617985514,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -32487,6 +32487,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 32861,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27900,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19299,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15171,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13998,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8793,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6242,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1874,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9491,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0cf83263969c044d284c9e22f5995128d5fece74",
+          "message": "fix: newtype field access through type alias (#1395)",
+          "timestamp": "2026-09-05T16:19:20+02:00",
+          "tree_id": "22e74fb58aebdffa3822eedb717f2def9ea18a6c",
+          "url": "https://github.com/ivov/lisette/commit/0cf83263969c044d284c9e22f5995128d5fece74"
+        },
+        "date": 1788617983181,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 140195,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32850,
             "unit": "lines"
           },
           {
