@@ -1858,6 +1858,45 @@ fn test() -> Flag {
 }
 
 #[test]
+fn generic_call_leaves_a_constant_alone_when_a_typed_sibling_binds_the_parameter() {
+    let input = r#"
+fn pick<T>(_a: T, b: T) -> T { b }
+fn ident<T>(v: T) -> T { v }
+
+fn test(w: int64, f: float64) -> float64 {
+  let a: int64 = pick(w, 1)
+  let b: float64 = pick(1, f)
+  let c: float64 = pick(1, 2)
+  let d: float64 = ident(min(1, 2))
+  let _ = a
+  b + c + d
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn method_call_leaves_a_constant_alone_when_the_receiver_binds_the_parameter() {
+    let input = r#"
+struct Wrapper<T> { value: T }
+
+impl<T> Wrapper<T> {
+  fn replace(self, v: T) -> Wrapper<T> { Wrapper { value: v } }
+  fn with<U>(self, u: U) -> U { u }
+}
+
+fn test() -> float32 {
+  let w: Wrapper<float64> = Wrapper { value: 1 }
+  let r = w.replace(2)
+  let u: float32 = w.with(3)
+  let _ = r
+  u
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn parenthesized_local_generic_return_only_type_args() {
     let input = r#"
 fn make<T>() -> Slice<T> {

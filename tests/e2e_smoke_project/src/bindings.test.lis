@@ -1,4 +1,16 @@
 #[test]
+fn let_keeps_a_character_literal_at_its_annotated_type() {
+  let b: byte = 'a'
+  let i: int = 'a'
+  assert byte_value(b) == 97
+  assert int_value(i) == 97
+}
+
+fn byte_value(b: byte) -> byte { b }
+
+fn int_value(i: int) -> int { i }
+
+#[test]
 fn if_let_some() {
   let opt = Some(42)
   let result = if let Some(x) = opt { x } else { 0 }

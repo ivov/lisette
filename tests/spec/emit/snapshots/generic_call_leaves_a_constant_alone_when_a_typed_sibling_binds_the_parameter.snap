@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn pick<T>(_a: T, b: T) -> T { b }
+  fn ident<T>(v: T) -> T { v }
+  
+  fn test(w: int64, f: float64) -> float64 {
+    let a: int64 = pick(w, 1)
+    let b: float64 = pick(1, f)
+    let c: float64 = pick(1, 2)
+    let d: float64 = ident(min(1, 2))
+    let _ = a
+    b + c + d
+  }
+---
+package main
+
+func pick[T any](_, b T) T {
+	return b
+}
+
+func ident[T any](v T) T {
+	return v
+}
+
+func test(w int64, f float64) float64 {
+	a := pick(w, 1)
+	b := pick(1, f)
+	c := pick(float64(1), float64(2))
+	d := ident(float64(min(1, 2)))
+	_ = a
+	return b + c + d
+}

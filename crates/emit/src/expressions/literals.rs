@@ -3,47 +3,79 @@ use std::fmt::Write;
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::context::expression::ExpressionContext;
-use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::values::{
+    CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
+};
 use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::types::{SimpleKind, Type};
 
 impl Planner<'_> {
     pub(super) fn emit_literal(&mut self, literal: &Literal, ty: &Type) -> ValuePlan {
-        let value = match literal {
-            Literal::Integer { value, text } => match text {
-                Some(original) => original.clone(),
-                None => value.to_string(),
-            },
-            Literal::Float { value, text } => match text {
-                Some(t) => t.clone(),
-                None => {
-                    let s = value.to_string();
-                    if s.contains('.') || s.contains('e') || s.contains('E') {
-                        s
-                    } else {
-                        format!("{}.0", s)
+        let (value, kind) = match literal {
+            Literal::Integer { value, text } => {
+                let rendered = match text {
+                    Some(original) => original.clone(),
+                    None => value.to_string(),
+                };
+                (rendered, ConstantKind::Int)
+            }
+            Literal::Float { value, text } => {
+                let rendered = match text {
+                    Some(t) => t.clone(),
+                    None => {
+                        let s = value.to_string();
+                        if s.contains('.') || s.contains('e') || s.contains('E') {
+                            s
+                        } else {
+                            format!("{}.0", s)
+                        }
                     }
-                }
-            },
+                };
+                (rendered, ConstantKind::Float)
+            }
             Literal::Imaginary(coef) => {
-                if *coef == coef.trunc() && coef.abs() < 1e15 {
+                let rendered = if *coef == coef.trunc() && coef.abs() < 1e15 {
                     format!("{}i", *coef as i64)
                 } else {
                     format!("{}i", coef)
-                }
+                };
+                (rendered, ConstantKind::Complex)
             }
-            Literal::Boolean(b) => b.to_string(),
-            Literal::String { value, raw: false } => {
-                format!("\"{}\"", convert_escape_sequences(value))
-            }
-            Literal::String { value, raw: true } => emit_raw_string(value),
-            Literal::Char(c) => {
-                format!("'{}'", convert_escape_sequences(c))
-            }
+            Literal::Boolean(b) => (b.to_string(), ConstantKind::Bool),
+            Literal::String { value, raw: false } => (
+                format!("\"{}\"", convert_escape_sequences(value)),
+                ConstantKind::String,
+            ),
+            Literal::String { value, raw: true } => (emit_raw_string(value), ConstantKind::String),
+            Literal::Char(c) => (
+                format!("'{}'", convert_escape_sequences(c)),
+                ConstantKind::Rune,
+            ),
             Literal::FormatString(parts) => return self.emit_format_string(parts),
             Literal::Slice(elements) => return self.emit_slice_literal(elements, ty),
         };
-        ValuePlan::literal(value)
+        ValuePlan::constant(value, kind)
+    }
+
+    pub(crate) fn constant_needs_go_type(
+        &mut self,
+        constant: Option<ConstantKind>,
+        slot_ty: &Type,
+    ) -> Option<String> {
+        let kind = constant?;
+        if self.facts.is_interface_or_unknown(slot_ty) {
+            return None;
+        }
+        let peeled = self.facts.peel_alias(slot_ty);
+        match &peeled {
+            Type::Simple(_) => {}
+            Type::Nominal { params, .. } if params.is_empty() => {}
+            _ => return None,
+        }
+        if peeled.as_simple() == Some(kind.default_kind()) {
+            return None;
+        }
+        Some(self.use_go_type(slot_ty))
     }
 
     fn emit_slice_literal(&mut self, elements: &[Expression], ty: &Type) -> ValuePlan {

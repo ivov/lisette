@@ -11,8 +11,8 @@ use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
-use crate::types::go_type::render_conversion;
 use crate::types::native::NativeGoType;
+use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::program::ReceiverCoercion;
 use syntax::types::Type;
@@ -215,6 +215,46 @@ impl Planner<'_> {
                 param.map(|param| &param.instantiated),
             ));
         }
+        let vars: Vec<EcoString> = match callee.declared_type() {
+            Some(Type::Forall { vars, .. }) if !callee.is_prelude_dispatch => vars.clone(),
+            _ => Vec::new(),
+        };
+        let receiver_instantiated = receiver.get_type().strip_refs();
+        let receiver_declared = (!callee.is_prelude_dispatch && callee.receiver_offset == 1)
+            .then(|| {
+                callee
+                    .declared_type()
+                    .and_then(|ty| ty.unwrap_forall().get_function_params())
+                    .and_then(|params| params.first())
+                    .map(|param| &param.ty)
+            })
+            .flatten();
+        let receiver_binding = receiver_declared.map(|declared| (declared, &receiver_instantiated));
+        let mut slots: Vec<Option<(&Type, &Type)>> = vec![None];
+        let mut convertible = vec![false];
+        for index in 0..args.len() {
+            let param = callee.abi.param(index);
+            slots.push(
+                (!callee.is_prelude_dispatch)
+                    .then(|| {
+                        param.and_then(|param| {
+                            param
+                                .declared
+                                .as_ref()
+                                .map(|declared| (declared, &param.instantiated))
+                        })
+                    })
+                    .flatten(),
+            );
+            convertible.push(true);
+        }
+        let all_stages = self.convert_inferred_constants(
+            all_stages,
+            &slots,
+            &convertible,
+            &vars,
+            receiver_binding,
+        );
         let combine = plan_variadic_spread(&self.facts, function, spread).map(|p| p.combine(1));
 
         let sequenced = self.sequence_args_with_spread_adapter_values(
@@ -258,19 +298,7 @@ impl Planner<'_> {
         if let Some(value) = self.try_adapt_lowered_fn_arg_shape(arg, Some(declared)) {
             return value;
         }
-        let staged = self.stage_composite(arg, ExpressionContext::value());
-        let Some(target) = formal_param else {
-            return staged;
-        };
-        let Some(go_type) = self.literal_pinning_go_type(arg, Some(declared), target) else {
-            return staged;
-        };
-        staged.map_rendered(|_setup, value, deferred| {
-            GoExpression::opaque_with_deferred_evaluation(
-                render_conversion(&go_type, &value),
-                deferred,
-            )
-        })
+        self.stage_composite(arg, ExpressionContext::value())
     }
 
     fn build_ufcs_qualified_call(

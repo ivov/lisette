@@ -1,6 +1,22 @@
 use crate::assert_emit_snapshot;
 
 #[test]
+fn let_binding_types_a_character_literal_into_a_byte() {
+    let input = r#"
+fn takes_byte(b: byte) -> byte { b }
+
+fn test() -> byte {
+  let b: byte = 'a'
+  let i: int = 'a'
+  let r: rune = 'a'
+  let _ = (i, r)
+  takes_byte(b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn integer_literal() {
     let input = r#"
 fn test() -> int {

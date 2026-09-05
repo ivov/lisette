@@ -24,6 +24,13 @@ fn option_some_keeps_a_literal_at_its_newtype() {
   assert rank.unwrap_or(Rank(0)).0 == 3
 }
 
+#[test]
+#[allow(float_cmp)]
+fn option_some_keeps_a_constant_builtin_result_at_its_type() {
+  let widened: Option<float64> = Some(min(1, 2))
+  assert halved_option(widened) == 0.25
+}
+
 struct Armed(bool)
 
 struct Rank(int)
