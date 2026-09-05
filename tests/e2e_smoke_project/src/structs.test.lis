@@ -41,6 +41,13 @@ fn tuple_struct_single() {
 }
 
 #[test]
+fn tuple_struct_single_through_alias() {
+  let id: UserIdAlias = UserId(42)
+  let result = id.0
+  assert result == 42
+}
+
+#[test]
 fn tuple_struct_multi() {
   let p = Point2D(10, 20)
   let result = p.0 + p.1
@@ -373,6 +380,8 @@ enum Cursor {
 }
 
 struct UserId(int)
+
+type UserIdAlias = UserId
 
 struct Point2D(int, int)
 

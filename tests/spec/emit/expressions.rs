@@ -415,6 +415,30 @@ fn test() -> int {
 }
 
 #[test]
+fn newtype_field_access_through_alias() {
+    let input = r#"
+import "go:fmt"
+
+struct Flag(bool)
+struct Ticket(int)
+type FlagAlias = Flag
+type TicketAlias = Ticket
+type Deep = TicketAlias
+
+fn read(x: FlagAlias) -> bool { x.0 }
+fn deep(t: Deep) -> int { t.0 }
+
+fn main() {
+  let f: FlagAlias = Flag(true)
+  let t: TicketAlias = Ticket(3)
+  let o: Option<FlagAlias> = Some(Flag(false))
+  fmt.Println(f.0, t.0, read(f), deep(t), o.unwrap_or(Flag(true)).0)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn tuple_field_assignment() {
     let input = r#"
 fn test() -> int {
