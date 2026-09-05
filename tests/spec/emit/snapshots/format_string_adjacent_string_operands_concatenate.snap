@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn join(a: string, b: string) -> string {
+    f"{a}{b}"
+  }
+---
+package main
+
+func join(a, b string) string {
+	return a + b
+}

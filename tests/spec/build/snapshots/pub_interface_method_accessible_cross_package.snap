@@ -19,8 +19,6 @@ func main() {
 // === types/lib.go ===
 package types
 
-import "fmt"
-
 type Greetable interface {
 	Greet() string
 }
@@ -30,5 +28,5 @@ type Person struct {
 }
 
 func (p Person) Greet() string {
-	return fmt.Sprintf("Hello, I'm %s", p.Name)
+	return "Hello, I'm " + p.Name
 }

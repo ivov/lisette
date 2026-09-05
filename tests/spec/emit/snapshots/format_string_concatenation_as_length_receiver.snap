@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn size(b: string) -> int {
+    f"x{b}".length()
+  }
+---
+package main
+
+func size(b string) int {
+	return len("x" + b)
+}

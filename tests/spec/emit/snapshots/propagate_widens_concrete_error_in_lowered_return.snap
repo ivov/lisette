@@ -39,17 +39,14 @@ description: |
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 type ValidationError struct {
 	field string
 }
 
 func (v ValidationError) Error() string {
-	return fmt.Sprintf("%s: required", v.field)
+	return v.field + ": required"
 }
 
 func validate(name string) lisette.Result[string, ValidationError] {

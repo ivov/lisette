@@ -24,7 +24,7 @@ type Container[T interface {
 
 func (c Container[T]) display() string {
 	fmtarg_1 := c.label
-	return fmt.Sprintf("[%s] %s", fmtarg_1, c.value.PrintVal())
+	return "[" + fmtarg_1 + "] " + c.value.PrintVal()
 }
 
 func (c Container[T]) total() int {

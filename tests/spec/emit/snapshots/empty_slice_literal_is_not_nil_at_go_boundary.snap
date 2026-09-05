@@ -25,7 +25,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	lisette "github.com/ivov/lisette/prelude"
 )
 
@@ -44,7 +43,7 @@ func main() {
 	}
 	encoded := string(result_3.UnwrapOr([]byte{}))
 	if encoded != "[]" {
-		panic(fmt.Sprintf("expected an explicit empty literal to encode as [], got %s", encoded))
+		panic("expected an explicit empty literal to encode as [], got " + encoded)
 	}
 	payload := Payload{Items: []int{}}
 	ret_4, ret_5 := json.Marshal(payload)
@@ -56,6 +55,6 @@ func main() {
 	}
 	wrapped := string(result_6.UnwrapOr([]byte{}))
 	if wrapped != "{\"Items\":[]}" {
-		panic(fmt.Sprintf("expected an empty slice field to encode as [], got %s", wrapped))
+		panic("expected an empty slice field to encode as [], got " + wrapped)
 	}
 }

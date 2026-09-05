@@ -51,7 +51,7 @@ func visit(node ASTNode) string {
 	case ASTNodeNumber:
 		return fmt.Sprintf("number:%d", node.Number)
 	case ASTNodeString:
-		return fmt.Sprintf("string:%s", node.ASTNodeString_)
+		return "string:" + node.ASTNodeString_
 	default:
 		return "null"
 	}

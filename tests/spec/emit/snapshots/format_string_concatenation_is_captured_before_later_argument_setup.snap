@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn next(s: string) -> Result<string, error> { fmt.Println(s); Ok(s) }
+  fn log(s: string) -> string { fmt.Println(s); s }
+  fn show(a: string, b: string) -> string { a + b }
+  
+  fn run() -> Result<string, error> {
+    Ok(show(f"{next("one")?}{log("two")}", next("three")?))
+  }
+---
+package main
+
+import "fmt"
+
+func next(s string) (string, error) {
+	fmt.Println(s)
+	return s, nil
+}
+
+func log(s string) string {
+	fmt.Println(s)
+	return s
+}
+
+func show(a, b string) string {
+	return a + b
+}
+
+func run() (string, error) {
+	ret_1, ret_2 := next("one")
+	if ret_2 != nil {
+		return "", ret_2
+	}
+	arg_5 := ret_1 + log("two")
+	ret_3, ret_4 := next("three")
+	if ret_4 != nil {
+		return "", ret_4
+	}
+	return show(arg_5, ret_3), nil
+}

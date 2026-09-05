@@ -24,10 +24,7 @@ description: |
 ---
 package main
 
-import (
-	"errors"
-	"fmt"
-)
+import "errors"
 
 func plain() error {
 	return errors.New("plain message")
@@ -38,7 +35,7 @@ func noInterpolation() error {
 }
 
 func solo(msg string) error {
-	return errors.New(fmt.Sprint(msg))
+	return errors.New(msg)
 }
 
 func main() {

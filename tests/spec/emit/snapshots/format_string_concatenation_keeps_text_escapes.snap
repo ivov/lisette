@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn wrap(a: string, b: string) -> string {
+    f"{{{a}}} 100% \"{b}\"\n"
+  }
+---
+package main
+
+func wrap(a, b string) string {
+	return "{" + a + "} 100% \"" + b + "\"\n"
+}

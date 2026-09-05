@@ -17,7 +17,6 @@ description: |
 package main
 
 import (
-	"fmt"
 	lisette "github.com/ivov/lisette/prelude"
 	"path"
 )
@@ -27,7 +26,7 @@ func useSplit(f func(string) (string, string), p string) string {
 	tup_3 := lisette.MakeTuple2(ret_1, ret_2)
 	dir := tup_3.First
 	file := tup_3.Second
-	return fmt.Sprintf("%s/%s", dir, file)
+	return dir + "/" + file
 }
 
 func main() {

@@ -63,6 +63,6 @@ loop_1:
 		}
 	}
 	if processed != "10," {
-		panic(fmt.Sprintf("expected 10, got %s", processed))
+		panic("expected 10, got " + processed)
 	}
 }

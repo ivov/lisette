@@ -35,8 +35,6 @@ description: |
 ---
 package main
 
-import "fmt"
-
 func MakeEitherLeft[L Displayable, R Displayable](arg0 L) Either[L, R] {
 	return Either[L, R]{Tag: EitherLeft, Left: arg0}
 }
@@ -65,10 +63,10 @@ type Either[L Displayable, R Displayable] struct {
 func (e Either[L, R]) display() string {
 	if e.Tag == EitherLeft {
 		s := e.Left.display()
-		return fmt.Sprintf("Left(%s)", s)
+		return "Left(" + s + ")"
 	}
 	s := e.Right.display()
-	return fmt.Sprintf("Right(%s)", s)
+	return "Right(" + s + ")"
 }
 
 type Name struct {

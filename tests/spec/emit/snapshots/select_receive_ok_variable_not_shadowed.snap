@@ -34,7 +34,7 @@ func test() {
 	case val, ok_1 := <-ch:
 		if ok_1 {
 			fmt.Printf("received: %d\n", val)
-			fmt.Printf("ok is: %s\n", ok)
+			fmt.Println("ok is: " + ok)
 		} else {
 			fmt.Println("closed")
 		}

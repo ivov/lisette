@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  type Name = string
+  
+  fn greet(n: Name) -> string {
+    f"hi {n}"
+  }
+---
+package main
+
+type Name = string
+
+func greet(n Name) string {
+	return "hi " + n
+}

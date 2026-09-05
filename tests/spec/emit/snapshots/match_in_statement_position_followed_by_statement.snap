@@ -25,7 +25,7 @@ func test() {
 	if result.Tag == lisette.ResultOk {
 		fmt.Printf("success: %d\n", result.OkVal)
 	} else {
-		fmt.Printf("error: %s\n", result.ErrVal)
+		fmt.Print("error: " + result.ErrVal + "\n")
 	}
 	fmt.Print("done\n")
 }

@@ -5281,3 +5281,192 @@ fn run() -> int {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn format_string_string_operands_concatenate() {
+    let input = r#"
+fn greet(first: string, last: string) -> string {
+  f"Hello, {first} {last}!"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_adjacent_string_operands_concatenate() {
+    let input = r#"
+fn join(a: string, b: string) -> string {
+  f"{a}{b}"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_solo_string_operand_is_the_operand() {
+    let input = r#"
+fn same(name: string) -> string {
+  f"{name}"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_concatenation_keeps_text_escapes() {
+    let input = r#"
+fn wrap(a: string, b: string) -> string {
+  f"{{{a}}} 100% \"{b}\"\n"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_string_alias_operand_concatenates() {
+    let input = r#"
+type Name = string
+
+fn greet(n: Name) -> string {
+  f"hi {n}"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_newtype_over_string_keeps_sprintf() {
+    let input = r#"
+#[display]
+struct Id(string)
+
+fn show(id: Id) -> string {
+  f"id {id}"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_mixed_operands_keep_sprintf() {
+    let input = r#"
+fn count(name: string, n: int) -> string {
+  f"{name} has {n}"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_concatenation_as_byte_at_receiver_is_parenthesized() {
+    let input = r#"
+fn first(b: string) -> byte {
+  f"x{b}".byte_at(0)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_concatenation_as_length_receiver() {
+    let input = r#"
+fn size(b: string) -> int {
+  f"x{b}".length()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_concatenation_operands_keep_evaluation_order() {
+    let input = r#"
+import "go:fmt"
+
+fn first() -> string { fmt.Println("first"); "a" }
+fn second() -> string { fmt.Println("second"); "b" }
+
+fn main() {
+  fmt.Println(f"{first()} and {second()}")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn errors_new_string_only_format_string_stays_errors_new() {
+    let input = r#"
+import "go:errors"
+
+fn fail(path: string) -> error {
+  errors.New(f"cannot open {path}")
+}
+
+fn main() {
+  let _ = fail("x")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fmt_println_string_only_format_string_prints_concatenation() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let name = "Ada"
+  fmt.Println(f"Hello {name}")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_concatenation_is_captured_before_later_argument_setup() {
+    let input = r#"
+import "go:fmt"
+
+fn next(s: string) -> Result<string, error> { fmt.Println(s); Ok(s) }
+fn log(s: string) -> string { fmt.Println(s); s }
+fn show(a: string, b: string) -> string { a + b }
+
+fn run() -> Result<string, error> {
+  Ok(show(f"{next("one")?}{log("two")}", next("three")?))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fmt_println_does_not_collapse_concatenation_that_starts_with_sprintf() {
+    let input = r#"
+import "go:fmt"
+
+fn b() -> string { "b" }
+
+fn main() {
+  fmt.Println(f"{fmt.Sprintf("%02d", 1)}{b()}")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn byte_at_on_ref_receiver_is_parenthesized() {
+    let input = r#"
+fn first(r: Ref<string>) -> byte {
+  r.byte_at(0)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_solo_deref_operand_as_byte_at_receiver_is_parenthesized() {
+    let input = r#"
+fn first(r: Ref<string>) -> byte {
+  f"{r.*}".byte_at(0)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
