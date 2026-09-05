@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788623819575,
+  "lastUpdate": 1788629030593,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -32982,6 +32982,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "bindgen",
             "value": 9491,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "930c45c8f8fbc17eccbf386ede14fabe4dc8869a",
+          "message": "refactor: simplify stdlib registry and reuse child traversal (#1400)",
+          "timestamp": "2026-09-05T19:23:25+02:00",
+          "tree_id": "ab4d899b3935f7ce26e8866266bafae8bc89a2ee",
+          "url": "https://github.com/ivov/lisette/commit/930c45c8f8fbc17eccbf386ede14fabe4dc8869a"
+        },
+        "date": 1788629028001,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 139197,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32537,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27873,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19214,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15160,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13998,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8789,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6242,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1874,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9375,
             "unit": "lines"
           },
           {
