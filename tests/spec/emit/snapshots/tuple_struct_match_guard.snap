@@ -21,9 +21,8 @@ type Point struct {
 func test(p Point) int {
 	{
 		x := p.F0
-		y := p.F1
 		if x > 0 {
-			return x + y
+			return x + p.F1
 		}
 	}
 	{

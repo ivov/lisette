@@ -2,12 +2,9 @@ use std::rc::Rc;
 
 use crate::Planner;
 use crate::control_flow::fallible;
-use crate::definitions::enum_layout::{EnumLayout, FieldTypeInfo, FieldTypeMap};
-use crate::definitions::structs::is_raw_function_type;
+use crate::definitions::enum_layout::EnumLayout;
 use crate::names::go_name;
-use crate::names::packages::PackageRequirements;
 use syntax::ast::{Generic, Pattern, RestPattern, StructFields};
-use syntax::containment::enum_payload_pointer_wrapped;
 use syntax::go_names;
 use syntax::program::{Definition, DefinitionBody, interface_requirements};
 use syntax::types;
@@ -229,13 +226,13 @@ impl Planner<'_> {
 }
 
 impl Planner<'_> {
-    /// Memoized per file. See the note on `Planner::enum_layouts`.
     pub(crate) fn enum_layout(&self, enum_id: &str) -> Option<Rc<EnumLayout>> {
-        if let Some(layout) = self.enum_layouts.borrow().get(enum_id) {
+        if let Some(layout) = self.namespace.enum_layouts.borrow().get(enum_id) {
             return Some(layout.clone());
         }
         let layout = Rc::new(self.compute_enum_layout(enum_id)?);
-        self.enum_layouts
+        self.namespace
+            .enum_layouts
             .borrow_mut()
             .insert(enum_id.to_string(), layout.clone());
         Some(layout)
@@ -261,39 +258,11 @@ impl Planner<'_> {
             return None;
         }
 
-        let mut field_types = FieldTypeMap::default();
-        let mut requirements = PackageRequirements::default();
-        for (vi, variant) in variants.iter().enumerate() {
-            for (fi, field) in variant.fields.iter().enumerate() {
-                let rendered_type = self.go_type(&field.ty);
-                requirements.extend(rendered_type.requirements());
-                let mut go_type = rendered_type.code;
-                let recursive = enum_payload_pointer_wrapped(enum_id, vi, fi, &field.ty, |id| {
-                    self.facts.definition(id)
-                });
-
-                if recursive {
-                    go_type = format!("*{}", go_type);
-                }
-
-                let is_function = !recursive && is_raw_function_type(&field.ty);
-                field_types.insert(
-                    (vi, fi),
-                    FieldTypeInfo {
-                        go_type,
-                        is_function,
-                        is_recursive: recursive,
-                    },
-                );
-            }
-        }
-
         Some(EnumLayout::new(
+            self,
             enum_id,
             generics,
             variants,
-            &field_types,
-            requirements,
             *default_variant,
         ))
     }
@@ -368,7 +337,7 @@ impl Planner<'_> {
             && let Some(variant_layout) = layout.get_variant(variant)
             && let Some(field) = variant_layout.fields.get(index)
         {
-            return field.is_recursive;
+            return field.is_recursive();
         }
         false
     }

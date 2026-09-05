@@ -36,8 +36,7 @@ type Res struct {
 
 func test(r Res, threshold int) int {
 	if r.Tag == ResOk {
-		x := r.Ok
-		if x > threshold {
+		if r.Ok > threshold {
 			return 100
 		}
 	}

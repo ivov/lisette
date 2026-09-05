@@ -32,10 +32,6 @@ pub use output::OutputFile;
 pub use output::imports;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use std::cell::RefCell;
-use std::mem;
-use std::rc::Rc;
-use std::sync::Arc;
 
 use abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use abi::catalog::GoAbiCatalog;
@@ -46,7 +42,6 @@ use names::packages::{PackageRequirements, PackageUse};
 use plan::PackagePlan;
 use plan::bodies::{LoopId, LoweredBlock, LoweredStatement};
 use state::adapter_registry::AdapterRegistry;
-use state::bindings::BindingSnapshot;
 use state::file_namespace::FileNamespace;
 use state::package_state::{FunctionEmissionContext, PackageState};
 use state::scope::ScopeState;
@@ -203,9 +198,6 @@ pub struct Planner<'a> {
     scope: ScopeState,
     adapter_registry: AdapterRegistry,
     namespace: FileNamespace,
-    /// Keep this memo. Layout queries run per field access, and each recompute
-    /// renders every field type again (5.8x slower on a 40-variant enum).
-    enum_layouts: RefCell<HashMap<String, Rc<EnumLayout>>>,
 }
 
 impl Planner<'_> {
@@ -292,24 +284,22 @@ impl<'a> Planner<'a> {
         options: EmitOptions,
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
         let line_indexes = options.sourcemap.then(|| {
-            Arc::new(
-                analysis
-                    .files
-                    .iter()
-                    .map(|(file_id, file)| {
-                        (
-                            *file_id,
-                            LineIndex::from_source(file.display_path.clone(), &file.source),
-                        )
-                    })
-                    .collect(),
-            )
+            analysis
+                .files
+                .iter()
+                .map(|(file_id, file)| {
+                    (
+                        *file_id,
+                        LineIndex::from_source(file.display_path.clone(), &file.source),
+                    )
+                })
+                .collect()
         });
 
         let shared = SharedEmitContext {
             emit_tests: options.emit_tests,
             line_indexes,
-            globals: Arc::new(GlobalEmitData::compute(&analysis.definitions)),
+            globals: GlobalEmitData::compute(&analysis.definitions),
         };
 
         let mut files_by_package: HashMap<&str, Vec<&File>> = HashMap::default();
@@ -372,12 +362,12 @@ impl<'a> Planner<'a> {
         files: &[&File],
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
         let line_indexes = source.map(|src| {
-            Arc::new(HashMap::from_iter([(
+            HashMap::from_iter([(
                 0u32,
                 LineIndex::from_source("src/test.lis".to_string(), src),
-            )]))
+            )])
         });
-        let globals = Arc::new(GlobalEmitData::compute(config.definitions));
+        let globals = GlobalEmitData::compute(config.definitions);
         let facts = EmitFacts::new(EmitFactsConfig {
             definitions: config.definitions,
             unused: config.unused,
@@ -390,11 +380,11 @@ impl<'a> Planner<'a> {
             entry_package_name: "main",
             go_module: config.go_module.to_string(),
             emit_tests: false,
-            line_indexes,
-            globals,
+            line_indexes: line_indexes.as_ref(),
+            globals: &globals,
             current_package: config.package_id.to_string().into(),
         });
-        Self::emit_files_with_facts(facts, files, config.package_id)
+        Planner::emit_files_with_facts(facts, files)
     }
 
     fn new(facts: EmitFacts<'a>, first_file: &File) -> Self {
@@ -411,7 +401,6 @@ impl<'a> Planner<'a> {
             scope: ScopeState::new(),
             adapter_registry: AdapterRegistry::default(),
             namespace,
-            enum_layouts: RefCell::default(),
         }
     }
 
@@ -570,17 +559,6 @@ impl<'a> Planner<'a> {
         result
     }
 
-    fn with_binding_snapshot<R>(
-        &mut self,
-        snapshot: BindingSnapshot,
-        f: impl FnOnce(&mut Self) -> R,
-    ) -> R {
-        let current = self.scope.replace_binding_snapshot(snapshot);
-        let result = f(self);
-        let _ = self.scope.replace_binding_snapshot(current);
-        result
-    }
-
     fn capture_go_uses<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> (R, HashSet<String>) {
         self.scope.enter_use_region();
         let result = f(self);
@@ -614,20 +592,15 @@ impl<'a> Planner<'a> {
     fn emit_files_with_facts(
         facts: EmitFacts<'a>,
         files: &[&File],
-        package_id: &str,
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
         let Some(first_file) = files.first() else {
             return Ok(Vec::new());
         };
-        Self::new(facts, first_file).emit_files(files, package_id)
+        Self::new(facts, first_file).emit_files(files)
     }
 
-    fn emit_files(
-        mut self,
-        files: &[&File],
-        package_id: &str,
-    ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
-        let plan = self.build_package_plan(files, package_id);
+    fn emit_files(mut self, files: &[&File]) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
+        let plan = self.build_package_plan(files);
         self.render_package_plan(files, plan)
     }
 
@@ -643,46 +616,26 @@ impl<'a> Planner<'a> {
         let mut output_files = Vec::new();
         let mut all_diagnostics = collision_diagnostics;
 
-        let (last_file, preceding_files) = files
-            .split_last()
-            .expect("a planner is created only for a nonempty file set");
-        for (i, file) in preceding_files.iter().enumerate() {
-            let rendered_source = self.render_file_source(file);
-            let next_namespace = FileNamespace::build(
-                files[i + 1],
+        for file in files {
+            self.namespace = FileNamespace::build(
+                file,
                 self.facts.go_module(),
                 self.facts.unused_imports_for_current_package(),
                 self.facts.go_package_names(),
             );
-            // Layouts render Go types against the current file's import aliases.
-            self.enum_layouts.get_mut().clear();
-            let namespace = mem::replace(&mut self.namespace, next_namespace);
-            let (imports, mut diagnostics) =
-                namespace.finish(self.facts.go_package_names(), self.facts.go_package_ids());
+            let source = self.render_file_source(file);
+            let (imports, mut diagnostics) = self
+                .namespace
+                .finish(self.facts.go_package_names(), self.facts.go_package_ids());
             all_diagnostics.append(&mut diagnostics);
             output_files.push(OutputFile {
                 name: file.go_filename(),
                 imports,
-                source: rendered_source,
+                source,
                 package_name: package_name.clone(),
                 file_comment: file.file_comment.clone(),
             });
         }
-
-        let rendered_source = self.render_file_source(last_file);
-        let Planner {
-            facts, namespace, ..
-        } = self;
-        let (imports, mut diagnostics) =
-            namespace.finish(facts.go_package_names(), facts.go_package_ids());
-        all_diagnostics.append(&mut diagnostics);
-        output_files.push(OutputFile {
-            name: last_file.go_filename(),
-            imports,
-            source: rendered_source,
-            package_name,
-            file_comment: last_file.file_comment.clone(),
-        });
 
         if all_diagnostics.is_empty() {
             Ok(output_files)
@@ -724,8 +677,8 @@ impl<'a> Planner<'a> {
 /// Emit state built once in [`Planner::emit`] and shared by every package worker.
 struct SharedEmitContext {
     emit_tests: bool,
-    line_indexes: Option<Arc<HashMap<u32, LineIndex>>>,
-    globals: Arc<GlobalEmitData>,
+    line_indexes: Option<HashMap<u32, LineIndex>>,
+    globals: GlobalEmitData,
 }
 
 fn emit_package<'a>(
@@ -748,11 +701,11 @@ fn emit_package<'a>(
         entry_package_name,
         go_module: go_module.to_string(),
         emit_tests: shared_emit_ctx.emit_tests,
-        line_indexes: shared_emit_ctx.line_indexes.clone(),
-        globals: shared_emit_ctx.globals.clone(),
+        line_indexes: shared_emit_ctx.line_indexes.as_ref(),
+        globals: &shared_emit_ctx.globals,
         current_package: package_id.to_string().into(),
     });
-    Planner::emit_files_with_facts(facts, files, package_id).map(|mut package_output| {
+    Planner::emit_files_with_facts(facts, files).map(|mut package_output| {
         if package_id != analysis.entry_package_id.as_str() {
             for file in &mut package_output {
                 file.name = format!("{}/{}", package_id, file.name);

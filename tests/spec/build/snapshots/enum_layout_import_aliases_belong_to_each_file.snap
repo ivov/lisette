@@ -1,0 +1,58 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	timer "time"
+)
+
+func second(event Event) (timer.Time, bool) {
+	if event.Tag == EventAt {
+		return event.At, true
+	}
+	return *new(timer.Time), false
+}
+
+func main() {
+	event := MakeEventAt(timer.Now())
+	option_1 := lisette.OptionFromCommaOk[timer.Time](first(event))
+	option_2 := lisette.OptionFromCommaOk[timer.Time](second(event))
+	fmt.Println(option_1, option_2)
+}
+
+
+// === types.go ===
+package main
+
+import clock "time"
+
+func MakeEventAt(arg0 clock.Time) Event {
+	return Event{Tag: EventAt, At: arg0}
+}
+
+func MakeEventEmpty() Event {
+	return Event{Tag: EventEmpty}
+}
+
+type EventTag int
+
+const (
+	EventAt EventTag = iota
+	EventEmpty
+)
+
+type Event struct {
+	Tag EventTag
+	At  clock.Time
+}
+
+func first(event Event) (clock.Time, bool) {
+	if event.Tag == EventAt {
+		return event.At, true
+	}
+	return *new(clock.Time), false
+}

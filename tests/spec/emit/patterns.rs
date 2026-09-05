@@ -2,6 +2,48 @@ use crate::assert_emit_snapshot;
 use crate::assert_emit_snapshot_with_go_typedefs;
 
 #[test]
+fn or_pattern_let_else_failure_sees_outer_binding() {
+    let input = r#"
+enum E { A(int), B(int), C }
+
+fn read(e: E) -> int {
+  let value = 40
+  let E.A(value) | E.B(value) = e else {
+    let fallback = value + 2
+    return fallback
+  }
+  value
+}
+
+fn main() {
+  if read(E.C) != 42 { panic("failure must see the outer value") }
+  if read(E.B(7)) != 7 { panic("success must see the new value") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn guarded_pattern_restores_outer_binding_for_fallback() {
+    let input = r#"
+fn read(option: Option<int>) -> string {
+  let value = "outer"
+  match option {
+    Some(value) if value > 0 => if value == 7 { "seven" } else { "positive" },
+    _ => value,
+  }
+}
+
+fn main() {
+  if read(Some(-1)) != "outer" { panic("guard failure must restore the outer value") }
+  if read(Some(7)) != "seven" { panic("guard success must see the pattern value") }
+  if read(None) != "outer" { panic("fallback must see the outer value") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn tuple_struct_pattern_in_match() {
     let input = r#"
 struct Pair(int, int)

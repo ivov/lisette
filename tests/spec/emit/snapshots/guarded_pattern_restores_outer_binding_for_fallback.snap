@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  fn read(option: Option<int>) -> string {
+    let value = "outer"
+    match option {
+      Some(value) if value > 0 => if value == 7 { "seven" } else { "positive" },
+      _ => value,
+    }
+  }
+  
+  fn main() {
+    if read(Some(-1)) != "outer" { panic("guard failure must restore the outer value") }
+    if read(Some(7)) != "seven" { panic("guard success must see the pattern value") }
+    if read(None) != "outer" { panic("fallback must see the outer value") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func read(option lisette.Option[int]) string {
+	value := "outer"
+	if option.Tag == lisette.OptionSome {
+		value_1 := option.SomeVal
+		if value_1 > 0 {
+			if value_1 == 7 {
+				return "seven"
+			}
+			return "positive"
+		}
+	}
+	{
+		return value
+	}
+}
+
+func main() {
+	if read(lisette.MakeOptionSome(-1)) != "outer" {
+		panic("guard failure must restore the outer value")
+	}
+	if read(lisette.MakeOptionSome(7)) != "seven" {
+		panic("guard success must see the pattern value")
+	}
+	if read(lisette.MakeOptionNone[int]()) != "outer" {
+		panic("fallback must see the outer value")
+	}
+}

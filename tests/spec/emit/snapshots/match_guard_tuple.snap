@@ -16,9 +16,7 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func test(pair lisette.Tuple2[int, int]) string {
 	{
-		x := pair.First
-		y := pair.Second
-		if x == y {
+		if pair.First == pair.Second {
 			return "equal"
 		}
 	}

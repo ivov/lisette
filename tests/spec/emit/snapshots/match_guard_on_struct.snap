@@ -21,9 +21,7 @@ type Point struct {
 
 func test(p Point) string {
 	{
-		x := p.x
-		y := p.y
-		if x == y {
+		if p.x == p.y {
 			return "diagonal"
 		}
 	}

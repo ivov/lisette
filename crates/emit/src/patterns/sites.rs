@@ -94,10 +94,10 @@ impl ResolvedSubject {
     }
 }
 
-struct LetElseAlternatives<'s> {
-    collected: Vec<PatternInfo>,
-    hoisted: Vec<(Cow<'s, str>, Option<String>)>,
-    irrefutable_index: Option<usize>,
+struct RefutableAlternative<'s> {
+    info: PatternInfo,
+    subject: Cow<'s, str>,
+    ok_var: Option<String>,
 }
 
 impl Planner<'_> {
@@ -158,7 +158,7 @@ impl Planner<'_> {
         let (body, used) = self.capture_go_uses(|this| {
             let mut body = Vec::new();
             let effective = apply_root_assertion(this, &mut body, &info, resolved.var());
-            tree_binding_statements(this, &mut body, &info.bindings, &effective, &[], &[]);
+            tree_binding_statements(this, &mut body, &info.bindings, &effective, &[]);
             body
         });
         let body_block = LoweredBlock { statements: body };
@@ -410,14 +410,7 @@ impl Planner<'_> {
         let then_body = self.with_scope(|this| {
             let mut then_body: Vec<LoweredStatement> = Vec::new();
             if !matches!(pattern, Pattern::Or { .. }) {
-                tree_binding_statements(
-                    this,
-                    &mut then_body,
-                    &info.bindings,
-                    &effective,
-                    &[body],
-                    &[],
-                );
+                tree_binding_statements(this, &mut then_body, &info.bindings, &effective, &[body]);
             }
             then_body.extend(this.lower_block_as_body(body).statements);
             then_body
@@ -561,7 +554,6 @@ impl Planner<'_> {
                 &info.bindings,
                 &effective_subject,
                 &[],
-                &[],
             );
             return statements;
         }
@@ -596,7 +588,6 @@ impl Planner<'_> {
             &info.bindings,
             &effective_subject,
             &[],
-            &[],
         );
         statements
     }
@@ -616,102 +607,70 @@ impl Planner<'_> {
         let Pattern::Or { patterns, .. } = pattern else {
             unreachable!("lower_let_else_or_pattern requires an Or pattern");
         };
-        let pre_let_snapshot = self.scope.binding_snapshot();
-        let mut statements = Vec::new();
-        self.lower_binding_declarations_with_type(&mut statements, pattern, binding_ty);
-
-        let mut asserts = Vec::new();
-        let alts =
-            self.collect_let_else_alternatives(&mut asserts, patterns, subject_ty, subject_var);
-
-        statements.extend(asserts);
-
-        let chain_len = alts.irrefutable_index.unwrap_or(alts.collected.len());
-
-        // An irrefutable first alternative always matches: no chain, just its
-        // assignments.
-        if chain_len == 0 {
-            let (effective, _) = &alts.hoisted[0];
-            tree_assignment_statements(
-                self,
-                &mut statements,
-                &alts.collected[0].bindings,
-                effective,
-            );
-            return statements;
-        }
-
-        // Forward pass (preserves scope-op order): condition plus assignment
-        // block per chain alternative.
-        let mut pieces: Vec<(String, LoweredBlock)> = Vec::with_capacity(chain_len);
-        for (i, info) in alts.collected.iter().take(chain_len).enumerate() {
-            let (effective, ok_var) = &alts.hoisted[i];
-            if !info.checks.is_empty() {
-                self.scope.record_go_use(effective.as_ref());
-            }
-            let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, effective);
-            let mut assigns = Vec::new();
-            tree_assignment_statements(self, &mut assigns, &info.bindings, effective);
-            pieces.push((
-                condition,
-                LoweredBlock {
-                    statements: assigns,
-                },
-            ));
-        }
-
-        // Terminal `else`: the irrefutable alternative's assignments, or the
-        // lowered `else` block (with the or-pattern bindings out of scope).
-        let terminal = match alts.irrefutable_index {
-            Some(index) => {
-                let (effective, _) = &alts.hoisted[index];
-                let mut assigns = Vec::new();
-                tree_assignment_statements(
-                    self,
-                    &mut assigns,
-                    &alts.collected[index].bindings,
-                    effective,
-                );
-                LoweredBlock {
-                    statements: assigns,
-                }
-            }
-            None => self.with_binding_snapshot(pre_let_snapshot, |this| {
-                this.lower_refutable_fail(fail, subject_var)
-            }),
-        };
-
-        statements.push(assemble_if_else_chain(pieces, terminal));
-        statements
-    }
-
-    fn collect_let_else_alternatives<'s>(
-        &mut self,
-        statements: &mut Vec<LoweredStatement>,
-        patterns: &[Pattern],
-        subject_ty: &Type,
-        subject_var: &'s str,
-    ) -> LetElseAlternatives<'s> {
-        let collected: Vec<PatternInfo> = patterns
+        let infos: Vec<_> = patterns
             .iter()
             .map(|alt| decision_tree::collect_pattern_info(self, alt, subject_ty))
             .collect();
-        for info in &collected {
-            self.require_packages(&info.packages);
-        }
-        let hoisted: Vec<(Cow<'s, str>, Option<String>)> = collected
+        let failure = infos
             .iter()
-            .map(|info| apply_refutable_root_assertion(self, statements, info, subject_var))
-            .collect();
-        let irrefutable_index = collected
-            .iter()
-            .zip(hoisted.iter())
-            .position(|(info, (_, ok_var))| info.checks.is_empty() && ok_var.is_none());
-        LetElseAlternatives {
-            collected,
-            hoisted,
-            irrefutable_index,
+            .all(|info| !info.checks.is_empty() || info.root_assertion.is_some())
+            .then(|| self.lower_refutable_fail(fail, subject_var));
+
+        let mut statements = Vec::new();
+        self.lower_binding_declarations_with_type(&mut statements, pattern, binding_ty);
+        let alternatives = self.prepare_refutable_alternatives(&mut statements, infos, subject_var);
+        let mut pieces = Vec::new();
+        for alternative in alternatives {
+            let RefutableAlternative {
+                info,
+                subject,
+                ok_var,
+            } = alternative;
+            let mut assigns = Vec::new();
+            tree_assignment_statements(self, &mut assigns, &info.bindings, &subject);
+            let body = LoweredBlock {
+                statements: assigns,
+            };
+            if info.checks.is_empty() && ok_var.is_none() {
+                if pieces.is_empty() {
+                    statements.extend(body.statements);
+                } else {
+                    statements.push(assemble_if_else_chain(pieces, body));
+                }
+                return statements;
+            }
+            if !info.checks.is_empty() {
+                self.scope.record_go_use(&subject);
+            }
+            let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &subject);
+            pieces.push((condition, body));
         }
+        statements.push(assemble_if_else_chain(
+            pieces,
+            failure.expect("all alternatives are refutable"),
+        ));
+        statements
+    }
+
+    fn prepare_refutable_alternatives<'s>(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        infos: Vec<PatternInfo>,
+        subject: &'s str,
+    ) -> Vec<RefutableAlternative<'s>> {
+        infos
+            .into_iter()
+            .map(|info| {
+                self.require_packages(&info.packages);
+                let (subject, ok_var) =
+                    apply_refutable_root_assertion(self, statements, &info, subject);
+                RefutableAlternative {
+                    info,
+                    subject,
+                    ok_var,
+                }
+            })
+            .collect()
     }
 
     /// Lower a binding or-pattern while-let body into `statements`: per-
@@ -732,10 +691,6 @@ impl Planner<'_> {
             .iter()
             .map(|alt| decision_tree::collect_pattern_info(self, alt, subject_ty))
             .collect();
-        for info in &alternatives {
-            self.require_packages(&info.packages);
-        }
-
         let unused_names: rustc_hash::FxHashSet<String> = alternatives
             .iter()
             .flat_map(|info| info.bindings.iter())
@@ -750,15 +705,17 @@ impl Planner<'_> {
             }
         }
 
-        let hoisted: Vec<_> = alternatives
-            .iter()
-            .map(|info| apply_refutable_root_assertion(self, statements, info, subject_var))
-            .collect();
-
-        let mut pieces: Vec<(String, LoweredBlock)> = Vec::with_capacity(alternatives.len());
-        for (i, info) in alternatives.iter().enumerate() {
-            let (effective, ok_var) = &hoisted[i];
-            let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, effective);
+        let alternatives =
+            self.prepare_refutable_alternatives(statements, alternatives, subject_var);
+        let mut pieces = Vec::with_capacity(alternatives.len());
+        for alternative in alternatives {
+            let RefutableAlternative {
+                info,
+                subject: effective,
+                ok_var,
+            } = alternative;
+            let condition =
+                compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
 
             let branch = self.with_scope(|this| {
                 let mut branch = Vec::new();
@@ -766,7 +723,7 @@ impl Planner<'_> {
                     this,
                     &mut branch,
                     &info.bindings,
-                    effective,
+                    &effective,
                     body,
                     |this, branch| {
                         branch.extend(this.lower_block_as_body(body).statements);
