@@ -35,7 +35,7 @@ func MakeNodeChild(arg0 Node) Node {
 	return Node{Tag: NodeChild, Child: &arg0}
 }
 
-type NodeTag int
+type NodeTag uint8
 
 const (
 	NodeValue NodeTag = iota

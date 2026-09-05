@@ -38,7 +38,7 @@ func MakeEventEmpty() Event {
 	return Event{Tag: EventEmpty}
 }
 
-type EventTag int
+type EventTag uint8
 
 const (
 	EventAt EventTag = iota
