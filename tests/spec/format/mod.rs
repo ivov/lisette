@@ -754,6 +754,13 @@ fn line_breaking_long_slice() {
 }
 
 #[test]
+fn line_breaking_wide_character_slice() {
+    assert_format_snapshot!(
+        "fn main() {\n  let weekdays = [\"日曜日\", \"月曜日\", \"火曜日\", \"水曜日\", \"木曜日\", \"金曜日\", \"土曜日\"]\n  let ascii = [\"aaaaaaa\", \"bbbbbbb\", \"ccccccc\", \"ddddddd\", \"eeeeeee\", \"fffffff\", \"ggggggg\"]\n}"
+    );
+}
+
+#[test]
 fn line_breaking_long_tuple() {
     assert_format_snapshot!(
         "fn test() { (first_long_element, second_long_element, third_long_element, fourth_long_element, fifth_long_element) }"
