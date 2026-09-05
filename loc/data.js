@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788609116149,
+  "lastUpdate": 1788613358908,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -32131,6 +32131,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 32634,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28115,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19299,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15171,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13998,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8793,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6179,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1874,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9491,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "storm.patrik@gmail.com",
+            "name": "Patrik Storm",
+            "username": "stormpat"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d6fe290d546b341e0414d2d295240fa08f692ac2",
+          "message": "fix: keep untyped literals at their checked type in emitted go (#1387)",
+          "timestamp": "2026-09-05T15:02:15+02:00",
+          "tree_id": "ffa124b7d85ec73147ee1f1404db89637a345b30",
+          "url": "https://github.com/ivov/lisette/commit/d6fe290d546b341e0414d2d295240fa08f692ac2"
+        },
+        "date": 1788613356686,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 140183,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32686,
             "unit": "lines"
           },
           {
