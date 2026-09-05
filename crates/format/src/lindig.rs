@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -11,12 +11,12 @@ enum Mode {
 
 type PendingDocument<'a, 'doc> = (isize, Mode, &'doc Document<'a>);
 
-/// For ASCII the byte length is already the grapheme count.
-fn grapheme_count(text: &str) -> isize {
+/// For ASCII the byte length is already the display width.
+fn display_width(text: &str) -> isize {
     if text.is_ascii() {
         text.len() as isize
     } else {
-        text.graphemes(true).count() as isize
+        text.width() as isize
     }
 }
 
@@ -71,14 +71,14 @@ fn fits<'a, 'doc>(
             }
 
             Document::Text(s) => {
-                current_width += grapheme_count(s);
+                current_width += display_width(s);
             }
 
             Document::VerbatimText(s) => {
                 if s.contains('\n') {
                     return false;
                 }
-                current_width += grapheme_count(s);
+                current_width += display_width(s);
             }
 
             Document::StrictBreak { unbroken, .. } | Document::FlexBreak { unbroken, .. } => {
@@ -173,7 +173,7 @@ fn format<'a, 'doc>(
 
             Document::Text(s) => {
                 write_pending_indent(output, &mut pending_indent);
-                width += grapheme_count(s);
+                width += display_width(s);
                 output.push_str(s);
             }
 
@@ -182,12 +182,12 @@ fn format<'a, 'doc>(
                 let mut segments = s.split('\n');
                 if let Some(first) = segments.next() {
                     output.push_str(first);
-                    width += grapheme_count(first);
+                    width += display_width(first);
                 }
                 for segment in segments {
                     output.push('\n');
                     output.push_str(segment);
-                    width = grapheme_count(segment);
+                    width = display_width(segment);
                 }
             }
 
