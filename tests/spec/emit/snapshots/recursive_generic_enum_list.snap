@@ -21,7 +21,7 @@ func MakeListCons[T any](arg0 T, arg1 List[T]) List[T] {
 	return List[T]{Tag: ListCons, Cons0: arg0, Cons1: &arg1}
 }
 
-type ListTag int
+type ListTag uint8
 
 const (
 	ListNil ListTag = iota

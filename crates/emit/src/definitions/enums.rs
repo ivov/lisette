@@ -150,7 +150,7 @@ impl Planner<'_> {
                 .map(|(sem_field, layout_field)| {
                     let mut lhs = format!("{receiver}.{}", layout_field.go_name);
                     let mut rhs = format!("{other}.{}", layout_field.go_name);
-                    if layout_field.is_recursive {
+                    if layout_field.is_recursive() {
                         lhs = format!("(*{lhs})");
                         rhs = format!("(*{rhs})");
                     }
@@ -215,7 +215,7 @@ impl Planner<'_> {
             .enumerate()
             .map(|(index, field)| {
                 let argument = format!("arg{}", index);
-                if field.is_recursive {
+                if field.is_recursive() {
                     let pointee = field.go_type.trim_start_matches('*');
                     let param = format!("{} {}", argument, pointee);
                     let field_assignment = format!("{}: &{}", field.go_name, argument);

@@ -36,7 +36,7 @@ func MakeLevelHigh() Level {
 	return Level{Tag: LevelHigh}
 }
 
-type LevelTag int
+type LevelTag uint8
 
 const (
 	LevelLow LevelTag = iota

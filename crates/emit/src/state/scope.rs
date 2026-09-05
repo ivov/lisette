@@ -1,16 +1,13 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use std::mem;
 
 use crate::ReturnContext;
 use crate::context::lowering::LoopContext;
 use crate::plan::bodies::LoopId;
-use crate::state::bindings::{BindingSnapshot, BindingUndo, BindingValue, InlineExpr};
+use crate::state::bindings::{BindingValue, InlineExpr};
 
 pub(crate) struct ScopeState {
     next_var: usize,
     next_loop_id: u32,
-    bindings: HashMap<String, BindingValue>,
-    bound_go_names: HashMap<String, usize>,
     frames: Vec<ScopeFrame>,
     loop_stack: Vec<LoopContext>,
     return_ctx_stack: Vec<ReturnContext>,
@@ -21,8 +18,7 @@ pub(crate) struct ScopeState {
 }
 
 struct ScopeFrame {
-    binding_undo: BindingUndo,
-    changed_bindings: HashSet<String>,
+    bindings: HashMap<String, BindingValue>,
     declarations: DeclarationScope,
     /// Conditions the branch being lowered has already tested in this scope.
     established: Vec<String>,
@@ -50,11 +46,8 @@ impl ScopeState {
         Self {
             next_var: 0,
             next_loop_id: 0,
-            bindings: HashMap::default(),
-            bound_go_names: HashMap::default(),
             frames: vec![ScopeFrame {
-                binding_undo: Vec::new(),
-                changed_bindings: HashSet::default(),
+                bindings: HashMap::default(),
                 declarations: DeclarationScope::Block(HashMap::default()),
                 established: Vec::new(),
             }],
@@ -111,38 +104,34 @@ impl ScopeState {
         self.set_binding(lisette_name.into(), BindingValue::InlineExpr(expr));
     }
 
-    pub(crate) fn bind_value(&mut self, lisette_name: impl Into<String>, value: BindingValue) {
-        self.set_binding(lisette_name.into(), value);
-    }
-
     pub(crate) fn mark_go_const(&mut self, lisette_name: &str) {
-        let Some(BindingValue::GoName(name)) = self.bindings.get(lisette_name).cloned() else {
+        let Some(BindingValue::GoName(name)) =
+            self.resolve_identifier_binding(lisette_name).cloned()
+        else {
             return;
         };
         self.set_binding(lisette_name.to_string(), BindingValue::GoConst(name));
     }
 
-    pub(crate) fn remove_binding(&mut self, lisette_name: &str) {
-        self.record_binding_change(lisette_name);
-        if let Some(value) = self.bindings.remove(lisette_name) {
-            self.remove_bound_go_name(&value);
-        }
-    }
-
     pub(crate) fn resolve_identifier_binding(&self, lisette_name: &str) -> Option<&BindingValue> {
-        self.bindings.get(lisette_name)
+        self.frames
+            .iter()
+            .rev()
+            .find_map(|frame| frame.bindings.get(lisette_name))
     }
 
     pub(crate) fn resolve_binding_go_name(&self, lisette_name: &str) -> Option<&str> {
-        self.bindings
-            .get(lisette_name)
+        self.resolve_identifier_binding(lisette_name)
             .and_then(BindingValue::as_go_name)
     }
 
-    /// Falls back to the keyword-escaped form when the name is unbound or
-    /// inline-bound; callers needing a usable local must hoist a fresh temp.
     pub(crate) fn has_binding_for_go_name(&self, go_name: &str) -> bool {
-        self.bound_go_names.contains_key(go_name)
+        self.frames.iter().any(|frame| {
+            frame.bindings.iter().any(|(source_name, value)| {
+                value.as_go_name() == Some(go_name)
+                    && self.resolve_binding_go_name(source_name) == Some(go_name)
+            })
+        })
     }
 
     pub(crate) fn push_binding_frame(&mut self) {
@@ -158,30 +147,6 @@ impl ScopeState {
             "a binding frame must be pushed before it is popped"
         );
         self.pop_frame();
-    }
-
-    pub(crate) fn binding_snapshot(&self) -> BindingSnapshot {
-        BindingSnapshot::new(
-            self.bindings.clone(),
-            self.current_frame().binding_undo.clone(),
-        )
-    }
-
-    pub(crate) fn replace_binding_snapshot(
-        &mut self,
-        snapshot: BindingSnapshot,
-    ) -> BindingSnapshot {
-        let (bindings, undo) = snapshot.into_inner();
-        let previous_bindings = mem::replace(&mut self.bindings, bindings);
-        self.rebuild_bound_go_names();
-        let previous_undo = mem::replace(&mut self.current_frame_mut().binding_undo, undo);
-        self.current_frame_mut().changed_bindings = self
-            .current_frame()
-            .binding_undo
-            .iter()
-            .map(|(name, _)| name.clone())
-            .collect();
-        BindingSnapshot::new(previous_bindings, previous_undo)
     }
 
     pub(crate) fn declare_go_name(&mut self, go_name: &str) {
@@ -348,8 +313,7 @@ impl ScopeState {
 
     fn push_frame(&mut self, declarations: DeclarationScope) {
         self.frames.push(ScopeFrame {
-            binding_undo: Vec::new(),
-            changed_bindings: HashSet::default(),
+            bindings: HashMap::default(),
             declarations,
             established: Vec::new(),
         });
@@ -357,16 +321,7 @@ impl ScopeState {
 
     fn pop_frame(&mut self) {
         assert!(self.frames.len() > 1, "cannot pop a stack's base frame");
-        let frame = self.frames.pop().expect("scope state retains a base frame");
-        for (name, previous) in frame.binding_undo.into_iter().rev() {
-            if let Some(value) = self.bindings.remove(&name) {
-                self.remove_bound_go_name(&value);
-            }
-            if let Some(value) = previous {
-                self.add_bound_go_name(&value);
-                self.bindings.insert(name, value);
-            }
-        }
+        self.frames.pop();
     }
 
     fn current_frame(&self) -> &ScopeFrame {
@@ -382,50 +337,7 @@ impl ScopeState {
     }
 
     fn set_binding(&mut self, name: String, value: BindingValue) {
-        self.record_binding_change(&name);
-        if let Some(previous) = self.bindings.insert(name, value.clone()) {
-            self.remove_bound_go_name(&previous);
-        }
-        self.add_bound_go_name(&value);
-    }
-
-    fn record_binding_change(&mut self, name: &str) {
-        if self.frames.len() == 1 {
-            return;
-        }
-        let previous = self.bindings.get(name).cloned();
-        let frame = self.current_frame_mut();
-        if frame.changed_bindings.insert(name.to_string()) {
-            frame.binding_undo.push((name.to_string(), previous));
-        }
-    }
-
-    fn add_bound_go_name(&mut self, value: &BindingValue) {
-        if let Some(name) = value.as_go_name() {
-            *self.bound_go_names.entry(name.to_string()).or_default() += 1;
-        }
-    }
-
-    fn remove_bound_go_name(&mut self, value: &BindingValue) {
-        let Some(name) = value.as_go_name() else {
-            return;
-        };
-        let Some(count) = self.bound_go_names.get_mut(name) else {
-            return;
-        };
-        *count -= 1;
-        if *count == 0 {
-            self.bound_go_names.remove(name);
-        }
-    }
-
-    fn rebuild_bound_go_names(&mut self) {
-        self.bound_go_names.clear();
-        for value in self.bindings.values() {
-            if let Some(name) = value.as_go_name() {
-                *self.bound_go_names.entry(name.to_string()).or_default() += 1;
-            }
-        }
+        self.current_frame_mut().bindings.insert(name, value);
     }
 
     fn current_declarations(&self) -> &Declarations {
@@ -487,37 +399,66 @@ mod tests {
     }
 
     #[test]
-    fn removing_binding_hides_it_until_scope_exit() {
-        let mut scope = ScopeState::new();
-        scope.bind("value", "outer");
-        scope.enter_block();
-        scope.remove_binding("value");
-        assert!(scope.resolve_identifier_binding("value").is_none());
-
-        scope.exit_block();
-
-        assert_eq!(scope.resolve_binding_go_name("value"), Some("outer"));
-    }
-
-    #[test]
-    fn replacing_snapshot_can_restore_current_bindings() {
-        let mut scope = ScopeState::new();
-        scope.bind("value", "before");
-        let before = scope.binding_snapshot();
-        scope.bind("value", "after");
-
-        let after = scope.replace_binding_snapshot(before);
-        assert_eq!(scope.resolve_binding_go_name("value"), Some("before"));
-        let _ = scope.replace_binding_snapshot(after);
-
-        assert_eq!(scope.resolve_binding_go_name("value"), Some("after"));
-    }
-
-    #[test]
     fn fresh_name_skips_bound_go_name() {
         let mut scope = ScopeState::new();
         scope.bind("value", "tmp_1");
 
         assert_eq!(scope.fresh_go_name(None), "tmp_2");
+    }
+
+    #[test]
+    fn nested_bindings_restore_names_constants_and_inline_expressions() {
+        let mut scope = ScopeState::new();
+        scope.bind("value", "outer");
+        scope.mark_go_const("value");
+        scope.push_binding_frame();
+        scope.bind_inline_expr(
+            "value",
+            InlineExpr::new("pair.F0", vec!["pair".into()], false),
+        );
+        scope.enter_block();
+        scope.bind("value", "inner");
+        scope.bind("value", "rebound");
+        scope.exit_block();
+        assert!(matches!(
+            scope.resolve_identifier_binding("value"),
+            Some(BindingValue::InlineExpr(expr)) if expr.as_str() == "pair.F0"
+        ));
+        scope.pop_binding_frame();
+        assert!(matches!(
+            scope.resolve_identifier_binding("value"),
+            Some(BindingValue::GoConst(name)) if name == "outer"
+        ));
+    }
+
+    #[test]
+    fn binding_frames_restore_all_bindings_but_keep_go_declarations() {
+        let mut scope = ScopeState::new();
+        scope.bind("value", "outer");
+        scope.push_binding_frame();
+        scope.bind("value", "inner");
+        scope.bind("new", "local");
+        scope.declare_go_name("local");
+        scope.pop_binding_frame();
+
+        assert_eq!(scope.resolve_binding_go_name("value"), Some("outer"));
+        assert!(scope.resolve_identifier_binding("new").is_none());
+        assert!(!scope.has_binding_for_go_name("inner"));
+        assert!(scope.is_go_name_declared("local"));
+    }
+
+    #[test]
+    fn bound_go_names_follow_visible_bindings_including_aliases() {
+        let mut scope = ScopeState::new();
+        scope.bind("first", "shared");
+        scope.bind("second", "shared");
+        scope.enter_block();
+        scope.bind("first", "inner");
+        assert!(scope.has_binding_for_go_name("shared"));
+        scope.bind_inline_expr("second", InlineExpr::new("pair.F0", vec![], false));
+        assert!(!scope.has_binding_for_go_name("shared"));
+        scope.exit_block();
+        assert!(scope.has_binding_for_go_name("shared"));
+        assert!(!scope.has_binding_for_go_name("inner"));
     }
 }

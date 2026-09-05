@@ -23,7 +23,7 @@ func MakeMessageWrite(arg0 string) Message {
 	return Message{Tag: MessageWrite, Write: arg0}
 }
 
-type MessageTag int
+type MessageTag uint8
 
 const (
 	MessageQuit MessageTag = iota

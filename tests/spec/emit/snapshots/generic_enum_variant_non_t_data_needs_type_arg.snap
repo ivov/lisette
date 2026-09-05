@@ -22,7 +22,7 @@ func MakeMyResultFail[T any](arg0 string) MyResult[T] {
 	return MyResult[T]{Tag: MyResultFail, Fail: arg0}
 }
 
-type MyResultTag int
+type MyResultTag uint8
 
 const (
 	MyResultOk MyResultTag = iota

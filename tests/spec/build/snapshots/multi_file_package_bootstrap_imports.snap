@@ -70,7 +70,7 @@ func MakeMyEnumAliased(arg0 g.Widget) MyEnum {
 	return MyEnum{Tag: MyEnumAliased, Aliased: arg0}
 }
 
-type MyEnumTag int
+type MyEnumTag uint8
 
 const (
 	MyEnumSingle MyEnumTag = iota

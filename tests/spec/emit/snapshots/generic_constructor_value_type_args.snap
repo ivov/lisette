@@ -16,7 +16,7 @@ func MakeWrapW[T any](arg0 T) Wrap[T] {
 	return Wrap[T]{Tag: WrapW, W: arg0}
 }
 
-type WrapTag int
+type WrapTag uint8
 
 const (
 	WrapW WrapTag = iota

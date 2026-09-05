@@ -10,6 +10,48 @@ use semantics::CompilePhase;
 use semantics::store::ENTRY_PACKAGE_ID;
 
 #[test]
+fn enum_layout_import_aliases_belong_to_each_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "types.lis",
+        r#"
+import clock "go:time"
+
+enum Event { At(clock.Time), Empty }
+
+fn first(event: Event) -> Option<clock.Time> {
+  match event {
+    Event.At(value) => Some(value),
+    Event.Empty => None,
+  }
+}
+"#,
+    );
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import timer "go:time"
+import "go:fmt"
+
+fn second(event: Event) -> Option<timer.Time> {
+  match event {
+    Event.At(value) => Some(value),
+    Event.Empty => None,
+  }
+}
+
+fn main() {
+  let event = Event.At(timer.Now())
+  fmt.Println(first(event), second(event))
+}
+"#,
+    );
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn unnecessary_mut_holds_while_permission_errors_stand() {
     let mut fs = MockFileSystem::new();
     fs.add_file(

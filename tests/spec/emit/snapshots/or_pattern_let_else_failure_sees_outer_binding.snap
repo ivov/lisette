@@ -1,0 +1,70 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  enum E { A(int), B(int), C }
+  
+  fn read(e: E) -> int {
+    let value = 40
+    let E.A(value) | E.B(value) = e else {
+      let fallback = value + 2
+      return fallback
+    }
+    value
+  }
+  
+  fn main() {
+    if read(E.C) != 42 { panic("failure must see the outer value") }
+    if read(E.B(7)) != 7 { panic("success must see the new value") }
+  }
+---
+package main
+
+func MakeEA(arg0 int) E {
+	return E{Tag: EA, A: arg0}
+}
+
+func MakeEB(arg0 int) E {
+	return E{Tag: EB, B: arg0}
+}
+
+func MakeEC() E {
+	return E{Tag: EC}
+}
+
+type ETag uint8
+
+const (
+	EA ETag = iota
+	EB
+	EC
+)
+
+type E struct {
+	Tag ETag
+	A   int
+	B   int
+}
+
+func read(e E) int {
+	value := 40
+	var value_1 int
+	if e.Tag == EA {
+		value_1 = e.A
+	} else if e.Tag == EB {
+		value_1 = e.B
+	} else {
+		fallback := value + 2
+		return fallback
+	}
+	return value_1
+}
+
+func main() {
+	if read(MakeEC()) != 42 {
+		panic("failure must see the outer value")
+	}
+	if read(MakeEB(7)) != 7 {
+		panic("success must see the new value")
+	}
+}

@@ -16,7 +16,7 @@ func MakeMarkerValue() Marker {
 	return Marker{Tag: MarkerValue}
 }
 
-type MarkerTag int
+type MarkerTag uint8
 
 const (
 	MarkerValue MarkerTag = iota

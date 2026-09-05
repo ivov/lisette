@@ -27,7 +27,7 @@ func MakeShapeTri(arg0 int) Shape {
 	return Shape{Tag: ShapeTri, Tri: arg0}
 }
 
-type ShapeTag int
+type ShapeTag uint8
 
 const (
 	ShapeCircle ShapeTag = iota

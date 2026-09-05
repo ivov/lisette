@@ -21,7 +21,7 @@ func MakeColorRGB() Color {
 	return Color{Tag: ColorRGB}
 }
 
-type ColorTag int
+type ColorTag uint8
 
 const (
 	ColorRGB ColorTag = iota

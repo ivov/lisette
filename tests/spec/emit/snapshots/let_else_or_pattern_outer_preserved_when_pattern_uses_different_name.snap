@@ -31,7 +31,7 @@ func MakeEC() E {
 	return E{Tag: EC}
 }
 
-type ETag int
+type ETag uint8
 
 const (
 	EA ETag = iota

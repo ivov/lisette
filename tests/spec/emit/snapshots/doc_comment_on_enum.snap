@@ -20,7 +20,7 @@ func MakeStatusComplete() Status {
 }
 
 // Represents the status of a task.
-type StatusTag int
+type StatusTag uint8
 
 const (
 	StatusPending StatusTag = iota

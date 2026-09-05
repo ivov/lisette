@@ -7,7 +7,7 @@ import (
 	"fmt"
 )
 
-type OptionTag int
+type OptionTag uint8
 
 const (
 	OptionNone OptionTag = iota

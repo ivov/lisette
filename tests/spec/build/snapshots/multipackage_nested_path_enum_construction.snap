@@ -26,7 +26,7 @@ func MakeEventReset() Event {
 	return Event{Tag: EventReset}
 }
 
-type EventTag int
+type EventTag uint8
 
 const (
 	EventClick EventTag = iota

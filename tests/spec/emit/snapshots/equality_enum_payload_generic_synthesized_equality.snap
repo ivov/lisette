@@ -24,7 +24,7 @@ func (b Box[T]) equals(other Box[T]) bool {
 	return slices.Equal(b.items, other.items)
 }
 
-type WrapTag int
+type WrapTag uint8
 
 const (
 	WrapWrapped WrapTag = iota

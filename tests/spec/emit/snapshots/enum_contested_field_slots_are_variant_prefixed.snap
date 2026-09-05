@@ -24,7 +24,7 @@ func MakeEventHover(arg0 string) Event {
 	return Event{Tag: EventHover, HoverTarget: arg0}
 }
 
-type EventTag int
+type EventTag uint8
 
 const (
 	EventClick EventTag = iota

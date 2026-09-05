@@ -17,7 +17,7 @@ func MakeColorGreen() Color {
 	return Color{Tag: ColorGreen}
 }
 
-type ColorTag int
+type ColorTag uint8
 
 const (
 	ColorRed ColorTag = iota

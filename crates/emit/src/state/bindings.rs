@@ -1,5 +1,3 @@
-use rustc_hash::FxHashMap as HashMap;
-
 #[derive(Clone, Debug)]
 pub(crate) struct InlineExpr {
     text: String,
@@ -39,23 +37,6 @@ pub(crate) enum BindingValue {
     GoName(String),
     GoConst(String),
     InlineExpr(InlineExpr),
-}
-
-pub(crate) type BindingUndo = Vec<(String, Option<BindingValue>)>;
-
-pub(crate) struct BindingSnapshot {
-    bindings: HashMap<String, BindingValue>,
-    undo: BindingUndo,
-}
-
-impl BindingSnapshot {
-    pub(crate) fn new(bindings: HashMap<String, BindingValue>, undo: BindingUndo) -> Self {
-        Self { bindings, undo }
-    }
-
-    pub(crate) fn into_inner(self) -> (HashMap<String, BindingValue>, BindingUndo) {
-        (self.bindings, self.undo)
-    }
 }
 
 impl BindingValue {

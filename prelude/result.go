@@ -2,7 +2,7 @@ package lisette
 
 import "fmt"
 
-type ResultTag int
+type ResultTag uint8
 
 const (
 	ResultOk ResultTag = iota

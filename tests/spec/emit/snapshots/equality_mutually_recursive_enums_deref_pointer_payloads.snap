@@ -27,7 +27,7 @@ func MakeBY(arg0 A) B {
 	return B{Tag: BY, Y: &arg0}
 }
 
-type ATag int
+type ATag uint8
 
 const (
 	AEnd ATag = iota
@@ -51,7 +51,7 @@ func (a A) equals(other A) bool {
 	}
 }
 
-type BTag int
+type BTag uint8
 
 const (
 	BY BTag = iota

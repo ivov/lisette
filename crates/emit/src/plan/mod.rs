@@ -16,13 +16,13 @@ pub(crate) struct PackagePlan {
 
 impl Planner<'_> {
     /// Resolve package-wide names and collisions before any item is rendered.
-    pub(crate) fn build_package_plan(&mut self, files: &[&File], package_id: &str) -> PackagePlan {
-        debug_assert_eq!(self.facts.current_package(), package_id);
+    pub(crate) fn build_package_plan(&mut self, files: &[&File]) -> PackagePlan {
         self.collect_escape_remap(files);
         self.derive_package_go_consts(files);
         self.collect_generic_renames(files);
         let collision_diagnostics = self.detect_name_collisions(files);
 
+        let package_id = self.facts.current_package();
         let package_name = if self.facts.is_entry_package(package_id) {
             self.facts.entry_package_name().to_string()
         } else {

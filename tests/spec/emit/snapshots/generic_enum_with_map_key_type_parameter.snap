@@ -24,7 +24,7 @@ func MakeContainerIndexed[K comparable, V any](arg0 map[K]V) Container[K, V] {
 	return Container[K, V]{Tag: ContainerIndexed, Indexed: arg0}
 }
 
-type ContainerTag int
+type ContainerTag uint8
 
 const (
 	ContainerEmpty ContainerTag = iota

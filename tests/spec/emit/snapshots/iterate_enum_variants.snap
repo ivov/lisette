@@ -31,7 +31,7 @@ func MakeBuildPhaseCodegen() BuildPhase {
 	return BuildPhase{Tag: BuildPhaseCodegen}
 }
 
-type BuildPhaseTag int
+type BuildPhaseTag uint8
 
 const (
 	BuildPhaseValidate BuildPhaseTag = iota

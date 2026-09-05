@@ -24,7 +24,7 @@ func MakeTagC() Tag {
 	return Tag{Tag: TagC}
 }
 
-type TagTag int
+type TagTag uint8
 
 const (
 	TagA TagTag = iota

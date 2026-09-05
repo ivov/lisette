@@ -25,7 +25,7 @@ func MakeStatusSuspended() Status {
 	return Status{Tag: StatusSuspended}
 }
 
-type StatusTag int
+type StatusTag uint8
 
 const (
 	StatusActive StatusTag = iota

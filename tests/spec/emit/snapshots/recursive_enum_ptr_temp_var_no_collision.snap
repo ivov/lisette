@@ -28,7 +28,7 @@ func MakeNodeBranch(arg0 Node, arg1 Node) Node {
 	return Node{Tag: NodeBranch, Left: &arg0, Right: &arg1}
 }
 
-type NodeTag int
+type NodeTag uint8
 
 const (
 	NodeLeaf NodeTag = iota

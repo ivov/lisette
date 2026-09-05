@@ -23,7 +23,7 @@ func MakeTreeNode(arg0 int, arg1 *Tree, arg2 *Tree) Tree {
 	return Tree{Tag: TreeNode, Value: arg0, Left: arg1, Right: arg2}
 }
 
-type TreeTag int
+type TreeTag uint8
 
 const (
 	TreeLeaf TreeTag = iota

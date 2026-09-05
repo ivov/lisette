@@ -1,10 +1,12 @@
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::definitions::structs::StringFormat;
+use crate::Planner;
+use crate::definitions::structs::{StringFormat, is_raw_function_type};
 use crate::names::go_name;
 use crate::names::packages::PackageRequirements;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{EnumVariant, Generic};
+use syntax::containment::enum_payload_pointer_wrapped;
 
 use syntax::go_names;
 use syntax::go_names::EnumFieldShape;
@@ -37,36 +39,45 @@ pub(crate) struct FieldLayout {
     pub(crate) source_name: String,
     pub(crate) go_name: String,
     pub(crate) go_type: String,
-    is_function: bool,
-    pub(crate) is_recursive: bool,
+    kind: FieldKind,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct FieldTypeInfo {
-    pub(crate) go_type: String,
-    pub(crate) is_function: bool,
-    pub(crate) is_recursive: bool,
+#[derive(Debug, Clone, Copy)]
+enum FieldKind {
+    Value,
+    Function,
+    Recursive,
 }
 
-pub(crate) type FieldTypeMap = HashMap<(usize, usize), FieldTypeInfo>;
+impl FieldLayout {
+    fn is_function(&self) -> bool {
+        matches!(self.kind, FieldKind::Function)
+    }
+
+    pub(crate) fn is_recursive(&self) -> bool {
+        matches!(self.kind, FieldKind::Recursive)
+    }
+}
 
 impl EnumLayout {
     pub(crate) fn new(
+        planner: &Planner,
         enum_id: &str,
         generics: &[Generic],
         variants: &[EnumVariant],
-        field_types: &FieldTypeMap,
-        requirements: PackageRequirements,
         default_variant: Option<usize>,
     ) -> Self {
         let enum_name = go_name::unqualified_name(enum_id).to_string();
         let tag_type = format!("{}Tag", enum_name);
 
+        let mut requirements = PackageRequirements::default();
         let slots = go_names::enum_field_slots(&enum_name, variants);
         let variants: Vec<_> = variants
             .iter()
             .enumerate()
-            .map(|(vi, v)| Self::compute_variant_layout(vi, v, &enum_name, &slots[vi], field_types))
+            .map(|(vi, v)| {
+                Self::compute_variant_layout(planner, vi, v, enum_id, &slots[vi], &mut requirements)
+            })
             .collect();
         let mut variant_indexes = HashMap::default();
         for (index, variant) in variants.iter().enumerate() {
@@ -81,6 +92,14 @@ impl EnumLayout {
             generics: generics.to_vec(),
             requirements,
             default_variant,
+        }
+    }
+
+    fn tag_go_type(&self) -> &'static str {
+        if self.variants.len() <= 256 {
+            "uint8"
+        } else {
+            "uint16"
         }
     }
 
@@ -107,12 +126,14 @@ impl EnumLayout {
     }
 
     fn compute_variant_layout(
+        planner: &Planner,
         variant_index: usize,
         variant: &EnumVariant,
-        enum_name: &str,
+        enum_id: &str,
         slots: &[String],
-        field_types: &FieldTypeMap,
+        requirements: &mut PackageRequirements,
     ) -> VariantLayout {
+        let enum_name = go_name::unqualified_name(enum_id);
         let tag_constant = go_name::enum_tag_constant(enum_name, &variant.name);
 
         let field_shape =
@@ -131,19 +152,25 @@ impl EnumLayout {
 
                 let go_name = slots[fi].clone();
 
-                let info = field_types.get(&(variant_index, fi));
-                let go_type = info
-                    .map(|i| i.go_type.clone())
-                    .unwrap_or_else(|| "any".to_string());
-                let is_function = info.is_some_and(|i| i.is_function);
-                let is_recursive = info.is_some_and(|i| i.is_recursive);
+                let rendered = planner.go_type(&field.ty);
+                requirements.extend(rendered.requirements());
+                let recursive =
+                    enum_payload_pointer_wrapped(enum_id, variant_index, fi, &field.ty, |id| {
+                        planner.facts.definition(id)
+                    });
+                let (go_type, kind) = if recursive {
+                    (format!("*{}", rendered.code), FieldKind::Recursive)
+                } else if is_raw_function_type(&field.ty) {
+                    (rendered.code, FieldKind::Function)
+                } else {
+                    (rendered.code, FieldKind::Value)
+                };
 
                 FieldLayout {
                     source_name,
                     go_name,
                     go_type,
-                    is_function,
-                    is_recursive,
+                    kind,
                 }
             })
             .collect();
@@ -187,7 +214,7 @@ impl EnumLayout {
     pub(crate) fn emit_definition(&self, generics_string: &str) -> String {
         let mut output = Vec::new();
 
-        output.push(format!("type {} int", self.tag_type));
+        output.push(format!("type {} {}", self.tag_type, self.tag_go_type()));
         if !self.variants.is_empty() {
             output.push("const (".to_string());
 
@@ -287,20 +314,20 @@ impl EnumLayout {
         let args: Vec<String> = variant
             .fields
             .iter()
-            .map(|f| format.argument(format!("{receiver}.{}", f.go_name), f.is_function))
+            .map(|f| format.argument(format!("{receiver}.{}", f.go_name), f.is_function()))
             .collect();
         let (open, close, placeholders) = if variant.is_struct_variant {
             let parts: Vec<String> = variant
                 .fields
                 .iter()
-                .map(|f| format!("{}: {}", f.source_name, format.verb(f.is_function)))
+                .map(|f| format!("{}: {}", f.source_name, format.verb(f.is_function())))
                 .collect();
             (" { ", " }", parts.join(", "))
         } else {
             let parts: Vec<&str> = variant
                 .fields
                 .iter()
-                .map(|f| format.verb(f.is_function))
+                .map(|f| format.verb(f.is_function()))
                 .collect();
             ("(", ")", parts.join(", "))
         };
@@ -319,7 +346,7 @@ impl EnumLayout {
         self.variants
             .iter()
             .flat_map(|v| v.fields.iter())
-            .any(|f| !f.is_function)
+            .any(|f| !f.is_function())
     }
 
     pub(crate) fn emit_variants_function(&self, fn_name: &str) -> String {

@@ -24,7 +24,7 @@ func MakeTreeNode[T any](arg0 Tree[T], arg1 Tree[T]) Tree[T] {
 	return Tree[T]{Tag: TreeNode, Left: &arg0, Right: &arg1}
 }
 
-type TreeTag int
+type TreeTag uint8
 
 const (
 	TreeLeaf TreeTag = iota

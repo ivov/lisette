@@ -32,7 +32,7 @@ func MakeASTNodeNull() ASTNode {
 	return ASTNode{Tag: ASTNodeNull}
 }
 
-type ASTNodeTag int
+type ASTNodeTag uint8
 
 const (
 	ASTNodeNumber ASTNodeTag = iota

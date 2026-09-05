@@ -21,7 +21,7 @@ func MakeActionStop() Action {
 	return Action{Tag: ActionStop}
 }
 
-type ActionTag int
+type ActionTag uint8
 
 const (
 	ActionMove ActionTag = iota

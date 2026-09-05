@@ -35,7 +35,7 @@ type Circle struct {
 	Radius float64
 }
 
-type ShapeKindTag int
+type ShapeKindTag uint8
 
 const (
 	ShapeKindCircleKind ShapeKindTag = iota

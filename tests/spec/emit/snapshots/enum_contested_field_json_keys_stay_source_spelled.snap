@@ -29,7 +29,7 @@ func MakeShapeSquare(arg0 int) Shape {
 	return Shape{Tag: ShapeSquare, SquareW: arg0}
 }
 
-type ShapeTag int
+type ShapeTag uint8
 
 const (
 	ShapeRect ShapeTag = iota

@@ -26,7 +26,7 @@ func MakeDirEast() Dir {
 	return Dir{Tag: DirEast}
 }
 
-type DirTag int
+type DirTag uint8
 
 const (
 	DirNorth DirTag = iota

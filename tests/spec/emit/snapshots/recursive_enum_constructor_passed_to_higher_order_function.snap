@@ -25,7 +25,7 @@ func MakeIntListCons(arg0 int, arg1 IntList) IntList {
 	return IntList{Tag: IntListCons, Cons0: arg0, Cons1: &arg1}
 }
 
-type IntListTag int
+type IntListTag uint8
 
 const (
 	IntListEmpty IntListTag = iota
