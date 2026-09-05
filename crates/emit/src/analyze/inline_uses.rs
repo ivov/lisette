@@ -131,27 +131,11 @@ impl<'a> Walker<'a> {
                     self.crossed_barrier = true;
                 }
             }
-            Expression::Unit { .. }
-            | Expression::Break { value: None, .. }
-            | Expression::Continue { .. } => {}
 
-            Expression::Call {
-                expression: callee,
-                args,
-                spread,
-                ..
-            } => {
-                self.walk(callee, ctx);
-                for arg in args {
-                    self.walk(arg, ctx);
+            Expression::Call { .. } | Expression::Propagate { .. } => {
+                for child in expression.children() {
+                    self.walk(child, ctx);
                 }
-                if let Some(spread_arg) = spread.as_ref() {
-                    self.walk(spread_arg, ctx);
-                }
-                self.crossed_barrier = true;
-            }
-            Expression::Propagate { expression, .. } => {
-                self.walk(expression, ctx);
                 self.crossed_barrier = true;
             }
             Expression::Assignment { target, value, .. } => {
@@ -165,30 +149,6 @@ impl<'a> Walker<'a> {
 
             Expression::Block { items, .. } => {
                 self.walk_block(items, ctx);
-            }
-            Expression::Let {
-                binding: _,
-                value,
-                mode,
-                ..
-            } => {
-                self.walk(value, ctx);
-                if let Some(else_b) = mode.else_block() {
-                    self.walk(else_b, ctx);
-                }
-            }
-
-            Expression::If {
-                condition,
-                consequence,
-                alternative,
-                ..
-            } => {
-                self.walk(condition, ctx);
-                self.walk(consequence, ctx);
-                if let Some(alternative) = alternative {
-                    self.walk(alternative, ctx);
-                }
             }
             Expression::IfLet {
                 pattern,
@@ -217,11 +177,6 @@ impl<'a> Walker<'a> {
                 }
             }
 
-            Expression::Tuple { elements, .. } => {
-                for el in elements {
-                    self.walk(el, ctx);
-                }
-            }
             Expression::StructCall {
                 field_assignments, ..
             } => {
@@ -229,32 +184,6 @@ impl<'a> Walker<'a> {
                     self.walk(&fa.value, ctx);
                 }
             }
-            Expression::IndexedAccess {
-                expression, index, ..
-            } => {
-                self.walk(expression, ctx);
-                self.walk(index, ctx);
-            }
-            Expression::Binary { left, right, .. } => {
-                self.walk(left, ctx);
-                self.walk(right, ctx);
-            }
-            Expression::Range { start, end, .. } => {
-                if let Some(s) = start.as_ref() {
-                    self.walk(s, ctx);
-                }
-                if let Some(e) = end.as_ref() {
-                    self.walk(e, ctx);
-                }
-            }
-            Expression::DotAccess { expression, .. }
-            | Expression::Unary { expression, .. }
-            | Expression::Paren { expression, .. }
-            | Expression::Cast { expression, .. }
-            | Expression::Return { expression, .. } => self.walk(expression, ctx),
-            Expression::Break {
-                value: Some(value), ..
-            } => self.walk(value, ctx),
 
             Expression::Loop { body, .. } => self.walk(body, ctx.enclosure()),
             Expression::While {
@@ -310,8 +239,6 @@ impl<'a> Walker<'a> {
                 self.crossed_barrier = true;
             }
 
-            Expression::Assert { expression, .. } => self.walk(expression, ctx),
-
             Expression::Select { arms, .. } => {
                 // Mark the barrier before walking arms so uses inside any arm
                 // see the select wait as preceding.
@@ -329,25 +256,12 @@ impl<'a> Walker<'a> {
                 self.crossed_barrier = true;
             }
 
-            // Block-local `Const`/`Function` shadowing is applied in `walk_block`.
-            Expression::Const { expression, .. } => {
-                if let Some(value) = expression.value() {
-                    self.walk(value, ctx);
+            Expression::Interface { .. } => {}
+            _ => {
+                for child in expression.children() {
+                    self.walk(child, ctx);
                 }
             }
-            Expression::VariableDeclaration { .. } => {}
-
-            Expression::ImplBlock { methods, .. } => {
-                for m in methods {
-                    self.walk(m, ctx);
-                }
-            }
-
-            Expression::Enum { .. }
-            | Expression::Struct { .. }
-            | Expression::TypeAlias { .. }
-            | Expression::PackageImport { .. }
-            | Expression::Interface { .. } => {}
         }
     }
 
@@ -406,5 +320,74 @@ impl<'a> Walker<'a> {
                 self.walk(body, ctx.enclosure());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn inline_decision(source: &str) -> InlineDecision {
+        let parsed = syntax::build_ast(&format!("fn test() {{ {source} }}"), 0);
+        assert!(!parsed.has_errors(), "{:?}", parsed.errors);
+        let Expression::Function { body, .. } = &parsed.ast[0] else {
+            panic!("expected a function");
+        };
+        analyze_inline_candidate("value", &[body.definition().unwrap()])
+    }
+
+    #[test]
+    fn call_argument_can_inline_before_a_later_spread_call() {
+        assert_eq!(
+            inline_decision("consume(value, later()...)"),
+            InlineDecision::Inline,
+        );
+    }
+
+    #[test]
+    fn spread_use_stays_bound_after_an_earlier_argument_call() {
+        assert_eq!(
+            inline_decision("consume(earlier(), value...)"),
+            InlineDecision::Keep,
+        );
+    }
+
+    #[test]
+    fn tuple_use_stays_bound_after_an_earlier_element_call() {
+        assert_eq!(inline_decision("(earlier(), value)"), InlineDecision::Keep,);
+    }
+
+    #[test]
+    fn format_string_blocks_a_later_use() {
+        assert_eq!(inline_decision("f\"{other}\"\nvalue"), InlineDecision::Keep,);
+    }
+
+    #[test]
+    fn shadowing_starts_after_the_let_initializer() {
+        assert_eq!(
+            inline_decision("let value = value\nvalue"),
+            InlineDecision::Inline,
+        );
+    }
+
+    #[test]
+    fn block_constant_shadows_even_a_preceding_use() {
+        assert_eq!(
+            inline_decision("value\nconst value = 1"),
+            InlineDecision::Unused,
+        );
+    }
+
+    #[test]
+    fn slice_literal_contents_do_not_count_as_inline_uses() {
+        assert_eq!(inline_decision("[value]"), InlineDecision::Unused);
+    }
+
+    #[test]
+    fn struct_spread_does_not_count_as_an_inline_use() {
+        assert_eq!(
+            inline_decision("Record { field: other, ..value }"),
+            InlineDecision::Unused,
+        );
     }
 }

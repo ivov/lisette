@@ -1,6 +1,7 @@
 mod go_modules;
 mod target;
 mod typedef;
+mod typedef_index;
 
 pub use go_modules::{
     get_go_stdlib_package_targets, get_go_stdlib_packages, get_go_stdlib_typedef,

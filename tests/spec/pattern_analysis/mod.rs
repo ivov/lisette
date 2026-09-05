@@ -1,6 +1,52 @@
 use crate::spec::infer::{infer, infer_with_go_typedefs};
 
 #[test]
+fn nested_matches_in_tuple_report_in_element_order() {
+    let result = infer(
+        r#"
+fn test(first: bool, second: bool) -> (int, int) {
+  (
+    match first { true => 1 },
+    match second { true => 2 },
+  )
+}
+"#,
+    );
+    let offsets: Vec<_> = result
+        .errors
+        .iter()
+        .filter(|error| error.code_str() == Some("infer.non_exhaustive"))
+        .map(|error| error.primary_offset())
+        .collect();
+
+    assert_eq!(offsets.len(), 2, "{:?}", result.errors);
+    assert!(offsets[0] < offsets[1]);
+}
+
+#[test]
+fn match_arm_body_errors_precede_guard_errors() {
+    let result = infer(
+        r#"
+fn test(value: bool, guard: bool, body: bool) -> int {
+  match value {
+    _ if match guard { true => true } => match body { true => 1 },
+    _ => 0,
+  }
+}
+"#,
+    );
+    let offsets: Vec<_> = result
+        .errors
+        .iter()
+        .filter(|error| error.code_str() == Some("infer.non_exhaustive"))
+        .map(|error| error.primary_offset())
+        .collect();
+
+    assert_eq!(offsets.len(), 2, "{:?}", result.errors);
+    assert!(offsets[0] > offsets[1]);
+}
+
+#[test]
 fn test_exhaustive_enum_all_variants() {
     let input = r#"
 fn test(opt: Option<int>) -> int {

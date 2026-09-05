@@ -6,6 +6,7 @@ use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::expressions::staging::SpreadSequenceOptions;
 use crate::names::go_name::is_plain_identifier;
+use crate::patterns::binding_decls::pattern_binds_name;
 use crate::plan::bodies::{
     AssignForm, BreakValueAction, BreakValuePlan, ElseArm, LoopTransfer, LoweredBlock,
     LoweredStatement, PlacePlan,
@@ -269,32 +270,7 @@ pub(crate) fn try_elide_tail_let(items: &[Expression]) -> Option<(&Expression, &
 }
 
 pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -> bool {
-    use syntax::ast::{Pattern, RestPattern, SelectArm};
-    fn pattern_contains_name(pattern: &Pattern, name: &str) -> bool {
-        match pattern {
-            Pattern::Identifier { identifier, .. } => identifier.as_str() == name,
-            Pattern::EnumVariant { fields, .. } => {
-                fields.iter().any(|f| pattern_contains_name(f, name))
-            }
-            Pattern::Struct { fields, .. } => {
-                fields.iter().any(|f| pattern_contains_name(&f.value, name))
-            }
-            Pattern::Tuple { elements, .. } => {
-                elements.iter().any(|e| pattern_contains_name(e, name))
-            }
-            Pattern::Slice { prefix, rest, .. } => {
-                prefix.iter().any(|p| pattern_contains_name(p, name))
-                    || matches!(rest, RestPattern::Bind { name: n, .. } if n == name)
-            }
-            Pattern::Or { patterns, .. } => patterns.iter().any(|p| pattern_contains_name(p, name)),
-            Pattern::AsBinding {
-                pattern,
-                name: as_name,
-                ..
-            } => as_name == name || pattern_contains_name(pattern, name),
-            Pattern::Literal { .. } | Pattern::Unit { .. } | Pattern::WildCard { .. } => false,
-        }
-    }
+    use syntax::ast::SelectArm;
     match expression {
         Expression::IfLet {
             pattern,
@@ -302,7 +278,7 @@ pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -
             alternative,
             ..
         } => {
-            pattern_contains_name(pattern, name)
+            pattern_binds_name(pattern, name)
                 || expression_contains_binding(consequence, name)
                 || alternative
                     .expression()
@@ -310,9 +286,9 @@ pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -
         }
         Expression::Match { arms, .. } => arms
             .iter()
-            .any(|arm| pattern_contains_name(&arm.pattern, name)),
+            .any(|arm| pattern_binds_name(&arm.pattern, name)),
         Expression::Block { items, .. } => items.iter().any(|item| match item {
-            Expression::Let { binding, .. } => pattern_contains_name(&binding.pattern, name),
+            Expression::Let { binding, .. } => pattern_binds_name(&binding.pattern, name),
             _ => false,
         }),
         Expression::If {
@@ -326,9 +302,9 @@ pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -
                     .is_some_and(|alternative| expression_contains_binding(alternative, name))
         }
         Expression::Select { arms, .. } => arms.iter().any(|arm| match arm {
-            SelectArm::Receive { binding, .. } => pattern_contains_name(binding, name),
+            SelectArm::Receive { binding, .. } => pattern_binds_name(binding, name),
             SelectArm::MatchReceive { arms, .. } => {
-                arms.iter().any(|a| pattern_contains_name(&a.pattern, name))
+                arms.iter().any(|a| pattern_binds_name(&a.pattern, name))
             }
             _ => false,
         }),
