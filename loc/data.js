@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788619284985,
+  "lastUpdate": 1788619297372,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -32665,6 +32665,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 32578,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27900,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19299,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15171,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13998,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8793,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6242,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1874,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9491,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "93e211be9d09a0e5eb1324b4439f57ae48230d77",
+          "message": "perf: reduce enum tags from `int` to `uint8` (#1397)",
+          "timestamp": "2026-09-05T16:41:11+02:00",
+          "tree_id": "b7dd1e7ae9086bc0aca524df47942f72624b7f4c",
+          "url": "https://github.com/ivov/lisette/commit/93e211be9d09a0e5eb1324b4439f57ae48230d77"
+        },
+        "date": 1788619295022,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 139930,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32585,
             "unit": "lines"
           },
           {
