@@ -95,6 +95,14 @@ impl EnumLayout {
         }
     }
 
+    fn tag_go_type(&self) -> &'static str {
+        if self.variants.len() <= 256 {
+            "uint8"
+        } else {
+            "uint16"
+        }
+    }
+
     /// Declaration order, except that the marked variant takes `0`.
     fn tag_values(&self) -> Vec<usize> {
         let Some(default_index) = self.default_variant.filter(|index| *index != 0) else {
@@ -206,7 +214,7 @@ impl EnumLayout {
     pub(crate) fn emit_definition(&self, generics_string: &str) -> String {
         let mut output = Vec::new();
 
-        output.push(format!("type {} int", self.tag_type));
+        output.push(format!("type {} {}", self.tag_type, self.tag_go_type()));
         if !self.variants.is_empty() {
             output.push("const (".to_string());
 

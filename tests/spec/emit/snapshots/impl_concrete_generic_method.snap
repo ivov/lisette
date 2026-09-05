@@ -37,7 +37,7 @@ type MyInt = int
 
 type MyString = string
 
-type EitherTag int
+type EitherTag uint8
 
 const (
 	EitherLeft EitherTag = iota

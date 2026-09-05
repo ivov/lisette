@@ -21,7 +21,7 @@ func MakeHolderSome[T comparable](arg0 Table[T]) Holder[T] {
 
 type Table[T comparable] = map[T]int
 
-type HolderTag int
+type HolderTag uint8
 
 const (
 	HolderSome HolderTag = iota

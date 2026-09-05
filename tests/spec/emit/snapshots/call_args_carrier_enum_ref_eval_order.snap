@@ -31,7 +31,7 @@ func MakeCarrierC(arg0 *int) Carrier {
 	return Carrier{Tag: CarrierC, P: arg0}
 }
 
-type CarrierTag int
+type CarrierTag uint8
 
 const (
 	CarrierC CarrierTag = iota

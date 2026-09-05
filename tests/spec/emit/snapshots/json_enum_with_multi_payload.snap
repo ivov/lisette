@@ -24,7 +24,7 @@ func MakeShapePoint() Shape {
 	return Shape{Tag: ShapePoint}
 }
 
-type ShapeTag int
+type ShapeTag uint8
 
 const (
 	ShapeRectangle ShapeTag = iota

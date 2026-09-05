@@ -22,7 +22,7 @@ func MakeCursorArea(arg0 int, arg1 int) Cursor {
 	return Cursor{Tag: CursorArea, Id: arg0, W: arg1}
 }
 
-type CursorTag int
+type CursorTag uint8
 
 const (
 	CursorPoint CursorTag = iota

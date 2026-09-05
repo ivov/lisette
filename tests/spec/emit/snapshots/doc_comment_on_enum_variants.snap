@@ -27,7 +27,7 @@ func MakeNetworkResultError(arg0 int) NetworkResult {
 }
 
 // Result of a network operation.
-type NetworkResultTag int
+type NetworkResultTag uint8
 
 const (
 	// The operation succeeded.

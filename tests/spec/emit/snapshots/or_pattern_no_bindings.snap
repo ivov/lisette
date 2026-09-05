@@ -29,7 +29,7 @@ func MakeStatusFailed() Status {
 	return Status{Tag: StatusFailed}
 }
 
-type StatusTag int
+type StatusTag uint8
 
 const (
 	StatusPending StatusTag = iota

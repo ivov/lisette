@@ -13,7 +13,7 @@ func MakeCacheKindMem() CacheKind {
 	return CacheKind{Tag: CacheKindMem}
 }
 
-type CacheKindTag int
+type CacheKindTag uint8
 
 const (
 	CacheKindMem CacheKindTag = iota

@@ -42,7 +42,7 @@ func MakeMyEnumMaybe(arg0 lisette.Option[foo.Foo]) MyEnum {
 	return MyEnum{Tag: MyEnumMaybe, Maybe: arg0}
 }
 
-type MyEnumTag int
+type MyEnumTag uint8
 
 const (
 	MyEnumMaybe MyEnumTag = iota

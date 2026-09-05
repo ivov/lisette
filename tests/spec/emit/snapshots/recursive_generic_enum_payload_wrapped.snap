@@ -33,7 +33,7 @@ func MakeCycleNext[T any](arg0 Link[T]) Cycle[T] {
 	return Cycle[T]{Tag: CycleNext, Next: &arg0}
 }
 
-type CycleTag int
+type CycleTag uint8
 
 const (
 	CycleEnd CycleTag = iota

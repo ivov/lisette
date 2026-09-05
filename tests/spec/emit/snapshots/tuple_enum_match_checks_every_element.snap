@@ -41,7 +41,7 @@ func MakeHandRight() Hand {
 	return Hand{Tag: HandRight}
 }
 
-type HandTag int
+type HandTag uint8
 
 const (
 	HandLeft HandTag = iota

@@ -21,7 +21,7 @@ func MakeStatusBad(arg0 string) Status {
 	return Status{Tag: StatusBad, Bad: arg0}
 }
 
-type StatusTag int
+type StatusTag uint8
 
 const (
 	StatusGood StatusTag = iota

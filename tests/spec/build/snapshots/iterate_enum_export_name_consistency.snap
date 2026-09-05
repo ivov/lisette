@@ -12,7 +12,7 @@ func MakeLocalPhaseCheck() LocalPhase {
 	return LocalPhase{Tag: LocalPhaseCheck}
 }
 
-type PublicPhaseTag int
+type PublicPhaseTag uint8
 
 const (
 	PublicPhaseBuild PublicPhaseTag = iota
@@ -28,7 +28,7 @@ func PublicPhase_Variants() []PublicPhase {
 	}
 }
 
-type LocalPhaseTag int
+type LocalPhaseTag uint8
 
 const (
 	LocalPhaseCheck LocalPhaseTag = iota

@@ -16,7 +16,7 @@ func main() {
 	_ = MakeAA()
 }
 
-type ATag int
+type ATag uint8
 
 const (
 	AA ATag = iota

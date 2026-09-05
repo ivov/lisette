@@ -2,7 +2,7 @@ package lisette
 
 import "fmt"
 
-type PartialTag int
+type PartialTag uint8
 
 const (
 	PartialOk PartialTag = iota

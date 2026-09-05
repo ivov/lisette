@@ -48,7 +48,7 @@ func MakeMaybeNothing[T any]() Maybe[T] {
 	return Maybe[T]{Tag: MaybeNothing}
 }
 
-type MaybeTag int
+type MaybeTag uint8
 
 const (
 	MaybeJust MaybeTag = iota

@@ -18,7 +18,7 @@ func MakeMyResultFailure[T any]() MyResult[T] {
 	return MyResult[T]{Tag: MyResultFailure}
 }
 
-type MyResultTag int
+type MyResultTag uint8
 
 const (
 	MyResultSuccess MyResultTag = iota

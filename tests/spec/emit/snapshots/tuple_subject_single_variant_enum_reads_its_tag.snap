@@ -17,7 +17,7 @@ func MakeOnlySingle() Only {
 	return Only{Tag: OnlySingle}
 }
 
-type OnlyTag int
+type OnlyTag uint8
 
 const (
 	OnlySingle OnlyTag = iota

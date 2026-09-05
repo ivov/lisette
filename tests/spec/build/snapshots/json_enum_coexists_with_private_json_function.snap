@@ -14,7 +14,7 @@ func MakeStatusReady() Status {
 	return Status{Tag: StatusReady}
 }
 
-type StatusTag int
+type StatusTag uint8
 
 const (
 	StatusReady StatusTag = iota

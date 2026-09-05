@@ -25,7 +25,7 @@ func MakeNodeNull() Node {
 	return Node{Tag: NodeNull}
 }
 
-type NodeTag int
+type NodeTag uint8
 
 const (
 	NodeNumber NodeTag = iota

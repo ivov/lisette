@@ -33,7 +33,7 @@ func MakeEventClose() Event {
 	return Event{Tag: EventClose}
 }
 
-type EventTag int
+type EventTag uint8
 
 const (
 	EventClick EventTag = iota

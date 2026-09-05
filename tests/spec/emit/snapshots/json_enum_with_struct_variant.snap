@@ -24,7 +24,7 @@ func MakeMessageQuit() Message {
 	return Message{Tag: MessageQuit}
 }
 
-type MessageTag int
+type MessageTag uint8
 
 const (
 	MessageMove MessageTag = iota

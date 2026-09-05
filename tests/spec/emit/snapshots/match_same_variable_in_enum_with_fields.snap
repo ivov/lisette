@@ -33,7 +33,7 @@ func MakeEventKeyPress(arg0 string) Event {
 	return Event{Tag: EventKeyPress, KeyPress: arg0}
 }
 
-type EventTag int
+type EventTag uint8
 
 const (
 	EventClick EventTag = iota
