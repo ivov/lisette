@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788622684512,
+  "lastUpdate": 1788623819575,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -32843,6 +32843,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 32585,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27900,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19311,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15171,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13998,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8789,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6242,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1874,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9491,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f643f2df2f8dc824c3e569a508e63256255e738d",
+          "message": "perf: concatenate f-strings whose operands are all strings (#1399)",
+          "timestamp": "2026-09-05T17:56:35+02:00",
+          "tree_id": "a2b57378d468f20806769f24017f6ce8ef8f047c",
+          "url": "https://github.com/ivov/lisette/commit/f643f2df2f8dc824c3e569a508e63256255e738d"
+        },
+        "date": 1788623818366,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 139995,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32642,
             "unit": "lines"
           },
           {
