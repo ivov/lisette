@@ -1846,6 +1846,120 @@ fn classify(s: string) -> int {
 }
 
 #[test]
+fn test_redundant_integer_pattern_decimal_vs_hex() {
+    let input = r#"
+fn classify(x: int) -> int {
+  match x {
+    1 => 1,
+    0x1 => 2,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_infer_code_count("redundant_arm", 1);
+}
+
+#[test]
+fn test_redundant_negative_integer_pattern_decimal_vs_hex() {
+    let input = r#"
+fn classify(x: int) -> int {
+  match x {
+    -1 => 1,
+    -0x1 => 2,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_infer_code_count("redundant_arm", 1);
+}
+
+#[test]
+fn test_distinct_integer_spellings_are_not_redundant() {
+    let input = r#"
+fn classify(x: int) -> int {
+  match x {
+    1 => 1,
+    0x2 => 2,
+    -1 => 3,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_no_errors();
+}
+
+#[test]
+fn test_redundant_rune_pattern_char_vs_integer() {
+    let input = r#"
+fn classify(r: rune) -> int {
+  match r {
+    'a' => 1,
+    97 => 2,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_infer_code_count("redundant_arm", 1);
+}
+
+#[test]
+fn test_redundant_char_pattern_hex_escape_vs_plain() {
+    let input = r#"
+fn classify(r: rune) -> int {
+  match r {
+    'a' => 1,
+    '\x61' => 2,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_infer_code_count("redundant_arm", 1);
+}
+
+const LEVELS_TYPEDEF: &str = r#"
+#[go(closed_domain)]
+pub struct Level(int)
+
+pub const Low: Level = 1
+pub const Medium: Level = 2
+pub const High: Level = 3
+"#;
+
+#[test]
+fn test_redundant_closed_domain_pattern_const_vs_hex() {
+    let input = r#"
+import "go:example.com/levels"
+
+fn classify(l: levels.Level) -> int {
+  match l {
+    levels.Low => 1,
+    0x1 => 2,
+    _ => 0,
+  }
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/levels", LEVELS_TYPEDEF)])
+        .assert_infer_code_count("redundant_arm", 1);
+}
+
+#[test]
+fn test_closed_domain_duplicate_spelling_still_non_exhaustive() {
+    let input = r#"
+import "go:example.com/levels"
+
+fn classify(l: levels.Level) -> int {
+  match l {
+    levels.Low => 1,
+    0x1 => 2,
+    3 => 3,
+  }
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/levels", LEVELS_TYPEDEF)])
+        .assert_exhaustiveness_error();
+}
+
+#[test]
 fn test_tuple_struct_refutable_field_non_exhaustive() {
     let input = r#"
 struct MP(int, string)
