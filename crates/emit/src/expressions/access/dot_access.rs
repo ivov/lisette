@@ -277,25 +277,15 @@ impl Planner<'_> {
         }
     }
 
-    /// Emit a newtype cast like `MyType(inner)` for single-field tuple struct access.
-    /// Returns None if the struct shape doesn't match (no single field, non-struct type).
+    /// Emit `.0` on a newtype as a Go conversion to the field type, `int(n)`.
+    /// Peels type aliases, so `.0` through `type Alias = New` also converts.
+    /// Returns None when the type is not a newtype.
     fn try_emit_newtype_cast(
         &mut self,
         expression_ty: &Type,
         expression_string: &str,
     ) -> Option<String> {
-        let deref_ty = expression_ty.strip_refs();
-        let Type::Nominal { id, .. } = &deref_ty else {
-            return None;
-        };
-        let Some(Definition {
-            body: DefinitionBody::Struct { fields, .. },
-            ..
-        }) = self.facts.definition(id.as_str())
-        else {
-            return None;
-        };
-        let field_ty = fields.first()?.ty.clone();
+        let field_ty = self.get_newtype_underlying(expression_ty)?;
         let go_type = self.use_go_type(&field_ty);
         let operand = if expression_ty.is_ref() {
             format!("*{}", expression_string)

@@ -1,0 +1,55 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Flag(bool)
+  struct Ticket(int)
+  type FlagAlias = Flag
+  type TicketAlias = Ticket
+  type Deep = TicketAlias
+  
+  fn read(x: FlagAlias) -> bool { x.0 }
+  fn deep(t: Deep) -> int { t.0 }
+  
+  fn main() {
+    let f: FlagAlias = Flag(true)
+    let t: TicketAlias = Ticket(3)
+    let o: Option<FlagAlias> = Some(Flag(false))
+    fmt.Println(f.0, t.0, read(f), deep(t), o.unwrap_or(Flag(true)).0)
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Flag bool
+
+type Ticket int
+
+type FlagAlias = Flag
+
+type TicketAlias = Ticket
+
+type Deep = TicketAlias
+
+func read(x FlagAlias) bool {
+	return bool(x)
+}
+
+func deep(t Deep) int {
+	return int(t)
+}
+
+func main() {
+	f := Flag(true)
+	t := Ticket(3)
+	o := lisette.MakeOptionSome(Flag(false))
+	arg_1 := bool(f)
+	arg_2 := int(t)
+	fmt.Println(arg_1, arg_2, read(f), deep(t), bool(o.UnwrapOr(Flag(true))))
+}
