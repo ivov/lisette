@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn same(name: string) -> string {
+    f"{name}"
+  }
+---
+package main
+
+func same(name string) string {
+	return name
+}

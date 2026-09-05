@@ -152,7 +152,7 @@ impl Planner<'_> {
             .iter()
             .any(|p| matches!(p, FormatStringPart::Expression(_)));
 
-        let stages: Vec<ValuePlan> = parts
+        let mut stages: Vec<ValuePlan> = parts
             .iter()
             .filter_map(|p| {
                 if let FormatStringPart::Expression(e) = p {
@@ -162,13 +162,45 @@ impl Planner<'_> {
                 }
             })
             .collect();
+        let concatenates = self.format_string_concatenates(parts);
+        if concatenates && stages.len() == 1 && parts.len() == 1 {
+            return stages.pop().expect("one staged operand");
+        }
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "fmtarg");
         let effect = sequenced.effect;
-        let (setup, emitted) = sequenced.into_rendered();
+        let setup = sequenced.setup;
+        let mut values = sequenced.values.into_iter();
+
+        if concatenates {
+            let mut pieces: Vec<GoExpression> = Vec::with_capacity(parts.len());
+            for part in parts {
+                match part {
+                    FormatStringPart::Text(text) => {
+                        let unescaped = text.replace("{{", "{").replace("}}", "}");
+                        let unescaped = convert_escape_sequences(&unescaped);
+                        if !unescaped.is_empty() {
+                            pieces.push(GoExpression::constant(
+                                format!("\"{}\"", unescaped),
+                                ConstantKind::String,
+                            ));
+                        }
+                    }
+                    FormatStringPart::Expression(_) => pieces.push(
+                        values
+                            .next()
+                            .expect("sequenced count matches expression parts"),
+                    ),
+                }
+            }
+            let mut pieces = pieces.into_iter();
+            let first = pieces.next().expect("an interpolated f-string has a piece");
+            let concatenation =
+                pieces.fold(first, |left, right| GoExpression::binary(left, "+", right));
+            return ValuePlan::computed(setup, concatenation, effect);
+        }
 
         let mut format_string = String::new();
-        let mut args = Vec::with_capacity(emitted.len());
-        let mut emitted = emitted.into_iter();
+        let mut args = Vec::with_capacity(values.len());
 
         for part in parts {
             match part {
@@ -185,9 +217,10 @@ impl Planner<'_> {
                     let peeled = self.facts.peel_alias(&expression.get_type());
                     format_string.push_str(format_verb_for(&peeled));
                     args.push(
-                        emitted
+                        values
                             .next()
-                            .expect("emitted count matches expression parts"),
+                            .expect("sequenced count matches expression parts")
+                            .rendered(),
                     );
                 }
             }
@@ -226,13 +259,28 @@ impl Planner<'_> {
         let has_interpolation = parts
             .iter()
             .any(|p| matches!(p, FormatStringPart::Expression(_)));
-        if !has_interpolation {
+        if !has_interpolation || self.format_string_concatenates(parts) {
             return false;
         }
         let [FormatStringPart::Expression(solo)] = parts else {
             return true;
         };
         format_verb_for(&self.facts.peel_alias(&solo.get_type())) == "%c"
+    }
+
+    fn format_string_concatenates(&self, parts: &[FormatStringPart]) -> bool {
+        let mut operands = parts
+            .iter()
+            .filter_map(|part| match part {
+                FormatStringPart::Expression(expression) => Some(expression),
+                FormatStringPart::Text(_) => None,
+            })
+            .peekable();
+        operands.peek().is_some()
+            && operands.all(|expression| {
+                self.facts.peel_alias(&expression.get_type()).as_simple()
+                    == Some(SimpleKind::String)
+            })
     }
 }
 

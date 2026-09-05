@@ -48,3 +48,54 @@ fn string_runes() {
   let runes = s.runes()
   assert runes.length() == 5 && runes[1] == 'é'
 }
+
+#[test]
+fn fstring_string_operands_concatenate() {
+  let a = "x"
+  let b = "y"
+  assert f"{a}-{b}" == "x-y" && f"{a}{b}" == "xy" && f"{a}" == "x"
+}
+
+#[test]
+fn fstring_text_escapes_next_to_string_operand() {
+  let s = "v"
+  assert f"{{{s}}} 100% \"{s}\"" == "{v} 100% \"v\"" && f"{s}\n".length() == 2
+}
+
+#[test]
+fn fstring_concatenation_as_receiver() {
+  let s = "yz"
+  assert (f"x{s}".byte_at(0) as int) == 120 && f"x{s}".length() == 3
+}
+
+fn first_byte(r: Ref<string>) -> byte { r.byte_at(0) }
+fn first_byte_of_deref(r: Ref<string>) -> byte { f"{r.*}".byte_at(0) }
+
+#[test]
+fn byte_at_through_ref() {
+  let s = "abc"
+  assert (first_byte(&s) as int) == 97 && (first_byte_of_deref(&s) as int) == 97
+}
+
+fn note_word_ok(log: mut Ref<string>, s: string) -> Result<string, error> {
+  log.* += s
+  Ok(s)
+}
+
+fn note_word(log: mut Ref<string>, s: string) -> string {
+  log.* += s
+  s
+}
+
+fn join_words(a: string, b: string) -> string { a + b }
+
+fn note_in_order(log: mut Ref<string>) -> Result<string, error> {
+  Ok(join_words(f"{note_word_ok(log, "one")?}{note_word(log, "two")}", note_word_ok(log, "three")?))
+}
+
+#[test]
+fn fstring_operand_calls_run_in_source_order() {
+  let mut log = ""
+  let joined = note_in_order(&log)
+  assert joined.unwrap_or("") == "onetwothree" && log == "onetwothree"
+}

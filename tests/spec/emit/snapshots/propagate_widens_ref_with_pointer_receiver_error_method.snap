@@ -28,14 +28,12 @@ description: |
 ---
 package main
 
-import "fmt"
-
 type FileError struct {
 	path string
 }
 
 func (f *FileError) Error() string {
-	return fmt.Sprintf("cannot open %s", f.path)
+	return "cannot open " + f.path
 }
 
 func readValue() (int, *FileError) {

@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn first() -> string { fmt.Println("first"); "a" }
+  fn second() -> string { fmt.Println("second"); "b" }
+  
+  fn main() {
+    fmt.Println(f"{first()} and {second()}")
+  }
+---
+package main
+
+import "fmt"
+
+func first() string {
+	fmt.Println("first")
+	return "a"
+}
+
+func second() string {
+	fmt.Println("second")
+	return "b"
+}
+
+func main() {
+	fmt.Println(first() + " and " + second())
+}

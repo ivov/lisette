@@ -23,8 +23,6 @@ description: |
 ---
 package main
 
-import "fmt"
-
 type Greetable interface {
 	greet() string
 }
@@ -34,7 +32,7 @@ type Person struct {
 }
 
 func (p Person) greet() string {
-	return fmt.Sprintf("Hello, %s", p.name)
+	return "Hello, " + p.name
 }
 
 func greetRef[T Greetable](item T) string {

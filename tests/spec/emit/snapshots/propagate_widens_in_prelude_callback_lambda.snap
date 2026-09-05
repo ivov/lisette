@@ -38,17 +38,14 @@ description: |
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 type ParseError struct {
 	text string
 }
 
 func (p ParseError) Error() string {
-	return fmt.Sprintf("bad: %s", p.text)
+	return "bad: " + p.text
 }
 
 func parseWord(w string) lisette.Result[int, ParseError] {

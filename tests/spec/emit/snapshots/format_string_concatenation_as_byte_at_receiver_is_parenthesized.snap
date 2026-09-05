@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn first(b: string) -> byte {
+    f"x{b}".byte_at(0)
+  }
+---
+package main
+
+func first(b string) byte {
+	return ("x" + b)[0]
+}

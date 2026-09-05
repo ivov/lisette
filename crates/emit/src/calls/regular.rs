@@ -124,12 +124,14 @@ enum FmtArgument {
     Sprint,
 }
 
-fn classify_fmt_argument(expression: &Expression) -> Option<FmtArgument> {
+fn classify_fmt_argument(planner: &Planner, expression: &Expression) -> Option<FmtArgument> {
     match expression.unwrap_parens() {
         Expression::Literal {
-            literal: Literal::FormatString(_),
+            literal: Literal::FormatString(parts),
             ..
-        } => Some(FmtArgument::Sprintf),
+        } => planner
+            .format_string_lowers_to_sprintf(parts)
+            .then_some(FmtArgument::Sprintf),
         Expression::Call {
             expression: callee,
             args,
@@ -167,6 +169,7 @@ impl FmtPrint {
 /// - `fmt.Print{ln}(fmt.Sprintf(...))` → `fmt.Printf(..., "\n")`
 /// - `fmt.Print{ln}(fmt.Sprint(x))` → `fmt.Print{ln}(x)`
 fn collapse_fmt_print(
+    planner: &Planner,
     function_string: &str,
     args: &[Expression],
     args_strings: &[String],
@@ -179,7 +182,7 @@ fn collapse_fmt_print(
         return call_str;
     };
 
-    match classify_fmt_argument(arg_expression) {
+    match classify_fmt_argument(planner, arg_expression) {
         Some(FmtArgument::Sprintf) => {
             let Some(inner) = arg
                 .strip_prefix("fmt.Sprintf(")
@@ -347,7 +350,7 @@ impl<'a> Planner<'a> {
             type_args_string,
             args_strings.join(", ")
         );
-        let call_str = collapse_fmt_print(&function_string, args, &args_strings, call_str);
+        let call_str = collapse_fmt_print(self, &function_string, args, &args_strings, call_str);
         let call_str = match &builtin_conversion {
             Some(go_type) => format!("{go_type}({call_str})"),
             None => call_str,

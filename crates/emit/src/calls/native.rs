@@ -331,8 +331,17 @@ fn retired_covers_receiver(target: &Expression, receiver: &Expression) -> bool {
     }
 }
 
+fn is_selector_chain(rendered: &str) -> bool {
+    rendered.split('.').all(go_name::is_plain_identifier)
+}
+
 fn render_inline(template: &str, receiver: &str, args: &[String]) -> String {
-    let mut result = template.replace("{r}", receiver);
+    let receiver = if template.contains("{r}[") && !is_selector_chain(receiver) {
+        format!("({receiver})")
+    } else {
+        receiver.to_string()
+    };
+    let mut result = template.replace("{r}", &receiver);
     for (i, arg) in args.iter().enumerate() {
         result = result.replace(&format!("{{{}}}", i), arg);
     }
@@ -340,7 +349,7 @@ fn render_inline(template: &str, receiver: &str, args: &[String]) -> String {
         result = result.replace("{args}", &args.join(", "));
     }
     if result.contains("{r+args}") {
-        let all = iter::once(receiver.to_string())
+        let all = iter::once(receiver)
             .chain(args.iter().cloned())
             .collect::<Vec<_>>()
             .join(", ");

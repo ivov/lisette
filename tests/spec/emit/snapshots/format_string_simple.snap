@@ -15,5 +15,5 @@ import "fmt"
 
 func test() {
 	name := "Alice"
-	fmt.Printf("Hello, %s!", name)
+	fmt.Print("Hello, " + name + "!")
 }

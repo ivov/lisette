@@ -37,13 +37,12 @@ func main() {
 package ops
 
 import (
-	"fmt"
 	"github.com/user/myproject/traits"
 	"github.com/user/myproject/types"
 )
 
 func DescribeTaggedPair[A traits.Showable, B traits.Showable](tp types.Tagged[types.Pair[A, B]]) string {
-	return fmt.Sprintf("tagged_pair: %s", tp.Display())
+	return "tagged_pair: " + tp.Display()
 }
 
 
@@ -58,10 +57,7 @@ type Showable interface {
 // === types/lib.go ===
 package types
 
-import (
-	"fmt"
-	"github.com/user/myproject/traits"
-)
+import "github.com/user/myproject/traits"
 
 type Pair[A traits.Showable, B traits.Showable] struct {
 	First  A
@@ -69,11 +65,11 @@ type Pair[A traits.Showable, B traits.Showable] struct {
 }
 
 func (p Pair[A, B]) Show() string {
-	return fmt.Sprintf("(%s, %s)", p.First.Show(), p.Second.Show())
+	return "(" + p.First.Show() + ", " + p.Second.Show() + ")"
 }
 
 func (p Pair[A, B]) Display() string {
-	return fmt.Sprintf("Pair%s", p.Show())
+	return "Pair" + p.Show()
 }
 
 type Tagged[T traits.Showable] struct {
@@ -83,9 +79,9 @@ type Tagged[T traits.Showable] struct {
 
 func (t Tagged[T]) Show() string {
 	fmtarg_1 := t.Label
-	return fmt.Sprintf("[%s] %s", fmtarg_1, t.Value.Show())
+	return "[" + fmtarg_1 + "] " + t.Value.Show()
 }
 
 func (t Tagged[T]) Display() string {
-	return fmt.Sprintf("Tagged%s", t.Show())
+	return "Tagged" + t.Show()
 }

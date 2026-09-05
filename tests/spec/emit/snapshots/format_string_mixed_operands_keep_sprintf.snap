@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn count(name: string, n: int) -> string {
+    f"{name} has {n}"
+  }
+---
+package main
+
+import "fmt"
+
+func count(name string, n int) string {
+	return fmt.Sprintf("%s has %d", name, n)
+}

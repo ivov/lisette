@@ -9,9 +9,7 @@ description: |
 ---
 package main
 
-import "fmt"
-
 // A publicly exported function.
 func Greet(name string) string {
-	return fmt.Sprintf("Hello, %s!", name)
+	return "Hello, " + name + "!"
 }

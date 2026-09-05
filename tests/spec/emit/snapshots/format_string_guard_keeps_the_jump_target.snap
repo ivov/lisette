@@ -16,10 +16,7 @@ description: |
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import lisette "github.com/ivov/lisette/prelude"
 
 func label(_ int) lisette.Result[string, string] {
 	return lisette.MakeResultOk[string, string]("x")
@@ -34,7 +31,7 @@ match_1:
 			if check_2.Tag != lisette.ResultOk {
 				return lisette.MakeResultErr[int, string](check_2.ErrVal)
 			}
-			if fmt.Sprintf("v%s", check_2.OkVal) == "vx" {
+			if "v"+check_2.OkVal == "vx" {
 				out = 1
 				break match_1
 			}

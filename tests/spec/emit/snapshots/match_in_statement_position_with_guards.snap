@@ -28,6 +28,6 @@ func test() {
 	case result.Tag == lisette.ResultOk:
 		fmt.Printf("non-positive: %d\n", result.OkVal)
 	default:
-		fmt.Printf("error: %s\n", result.ErrVal)
+		fmt.Print("error: " + result.ErrVal + "\n")
 	}
 }

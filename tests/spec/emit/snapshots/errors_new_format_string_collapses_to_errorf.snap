@@ -19,10 +19,13 @@ description: |
 ---
 package main
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 func fail(line string) error {
-	return fmt.Errorf("malformed line: %s", line)
+	return errors.New("malformed line: " + line)
 }
 
 func percent(rate int) error {

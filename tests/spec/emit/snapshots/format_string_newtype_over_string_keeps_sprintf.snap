@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  #[display]
+  struct Id(string)
+  
+  fn show(id: Id) -> string {
+    f"id {id}"
+  }
+---
+package main
+
+import "fmt"
+
+type Id string
+
+func (i Id) String() string {
+	return fmt.Sprintf("Id(%v)", string(i))
+}
+
+func (i Id) toString() string {
+	return i.String()
+}
+
+func show(id Id) string {
+	return fmt.Sprintf("id %v", id)
+}
