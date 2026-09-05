@@ -222,3 +222,38 @@ impl AnalysisSnapshot {
             .is_some_and(|document| self.analysis.parse_status(document.file_id) != Failed)
     }
 }
+
+#[cfg(test)]
+impl AnalysisSnapshot {
+    pub(crate) fn from_sources(root: &Path, files: &[(&str, &str)]) -> Self {
+        use deps::TypedefLocator;
+        use passes::analyze;
+        use semantics::loader::MemoryLoader;
+        use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, ProjectKind, RecoverTarget};
+
+        let mut loader = MemoryLoader::new();
+        for (name, source) in files {
+            loader.add_file(ENTRY_PACKAGE_ID, name, source);
+        }
+        let locator = TypedefLocator::default();
+        let analysis = analyze(AnalyzeInput {
+            load_siblings: true,
+            scope: AnalysisScope::Project(root.to_path_buf()),
+            loader: &loader,
+            entry: None,
+            compile_phase: CompilePhase::Check,
+            project_kind: ProjectKind::Binary,
+            locator: &locator,
+            go_module: "",
+            disable_cache: true,
+            recover_target: RecoverTarget::Package(ENTRY_PACKAGE_ID.to_string()),
+        });
+        Self::new(
+            analysis,
+            &ProjectConfig::Workspace(root.to_path_buf()),
+            &root.join("src"),
+            false,
+            PackageResolver::new(locator, Arc::default()),
+        )
+    }
+}

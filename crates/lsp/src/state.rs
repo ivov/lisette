@@ -105,6 +105,25 @@ impl Workspace {
         }
     }
 
+    /// Drops every snapshot that did not analyze `uri` with exactly this text.
+    pub(crate) fn invalidate_unseen(&mut self, uri: &Url, content: &str) {
+        let mut dropped = false;
+        for analysis in self.analyses.values_mut() {
+            let seen = analysis.current.as_ref().is_some_and(|snapshot| {
+                snapshot
+                    .document(uri)
+                    .is_some_and(|document| document.file.source == content)
+            });
+            if !seen {
+                analysis.current = None;
+                dropped = true;
+            }
+        }
+        if dropped {
+            self.generation += 1;
+        }
+    }
+
     pub(crate) fn set_pending_diagnostics(&mut self, key: &AnalysisKey, token: CancellationToken) {
         let Some(analysis) = self.analyses.get_mut(key) else {
             token.cancel();
@@ -229,6 +248,8 @@ impl Backend {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
 
     fn key() -> AnalysisKey {
@@ -236,6 +257,90 @@ mod tests {
             external_test: false,
             package_id: "_entry_".to_string(),
         }
+    }
+
+    const MAIN: &str = "fn main() {}\n";
+    const UTIL: &str = "pub fn util() -> int { 1 }\n";
+
+    fn uri(name: &str) -> Url {
+        Url::from_file_path(format!("/project/src/{name}")).unwrap()
+    }
+
+    fn installed(
+        workspace: &mut Workspace,
+        key: &AnalysisKey,
+        files: &[(&str, &str)],
+    ) -> Arc<AnalysisSnapshot> {
+        let snapshot = Arc::new(AnalysisSnapshot::from_sources(Path::new("/project"), files));
+        workspace.ensure(key);
+        assert!(workspace.install(key, workspace.generation(), Arc::clone(&snapshot)));
+        snapshot
+    }
+
+    #[test]
+    fn opening_a_file_with_the_analyzed_text_keeps_the_snapshot() {
+        let mut workspace = Workspace::default();
+        let snapshot = installed(
+            &mut workspace,
+            &key(),
+            &[("main.lis", MAIN), ("util.lis", UTIL)],
+        );
+        let generation = workspace.generation();
+
+        workspace.invalidate_unseen(&uri("util.lis"), UTIL);
+
+        assert!(
+            workspace
+                .snapshot(&key())
+                .is_some_and(|current| Arc::ptr_eq(&current, &snapshot))
+        );
+        assert_eq!(workspace.generation(), generation);
+    }
+
+    #[test]
+    fn opening_a_file_with_other_text_drops_the_snapshot() {
+        let mut workspace = Workspace::default();
+        installed(
+            &mut workspace,
+            &key(),
+            &[("main.lis", MAIN), ("util.lis", UTIL)],
+        );
+        let generation = workspace.generation();
+
+        workspace.invalidate_unseen(&uri("util.lis"), "pub fn util() -> int { 2 }\n");
+
+        assert!(workspace.snapshot(&key()).is_none());
+        assert_ne!(workspace.generation(), generation);
+    }
+
+    #[test]
+    fn opening_a_file_drops_only_the_snapshots_that_never_analyzed_it() {
+        let other_key = AnalysisKey::Package {
+            external_test: false,
+            package_id: "other".to_string(),
+        };
+        let mut workspace = Workspace::default();
+        let seen = installed(
+            &mut workspace,
+            &key(),
+            &[("main.lis", MAIN), ("util.lis", UTIL)],
+        );
+        installed(&mut workspace, &other_key, &[("main.lis", MAIN)]);
+        let generation = workspace.generation();
+
+        workspace.invalidate_unseen(&uri("util.lis"), UTIL);
+
+        assert!(
+            workspace
+                .snapshot(&key())
+                .is_some_and(|current| Arc::ptr_eq(&current, &seen))
+        );
+        assert!(workspace.snapshot(&other_key).is_none());
+        assert_ne!(
+            workspace.generation(),
+            generation,
+            "a build in flight for the dropped key must not install"
+        );
     }
 
     #[test]
