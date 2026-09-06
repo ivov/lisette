@@ -101,24 +101,11 @@ impl FunctionLayout {
             CallableReturnAbi::Tagged | CallableReturnAbi::Direct => self.result.go_type(planner),
             CallableReturnAbi::BareError => planner.go_type(&self.result.logical_type().err_type()),
             CallableReturnAbi::Result { .. } | CallableReturnAbi::Partial { .. } => {
-                let payload = self
-                    .payload
-                    .as_deref()
-                    .expect("fallible callable layout has a payload");
-                let payload = payload.go_type(planner);
                 let error = planner.go_type(&self.result.logical_type().err_type());
-                GoType::with_dependencies(
-                    format!("({}, {})", payload.code, error.code),
-                    [&payload, &error],
-                )
+                self.multi_result_go_type(planner, error)
             }
             CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
-                let payload = self
-                    .payload
-                    .as_deref()
-                    .expect("option callable layout has a payload");
-                let payload = payload.go_type(planner);
-                GoType::with_dependencies(format!("({}, bool)", payload.code), [&payload])
+                self.multi_result_go_type(planner, GoType::new("bool"))
             }
             CallableReturnAbi::Option(OptionReturnAbi::Nullable) => self
                 .payload
@@ -149,6 +136,18 @@ impl FunctionLayout {
                 GoType::with_dependencies(code, &elements)
             }
         })
+    }
+
+    fn multi_result_go_type(&self, planner: &Planner<'_>, status: GoType) -> GoType {
+        let payload = self
+            .payload
+            .as_deref()
+            .expect("payload-carrying callable layout has a payload")
+            .go_type(planner);
+        GoType::with_dependencies(
+            format!("({}, {})", payload.code, status.code),
+            [&payload, &status],
+        )
     }
 }
 

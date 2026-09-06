@@ -171,8 +171,8 @@ pub(crate) fn emit_lowered_result_return(
                 multi_value_return(lowered_none_values(planner, shape, return_ty)),
             ]
         }
-        CallableReturnAbi::Tuple { arity, .. } => {
-            emit_lowered_tuple_return(planner, result_value, return_ty, *arity)
+        CallableReturnAbi::Tuple { .. } => {
+            emit_lowered_tuple_return(planner, result_value, return_ty)
         }
         CallableReturnAbi::Tagged
         | CallableReturnAbi::Direct
@@ -182,39 +182,63 @@ pub(crate) fn emit_lowered_result_return(
     }
 }
 
-/// `Tuple` shape return: project each tuple field, unwrapping any
-/// nullable-Option slot to its bare Go nilable.
 fn emit_lowered_tuple_return(
     planner: &mut Planner,
     result_value: &str,
     return_ty: &Type,
-    arity: usize,
 ) -> Vec<LoweredStatement> {
-    let peeled = planner.facts.peel_alias(return_ty);
-    let slot_tys = tuple_element_types(&peeled);
-    let any_nullable = slot_tys.iter().any(|t| planner.facts.is_nullable_option(t));
-    if !any_nullable {
-        let fields: Vec<String> = (0..arity)
-            .map(|i| format!("{}.{}", result_value, TUPLE_FIELDS[i]))
-            .collect();
-        return vec![multi_value_return(fields)];
-    }
-    let mut statements = Vec::new();
-    let fields: Vec<String> = (0..arity)
-        .map(|i| {
-            let raw = format!("{}.{}", result_value, TUPLE_FIELDS[i]);
-            slot_tys
-                .get(i)
-                .filter(|t| planner.facts.is_nullable_option(t))
-                .map(|t| {
-                    let inner = planner.use_go_type(&t.ok_type());
-                    planner.plan_option_projection(&mut statements, &raw, "unwrap", &inner, false)
-                })
-                .unwrap_or(raw)
-        })
-        .collect();
+    let (mut statements, fields) = lowered_tuple_values(planner, result_value, return_ty);
     statements.push(multi_value_return(fields));
     statements
+}
+
+/// Project each field of a lowered tuple value, unwrapping any
+/// nullable-Option slot to its bare Go nilable.
+fn lowered_tuple_values(
+    planner: &mut Planner,
+    tuple_value: &str,
+    tuple_ty: &Type,
+) -> (Vec<LoweredStatement>, Vec<String>) {
+    let slot_tys = tuple_element_types(&planner.facts.peel_alias(tuple_ty));
+    let mut statements = Vec::new();
+    let fields = slot_tys
+        .iter()
+        .enumerate()
+        .map(|(i, slot_ty)| {
+            let raw = format!("{}.{}", tuple_value, TUPLE_FIELDS[i]);
+            if planner.facts.is_nullable_option(slot_ty) {
+                let inner = planner.use_go_type(&slot_ty.ok_type());
+                planner.plan_option_projection(&mut statements, &raw, "unwrap", &inner, false)
+            } else {
+                raw
+            }
+        })
+        .collect();
+    (statements, fields)
+}
+
+/// Lower each element of a tuple literal into its lowered return slot.
+fn lowered_tuple_literal_values(
+    planner: &mut Planner,
+    elements: &[Expression],
+    tuple_ty: &Type,
+) -> (Vec<LoweredStatement>, Vec<String>) {
+    let slot_tys = tuple_element_types(&planner.facts.peel_alias(tuple_ty));
+    let stages: Vec<ValuePlan> = elements
+        .iter()
+        .enumerate()
+        .map(|(i, e)| match slot_tys.get(i) {
+            Some(slot_ty) if planner.facts.is_nullable_option(slot_ty) => {
+                lower_nullable_slot_value(planner, e, slot_ty)
+            }
+            _ => planner.lower_composite_value(e, ExpressionContext::value()),
+        })
+        .collect();
+    let (mut statements, parts) = planner
+        .sequence_values(stages, CaptureBoundary::SiblingSequence, "ret")
+        .into_rendered();
+    let parts = planner.coerce_elements_to_slots(&mut statements, elements, parts, &slot_tys);
+    (statements, parts)
 }
 
 impl Planner<'_> {
@@ -528,7 +552,7 @@ pub(crate) fn lower_arg_to_tagged(
     tagged_var
 }
 
-/// Tail return for `PartialTuple` and `Tuple` ABIs. Returns `true` when this
+/// Tail return for `Partial` and `Tuple` ABIs. Returns `true` when this
 /// path handled the emission.
 pub(crate) fn try_emit_lowered_tail_return(
     planner: &mut Planner,
@@ -570,30 +594,15 @@ fn emit_lowered_tuple_tail(
     arity: usize,
 ) -> Vec<LoweredStatement> {
     use Expression;
+    let return_ty = planner.return_ctx().expect_ty();
     if let Expression::Tuple { elements, .. } = expression
         && elements.len() == arity
     {
-        let return_ty = planner.return_ctx().expect_ty();
-        let slot_tys = tuple_element_types(&planner.facts.peel_alias(&return_ty));
-        let stages: Vec<ValuePlan> = elements
-            .iter()
-            .enumerate()
-            .map(|(i, e)| match slot_tys.get(i) {
-                Some(slot_ty) if planner.facts.is_nullable_option(slot_ty) => {
-                    lower_nullable_slot_value(planner, e, slot_ty)
-                }
-                _ => planner.lower_composite_value(e, ExpressionContext::value()),
-            })
-            .collect();
-        let (mut statements, parts) = planner
-            .sequence_values(stages, CaptureBoundary::SiblingSequence, "ret")
-            .into_rendered();
-        let parts = planner.coerce_elements_to_slots(&mut statements, elements, parts, &slot_tys);
+        let (mut statements, parts) = lowered_tuple_literal_values(planner, elements, &return_ty);
         statements.push(multi_value_return(parts));
         return statements;
     }
 
-    let return_ty = planner.return_ctx().expect_ty();
     lowered_tail_fallback(
         planner,
         expression,
