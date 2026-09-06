@@ -1,0 +1,59 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:errors"
+  import "go:fmt"
+  import "go:io/fs"
+  import "go:os"
+  
+  const FILE = "tasks.json"
+  
+  fn load() -> Result<Slice<byte>, error> {
+    let bytes = match os.ReadFile(FILE) {
+      Ok(bytes) => bytes,
+      Err(err) => {
+        if errors.Is(err, fs.ErrNotExist) { return Ok([]) }
+        return Err(err).wrap_err(f"reading {FILE}")
+      },
+    }
+    Ok(bytes)
+  }
+  
+  fn main() {
+    fmt.Println(load())
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"io/fs"
+	"os"
+)
+
+const File string = "tasks.json"
+
+func load() ([]byte, error) {
+	bytes, err := os.ReadFile(File)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return []byte{}, nil
+		}
+		return nil, fmt.Errorf("reading %s: %w", File, err)
+	}
+	return bytes, nil
+}
+
+func main() {
+	ret_1, ret_2 := load()
+	var result_3 lisette.Result[[]byte, error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[[]byte, error](ret_2)
+	} else {
+		result_3 = lisette.MakeResultOk[[]byte, error](ret_1)
+	}
+	fmt.Println(result_3)
+}

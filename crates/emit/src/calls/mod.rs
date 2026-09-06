@@ -7,6 +7,7 @@ pub(crate) mod predicates;
 mod regular;
 mod slice_loop;
 mod ufcs;
+pub(crate) mod wrap_err;
 
 use crate::plan::values::CaptureBoundary;
 use crate::types::native::NativeGoType;

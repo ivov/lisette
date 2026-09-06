@@ -1,0 +1,54 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:encoding/json"
+  import "go:fmt"
+  import "go:os"
+  
+  const FILE = "nums.json"
+  
+  fn load() -> Result<Slice<int>, error> {
+    let bytes = os.ReadFile(FILE).wrap_err(f"reading {FILE}")?
+    let mut nums: Slice<int> = []
+    json.Unmarshal(bytes, &nums).wrap_err("parsing nums")?
+    Ok(nums)
+  }
+  
+  fn main() {
+    fmt.Println(load())
+  }
+---
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"os"
+)
+
+const File string = "nums.json"
+
+func load() ([]int, error) {
+	bytes, err := os.ReadFile(File)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", File, err)
+	}
+	nums := []int{}
+	if err := json.Unmarshal(bytes, &nums); err != nil {
+		return nil, fmt.Errorf("parsing nums: %w", err)
+	}
+	return nums, nil
+}
+
+func main() {
+	ret_1, ret_2 := load()
+	var result_3 lisette.Result[[]int, error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[[]int, error](ret_2)
+	} else {
+		result_3 = lisette.MakeResultOk[[]int, error](ret_1)
+	}
+	fmt.Println(result_3)
+}

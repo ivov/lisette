@@ -179,8 +179,9 @@ impl Planner<'_> {
         fallible: &Fallible,
         result_var_name: Option<&str>,
     ) -> Option<(Vec<LoweredStatement>, String)> {
-        let plan = self.plan_call(expression)?;
-        let expression_ty = expression.get_type();
+        let (call, wraps) = self.peel_wrap_err(expression);
+        let plan = self.plan_call(call)?;
+        let expression_ty = call.get_type();
         let ok_ty = self.facts.peel_alias(&expression_ty).ok_type();
         let shape = plan.resolved.abi.result.clone();
         let comma_ok = match shape {
@@ -225,7 +226,7 @@ impl Planner<'_> {
         }
 
         let (mut statements, call_str) = self
-            .lower_call(expression, None, ExpressionContext::value())
+            .lower_call(call, None, ExpressionContext::value())
             .into_parts();
         let want_value = !matches!(result_var_name, Some("_"));
         let let_slot = result_var_name.filter(|name| {
@@ -244,18 +245,21 @@ impl Planner<'_> {
         } else {
             PairStatusKind::Error
         };
-        let outcome_var = self.pair_status(None, status_kind, value_var.is_none());
+        let (message_setup, wraps) = self.prepare_wrap_messages(&wraps, true);
+        let opens_if = value_var.is_none() && message_setup.is_empty();
+        let outcome_var = self.pair_status(None, status_kind, opens_if);
         let bind_line = match &value_var {
             Some(value) => format!("{value}, {outcome_var} := {call_str}"),
             None if has_value_slot => format!("_, {outcome_var} := {call_str}"),
             None => format!("{outcome_var} := {call_str}"),
         };
-        let initializer = if value_var.is_some() {
+        let initializer = if opens_if {
+            Some(bind_line)
+        } else {
             statements.push(LoweredStatement::RawGo(format!("{bind_line}\n")));
             None
-        } else {
-            Some(bind_line)
         };
+        statements.extend(message_setup);
         let open_if = |condition: String| match &initializer {
             Some(initializer) => format!("{initializer}; {condition}"),
             None => condition,
@@ -282,8 +286,8 @@ impl Planner<'_> {
                 failure_values,
             ));
         } else {
-            let (failure_setup, failure_values) =
-                self.propagate_failure_values(fallible, &outcome_var);
+            let error = self.wrap_error(&wraps, outcome_var.clone());
+            let (failure_setup, failure_values) = self.propagate_failure_values(fallible, &error);
             statements.push(transition::tag_check(
                 open_if(format!("{} != nil", outcome_var)),
                 failure_setup,
@@ -297,8 +301,8 @@ impl Planner<'_> {
                     self.require_stdlib();
                 }
                 self.require_errors();
-                let (nil_setup, nil_failure) =
-                    self.propagate_failure_values(fallible, "errors.New(\"unexpected nil\")");
+                let error = self.wrap_error(&wraps, "errors.New(\"unexpected nil\")".to_string());
+                let (nil_setup, nil_failure) = self.propagate_failure_values(fallible, &error);
                 statements.push(transition::tag_check(
                     guard.is_nil(val),
                     nil_setup,
@@ -450,6 +454,7 @@ impl Planner<'_> {
                 &fallible,
                 &return_ty,
                 lowered.as_ref(),
+                &[],
             ));
             return Some(statements);
         }
@@ -532,12 +537,25 @@ impl Planner<'_> {
         else {
             unreachable!("lower_wrapped_call_return requires a Call expression");
         };
+        let (inner, wraps) = self.peel_wrap_err(expression);
+        if let Expression::Call {
+            expression: inner_callee,
+            args: inner_args,
+            ..
+        } = inner
+            && !wraps.is_empty()
+            && fallible.classify_constructor(inner_callee) == Some(ConstructorKind::Failure)
+        {
+            return self.lower_failure_constructor_return(
+                inner_args, fallible, return_ty, lowered, &wraps,
+            );
+        }
         match fallible.classify_constructor(call_expression) {
             Some(ConstructorKind::Success) => {
                 self.lower_success_constructor_return(args, fallible, lowered)
             }
             Some(ConstructorKind::Failure) => {
-                self.lower_failure_constructor_return(args, fallible, return_ty, lowered)
+                self.lower_failure_constructor_return(args, fallible, return_ty, lowered, &[])
             }
             None => self.lower_wrapped_passthrough_return(expression, return_ty, lowered),
         }
@@ -601,45 +619,37 @@ impl Planner<'_> {
         fallible: &Fallible,
         return_ty: &Type,
         lowered: Option<&CallableReturnAbi>,
+        wraps: &[&Expression],
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
-        if let Some(shape) = lowered {
-            if args.is_empty() {
-                statements.push(transition::multi_value_return(
-                    transition::lowered_none_values(self, shape, return_ty),
-                ));
+        let error = args.first().map(|arg| {
+            let error = self.lower_composite_value(arg, ExpressionContext::value());
+            let (message_setup, wraps) = self.prepare_wrap_messages(wraps, true);
+            let error = if message_setup.is_empty() {
+                error
             } else {
-                let (setup, err_expr) = self
-                    .lower_composite_value(&args[0], ExpressionContext::value())
-                    .into_parts();
-                statements.extend(setup);
-                let from = args[0].get_type();
-                let to = self
-                    .contextual_err_ty(fallible)
-                    .expect("Result must have error type");
-                let err_expr = self.coerce_value(&mut statements, err_expr, &from, &to);
-                let values = transition::lowered_err_values(self, shape, return_ty, &err_expr);
-                statements.push(transition::multi_value_return(values));
-            }
-        } else {
-            let failure = if fallible.is_result() {
-                let (setup, arg) = self
-                    .lower_composite_value(&args[0], ExpressionContext::value())
-                    .into_parts();
-                statements.extend(setup);
-                let from = args[0].get_type();
-                let to = self
-                    .contextual_err_ty(fallible)
-                    .expect("Result must have error type");
-                let arg = self.coerce_value(&mut statements, arg, &from, &to);
-                let mut fe = FalliblePlanner::new(self, fallible);
-                fe.emit_failure(Some(&arg))
-            } else {
-                let mut fe = FalliblePlanner::new(self, fallible);
-                fe.emit_failure(None)
+                self.eager_operand(arg, error, "err")
             };
-            statements.push(plain_return(failure));
-        }
+            let (setup, error) = error.into_parts();
+            statements.extend(setup);
+            let to = self
+                .contextual_err_ty(fallible)
+                .expect("Result must have error type");
+            let error = self.coerce_value(&mut statements, error, &arg.get_type(), &to);
+            statements.extend(message_setup);
+            self.wrap_error(&wraps, error)
+        });
+        let returned = if let Some(shape) = lowered {
+            let values = match error {
+                Some(error) => transition::lowered_err_values(self, shape, return_ty, &error),
+                None => transition::lowered_none_values(self, shape, return_ty),
+            };
+            transition::multi_value_return(values)
+        } else {
+            let mut fe = FalliblePlanner::new(self, fallible);
+            plain_return(fe.emit_failure(error.as_deref()))
+        };
+        statements.push(returned);
         statements
     }
 
@@ -651,6 +661,21 @@ impl Planner<'_> {
         lowered: Option<&CallableReturnAbi>,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
+        if let Some(shape) = lowered
+            && matches!(
+                shape,
+                CallableReturnAbi::Result { .. } | CallableReturnAbi::BareError
+            )
+            && !self.peel_wrap_err(expression).1.is_empty()
+            && self.result_fuse_plan(expression).is_some()
+        {
+            let (setup, value) = self.lower_propagate(expression, None);
+            statements.extend(setup);
+            statements.push(transition::multi_value_return(
+                transition::lowered_ok_values(shape, &value),
+            ));
+            return statements;
+        }
         if let Some(shape) = lowered
             && self.callee_matches_lowered_shape(expression, shape)
         {

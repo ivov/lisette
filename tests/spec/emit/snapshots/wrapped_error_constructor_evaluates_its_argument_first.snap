@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:errors"
+  import "go:fmt"
+  
+  fn message() -> string {
+    fmt.Println("message ran")
+    "ctx"
+  }
+  
+  fn make_error() -> error {
+    fmt.Println("make_error ran")
+    errors.New("boom")
+  }
+  
+  fn five() -> Result<int, error> {
+    Err(make_error()).wrap_err(message())
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+func message() string {
+	fmt.Println("message ran")
+	return "ctx"
+}
+
+func makeError() error {
+	fmt.Println("make_error ran")
+	return errors.New("boom")
+}
+
+func five() (int, error) {
+	err_2 := makeError()
+	msg_1 := message()
+	return 0, fmt.Errorf("%s: %w", msg_1, err_2)
+}

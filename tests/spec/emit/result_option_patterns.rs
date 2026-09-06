@@ -2678,6 +2678,164 @@ fn main() {
 }
 
 #[test]
+fn wrap_err_propagate_on_go_calls_uses_errorf() {
+    let input = r#"
+import "go:encoding/json"
+import "go:fmt"
+import "go:os"
+
+const FILE = "nums.json"
+
+fn load() -> Result<Slice<int>, error> {
+  let bytes = os.ReadFile(FILE).wrap_err(f"reading {FILE}")?
+  let mut nums: Slice<int> = []
+  json.Unmarshal(bytes, &nums).wrap_err("parsing nums")?
+  Ok(nums)
+}
+
+fn main() {
+  fmt.Println(load())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn wrap_err_message_escapes_percent_and_interpolates_values() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn parse(raw: string, attempt: int) -> Result<int, error> {
+  let n = strconv.Atoi(raw).wrap_err(f"attempt {attempt} at 100% of {raw}")?
+  Ok(n)
+}
+
+fn main() {
+  fmt.Println(parse("1", 2))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn wrap_err_computed_message_uses_a_string_verb() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn describe(raw: string) -> string { "parsing " + raw }
+
+fn parse(raw: string) -> Result<int, error> {
+  let n = strconv.Atoi(raw).wrap_err(describe(raw))?
+  Ok(n)
+}
+
+fn main() {
+  fmt.Println(parse("1"))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn wrap_err_on_pointer_returning_go_call_wraps_both_failures() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn open(path: string) -> Result<Ref<os.File>, error> {
+  let file = os.Open(path).wrap_err("open")?
+  Ok(file)
+}
+
+fn main() {
+  fmt.Println(open("missing.txt"))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn err_constructor_wrap_err_in_return_position() {
+    let input = r#"
+import "go:errors"
+import "go:fmt"
+import "go:io/fs"
+import "go:os"
+
+const FILE = "tasks.json"
+
+fn load() -> Result<Slice<byte>, error> {
+  let bytes = match os.ReadFile(FILE) {
+    Ok(bytes) => bytes,
+    Err(err) => {
+      if errors.Is(err, fs.ErrNotExist) { return Ok([]) }
+      return Err(err).wrap_err(f"reading {FILE}")
+    },
+  }
+  Ok(bytes)
+}
+
+fn main() {
+  fmt.Println(load())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_on_wrap_err_of_go_call_wraps_in_the_err_arm() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn main() {
+  match strconv.Atoi("x").wrap_err("parse") {
+    Ok(n) => fmt.Println(n),
+    Err(err) => fmt.Println(err),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tail_return_of_wrap_err_on_go_call() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn port(raw: string) -> Result<int, error> {
+  strconv.Atoi(raw).wrap_err("read port")
+}
+
+fn main() {
+  fmt.Println(port("8080"))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_wrap_err_wraps_inner_message_first() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn parse(raw: string) -> Result<int, error> {
+  let n = strconv.Atoi(raw).wrap_err("inner").wrap_err("outer")?
+  Ok(n)
+}
+
+fn main() {
+  fmt.Println(parse("1"))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn nested_propagate_in_call_args_binds_the_inner_pair_first() {
     let input = r#"
 import "go:strconv"
@@ -2687,6 +2845,146 @@ fn double(n: int) -> Result<int, error> { Ok(n * 2) }
 fn run() -> Result<int, error> {
   let d = double(strconv.Atoi("1")?)?
   Ok(d)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn wrap_err_evaluates_an_effectful_message_before_the_error_test() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn message() -> string {
+  fmt.Println("message ran")
+  "ctx"
+}
+
+fn two() -> Result<int, error> {
+  let n = strconv.Atoi("2").wrap_err(message())?
+  Ok(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_wrap_evaluates_custom_display_on_success_and_failure() {
+    let input = r#"
+import "go:strconv"
+
+#[display]
+struct Label { describe: fn() -> string }
+
+impl Label {
+  fn string(self) -> string {
+    self.describe()
+  }
+}
+
+fn parse(raw: string, label: Label) -> Result<int, error> {
+  let n = strconv.Atoi(raw).wrap_err(f"took {label}")?
+  Ok(n)
+}
+
+fn main() {
+  let mut seen = 0
+  let describe = || -> string {
+    seen = seen + 1
+    "label"
+  }
+  let label = Label { describe }
+  let good = parse("1", label).unwrap_or(0)
+  if good != 1 || seen != 1 { panic("success skipped display") }
+  let bad = parse("bad", label).is_ok()
+  if bad || seen != 2 { panic("failure skipped display") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn wrap_err_message_with_a_nested_propagate_keeps_the_outer_error() {
+    let input = r#"
+import "go:strconv"
+
+fn three() -> Result<int, error> {
+  let n = strconv.Atoi("x").wrap_err(f"{strconv.Atoi("0")?}")?
+  Ok(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn chained_wrap_err_reads_an_earlier_message_before_a_later_effect() {
+    let input = r#"
+import "go:strconv"
+
+fn four(initial: string) -> Result<int, error> {
+  let mut text = initial
+  let update = || -> string {
+    text = "changed"
+    "outer"
+  }
+  let n = strconv.Atoi("bad").wrap_err(text).wrap_err(update())?
+  Ok(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn wrapped_error_constructor_evaluates_its_argument_first() {
+    let input = r#"
+import "go:errors"
+import "go:fmt"
+
+fn message() -> string {
+  fmt.Println("message ran")
+  "ctx"
+}
+
+fn make_error() -> error {
+  fmt.Println("make_error ran")
+  errors.New("boom")
+}
+
+fn five() -> Result<int, error> {
+  Err(make_error()).wrap_err(message())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn adjacent_wrapped_matches_take_fresh_payload_names() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn message() -> string {
+  fmt.Println("message ran")
+  "ctx"
+}
+
+fn six() -> int {
+  let a = match strconv.Atoi("1").wrap_err(message()) {
+    Ok(n) => n,
+    Err(e) => {
+      fmt.Println(e)
+      0
+    },
+  }
+  let b = match strconv.Atoi("2").wrap_err(message()) {
+    Ok(n) => n,
+    Err(e) => {
+      fmt.Println(e)
+      0
+    },
+  }
+  a + b
 }
 "#;
     assert_emit_snapshot!(input);
@@ -2709,6 +3007,59 @@ fn eight() -> int {
 }
 
 #[test]
+fn wrapped_error_variable_is_read_before_a_message_that_rebinds_it() {
+    let input = r#"
+import "go:errors"
+
+fn two() -> Result<int, error> {
+  let mut e = errors.New("before")
+  let update = || -> string {
+    e = errors.New("after")
+    "context"
+  }
+  Err(e).wrap_err(update())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_message_that_calls_a_function_of_the_let_name_keeps_a_temp() {
+    let input = r#"
+import "go:strconv"
+
+fn n() -> int { 9 }
+
+fn four() -> Result<int, error> {
+  let n = strconv.Atoi("bad").wrap_err(f"{n()}")?
+  Ok(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn err_arm_closure_keeps_its_error_past_a_later_pair() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn message() -> string { "context" }
+
+fn parse() -> Result<int, error> {
+  let show = match strconv.Atoi("bad").wrap_err(message()) {
+    Ok(_) => || fmt.Println("ok"),
+    Err(err) => || fmt.Println(err),
+  }
+  let n = strconv.Atoi("2")?
+  let _ = show()
+  Ok(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn pairs_of_different_error_types_take_distinct_statuses() {
     let input = r#"
 import "go:strconv"
@@ -2724,6 +3075,51 @@ fn run() -> Result<int, error> {
   let a = first()?
   let b = strconv.Atoi("2")?
   Ok(a + b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn ignored_error_arm_still_runs_an_effectful_wrap_message() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn message() -> string {
+  fmt.Println("message")
+  "context"
+}
+
+fn main() {
+  match strconv.Atoi("2").wrap_err(message()) {
+    Ok(n) => fmt.Println(n),
+    Err(_) => fmt.Println("bad"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn result_binding_sites_keep_a_temp_when_a_message_reads_the_let_name() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn n() -> string { "context" }
+
+fn let_else() {
+  let Ok(n) = strconv.Atoi("2").wrap_err(n()) else { return }
+  fmt.Println(n)
+}
+
+fn let_match() {
+  let n = match strconv.Atoi("2").wrap_err(n()) {
+    Ok(x) => x,
+    Err(_) => { return },
+  }
+  fmt.Println(n)
 }
 "#;
     assert_emit_snapshot!(input);

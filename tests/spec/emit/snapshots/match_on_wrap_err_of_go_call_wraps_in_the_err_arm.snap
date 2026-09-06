@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn main() {
+    match strconv.Atoi("x").wrap_err("parse") {
+      Ok(n) => fmt.Println(n),
+      Err(err) => fmt.Println(err),
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	if n, err := strconv.Atoi("x"); err == nil {
+		fmt.Println(n)
+	} else {
+		err = fmt.Errorf("parse: %w", err)
+		fmt.Println(err)
+	}
+}

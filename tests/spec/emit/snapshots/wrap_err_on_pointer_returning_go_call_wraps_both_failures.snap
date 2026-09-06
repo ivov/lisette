@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn open(path: string) -> Result<Ref<os.File>, error> {
+    let file = os.Open(path).wrap_err("open")?
+    Ok(file)
+  }
+  
+  fn main() {
+    fmt.Println(open("missing.txt"))
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"os"
+)
+
+func open(path string) (*os.File, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open: %w", err)
+	}
+	if file == nil {
+		return nil, fmt.Errorf("open: %w", errors.New("unexpected nil"))
+	}
+	return file, nil
+}
+
+func main() {
+	ret_1, ret_2 := open("missing.txt")
+	var result_3 lisette.Result[*os.File, error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[*os.File, error](ret_2)
+	} else if ret_1 == nil {
+		result_3 = lisette.MakeResultErr[*os.File, error](errors.New("unexpected nil"))
+	} else {
+		result_3 = lisette.MakeResultOk[*os.File, error](ret_1)
+	}
+	fmt.Println(result_3)
+}

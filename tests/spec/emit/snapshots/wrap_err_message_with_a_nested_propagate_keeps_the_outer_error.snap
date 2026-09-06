@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn three() -> Result<int, error> {
+    let n = strconv.Atoi("x").wrap_err(f"{strconv.Atoi("0")?}")?
+    Ok(n)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func three() (int, error) {
+	n, err_3 := strconv.Atoi("x")
+	ret_1, err := strconv.Atoi("0")
+	if err != nil {
+		return 0, err
+	}
+	fmtarg_2 := ret_1
+	if err_3 != nil {
+		return 0, fmt.Errorf("%d: %w", fmtarg_2, err_3)
+	}
+	return n, nil
+}

@@ -3,6 +3,7 @@ use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
 use crate::calls::comma_ok::CommaOkSource;
 use crate::calls::comma_ok::{CommaOkValueSlot, LoweredPair, PairKind, header_call};
 use crate::calls::go_interop::NilGuard;
+use crate::calls::wrap_err::WrapMessage;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::is_plain_identifier;
 use crate::patterns::binding_decls::pattern_binds_name;
@@ -21,6 +22,7 @@ pub(crate) struct ResultFusePlan<'a> {
     subject: &'a Expression,
     shape: CallableReturnAbi,
     nil_guard: Option<NilGuard>,
+    wraps: Vec<&'a Expression>,
 }
 
 pub(crate) enum OptionFusePlan<'a> {
@@ -159,11 +161,34 @@ impl ResultFusePlan<'_> {
         slot: CommaOkValueSlot,
         error_name: Option<&str>,
     ) -> LoweredPair {
+        self.bind_wrapped(planner, slot, error_name, false).0
+    }
+
+    fn bind_wrapped(
+        self,
+        planner: &mut Planner<'_>,
+        slot: CommaOkValueSlot,
+        error_name: Option<&str>,
+        read_error: bool,
+    ) -> (LoweredPair, Vec<WrapMessage>) {
         let carries_value = self.carries_payload();
         let (setup, call) = planner
             .lower_call(self.subject, None, ExpressionContext::value())
             .into_parts();
-        planner.bind_pair(
+        let (message_setup, messages) = planner.prepare_wrap_messages(&self.wraps, read_error);
+        // Bind before any eager message setup.
+        let slot = if message_setup.is_empty() {
+            slot
+        } else {
+            match slot {
+                CommaOkValueSlot::Arm(name) => {
+                    CommaOkValueSlot::Named(planner.declared_arm_value_name(&name))
+                }
+                CommaOkValueSlot::Unused => CommaOkValueSlot::Discarded,
+                slot => slot,
+            }
+        };
+        let mut pair = planner.bind_pair(
             setup,
             call,
             slot,
@@ -172,7 +197,9 @@ impl ResultFusePlan<'_> {
                 nil_guard: self.nil_guard,
             },
             error_name,
-        )
+        );
+        pair.statements.extend(message_setup);
+        (pair, messages)
     }
 }
 
@@ -382,6 +409,7 @@ impl Planner<'_> {
         &self,
         subject: &'a Expression,
     ) -> Option<ResultFusePlan<'a>> {
+        let (subject, wraps) = self.peel_wrap_err(subject);
         let plan = self.plan_call(subject)?;
         let shape = plan.resolved.abi.result.clone();
         let nil_guard = match &plan.resolved.origin {
@@ -414,6 +442,7 @@ impl Planner<'_> {
             subject,
             shape,
             nil_guard,
+            wraps,
         })
     }
 
@@ -580,7 +609,8 @@ impl Planner<'_> {
             (None, Some(name)) => CommaOkValueSlot::Arm(self.arm_value_name(name)),
             (None, None) => CommaOkValueSlot::Unused,
         };
-        let mut bound = fuse.bind(self, slot, err_name);
+        let (mut bound, wraps) = fuse.bind_wrapped(self, slot, err_name, err_name.is_some());
+        let error = bound.status().to_string();
 
         let then_body = destination.is_none().then(|| {
             // A call returning only `error` has no value, so `Ok(x)` takes unit.
@@ -601,7 +631,8 @@ impl Planner<'_> {
         let (mut else_body, err_used) =
             self.lower_fused_arm(&[err_binding], &err.arm.expression, arm_place);
 
-        if has_nil_guard && err_used.into_iter().any(|used| used) {
+        let err_read = err_used.first().copied().unwrap_or(false) || !wraps.is_empty();
+        if has_nil_guard && err_read {
             self.require_errors();
             let error = bound.status();
             else_body.statements.insert(
@@ -610,6 +641,14 @@ impl Planner<'_> {
                     "if {error} == nil {{\n{error} = errors.New(\"unexpected nil\")\n}}\n"
                 )),
             );
+        }
+        if !wraps.is_empty() {
+            let wrapped = self.wrap_error(&wraps, error.clone());
+            let prologue = vec![LoweredStatement::RawGo(format!("{error} = {wrapped}\n"))];
+            let after_nil_guard = usize::from(has_nil_guard);
+            else_body
+                .statements
+                .splice(after_nil_guard..after_nil_guard, prologue);
         }
         if matches!(then_body, Some((_, false))) {
             bound.discard_value();
