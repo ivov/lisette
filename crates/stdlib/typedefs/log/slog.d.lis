@@ -278,7 +278,7 @@ pub interface Handler {
 pub struct HandlerOptions {
   pub AddSource: bool,
   pub Level: Option<Leveler>,
-  pub ReplaceAttr: Option<fn(Slice<string>, Attr) -> Attr>,
+  pub ReplaceAttr: Option<fn(mut Slice<string>, Attr) -> Attr>,
 }
 
 /// JSONHandler is a [Handler] that writes Records to an [io.Writer] as

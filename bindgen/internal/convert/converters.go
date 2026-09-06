@@ -169,6 +169,7 @@ func (c *Converter) applySupersededBy(result *ConvertResult, qualifiedName strin
 
 func (c *Converter) convertParams(sig *types.Signature, obj types.Object, lookupName, methodName string, paramOverrides map[int]string, directEligible bool, substitutions map[string]string) ([]FunctionParameter, *SkipReason) {
 	mutParams := c.cfg.MutatingParams(c.currentPkgPath, lookupName)
+	nonMutParams := c.cfg.NonMutatingParams(c.currentPkgPath, lookupName)
 	mutation, _ := c.mutation.Function(obj)
 	declaring, _ := obj.(*types.Func)
 
@@ -197,7 +198,7 @@ func (c *Converter) convertParams(sig *types.Signature, obj types.Object, lookup
 		typeStr := paramType.LisetteType
 		naming := paramNaming{emitted: name, goName: param.Name()}
 		if !directHandled && !isVariadicTail &&
-			isMutableParam(mutation.Mutates(i), mutParams, naming, param.Type(), methodName) {
+			isMutableParam(mutation.Mutates(i), mutParams, nonMutParams, naming, param.Type(), methodName) {
 			writable := writableParamType(param.Type(), optional, c, substitutions)
 			if writable.SkipReason != nil {
 				return nil, writable.SkipReason
@@ -1093,10 +1094,15 @@ func isSingleDemotableResult(sig *types.Signature) bool {
 }
 
 func sliceToVarArgs(typeStr string) string {
-	if elem, ok := unwrapSlice(typeStr); ok {
-		return varArgsOf(elem)
+	base, writable := strings.CutPrefix(typeStr, "mut ")
+	elem, ok := unwrapSlice(base)
+	if !ok {
+		return typeStr
 	}
-	return typeStr
+	if writable {
+		return "mut " + varArgsOf(elem)
+	}
+	return varArgsOf(elem)
 }
 
 func formatConstantValue(val constant.Value) string {
@@ -1234,10 +1240,12 @@ type paramNaming struct {
 	goName  string
 }
 
-// isMutableParam combines the three signals additively rather than ranking them:
-// a missing `mut` corrupts caller data, a spurious one only asks for a `let mut`.
+// isMutableParam lets an explicit read-only contract override all write signals.
 // The writable renderer neutralizes a signal on a type Go cannot write through.
-func isMutableParam(derivedMutates bool, mutParams []string, names paramNaming, t types.Type, funcName string) bool {
+func isMutableParam(derivedMutates bool, mutParams, nonMutParams []string, names paramNaming, t types.Type, funcName string) bool {
+	if slices.Contains(nonMutParams, names.emitted) {
+		return false
+	}
 	return slices.Contains(mutParams, names.emitted) ||
 		derivedMutates ||
 		looksLikeMutableParam(names.goName, t, funcName)

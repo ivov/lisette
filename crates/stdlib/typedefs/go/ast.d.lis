@@ -216,7 +216,7 @@ pub fn Preorder(root: Node) -> iter.Seq<Node>
 pub fn PreorderStack(
   root: Node,
   stack: mut Slice<Node>,
-  f: fn(Node, Slice<Node>) -> bool,
+  f: fn(Node, mut Slice<Node>) -> bool,
 )
 
 /// Print prints x to standard output, skipping nil fields.
@@ -479,7 +479,7 @@ pub struct Field {
 }
 
 /// A FieldFilter may be provided to [Fprint] to control the output.
-pub type FieldFilter = fn(string, reflect.Value) -> bool
+pub type FieldFilter = fn(string, mut reflect.Value) -> bool
 
 /// A FieldList represents a list of Fields, enclosed by parentheses,
 /// curly braces, or square brackets.
@@ -619,7 +619,7 @@ pub struct ImportSpec {
 /// return pkg.
 /// 
 /// Deprecated: use the type checker [go/types] instead; see [Object].
-pub type Importer = fn(Map<string, Ref<Object>>, string) -> Result<mut Ref<Object>, error>
+pub type Importer = fn(mut Map<string, mut Ref<Object>>, string) -> Result<mut Ref<Object>, error>
 
 /// An IncDecStmt node represents an increment or decrement statement.
 pub struct IncDecStmt {

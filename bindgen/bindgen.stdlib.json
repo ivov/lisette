@@ -182,6 +182,26 @@
       },
       "nilable_return": {
       },
+      "non_mutating_param": {
+        "compress/flate": {
+          "Writer.Write": ["data"]
+        },
+        "compress/gzip": {
+          "Writer.Write": ["p"]
+        },
+        "compress/zlib": {
+          "Writer.Write": ["p"]
+        },
+        "hash/crc32": {
+          "Checksum": ["data"],
+          "ChecksumIEEE": ["data"],
+          "Update": ["p"]
+        },
+        "net/http/httputil": {
+          "ClientConn.Do": ["req"],
+          "ClientConn.Write": ["req"]
+        }
+      },
       "mutates_param": {
         "archive/tar": {
           "Reader.Read": ["b"]

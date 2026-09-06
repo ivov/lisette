@@ -424,7 +424,7 @@ impl FileSet {
 
   /// Iterate calls yield for the files in the file set in ascending Base
   /// order until yield returns false.
-  fn Iterate(self: Ref<FileSet>, yield: fn(Ref<File>) -> bool)
+  fn Iterate(self: Ref<FileSet>, yield: fn(mut Ref<File>) -> bool)
 
   /// Position converts a [Pos] p in the fileset into a Position value.
   /// Calling s.Position(p) is equivalent to calling s.PositionFor(p, true).

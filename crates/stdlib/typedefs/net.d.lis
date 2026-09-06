@@ -87,8 +87,8 @@ pub fn DialIP(
 /// local system is assumed.
 pub fn DialTCP(
   network: string,
-  laddr: Ref<TCPAddr>,
-  raddr: Ref<TCPAddr>,
+  laddr: mut Ref<TCPAddr>,
+  raddr: mut Ref<TCPAddr>,
 ) -> Result<mut Ref<TCPConn>, error>
 
 /// DialTimeout acts like [Dial] but takes a timeout.

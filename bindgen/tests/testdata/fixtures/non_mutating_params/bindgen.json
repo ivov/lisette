@@ -1,0 +1,14 @@
+{
+  "overrides": {
+    "types": {
+      "non_mutating_param": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/non_mutating_params": {
+          "ReadOnlyView": ["self_"],
+          "Peek": ["dst"],
+          "Copy": ["src"],
+          "Reader.View": ["data"]
+        }
+      }
+    }
+  }
+}

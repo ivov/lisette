@@ -121,7 +121,7 @@ pub type Scanner
 /// The function is never called with an empty data slice unless atEOF
 /// is true. If atEOF is true, however, data may be non-empty and,
 /// as always, holds unprocessed text.
-pub type SplitFunc = fn(Slice<byte>, bool) -> Result<(int, Slice<byte>), error>
+pub type SplitFunc = fn(mut Slice<byte>, bool) -> Result<(int, Slice<byte>), error>
 
 /// Writer implements buffering for an [io.Writer] object.
 /// If an error occurs writing to a [Writer], no more data will be

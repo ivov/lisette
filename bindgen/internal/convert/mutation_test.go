@@ -482,24 +482,29 @@ func TestIsMutableParamCombinesSignals(t *testing.T) {
 		name      string
 		derived   bool
 		curated   []string
+		readOnly  []string
 		naming    paramNaming
 		paramType types.Type
 		funcName  string
 		want      bool
 	}{
-		{"derived only", true, nil, paramNaming{"s", "s"}, intSlice, "Sort", true},
-		{"curated only", false, []string{"buf"}, paramNaming{"buf", "buf"}, byteSlice, "Buffer", true},
-		{"heuristic only", false, nil, paramNaming{"p", "p"}, byteSlice, "Read", true},
-		{"curated omits, derived finds", true, []string{"other"}, paramNaming{"s", "s"}, intSlice, "Sort", true},
-		{"no signal", false, nil, paramNaming{"s", "s"}, intSlice, "Sort", false},
-		{"pointer with derived signal", true, nil, paramNaming{"m", "m"}, pointer, "ReadMemStats", true},
-		{"curated key reaches an unnamed param", false, []string{"request"}, paramNaming{"request", ""}, pointer, "ServeHTTP", true},
-		{"derived name does not trip the heuristic", false, nil, paramNaming{"dst", ""}, pointer, "Inspect", false},
-		{"go name still trips the heuristic", false, nil, paramNaming{"dst", "dst"}, pointer, "Inspect", true},
+		{"derived only", true, nil, nil, paramNaming{"s", "s"}, intSlice, "Sort", true},
+		{"curated only", false, []string{"buf"}, nil, paramNaming{"buf", "buf"}, byteSlice, "Buffer", true},
+		{"heuristic only", false, nil, nil, paramNaming{"p", "p"}, byteSlice, "Read", true},
+		{"curated omits, derived finds", true, []string{"other"}, nil, paramNaming{"s", "s"}, intSlice, "Sort", true},
+		{"no signal", false, nil, nil, paramNaming{"s", "s"}, intSlice, "Sort", false},
+		{"pointer with derived signal", true, nil, nil, paramNaming{"m", "m"}, pointer, "ReadMemStats", true},
+		{"curated key reaches an unnamed param", false, []string{"request"}, nil, paramNaming{"request", ""}, pointer, "ServeHTTP", true},
+		{"derived name does not trip the heuristic", false, nil, nil, paramNaming{"dst", ""}, pointer, "Inspect", false},
+		{"go name still trips the heuristic", false, nil, nil, paramNaming{"dst", "dst"}, pointer, "Inspect", true},
+		{"read-only overrides derived", true, nil, []string{"s"}, paramNaming{"s", "s"}, intSlice, "Sort", false},
+		{"read-only overrides curated", false, []string{"buf"}, []string{"buf"}, paramNaming{"buf", "buf"}, byteSlice, "Buffer", false},
+		{"read-only overrides heuristic", false, nil, []string{"p"}, paramNaming{"p", "p"}, byteSlice, "Read", false},
+		{"read-only omits, derived finds", true, nil, []string{"other"}, paramNaming{"s", "s"}, intSlice, "Sort", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := isMutableParam(c.derived, c.curated, c.naming, c.paramType, c.funcName)
+			got := isMutableParam(c.derived, c.curated, c.readOnly, c.naming, c.paramType, c.funcName)
 			if got != c.want {
 				t.Errorf("isMutableParam = %v, want %v", got, c.want)
 			}

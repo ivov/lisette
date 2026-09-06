@@ -15,7 +15,7 @@ pub fn WithKeys(keys: VarArgs<string>) -> BindingOpt
 pub type Binding
 
 /// Option type for a binding, as in charm.land/bubbles/v2/key.
-pub type BindingOpt = fn(Ref<Binding>) -> ()
+pub type BindingOpt = fn(mut Ref<Binding>) -> ()
 
 pub type Handler = fn(string) -> string
 

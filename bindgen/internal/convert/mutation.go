@@ -126,6 +126,8 @@ type mutationSummary struct {
 	handOut *aliasSources
 	// freeVarStores: what the function stores through each captured variable.
 	freeVarStores map[int]*captureStores
+	// callbacks: calls of this function's own parameters, for the caller to resolve.
+	callbacks map[callbackKey]*callbackFact
 }
 
 func (m *mutationSummary) captureStoresFor(index int) *captureStores {
@@ -327,6 +329,7 @@ func (m *mutationSummary) weight() int {
 	for _, buckets := range m.freeVarStores {
 		total += buckets.weight()
 	}
+	total += m.callbackWeight()
 	return total
 }
 
@@ -440,12 +443,15 @@ func (a *MutationAnalysis) record(fn *types.Func) {
 		offset = 1
 	}
 	summary := a.summarize(ssaFn)
+	written := map[int]reachMode{}
+	mergeModes(written, summary.params)
+	mergeModes(written, summary.externalCallbackRoots())
 	if sig.Recv() != nil {
-		if _, wrote := summary.params[0]; wrote {
+		if _, wrote := written[0]; wrote {
 			facts.ReceiverMutates = true
 		}
 	}
-	for index := range summary.params {
+	for index := range written {
 		if signatureIndex := index - offset; signatureIndex >= 0 && signatureIndex < paramCount {
 			facts.Params[signatureIndex] = true
 		}
@@ -575,6 +581,7 @@ func (a *MutationAnalysis) recordClosureWrites(fn *ssa.Function, closure *ssa.Ma
 			resumeWalk(fn, closure.Bindings[index], summary, mode)
 		}
 	}
+	a.resolveClosureCallbacks(fn, closure, inner, summary)
 }
 
 // resumeWalk continues the way the callee reached its own parameter, so
@@ -612,6 +619,7 @@ func (a *MutationAnalysis) recordCallWrites(fn *ssa.Function, common *ssa.CallCo
 	}
 	callee := common.StaticCallee()
 	if callee == nil {
+		a.recordCallbackCall(fn, common, summary)
 		return
 	}
 	inner := a.summarize(callee)
@@ -620,6 +628,7 @@ func (a *MutationAnalysis) recordCallWrites(fn *ssa.Function, common *ssa.CallCo
 			resumeWalk(fn, common.Args[index], summary, mode)
 		}
 	}
+	a.resolveCalleeCallbacks(fn, common, inner, summary)
 }
 
 func isReceiverMutationAxiom(method *types.Func) bool {

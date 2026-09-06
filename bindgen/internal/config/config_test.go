@@ -68,6 +68,9 @@ func TestNilConfigAccessorsDoNotPanic(t *testing.T) {
 	if cfg.MutatingParams("io", "Foo") != nil {
 		t.Error("MutatingParams")
 	}
+	if cfg.NonMutatingParams("io", "Foo") != nil {
+		t.Error("NonMutatingParams")
+	}
 	if cfg.NilableParams("io", "Foo") != nil {
 		t.Error("NilableParams")
 	}

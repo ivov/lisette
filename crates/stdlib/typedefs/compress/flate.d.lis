@@ -141,5 +141,5 @@ impl Writer {
 
   /// Write writes data to w, which will eventually write the
   /// compressed form of data to its underlying writer.
-  fn Write(self: Ref<Writer>, data: Slice<byte>) -> Partial<int, error>
+  fn Write(self: mut Ref<Writer>, data: Slice<byte>) -> Partial<int, error>
 }

@@ -356,11 +356,11 @@ pub struct Config {
   pub Time: Option<fn() -> time.Time>,
   pub Certificates: mut Slice<mut Certificate>,
   pub NameToCertificate: Option<mut Map<string, Option<mut Ref<Certificate>>>>,
-  pub GetCertificate: Option<fn(Ref<ClientHelloInfo>) -> Result<mut Ref<Certificate>, error>>,
-  pub GetClientCertificate: Option<fn(Ref<CertificateRequestInfo>) -> Result<mut Ref<Certificate>, error>>,
-  pub GetConfigForClient: Option<fn(Ref<ClientHelloInfo>) -> Result<mut Ref<Config>, error>>,
-  pub VerifyPeerCertificate: Option<fn(Slice<Slice<byte>>, Slice<Slice<Ref<x509.Certificate>>>) -> Result<(), error>>,
-  pub VerifyConnection: Option<fn(ConnectionState) -> Result<(), error>>,
+  pub GetCertificate: Option<fn(mut Ref<ClientHelloInfo>) -> Result<mut Ref<Certificate>, error>>,
+  pub GetClientCertificate: Option<fn(mut Ref<CertificateRequestInfo>) -> Result<mut Ref<Certificate>, error>>,
+  pub GetConfigForClient: Option<fn(mut Ref<ClientHelloInfo>) -> Result<mut Ref<Config>, error>>,
+  pub VerifyPeerCertificate: Option<fn(mut Slice<mut Slice<byte>>, mut Slice<mut Slice<mut Ref<x509.Certificate>>>) -> Result<(), error>>,
+  pub VerifyConnection: Option<fn(mut ConnectionState) -> Result<(), error>>,
   pub RootCAs: Option<mut Ref<x509.CertPool>>,
   pub NextProtos: mut Slice<string>,
   pub ServerName: string,
@@ -372,8 +372,8 @@ pub struct Config {
   pub SessionTicketsDisabled: bool,
   pub SessionTicketKey: Array<byte, 32>,
   pub ClientSessionCache: Option<ClientSessionCache>,
-  pub UnwrapSession: Option<fn(Slice<byte>, ConnectionState) -> Result<mut Ref<SessionState>, error>>,
-  pub WrapSession: Option<fn(ConnectionState, Ref<SessionState>) -> Result<Slice<byte>, error>>,
+  pub UnwrapSession: Option<fn(mut Slice<byte>, mut ConnectionState) -> Result<mut Ref<SessionState>, error>>,
+  pub WrapSession: Option<fn(mut ConnectionState, mut Ref<SessionState>) -> Result<Slice<byte>, error>>,
   pub MinVersion: uint16,
   pub MaxVersion: uint16,
   pub CurvePreferences: mut Slice<CurveID>,
@@ -381,8 +381,8 @@ pub struct Config {
   pub Renegotiation: RenegotiationSupport,
   pub KeyLogWriter: Option<io.Writer>,
   pub EncryptedClientHelloConfigList: mut Slice<byte>,
-  pub EncryptedClientHelloRejectionVerify: Option<fn(ConnectionState) -> Result<(), error>>,
-  pub GetEncryptedClientHelloKeys: Option<fn(Ref<ClientHelloInfo>) -> Result<Slice<EncryptedClientHelloKey>, error>>,
+  pub EncryptedClientHelloRejectionVerify: Option<fn(mut ConnectionState) -> Result<(), error>>,
+  pub GetEncryptedClientHelloKeys: Option<fn(mut Ref<ClientHelloInfo>) -> Result<Slice<EncryptedClientHelloKey>, error>>,
   pub EncryptedClientHelloKeys: mut Slice<mut EncryptedClientHelloKey>,
 }
 
@@ -884,7 +884,7 @@ impl ConnectionState {
   fn ExportKeyingMaterial(
     self: Ref<ConnectionState>,
     label: string,
-    context: Slice<byte>,
+    context: mut Slice<byte>,
     length: int,
   ) -> Result<mut Slice<byte>, error>
 }

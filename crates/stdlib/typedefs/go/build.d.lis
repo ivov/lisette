@@ -45,7 +45,7 @@ pub struct Context {
   pub ToolTags: mut Slice<string>,
   pub ReleaseTags: mut Slice<string>,
   pub InstallSuffix: string,
-  pub JoinPath: Option<fn(VarArgs<string>) -> string>,
+  pub JoinPath: Option<fn(mut VarArgs<string>) -> string>,
   pub SplitPathList: Option<fn(string) -> Slice<string>>,
   pub IsAbsPath: Option<fn(string) -> bool>,
   pub IsDir: Option<fn(string) -> bool>,

@@ -52,6 +52,15 @@ pub struct BadResultFn {
   pub Run: Option<fn() -> Result<AnonX, error>>,
 }
 
+/// Function type params are writable
+pub struct Callbacks {
+  pub OnNode: Option<fn(mut Ref<Node>) -> ()>,
+  pub OnBytes: Option<fn(mut Slice<byte>) -> ()>,
+  pub OnLookup: Option<fn(mut Map<string, mut Slice<int>>) -> ()>,
+  pub OnValue: Option<fn(Node) -> ()>,
+  pub OnNodes: Option<fn(mut Ref<Node>, mut VarArgs<mut Ref<Node>>) -> ()>,
+}
+
 /// Function type with just error return - tests single error path
 pub struct ErrorOnly {
   pub Try: Option<fn() -> Result<(), error>>,
@@ -66,7 +75,7 @@ pub type Handler = fn(int) -> Result<(), error>
 
 /// Variadic function type
 pub struct Logger {
-  pub Log: Option<fn(string, VarArgs<Unknown>) -> ()>,
+  pub Log: Option<fn(string, mut VarArgs<Unknown>) -> ()>,
 }
 
 pub type MultiReturn = fn() -> Result<int, error>
@@ -85,6 +94,6 @@ pub struct TupleSkip {
   pub GetPair: Option<fn() -> (AnonA, AnonB)>,
 }
 
-pub type Variadic = fn(string, VarArgs<int>) -> Result<(), error>
+pub type Variadic = fn(string, mut VarArgs<int>) -> Result<(), error>
 
 pub type WithArgs = fn(int, string) -> bool

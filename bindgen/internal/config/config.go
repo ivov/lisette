@@ -36,6 +36,9 @@ type TypeOverrides struct {
 	NeverReturn      map[string][]string            `json:"never_return"`
 	PartialResult    map[string][]string            `json:"partial_result"`
 	MutatesParam     map[string]map[string][]string `json:"mutates_param"`
+	// NonMutatingParam declares read-only contracts, overriding inferred writes,
+	// name heuristics, and mutates_param entries for the named parameters.
+	NonMutatingParam map[string]map[string][]string `json:"non_mutating_param"`
 	// MutatesReceiver curates receiver writes the SSA walk cannot see, as "Type.Method".
 	MutatesReceiver map[string][]string `json:"mutates_receiver"`
 	// ReturnsViewOf curates view aliasing the SSA result walk cannot see:
@@ -219,6 +222,14 @@ func (c *Config) MutatingParams(pkg, name string) []string {
 		return nil
 	}
 	return nestedParams(c.Overrides.Types.MutatesParam, pkg, name)
+}
+
+// NonMutatingParams declares parameters whose public contract forbids writes.
+func (c *Config) NonMutatingParams(pkg, name string) []string {
+	if c == nil {
+		return nil
+	}
+	return nestedParams(c.Overrides.Types.NonMutatingParam, pkg, name)
 }
 
 // MutatesReceiver returns true if the "Type.Method" is curated as writing through its receiver.
