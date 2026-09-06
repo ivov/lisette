@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `mut` has no effect
+   ╭─[test.lis:4:10]
+ 3 │   let xs = [1, 2]
+ 4 │   let r: Ref<mut Slice<int>> = &xs
+   ·          ─┬─ ───────┬──────
+   ·           │         ╰── `mut` has no effect
+   ·           ╰── read-only
+ 5 │   let _ = r
+   ╰────
+  help: A read-only container makes its contents read-only. Write `mut` before `Ref`, or remove the inner `mut` · code: [infer.mut_without_effect]

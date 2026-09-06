@@ -15650,7 +15650,7 @@ struct Beam {
 }
 
 impl Beam {
-  fn new(rocks: mut Ref<Slice<mut Ref<Rock>>>) -> mut Ref<Beam> {
+  fn new(rocks: mut Ref<Slice<Ref<Rock>>>) -> mut Ref<Beam> {
     &Beam {
       rocks,
       hits: 0,
@@ -15708,6 +15708,30 @@ struct Pair(mut Slice<int>, int)
 
 fn poke(p: Pair) {
   p.0[0] = 1
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_under_read_only_ref_names_the_wrapper() {
+    let input = r#"
+fn main() {
+  let xs = [1, 2]
+  let r: Ref<mut Slice<int>> = &xs
+  let _ = r
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_under_read_only_ref_inner_layer_names_the_outer_wrapper() {
+    let input = r#"
+struct P { x: int }
+
+fn take(items: Ref<mut Slice<mut Ref<P>>>) {
+  let _ = items
 }
 "#;
     assert_infer_error_snapshot!(input);

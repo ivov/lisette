@@ -78,6 +78,7 @@ impl<'source> Parser<'source> {
                         name: "Slice".into(),
                         params: vec![],
                         writable: false,
+                        mut_span: None,
                         span: error_span,
                     };
                 }
@@ -87,6 +88,7 @@ impl<'source> Parser<'source> {
                     name: "".into(),
                     params: vec![],
                     writable: false,
+                    mut_span: None,
                     span,
                 }
             }
@@ -108,6 +110,7 @@ impl<'source> Parser<'source> {
 
     fn parse_writable_annotation(&mut self) -> Annotation {
         let mut_token = self.current_token();
+        let mut_span = Span::new(self.file_id, mut_token.byte_offset, mut_token.byte_length);
         self.next();
         while self.is(Mut) {
             self.track_error("duplicate `mut` qualifier", "Write `mut` once.");
@@ -119,16 +122,18 @@ impl<'source> Parser<'source> {
                 name,
                 params,
                 writable: _,
+                mut_span: _,
                 span,
             } => Annotation::Constructor {
                 name,
                 params,
                 writable: true,
+                mut_span: Some(mut_span),
                 span,
             },
             other => {
                 self.track_error_at(
-                    Span::new(self.file_id, mut_token.byte_offset, mut_token.byte_length),
+                    mut_span,
                     "`mut` does not apply to this type",
                     "Write `mut` on the reference type it protects, as in `mut Slice<int>`. \
                      A tuple or function type cannot carry it.",
@@ -170,6 +175,7 @@ impl<'source> Parser<'source> {
                 name,
                 params: type_params,
                 writable: false,
+                mut_span: None,
                 span: self.span_from_offset(start.byte_offset),
             };
         }
@@ -182,6 +188,7 @@ impl<'source> Parser<'source> {
             name,
             params: vec![],
             writable: false,
+            mut_span: None,
             span: self.span_from_offset(start.byte_offset),
         }
     }
@@ -242,6 +249,7 @@ impl<'source> Parser<'source> {
             name,
             params: type_params,
             writable: false,
+            mut_span: None,
             span: self.span_from_offset(start.byte_offset),
         }
     }
