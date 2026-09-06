@@ -17,11 +17,10 @@ import "slices"
 
 func f(arr [3]int) ([]int, int, int, []int, []int) {
 	src_1 := slices.Clone(arr[:])
-	result_2 := make([]int, len(src_1))
-	for i_3, x := range src_1 {
-		result_2[i_3] = x * 2
+	doubled := make([]int, len(src_1))
+	for i_2, x := range src_1 {
+		doubled[i_2] = x * 2
 	}
-	doubled := result_2
 	stomped := copy(slices.Clone(arr[:]), []int{7, 8})
 	room := cap(slices.Clone(arr[:]))
 	grown := slices.Grow(slices.Clone(arr[:]), 10)

@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let mut items = [1, 2, 3]
+    for i in 0..items.length() {
+      items = items.append(i)
+      fmt.Println(items.length())
+    }
+  }
+---
+package main
+
+import "fmt"
+
+func main() {
+	items := []int{1, 2, 3}
+	bound_1 := len(items)
+	for i := range bound_1 {
+		items = append(items, i)
+		fmt.Println(len(items))
+	}
+}

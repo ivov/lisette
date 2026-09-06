@@ -3110,6 +3110,70 @@ fn main() {
 }
 
 #[test]
+fn range_bound_over_an_unmutated_slice_reads_len_in_the_header() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  let args = os.Args
+  for i in 1..args.length() {
+    fmt.Println(args[i])
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn range_bound_over_a_mutated_slice_keeps_the_bound_temp() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let mut items = [1, 2, 3]
+  for i in 0..items.length() {
+    items = items.append(i)
+    fmt.Println(items.length())
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_map_fills_the_let_name_as_the_result() {
+    let input = r#"
+import "go:fmt"
+
+struct Task { id: int, done: bool }
+
+fn main() {
+  let tasks = [Task { id: 1, done: false }, Task { id: 2, done: true }]
+  let ids = tasks.map(|t| t.id)
+  let open = tasks.filter(|t| !t.done)
+  let total = tasks.fold(0, |sum, t| sum + t.id)
+  fmt.Println(ids, open.length(), total)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_map_with_a_returning_lambda_keeps_the_helper_call() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let nums = [1, 2, 3]
+  let doubled = nums.map(|n| { return n * 2 })
+  fmt.Println(doubled)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn nested_propagate_in_call_args_binds_the_inner_pair_first() {
     let input = r#"
 import "go:strconv"
@@ -3450,6 +3514,19 @@ fn two() -> Result<int, error> {
 }
 
 #[test]
+fn let_map_over_a_function_of_its_own_name_keeps_a_temp() {
+    let input = r#"
+fn items() -> Slice<int> { [1, 2, 3] }
+
+fn three() -> int {
+  let items = items().filter(|x| x > 1)
+  items.length()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn propagate_message_that_calls_a_function_of_the_let_name_keeps_a_temp() {
     let input = r#"
 import "go:strconv"
@@ -3546,6 +3623,62 @@ fn let_match() {
     Err(_) => { return },
   }
   fmt.Println(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generated_names_avoid_renamed_package_functions() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn get_items() -> Slice<int> { [1, 2, 3] }
+
+fn len() -> string { "context" }
+
+fn direct_let() -> int {
+  let getItems = 5
+  getItems + get_items().length()
+}
+
+fn filtered_let() -> int {
+  let getItems = get_items().filter(|x| x > 1)
+  getItems.length() + get_items().length()
+}
+
+fn parameter(getItems: int) -> int {
+  let (first, rest) = (getItems, 2)
+  first + rest + get_items().length()
+}
+
+fn arm_in_other_arm() {
+  match strconv.Atoi("bad") {
+    Ok(len) => fmt.Println(len),
+    Err(_) => fmt.Println(len()),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn range_bound_over_a_channel_length_keeps_the_bound_temp() {
+    let input = r#"
+import "go:fmt"
+
+fn six() {
+  let ch = Channel.buffered<int>(3)
+  ch.send(1)
+  ch.send(2)
+  ch.send(3)
+  let mut iterations = 0
+  for _i in 1..ch.length() {
+    let _ = ch.receive()
+    iterations += 1
+  }
+  fmt.Println("iterations", iterations)
 }
 "#;
     assert_emit_snapshot!(input);

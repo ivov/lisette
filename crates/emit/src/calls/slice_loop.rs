@@ -2,6 +2,7 @@ use syntax::ast::{Binding, Expression, Pattern};
 use syntax::types::Type;
 
 use super::NativeCallContext;
+use super::dispatch::extract_native_method_name;
 use super::native::NativeCallResult;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
@@ -9,7 +10,9 @@ use crate::names::go_name;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, PlacePlan,
 };
-use crate::plan::values::EvaluationEffect;
+use crate::plan::calls::CallableOrigin;
+use crate::plan::values::{CaptureBoundary, EvaluationEffect};
+use crate::types::native::NativeGoType;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SliceLoop {
@@ -97,15 +100,22 @@ fn peel_single_expression_block(body: &Expression) -> &Expression {
     }
 }
 
+struct SliceLoopShape<'a> {
+    kind: SliceLoop,
+    body: &'a Expression,
+    patterns: Vec<&'a Pattern>,
+    result_ty: Type,
+    element_ty: Type,
+}
+
 impl Planner<'_> {
-    /// Lower `xs.map(|x| ...)` and its siblings to the loop the prelude helper
-    /// runs. `None` keeps the helper call.
-    pub(super) fn try_lower_slice_loop(
-        &mut self,
-        ctx: &NativeCallContext,
+    /// The parts of a `map`, `filter`, `fold`, or `find` call that inline as a loop.
+    fn slice_loop_shape<'a>(
+        &self,
+        ctx: &NativeCallContext<'_>,
         receiver: &Expression,
-        args: &[Expression],
-    ) -> Option<NativeCallResult> {
+        args: &'a [Expression],
+    ) -> Option<SliceLoopShape<'a>> {
         let kind = SliceLoop::from_method(ctx.method)?;
         if args.len() != kind.argument_count() || ctx.spread.is_some() {
             return None;
@@ -125,7 +135,6 @@ impl Planner<'_> {
         if expects_accumulator && body_captures_by_reference(body) {
             return None;
         }
-
         let result_ty = ctx.call_ty?.clone();
         let element_ty = self
             .facts
@@ -133,6 +142,79 @@ impl Planner<'_> {
             .get_type_params()?
             .first()?
             .clone();
+        Some(SliceLoopShape {
+            kind,
+            body,
+            patterns,
+            result_ty,
+            element_ty,
+        })
+    }
+
+    /// `let xs = ys.map(..)` fills `xs` as the loop's own result.
+    pub(crate) fn lower_slice_loop_into(
+        &mut self,
+        value: &Expression,
+        go_name: &str,
+    ) -> Option<Vec<LoweredStatement>> {
+        let Expression::Call {
+            expression: callee,
+            args,
+            spread,
+            type_arguments,
+            ..
+        } = value.unwrap_parens()
+        else {
+            return None;
+        };
+        let plan = self.plan_call(value.unwrap_parens())?;
+        let (CallableOrigin::NativeMethod(kind) | CallableOrigin::NativeMethodIdentifier(kind)) =
+            &plan.resolved.origin
+        else {
+            return None;
+        };
+        let native_type = NativeGoType::from_kind(*kind);
+        if !matches!(native_type, NativeGoType::Slice) {
+            return None;
+        }
+        let function = callee.unwrap_parens();
+        let ty = value.get_type();
+        let ctx = NativeCallContext {
+            function,
+            args,
+            spread: spread.as_deref(),
+            resolved_type_args: type_arguments.resolved_types()?,
+            call_ty: Some(&ty),
+            native_type: &native_type,
+            method: extract_native_method_name(function),
+            capture_boundary: CaptureBoundary::SiblingSequence,
+            retired_receiver: None,
+            result_name: Some(go_name),
+        };
+        let (receiver, arguments) = match function {
+            Expression::DotAccess { expression, .. } => (expression.as_ref(), args.as_slice()),
+            _ => args.split_first()?,
+        };
+        self.slice_loop_shape(&ctx, receiver, arguments)?;
+        Some(self.lower_native_call(&ctx, &plan.resolved.origin).setup)
+    }
+
+    /// Lower `xs.map(|x| ...)` and its siblings to the loop the prelude helper
+    /// runs. `None` keeps the helper call.
+    pub(super) fn try_lower_slice_loop(
+        &mut self,
+        ctx: &NativeCallContext,
+        receiver: &Expression,
+        args: &[Expression],
+    ) -> Option<NativeCallResult> {
+        let SliceLoopShape {
+            kind,
+            body,
+            patterns,
+            result_ty,
+            element_ty,
+        } = self.slice_loop_shape(ctx, receiver, args)?;
+        let expects_accumulator = kind == SliceLoop::Fold;
 
         let mut source_staged = self.plan_operand(receiver, ExpressionContext::value());
         // `map` reads the source twice, for its length and for the range.
@@ -148,7 +230,10 @@ impl Planner<'_> {
         let (mut setup, values) = sequenced.into_rendered();
         let source = values[0].clone();
 
-        let result = self.fresh_var(Some("result"));
+        let result = match ctx.result_name {
+            Some(name) => name.to_string(),
+            None => self.fresh_var(Some("result")),
+        };
         self.declare(&result);
         setup.push(self.slice_loop_declaration(kind, &result, &result_ty, &source, values.get(1)));
 

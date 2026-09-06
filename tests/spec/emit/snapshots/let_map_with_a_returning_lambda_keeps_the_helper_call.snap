@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let nums = [1, 2, 3]
+    let doubled = nums.map(|n| { return n * 2 })
+    fmt.Println(doubled)
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	nums := []int{1, 2, 3}
+	doubled := lisette.SliceMap(nums, func(n int) int {
+		return n * 2
+	})
+	fmt.Println(doubled)
+}

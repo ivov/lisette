@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Task { id: int, done: bool }
+  
+  fn main() {
+    let tasks = [Task { id: 1, done: false }, Task { id: 2, done: true }]
+    let ids = tasks.map(|t| t.id)
+    let open = tasks.filter(|t| !t.done)
+    let total = tasks.fold(0, |sum, t| sum + t.id)
+    fmt.Println(ids, open.length(), total)
+  }
+---
+package main
+
+import "fmt"
+
+type Task struct {
+	id   int
+	done bool
+}
+
+func main() {
+	tasks := []Task{{
+		id:   1,
+		done: false,
+	}, {
+		id:   2,
+		done: true,
+	}}
+	ids := make([]int, len(tasks))
+	for i_1, t := range tasks {
+		ids[i_1] = t.id
+	}
+	var open []Task
+	for _, t := range tasks {
+		if !t.done {
+			open = append(open, t)
+		}
+	}
+	total := 0
+	for _, t := range tasks {
+		total = total + t.id
+	}
+	fmt.Println(ids, len(open), total)
+}
