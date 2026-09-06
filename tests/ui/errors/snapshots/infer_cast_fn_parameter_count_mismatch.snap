@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:7:17]
+ 6 │ fn test() {
+ 7 │   let handler = pair as Handler
+   ·                 ───────┬───────
+   ·                        ╰── expected `Handler`, found `fn (int, int) -> ()`
+ 8 │   handler(1)
+   ╰────
+  help: The function types must have the same number of parameters · code: [infer.type_mismatch]
