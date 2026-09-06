@@ -12,7 +12,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-const Key string = "a"
+const Key = "a"
 
 func test() map[string]int {
 	return lisette.MapFrom([]lisette.Tuple2[string, int]{

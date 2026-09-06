@@ -28,7 +28,7 @@ import (
 	"os"
 )
 
-const File string = "nums.json"
+const File = "nums.json"
 
 func load() ([]int, error) {
 	bytes, err := os.ReadFile(File)

@@ -18,8 +18,5 @@ type Conf struct {
 }
 
 func test() Conf {
-	return Conf{
-		name: "x",
-		opt:  lisette.MakeOptionNone[int](),
-	}
+	return Conf{name: "x"}
 }

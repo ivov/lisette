@@ -34,7 +34,7 @@ import (
 	"os"
 )
 
-const File string = "tasks.json"
+const File = "tasks.json"
 
 func load() ([]byte, error) {
 	bytes, err := os.ReadFile(File)

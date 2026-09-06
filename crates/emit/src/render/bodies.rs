@@ -325,14 +325,18 @@ impl Renderer {
     pub(crate) fn render_const_declaration(&self, output: &mut String, plan: &ConstPlan) {
         let value_text = self.render_value(output, &plan.value);
         let keyword = if plan.is_const { "const" } else { "var" };
-        write_line!(
-            output,
-            "{} {} {} = {}",
-            keyword,
-            plan.name,
-            plan.ty_str,
-            value_text
-        );
+        if plan.ty_str.is_empty() {
+            write_line!(output, "{} {} = {}", keyword, plan.name, value_text);
+        } else {
+            write_line!(
+                output,
+                "{} {} {} = {}",
+                keyword,
+                plan.name,
+                plan.ty_str,
+                value_text
+            );
+        }
     }
 
     fn render_loop(&self, output: &mut String, plan: &LoopPlan) {

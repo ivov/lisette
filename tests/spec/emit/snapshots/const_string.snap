@@ -14,7 +14,7 @@ package main
 
 import "fmt"
 
-const Greeting string = "Hello, World!"
+const Greeting = "Hello, World!"
 
 func test() {
 	fmt.Print(Greeting)

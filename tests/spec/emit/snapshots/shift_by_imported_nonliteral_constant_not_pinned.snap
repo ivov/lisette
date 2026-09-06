@@ -13,5 +13,5 @@ package main
 import "example.com/consts"
 
 func main() {
-	_ = float64((1 << consts.SHIFT))
+	_ = float64(1 << consts.SHIFT)
 }

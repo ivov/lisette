@@ -5,7 +5,7 @@ use crate::names::go_name;
 use crate::plan::bodies::ConstPlan;
 use crate::plan::values::ValuePlan;
 use syntax::ast::{Expression, Generic};
-use syntax::types::Type;
+use syntax::types::{SimpleKind, Type};
 
 #[derive(Clone, Copy)]
 pub(crate) enum ConstScope {
@@ -71,7 +71,14 @@ impl Planner<'_> {
             self.try_declare(&fresh);
             fresh
         };
-        let ty_str = self.use_go_type(ty);
+        let is_const = self.is_go_constant_expression(expression);
+        // An untyped string or bool constant also assigns to named types.
+        let ty_str =
+            if is_const && matches!(ty, Type::Simple(SimpleKind::String | SimpleKind::Bool)) {
+                String::new()
+            } else {
+                self.use_go_type(ty)
+            };
 
         // `is_go_constant_expression` admits only literals, identifiers, and
         // constexpr unary/binary, none of which carry setup statements.
@@ -82,7 +89,6 @@ impl Planner<'_> {
         } else {
             ValuePlan::opaque(value_text)
         };
-        let is_const = self.is_go_constant_expression(expression);
         if is_const && matches!(scope, ConstScope::Local) {
             self.scope.mark_go_const(identifier);
         }

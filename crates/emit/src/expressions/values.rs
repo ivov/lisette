@@ -399,9 +399,10 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         let slot_origin = self.function_type_origin(ty, SlotOrigin::Lisette);
-        let inner = self.lower_value(expression, ctx.with_function_slot_origin(slot_origin));
+        let ctx = ctx.with_function_slot_origin(slot_origin);
 
         if self.facts.is_interface(ty) {
+            let inner = self.lower_value(expression, ctx);
             let source_ty = expression.get_type();
             let coercion = CoercionPlan::internal(self, &source_ty, ty);
             let mut converted =
@@ -416,6 +417,8 @@ impl Planner<'_> {
             return converted;
         }
 
+        let expression = expression.unwrap_parens();
+        let inner = self.lower_value(expression, ctx);
         let go_type = self.use_go_type(ty);
 
         let function_bridge = self.function_slot_bridge(expression, ty);
@@ -434,6 +437,14 @@ impl Planner<'_> {
         }
 
         inner.conversion(go_type)
+    }
+
+    /// `T(x)` is a primary expression, so parentheses around it add nothing.
+    pub(crate) fn is_conversion_cast(&self, expression: &Expression) -> bool {
+        matches!(
+            expression.unwrap_parens(),
+            Expression::Cast { ty, .. } if !self.facts.is_interface(ty)
+        )
     }
 
     fn shift_pin_go_type(&mut self, expression: &Expression, target_ty: &Type) -> Option<String> {

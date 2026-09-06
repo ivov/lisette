@@ -688,6 +688,9 @@ impl Planner<'_> {
             );
         }
         match expression {
+            Expression::Paren { expression, .. } if self.is_conversion_cast(expression) => {
+                self.plan_operand(expression, ctx)
+            }
             Expression::Paren { expression, .. } => {
                 self.plan_operand(expression, ctx).parenthesized()
             }

@@ -9,5 +9,5 @@ description: |
 package main
 
 func scale(base, level int) float64 {
-	return float64((base << level))
+	return float64(base << level)
 }

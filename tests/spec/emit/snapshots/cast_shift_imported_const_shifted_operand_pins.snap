@@ -13,5 +13,5 @@ package main
 import "math"
 
 func scale(level int) float64 {
-	return float64(int((math.MaxInt8 << level)))
+	return float64(int(math.MaxInt8 << level))
 }
