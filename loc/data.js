@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788704363956,
+  "lastUpdate": 1788707000618,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -33733,6 +33733,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 32379,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27931,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19300,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15171,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13998,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8811,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6242,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1874,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9777,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "95a48ce2ccbc6b376275427a885ee8a058d173b8",
+          "message": "refactor: flatten tuple payloads in Go function wrappers (#1410)",
+          "timestamp": "2026-09-06T17:02:58+02:00",
+          "tree_id": "309f8a9abd3e18984755174c81adb27348e334c3",
+          "url": "https://github.com/ivov/lisette/commit/95a48ce2ccbc6b376275427a885ee8a058d173b8"
+        },
+        "date": 1788706999300,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 139775,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32536,
             "unit": "lines"
           },
           {
