@@ -192,6 +192,14 @@
         "compress/zlib": {
           "Writer.Write": ["p"]
         },
+        "crypto/ecdh": {
+          "Curve.NewPrivateKey": ["key"],
+          "Curve.NewPublicKey": ["key"]
+        },
+        "crypto/hpke": {
+          "KEM.NewPrivateKey": ["b"],
+          "KEM.NewPublicKey": ["b"]
+        },
         "hash/crc32": {
           "Checksum": ["data"],
           "ChecksumIEEE": ["data"],

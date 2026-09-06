@@ -391,7 +391,85 @@ func NewMutationAnalysis(nilness *NilnessAnalysis, roots []*packages.Package) (a
 	for _, fn := range bound {
 		analysis.record(fn)
 	}
+	analysis.widenInterfaceMethods(wellTyped)
 	return analysis, nil
+}
+
+type implementation struct {
+	abstract *types.Func
+	concrete *types.Func
+}
+
+// widenInterfaceMethods marks an interface parameter writable when a same-package implementer writes it.
+func (a *MutationAnalysis) widenInterfaceMethods(pkgs []*packages.Package) {
+	var implementations []implementation
+	for _, pkg := range pkgs {
+		implementations = append(implementations, a.packageImplementations(pkg)...)
+	}
+	for changed := true; changed; {
+		changed = false
+		for _, pair := range implementations {
+			if written, ok := a.verdicts[pair.concrete]; ok && a.mergeWrittenParams(pair.abstract, written) {
+				changed = true
+			}
+		}
+	}
+}
+
+func (a *MutationAnalysis) packageImplementations(pkg *packages.Package) []implementation {
+	var interfaces []*types.Interface
+	var implementers []*types.Pointer
+	scope := pkg.Types.Scope()
+	for _, name := range scope.Names() {
+		typeName, ok := scope.Lookup(name).(*types.TypeName)
+		if !ok {
+			continue
+		}
+		named, ok := typeName.Type().(*types.Named)
+		if !ok || named.TypeParams().Len() > 0 {
+			continue
+		}
+		if iface, ok := named.Underlying().(*types.Interface); ok {
+			if iface.IsMethodSet() && iface.NumMethods() > 0 {
+				interfaces = append(interfaces, iface)
+			}
+			continue
+		}
+		implementers = append(implementers, types.NewPointer(named))
+	}
+	var out []implementation
+	for _, iface := range interfaces {
+		for _, implementer := range implementers {
+			if !types.Implements(implementer, iface) {
+				continue
+			}
+			methods := a.program.MethodSets.MethodSet(implementer)
+			for method := range iface.Methods() {
+				if selection := methods.Lookup(method.Pkg(), method.Name()); selection != nil {
+					out = append(out, implementation{abstract: method, concrete: selection.Obj().(*types.Func)})
+				}
+			}
+		}
+	}
+	return out
+}
+
+func (a *MutationAnalysis) mergeWrittenParams(method *types.Func, written FunctionMutation) bool {
+	facts, ok := a.verdicts[method]
+	if !ok {
+		facts = FunctionMutation{Params: make([]bool, method.Type().(*types.Signature).Params().Len())}
+	}
+	changed := false
+	for index := range facts.Params {
+		if !facts.Params[index] && written.Mutates(index) {
+			facts.Params[index] = true
+			changed = true
+		}
+	}
+	if changed {
+		a.verdicts[method] = facts
+	}
+	return changed
 }
 
 func (a *MutationAnalysis) Function(obj types.Object) (FunctionMutation, bool) {
