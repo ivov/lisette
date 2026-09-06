@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let m = Map.new<string, int>()
+    if m.get("a").is_some() {
+      fmt.Println("has a")
+    }
+  }
+---
+package main
+
+import "fmt"
+
+func main() {
+	m := make(map[string]int)
+	if _, ok := m["a"]; ok {
+		fmt.Println("has a")
+	}
+}

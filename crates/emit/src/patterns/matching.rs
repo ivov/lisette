@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
 use crate::calls::comma_ok::CommaOkSource;
-use crate::calls::comma_ok::{CommaOkValueSlot, LoweredPair, PairKind};
+use crate::calls::comma_ok::{CommaOkValueSlot, LoweredPair, PairKind, header_call};
 use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::is_plain_identifier;
@@ -17,13 +17,13 @@ use syntax::ast::{Expression, MatchArm, Pattern};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
 
-pub(super) struct ResultFusePlan<'a> {
+pub(crate) struct ResultFusePlan<'a> {
     subject: &'a Expression,
     shape: CallableReturnAbi,
     nil_guard: Option<NilGuard>,
 }
 
-pub(super) enum OptionFusePlan<'a> {
+pub(crate) enum OptionFusePlan<'a> {
     CommaOk {
         subject: &'a Expression,
         source: CommaOkSource,
@@ -34,8 +34,8 @@ pub(super) enum OptionFusePlan<'a> {
     },
 }
 
-pub(super) struct BoundOption {
-    pub(super) statements: Vec<LoweredStatement>,
+pub(crate) struct BoundOption {
+    pub(crate) statements: Vec<LoweredStatement>,
     source: BoundSource,
 }
 
@@ -62,11 +62,11 @@ impl BoundOption {
         }
     }
 
-    pub(super) fn some_condition(&self, planner: &mut Planner<'_>) -> String {
+    pub(crate) fn some_condition(&self, planner: &mut Planner<'_>) -> String {
         self.condition(planner, true)
     }
 
-    pub(super) fn none_condition(&self, planner: &mut Planner<'_>) -> String {
+    pub(crate) fn none_condition(&self, planner: &mut Planner<'_>) -> String {
         self.condition(planner, false)
     }
 
@@ -88,7 +88,7 @@ impl BoundOption {
                     nil_guard.is_nil(value)
                 };
                 match initializer_call {
-                    Some(call) => format!("{value} := {call}; {test}"),
+                    Some(call) => format!("{value} := {}; {test}", header_call(call)),
                     None => test,
                 }
             }
@@ -97,7 +97,7 @@ impl BoundOption {
 }
 
 impl OptionFusePlan<'_> {
-    pub(super) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundOption {
+    pub(crate) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundOption {
         match self {
             Self::CommaOk { subject, source } => {
                 let mut pair = planner.bind_comma_ok_pair(subject, source, slot);
@@ -113,7 +113,9 @@ impl OptionFusePlan<'_> {
                 let (value, opens_if) = match slot {
                     CommaOkValueSlot::Named(name) => (name, false),
                     CommaOkValueSlot::Arm(name) => (name, true),
-                    CommaOkValueSlot::Temp => (planner.fresh_pair_value(), false),
+                    CommaOkValueSlot::Temp | CommaOkValueSlot::Discarded => {
+                        (planner.fresh_pair_value(), false)
+                    }
                     CommaOkValueSlot::Unused => (planner.fresh_pair_value(), true),
                 };
                 let initializer_call = if opens_if {
@@ -151,7 +153,7 @@ impl ResultFusePlan<'_> {
         matches!(self.shape, CallableReturnAbi::Result { .. })
     }
 
-    pub(super) fn bind(
+    pub(crate) fn bind(
         self,
         planner: &mut Planner<'_>,
         slot: CommaOkValueSlot,
@@ -376,7 +378,7 @@ impl Planner<'_> {
     }
 
     /// Recognize a Lisette `Result` function or a Go `(T, error)` one.
-    pub(super) fn result_fuse_plan<'a>(
+    pub(crate) fn result_fuse_plan<'a>(
         &self,
         subject: &'a Expression,
     ) -> Option<ResultFusePlan<'a>> {
@@ -417,7 +419,7 @@ impl Planner<'_> {
 
     /// Recognize an Option-producing call whose physical Go result can be
     /// tested directly, without first constructing a tagged Option.
-    pub(super) fn option_fuse_plan<'a>(
+    pub(crate) fn option_fuse_plan<'a>(
         &self,
         subject: &'a Expression,
     ) -> Option<OptionFusePlan<'a>> {
@@ -711,8 +713,8 @@ impl Planner<'_> {
         );
         let val_used = nilable || ok_uses[0] || both_uses[0];
         let header = match val_var.as_deref().filter(|_| val_used) {
-            Some(v) => format!("{}, {} := {}", v, err_var, call_str),
-            None => format!("_, {} := {}", err_var, call_str),
+            Some(v) => format!("{}, {} := {}", v, err_var, header_call(&call_str)),
+            None => format!("_, {} := {}", err_var, header_call(&call_str)),
         };
         let condition = format!("{header}; {} == nil", err_var);
 
@@ -840,7 +842,7 @@ impl Planner<'_> {
                 format!("{error} != nil && {}", guard.is_nil(value))
             }
         };
-        let condition = format!("{result_slots} := {call}; {condition}");
+        let condition = format!("{result_slots} := {}; {condition}", header_call(&call));
         let selected_diverges = selected.ends_with_diverge();
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),

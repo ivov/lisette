@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn main() {
+    if os.Open("a").is_ok() {
+      fmt.Println("readable")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	if ret_1, err := os.Open("a"); err == nil && ret_1 != nil {
+		fmt.Println("readable")
+	}
+}

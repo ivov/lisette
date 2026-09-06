@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Parser { src: string }
+  
+  impl Parser {
+    fn parse(self: Parser) -> Result<int, error> { Ok(self.src.length()) }
+  }
+  
+  fn main() {
+    match Parser { src: "ab" }.parse() {
+      Ok(n) => fmt.Println(n),
+      Err(err) => fmt.Println(err),
+    }
+  }
+---
+package main
+
+import "fmt"
+
+type Parser struct {
+	src string
+}
+
+func (p Parser) parse() (int, error) {
+	return len(p.src), nil
+}
+
+func main() {
+	if n, err := (Parser{src: "ab"}.parse()); err == nil {
+		fmt.Println(n)
+	} else {
+		fmt.Println(err)
+	}
+}

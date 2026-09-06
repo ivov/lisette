@@ -3,6 +3,7 @@ pub(crate) mod comma_ok;
 pub(crate) mod dispatch;
 pub(crate) mod go_interop;
 pub(crate) mod native;
+pub(crate) mod predicates;
 mod regular;
 mod slice_loop;
 mod ufcs;

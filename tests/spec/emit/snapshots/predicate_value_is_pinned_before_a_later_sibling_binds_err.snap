@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn first() -> Result<int, error> { Ok(1) }
+  fn second() -> Result<int, error> { Ok(2) }
+  fn pick(flag: bool, n: int) -> int { if flag { n } else { 0 } }
+  
+  fn run() -> Result<int, error> {
+    Ok(pick(first().is_ok(), second()?))
+  }
+---
+package main
+
+func first() (int, error) {
+	return 1, nil
+}
+
+func second() (int, error) {
+	return 2, nil
+}
+
+func pick(flag bool, n int) int {
+	if flag {
+		return n
+	}
+	return 0
+}
+
+func run() (int, error) {
+	_, err := first()
+	arg_3 := err == nil
+	ret_1, err_2 := second()
+	if err_2 != nil {
+		return 0, err_2
+	}
+	return pick(arg_3, ret_1), nil
+}

@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn main() {
+    let mut text = "1"
+    while strconv.Atoi(text).is_ok() {
+      text = text + "x"
+    }
+    fmt.Println(text)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	text := "1"
+	for {
+		_, err := strconv.Atoi(text)
+		if err != nil {
+			break
+		}
+		text += "x"
+	}
+	fmt.Println(text)
+}

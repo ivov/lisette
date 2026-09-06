@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn count() -> Result<int, error> { Ok(1) }
+  fn touch() -> Result<(), error> { Ok(()) }
+  
+  fn main() {
+    if count().is_err() {
+      fmt.Println("count failed")
+    }
+    if touch().is_err() {
+      fmt.Println("touch failed")
+    }
+  }
+---
+package main
+
+import "fmt"
+
+func count() (int, error) {
+	return 1, nil
+}
+
+func touch() error {
+	return nil
+}
+
+func main() {
+	if _, err := count(); err != nil {
+		fmt.Println("count failed")
+	}
+	if err := touch(); err != nil {
+		fmt.Println("touch failed")
+	}
+}

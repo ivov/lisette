@@ -481,6 +481,10 @@ impl<'a> Planner<'a> {
             .resolved_types()
             .expect("emission requires checked call type arguments");
 
+        if let Some(predicate) = self.lower_fused_predicate_value(call_expression, false) {
+            return predicate;
+        }
+
         match &plan.resolved.origin {
             CallableOrigin::TupleStructConstructor => {
                 if let Some(result) = self.try_lower_tuple_struct_call(function, args, call_ty, ctx)

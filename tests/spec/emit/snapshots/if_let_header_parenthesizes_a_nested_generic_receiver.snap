@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct Box<T> { v: T }
+  
+  impl<T> Box<T> {
+    fn parse(self) -> Option<int> { Some(1) }
+  }
+  
+  fn eight() -> int {
+    if let Some(v) = Box { v: [1] }.parse() { v } else { 0 }
+  }
+---
+package main
+
+type Box[T any] struct {
+	v T
+}
+
+func (b Box[T]) parse() (int, bool) {
+	return 1, true
+}
+
+func eight() int {
+	if v, ok := (Box[[]int]{v: []int{1}}.parse()); ok {
+		return v
+	} else {
+		return 0
+	}
+}

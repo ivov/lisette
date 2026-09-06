@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn main() {
+    let ready = true
+    if ready && strconv.Atoi("1").is_ok() {
+      fmt.Println("both")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	ready := true
+	if ready && func() bool {
+		_, err := strconv.Atoi("1")
+		return err == nil
+	}() {
+		fmt.Println("both")
+	}
+}

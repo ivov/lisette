@@ -19,8 +19,6 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func track(flag *bool) (int, error) {
 	*flag = true
 	return 1, nil
@@ -29,14 +27,8 @@ func track(flag *bool) (int, error) {
 func test() {
 	ran := false
 	if false && func() bool {
-		ret_1, ret_2 := track(&ran)
-		var result_3 lisette.Result[int, error]
-		if ret_2 != nil {
-			result_3 = lisette.MakeResultErr[int, error](ret_2)
-		} else {
-			result_3 = lisette.MakeResultOk[int, error](ret_1)
-		}
-		return result_3.IsOk()
+		_, err := track(&ran)
+		return err == nil
 	}() {
 		panic("body should not run")
 	}
