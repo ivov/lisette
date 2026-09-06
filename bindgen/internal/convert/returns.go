@@ -299,6 +299,7 @@ func (c *Converter) resultPermissionOf(obj types.Object, results *types.Tuple, i
 	}
 	mutation, _ := c.mutation.Function(obj)
 	mutParams := c.cfg.MutatingParams(c.currentPkgPath, qualifiedName)
+	nonMutParams := c.cfg.NonMutatingParams(c.currentPkgPath, qualifiedName)
 	params := sig.Params()
 	names := paramNames(sig)
 	permission := resultFullyWritable
@@ -313,7 +314,7 @@ func (c *Converter) resultPermissionOf(obj types.Object, results *types.Tuple, i
 		}
 		source := params.At(i)
 		naming := paramNaming{emitted: names[i], goName: source.Name()}
-		if !isMutableParam(mutation.Mutates(i), mutParams, naming, source.Type(), fn.Name()) {
+		if !isMutableParam(mutation.Mutates(i), mutParams, nonMutParams, naming, source.Type(), fn.Name()) {
 			permission = min(permission, permissionFor(depth))
 		}
 	}

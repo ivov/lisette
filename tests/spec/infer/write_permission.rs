@@ -507,6 +507,106 @@ fn main() {
 }
 
 #[test]
+fn callback_param_pointer_receiver_call_accepted() {
+    infer(
+        r#"import "go:net/http"
+fn main() {
+  http.HandleFunc("/", |_w, r| {
+    let _ = r.ParseForm()
+  })
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn function_field_param_pointer_receiver_call_accepted() {
+    infer(
+        r#"import "go:net/http"
+fn main() {
+  let _ = http.Client {
+    CheckRedirect: Some(|req, _via| req.ParseForm()),
+    ..,
+  }
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn forwarding_to_callback_needs_writable_argument() {
+    infer(
+        r#"import "go:bytes"
+import "go:net/http"
+import "go:net/http/httptest"
+fn main() {
+  let h = http.HandlerFunc(|_w, r| {
+    r.Method = "POST"
+  })
+  let mut rec = httptest.NewRecorder()
+  let req = httptest.NewRequest("GET", "/", bytes.NewBufferString(""))
+  h.ServeHTTP(rec, req)
+}"#,
+    )
+    .assert_infer_code("immutable");
+}
+
+#[test]
+fn stored_callback_needs_writable_argument() {
+    infer(
+        r#"import "go:bytes"
+import "go:net/http/httptest"
+import "go:net/http/httputil"
+fn main() {
+  let proxy = httputil.ReverseProxy {
+    ErrorHandler: Some(|_w, r, _err| { r.Method = "POST" }),
+    ..,
+  }
+  let mut rec = httptest.NewRecorder()
+  let req = httptest.NewRequest("GET", "/", bytes.NewBufferString(""))
+  proxy.ServeHTTP(rec, req)
+}"#,
+    )
+    .assert_infer_code("immutable");
+}
+
+#[test]
+fn unknown_param_callee_may_demand_less() {
+    infer(
+        r#"fn accepts_any(_v: Unknown) -> bool { true }
+fn main() {
+  let g: fn(mut Unknown) -> bool = accepts_any
+  let _ = g
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn unknown_element_qualifier_stays_invariant_in_callee() {
+    infer(
+        r#"fn replace(xs: mut Slice<Unknown>, value: Unknown) { xs[0] = value }
+fn main() {
+  let f: fn(mut Slice<mut Unknown>, Unknown) -> () = replace
+  let _ = f
+}"#,
+    )
+    .assert_infer_code("needs_writable");
+}
+
+#[test]
+fn unknown_param_callee_may_not_demand_more() {
+    infer(
+        r#"fn accepts_writable_any(_v: mut Unknown) -> bool { true }
+fn main() {
+  let g: fn(Unknown) -> bool = accepts_writable_any
+  let _ = g
+}"#,
+    )
+    .assert_infer_code("needs_writable");
+}
+
+#[test]
 fn recorder_header_write_accepted() {
     infer(
         r#"import "go:net/http/httptest"

@@ -100,8 +100,8 @@ pub struct Plain(string)
 /// in order to customize the details of the printing process.
 pub struct Printer {
   pub HeadingLevel: int,
-  pub HeadingID: Option<fn(Ref<Heading>) -> string>,
-  pub DocLinkURL: Option<fn(Ref<DocLink>) -> string>,
+  pub HeadingID: Option<fn(mut Ref<Heading>) -> string>,
+  pub DocLinkURL: Option<fn(mut Ref<DocLink>) -> string>,
   pub DocLinkBaseURL: string,
   pub TextPrefix: string,
   pub TextCodePrefix: string,

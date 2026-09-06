@@ -171,11 +171,8 @@ impl InferCtx<'_> {
             (Type::Var { id: i1, .. }, Type::Var { id: i2, .. }) if i1 == i2 => Ok(()),
 
             _ if r1_is_unknown && r2_is_unknown => {
-                if r1.is_writable() && !r2.is_writable() {
-                    Err(UnifyError::QualifierMismatch)
-                } else {
-                    Ok(())
-                }
+                self.check_qualifier(r1.is_writable(), r2.is_writable())?;
+                Ok(())
             }
 
             // Shallow resolution above leaves only unbound variables here.

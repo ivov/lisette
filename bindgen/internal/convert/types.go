@@ -250,7 +250,7 @@ func signatureToLisette(signature *types.Signature, seen map[types.Type]bool, co
 
 	param := signature.Params()
 	for param := range param.Variables() {
-		paramType := toLisetteRecursive(param.Type(), seen, conv, substitutions)
+		paramType := writableRecursive(param.Type(), seen, conv, substitutions, false)
 		if paramType.SkipReason != nil {
 			return paramType
 		}

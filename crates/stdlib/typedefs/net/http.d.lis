@@ -150,7 +150,7 @@ pub fn Handle(pattern: string, handler: Handler)
 /// The documentation for [ServeMux] explains how patterns are matched.
 pub fn HandleFunc(
   pattern: string,
-  handler: fn(ResponseWriter, Ref<Request>) -> (),
+  handler: fn(ResponseWriter, mut Ref<Request>) -> (),
 )
 
 /// Head issues a HEAD to the specified URL. If the response is one of
@@ -395,7 +395,7 @@ pub fn ProxyFromEnvironment(
 /// that always returns the same URL.
 pub fn ProxyURL(
   fixedURL: Ref<url.URL>,
-) -> Option<fn(Ref<Request>) -> Result<mut Ref<url.URL>, error>>
+) -> Option<fn(mut Ref<Request>) -> Result<mut Ref<url.URL>, error>>
 
 /// ReadRequest reads and parses an incoming request from b.
 /// 
@@ -618,7 +618,7 @@ pub fn TimeoutHandler(h: Handler, dt: time.Duration, msg: string) -> Handler
 ///     If Jar is nil, the initial cookies are forwarded without change.
 pub struct Client {
   pub Transport: Option<RoundTripper>,
-  pub CheckRedirect: Option<fn(Ref<Request>, Slice<Ref<Request>>) -> Result<(), error>>,
+  pub CheckRedirect: Option<fn(mut Ref<Request>, mut Slice<mut Ref<Request>>) -> Result<(), error>>,
   pub Jar: Option<CookieJar>,
   pub Timeout: time.Duration,
 }
@@ -803,7 +803,7 @@ pub interface Handler {
 /// ordinary functions as HTTP handlers. If f is a function
 /// with the appropriate signature, HandlerFunc(f) is a
 /// [Handler] that calls f.
-pub type HandlerFunc = fn(ResponseWriter, Ref<Request>) -> ()
+pub type HandlerFunc = fn(ResponseWriter, mut Ref<Request>) -> ()
 
 /// A Header represents the key-value pairs in an HTTP header.
 /// 
@@ -1074,7 +1074,7 @@ pub struct Server {
   pub WriteTimeout: time.Duration,
   pub IdleTimeout: time.Duration,
   pub MaxHeaderBytes: int,
-  pub TLSNextProto: Option<mut Map<string, Option<fn(Ref<Server>, Ref<tls.Conn>, Handler) -> ()>>>,
+  pub TLSNextProto: Option<mut Map<string, Option<fn(mut Ref<Server>, mut Ref<tls.Conn>, Handler) -> ()>>>,
   pub ConnState: Option<fn(net.Conn, ConnState) -> ()>,
   pub ErrorLog: Option<mut Ref<log.Logger>>,
   pub BaseContext: Option<fn(net.Listener) -> context.Context>,
@@ -1119,8 +1119,8 @@ pub struct Server {
 /// header is not sent on the wire.
 #[go(hidden_fields)]
 pub struct Transport {
-  pub Proxy: Option<fn(Ref<Request>) -> Result<mut Ref<url.URL>, error>>,
-  pub OnProxyConnectResponse: Option<fn(context.Context, Ref<url.URL>, Ref<Request>, Ref<Response>) -> Result<(), error>>,
+  pub Proxy: Option<fn(mut Ref<Request>) -> Result<mut Ref<url.URL>, error>>,
+  pub OnProxyConnectResponse: Option<fn(context.Context, mut Ref<url.URL>, mut Ref<Request>, mut Ref<Response>) -> Result<(), error>>,
   pub DialContext: Option<fn(context.Context, string, string) -> Result<net.Conn, error>>,
   pub Dial: Option<fn(string, string) -> Result<net.Conn, error>>,
   pub DialTLSContext: Option<fn(context.Context, string, string) -> Result<net.Conn, error>>,
@@ -1135,9 +1135,9 @@ pub struct Transport {
   pub IdleConnTimeout: time.Duration,
   pub ResponseHeaderTimeout: time.Duration,
   pub ExpectContinueTimeout: time.Duration,
-  pub TLSNextProto: Option<mut Map<string, Option<fn(string, Ref<tls.Conn>) -> RoundTripper>>>,
+  pub TLSNextProto: Option<mut Map<string, Option<fn(string, mut Ref<tls.Conn>) -> RoundTripper>>>,
   pub ProxyConnectHeader: Option<mut Header>,
-  pub GetProxyConnectHeader: Option<fn(context.Context, Ref<url.URL>, string) -> Result<Header, error>>,
+  pub GetProxyConnectHeader: Option<fn(context.Context, mut Ref<url.URL>, string) -> Result<Header, error>>,
   pub MaxResponseHeaderBytes: int64,
   pub WriteBufferSize: int,
   pub ReadBufferSize: int,
@@ -1762,7 +1762,7 @@ impl ClientConn {
   /// f is called when Available increases (more requests may be sent on the connection),
   /// InFlight decreases (existing requests complete), or Err begins returning non-nil
   /// (the connection is no longer usable).
-  fn SetStateHook(self: mut Ref<ClientConn>, f: fn(Ref<ClientConn>) -> ())
+  fn SetStateHook(self: mut Ref<ClientConn>, f: fn(mut Ref<ClientConn>) -> ())
 }
 
 impl ConnState {
@@ -1843,7 +1843,7 @@ impl Dir {
 
 impl HandlerFunc {
   /// ServeHTTP calls f(w, r).
-  fn ServeHTTP(self, w: ResponseWriter, r: Ref<Request>)
+  fn ServeHTTP(self, w: ResponseWriter, r: mut Ref<Request>)
 }
 
 impl Header {
@@ -2223,7 +2223,7 @@ impl ServeMux {
   fn HandleFunc(
     self: mut Ref<ServeMux>,
     pattern: string,
-    handler: fn(ResponseWriter, Ref<Request>) -> (),
+    handler: fn(ResponseWriter, mut Ref<Request>) -> (),
   )
 
   /// Handler returns the handler to use for the given request,

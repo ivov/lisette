@@ -26,7 +26,7 @@ pub fn AllocsPerRun(runs: int, f: fn() -> ()) -> float64
 /// 
 /// If f calls Run, the result will be an estimate of running all its
 /// subbenchmarks that don't call Run in sequence in a single benchmark.
-pub fn Benchmark(f: fn(Ref<B>) -> ()) -> BenchmarkResult
+pub fn Benchmark(f: fn(mut Ref<B>) -> ()) -> BenchmarkResult
 
 /// CoverMode reports what the test coverage mode is set to. The
 /// values are "set", "count", or "atomic". The return value will be
@@ -189,7 +189,7 @@ pub struct F {
 /// it is part of the implementation of the "go test" command.
 pub struct InternalBenchmark {
   pub Name: string,
-  pub F: Option<fn(Ref<B>) -> ()>,
+  pub F: Option<fn(mut Ref<B>) -> ()>,
 }
 
 pub struct InternalExample {
@@ -203,14 +203,14 @@ pub struct InternalExample {
 /// cross-package; it is part of the implementation of the "go test" command.
 pub struct InternalFuzzTarget {
   pub Name: string,
-  pub Fn: Option<fn(Ref<F>) -> ()>,
+  pub Fn: Option<fn(mut Ref<F>) -> ()>,
 }
 
 /// InternalTest is an internal type but exported because it is cross-package;
 /// it is part of the implementation of the "go test" command.
 pub struct InternalTest {
   pub Name: string,
-  pub F: Option<fn(Ref<T>) -> ()>,
+  pub F: Option<fn(mut Ref<T>) -> ()>,
 }
 
 /// M is a type passed to a TestMain function to run the actual tests.
@@ -336,7 +336,7 @@ impl B {
   /// 
   /// A subbenchmark is like any other benchmark. A benchmark that calls Run at
   /// least once will not be measured itself and will be called once with N=1.
-  fn Run(self: mut Ref<B>, name: string, f: fn(Ref<B>) -> ()) -> bool
+  fn Run(self: mut Ref<B>, name: string, f: fn(mut Ref<B>) -> ()) -> bool
 
   /// RunParallel runs a benchmark in parallel.
   /// It creates multiple goroutines and distributes b.N iterations among them.
@@ -351,7 +351,7 @@ impl B {
   /// 
   /// RunParallel reports ns/op values as wall time for the benchmark as a whole,
   /// not the sum of wall time or CPU time over each parallel goroutine.
-  fn RunParallel(self: mut Ref<B>, body: fn(Ref<PB>) -> ())
+  fn RunParallel(self: mut Ref<B>, body: fn(mut Ref<PB>) -> ())
 
   /// SetBytes records the number of bytes processed in a single operation.
   /// If this is called, the benchmark will report ns/op and MB/s.
@@ -483,7 +483,7 @@ impl T {
   /// 
   /// Run may be called simultaneously from multiple goroutines, but all such calls
   /// must return before the outer test function for t returns.
-  fn Run(self: Ref<T>, name: string, f: fn(Ref<T>) -> ()) -> bool
+  fn Run(self: Ref<T>, name: string, f: fn(mut Ref<T>) -> ()) -> bool
 
   /// Setenv calls os.Setenv(key, value) and uses Cleanup to
   /// restore the environment variable to its original value

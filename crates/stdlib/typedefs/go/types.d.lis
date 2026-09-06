@@ -930,7 +930,7 @@ pub type Pointer
 /// 
 /// Using a nil Qualifier is equivalent to using (*[Package]).Path: the
 /// object is qualified by the import path, e.g., "encoding/json.Marshal".
-pub type Qualifier = fn(Ref<Package>) -> string
+pub type Qualifier = fn(mut Ref<Package>) -> string
 
 /// A Scope maintains a set of objects and links to its containing
 /// (parent) and contained (children) scopes. Objects may be inserted

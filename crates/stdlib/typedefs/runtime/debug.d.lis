@@ -254,5 +254,5 @@ pub struct Module {
 
 impl BuildInfo {
   /// String returns a string representation of a [BuildInfo].
-  fn String(self: Ref<BuildInfo>) -> string
+  fn String(self: mut Ref<BuildInfo>) -> string
 }

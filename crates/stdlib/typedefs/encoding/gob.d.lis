@@ -103,6 +103,6 @@ impl Encoder {
   /// Passing a nil pointer to EncodeValue will panic, as they cannot be transmitted by gob.
   fn EncodeValue(
     self: mut Ref<Encoder>,
-    value: reflect.Value,
+    value: mut reflect.Value,
   ) -> Result<(), error>
 }

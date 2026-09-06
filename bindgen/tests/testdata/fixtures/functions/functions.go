@@ -67,6 +67,15 @@ type Node struct {
 	Value int
 }
 
+// Function type params are writable
+type Callbacks struct {
+	OnNode   func(node *Node)
+	OnBytes  func(data []byte)
+	OnLookup func(table map[string][]int)
+	OnValue  func(n Node)
+	OnNodes  func(first *Node, rest ...*Node)
+}
+
 // Comma-ok with pointer inner type - produces tuple to avoid
 // ambiguity with single-pointer returns that also produce Option<Ref<T>>
 func FindNode(key string) (node *Node, ok bool) { return nil, false }

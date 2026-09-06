@@ -325,8 +325,8 @@ impl Regexp {
   /// directly, without using [Regexp.Expand].
   fn ReplaceAllFunc(
     self: Ref<Regexp>,
-    src: Slice<byte>,
-    repl: fn(Slice<byte>) -> Slice<byte>,
+    src: mut Slice<byte>,
+    repl: fn(mut Slice<byte>) -> Slice<byte>,
   ) -> mut Slice<byte>
 
   /// ReplaceAllLiteral returns a copy of src, replacing matches of the [Regexp]

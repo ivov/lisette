@@ -12,8 +12,8 @@ import "go:testing"
 /// calls result to get the result. If the test case fails, it calls t.Error.
 pub fn Run(
   t: Ref<testing.T>,
-  newHandler: fn(Ref<testing.T>) -> slog.Handler,
-  result: fn(Ref<testing.T>) -> Map<string, Unknown>,
+  newHandler: fn(mut Ref<testing.T>) -> slog.Handler,
+  result: fn(mut Ref<testing.T>) -> Map<string, Unknown>,
 )
 
 /// TestHandler tests a [slog.Handler].

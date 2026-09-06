@@ -59,7 +59,7 @@ pub struct Form {
 pub struct Handler {
   pub OnSuccess: Option<fn(string) -> ()>,
   pub OnError: Option<fn(error) -> ()>,
-  pub Transform: Option<fn(Slice<byte>) -> Result<Slice<byte>, error>>,
+  pub Transform: Option<fn(mut Slice<byte>) -> Result<Slice<byte>, error>>,
   pub Lookup: Option<fn(string) -> Option<int>>,
   pub GetCoords: Option<fn() -> (float64, float64, float64)>,
 }

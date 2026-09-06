@@ -24,7 +24,7 @@ pub fn FillBag(b: mut Bag)
 pub fn FillIntList(l: mut Ref<IntList>)
 
 /// FillVia exercises curated permission on a sanitized parameter name.
-pub fn FillVia(f: fn(Slice<int>) -> (), self_: mut Slice<int>)
+pub fn FillVia(f: fn(mut Slice<int>) -> (), self_: mut Slice<int>)
 
 /// Function returning alias
 pub fn GetMap() -> mut Map<string, int>
@@ -42,7 +42,7 @@ pub fn PairOfLists() -> (mut IntList, mut IntList)
 pub fn PairOfRows() -> Array<mut Slice<byte>, 2>
 
 /// Pick exercises curated view overrides on a blind-spot result.
-pub fn Pick(f: fn(Slice<string>) -> Slice<string>, rows: Slice<string>) -> Slice<string>
+pub fn Pick(f: fn(mut Slice<string>) -> Slice<string>, rows: mut Slice<string>) -> mut Slice<string>
 
 /// Function using type aliases
 pub fn TakeAlias(s: string) -> mut Slice<int>
@@ -127,7 +127,7 @@ pub struct MyInt(int)
 pub struct MyString(string)
 
 /// Processor processes data.
-pub type Processor = fn(Slice<byte>) -> Slice<byte>
+pub type Processor = fn(mut Slice<byte>) -> Slice<byte>
 
 /// RefList exercises the plain newtype shape with per-hop qualifiers.
 pub struct RefList(mut Slice<mut Ref<IntList>>)
@@ -147,5 +147,5 @@ pub struct StringMap(mut Map<string, int>)
 
 impl Counter {
   /// Bump exercises a receiver write hidden behind an indirect call.
-  fn Bump(self: mut Ref<Counter>, f: fn(Ref<int>) -> ())
+  fn Bump(self: mut Ref<Counter>, f: fn(mut Ref<int>) -> ())
 }

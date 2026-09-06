@@ -180,6 +180,17 @@ fn handlerfunc_conversion() {
 }
 
 #[test]
+fn handlerfunc_closure_calls_pointer_receiver() {
+  let h = httpx.HandlerFunc(|w, r| {
+    match r.ParseForm() {
+      Ok(_) => w.WriteHeader(httpx.StatusAccepted),
+      Err(_) => w.WriteHeader(httpx.StatusBadRequest),
+    }
+  })
+  assert serve(h) == httpx.StatusAccepted
+}
+
+#[test]
 fn pointer_receiver_struct_literal() {
   let mut wg = sync.WaitGroup {}
   wg.Add(1)

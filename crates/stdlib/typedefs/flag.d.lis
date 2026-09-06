@@ -203,11 +203,11 @@ pub fn Var(value: Value, name: string, usage: string)
 
 /// Visit visits the command-line flags in lexicographical order, calling fn
 /// for each. It visits only those flags that have been set.
-pub fn Visit(fn_: fn(Ref<Flag>) -> ())
+pub fn Visit(fn_: fn(mut Ref<Flag>) -> ())
 
 /// VisitAll visits the command-line flags in lexicographical order, calling
 /// fn for each. It visits all flags, even those not set.
-pub fn VisitAll(fn_: fn(Ref<Flag>) -> ())
+pub fn VisitAll(fn_: fn(mut Ref<Flag>) -> ())
 
 /// A Flag represents the state of a flag.
 pub struct Flag {
@@ -527,9 +527,9 @@ impl FlagSet {
 
   /// Visit visits the flags in lexicographical order, calling fn for each.
   /// It visits only those flags that have been set.
-  fn Visit(self: Ref<FlagSet>, fn_: fn(Ref<Flag>) -> ())
+  fn Visit(self: Ref<FlagSet>, fn_: fn(mut Ref<Flag>) -> ())
 
   /// VisitAll visits the flags in lexicographical order, calling fn for each.
   /// It visits all flags, even those not set.
-  fn VisitAll(self: Ref<FlagSet>, fn_: fn(Ref<Flag>) -> ())
+  fn VisitAll(self: Ref<FlagSet>, fn_: fn(mut Ref<Flag>) -> ())
 }

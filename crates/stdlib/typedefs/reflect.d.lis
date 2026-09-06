@@ -207,7 +207,10 @@ pub fn MakeChan(typ: Type, buffer: int) -> mut Value
 /// 
 /// The Examples section of the documentation includes an illustration
 /// of how to use MakeFunc to build a swap function for different types.
-pub fn MakeFunc(typ: Type, fn_: fn(Slice<Value>) -> Slice<Value>) -> mut Value
+pub fn MakeFunc(
+  typ: Type,
+  fn_: fn(mut Slice<mut Value>) -> Slice<Value>,
+) -> mut Value
 
 /// MakeMap creates a new map with the specified type.
 pub fn MakeMap(typ: Type) -> mut Value
@@ -642,7 +645,8 @@ impl Value {
   /// Convert returns the value v converted to type t.
   /// If the usual Go conversion rules do not allow conversion
   /// of the value v to type t, or if converting v to type t panics, Convert panics.
-  fn Convert(self, t: Type) -> mut Value
+  #[go(value_method_set)]
+  fn Convert(self: mut Ref<Value>, t: Type) -> mut Value
 
   /// Elem returns the value that the interface v contains
   /// or that the pointer v points to.
