@@ -1072,7 +1072,13 @@ impl<'a> Planner<'a> {
             (
                 Some(ValueLayout::Function { layout: source, .. }),
                 ValueLayout::Function { layout: target, .. },
-            ) => source.return_abi == target.return_abi,
+            ) => {
+                // `lower_value` re-encodes a Go function value's return itself.
+                if source.return_abi != target.return_abi {
+                    return false;
+                }
+                true
+            }
             (Some(_), _) => true,
             (None, _) => false,
         };

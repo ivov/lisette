@@ -5,11 +5,26 @@ pub(crate) mod layout;
 pub(crate) mod transition;
 
 use crate::Planner;
+use crate::names::go_name;
 use crate::names::go_name::PRELUDE_ERROR_ID;
 use crate::types::go_type::GoType;
 use callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use layout::SlotOrigin;
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::types::Type;
+
+/// Go spells a tuple payload as one result per element.
+pub(crate) fn go_payload_layout(return_ty: &Type) -> PayloadLayout {
+    if return_ty
+        .ok_type()
+        .tuple_arity()
+        .is_some_and(|arity| arity >= 2)
+    {
+        PayloadLayout::Flattened
+    } else {
+        PayloadLayout::Packed
+    }
+}
 
 impl Planner<'_> {
     /// ABI of a value after it has crossed into Lisette expression space.
@@ -28,6 +43,44 @@ impl Planner<'_> {
     pub(crate) fn callable_return_abi(&self, return_ty: &Type) -> CallableReturnAbi {
         self.classify_direct_emission(return_ty)
             .unwrap_or_else(|| self.value_return_abi(return_ty))
+    }
+
+    pub(crate) fn slot_return_abi(
+        &self,
+        return_ty: &Type,
+        origin: SlotOrigin,
+    ) -> CallableReturnAbi {
+        self.classify_slot_emission(return_ty, origin)
+            .unwrap_or_else(|| self.value_return_abi(return_ty))
+    }
+
+    /// A Go-named function type renders as its Go name, so a value of that
+    /// type has Go's shape in any slot.
+    pub(crate) fn function_type_origin(&self, fn_ty: &Type, origin: SlotOrigin) -> SlotOrigin {
+        if origin.declared_by_go() || !self.is_go_named_function_type(fn_ty) {
+            origin
+        } else {
+            SlotOrigin::GoParameter
+        }
+    }
+
+    fn is_go_named_function_type(&self, ty: &Type) -> bool {
+        matches!(ty.unwrap_forall(), Type::Nominal { id, .. } if go_name::is_go_import(id))
+            && self.facts.resolve_to_function_type(ty).is_some()
+    }
+
+    /// Lowered shape for the slot at `origin`, or `None` to keep it tagged.
+    pub(crate) fn classify_slot_emission(
+        &self,
+        return_ty: &Type,
+        origin: SlotOrigin,
+    ) -> Option<CallableReturnAbi> {
+        let abi = self.classify_direct_emission(return_ty)?;
+        Some(if origin.declared_by_go() && abi.payload().is_some() {
+            abi.with_payload(go_payload_layout(&self.facts.peel_alias(return_ty)))
+        } else {
+            abi
+        })
     }
 
     /// Lowered shape for a Lisette return type, or `None` to keep it tagged.
@@ -93,19 +146,27 @@ impl Planner<'_> {
         match shape {
             CallableReturnAbi::Tagged | CallableReturnAbi::Direct => self.go_type(&peeled),
             CallableReturnAbi::BareError => self.go_type(&peeled.err_type()),
-            CallableReturnAbi::Result { .. } | CallableReturnAbi::Partial { .. } => {
-                go_result_list(&[
-                    self.go_type(&peeled.ok_type()),
-                    self.go_type(&peeled.err_type()),
-                ])
+            CallableReturnAbi::Result { payload } | CallableReturnAbi::Partial { payload } => {
+                let mut slots = self.lowered_payload_go_types(&peeled.ok_type(), *payload);
+                slots.push(self.go_type(&peeled.err_type()));
+                go_result_list(&slots)
             }
-            CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
-                go_result_list(&[self.go_type(&peeled.ok_type()), GoType::new("bool")])
+            CallableReturnAbi::Option(OptionReturnAbi::CommaOk { payload }) => {
+                let mut slots = self.lowered_payload_go_types(&peeled.ok_type(), *payload);
+                slots.push(GoType::new("bool"));
+                go_result_list(&slots)
             }
             CallableReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
                 self.go_type(&peeled.ok_type())
             }
             CallableReturnAbi::Tuple { .. } => go_result_list(&self.tuple_slot_go_types(&peeled)),
+        }
+    }
+
+    fn lowered_payload_go_types(&self, ok_ty: &Type, payload: PayloadLayout) -> Vec<GoType> {
+        match payload {
+            PayloadLayout::Flattened => self.tuple_slot_go_types(&self.facts.peel_alias(ok_ty)),
+            PayloadLayout::Packed => vec![self.go_type(ok_ty)],
         }
     }
 
