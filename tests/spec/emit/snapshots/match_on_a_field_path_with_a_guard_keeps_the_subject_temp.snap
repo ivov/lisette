@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Task { retries: Option<int> }
+  
+  fn describe(t: Ref<Task>) -> string {
+    match t.retries {
+      Some(n) if n > 3 => "many",
+      Some(_) => "some",
+      None => "none",
+    }
+  }
+  
+  fn main() {
+    fmt.Println(describe(&Task { retries: Some(1) }))
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Task struct {
+	retries lisette.Option[int]
+}
+
+func describe(t *Task) string {
+	subject_1 := t.retries
+	if subject_1.Tag == lisette.OptionSome {
+		if subject_1.SomeVal > 3 {
+			return "many"
+		}
+		return "some"
+	}
+	return "none"
+}
+
+func main() {
+	fmt.Println(describe(&Task{retries: lisette.MakeOptionSome(1)}))
+}

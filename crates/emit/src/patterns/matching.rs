@@ -1029,7 +1029,12 @@ impl Planner<'_> {
         let rests_in_stable_name = self.plan_rests_in_stable_name(&staged);
         let (subject_setup, value) = staged.into_parts();
         setup.extend(subject_setup);
-        if !any_guard && is_plain_identifier(&value) {
+        let reads_in_place = is_plain_identifier(&value)
+            || self.field_path_reads_in_place(subject, &value, |root| {
+                arms.iter()
+                    .any(|arm| pattern_binds_name(&arm.pattern, root))
+            });
+        if !any_guard && reads_in_place {
             return (value, SubjectDeclaration::None);
         }
         if any_guard && rests_in_stable_name {

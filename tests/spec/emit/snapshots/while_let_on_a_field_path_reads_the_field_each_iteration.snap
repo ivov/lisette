@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Cursor { next: Option<int> }
+  
+  fn main() {
+    let mut cursor = Cursor { next: Some(3) }
+    while let Some(n) = cursor.next {
+      fmt.Println(n)
+      cursor.next = if n > 0 { Some(n - 1) } else { None }
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Cursor struct {
+	next lisette.Option[int]
+}
+
+func main() {
+	cursor := Cursor{next: lisette.MakeOptionSome(3)}
+	for {
+		if cursor.next.Tag == lisette.OptionSome {
+			n := cursor.next.SomeVal
+			fmt.Println(n)
+			var tmp_1 lisette.Option[int]
+			if n > 0 {
+				tmp_1 = lisette.MakeOptionSome[int](n - 1)
+			} else {
+				tmp_1 = lisette.MakeOptionNone[int]()
+			}
+			cursor.next = tmp_1
+		} else {
+			break
+		}
+	}
+}

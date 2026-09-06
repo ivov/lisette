@@ -549,6 +549,13 @@ impl<'a> Planner<'a> {
         } else {
             EvaluationEffect::EffectfulCall
         };
+        if result
+            .setup
+            .iter()
+            .any(|statement| statement.binds_name(&result.value))
+        {
+            return ValuePlan::captured_with_effect(result.setup, result.value, effect);
+        }
         let receiver_arity = if matches!(origin, CallableOrigin::NativeMethodIdentifier(_)) {
             ctx.args.len().saturating_sub(1)
         } else {

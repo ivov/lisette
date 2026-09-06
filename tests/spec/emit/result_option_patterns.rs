@@ -2993,6 +2993,123 @@ fn main() {
 }
 
 #[test]
+fn match_on_a_field_path_reads_the_field_in_place() {
+    let input = r#"
+import "go:fmt"
+
+enum Status { Pending, Done }
+
+struct Task { status: Status }
+
+impl Task {
+  fn icon(self: Ref<Task>) -> string {
+    match self.status {
+      Status.Pending => "[ ]",
+      Status.Done => "[x]",
+    }
+  }
+}
+
+fn main() {
+  let t = Task { status: Status.Pending }
+  fmt.Println(t.icon())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_on_a_field_path_with_a_guard_keeps_the_subject_temp() {
+    let input = r#"
+import "go:fmt"
+
+struct Task { retries: Option<int> }
+
+fn describe(t: Ref<Task>) -> string {
+  match t.retries {
+    Some(n) if n > 3 => "many",
+    Some(_) => "some",
+    None => "none",
+  }
+}
+
+fn main() {
+  fmt.Println(describe(&Task { retries: Some(1) }))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_on_a_field_path_whose_arm_rebinds_the_root_keeps_the_subject_temp() {
+    let input = r#"
+import "go:fmt"
+
+struct Node { next: Option<int> }
+
+fn main() {
+  let t = Node { next: Some(2) }
+  match t.next {
+    Some(t) => fmt.Println(t),
+    None => fmt.Println("end"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_else_on_a_field_path_reads_the_field_in_place() {
+    let input = r#"
+import "go:fmt"
+
+struct Task { parent: Option<int> }
+
+fn parent_of(item: Ref<Task>) -> int {
+  let Some(id) = item.parent else { return -1 }
+  id
+}
+
+fn main() {
+  fmt.Println(parent_of(&Task { parent: Some(7) }))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn while_let_on_a_field_path_reads_the_field_each_iteration() {
+    let input = r#"
+import "go:fmt"
+
+struct Cursor { next: Option<int> }
+
+fn main() {
+  let mut cursor = Cursor { next: Some(3) }
+  while let Some(n) = cursor.next {
+    fmt.Println(n)
+    cursor.next = if n > 0 { Some(n - 1) } else { None }
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn find_result_in_a_let_else_needs_no_subject_temp() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let nums = [1, 2, 3]
+  let Some(even) = nums.find(|n| n % 2 == 0) else { return }
+  fmt.Println(even)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn nested_propagate_in_call_args_binds_the_inner_pair_first() {
     let input = r#"
 import "go:strconv"

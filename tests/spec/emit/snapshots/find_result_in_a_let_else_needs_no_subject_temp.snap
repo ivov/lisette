@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let nums = [1, 2, 3]
+    let Some(even) = nums.find(|n| n % 2 == 0) else { return }
+    fmt.Println(even)
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	nums := []int{1, 2, 3}
+	result_1 := lisette.MakeOptionNone[int]()
+	for _, n := range nums {
+		if n%2 == 0 {
+			result_1 = lisette.MakeOptionSome[int](n)
+			break
+		}
+	}
+	if result_1.Tag != lisette.OptionSome {
+		return
+	}
+	even := result_1.SomeVal
+	fmt.Println(even)
+}
