@@ -859,7 +859,7 @@ pub struct PushOptions {
 /// HTTP/2 server push. For more background, see
 /// https://tools.ietf.org/html/rfc7540#section-8.2.
 pub interface Pusher {
-  fn Push(target: string, opts: Ref<PushOptions>) -> Result<(), error>
+  fn Push(target: string, opts: mut Ref<PushOptions>) -> Result<(), error>
 }
 
 /// A Request represents an HTTP request received by a server
