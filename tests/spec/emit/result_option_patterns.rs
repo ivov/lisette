@@ -2424,6 +2424,65 @@ fn write_all(file: Ref<os.File>) {
 }
 
 #[test]
+fn let_named_like_its_ok_binding_fuses() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  let bytes = match os.ReadFile("tasks.json") {
+    Ok(bytes) => bytes,
+    Err(err) => {
+      fmt.Println(err)
+      return
+    },
+  }
+  fmt.Println(bytes.length())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_named_like_its_ok_binding_keeps_an_inner_let_apart() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  let bytes = match os.ReadFile("tasks.json") {
+    Ok(bytes) => bytes,
+    Err(err) => {
+      let bytes = err.Error().bytes()
+      fmt.Println(bytes.length())
+      return
+    },
+  }
+  fmt.Println(bytes.length())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_named_like_its_some_binding_fuses() {
+    let input = r#"
+import "go:context"
+import "go:fmt"
+
+fn main() {
+  let ctx = context.Background()
+  let err = match ctx.Err() {
+    Some(err) => err,
+    None => { return },
+  }
+  fmt.Println(err)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn nested_propagate_in_call_args_binds_the_inner_pair_first() {
     let input = r#"
 import "go:strconv"

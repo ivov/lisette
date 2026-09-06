@@ -106,7 +106,6 @@ impl Planner<'_> {
         if needs_temp {
             let go_identifier = escape_reserved(raw_go_name);
             if !self.shadows_declaration(&go_identifier)
-                && !expression_contains_binding(value, identifier)
                 && !self.scope.is_active_assign_target(&go_identifier)
                 && !self.scope.has_binding_for_go_name(&go_identifier)
                 && value.get_type().demoted() == binding_ty.demoted()

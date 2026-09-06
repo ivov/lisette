@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn main() {
+    let bytes = match os.ReadFile("tasks.json") {
+      Ok(bytes) => bytes,
+      Err(err) => {
+        let bytes = err.Error().bytes()
+        fmt.Println(bytes.length())
+        return
+      },
+    }
+    fmt.Println(bytes.length())
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	bytes, err := os.ReadFile("tasks.json")
+	if err != nil {
+		bytes_1 := []byte(err.Error())
+		fmt.Println(len(bytes_1))
+		return
+	}
+	fmt.Println(len(bytes))
+}
