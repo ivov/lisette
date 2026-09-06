@@ -16,9 +16,7 @@ package main
 import "example.com/reg"
 
 func main() {
-	ret_1, ok := reg.Lookup("a")
-	if ok && ret_1 != nil {
-		m := ret_1
+	if m, ok := reg.Lookup("a"); ok && m != nil {
 		_ = len(m)
 	}
 }

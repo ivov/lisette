@@ -1,5 +1,5 @@
 ---
-source: tests/spec/emit/interop_matrix.rs
+source: tests/spec/emit/result_option_patterns.rs
 description: |
   
   import "go:context"
@@ -8,7 +8,7 @@ description: |
   fn main() {
     let ctx = context.Background()
     match ctx.Err() {
-      Some(e) => fmt.Println(e.Error()),
+      Some(err) => fmt.Println(err),
       None => fmt.Println("no error"),
     }
   }
@@ -23,8 +23,8 @@ import (
 
 func main() {
 	ctx := context.Background()
-	if e := ctx.Err(); !lisette.IsNilInterface(e) {
-		fmt.Println(e.Error())
+	if err := ctx.Err(); !lisette.IsNilInterface(err) {
+		fmt.Println(err)
 	} else {
 		fmt.Println("no error")
 	}

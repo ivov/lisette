@@ -85,9 +85,7 @@ func test() {
 			panic("wrong app error")
 		}
 	}
-	ret_1, err := handler(true)
-	if err == nil {
-		n := ret_1
+	if n, err := handler(true); err == nil {
 		if n != 3 {
 			panic("wrong ok length")
 		}

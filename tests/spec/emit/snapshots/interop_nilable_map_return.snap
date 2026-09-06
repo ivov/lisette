@@ -16,9 +16,7 @@ package main
 import "example.com/reg"
 
 func main() {
-	ret_1 := reg.Registry(true)
-	if ret_1 != nil {
-		m := ret_1
+	if m := reg.Registry(true); m != nil {
 		_ = len(m)
 	}
 }

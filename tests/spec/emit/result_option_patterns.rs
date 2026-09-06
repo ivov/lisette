@@ -2340,6 +2340,90 @@ fn run(m: Map<string, int>) {
 }
 
 #[test]
+fn value_position_match_assigns_from_the_if_initializer() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn main() {
+  let doubled = match strconv.Atoi("21") {
+    Ok(n) => n * 2,
+    Err(_) => 0,
+  }
+  fmt.Println(doubled)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn option_match_on_nullable_call_names_the_value() {
+    let input = r#"
+import "go:context"
+import "go:fmt"
+
+fn main() {
+  let ctx = context.Background()
+  match ctx.Err() {
+    Some(err) => fmt.Println(err),
+    None => fmt.Println("no error"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn ok_binding_shadowing_a_live_name_gets_a_fresh_header_name() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn main() {
+  let n = 1
+  match strconv.Atoi("2") {
+    Ok(n) => fmt.Println(n),
+    Err(_) => fmt.Println(n),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn ok_and_err_arms_sharing_a_name_get_distinct_slots() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn main() {
+  match strconv.Atoi("2") {
+    Ok(x) => fmt.Println(x),
+    Err(x) => fmt.Println(x),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_match_aliases_the_both_arm_names() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn write_all(file: Ref<os.File>) {
+  match file.Write(['h', 'i']) {
+    Ok(n) => fmt.Println(n),
+    Both(m, e) => fmt.Println(m, e),
+    Err(e) => fmt.Println(e),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn nested_propagate_in_call_args_binds_the_inner_pair_first() {
     let input = r#"
 import "go:strconv"

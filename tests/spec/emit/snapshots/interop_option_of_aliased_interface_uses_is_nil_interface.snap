@@ -21,9 +21,7 @@ import (
 )
 
 func main() {
-	ret_1 := evts.Peek()
-	if !lisette.IsNilInterface(ret_1) {
-		e := ret_1
+	if e := evts.Peek(); !lisette.IsNilInterface(e) {
 		fmt.Println(e)
 	} else {
 		fmt.Println("none")

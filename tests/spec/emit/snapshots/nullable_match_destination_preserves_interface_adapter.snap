@@ -60,16 +60,12 @@ func maybeBar(bar *Bar[*Thing]) *Bar[*Thing] {
 func main() {
 	bar := Bar[*Thing]{x: lisette.MakeOptionSome(&Thing{})}
 	var opt Opt
-	ret_1 := maybeBar(&bar)
-	if ret_1 != nil {
-		found := ret_1
+	if found := maybeBar(&bar); found != nil {
 		opt = _lisAdapter_Bar_Opt_0{inner: found}
 	} else {
 		return
 	}
-	ret_5 := opt.find()
-	if ret_5 != nil {
-		thing := ret_5
+	if thing := opt.find(); thing != nil {
 		_ = thing
 	}
 }
@@ -79,15 +75,15 @@ type _lisAdapter_Bar_Opt_0 struct {
 }
 
 func (a _lisAdapter_Bar_Opt_0) find() *Thing {
-	ret_2, ret_3 := a.inner.find()
-	var option_4 lisette.Option[*Thing]
-	if ret_3 && ret_2 != nil {
-		option_4 = lisette.MakeOptionSome[*Thing](ret_2)
+	ret_1, ret_2 := a.inner.find()
+	var option_3 lisette.Option[*Thing]
+	if ret_2 && ret_1 != nil {
+		option_3 = lisette.MakeOptionSome[*Thing](ret_1)
 	} else {
-		option_4 = lisette.MakeOptionNone[*Thing]()
+		option_3 = lisette.MakeOptionNone[*Thing]()
 	}
-	if option_4.Tag == lisette.OptionSome {
-		return option_4.SomeVal
+	if option_3.Tag == lisette.OptionSome {
+		return option_3.SomeVal
 	}
 	return nil
 }

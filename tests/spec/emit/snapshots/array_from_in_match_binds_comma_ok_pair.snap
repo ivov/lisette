@@ -12,14 +12,12 @@ description: |
 package main
 
 func first(xs []int) int {
-	ret_1, ok := func(s []int) ([3]int, bool) {
+	if a, ok := func(s []int) ([3]int, bool) {
 		if len(s) != 3 {
 			return [3]int{}, false
 		}
 		return ([3]int)(s), true
-	}(xs)
-	if ok {
-		a := ret_1
+	}(xs); ok {
 		return a[0]
 	} else {
 		return 0

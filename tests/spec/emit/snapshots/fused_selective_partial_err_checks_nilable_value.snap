@@ -20,8 +20,7 @@ import (
 )
 
 func main() {
-	ret_1, e := aws.Read()
-	if e != nil && ret_1 == nil {
+	if ret_1, e := aws.Read(); e != nil && ret_1 == nil {
 		fmt.Println("err", e)
 	}
 }

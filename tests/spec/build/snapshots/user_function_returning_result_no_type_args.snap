@@ -14,9 +14,7 @@ func parseInt(s string) (int, error) {
 }
 
 func main() {
-	ret_1, e := parseInt("42")
-	if e == nil {
-		n := ret_1
+	if n, e := parseInt("42"); e == nil {
 		fmt.Println(n)
 	} else {
 		fmt.Println(e)

@@ -36,9 +36,7 @@ func fallible() (int, error) {
 }
 
 func describe(value any) string {
-	ret_1, ok := value.(string)
-	if ok {
-		text := ret_1
+	if text, ok := value.(string); ok {
 		return text
 	} else {
 		return ""
@@ -58,9 +56,7 @@ func run() (string, error) {
 
 func test() {
 	var text_1 string
-	ret_2, err := run()
-	if err == nil {
-		text := ret_2
+	if text, err := run(); err == nil {
 		text_1 = text
 	} else {
 		text_1 = ""

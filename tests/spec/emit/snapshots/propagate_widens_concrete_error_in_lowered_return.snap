@@ -73,9 +73,7 @@ func test() {
 			panic("wrong widened error")
 		}
 	}
-	ret_1, err := load("ada")
-	if err == nil {
-		v := ret_1
+	if v, err := load("ada"); err == nil {
 		if v != "ada" {
 			panic("wrong ok value")
 		}

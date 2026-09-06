@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn main() {
+    let doubled = match strconv.Atoi("21") {
+      Ok(n) => n * 2,
+      Err(_) => 0,
+    }
+    fmt.Println(doubled)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	var doubled int
+	if n, err := strconv.Atoi("21"); err == nil {
+		doubled = n * 2
+	} else {
+		doubled = 0
+	}
+	fmt.Println(doubled)
+}

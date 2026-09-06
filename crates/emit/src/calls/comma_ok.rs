@@ -39,6 +39,7 @@ pub(crate) enum CommaOkValueSlot {
     Named(String),
     /// Allocate a fresh temporary.
     Temp,
+    Arm(String),
     /// No payload use. The value is still captured when the nil guard needs it.
     Unused,
 }
@@ -66,12 +67,32 @@ pub(crate) struct LoweredPair {
     status: String,
     success: PairSuccess,
     nil_guard: Option<NilGuard>,
-    initializer: Option<String>,
+    has_value_slot: bool,
+    initializer_call: Option<String>,
 }
 
 impl LoweredPair {
     pub(crate) fn status(&self) -> &str {
         &self.status
+    }
+
+    pub(crate) fn discard_value(&mut self) {
+        if self.nil_guard.is_none() {
+            self.value = None;
+        }
+    }
+
+    fn binding(&self) -> String {
+        match (self.has_value_slot, &self.value) {
+            (true, Some(value)) => format!("{value}, {}", self.status),
+            (true, None) => format!("_, {}", self.status),
+            (false, _) => self.status.clone(),
+        }
+    }
+
+    fn initializer(&self) -> Option<String> {
+        let call = self.initializer_call.as_ref()?;
+        Some(format!("{} := {call}", self.binding()))
     }
 }
 
@@ -168,7 +189,7 @@ impl Planner<'_> {
 
     pub(crate) fn bind_pair(
         &mut self,
-        mut statements: Vec<LoweredStatement>,
+        statements: Vec<LoweredStatement>,
         expression: String,
         slot: CommaOkValueSlot,
         kind: PairKind,
@@ -188,41 +209,51 @@ impl Planner<'_> {
                 PairStatusKind::Error,
             ),
         };
+        let opens_if = !matches!(slot, CommaOkValueSlot::Named(_) | CommaOkValueSlot::Temp);
         let value = carries_value
             .then(|| match slot {
-                CommaOkValueSlot::Named(name) => Some(name),
+                CommaOkValueSlot::Named(name) | CommaOkValueSlot::Arm(name) => Some(name),
                 CommaOkValueSlot::Temp => Some(self.fresh_pair_value()),
                 CommaOkValueSlot::Unused => nil_guard.map(|_| self.fresh_pair_value()),
             })
             .flatten();
-        let opens_if = value.is_none();
-        let status = self.pair_status(status_hint, status_kind, opens_if);
-        let binding = match (carries_value, value.as_deref()) {
-            (true, Some(value)) => format!("{value}, {status}"),
-            (true, None) => format!("_, {status}"),
-            (false, _) => status.clone(),
-        };
-        let line = format!("{binding} := {expression}");
-        let initializer = if opens_if {
-            Some(line)
-        } else {
-            statements.push(LoweredStatement::RawGo(format!("{line}\n")));
-            None
-        };
-        LoweredPair {
+        let mut status = self.pair_status(status_hint, status_kind, opens_if);
+        if opens_if && value.as_deref() == Some(status.as_str()) {
+            status = self.fresh_var(Some(&status));
+        }
+        let mut pair = LoweredPair {
             statements,
             value,
             status,
             success,
             nil_guard,
-            initializer,
+            has_value_slot: carries_value,
+            initializer_call: None,
+        };
+        if opens_if {
+            pair.initializer_call = Some(expression);
+        } else {
+            let line = format!("{} := {expression}\n", pair.binding());
+            pair.statements.push(LoweredStatement::RawGo(line));
         }
+        pair
     }
 
     pub(crate) fn fresh_pair_value(&mut self) -> String {
         let v = self.fresh_var(Some("ret"));
         self.declare(&v);
         v
+    }
+
+    pub(crate) fn arm_value_name(&mut self, name: &str) -> String {
+        let candidate = escape_reserved(name);
+        if self.scope.has_binding_for_go_name(&candidate)
+            || self.package.is_package_block_name(&candidate)
+        {
+            self.fresh_var(Some(&candidate))
+        } else {
+            candidate.into_owned()
+        }
     }
 
     /// Fresh within a Go block; nested blocks may shadow outer statuses.
@@ -284,7 +315,7 @@ impl Planner<'_> {
                 format!("{status} {operator} {nil_condition}")
             }
         };
-        match &pair.initializer {
+        match pair.initializer() {
             Some(initializer) => format!("{initializer}; {condition}"),
             None => condition,
         }

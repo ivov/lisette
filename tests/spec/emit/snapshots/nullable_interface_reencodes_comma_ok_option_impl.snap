@@ -56,9 +56,7 @@ func (b Bar[T]) find() (T, bool) {
 }
 
 func useOpt(o Opt) {
-	ret_1 := o.find()
-	if ret_1 != nil {
-		t := ret_1
+	if t := o.find(); t != nil {
 		_ = t
 	}
 }

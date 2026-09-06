@@ -59,9 +59,7 @@ func openAndCheck(path, n string) (int, error) {
 }
 
 func main() {
-	ret_1, err := openAndCheck("/tmp/x", "7")
-	if err == nil {
-		v := ret_1
+	if v, err := openAndCheck("/tmp/x", "7"); err == nil {
 		_ = v
 	}
 }

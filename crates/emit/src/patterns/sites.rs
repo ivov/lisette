@@ -294,12 +294,8 @@ impl Planner<'_> {
             None => CommaOkValueSlot::Unused,
         };
         let bound = fuse.bind(self, slot);
-        Some(self.finish_fused_let_else(
-            bound.statements,
-            bound.none_condition,
-            binding,
-            else_block,
-        ))
+        let none_condition = bound.none_condition(self);
+        Some(self.finish_fused_let_else(bound.statements, none_condition, binding, else_block))
     }
 
     fn finish_fused_let_else(
@@ -463,11 +459,13 @@ impl Planner<'_> {
             CommaOkValueSlot::Unused
         };
         let bound = fuse.bind(self, slot);
+        let none_condition = bound.none_condition(self);
+        let value = bound.value().map(str::to_string);
 
         let mut loop_body = bound.statements;
         loop_body.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
-            condition: bound.none_condition,
+            condition: none_condition,
             then_body: LoweredBlock {
                 statements: vec![LoweredStatement::Break(
                     self.current_loop_id()
@@ -477,7 +475,7 @@ impl Planner<'_> {
             else_arm: ElseArm::None,
         }));
         let (body_block, _) = self.lower_fused_arm(
-            &[ArmBinding::copy(binding, bound.value.as_deref())],
+            &[ArmBinding::copy(binding, value.as_deref())],
             body,
             &PlacePlan::Statement,
         );

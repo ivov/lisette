@@ -18,9 +18,7 @@ import "strconv"
 
 func test(text string) int {
 	var parsed int
-	ret_1, err := strconv.Atoi(text)
-	if err == nil {
-		n := ret_1
+	if n, err := strconv.Atoi(text); err == nil {
 		parsed = n
 	} else {
 		parsed = -1

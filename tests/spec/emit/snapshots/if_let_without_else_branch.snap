@@ -26,9 +26,7 @@ func divide(a, b int) (int, bool) {
 }
 
 func test() {
-	ret_1, ok := divide(100, 10)
-	if ok {
-		x := ret_1
+	if x, ok := divide(100, 10); ok {
 		fmt.Printf("Result: %d\n", x)
 	}
 }
