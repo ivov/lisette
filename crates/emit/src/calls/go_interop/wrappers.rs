@@ -12,6 +12,7 @@ use crate::names::go_name;
 use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement};
 use crate::write_line;
 use syntax::ast::Expression;
+use syntax::parse::TUPLE_FIELDS;
 use syntax::types::{FunctionParameter, Type};
 
 #[derive(Clone, Copy)]
@@ -76,6 +77,14 @@ pub(super) fn leaf_block(sink: &ResolvedSink, value: &str) -> LoweredBlock {
     }
 }
 
+fn tuple_slots(layout: &ValueLayout) -> &[ValueLayout] {
+    match layout {
+        ValueLayout::Tuple { elements, .. } => elements,
+        ValueLayout::Named { underlying, .. } => tuple_slots(underlying),
+        _ => unreachable!("a tuple payload is a tuple layout"),
+    }
+}
+
 impl Planner<'_> {
     pub(crate) fn plan_function_layout_bridge(
         &mut self,
@@ -84,7 +93,7 @@ impl Planner<'_> {
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) -> String {
-        debug_assert_eq!(source.return_abi, target.return_abi);
+        debug_assert!(source.return_abi.same_logical_contract(&target.return_abi));
         let function = self.hoist_tmp_value_statement(statements, "cb", value);
         let mut body = Vec::new();
         let mut parameters = Vec::new();
@@ -140,17 +149,30 @@ impl Planner<'_> {
             CallableReturnAbi::Result { .. }
             | CallableReturnAbi::Partial { .. }
             | CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
-                let value = self.fresh_var(Some("ret"));
-                self.declare(&value);
-                let auxiliary = self.fresh_var(Some("ret"));
-                self.declare(&auxiliary);
+                let source_payload = source
+                    .payload
+                    .as_deref()
+                    .expect("lowered callable has a payload layout");
+                let target_payload = target
+                    .payload
+                    .as_deref()
+                    .expect("lowered callable target has a payload layout");
+                let source_flat = source.return_abi.has_flattened_payload();
+                let slot_count = if source_flat {
+                    tuple_slots(source_payload).len()
+                } else {
+                    1
+                };
+                let mut values = self.create_temp_vars("ret", slot_count + 1);
                 statements.push(LoweredStatement::RawGo(format!(
-                    "{value}, {auxiliary} := {call}\n"
+                    "{} := {call}\n",
+                    values.join(", ")
                 )));
+                let auxiliary = values.pop().expect("a lowered callable has a status slot");
 
-                if matches!(source.return_abi, CallableReturnAbi::Partial { .. }) {
+                if matches!(source.return_abi, CallableReturnAbi::Partial { .. }) && !source_flat {
                     let ok_type = source.result.logical_type().ok_type();
-                    if let Some(condition) = self.partial_ok_nil_check(&ok_type, &value) {
+                    if let Some(condition) = self.partial_ok_nil_check(&ok_type, &values[0]) {
                         statements.push(LoweredStatement::If(IfPlan {
                             condition_setup: Vec::new(),
                             condition,
@@ -162,17 +184,15 @@ impl Planner<'_> {
                     }
                 }
 
-                let source_payload = source
-                    .payload
-                    .as_deref()
-                    .expect("lowered callable has a payload layout");
-                let target_payload = target
-                    .payload
-                    .as_deref()
-                    .expect("lowered callable target has a payload layout");
-                let bridge = resolve_layout_bridge(self, source_payload, target_payload);
-                let value = self.plan_layout_bridge(statements, &value, &bridge);
-                statements.push(plain_return(format!("{value}, {auxiliary}")));
+                let mut values = self.bridge_payload_slots(
+                    statements,
+                    values,
+                    source_payload,
+                    target_payload,
+                    target.return_abi.has_flattened_payload(),
+                );
+                values.push(auxiliary);
+                statements.push(plain_return(values.join(", ")));
             }
             CallableReturnAbi::Option(OptionReturnAbi::Nullable) => {
                 let raw = self.hoist_tmp_value_statement(statements, "raw", call);
@@ -233,6 +253,45 @@ impl Planner<'_> {
                     .collect::<Vec<_>>();
                 statements.push(plain_return(values.join(", ")));
             }
+        }
+    }
+
+    /// `values` holds one Go value per source slot: the packed payload, or one
+    /// value per tuple element when the source is flattened.
+    fn bridge_payload_slots(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        values: Vec<String>,
+        source: &ValueLayout,
+        target: &ValueLayout,
+        target_flat: bool,
+    ) -> Vec<String> {
+        let source_flat = values.len() > 1;
+        if !source_flat && !target_flat {
+            let bridge = resolve_layout_bridge(self, source, target);
+            return vec![self.plan_layout_bridge(statements, &values[0], &bridge)];
+        }
+        let source_slots = tuple_slots(source);
+        let target_slots = tuple_slots(target);
+        let elements: Vec<String> = if source_flat {
+            values
+        } else {
+            (0..source_slots.len())
+                .map(|index| format!("{}.{}", values[0], TUPLE_FIELDS[index]))
+                .collect()
+        };
+        let bridged: Vec<String> = elements
+            .into_iter()
+            .zip(source_slots.iter().zip(target_slots))
+            .map(|(value, (source, target))| {
+                let bridge = resolve_layout_bridge(self, source, target);
+                self.plan_layout_bridge(statements, &value, &bridge)
+            })
+            .collect();
+        if target_flat {
+            bridged
+        } else {
+            vec![self.plan_tuple_from_vars(statements, &bridged, target.logical_type())]
         }
     }
 

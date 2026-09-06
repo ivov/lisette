@@ -324,7 +324,7 @@ pub(crate) fn resolve_layout_bridge(
             }
         }
         (Function { layout: source, .. }, Function { layout: target, .. })
-            if source.return_abi == target.return_abi =>
+            if source.return_abi.same_logical_contract(&target.return_abi) =>
         {
             LayoutBridge::Function {
                 direction: function_bridge_direction(planner, source, target),

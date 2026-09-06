@@ -78,6 +78,39 @@ impl CallableReturnAbi {
                 | Self::Tuple { .. }
         )
     }
+
+    pub(crate) fn payload(&self) -> Option<PayloadLayout> {
+        match self {
+            Self::Result { payload }
+            | Self::Partial { payload }
+            | Self::Option(OptionReturnAbi::CommaOk { payload }) => Some(*payload),
+            Self::Tagged
+            | Self::Direct
+            | Self::BareError
+            | Self::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_))
+            | Self::Tuple { .. } => None,
+        }
+    }
+
+    pub(crate) fn with_payload(self, payload: PayloadLayout) -> Self {
+        match self {
+            Self::Result { .. } => Self::Result { payload },
+            Self::Partial { .. } => Self::Partial { payload },
+            Self::Option(OptionReturnAbi::CommaOk { .. }) => {
+                Self::Option(OptionReturnAbi::CommaOk { payload })
+            }
+            other => other,
+        }
+    }
+
+    pub(crate) fn has_flattened_payload(&self) -> bool {
+        self.payload().is_some_and(PayloadLayout::is_flattened)
+    }
+
+    pub(crate) fn same_logical_contract(&self, other: &Self) -> bool {
+        self.clone().with_payload(PayloadLayout::Packed)
+            == other.clone().with_payload(PayloadLayout::Packed)
+    }
 }
 
 /// Required conversion between two callable result contracts.

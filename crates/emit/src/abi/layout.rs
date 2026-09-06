@@ -38,6 +38,10 @@ impl SlotOrigin {
             self
         }
     }
+
+    pub(crate) fn declared_by_go(self) -> bool {
+        matches!(self, Self::GoParameter | Self::GoReturn | Self::GoField)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -142,12 +146,26 @@ impl FunctionLayout {
         let payload = self
             .payload
             .as_deref()
-            .expect("payload-carrying callable layout has a payload")
-            .go_type(planner);
-        GoType::with_dependencies(
-            format!("({}, {})", payload.code, status.code),
-            [&payload, &status],
-        )
+            .expect("payload-carrying callable layout has a payload");
+        let mut slots: Vec<GoType> = match payload {
+            ValueLayout::Tuple { elements, .. } if self.return_abi.has_flattened_payload() => {
+                elements
+                    .iter()
+                    .map(|element| element.go_type(planner))
+                    .collect()
+            }
+            _ => vec![payload.go_type(planner)],
+        };
+        slots.push(status);
+        let code = format!(
+            "({})",
+            slots
+                .iter()
+                .map(|slot| slot.code.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        GoType::with_dependencies(code, &slots)
     }
 }
 
@@ -400,6 +418,7 @@ impl Planner<'_> {
             return self.value_layout_with_hint(ty, SlotOrigin::Lisette, None);
         }
 
+        let origin = self.function_type_origin(ty, origin);
         let resolved = self.facts.peel_alias(ty);
         if resolved != *ty {
             return ValueLayout::Named {
@@ -578,7 +597,7 @@ impl Planner<'_> {
                     let payload = self
                         .callable_payload_layout(&result_type, origin, declared_result)
                         .map(Box::new);
-                    let return_abi = self.callable_return_abi(&result_type);
+                    let return_abi = self.slot_return_abi(&result_type, origin);
                     return ValueLayout::Function {
                         function_type: ty,
                         layout: FunctionLayout {
