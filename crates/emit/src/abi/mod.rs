@@ -94,45 +94,46 @@ impl Planner<'_> {
             CallableReturnAbi::Tagged | CallableReturnAbi::Direct => self.go_type(&peeled),
             CallableReturnAbi::BareError => self.go_type(&peeled.err_type()),
             CallableReturnAbi::Result { .. } | CallableReturnAbi::Partial { .. } => {
-                let ok_go = self.go_type(&peeled.ok_type());
-                let err_go = self.go_type(&peeled.err_type());
-                GoType::with_dependencies(
-                    format!("({}, {})", ok_go.code, err_go.code),
-                    [&ok_go, &err_go],
-                )
+                go_result_list(&[
+                    self.go_type(&peeled.ok_type()),
+                    self.go_type(&peeled.err_type()),
+                ])
             }
             CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
-                let inner_go = self.go_type(&peeled.ok_type());
-                GoType::with_dependencies(format!("({}, bool)", inner_go.code), [&inner_go])
+                go_result_list(&[self.go_type(&peeled.ok_type()), GoType::new("bool")])
             }
             CallableReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
                 self.go_type(&peeled.ok_type())
             }
-            CallableReturnAbi::Tuple { .. } => {
-                let elements = tuple_element_types(&peeled);
-                let element_gos: Vec<GoType> = elements
-                    .iter()
-                    .map(|t| {
-                        if self.facts.is_nullable_option(t) {
-                            let inner = self.facts.peel_alias(t).ok_type();
-                            self.go_type(&inner)
-                        } else {
-                            self.go_type(t)
-                        }
-                    })
-                    .collect();
-                let code = format!(
-                    "({})",
-                    element_gos
-                        .iter()
-                        .map(|go| go.code.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                );
-                GoType::with_dependencies(code, &element_gos)
-            }
+            CallableReturnAbi::Tuple { .. } => go_result_list(&self.tuple_slot_go_types(&peeled)),
         }
     }
+
+    fn tuple_slot_go_types(&self, tuple_ty: &Type) -> Vec<GoType> {
+        tuple_element_types(tuple_ty)
+            .iter()
+            .map(|t| {
+                if self.facts.is_nullable_option(t) {
+                    let inner = self.facts.peel_alias(t).ok_type();
+                    self.go_type(&inner)
+                } else {
+                    self.go_type(t)
+                }
+            })
+            .collect()
+    }
+}
+
+fn go_result_list(slots: &[GoType]) -> GoType {
+    let code = format!(
+        "({})",
+        slots
+            .iter()
+            .map(|slot| slot.code.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    GoType::with_dependencies(code, slots)
 }
 
 pub(crate) fn tuple_element_types(ty: &Type) -> Vec<Type> {

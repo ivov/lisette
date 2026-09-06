@@ -54,6 +54,12 @@ fn go_builtin_conversion(type_args: &str) -> Option<String> {
     (!inner.is_empty() && !inner.contains(',')).then(|| inner.to_string())
 }
 
+struct FnArgShapes {
+    param_abi: CallableReturnAbi,
+    arg_fn: Type,
+    arg_abi: CallableReturnAbi,
+}
+
 struct CallArgsContext<'plan, 'facts> {
     plan: &'plan CallPlan<'facts>,
     /// Suppresses the Go-fn identity short-circuit on fn-typed params
@@ -611,16 +617,14 @@ impl<'a> Planner<'a> {
             ArgumentPlan::TaggedGoLowering => {
                 let target =
                     effective_param_ty.expect("TaggedGoLowering requires effective_param_ty");
-                let arg_ctx = direct_arg_emit_ctx(&self.facts, Some(target), true);
+                let arg_ctx = self.direct_arg_emit_ctx(param, true);
                 let argument = self.lower_composite_value(arg, arg_ctx);
                 argument.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
                     let lowered = self.emit_lower_arg_to_tagged(setup, &value, target);
                     GoExpression::opaque_with_deferred_evaluation(lowered, true)
                 })
             }
-            ArgumentPlan::Direct => {
-                self.lower_direct_arg(arg, ctx, effective_param_ty, declared_param_ty)
-            }
+            ArgumentPlan::Direct => self.lower_direct_arg(arg, ctx, param, declared_param_ty),
         }
     }
 
@@ -636,8 +640,7 @@ impl<'a> Planner<'a> {
         let effective_param_ty = param.map(|param| &param.instantiated);
         let declared_param_ty = param.and_then(|param| param.declared.as_ref());
         if matches!(callee.origin, CallableOrigin::GoInterop)
-            && let Some((source, target, transition)) =
-                self.detect_callback_wrapper(arg, effective_param_ty)
+            && let Some((source, target, transition)) = self.detect_callback_wrapper(arg, param)
         {
             return ArgumentPlan::GoCallbackAdapter {
                 source,
@@ -755,16 +758,16 @@ impl<'a> Planner<'a> {
         &mut self,
         arg: &Expression,
         ctx: &CallArgsContext<'_, '_>,
-        effective_param_ty: Option<&Type>,
+        param: Option<&CallableParamAbi>,
         declared_param_ty: Option<&Type>,
     ) -> ValuePlan {
         let suppress = would_suppress_tagged_go(&ctx.plan.resolved, declared_param_ty);
-        let mut arg_ctx = direct_arg_emit_ctx(&self.facts, effective_param_ty, suppress);
+        let mut arg_ctx = self.direct_arg_emit_ctx(param, suppress);
         if let Some(retired) = ctx.retired_receiver {
             arg_ctx = arg_ctx.with_retired_receiver(retired);
         }
         let argument = self.lower_composite_value(arg, arg_ctx);
-        let Some(target) = effective_param_ty else {
+        let Some(target) = param.map(|param| &param.instantiated) else {
             return argument;
         };
         let coercion = CoercionPlan::internal(self, &arg.get_type(), target);
@@ -776,6 +779,21 @@ impl<'a> Planner<'a> {
             setup.extend(coercion_setup);
             GoExpression::opaque_with_deferred_evaluation(coerced, contains_deferred_evaluation)
         })
+    }
+
+    /// Context for a `Direct` or `TaggedGoLowering` argument.
+    fn direct_arg_emit_ctx<'b>(
+        &self,
+        param: Option<&CallableParamAbi>,
+        suppress: bool,
+    ) -> ExpressionContext<'b> {
+        let flows_to_unknown = param.is_some_and(|param| {
+            self.facts
+                .resolves_to_unknown(param.instantiated.unwrap_forall())
+        });
+        ExpressionContext::value()
+            .with_forced_tagged_go_function(suppress)
+            .with_unknown_argument_target(flows_to_unknown)
     }
 
     /// Adapt a lowered-return fn arg when its shape disagrees with the
@@ -791,11 +809,7 @@ impl<'a> Planner<'a> {
 
     /// Detect whether `arg`'s fn-shape disagrees with the callee's generic
     /// param shape (Lisette callback adapter trigger). Pure detection.
-    fn fn_arg_shapes(
-        &self,
-        arg: &Expression,
-        raw_param_ty: &Type,
-    ) -> Option<(CallableReturnAbi, Type, CallableReturnAbi)> {
+    fn fn_arg_shapes(&self, arg: &Expression, raw_param_ty: &Type) -> Option<FnArgShapes> {
         let variadic_inner = if raw_param_ty.get_name() == Some("VarArgs") {
             raw_param_ty.inner()
         } else {
@@ -815,7 +829,11 @@ impl<'a> Planner<'a> {
         let arg_ret = arg_fn.get_function_ret()?;
         let arg_abi = self.classify_direct_emission(arg_ret)?;
 
-        Some((param_abi, arg_fn, arg_abi))
+        Some(FnArgShapes {
+            param_abi,
+            arg_fn,
+            arg_abi,
+        })
     }
 
     fn detect_lowered_fn_arg_shape(
@@ -827,8 +845,8 @@ impl<'a> Planner<'a> {
             return None;
         }
         let raw_param_ty = generic_param_ty?;
-        let (param_abi, _arg_fn, arg_abi) = self.fn_arg_shapes(arg, raw_param_ty)?;
-        if param_abi == arg_abi {
+        let shapes = self.fn_arg_shapes(arg, raw_param_ty)?;
+        if shapes.param_abi == shapes.arg_abi {
             return None;
         }
         Some(())
@@ -839,7 +857,11 @@ impl<'a> Planner<'a> {
         arg: &Expression,
         generic_param_ty: &Type,
     ) -> Option<ValuePlan> {
-        let (param_abi, arg_fn, arg_abi) = self.fn_arg_shapes(arg, generic_param_ty)?;
+        let FnArgShapes {
+            param_abi,
+            arg_fn,
+            arg_abi,
+        } = self.fn_arg_shapes(arg, generic_param_ty)?;
         let argument = self.lower_value(arg, ExpressionContext::value());
         Some(argument.map_rendered_as_computed(|setup, value, _| {
             let mut buffer = String::new();
@@ -931,13 +953,12 @@ impl<'a> Planner<'a> {
     fn detect_callback_wrapper(
         &self,
         arg: &Expression,
-        effective_param_ty: Option<&Type>,
+        param: Option<&CallableParamAbi>,
     ) -> Option<(CallableReturnAbi, CallableReturnAbi, AbiTransition)> {
-        let param_fn_ty = effective_param_ty
-            .and_then(|param_ty| {
-                self.facts
-                    .resolve_to_function_type(param_ty.unwrap_forall())
-            })
+        let param = param?;
+        let param_fn_ty = self
+            .facts
+            .resolve_to_function_type(param.instantiated.unwrap_forall())
             .filter(|fn_ty| {
                 let Type::Function(f) = fn_ty else {
                     return false;
@@ -1033,6 +1054,10 @@ impl<'a> Planner<'a> {
         }
     }
 
+    fn argument_source_layout(&self, argument: &Expression) -> ValueLayout {
+        self.value_layout(&argument.get_type(), SlotOrigin::Lisette)
+    }
+
     fn argument_needs_slot_bridge(
         &self,
         argument: &Expression,
@@ -1041,7 +1066,7 @@ impl<'a> Planner<'a> {
         let physical_source = self.go_physical_expression_layout(argument);
         let source = physical_source
             .clone()
-            .unwrap_or_else(|| self.value_layout(&argument.get_type(), SlotOrigin::Lisette));
+            .unwrap_or_else(|| self.argument_source_layout(argument));
         let target = self.argument_slot_layout(parameter);
         let can_forward_physical = match (&physical_source, &target) {
             (
@@ -1069,7 +1094,7 @@ impl<'a> Planner<'a> {
         let raw_source = self.go_physical_expression_layout(argument);
         let source = raw_source
             .clone()
-            .unwrap_or_else(|| self.value_layout(&argument.get_type(), SlotOrigin::Lisette));
+            .unwrap_or_else(|| self.argument_source_layout(argument));
         let target = self.argument_slot_layout(parameter);
         let coercion = CoercionPlan::bridge(self, &source, &target);
         let value = if raw_source.is_some() {
@@ -1195,18 +1220,4 @@ fn spread_needs_any_wrap(
 fn would_suppress_tagged_go(callee: &ResolvedCallee<'_>, declared_param_ty: Option<&Type>) -> bool {
     let unwrapped = declared_param_ty.map(|p| p.unwrap_forall());
     callee.is_prelude_dispatch && unwrapped.is_some_and(|p| matches!(p, Type::Function(_)))
-}
-
-/// Compute the `ExpressionContext` for emitting a Direct or TaggedGoLowering
-/// argument's underlying value via `emit_composite_value`.
-fn direct_arg_emit_ctx<'b>(
-    facts: &crate::EmitFacts<'_>,
-    effective_param_ty: Option<&'b Type>,
-    suppress: bool,
-) -> ExpressionContext<'b> {
-    let unwrapped = effective_param_ty.map(|p| p.unwrap_forall());
-    let flows_to_unknown = unwrapped.is_some_and(|ty| facts.resolves_to_unknown(ty));
-    ExpressionContext::value()
-        .with_forced_tagged_go_function(suppress)
-        .with_unknown_argument_target(flows_to_unknown)
 }
