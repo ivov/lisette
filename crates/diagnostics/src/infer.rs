@@ -617,6 +617,21 @@ pub fn mut_without_effect(target: &str, span: Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn mut_under_read_only_wrapper(
+    wrapper: &str,
+    wrapper_span: Span,
+    contents_span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`mut` has no effect")
+        .with_infer_code("mut_without_effect")
+        .with_span_label(&wrapper_span, "read-only")
+        .with_span_label(&contents_span, "`mut` has no effect")
+        .with_help(format!(
+            "A read-only container makes its contents read-only. \
+             Write `mut` before `{wrapper}`, or remove the inner `mut`"
+        ))
+}
+
 pub fn assert_type_needs_concrete(target: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot assert to a type parameter")
         .with_infer_code("needs_writable")

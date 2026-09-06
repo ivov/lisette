@@ -928,6 +928,7 @@ pub enum Annotation {
         name: EcoString,
         params: Vec<Self>,
         writable: bool,
+        mut_span: Option<Span>,
         span: Span,
     },
     Function {
@@ -959,6 +960,7 @@ impl fmt::Debug for Annotation {
                 name,
                 params,
                 writable,
+                mut_span: _,
                 span,
             } => {
                 let mut s = f.debug_struct("Constructor");
@@ -1001,6 +1003,7 @@ impl Annotation {
             name: "Unit".into(),
             params: vec![],
             writable: false,
+            mut_span: None,
             span: Span::dummy(),
         }
     }

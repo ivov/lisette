@@ -495,6 +495,7 @@ mod tests {
                             name: "Comparable".into(),
                             params: Vec::new(),
                             writable: false,
+                            mut_span: None,
                             span: bound_span,
                         },
                         Type::Nominal {

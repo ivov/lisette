@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `mut` has no effect
+   ╭─[test.lis:4:16]
+ 3 │ 
+ 4 │ fn take(items: Ref<mut Slice<mut Ref<P>>>) {
+   ·                ─┬─           ─────┬────
+   ·                 │                 ╰── `mut` has no effect
+   ·                 ╰── read-only
+ 5 │   let _ = items
+   ╰────
+  help: A read-only container makes its contents read-only. Write `mut` before `Ref`, or remove the inner `mut` · code: [infer.mut_without_effect]

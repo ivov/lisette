@@ -23,7 +23,7 @@ pub type AstBuildResult = parse::ParseResult;
 #[cfg(target_pointer_width = "64")]
 mod size_assertions {
     use std::mem::size_of;
-    const _: () = assert!(size_of::<super::ast::Expression>() == 304);
+    const _: () = assert!(size_of::<super::ast::Expression>() == 320);
     const _: () = assert!(size_of::<super::ast::Pattern>() == 160);
     const _: () = assert!(size_of::<super::types::Type>() == 48);
     const _: () = assert!(size_of::<super::ast::Span>() == 12);

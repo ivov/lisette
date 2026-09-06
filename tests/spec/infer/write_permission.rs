@@ -1486,6 +1486,92 @@ fn mut_on_scalar_let_refused() {
 }
 
 #[test]
+fn mut_under_read_only_ref_refused() {
+    infer(
+        r#"fn main() {
+  let xs = [1, 2]
+  let r: Ref<mut Slice<int>> = &xs
+  let _ = r
+}"#,
+    )
+    .assert_infer_code("mut_without_effect");
+}
+
+#[test]
+fn mut_under_read_only_slice_field_refused() {
+    infer(
+        r#"struct P { x: int }
+
+struct Holder {
+  items: Slice<mut Ref<P>>,
+}"#,
+    )
+    .assert_infer_code("mut_without_effect");
+}
+
+#[test]
+fn mut_under_read_only_map_value_refused() {
+    infer(
+        r#"fn take(by_name: Map<string, mut Slice<int>>) {
+  let _ = by_name
+}"#,
+    )
+    .assert_infer_code("mut_without_effect");
+}
+
+#[test]
+fn mut_under_read_only_ref_through_option_refused() {
+    infer(
+        r#"fn take(maybe: Ref<Option<mut Slice<int>>>) {
+  let _ = maybe
+}"#,
+    )
+    .assert_infer_code("mut_without_effect");
+}
+
+#[test]
+fn mut_under_read_only_ref_reports_each_layer() {
+    infer(
+        r#"struct P { x: int }
+
+fn take(items: Ref<mut Slice<mut Ref<P>>>) {
+  let _ = items
+}"#,
+    )
+    .assert_infer_code_count("mut_without_effect", 2);
+}
+
+#[test]
+fn mut_under_writable_ref_accepted() {
+    infer(
+        r#"fn take(items: mut Ref<mut Slice<int>>) {
+  let _ = items
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_in_function_parameter_under_read_only_ref_accepted() {
+    infer(
+        r#"fn take(callback: Ref<fn(mut Slice<int>) -> ()>) {
+  let _ = callback
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_in_function_result_under_read_only_ref_refused() {
+    infer(
+        r#"fn take(factory: Ref<fn() -> mut Slice<int>>) {
+  let _ = factory
+}"#,
+    )
+    .assert_infer_code("mut_without_effect");
+}
+
+#[test]
 fn mut_on_impl_target_refused() {
     infer(
         r#"struct Batch {

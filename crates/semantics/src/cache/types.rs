@@ -138,9 +138,13 @@ fn remap_annotation(annotation: &mut Annotation, remap: &mut impl FnMut(&mut Spa
             name: _,
             params,
             writable: _,
+            mut_span,
             span,
         } => {
             remap(span);
+            if let Some(mut_span) = mut_span {
+                remap(mut_span);
+            }
             for param in params {
                 remap_annotation(param, remap);
             }
@@ -295,6 +299,7 @@ mod tests {
             name: EcoString::from("Item"),
             params: vec![Annotation::Opaque { span: span() }],
             writable: false,
+            mut_span: None,
             span: span(),
         };
         let mut methods = Methods::default();

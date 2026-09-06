@@ -77,10 +77,17 @@ impl TypeArgumentChecks {
 }
 
 #[derive(Clone, Copy)]
+struct ReadOnlyWrapper {
+    name: &'static str,
+    name_span: Span,
+}
+
+#[derive(Clone, Copy)]
 struct ConvertMode {
     variadic_allowed: bool,
     type_argument_checks: TypeArgumentChecks,
     position: TypePosition,
+    read_only_wrapper: Option<ReadOnlyWrapper>,
 }
 
 impl ConvertMode {
@@ -89,7 +96,17 @@ impl ConvertMode {
             variadic_allowed: false,
             type_argument_checks: self.type_argument_checks.nested(),
             position: TypePosition::Value,
+            read_only_wrapper: self.read_only_wrapper,
         }
+    }
+}
+
+fn read_only_wrapper_name(qualified_name: &str) -> Option<&'static str> {
+    match qualified_name {
+        "prelude.Ref" => Some("Ref"),
+        "prelude.Slice" => Some("Slice"),
+        "prelude.Map" => Some("Map"),
+        _ => None,
     }
 }
 
@@ -111,6 +128,7 @@ impl TaskState {
                 variadic_allowed: false,
                 type_argument_checks: TypeArgumentChecks::Deferred,
                 position: TypePosition::Bound,
+                read_only_wrapper: None,
             },
         )
     }
@@ -129,6 +147,7 @@ impl TaskState {
                 variadic_allowed: false,
                 type_argument_checks: TypeArgumentChecks::All,
                 position: TypePosition::Value,
+                read_only_wrapper: None,
             },
         );
         store.normalized_annotation_type(&ty)
@@ -148,6 +167,7 @@ impl TaskState {
                 variadic_allowed: true,
                 type_argument_checks: TypeArgumentChecks::All,
                 position: TypePosition::Value,
+                read_only_wrapper: None,
             },
         );
         store.normalized_annotation_type(&ty)
@@ -167,6 +187,7 @@ impl TaskState {
                 variadic_allowed: false,
                 type_argument_checks: TypeArgumentChecks::Descendants,
                 position: TypePosition::Value,
+                read_only_wrapper: None,
             },
         );
         store.normalized_annotation_type(&ty)
@@ -198,6 +219,7 @@ impl TaskState {
                             span,
                             ConvertMode {
                                 variadic_allowed: index == last_param,
+                                read_only_wrapper: None,
                                 ..mode.nested()
                             },
                         )
@@ -255,6 +277,7 @@ impl TaskState {
             name: type_name,
             params,
             writable,
+            mut_span,
             span: annotation_span,
         } = annotation
         else {
@@ -262,10 +285,13 @@ impl TaskState {
         };
         let writable = *writable;
         let annotation_span = *annotation_span;
+        let contents_span =
+            mut_span.map_or(annotation_span, |mut_span| mut_span.merge(annotation_span));
         let ConvertMode {
             variadic_allowed,
             type_argument_checks,
             position,
+            read_only_wrapper,
         } = mode;
 
         if type_name == "VarArgs" && !variadic_allowed {
@@ -375,9 +401,24 @@ impl TaskState {
         // demote writable type arguments.
         let body = if writable { body.make_writable() } else { body };
 
+        let argument_mode = ConvertMode {
+            read_only_wrapper: read_only_wrapper.or_else(|| {
+                read_only_wrapper_name(&qualified_name)
+                    .filter(|_| !writable)
+                    .map(|name| ReadOnlyWrapper {
+                        name,
+                        name_span: Span::new(
+                            annotation_span.file_id,
+                            annotation_span.byte_offset,
+                            type_name.len() as u32,
+                        ),
+                    })
+            }),
+            ..mode.nested()
+        };
         let concrete_args: Vec<Type> = params
             .iter()
-            .map(|arg| self.convert_to_type_mode(store, arg, span, mode.nested()))
+            .map(|arg| self.convert_to_type_mode(store, arg, span, argument_mode))
             .collect();
 
         if generics.len() != params.len() {
@@ -436,6 +477,14 @@ impl TaskState {
                 annotation_span,
             ));
             return resolved_ty.shallow_demoted();
+        }
+        if writable && let Some(wrapper) = read_only_wrapper {
+            self.sink
+                .push(diagnostics::infer::mut_under_read_only_wrapper(
+                    wrapper.name,
+                    wrapper.name_span,
+                    contents_span,
+                ));
         }
 
         resolved_ty
