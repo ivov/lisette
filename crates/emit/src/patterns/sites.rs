@@ -334,7 +334,11 @@ impl Planner<'_> {
         };
         let bound = fuse.bind(self, slot);
         let none_condition = bound.none_condition(self);
-        Some(self.finish_fused_let_else(bound.statements, none_condition, binding, else_block))
+        let late_binding = bound.late_binding();
+        let mut statements =
+            self.finish_fused_let_else(bound.statements, none_condition, binding, else_block);
+        statements.extend(late_binding);
+        Some(statements)
     }
 
     fn finish_fused_let_else(

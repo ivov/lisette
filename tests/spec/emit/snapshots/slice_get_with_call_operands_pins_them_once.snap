@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn xs() -> Slice<int> { [1, 2] }
+  fn idx() -> int { 1 }
+  
+  fn run() -> int {
+    let Some(v) = xs().get(idx()) else { return 0 }
+    v
+  }
+---
+package main
+
+func xs() []int {
+	return []int{1, 2}
+}
+
+func idx() int {
+	return 1
+}
+
+func run() int {
+	recv_1 := xs()
+	idx_2 := idx()
+	if idx_2 < 0 || idx_2 >= len(recv_1) {
+		return 0
+	}
+	v := recv_1[idx_2]
+	return v
+}

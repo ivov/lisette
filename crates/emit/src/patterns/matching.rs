@@ -1,8 +1,11 @@
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
+use crate::calls::NativeMethodCall;
+use crate::calls::bounds::BoundsCheckedIndex;
 use crate::calls::comma_ok::CommaOkSource;
 use crate::calls::comma_ok::{CommaOkValueSlot, LoweredPair, PairKind, header_call};
 use crate::calls::go_interop::NilGuard;
+use crate::calls::slice_loop::FoundSink;
 use crate::calls::wrap_err::WrapMessage;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::is_plain_identifier;
@@ -13,8 +16,9 @@ use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, Place
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::state::scope::PairStatusKind;
+use crate::types::native::NativeGoType;
 use std::mem;
-use syntax::ast::{Expression, MatchArm, Pattern};
+use syntax::ast::{Expression, Literal, MatchArm, Pattern};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
 
@@ -34,6 +38,12 @@ pub(crate) enum OptionFusePlan<'a> {
         subject: &'a Expression,
         nil_guard: NilGuard,
     },
+    /// `xs.get(i)` on a slice or array: a bounds test guards a direct index.
+    Index { call: NativeMethodCall<'a> },
+    Found {
+        subject: &'a Expression,
+        call: NativeMethodCall<'a>,
+    },
 }
 
 pub(crate) struct BoundOption {
@@ -48,19 +58,56 @@ enum BoundSource {
         nil_guard: NilGuard,
         initializer_call: Option<String>,
     },
+    Index {
+        index: BoundsCheckedIndex,
+        target: Option<String>,
+    },
+    Found {
+        value: Option<String>,
+        flag: String,
+    },
 }
 
 impl BoundOption {
+    /// The payload expression, valid once the some-condition holds.
     pub(crate) fn value(&self) -> Option<&str> {
         match &self.source {
             BoundSource::Pair(pair) => pair.value.as_deref(),
             BoundSource::Nullable { value, .. } => Some(value),
+            BoundSource::Index { index, .. } => Some(&index.element),
+            BoundSource::Found { value, .. } => value.as_deref(),
         }
     }
 
+    pub(crate) fn binds_value(&self) -> bool {
+        !matches!(self.source, BoundSource::Index { .. })
+    }
+
+    /// The statement that reads a late payload into its requested name.
+    pub(crate) fn late_binding(&self) -> Option<LoweredStatement> {
+        let BoundSource::Index {
+            index,
+            target: Some(target),
+        } = &self.source
+        else {
+            return None;
+        };
+        Some(LoweredStatement::TempBind {
+            name: target.clone(),
+            value: index.element.clone(),
+        })
+    }
+
     pub(super) fn discard_value(&mut self) {
-        if let BoundSource::Pair(pair) = &mut self.source {
-            pair.discard_value();
+        match &mut self.source {
+            BoundSource::Pair(pair) => pair.discard_value(),
+            BoundSource::Found {
+                value: Some(value), ..
+            } => {
+                self.statements
+                    .push(LoweredStatement::RawGo(format!("_ = {value}\n")));
+            }
+            _ => {}
         }
     }
 
@@ -94,6 +141,10 @@ impl BoundOption {
                     None => test,
                 }
             }
+            BoundSource::Index { index, .. } if success => index.in_bounds.clone(),
+            BoundSource::Index { index, .. } => index.out_of_bounds.clone(),
+            BoundSource::Found { flag, .. } if success => flag.clone(),
+            BoundSource::Found { flag, .. } => format!("!{flag}"),
         }
     }
 }
@@ -136,6 +187,39 @@ impl OptionFusePlan<'_> {
                         nil_guard,
                         initializer_call,
                     },
+                }
+            }
+            Self::Index { call } => {
+                let (statements, index) = planner.lower_bounds_checked_index(&call);
+                let target = match slot {
+                    CommaOkValueSlot::Named(name) => Some(name),
+                    _ => None,
+                };
+                BoundOption {
+                    statements,
+                    source: BoundSource::Index { index, target },
+                }
+            }
+            Self::Found { subject, call } => {
+                let value = match slot {
+                    CommaOkValueSlot::Named(name) => Some(name),
+                    CommaOkValueSlot::Arm(name) => Some(planner.declared_arm_value_name(&name)),
+                    CommaOkValueSlot::Temp => Some(planner.fresh_pair_value()),
+                    CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => None,
+                };
+                let flag = planner.fresh_var(Some("found"));
+                planner.declare(&flag);
+                let statements = planner.lower_find_loop(
+                    subject,
+                    &call,
+                    FoundSink {
+                        value: value.as_deref(),
+                        flag: &flag,
+                    },
+                );
+                BoundOption {
+                    statements,
+                    source: BoundSource::Found { value, flag },
                 }
             }
         }
@@ -446,14 +530,41 @@ impl Planner<'_> {
         })
     }
 
-    /// Recognize an Option-producing call whose physical Go result can be
-    /// tested directly, without first constructing a tagged Option.
+    /// Go rejects invalid constant indexes even behind a bounds check.
+    fn index_fuses(&self, receiver: &Expression, index: &Expression) -> bool {
+        match index.unwrap_parens() {
+            Expression::Literal {
+                literal: Literal::Integer { value, .. },
+                ..
+            } => match self.facts.strip_and_peel(&receiver.get_type()) {
+                Type::Array { length, .. } => *value < length,
+                _ => true,
+            },
+            other => !self.is_go_constant_expression(other),
+        }
+    }
+
     pub(crate) fn option_fuse_plan<'a>(
         &self,
         subject: &'a Expression,
     ) -> Option<OptionFusePlan<'a>> {
         if let Some(source) = self.comma_ok_source(subject) {
             return Some(OptionFusePlan::CommaOk { subject, source });
+        }
+        if let Some(call) = self.native_method_call(subject) {
+            let indexes = matches!(
+                NativeGoType::from_kind(call.kind),
+                NativeGoType::Slice | NativeGoType::Array
+            ) && call.method == "get"
+                && call.arguments.len() == 1
+                && call.spread.is_none()
+                && self.index_fuses(call.receiver, &call.arguments[0]);
+            if indexes {
+                return Some(OptionFusePlan::Index { call });
+            }
+            if self.find_loop_fuses(subject, &call) {
+                return Some(OptionFusePlan::Found { subject, call });
+            }
         }
 
         let plan = self.plan_call(subject)?;
@@ -493,8 +604,8 @@ impl Planner<'_> {
         self.lower_fused_lowered_match(subject, arms, &PlacePlan::Statement, Some(go_name))
     }
 
-    /// Bind `let x = match nullable_call() { Some(v) => v, None => diverge }`
-    /// straight into `x` and test the raw Go value for nil.
+    /// Bind `let x = match <lowered Option source> { Some(v) => v, None => diverge }`
+    /// straight into `x` and test the physical Go result.
     pub(crate) fn lower_fused_option_match_into(
         &mut self,
         value: &Expression,
@@ -504,9 +615,6 @@ impl Planner<'_> {
             return None;
         };
         let fuse = self.option_fuse_plan(subject)?;
-        if !matches!(&fuse, OptionFusePlan::Nullable { .. }) {
-            return None;
-        }
         let arms = classify_option_arms(arms)?;
         let payload = arms.some_binding?;
         if !arms.none_body.get_type().is_never()
@@ -520,6 +628,7 @@ impl Planner<'_> {
         let bound = fuse.bind(self, CommaOkValueSlot::Named(go_name.to_string()));
         let none_condition = bound.none_condition(self);
         let fail_body = self.lower_block_as_body(arms.none_body);
+        let late_binding = bound.late_binding();
         let mut statements = bound.statements;
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
@@ -527,6 +636,7 @@ impl Planner<'_> {
             then_body: fail_body,
             else_arm: ElseArm::None,
         }));
+        statements.extend(late_binding);
         Some(statements)
     }
 
@@ -917,7 +1027,11 @@ impl Planner<'_> {
         };
         let mut bound = fuse.bind(self, slot);
 
-        let some_binding = ArmBinding::alias(arms.some_binding, bound.value());
+        let some_binding = if bound.binds_value() {
+            ArmBinding::alias(arms.some_binding, bound.value())
+        } else {
+            ArmBinding::copy(arms.some_binding, bound.value())
+        };
         let (then_body, some_uses) = self.lower_fused_arm(&[some_binding], arms.some_body, place);
         let (else_body, _) = self.lower_fused_arm(&[], arms.none_body, place);
         if !some_uses.first().copied().unwrap_or(false) {

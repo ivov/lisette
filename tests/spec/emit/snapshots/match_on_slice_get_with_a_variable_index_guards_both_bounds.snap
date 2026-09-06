@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn pick(xs: Slice<int>, i: int) -> int {
+    match xs.get(i) {
+      Some(v) => v,
+      None => -1,
+    }
+  }
+---
+package main
+
+func pick(xs []int, i int) int {
+	if i >= 0 && i < len(xs) {
+		v := xs[i]
+		return v
+	} else {
+		return -1
+	}
+}

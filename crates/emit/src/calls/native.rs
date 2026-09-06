@@ -631,7 +631,8 @@ impl Planner<'_> {
         }
 
         if matches!(ctx.native_type, NativeGoType::Slice)
-            && let Some(result) = self.try_lower_slice_loop(ctx, receiver_expression, arguments)
+            && let Some(result) =
+                self.try_lower_slice_loop(ctx, receiver_expression, arguments, None)
         {
             return result;
         }

@@ -1,9 +1,8 @@
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::types::Type;
 
-use super::NativeCallContext;
-use super::dispatch::extract_native_method_name;
 use super::native::NativeCallResult;
+use super::{NativeCallContext, NativeMethodCall};
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
@@ -89,6 +88,32 @@ struct SliceLoopBody<'a> {
     result: &'a str,
     element_name: &'a str,
     index: Option<&'a str>,
+    found: Option<FoundSink<'a>>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct FoundSink<'a> {
+    pub value: Option<&'a str>,
+    pub flag: &'a str,
+}
+
+fn loop_context<'a>(
+    call: &NativeMethodCall<'a>,
+    call_ty: &'a Type,
+    result_name: Option<&'a str>,
+) -> NativeCallContext<'a> {
+    NativeCallContext {
+        function: call.function,
+        args: call.args,
+        spread: call.spread,
+        resolved_type_args: call.resolved_type_args,
+        call_ty: Some(call_ty),
+        native_type: &NativeGoType::Slice,
+        method: call.method,
+        capture_boundary: CaptureBoundary::SiblingSequence,
+        retired_receiver: None,
+        result_name,
+    }
 }
 
 fn peel_single_expression_block(body: &Expression) -> &Expression {
@@ -157,46 +182,49 @@ impl Planner<'_> {
         value: &Expression,
         go_name: &str,
     ) -> Option<Vec<LoweredStatement>> {
-        let Expression::Call {
-            expression: callee,
-            args,
-            spread,
-            type_arguments,
-            ..
-        } = value.unwrap_parens()
-        else {
-            return None;
-        };
-        let plan = self.plan_call(value.unwrap_parens())?;
-        let (CallableOrigin::NativeMethod(kind) | CallableOrigin::NativeMethodIdentifier(kind)) =
-            &plan.resolved.origin
-        else {
-            return None;
-        };
-        let native_type = NativeGoType::from_kind(*kind);
-        if !matches!(native_type, NativeGoType::Slice) {
+        let call = self.native_method_call(value)?;
+        if !matches!(NativeGoType::from_kind(call.kind), NativeGoType::Slice) {
             return None;
         }
-        let function = callee.unwrap_parens();
         let ty = value.get_type();
-        let ctx = NativeCallContext {
-            function,
-            args,
-            spread: spread.as_deref(),
-            resolved_type_args: type_arguments.resolved_types()?,
-            call_ty: Some(&ty),
-            native_type: &native_type,
-            method: extract_native_method_name(function),
-            capture_boundary: CaptureBoundary::SiblingSequence,
-            retired_receiver: None,
-            result_name: Some(go_name),
-        };
-        let (receiver, arguments) = match function {
-            Expression::DotAccess { expression, .. } => (expression.as_ref(), args.as_slice()),
-            _ => args.split_first()?,
-        };
-        self.slice_loop_shape(&ctx, receiver, arguments)?;
-        Some(self.lower_native_call(&ctx, &plan.resolved.origin).setup)
+        let ctx = loop_context(&call, &ty, Some(go_name));
+        self.slice_loop_shape(&ctx, call.receiver, call.arguments)?;
+        Some(
+            self.lower_native_call(&ctx, &CallableOrigin::NativeMethod(call.kind))
+                .setup,
+        )
+    }
+
+    pub(crate) fn find_loop_fuses(
+        &self,
+        subject: &Expression,
+        call: &NativeMethodCall<'_>,
+    ) -> bool {
+        if !matches!(NativeGoType::from_kind(call.kind), NativeGoType::Slice)
+            || call.method != "find"
+        {
+            return false;
+        }
+        let ty = subject.get_type();
+        self.slice_loop_shape(
+            &loop_context(call, &ty, None),
+            call.receiver,
+            call.arguments,
+        )
+        .is_some()
+    }
+
+    pub(crate) fn lower_find_loop(
+        &mut self,
+        subject: &Expression,
+        call: &NativeMethodCall<'_>,
+        sink: FoundSink<'_>,
+    ) -> Vec<LoweredStatement> {
+        let ty = subject.get_type();
+        let ctx = loop_context(call, &ty, None);
+        self.try_lower_slice_loop(&ctx, call.receiver, call.arguments, Some(sink))
+            .expect("find_loop_fuses accepted this call")
+            .setup
     }
 
     /// Lower `xs.map(|x| ...)` and its siblings to the loop the prelude helper
@@ -206,6 +234,7 @@ impl Planner<'_> {
         ctx: &NativeCallContext,
         receiver: &Expression,
         args: &[Expression],
+        found: Option<FoundSink<'_>>,
     ) -> Option<NativeCallResult> {
         let SliceLoopShape {
             kind,
@@ -230,12 +259,37 @@ impl Planner<'_> {
         let (mut setup, values) = sequenced.into_rendered();
         let source = values[0].clone();
 
-        let result = match ctx.result_name {
-            Some(name) => name.to_string(),
-            None => self.fresh_var(Some("result")),
+        let result = match (found, ctx.result_name) {
+            (Some(sink), _) => sink.value.unwrap_or_default().to_string(),
+            (None, Some(name)) => name.to_string(),
+            (None, None) => self.fresh_var(Some("result")),
         };
-        self.declare(&result);
-        setup.push(self.slice_loop_declaration(kind, &result, &result_ty, &source, values.get(1)));
+        match found {
+            Some(sink) => {
+                if let Some(value) = sink.value {
+                    let go_type = self.use_go_type(&element_ty);
+                    setup.push(LoweredStatement::VarDecl {
+                        name: value.to_string(),
+                        go_type,
+                        value: None,
+                    });
+                }
+                setup.push(LoweredStatement::TempBind {
+                    name: sink.flag.to_string(),
+                    value: "false".to_string(),
+                });
+            }
+            None => {
+                self.declare(&result);
+                setup.push(self.slice_loop_declaration(
+                    kind,
+                    &result,
+                    &result_ty,
+                    &source,
+                    values.get(1),
+                ));
+            }
+        }
 
         let index = (kind == SliceLoop::Map).then(|| {
             let index = self.fresh_var(Some("i"));
@@ -256,6 +310,7 @@ impl Planner<'_> {
                 result: &result,
                 element_name: &element_name,
                 index: index.as_deref(),
+                found,
             });
             (element_name, statements)
         });
@@ -370,6 +425,7 @@ impl Planner<'_> {
             result,
             element_name,
             index,
+            found,
         } = *loop_body;
 
         // Map and fold store their body's value, so it lowers into the slot.
@@ -399,20 +455,30 @@ impl Planner<'_> {
                 ))],
             },
             SliceLoop::Find => {
-                self.require_stdlib();
-                let payload = self.use_go_type(element_ty);
-                LoweredBlock {
-                    statements: vec![
-                        LoweredStatement::RawGo(format!(
+                let mut statements = Vec::new();
+                match found {
+                    Some(sink) => {
+                        if let Some(value) = sink.value {
+                            statements.push(LoweredStatement::RawGo(format!(
+                                "{value} = {element_name}\n"
+                            )));
+                        }
+                        statements.push(LoweredStatement::RawGo(format!("{} = true\n", sink.flag)));
+                    }
+                    None => {
+                        self.require_stdlib();
+                        let payload = self.use_go_type(element_ty);
+                        statements.push(LoweredStatement::RawGo(format!(
                             "{} = {}.MakeOptionSome[{}]({})\n",
                             result,
                             go_name::GO_STDLIB_PKG,
                             payload,
                             element_name
-                        )),
-                        LoweredStatement::RawGo("break\n".to_string()),
-                    ],
+                        )));
+                    }
                 }
+                statements.push(LoweredStatement::RawGo("break\n".to_string()));
+                LoweredBlock { statements }
             }
             SliceLoop::Map | SliceLoop::Fold => unreachable!("assign-place kinds returned above"),
         };

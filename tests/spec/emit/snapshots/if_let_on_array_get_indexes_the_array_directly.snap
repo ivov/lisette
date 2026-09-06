@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn first(a: Array<int, 3>, i: int) -> int {
+    if let Some(v) = a.get(i) { v } else { 0 }
+  }
+---
+package main
+
+func first(a [3]int, i int) int {
+	if i >= 0 && i < len(a) {
+		v := a[i]
+		return v
+	} else {
+		return 0
+	}
+}

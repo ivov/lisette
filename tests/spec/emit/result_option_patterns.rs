@@ -3189,6 +3189,129 @@ fn run() -> Result<int, error> {
 }
 
 #[test]
+fn let_else_on_slice_get_tests_bounds_and_indexes() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  let Some(command) = os.Args.get(1) else {
+    fmt.Println("usage: app <command>")
+    return
+  }
+  fmt.Println(command)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_on_slice_get_with_a_variable_index_guards_both_bounds() {
+    let input = r#"
+fn pick(xs: Slice<int>, i: int) -> int {
+  match xs.get(i) {
+    Some(v) => v,
+    None => -1,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn if_let_on_array_get_indexes_the_array_directly() {
+    let input = r#"
+fn first(a: Array<int, 3>, i: int) -> int {
+  if let Some(v) = a.get(i) { v } else { 0 }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_get_with_call_operands_pins_them_once() {
+    let input = r#"
+fn xs() -> Slice<int> { [1, 2] }
+fn idx() -> int { 1 }
+
+fn run() -> int {
+  let Some(v) = xs().get(idx()) else { return 0 }
+  v
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn is_some_on_slice_get_is_a_bounds_test() {
+    let input = r#"
+fn has(xs: Slice<int>, i: int) -> bool { xs.get(i).is_some() }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_get_through_a_ref_receiver_derefs_once() {
+    let input = r#"
+fn head(xs: Ref<Slice<int>>) -> int {
+  let Some(v) = xs.get(0) else { return 0 }
+  v
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn while_let_on_slice_get_reads_after_the_bounds_test() {
+    let input = r#"
+fn sum(xs: Slice<int>) -> int {
+  let mut i = 0
+  let mut total = 0
+  while let Some(x) = xs.get(i) {
+    total = total + x
+    i = i + 1
+  }
+  total
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_match_on_natives_binds_the_let_name_directly() {
+    let input = r#"
+fn pick(xs: Slice<int>, i: int) -> int {
+  let v = match xs.get(i) { Some(v) => v, None => return -1 }
+  v + 1
+}
+
+fn lookup(m: Map<string, int>, k: string) -> int {
+  let v = match m.get(k) { Some(v) => v, None => return -1 }
+  v + 1
+}
+
+fn first_even(nums: Slice<int>) -> int {
+  let n = match nums.find(|n| n % 2 == 0) { Some(n) => n, None => return -1 }
+  n + 1
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_on_find_uses_a_found_flag() {
+    let input = r#"
+fn first_even(nums: Slice<int>) -> int {
+  match nums.find(|n| n % 2 == 0) {
+    Some(n) => n,
+    None => -1,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn unwrap_or_evaluates_an_effectful_default_before_the_error_test() {
     let input = r#"
 import "go:fmt"
@@ -3333,6 +3456,44 @@ import "go:strconv"
 fn three() -> Result<int, error> {
   let n = strconv.Atoi("x").wrap_err(f"{strconv.Atoi("0")?}")?
   Ok(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn get_with_a_constant_index_go_rejects_keeps_the_helper() {
+    let input = r#"
+fn past_the_end(xs: Array<int, 2>) -> int {
+  match xs.get(2) {
+    Some(v) => v,
+    None => -1,
+  }
+}
+
+fn negative(xs: Slice<int>) -> int {
+  match xs.get(-1) {
+    Some(v) => v,
+    None => -1,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn adjacent_find_matches_take_distinct_payload_names() {
+    let input = r#"
+import "go:fmt"
+
+fn five(xs: Slice<int>) -> int {
+  if let Some(x) = xs.find(|n| n > 1) {
+    fmt.Println(x)
+  }
+  if let Some(x) = xs.find(|n| n > 2) {
+    fmt.Println(x)
+  }
+  0
 }
 "#;
     assert_emit_snapshot!(input);
@@ -3623,6 +3784,45 @@ fn let_match() {
     Err(_) => { return },
   }
   fmt.Println(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generated_names_avoid_package_functions() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn err() -> int { 3 }
+fn n() -> string { "context" }
+fn items() -> Slice<int> { [1, 2] }
+
+fn status() -> Result<int, error> {
+  let count = strconv.Atoi("2")?
+  Ok(count + err())
+}
+
+fn arm_after_message() {
+  match strconv.Atoi("2").wrap_err(n()) {
+    Ok(n) => fmt.Println(n),
+    Err(e) => fmt.Println(e),
+  }
+}
+
+fn arm_in_other_arm() {
+  match strconv.Atoi("bad") {
+    Ok(n) => fmt.Println(n),
+    Err(_) => fmt.Println(n()),
+  }
+}
+
+fn find_arm() {
+  match items().find(|x| x > 1) {
+    Some(items) => fmt.Println(items),
+    None => fmt.Println("none"),
+  }
 }
 "#;
     assert_emit_snapshot!(input);

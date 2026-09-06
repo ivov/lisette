@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn main() {
+    let Some(command) = os.Args.get(1) else {
+      fmt.Println("usage: app <command>")
+      return
+    }
+    fmt.Println(command)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	if len(os.Args) <= 1 {
+		fmt.Println("usage: app <command>")
+		return
+	}
+	command := os.Args[1]
+	fmt.Println(command)
+}

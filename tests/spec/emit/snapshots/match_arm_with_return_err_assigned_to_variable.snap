@@ -29,10 +29,8 @@ func safeDivide(a, b float64) (float64, bool) {
 }
 
 func parseAndDivide(a, b float64) lisette.Result[string, string] {
-	var result float64
-	if v, ok := safeDivide(a, b); ok {
-		result = v
-	} else {
+	result, ok := safeDivide(a, b)
+	if !ok {
 		return lisette.MakeResultErr[string, string]("division by zero")
 	}
 	return lisette.MakeResultOk[string, string](fmt.Sprint(result))
