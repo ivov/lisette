@@ -2,6 +2,14 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.12.2](https://github.com/ivov/lisette/compare/lisette-v0.12.1...lisette-v0.12.2) - 2026-09-06
+
+### Internals
+
+- refactor: flatten tuple payloads in Go function wrappers [#1410](https://github.com/ivov/lisette/pull/1410) [`95a48ce`](https://github.com/ivov/lisette/commit/95a48ce2ccbc6b376275427a885ee8a058d173b8)
+- refactor: share lowered-return and arg-slot utils in `emit` crate [#1408](https://github.com/ivov/lisette/pull/1408) [`d7e4e0e`](https://github.com/ivov/lisette/commit/d7e4e0e44f205567120d3bdfb9723fdc7d5f38d2)
+
+
 ## [0.12.1](https://github.com/ivov/lisette/compare/lisette-v0.12.0...lisette-v0.12.1) - 2026-09-06
 
 ### Features
