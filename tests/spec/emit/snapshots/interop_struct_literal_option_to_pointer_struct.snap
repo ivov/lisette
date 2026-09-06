@@ -13,17 +13,9 @@ description: |
 ---
 package main
 
-import (
-	"example.com/cb"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/cb"
 
 func main() {
 	inner := cb.Inner{Tag: "x"}
-	opt_1 := lisette.MakeOptionSome(&inner)
-	var unwrap_2 *cb.Inner
-	if opt_1.Tag == lisette.OptionSome {
-		unwrap_2 = opt_1.SomeVal
-	}
-	_ = cb.Outer{Slot: unwrap_2}
+	_ = cb.Outer{Slot: &inner}
 }

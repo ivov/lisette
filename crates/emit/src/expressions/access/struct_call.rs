@@ -75,9 +75,34 @@ impl Planner<'_> {
 
         let is_go_struct = self.is_go_abi_type(ty);
 
+        let field_slots: Vec<(Option<Type>, Option<ValueLayout>)> = field_assignments
+            .iter()
+            .map(|f| {
+                let field_ty = self.lookup_struct_field_ty(ty, &f.name);
+                let value_ty = f.value.get_type();
+                let layout = self.field_slot_layout(
+                    ty,
+                    None,
+                    &f.name,
+                    field_ty.as_ref().unwrap_or(&value_ty),
+                );
+                (field_ty, layout)
+            })
+            .collect();
+        let mut literal_slots = vec![false; field_assignments.len()];
         let stages: Vec<ValuePlan> = field_assignments
             .iter()
-            .map(|f| self.lower_composite_value(&f.value, ExpressionContext::value()))
+            .zip(&field_slots)
+            .zip(&mut literal_slots)
+            .map(|((f, (_, layout)), literal_slot)| {
+                if let Some(layout) = layout
+                    && let Some(literal) = self.lower_option_literal_into_layout(&f.value, layout)
+                {
+                    *literal_slot = true;
+                    return literal;
+                }
+                self.lower_composite_value(&f.value, ExpressionContext::value())
+            })
             .collect();
         let field_evaluations: Vec<bool> = stages
             .iter()
@@ -90,23 +115,25 @@ impl Planner<'_> {
 
         let mut fields =
             Vec::with_capacity(field_assignments.len() + usize::from(ctx.enum_ctx.is_some()));
-        for ((f, has_observable_evaluation), mut value) in field_assignments
+        for (
+            (((f, has_observable_evaluation), mut value), (field_ty, field_layout)),
+            literal_slot,
+        ) in field_assignments
             .iter()
             .zip(field_evaluations)
             .zip(emitted_values)
+            .zip(field_slots)
+            .zip(literal_slots)
         {
             let field_name = self.resolve_struct_call_field_name(&f.name, &ctx);
             value = self.wrap_recursive_enum_field(&mut setup, value, f, &ctx);
             let value_ty = f.value.get_type();
-            let field_ty = self.lookup_struct_field_ty(ty, &f.name);
-            let field_layout =
-                self.field_slot_layout(ty, None, &f.name, field_ty.as_ref().unwrap_or(&value_ty));
             value = self.coerce_struct_field(
                 &mut setup,
                 value,
                 &value_ty,
                 field_ty.as_ref(),
-                field_layout.as_ref(),
+                field_layout.as_ref().filter(|_| !literal_slot),
             );
             fields.push(StructCallField {
                 name: field_name,

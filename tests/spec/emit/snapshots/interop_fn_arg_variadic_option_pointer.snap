@@ -11,17 +11,9 @@ description: |
 ---
 package main
 
-import (
-	"example.com/aws"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/aws"
 
 func main() {
 	n := aws.Node{}
-	opt_1 := lisette.MakeOptionSome(&n)
-	var unwrap_2 *aws.Node
-	if opt_1.Tag == lisette.OptionSome {
-		unwrap_2 = opt_1.SomeVal
-	}
-	aws.Use(unwrap_2, nil)
+	aws.Use(&n, nil)
 }

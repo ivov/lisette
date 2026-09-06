@@ -1,7 +1,16 @@
 ---
-source: tests/spec/build/mod.rs
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:net/http"
+  import "go:strings"
+  
+  fn main() {
+    let req = http.NewRequest("POST", "https://example.com", Some(strings.NewReader("hello")))
+    fmt.Println(req.is_ok())
+  }
 ---
-// === main.go ===
 package main
 
 import (
@@ -13,8 +22,7 @@ import (
 )
 
 func main() {
-	body := strings.NewReader("hello")
-	ret_1, ret_2 := http.NewRequest("POST", "https://example.com", body)
+	ret_1, ret_2 := http.NewRequest("POST", "https://example.com", strings.NewReader("hello"))
 	var req lisette.Result[*http.Request, error]
 	if ret_2 != nil {
 		req = lisette.MakeResultErr[*http.Request, error](ret_2)
@@ -23,7 +31,5 @@ func main() {
 	} else {
 		req = lisette.MakeResultOk[*http.Request, error](ret_1)
 	}
-	unwrap_2 := 7
-	_ = unwrap_2
-	fmt.Println(req)
+	fmt.Println(req.IsOk())
 }

@@ -11,20 +11,15 @@ import (
 )
 
 func main() {
-	opt_1 := lisette.MakeOptionNone[*debug.Module]()
-	var unwrap_2 *debug.Module
-	if opt_1.Tag == lisette.OptionSome {
-		unwrap_2 = opt_1.SomeVal
-	}
 	mod_ := debug.Module{
 		Path:    "example.com/mod",
 		Version: "v1.0.0",
 		Sum:     "",
-		Replace: unwrap_2,
+		Replace: nil,
 	}
-	raw_3 := mod_.Replace
-	r := lisette.OptionFromNilable[*debug.Module](raw_3, raw_3 == nil)
-	raw_1 := 3
+	raw_1 := mod_.Replace
+	r := lisette.OptionFromNilable[*debug.Module](raw_1, raw_1 == nil)
+	raw_1_3 := 3
 	fmt.Println(r)
-	fmt.Println(raw_1)
+	fmt.Println(raw_1_3)
 }

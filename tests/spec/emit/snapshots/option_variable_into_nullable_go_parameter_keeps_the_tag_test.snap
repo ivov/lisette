@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:net/http"
+  import "go:os"
+  
+  fn main() {
+    let body = if os.Args.length() > 1 { Some(os.Stdin) } else { None }
+    let req = http.NewRequest("POST", "https://example.com", body)
+    fmt.Println(req.is_ok())
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"io"
+	"net/http"
+	"os"
+)
+
+func main() {
+	var body lisette.Option[*os.File]
+	if len(os.Args) > 1 {
+		body = lisette.MakeOptionSome[*os.File](os.Stdin)
+	} else {
+		body = lisette.MakeOptionNone[*os.File]()
+	}
+	var unwrap_1 io.Reader
+	if body.Tag == lisette.OptionSome {
+		unwrap_1 = body.SomeVal
+	}
+	ret_2, ret_3 := http.NewRequest("POST", "https://example.com", unwrap_1)
+	var req lisette.Result[*http.Request, error]
+	if ret_3 != nil {
+		req = lisette.MakeResultErr[*http.Request, error](ret_3)
+	} else if ret_2 == nil {
+		req = lisette.MakeResultErr[*http.Request, error](errors.New("unexpected nil"))
+	} else {
+		req = lisette.MakeResultOk[*http.Request, error](ret_2)
+	}
+	fmt.Println(req.IsOk())
+}

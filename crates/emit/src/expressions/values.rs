@@ -513,7 +513,27 @@ impl Planner<'_> {
         target: &Expression,
         value: &Expression,
     ) -> Vec<LoweredStatement> {
-        let right_hand_side = self.lower_composite_value(value, ExpressionContext::value());
+        let go_field_layout = match target {
+            Expression::DotAccess {
+                expression: receiver,
+                member,
+                ty,
+                resolution,
+                ..
+            } => self.field_slot_layout(
+                &receiver.get_type(),
+                resolution.declaring_type(),
+                member,
+                ty,
+            ),
+            _ => None,
+        };
+        let literal_slot = go_field_layout
+            .as_ref()
+            .and_then(|layout| self.lower_option_literal_into_layout(value, layout));
+        let is_literal_slot = literal_slot.is_some();
+        let right_hand_side = literal_slot
+            .unwrap_or_else(|| self.lower_composite_value(value, ExpressionContext::value()));
         let mut setup: Vec<LoweredStatement> = Vec::new();
         let target_str = if is_order_sensitive(target) {
             self.emit_left_value_capturing(&mut setup, target, Some(&right_hand_side))
@@ -523,19 +543,8 @@ impl Planner<'_> {
         let (rhs_setup, rhs_value) = right_hand_side.into_parts();
         setup.extend(rhs_setup);
 
-        if let Expression::DotAccess {
-            expression: receiver,
-            member,
-            ty,
-            resolution,
-            ..
-        } = target
-            && let Some(target_layout) = self.field_slot_layout(
-                &receiver.get_type(),
-                resolution.declaring_type(),
-                member,
-                ty,
-            )
+        if let Some(target_layout) = go_field_layout
+            && !is_literal_slot
         {
             let source_layout = self.value_layout(&value.get_type(), SlotOrigin::Lisette);
             let coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);

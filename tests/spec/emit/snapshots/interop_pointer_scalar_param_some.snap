@@ -10,16 +10,9 @@ description: |
 ---
 package main
 
-import (
-	"example.com/cfg"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/cfg"
 
 func main() {
-	opt_1 := lisette.MakeOptionSome("custom")
-	var ptr_2 *string
-	if opt_1.Tag == lisette.OptionSome {
-		ptr_2 = &opt_1.SomeVal
-	}
-	cfg.Configure(ptr_2)
+	var ptr_1 string = "custom"
+	cfg.Configure(&ptr_1)
 }

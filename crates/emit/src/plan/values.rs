@@ -432,6 +432,14 @@ impl ValuePlan {
         )
     }
 
+    pub(crate) fn literal(rendered: String) -> Self {
+        Self::from_facts(
+            Vec::new(),
+            GoExpression::literal(rendered),
+            EvaluationFacts::literal(),
+        )
+    }
+
     pub(crate) fn evaluated_literal(
         setup: Vec<LoweredStatement>,
         rendered: String,

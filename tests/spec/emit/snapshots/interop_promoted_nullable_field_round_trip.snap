@@ -59,12 +59,7 @@ func main() {
 		} else {
 			fmt.Println("error", e)
 		}
-		opt_1 := lisette.MakeOptionNone[*parse.ListNode]()
-		var unwrap_2 *parse.ListNode
-		if opt_1.Tag == lisette.OptionSome {
-			unwrap_2 = opt_1.SomeVal
-		}
-		parsed.Root = unwrap_2
+		parsed.Root = nil
 		if _, e := root(parsed); e == nil {
 			fmt.Println("root is available")
 		} else {
