@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788697769275,
+  "lastUpdate": 1788704363956,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -33644,6 +33644,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 32366,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27931,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19300,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15171,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13998,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8811,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6242,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1874,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9777,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d7e4e0e44f205567120d3bdfb9723fdc7d5f38d2",
+          "message": "refactor: share lowered-return and arg-slot utils in `emit` crate (#1408)",
+          "timestamp": "2026-09-06T16:19:00+02:00",
+          "tree_id": "5136d2216c2ef894b4e081ebf2f5c74d3783f3b3",
+          "url": "https://github.com/ivov/lisette/commit/d7e4e0e44f205567120d3bdfb9723fdc7d5f38d2"
+        },
+        "date": 1788704362565,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 139618,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32379,
             "unit": "lines"
           },
           {
