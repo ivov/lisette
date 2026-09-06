@@ -145,7 +145,7 @@ pub(crate) fn tree_binding_statements(
             fresh
         } else {
             let name = planner.scope.bind(&binding.lisette_name, go_name.clone());
-            if planner.try_declare(&name) {
+            if !planner.package.is_package_block_name(&name) && planner.try_declare(&name) {
                 name
             } else {
                 let fresh = planner.fresh_var(Some(&binding.lisette_name));

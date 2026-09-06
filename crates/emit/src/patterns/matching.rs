@@ -11,6 +11,7 @@ use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
 use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::state::scope::PairStatusKind;
 use syntax::ast::{Expression, MatchArm, Pattern};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
@@ -96,7 +97,12 @@ impl ResultFusePlan<'_> {
         matches!(self.shape, CallableReturnAbi::Result { .. })
     }
 
-    pub(super) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> LoweredPair {
+    pub(super) fn bind(
+        self,
+        planner: &mut Planner<'_>,
+        slot: CommaOkValueSlot,
+        error_name: Option<&str>,
+    ) -> LoweredPair {
         let carries_value = self.carries_payload();
         let (setup, call) = planner
             .lower_call(self.subject, None, ExpressionContext::value())
@@ -109,7 +115,25 @@ impl ResultFusePlan<'_> {
                 carries_value,
                 nil_guard: self.nil_guard,
             },
+            error_name,
         )
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum ArmBinding<'a> {
+    Alias { name: &'a str, go_name: &'a str },
+    Copy { name: &'a str, value: &'a str },
+}
+
+impl<'a> ArmBinding<'a> {
+    pub(super) fn alias(name: Option<&'a str>, go_name: &'a str) -> Option<Self> {
+        name.map(|name| Self::Alias { name, go_name })
+    }
+
+    pub(super) fn copy(name: Option<&'a str>, value: Option<&'a str>) -> Option<Self> {
+        name.zip(value)
+            .map(|(name, value)| Self::Copy { name, value })
     }
 }
 
@@ -498,7 +522,7 @@ impl Planner<'_> {
             None if ok_name.is_some() => CommaOkValueSlot::Temp,
             None => CommaOkValueSlot::Unused,
         };
-        let bound = fuse.bind(self, slot);
+        let bound = fuse.bind(self, slot, err_name);
         let ok_condition = self.pair_success_condition(&bound);
         let err_condition = self.pair_failure_condition(&bound);
 
@@ -509,7 +533,8 @@ impl Planner<'_> {
             } else {
                 Some(UNIT_VALUE)
             };
-            self.lower_fused_arm(&[ok_name.zip(ok_value)], &ok.arm.expression, place)
+            let ok_binding = ArmBinding::copy(ok_name, ok_value);
+            self.lower_fused_arm(&[ok_binding], &ok.arm.expression, place)
                 .0
         });
         let arm_place = if destination.is_some() {
@@ -517,11 +542,9 @@ impl Planner<'_> {
         } else {
             place
         };
-        let (mut else_body, err_used) = self.lower_fused_arm(
-            &[err_name.map(|n| (n, bound.status()))],
-            &err.arm.expression,
-            arm_place,
-        );
+        let err_binding = ArmBinding::alias(err_name, bound.status());
+        let (mut else_body, err_used) =
+            self.lower_fused_arm(&[err_binding], &err.arm.expression, arm_place);
 
         if has_nil_guard && err_used.into_iter().any(|used| used) {
             self.require_errors();
@@ -603,33 +626,36 @@ impl Planner<'_> {
         let nilable = self.partial_ok_is_nilable(&ok_ty);
         let val_used = ok_name.is_some() || both_val.is_some() || nilable;
 
-        let val_var = val_used.then(|| {
-            let v = self.fresh_var(Some("ret"));
-            self.declare(&v);
-            v
-        });
-        let err_var = self.fresh_var(Some("ret"));
-        self.declare(&err_var);
-
         let (mut statements, call_str) = self
             .lower_call(subject, None, ExpressionContext::value())
             .into_parts();
+        let val_var = val_used.then(|| self.fresh_pair_value());
+        let err_var = self.pair_status(
+            both_err.or(err_name),
+            PairStatusKind::Error,
+            val_var.is_none(),
+        );
         let bind_line = match &val_var {
-            Some(v) => format!("{}, {} := {}\n", v, err_var, call_str),
-            None => format!("_, {} := {}\n", err_var, call_str),
+            Some(v) => format!("{}, {} := {}", v, err_var, call_str),
+            None => format!("_, {} := {}", err_var, call_str),
         };
-        statements.push(LoweredStatement::RawGo(bind_line));
+        let condition = if val_var.is_some() {
+            statements.push(LoweredStatement::RawGo(format!("{bind_line}\n")));
+            format!("{} == nil", err_var)
+        } else {
+            format!("{bind_line}; {} == nil", err_var)
+        };
 
         let (ok_body, _) = self.lower_fused_arm(
-            &[ok_name.zip(val_var.as_deref())],
+            &[ArmBinding::copy(ok_name, val_var.as_deref())],
             &ok_arm.expression,
             place,
         );
         let both_body = self
             .lower_fused_arm(
                 &[
-                    both_val.zip(val_var.as_deref()),
-                    both_err.zip(Some(err_var.as_str())),
+                    ArmBinding::copy(both_val, val_var.as_deref()),
+                    ArmBinding::alias(both_err, &err_var),
                 ],
                 &both_arm.expression,
                 place,
@@ -643,7 +669,7 @@ impl Planner<'_> {
         let else_arm = match nil_check {
             Some(check) => {
                 let (err_body, _) = self.lower_fused_arm(
-                    &[err_name.zip(Some(err_var.as_str()))],
+                    &[ArmBinding::alias(err_name, &err_var)],
                     &err_arm.expression,
                     place,
                 );
@@ -659,7 +685,7 @@ impl Planner<'_> {
 
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
-            condition: format!("{} == nil", err_var),
+            condition,
             then_body: ok_body,
             else_arm,
         }));
@@ -708,17 +734,12 @@ impl Planner<'_> {
         let condition_needs_value = nil_guard.is_some()
             && matches!(arms.variant, PartialVariant::Both | PartialVariant::Err);
         let may_need_value = value_binding.is_some() || condition_needs_value;
-        let value = may_need_value.then(|| {
-            let name = self.fresh_var(Some("ret"));
-            self.declare(&name);
-            name
-        });
-        let error = self.fresh_var(Some("err"));
-        self.declare(&error);
+        let value = may_need_value.then(|| self.fresh_pair_value());
+        let error = self.pair_status(error_binding, PairStatusKind::Error, value.is_none());
         let (selected, binding_uses) = self.lower_fused_arm(
             &[
-                value_binding.zip(value.as_deref()),
-                error_binding.map(|name| (name, error.as_str())),
+                ArmBinding::copy(value_binding, value.as_deref()),
+                ArmBinding::alias(error_binding, &error),
             ],
             &arms.selected.expression,
             place,
@@ -733,11 +754,11 @@ impl Planner<'_> {
         }
 
         let value_is_used = binding_uses.first().copied().unwrap_or(false);
-        let result_slots = if condition_needs_value || value_is_used {
-            let value = value.as_deref().expect("value use allocates a result slot");
-            format!("{value}, {error}")
-        } else {
-            format!("_, {error}")
+        let value_slot = (condition_needs_value || value_is_used)
+            .then(|| value.as_deref().expect("value use allocates a result slot"));
+        let result_slots = match value_slot {
+            Some(value) => format!("{value}, {error}"),
+            None => format!("_, {error}"),
         };
         let condition = match arms.variant {
             PartialVariant::Ok => format!("{error} == nil"),
@@ -760,9 +781,14 @@ impl Planner<'_> {
                 format!("{error} != nil && {}", guard.is_nil(value))
             }
         };
-        statements.push(LoweredStatement::RawGo(format!(
-            "{result_slots} := {call}\n"
-        )));
+        let condition = if value_slot.is_some() {
+            statements.push(LoweredStatement::RawGo(format!(
+                "{result_slots} := {call}\n"
+            )));
+            condition
+        } else {
+            format!("{result_slots} := {call}; {condition}")
+        };
         let selected_diverges = selected.ends_with_diverge();
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
@@ -791,11 +817,8 @@ impl Planner<'_> {
         };
         let bound = fuse.bind(self, slot);
 
-        let (then_body, _) = self.lower_fused_arm(
-            &[arms.some_binding.zip(bound.value.as_deref())],
-            arms.some_body,
-            place,
-        );
+        let some_binding = ArmBinding::copy(arms.some_binding, bound.value.as_deref());
+        let (then_body, _) = self.lower_fused_arm(&[some_binding], arms.some_body, place);
         let (else_body, _) = self.lower_fused_arm(&[], arms.none_body, place);
 
         let invert = then_body.renders_empty() && !else_body.renders_empty();
@@ -826,18 +849,23 @@ impl Planner<'_> {
 
     pub(super) fn lower_fused_arm(
         &mut self,
-        bindings: &[Option<(&str, &str)>],
+        bindings: &[Option<ArmBinding<'_>>],
         body: &Expression,
         place: &PlacePlan,
     ) -> (LoweredBlock, Vec<bool>) {
         self.with_binding_frame(|this| {
-            let bound: Vec<Option<(String, String)>> = bindings
+            let bound: Vec<Option<(String, Option<String>)>> = bindings
                 .iter()
                 .map(|binding| {
-                    binding.map(|(name, value)| {
-                        let go_name = this.scope.bind(name, name);
-                        this.declare(&go_name);
-                        (go_name, value.to_string())
+                    binding.map(|binding| match binding {
+                        ArmBinding::Alias { name, go_name } => {
+                            (this.scope.bind(name, go_name), None)
+                        }
+                        ArmBinding::Copy { name, value } => {
+                            let go_name = this.scope.bind(name, name);
+                            this.declare(&go_name);
+                            (go_name, Some(value.to_string()))
+                        }
                     })
                 })
                 .collect();
@@ -853,7 +881,7 @@ impl Planner<'_> {
                 })
                 .collect::<Vec<_>>();
             for (binding, is_used) in bound.iter().zip(&binding_uses) {
-                let Some((go_name, value)) = binding else {
+                let Some((go_name, Some(value))) = binding else {
                     continue;
                 };
                 if !is_used {

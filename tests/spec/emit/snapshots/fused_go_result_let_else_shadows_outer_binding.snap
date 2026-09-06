@@ -24,8 +24,8 @@ import (
 func test(text string) int {
 	parsed := "outer"
 	fmt.Println(parsed)
-	parsed_1, err_2 := strconv.Atoi(text)
-	if err_2 != nil {
+	parsed_1, err := strconv.Atoi(text)
+	if err != nil {
 		return -1
 	}
 	return parsed_1

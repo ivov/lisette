@@ -14,8 +14,8 @@ package main
 
 func test(m map[string]string, v int) string {
 	_ = v + 1
-	v_1, ok_2 := m["a"]
-	if !ok_2 {
+	v_1, ok := m["a"]
+	if !ok {
 		return ""
 	}
 	return v_1

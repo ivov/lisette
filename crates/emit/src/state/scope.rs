@@ -41,6 +41,12 @@ enum DeclarationKind {
     TypeParameter,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PairStatusKind {
+    Error,
+    Ok,
+}
+
 impl ScopeState {
     pub(crate) fn new() -> Self {
         Self {
@@ -162,6 +168,10 @@ impl ScopeState {
             current.insert(go_name.to_string(), DeclarationKind::Local);
             true
         }
+    }
+
+    pub(crate) fn current_block_declares(&self, go_name: &str) -> bool {
+        self.current_declarations().contains_key(go_name)
     }
 
     pub(crate) fn is_go_name_declared(&self, go_name: &str) -> bool {

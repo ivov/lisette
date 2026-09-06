@@ -16,8 +16,8 @@ package main
 func test(m map[string]int) int {
 	len_ := 3
 	_ = len_ + 1
-	len_1, ok_2 := m["a"]
-	if !ok_2 {
+	len_1, ok := m["a"]
+	if !ok {
 		return 0
 	}
 	return len_1

@@ -16,8 +16,8 @@ package main
 import "fmt"
 
 func test(m map[string]int, key string) int {
-	ret_1, ok_2 := m[key]
-	if ok_2 {
+	ret_1, ok := m[key]
+	if ok {
 		v := ret_1
 		return v
 	} else {

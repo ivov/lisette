@@ -21,14 +21,13 @@ import (
 )
 
 func test() {
-	ret_1, err_2 := os.Create("f")
-	if err_2 == nil && ret_1 != nil {
+	ret_1, e := os.Create("f")
+	if e == nil && ret_1 != nil {
 		fmt.Println("made")
 	} else {
-		if err_2 == nil {
-			err_2 = errors.New("unexpected nil")
+		if e == nil {
+			e = errors.New("unexpected nil")
 		}
-		e := err_2
 		fmt.Println(e)
 	}
 }

@@ -78,18 +78,16 @@ func handler(ok bool) (int, AppError) {
 }
 
 func test() {
-	_, err_1 := handler(false)
-	if err_1 == nil {
+	if _, e := handler(false); e == nil {
 		panic("expected error")
 	} else {
-		e := err_1
 		if e.Status() != 500 || e.Error() != "db down" {
 			panic("wrong app error")
 		}
 	}
-	ret_2, err_3 := handler(true)
-	if err_3 == nil {
-		n := ret_2
+	ret_1, err := handler(true)
+	if err == nil {
+		n := ret_1
 		if n != 3 {
 			panic("wrong ok length")
 		}

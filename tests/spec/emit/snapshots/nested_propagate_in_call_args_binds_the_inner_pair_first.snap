@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn double(n: int) -> Result<int, error> { Ok(n * 2) }
+  
+  fn run() -> Result<int, error> {
+    let d = double(strconv.Atoi("1")?)?
+    Ok(d)
+  }
+---
+package main
+
+import "strconv"
+
+func double(n int) (int, error) {
+	return n * 2, nil
+}
+
+func run() (int, error) {
+	ret_1, err := strconv.Atoi("1")
+	if err != nil {
+		return 0, err
+	}
+	d, err_2 := double(ret_1)
+	if err_2 != nil {
+		return 0, err_2
+	}
+	return d, nil
+}

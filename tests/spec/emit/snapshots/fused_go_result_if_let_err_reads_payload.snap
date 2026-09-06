@@ -21,12 +21,11 @@ import (
 )
 
 func test(name string) {
-	ret_1, err_2 := os.Stat(name)
-	if err_2 != nil || lisette.IsNilInterface(ret_1) {
-		if err_2 == nil {
-			err_2 = errors.New("unexpected nil")
+	ret_1, e := os.Stat(name)
+	if e != nil || lisette.IsNilInterface(ret_1) {
+		if e == nil {
+			e = errors.New("unexpected nil")
 		}
-		e := err_2
 		fmt.Println(e)
 	}
 }

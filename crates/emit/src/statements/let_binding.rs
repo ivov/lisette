@@ -71,7 +71,7 @@ impl Planner<'_> {
         force_fresh: bool,
     ) -> String {
         let escaped = escape_reserved(raw_go_name);
-        if force_fresh || self.is_declared(&escaped) {
+        if force_fresh || self.shadows_declaration(&escaped) {
             self.fresh_var(Some(identifier))
         } else {
             escaped.into_owned()
@@ -105,7 +105,7 @@ impl Planner<'_> {
         };
         if needs_temp {
             let go_identifier = escape_reserved(raw_go_name);
-            if !self.is_declared(&go_identifier)
+            if !self.shadows_declaration(&go_identifier)
                 && !expression_contains_binding(value, identifier)
                 && !self.scope.is_active_assign_target(&go_identifier)
                 && !self.scope.has_binding_for_go_name(&go_identifier)
@@ -122,7 +122,9 @@ impl Planner<'_> {
                     return statements;
                 }
             }
-            if self.is_declared(&go_identifier) || expression_contains_binding(value, identifier) {
+            if self.shadows_declaration(&go_identifier)
+                || expression_contains_binding(value, identifier)
+            {
                 let fresh = self.fresh_var(Some(identifier));
                 let statements = self.lower_let_temp(&fresh, value, binding_ty);
                 self.scope.bind(identifier, &fresh);
@@ -188,7 +190,7 @@ impl Planner<'_> {
             return statements;
         };
         let escaped = escape_reserved(raw_go_name);
-        if self.is_declared(&escaped) {
+        if self.shadows_declaration(&escaped) {
             let fresh = self.fresh_var(Some(identifier));
             self.declare(&fresh);
             statements.push(LoweredStatement::TempBind {
@@ -235,7 +237,7 @@ impl Planner<'_> {
         statements.extend(coercion_setup);
 
         let bound = self.scope.bind(identifier, raw_go_name);
-        let is_new = self.try_declare(&bound);
+        let is_new = !self.package.is_package_block_name(&bound) && self.try_declare(&bound);
         let go_identifier = if !is_new || self.scope.is_active_assign_target(&bound) {
             let fresh = self.fresh_var(Some(identifier));
             self.scope.bind(identifier, &fresh);
@@ -277,7 +279,7 @@ impl Planner<'_> {
         binding_ty: &Type,
     ) -> Option<Vec<LoweredStatement>> {
         let go_identifier = escape_reserved(raw_go_name);
-        if self.is_declared(&go_identifier)
+        if self.shadows_declaration(&go_identifier)
             || self.scope.is_active_assign_target(&go_identifier)
             || self.scope.has_binding_for_go_name(&go_identifier)
         {
@@ -574,7 +576,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                     && let Some(go_name) = self.planner.go_name_for_binding(pattern)
                 {
                     let escaped = escape_reserved(&go_name).into_owned();
-                    let name = if self.planner.is_declared(&escaped) {
+                    let name = if self.planner.shadows_declaration(&escaped) {
                         let fresh = self.planner.fresh_var(Some(identifier));
                         any_new = true;
                         fresh

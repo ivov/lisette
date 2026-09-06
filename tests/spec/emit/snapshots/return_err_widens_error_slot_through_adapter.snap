@@ -44,8 +44,7 @@ func bail() (int, Failing[lisette.Result[int, error]]) {
 }
 
 func main() {
-	_, err_1 := bail()
-	if err_1 == nil {
+	if _, err := bail(); err == nil {
 		panic("expected error")
 	}
 }

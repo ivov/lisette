@@ -220,7 +220,7 @@ impl Planner<'_> {
     }
 
     fn fresh_ok_var(&mut self) -> String {
-        if self.scope.has_binding_for_go_name("ok") || self.is_declared("ok") {
+        if self.scope.has_binding_for_go_name("ok") || self.shadows_declaration("ok") {
             self.fresh_var(Some("ok"))
         } else {
             "ok".to_string()

@@ -21,8 +21,8 @@ package main
 import "os"
 
 func apply(f func(string) (string, bool), key string) string {
-	ret_1, ok_2 := f(key)
-	if ok_2 {
+	ret_1, ok := f(key)
+	if ok {
 		v := ret_1
 		return v
 	} else {

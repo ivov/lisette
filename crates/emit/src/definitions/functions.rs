@@ -242,7 +242,7 @@ impl Planner<'_> {
     /// Bind and declare a parameter; freshens the Go name on collision.
     fn declare_param(&mut self, lisette_name: &str, raw_go_name: impl Into<String>) -> String {
         let go_id = self.scope.bind(lisette_name, raw_go_name);
-        let go_id = if self.is_declared(&go_id) {
+        let go_id = if self.shadows_declaration(&go_id) {
             let fresh = self.fresh_var(Some(lisette_name));
             self.scope.bind(lisette_name, fresh)
         } else {
@@ -435,8 +435,9 @@ impl Planner<'_> {
         let ty_string = self.use_go_type(actual_ty);
         let mut receiver_var = receiver_name(&ty_string);
 
-        let taken =
-            |this: &Self, name: &String| param_names.contains(name) || this.is_declared(name);
+        let taken = |this: &Self, name: &String| {
+            param_names.contains(name) || this.shadows_declaration(name)
+        };
         if taken(self, &receiver_var) {
             receiver_var = format!("{}{}", receiver_var, receiver_var);
             let mut counter = 2;

@@ -8,6 +8,7 @@ use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::is_go_never;
 use crate::plan::bodies::{AssignForm, LoweredBlock, LoweredStatement, PlacePlan, ReturnForm};
 use crate::plan::values::{GoExpression, ValuePlan};
+use crate::state::scope::PairStatusKind;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -223,27 +224,42 @@ impl Planner<'_> {
             return None;
         }
 
-        let want_value = !matches!(result_var_name, Some("_"));
-        let value_var = (has_value_slot && (want_value || nil_guard.is_some())).then(|| {
-            let v = self.fresh_var(Some("ret"));
-            self.declare(&v);
-            v
-        });
-        let outcome_var = self.fresh_var(Some("ret"));
-        self.declare(&outcome_var);
-
         let (mut statements, call_str) = self
             .lower_call(expression, None, ExpressionContext::value())
             .into_parts();
-        let bind_line = if has_value_slot {
-            match &value_var {
-                Some(v) => format!("{}, {} := {}\n", v, outcome_var, call_str),
-                None => format!("_, {} := {}\n", outcome_var, call_str),
-            }
+        let want_value = !matches!(result_var_name, Some("_"));
+        let let_slot = result_var_name.filter(|name| {
+            has_value_slot && *name != "_" && payload_bridge.is_none() && !self.is_declared(name)
+        });
+        let value_var =
+            (has_value_slot && (want_value || nil_guard.is_some())).then(|| match let_slot {
+                Some(name) => {
+                    self.declare(name);
+                    name.to_string()
+                }
+                None => self.fresh_pair_value(),
+            });
+        let status_kind = if comma_ok {
+            PairStatusKind::Ok
         } else {
-            format!("{} := {}\n", outcome_var, call_str)
+            PairStatusKind::Error
         };
-        statements.push(LoweredStatement::RawGo(bind_line));
+        let outcome_var = self.pair_status(None, status_kind, value_var.is_none());
+        let bind_line = match &value_var {
+            Some(value) => format!("{value}, {outcome_var} := {call_str}"),
+            None if has_value_slot => format!("_, {outcome_var} := {call_str}"),
+            None => format!("{outcome_var} := {call_str}"),
+        };
+        let initializer = if value_var.is_some() {
+            statements.push(LoweredStatement::RawGo(format!("{bind_line}\n")));
+            None
+        } else {
+            Some(bind_line)
+        };
+        let open_if = |condition: String| match &initializer {
+            Some(initializer) => format!("{initializer}; {condition}"),
+            None => condition,
+        };
 
         if comma_ok {
             let failure_condition = match nil_guard {
@@ -261,7 +277,7 @@ impl Planner<'_> {
             let (failure_setup, failure_values) =
                 self.propagate_failure_values(fallible, &outcome_var);
             statements.push(transition::tag_check(
-                failure_condition,
+                open_if(failure_condition),
                 failure_setup,
                 failure_values,
             ));
@@ -269,7 +285,7 @@ impl Planner<'_> {
             let (failure_setup, failure_values) =
                 self.propagate_failure_values(fallible, &outcome_var);
             statements.push(transition::tag_check(
-                format!("{} != nil", outcome_var),
+                open_if(format!("{} != nil", outcome_var)),
                 failure_setup,
                 failure_values,
             ));
@@ -299,6 +315,7 @@ impl Planner<'_> {
         let value = match result_var_name {
             None => ok_value.unwrap_or_else(|| "struct{}{}".to_string()),
             Some("_") => "_".to_string(),
+            Some(name) if let_slot.is_some() => name.to_string(),
             Some(name) => {
                 let v = ok_value.unwrap_or_else(|| "struct{}{}".to_string());
                 statements.push(self.bind_propagate_ok(name, &v));

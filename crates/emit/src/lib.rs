@@ -464,6 +464,10 @@ impl<'a> Planner<'a> {
         self.scope.is_go_name_declared(go_name)
     }
 
+    fn shadows_declaration(&self, go_name: &str) -> bool {
+        self.is_declared(go_name) || self.package.is_package_block_name(go_name)
+    }
+
     /// Whether an enclosing branch already tested this exact condition.
     fn is_condition_established(&self, condition: &str) -> bool {
         self.scope.is_condition_established(condition)
@@ -568,7 +572,12 @@ impl<'a> Planner<'a> {
     }
 
     fn fresh_var(&mut self, hint: Option<&str>) -> String {
-        self.scope.fresh_go_name(hint)
+        loop {
+            let name = self.scope.fresh_go_name(hint);
+            if !self.package.is_package_block_name(&name) {
+                return name;
+            }
+        }
     }
 
     fn current_function_context(&self) -> Option<&FunctionEmissionContext> {

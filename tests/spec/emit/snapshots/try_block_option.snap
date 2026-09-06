@@ -28,11 +28,10 @@ func maybeGet() (int, bool) {
 func test() int {
 	var opt lisette.Option[int]
 	tryResult_1 := func() lisette.Option[int] {
-		ret_2, ret_3 := maybeGet()
-		if !ret_3 {
+		x, ok := maybeGet()
+		if !ok {
 			return lisette.MakeOptionNone[int]()
 		}
-		x := ret_2
 		return lisette.MakeOptionSome[int](x + 1)
 	}()
 	opt = tryResult_1

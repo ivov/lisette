@@ -26,8 +26,8 @@ func (c *Counter) increment() {
 }
 
 func test(m map[string]*Counter) {
-	c, ok_1 := m["a"]
-	if !ok_1 {
+	c, ok := m["a"]
+	if !ok {
 		return
 	}
 	c.increment()

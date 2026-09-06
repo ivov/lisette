@@ -19,8 +19,8 @@ import (
 )
 
 func test(name string) bool {
-	ret_1, err_2 := os.Stat(name)
-	if err_2 != nil || lisette.IsNilInterface(ret_1) {
+	ret_1, err := os.Stat(name)
+	if err != nil || lisette.IsNilInterface(ret_1) {
 		return false
 	}
 	return true

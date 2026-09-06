@@ -23,11 +23,11 @@ func main() {
 	items := []int{1}
 	m := make(map[string]Outer)
 	m["a"] = Outer{items: &items}
-	o, ok_1 := m["a"]
-	if !ok_1 {
+	o, ok := m["a"]
+	if !ok {
 		return
 	}
-	ref_2 := o.items
-	*ref_2 = append(*o.items, 2)
+	ref_1 := o.items
+	*ref_1 = append(*o.items, 2)
 	_ = items
 }

@@ -27,9 +27,9 @@ func add(_, _ int) int {
 }
 
 func run() (int, error) {
-	ret_1, ret_2 := getX()
-	if ret_2 != nil {
-		return 0, ret_2
+	ret_1, err := getX()
+	if err != nil {
+		return 0, err
 	}
 	return add(ret_1, side()), nil
 }

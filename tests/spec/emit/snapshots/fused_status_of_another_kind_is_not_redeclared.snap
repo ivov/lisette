@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn run(m: Map<string, int>) {
+    let parsed = match strconv.Atoi("1") {
+      Ok(n) => n,
+      Err(ok) => {
+        fmt.Println(ok)
+        return
+      },
+    }
+    let Some(v) = m.get("a") else { return }
+    fmt.Println(parsed, v)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func run(m map[string]int) {
+	parsed, ok := strconv.Atoi("1")
+	if ok != nil {
+		fmt.Println(ok)
+		return
+	}
+	v, ok_1 := m["a"]
+	if !ok_1 {
+		return
+	}
+	fmt.Println(parsed, v)
+}

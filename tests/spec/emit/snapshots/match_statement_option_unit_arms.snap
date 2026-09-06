@@ -27,8 +27,7 @@ func maybe(b bool) (int, bool) {
 }
 
 func test() {
-	_, ok_1 := maybe(true)
-	if ok_1 {
+	if _, ok := maybe(true); ok {
 		noop()
 	} else {
 		noop()

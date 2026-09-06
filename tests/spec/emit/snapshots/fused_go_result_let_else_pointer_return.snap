@@ -16,8 +16,8 @@ package main
 import "net/url"
 
 func test(raw string) string {
-	parsed, err_1 := url.Parse(raw)
-	if err_1 != nil || parsed == nil {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed == nil {
 		return "bad"
 	}
 	return parsed.Scheme

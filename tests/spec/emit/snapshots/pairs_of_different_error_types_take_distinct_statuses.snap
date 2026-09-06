@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  pub interface AppError {
+    fn Error() -> string
+    fn status() -> int
+  }
+  
+  fn first() -> Result<int, AppError> { Ok(1) }
+  
+  fn run() -> Result<int, error> {
+    let a = first()?
+    let b = strconv.Atoi("2")?
+    Ok(a + b)
+  }
+---
+package main
+
+import "strconv"
+
+type AppError interface {
+	Error() string
+	Status() int
+}
+
+func first() (int, AppError) {
+	return 1, nil
+}
+
+func run() (int, error) {
+	a, err := first()
+	if err != nil {
+		return 0, err
+	}
+	b, err_1 := strconv.Atoi("2")
+	if err_1 != nil {
+		return 0, err_1
+	}
+	return a + b, nil
+}

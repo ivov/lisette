@@ -12,8 +12,8 @@ import (
 
 func main() {
 	reader := strings.NewReader("hello")
-	ret_1, ret_2 := io.ReadAll(reader)
-	if ret_2 == nil {
+	ret_1, err := io.ReadAll(reader)
+	if err == nil {
 		fmt.Print("ok")
 	} else if ret_1 == nil {
 		fmt.Print("err")

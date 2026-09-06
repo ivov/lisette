@@ -20,12 +20,10 @@ import (
 )
 
 func test() {
-	err_1 := os.Remove("f")
-	if err_1 == nil {
+	if e := os.Remove("f"); e == nil {
 		x := struct{}{}
 		fmt.Println(x)
 	} else {
-		e := err_1
 		fmt.Println(e)
 	}
 }

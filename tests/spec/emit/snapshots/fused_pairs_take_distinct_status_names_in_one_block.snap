@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:os"
+  import "go:strconv"
+  
+  fn run(path: string) -> Result<int, error> {
+    let text = os.ReadFile(path)?
+    let Ok(n) = strconv.Atoi(os.Getenv("N")) else { return Ok(text.length()) }
+    os.Remove(path)?
+    Ok(n)
+  }
+---
+package main
+
+import (
+	"os"
+	"strconv"
+)
+
+func run(path string) (int, error) {
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	n, err_1 := strconv.Atoi(os.Getenv("N"))
+	if err_1 != nil {
+		return len(text), nil
+	}
+	if err := os.Remove(path); err != nil {
+		return 0, err
+	}
+	return n, nil
+}

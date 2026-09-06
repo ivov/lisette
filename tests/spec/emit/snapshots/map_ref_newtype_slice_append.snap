@@ -21,12 +21,12 @@ func main() {
 	w := Wrap([]int{1})
 	m := make(map[string]*Wrap)
 	m["a"] = &w
-	r, ok_1 := m["a"]
-	if !ok_1 {
+	r, ok := m["a"]
+	if !ok {
 		return
 	}
-	ref_3 := r
-	recv_2 := ([]int)(*r)
-	*ref_3 = Wrap(append(recv_2[:len(recv_2):len(recv_2)], 2))
+	ref_2 := r
+	recv_1 := ([]int)(*r)
+	*ref_2 = Wrap(append(recv_1[:len(recv_1):len(recv_1)], 2))
 	_ = w
 }

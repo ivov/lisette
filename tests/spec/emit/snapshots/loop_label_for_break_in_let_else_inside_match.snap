@@ -39,8 +39,8 @@ func test() int {
 			break
 		}
 		if count == 1 {
-			v, ok_1 := maybe(true)
-			if !ok_1 {
+			v, ok := maybe(true)
+			if !ok {
 				break
 			}
 			_ = v

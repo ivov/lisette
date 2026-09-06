@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn main() {
+    match strconv.Atoi("1") {
+      Ok(n) => fmt.Println(n),
+      Err(failure) => fmt.Println(failure),
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	ret_1, failure := strconv.Atoi("1")
+	if failure == nil {
+		n := ret_1
+		fmt.Println(n)
+	} else {
+		fmt.Println(failure)
+	}
+}

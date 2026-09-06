@@ -23,13 +23,13 @@ func main() {
 	items := []int{1}
 	m := make(map[string]Outer)
 	m["a"] = Outer{items: &items}
-	o, ok_1 := m["a"]
-	if !ok_1 {
+	o, ok := m["a"]
+	if !ok {
 		return
 	}
-	var tmp_2 []int
-	recv_3 := *o.items
-	tmp_2 = append(recv_3[:len(recv_3):len(recv_3)], 2)
-	_ = tmp_2
+	var tmp_1 []int
+	recv_2 := *o.items
+	tmp_1 = append(recv_2[:len(recv_2):len(recv_2)], 2)
+	_ = tmp_1
 	_ = items
 }

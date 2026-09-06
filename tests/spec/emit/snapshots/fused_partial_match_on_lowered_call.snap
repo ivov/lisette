@@ -28,8 +28,8 @@ func attempt(ok bool) (int, error) {
 }
 
 func test() int {
-	ret_1, ret_2 := attempt(true)
-	if ret_2 == nil {
+	ret_1, err := attempt(true)
+	if err == nil {
 		n := ret_1
 		return n
 	} else {
