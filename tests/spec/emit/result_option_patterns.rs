@@ -2836,6 +2836,117 @@ fn main() {
 }
 
 #[test]
+fn unwrap_or_on_comma_ok_go_call_assigns_the_default_on_failure() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  let home = os.LookupEnv("HOME").unwrap_or("unset")
+  fmt.Println(home)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unwrap_or_on_go_result_call_assigns_the_default_on_error() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn main() {
+  let port = strconv.Atoi("x").unwrap_or(80)
+  fmt.Println(port)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unwrap_or_on_map_get_as_an_argument() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let counts = Map.new<string, int>()
+  fmt.Println(counts.get("a").unwrap_or(0) + 1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_then_unwrap_or_on_comma_ok_go_call_branches_on_the_header() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  let shown = os.LookupEnv("HOME").map(|h| "home=" + h).unwrap_or("unset")
+  fmt.Println(shown)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_or_on_nullable_go_call_as_an_argument() {
+    let input = r#"
+import "go:context"
+import "go:fmt"
+
+fn main() {
+  let ctx = context.Background()
+  fmt.Println(ctx.Err().map_or("clean", |err| err.Error()))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_with_a_returning_lambda_keeps_the_tagged_path() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  let shown = os.LookupEnv("HOME").map(|h| { return "home=" + h }).unwrap_or("unset")
+  fmt.Println(shown)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_alone_keeps_the_option() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  let shown = os.LookupEnv("HOME").map(|h| "home=" + h)
+  fmt.Println(shown.is_some())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unwrap_or_on_a_stored_option_keeps_the_tagged_path() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  let home = os.LookupEnv("HOME")
+  fmt.Println(home.unwrap_or("unset"))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn nested_propagate_in_call_args_binds_the_inner_pair_first() {
     let input = r#"
 import "go:strconv"
@@ -2845,6 +2956,42 @@ fn double(n: int) -> Result<int, error> { Ok(n * 2) }
 fn run() -> Result<int, error> {
   let d = double(strconv.Atoi("1")?)?
   Ok(d)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unwrap_or_evaluates_an_effectful_default_before_the_error_test() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn fallback() -> int {
+  fmt.Println("fallback ran")
+  7
+}
+
+fn one() -> int {
+  strconv.Atoi("1").unwrap_or(fallback())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_or_with_an_effectful_default_keeps_the_helper_call() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn fallback() -> int {
+  fmt.Println("fallback ran")
+  0
+}
+
+fn home_length() -> int {
+  os.LookupEnv("HOME").map_or(fallback(), |home| home.length())
 }
 "#;
     assert_emit_snapshot!(input);
@@ -2864,6 +3011,33 @@ fn message() -> string {
 fn two() -> Result<int, error> {
   let n = strconv.Atoi("2").wrap_err(message())?
   Ok(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_wrap_and_default_arguments_preserve_eager_order() {
+    let input = r#"
+import "go:strconv"
+
+fn choose(raw: string) -> int {
+  let mut trace = ""
+  let message = || -> string {
+    trace = trace + "message;"
+    "context"
+  }
+  let fallback = || -> int {
+    trace = trace + "default;"
+    7
+  }
+  let n = strconv.Atoi(raw).wrap_err(message()).unwrap_or(fallback())
+  if trace != "message;default;" { panic(trace) }
+  n
+}
+
+fn main() {
+  if choose("1") != 1 || choose("bad") != 7 { panic("wrong result") }
 }
 "#;
     assert_emit_snapshot!(input);
@@ -2905,6 +3079,26 @@ fn main() {
 }
 
 #[test]
+fn eager_defaults_preserve_numeric_types() {
+    let input = r#"
+import "go:strconv"
+
+fn shifted(sh: uint64) -> uint64 {
+  strconv.ParseUint("bad", 10, 64).unwrap_or(1 << sh)
+}
+
+fn negative() -> int64 {
+  strconv.ParseInt("bad", 10, 64).unwrap_or(-1)
+}
+
+fn main() {
+  if shifted(63) != 9223372036854775808 || negative() != -1 { panic("wrong default") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn wrap_err_message_with_a_nested_propagate_keeps_the_outer_error() {
     let input = r#"
 import "go:strconv"
@@ -2912,6 +3106,60 @@ import "go:strconv"
 fn three() -> Result<int, error> {
   let n = strconv.Atoi("x").wrap_err(f"{strconv.Atoi("0")?}")?
   Ok(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unwrap_or_default_with_a_nested_propagate_keeps_the_outer_error() {
+    let input = r#"
+import "go:strconv"
+
+fn one() -> Result<int, error> {
+  Ok(strconv.Atoi("bad").unwrap_or(strconv.Atoi("7")?))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn wrap_err_messages_run_where_nothing_reads_the_wrapped_error() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn message() -> string {
+  fmt.Println("message ran")
+  "ctx"
+}
+
+fn predicate() -> bool {
+  strconv.Atoi("1").wrap_err(message()).is_err()
+}
+
+fn defaulted() -> int {
+  strconv.Atoi("1").wrap_err(message()).unwrap_or(0)
+}
+
+fn let_else() -> int {
+  let Ok(v) = strconv.Atoi("1").wrap_err(message()) else { return -1 }
+  v
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn shift_defaults_and_display_interpolations_run_before_the_error_test() {
+    let input = r#"
+import "go:strconv"
+import "go:time"
+
+fn three(d: time.Duration, sh: int) -> Result<int, error> {
+  let a = strconv.Atoi("1").wrap_err(f"took {d}")?
+  let b = strconv.Atoi("2").unwrap_or(1 << sh)
+  Ok(a + b)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -2985,6 +3233,21 @@ fn six() -> int {
     },
   }
   a + b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn defaulted_let_that_calls_a_function_of_its_own_name_keeps_a_temp() {
+    let input = r#"
+import "go:strconv"
+
+fn n() -> int { 9 }
+
+fn seven() -> int {
+  let n = strconv.Atoi("bad").unwrap_or(n())
+  n
 }
 "#;
     assert_emit_snapshot!(input);

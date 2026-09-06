@@ -23,10 +23,7 @@ description: |
 ---
 package main
 
-import (
-	"encoding/json"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "encoding/json"
 
 type Payload struct {
 	Items []int
@@ -34,26 +31,20 @@ type Payload struct {
 
 func main() {
 	xs := []int{}
-	ret_1, ret_2 := json.Marshal(xs)
-	var result_3 lisette.Result[[]byte, error]
-	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[[]byte, error](ret_2)
-	} else {
-		result_3 = lisette.MakeResultOk[[]byte, error](ret_1)
+	ret_1, err := json.Marshal(xs)
+	if err != nil {
+		ret_1 = []byte{}
 	}
-	encoded := string(result_3.UnwrapOr([]byte{}))
+	encoded := string(ret_1)
 	if encoded != "[]" {
 		panic("expected an explicit empty literal to encode as [], got " + encoded)
 	}
 	payload := Payload{Items: []int{}}
-	ret_4, ret_5 := json.Marshal(payload)
-	var result_6 lisette.Result[[]byte, error]
-	if ret_5 != nil {
-		result_6 = lisette.MakeResultErr[[]byte, error](ret_5)
-	} else {
-		result_6 = lisette.MakeResultOk[[]byte, error](ret_4)
+	ret_2, err_3 := json.Marshal(payload)
+	if err_3 != nil {
+		ret_2 = []byte{}
 	}
-	wrapped := string(result_6.UnwrapOr([]byte{}))
+	wrapped := string(ret_2)
 	if wrapped != "{\"Items\":[]}" {
 		panic("expected an empty slice field to encode as [], got " + wrapped)
 	}

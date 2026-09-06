@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn main() {
+    let shown = os.LookupEnv("HOME").map(|h| "home=" + h)
+    fmt.Println(shown.is_some())
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"os"
+)
+
+func main() {
+	option_1 := lisette.OptionFromCommaOk[string](os.LookupEnv("HOME"))
+	shown := lisette.OptionMap(option_1, func(h string) string {
+		return "home=" + h
+	})
+	fmt.Println(shown.IsSome())
+}

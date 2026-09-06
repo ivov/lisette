@@ -484,6 +484,9 @@ impl<'a> Planner<'a> {
         if let Some(predicate) = self.lower_fused_predicate_value(call_expression, false) {
             return predicate;
         }
+        if let Some(defaulted) = self.lower_defaulted_call_value(call_expression) {
+            return defaulted;
+        }
 
         match &plan.resolved.origin {
             CallableOrigin::TupleStructConstructor => {

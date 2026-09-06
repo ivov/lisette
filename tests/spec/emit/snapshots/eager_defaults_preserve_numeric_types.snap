@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn shifted(sh: uint64) -> uint64 {
+    strconv.ParseUint("bad", 10, 64).unwrap_or(1 << sh)
+  }
+  
+  fn negative() -> int64 {
+    strconv.ParseInt("bad", 10, 64).unwrap_or(-1)
+  }
+  
+  fn main() {
+    if shifted(63) != 9223372036854775808 || negative() != -1 { panic("wrong default") }
+  }
+---
+package main
+
+import "strconv"
+
+func shifted(sh uint64) uint64 {
+	ret_1, err := strconv.ParseUint("bad", 10, 64)
+	default_2 := uint64(1 << sh)
+	if err != nil {
+		ret_1 = default_2
+	}
+	return ret_1
+}
+
+func negative() int64 {
+	ret_1, err := strconv.ParseInt("bad", 10, 64)
+	if err != nil {
+		ret_1 = -1
+	}
+	return ret_1
+}
+
+func main() {
+	if shifted(63) != 9223372036854775808 || negative() != -1 {
+		panic("wrong default")
+	}
+}

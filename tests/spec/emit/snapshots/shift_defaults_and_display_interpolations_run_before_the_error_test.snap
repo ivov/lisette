@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  import "go:time"
+  
+  fn three(d: time.Duration, sh: int) -> Result<int, error> {
+    let a = strconv.Atoi("1").wrap_err(f"took {d}")?
+    let b = strconv.Atoi("2").unwrap_or(1 << sh)
+    Ok(a + b)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+	"time"
+)
+
+func three(d time.Duration, sh int) (int, error) {
+	a, err := strconv.Atoi("1")
+	msg_1 := fmt.Sprintf("took %v", d)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", msg_1, err)
+	}
+	b, err_2 := strconv.Atoi("2")
+	default_3 := int(1 << sh)
+	if err_2 != nil {
+		b = default_3
+	}
+	return a + b, nil
+}

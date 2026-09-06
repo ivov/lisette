@@ -51,7 +51,7 @@ enum BoundSource {
 }
 
 impl BoundOption {
-    pub(super) fn value(&self) -> Option<&str> {
+    pub(crate) fn value(&self) -> Option<&str> {
         match &self.source {
             BoundSource::Pair(pair) => pair.value.as_deref(),
             BoundSource::Nullable { value, .. } => Some(value),
@@ -151,7 +151,7 @@ impl ResultFusePlan<'_> {
         &self.shape
     }
 
-    pub(super) fn carries_payload(&self) -> bool {
+    pub(crate) fn carries_payload(&self) -> bool {
         matches!(self.shape, CallableReturnAbi::Result { .. })
     }
 
@@ -902,7 +902,15 @@ impl Planner<'_> {
     ) -> Option<Vec<LoweredStatement>> {
         let fuse = self.option_fuse_plan(subject)?;
         let arms = classify_option_arms(arms)?;
+        Some(self.lower_fused_option_arms(fuse, arms, place))
+    }
 
+    pub(crate) fn lower_fused_option_arms(
+        &mut self,
+        fuse: OptionFusePlan<'_>,
+        arms: OptionArms<'_>,
+        place: &PlacePlan,
+    ) -> Vec<LoweredStatement> {
         let slot = match arms.some_binding {
             Some(name) => CommaOkValueSlot::Arm(self.arm_value_name(name)),
             None => CommaOkValueSlot::Unused,
@@ -939,7 +947,7 @@ impl Planner<'_> {
         };
         let mut statements = bound.statements;
         statements.push(LoweredStatement::If(plan));
-        Some(statements)
+        statements
     }
 
     pub(super) fn lower_fused_arm(
@@ -1167,11 +1175,11 @@ fn classify_selective_partial_arms(arms: &[MatchArm]) -> Option<SelectivePartial
     })
 }
 
-struct OptionArms<'a> {
+pub(crate) struct OptionArms<'a> {
     /// `None` when the Some arm binds no payload.
-    some_binding: Option<&'a str>,
-    some_body: &'a Expression,
-    none_body: &'a Expression,
+    pub(crate) some_binding: Option<&'a str>,
+    pub(crate) some_body: &'a Expression,
+    pub(crate) none_body: &'a Expression,
 }
 
 enum OptionArmKind<'a> {

@@ -1,0 +1,56 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn choose(raw: string) -> int {
+    let mut trace = ""
+    let message = || -> string {
+      trace = trace + "message;"
+      "context"
+    }
+    let fallback = || -> int {
+      trace = trace + "default;"
+      7
+    }
+    let n = strconv.Atoi(raw).wrap_err(message()).unwrap_or(fallback())
+    if trace != "message;default;" { panic(trace) }
+    n
+  }
+  
+  fn main() {
+    if choose("1") != 1 || choose("bad") != 7 { panic("wrong result") }
+  }
+---
+package main
+
+import "strconv"
+
+func choose(raw string) int {
+	trace := ""
+	message := func() string {
+		trace += "message;"
+		return "context"
+	}
+	fallback := func() int {
+		trace += "default;"
+		return 7
+	}
+	n, err := strconv.Atoi(raw)
+	_ = message()
+	default_1 := fallback()
+	if err != nil {
+		n = default_1
+	}
+	if trace != "message;default;" {
+		panic(trace)
+	}
+	return n
+}
+
+func main() {
+	if choose("1") != 1 || choose("bad") != 7 {
+		panic("wrong result")
+	}
+}

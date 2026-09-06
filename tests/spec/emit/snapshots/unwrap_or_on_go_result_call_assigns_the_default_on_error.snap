@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn main() {
+    let port = strconv.Atoi("x").unwrap_or(80)
+    fmt.Println(port)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	port, err := strconv.Atoi("x")
+	if err != nil {
+		port = 80
+	}
+	fmt.Println(port)
+}

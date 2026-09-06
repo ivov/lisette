@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn fallback() -> int {
+    fmt.Println("fallback ran")
+    7
+  }
+  
+  fn one() -> int {
+    strconv.Atoi("1").unwrap_or(fallback())
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func fallback() int {
+	fmt.Println("fallback ran")
+	return 7
+}
+
+func one() int {
+	ret_1, err := strconv.Atoi("1")
+	default_2 := fallback()
+	if err != nil {
+		ret_1 = default_2
+	}
+	return ret_1
+}
