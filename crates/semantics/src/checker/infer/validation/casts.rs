@@ -17,6 +17,8 @@ impl InferCtx<'_> {
     ///   including types with numeric underlying types (e.g., `struct Duration(int64)`).
     /// - rune -> string (UTF-8 encodes the codepoint)
     /// - string <-> Slice<byte> / Slice<rune>
+    /// - Function type -> function type under the assignment rule: a parameter
+    ///   may demand less permission than the target promises, never more.
     ///
     /// Explicitly blocked:
     /// - rune -> byte/uint8 (rune is int32 and may not fit in a byte)
@@ -33,6 +35,16 @@ impl InferCtx<'_> {
         let store = self.store;
         let raw_source_resolved = raw_source_ty.resolve_in(&self.env);
         let raw_target_resolved = raw_target_ty.resolve_in(&self.env);
+        let source_is_function = store
+            .resolve_to_function_type(&raw_source_resolved)
+            .is_some();
+        let target_is_function = store
+            .resolve_to_function_type(&raw_target_resolved)
+            .is_some();
+        if source_is_function && target_is_function {
+            self.unify(&raw_target_resolved, &raw_source_resolved, &span);
+            return;
+        }
         if !self.cast_keeps_permission(&raw_source_resolved, &raw_target_resolved) {
             self.sink.push(diagnostics::infer::cast_grants_permission(
                 &raw_source_resolved.to_string(),

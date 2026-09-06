@@ -9442,6 +9442,57 @@ fn test() -> int {
 }
 
 #[test]
+fn infer_cast_fn_reader_to_writer_type() {
+    let input = r#"
+struct Node { value: int }
+
+type Handler = fn(mut Ref<Node>)
+
+fn read_only(n: Ref<Node>) { let _ = n.value }
+
+fn test() {
+  let handler = read_only as Handler
+  let mut node = Node { value: 1 }
+  handler(&node)
+}
+"#;
+    infer(input).assert_no_errors();
+}
+
+#[test]
+fn infer_cast_fn_writer_to_reader_type() {
+    let input = r#"
+struct Node { value: int }
+
+type Handler = fn(Ref<Node>)
+
+fn writer(n: mut Ref<Node>) { n.value = 2 }
+
+fn test() {
+  let handler = writer as Handler
+  let node = Node { value: 1 }
+  handler(&node)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_cast_fn_parameter_count_mismatch() {
+    let input = r#"
+type Handler = fn(int)
+
+fn pair(a: int, b: int) { let _ = a + b }
+
+fn test() {
+  let handler = pair as Handler
+  handler(1)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_invalid_cast_complex_to_int() {
     let input = r#"
 fn test() -> int {
