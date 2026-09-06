@@ -23,7 +23,7 @@ func run() int {
 		h.slc = []int{99}
 		return 7
 	}
-	recv_1 := h.slc
-	ys := append(recv_1[:len(recv_1):len(recv_1)], bump())
+	arg_1 := h.slc
+	ys := append(arg_1[:len(arg_1):len(arg_1)], bump())
 	return ys[0]
 }

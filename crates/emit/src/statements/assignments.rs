@@ -2,10 +2,11 @@ use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::context::expression::ExpressionContext;
+use crate::expressions::staging::LaterStages;
 use crate::is_order_sensitive;
 use crate::names::go_name;
 use crate::plan::bodies::{AssignForm, CompoundKind, LoweredBlock, LoweredStatement};
-use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::plan::values::{GoExpression, ValuePlan};
 use crate::state::bindings::BindingValue;
 use syntax::ast::Literal;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
@@ -117,14 +118,10 @@ impl Planner<'_> {
         }
 
         let right_hand_side = self.plan_operand(rhs, ExpressionContext::value());
-        let right_hand_side_has_setup = !right_hand_side.setup.is_empty();
-        let right_hand_side_has_effectful_call =
-            right_hand_side.evaluation.effect.has_effectful_call();
         let (mut target_capture, target_str) =
             self.capture_assignment_target(target, Some(&right_hand_side));
-        let needs_left_pin = right_hand_side_has_setup
-            || (right_hand_side_has_effectful_call
-                && !self.identifier_immune_to_calls(target.unwrap_parens()));
+        let needs_left_pin =
+            later_stages(Some(&right_hand_side)).can_change(self.place_read_stability(target));
         let pinned_left = needs_left_pin.then(|| {
             let tmp = self.fresh_var(Some("left"));
             self.declare(&tmp);
@@ -229,7 +226,7 @@ impl Planner<'_> {
                 operator: UnaryOperator::Deref,
                 expression,
                 ..
-            } => self.emit_deref_lvalue(setup, expression, false),
+            } => self.emit_deref_lvalue(setup, expression, None),
             Expression::Call { .. } if expression.get_type().is_ref() => {
                 let call_str = self.capture_operand_into(setup, expression);
                 self.hoist_tmp_value_statement(setup, "ref", &call_str)
@@ -245,14 +242,13 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         pointee: &Expression,
-        rhs_has_setup: bool,
+        right_hand_side: Option<&ValuePlan>,
     ) -> String {
         let pointee_plan = self.plan_operand(pointee, ExpressionContext::value());
-        let pointee_is_observable = pointee_plan.evaluation.stability.is_observable();
+        let needs_capture = matches!(pointee.unwrap_parens(), Expression::Call { .. })
+            || later_stages(right_hand_side).can_change(pointee_plan.evaluation.stability);
         let (pointee_setup, pointee_string) = pointee_plan.into_parts();
         setup.extend(pointee_setup);
-        let needs_capture = matches!(pointee.unwrap_parens(), Expression::Call { .. })
-            || (rhs_has_setup && pointee_is_observable);
         if needs_capture {
             let tmp = self.hoist_tmp_value_statement(setup, "ref", &pointee_string);
             return format!("*{}", tmp);
@@ -308,12 +304,8 @@ impl Planner<'_> {
             } => {
                 if assignment_requires_target_capture(right_hand_side) {
                     let base_str = self.emit_indexed_base_lvalue(setup, base, right_hand_side);
-                    let index_str = self.capture_value_at_boundary(
-                        setup,
-                        index,
-                        "idx",
-                        CaptureBoundary::AssignmentRightHandSide,
-                    );
+                    let index_str =
+                        self.capture_assignment_operand(setup, index, "idx", right_hand_side);
                     format!("{}[{}]", base_str, index_str)
                 } else {
                     self.emit_indexed_lvalue_inline(setup, base, index)
@@ -326,27 +318,11 @@ impl Planner<'_> {
                 ..
             } => {
                 let base_str = if let Some(inner) = base.deref_inner() {
-                    if assignment_requires_target_capture(right_hand_side) {
-                        self.capture_value_at_boundary(
-                            setup,
-                            inner,
-                            "ref",
-                            CaptureBoundary::AssignmentRightHandSide,
-                        )
-                    } else {
-                        self.capture_operand_into(setup, inner)
-                    }
+                    self.capture_assignment_operand(setup, inner, "ref", right_hand_side)
                 } else if is_order_sensitive(base) {
                     self.emit_left_value_capturing(setup, base, right_hand_side)
-                } else if assignment_requires_target_capture(right_hand_side)
-                    && base.get_type().is_ref()
-                {
-                    self.capture_value_at_boundary(
-                        setup,
-                        base,
-                        "ref",
-                        CaptureBoundary::AssignmentRightHandSide,
-                    )
+                } else if base.get_type().is_ref() {
+                    self.capture_assignment_operand(setup, base, "ref", right_hand_side)
                 } else {
                     self.emit_left_value(setup, base)
                 };
@@ -357,11 +333,7 @@ impl Planner<'_> {
                 operator: UnaryOperator::Deref,
                 expression: inner,
                 ..
-            } => self.emit_deref_lvalue(
-                setup,
-                inner,
-                assignment_requires_target_capture(right_hand_side),
-            ),
+            } => self.emit_deref_lvalue(setup, inner, right_hand_side),
             _ => self.emit_left_value(setup, expression),
         }
     }
@@ -387,39 +359,36 @@ impl Planner<'_> {
         right_hand_side: Option<&ValuePlan>,
     ) -> String {
         if let Some(inner) = base.deref_inner() {
-            let inner_str = self.emit_base_operand(setup, inner, true);
+            let inner_str = self.capture_assignment_operand(setup, inner, "base", right_hand_side);
             format!("(*{})", inner_str)
         } else {
-            let base_plan = self.lower_composite_value(base, ExpressionContext::value());
-            let force = base_plan.evaluation.stability.is_observable()
-                && (assignment_has_setup(right_hand_side)
-                    || !self.identifier_immune_to_calls(base.unwrap_parens()));
-            let (base_setup, base_value) = base_plan.into_parts();
-            setup.extend(base_setup);
-            if force {
-                return self.hoist_tmp_value_statement(setup, "base", &base_value);
-            }
-            base_value
+            self.capture_assignment_operand(setup, base, "base", right_hand_side)
         }
     }
 
-    fn emit_base_operand(
+    fn capture_assignment_operand(
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
-        force_capture: bool,
+        prefix: &str,
+        right_hand_side: Option<&ValuePlan>,
     ) -> String {
-        if force_capture {
-            self.capture_value_at_boundary(
-                setup,
-                expression,
-                "base",
-                CaptureBoundary::AssignmentRightHandSide,
-            )
+        let plan = self.lower_composite_value(expression, ExpressionContext::value());
+        let pin = later_stages(right_hand_side).can_change(plan.evaluation.stability);
+        let (value_setup, value) = plan.into_parts();
+        setup.extend(value_setup);
+        if pin {
+            self.hoist_tmp_value_statement(setup, prefix, &value)
         } else {
-            self.capture_operand_into(setup, expression)
+            value
         }
     }
+}
+
+fn later_stages(right_hand_side: Option<&ValuePlan>) -> LaterStages {
+    right_hand_side.map_or_else(LaterStages::default, |value| {
+        LaterStages::sequenced(&value.setup, value.evaluation.effect)
+    })
 }
 
 fn assignment_has_setup(right_hand_side: Option<&ValuePlan>) -> bool {

@@ -11,8 +11,9 @@ use crate::abi::layout::SlotOrigin;
 use crate::context::expression::ExpressionContext;
 use crate::go_name;
 use crate::plan::bodies::LoweredStatement;
-use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::values::{EvaluationEffect, GoExpression, Stability, ValuePlan};
 use crate::types::go_type::render_conversion;
+use crate::utils::reads_value_member;
 
 struct NullableFieldAccess<'a> {
     expression_string: &'a str,
@@ -60,6 +61,16 @@ impl Planner<'_> {
             self.plan_coerced_expression(expression, receiver_coercion, ctx)
         };
         let effect = base_plan.evaluation.effect;
+        let stability = if reads_value_member(
+            dot_access_kind,
+            receiver_coercion,
+            expression,
+            &expression_ty,
+        ) {
+            base_plan.evaluation.stability
+        } else {
+            Stability::Observable
+        };
         let base_contains_deferred_evaluation = base_plan.expression.contains_deferred_evaluation();
         let (mut setup, expression_string) = base_plan.into_parts();
 
@@ -80,7 +91,8 @@ impl Planner<'_> {
                     base_contains_deferred_evaluation || is_newtype_conversion,
                 ),
                 effect,
-            );
+            )
+            .with_stability(stability);
         }
 
         let is_exported =
@@ -124,7 +136,7 @@ impl Planner<'_> {
         } else {
             GoExpression::opaque_with_deferred_evaluation(result, base_contains_deferred_evaluation)
         };
-        ValuePlan::computed(setup, expression, effect)
+        ValuePlan::computed(setup, expression, effect).with_stability(stability)
     }
 
     /// Dispatch kinds that can resolve without the receiver emitted first.

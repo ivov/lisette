@@ -27,7 +27,6 @@ func main() {
 	if !ok {
 		return
 	}
-	ref_1 := o.items
-	*ref_1 = append(*o.items, 2)
+	*o.items = append(*o.items, 2)
 	_ = items
 }

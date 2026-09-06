@@ -9,7 +9,6 @@ use crate::plan::calls::plan_variadic_spread;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::statements::assignments::lvalues_match;
 use crate::types::native::NativeGoType;
-use crate::utils::reads_mutable_operand;
 use std::iter;
 use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
 use syntax::program::{CallKind, DotAccessKind, NativeTypeKind};
@@ -260,6 +259,44 @@ pub(crate) fn clip_shared_capacity(receiver: &str) -> String {
 
 fn grows_into_capacity(method: &str, appends_anything: bool) -> bool {
     method == "reserve" || (method == "append" && appends_anything)
+}
+
+/// Natives that write no memory a sibling operand can read and run no caller code.
+pub(super) fn native_method_is_pure(native_type: &NativeGoType, method: &str) -> bool {
+    match native_type {
+        NativeGoType::String => matches!(
+            method,
+            "length"
+                | "is_empty"
+                | "contains"
+                | "split"
+                | "starts_with"
+                | "ends_with"
+                | "byte_at"
+                | "rune_at"
+                | "bytes"
+                | "runes"
+                | "substring"
+        ),
+        NativeGoType::Array => matches!(method, "length" | "get" | "to_slice"),
+        NativeGoType::Slice => matches!(
+            method,
+            "length"
+                | "is_empty"
+                | "capacity"
+                | "get"
+                | "append"
+                | "contains"
+                | "enumerate"
+                | "clone"
+                | "join"
+        ),
+        NativeGoType::Map => matches!(method, "length" | "is_empty" | "get" | "clone"),
+        NativeGoType::Channel | NativeGoType::Sender | NativeGoType::Receiver => {
+            matches!(method, "length" | "is_empty" | "capacity")
+        }
+        NativeGoType::EnumeratedSlice => method == "clone",
+    }
 }
 
 pub(crate) fn is_clip_safe_path(value: &str) -> bool {
@@ -788,25 +825,6 @@ impl Planner<'_> {
         Some(inlined)
     }
 
-    /// Pin the receiver stage to a temp when it reads a mutable operand,
-    /// carries no setup of its own, and a later argument (or the spread)
-    /// contains a call, so the receiver is captured before those args can
-    /// mutate it. A receiver that is itself a call already evaluates eagerly.
-    fn pin_receiver_if_mutated(
-        &mut self,
-        stage: &mut ValuePlan,
-        receiver: &Expression,
-        rest_has_call: bool,
-    ) {
-        if !matches!(receiver.unwrap_parens(), Expression::Call { .. })
-            && reads_mutable_operand(receiver)
-            && stage.setup.is_empty()
-            && rest_has_call
-        {
-            self.pin_staged(stage, "recv");
-        }
-    }
-
     /// Stage `to_slice()` as `arr[:]` when the consumer cannot observe the skipped clone.
     fn try_stage_to_slice_view(
         &mut self,
@@ -817,10 +835,7 @@ impl Planner<'_> {
         if !matches!(ctx.native_type, NativeGoType::Slice) {
             return None;
         }
-        if !matches!(
-            ctx.capture_boundary,
-            CaptureBoundary::SiblingSequence | CaptureBoundary::AssignmentRightHandSide
-        ) {
+        if !matches!(ctx.capture_boundary, CaptureBoundary::SiblingSequence) {
             return None;
         }
         if ctx.spread.is_some()
@@ -901,11 +916,6 @@ impl Planner<'_> {
         let spread_stage = ctx
             .spread
             .map(|spread| self.plan_operand(spread, ExpressionContext::value()));
-        let rest_has_call = stages[1..]
-            .iter()
-            .chain(spread_stage.iter())
-            .any(|stage| stage.evaluation.effect.has_call());
-        self.pin_receiver_if_mutated(&mut stages[0], receiver, rest_has_call);
         if matches!(form, NativeMethodForm::Dot) && receiver.get_type().is_ref() {
             let receiver = stages.remove(0).unary("*");
             stages.insert(0, receiver);

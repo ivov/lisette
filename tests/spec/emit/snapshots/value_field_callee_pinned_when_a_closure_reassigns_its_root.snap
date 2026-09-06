@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Handler { f: fn(int) -> int }
+  
+  fn f0(x: int) -> int { x + 10 }
+  fn f1(x: int) -> int { x + 20 }
+  
+  fn run() -> int {
+    let mut h = Handler { f: f0 }
+    let swap = || -> int { h = Handler { f: f1 }; 7 }
+    h.f(swap())
+  }
+---
+package main
+
+type Handler struct {
+	f func(int) int
+}
+
+func f0(x int) int {
+	return x + 10
+}
+
+func f1(x int) int {
+	return x + 20
+}
+
+func run() int {
+	h := Handler{f: f0}
+	swap := func() int {
+		h = Handler{f: f1}
+		return 7
+	}
+	callee_1 := h.f
+	return callee_1(swap())
+}

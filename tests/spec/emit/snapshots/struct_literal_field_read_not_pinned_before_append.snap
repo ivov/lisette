@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Suite { name: string, cases: Slice<string> }
+  
+  impl Suite {
+    fn with_case(self: Suite, name: string) -> Suite {
+      Suite { name: self.name, cases: self.cases.append(name) }
+    }
+  }
+---
+package main
+
+type Suite struct {
+	name  string
+	cases []string
+}
+
+func (s Suite) withCase(name string) Suite {
+	return Suite{
+		name:  s.name,
+		cases: append(s.cases[:len(s.cases):len(s.cases)], name),
+	}
+}

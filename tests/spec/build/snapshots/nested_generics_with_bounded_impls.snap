@@ -78,8 +78,7 @@ type Tagged[T traits.Showable] struct {
 }
 
 func (t Tagged[T]) Show() string {
-	fmtarg_1 := t.Label
-	return "[" + fmtarg_1 + "] " + t.Value.Show()
+	return "[" + t.Label + "] " + t.Value.Show()
 }
 
 func (t Tagged[T]) Display() string {

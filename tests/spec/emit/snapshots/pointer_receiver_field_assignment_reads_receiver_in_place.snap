@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Clock { now: int, step: int }
+  
+  fn advance(now: int, step: int) -> int { now + step }
+  
+  impl Clock {
+    fn tick(self: mut Ref<Clock>) {
+      self.now = advance(self.now, self.step)
+    }
+  }
+---
+package main
+
+type Clock struct {
+	now  int
+	step int
+}
+
+func advance(now, step int) int {
+	return now + step
+}
+
+func (c *Clock) tick() {
+	c.now = advance(c.now, c.step)
+}
