@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788794840043,
+  "lastUpdate": 1788795546800,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -33961,6 +33961,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "bindgen",
             "value": 9777,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "17812ebff007b49816bc4eea5bf6c16e9305f4d8",
+          "message": "fix: drop `mut` on structs with no writable field in bindgen (#1414)",
+          "timestamp": "2026-09-07T17:38:37+02:00",
+          "tree_id": "1f23b1aa94e81c7eb43436cdfbc58fc14522432c",
+          "url": "https://github.com/ivov/lisette/commit/17812ebff007b49816bc4eea5bf6c16e9305f4d8"
+        },
+        "date": 1788795544179,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 140128,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32536,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28034,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19300,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15235,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13940,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8840,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6285,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1874,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9949,
             "unit": "lines"
           },
           {
