@@ -671,8 +671,12 @@ impl Planner<'_> {
         {
             let (setup, value) = self.lower_propagate(expression, None);
             statements.extend(setup);
+            let ok_ty = self.facts.peel_alias(return_ty).ok_type();
+            let (projection, payload) =
+                transition::lowered_payload_values(self, shape, &ok_ty, &value);
+            statements.extend(projection);
             statements.push(transition::multi_value_return(
-                transition::lowered_ok_values(shape, &value),
+                transition::lowered_ok_values(shape, payload),
             ));
             return statements;
         }
