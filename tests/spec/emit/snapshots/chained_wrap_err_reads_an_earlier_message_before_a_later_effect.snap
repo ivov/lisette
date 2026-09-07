@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn four(initial: string) -> Result<int, error> {
+    let mut text = initial
+    let update = || -> string {
+      text = "changed"
+      "outer"
+    }
+    let n = strconv.Atoi("bad").wrap_err(text).wrap_err(update())?
+    Ok(n)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func four(initial string) (int, error) {
+	text := initial
+	update := func() string {
+		text = "changed"
+		return "outer"
+	}
+	n, err := strconv.Atoi("bad")
+	msg_1 := text
+	msg_2 := update()
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", msg_2, fmt.Errorf("%s: %w", msg_1, err))
+	}
+	return n, nil
+}

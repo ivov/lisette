@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:errors"
+  
+  fn two() -> Result<int, error> {
+    let mut e = errors.New("before")
+    let update = || -> string {
+      e = errors.New("after")
+      "context"
+    }
+    Err(e).wrap_err(update())
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+func two() (int, error) {
+	e := errors.New("before")
+	update := func() string {
+		e = errors.New("after")
+		return "context"
+	}
+	err_2 := e
+	msg_1 := update()
+	return 0, fmt.Errorf("%s: %w", msg_1, err_2)
+}

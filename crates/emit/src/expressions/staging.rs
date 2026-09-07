@@ -78,6 +78,25 @@ impl Planner<'_> {
         staged.replace_with_pinned_name(tmp);
     }
 
+    pub(crate) fn eager_operand(
+        &mut self,
+        source: &Expression,
+        mut value: ValuePlan,
+        prefix: &str,
+    ) -> ValuePlan {
+        if !value.evaluation.stability.is_fixed()
+            && value.expression.constant_kind().is_none()
+            && !self.plan_rests_in_stable_name(&value)
+        {
+            // Keep the source type when Go would default an untyped shift to int.
+            if self.contains_untyped_constant_shift(source) {
+                value = value.conversion(self.use_go_type(&source.get_type()));
+            }
+            self.pin_staged(&mut value, prefix);
+        }
+        value
+    }
+
     pub(crate) fn capture_value_at_boundary(
         &mut self,
         setup: &mut Vec<LoweredStatement>,

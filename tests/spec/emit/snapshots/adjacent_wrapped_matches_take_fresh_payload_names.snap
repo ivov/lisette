@@ -1,0 +1,65 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn message() -> string {
+    fmt.Println("message ran")
+    "ctx"
+  }
+  
+  fn six() -> int {
+    let a = match strconv.Atoi("1").wrap_err(message()) {
+      Ok(n) => n,
+      Err(e) => {
+        fmt.Println(e)
+        0
+      },
+    }
+    let b = match strconv.Atoi("2").wrap_err(message()) {
+      Ok(n) => n,
+      Err(e) => {
+        fmt.Println(e)
+        0
+      },
+    }
+    a + b
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func message() string {
+	fmt.Println("message ran")
+	return "ctx"
+}
+
+func six() int {
+	var a int
+	n, e := strconv.Atoi("1")
+	msg_1 := message()
+	if e == nil {
+		a = n
+	} else {
+		e = fmt.Errorf("%s: %w", msg_1, e)
+		fmt.Println(e)
+		a = 0
+	}
+	var b int
+	n_3, e_4 := strconv.Atoi("2")
+	msg_2 := message()
+	if e_4 == nil {
+		b = n_3
+	} else {
+		e_4 = fmt.Errorf("%s: %w", msg_2, e_4)
+		fmt.Println(e_4)
+		b = 0
+	}
+	return a + b
+}

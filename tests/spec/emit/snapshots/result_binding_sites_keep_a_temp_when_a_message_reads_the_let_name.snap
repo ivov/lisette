@@ -1,0 +1,53 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn n() -> string { "context" }
+  
+  fn let_else() {
+    let Ok(n) = strconv.Atoi("2").wrap_err(n()) else { return }
+    fmt.Println(n)
+  }
+  
+  fn let_match() {
+    let n = match strconv.Atoi("2").wrap_err(n()) {
+      Ok(x) => x,
+      Err(_) => { return },
+    }
+    fmt.Println(n)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func n() string {
+	return "context"
+}
+
+func letElse() {
+	n_1, err := strconv.Atoi("2")
+	_ = n()
+	if err != nil {
+		return
+	}
+	fmt.Println(n_1)
+}
+
+func letMatch() {
+	var n_1 int
+	x, err := strconv.Atoi("2")
+	_ = n()
+	if err == nil {
+		n_1 = x
+	} else {
+		return
+	}
+	fmt.Println(n_1)
+}

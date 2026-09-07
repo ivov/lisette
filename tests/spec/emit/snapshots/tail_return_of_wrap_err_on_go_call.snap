@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn port(raw: string) -> Result<int, error> {
+    strconv.Atoi(raw).wrap_err("read port")
+  }
+  
+  fn main() {
+    fmt.Println(port("8080"))
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func port(raw string) (int, error) {
+	ret_1, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("read port: %w", err)
+	}
+	return ret_1, nil
+}
+
+func main() {
+	ret_1, ret_2 := port("8080")
+	var result_3 lisette.Result[int, error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		result_3 = lisette.MakeResultOk[int, error](ret_1)
+	}
+	fmt.Println(result_3)
+}

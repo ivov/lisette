@@ -293,6 +293,17 @@ impl Planner<'_> {
         }
     }
 
+    pub(crate) fn declared_arm_value_name(&mut self, name: &str) -> String {
+        let candidate = self.arm_value_name(name);
+        let name = if self.is_declared(&candidate) {
+            self.fresh_var(Some(&candidate))
+        } else {
+            candidate
+        };
+        self.declare(&name);
+        name
+    }
+
     /// Fresh within a Go block; nested blocks may shadow outer statuses.
     pub(crate) fn pair_status(
         &mut self,

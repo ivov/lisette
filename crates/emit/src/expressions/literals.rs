@@ -199,32 +199,7 @@ impl Planner<'_> {
             return ValuePlan::computed(setup, concatenation, effect);
         }
 
-        let mut format_string = String::new();
-        let mut args = Vec::with_capacity(values.len());
-
-        for part in parts {
-            match part {
-                FormatStringPart::Text(text) => {
-                    let unescaped = text.replace("{{", "{").replace("}}", "}");
-                    let unescaped = convert_escape_sequences(&unescaped);
-                    if has_interpolation {
-                        format_string.push_str(&unescaped.replace('%', "%%"));
-                    } else {
-                        format_string.push_str(&unescaped);
-                    }
-                }
-                FormatStringPart::Expression(expression) => {
-                    let peeled = self.facts.peel_alias(&expression.get_type());
-                    format_string.push_str(format_verb_for(&peeled));
-                    args.push(
-                        values
-                            .next()
-                            .expect("sequenced count matches expression parts")
-                            .rendered(),
-                    );
-                }
-            }
-        }
+        let (format_string, args) = self.sprintf_pieces(parts, values, has_interpolation);
 
         if args.is_empty() {
             return ValuePlan::evaluated_literal(setup, format!("\"{}\"", format_string), effect);
@@ -253,6 +228,42 @@ impl Planner<'_> {
             GoExpression::call(GoExpression::opaque("fmt.Sprintf".to_string()), arguments),
             effect,
         )
+    }
+
+    /// The `fmt` format text and arguments for the parts, given their lowered values in order.
+    pub(crate) fn sprintf_pieces(
+        &self,
+        parts: &[FormatStringPart],
+        values: impl IntoIterator<Item = GoExpression>,
+        escape_percent: bool,
+    ) -> (String, Vec<String>) {
+        let mut values = values.into_iter();
+        let mut format_string = String::new();
+        let mut args = Vec::new();
+        for part in parts {
+            match part {
+                FormatStringPart::Text(text) => {
+                    let unescaped = text.replace("{{", "{").replace("}}", "}");
+                    let unescaped = convert_escape_sequences(&unescaped);
+                    if escape_percent {
+                        format_string.push_str(&unescaped.replace('%', "%%"));
+                    } else {
+                        format_string.push_str(&unescaped);
+                    }
+                }
+                FormatStringPart::Expression(expression) => {
+                    let peeled = self.facts.peel_alias(&expression.get_type());
+                    format_string.push_str(format_verb_for(&peeled));
+                    args.push(
+                        values
+                            .next()
+                            .expect("sequenced count matches expression parts")
+                            .rendered(),
+                    );
+                }
+            }
+        }
+        (format_string, args)
     }
 
     pub(crate) fn format_string_lowers_to_sprintf(&self, parts: &[FormatStringPart]) -> bool {

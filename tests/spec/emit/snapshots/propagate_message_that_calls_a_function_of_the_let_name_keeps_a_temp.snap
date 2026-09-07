@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn n() -> int { 9 }
+  
+  fn four() -> Result<int, error> {
+    let n = strconv.Atoi("bad").wrap_err(f"{n()}")?
+    Ok(n)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func n() int {
+	return 9
+}
+
+func four() (int, error) {
+	n_1, err := strconv.Atoi("bad")
+	fmtarg_2 := n()
+	if err != nil {
+		return 0, fmt.Errorf("%d: %w", fmtarg_2, err)
+	}
+	return n_1, nil
+}

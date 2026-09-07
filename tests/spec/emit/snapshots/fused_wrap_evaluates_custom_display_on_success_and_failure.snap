@@ -1,0 +1,90 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  #[display]
+  struct Label { describe: fn() -> string }
+  
+  impl Label {
+    fn string(self) -> string {
+      self.describe()
+    }
+  }
+  
+  fn parse(raw: string, label: Label) -> Result<int, error> {
+    let n = strconv.Atoi(raw).wrap_err(f"took {label}")?
+    Ok(n)
+  }
+  
+  fn main() {
+    let mut seen = 0
+    let describe = || -> string {
+      seen = seen + 1
+      "label"
+    }
+    let label = Label { describe }
+    let good = parse("1", label).unwrap_or(0)
+    if good != 1 || seen != 1 { panic("success skipped display") }
+    let bad = parse("bad", label).is_ok()
+    if bad || seen != 2 { panic("failure skipped display") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+type Label struct {
+	describe func() string
+}
+
+func (l Label) GoString() string {
+	return fmt.Sprintf("Label { describe: %p }", l.describe)
+}
+
+func (l Label) toString() string {
+	return l.String()
+}
+
+func (l Label) String() string {
+	return l.describe()
+}
+
+func parse(raw string, label Label) (int, error) {
+	n, err := strconv.Atoi(raw)
+	msg_1 := fmt.Sprintf("took %v", label)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", msg_1, err)
+	}
+	return n, nil
+}
+
+func main() {
+	seen := 0
+	describe := func() string {
+		seen++
+		return "label"
+	}
+	label := Label{describe: describe}
+	ret_1, ret_2 := parse("1", label)
+	var result_3 lisette.Result[int, error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		result_3 = lisette.MakeResultOk[int, error](ret_1)
+	}
+	good := result_3.UnwrapOr(0)
+	if good != 1 || seen != 1 {
+		panic("success skipped display")
+	}
+	_, err := parse("bad", label)
+	bad := err == nil
+	if bad || seen != 2 {
+		panic("failure skipped display")
+	}
+}
