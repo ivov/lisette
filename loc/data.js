@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788808906818,
+  "lastUpdate": 1788809586904,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -34801,6 +34801,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 33580,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28190,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19300,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15235,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13959,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8855,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6285,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c98c4abad42deb5a19bc47210dd0237ce999034a",
+          "message": "feat: idiomatic Go for `Some` and `None` in nullable Go slots (#1424)",
+          "timestamp": "2026-09-07T21:32:43+02:00",
+          "tree_id": "575d87a2a45a53a63e2a7f188e7475738b77479f",
+          "url": "https://github.com/ivov/lisette/commit/c98c4abad42deb5a19bc47210dd0237ce999034a"
+        },
+        "date": 1788809585547,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 141590,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 33699,
             "unit": "lines"
           },
           {
