@@ -9,8 +9,9 @@ use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::emit_lisette_callback_wrapper;
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
-use crate::plan::bodies::{ExpressionStatementForm, LoweredBlock, LoweredStatement};
+use crate::plan::bodies::{LoweredBlock, LoweredStatement, assign, discard, expression_statement};
 use crate::plan::calls::{CallPlan, CallableOrigin};
+use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, OperandForm, ValuePlan,
 };
@@ -64,14 +65,10 @@ impl Planner<'_> {
                 } else {
                     self.emit_go_fn_wrapper(&mut setup, expression, &callee.abi)
                 };
-                return ValuePlan::computed(
-                    setup,
-                    GoExpression::opaque(value),
-                    EvaluationEffect::Pure,
-                )
-                .stable_across_calls_if(
-                    self.identifier_immune_to_calls(expression.unwrap_parens()),
-                );
+                return ValuePlan::computed(setup, value, EvaluationEffect::Pure)
+                    .stable_across_calls_if(
+                        self.identifier_immune_to_calls(expression.unwrap_parens()),
+                    );
             }
         }
 
@@ -93,7 +90,7 @@ impl Planner<'_> {
                 .lower_value(expression, ctx)
                 .map_expression_as_observable_computed(|setup, call| {
                     if !call.is_empty() {
-                        setup.push(LoweredStatement::RawGo(format!("{call}\n")));
+                        setup.push(expression_statement(call));
                     }
                     GoExpression::empty_composite("struct{}".to_string())
                 });
@@ -157,9 +154,9 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
         ty: &Type,
-        raw: String,
+        raw: GoExpression,
         ctx: ExpressionContext<'_>,
-    ) -> String {
+    ) -> GoExpression {
         if ctx.is_callee() || ctx.forces_tagged_go_function() {
             return raw;
         }
@@ -173,7 +170,7 @@ impl Planner<'_> {
         if self.classify_direct_emission(&f.return_type).is_none() {
             return raw;
         }
-        emit_lisette_callback_wrapper(self, setup, &raw, fn_ty)
+        emit_lisette_callback_wrapper(self, setup, raw, fn_ty)
     }
 
     /// Result ABI the slot expects from a Go function value, or `None` when
@@ -242,7 +239,7 @@ impl Planner<'_> {
                     &mut adapter_setup,
                     expression,
                     ty,
-                    plan.rendered(),
+                    plan.expression.clone(),
                     ctx,
                 );
                 if adapter_setup.is_empty() {
@@ -250,15 +247,12 @@ impl Planner<'_> {
                 } else {
                     plan.map_expression_as_computed(|setup, identifier| {
                         setup.extend(adapter_setup);
-                        GoExpression::opaque_with_deferred_evaluation(
-                            value,
-                            identifier.contains_deferred_evaluation(),
-                        )
+                        value.with_deferred_evaluation(identifier.contains_deferred_evaluation())
                     })
                 }
             }
             Expression::Call { ty, .. } => self.lower_call_value(expression, ty, ctx),
-            Expression::RawGo { text } => ValuePlan::opaque(text.clone()),
+            Expression::RawGo { text } => ValuePlan::verbatim(text.clone()),
             Expression::Unit { .. } => ValuePlan::computed(
                 Vec::new(),
                 GoExpression::empty_composite("struct{}".to_string()),
@@ -266,12 +260,22 @@ impl Planner<'_> {
             ),
             Expression::Lambda {
                 params, body, ty, ..
-            } => ValuePlan::opaque(self.emit_lambda(params, body, ty, ctx)),
+            } => ValuePlan::computed(
+                Vec::new(),
+                self.emit_lambda(params, body, ty, ctx),
+                EvaluationEffect::Pure,
+            ),
             Expression::Function {
                 params, body, ty, ..
             } => match body.definition() {
-                Some(body) => ValuePlan::opaque(self.emit_lambda(params, body, ty, ctx)),
-                None => ValuePlan::opaque(String::new()),
+                Some(body) => ValuePlan::computed(
+                    Vec::new(),
+                    self.emit_lambda(params, body, ty, ctx),
+                    EvaluationEffect::Pure,
+                ),
+                None => {
+                    ValuePlan::computed(Vec::new(), GoExpression::empty(), EvaluationEffect::Pure)
+                }
             },
             Expression::IfLet { ty, .. }
             | Expression::Match { ty, .. }
@@ -462,13 +466,13 @@ impl Planner<'_> {
             let staged = self.plan_operand(inner.unwrap_parens(), ExpressionContext::value());
             return staged.map_expression_as_observable_computed(|setup, staged_value| {
                 if !staged_value.is_empty() {
-                    setup.push(LoweredStatement::Expression(
-                        ExpressionStatementForm::Async {
-                            value: ValuePlan::opaque(staged_value.rendered()),
-                        },
-                    ));
+                    setup.push(expression_statement(staged_value));
                 }
-                let tmp = self.hoist_tmp_value_statement(setup, "ref", "struct{}{}");
+                let tmp = self.hoist_tmp_value_statement(
+                    setup,
+                    "ref",
+                    GoExpression::empty_composite("struct{}".to_string()),
+                );
                 GoExpression::address_of(GoExpression::name(tmp))
             });
         }
@@ -480,7 +484,7 @@ impl Planner<'_> {
             } else if self.is_go_unaddressable(inner)
                 || matches!(inner.get_type(), Type::Function(_))
             {
-                let tmp = self.hoist_tmp_value_statement(setup, "ref", emitted.as_str());
+                let tmp = self.hoist_tmp_value_statement(setup, "ref", emitted);
                 GoExpression::address_of(GoExpression::name(tmp))
             } else {
                 GoExpression::address_of(emitted)
@@ -533,7 +537,7 @@ impl Planner<'_> {
         let right_hand_side = literal_slot
             .unwrap_or_else(|| self.lower_composite_value(value, ExpressionContext::value()));
         let mut setup: Vec<LoweredStatement> = Vec::new();
-        let target_str = if is_order_sensitive(target) {
+        let target_place = if is_order_sensitive(target) {
             self.emit_left_value_capturing(&mut setup, target, Some(&right_hand_side))
         } else {
             self.emit_left_value(&mut setup, target)
@@ -553,17 +557,11 @@ impl Planner<'_> {
             if !coercion.is_identity() {
                 let (coercion_setup, unwrapped) = coercion.lower(self, rhs_value);
                 setup.extend(coercion_setup);
-                setup.push(LoweredStatement::RawGo(format!(
-                    "{} = {}\n",
-                    target_str, unwrapped
-                )));
+                setup.push(assign(target_place, unwrapped));
                 return setup;
             }
         }
-        setup.push(LoweredStatement::RawGo(format!(
-            "{} = {}\n",
-            target_str, rhs_value
-        )));
+        setup.push(assign(target_place, rhs_value));
         setup
     }
 
@@ -625,25 +623,27 @@ impl Planner<'_> {
         keyword: &str,
         expression: &Expression,
     ) -> ValuePlan {
+        let async_statement = |call: GoExpression| LoweredStatement::Async {
+            keyword: keyword.to_string(),
+            call,
+        };
+        let statement_plan = |setup: Vec<LoweredStatement>| {
+            ValuePlan::computed(setup, GoExpression::empty(), EvaluationEffect::Pure)
+        };
+        let immediate_call = |body: LoweredBlock| {
+            GoExpression::immediate_call(String::new(), body, FunctionLiteralLayout::MultiLine)
+        };
+
         if let Expression::Block { .. } = expression {
             let body =
                 self.with_isolated_function(|planner| planner.lower_block_as_body(expression));
-            let setup = vec![LoweredStatement::Expression(
-                ExpressionStatementForm::AsyncBlock {
-                    keyword: keyword.to_string(),
-                    body,
-                },
-            )];
-            return ValuePlan::computed(setup, GoExpression::empty(), EvaluationEffect::Pure);
+            return statement_plan(vec![async_statement(immediate_call(body))]);
         }
 
         let mut setup: Vec<LoweredStatement> = Vec::new();
-        if let Some(call_str) = self.emit_go_call_discarded(&mut setup, expression) {
-            return ValuePlan::computed(
-                setup,
-                GoExpression::opaque(format!("{} {}", keyword, call_str)),
-                EvaluationEffect::Pure,
-            );
+        if let Some(call) = self.emit_go_call_discarded(&mut setup, expression) {
+            setup.push(async_statement(call));
+            return statement_plan(setup);
         }
 
         let plan = self.lower_value(
@@ -664,30 +664,21 @@ impl Planner<'_> {
                 .into_parts();
             let mut body_statements = Vec::new();
             if !inner.is_empty() {
-                let line = if expression.get_type().is_unit() {
-                    format!("{}\n", inner)
+                body_statements.push(if expression.get_type().is_unit() {
+                    expression_statement(inner)
                 } else {
-                    format!("_ = {}\n", inner)
-                };
-                body_statements.push(LoweredStatement::RawGo(line));
+                    discard(inner)
+                });
             }
             let body = LoweredBlock {
                 statements: body_statements,
             };
-            setup.push(LoweredStatement::Expression(
-                ExpressionStatementForm::AsyncBlock {
-                    keyword: keyword.to_string(),
-                    body,
-                },
-            ));
-            return ValuePlan::computed(setup, GoExpression::empty(), EvaluationEffect::Pure);
+            setup.push(async_statement(immediate_call(body)));
+            return statement_plan(setup);
         }
-        let (setup, inner) = plan.into_parts();
-        ValuePlan::computed(
-            setup,
-            GoExpression::opaque(format!("{} {}", keyword, inner)),
-            EvaluationEffect::Pure,
-        )
+        let (mut setup, inner) = plan.into_parts();
+        setup.push(async_statement(inner));
+        statement_plan(setup)
     }
 }
 

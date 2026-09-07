@@ -42,7 +42,8 @@ use diagnostics::LisetteDiagnostic;
 use names::go_name::GeneratedPackage;
 use names::packages::{PackageRequirements, PackageUse};
 use plan::PackagePlan;
-use plan::bodies::{LoopId, LoweredBlock, LoweredStatement};
+use plan::bodies::{LoopId, LoweredBlock, LoweredStatement, define};
+use plan::values::GoExpression;
 use state::adapter_registry::AdapterRegistry;
 use state::file_namespace::FileNamespace;
 use state::package_state::{FunctionEmissionContext, PackageState};
@@ -478,41 +479,29 @@ impl<'a> Planner<'a> {
         self.scope.declare_go_name(go_name);
     }
 
-    /// Allocate a fresh Go temp, register it as declared, and emit
-    /// `tmp := value` into `output`.
-    fn hoist_tmp_value(&mut self, output: &mut String, hint: &str, value: &str) -> String {
-        let tmp = self.fresh_var(Some(hint));
-        self.declare(&tmp);
-        write_line!(output, "{} := {}", tmp, value);
-        tmp
-    }
-
     /// Bind `value` to a name that can be read more than once.
     fn stable_source(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         hint: &str,
-        value: &str,
-    ) -> String {
-        if go_name::is_plain_identifier(value) {
-            return value.to_string();
+        value: GoExpression,
+    ) -> GoExpression {
+        if go_name::is_plain_identifier(value.as_str()) {
+            return value;
         }
-        self.hoist_tmp_value_statement(statements, hint, value)
+        GoExpression::name(self.hoist_tmp_value_statement(statements, hint, value))
     }
 
-    /// Structured counterpart of `hoist_tmp_value`: push a `TempBind` leaf.
+    /// Allocate a fresh Go temp, register it as declared, and push `tmp := value`.
     fn hoist_tmp_value_statement(
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         hint: &str,
-        value: &str,
+        value: GoExpression,
     ) -> String {
         let tmp = self.fresh_var(Some(hint));
         self.declare(&tmp);
-        setup.push(LoweredStatement::TempBind {
-            name: tmp.clone(),
-            value: value.to_string(),
-        });
+        setup.push(define(tmp.clone(), value));
         tmp
     }
 

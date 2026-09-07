@@ -235,7 +235,7 @@ impl Planner<'_> {
             return None;
         }
         let raw_access = GoExpression::selector(base.clone(), field.to_string());
-        let raw_var = self.hoist_tmp_value_statement(setup, "raw", raw_access.as_str());
+        let raw_var = self.hoist_tmp_value_statement(setup, "raw", raw_access);
         let (coercion_setup, coerced) = coercion.lower(self, GoExpression::name(raw_var));
         setup.extend(coercion_setup);
         Some(coerced)
@@ -318,7 +318,7 @@ impl Planner<'_> {
             }
             match expression.unwrap_parens() {
                 Expression::Call { .. } => {
-                    GoExpression::name(self.hoist_tmp_value_statement(setup, "ref", base.as_str()))
+                    GoExpression::name(self.hoist_tmp_value_statement(setup, "ref", base))
                 }
                 Expression::StructCall { .. } => {
                     GoExpression::parenthesized(GoExpression::address_of(base))
@@ -340,10 +340,10 @@ impl Planner<'_> {
 
     pub(crate) fn try_emit_tuple_struct_field_access(
         &self,
-        expression_string: &str,
+        base: GoExpression,
         expression_ty: &Type,
         index: usize,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         let deref_ty = expression_ty.strip_refs();
         let Type::Nominal { ref id, .. } = deref_ty else {
             return None;
@@ -361,7 +361,7 @@ impl Planner<'_> {
             return None;
         };
 
-        Some(format!("{}.F{}", expression_string, index))
+        Some(GoExpression::selector(base, format!("F{index}")))
     }
 
     fn try_resolve_cross_package_const(

@@ -2,12 +2,14 @@ use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::transition;
 use crate::calls::comma_ok::CommaOkValueSlot;
-use crate::calls::go_interop::NilGuard;
+use crate::calls::go_interop::{NilGuard, non_nil, unexpected_nil_error};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::is_go_never;
-use crate::plan::bodies::{AssignForm, LoweredBlock, LoweredStatement, PlacePlan, ReturnForm};
-use crate::plan::values::{GoExpression, ValuePlan};
+use crate::plan::bodies::{
+    Definition, LoweredBlock, LoweredStatement, PlacePlan, ReturnForm, assign, define,
+};
+use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
 use crate::state::scope::PairStatusKind;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -19,17 +21,9 @@ struct WrappedReturnInfo<'a> {
     lowered: Option<&'a CallableReturnAbi>,
 }
 
-pub(crate) fn plain_return(value: String) -> LoweredStatement {
+pub(crate) fn plain_return(value: GoExpression) -> LoweredStatement {
     LoweredStatement::Return(ReturnForm::Plain {
-        value: ValuePlan::opaque(value),
-    })
-}
-
-fn simple_assign(target: String, value: String) -> LoweredStatement {
-    LoweredStatement::Assign(AssignForm::Simple {
-        target_capture: Vec::new(),
-        target_str: target,
-        value: ValuePlan::opaque(value),
+        value: ValuePlan::computed(Vec::new(), value, EvaluationEffect::Pure),
     })
 }
 
@@ -57,31 +51,22 @@ impl Planner<'_> {
             return (statements, GoExpression::empty());
         }
 
-        if let Some((statements, value)) =
-            self.try_lower_fused_propagate(expression, &fallible, result_var_name)
+        if let Some(fused) = self.try_lower_fused_propagate(expression, &fallible, result_var_name)
         {
-            let value = if value.is_empty() {
-                GoExpression::empty()
-            } else {
-                GoExpression::name(value)
-            };
-            return (statements, value);
+            return fused;
         }
 
         self.require_stdlib();
-        let (check_setup, check_var) = self.hoist_propagate_check_var(expression);
+        let (check_setup, check) = self.hoist_propagate_check_var(expression);
         statements.extend(check_setup);
-        statements.push(self.build_propagate_failure_check(&check_var, &fallible));
+        statements.push(self.build_propagate_failure_check(&check, &fallible));
 
-        let ok_access = GoExpression::selector(
-            GoExpression::name(check_var),
-            fallible.ok_field().to_string(),
-        );
+        let ok_access = GoExpression::selector(check, fallible.ok_field().to_string());
         let value = match result_var_name {
             None => ok_access,
             Some("_") => GoExpression::name("_".to_string()),
             Some(name) => {
-                statements.push(self.bind_propagate_ok(name, ok_access.as_str()));
+                statements.push(self.bind_propagate_ok(name, ok_access));
                 GoExpression::name(name.to_string())
             }
         };
@@ -101,10 +86,9 @@ impl Planner<'_> {
             return;
         }
         let inner_ty = fallible.ok_ty();
-        let (zero, packages) = self.zero_value(inner_ty);
-        self.require_packages(&packages);
+        let zero = self.zero_value_expression(inner_ty);
         if self.is_declared(var_name) {
-            statements.push(simple_assign(var_name.to_string(), zero));
+            statements.push(assign(GoExpression::name(var_name.to_string()), zero));
         } else {
             // Declared so the dead-path binding stays in scope for later references.
             let go_ty = self.use_go_type(inner_ty);
@@ -120,14 +104,14 @@ impl Planner<'_> {
     fn hoist_propagate_check_var(
         &mut self,
         expression: &Expression,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> (Vec<LoweredStatement>, GoExpression) {
         let plan = self.plan_operand(expression, ExpressionContext::value());
         let requires_capture = !matches!(expression, Expression::Identifier { .. })
             || plan.expression.contains_deferred_evaluation();
         let (mut setup, value) = plan.into_parts();
         if requires_capture {
-            let check = self.hoist_tmp_value_statement(&mut setup, "check", &value);
-            (setup, check)
+            let check = self.hoist_tmp_value_statement(&mut setup, "check", value);
+            (setup, GoExpression::name(check))
         } else {
             (setup, value)
         }
@@ -136,15 +120,21 @@ impl Planner<'_> {
     /// The `if check.Tag != <success> { return <failure> }` failure guard.
     fn build_propagate_failure_check(
         &mut self,
-        check_var: &str,
+        check: &GoExpression,
         fallible: &Fallible,
     ) -> LoweredStatement {
-        let err_field = if fallible.is_result() { ".ErrVal" } else { "" };
-        let success_tag = fallible.success_tag();
-        let err_expr = format!("{}{}", check_var, err_field);
-        let (setup, values) = self.propagate_failure_values(fallible, &err_expr);
+        let err_expr = if fallible.is_result() {
+            GoExpression::selector(check.clone(), "ErrVal".to_string())
+        } else {
+            check.clone()
+        };
+        let (setup, values) = self.propagate_failure_values(fallible, err_expr);
         transition::tag_check(
-            format!("{}.Tag != {}", check_var, success_tag),
+            GoExpression::binary(
+                GoExpression::selector(check.clone(), "Tag".to_string()),
+                "!=",
+                GoExpression::name(fallible.success_tag().to_string()),
+            ),
             setup,
             values,
         )
@@ -153,8 +143,8 @@ impl Planner<'_> {
     fn propagate_failure_values(
         &mut self,
         fallible: &Fallible,
-        err_expr: &str,
-    ) -> (Vec<LoweredStatement>, Vec<String>) {
+        err_expr: GoExpression,
+    ) -> (Vec<LoweredStatement>, Vec<GoExpression>) {
         let mut setup = Vec::new();
         let return_ctx = self.return_ctx();
         let values = if let Some(shape) = return_ctx.lowered_shape() {
@@ -162,20 +152,15 @@ impl Planner<'_> {
             // Option propagation: failure carries no payload, so return a
             // shape-specific `None` rather than an err-return.
             if fallible.is_result() {
-                let err_expr = self.convert_error_to_return_context(
-                    &mut setup,
-                    err_expr.to_string(),
-                    fallible,
-                );
-                transition::lowered_err_values(self, &shape, &return_ty, &err_expr)
+                let err_expr = self.convert_error_to_return_context(&mut setup, err_expr, fallible);
+                transition::lowered_err_values(self, &shape, &return_ty, err_expr)
             } else {
                 transition::lowered_none_values(self, &shape, &return_ty)
             }
         } else {
-            let err_expr =
-                self.convert_error_to_return_context(&mut setup, err_expr.to_string(), fallible);
+            let err_expr = self.convert_error_to_return_context(&mut setup, err_expr, fallible);
             let mut fe = FalliblePlanner::new(self, fallible);
-            vec![fe.emit_contextual_failure(Some(&err_expr))]
+            vec![fe.emit_contextual_failure(Some(err_expr))]
         };
         (setup, values)
     }
@@ -187,7 +172,7 @@ impl Planner<'_> {
         expression: &Expression,
         fallible: &Fallible,
         result_var_name: Option<&str>,
-    ) -> Option<(Vec<LoweredStatement>, String)> {
+    ) -> Option<(Vec<LoweredStatement>, GoExpression)> {
         let (call, wraps) = self.peel_wrap_err(expression);
         let plan = self.plan_call(call)?;
         let expression_ty = call.get_type();
@@ -234,7 +219,7 @@ impl Planner<'_> {
             return None;
         }
 
-        let (mut statements, call_str) = self
+        let (mut statements, call) = self
             .lower_call(call, None, ExpressionContext::value())
             .into_parts();
         let want_value = !matches!(result_var_name, Some("_"));
@@ -257,22 +242,24 @@ impl Planner<'_> {
         let (message_setup, wraps) = self.prepare_wrap_messages(&wraps, true);
         let opens_if = value_var.is_none() && message_setup.is_empty();
         let outcome_var = self.pair_status(None, status_kind, opens_if);
-        let bind_line = match &value_var {
-            Some(value) => format!("{value}, {outcome_var} := {call_str}"),
-            None if has_value_slot => format!("_, {outcome_var} := {call_str}"),
-            None => format!("{outcome_var} := {call_str}"),
+        let outcome = || GoExpression::name(outcome_var.clone());
+        let binding = Definition {
+            names: match &value_var {
+                Some(value) => vec![value.clone(), outcome_var.clone()],
+                None if has_value_slot => vec!["_".to_string(), outcome_var.clone()],
+                None => vec![outcome_var.clone()],
+            },
+            value: call,
         };
         let initializer = if opens_if {
-            Some(bind_line)
+            Some(binding)
         } else {
-            statements.push(LoweredStatement::RawGo(format!("{bind_line}\n")));
+            statements.push(LoweredStatement::Define(binding));
             None
         };
         statements.extend(message_setup);
-        let open_if = |condition: String| match &initializer {
-            Some(initializer) => format!("{initializer}; {condition}"),
-            None => condition,
-        };
+        let guarded_value =
+            || GoExpression::name(value_var.clone().expect("nil guard requires the value var"));
 
         if comma_ok {
             let failure_condition = match nil_guard {
@@ -280,59 +267,63 @@ impl Planner<'_> {
                     if guard.is_interface() {
                         self.require_stdlib();
                     }
-                    let val = value_var
-                        .as_deref()
-                        .expect("nil guard requires the value var");
-                    format!("!{} || {}", outcome_var, guard.is_nil(val))
+                    GoExpression::binary(
+                        GoExpression::unary("!", outcome()),
+                        "||",
+                        guard.is_nil(guarded_value()),
+                    )
                 }
-                None => format!("!{}", outcome_var),
+                None => GoExpression::unary("!", outcome()),
             };
             let (failure_setup, failure_values) =
-                self.propagate_failure_values(fallible, &outcome_var);
-            statements.push(transition::tag_check(
-                open_if(failure_condition),
+                self.propagate_failure_values(fallible, outcome());
+            statements.push(transition::tag_check_with_initializer(
+                initializer,
+                failure_condition,
                 failure_setup,
                 failure_values,
             ));
         } else {
-            let error = self.wrap_error(&wraps, outcome_var.clone());
-            let (failure_setup, failure_values) = self.propagate_failure_values(fallible, &error);
-            statements.push(transition::tag_check(
-                open_if(format!("{} != nil", outcome_var)),
+            let error = self.wrap_error(&wraps, outcome());
+            let (failure_setup, failure_values) = self.propagate_failure_values(fallible, error);
+            statements.push(transition::tag_check_with_initializer(
+                initializer,
+                non_nil(outcome()),
                 failure_setup,
                 failure_values,
             ));
             if let Some(guard) = nil_guard {
-                let val = value_var
-                    .as_deref()
-                    .expect("nil guard requires the value var");
                 if guard.is_interface() {
                     self.require_stdlib();
                 }
                 self.require_errors();
-                let error = self.wrap_error(&wraps, "errors.New(\"unexpected nil\")".to_string());
-                let (nil_setup, nil_failure) = self.propagate_failure_values(fallible, &error);
+                let error = self.wrap_error(&wraps, unexpected_nil_error());
+                let (nil_setup, nil_failure) = self.propagate_failure_values(fallible, error);
                 statements.push(transition::tag_check(
-                    guard.is_nil(val),
+                    guard.is_nil(guarded_value()),
                     nil_setup,
                     nil_failure,
                 ));
             }
         }
 
-        let ok_value = value_var.map(|val| match &payload_bridge {
-            Some(bridge) if want_value => self.plan_layout_bridge(&mut statements, &val, bridge),
-            _ => val,
+        let ok_value = value_var.map(|val| {
+            let val = GoExpression::name(val);
+            match &payload_bridge {
+                Some(bridge) if want_value => self.plan_layout_bridge(&mut statements, val, bridge),
+                _ => val,
+            }
         });
+        let unit = || GoExpression::empty_composite("struct{}".to_string());
 
         let value = match result_var_name {
-            None => ok_value.unwrap_or_else(|| "struct{}{}".to_string()),
-            Some("_") => "_".to_string(),
-            Some(name) if let_slot.is_some() => name.to_string(),
+            None => ok_value.unwrap_or_else(unit),
+            Some("_") => GoExpression::name("_".to_string()),
+            Some(name) if let_slot.is_some() => GoExpression::name(name.to_string()),
             Some(name) => {
-                let v = ok_value.unwrap_or_else(|| "struct{}{}".to_string());
-                statements.push(self.bind_propagate_ok(name, &v));
-                name.to_string()
+                let v = ok_value.unwrap_or_else(unit);
+                statements.push(self.bind_propagate_ok(name, v));
+                GoExpression::name(name.to_string())
             }
         };
         Some((statements, value))
@@ -346,15 +337,12 @@ impl Planner<'_> {
         self.lower_propagate(inner, Some("_")).0
     }
 
-    fn bind_propagate_ok(&mut self, name: &str, ok_access: &str) -> LoweredStatement {
+    fn bind_propagate_ok(&mut self, name: &str, ok_access: GoExpression) -> LoweredStatement {
         if self.is_declared(name) {
-            simple_assign(name.to_string(), ok_access.to_string())
+            assign(GoExpression::name(name.to_string()), ok_access)
         } else {
             self.declare(name);
-            LoweredStatement::TempBind {
-                name: name.to_string(),
-                value: ok_access.to_string(),
-            }
+            define(name.to_string(), ok_access)
         }
     }
 
@@ -397,16 +385,8 @@ impl Planner<'_> {
         ReturnForm::Plain {
             value: plan.map_expression_as_computed(|setup, raw_value| {
                 let contains_deferred_evaluation = raw_value.contains_deferred_evaluation();
-                let mut coercion_buffer = String::new();
-                let final_value = self.apply_type_coercion(
-                    &mut coercion_buffer,
-                    return_ctx.ty(),
-                    expression,
-                    raw_value,
-                );
-                if !coercion_buffer.is_empty() {
-                    setup.push(LoweredStatement::RawGo(coercion_buffer));
-                }
+                let final_value =
+                    self.apply_type_coercion(setup, return_ctx.ty(), expression, raw_value);
                 final_value.with_deferred_evaluation(contains_deferred_evaluation)
             }),
         }
@@ -436,14 +416,14 @@ impl Planner<'_> {
         let mut statements = Vec::new();
 
         if is_go_never(expression) {
-            let (setup, call_str) = self
+            let (setup, call) = self
                 .lower_call(expression, None, ExpressionContext::value())
                 .into_parts();
             statements.extend(setup);
-            // Kept as `RawGo`: this is a Go-never call (`panic(...)`) whose
-            // `ends_with_diverge` must stay true; `ExpressionStatementForm::Async`
-            // reports false.
-            statements.push(LoweredStatement::RawGo(format!("{}\n", call_str)));
+            statements.push(LoweredStatement::ExpressionStatement {
+                expression: call,
+                diverges: true,
+            });
             return Some(statements);
         }
 
@@ -490,11 +470,7 @@ impl Planner<'_> {
         {
             let (setup, value) = self.lower_propagate(inner, None);
             statements.extend(setup);
-            statements.extend(self.wrapped_value_return(
-                value.rendered(),
-                &return_ty,
-                lowered.as_ref(),
-            ));
+            statements.extend(self.wrapped_value_return(value, &return_ty, lowered.as_ref()));
             return Some(statements);
         }
 
@@ -508,7 +484,7 @@ impl Planner<'_> {
 
     fn wrapped_value_return(
         &mut self,
-        value: String,
+        value: GoExpression,
         return_ty: &Type,
         lowered: Option<&CallableReturnAbi>,
     ) -> Vec<LoweredStatement> {
@@ -518,7 +494,7 @@ impl Planner<'_> {
         // The destructure references the value multiple times (`.Tag`,
         // `.OkVal`, `.ErrVal` etc.); hoist to avoid re-evaluating.
         let mut statements = Vec::new();
-        let temp = self.hoist_tmp_value_statement(&mut statements, "v", &value);
+        let temp = GoExpression::name(self.hoist_tmp_value_statement(&mut statements, "v", value));
         statements.extend(transition::emit_lowered_result_return(
             self, &temp, return_ty, shape,
         ));
@@ -587,7 +563,7 @@ impl Planner<'_> {
                 }
                 Vec::new()
             } else if args.is_empty() {
-                vec!["struct{}{}".to_string()]
+                vec![GoExpression::empty_composite("struct{}".to_string())]
             } else if shape.has_flattened_payload()
                 && let Expression::Tuple { elements, .. } = args[0].unwrap_parens()
             {
@@ -601,7 +577,7 @@ impl Planner<'_> {
                     .into_parts();
                 statements.extend(setup);
                 let (projection, parts) =
-                    transition::lowered_payload_values(self, shape, fallible.ok_ty(), &value);
+                    transition::lowered_payload_values(self, shape, fallible.ok_ty(), value);
                 statements.extend(projection);
                 parts
             };
@@ -614,7 +590,7 @@ impl Planner<'_> {
                 .into_parts();
             let success = {
                 let mut fe = FalliblePlanner::new(self, fallible);
-                fe.emit_success(&arg)
+                fe.emit_success(arg)
             };
             statements.extend(setup);
             statements.push(plain_return(success));
@@ -650,13 +626,13 @@ impl Planner<'_> {
         });
         let returned = if let Some(shape) = lowered {
             let values = match error {
-                Some(error) => transition::lowered_err_values(self, shape, return_ty, &error),
+                Some(error) => transition::lowered_err_values(self, shape, return_ty, error),
                 None => transition::lowered_none_values(self, shape, return_ty),
             };
             transition::multi_value_return(values)
         } else {
             let mut fe = FalliblePlanner::new(self, fallible);
-            plain_return(fe.emit_failure(error.as_deref()))
+            plain_return(fe.emit_failure(error))
         };
         statements.push(returned);
         statements
@@ -682,7 +658,7 @@ impl Planner<'_> {
             statements.extend(setup);
             let ok_ty = self.facts.peel_alias(return_ty).ok_type();
             let (projection, payload) =
-                transition::lowered_payload_values(self, shape, &ok_ty, value.as_str());
+                transition::lowered_payload_values(self, shape, &ok_ty, value);
             statements.extend(projection);
             statements.push(transition::multi_value_return(
                 transition::lowered_ok_values(shape, payload),
@@ -706,8 +682,9 @@ impl Planner<'_> {
             && !source.has_nil_guard()
         {
             let pair = self.bind_comma_ok_pair(expression, source, CommaOkValueSlot::Temp);
-            let ok = pair.status().to_string();
-            let value = pair.value.expect("Temp slot always captures the value");
+            let ok = GoExpression::name(pair.status().to_string());
+            let value =
+                GoExpression::name(pair.value.expect("Temp slot always captures the value"));
             let mut statements = pair.statements;
             statements.push(transition::multi_value_return(vec![value, ok]));
             return statements;
@@ -732,12 +709,12 @@ impl Planner<'_> {
                     && self.go_result_layout_bridge(&abi, return_ty).is_none()
                     && self.go_return_payload_bridge(&abi, return_ty).is_none();
                 if unbridged {
-                    let (setup, call_str) = self
+                    let (setup, call) = self
                         .lower_call(expression, None, ExpressionContext::value())
                         .into_parts();
                     statements.extend(setup);
                     statements.extend(self.lower_abi_to_tagged_return(
-                        &call_str,
+                        call,
                         &abi.result,
                         return_ty,
                     ));
@@ -756,7 +733,8 @@ impl Planner<'_> {
                 .lower_value(expression, ExpressionContext::value())
                 .into_parts();
             statements.extend(setup);
-            let temp = self.hoist_tmp_value_statement(&mut statements, "v", &value);
+            let temp =
+                GoExpression::name(self.hoist_tmp_value_statement(&mut statements, "v", value));
             statements.extend(transition::emit_lowered_result_return(
                 self, &temp, return_ty, shape,
             ));

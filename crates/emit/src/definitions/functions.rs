@@ -7,7 +7,9 @@ use crate::abi::callable::CallableReturnAbi;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::sites::PatternSubject;
-use crate::plan::bodies::LoweredBlock;
+use crate::plan::bodies::{LoweredBlock, LoweredStatement};
+use crate::plan::go_expression::FunctionLiteralLayout;
+use crate::plan::values::GoExpression;
 use crate::state::package_state::FunctionEmissionContext;
 use crate::types::native::NativeGoType;
 use crate::utils::{group_params, receiver_name};
@@ -76,7 +78,7 @@ impl Planner<'_> {
         body: &Expression,
         ty: &Type,
         ctx: ExpressionContext<'_>,
-    ) -> String {
+    ) -> GoExpression {
         self.with_isolated_function(|this| {
             let (mut param_pairs, destructure_bindings) = this.build_lambda_param_pairs(params);
 
@@ -97,17 +99,26 @@ impl Planner<'_> {
             let recover = handle.as_ref().map(|name| {
                 this.require_testkit();
                 let span = body.get_span();
-                format!(
-                    "defer {name}.Recover({}, {}, {})\n",
-                    span.file_id,
-                    span.byte_offset,
-                    span.byte_offset + span.byte_length,
-                )
+                let literal = |value: u32| GoExpression::literal(value.to_string());
+                LoweredStatement::Async {
+                    keyword: "defer".to_string(),
+                    call: GoExpression::call(
+                        GoExpression::selector(
+                            GoExpression::name(name.clone()),
+                            "Recover".to_string(),
+                        ),
+                        vec![
+                            literal(span.file_id),
+                            literal(span.byte_offset),
+                            literal(span.byte_offset + span.byte_length),
+                        ],
+                    ),
+                }
             });
 
             let return_info = this.lambda_return_info(ty, ctx);
-            let mut body_string = this.with_test_handle(handle, |this| {
-                this.emit_lambda_body_with_deferred(
+            let mut statements = this.with_test_handle(handle, |this| {
+                this.lower_lambda_body_with_deferred(
                     body,
                     &destructure_bindings,
                     &return_info.ctx,
@@ -115,14 +126,14 @@ impl Planner<'_> {
                 )
             });
             if let Some(recover) = recover {
-                body_string.insert_str(0, &recover);
+                statements.insert(0, recover);
             }
 
-            format!(
-                "func({}){} {{\n{}}}",
+            GoExpression::function_literal(
                 group_params(&param_pairs),
-                return_info.signature(),
-                body_string
+                return_info.signature().trim_start().to_string(),
+                LoweredBlock { statements },
+                FunctionLiteralLayout::MultiLine,
             )
         })
     }
@@ -200,24 +211,26 @@ impl Planner<'_> {
         }
     }
 
-    fn emit_lambda_body_with_deferred(
+    fn lower_lambda_body_with_deferred(
         &mut self,
         body: &Expression,
         destructure_bindings: &[LambdaParamDestructure<'_>],
         return_ctx: &ReturnContext,
         should_return: bool,
-    ) -> String {
-        let mut body_string = String::new();
+    ) -> Vec<LoweredStatement> {
+        let mut statements = Vec::new();
         for (temp_name, pattern, param_ty) in destructure_bindings {
-            let statements = self.lower_irrefutable_pattern_site(
+            statements.extend(self.lower_irrefutable_pattern_site(
                 PatternSubject::for_value(temp_name.clone()),
                 pattern,
                 param_ty,
-            );
-            Renderer.render_lowered_block(&mut body_string, &LoweredBlock { statements });
+            ));
         }
-        self.emit_function_body(&mut body_string, body, should_return, return_ctx);
-        body_string
+        let body = self.with_return_context(return_ctx.clone(), |this| {
+            this.lower_function_body(body, should_return)
+        });
+        statements.extend(body.statements);
+        statements
     }
 
     fn declare_type_param_go_names(

@@ -3,6 +3,7 @@ use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_MET
 use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
 use crate::expressions::top_items::emit_doc;
 use crate::names::go_name::{self, prelude_qualifier};
+use crate::plan::values::GoExpression;
 use crate::types::go_type::render_conversion;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use rustc_hash::FxHashSet;
@@ -473,9 +474,11 @@ impl Planner<'_> {
             .iter()
             .map(|f| {
                 let go_field = struct_field_go_name(f, attributes);
-                let lhs = format!("{receiver}.{go_field}");
-                let rhs = format!("{other}.{go_field}");
-                self.render_equality(&lhs, &rhs, &f.ty, generics)
+                let field = |base: &str| {
+                    GoExpression::selector(GoExpression::name(base.to_string()), go_field.clone())
+                };
+                self.equality_expression(field(&receiver), field(&other), &f.ty, generics)
+                    .rendered()
             })
             .collect();
         let body = if comparisons.is_empty() {

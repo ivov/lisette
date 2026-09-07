@@ -1,3 +1,4 @@
+use crate::plan::values::GoExpression;
 use syntax::ast::{Expression, Literal};
 use syntax::program::{DotAccessKind, ReceiverCoercion};
 use syntax::types::Type;
@@ -9,9 +10,9 @@ macro_rules! write_line {
 }
 pub(crate) use write_line;
 
-pub(crate) fn wrap_if_struct_literal(condition: String) -> String {
-    if condition.contains('{') {
-        format!("({})", condition)
+pub(crate) fn wrap_if_struct_literal(condition: GoExpression) -> GoExpression {
+    if condition.as_str().contains('{') {
+        GoExpression::parenthesized(condition)
     } else {
         condition
     }

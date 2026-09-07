@@ -5,15 +5,15 @@ use crate::abi::transition;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
-use crate::plan::bodies::{LoweredBlock, LoweredStatement};
+use crate::plan::bodies::{LoweredBlock, LoweredStatement, define};
+use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::placement::is_unit_call;
-use crate::plan::values::ValuePlan;
+use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    /// `try { ... }` → `ClosureBind` over `func() T { ... }()`; value is the
-    /// bound result var.
+    /// `try { ... }` → `result := func() T { ... }()`; value is the bound result var.
     pub(crate) fn lower_try_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
         self.require_stdlib();
 
@@ -35,12 +35,10 @@ impl Planner<'_> {
             planner.with_isolated_function(|planner| planner.lower_try_body(items, &fallible))
         });
 
-        let setup = vec![LoweredStatement::ClosureBind {
-            name: result_var.clone(),
-            closure_open: format!("func() {} {{\n", full_ty),
-            body,
-            closure_close: "}()\n".to_string(),
-        }];
+        let setup = vec![define(
+            result_var.clone(),
+            GoExpression::immediate_call(full_ty, body, FunctionLiteralLayout::MultiLine),
+        )];
         ValuePlan::captured(setup, result_var)
     }
 
@@ -91,18 +89,21 @@ impl Planner<'_> {
         if final_expression.is_empty() {
             statements.push(self.lower_try_unit_return(fallible));
         } else {
-            statements.push(self.lower_try_success_return(&final_expression, fallible));
+            statements.push(self.lower_try_success_return(final_expression, fallible));
         }
         statements
     }
 
     fn lower_try_unit_return(&mut self, fallible: &Fallible) -> LoweredStatement {
-        let (unit_val, packages) = self.zero_value(fallible.ok_ty());
-        self.require_packages(&packages);
-        self.lower_try_success_return(&unit_val, fallible)
+        let unit_val = self.zero_value_expression(fallible.ok_ty());
+        self.lower_try_success_return(unit_val, fallible)
     }
 
-    fn lower_try_success_return(&mut self, value: &str, fallible: &Fallible) -> LoweredStatement {
+    fn lower_try_success_return(
+        &mut self,
+        value: GoExpression,
+        fallible: &Fallible,
+    ) -> LoweredStatement {
         let ok_return = {
             let mut fe = FalliblePlanner::new(self, fallible);
             fe.emit_success(value)
@@ -134,14 +135,14 @@ impl Planner<'_> {
                     statements.extend(setup);
                     Some(value)
                 } else {
-                    Some(String::new())
+                    None
                 }
             }
             Expression::Identifier { .. } => {
                 if fallible.classify_constructor(expression) != Some(ConstructorKind::Failure) {
                     return None;
                 }
-                Some(String::new())
+                None
             }
             _ => return None,
         };
@@ -150,14 +151,14 @@ impl Planner<'_> {
         if let Some(shape) = return_ctx.lowered_shape() {
             let return_ty = return_ctx.expect_ty();
             let values = if fallible.is_result() {
-                let err_expr = err_arg.unwrap_or_default();
+                let err_expr = err_arg.expect("`Err` carries an error payload");
                 let err_expr =
                     self.convert_error_to_return_context(&mut statements, err_expr, fallible);
-                transition::lowered_err_values(self, &shape, &return_ty, &err_expr)
+                transition::lowered_err_values(self, &shape, &return_ty, err_expr)
             } else {
                 transition::lowered_none_values(self, &shape, &return_ty)
             };
-            statements.push(plain_return(values.join(", ")));
+            statements.push(transition::multi_value_return(values));
         } else {
             self.require_stdlib();
             let err_arg = err_arg.map(|value| {
@@ -165,15 +166,14 @@ impl Planner<'_> {
             });
             let err_return = {
                 let mut fe = FalliblePlanner::new(self, fallible);
-                fe.emit_contextual_failure(err_arg.as_deref())
+                fe.emit_contextual_failure(err_arg)
             };
             statements.push(plain_return(err_return));
         }
         Some(statements)
     }
 
-    /// `recover { ... }` → `ClosureBind` over
-    /// `lisette.RecoverBlock(func() T { ... })`.
+    /// `recover { ... }` → `result := lisette.RecoverBlock(func() T { ... })`.
     pub(crate) fn lower_recover_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
         self.require_stdlib();
 
@@ -194,12 +194,18 @@ impl Planner<'_> {
             })
         });
 
-        let setup = vec![LoweredStatement::ClosureBind {
-            name: result_var.clone(),
-            closure_open: format!("lisette.RecoverBlock(func() {} {{\n", inner_ty_str),
-            body,
-            closure_close: "})\n".to_string(),
-        }];
+        let setup = vec![define(
+            result_var.clone(),
+            GoExpression::call(
+                GoExpression::name("lisette.RecoverBlock".to_string()),
+                vec![GoExpression::function_literal(
+                    String::new(),
+                    inner_ty_str,
+                    body,
+                    FunctionLiteralLayout::MultiLine,
+                )],
+            ),
+        )];
         ValuePlan::captured(setup, result_var)
     }
 
@@ -250,9 +256,7 @@ impl Planner<'_> {
 
     /// A structured zero-value return for a `recover` block's inner type.
     fn lower_zero_return(&mut self, ty: &Type) -> LoweredStatement {
-        let (zero, packages) = self.zero_value(ty);
-        self.require_packages(&packages);
-        plain_return(zero)
+        plain_return(self.zero_value_expression(ty))
     }
 }
 

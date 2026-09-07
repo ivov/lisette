@@ -3,10 +3,9 @@ use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
 
 use crate::Planner;
-use crate::Renderer;
 use crate::definitions::interface_adapter::AdapterPlan;
 use crate::names::go_name;
-use crate::plan::bodies::{LoopKind, LoopPlan, LoweredBlock, LoweredStatement};
+use crate::plan::bodies::{LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign};
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::values::GoExpression;
 
@@ -149,18 +148,15 @@ impl CoercionPlan {
                 let type_name = planner.use_go_type(&ty);
                 GoExpression::conversion(type_name, value)
             }
-            Self::Layout(bridge) => {
-                let bridged = planner.plan_layout_bridge(&mut statements, value.as_str(), &bridge);
-                GoExpression::opaque(bridged)
-            }
+            Self::Layout(bridge) => planner.plan_layout_bridge(&mut statements, value, &bridge),
             Self::RebuildArray {
                 array_type,
                 element,
-            } => planner.plan_array_rebuild(&mut statements, value.as_str(), &array_type, *element),
+            } => planner.plan_array_rebuild(&mut statements, value, &array_type, *element),
             Self::RebuildTuple {
                 slot_types,
                 elements,
-            } => planner.plan_tuple_rebuild(&mut statements, value.as_str(), &slot_types, elements),
+            } => planner.plan_tuple_rebuild(&mut statements, value, &slot_types, elements),
         };
         (statements, value)
     }
@@ -169,7 +165,7 @@ impl CoercionPlan {
 impl Planner<'_> {
     pub(crate) fn apply_type_coercion(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         target_ty: Option<&Type>,
         expression: &Expression,
         emitted: GoExpression,
@@ -179,14 +175,14 @@ impl Planner<'_> {
         };
         let coercion = self.value_slot_coercion(expression, target);
         let (setup, value) = coercion.lower(self, emitted);
-        output.push_str(&Renderer.render_setup(&setup));
+        statements.extend(setup);
         value
     }
 
     fn plan_array_rebuild(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        value: &str,
+        value: GoExpression,
         array_type: &Type,
         element: CoercionPlan,
     ) -> GoExpression {
@@ -202,18 +198,23 @@ impl Planner<'_> {
 
         let index = self.fresh_var(Some("i"));
         self.declare(&index);
-        let element_read = GoExpression::index(
-            GoExpression::name(source.clone()),
-            GoExpression::name(index.clone()),
-        );
+        let element_read = GoExpression::index(source.clone(), GoExpression::name(index.clone()));
         let (mut body, coerced) = element.lower(self, element_read);
-        body.push(LoweredStatement::RawGo(format!(
-            "{output}[{index}] = {coerced}\n"
-        )));
+        body.push(assign(
+            GoExpression::index(
+                GoExpression::name(output.clone()),
+                GoExpression::name(index.clone()),
+            ),
+            coerced,
+        ));
         statements.push(LoweredStatement::Loop(LoopPlan {
             prologue: Vec::new(),
             kind: LoopKind::Generated { label: None },
-            header: format!("for {index} := range {source} {{\n"),
+            header: LoopHeader::Range {
+                key: Some(index),
+                value: None,
+                iterable: source,
+            },
             body: LoweredBlock { statements: body },
         }));
         GoExpression::name(output)
@@ -222,7 +223,7 @@ impl Planner<'_> {
     fn plan_tuple_rebuild(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        value: &str,
+        value: GoExpression,
         slot_types: &[Type],
         elements: Vec<CoercionPlan>,
     ) -> GoExpression {
@@ -231,8 +232,7 @@ impl Planner<'_> {
         let mut arguments = Vec::with_capacity(elements.len());
         for (index, element) in elements.into_iter().enumerate() {
             let field = TUPLE_FIELDS.get(index).expect("oversize tuple arity");
-            let slot_read =
-                GoExpression::selector(GoExpression::name(source.clone()), field.to_string());
+            let slot_read = GoExpression::selector(source.clone(), field.to_string());
             let (element_setup, coerced) = element.lower(self, slot_read);
             statements.extend(element_setup);
             arguments.push(coerced);

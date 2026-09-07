@@ -1,8 +1,35 @@
 //! Lowered body IR: the typed vocabulary `plan::lower` produces and `render/`
-//! consumes. `RawGo` is a transitional node holding pre-rendered Go.
+//! consumes.
 
-use crate::plan::values::{GoExpression, ValuePlan};
+use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
 use syntax::types::Type;
+
+pub(crate) fn define(name: String, value: GoExpression) -> LoweredStatement {
+    LoweredStatement::Define(Definition::single(name, value))
+}
+
+pub(crate) fn define_many(names: Vec<String>, value: GoExpression) -> LoweredStatement {
+    LoweredStatement::Define(Definition { names, value })
+}
+
+pub(crate) fn discard(value: GoExpression) -> LoweredStatement {
+    LoweredStatement::Discard(value)
+}
+
+pub(crate) fn expression_statement(expression: GoExpression) -> LoweredStatement {
+    LoweredStatement::ExpressionStatement {
+        expression,
+        diverges: false,
+    }
+}
+
+pub(crate) fn assign(target: GoExpression, value: GoExpression) -> LoweredStatement {
+    LoweredStatement::Assign(AssignForm::Simple {
+        target_capture: Vec::new(),
+        target,
+        value: ValuePlan::computed(Vec::new(), value, EvaluationEffect::Pure),
+    })
+}
 
 /// Destination for a lowered block's tail. The enclosing function's return
 /// context (for nested `return`/`?`) is read from the scope stack via
@@ -11,7 +38,7 @@ pub(crate) enum PlacePlan<'a> {
     Statement,
     Return,
     Assign {
-        local: &'a str,
+        local: &'a GoExpression,
         target_ty: Option<&'a Type>,
     },
 }
@@ -22,6 +49,7 @@ impl PlacePlan<'_> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LoweredBlock {
     pub(crate) statements: Vec<LoweredStatement>,
 }
@@ -29,6 +57,7 @@ pub(crate) struct LoweredBlock {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct LoopId(pub(crate) u32);
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LoopTransfer {
     Unlabeled,
     Source(LoopId),
@@ -46,6 +75,40 @@ pub(crate) fn directed(directive: String, stmt: LoweredStatement) -> LoweredStat
     }
 }
 
+pub(crate) fn directed_first(
+    directive: String,
+    statements: Vec<LoweredStatement>,
+) -> Vec<LoweredStatement> {
+    if directive.is_empty() {
+        return statements;
+    }
+    let mut statements = statements.into_iter();
+    let first = statements.next().unwrap_or_else(|| {
+        LoweredStatement::Body(LoweredBlock {
+            statements: Vec::new(),
+        })
+    });
+    let mut directed_statements = vec![directed(directive, first)];
+    directed_statements.extend(statements);
+    directed_statements
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Definition {
+    pub(crate) names: Vec<String>,
+    pub(crate) value: GoExpression,
+}
+
+impl Definition {
+    pub(crate) fn single(name: String, value: GoExpression) -> Self {
+        Self {
+            names: vec![name],
+            value,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LoweredStatement {
     If(IfPlan),
     Loop(LoopPlan),
@@ -59,45 +122,41 @@ pub(crate) enum LoweredStatement {
     BreakValue(BreakValuePlan),
     Let(LetPlan),
     Assign(AssignForm),
-    Expression(ExpressionStatementForm),
+    Async {
+        keyword: String,
+        call: GoExpression,
+    },
     Select(SelectStatementPlan),
     Switch(SwitchStatementPlan),
     WhileLet(LoweredBlock),
-    /// Eval-order temp capture: `name := value`.
-    TempBind {
-        name: String,
-        value: String,
+    Define(Definition),
+    AssignMany {
+        targets: Vec<GoExpression>,
+        value: GoExpression,
     },
     /// `var name go_type` (with `= value` when `value` is set).
     VarDecl {
         name: String,
         go_type: String,
-        value: Option<String>,
+        value: Option<GoExpression>,
     },
-    /// `name := <closure_open><body><closure_close>` (try-block IIFE,
-    /// recover-block closure). `closure_open`/`close` are opaque Go text.
-    ClosureBind {
-        name: String,
-        closure_open: String,
-        body: LoweredBlock,
-        closure_close: String,
+    Discard(GoExpression),
+    ExpressionStatement {
+        expression: GoExpression,
+        diverges: bool,
     },
     /// A statement preceded by a sourcemap `//line` directive.
     Directed {
         directive: String,
         inner: Box<LoweredStatement>,
     },
-    RawGo(String),
-    /// Raw Go whose tail diverges (a never-typed call such as `panic(...)`).
-    /// Tracked separately from `RawGo` so divergence is structural rather than
-    /// re-derived by scanning text.
-    DivergingRawGo(String),
     /// `panic("unreachable")` tail after a non-exhaustive branch in return
     /// position: a structured diverging leaf.
     UnreachablePanic,
 }
 
 /// A source `const` (or `var` when the value is not Go-const-eligible).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ConstPlan {
     pub(crate) is_const: bool,
     pub(crate) name: String,
@@ -106,6 +165,7 @@ pub(crate) struct ConstPlan {
 }
 
 /// A source `return expr` statement, classified by `ReturnForm`.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ReturnForm {
     Plain {
         value: ValuePlan,
@@ -117,7 +177,7 @@ pub(crate) enum ReturnForm {
     },
     /// `return v0, v1, ...` for a lowered multi-value ABI return.
     Multi {
-        values: Vec<String>,
+        values: Vec<GoExpression>,
     },
     /// An already-lowered return sequence.
     Body {
@@ -127,6 +187,7 @@ pub(crate) enum ReturnForm {
 
 /// A `break value` statement. A diverged value terminates on its own; all
 /// other values carry the action and transfer needed to finish the break.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BreakValuePlan {
     Diverged {
         value: ValuePlan,
@@ -139,6 +200,7 @@ pub(crate) enum BreakValuePlan {
 }
 
 /// What to do with a non-diverging `break value` after its setup has run.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BreakValueAction {
     /// Inside a loop with a result slot, when the value is a unit-typed
     /// call: emit `<value>` as a side-effect statement (skipped if value
@@ -153,6 +215,7 @@ pub(crate) enum BreakValueAction {
 }
 
 /// A lowered `let` binding.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LetPlan {
     /// Optional `var X T` emitted before a never-typed value so dead code can
     /// still reference the binding.
@@ -161,21 +224,23 @@ pub(crate) struct LetPlan {
 }
 
 /// An assignment statement, structured by shape.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AssignForm {
     /// `target++`, `target--`, or `target op= rhs`.
     Compound {
         target_capture: Vec<LoweredStatement>,
-        target_str: String,
+        target: GoExpression,
         kind: CompoundKind,
     },
     /// `target = value`.
     Simple {
         target_capture: Vec<LoweredStatement>,
-        target_str: String,
+        target: GoExpression,
         value: ValuePlan,
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CompoundKind {
     Increment,
     Decrement,
@@ -188,17 +253,9 @@ pub(crate) enum CompoundKind {
     },
 }
 
-/// A bare expression statement.
-pub(crate) enum ExpressionStatementForm {
-    /// `go <value>` / `defer <value>` at statement position.
-    Async { value: ValuePlan },
-    /// `<keyword> func() { <body> }()` IIFE wrapper for Task/Defer block
-    /// forms and inner expressions requiring an IIFE (`needs_iife_for_async`).
-    AsyncBlock { keyword: String, body: LoweredBlock },
-}
-
 /// A `switch` statement (value or type switch). The renderer owns the
 /// `switch`/`case`/`default:` syntax.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SwitchStatementPlan {
     pub(crate) kind: SwitchKind,
     pub(crate) cases: Vec<SwitchCasePlan>,
@@ -207,23 +264,25 @@ pub(crate) struct SwitchStatementPlan {
     pub(crate) postlude: Vec<LoweredStatement>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SwitchKind {
     Conditional,
     /// `switch <subject> {`
     Value {
-        subject: String,
+        subject: GoExpression,
     },
     /// `switch <binding> := <subject>.(type) {` when `binding` is set,
     /// otherwise `switch <subject>.(type) {`.
     Type {
-        subject: String,
+        subject: GoExpression,
         binding: Option<String>,
     },
 }
 
 /// A single `case <labels>:` plus its body.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SwitchCasePlan {
-    pub(crate) labels: String,
+    pub(crate) labels: Vec<GoExpression>,
     pub(crate) body: LoweredBlock,
 }
 
@@ -239,6 +298,7 @@ impl SwitchStatementPlan {
 /// ordered set of arms, plus hoisted setup and a trailing postlude (e.g. an
 /// unreachable panic). The renderer owns the `for`/`select`/`case`/`default:`
 /// syntax.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SelectStatementPlan {
     /// Side-effecting setup hoisted before the `select` (channel/value temps).
     pub(crate) setup: Vec<LoweredStatement>,
@@ -250,17 +310,19 @@ pub(crate) struct SelectStatementPlan {
 }
 
 /// A single `select` arm: a `case`/`default:` header plus its body block.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SelectArmPlan {
     /// `case <receive_vars> := <-<channel>:`, or `case <-<channel>:` when
     /// `receive_vars` is `None`.
     Receive {
         receive_vars: Option<String>,
-        channel: String,
+        channel: GoExpression,
         body: LoweredBlock,
     },
-    /// `case <operation>:` where `operation` is `ch <- val` or `<-ch`.
+    /// `case <channel> <- <value>:`
     Send {
-        operation: GoExpression,
+        channel: GoExpression,
+        value: GoExpression,
         body: LoweredBlock,
     },
     /// `default:`
@@ -299,16 +361,33 @@ impl SelectArmPlan {
 }
 
 /// A statement-position loop. `prologue` is pre-loop setup (a for-loop's
-/// iterable capture); `header` is the rendered Go loop opener through the body's
-/// opening brace; its kind records whether transfers inside it can target an
-/// enclosing source loop.
+/// iterable capture); its kind records whether transfers inside it can target
+/// an enclosing source loop.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LoopPlan {
     pub(crate) prologue: Vec<LoweredStatement>,
     pub(crate) kind: LoopKind,
-    pub(crate) header: String,
+    pub(crate) header: LoopHeader,
     pub(crate) body: LoweredBlock,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LoopHeader {
+    Infinite,
+    While(GoExpression),
+    Range {
+        key: Option<String>,
+        value: Option<String>,
+        iterable: GoExpression,
+    },
+    Counted {
+        variable: String,
+        start: GoExpression,
+        condition: Option<GoExpression>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LoopKind {
     Source { label: Option<String> },
     Generated { label: Option<String> },
@@ -322,15 +401,34 @@ impl LoopKind {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct IfPlan {
     /// Side-effecting setup hoisted before the `if` condition (temps from a
     /// condition that lowered to statements).
     pub(crate) condition_setup: Vec<LoweredStatement>,
-    pub(crate) condition: String,
+    pub(crate) initializer: Option<Definition>,
+    pub(crate) condition: GoExpression,
     pub(crate) then_body: LoweredBlock,
     pub(crate) else_arm: ElseArm,
 }
 
+impl IfPlan {
+    pub(crate) fn plain(
+        condition: GoExpression,
+        then_body: LoweredBlock,
+        else_arm: ElseArm,
+    ) -> Self {
+        Self {
+            condition_setup: Vec::new(),
+            initializer: None,
+            condition,
+            then_body,
+            else_arm,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ElseArm {
     None,
     ElseIf(Box<IfPlan>),
@@ -377,9 +475,11 @@ impl LoweredStatement {
     pub(crate) fn bound_name(&self) -> Option<&str> {
         match self {
             LoweredStatement::Directed { inner, .. } => inner.bound_name(),
-            LoweredStatement::TempBind { name, .. }
-            | LoweredStatement::ClosureBind { name, .. }
-            | LoweredStatement::VarDecl {
+            LoweredStatement::Define(Definition { names, .. }) => match names.as_slice() {
+                [name] => Some(name),
+                _ => None,
+            },
+            LoweredStatement::VarDecl {
                 name,
                 value: Some(_),
                 ..
@@ -396,9 +496,11 @@ impl LoweredStatement {
     pub(crate) fn rename_bound_name(&mut self, go_name: &str) -> bool {
         let bound = match self {
             LoweredStatement::Directed { inner, .. } => return inner.rename_bound_name(go_name),
-            LoweredStatement::TempBind { name, .. }
-            | LoweredStatement::ClosureBind { name, .. }
-            | LoweredStatement::VarDecl {
+            LoweredStatement::Define(Definition { names, .. }) => match names.as_mut_slice() {
+                [name] => name,
+                _ => return false,
+            },
+            LoweredStatement::VarDecl {
                 name,
                 value: Some(_),
                 ..
@@ -419,9 +521,11 @@ impl LoweredStatement {
             | LoweredStatement::Const(_)
             | LoweredStatement::Select(_)
             | LoweredStatement::Switch(_)
-            | LoweredStatement::TempBind { .. }
+            | LoweredStatement::Async { .. }
+            | LoweredStatement::Define(_)
             | LoweredStatement::VarDecl { .. }
-            | LoweredStatement::ClosureBind { .. }
+            | LoweredStatement::Discard(_)
+            | LoweredStatement::AssignMany { .. }
             | LoweredStatement::UnreachablePanic => true,
             LoweredStatement::Body(body) => !body.renders_empty(),
             LoweredStatement::Return(plan) => match plan {
@@ -440,18 +544,10 @@ impl LoweredStatement {
             LoweredStatement::Assign(plan) => match plan {
                 AssignForm::Compound { .. } | AssignForm::Simple { .. } => true,
             },
-            LoweredStatement::Expression(plan) => match plan {
-                ExpressionStatementForm::Async { value } => {
-                    !value.is_empty() || value.setup.iter().any(LoweredStatement::emits_output)
-                }
-                ExpressionStatementForm::AsyncBlock { .. } => true,
-            },
             LoweredStatement::WhileLet(body) => !body.renders_empty(),
+            LoweredStatement::ExpressionStatement { expression, .. } => !expression.is_empty(),
             LoweredStatement::Directed { directive, inner } => {
                 !directive.is_empty() || inner.emits_output()
-            }
-            LoweredStatement::RawGo(code) | LoweredStatement::DivergingRawGo(code) => {
-                !code.is_empty()
             }
         }
     }
@@ -470,19 +566,17 @@ impl LoweredStatement {
             LoweredStatement::Assign(plan) => match plan {
                 AssignForm::Compound { .. } | AssignForm::Simple { .. } => false,
             },
-            LoweredStatement::Expression(plan) => match plan {
-                ExpressionStatementForm::Async { .. }
-                | ExpressionStatementForm::AsyncBlock { .. } => false,
-            },
+            LoweredStatement::Async { .. } => false,
             LoweredStatement::Select(plan) => plan.ends_with_diverge(),
             LoweredStatement::Switch(plan) => plan.ends_with_diverge(),
             LoweredStatement::WhileLet(body) => body.ends_with_diverge(),
-            LoweredStatement::TempBind { .. }
+            LoweredStatement::Define(_)
             | LoweredStatement::VarDecl { .. }
-            | LoweredStatement::ClosureBind { .. } => false,
+            | LoweredStatement::Discard(_)
+            | LoweredStatement::AssignMany { .. } => false,
+            LoweredStatement::ExpressionStatement { diverges, .. } => *diverges,
             LoweredStatement::Directed { inner, .. } => inner.ends_with_diverge(),
-            LoweredStatement::RawGo(_) => false,
-            LoweredStatement::DivergingRawGo(_) | LoweredStatement::UnreachablePanic => true,
+            LoweredStatement::UnreachablePanic => true,
         }
     }
 

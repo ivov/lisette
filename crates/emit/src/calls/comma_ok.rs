@@ -1,15 +1,14 @@
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::calls::dispatch::extract_native_method_name;
-use crate::calls::go_interop::NilGuard;
+use crate::calls::go_interop::{NilGuard, is_nil, non_nil};
 use crate::context::expression::ExpressionContext;
 use crate::escape_reserved;
-use crate::plan::bodies::LoweredStatement;
+use crate::plan::bodies::{Definition, LoweredStatement, define_many};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::values::GoExpression;
 use crate::state::scope::PairStatusKind;
 use crate::types::native::NativeGoType;
-use std::borrow::Cow;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -72,7 +71,12 @@ pub(crate) struct LoweredPair {
     success: PairSuccess,
     nil_guard: Option<NilGuard>,
     has_value_slot: bool,
-    initializer_call: Option<String>,
+    initializer_call: Option<GoExpression>,
+}
+
+pub(crate) struct PairCondition {
+    pub(crate) initializer: Option<Definition>,
+    pub(crate) condition: GoExpression,
 }
 
 impl LoweredPair {
@@ -86,28 +90,32 @@ impl LoweredPair {
         }
     }
 
-    fn binding(&self) -> String {
+    fn binding(&self) -> Vec<String> {
         match (self.has_value_slot, &self.value) {
-            (true, Some(value)) => format!("{value}, {}", self.status),
-            (true, None) => format!("_, {}", self.status),
-            (false, _) => self.status.clone(),
+            (true, Some(value)) => vec![value.clone(), self.status.clone()],
+            (true, None) => vec!["_".to_string(), self.status.clone()],
+            (false, _) => vec![self.status.clone()],
         }
     }
 
-    fn initializer(&self) -> Option<String> {
+    fn initializer(&self) -> Option<Definition> {
         let call = self.initializer_call.as_ref()?;
-        Some(format!("{} := {}", self.binding(), header_call(call)))
+        Some(Definition {
+            names: self.binding(),
+            value: header_call(call.clone()),
+        })
     }
 }
 
 /// Go reads a bare `T{` in an `if` header as the block, so such a receiver takes parentheses.
-pub(crate) fn header_call(call: &str) -> Cow<'_, str> {
-    let mut rest = call.trim_start_matches(['&', '*']);
+pub(crate) fn header_call(call: GoExpression) -> GoExpression {
+    let text = call.as_str();
+    let mut rest = text.trim_start_matches(['&', '*']);
     let type_name_end = rest
         .find(|c: char| !(c.is_alphanumeric() || c == '_' || c == '.'))
         .unwrap_or(rest.len());
     if type_name_end == 0 {
-        return Cow::Borrowed(call);
+        return call;
     }
     rest = &rest[type_name_end..];
     if let Some(after_bracket) = rest.strip_prefix('[') {
@@ -121,14 +129,14 @@ pub(crate) fn header_call(call: &str) -> Cow<'_, str> {
             depth == 0
         });
         let Some((close, _)) = close else {
-            return Cow::Borrowed(call);
+            return call;
         };
         rest = &after_bracket[close + 1..];
     }
     if rest.starts_with('{') {
-        Cow::Owned(format!("({call})"))
+        GoExpression::parenthesized(call)
     } else {
-        Cow::Borrowed(call)
+        call
     }
 }
 
@@ -226,7 +234,7 @@ impl Planner<'_> {
     pub(crate) fn bind_pair(
         &mut self,
         statements: Vec<LoweredStatement>,
-        expression: String,
+        expression: GoExpression,
         slot: CommaOkValueSlot,
         kind: PairKind,
         status_hint: Option<&str>,
@@ -271,8 +279,8 @@ impl Planner<'_> {
         if opens_if {
             pair.initializer_call = Some(expression);
         } else {
-            let line = format!("{} := {expression}\n", pair.binding());
-            pair.statements.push(LoweredStatement::RawGo(line));
+            pair.statements
+                .push(define_many(pair.binding(), expression));
         }
         pair
     }
@@ -330,20 +338,21 @@ impl Planner<'_> {
         name
     }
 
-    pub(crate) fn pair_success_condition(&mut self, pair: &LoweredPair) -> String {
+    pub(crate) fn pair_success_condition(&mut self, pair: &LoweredPair) -> PairCondition {
         self.pair_condition(pair, true)
     }
 
-    pub(crate) fn pair_failure_condition(&mut self, pair: &LoweredPair) -> String {
+    pub(crate) fn pair_failure_condition(&mut self, pair: &LoweredPair) -> PairCondition {
         self.pair_condition(pair, false)
     }
 
-    fn pair_condition(&mut self, pair: &LoweredPair, success: bool) -> String {
+    fn pair_condition(&mut self, pair: &LoweredPair, success: bool) -> PairCondition {
+        let status = GoExpression::name(pair.status.clone());
         let status = match (pair.success, success) {
-            (PairSuccess::Truthy, true) => pair.status.clone(),
-            (PairSuccess::Truthy, false) => format!("!{}", pair.status),
-            (PairSuccess::Nil, true) => format!("{} == nil", pair.status),
-            (PairSuccess::Nil, false) => format!("{} != nil", pair.status),
+            (PairSuccess::Truthy, true) => status,
+            (PairSuccess::Truthy, false) => GoExpression::unary("!", status),
+            (PairSuccess::Nil, true) => is_nil(status),
+            (PairSuccess::Nil, false) => non_nil(status),
         };
         let condition = match pair.nil_guard {
             None => status,
@@ -351,22 +360,23 @@ impl Planner<'_> {
                 if guard.is_interface() {
                     self.require_stdlib();
                 }
-                let value = pair
-                    .value
-                    .as_deref()
-                    .expect("nil guard requires the value var");
+                let value = GoExpression::name(
+                    pair.value
+                        .clone()
+                        .expect("nil guard requires the value var"),
+                );
                 let nil_condition = if success {
                     guard.non_nil(value)
                 } else {
                     guard.is_nil(value)
                 };
                 let operator = if success { "&&" } else { "||" };
-                format!("{status} {operator} {nil_condition}")
+                GoExpression::binary(status, operator, nil_condition)
             }
         };
-        match pair.initializer() {
-            Some(initializer) => format!("{initializer}; {condition}"),
-            None => condition,
+        PairCondition {
+            initializer: pair.initializer(),
+            condition,
         }
     }
 
@@ -375,7 +385,7 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         pair: &CommaOkPair,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> (Vec<LoweredStatement>, GoExpression) {
         match pair {
             CommaOkPair::LoweredCall => self
                 .lower_call(expression, None, ExpressionContext::value())
@@ -388,21 +398,12 @@ impl Planner<'_> {
                 let (setup, operand) = self
                     .lower_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
-                let operand = parenthesize_prefixed(operand);
+                let operand = parenthesize_prefixed_expression(operand);
                 let target_ty = self.facts.peel_alias(&expression.get_type()).ok_type();
                 let target = self.use_go_type(&target_ty);
-                (setup, format!("{}.({})", operand, target))
+                (setup, GoExpression::type_assertion(operand, target))
             }
         }
-    }
-}
-
-/// `*x` and `&x` bind looser than a postfix `[k]` or `.(T)`.
-pub(super) fn parenthesize_prefixed(operand: String) -> String {
-    if operand.starts_with('*') || operand.starts_with('&') {
-        format!("({operand})")
-    } else {
-        operand
     }
 }
 

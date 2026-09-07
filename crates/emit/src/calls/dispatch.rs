@@ -7,14 +7,17 @@ use super::NativeCallContext;
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::is_prelude_container_type;
+use crate::abi::transition::multi_value_return;
 use crate::calls::native::{native_method_is_pure, native_method_lowers_to_plain_call};
 use crate::context::expression::ExpressionContext;
+use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
-use crate::plan::bodies::LoweredStatement;
+use crate::plan::bodies::{
+    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, define,
+};
 use crate::plan::calls::{CallPlan, CallableOrigin};
-use crate::plan::go_expression::CompositeLayout;
+use crate::plan::go_expression::{CompositeLayout, FunctionLiteralLayout};
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, Stability, ValuePlan};
-use crate::types::go_type::render_conversion;
 use crate::types::native::NativeGoType;
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments, StructFields};
@@ -225,9 +228,40 @@ impl<'a> Planner<'a> {
                     )
                 } else {
                     let zero = self.lisette_zero(&element_ty);
-                    GoExpression::opaque(format!(
-                        "func() []{element} {{ s := make([]{element}, {length}); for i := range s {{ s[i] = {zero} }}; return s }}()"
-                    ))
+                    let slice_type = format!("[]{element}");
+                    let slice = || GoExpression::name("s".to_string());
+                    let index = || GoExpression::name("i".to_string());
+                    GoExpression::immediate_call(
+                        slice_type.clone(),
+                        LoweredBlock {
+                            statements: vec![
+                                define(
+                                    "s".to_string(),
+                                    GoExpression::call(
+                                        GoExpression::name("make".to_string()),
+                                        vec![GoExpression::type_name(slice_type), length],
+                                    ),
+                                ),
+                                LoweredStatement::Loop(LoopPlan {
+                                    prologue: Vec::new(),
+                                    kind: LoopKind::Generated { label: None },
+                                    header: LoopHeader::Range {
+                                        key: Some("i".to_string()),
+                                        value: None,
+                                        iterable: slice(),
+                                    },
+                                    body: LoweredBlock {
+                                        statements: vec![assign(
+                                            GoExpression::index(slice(), index()),
+                                            zero,
+                                        )],
+                                    },
+                                }),
+                                plain_return(slice()),
+                            ],
+                        },
+                        FunctionLiteralLayout::MultiLine,
+                    )
                 };
                 Some(ValuePlan::observable_call(
                     setup,
@@ -274,13 +308,41 @@ impl<'a> Planner<'a> {
         let argument_effect = staged.evaluation.effect;
         let (setup, source) = staged.into_parts();
 
-        // A function element makes `[N]func(...)(s)` parse as a type.
-        let conversion = render_conversion(&array_go, "s");
-        let value = GoExpression::opaque(format!(
-            "func(s []{element_go}) ({array_go}, bool) {{ \
-             if len(s) != {length} {{ return {array_go}{{}}, false }}; \
-             return {conversion}, true }}({source})"
-        ));
+        let slice = || GoExpression::name("s".to_string());
+        let literal = |text: String| GoExpression::literal(text);
+        let value = GoExpression::call(
+            GoExpression::function_literal(
+                format!("s []{element_go}"),
+                format!("({array_go}, bool)"),
+                LoweredBlock {
+                    statements: vec![
+                        LoweredStatement::If(IfPlan::plain(
+                            GoExpression::binary(
+                                GoExpression::call(
+                                    GoExpression::name("len".to_string()),
+                                    vec![slice()],
+                                ),
+                                "!=",
+                                literal(length.to_string()),
+                            ),
+                            LoweredBlock {
+                                statements: vec![multi_value_return(vec![
+                                    GoExpression::empty_composite(array_go.clone()),
+                                    literal("false".to_string()),
+                                ])],
+                            },
+                            ElseArm::None,
+                        )),
+                        multi_value_return(vec![
+                            GoExpression::conversion(array_go, slice()),
+                            literal("true".to_string()),
+                        ]),
+                    ],
+                },
+                FunctionLiteralLayout::MultiLine,
+            ),
+            vec![source],
+        );
 
         Some(ValuePlan::observable_call(
             setup,

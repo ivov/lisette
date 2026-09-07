@@ -5,7 +5,7 @@ use crate::patterns::sites::{
 };
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan, SelectArmPlan,
-    SelectStatementPlan,
+    SelectStatementPlan, assign, discard,
 };
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::placement::unreachable_panic_if_needed;
@@ -20,7 +20,7 @@ enum PreparedChannelOperation {
 }
 
 struct SelectReceiveContext<'a> {
-    channel: &'a str,
+    channel: &'a GoExpression,
     body: &'a Expression,
     default_body: Option<&'a Expression>,
     retry_var: Option<&'a str>,
@@ -32,7 +32,7 @@ enum PreparedSelectArm<'a> {
     Receive {
         binding: &'a Pattern,
         body: &'a Expression,
-        channel: String,
+        channel: GoExpression,
         element_ty: Type,
     },
     Send {
@@ -41,7 +41,7 @@ enum PreparedSelectArm<'a> {
     },
     MatchReceive {
         arms: &'a [MatchArm],
-        channel: String,
+        channel: GoExpression,
         element_ty: Type,
     },
     Default {
@@ -160,15 +160,12 @@ impl Planner<'_> {
                     let channel_has_call = channel.evaluation.effect.has_call();
                     let (channel_setup, ch) = channel.into_parts();
                     setup.extend(channel_setup);
-                    let channel = if binding.is_some_pattern() {
-                        self.hoist_tmp_value_statement(setup, "ch", &ch)
-                    } else {
-                        if needs_retry_loop && channel_has_call {
-                            self.hoist_tmp_value_statement(setup, "ch", &ch)
+                    let channel =
+                        if binding.is_some_pattern() || (needs_retry_loop && channel_has_call) {
+                            GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", ch))
                         } else {
                             ch
-                        }
-                    };
+                        };
                     PreparedSelectArm::Receive {
                         binding,
                         body,
@@ -185,7 +182,7 @@ impl Planner<'_> {
                     let (channel_setup, ch) = channel.into_parts();
                     setup.extend(channel_setup);
                     let ch = if needs_retry_loop && channel_has_call {
-                        self.hoist_tmp_value_statement(setup, "ch", &ch)
+                        GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", ch))
                     } else {
                         ch
                     };
@@ -240,24 +237,19 @@ impl Planner<'_> {
             return Vec::new();
         }
 
+        let ok = GoExpression::name(ok_var.to_string());
         let plan = if body_empty {
-            IfPlan {
-                condition_setup: Vec::new(),
-                condition: format!("!{}", ok_var),
-                then_body: else_block.expect("body_empty && has_else"),
-                else_arm: ElseArm::None,
-            }
+            IfPlan::plain(
+                GoExpression::unary("!", ok),
+                else_block.expect("body_empty && has_else"),
+                ElseArm::None,
+            )
         } else {
             let else_arm = match else_block {
                 Some(body) => ElseArm::from_body(body, false),
                 None => ElseArm::None,
             };
-            IfPlan {
-                condition_setup: Vec::new(),
-                condition: ok_var.to_string(),
-                then_body: body_block,
-                else_arm,
-            }
+            IfPlan::plain(ok, body_block, else_arm)
         };
         vec![LoweredStatement::If(plan)]
     }
@@ -268,7 +260,10 @@ impl Planner<'_> {
         if let Some(retry_var) = ctx.retry_var {
             return Some(LoweredBlock {
                 statements: vec![
-                    LoweredStatement::RawGo(format!("{} = nil\n", retry_var)),
+                    assign(
+                        GoExpression::name(retry_var.to_string()),
+                        GoExpression::nil(),
+                    ),
                     LoweredStatement::Continue(LoopTransfer::Unlabeled),
                 ],
             });
@@ -309,7 +304,7 @@ impl Planner<'_> {
             });
             let mut then_statements: Vec<LoweredStatement> = Vec::new();
             if !used.contains(&receiver_var) {
-                then_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", receiver_var)));
+                then_statements.push(discard(GoExpression::name(receiver_var.clone())));
             }
             then_statements.extend(body_statements);
             (receiver_var, ok_var, then_statements)
@@ -320,17 +315,16 @@ impl Planner<'_> {
             None => ElseArm::None,
         };
         let receive_vars = format!("{}, {}", receiver_var, ok_var);
-        let if_plan = IfPlan {
-            condition_setup: Vec::new(),
-            condition: ok_var,
-            then_body: LoweredBlock {
+        let if_plan = IfPlan::plain(
+            GoExpression::name(ok_var),
+            LoweredBlock {
                 statements: then_statements,
             },
             else_arm,
-        };
+        );
         SelectArmPlan::Receive {
             receive_vars: Some(receive_vars),
-            channel: ctx.channel.to_string(),
+            channel: ctx.channel.clone(),
             body: LoweredBlock {
                 statements: vec![LoweredStatement::If(if_plan)],
             },
@@ -373,7 +367,7 @@ impl Planner<'_> {
             });
             return SelectArmPlan::Receive {
                 receive_vars: Some(format!("_, {}", ok_var)),
-                channel: ctx.channel.to_string(),
+                channel: ctx.channel.clone(),
                 body: LoweredBlock { statements: body },
             };
         }
@@ -411,7 +405,7 @@ impl Planner<'_> {
             body_statements.extend(block.statements);
             SelectArmPlan::Receive {
                 receive_vars,
-                channel: ctx.channel.to_string(),
+                channel: ctx.channel.clone(),
                 body: LoweredBlock {
                     statements: body_statements,
                 },
@@ -436,7 +430,7 @@ impl Planner<'_> {
                 ch = cancel_deref_of_address(ch);
             }
             if ch_has_call {
-                ch = GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", ch.as_str()));
+                ch = GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", ch));
             }
             match operation {
                 ChannelOperation::Send { value, .. } => {
@@ -445,11 +439,9 @@ impl Planner<'_> {
                     setup.extend(value_plan.setup);
                     let mut val = value_plan.expression;
                     if val_has_call {
-                        val = GoExpression::name(self.hoist_tmp_value_statement(
-                            setup,
-                            "send_val",
-                            val.as_str(),
-                        ));
+                        val = GoExpression::name(
+                            self.hoist_tmp_value_statement(setup, "send_val", val),
+                        );
                     }
                     PreparedChannelOperation::Send(ch, val)
                 }
@@ -464,13 +456,13 @@ impl Planner<'_> {
                 ch = cancel_deref_of_address(ch);
             }
             if expression_has_call {
-                ch = GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", ch.as_str()));
+                ch = GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", ch));
             }
             PreparedChannelOperation::Receive(ch)
         }
     }
 
-    /// `case <send>:` (or `default:`) plus the arm body.
+    /// `case ch <- v:` or a bare `case <-ch:` plus the arm body.
     fn lower_send_arm(
         &mut self,
         operation: &PreparedChannelOperation,
@@ -480,11 +472,13 @@ impl Planner<'_> {
         let block = self.lower_block_to_place(body, place);
         match operation {
             PreparedChannelOperation::Send(ch, val) => SelectArmPlan::Send {
-                operation: GoExpression::opaque(format!("{} <- {}", ch, val)),
+                channel: ch.clone(),
+                value: val.clone(),
                 body: block,
             },
-            PreparedChannelOperation::Receive(ch) => SelectArmPlan::Send {
-                operation: GoExpression::receive(ch.clone()),
+            PreparedChannelOperation::Receive(ch) => SelectArmPlan::Receive {
+                receive_vars: None,
+                channel: ch.clone(),
                 body: block,
             },
         }
@@ -493,7 +487,7 @@ impl Planner<'_> {
     fn lower_match_receive_arm(
         &mut self,
         match_arms: &[MatchArm],
-        channel: &str,
+        channel: &GoExpression,
         element_ty: &Type,
         place: &PlacePlan,
     ) -> SelectArmPlan {
@@ -533,17 +527,17 @@ impl Planner<'_> {
             // precede the structured body inside the `case x, ok := <-ch:` arm.
             let mut body_statements: Vec<LoweredStatement> = Vec::new();
             if !used.contains(&ok_var) {
-                body_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", ok_var)));
+                body_statements.push(discard(GoExpression::name(ok_var.clone())));
             }
             if case_var != "_" && !used.contains(&case_var) {
-                body_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", case_var)));
+                body_statements.push(discard(GoExpression::name(case_var.clone())));
             }
             if let Some(plan) = arms_plan {
                 body_statements.push(LoweredStatement::If(plan));
             }
             SelectArmPlan::Receive {
                 receive_vars: Some(format!("{}, {}", case_var, ok_var)),
-                channel: channel.to_string(),
+                channel: channel.clone(),
                 body: LoweredBlock {
                     statements: body_statements,
                 },
@@ -583,8 +577,6 @@ impl Planner<'_> {
     }
 }
 
-/// `*&x` → `x` (avoids redundant deref when the emitter has already
-/// produced an `&`-prefixed expression).
 /// `*&x` is `x`. Any other pointer gets dereferenced.
 fn cancel_deref_of_address(channel: GoExpression) -> GoExpression {
     let contains_deferred_evaluation = channel.contains_deferred_evaluation();
@@ -610,25 +602,17 @@ fn build_receive_arms_plan(
     some: Option<LoweredBlock>,
     none: Option<LoweredBlock>,
 ) -> Option<IfPlan> {
+    let ok = || GoExpression::name(ok_var.to_string());
     match (some, none) {
-        (Some(some), Some(none)) => Some(IfPlan {
-            condition_setup: Vec::new(),
-            condition: ok_var.to_string(),
-            then_body: some,
-            else_arm: ElseArm::from_body(none, false),
-        }),
-        (Some(some), None) => Some(IfPlan {
-            condition_setup: Vec::new(),
-            condition: ok_var.to_string(),
-            then_body: some,
-            else_arm: ElseArm::None,
-        }),
-        (None, Some(none)) => Some(IfPlan {
-            condition_setup: Vec::new(),
-            condition: format!("!{}", ok_var),
-            then_body: none,
-            else_arm: ElseArm::None,
-        }),
+        (Some(some), Some(none)) => {
+            Some(IfPlan::plain(ok(), some, ElseArm::from_body(none, false)))
+        }
+        (Some(some), None) => Some(IfPlan::plain(ok(), some, ElseArm::None)),
+        (None, Some(none)) => Some(IfPlan::plain(
+            GoExpression::unary("!", ok()),
+            none,
+            ElseArm::None,
+        )),
         (None, None) => None,
     }
 }

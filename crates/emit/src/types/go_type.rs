@@ -3,6 +3,7 @@ use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::definitions::structs::struct_field_go_name;
 use crate::names::go_name;
 use crate::names::packages::{PackageRequirements, PackageUse};
+use crate::plan::values::GoExpression;
 use crate::types::native::NativeGoType;
 use crate::types::prelude::PreludeType;
 use syntax::ast::ResolvedCallTypeArguments;
@@ -407,14 +408,22 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn zero_value(&self, ty: &Type) -> (String, PackageRequirements) {
+    pub(crate) fn zero_value(&self, ty: &Type) -> (GoExpression, PackageRequirements) {
         let mut packages = PackageRequirements::default();
         if self.facts.is_interface(ty) {
-            return ("nil".to_string(), packages);
+            return (GoExpression::literal("nil".to_string()), packages);
         }
 
         let go_ty = self.go_type(ty);
         packages.extend(go_ty.requirements());
+
+        let literal = |text: &str| GoExpression::literal(text.to_string());
+        let dereferenced_new = |code: &str| {
+            GoExpression::dereference(GoExpression::call(
+                GoExpression::name("new".to_string()),
+                vec![GoExpression::type_name(code.to_string())],
+            ))
+        };
 
         let layout = self.value_layout(ty, SlotOrigin::Lisette);
         let value = match layout {
@@ -431,16 +440,14 @@ impl Planner<'_> {
                 | SimpleKind::Uint64
                 | SimpleKind::Uintptr
                 | SimpleKind::Byte
-                | SimpleKind::Rune => "0".to_string(),
-                SimpleKind::Float32 | SimpleKind::Float64 => "0.0".to_string(),
-                SimpleKind::Bool => "false".to_string(),
-                SimpleKind::String => "\"\"".to_string(),
-                SimpleKind::Unit => "struct{}{}".to_string(),
-                SimpleKind::Complex64 | SimpleKind::Complex128 => {
-                    format!("*new({})", go_ty.code)
-                }
+                | SimpleKind::Rune => literal("0"),
+                SimpleKind::Float32 | SimpleKind::Float64 => literal("0.0"),
+                SimpleKind::Bool => literal("false"),
+                SimpleKind::String => literal("\"\""),
+                SimpleKind::Unit => GoExpression::empty_composite("struct{}".to_string()),
+                SimpleKind::Complex64 | SimpleKind::Complex128 => dereferenced_new(&go_ty.code),
             },
-            ValueLayout::Array { .. } => format!("{}{{}}", go_ty.code),
+            ValueLayout::Array { .. } => GoExpression::empty_composite(go_ty.code),
             ValueLayout::Slice { .. }
             | ValueLayout::Map { .. }
             | ValueLayout::Function { .. }
@@ -454,9 +461,9 @@ impl Planner<'_> {
                     | CompoundKind::Sender
                     | CompoundKind::Receiver,
                 ..
-            }) => "nil".to_string(),
+            }) => literal("nil"),
             ValueLayout::Tuple { .. } | ValueLayout::TaggedOption { .. } => {
-                format!("{}{{}}", go_ty.code)
+                GoExpression::empty_composite(go_ty.code)
             }
             ValueLayout::Plain(Type::Nominal { id, .. })
                 if self
@@ -469,11 +476,17 @@ impl Planner<'_> {
                         )
                     }) =>
             {
-                format!("{}{{}}", go_ty.code)
+                GoExpression::empty_composite(go_ty.code)
             }
-            _ => format!("*new({})", go_ty.code),
+            _ => dereferenced_new(&go_ty.code),
         };
         (value, packages)
+    }
+
+    pub(crate) fn zero_value_expression(&mut self, ty: &Type) -> GoExpression {
+        let (zero, packages) = self.zero_value(ty);
+        self.require_packages(&packages);
+        zero
     }
 
     /// Render a `#[go(anon_struct)]` stand-in as inline `struct{...}`: its name
@@ -514,6 +527,25 @@ fn build_go_import_typed(code: String, package: PackageUse, param_types: &[GoTyp
     let mut result = GoType::with_package(code, package);
     result.merge_all(param_types);
     result
+}
+
+pub(crate) fn split_top_level_type_list(list: &str) -> Vec<&str> {
+    let mut entries = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0;
+    for (i, c) in list.char_indices() {
+        match c {
+            '[' | '(' => depth += 1,
+            ']' | ')' => depth -= 1,
+            ',' if depth == 0 => {
+                entries.push(list[start..i].trim());
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    entries.push(list[start..].trim());
+    entries
 }
 
 /// Split a recipe like `Map<K, V>, K, V` on commas outside angle brackets, so a

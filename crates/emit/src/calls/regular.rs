@@ -16,13 +16,14 @@ use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::LaterStages;
 use crate::expressions::staging::{SpreadSequenceOptions, VariadicCombine};
 use crate::names::generics::extract_type_mapping;
-use crate::plan::bodies::LoweredStatement;
+use crate::plan::bodies::{
+    LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, define,
+};
 use crate::plan::calls::{ArgumentPlan, CallPlan, CallableOrigin, ResolvedCallee};
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{
     CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, SequencedValues, ValuePlan,
 };
-use crate::write_line;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::types::Type;
 
@@ -351,11 +352,8 @@ impl<'a> Planner<'a> {
             && LaterStages::sequenced(&args_setup, args_effect)
                 .can_change(self.place_read_stability(function));
         if callee_needs_pin {
-            callee = GoExpression::name(self.hoist_tmp_value_statement(
-                &mut setup,
-                "callee",
-                callee.as_str(),
-            ));
+            let pinned = self.hoist_tmp_value_statement(&mut setup, "callee", callee);
+            callee = GoExpression::name(pinned);
         }
 
         let call = match collapse_fmt_print(self, &callee, args, &arguments) {
@@ -582,7 +580,7 @@ impl<'a> Planner<'a> {
 
     /// Classify and lower a single call argument: dispatch is plan-driven and
     /// returns typed setup. The plain `Direct` / `TaggedGoLowering` paths produce
-    /// typed `TempBind` setup; adapter and slot-bridge paths retain their own
+    /// `Define` setup; adapter and slot-bridge paths retain their own
     /// structured setup until sequencing.
     fn lower_call_arg(
         &mut self,
@@ -627,8 +625,8 @@ impl<'a> Planner<'a> {
                 let arg_ctx = self.direct_arg_emit_ctx(param, true);
                 let argument = self.lower_composite_value(arg, arg_ctx);
                 argument.map_expression_as_computed(|setup, value| {
-                    let lowered = self.emit_lower_arg_to_tagged(setup, value.as_str(), target);
-                    GoExpression::opaque_with_deferred_evaluation(lowered, true)
+                    self.emit_lower_arg_to_tagged(setup, value, target)
+                        .with_deferred_evaluation(true)
                 })
             }
             ArgumentPlan::Direct => self.lower_direct_arg(arg, ctx, param, declared_param_ty),
@@ -887,20 +885,9 @@ impl<'a> Planner<'a> {
             ExpressionContext::value().with_function_slot_origin(param_origin),
         );
         Some(argument.map_expression_as_computed(|setup, value| {
-            let mut buffer = String::new();
-            let adapted = emit_fn_arg_shape_adapter(
-                self,
-                &mut buffer,
-                value.as_str(),
-                &arg_fn,
-                &arg_abi,
-                &param_abi,
-            )
-            .expect("fn_arg_shapes resolved a function signature");
-            if !buffer.is_empty() {
-                setup.push(LoweredStatement::RawGo(buffer));
-            }
-            GoExpression::opaque_with_deferred_evaluation(adapted, true)
+            emit_fn_arg_shape_adapter(self, setup, value, &arg_fn, &arg_abi, &param_abi)
+                .expect("fn_arg_shapes resolved a function signature")
+                .with_deferred_evaluation(true)
         }))
     }
 
@@ -940,13 +927,9 @@ impl<'a> Planner<'a> {
         let source = self
             .lower_value(spread, ExpressionContext::value())
             .map_expression_as_name(|setup, source_value| {
-                GoExpression::name(self.hoist_tmp_value_statement(
-                    setup,
-                    "src",
-                    source_value.as_str(),
-                ))
+                GoExpression::name(self.hoist_tmp_value_statement(setup, "src", source_value))
             });
-        let source_variable = source.rendered();
+        let source_variable = source.expression.clone();
 
         let target_element_ret = self.render_lowered_return_ty(&param_abi, arg_ret);
         let arg_fn_params = arg_fn.get_function_params().unwrap_or(&[]);
@@ -964,20 +947,47 @@ impl<'a> Planner<'a> {
         self.declare(&adapted);
         let loop_cb = self.fresh_var(Some("cb"));
 
-        let mut body = String::new();
-        let closure =
-            emit_fn_arg_shape_adapter(self, &mut body, &loop_cb, &arg_fn, &arg_abi, &param_abi)?;
-        write_line!(body, "{}[i] = {}", adapted, closure);
+        let mut body = Vec::new();
+        let closure = emit_fn_arg_shape_adapter(
+            self,
+            &mut body,
+            GoExpression::name(loop_cb.clone()),
+            &arg_fn,
+            &arg_abi,
+            &param_abi,
+        )?;
+        body.push(assign(
+            GoExpression::index(
+                GoExpression::name(adapted.clone()),
+                GoExpression::name("i".to_string()),
+            ),
+            closure,
+        ));
 
         Some(source.map_expression_as_name(|setup, _source_value| {
-            setup.push(LoweredStatement::RawGo(format!(
-                "{} := make([]{}, len({}))\n",
-                adapted, target_element_ty, source_variable
-            )));
-            setup.push(LoweredStatement::RawGo(format!(
-                "for i, {} := range {} {{\n{}}}\n",
-                loop_cb, source_variable, body
-            )));
+            setup.push(define(
+                adapted.clone(),
+                GoExpression::call(
+                    GoExpression::name("make".to_string()),
+                    vec![
+                        GoExpression::type_name(format!("[]{target_element_ty}")),
+                        GoExpression::call(
+                            GoExpression::name("len".to_string()),
+                            vec![source_variable.clone()],
+                        ),
+                    ],
+                ),
+            ));
+            setup.push(LoweredStatement::Loop(LoopPlan {
+                prologue: Vec::new(),
+                kind: LoopKind::Generated { label: None },
+                header: LoopHeader::Range {
+                    key: Some("i".to_string()),
+                    value: Some(loop_cb),
+                    iterable: source_variable,
+                },
+                body: LoweredBlock { statements: body },
+            }));
             GoExpression::name(adapted)
         }))
     }
@@ -1045,32 +1055,15 @@ impl<'a> Planner<'a> {
                         .facts
                         .resolve_to_function_type(effective_param_ty.unwrap_forall())
                         .expect("callback target resolves to a fn type");
-                    GoExpression::opaque(emit_lisette_callback_wrapper(
-                        self,
-                        setup,
-                        value.as_str(),
-                        &param_fn_ty,
-                    ))
+                    emit_lisette_callback_wrapper(self, setup, value, &param_fn_ty)
                 }
                 AbiTransition::WrapToTagged | AbiTransition::Reencode => {
                     let arg_fn_ty = self
                         .facts
                         .resolve_to_function_type(arg.get_type().unwrap_forall())
                         .expect("callback source resolves to a fn type");
-                    let mut buffer = String::new();
-                    let adapted = emit_fn_arg_shape_adapter(
-                        self,
-                        &mut buffer,
-                        value.as_str(),
-                        &arg_fn_ty,
-                        source,
-                        target,
-                    )
-                    .expect("callback ABI transition has a function signature");
-                    if !buffer.is_empty() {
-                        setup.push(LoweredStatement::RawGo(buffer));
-                    }
-                    GoExpression::opaque(adapted)
+                    emit_fn_arg_shape_adapter(self, setup, value, &arg_fn_ty, source, target)
+                        .expect("callback ABI transition has a function signature")
                 }
                 AbiTransition::Incompatible => {
                     unreachable!("type-checked callback ABIs must describe the same result")

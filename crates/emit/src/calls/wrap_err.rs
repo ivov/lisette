@@ -7,7 +7,7 @@ use syntax::ast::{Expression, FormatStringPart, Literal};
 
 pub(crate) struct WrapMessage {
     format: String,
-    args: Vec<String>,
+    args: Vec<GoExpression>,
 }
 
 impl Planner<'_> {
@@ -102,8 +102,7 @@ impl Planner<'_> {
                             values.push(value);
                         }
                     }
-                    let (format, args) = self.sprintf_pieces(parts, values, true);
-                    (format, args.iter().map(GoExpression::rendered).collect())
+                    self.sprintf_pieces(parts, values, true)
                 }
                 _ => {
                     let value = self.lower_composite_value(message, ExpressionContext::value());
@@ -118,16 +117,17 @@ impl Planner<'_> {
         (setup, prepared)
     }
 
-    pub(crate) fn wrap_error(&mut self, messages: &[WrapMessage], error: String) -> String {
+    pub(crate) fn wrap_error(
+        &mut self,
+        messages: &[WrapMessage],
+        error: GoExpression,
+    ) -> GoExpression {
         messages.iter().fold(error, |error, message| {
             self.require_fmt();
-            let mut args = message.args.clone();
+            let mut args = vec![GoExpression::literal(format!("\"{}: %w\"", message.format))];
+            args.extend(message.args.iter().cloned());
             args.push(error);
-            format!(
-                "fmt.Errorf(\"{}: %w\", {})",
-                message.format,
-                args.join(", ")
-            )
+            GoExpression::call(GoExpression::name("fmt.Errorf".to_string()), args)
         })
     }
 }

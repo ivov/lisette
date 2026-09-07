@@ -2,10 +2,12 @@ use super::NativeCallContext;
 use crate::Planner;
 use crate::calls::dispatch::extract_native_method_name;
 use crate::context::expression::ExpressionContext;
+use crate::control_flow::propagation::plain_return;
 use crate::expressions::access::index_access::range_var_bounds;
 use crate::names::go_name;
-use crate::plan::bodies::LoweredStatement;
+use crate::plan::bodies::{LoweredBlock, LoweredStatement};
 use crate::plan::calls::plan_variadic_spread;
+use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::statements::assignments::lvalues_match;
 use crate::types::native::NativeGoType;
@@ -625,12 +627,12 @@ impl Planner<'_> {
             {
                 let mut staged = self.stage_native_method(ctx, form);
                 self.require_slices();
-                let searched = staged.arguments[0].as_str().to_string();
-                let target = self.hoist_tmp_value_statement(&mut staged.setup, "want", &searched);
-                let predicate = self.contains_predicate(&element, &target, &[]);
+                let searched = staged.arguments[0].clone();
+                let target = self.hoist_tmp_value_statement(&mut staged.setup, "want", searched);
+                let predicate = self.contains_predicate(&element, GoExpression::name(target), &[]);
                 let body = GoExpression::call(
                     GoExpression::name("slices.ContainsFunc".to_string()),
-                    vec![staged.receiver.clone(), GoExpression::opaque(predicate)],
+                    vec![staged.receiver.clone(), predicate],
                 );
                 return staged.finish(body);
             }
@@ -769,7 +771,7 @@ impl Planner<'_> {
                 receiver
             }
         } else {
-            GoExpression::name(self.hoist_tmp_value_statement(setup, "arr", receiver.as_str()))
+            GoExpression::name(self.hoist_tmp_value_statement(setup, "arr", receiver))
         };
         GoExpression::slice(base, None, None, None)
     }
@@ -983,7 +985,7 @@ impl Planner<'_> {
     pub(super) fn lower_map_index_pair(
         &mut self,
         expression: &Expression,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> (Vec<LoweredStatement>, GoExpression) {
         let Expression::Call {
             expression: function,
             args,
@@ -1012,7 +1014,7 @@ impl Planner<'_> {
         let mut staged = self.stage_native_method(&ctx, NativeMethodForm::Dot);
         let receiver = super::comma_ok::parenthesize_prefixed_expression(staged.receiver);
         let key = staged.arguments.remove(0);
-        (staged.setup, GoExpression::index(receiver, key).rendered())
+        (staged.setup, GoExpression::index(receiver, key))
     }
 
     fn lower_string_substring(
@@ -1092,39 +1094,25 @@ impl Planner<'_> {
         )
     }
 
-    pub(crate) fn render_equality(
+    pub(crate) fn equality_expression(
         &mut self,
-        lhs: &str,
-        rhs: &str,
+        lhs: GoExpression,
+        rhs: GoExpression,
         ty: &Type,
         generics: &[Generic],
-    ) -> String {
-        self.equality_test(
-            GoExpression::opaque(lhs.to_string()),
-            GoExpression::opaque(rhs.to_string()),
-            ty,
-            generics,
-            false,
-        )
-        .rendered()
+    ) -> GoExpression {
+        self.equality_test(lhs, rhs, ty, generics, false)
     }
 
     /// `!=` where equality is an operator, a `!` prefix where it is a call.
-    pub(crate) fn render_inequality(
+    pub(crate) fn inequality_expression(
         &mut self,
-        lhs: &str,
-        rhs: &str,
+        lhs: GoExpression,
+        rhs: GoExpression,
         ty: &Type,
         generics: &[Generic],
-    ) -> String {
-        self.equality_test(
-            GoExpression::opaque(lhs.to_string()),
-            GoExpression::opaque(rhs.to_string()),
-            ty,
-            generics,
-            true,
-        )
-        .rendered()
+    ) -> GoExpression {
+        self.equality_test(lhs, rhs, ty, generics, true)
     }
 
     fn equality_test(
@@ -1154,7 +1142,7 @@ impl Planner<'_> {
                     let eq = self.equality_closure(&elem, generics);
                     negate(GoExpression::call(
                         GoExpression::name("slices.EqualFunc".to_string()),
-                        vec![lhs, rhs, GoExpression::opaque(eq)],
+                        vec![lhs, rhs, eq],
                     ))
                 }
                 _ => negate(GoExpression::call(
@@ -1173,7 +1161,7 @@ impl Planner<'_> {
                     let eq = self.equality_closure(&value, generics);
                     negate(GoExpression::call(
                         GoExpression::name("maps.EqualFunc".to_string()),
-                        vec![lhs, rhs, GoExpression::opaque(eq)],
+                        vec![lhs, rhs, eq],
                     ))
                 }
                 _ => negate(GoExpression::call(
@@ -1192,19 +1180,30 @@ impl Planner<'_> {
         GoExpression::binary(lhs, operator, rhs)
     }
 
-    fn equality_closure(&mut self, ty: &Type, generics: &[Generic]) -> String {
+    fn equality_closure(&mut self, ty: &Type, generics: &[Generic]) -> GoExpression {
         let go_ty = self.use_go_type(ty);
         let a = self.fresh_var(Some("a"));
         let b = self.fresh_var(Some("b"));
-        let body = self.render_equality(&a, &b, ty, generics);
-        format!("func({a} {go_ty}, {b} {go_ty}) bool {{ return {body} }}")
+        let body = self.equality_expression(
+            GoExpression::name(a.clone()),
+            GoExpression::name(b.clone()),
+            ty,
+            generics,
+        );
+        predicate_literal(format!("{a} {go_ty}, {b} {go_ty}"), body)
     }
 
-    fn contains_predicate(&mut self, ty: &Type, target: &str, generics: &[Generic]) -> String {
+    fn contains_predicate(
+        &mut self,
+        ty: &Type,
+        target: GoExpression,
+        generics: &[Generic],
+    ) -> GoExpression {
         let go_ty = self.use_go_type(ty);
         let element = self.fresh_var(Some("e"));
-        let body = self.render_equality(&element, target, ty, generics);
-        format!("func({element} {go_ty}) bool {{ return {body} }}")
+        let body =
+            self.equality_expression(GoExpression::name(element.clone()), target, ty, generics);
+        predicate_literal(format!("{element} {go_ty}"), body)
     }
 
     fn needs_custom_equality(&self, ty: &Type, generics: &[Generic]) -> bool {
@@ -1215,6 +1214,17 @@ impl Planner<'_> {
         let peeled = self.facts.peel_alias(ty);
         peeled.is_slice() || peeled.is_map()
     }
+}
+
+fn predicate_literal(parameters: String, body: GoExpression) -> GoExpression {
+    GoExpression::function_literal(
+        parameters,
+        "bool".to_string(),
+        LoweredBlock {
+            statements: vec![plain_return(body)],
+        },
+        FunctionLiteralLayout::Inline,
+    )
 }
 
 fn is_cloneable_container(ty: &Type) -> bool {

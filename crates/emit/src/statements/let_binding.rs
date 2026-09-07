@@ -6,12 +6,15 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::Fallible;
 use crate::escape_reserved;
 use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
-use crate::plan::bodies::{LetPlan, LoweredBlock, LoweredStatement};
+use crate::plan::bodies::{
+    LetPlan, LoweredBlock, LoweredStatement, define, define_many, expression_statement,
+};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::placement::{
     collapse_declared_temp, expression_contains_binding, is_unit_call, rebind_trailing_temp,
     requires_temp_var,
 };
+use crate::plan::values::GoExpression;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::types::Type;
 
@@ -190,26 +193,21 @@ impl Planner<'_> {
         let (mut statements, value_expression) = self
             .lower_value(value, ExpressionContext::value())
             .into_parts();
-        statements.push(LoweredStatement::RawGo(format!("{}\n", value_expression)));
+        statements.push(expression_statement(value_expression));
         let Some(raw_go_name) = raw_go_name else {
             return statements;
         };
+        let unit = || GoExpression::empty_composite("struct{}".to_string());
         let escaped = escape_reserved(raw_go_name);
         if self.shadows_declaration(&escaped) {
             let fresh = self.fresh_var(Some(identifier));
             self.declare(&fresh);
-            statements.push(LoweredStatement::TempBind {
-                name: fresh.clone(),
-                value: "struct{}{}".to_string(),
-            });
+            statements.push(define(fresh.clone(), unit()));
             self.scope.bind(identifier, &fresh);
         } else {
             let go_identifier = self.scope.bind(identifier, raw_go_name);
             self.try_declare(&go_identifier);
-            statements.push(LoweredStatement::TempBind {
-                name: go_identifier,
-                value: "struct{}{}".to_string(),
-            });
+            statements.push(define(go_identifier, unit()));
         }
         statements
     }
@@ -239,7 +237,6 @@ impl Planner<'_> {
         let constant_needs_type =
             coercion.is_identity() && self.constant_needs_go_type(constant, binding_ty).is_some();
         let (coercion_setup, value_expression) = coercion.lower(self, plan.expression);
-        let value_expression = value_expression.rendered();
         statements.extend(coercion_setup);
 
         let bound = self.scope.bind(identifier, raw_go_name);
@@ -263,15 +260,14 @@ impl Planner<'_> {
             return statements;
         }
         // A temp no source binding answers to has no other reader to break.
-        if !self.scope.has_binding_for_go_name(&value_expression)
-            && rebind_trailing_temp(&mut statements, &go_identifier, &value_expression)
+        if !self
+            .scope
+            .has_binding_for_go_name(value_expression.as_str())
+            && rebind_trailing_temp(&mut statements, &go_identifier, value_expression.as_str())
         {
             return statements;
         }
-        statements.push(LoweredStatement::TempBind {
-            name: go_identifier,
-            value: value_expression,
-        });
+        statements.push(define(go_identifier, value_expression));
         statements
     }
 
@@ -326,7 +322,11 @@ impl Planner<'_> {
             }
             self.try_declare(name);
         }
-        statements.extend(self.lower_assign(value, name, Some(binding_ty)));
+        statements.extend(self.lower_assign(
+            value,
+            &GoExpression::name(name.to_string()),
+            Some(binding_ty),
+        ));
         collapse_declared_temp(&mut statements, name);
         statements
     }
@@ -599,7 +599,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             })
             .collect();
 
-        let (mut statements, call_str) = self
+        let (mut statements, call) = self
             .planner
             .lower_call(self.value, None, ExpressionContext::value())
             .into_parts();
@@ -609,13 +609,14 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             self.planner.try_declare(go_name);
         }
 
-        let op = if any_new { ":=" } else { "=" };
-        statements.push(LoweredStatement::RawGo(format!(
-            "{} {} {}\n",
-            go_vars.join(", "),
-            op,
-            call_str
-        )));
+        statements.push(if any_new {
+            define_many(go_vars, call)
+        } else {
+            LoweredStatement::AssignMany {
+                targets: go_vars.into_iter().map(GoExpression::name).collect(),
+                value: call,
+            }
+        });
         LoweredBlock { statements }
     }
 }

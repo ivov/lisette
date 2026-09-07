@@ -5,7 +5,7 @@ use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::LaterStages;
 use crate::is_order_sensitive;
 use crate::names::go_name;
-use crate::plan::bodies::{AssignForm, CompoundKind, LoweredBlock, LoweredStatement};
+use crate::plan::bodies::{AssignForm, CompoundKind, LoweredBlock, LoweredStatement, define};
 use crate::plan::values::{GoExpression, ValuePlan};
 use crate::state::bindings::BindingValue;
 use syntax::ast::Literal;
@@ -66,7 +66,7 @@ impl Planner<'_> {
                 ExpressionContext::value().with_retired_receiver(target),
             )
         });
-        let (target_capture, target_str) =
+        let (target_capture, target_place) =
             self.capture_assignment_target(target, Some(&right_hand_side));
         let coercion = if is_literal_slot {
             CoercionPlan::Identity
@@ -84,7 +84,7 @@ impl Planner<'_> {
         });
         LoweredStatement::Assign(AssignForm::Simple {
             target_capture,
-            target_str,
+            target: target_place,
             value,
         })
     }
@@ -105,26 +105,23 @@ impl Planner<'_> {
             } else {
                 CompoundKind::Decrement
             };
-            let (target_capture, target_str) = self.capture_assignment_target(target, None);
+            let (target_capture, target_place) = self.capture_assignment_target(target, None);
             return AssignForm::Compound {
                 target_capture,
-                target_str,
+                target: target_place,
                 kind,
             };
         }
 
         let right_hand_side = self.plan_operand(rhs, ExpressionContext::value());
-        let (mut target_capture, target_str) =
+        let (mut target_capture, target_place) =
             self.capture_assignment_target(target, Some(&right_hand_side));
         let needs_left_pin =
             later_stages(Some(&right_hand_side)).can_change(self.place_read_stability(target));
         let pinned_left = needs_left_pin.then(|| {
             let tmp = self.fresh_var(Some("left"));
             self.declare(&tmp);
-            target_capture.push(LoweredStatement::TempBind {
-                name: tmp.clone(),
-                value: target_str.clone(),
-            });
+            target_capture.push(define(tmp.clone(), target_place.clone()));
             tmp
         });
         let parenthesize_rhs =
@@ -148,7 +145,7 @@ impl Planner<'_> {
         };
         AssignForm::Compound {
             target_capture,
-            target_str,
+            target: target_place,
             kind,
         }
     }
@@ -159,14 +156,14 @@ impl Planner<'_> {
         &mut self,
         target: &Expression,
         right_hand_side: Option<&ValuePlan>,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> (Vec<LoweredStatement>, GoExpression) {
         let mut target_capture: Vec<LoweredStatement> = Vec::new();
-        let target_str = if is_order_sensitive(target) {
+        let target = if is_order_sensitive(target) {
             self.emit_left_value_capturing(&mut target_capture, target, right_hand_side)
         } else {
             self.emit_left_value(&mut target_capture, target)
         };
-        (target_capture, target_str)
+        (target_capture, target)
     }
 
     fn target_binds_to_discard(&self, target: &Expression) -> bool {
@@ -184,14 +181,15 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
-    ) -> String {
+    ) -> GoExpression {
         let expression = expression.unwrap_parens();
         match expression {
-            Expression::Identifier { value, .. } => self
-                .scope
-                .resolve_binding_go_name(value)
-                .unwrap_or(value)
-                .to_string(),
+            Expression::Identifier { value, .. } => GoExpression::name(
+                self.scope
+                    .resolve_binding_go_name(value)
+                    .unwrap_or(value)
+                    .to_string(),
+            ),
             Expression::DotAccess {
                 expression,
                 member,
@@ -199,21 +197,21 @@ impl Planner<'_> {
                 ..
             } => {
                 let base = expression.deref_inner().unwrap_or(expression);
-                let base_str = self.capture_operand_into(setup, base);
+                let base = self.capture_operand_into(setup, base);
                 let expression_ty = expression.get_type();
-                self.format_dot_access_lvalue(&base_str, &expression_ty, member, resolution)
+                self.format_dot_access_lvalue(base, &expression_ty, member, resolution)
             }
             Expression::IndexedAccess {
                 expression, index, ..
             } => {
-                let expression_string = if let Some(inner) = expression.deref_inner() {
-                    let inner_str = self.capture_operand_into(setup, inner);
-                    format!("(*{})", inner_str)
+                let base = if let Some(inner) = expression.deref_inner() {
+                    let inner = self.capture_operand_into(setup, inner);
+                    GoExpression::parenthesized(GoExpression::dereference(inner))
                 } else {
                     self.capture_operand_into(setup, expression)
                 };
-                let index_str = self.capture_operand_into(setup, index);
-                format!("{}[{}]", expression_string, index_str)
+                let index = self.capture_operand_into(setup, index);
+                GoExpression::index(base, index)
             }
             Expression::Unary {
                 operator: UnaryOperator::Deref,
@@ -221,10 +219,10 @@ impl Planner<'_> {
                 ..
             } => self.emit_deref_lvalue(setup, expression, None),
             Expression::Call { .. } if expression.get_type().is_ref() => {
-                let call_str = self.capture_operand_into(setup, expression);
-                self.hoist_tmp_value_statement(setup, "ref", &call_str)
+                let call = self.capture_operand_into(setup, expression);
+                GoExpression::name(self.hoist_tmp_value_statement(setup, "ref", call))
             }
-            _ => "_".to_string(),
+            _ => GoExpression::name("_".to_string()),
         }
     }
 
@@ -236,17 +234,17 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
         pointee: &Expression,
         right_hand_side: Option<&ValuePlan>,
-    ) -> String {
+    ) -> GoExpression {
         let pointee_plan = self.plan_operand(pointee, ExpressionContext::value());
         let needs_capture = matches!(pointee.unwrap_parens(), Expression::Call { .. })
             || later_stages(right_hand_side).can_change(pointee_plan.evaluation.stability);
-        let (pointee_setup, pointee_string) = pointee_plan.into_parts();
+        let (pointee_setup, pointee_value) = pointee_plan.into_parts();
         setup.extend(pointee_setup);
         if needs_capture {
-            let tmp = self.hoist_tmp_value_statement(setup, "ref", &pointee_string);
-            return format!("*{}", tmp);
+            let tmp = self.hoist_tmp_value_statement(setup, "ref", pointee_value);
+            return GoExpression::dereference(GoExpression::name(tmp));
         }
-        format!("*{}", pointee_string)
+        GoExpression::dereference(pointee_value)
     }
 
     /// Format a dot-access lvalue (struct field or tuple element) onto the
@@ -254,18 +252,19 @@ impl Planner<'_> {
     /// tuple-struct field helper (newtype unwrap) or positional `Fi` fallback.
     fn format_dot_access_lvalue(
         &mut self,
-        base_str: &str,
+        base: GoExpression,
         expression_ty: &Type,
         member: &str,
         resolution: &DotAccessResolution,
-    ) -> String {
+    ) -> GoExpression {
         if let Ok(index) = member.parse::<usize>() {
-            let access = self.try_emit_tuple_struct_field_access(base_str, expression_ty, index);
+            let access =
+                self.try_emit_tuple_struct_field_access(base.clone(), expression_ty, index);
             if let Some(access) = access {
                 return access;
             }
             let field = TUPLE_FIELDS.get(index).expect("oversize tuple arity");
-            return format!("{}.{}", base_str, field);
+            return GoExpression::selector(base, field.to_string());
         }
         let field = if resolution_exports_field(resolution)
             || self.struct_field_is_exported(expression_ty, member)
@@ -276,7 +275,7 @@ impl Planner<'_> {
         } else {
             go_name::unexported_method_go_name(member)
         };
-        format!("{}.{}", base_str, field)
+        GoExpression::selector(base, field)
     }
 
     /// Emit a left-value, capturing side-effecting subexpressions (index, base)
@@ -287,7 +286,7 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
         right_hand_side: Option<&ValuePlan>,
-    ) -> String {
+    ) -> GoExpression {
         let expression = expression.unwrap_parens();
         match expression {
             Expression::IndexedAccess {
@@ -296,10 +295,10 @@ impl Planner<'_> {
                 ..
             } => {
                 if assignment_requires_target_capture(right_hand_side) {
-                    let base_str = self.emit_indexed_base_lvalue(setup, base, right_hand_side);
-                    let index_str =
+                    let base = self.emit_indexed_base_lvalue(setup, base, right_hand_side);
+                    let index =
                         self.capture_assignment_operand(setup, index, "idx", right_hand_side);
-                    format!("{}[{}]", base_str, index_str)
+                    GoExpression::index(base, index)
                 } else {
                     self.emit_indexed_lvalue_inline(setup, base, index)
                 }
@@ -310,7 +309,7 @@ impl Planner<'_> {
                 resolution,
                 ..
             } => {
-                let base_str = if let Some(inner) = base.deref_inner() {
+                let base_value = if let Some(inner) = base.deref_inner() {
                     self.capture_assignment_operand(setup, inner, "ref", right_hand_side)
                 } else if is_order_sensitive(base) {
                     self.emit_left_value_capturing(setup, base, right_hand_side)
@@ -320,7 +319,7 @@ impl Planner<'_> {
                     self.emit_left_value(setup, base)
                 };
                 let expression_ty = base.get_type();
-                self.format_dot_access_lvalue(&base_str, &expression_ty, member, resolution)
+                self.format_dot_access_lvalue(base_value, &expression_ty, member, resolution)
             }
             Expression::Unary {
                 operator: UnaryOperator::Deref,
@@ -336,7 +335,7 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
         base: &Expression,
         index: &Expression,
-    ) -> String {
+    ) -> GoExpression {
         let base_staged = self.stage_base_with_deref(base);
         let (seq_setup, value) = self
             .sequence_indexed_access(base, base_staged, index, "base")
@@ -350,10 +349,10 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
         base: &Expression,
         right_hand_side: Option<&ValuePlan>,
-    ) -> String {
+    ) -> GoExpression {
         if let Some(inner) = base.deref_inner() {
-            let inner_str = self.capture_assignment_operand(setup, inner, "base", right_hand_side);
-            format!("(*{})", inner_str)
+            let inner = self.capture_assignment_operand(setup, inner, "base", right_hand_side);
+            GoExpression::parenthesized(GoExpression::dereference(inner))
         } else {
             self.capture_assignment_operand(setup, base, "base", right_hand_side)
         }
@@ -365,13 +364,13 @@ impl Planner<'_> {
         expression: &Expression,
         prefix: &str,
         right_hand_side: Option<&ValuePlan>,
-    ) -> String {
+    ) -> GoExpression {
         let plan = self.lower_composite_value(expression, ExpressionContext::value());
         let pin = later_stages(right_hand_side).can_change(plan.evaluation.stability);
         let (value_setup, value) = plan.into_parts();
         setup.extend(value_setup);
         if pin {
-            self.hoist_tmp_value_statement(setup, prefix, &value)
+            GoExpression::name(self.hoist_tmp_value_statement(setup, prefix, value))
         } else {
             value
         }

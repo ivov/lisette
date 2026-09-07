@@ -1,6 +1,6 @@
 use crate::plan::bodies::{
-    AssignForm, BreakValuePlan, CompoundKind, ElseArm, ExpressionStatementForm, IfPlan, LoopId,
-    LoopKind, LoopTransfer, LoweredBlock, LoweredStatement, ReturnForm,
+    AssignForm, BreakValuePlan, CompoundKind, ElseArm, IfPlan, LoopId, LoopKind, LoopTransfer,
+    LoweredBlock, LoweredStatement, ReturnForm,
 };
 use crate::plan::values::ValuePlan;
 
@@ -141,10 +141,6 @@ impl Legalizer {
                     self.walk_value(value, interception);
                 }
             },
-            LoweredStatement::Expression(plan) => match plan {
-                ExpressionStatementForm::Async { value } => self.walk_value(value, interception),
-                ExpressionStatementForm::AsyncBlock { .. } => {}
-            },
             LoweredStatement::Select(plan) => {
                 self.walk_statements(&mut plan.setup, interception);
                 let arm_interception = if plan.retry_loop {
@@ -169,11 +165,12 @@ impl Legalizer {
             }
             LoweredStatement::WhileLet(body) => self.walk_block(body, interception),
             LoweredStatement::Directed { inner, .. } => self.walk_statement(inner, interception),
-            LoweredStatement::TempBind { .. }
+            LoweredStatement::Async { .. }
+            | LoweredStatement::Define(_)
             | LoweredStatement::VarDecl { .. }
-            | LoweredStatement::ClosureBind { .. }
-            | LoweredStatement::RawGo(_)
-            | LoweredStatement::DivergingRawGo(_)
+            | LoweredStatement::Discard(_)
+            | LoweredStatement::AssignMany { .. }
+            | LoweredStatement::ExpressionStatement { .. }
             | LoweredStatement::UnreachablePanic => {}
         }
     }

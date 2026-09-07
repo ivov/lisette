@@ -1,6 +1,9 @@
 //! The Go expression tree behind `GoExpression`.
 
+use crate::plan::bodies::LoweredBlock;
+use crate::render::Renderer;
 use crate::types::go_type::render_conversion;
+use std::slice;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GoExpressionNode {
@@ -58,11 +61,23 @@ pub(crate) enum GoExpressionNode {
         go_type: String,
         operand: Box<GoExpressionNode>,
     },
-    Receive(Box<GoExpressionNode>),
     /// A variadic argument, `values...`.
     Spread(Box<GoExpressionNode>),
-    /// Go text that is not yet a node.
-    Raw(String),
+    FunctionLiteral {
+        parameters: String,
+        result: String,
+        body: LoweredBlock,
+        layout: FunctionLiteralLayout,
+    },
+    Empty,
+    /// Go source the program supplied through `@rawgo`.
+    Verbatim(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FunctionLiteralLayout {
+    Inline,
+    MultiLine,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,9 +118,11 @@ impl GoExpressionNode {
 
     fn write(&self, output: &mut String) {
         match self {
-            Self::Identifier(text) | Self::Literal(text) | Self::Type(text) | Self::Raw(text) => {
-                output.push_str(text)
-            }
+            Self::Identifier(text)
+            | Self::Literal(text)
+            | Self::Type(text)
+            | Self::Verbatim(text) => output.push_str(text),
+            Self::Empty => {}
             Self::CompositeLiteral {
                 go_type,
                 elements,
@@ -237,13 +254,51 @@ impl GoExpressionNode {
             Self::Conversion { go_type, operand } => {
                 output.push_str(&render_conversion(go_type, &operand.print()));
             }
-            Self::Receive(channel) => {
-                output.push_str("<-");
-                channel.write(output);
-            }
             Self::Spread(operand) => {
                 operand.write(output);
                 output.push_str("...");
+            }
+            Self::FunctionLiteral {
+                parameters,
+                result,
+                body,
+                layout,
+            } => {
+                output.push_str("func(");
+                output.push_str(parameters);
+                output.push(')');
+                if !result.is_empty() {
+                    output.push(' ');
+                    output.push_str(result);
+                }
+                output.push_str(" {");
+                let lines: Vec<String> = body
+                    .statements
+                    .iter()
+                    .map(|statement| Renderer.render_setup(slice::from_ref(statement)))
+                    .collect();
+                let single_line = lines
+                    .iter()
+                    .all(|line| line.trim_end_matches('\n').lines().count() <= 1);
+                if matches!(layout, FunctionLiteralLayout::Inline) && single_line {
+                    let joined = lines
+                        .iter()
+                        .map(|line| line.trim_end_matches('\n'))
+                        .collect::<Vec<_>>()
+                        .join("; ");
+                    if !joined.is_empty() {
+                        output.push(' ');
+                        output.push_str(&joined);
+                        output.push(' ');
+                    }
+                    output.push('}');
+                } else {
+                    output.push('\n');
+                    for line in &lines {
+                        output.push_str(line);
+                    }
+                    output.push('}');
+                }
             }
         }
     }

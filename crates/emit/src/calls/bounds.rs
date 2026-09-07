@@ -1,14 +1,14 @@
 use super::NativeMethodCall;
-use super::comma_ok::parenthesize_prefixed;
+use super::comma_ok::parenthesize_prefixed_expression;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::plan::bodies::LoweredStatement;
-use crate::plan::values::CaptureBoundary;
+use crate::plan::values::{CaptureBoundary, GoExpression};
 
 pub(crate) struct BoundsCheckedIndex {
-    pub element: String,
-    pub in_bounds: String,
-    pub out_of_bounds: String,
+    pub element: GoExpression,
+    pub in_bounds: GoExpression,
+    pub out_of_bounds: GoExpression,
 }
 
 impl Planner<'_> {
@@ -30,27 +30,46 @@ impl Planner<'_> {
             CaptureBoundary::SiblingSequence,
             "arg",
         );
-        let (setup, mut values) = sequenced.into_rendered();
+        let setup = sequenced.setup;
+        let mut values = sequenced.values;
         let index = values.pop().expect("index operand");
         let mut receiver = values.pop().expect("receiver operand");
         if call.receiver.get_type().is_ref() {
-            receiver = format!("*{receiver}");
+            receiver = GoExpression::dereference(receiver);
         }
-        let length = format!("len({receiver})");
-        let element = format!("{}[{index}]", parenthesize_prefixed(receiver));
-        let (in_bounds, out_of_bounds) = if index == "0" {
-            (format!("{length} > 0"), format!("{length} == 0"))
-        } else if index.parse::<u64>().is_ok() {
+        let length = || {
+            GoExpression::call(
+                GoExpression::name("len".to_string()),
+                vec![receiver.clone()],
+            )
+        };
+        let literal = |text: &str| GoExpression::literal(text.to_string());
+        let (in_bounds, out_of_bounds) = if index.as_str() == "0" {
             (
-                format!("{length} > {index}"),
-                format!("{length} <= {index}"),
+                GoExpression::binary(length(), ">", literal("0")),
+                GoExpression::binary(length(), "==", literal("0")),
+            )
+        } else if index.as_str().parse::<u64>().is_ok() {
+            (
+                GoExpression::binary(length(), ">", index.clone()),
+                GoExpression::binary(length(), "<=", index.clone()),
             )
         } else {
             (
-                format!("{index} >= 0 && {index} < {length}"),
-                format!("{index} < 0 || {index} >= {length}"),
+                GoExpression::binary(
+                    GoExpression::binary(index.clone(), ">=", literal("0")),
+                    "&&",
+                    GoExpression::binary(index.clone(), "<", length()),
+                ),
+                GoExpression::binary(
+                    GoExpression::binary(index.clone(), "<", literal("0")),
+                    "||",
+                    GoExpression::binary(index.clone(), ">=", length()),
+                ),
             )
         };
+        let element =
+            GoExpression::index(parenthesize_prefixed_expression(receiver.clone()), index);
         (
             setup,
             BoundsCheckedIndex {

@@ -323,7 +323,7 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let value = mem::replace(&mut stage.expression, GoExpression::empty());
         if matches!(receiver.unwrap_parens(), Expression::Call { .. }) {
-            let tmp = self.hoist_tmp_value_statement(&mut stage.setup, "ref", value.as_str());
+            let tmp = self.hoist_tmp_value_statement(&mut stage.setup, "ref", value);
             stage.expression = GoExpression::address_of(GoExpression::name(tmp));
             return stage.into_addressed_location();
         }
@@ -336,7 +336,7 @@ impl Planner<'_> {
             stage.make_observable_computed();
             stage
         } else {
-            let tmp = self.hoist_tmp_value_statement(&mut stage.setup, "ref", addressed.as_str());
+            let tmp = self.hoist_tmp_value_statement(&mut stage.setup, "ref", addressed);
             ValuePlan::captured(stage.setup, tmp)
         }
     }
