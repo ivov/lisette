@@ -10,16 +10,8 @@ description: |
 ---
 package main
 
-import (
-	"example.com/promoted"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/promoted"
 
 func clear_(client *promoted.Client) {
-	opt_1 := lisette.MakeOptionNone[*promoted.Group]()
-	var unwrap_2 *promoted.Group
-	if opt_1.Tag == lisette.OptionSome {
-		unwrap_2 = opt_1.SomeVal
-	}
-	client.Group = unwrap_2
+	client.Group = nil
 }

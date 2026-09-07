@@ -1,15 +1,83 @@
 use crate::Planner;
 use crate::abi::callable::PayloadLayout;
-use crate::abi::coercion::{BridgeDirection, LayoutBridge};
-use crate::abi::layout::ValueLayout;
+use crate::abi::coercion::{BridgeDirection, CoercionPlan, LayoutBridge};
+use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::calls::go_interop::build_tuple_literal;
 use crate::calls::go_interop::wrappers::{WrapperOutcome, WrapperTarget, leaf_block};
+use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG};
 use crate::plan::bodies::{ElseArm, IfPlan, LoopKind, LoopPlan, LoweredBlock, LoweredStatement};
+use crate::plan::values::{GoExpression, ValuePlan};
 use std::iter;
+use syntax::ast::Expression;
 use syntax::types::Type;
 
 impl Planner<'_> {
+    /// `Some(e)` and `None` written straight into a nullable Go slot.
+    pub(crate) fn lower_option_literal_into_layout(
+        &mut self,
+        expression: &Expression,
+        target: &ValueLayout,
+    ) -> Option<ValuePlan> {
+        let source = self.value_layout(&expression.get_type(), SlotOrigin::Lisette);
+        let CoercionPlan::Layout(bridge) = CoercionPlan::bridge(self, &source, target) else {
+            return None;
+        };
+        let (payload, pointee) = match &bridge {
+            LayoutBridge::UnwrapNullableOption { payload, .. } => (payload, None),
+            LayoutBridge::UnwrapPointerOption {
+                payload,
+                target_payload,
+                ..
+            } => (payload, Some(target_payload)),
+            _ => return None,
+        };
+        let expression = expression.unwrap_parens();
+        if expression.is_none_literal() {
+            return Some(ValuePlan::literal("nil".to_string()));
+        }
+        let Expression::Call {
+            expression: callee,
+            args,
+            spread,
+            ..
+        } = expression
+        else {
+            return None;
+        };
+        let [inner] = args.as_slice() else {
+            return None;
+        };
+        if spread.is_some() || callee.as_option_constructor() != Some(Ok(())) {
+            return None;
+        }
+        let inner = self.lower_composite_value(inner, ExpressionContext::value());
+        Some(
+            inner.map_rendered_as_computed(|setup, value, contains_deferred_evaluation| {
+                let value = self.plan_layout_bridge(setup, &value, payload);
+                let Some(pointee) = pointee else {
+                    return GoExpression::opaque_with_deferred_evaluation(
+                        value,
+                        contains_deferred_evaluation,
+                    );
+                };
+                let go_type = pointee.go_type(self);
+                let go_type = self.use_rendered_go_type(go_type);
+                let copy = self.fresh_var(Some("ptr"));
+                self.declare(&copy);
+                setup.push(LoweredStatement::VarDecl {
+                    name: copy.clone(),
+                    go_type,
+                    value: Some(value),
+                });
+                GoExpression::opaque_with_deferred_evaluation(
+                    format!("&{copy}"),
+                    contains_deferred_evaluation,
+                )
+            }),
+        )
+    }
+
     /// Wrap a sentinel-call via `OptionFromCommaOk` with `raw != sentinel`.
     pub(crate) fn lower_sentinel_wrapping(
         &mut self,

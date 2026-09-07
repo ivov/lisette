@@ -1128,11 +1128,14 @@ impl<'a> Planner<'a> {
                 EvaluationEffect::PureCall,
             );
         }
+        let target = self.argument_slot_layout(parameter);
+        if let Some(literal) = self.lower_option_literal_into_layout(argument, &target) {
+            return literal;
+        }
         let raw_source = self.go_physical_expression_layout(argument);
         let source = raw_source
             .clone()
             .unwrap_or_else(|| self.argument_source_layout(argument, parameter));
-        let target = self.argument_slot_layout(parameter);
         let coercion = CoercionPlan::bridge(self, &source, &target);
         let value = if raw_source.is_some() {
             if matches!(argument.unwrap_parens(), Expression::Call { .. }) {

@@ -24,19 +24,14 @@ import (
 func test() string {
 	headers := make(map[string]string)
 	headers["key"] = "value"
-	opt_1 := lisette.MakeOptionSome(headers)
-	var unwrap_2 map[string]string
-	if opt_1.Tag == lisette.OptionSome {
-		unwrap_2 = opt_1.SomeVal
-	}
 	b := pem.Block{
 		Type:    "X",
-		Headers: unwrap_2,
+		Headers: headers,
 	}
-	raw_3 := b.Headers
-	option_4 := lisette.OptionFromNilable[map[string]string](raw_3, raw_3 == nil)
-	if option_4.Tag == lisette.OptionSome {
-		return option_4.SomeVal["key"]
+	raw_1 := b.Headers
+	option_2 := lisette.OptionFromNilable[map[string]string](raw_1, raw_1 == nil)
+	if option_2.Tag == lisette.OptionSome {
+		return option_2.SomeVal["key"]
 	}
 	return ""
 }

@@ -11,17 +11,10 @@ description: |
 ---
 package main
 
-import (
-	"example.com/aws"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/aws"
 
 func main() {
 	b := aws.Bucket{}
-	opt_1 := lisette.MakeOptionSome("hi")
-	var ptr_2 *string
-	if opt_1.Tag == lisette.OptionSome {
-		ptr_2 = &opt_1.SomeVal
-	}
-	b.Name = ptr_2
+	var ptr_1 string = "hi"
+	b.Name = &ptr_1
 }

@@ -12,16 +12,8 @@ description: |
 ---
 package main
 
-import (
-	"example.com/cb"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/cb"
 
 func main() {
-	opt_1 := lisette.MakeOptionNone[cb.Direction]()
-	var ptr_2 *cb.Direction
-	if opt_1.Tag == lisette.OptionSome {
-		ptr_2 = &opt_1.SomeVal
-	}
-	_ = cb.Options{Direction: ptr_2}
+	_ = cb.Options{Direction: nil}
 }

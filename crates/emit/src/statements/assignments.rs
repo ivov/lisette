@@ -55,13 +55,21 @@ impl Planner<'_> {
         // `target = value`. Stage RHS first (so the target capture knows
         // whether RHS produced setup), capture the target, then fold RHS
         // setup + coercion setup into the value plan in emission order.
-        let right_hand_side = self.lower_composite_value(
-            value,
-            ExpressionContext::value().with_retired_receiver(target),
-        );
+        let literal_slot = go_field_slot
+            .as_ref()
+            .and_then(|(_, layout)| self.lower_option_literal_into_layout(value, layout));
+        let is_literal_slot = literal_slot.is_some();
+        let right_hand_side = literal_slot.unwrap_or_else(|| {
+            self.lower_composite_value(
+                value,
+                ExpressionContext::value().with_retired_receiver(target),
+            )
+        });
         let (target_capture, target_str) =
             self.capture_assignment_target(target, Some(&right_hand_side));
-        let coercion = if let Some((_target_ty, target_layout)) = go_field_slot {
+        let coercion = if is_literal_slot {
+            CoercionPlan::Identity
+        } else if let Some((_target_ty, target_layout)) = go_field_slot {
             let source_layout = self.value_layout(&value.get_type(), SlotOrigin::Lisette);
             CoercionPlan::bridge(self, &source_layout, &target_layout)
         } else {

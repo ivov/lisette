@@ -18,26 +18,20 @@ import (
 	"errors"
 	"fmt"
 	lisette "github.com/ivov/lisette/prelude"
-	"io"
 	"net/http"
 	"strings"
 )
 
 func main() {
 	body := strings.NewReader("hello")
-	opt_1 := lisette.MakeOptionSome[io.Reader](body)
-	var unwrap_2 io.Reader
-	if opt_1.Tag == lisette.OptionSome {
-		unwrap_2 = opt_1.SomeVal
-	}
-	ret_3, ret_4 := http.NewRequest("POST", "https://example.com", unwrap_2)
+	ret_1, ret_2 := http.NewRequest("POST", "https://example.com", body)
 	var req lisette.Result[*http.Request, error]
-	if ret_4 != nil {
-		req = lisette.MakeResultErr[*http.Request, error](ret_4)
-	} else if ret_3 == nil {
+	if ret_2 != nil {
+		req = lisette.MakeResultErr[*http.Request, error](ret_2)
+	} else if ret_1 == nil {
 		req = lisette.MakeResultErr[*http.Request, error](errors.New("unexpected nil"))
 	} else {
-		req = lisette.MakeResultOk[*http.Request, error](ret_3)
+		req = lisette.MakeResultOk[*http.Request, error](ret_1)
 	}
 	fmt.Println(req)
 }

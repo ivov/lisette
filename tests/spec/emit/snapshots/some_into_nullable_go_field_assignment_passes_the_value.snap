@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:net/http"
+  
+  fn main() {
+    let mut server = http.Server { Addr: ":8080", .. }
+    server.Handler = Some(http.NewServeMux())
+    fmt.Println(server.Addr)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+func main() {
+	server := http.Server{Addr: ":8080"}
+	server.Handler = http.NewServeMux()
+	fmt.Println(server.Addr)
+}

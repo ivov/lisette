@@ -12,23 +12,11 @@ description: |
 ---
 package main
 
-import (
-	"example.com/aws"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/aws"
 
 func main() {
 	b := aws.ListInput{}
-	opt_1 := lisette.MakeOptionSome(int32(5))
-	var ptr_2 *int32
-	if opt_1.Tag == lisette.OptionSome {
-		ptr_2 = &opt_1.SomeVal
-	}
-	b.MaxItems = ptr_2
-	opt_3 := lisette.MakeOptionNone[int32]()
-	var ptr_4 *int32
-	if opt_3.Tag == lisette.OptionSome {
-		ptr_4 = &opt_3.SomeVal
-	}
-	b.MaxItems = ptr_4
+	var ptr_1 int32 = 5
+	b.MaxItems = &ptr_1
+	b.MaxItems = nil
 }

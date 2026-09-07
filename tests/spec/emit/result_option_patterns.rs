@@ -2947,6 +2947,52 @@ fn main() {
 }
 
 #[test]
+fn some_call_into_nullable_go_parameter_passes_the_value() {
+    let input = r#"
+import "go:fmt"
+import "go:net/http"
+import "go:strings"
+
+fn main() {
+  let req = http.NewRequest("POST", "https://example.com", Some(strings.NewReader("hello")))
+  fmt.Println(req.is_ok())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn option_variable_into_nullable_go_parameter_keeps_the_tag_test() {
+    let input = r#"
+import "go:fmt"
+import "go:net/http"
+import "go:os"
+
+fn main() {
+  let body = if os.Args.length() > 1 { Some(os.Stdin) } else { None }
+  let req = http.NewRequest("POST", "https://example.com", body)
+  fmt.Println(req.is_ok())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn some_into_nullable_go_field_assignment_passes_the_value() {
+    let input = r#"
+import "go:fmt"
+import "go:net/http"
+
+fn main() {
+  let mut server = http.Server { Addr: ":8080", .. }
+  server.Handler = Some(http.NewServeMux())
+  fmt.Println(server.Addr)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn nested_propagate_in_call_args_binds_the_inner_pair_first() {
     let input = r#"
 import "go:strconv"
