@@ -240,7 +240,7 @@ let mut history = Slice.new<Message>()
 match msg {
   Ready => "ready",
   Write(text) => text,
-  // !callout[/(?<=as )moved/] `moved` is `Move` itself
+  // !callout-above[/(?<=as )moved/] `moved` is `Move` itself
   Move { x, .. } as moved => {
     history = history.append(moved)
     f"moved to {x}"

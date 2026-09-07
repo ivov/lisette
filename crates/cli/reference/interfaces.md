@@ -14,7 +14,6 @@ struct Rectangle {
   width: int,
   height: int,
 }
-
 // !callout-above[/Rectangle/] `Rectangle` implements `area()` so it satisfies `Shape`
 impl Rectangle {
   fn area(self) -> int {
@@ -42,7 +41,6 @@ interface Reader {
 interface Writer {
   fn write(buf: Slice<byte>) -> Result<int, error>
 }
-
 // !callout-above[/ReadWriter/] satisfied only by a type with both `read()` and `write()`
 interface ReadWriter {
   embed Reader
@@ -63,7 +61,6 @@ struct Counter {
   current: int,
   end: int,
 }
-
 // !callout-above[/Counter/] satisfies `Iterator<T>`
 impl Counter {
   fn next(self: mut Ref<Counter>) -> Option<int> {

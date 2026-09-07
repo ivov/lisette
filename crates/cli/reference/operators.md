@@ -152,11 +152,11 @@ let value = r.*
 The pipeline operator `|>` passes the left side as the first argument to the function on the right.
 
 ```lisette
-// !callout-right equivalent to `f(x)`
+// !callout-right same as `f(x)`
 x |> f
-// !callout-right equivalent to `f(x, y)`
+// !callout-right same as `f(x, y)`
 x |> f(y)
-// !callout-right equivalent to `f(x, y, z)`
+// !callout-right same as `f(x, y, z)`
 x |> f(y, z)
 ```
 
@@ -166,7 +166,7 @@ Chains read top to bottom:
 let result = items
   |> filter(is_valid)
   |> map(transform)
-// !callout[/sum/] equivalent to `sum(map(filter(items, is_valid), transform))`
+// !callout[/sum/] same as `sum(map(filter(items, is_valid), transform))`
   |> sum()
 ```
 

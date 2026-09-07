@@ -11,9 +11,9 @@ description: "let, let mut, write permission, const, annotating, destructuring"
 let defaults = [10, 20, 30]
 let timeout = 30
 
-// !callout-error-right write not permitted
+// !callout-error-right error: write not permitted
 defaults[0] = 60
-// !callout-error-right reassignment not permitted
+// !callout-error-right error: reassignment not permitted
 timeout = 60
 ```
 

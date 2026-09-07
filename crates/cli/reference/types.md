@@ -97,7 +97,6 @@ A type parameter can carry a bound `T: Constraint` that constrains which types m
 interface Display {
   fn to_string() -> string
 }
-
 // !callout-above[/T: Display/] `T` must satisfy `Display`
 fn print_value<T: Display>(value: T) {
   fmt.Println(value.to_string())
