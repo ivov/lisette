@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn has(xs: Slice<int>, i: int) -> bool { xs.get(i).is_some() }
+---
+package main
+
+func has(xs []int, i int) bool {
+	return i >= 0 && i < len(xs)
+}

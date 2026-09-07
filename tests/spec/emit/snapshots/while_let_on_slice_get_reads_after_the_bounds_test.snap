@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn sum(xs: Slice<int>) -> int {
+    let mut i = 0
+    let mut total = 0
+    while let Some(x) = xs.get(i) {
+      total = total + x
+      i = i + 1
+    }
+    total
+  }
+---
+package main
+
+func sum(xs []int) int {
+	i := 0
+	total := 0
+	for {
+		if i < 0 || i >= len(xs) {
+			break
+		}
+		x := xs[i]
+		total += x
+		i++
+	}
+	return total
+}

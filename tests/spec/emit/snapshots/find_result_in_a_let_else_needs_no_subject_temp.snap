@@ -12,23 +12,21 @@ description: |
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "fmt"
 
 func main() {
 	nums := []int{1, 2, 3}
-	result_1 := lisette.MakeOptionNone[int]()
+	var even int
+	found_1 := false
 	for _, n := range nums {
 		if n%2 == 0 {
-			result_1 = lisette.MakeOptionSome[int](n)
+			even = n
+			found_1 = true
 			break
 		}
 	}
-	if result_1.Tag != lisette.OptionSome {
+	if !found_1 {
 		return
 	}
-	even := result_1.SomeVal
 	fmt.Println(even)
 }

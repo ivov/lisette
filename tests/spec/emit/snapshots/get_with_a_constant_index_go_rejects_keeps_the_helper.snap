@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn past_the_end(xs: Array<int, 2>) -> int {
+    match xs.get(2) {
+      Some(v) => v,
+      None => -1,
+    }
+  }
+  
+  fn negative(xs: Slice<int>) -> int {
+    match xs.get(-1) {
+      Some(v) => v,
+      None => -1,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func pastTheEnd(xs [2]int) int {
+	subject_1 := lisette.SliceGet(xs[:], 2)
+	if subject_1.Tag == lisette.OptionSome {
+		return subject_1.SomeVal
+	}
+	return -1
+}
+
+func negative(xs []int) int {
+	subject_1 := lisette.SliceGet(xs, -1)
+	if subject_1.Tag == lisette.OptionSome {
+		return subject_1.SomeVal
+	}
+	return -1
+}

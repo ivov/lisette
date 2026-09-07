@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn first_even(nums: Slice<int>) -> int {
+    match nums.find(|n| n % 2 == 0) {
+      Some(n) => n,
+      None => -1,
+    }
+  }
+---
+package main
+
+func firstEven(nums []int) int {
+	var n int
+	found_1 := false
+	for _, n_2 := range nums {
+		if n_2%2 == 0 {
+			n = n_2
+			found_1 = true
+			break
+		}
+	}
+	if found_1 {
+		return n
+	} else {
+		return -1
+	}
+}

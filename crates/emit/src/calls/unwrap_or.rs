@@ -125,7 +125,11 @@ impl Planner<'_> {
         }
         let receiver_ty = self.facts.peel_alias(&receiver.get_type());
         let fuse = if receiver_ty.is_option() {
-            FusedCall::Option(self.option_fuse_plan(receiver)?)
+            let fuse = self.option_fuse_plan(receiver)?;
+            if matches!(fuse, OptionFusePlan::Index { .. }) {
+                return None;
+            }
+            FusedCall::Option(fuse)
         } else if receiver_ty.is_result() && map.is_none() {
             let fuse = self.result_fuse_plan(receiver)?;
             if !fuse.carries_payload() {

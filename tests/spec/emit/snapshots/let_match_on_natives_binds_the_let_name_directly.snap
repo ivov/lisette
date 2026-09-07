@@ -1,0 +1,52 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn pick(xs: Slice<int>, i: int) -> int {
+    let v = match xs.get(i) { Some(v) => v, None => return -1 }
+    v + 1
+  }
+  
+  fn lookup(m: Map<string, int>, k: string) -> int {
+    let v = match m.get(k) { Some(v) => v, None => return -1 }
+    v + 1
+  }
+  
+  fn first_even(nums: Slice<int>) -> int {
+    let n = match nums.find(|n| n % 2 == 0) { Some(n) => n, None => return -1 }
+    n + 1
+  }
+---
+package main
+
+func pick(xs []int, i int) int {
+	if i < 0 || i >= len(xs) {
+		return -1
+	}
+	v := xs[i]
+	return v + 1
+}
+
+func lookup(m map[string]int, k string) int {
+	v, ok := m[k]
+	if !ok {
+		return -1
+	}
+	return v + 1
+}
+
+func firstEven(nums []int) int {
+	var n int
+	found_1 := false
+	for _, n_2 := range nums {
+		if n_2%2 == 0 {
+			n = n_2
+			found_1 = true
+			break
+		}
+	}
+	if !found_1 {
+		return -1
+	}
+	return n + 1
+}
