@@ -1,0 +1,79 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:bufio"
+  import "go:fmt"
+  import "go:strings"
+  
+  fn split_words(data: Slice<byte>, at_eof: bool) -> Result<(int, Slice<byte>), error> {
+    bufio.ScanWords(data, at_eof)
+  }
+  
+  fn count(input: string, split: bufio.SplitFunc) -> int {
+    let mut scanner = bufio.NewScanner(strings.NewReader(input))
+    scanner.Split(split)
+    let mut n = 0
+    while scanner.Scan() {
+      n += 1
+    }
+    n
+  }
+  
+  fn main() {
+    fmt.Println(count("one two three", split_words))
+    fmt.Println(count("four five", bufio.ScanWords))
+  }
+---
+package main
+
+import (
+	"bufio"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strings"
+)
+
+func splitWords(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
+	ret_1, ret_2, ret_3 := bufio.ScanWords(data, at_eof)
+	tup_4 := lisette.MakeTuple2(ret_1, ret_2)
+	var result_5 lisette.Result[lisette.Tuple2[int, []byte], error]
+	if ret_3 != nil {
+		result_5 = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_3)
+	} else {
+		result_5 = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup_4)
+	}
+	if result_5.Tag == lisette.ResultOk {
+		return result_5.OkVal, nil
+	}
+	return *new(lisette.Tuple2[int, []byte]), result_5.ErrVal
+}
+
+func count(input string, split bufio.SplitFunc) int {
+	scanner := bufio.NewScanner(strings.NewReader(input))
+	scanner.Split(split)
+	n := 0
+	for scanner.Scan() {
+		n++
+	}
+	return n
+}
+
+func main() {
+	cb_1 := splitWords
+	fmt.Println(count("one two three", func(arg0 []byte, arg1 bool) (int, []byte, error) {
+		ret_2, ret_3 := cb_1(arg0, arg1)
+		var result_4 lisette.Result[lisette.Tuple2[int, []byte], error]
+		if ret_3 != nil {
+			result_4 = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_3)
+		} else {
+			result_4 = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](ret_2)
+		}
+		if result_4.Tag == lisette.ResultOk {
+			tup_5 := result_4.OkVal
+			return tup_5.First, tup_5.Second, nil
+		}
+		return 0, nil, result_4.ErrVal
+	}))
+	fmt.Println(count("four five", bufio.ScanWords))
+}

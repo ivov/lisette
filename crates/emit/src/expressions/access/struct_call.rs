@@ -206,7 +206,12 @@ impl Planner<'_> {
             value = coerced;
         }
         if let Some(field_ty) = field_ty {
-            let coercion = CoercionPlan::internal(self, value_ty, field_ty);
+            let bridge = self.function_type_slot_bridge(value_ty, field_ty, SlotOrigin::Lisette);
+            let coercion = if bridge.is_identity() {
+                CoercionPlan::internal(self, value_ty, field_ty)
+            } else {
+                bridge
+            };
             let (coercion_setup, coerced) = coercion.lower(self, value);
             statements.extend(coercion_setup);
             value = coerced;

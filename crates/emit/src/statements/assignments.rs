@@ -65,7 +65,7 @@ impl Planner<'_> {
             let source_layout = self.value_layout(&value.get_type(), SlotOrigin::Lisette);
             CoercionPlan::bridge(self, &source_layout, &target_layout)
         } else {
-            CoercionPlan::internal(self, &value.get_type(), &target.get_type())
+            self.value_slot_coercion(value, &target.get_type())
         };
         let value = right_hand_side.map_rendered_as_computed(
             |value_setup, rhs_value, contains_deferred_evaluation| {

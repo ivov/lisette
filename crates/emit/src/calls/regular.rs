@@ -1,4 +1,4 @@
-use crate::abi::is_tagged_shape_fn_value;
+use crate::abi::{is_closure_literal, is_tagged_shape_fn_value};
 use crate::calls::dispatch::{
     CallArgShape, all_type_params_inferrable, callee_is_go_builtin, go_builtin_name,
     is_prelude_variant_constructor,
@@ -56,6 +56,7 @@ fn go_builtin_conversion(type_args: &str) -> Option<String> {
 
 struct FnArgShapes {
     param_abi: CallableReturnAbi,
+    param_origin: SlotOrigin,
     arg_fn: Type,
     arg_abi: CallableReturnAbi,
 }
@@ -787,11 +788,15 @@ impl<'a> Planner<'a> {
         param: Option<&CallableParamAbi>,
         suppress: bool,
     ) -> ExpressionContext<'b> {
+        let origin = param.map_or(SlotOrigin::Lisette, |param| {
+            self.function_type_origin(&param.instantiated, param.origin)
+        });
         let flows_to_unknown = param.is_some_and(|param| {
             self.facts
                 .resolves_to_unknown(param.instantiated.unwrap_forall())
         });
         ExpressionContext::value()
+            .with_function_slot_origin(origin)
             .with_forced_tagged_go_function(suppress)
             .with_unknown_argument_target(flows_to_unknown)
     }
@@ -820,17 +825,24 @@ impl<'a> Planner<'a> {
             .facts
             .resolve_to_function_type(param_ty.unwrap_forall())?;
         let param_ret = param_fn.get_function_ret()?;
-        let param_abi = self.callable_return_abi(param_ret);
+        let param_origin = self.function_type_origin(param_ty, SlotOrigin::Lisette);
+        let param_abi = self.slot_return_abi(param_ret, param_origin);
 
         let arg_ty = arg.get_type();
         let arg_fn = self
             .facts
             .resolve_to_function_type(arg_ty.unwrap_forall())?;
         let arg_ret = arg_fn.get_function_ret()?;
-        let arg_abi = self.classify_direct_emission(arg_ret)?;
+        let arg_origin = if is_closure_literal(arg) || self.is_go_callable(arg) {
+            param_origin
+        } else {
+            self.function_type_origin(&arg_ty, SlotOrigin::Lisette)
+        };
+        let arg_abi = self.classify_slot_emission(arg_ret, arg_origin)?;
 
         Some(FnArgShapes {
             param_abi,
+            param_origin,
             arg_fn,
             arg_abi,
         })
@@ -859,10 +871,14 @@ impl<'a> Planner<'a> {
     ) -> Option<ValuePlan> {
         let FnArgShapes {
             param_abi,
+            param_origin,
             arg_fn,
             arg_abi,
         } = self.fn_arg_shapes(arg, generic_param_ty)?;
-        let argument = self.lower_value(arg, ExpressionContext::value());
+        let argument = self.lower_value(
+            arg,
+            ExpressionContext::value().with_function_slot_origin(param_origin),
+        );
         Some(argument.map_rendered_as_computed(|setup, value, _| {
             let mut buffer = String::new();
             let adapted =
@@ -892,7 +908,8 @@ impl<'a> Planner<'a> {
             .facts
             .resolve_to_function_type(variadic_inner.unwrap_forall())?;
         let param_ret = param_fn.get_function_ret()?;
-        let param_abi = self.callable_return_abi(param_ret);
+        let param_origin = self.function_type_origin(&variadic_inner, SlotOrigin::Lisette);
+        let param_abi = self.slot_return_abi(param_ret, param_origin);
 
         let spread_ty = spread.get_type();
         let element_ty = spread_ty.unwrap_forall().inner()?;
@@ -900,7 +917,8 @@ impl<'a> Planner<'a> {
             .facts
             .resolve_to_function_type(element_ty.unwrap_forall())?;
         let arg_ret = arg_fn.get_function_ret()?;
-        let arg_abi = self.classify_direct_emission(arg_ret)?;
+        let arg_origin = self.function_type_origin(&element_ty, SlotOrigin::Lisette);
+        let arg_abi = self.classify_slot_emission(arg_ret, arg_origin)?;
 
         if param_abi == arg_abi {
             return None;
@@ -950,11 +968,15 @@ impl<'a> Planner<'a> {
     }
 
     /// Resolve the source and target callback contracts at a Go call boundary.
+    /// A closure literal compiles to the slot's shape and needs no adapter.
     fn detect_callback_wrapper(
         &self,
         arg: &Expression,
         param: Option<&CallableParamAbi>,
     ) -> Option<(CallableReturnAbi, CallableReturnAbi, AbiTransition)> {
+        if is_closure_literal(arg) {
+            return None;
+        }
         let param = param?;
         let param_fn_ty = self
             .facts
@@ -971,7 +993,7 @@ impl<'a> Planner<'a> {
         let Type::Function(param_f) = &param_fn_ty else {
             return None;
         };
-        let target = self.classify_direct_emission(&param_f.return_type)?;
+        let target = self.classify_slot_emission(&param_f.return_type, param.origin)?;
         let source = if is_tagged_shape_fn_value(arg) {
             CallableReturnAbi::Tagged
         } else {
@@ -1054,8 +1076,17 @@ impl<'a> Planner<'a> {
         }
     }
 
-    fn argument_source_layout(&self, argument: &Expression) -> ValueLayout {
-        self.value_layout(&argument.get_type(), SlotOrigin::Lisette)
+    fn argument_source_layout(
+        &self,
+        argument: &Expression,
+        parameter: &CallableParamAbi,
+    ) -> ValueLayout {
+        let origin = if is_closure_literal(argument) {
+            self.function_type_origin(&parameter.instantiated, parameter.origin)
+        } else {
+            SlotOrigin::Lisette
+        };
+        self.value_layout(&argument.get_type(), origin)
     }
 
     fn argument_needs_slot_bridge(
@@ -1066,7 +1097,7 @@ impl<'a> Planner<'a> {
         let physical_source = self.go_physical_expression_layout(argument);
         let source = physical_source
             .clone()
-            .unwrap_or_else(|| self.argument_source_layout(argument));
+            .unwrap_or_else(|| self.argument_source_layout(argument, parameter));
         let target = self.argument_slot_layout(parameter);
         let can_forward_physical = match (&physical_source, &target) {
             (
@@ -1100,7 +1131,7 @@ impl<'a> Planner<'a> {
         let raw_source = self.go_physical_expression_layout(argument);
         let source = raw_source
             .clone()
-            .unwrap_or_else(|| self.argument_source_layout(argument));
+            .unwrap_or_else(|| self.argument_source_layout(argument, parameter));
         let target = self.argument_slot_layout(parameter);
         let coercion = CoercionPlan::bridge(self, &source, &target);
         let value = if raw_source.is_some() {

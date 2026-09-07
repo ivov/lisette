@@ -430,8 +430,9 @@ impl<'a> Planner<'a> {
         }
         let declared_return = declared_type.and_then(|ty| ty.unwrap_forall().get_function_ret());
         let classify_ty = declared_return.unwrap_or(f.return_type.as_ref());
+        let origin = self.function_type_origin(&callee_ty, SlotOrigin::Lisette);
 
-        self.classify_direct_emission(classify_ty)
+        self.classify_slot_emission(classify_ty, origin)
     }
 
     /// Resolve a Go-interop call's strategy.

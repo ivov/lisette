@@ -167,7 +167,7 @@ impl Planner<'_> {
         let Some(target) = target_ty else {
             return emitted;
         };
-        let coercion = CoercionPlan::internal(self, &expression.get_type(), target);
+        let coercion = self.value_slot_coercion(expression, target);
         let (setup, value) = coercion.lower(self, emitted);
         output.push_str(&Renderer.render_setup(&setup));
         value

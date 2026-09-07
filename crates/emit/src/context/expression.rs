@@ -1,6 +1,7 @@
 use syntax::ast::Expression;
 use syntax::types::Type;
 
+use crate::abi::layout::SlotOrigin;
 use crate::plan::values::CaptureBoundary;
 
 /// Whether the expression is being emitted as the callee of a call.
@@ -21,11 +22,16 @@ pub(crate) enum SyntaxContext {
     Condition,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FunctionValueAbiTarget {
-    #[default]
-    Natural,
+    Slot(SlotOrigin),
     Tagged,
+}
+
+impl Default for FunctionValueAbiTarget {
+    fn default() -> Self {
+        Self::Slot(SlotOrigin::Lisette)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -77,6 +83,16 @@ impl<'a> ExpressionContext<'a> {
         }
     }
 
+    pub(crate) fn with_function_slot_origin(self, origin: SlotOrigin) -> Self {
+        match self.function_value_abi_target {
+            FunctionValueAbiTarget::Tagged => self,
+            FunctionValueAbiTarget::Slot(_) => Self {
+                function_value_abi_target: FunctionValueAbiTarget::Slot(origin),
+                ..self
+            },
+        }
+    }
+
     pub(crate) fn with_unknown_argument_target(self, flows: bool) -> Self {
         if flows {
             Self {
@@ -110,6 +126,13 @@ impl<'a> ExpressionContext<'a> {
             self.function_value_abi_target,
             FunctionValueAbiTarget::Tagged
         )
+    }
+
+    pub(crate) fn function_slot_origin(self) -> SlotOrigin {
+        match self.function_value_abi_target {
+            FunctionValueAbiTarget::Slot(origin) => origin,
+            FunctionValueAbiTarget::Tagged => SlotOrigin::Lisette,
+        }
     }
 
     pub(crate) fn argument_flows_to_unknown(self) -> bool {

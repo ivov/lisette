@@ -31,7 +31,8 @@ impl Planner<'_> {
         {
             let abi = &callee.abi.result;
             let matches_slot = self.go_fn_slot_abi(expression, ctx).as_ref() == Some(abi);
-            let target_layout = self.value_layout(&expression.get_type(), SlotOrigin::Lisette);
+            let target_layout =
+                self.value_layout(&expression.get_type(), ctx.function_slot_origin());
             let same_abi = matches_slot
                 && matches!(
                     &target_layout,
@@ -190,7 +191,7 @@ impl Planner<'_> {
         Some(if ctx.forces_tagged_go_function() {
             self.value_return_abi(&f.return_type)
         } else {
-            self.callable_return_abi(&f.return_type)
+            self.slot_return_abi(&f.return_type, ctx.function_slot_origin())
         })
     }
 
@@ -397,7 +398,8 @@ impl Planner<'_> {
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        let inner = self.plan_operand(expression, ctx);
+        let slot_origin = self.function_type_origin(ty, SlotOrigin::Lisette);
+        let inner = self.lower_value(expression, ctx.with_function_slot_origin(slot_origin));
 
         if self.facts.is_interface(ty) {
             let source_ty = expression.get_type();
@@ -415,6 +417,17 @@ impl Planner<'_> {
         }
 
         let go_type = self.use_go_type(ty);
+
+        let function_bridge = self.function_slot_bridge(expression, ty);
+        if !function_bridge.is_identity() {
+            return inner
+                .map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
+                    let (bridge_setup, bridged) = function_bridge.lower(self, value);
+                    setup.extend(bridge_setup);
+                    GoExpression::opaque_with_deferred_evaluation(bridged, true)
+                })
+                .conversion(go_type);
+        }
 
         if let Some(source_go_type) = self.shift_pin_go_type(expression, ty) {
             return inner.conversion(source_go_type).conversion(go_type);
