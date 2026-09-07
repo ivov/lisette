@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:context"
+  import "go:fmt"
+  
+  fn main() {
+    let ctx = context.Background()
+    let err = match ctx.Err() {
+      Some(err) => err,
+      None => { return },
+    }
+    fmt.Println(err)
+  }
+---
+package main
+
+import (
+	"context"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ctx := context.Background()
+	err := ctx.Err()
+	if lisette.IsNilInterface(err) {
+		return
+	}
+	fmt.Println(err)
+}
