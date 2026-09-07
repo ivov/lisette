@@ -3,11 +3,17 @@ use syntax::types::{CompoundKind, Type};
 
 use crate::Planner;
 use crate::names::go_name;
+use crate::plan::values::GoExpression;
 
 impl Planner<'_> {
     pub(crate) fn render_clone(&mut self, value: &str, ty: &Type) -> String {
+        self.clone_expression(GoExpression::opaque(value.to_string()), ty)
+            .rendered()
+    }
+
+    pub(crate) fn clone_expression(&mut self, value: GoExpression, ty: &Type) -> GoExpression {
         let peeled = self.facts.peel_alias(ty);
-        match &peeled {
+        let (function, closure) = match &peeled {
             Type::Compound {
                 kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice,
                 args,
@@ -15,14 +21,14 @@ impl Planner<'_> {
             } => match args.first().and_then(|elem| self.element_clone(elem)) {
                 Some(clone) => {
                     self.require_stdlib();
-                    format!(
-                        "{}.SliceCloneFunc({value}, {clone})",
-                        go_name::GO_STDLIB_PKG
+                    (
+                        format!("{}.SliceCloneFunc", go_name::GO_STDLIB_PKG),
+                        Some(clone),
                     )
                 }
                 None => {
                     self.require_slices();
-                    format!("slices.Clone({value})")
+                    ("slices.Clone".to_string(), None)
                 }
             },
             Type::Compound {
@@ -32,15 +38,21 @@ impl Planner<'_> {
             } => match args.get(1).and_then(|v| self.element_clone(v)) {
                 Some(clone) => {
                     self.require_stdlib();
-                    format!("{}.MapCloneFunc({value}, {clone})", go_name::GO_STDLIB_PKG)
+                    (
+                        format!("{}.MapCloneFunc", go_name::GO_STDLIB_PKG),
+                        Some(clone),
+                    )
                 }
                 None => {
                     self.require_stdlib();
-                    format!("{}.MapClone({value})", go_name::GO_STDLIB_PKG)
+                    (format!("{}.MapClone", go_name::GO_STDLIB_PKG), None)
                 }
             },
-            _ => value.to_string(),
-        }
+            _ => return value,
+        };
+        let mut arguments = vec![value];
+        arguments.extend(closure.map(GoExpression::opaque));
+        GoExpression::call(GoExpression::name(function), arguments)
     }
 
     fn element_clone(&mut self, ty: &Type) -> Option<String> {

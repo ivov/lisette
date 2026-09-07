@@ -5,11 +5,11 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::CallableOrigin;
+use crate::plan::go_expression::CompositeLayout;
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, SequencedValues, Stability, ValuePlan,
 };
 use crate::utils::reads_value_member;
-use std::iter;
 use std::mem;
 use syntax::ast::{Expression, IdentifierResolution, UnaryOperator};
 use syntax::program::DotAccessKind;
@@ -84,9 +84,8 @@ impl Planner<'_> {
     /// Pin a staged operand's value into a temp so it evaluates before any
     /// later sibling.
     pub(crate) fn pin_staged(&mut self, staged: &mut ValuePlan, prefix: &str) {
-        let value =
-            mem::replace(&mut staged.expression, GoExpression::opaque(String::new())).rendered();
-        let tmp = self.hoist_tmp_value_statement(&mut staged.setup, prefix, &value);
+        let tmp =
+            self.hoist_tmp_value_statement(&mut staged.setup, prefix, staged.expression.as_str());
         staged.replace_with_pinned_name(tmp);
     }
 
@@ -251,16 +250,14 @@ impl Planner<'_> {
                 .detect_lower_arg_to_tagged(expression, param_ty)
                 .is_some()
         {
-            return staged.map_rendered_as_computed(
-                |setup, value, _contains_deferred_evaluation| {
-                    let tagged = self.emit_lower_arg_to_tagged(
-                        setup,
-                        &value,
-                        param_ty.expect("detected lowering requires a parameter type"),
-                    );
-                    GoExpression::opaque_with_deferred_evaluation(tagged, true)
-                },
-            );
+            return staged.map_expression_as_computed(|setup, value| {
+                let tagged = self.emit_lower_arg_to_tagged(
+                    setup,
+                    value.as_str(),
+                    param_ty.expect("detected lowering requires a parameter type"),
+                );
+                GoExpression::opaque_with_deferred_evaluation(tagged, true)
+            });
         }
 
         staged
@@ -341,38 +338,35 @@ impl Planner<'_> {
     ) {
         if wrap_to_any {
             self.require_stdlib();
-            let rendered = format!(
-                "{}.SliceToAny({})",
-                go_name::GO_STDLIB_PKG,
-                values[spread_index].rendered()
+            let spread_value = mem::replace(&mut values[spread_index], GoExpression::empty());
+            values[spread_index] = GoExpression::call(
+                GoExpression::name(format!("{}.SliceToAny", go_name::GO_STDLIB_PKG)),
+                vec![spread_value],
             );
-            values[spread_index] = GoExpression::opaque_with_deferred_evaluation(rendered, true);
         }
         match combine {
             Some(c) if spread_index > c.fixed_count => {
                 let element_go = self.use_go_type(&c.element_ty);
-                let leading = values[c.fixed_count..spread_index]
-                    .iter()
-                    .map(GoExpression::rendered)
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let spread_value = values[spread_index].rendered();
-                let combined = format!("append([]{element_go}{{{leading}}}, {spread_value}...)...");
-                values.splice(
-                    c.fixed_count..=spread_index,
-                    iter::once(GoExpression::opaque_with_deferred_evaluation(
-                        combined, true,
-                    )),
+                let mut combined: Vec<GoExpression> =
+                    values.drain(c.fixed_count..=spread_index).collect();
+                let spread_value = combined
+                    .pop()
+                    .expect("the spread value follows the leading arguments");
+                let leading = GoExpression::composite(
+                    Some(format!("[]{element_go}")),
+                    combined.into_iter().map(|value| (None, value)).collect(),
+                    CompositeLayout::Inline { padded: false },
+                    false,
                 );
+                let appended = GoExpression::call(
+                    GoExpression::name("append".to_string()),
+                    vec![leading, GoExpression::spread(spread_value)],
+                );
+                values.insert(c.fixed_count, GoExpression::spread(appended));
             }
             _ => {
-                let contains_deferred_evaluation =
-                    values[spread_index].contains_deferred_evaluation();
-                let rendered = format!("{}...", values[spread_index].rendered());
-                values[spread_index] = GoExpression::opaque_with_deferred_evaluation(
-                    rendered,
-                    contains_deferred_evaluation,
-                );
+                let spread_value = mem::replace(&mut values[spread_index], GoExpression::empty());
+                values[spread_index] = GoExpression::spread(spread_value);
             }
         }
     }
@@ -416,10 +410,7 @@ impl Planner<'_> {
         let mut results = Vec::with_capacity(stages.len());
         for i in 0..stages.len() {
             let s_non_literal = !stages[i].evaluation.stability.is_fixed();
-            let s_expression = mem::replace(
-                &mut stages[i].expression,
-                GoExpression::opaque(String::new()),
-            );
+            let s_expression = mem::replace(&mut stages[i].expression, GoExpression::empty());
             let s_setup = mem::take(&mut stages[i].setup);
 
             setup.extend(s_setup);

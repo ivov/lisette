@@ -52,30 +52,28 @@ impl Planner<'_> {
             return None;
         }
         let inner = self.lower_composite_value(inner, ExpressionContext::value());
-        Some(
-            inner.map_rendered_as_computed(|setup, value, contains_deferred_evaluation| {
-                let value = self.plan_layout_bridge(setup, &value, payload);
-                let Some(pointee) = pointee else {
-                    return GoExpression::opaque_with_deferred_evaluation(
-                        value,
-                        contains_deferred_evaluation,
-                    );
-                };
-                let go_type = pointee.go_type(self);
-                let go_type = self.use_rendered_go_type(go_type);
-                let copy = self.fresh_var(Some("ptr"));
-                self.declare(&copy);
-                setup.push(LoweredStatement::VarDecl {
-                    name: copy.clone(),
-                    go_type,
-                    value: Some(value),
-                });
-                GoExpression::opaque_with_deferred_evaluation(
-                    format!("&{copy}"),
-                    contains_deferred_evaluation,
-                )
-            }),
-        )
+        Some(inner.map_expression_as_computed(|setup, value| {
+            let contains_deferred_evaluation = value.contains_deferred_evaluation();
+            let value = if payload.is_identity() {
+                value
+            } else {
+                GoExpression::opaque(self.plan_layout_bridge(setup, value.as_str(), payload))
+            };
+            let Some(pointee) = pointee else {
+                return value.with_deferred_evaluation(contains_deferred_evaluation);
+            };
+            let go_type = pointee.go_type(self);
+            let go_type = self.use_rendered_go_type(go_type);
+            let copy = self.fresh_var(Some("ptr"));
+            self.declare(&copy);
+            setup.push(LoweredStatement::VarDecl {
+                name: copy.clone(),
+                go_type,
+                value: Some(value.rendered()),
+            });
+            GoExpression::address_of(GoExpression::name(copy))
+                .with_deferred_evaluation(contains_deferred_evaluation)
+        }))
     }
 
     /// Wrap a sentinel-call via `OptionFromCommaOk` with `raw != sentinel`.

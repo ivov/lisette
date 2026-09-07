@@ -1,34 +1,30 @@
+use crate::plan::values::GoExpression;
+
 #[derive(Clone, Debug)]
 pub(crate) struct InlineExpr {
-    text: String,
-    /// Emitter vars the text references, recorded as uses on substitution.
+    expression: GoExpression,
+    /// Emitter vars the expression references, recorded as uses on substitution.
     refs: Vec<String>,
-    contains_deferred_evaluation: bool,
 }
 
 impl InlineExpr {
     pub(crate) fn new(
-        text: impl Into<String>,
+        expression: GoExpression,
         refs: Vec<String>,
         contains_deferred_evaluation: bool,
     ) -> Self {
         Self {
-            text: text.into(),
+            expression: expression.with_deferred_evaluation(contains_deferred_evaluation),
             refs,
-            contains_deferred_evaluation,
         }
     }
 
-    pub(crate) fn as_str(&self) -> &str {
-        &self.text
+    pub(crate) fn expression(&self) -> &GoExpression {
+        &self.expression
     }
 
     pub(crate) fn refs(&self) -> &[String] {
         &self.refs
-    }
-
-    pub(crate) fn contains_deferred_evaluation(&self) -> bool {
-        self.contains_deferred_evaluation
     }
 }
 

@@ -9,14 +9,13 @@ use crate::plan::calls::plan_variadic_spread;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::statements::assignments::lvalues_match;
 use crate::types::native::NativeGoType;
-use std::iter;
 use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
 use syntax::program::{CallKind, DotAccessKind, NativeTypeKind};
 use syntax::types::{CompoundKind, Type, peel_to_range_type};
 
 pub(super) struct NativeCallResult {
     pub setup: Vec<LoweredStatement>,
-    pub value: String,
+    pub value: GoExpression,
     pub argument_effect: EvaluationEffect,
     pub arguments_contain_deferred_evaluation: bool,
 }
@@ -24,7 +23,7 @@ pub(super) struct NativeCallResult {
 impl NativeCallResult {
     pub(super) fn new(
         setup: Vec<LoweredStatement>,
-        value: String,
+        value: GoExpression,
         argument_effect: EvaluationEffect,
         arguments_contain_deferred_evaluation: bool,
     ) -> Self {
@@ -45,15 +44,26 @@ pub(super) enum InlineImport {
     Stdlib,
 }
 
+/// The Go shape a native method inlines to, given the receiver and arguments.
+#[derive(Clone, Copy)]
+enum InlineForm {
+    /// `callee(receiver, arguments...)`.
+    Call(&'static str),
+    /// `len(receiver) == 0`. The negated method flips the operator instead of
+    /// prepending `!`, which binds tighter than `==` in Go.
+    IsEmpty,
+    Receiver,
+    /// `T(receiver)`.
+    Conversion(&'static str),
+    /// `receiver[argument]`.
+    Index,
+}
+
 struct InlineRule {
     types: &'static [NativeGoType],
     method: &'static str,
     arity: RuleArity,
-    template: &'static str,
-    /// Direct Go form of the negated method. Set when the positive template
-    /// emits a comparison, so `!method(...)` can flip the operator instead
-    /// of prepending `!` (Go's `!` binds tighter than `==`).
-    negated_template: Option<&'static str>,
+    form: InlineForm,
     import: InlineImport,
 }
 
@@ -94,16 +104,14 @@ static INLINE_METHODS: &[InlineRule] = &[
         ],
         method: "length",
         arity: RuleArity::Exact(0),
-        template: "len({r})",
-        negated_template: None,
+        form: InlineForm::Call("len"),
         import: InlineImport::None,
     },
     InlineRule {
         types: &[N::Slice, N::Channel, N::Sender, N::Receiver],
         method: "capacity",
         arity: RuleArity::Exact(0),
-        template: "cap({r})",
-        negated_template: None,
+        form: InlineForm::Call("cap"),
         import: InlineImport::None,
     },
     InlineRule {
@@ -117,32 +125,28 @@ static INLINE_METHODS: &[InlineRule] = &[
         ],
         method: "is_empty",
         arity: RuleArity::Exact(0),
-        template: "len({r}) == 0",
-        negated_template: Some("len({r}) != 0"),
+        form: InlineForm::IsEmpty,
         import: InlineImport::None,
     },
     InlineRule {
         types: &[N::Slice],
         method: "enumerate",
         arity: RuleArity::Exact(0),
-        template: "{r}",
-        negated_template: None,
+        form: InlineForm::Receiver,
         import: InlineImport::None,
     },
     InlineRule {
         types: &[N::String],
         method: "bytes",
         arity: RuleArity::Exact(0),
-        template: "[]byte({r})",
-        negated_template: None,
+        form: InlineForm::Conversion("[]byte"),
         import: InlineImport::None,
     },
     InlineRule {
         types: &[N::String],
         method: "runes",
         arity: RuleArity::Exact(0),
-        template: "[]rune({r})",
-        negated_template: None,
+        form: InlineForm::Conversion("[]rune"),
         import: InlineImport::None,
     },
     // Single-arg methods
@@ -150,96 +154,84 @@ static INLINE_METHODS: &[InlineRule] = &[
         types: &[N::Map],
         method: "delete",
         arity: RuleArity::Exact(1),
-        template: "delete({r}, {0})",
-        negated_template: None,
+        form: InlineForm::Call("delete"),
         import: InlineImport::None,
     },
     InlineRule {
         types: &[N::Slice],
         method: "copy_from",
         arity: RuleArity::Exact(1),
-        template: "copy({r}, {0})",
-        negated_template: None,
+        form: InlineForm::Call("copy"),
         import: InlineImport::None,
     },
     InlineRule {
         types: &[N::Slice],
         method: "contains",
         arity: RuleArity::Exact(1),
-        template: "slices.Contains({r}, {0})",
-        negated_template: None,
+        form: InlineForm::Call("slices.Contains"),
         import: InlineImport::Slices,
     },
     InlineRule {
         types: &[N::String],
         method: "contains",
         arity: RuleArity::Exact(1),
-        template: "strings.Contains({r}, {0})",
-        negated_template: None,
+        form: InlineForm::Call("strings.Contains"),
         import: InlineImport::Strings,
     },
     InlineRule {
         types: &[N::String],
         method: "split",
         arity: RuleArity::Exact(1),
-        template: "strings.Split({r}, {0})",
-        negated_template: None,
+        form: InlineForm::Call("strings.Split"),
         import: InlineImport::Strings,
     },
     InlineRule {
         types: &[N::String],
         method: "starts_with",
         arity: RuleArity::Exact(1),
-        template: "strings.HasPrefix({r}, {0})",
-        negated_template: None,
+        form: InlineForm::Call("strings.HasPrefix"),
         import: InlineImport::Strings,
     },
     InlineRule {
         types: &[N::String],
         method: "ends_with",
         arity: RuleArity::Exact(1),
-        template: "strings.HasSuffix({r}, {0})",
-        negated_template: None,
+        form: InlineForm::Call("strings.HasSuffix"),
         import: InlineImport::Strings,
     },
     InlineRule {
         types: &[N::String],
         method: "byte_at",
         arity: RuleArity::Exact(1),
-        template: "{r}[{0}]",
-        negated_template: None,
+        form: InlineForm::Index,
         import: InlineImport::None,
     },
     InlineRule {
         types: &[N::String],
         method: "rune_at",
         arity: RuleArity::Exact(1),
-        template: "lisette.RuneAt({r}, {0})",
-        negated_template: None,
+        form: InlineForm::Call("lisette.RuneAt"),
         import: InlineImport::Stdlib,
     },
     InlineRule {
         types: &[N::Slice],
         method: "join",
         arity: RuleArity::Exact(1),
-        template: "strings.Join({r}, {0})",
-        negated_template: None,
+        form: InlineForm::Call("strings.Join"),
         import: InlineImport::Strings,
     },
     InlineRule {
         types: &[N::Slice],
         method: "any",
         arity: RuleArity::Exact(1),
-        template: "slices.ContainsFunc({r}, {0})",
-        negated_template: None,
+        form: InlineForm::Call("slices.ContainsFunc"),
         import: InlineImport::Slices,
     },
     InlineRule {
         types: &[N::Slice],
         method: "reserve",
         arity: RuleArity::Exact(1),
-        template: "slices.Grow({r}, {0})",
-        negated_template: None,
+        form: InlineForm::Call("slices.Grow"),
         import: InlineImport::Slices,
     },
     // Variadic methods
@@ -247,14 +239,18 @@ static INLINE_METHODS: &[InlineRule] = &[
         types: &[N::Slice],
         method: "append",
         arity: RuleArity::Variadic,
-        template: "append({r+args})",
-        negated_template: None,
+        form: InlineForm::Call("append"),
         import: InlineImport::None,
     },
 ];
 
-pub(crate) fn clip_shared_capacity(receiver: &str) -> String {
-    format!("{r}[:len({r}):len({r})]", r = receiver)
+/// `receiver[:len(receiver):len(receiver)]`, so a later `append` cannot write through an alias.
+pub(crate) fn clip_shared_capacity(receiver: GoExpression) -> GoExpression {
+    let length = GoExpression::call(
+        GoExpression::name("len".to_string()),
+        vec![receiver.clone()],
+    );
+    GoExpression::slice(receiver, None, Some(&length), Some(&length))
 }
 
 fn grows_into_capacity(method: &str, appends_anything: bool) -> bool {
@@ -372,27 +368,48 @@ fn is_selector_chain(rendered: &str) -> bool {
     rendered.split('.').all(go_name::is_plain_identifier)
 }
 
-fn render_inline(template: &str, receiver: &str, args: &[String]) -> String {
-    let receiver = if template.contains("{r}[") && !is_selector_chain(receiver) {
-        format!("({receiver})")
-    } else {
-        receiver.to_string()
-    };
-    let mut result = template.replace("{r}", &receiver);
-    for (i, arg) in args.iter().enumerate() {
-        result = result.replace(&format!("{{{}}}", i), arg);
+fn build_inline(
+    form: InlineForm,
+    receiver: &GoExpression,
+    arguments: &[GoExpression],
+    negated: bool,
+) -> GoExpression {
+    match form {
+        InlineForm::Call(callee) => {
+            let mut all = vec![receiver.clone()];
+            all.extend(arguments.iter().cloned());
+            GoExpression::call(GoExpression::name(callee.to_string()), all)
+        }
+        InlineForm::IsEmpty => {
+            let operator = if negated { "!=" } else { "==" };
+            GoExpression::binary(
+                GoExpression::call(
+                    GoExpression::name("len".to_string()),
+                    vec![receiver.clone()],
+                ),
+                operator,
+                GoExpression::literal("0".to_string()),
+            )
+        }
+        InlineForm::Receiver => receiver.clone(),
+        // A slice type needs no parentheses as a callee, unlike `Conversion`'s general form.
+        InlineForm::Conversion(go_type) => GoExpression::call(
+            GoExpression::type_name(go_type.to_string()),
+            vec![receiver.clone()],
+        ),
+        InlineForm::Index => {
+            let base = if is_selector_chain(receiver.as_str()) {
+                receiver.clone()
+            } else {
+                GoExpression::parenthesized(receiver.clone())
+            };
+            let index = arguments
+                .first()
+                .expect("an index rule takes one argument")
+                .clone();
+            GoExpression::index(base, index)
+        }
     }
-    if result.contains("{args}") {
-        result = result.replace("{args}", &args.join(", "));
-    }
-    if result.contains("{r+args}") {
-        let all = iter::once(receiver)
-            .chain(args.iter().cloned())
-            .collect::<Vec<_>>()
-            .join(", ");
-        result = result.replace("{r+args}", &all);
-    }
-    result
 }
 
 fn lookup_inline_rule(
@@ -405,27 +422,28 @@ fn lookup_inline_rule(
         .find(|rule| rule.matches(*native_type, method, arity))
 }
 
-/// Try to inline a native-type method call. `negated` picks the rule's
-/// `negated_template` (returning `None` when the rule lacks one).
+/// Try to inline a native-type method call. `negated` asks for the rule's
+/// negated form (`None` when the rule has none).
 pub(super) fn try_inline_native_method(
     native_type: &NativeGoType,
     method: &str,
-    receiver: &str,
-    args: &[String],
+    receiver: &GoExpression,
+    arguments: &[GoExpression],
     negated: bool,
-) -> Option<(String, InlineImport)> {
+) -> Option<(GoExpression, InlineImport)> {
     // Go's `append` requires at least 2 args, so zero-arg `append` returns
     // the receiver unchanged.
-    if !negated && method == "append" && args.is_empty() {
-        return Some((receiver.to_string(), InlineImport::None));
+    if !negated && method == "append" && arguments.is_empty() {
+        return Some((receiver.clone(), InlineImport::None));
     }
-    let rule = lookup_inline_rule(native_type, method, args.len())?;
-    let template = if negated {
-        rule.negated_template?
-    } else {
-        rule.template
-    };
-    Some((render_inline(template, receiver, args), rule.import))
+    let rule = lookup_inline_rule(native_type, method, arguments.len())?;
+    if negated && !matches!(rule.form, InlineForm::IsEmpty) {
+        return None;
+    }
+    Some((
+        build_inline(rule.form, receiver, arguments, negated),
+        rule.import,
+    ))
 }
 
 fn is_native_array_method(method: &str) -> bool {
@@ -499,11 +517,10 @@ pub(super) fn native_method_lowers_to_plain_call(
     )
 }
 
-/// Whether a rule for `(type, method, arity)` defines a negated template.
+/// Whether a rule for `(type, method, arity)` has a negated form.
 fn has_inline_negation(native_type: &NativeGoType, method: &str, arity: usize) -> bool {
     lookup_inline_rule(native_type, method, arity)
-        .and_then(|r| r.negated_template)
-        .is_some()
+        .is_some_and(|rule| matches!(rule.form, InlineForm::IsEmpty))
 }
 
 /// Resolve the inline rule for a dot-access form, applying the static-receiver
@@ -512,10 +529,10 @@ fn apply_inline_lookup(
     planner: &mut Planner,
     native_type: &NativeGoType,
     method: &str,
-    receiver: &str,
-    emitted_args: &[String],
+    receiver: &GoExpression,
+    emitted_args: &[GoExpression],
     negated: bool,
-) -> Option<String> {
+) -> Option<GoExpression> {
     if let Some((inlined, import)) =
         try_inline_native_method(native_type, method, receiver, emitted_args, negated)
     {
@@ -540,14 +557,14 @@ enum NativeMethodForm {
 
 struct StagedNativeMethod {
     setup: Vec<LoweredStatement>,
-    receiver: String,
-    arguments: Vec<String>,
+    receiver: GoExpression,
+    arguments: Vec<GoExpression>,
     effect: EvaluationEffect,
     contains_deferred_evaluation: bool,
 }
 
 impl StagedNativeMethod {
-    fn finish(self, value: String) -> NativeCallResult {
+    fn finish(self, value: GoExpression) -> NativeCallResult {
         NativeCallResult::new(
             self.setup,
             value,
@@ -589,8 +606,13 @@ impl Planner<'_> {
             let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
             if receiver_ty.is_slice() || receiver_ty.is_map() {
                 let staged = self.stage_native_method(ctx, form);
-                let body =
-                    self.render_equality(&staged.receiver, &staged.arguments[0], &receiver_ty, &[]);
+                let body = self.equality_test(
+                    staged.receiver.clone(),
+                    staged.arguments[0].clone(),
+                    &receiver_ty,
+                    &[],
+                    false,
+                );
                 return staged.finish(body);
             }
         }
@@ -603,10 +625,13 @@ impl Planner<'_> {
             {
                 let mut staged = self.stage_native_method(ctx, form);
                 self.require_slices();
-                let searched = staged.arguments[0].clone();
+                let searched = staged.arguments[0].as_str().to_string();
                 let target = self.hoist_tmp_value_statement(&mut staged.setup, "want", &searched);
                 let predicate = self.contains_predicate(&element, &target, &[]);
-                let body = format!("slices.ContainsFunc({}, {predicate})", staged.receiver);
+                let body = GoExpression::call(
+                    GoExpression::name("slices.ContainsFunc".to_string()),
+                    vec![staged.receiver.clone(), GoExpression::opaque(predicate)],
+                );
                 return staged.finish(body);
             }
         }
@@ -619,7 +644,7 @@ impl Planner<'_> {
             )
         {
             let mut staged = self.stage_native_method(ctx, form);
-            let index = staged.arguments.first();
+            let index = staged.arguments.first().cloned();
             let body = self.lower_array_method_body(
                 ctx.method,
                 receiver_expression,
@@ -641,14 +666,14 @@ impl Planner<'_> {
             let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
             if is_cloneable_container(&receiver_ty) {
                 let staged = self.stage_native_method(ctx, form);
-                let body = self.render_clone(&staged.receiver, &receiver_ty);
+                let body = self.clone_expression(staged.receiver.clone(), &receiver_ty);
                 return staged.finish(body);
             }
         }
 
         let mut staged = self.stage_native_method(ctx, form);
         if growth_clip_applies(ctx, receiver_expression) {
-            staged.receiver = clip_shared_capacity(&staged.receiver);
+            staged.receiver = clip_shared_capacity(staged.receiver);
         }
 
         let inlined = match form {
@@ -676,8 +701,6 @@ impl Planner<'_> {
             return staged.finish(inlined);
         }
 
-        let mut emitted_args = vec![staged.receiver.clone()];
-        emitted_args.extend(staged.arguments.iter().cloned());
         self.require_stdlib();
         let fn_name = format!(
             "{}.{}{}",
@@ -698,30 +721,35 @@ impl Planner<'_> {
                 self.format_resolved_type_args(ctx.resolved_type_args)
             }
         };
-        staged.finish(format!("{fn_name}{type_args}({})", emitted_args.join(", ")))
+        let mut emitted_args = vec![staged.receiver.clone()];
+        emitted_args.extend(staged.arguments.iter().cloned());
+        staged.finish(GoExpression::call(
+            GoExpression::instantiation(GoExpression::name(fn_name), type_args),
+            emitted_args,
+        ))
     }
 
     fn lower_array_method_body(
         &mut self,
         method: &str,
         receiver_expr: &Expression,
-        receiver: String,
-        index: Option<&String>,
+        receiver: GoExpression,
+        index: Option<GoExpression>,
         setup: &mut Vec<LoweredStatement>,
-    ) -> String {
+    ) -> GoExpression {
         match method {
             "to_slice" => {
                 self.require_slices();
                 let view = self.sliceable_receiver(receiver_expr, receiver, setup);
-                format!("slices.Clone({view})")
+                GoExpression::call(GoExpression::name("slices.Clone".to_string()), vec![view])
             }
             "get" => {
                 self.require_stdlib();
                 let view = self.sliceable_receiver(receiver_expr, receiver, setup);
                 let pkg = go_name::GO_STDLIB_PKG;
-                format!(
-                    "{pkg}.SliceGet({view}, {})",
-                    index.expect("get needs an index")
+                GoExpression::call(
+                    GoExpression::name(format!("{pkg}.SliceGet")),
+                    vec![view, index.expect("get needs an index")],
                 )
             }
             other => unreachable!("not a native array method: {other}"),
@@ -731,19 +759,19 @@ impl Planner<'_> {
     fn sliceable_receiver(
         &mut self,
         expression: &Expression,
-        receiver: String,
+        receiver: GoExpression,
         setup: &mut Vec<LoweredStatement>,
-    ) -> String {
+    ) -> GoExpression {
         let base = if self.receiver_is_addressable(expression) {
-            if receiver.starts_with('*') {
-                format!("({receiver})")
+            if receiver.as_str().starts_with('*') {
+                GoExpression::parenthesized(receiver)
             } else {
                 receiver
             }
         } else {
-            self.hoist_tmp_value_statement(setup, "arr", &receiver)
+            GoExpression::name(self.hoist_tmp_value_statement(setup, "arr", receiver.as_str()))
         };
-        format!("{base}[:]")
+        GoExpression::slice(base, None, None, None)
     }
 
     fn receiver_is_addressable(&self, expression: &Expression) -> bool {
@@ -788,7 +816,7 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         ctx: &NativeCallContext,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         let (form, arity) = if matches!(ctx.function, Expression::DotAccess { .. }) {
             (NativeMethodForm::Dot, ctx.args.len())
         } else {
@@ -872,13 +900,15 @@ impl Planner<'_> {
         if !self.receiver_is_addressable(array) {
             self.pin_staged(&mut staged, "arr");
         }
-        staged.map_rendered_as_observable_computed(|_setup, rendered, deferred| {
-            let base = if rendered.starts_with('*') {
-                format!("({rendered})")
+        staged.map_expression_as_observable_computed(|_setup, array| {
+            let base = if array.as_str().starts_with('*') {
+                GoExpression::parenthesized(array)
             } else {
-                rendered
+                array
             };
-            GoExpression::opaque_with_deferred_evaluation(format!("{base}[:]"), deferred)
+            let contains_deferred_evaluation = base.contains_deferred_evaluation();
+            GoExpression::slice(base, None, None, None)
+                .with_deferred_evaluation(contains_deferred_evaluation)
         })
     }
 
@@ -921,9 +951,7 @@ impl Planner<'_> {
             let receiver = stages.remove(0).unary("*");
             stages.insert(0, receiver);
         }
-        if growth_clip_applies(ctx, receiver)
-            && !is_clip_safe_path(&stages[0].expression.rendered())
-        {
+        if growth_clip_applies(ctx, receiver) && !is_clip_safe_path(stages[0].expression.as_str()) {
             self.pin_staged(&mut stages[0], "recv");
         }
         let spread_index = spread_stage.map(|stage| {
@@ -940,10 +968,10 @@ impl Planner<'_> {
         }
         let effect = sequenced.effect;
         let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
-        let (setup, mut values) = sequenced.into_rendered();
+        let mut values = sequenced.values;
         let receiver = values.remove(0);
         StagedNativeMethod {
-            setup,
+            setup: sequenced.setup,
             receiver,
             arguments: values,
             effect,
@@ -981,12 +1009,10 @@ impl Planner<'_> {
             retired_receiver: None,
             result_name: None,
         };
-        let staged = self.stage_native_method(&ctx, NativeMethodForm::Dot);
-        let receiver = super::comma_ok::parenthesize_prefixed(staged.receiver);
-        (
-            staged.setup,
-            format!("{}[{}]", receiver, staged.arguments[0]),
-        )
+        let mut staged = self.stage_native_method(&ctx, NativeMethodForm::Dot);
+        let receiver = super::comma_ok::parenthesize_prefixed_expression(staged.receiver);
+        let key = staged.arguments.remove(0);
+        (staged.setup, GoExpression::index(receiver, key).rendered())
     }
 
     fn lower_string_substring(
@@ -998,11 +1024,11 @@ impl Planner<'_> {
         self.require_stdlib();
         let arg = &args[0];
         let is_ref_receiver = receiver_expr.get_type().is_ref();
-        let deref = |raw: &str| -> String {
+        let deref = |raw: GoExpression| -> GoExpression {
             if is_ref_receiver {
-                format!("*{}", raw)
+                GoExpression::dereference(raw)
             } else {
-                raw.to_string()
+                raw
             }
         };
 
@@ -1023,24 +1049,22 @@ impl Planner<'_> {
             let sequenced = self.sequence_values(stages, capture_boundary, "arg");
             let effect = sequenced.effect;
             let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
-            let (setup, values) = sequenced.into_rendered();
-            let mut bounds = values.iter().skip(1);
-            let start_bound = start.is_some().then(|| bounds.next().unwrap().clone());
+            let mut values = sequenced.values.into_iter();
+            let receiver = values.next().expect("substring has a receiver");
+            let start_bound = start
+                .is_some()
+                .then(|| values.next().expect("range has a start"));
             let end_bound = end.is_some().then(|| {
-                let e = bounds.next().unwrap();
+                let end = values.next().expect("range has an end");
                 if *inclusive {
-                    format!("{}+1", e)
+                    GoExpression::binary(end, "+", GoExpression::literal("1".to_string()))
                 } else {
-                    e.clone()
+                    end
                 }
             });
             return NativeCallResult::new(
-                setup,
-                format_substring_call(
-                    &deref(&values[0]),
-                    start_bound.as_deref(),
-                    end_bound.as_deref(),
-                ),
+                sequenced.setup,
+                substring_call(deref(receiver), start_bound, end_bound),
                 effect,
                 contains_deferred_evaluation,
             );
@@ -1056,11 +1080,13 @@ impl Planner<'_> {
             self.sequence_values(vec![receiver_staged, range_staged], capture_boundary, "arg");
         let effect = sequenced.effect;
         let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
-        let (setup, values) = sequenced.into_rendered();
-        let (start, end) = range_var_bounds(&values[1], &range_kind);
+        let mut values = sequenced.values.into_iter();
+        let receiver = values.next().expect("substring has a receiver");
+        let range = values.next().expect("substring has a range");
+        let (start, end) = range_var_bounds(&range, &range_kind);
         NativeCallResult::new(
-            setup,
-            format_substring_call(&deref(&values[0]), start.as_deref(), end.as_deref()),
+            sequenced.setup,
+            substring_call(deref(receiver), start, end),
             effect,
             contains_deferred_evaluation,
         )
@@ -1073,7 +1099,14 @@ impl Planner<'_> {
         ty: &Type,
         generics: &[Generic],
     ) -> String {
-        self.render_equality_test(lhs, rhs, ty, generics, false)
+        self.equality_test(
+            GoExpression::opaque(lhs.to_string()),
+            GoExpression::opaque(rhs.to_string()),
+            ty,
+            generics,
+            false,
+        )
+        .rendered()
     }
 
     /// `!=` where equality is an operator, a `!` prefix where it is a call.
@@ -1084,30 +1117,50 @@ impl Planner<'_> {
         ty: &Type,
         generics: &[Generic],
     ) -> String {
-        self.render_equality_test(lhs, rhs, ty, generics, true)
+        self.equality_test(
+            GoExpression::opaque(lhs.to_string()),
+            GoExpression::opaque(rhs.to_string()),
+            ty,
+            generics,
+            true,
+        )
+        .rendered()
     }
 
-    fn render_equality_test(
+    fn equality_test(
         &mut self,
-        lhs: &str,
-        rhs: &str,
+        lhs: GoExpression,
+        rhs: GoExpression,
         ty: &Type,
         generics: &[Generic],
         negated: bool,
-    ) -> String {
-        let (operator, prefix) = if negated { ("!=", "!") } else { ("==", "") };
+    ) -> GoExpression {
+        let operator = if negated { "!=" } else { "==" };
+        let negate = |call: GoExpression| {
+            if negated {
+                GoExpression::unary("!", call)
+            } else {
+                call
+            }
+        };
         let peeled = self.facts.peel_alias(ty);
         if peeled.is_ref() {
-            return format!("{lhs} {operator} {rhs}");
+            return GoExpression::binary(lhs, operator, rhs);
         }
         if peeled.is_slice() {
             self.require_slices();
             return match peeled.inner() {
                 Some(elem) if self.needs_custom_equality(&elem, generics) => {
                     let eq = self.equality_closure(&elem, generics);
-                    format!("{prefix}slices.EqualFunc({lhs}, {rhs}, {eq})")
+                    negate(GoExpression::call(
+                        GoExpression::name("slices.EqualFunc".to_string()),
+                        vec![lhs, rhs, GoExpression::opaque(eq)],
+                    ))
                 }
-                _ => format!("{prefix}slices.Equal({lhs}, {rhs})"),
+                _ => negate(GoExpression::call(
+                    GoExpression::name("slices.Equal".to_string()),
+                    vec![lhs, rhs],
+                )),
             };
         }
         if peeled.is_map() {
@@ -1118,15 +1171,25 @@ impl Planner<'_> {
             return match value {
                 Some(value) if self.needs_custom_equality(&value, generics) => {
                     let eq = self.equality_closure(&value, generics);
-                    format!("{prefix}maps.EqualFunc({lhs}, {rhs}, {eq})")
+                    negate(GoExpression::call(
+                        GoExpression::name("maps.EqualFunc".to_string()),
+                        vec![lhs, rhs, GoExpression::opaque(eq)],
+                    ))
                 }
-                _ => format!("{prefix}maps.Equal({lhs}, {rhs})"),
+                _ => negate(GoExpression::call(
+                    GoExpression::name("maps.Equal".to_string()),
+                    vec![lhs, rhs],
+                )),
             };
         }
         if self.type_has_equals(&peeled, generics) {
-            return format!("{prefix}{lhs}.{}({rhs})", self.equals_method_go_name());
+            let method = self.equals_method_go_name();
+            return negate(GoExpression::call(
+                GoExpression::selector(lhs, method.to_string()),
+                vec![rhs],
+            ));
         }
-        format!("{lhs} {operator} {rhs}")
+        GoExpression::binary(lhs, operator, rhs)
     }
 
     fn equality_closure(&mut self, ty: &Type, generics: &[Generic]) -> String {
@@ -1164,14 +1227,21 @@ fn is_cloneable_container(ty: &Type) -> bool {
     )
 }
 
-fn format_substring_call(receiver: &str, start: Option<&str>, end: Option<&str>) -> String {
+fn substring_call(
+    receiver: GoExpression,
+    start: Option<GoExpression>,
+    end: Option<GoExpression>,
+) -> GoExpression {
     let pkg = go_name::GO_STDLIB_PKG;
-    match (start, end) {
-        (Some(s), Some(e)) => format!("{}.Substring({}, {}, {})", pkg, receiver, s, e),
-        (Some(s), None) => format!("{}.SubstringFrom({}, {})", pkg, receiver, s),
-        (None, Some(e)) => format!("{}.SubstringTo({}, {})", pkg, receiver, e),
+    let (function, bounds) = match (start, end) {
+        (Some(start), Some(end)) => ("Substring", vec![start, end]),
+        (Some(start), None) => ("SubstringFrom", vec![start]),
+        (None, Some(end)) => ("SubstringTo", vec![end]),
         (None, None) => unreachable!("`s.substring(..)` is rejected upstream"),
-    }
+    };
+    let mut arguments = vec![receiver];
+    arguments.extend(bounds);
+    GoExpression::call(GoExpression::name(format!("{pkg}.{function}")), arguments)
 }
 
 pub(super) fn apply_inline_import(planner: &mut Planner, import: InlineImport) {

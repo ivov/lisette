@@ -13,7 +13,7 @@ use crate::Planner;
 use crate::names::packages::PackageRequirements;
 use crate::names::{generics, go_name};
 use crate::patterns::binding_decls::emit_pattern_literal;
-use crate::types::go_type::render_conversion;
+use crate::plan::values::GoExpression;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum PathSegment {
@@ -98,39 +98,50 @@ impl AccessPath {
         new
     }
 
-    pub(crate) fn render(&self, subject: SubjectRoot<'_>) -> String {
-        let (mut result, segments) = subject.resolve(&self.segments);
+    pub(crate) fn render(&self, subject: SubjectRoot<'_>) -> GoExpression {
+        let (root, segments) = subject.resolve(&self.segments);
+        let mut result = GoExpression::name(root);
         let last = segments.len().saturating_sub(1);
         for (i, seg) in segments.iter().enumerate() {
-            match seg {
-                PathSegment::Field(name) => result = format!("{}.{}", result, name),
-                PathSegment::Index(index) => result = format!("{}[{}]", result, index),
-                PathSegment::SliceFrom(offset) => result = format!("{}[{}:]", result, offset),
-                PathSegment::ArraySliceFrom { offset, go_type } => {
-                    result = render_conversion(go_type, &format!("{}[{}:]", result, offset))
+            result = match seg {
+                PathSegment::Field(name) => GoExpression::selector(result, name.clone()),
+                PathSegment::Index(index) => {
+                    GoExpression::index(result, GoExpression::literal(index.to_string()))
                 }
+                PathSegment::SliceFrom(offset) => GoExpression::slice(
+                    result,
+                    Some(&GoExpression::literal(offset.to_string())),
+                    None,
+                    None,
+                ),
+                PathSegment::ArraySliceFrom { offset, go_type } => GoExpression::conversion(
+                    go_type.clone(),
+                    GoExpression::slice(
+                        result,
+                        Some(&GoExpression::literal(offset.to_string())),
+                        None,
+                        None,
+                    ),
+                ),
+                PathSegment::Deref if i == last => GoExpression::dereference(result),
                 PathSegment::Deref => {
-                    if i == last {
-                        result = format!("*{}", result);
-                    } else {
-                        result = format!("(*{})", result);
-                    }
+                    GoExpression::parenthesized(GoExpression::dereference(result))
                 }
-                PathSegment::NewtypeCast(go_type) => result = render_conversion(go_type, &result),
-                PathSegment::AssertedAs(ty) => {
-                    result = format!("{}.({})", result, ty);
+                PathSegment::NewtypeCast(go_type) => {
+                    GoExpression::conversion(go_type.clone(), result)
                 }
-            }
+                PathSegment::AssertedAs(ty) => GoExpression::type_assertion(result, ty.clone()),
+            };
         }
         result
     }
 
     /// Like `render`, but a tail-`Deref` is parenthesized so the result is
     /// safe as a selector receiver, index target, or call callee.
-    pub(crate) fn render_composable(&self, subject: SubjectRoot<'_>) -> String {
+    pub(crate) fn render_composable(&self, subject: SubjectRoot<'_>) -> GoExpression {
         let rendered = self.render(subject);
         if matches!(self.segments.last(), Some(PathSegment::Deref)) {
-            format!("({})", rendered)
+            GoExpression::parenthesized(rendered)
         } else {
             rendered
         }
@@ -198,12 +209,12 @@ impl Check {
         let negative = matches!(polarity, CheckPolarity::Negative);
         match self {
             Check::EnumTag { path, tag_constant } => {
-                let rendered_path = path.render(subject);
+                let rendered_path = path.render(subject).rendered();
                 let operator = if negative { "!=" } else { "==" };
                 format!("{rendered_path}.Tag {operator} {tag_constant}")
             }
             Check::Literal { path, go_literal } => {
-                let rendered_path = path.render(subject);
+                let rendered_path = path.render(subject).rendered();
                 match (go_literal.as_str(), negative) {
                     ("true", false) | ("false", true) => rendered_path,
                     ("true", true) | ("false", false) => format!("!{rendered_path}"),
@@ -212,12 +223,12 @@ impl Check {
                 }
             }
             Check::SliceLenEq { path, length } => {
-                let rendered_path = path.render(subject);
+                let rendered_path = path.render(subject).rendered();
                 let operator = if negative { "!=" } else { "==" };
                 format!("len({rendered_path}) {operator} {length}")
             }
             Check::SliceLenGe { path, min_length } => {
-                let rendered_path = path.render(subject);
+                let rendered_path = path.render(subject).rendered();
                 let operator = if negative { "<" } else { ">=" };
                 format!("len({rendered_path}) {operator} {min_length}")
             }
@@ -248,7 +259,7 @@ impl Check {
             }
             Check::TypeAssert { path, go_type } if !negative => format!(
                 "func() bool {{ _, ok := {}.({}); return ok }}()",
-                path.render(subject),
+                path.render(subject).rendered(),
                 go_type,
             ),
             Check::Or { .. } | Check::TypeAssert { .. } => {

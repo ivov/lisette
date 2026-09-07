@@ -3,7 +3,7 @@ use crate::Renderer;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::ConstPlan;
-use crate::plan::values::ValuePlan;
+use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
 use syntax::ast::{Expression, Generic};
 use syntax::types::{SimpleKind, Type};
 
@@ -83,12 +83,12 @@ impl Planner<'_> {
         // `is_go_constant_expression` admits only literals, identifiers, and
         // constexpr unary/binary, none of which carry setup statements.
         let raw_value = self.lower_value(expression, ExpressionContext::value());
-        let value_text = raw_value.rendered();
-        let value = if value_text.is_empty() {
-            ValuePlan::opaque("struct{}{}".to_string())
+        let value = if raw_value.is_empty() {
+            GoExpression::empty_composite("struct{}".to_string())
         } else {
-            ValuePlan::opaque(value_text)
+            raw_value.expression
         };
+        let value = ValuePlan::computed(Vec::new(), value, EvaluationEffect::Pure);
         if is_const && matches!(scope, ConstScope::Local) {
             self.scope.mark_go_const(identifier);
         }

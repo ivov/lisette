@@ -1,5 +1,4 @@
 use crate::expressions::access::struct_call::emit_struct_literal;
-use crate::expressions::literals::elide_element_type;
 use crate::names::generics::extract_type_mapping;
 use rustc_hash::FxHashMap as HashMap;
 use std::borrow::Cow;
@@ -13,6 +12,7 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{CallPlan, CallableOrigin};
+use crate::plan::go_expression::CompositeLayout;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, Stability, ValuePlan};
 use crate::types::go_type::render_conversion;
 use crate::types::native::NativeGoType;
@@ -144,15 +144,17 @@ impl<'a> Planner<'a> {
     fn stage_size_argument(
         &mut self,
         ctx: &NativeCallContext,
-    ) -> (Vec<LoweredStatement>, String, EvaluationEffect) {
+    ) -> (Vec<LoweredStatement>, GoExpression, EvaluationEffect) {
         match ctx.args.first() {
             Some(a) => {
                 let staged = self.plan_operand(a, ExpressionContext::value());
-                let effect = staged.evaluation.effect;
-                let (setup, value) = staged.into_parts();
-                (setup, value, effect)
+                (staged.setup, staged.expression, staged.evaluation.effect)
             }
-            None => (Vec::new(), "0".to_string(), EvaluationEffect::Pure),
+            None => (
+                Vec::new(),
+                GoExpression::literal("0".to_string()),
+                EvaluationEffect::Pure,
+            ),
         }
     }
 
@@ -165,7 +167,7 @@ impl<'a> Planner<'a> {
                     Vec::new(),
                     GoExpression::call(
                         GoExpression::name("make".to_string()),
-                        vec![GoExpression::opaque(format!("chan {}", element))],
+                        vec![GoExpression::type_name(format!("chan {}", element))],
                     ),
                     self.native_constructor_effect(ctx, EvaluationEffect::Pure),
                 ))
@@ -179,8 +181,8 @@ impl<'a> Planner<'a> {
                     GoExpression::call(
                         GoExpression::name("make".to_string()),
                         vec![
-                            GoExpression::opaque(format!("chan {}", element)),
-                            GoExpression::opaque(capacity),
+                            GoExpression::type_name(format!("chan {}", element)),
+                            capacity,
                         ],
                     ),
                     self.native_constructor_effect(ctx, argument_effect),
@@ -193,7 +195,7 @@ impl<'a> Planner<'a> {
                     Vec::new(),
                     GoExpression::call(
                         GoExpression::name("make".to_string()),
-                        vec![GoExpression::opaque(format!("map[{}]{}", key, val))],
+                        vec![GoExpression::type_name(format!("map[{}]{}", key, val))],
                     ),
                     self.native_constructor_effect(ctx, EvaluationEffect::Pure),
                 ))
@@ -204,7 +206,7 @@ impl<'a> Planner<'a> {
                     self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
                 Some(ValuePlan::computed(
                     Vec::new(),
-                    GoExpression::composite_literal(format!("[]{}{{}}", element), false),
+                    GoExpression::empty_composite(format!("[]{}", element)),
                     self.native_constructor_effect(ctx, EvaluationEffect::Pure),
                 ))
             }
@@ -219,10 +221,7 @@ impl<'a> Planner<'a> {
                 let value = if self.element_go_zero_ok(&element_ty) {
                     GoExpression::call(
                         GoExpression::name("make".to_string()),
-                        vec![
-                            GoExpression::opaque(format!("[]{}", element)),
-                            GoExpression::opaque(length),
-                        ],
+                        vec![GoExpression::type_name(format!("[]{}", element)), length],
                     )
                 } else {
                     let zero = self.lisette_zero(&element_ty);
@@ -328,7 +327,7 @@ impl<'a> Planner<'a> {
         if pairs.is_empty() {
             return Some(ValuePlan::computed(
                 Vec::new(),
-                GoExpression::composite_literal(format!("{map_ty}{{}}"), false),
+                GoExpression::empty_composite(map_ty),
                 self.native_constructor_effect(ctx, EvaluationEffect::Pure),
             ));
         }
@@ -342,45 +341,35 @@ impl<'a> Planner<'a> {
         let effect = sequenced.effect;
         let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let mut setup = sequenced.setup;
-        let values = sequenced.values;
+        let mut values = sequenced.values.into_iter();
 
         let mut lowered = Vec::with_capacity(pairs.len());
         let mut widest = 0;
-        for ((key, value), staged) in pairs.iter().zip(values.chunks_exact(2)) {
-            let [staged_key, staged_value] = staged else {
-                unreachable!("each pair stages exactly two values")
-            };
-            let (key_setup, coerced_key) = CoercionPlan::internal(self, &key.get_type(), &key_ty)
-                .lower(self, staged_key.rendered());
+        for (key, value) in &pairs {
+            let staged_key = values.next().expect("each pair stages a key");
+            let staged_value = values.next().expect("each pair stages a value");
+            let (key_setup, coerced_key) =
+                CoercionPlan::internal(self, &key.get_type(), &key_ty).lower(self, staged_key);
             setup.extend(key_setup);
             let value_coercion = CoercionPlan::internal(self, &value.get_type(), &value_ty);
             let is_whole_literal =
                 value_coercion.is_identity() && staged_value.is_composite_literal();
-            let (value_setup, coerced_value) = value_coercion.lower(self, staged_value.rendered());
+            let (value_setup, coerced_value) = value_coercion.lower(self, staged_value);
             setup.extend(value_setup);
-            widest = widest.max(coerced_key.len() + coerced_value.len() + ": ".len());
+            widest =
+                widest.max(coerced_key.as_str().len() + coerced_value.as_str().len() + ": ".len());
             let coerced_value = if is_whole_literal {
-                elide_element_type(&value_go_ty, coerced_value)
+                coerced_value.elide_composite_type(&value_go_ty)
             } else {
                 coerced_value
             };
-            lowered.push(format!("{coerced_key}: {coerced_value}"));
+            lowered.push((Some(coerced_key.rendered()), coerced_value));
         }
 
-        let value = if lowered.len() > 1 && widest > 30 {
-            let indented = lowered
-                .iter()
-                .map(|entry| format!("\t{}", entry))
-                .collect::<Vec<_>>()
-                .join(",\n");
-            format!("{map_ty}{{\n{indented},\n}}")
-        } else {
-            format!("{map_ty}{{ {} }}", lowered.join(", "))
-        };
-
+        let layout = CompositeLayout::for_elements(lowered.len(), widest);
         Some(ValuePlan::computed(
             setup,
-            GoExpression::composite_literal(value, contains_deferred_evaluation),
+            GoExpression::composite(Some(map_ty), lowered, layout, contains_deferred_evaluation),
             self.native_constructor_effect(ctx, effect),
         ))
     }
@@ -405,7 +394,7 @@ impl<'a> Planner<'a> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         call_expression: &Expression,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         let Expression::Call {
             expression: callee,
             args,
@@ -498,11 +487,7 @@ impl<'a> Planner<'a> {
             }
             CallableOrigin::AssertType => {
                 let (setup, value) = self.lower_assert_type(function, args, resolved_type_args);
-                return ValuePlan::plain_call(
-                    setup,
-                    GoExpression::opaque_with_deferred_evaluation(value, true),
-                    EvaluationEffect::EffectfulCall,
-                );
+                return ValuePlan::plain_call(setup, value, EvaluationEffect::EffectfulCall);
             }
             CallableOrigin::UfcsMethod => {
                 return self.lower_ufcs_call(function, args, resolved_type_args, spread, &plan);
@@ -572,9 +557,9 @@ impl<'a> Planner<'a> {
         if result
             .setup
             .iter()
-            .any(|statement| statement.binds_name(&result.value))
+            .any(|statement| statement.binds_name(result.value.as_str()))
         {
-            return ValuePlan::captured_with_effect(result.setup, result.value, effect);
+            return ValuePlan::captured_with_effect(result.setup, result.value.rendered(), effect);
         }
         let receiver_arity = if matches!(origin, CallableOrigin::NativeMethodIdentifier(_)) {
             ctx.args.len().saturating_sub(1)
@@ -586,29 +571,22 @@ impl<'a> Planner<'a> {
         let mut plan = if plain_call {
             ValuePlan::plain_call(
                 result.setup,
-                GoExpression::opaque_with_deferred_evaluation(result.value, true),
+                result.value.with_deferred_evaluation(true),
                 effect,
             )
         } else {
             let contains_deferred_evaluation = match ctx.method {
-                "enumerate" => result.arguments_contain_deferred_evaluation,
+                "byte_at" | "enumerate" => result.arguments_contain_deferred_evaluation,
                 "append" if receiver_arity == 0 => result.arguments_contain_deferred_evaluation,
                 _ => true,
             };
-            let expression = if ctx.method == "byte_at" {
-                GoExpression::opaque_with_deferred_evaluation(
-                    result.value,
-                    result.arguments_contain_deferred_evaluation,
-                )
-            } else if ctx.method == "is_empty" {
-                GoExpression::opaque_with_deferred_evaluation(result.value, true)
-            } else {
-                GoExpression::opaque_with_deferred_evaluation(
-                    result.value,
-                    contains_deferred_evaluation,
-                )
-            };
-            ValuePlan::computed(result.setup, expression, effect)
+            ValuePlan::computed(
+                result.setup,
+                result
+                    .value
+                    .with_deferred_evaluation(contains_deferred_evaluation),
+                effect,
+            )
         };
         if reads_fixed_length {
             plan.evaluation.stability = Stability::Fixed;
@@ -680,14 +658,14 @@ impl<'a> Planner<'a> {
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "arg");
         let effect = EvaluationEffect::PureCall.combine(sequenced.effect);
         let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
-        let (mut setup, values) = sequenced.into_rendered();
+        let mut setup = sequenced.setup;
 
-        let mut field_pairs: Vec<(String, String)> = Vec::with_capacity(target.field_tys.len());
+        let mut field_pairs = Vec::with_capacity(target.field_tys.len());
         for (i, ((field_ty, arg), value)) in target
             .field_tys
             .iter()
             .zip(args.iter())
-            .zip(values)
+            .zip(sequenced.values)
             .enumerate()
         {
             let value_ty = arg.get_type();
@@ -699,8 +677,10 @@ impl<'a> Planner<'a> {
 
         Some(ValuePlan::computed(
             setup,
-            GoExpression::composite_literal(
-                emit_struct_literal(&target.go_ty, &field_pairs, ctx),
+            emit_struct_literal(
+                &target.go_ty,
+                field_pairs,
+                ctx,
                 contains_deferred_evaluation,
             ),
             effect,
@@ -761,7 +741,7 @@ impl<'a> Planner<'a> {
         function: &Expression,
         args: &[Expression],
         type_args: ResolvedCallTypeArguments<'_>,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> (Vec<LoweredStatement>, GoExpression) {
         let target_ty = if !type_args.is_empty() {
             self.use_go_type(&type_args[0])
         } else {
@@ -769,20 +749,22 @@ impl<'a> Planner<'a> {
                 .expect("AssertType must have constructor return type");
             self.use_go_type(&param)
         };
-        let (setup, arg_expression) = match args.first() {
-            Some(a) => self
-                .lower_composite_value(a, ExpressionContext::value())
-                .into_parts(),
-            None => (Vec::new(), String::new()),
+        let (setup, arguments) = match args.first() {
+            Some(a) => {
+                let staged = self.lower_composite_value(a, ExpressionContext::value());
+                (staged.setup, vec![staged.expression])
+            }
+            None => (Vec::new(), Vec::new()),
         };
         self.require_stdlib();
         (
             setup,
-            format!(
-                "{}.AssertType[{}]({})",
-                go_name::GO_STDLIB_PKG,
-                target_ty,
-                arg_expression
+            GoExpression::call(
+                GoExpression::instantiation(
+                    GoExpression::name(format!("{}.AssertType", go_name::GO_STDLIB_PKG)),
+                    format!("[{target_ty}]"),
+                ),
+                arguments,
             ),
         )
     }

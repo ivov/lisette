@@ -1,6 +1,8 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
+use crate::expressions::identifiers::method_expression;
 use crate::names::go_name;
+use crate::plan::values::GoExpression;
 use syntax::ast::Expression;
 use syntax::program::DefinitionBody;
 use syntax::types::{Type, unqualified_name};
@@ -11,7 +13,7 @@ impl Planner<'_> {
         &mut self,
         member: &str,
         result_ty: &Type,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         if let Some(s) = self.emit_enum_variant_constructor(member, result_ty) {
             return Some(s);
         }
@@ -25,7 +27,7 @@ impl Planner<'_> {
         member: &str,
         result_ty: &Type,
         ctx: ExpressionContext<'_>,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         if let Some(s) = self.emit_cross_package_static_method(expression, member, result_ty, ctx) {
             return Some(s);
         }
@@ -41,7 +43,7 @@ impl Planner<'_> {
         &mut self,
         variant_name: &str,
         result_ty: &Type,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         let Type::Function(f) = result_ty else {
             return None;
         };
@@ -74,22 +76,25 @@ impl Planner<'_> {
                 if let Some(package) = resolved.package {
                     self.require_generated_package(package);
                 }
-                format!("{}{}", resolved.name, type_args)
+                resolved.name.to_string()
             } else {
                 let pkg = self.require_package_import(enum_package);
-                format!("{}.{}{}", pkg, make_fn_name, type_args)
+                format!("{}.{}", pkg, make_fn_name)
             }
         } else {
-            format!("{}{}", make_fn_name, type_args)
+            make_fn_name.to_string()
         };
-        Some(make_fn)
+        Some(GoExpression::instantiation(
+            GoExpression::name(make_fn),
+            type_args,
+        ))
     }
 
     fn emit_unit_variant_constructor(
         &mut self,
         variant_name: &str,
         result_ty: &Type,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         let Type::Nominal {
             id: enum_id,
             params,
@@ -116,18 +121,22 @@ impl Planner<'_> {
         let make_fn = self.facts.make_function_name(enum_id, variant_name)?;
         let type_args = self.format_type_args(params);
 
-        if is_prelude {
+        let callee = if is_prelude {
             let resolved = go_name::resolve(&make_fn);
             if let Some(package) = resolved.package {
                 self.require_generated_package(package);
             }
-            Some(format!("{}{}()", resolved.name, type_args))
+            resolved.name.to_string()
         } else if is_cross_package {
             let pkg = self.require_package_import(enum_package);
-            Some(format!("{}.{}{}()", pkg, make_fn, type_args))
+            format!("{}.{}", pkg, make_fn)
         } else {
-            Some(format!("{}{}()", make_fn, type_args))
-        }
+            make_fn.to_string()
+        };
+        Some(GoExpression::call(
+            GoExpression::instantiation(GoExpression::name(callee), type_args),
+            Vec::new(),
+        ))
     }
 
     /// Handles `Alias.new(1)` where `type Alias = Box` → emit as `Box_new(1)`.
@@ -137,7 +146,7 @@ impl Planner<'_> {
         expression: &Expression,
         member: &str,
         result_ty: &Type,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         let func_ty = result_ty.unwrap_forall();
         if !matches!(func_ty, Type::Function(_)) {
             return None;
@@ -154,7 +163,7 @@ impl Planner<'_> {
         let capitalized = self.capitalize_static_method_if_public(&resolved_name);
         let go_name = self.resolve_go_name(&capitalized, None, false);
 
-        Some(go_name)
+        Some(GoExpression::name(go_name))
     }
 
     /// Instance method used as a value (e.g. `lib.Point.area` callback →
@@ -166,7 +175,7 @@ impl Planner<'_> {
         result_ty: &Type,
         is_exported: bool,
         is_pointer_receiver: bool,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         if let Expression::Identifier { value, .. } = expression {
             let go_method = if is_exported {
                 go_name::snake_to_camel(member)
@@ -178,11 +187,11 @@ impl Planner<'_> {
                 .unwrap_or_else(|| value.to_string());
             let type_go = go_name::escape_type_name(&type_name);
             let type_args = self.method_expression_type_args(result_ty);
-            return Some(if is_pointer_receiver {
-                format!("(*{}{}).{}", type_go, type_args, go_method)
-            } else {
-                format!("{}{}.{}", type_go, type_args, go_method)
-            });
+            return Some(method_expression(
+                format!("{}{}", type_go, type_args),
+                is_pointer_receiver,
+                go_method,
+            ));
         }
 
         let Expression::DotAccess {
@@ -217,13 +226,11 @@ impl Planner<'_> {
         let go_type_name = go_name::snake_to_camel(type_name);
         let type_args = self.method_expression_type_args(result_ty);
 
-        let method_expression = if is_pointer_receiver {
-            format!("(*{}.{}{}).{}", pkg, go_type_name, type_args, go_method)
-        } else {
-            format!("{}.{}{}.{}", pkg, go_type_name, type_args, go_method)
-        };
-
-        Some(method_expression)
+        Some(method_expression(
+            format!("{}.{}{}", pkg, go_type_name, type_args),
+            is_pointer_receiver,
+            go_method,
+        ))
     }
 
     fn method_expression_type_args(&mut self, result_ty: &Type) -> String {
@@ -255,7 +262,7 @@ impl Planner<'_> {
         member: &str,
         result_ty: &Type,
         ctx: ExpressionContext<'_>,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         if !matches!(result_ty.unwrap_forall(), Type::Function(_)) {
             return None;
         }
@@ -324,6 +331,9 @@ impl Planner<'_> {
             String::new()
         };
 
-        Some(format!("{}{}", qualified_name, type_args))
+        Some(GoExpression::instantiation(
+            GoExpression::name(qualified_name),
+            type_args,
+        ))
     }
 }

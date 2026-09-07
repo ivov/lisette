@@ -358,7 +358,11 @@ impl Planner<'_> {
         }
         statements.push(simple_assign(
             var,
-            ValuePlan::opaque("struct{}{}".to_string()),
+            ValuePlan::computed(
+                Vec::new(),
+                GoExpression::empty_composite("struct{}".to_string()),
+                EvaluationEffect::Pure,
+            ),
         ));
         statements
     }
@@ -451,42 +455,47 @@ impl Planner<'_> {
                     }
                 };
                 if let Some(constructor_arg) = constructor_arg {
-                    let (arg_setup, call_str, argument_effect) = {
+                    let (arg_setup, call, argument_effect) = {
                         let mut fe = FalliblePlanner::new(self, &fallible);
                         let argument = fe
                             .planner
                             .lower_composite_value(constructor_arg, ExpressionContext::value());
                         let argument_effect = argument.evaluation.effect;
-                        let (arg_setup, arg) = argument.into_parts();
                         (
-                            arg_setup,
-                            fe.format_constructor_call(constructor_name, Some(&arg)),
+                            argument.setup,
+                            fe.format_constructor_call(constructor_name, Some(argument.expression)),
                             argument_effect,
                         )
                     };
                     let value = ValuePlan::plain_call(
                         arg_setup,
-                        GoExpression::opaque_with_deferred_evaluation(call_str, true),
+                        call,
                         EvaluationEffect::PureCall.combine(argument_effect),
                     );
                     vec![simple_assign(target_var, value)]
                 } else {
-                    let call_str = {
+                    let call = {
                         let mut fe = FalliblePlanner::new(self, &fallible);
                         fe.format_constructor_call(constructor_name, None)
                     };
-                    vec![simple_assign(target_var, ValuePlan::opaque(call_str))]
+                    vec![simple_assign(
+                        target_var,
+                        ValuePlan::computed(Vec::new(), call, EvaluationEffect::Pure),
+                    )]
                 }
             }
             Expression::Identifier { .. } => {
                 if fallible.classify_constructor(actual_expression)
                     == Some(ConstructorKind::Failure)
                 {
-                    let call_str = {
+                    let call = {
                         let mut fe = FalliblePlanner::new(self, &fallible);
                         fe.format_constructor_call(fallible.err_constructor(), None)
                     };
-                    vec![simple_assign(target_var, ValuePlan::opaque(call_str))]
+                    vec![simple_assign(
+                        target_var,
+                        ValuePlan::computed(Vec::new(), call, EvaluationEffect::Pure),
+                    )]
                 } else {
                     self.lower_plain_assign(target_var, expression)
                 }
@@ -590,24 +599,16 @@ impl Planner<'_> {
             return self.lower_branching_to_block(last, &place).statements;
         }
         let value = self.lower_value(last, ExpressionContext::value());
-        let value = value.map_rendered_as_computed(
-            |setup, expression_string, contains_deferred_evaluation| {
-                let mut coercion_buffer = String::new();
-                let expression_string = self.apply_type_coercion(
-                    &mut coercion_buffer,
-                    target_ty,
-                    last,
-                    expression_string,
-                );
-                if !coercion_buffer.is_empty() {
-                    setup.push(LoweredStatement::RawGo(coercion_buffer));
-                }
-                GoExpression::opaque_with_deferred_evaluation(
-                    expression_string,
-                    contains_deferred_evaluation,
-                )
-            },
-        );
+        let value = value.map_expression_as_computed(|setup, expression| {
+            let contains_deferred_evaluation = expression.contains_deferred_evaluation();
+            let mut coercion_buffer = String::new();
+            let expression =
+                self.apply_type_coercion(&mut coercion_buffer, target_ty, last, expression);
+            if !coercion_buffer.is_empty() {
+                setup.push(LoweredStatement::RawGo(coercion_buffer));
+            }
+            expression.with_deferred_evaluation(contains_deferred_evaluation)
+        });
         vec![simple_assign(var, value)]
     }
 
@@ -633,40 +634,44 @@ impl Planner<'_> {
             is_lvalue_chain(unwrapped) && !self.contains_newtype_access(unwrapped);
 
         let (value, mut statements) = if receiver_is_lvalue {
-            let arguments = self.lower_growth_args(func, args, spread.as_deref());
+            let (arguments, ordering) = self.lower_growth_args(func, args, spread.as_deref());
             let mut capture: Vec<LoweredStatement> = Vec::new();
             let receiver_lv =
-                self.emit_left_value_capturing(&mut capture, unwrapped, Some(&arguments));
-            let (args_setup, args_str) = arguments.into_parts();
-            let grows = !args_str.is_empty();
-            let receiver_lv = if grows && receiver_lv != var {
-                let clippable = if is_clip_safe_path(&receiver_lv) && args_setup.is_empty() {
+                self.emit_left_value_capturing(&mut capture, unwrapped, Some(&ordering));
+            let grows = !arguments.is_empty();
+            let receiver = if grows && receiver_lv != var {
+                let clippable = if is_clip_safe_path(&receiver_lv) && ordering.setup.is_empty() {
                     receiver_lv
                 } else {
                     self.hoist_tmp_value_statement(&mut capture, "recv", &receiver_lv)
                 };
-                clip_shared_capacity(&clippable)
+                clip_shared_capacity(GoExpression::opaque(clippable))
             } else {
-                receiver_lv
+                GoExpression::opaque(receiver_lv)
             };
-            capture.extend(args_setup);
+            capture.extend(ordering.setup);
             let value = if method == "reserve" {
                 self.require_slices();
-                format!("slices.Grow({}, {})", receiver_lv, args_str)
-            } else if args_str.is_empty() {
-                receiver_lv
+                let mut all = vec![receiver];
+                all.extend(arguments);
+                GoExpression::call(GoExpression::name("slices.Grow".to_string()), all)
+            } else if arguments.is_empty() {
+                receiver
             } else {
-                format!("append({}, {})", receiver_lv, args_str)
+                let mut all = vec![receiver];
+                all.extend(arguments);
+                GoExpression::call(GoExpression::name("append".to_string()), all)
             };
             (value, capture)
         } else {
-            let (setup, value) = self
-                .lower_value(last, ExpressionContext::value())
-                .into_parts();
-            (value, setup)
+            let plan = self.lower_value(last, ExpressionContext::value());
+            (plan.expression, plan.setup)
         };
 
-        statements.push(simple_assign(var, ValuePlan::opaque(value)));
+        statements.push(simple_assign(
+            var,
+            ValuePlan::computed(Vec::new(), value, EvaluationEffect::Pure),
+        ));
         Some(statements)
     }
 
@@ -682,12 +687,14 @@ impl Planner<'_> {
         None
     }
 
+    /// The growth arguments, plus their setup and effect as the plan the
+    /// receiver capture orders itself against.
     fn lower_growth_args(
         &mut self,
         function: &Expression,
         args: &[Expression],
         spread: Option<&Expression>,
-    ) -> ValuePlan {
+    ) -> (Vec<GoExpression>, ValuePlan) {
         let stages: Vec<ValuePlan> = args
             .iter()
             .map(|a| self.lower_composite_value(a, ExpressionContext::value()))
@@ -703,17 +710,9 @@ impl Planner<'_> {
                 boundary: CaptureBoundary::SiblingSequence,
             },
         );
-        let effect = sequenced.effect;
-        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
-        let (setup, emitted_args) = sequenced.into_rendered();
-        ValuePlan::computed(
-            setup,
-            GoExpression::opaque_with_deferred_evaluation(
-                emitted_args.join(", "),
-                contains_deferred_evaluation,
-            ),
-            effect,
-        )
+        let ordering =
+            ValuePlan::computed(sequenced.setup, GoExpression::empty(), sequenced.effect);
+        (sequenced.values, ordering)
     }
 
     /// Lower `last` as a tail value. Tuple literals widen slot types to the
@@ -721,14 +720,13 @@ impl Planner<'_> {
     pub(crate) fn lower_tail_value(
         &mut self,
         last: &Expression,
-    ) -> (Vec<LoweredStatement>, String) {
-        if let Expression::Tuple { elements, ty, .. } = last {
-            let plan = self.plan_tuple_value(elements, ty, true);
-            plan.into_parts()
+    ) -> (Vec<LoweredStatement>, GoExpression) {
+        let plan = if let Expression::Tuple { elements, ty, .. } = last {
+            self.plan_tuple_value(elements, ty, true)
         } else {
             self.lower_value(last, ExpressionContext::value())
-                .into_parts()
-        }
+        };
+        (plan.setup, plan.expression)
     }
 
     pub(crate) fn lower_to_operand_temp(
@@ -744,7 +742,7 @@ impl Planner<'_> {
             {
                 return ValuePlan::computed(
                     self.lower_block_as_body(expression).statements,
-                    GoExpression::opaque(String::new()),
+                    GoExpression::empty(),
                     EvaluationEffect::Pure,
                 );
             }

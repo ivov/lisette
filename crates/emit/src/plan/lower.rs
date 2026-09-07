@@ -14,7 +14,7 @@ use crate::plan::bodies::{
     LoweredStatement, PlacePlan, directed,
 };
 use crate::plan::placement::{collapse_declared_temp, requires_temp_var, try_elide_tail_let};
-use crate::plan::values::{OperandForm, ValuePlan};
+use crate::plan::values::{GoExpression, OperandForm, ValuePlan};
 use crate::utils::wrap_if_struct_literal;
 use std::slice;
 use syntax::ast::{
@@ -434,7 +434,7 @@ impl Planner<'_> {
     pub(crate) fn lower_test_log_call(
         &mut self,
         expression: &Expression,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> (Vec<LoweredStatement>, GoExpression) {
         let Expression::Call {
             expression: callee,
             args,
@@ -454,22 +454,24 @@ impl Planner<'_> {
         self.require_stdlib();
 
         let mut statements = Vec::new();
-        let (recv_setup, handle) = self
-            .lower_value(receiver, ExpressionContext::value())
-            .into_parts();
-        statements.extend(recv_setup);
-        let (arg_setup, value) = self
-            .lower_value(&args[0], ExpressionContext::value())
-            .into_parts();
-        statements.extend(arg_setup);
+        let handle = self.lower_value(receiver, ExpressionContext::value());
+        statements.extend(handle.setup);
+        let value = self.lower_value(&args[0], ExpressionContext::value());
+        statements.extend(value.setup);
 
         let prelude = prelude_qualifier();
         let span = args[0].get_span();
-        let call = format!(
-            "{handle}.Log({}, {}, {}, {prelude}.Debug({value}))",
-            span.file_id,
-            span.byte_offset,
-            span.byte_offset + span.byte_length,
+        let call = GoExpression::call(
+            GoExpression::selector(handle.expression, "Log".to_string()),
+            vec![
+                GoExpression::literal(span.file_id.to_string()),
+                GoExpression::literal(span.byte_offset.to_string()),
+                GoExpression::literal((span.byte_offset + span.byte_length).to_string()),
+                GoExpression::call(
+                    GoExpression::name(format!("{prelude}.Debug")),
+                    vec![value.expression],
+                ),
+            ],
         );
         (statements, call)
     }
@@ -972,15 +974,15 @@ impl Planner<'_> {
             }
             statements
         } else {
-            let (mut statements, expression_string) = self.lower_tail_value(last);
+            let (mut statements, expression) = self.lower_tail_value(last);
             let return_ctx = self.return_ctx();
             let mut coercion = String::new();
-            let expression_string =
-                self.apply_type_coercion(&mut coercion, return_ctx.ty(), last, expression_string);
+            let expression =
+                self.apply_type_coercion(&mut coercion, return_ctx.ty(), last, expression);
             if !coercion.is_empty() {
                 statements.push(LoweredStatement::RawGo(coercion));
             }
-            statements.push(plain_return(expression_string));
+            statements.push(plain_return(expression.rendered()));
             statements
         }
     }

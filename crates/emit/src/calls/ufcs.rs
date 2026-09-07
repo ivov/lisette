@@ -10,8 +10,10 @@ use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{CallPlan, ResolvedCallee};
+use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::types::native::NativeGoType;
+use std::mem;
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::program::ReceiverCoercion;
@@ -122,7 +124,7 @@ impl Planner<'_> {
         let (setup, receiver_arg, emitted_args, arguments_contain_deferred_evaluation) =
             self.lower_ufcs_call_args(site, receiver, args, spread, coercion);
         let receiver_arg = match coercion {
-            Some(ReceiverCoercion::AutoDeref) => format!("*{receiver_arg}"),
+            Some(ReceiverCoercion::AutoDeref) => GoExpression::dereference(receiver_arg),
             Some(ReceiverCoercion::AutoAddress) | None => receiver_arg,
         };
 
@@ -135,8 +137,7 @@ impl Planner<'_> {
                 native_method_lowers_to_plain_call(&native_type, member, emitted_args.len());
             let deferred_evaluation =
                 plain_call || member == "is_empty" || arguments_contain_deferred_evaluation;
-            let expression =
-                GoExpression::opaque_with_deferred_evaluation(inlined, deferred_evaluation);
+            let expression = inlined.with_deferred_evaluation(deferred_evaluation);
             return if plain_call {
                 ValuePlan::plain_call(setup, expression, EvaluationEffect::EffectfulCall)
             } else {
@@ -147,7 +148,7 @@ impl Planner<'_> {
         let mut new_args = vec![receiver_arg];
         new_args.extend(emitted_args);
 
-        let fn_name = self.build_ufcs_qualified_call(
+        let callee = self.build_ufcs_qualified_call(
             site,
             &receiver_ty,
             member,
@@ -157,10 +158,7 @@ impl Planner<'_> {
                 has_spread: spread.is_some(),
             },
         );
-        let expression = GoExpression::call(
-            GoExpression::opaque(fn_name),
-            new_args.into_iter().map(GoExpression::opaque).collect(),
-        );
+        let expression = GoExpression::call(callee, new_args);
         if self.callee_lowers_to_type_construction(function) {
             ValuePlan::observable_call(setup, expression, EvaluationEffect::EffectfulCall)
         } else {
@@ -175,7 +173,7 @@ impl Planner<'_> {
         args: &[Expression],
         spread: Option<&Expression>,
         coercion: Option<ReceiverCoercion>,
-    ) -> (Vec<LoweredStatement>, String, Vec<String>, bool) {
+    ) -> (Vec<LoweredStatement>, GoExpression, Vec<GoExpression>, bool) {
         let UfcsCallSite { function, callee } = site;
         // The DotAccess function type curries `self` out, so its params line
         // up 1:1 with the user args. Pair each so a function-typed param
@@ -263,13 +261,12 @@ impl Planner<'_> {
             },
         );
         let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
-        let (setup, all_values) = sequenced.into_rendered();
-        let receiver_arg = all_values[0].clone();
-        let emitted_args: Vec<String> = all_values[1..].to_vec();
+        let mut all_values = sequenced.values;
+        let receiver_arg = all_values.remove(0);
         (
-            setup,
+            sequenced.setup,
             receiver_arg,
-            emitted_args,
+            all_values,
             contains_deferred_evaluation,
         )
     }
@@ -297,7 +294,7 @@ impl Planner<'_> {
         member: &str,
         type_args: ResolvedCallTypeArguments<'_>,
         arg_shape: CallArgShape,
-    ) -> String {
+    ) -> GoExpression {
         let UfcsCallSite { function, callee } = site;
         let Type::Nominal {
             id: qualified_name, ..
@@ -316,7 +313,7 @@ impl Planner<'_> {
             || self.method_needs_export(member);
 
         let qualified_method_name = self.qualify_method_call(qualified_name, member, is_public);
-        format!("{}{}", qualified_method_name, type_args_string)
+        GoExpression::instantiation(GoExpression::name(qualified_method_name), type_args_string)
     }
 
     fn coerce_receiver_address_stage(
@@ -324,22 +321,22 @@ impl Planner<'_> {
         receiver: &Expression,
         mut stage: ValuePlan,
     ) -> ValuePlan {
-        let value = stage.expression.rendered();
+        let value = mem::replace(&mut stage.expression, GoExpression::empty());
         if matches!(receiver.unwrap_parens(), Expression::Call { .. }) {
-            let tmp = self.hoist_tmp_value_statement(&mut stage.setup, "ref", &value);
-            stage.expression = GoExpression::opaque(format!("&{tmp}"));
+            let tmp = self.hoist_tmp_value_statement(&mut stage.setup, "ref", value.as_str());
+            stage.expression = GoExpression::address_of(GoExpression::name(tmp));
             return stage.into_addressed_location();
         }
-        let addressed = format!("&{value}");
+        let addressed = GoExpression::address_of(value);
         if matches!(receiver.unwrap_parens(), Expression::Identifier { .. }) {
-            stage.expression = GoExpression::opaque(addressed);
+            stage.expression = addressed;
             stage.into_addressed_location()
         } else if stage.setup.is_empty() {
-            stage.expression = GoExpression::opaque(addressed);
+            stage.expression = addressed;
             stage.make_observable_computed();
             stage
         } else {
-            let tmp = self.hoist_tmp_value_statement(&mut stage.setup, "ref", &addressed);
+            let tmp = self.hoist_tmp_value_statement(&mut stage.setup, "ref", addressed.as_str());
             ValuePlan::captured(stage.setup, tmp)
         }
     }
@@ -374,29 +371,26 @@ impl Planner<'_> {
                 boundary: CaptureBoundary::SiblingSequence,
             },
         );
-        let (setup, emitted_all) = sequenced.into_rendered();
+        let mut emitted_all = sequenced.values;
+        let receiver = emitted_all.remove(0);
 
-        let receiver = emitted_all[0].clone();
-        let emitted_rest: Vec<String> = emitted_all[1..].to_vec();
-
-        let receiver = if let Some(stripped) = receiver.strip_prefix('&') {
-            if is_address_of_composite_literal(args.first()) {
-                format!("(&{})", stripped)
-            } else {
-                stripped.to_string()
+        // The method call takes the value's own address, so `&x` unwraps.
+        let addressed = match receiver.node() {
+            GoExpressionNode::AddressOf(inner) => Some(GoExpression::from_node((**inner).clone())),
+            _ => None,
+        };
+        let receiver = match addressed {
+            Some(inner) if is_address_of_composite_literal(args.first()) => {
+                GoExpression::parenthesized(GoExpression::address_of(inner))
             }
-        } else if receiver.starts_with('*') {
-            format!("({})", receiver)
-        } else {
-            receiver
+            Some(inner) => inner,
+            None if receiver.as_str().starts_with('*') => GoExpression::parenthesized(receiver),
+            None => receiver,
         };
 
         ValuePlan::observable_call(
-            setup,
-            GoExpression::call(
-                GoExpression::opaque(format!("{}.{}", receiver, go_method)),
-                emitted_rest.into_iter().map(GoExpression::opaque).collect(),
-            ),
+            sequenced.setup,
+            GoExpression::call(GoExpression::selector(receiver, go_method), emitted_all),
             EvaluationEffect::EffectfulCall,
         )
     }
@@ -406,9 +400,9 @@ fn try_inline_native_ufcs(
     planner: &mut Planner,
     receiver: &Expression,
     member: &str,
-    receiver_arg: &str,
-    emitted_args: &[String],
-) -> Option<String> {
+    receiver_arg: &GoExpression,
+    emitted_args: &[GoExpression],
+) -> Option<GoExpression> {
     let native_type = NativeGoType::from_type(&receiver.get_type())?;
     let (inlined, extra_import) = super::native::try_inline_native_method(
         &native_type,

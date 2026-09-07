@@ -3,6 +3,7 @@ use std::fmt::Write;
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::context::expression::ExpressionContext;
+use crate::plan::go_expression::CompositeLayout;
 use crate::plan::values::{
     CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
 };
@@ -93,13 +94,11 @@ impl Planner<'_> {
         };
         let element_ty = self.use_go_type(&element_lisette_ty);
 
+        let go_type = format!("{}{}", type_prefix, element_ty);
         if elements.is_empty() {
             return ValuePlan::computed(
                 Vec::new(),
-                GoExpression::composite_literal(
-                    format!("{}{}{{}}", type_prefix, element_ty),
-                    false,
-                ),
+                GoExpression::empty_composite(go_type),
                 EvaluationEffect::Pure,
             );
         }
@@ -112,37 +111,29 @@ impl Planner<'_> {
         let effect = sequenced.effect;
         let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let mut setup = sequenced.setup;
-        let values = sequenced.values;
 
-        let mut wrapped: Vec<String> = Vec::with_capacity(values.len());
+        let mut wrapped = Vec::with_capacity(sequenced.values.len());
         let mut widest = 0;
-        for (expr, value) in elements.iter().zip(&values) {
+        for (expr, value) in elements.iter().zip(sequenced.values) {
             let coercion = CoercionPlan::internal(self, &expr.get_type(), &element_lisette_ty);
             let is_whole_literal = coercion.is_identity() && value.is_composite_literal();
-            let (coercion_setup, coerced) = coercion.lower(self, value.rendered());
+            let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
-            widest = widest.max(coerced.len());
-            wrapped.push(if is_whole_literal {
-                elide_element_type(&element_ty, coerced)
-            } else {
-                coerced
-            });
+            widest = widest.max(coerced.as_str().len());
+            wrapped.push((
+                None,
+                if is_whole_literal {
+                    coerced.elide_composite_type(&element_ty)
+                } else {
+                    coerced
+                },
+            ));
         }
-        let elements = wrapped;
 
-        let value = if elements.len() > 1 && widest > 30 {
-            let indented = elements
-                .iter()
-                .map(|e| format!("\t{}", e))
-                .collect::<Vec<_>>()
-                .join(",\n");
-            format!("{}{}{{\n{},\n}}", type_prefix, element_ty, indented)
-        } else {
-            format!("{}{}{{ {} }}", type_prefix, element_ty, elements.join(", "))
-        };
+        let layout = CompositeLayout::for_elements(wrapped.len(), widest);
         ValuePlan::computed(
             setup,
-            GoExpression::composite_literal(value, contains_deferred_evaluation),
+            GoExpression::composite(Some(go_type), wrapped, layout, contains_deferred_evaluation),
             effect,
         )
     }
@@ -209,23 +200,20 @@ impl Planner<'_> {
         // Solo-expression f-strings round-trip through fmt.Sprint, which skips
         // the format-string parse. Excluded: `%c`, because Sprint on a rune
         // prints the integer codepoint instead of the character.
-        if let ([FormatStringPart::Expression(_)], [arg]) = (parts, args.as_slice())
+        if let ([FormatStringPart::Expression(_)], [_]) = (parts, args.as_slice())
             && format_string != "%c"
         {
             return ValuePlan::observable_call(
                 setup,
-                GoExpression::call(
-                    GoExpression::opaque("fmt.Sprint".to_string()),
-                    vec![GoExpression::opaque(arg.clone())],
-                ),
+                GoExpression::call(GoExpression::name("fmt.Sprint".to_string()), args),
                 effect,
             );
         }
         let mut arguments = vec![GoExpression::literal(format!("\"{}\"", format_string))];
-        arguments.extend(args.into_iter().map(GoExpression::opaque));
+        arguments.extend(args);
         ValuePlan::observable_call(
             setup,
-            GoExpression::call(GoExpression::opaque("fmt.Sprintf".to_string()), arguments),
+            GoExpression::call(GoExpression::name("fmt.Sprintf".to_string()), arguments),
             effect,
         )
     }
@@ -236,7 +224,7 @@ impl Planner<'_> {
         parts: &[FormatStringPart],
         values: impl IntoIterator<Item = GoExpression>,
         escape_percent: bool,
-    ) -> (String, Vec<String>) {
+    ) -> (String, Vec<GoExpression>) {
         let mut values = values.into_iter();
         let mut format_string = String::new();
         let mut args = Vec::new();
@@ -257,8 +245,7 @@ impl Planner<'_> {
                     args.push(
                         values
                             .next()
-                            .expect("sequenced count matches expression parts")
-                            .rendered(),
+                            .expect("sequenced count matches expression parts"),
                     );
                 }
             }
@@ -305,13 +292,6 @@ fn format_verb_for(ty: &Type) -> &'static str {
         Some(k) if k.is_signed_int() || k.is_unsigned_int() => "%d",
         Some(k) if k.is_float() => "%g",
         _ => "%v",
-    }
-}
-
-pub(crate) fn elide_element_type(element_ty: &str, rendered: String) -> String {
-    match rendered.strip_prefix(element_ty) {
-        Some(literal) if literal.starts_with('{') => literal.to_string(),
-        _ => rendered,
     }
 }
 

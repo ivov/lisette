@@ -10,7 +10,7 @@ use crate::plan::bodies::{
     ElseArm, IfPlan, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, PlacePlan,
 };
 use crate::plan::calls::CallableOrigin;
-use crate::plan::values::{CaptureBoundary, EvaluationEffect};
+use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression};
 use crate::types::native::NativeGoType;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -336,6 +336,11 @@ impl Planner<'_> {
             },
         }));
 
+        let result = if result.is_empty() {
+            GoExpression::empty()
+        } else {
+            GoExpression::name(result)
+        };
         Some(NativeCallResult::new(
             setup,
             result,

@@ -18,6 +18,7 @@ use crate::expressions::staging::{SpreadSequenceOptions, VariadicCombine};
 use crate::names::generics::extract_type_mapping;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{ArgumentPlan, CallPlan, CallableOrigin, ResolvedCallee};
+use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{
     CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, SequencedValues, ValuePlan,
 };
@@ -172,53 +173,57 @@ impl FmtPrint {
     }
 }
 
+/// The arguments of `callee(...)` when the expression is a call to that name.
+fn call_arguments_of<'n>(
+    expression: &'n GoExpressionNode,
+    callee: &str,
+) -> Option<&'n [GoExpressionNode]> {
+    let GoExpressionNode::Call {
+        callee: called,
+        arguments,
+    } = expression
+    else {
+        return None;
+    };
+    (called.print() == callee).then_some(arguments.as_slice())
+}
+
 /// Collapse redundant fmt wrappers:
 /// - `fmt.Print{ln}(fmt.Sprintf(...))` → `fmt.Printf(..., "\n")`
 /// - `fmt.Print{ln}(fmt.Sprint(x))` → `fmt.Print{ln}(x)`
 fn collapse_fmt_print(
     planner: &Planner,
-    function_string: &str,
+    callee: &GoExpression,
     args: &[Expression],
-    args_strings: &[String],
-    call_str: String,
-) -> String {
-    let Some(print) = FmtPrint::from_callee(function_string) else {
-        return call_str;
-    };
-    let ([arg_expression], [arg]) = (args, args_strings) else {
-        return call_str;
+    arguments: &[GoExpression],
+) -> Option<GoExpression> {
+    let print = FmtPrint::from_callee(callee.as_str())?;
+    let ([arg_expression], [argument]) = (args, arguments) else {
+        return None;
     };
 
-    match classify_fmt_argument(planner, arg_expression) {
-        Some(FmtArgument::Sprintf) => {
-            let Some(inner) = arg
-                .strip_prefix("fmt.Sprintf(")
-                .and_then(|s| s.strip_suffix(')'))
-            else {
-                return call_str;
-            };
-            match print {
-                FmtPrint::Print => format!("fmt.Printf({})", inner),
-                FmtPrint::Println => {
-                    let Some(close_quote) = find_go_string_literal_close(inner) else {
-                        return call_str;
-                    };
-                    let format_open = &inner[..close_quote];
-                    let close_and_rest = &inner[close_quote..];
-                    format!("fmt.Printf({}\\n{})", format_open, close_and_rest)
-                }
+    match classify_fmt_argument(planner, arg_expression)? {
+        FmtArgument::Sprintf => {
+            let mut inner = call_arguments_of(argument.node(), "fmt.Sprintf")?.to_vec();
+            if let FmtPrint::Println = print {
+                let Some(GoExpressionNode::Literal(format)) = inner.first_mut() else {
+                    return None;
+                };
+                let close_quote = find_go_string_literal_close(format)?;
+                format.insert_str(close_quote, "\\n");
             }
+            Some(GoExpression::call(
+                GoExpression::name("fmt.Printf".to_string()),
+                inner.into_iter().map(GoExpression::from_node).collect(),
+            ))
         }
-        Some(FmtArgument::Sprint) => {
-            let Some(inner) = arg
-                .strip_prefix("fmt.Sprint(")
-                .and_then(|s| s.strip_suffix(')'))
-            else {
-                return call_str;
-            };
-            format!("{}({})", function_string, inner)
+        FmtArgument::Sprint => {
+            let inner = call_arguments_of(argument.node(), "fmt.Sprint")?;
+            Some(GoExpression::call(
+                callee.clone(),
+                inner.iter().cloned().map(GoExpression::from_node).collect(),
+            ))
         }
-        None => call_str,
     }
 }
 
@@ -275,24 +280,24 @@ impl<'a> Planner<'a> {
                 },
             );
             let effect = self.regular_call_effect(function, sequenced.effect);
-            let (setup, args_strings) = sequenced.into_rendered();
-            let expression = GoExpression::call(
-                GoExpression::opaque(go_name),
-                args_strings.into_iter().map(GoExpression::opaque).collect(),
-            );
+            let expression = GoExpression::call(GoExpression::name(go_name), sequenced.values);
             return if self.callee_lowers_to_type_construction(function) {
-                ValuePlan::observable_call(setup, expression, effect)
+                ValuePlan::observable_call(sequenced.setup, expression, effect)
             } else {
-                ValuePlan::plain_call(setup, expression, effect)
+                ValuePlan::plain_call(sequenced.setup, expression, effect)
             };
         }
 
         let callee_staged = self.plan_operand(function, expression_ctx.callee());
         let callee_effect = callee_staged.evaluation.effect;
-        let (mut setup, mut function_string) = callee_staged.into_parts();
+        let ValuePlan {
+            mut setup,
+            expression: mut callee,
+            ..
+        } = callee_staged;
 
         if function.deref_inner().is_some() {
-            function_string = format!("({})", function_string);
+            callee = GoExpression::parenthesized(callee);
         }
 
         let mut type_args_string = self.resolve_call_type_args(CallTypeArgsRequest {
@@ -312,10 +317,8 @@ impl<'a> Planner<'a> {
         if builtin_conversion.is_some() {
             type_args_string = String::new();
         }
-        if !type_args_string.is_empty()
-            && let Some(bracket_start) = function_string.find('[')
-        {
-            function_string.truncate(bracket_start);
+        if !type_args_string.is_empty() {
+            callee = callee.without_instantiation();
         }
 
         let args_ctx = CallArgsContext {
@@ -337,27 +340,34 @@ impl<'a> Planner<'a> {
         let constant_result = go_builtin_name(function)
             .filter(|_| builtin_conversion.is_none())
             .and_then(|builtin| builtin_constant(builtin, &sequenced_args.values));
-        let (args_setup, args_strings) = sequenced_args.into_rendered();
+        let SequencedValues {
+            setup: args_setup,
+            values: arguments,
+            ..
+        } = sequenced_args;
 
         let callee_needs_pin = setup.is_empty()
             && type_args_string.is_empty()
             && LaterStages::sequenced(&args_setup, args_effect)
                 .can_change(self.place_read_stability(function));
         if callee_needs_pin {
-            function_string =
-                self.hoist_tmp_value_statement(&mut setup, "callee", &function_string);
+            callee = GoExpression::name(self.hoist_tmp_value_statement(
+                &mut setup,
+                "callee",
+                callee.as_str(),
+            ));
         }
 
-        let call_str = format!(
-            "{}{}({})",
-            function_string,
-            type_args_string,
-            args_strings.join(", ")
-        );
-        let call_str = collapse_fmt_print(self, &function_string, args, &args_strings, call_str);
-        let call_str = match &builtin_conversion {
-            Some(go_type) => format!("{go_type}({call_str})"),
-            None => call_str,
+        let call = match collapse_fmt_print(self, &callee, args, &arguments) {
+            Some(collapsed) => collapsed,
+            None => GoExpression::call(
+                GoExpression::instantiation(callee, type_args_string),
+                arguments,
+            ),
+        };
+        let call = match builtin_conversion {
+            Some(go_type) => GoExpression::conversion(go_type, call),
+            None => call,
         };
 
         setup.extend(args_setup);
@@ -365,8 +375,7 @@ impl<'a> Planner<'a> {
         let effect = self
             .regular_call_effect(function, args_effect)
             .combine(callee_effect);
-        let expression = GoExpression::opaque_with_deferred_evaluation(call_str, true)
-            .with_constant(constant_result);
+        let expression = call.with_constant(constant_result);
         if self.callee_lowers_to_type_construction(function) {
             ValuePlan::computed(setup, expression, effect)
         } else {
@@ -407,20 +416,19 @@ impl<'a> Planner<'a> {
             .values
             .pop()
             .expect("sequenced exactly one argument");
-        let sprintf_arguments = value
-            .as_str()
-            .strip_prefix("fmt.Sprintf(")
-            .and_then(|value| value.strip_suffix(')'))
-            .map(str::to_string);
-        let call = match sprintf_arguments {
-            Some(arguments) => GoExpression::opaque_with_deferred_evaluation(
-                format!("fmt.Errorf({arguments})"),
-                true,
+        let call = match call_arguments_of(value.node(), "fmt.Sprintf") {
+            Some(arguments) => GoExpression::call(
+                GoExpression::name("fmt.Errorf".to_string()),
+                arguments
+                    .iter()
+                    .cloned()
+                    .map(GoExpression::from_node)
+                    .collect(),
             ),
             None => {
                 let qualifier = self.require_package_import("go:errors");
                 GoExpression::call(
-                    GoExpression::opaque(format!("{}.New", qualifier)),
+                    GoExpression::name(format!("{}.New", qualifier)),
                     vec![value],
                 )
             }
@@ -618,8 +626,8 @@ impl<'a> Planner<'a> {
                     effective_param_ty.expect("TaggedGoLowering requires effective_param_ty");
                 let arg_ctx = self.direct_arg_emit_ctx(param, true);
                 let argument = self.lower_composite_value(arg, arg_ctx);
-                argument.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
-                    let lowered = self.emit_lower_arg_to_tagged(setup, &value, target);
+                argument.map_expression_as_computed(|setup, value| {
+                    let lowered = self.emit_lower_arg_to_tagged(setup, value.as_str(), target);
                     GoExpression::opaque_with_deferred_evaluation(lowered, true)
                 })
             }
@@ -773,10 +781,11 @@ impl<'a> Planner<'a> {
         if coercion.is_identity() {
             return argument;
         }
-        argument.map_rendered_as_computed(|setup, value, contains_deferred_evaluation| {
+        argument.map_expression_as_computed(|setup, value| {
+            let contains_deferred_evaluation = value.contains_deferred_evaluation();
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
-            GoExpression::opaque_with_deferred_evaluation(coerced, contains_deferred_evaluation)
+            coerced.with_deferred_evaluation(contains_deferred_evaluation)
         })
     }
 
@@ -877,11 +886,17 @@ impl<'a> Planner<'a> {
             arg,
             ExpressionContext::value().with_function_slot_origin(param_origin),
         );
-        Some(argument.map_rendered_as_computed(|setup, value, _| {
+        Some(argument.map_expression_as_computed(|setup, value| {
             let mut buffer = String::new();
-            let adapted =
-                emit_fn_arg_shape_adapter(self, &mut buffer, &value, &arg_fn, &arg_abi, &param_abi)
-                    .expect("fn_arg_shapes resolved a function signature");
+            let adapted = emit_fn_arg_shape_adapter(
+                self,
+                &mut buffer,
+                value.as_str(),
+                &arg_fn,
+                &arg_abi,
+                &param_abi,
+            )
+            .expect("fn_arg_shapes resolved a function signature");
             if !buffer.is_empty() {
                 setup.push(LoweredStatement::RawGo(buffer));
             }
@@ -924,8 +939,12 @@ impl<'a> Planner<'a> {
 
         let source = self
             .lower_value(spread, ExpressionContext::value())
-            .map_rendered_as_name(|setup, source_value, _| {
-                GoExpression::name(self.hoist_tmp_value_statement(setup, "src", &source_value))
+            .map_expression_as_name(|setup, source_value| {
+                GoExpression::name(self.hoist_tmp_value_statement(
+                    setup,
+                    "src",
+                    source_value.as_str(),
+                ))
             });
         let source_variable = source.rendered();
 
@@ -950,19 +969,17 @@ impl<'a> Planner<'a> {
             emit_fn_arg_shape_adapter(self, &mut body, &loop_cb, &arg_fn, &arg_abi, &param_abi)?;
         write_line!(body, "{}[i] = {}", adapted, closure);
 
-        Some(
-            source.map_rendered_as_name(|setup, _source_value, _contains_deferred_evaluation| {
-                setup.push(LoweredStatement::RawGo(format!(
-                    "{} := make([]{}, len({}))\n",
-                    adapted, target_element_ty, source_variable
-                )));
-                setup.push(LoweredStatement::RawGo(format!(
-                    "for i, {} := range {} {{\n{}}}\n",
-                    loop_cb, source_variable, body
-                )));
-                GoExpression::name(adapted)
-            }),
-        )
+        Some(source.map_expression_as_name(|setup, _source_value| {
+            setup.push(LoweredStatement::RawGo(format!(
+                "{} := make([]{}, len({}))\n",
+                adapted, target_element_ty, source_variable
+            )));
+            setup.push(LoweredStatement::RawGo(format!(
+                "for i, {} := range {} {{\n{}}}\n",
+                loop_cb, source_variable, body
+            )));
+            GoExpression::name(adapted)
+        }))
     }
 
     /// Resolve the source and target callback contracts at a Go call boundary.
@@ -1018,7 +1035,9 @@ impl<'a> Planner<'a> {
                 ExpressionContext::value().with_forced_tagged_go_function(true),
             ),
         };
-        argument.map_rendered_as_computed(|setup, value, contains_deferred_evaluation| {
+        argument.map_expression_as_computed(|setup, value| {
+            let contains_deferred_evaluation = value.contains_deferred_evaluation()
+                || !matches!(transition, AbiTransition::Identity);
             let result = match transition {
                 AbiTransition::Identity => value,
                 AbiTransition::LowerFromTagged => {
@@ -1026,7 +1045,12 @@ impl<'a> Planner<'a> {
                         .facts
                         .resolve_to_function_type(effective_param_ty.unwrap_forall())
                         .expect("callback target resolves to a fn type");
-                    emit_lisette_callback_wrapper(self, setup, &value, &param_fn_ty)
+                    GoExpression::opaque(emit_lisette_callback_wrapper(
+                        self,
+                        setup,
+                        value.as_str(),
+                        &param_fn_ty,
+                    ))
                 }
                 AbiTransition::WrapToTagged | AbiTransition::Reencode => {
                     let arg_fn_ty = self
@@ -1037,7 +1061,7 @@ impl<'a> Planner<'a> {
                     let adapted = emit_fn_arg_shape_adapter(
                         self,
                         &mut buffer,
-                        &value,
+                        value.as_str(),
                         &arg_fn_ty,
                         source,
                         target,
@@ -1046,16 +1070,13 @@ impl<'a> Planner<'a> {
                     if !buffer.is_empty() {
                         setup.push(LoweredStatement::RawGo(buffer));
                     }
-                    adapted
+                    GoExpression::opaque(adapted)
                 }
                 AbiTransition::Incompatible => {
                     unreachable!("type-checked callback ABIs must describe the same result")
                 }
             };
-            GoExpression::opaque_with_deferred_evaluation(
-                result,
-                contains_deferred_evaluation || !matches!(transition, AbiTransition::Identity),
-            )
+            result.with_deferred_evaluation(contains_deferred_evaluation)
         })
     }
 
@@ -1148,10 +1169,10 @@ impl<'a> Planner<'a> {
         } else {
             self.lower_value(argument, ExpressionContext::value())
         };
-        value.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
+        value.map_expression_as_computed(|setup, value| {
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
-            GoExpression::opaque_with_deferred_evaluation(coerced, true)
+            coerced.with_deferred_evaluation(true)
         })
     }
 
@@ -1200,10 +1221,10 @@ impl<'a> Planner<'a> {
         } else {
             self.lower_value(spread, ExpressionContext::value())
         };
-        Some(value.map_rendered_as_computed(|setup, value, _| {
+        Some(value.map_expression_as_computed(|setup, value| {
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
-            GoExpression::opaque_with_deferred_evaluation(coerced, true)
+            coerced.with_deferred_evaluation(true)
         }))
     }
 }

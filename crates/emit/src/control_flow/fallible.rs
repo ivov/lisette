@@ -2,6 +2,7 @@ use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
+use crate::plan::values::GoExpression;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -153,9 +154,9 @@ impl Planner<'_> {
         to: &Type,
     ) -> String {
         let coercion = CoercionPlan::internal(self, from, to);
-        let (setup, value) = coercion.lower(self, value);
+        let (setup, value) = coercion.lower(self, GoExpression::opaque(value));
         statements.extend(setup);
-        value
+        value.rendered()
     }
 
     pub(crate) fn convert_error_to_return_context(
@@ -275,17 +276,20 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
     pub(crate) fn format_constructor_call(
         &mut self,
         constructor: &str,
-        arg: Option<&str>,
-    ) -> String {
+        arg: Option<GoExpression>,
+    ) -> GoExpression {
         let inner_ty = self.ok_type_string();
-        let arg_str = arg.unwrap_or("");
-        if self.fallible.is_result() {
+        let type_args = if self.fallible.is_result() {
             let err_ty = self
                 .err_type_string()
                 .expect("Result type must have an error type");
-            format!("{}[{}, {}]({})", constructor, inner_ty, err_ty, arg_str)
+            format!("[{}, {}]", inner_ty, err_ty)
         } else {
-            format!("{}[{}]({})", constructor, inner_ty, arg_str)
-        }
+            format!("[{}]", inner_ty)
+        };
+        GoExpression::call(
+            GoExpression::instantiation(GoExpression::name(constructor.to_string()), type_args),
+            arg.into_iter().collect(),
+        )
     }
 }

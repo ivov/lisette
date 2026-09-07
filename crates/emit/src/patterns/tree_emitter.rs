@@ -594,7 +594,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 branches,
                 fallback,
             } => {
-                let rendered_path = path.render(self.subject.root());
+                let rendered_path = path.render(self.subject.root()).rendered();
                 let (cased, lifted) = split_with_default_lift(branches, fallback.as_deref());
                 for branch in cased {
                     self.record_subject_use();
@@ -648,11 +648,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             if binding.go_name.is_none() {
                 continue;
             }
-            let text = binding.path.render_composable(self.subject.root());
+            let composable = binding.path.render_composable(self.subject.root());
             self.planner.scope.bind_inline_expr(
                 &binding.lisette_name,
                 InlineExpr::new(
-                    text,
+                    composable,
                     vec![self.subject.var().to_string()],
                     binding.path.contains_deferred_evaluation(),
                 ),
@@ -739,7 +739,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             unreachable!("walk_switch requires a Switch decision");
         };
         let fallback = fallback.as_deref();
-        let rendered_path = path.render(self.subject.root());
+        let rendered_path = path.render(self.subject.root()).rendered();
         match shape {
             SwitchShape::TypeSwitch => {
                 self.record_subject_use();

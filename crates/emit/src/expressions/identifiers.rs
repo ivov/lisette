@@ -29,16 +29,12 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
         if let Some(BindingValue::InlineExpr(expr)) = self.scope.resolve_identifier_binding(value) {
-            let text = expr.as_str().to_string();
+            let expression = expr.expression().clone();
             let refs = expr.refs().to_vec();
-            let contains_deferred_evaluation = expr.contains_deferred_evaluation();
             for go_name in &refs {
                 self.scope.record_go_use(go_name);
             }
-            return GoExpression::opaque_with_deferred_evaluation(
-                text,
-                contains_deferred_evaluation,
-            );
+            return expression;
         }
         let bound_go_name = self
             .scope
@@ -48,33 +44,29 @@ impl Planner<'_> {
             self.scope.record_go_use(go_name);
         }
         match self.classify_identifier(value, ty, ctx) {
-            IdentifierKind::UnitValue => {
-                GoExpression::composite_literal("struct{}{}".to_string(), false)
-            }
+            IdentifierKind::UnitValue => GoExpression::empty_composite("struct{}".to_string()),
             IdentifierKind::PublicFunction { capitalized } => GoExpression::name(capitalized),
             IdentifierKind::UnitConstructor { name, type_args } => GoExpression::call(
-                GoExpression::opaque(format!(
-                    "{}{}",
-                    self.resolve_go_name(&name, None, false),
-                    type_args
-                )),
+                GoExpression::instantiation(
+                    GoExpression::name(self.resolve_go_name(&name, None, false)),
+                    type_args,
+                ),
                 Vec::new(),
             ),
-            IdentifierKind::ConstructorFunction { name, type_args } => GoExpression::name(format!(
-                "{}{}",
-                self.resolve_go_name(&name, None, false),
-                type_args
-            )),
+            IdentifierKind::ConstructorFunction { name, type_args } => GoExpression::instantiation(
+                GoExpression::name(self.resolve_go_name(&name, None, false)),
+                type_args,
+            ),
             IdentifierKind::Regular { name } => {
                 if let Some(expression) = self.try_emit_method_expression(&name, ty) {
-                    return GoExpression::opaque(expression);
+                    return expression;
                 }
                 let resolved = self.capitalize_static_method_if_public(&name);
                 let go_name = self.resolve_go_name(&resolved, qualified, bound_go_name.is_some());
                 if !ctx.is_callee()
                     && let Some(type_args) = self.format_generic_value_type_args(&name, ty)
                 {
-                    return GoExpression::name(format!("{}{}", go_name, type_args));
+                    return GoExpression::instantiation(GoExpression::name(go_name), type_args);
                 }
                 GoExpression::name(go_name)
             }
@@ -258,7 +250,7 @@ impl Planner<'_> {
 
     /// Return Go method-expression syntax for a `Type.method` referring to an
     /// instance method (first param is `self`); `None` for static methods.
-    fn try_emit_method_expression(&mut self, name: &str, id_ty: &Type) -> Option<String> {
+    fn try_emit_method_expression(&mut self, name: &str, id_ty: &Type) -> Option<GoExpression> {
         let (type_part, method_part) = name.split_once('.')?;
 
         if method_part.contains('.') {
@@ -316,11 +308,11 @@ impl Planner<'_> {
         };
 
         let type_go = go_name::escape_type_name(type_part);
-        if is_pointer {
-            Some(format!("(*{}{}).{}", type_go, type_args, go_method))
-        } else {
-            Some(format!("{}{}.{}", type_go, type_args, go_method))
-        }
+        Some(method_expression(
+            format!("{}{}", type_go, type_args),
+            is_pointer,
+            go_method,
+        ))
     }
 
     /// Resolve `package.Type.method` as a cross-package static method call.
@@ -373,4 +365,18 @@ impl Planner<'_> {
 
         Some(go_name::snake_to_camel(name))
     }
+}
+
+/// Go method expression on a type, `T.method` or `(*T).method`.
+pub(crate) fn method_expression(
+    receiver_type: String,
+    pointer_receiver: bool,
+    go_method: String,
+) -> GoExpression {
+    let receiver = if pointer_receiver {
+        format!("(*{})", receiver_type)
+    } else {
+        receiver_type
+    };
+    GoExpression::selector(GoExpression::type_name(receiver), go_method)
 }
