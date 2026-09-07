@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788813057338,
+  "lastUpdate": 1788817629064,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -35424,6 +35424,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 34362,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28190,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19300,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15235,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13959,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8855,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6285,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "047ecd4cae9165786df293a26cf21e69d458782e",
+          "message": "refactor: lower expression producers to `GoExpressionNode` trees (#1431)",
+          "timestamp": "2026-09-07T23:46:03+02:00",
+          "tree_id": "c3995cf79e7290f15d30113ee433de1bb5066527",
+          "url": "https://github.com/ivov/lisette/commit/047ecd4cae9165786df293a26cf21e69d458782e"
+        },
+        "date": 1788817627747,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 142551,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 34660,
             "unit": "lines"
           },
           {
