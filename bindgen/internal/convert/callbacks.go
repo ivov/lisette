@@ -114,7 +114,7 @@ func (a *MutationAnalysis) recordCallbackCall(fn *ssa.Function, common *ssa.Call
 		a.applyKnownCallee(fn, target, common.Args, summary)
 	}
 	for position, argument := range common.Args {
-		if !goWritableCapability(argument.Type()) {
+		if !goStorageWritable(argument.Type()) {
 			continue
 		}
 		roots := &mutationSummary{params: map[int]reachMode{}, freeVars: map[int]reachMode{}}
@@ -174,7 +174,7 @@ func (a *MutationAnalysis) packedRoots(fn *ssa.Function, value ssa.Value, into *
 	}
 	values, _, _ := a.containedValues(root)
 	for _, stored := range values {
-		if !goWritableCapability(stored.value.Type()) {
+		if !goStorageWritable(stored.value.Type()) {
 			continue
 		}
 		resumeWalk(fn, stored.value, into, reachDirect)

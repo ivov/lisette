@@ -721,7 +721,7 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 
 	default:
 		t := ToLisette(underlying, c)
-		if goWritableCapability(underlying) {
+		if carriesWritePermission(underlying) {
 			t = writableRecursive(underlying, make(map[types.Type]bool), c, nil, false)
 		}
 		if t.SkipReason != nil {
@@ -732,12 +732,64 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 	}
 }
 
-// goWritableCapability reports whether Go grants writes through this storage.
-func goWritableCapability(t types.Type) bool {
-	return writableCapability(t, make(map[types.Type]bool))
+func carriesWritePermission(t types.Type) bool {
+	return writableCapability(t, make(map[types.Type]bool), false)
 }
 
-func writableCapability(t types.Type, seen map[types.Type]bool) bool {
+func writableCapability(t types.Type, seen map[types.Type]bool, nilable bool) bool {
+	if seen[t] {
+		return false
+	}
+	seen[t] = true
+	defer delete(seen, t)
+	switch u := t.(type) {
+	case *types.Alias:
+		return writableCapability(u.Rhs(), seen, nilable)
+	case *types.Named:
+		if fields, ok := u.Underlying().(*types.Struct); ok {
+			return structFieldsCarryWrite(fields, seen)
+		}
+		return writableCapability(u.Underlying(), seen, false)
+	case *types.Pointer:
+		if nilable && isScalarType(u.Elem()) {
+			return false
+		}
+		return fieldTypeRenders(u.Elem(), make(map[types.Type]bool))
+	case *types.Slice, *types.Map:
+		return fieldTypeRenders(u, make(map[types.Type]bool))
+	case *types.Array:
+		return writableCapability(u.Elem(), seen, nilable)
+	case *types.Struct:
+		return fieldTypeRenders(u, make(map[types.Type]bool)) && structFieldsCarryWrite(u, seen)
+	}
+	return false
+}
+
+func structFieldsCarryWrite(fields *types.Struct, seen map[types.Type]bool) bool {
+	emitted := false
+	for field := range fields.Fields() {
+		if field.Embedded() {
+			shown, writable := embedRendering(field, seen)
+			emitted = emitted || shown
+			if writable {
+				return true
+			}
+		} else if field.Exported() && fieldTypeRenders(field.Type(), make(map[types.Type]bool)) {
+			emitted = true
+			if writableCapability(field.Type(), seen, true) {
+				return true
+			}
+		}
+	}
+	// no emitted field renders as an opaque type, whose mut the checker accepts
+	return !emitted && goStorageWritable(fields)
+}
+
+func goStorageWritable(t types.Type) bool {
+	return storageWritable(t, make(map[types.Type]bool))
+}
+
+func storageWritable(t types.Type, seen map[types.Type]bool) bool {
 	if seen[t] {
 		return false
 	}
@@ -747,12 +799,138 @@ func writableCapability(t types.Type, seen map[types.Type]bool) bool {
 		return true
 	case *types.Struct:
 		for field := range u.Fields() {
-			if writableCapability(field.Type(), seen) {
+			if storageWritable(field.Type(), seen) {
 				return true
 			}
 		}
 	case *types.Array:
-		return writableCapability(u.Elem(), seen)
+		return storageWritable(u.Elem(), seen)
+	}
+	return false
+}
+
+func embedRendering(field *types.Var, seen map[types.Type]bool) (emitted, writable bool) {
+	target := field.Type()
+	pointer := false
+	if ptr, ok := target.(*types.Pointer); ok {
+		target, pointer = ptr.Elem(), true
+	}
+	if named, ok := target.(*types.Named); ok && !named.Obj().Exported() {
+		fields, faithful := unexportedEmbedFields(named)
+		if !faithful {
+			return false, false
+		}
+		return true, pointer || structFieldsCarryWrite(fields, seen)
+	}
+	if isGenericAlias(target) || !fieldTypeRenders(target, make(map[types.Type]bool)) {
+		return false, false
+	}
+	return true, pointer || writableCapability(target, seen, true)
+}
+
+func unexportedEmbedFields(named *types.Named) (*types.Struct, bool) {
+	if named.TypeParams().Len() > 0 || named.TypeArgs().Len() > 0 {
+		return nil, false
+	}
+	fields, ok := named.Underlying().(*types.Struct)
+	if !ok {
+		return nil, false
+	}
+	for field := range fields.Fields() {
+		if !field.Embedded() {
+			continue
+		}
+		target := field.Type()
+		if ptr, ok := target.(*types.Pointer); ok {
+			target = ptr.Elem()
+		}
+		embedded, ok := target.(*types.Named)
+		if !ok {
+			return nil, false
+		}
+		if embedded.Obj().Exported() {
+			_, isStruct := embedded.Underlying().(*types.Struct)
+			if !isStruct || isGenericAlias(field.Type()) || !fieldTypeRenders(embedded, make(map[types.Type]bool)) {
+				return nil, false
+			}
+			continue
+		}
+		if _, faithful := unexportedEmbedFields(embedded); !faithful {
+			return nil, false
+		}
+	}
+	return fields, true
+}
+
+func fieldTypeRenders(t types.Type, seen map[types.Type]bool) bool {
+	if seen[t] {
+		return true
+	}
+	seen[t] = true
+	defer delete(seen, t)
+	switch u := t.(type) {
+	case *types.Alias:
+		return fieldTypeRenders(u.Rhs(), seen)
+	case *types.Named:
+		obj := u.Obj()
+		if pkg := obj.Pkg(); pkg != nil && extract.IsInternalPackagePath(pkg.Path()) {
+			return false
+		}
+		if fields, ok := u.Underlying().(*types.Struct); ok && !obj.Exported() && fields.NumFields() > 0 && !unexportedStructRenders(u) {
+			return false
+		}
+		for i := range u.TypeArgs().Len() {
+			if !fieldTypeRenders(u.TypeArgs().At(i), seen) {
+				return false
+			}
+		}
+		return true
+	case *types.Pointer:
+		return fieldTypeRenders(u.Elem(), seen)
+	case *types.Slice:
+		return fieldTypeRenders(u.Elem(), seen)
+	case *types.Array:
+		return fieldTypeRenders(u.Elem(), seen)
+	case *types.Chan:
+		return fieldTypeRenders(u.Elem(), seen)
+	case *types.Map:
+		return fieldTypeRenders(u.Key(), seen) && fieldTypeRenders(u.Elem(), seen)
+	case *types.Signature:
+		return fieldTypeRenders(u.Params(), seen) && fieldTypeRenders(u.Results(), seen)
+	case *types.Tuple:
+		for variable := range u.Variables() {
+			if !fieldTypeRenders(variable.Type(), seen) {
+				return false
+			}
+		}
+		return true
+	case *types.Struct:
+		for i := range u.NumFields() {
+			if !u.Field(i).Exported() || u.Tag(i) != "" || !fieldTypeRenders(u.Field(i).Type(), seen) {
+				return false
+			}
+		}
+		return true
+	}
+	return true
+}
+
+func unexportedStructRenders(named *types.Named) bool {
+	if namedImplementsError(named) {
+		return true
+	}
+	pkg := named.Obj().Pkg()
+	if named.TypeParams().Len() > 0 || pkg == nil {
+		return false
+	}
+	candidates := interfaceCandidatesIn(pkg.Scope(), nil)
+	for _, imported := range pkg.Imports() {
+		candidates = interfaceCandidatesIn(imported.Scope(), candidates)
+	}
+	for _, candidate := range candidates {
+		if types.Implements(named, candidate.Underlying().(*types.Interface)) {
+			return true
+		}
 	}
 	return false
 }
@@ -822,7 +1000,7 @@ func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExp
 		result.SkipNote = t.SkipReason
 	} else {
 		result.LisetteType = t.LisetteType
-		if goWritableCapability(exp.GoType) {
+		if carriesWritePermission(exp.GoType) {
 			writable := writableRecursive(exp.GoType, make(map[types.Type]bool), c, nil, false)
 			if writable.SkipReason == nil {
 				result.LisetteType = writable.LisetteType
@@ -928,7 +1106,7 @@ func embeddedStructField(field *types.Var, c *Converter) StructField {
 		ref := named.Obj().Name()
 		if isPointer {
 			ref = "mut " + refOf(ref)
-		} else if goWritableCapability(named) {
+		} else if carriesWritePermission(named) {
 			ref = "mut " + ref
 		}
 		return StructField{Name: field.Name(), Type: ref, IsEmbedded: true}
@@ -955,7 +1133,7 @@ func embeddedStructField(field *types.Var, c *Converter) StructField {
 	ref := bare
 	if isPointer {
 		ref = "mut " + refOf(ref)
-	} else if goWritableCapability(target) {
+	} else if carriesWritePermission(target) {
 		if isStruct {
 			ref = "mut " + ref
 		} else {
@@ -1663,40 +1841,40 @@ func (c *Converter) collectInterfaceCandidates() []*types.Named {
 		return c.ifaceCandidates
 	}
 	candidates := []*types.Named{}
-
-	collect := func(scope *types.Scope) {
-		for _, name := range scope.Names() {
-			typeName, ok := scope.Lookup(name).(*types.TypeName)
-			if !ok || !typeName.Exported() || typeName.Pkg() == nil {
-				continue
-			}
-			if extract.IsInternalPackagePath(typeName.Pkg().Path()) {
-				continue
-			}
-			named, ok := typeName.Type().(*types.Named)
-			if !ok || named.TypeParams().Len() > 0 {
-				continue
-			}
-			// IsMethodSet excludes constraint interfaces (unions, `~T` terms).
-			iface, ok := named.Underlying().(*types.Interface)
-			if !ok || iface.NumMethods() == 0 || !iface.IsMethodSet() {
-				continue
-			}
-			candidates = append(candidates, named)
-		}
-	}
-
 	if c.pkg != nil && c.pkg.Types != nil {
-		collect(c.pkg.Types.Scope())
+		candidates = interfaceCandidatesIn(c.pkg.Types.Scope(), candidates)
 		for _, imported := range c.pkg.Imports {
 			if imported != nil && imported.Types != nil {
-				collect(imported.Types.Scope())
+				candidates = interfaceCandidatesIn(imported.Types.Scope(), candidates)
 			}
 		}
 	}
 
 	c.ifaceCandidates = candidates
 	return c.ifaceCandidates
+}
+
+func interfaceCandidatesIn(scope *types.Scope, candidates []*types.Named) []*types.Named {
+	for _, name := range scope.Names() {
+		typeName, ok := scope.Lookup(name).(*types.TypeName)
+		if !ok || !typeName.Exported() || typeName.Pkg() == nil {
+			continue
+		}
+		if extract.IsInternalPackagePath(typeName.Pkg().Path()) {
+			continue
+		}
+		named, ok := typeName.Type().(*types.Named)
+		if !ok || named.TypeParams().Len() > 0 {
+			continue
+		}
+		// IsMethodSet excludes constraint interfaces (unions, `~T` terms).
+		iface, ok := named.Underlying().(*types.Interface)
+		if !ok || iface.NumMethods() == 0 || !iface.IsMethodSet() {
+			continue
+		}
+		candidates = append(candidates, named)
+	}
+	return candidates
 }
 
 // hasReachableUnexportedType reports whether any exported declaration in the

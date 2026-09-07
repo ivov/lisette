@@ -403,7 +403,7 @@ func writableParamType(t types.Type, optional bool, conv *Converter, substitutio
 func outerWritableType(t types.Type, seen map[types.Type]bool, conv *Converter, substitutions map[string]string) TypeResult {
 	rendered := toLisetteRecursive(t, seen, conv, substitutions)
 	concrete := concreteResultType(t)
-	if rendered.SkipReason != nil || !goWritableCapability(concrete) {
+	if rendered.SkipReason != nil || !carriesWritePermission(concrete) {
 		return rendered
 	}
 	if _, named := types.Unalias(concrete).(*types.Named); named {
@@ -471,7 +471,7 @@ func writableRecursive(t types.Type, seen map[types.Type]bool, conv *Converter, 
 		return TypeResult{LisetteType: arrayOf(elem.LisetteType, u.Len())}
 
 	case *types.Named:
-		if goWritableCapability(u) {
+		if carriesWritePermission(u) {
 			// Option goes outside `mut`: Option<mut url.Values>.
 			wrapNil := nilable && isNamedMap(u)
 			rendered := writableBase(t, seen, conv, substitutions, nilable && !wrapNil)
@@ -491,14 +491,14 @@ func writableRecursive(t types.Type, seen map[types.Type]bool, conv *Converter, 
 		if rendered.SkipReason != nil {
 			return rendered
 		}
-		if core := coreType(u); core != nil && goWritableCapability(core) {
+		if core := coreType(u); core != nil && carriesWritePermission(core) {
 			rendered.LisetteType = "mut " + rendered.LisetteType
 		}
 		return rendered
 
 	case *types.Struct:
 		rendered := writableBase(t, seen, conv, substitutions, nilable)
-		if rendered.SkipReason == nil && goWritableCapability(u) {
+		if rendered.SkipReason == nil && carriesWritePermission(u) {
 			rendered.LisetteType = "mut " + rendered.LisetteType
 		}
 		return rendered
