@@ -100,6 +100,28 @@ struct RefutableAlternative<'s> {
     ok_var: Option<String>,
 }
 
+/// The identifier under a chain of field accesses.
+fn field_path_root(expression: &Expression) -> Option<&str> {
+    let mut expression = expression.unwrap_parens();
+    while let Expression::DotAccess {
+        expression: inner, ..
+    } = expression
+    {
+        expression = inner.unwrap_parens();
+    }
+    match expression {
+        Expression::Identifier { value, .. } => Some(value),
+        _ => None,
+    }
+}
+
+fn is_field_path(rendered: &str) -> bool {
+    let mut segments = rendered.split('.');
+    segments.next().is_some_and(go_name::is_plain_identifier)
+        && rendered.contains('.')
+        && segments.all(go_name::is_plain_identifier)
+}
+
 impl Planner<'_> {
     pub(crate) fn can_reuse_subject_identifier(&self, value: &str, binds_name: bool) -> bool {
         !binds_name
@@ -108,6 +130,19 @@ impl Planner<'_> {
                 self.scope.resolve_identifier_binding(value),
                 Some(BindingValue::InlineExpr(_))
             )
+    }
+
+    /// A field path such as `t.status` is read where it sits when nothing rebinds its root.
+    pub(crate) fn field_path_reads_in_place(
+        &self,
+        subject: &Expression,
+        rendered: &str,
+        binds_root: impl Fn(&str) -> bool,
+    ) -> bool {
+        let Some(root) = field_path_root(subject) else {
+            return false;
+        };
+        is_field_path(rendered) && self.can_reuse_subject_identifier(root, binds_root(root))
     }
 
     fn resolve_pattern_subject(
@@ -132,7 +167,11 @@ impl Planner<'_> {
                 let rests_in_stable_name = self.plan_rests_in_stable_name(&plan);
                 let (op_setup, expression) = plan.into_parts();
                 setup.extend(op_setup);
-                if rests_in_stable_name {
+                if rests_in_stable_name
+                    || self.field_path_reads_in_place(scrutinee, &expression, |root| {
+                        pattern_binds_name(pattern, root)
+                    })
+                {
                     return ResolvedSubject::Existing { var: expression };
                 }
                 let var = self.fresh_var(temp_hint);
@@ -345,9 +384,14 @@ impl Planner<'_> {
                 return (self.reference_go_name(value), Vec::new());
             }
         }
-        let var = self.fresh_var(Some("subject"));
         let staged = self.plan_operand(scrutinee, ExpressionContext::value());
         let (mut setup, value) = staged.into_parts();
+        if self
+            .field_path_reads_in_place(scrutinee, &value, |root| pattern_binds_name(pattern, root))
+        {
+            return (value, setup);
+        }
+        let var = self.fresh_var(Some("subject"));
         setup.push(LoweredStatement::TempBind {
             name: var.clone(),
             value,

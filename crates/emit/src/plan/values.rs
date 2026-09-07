@@ -454,10 +454,18 @@ impl ValuePlan {
 
     /// A name the setup just bound, or which nothing can rebind.
     pub(crate) fn captured(setup: Vec<LoweredStatement>, name: String) -> Self {
+        Self::captured_with_effect(setup, name, EvaluationEffect::Pure)
+    }
+
+    pub(crate) fn captured_with_effect(
+        setup: Vec<LoweredStatement>,
+        name: String,
+        effect: EvaluationEffect,
+    ) -> Self {
         Self::from_facts(
             setup,
             GoExpression::name(name),
-            EvaluationFacts::new(OperandForm::Name, Stability::Fixed, EvaluationEffect::Pure),
+            EvaluationFacts::new(OperandForm::Name, Stability::Fixed, effect),
         )
     }
 

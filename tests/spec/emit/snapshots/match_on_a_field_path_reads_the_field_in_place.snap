@@ -1,0 +1,62 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  enum Status { Pending, Done }
+  
+  struct Task { status: Status }
+  
+  impl Task {
+    fn icon(self: Ref<Task>) -> string {
+      match self.status {
+        Status.Pending => "[ ]",
+        Status.Done => "[x]",
+      }
+    }
+  }
+  
+  fn main() {
+    let t = Task { status: Status.Pending }
+    fmt.Println(t.icon())
+  }
+---
+package main
+
+import "fmt"
+
+func MakeStatusPending() Status {
+	return Status{Tag: StatusPending}
+}
+
+func MakeStatusDone() Status {
+	return Status{Tag: StatusDone}
+}
+
+type StatusTag uint8
+
+const (
+	StatusPending StatusTag = iota
+	StatusDone
+)
+
+type Status struct {
+	Tag StatusTag
+}
+
+type Task struct {
+	status Status
+}
+
+func (t *Task) icon() string {
+	if t.status.Tag == StatusPending {
+		return "[ ]"
+	}
+	return "[x]"
+}
+
+func main() {
+	t := Task{status: MakeStatusPending()}
+	fmt.Println(t.icon())
+}

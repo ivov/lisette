@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Task { parent: Option<int> }
+  
+  fn parent_of(item: Ref<Task>) -> int {
+    let Some(id) = item.parent else { return -1 }
+    id
+  }
+  
+  fn main() {
+    fmt.Println(parent_of(&Task { parent: Some(7) }))
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Task struct {
+	parent lisette.Option[int]
+}
+
+func parentOf(item *Task) int {
+	if item.parent.Tag != lisette.OptionSome {
+		return -1
+	}
+	id := item.parent.SomeVal
+	return id
+}
+
+func main() {
+	fmt.Println(parentOf(&Task{parent: lisette.MakeOptionSome(7)}))
+}

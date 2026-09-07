@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Node { next: Option<int> }
+  
+  fn main() {
+    let t = Node { next: Some(2) }
+    match t.next {
+      Some(t) => fmt.Println(t),
+      None => fmt.Println("end"),
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Node struct {
+	next lisette.Option[int]
+}
+
+func main() {
+	t := Node{next: lisette.MakeOptionSome(2)}
+	subject_1 := t.next
+	if subject_1.Tag == lisette.OptionSome {
+		fmt.Println(subject_1.SomeVal)
+	} else {
+		fmt.Println("end")
+	}
+}

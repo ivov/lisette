@@ -31,9 +31,8 @@ type Node struct {
 }
 
 func (n Node) sum() int {
-	subject_1 := n.Next
-	if subject_1.Tag == lisette.OptionSome {
-		return n.Value + subject_1.SomeVal
+	if n.Next.Tag == lisette.OptionSome {
+		return n.Value + n.Next.SomeVal
 	}
 	return n.Value
 }
