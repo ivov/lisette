@@ -2714,6 +2714,7 @@ pub enum InterfaceMethodViolation {
         expected: Type,
         actual: Type,
         impl_span: Option<Span>,
+        through_type_parameter: bool,
     },
 }
 
@@ -2765,6 +2766,7 @@ fn labelled_methods<'a>(
                 expected,
                 actual,
                 impl_span,
+                ..
             } = method
             else {
                 return None;
@@ -3099,6 +3101,20 @@ pub fn builtin_type_cannot_implement_interface(
         .with_help(format!(
             "Built-in types have no Go methods, so they cannot satisfy interfaces. Wrap the \
              value in a struct that implements `{interface_name}`."
+        ))
+}
+
+pub fn unsupported_generic_go_interface(
+    interface_name: &str,
+    type_name: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Not supported yet")
+        .with_infer_code("unsupported_generic_go_interface")
+        .with_span_label(&span, "unsupported")
+        .with_help(format!(
+            "Lisette does not yet support using `{}` as the generic Go interface `{}`",
+            type_name, interface_name
         ))
 }
 

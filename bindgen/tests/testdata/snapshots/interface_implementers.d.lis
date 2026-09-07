@@ -3,10 +3,20 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
+pub interface Applier<T> {
+  fn Apply(b: mut Ref<Box<T>>)
+}
+
+pub struct Box<T> {
+  pub Value: T,
+}
+
 pub interface Bundle {
   fn Name() -> string
   fn Run(n: mut Ref<Node>)
 }
+
+pub type GenericApplier<T>
 
 pub interface Hook {
   fn Run(n: mut Ref<Node>)
@@ -18,7 +28,16 @@ pub interface Inspector {
   fn Inspect(n: Ref<Node>)
 }
 
+pub type IntPeeker
+
 pub type IntStore
+
+pub interface Labeled {
+  fn Apply(b: mut Ref<Box<string>>)
+  fn Label() -> string
+}
+
+pub type LabeledApplier
 
 pub interface Marker {
   fn Mark(n: mut Ref<Node>)
@@ -39,6 +58,14 @@ pub interface Orphan {
   fn Touch(n: Ref<Node>)
 }
 
+pub interface Pair<K: Comparable, V> {
+  fn Set(m: mut Map<K, V>, k: K, v: V)
+}
+
+pub interface Peeker<T> {
+  fn Peek(b: Ref<Box<T>>)
+}
+
 pub type Printer
 
 pub type Reader
@@ -48,8 +75,14 @@ pub interface Router {
 }
 
 pub interface Store<T> {
-  fn Put(n: Ref<Node>, value: T)
+  fn Put(n: mut Ref<Node>, value: T)
 }
+
+pub interface StringApplier {
+  fn Apply(b: mut Ref<Box<string>>)
+}
+
+pub type StringIntPair
 
 pub interface Visitor {
   fn Visit(n: mut Ref<Node>)
@@ -62,12 +95,25 @@ pub struct Wrapped {
   pub Hook: Option<Hook>,
 }
 
+impl<T> GenericApplier<T> {
+  fn Apply(self: Ref<GenericApplier<T>>, b: mut Ref<Box<T>>)
+}
+
 impl HookFunc {
   fn Run(self, n: mut Ref<Node>)
 }
 
+impl IntPeeker {
+  fn Peek(self, b: Ref<Box<int>>)
+}
+
 impl IntStore {
   fn Put(self, n: mut Ref<Node>, value: int)
+}
+
+impl LabeledApplier {
+  fn Apply(self, b: mut Ref<Box<string>>)
+  fn Label(self) -> string
 }
 
 impl Mux {
@@ -80,6 +126,10 @@ impl Printer {
 
 impl Reader {
   fn Visit(self, n: Ref<Node>)
+}
+
+impl StringIntPair {
+  fn Set(self, m: mut Map<string, int>, k: string, v: int)
 }
 
 impl VisitorFunc {

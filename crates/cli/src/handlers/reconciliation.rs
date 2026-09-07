@@ -319,6 +319,7 @@ pub(crate) fn reconcile_root(
     let bindgenned = walk_typedef_cache(dep, workspace, &mut graph, replacements)?;
     expand_unwalked_modules(workspace, &mut graph, locals)?;
     rebuild_drifted_cache_entries(workspace, &graph, &bindgenned, replacements);
+    workspace.invalidate_warm_stamp();
     Ok(graph)
 }
 

@@ -104,7 +104,7 @@ pub interface ClientCodec {
   #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn ReadResponseBody(any: Unknown) -> Result<(), error>
-  fn ReadResponseHeader(response: Ref<Response>) -> Result<(), error>
+  fn ReadResponseHeader(response: mut Ref<Response>) -> Result<(), error>
   fn WriteRequest(request: Ref<Request>, any: Unknown) -> Result<(), error>
 }
 
@@ -142,7 +142,7 @@ pub interface ServerCodec {
   #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn ReadRequestBody(any: Unknown) -> Result<(), error>
-  fn ReadRequestHeader(request: Ref<Request>) -> Result<(), error>
+  fn ReadRequestHeader(request: mut Ref<Request>) -> Result<(), error>
   fn WriteResponse(response: Ref<Response>, any: Unknown) -> Result<(), error>
 }
 
