@@ -1,8 +1,10 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
-use crate::plan::bodies::LoweredStatement;
-use crate::plan::go_expression::{CompositeElement, CompositeLayout, GoExpressionNode};
+use crate::plan::bodies::{LoweredBlock, LoweredStatement};
+use crate::plan::go_expression::{
+    CompositeElement, CompositeLayout, FunctionLiteralLayout, GoExpressionNode,
+};
 use std::fmt::{self, Display, Formatter};
 use syntax::ast::Expression;
 use syntax::types::SimpleKind;
@@ -122,22 +124,19 @@ impl GoExpression {
         )
     }
 
-    pub(crate) fn opaque(rendered: String) -> Self {
-        Self::opaque_with_deferred_evaluation(rendered, false)
+    pub(crate) fn nil() -> Self {
+        Self::literal("nil".to_string())
     }
 
     /// The value of a lowering that produced only statements.
     pub(crate) fn empty() -> Self {
-        Self::opaque(String::new())
+        Self::new(GoExpressionNode::Empty, false, false, OperandForm::Other)
     }
 
-    pub(crate) fn opaque_with_deferred_evaluation(
-        rendered: String,
-        contains_deferred_evaluation: bool,
-    ) -> Self {
+    pub(crate) fn verbatim(source: String) -> Self {
         Self::new(
-            GoExpressionNode::Raw(rendered),
-            contains_deferred_evaluation,
+            GoExpressionNode::Verbatim(source),
+            false,
             false,
             OperandForm::Other,
         )
@@ -270,6 +269,36 @@ impl GoExpression {
         )
     }
 
+    pub(crate) fn function_literal(
+        parameters: String,
+        result: String,
+        body: LoweredBlock,
+        layout: FunctionLiteralLayout,
+    ) -> Self {
+        Self::new(
+            GoExpressionNode::FunctionLiteral {
+                parameters,
+                result,
+                body,
+                layout,
+            },
+            false,
+            false,
+            OperandForm::Other,
+        )
+    }
+
+    pub(crate) fn immediate_call(
+        result: String,
+        body: LoweredBlock,
+        layout: FunctionLiteralLayout,
+    ) -> Self {
+        Self::call(
+            Self::function_literal(String::new(), result, body, layout),
+            Vec::new(),
+        )
+    }
+
     pub(crate) fn call(callee: GoExpression, arguments: Vec<GoExpression>) -> Self {
         let node = GoExpressionNode::Call {
             callee: Box::new(callee.node),
@@ -279,15 +308,6 @@ impl GoExpression {
                 .collect(),
         };
         Self::new(node, true, false, OperandForm::Call)
-    }
-
-    pub(crate) fn receive(channel: GoExpression) -> Self {
-        Self::new(
-            GoExpressionNode::Receive(Box::new(channel.node)),
-            true,
-            false,
-            OperandForm::Other,
-        )
     }
 
     pub(crate) fn binary(
@@ -525,12 +545,14 @@ impl EvaluationFacts {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ValuePlan {
     pub setup: Vec<LoweredStatement>,
     pub expression: GoExpression,
     pub evaluation: EvaluationFacts,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SequencedValues {
     pub setup: Vec<LoweredStatement>,
     pub values: Vec<GoExpression>,
@@ -538,16 +560,6 @@ pub(crate) struct SequencedValues {
 }
 
 impl SequencedValues {
-    pub(crate) fn into_rendered(self) -> (Vec<LoweredStatement>, Vec<String>) {
-        (
-            self.setup,
-            self.values
-                .into_iter()
-                .map(|value| value.rendered())
-                .collect(),
-        )
-    }
-
     pub(crate) fn contains_deferred_evaluation(&self) -> bool {
         self.values
             .iter()
@@ -664,10 +676,10 @@ impl ValuePlan {
         )
     }
 
-    pub(crate) fn opaque(value: String) -> Self {
+    pub(crate) fn verbatim(source: String) -> Self {
         Self::computed(
             Vec::new(),
-            GoExpression::opaque(value),
+            GoExpression::verbatim(source),
             EvaluationEffect::Pure,
         )
     }
@@ -778,8 +790,8 @@ impl ValuePlan {
         self.expression.is_empty()
     }
 
-    pub(crate) fn into_parts(self) -> (Vec<LoweredStatement>, String) {
-        (self.setup, self.expression.rendered())
+    pub(crate) fn into_parts(self) -> (Vec<LoweredStatement>, GoExpression) {
+        (self.setup, self.expression)
     }
 
     pub(crate) fn parenthesized(mut self) -> Self {

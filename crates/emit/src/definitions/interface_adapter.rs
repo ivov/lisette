@@ -1,8 +1,11 @@
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
-use crate::abi::transition::render_lowered_result_return;
+use crate::abi::transition::emit_lowered_result_return;
+use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
 use crate::names::go_name::GO_IMPORT_PREFIX;
+use crate::plan::bodies::{LoweredStatement, define, expression_statement};
+use crate::plan::values::GoExpression;
 use crate::write_line;
 use ecow::EcoString;
 use rustc_hash::FxHashSet as HashSet;
@@ -332,14 +335,21 @@ impl Planner<'_> {
             } else {
                 go_name::unexported_method_go_name(&method.name)
             };
-            let inner_call = format!(
-                "{}.inner.{}({})",
-                receiver_name,
-                go_method_name,
-                param_names.join(", ")
+            let inner_call = GoExpression::call(
+                GoExpression::selector(
+                    GoExpression::selector(
+                        GoExpression::name(receiver_name.clone()),
+                        "inner".to_string(),
+                    ),
+                    go_method_name.clone(),
+                ),
+                param_names
+                    .iter()
+                    .map(|name| GoExpression::name(name.clone()))
+                    .collect(),
             );
 
-            let (go_ret, body) = this.build_adapter_body(method, &inner_call);
+            let (go_ret, body) = this.build_adapter_body(method, inner_call);
             write_method_header(
                 declaration,
                 &receiver_name,
@@ -381,24 +391,39 @@ impl Planner<'_> {
                 .code
     }
 
-    fn build_adapter_body(&mut self, method: &AdapterMethod, inner_call: &str) -> (String, String) {
+    fn build_adapter_body(
+        &mut self,
+        method: &AdapterMethod,
+        inner_call: GoExpression,
+    ) -> (String, String) {
+        let (go_ret, statements) = self.plan_adapter_body(method, inner_call);
+        (go_ret, crate::Renderer.render_setup(&statements))
+    }
+
+    fn plan_adapter_body(
+        &mut self,
+        method: &AdapterMethod,
+        inner_call: GoExpression,
+    ) -> (String, Vec<LoweredStatement>) {
         let user_abi = &method.user_abi;
         let interface_abi = &method.interface_abi;
         let return_type = &method.return_type;
 
         if method.user_returns_void != method.interface_returns_void {
             if method.interface_returns_void {
-                return (String::new(), format!("{}\n", inner_call));
+                return (String::new(), vec![expression_statement(inner_call)]);
             }
             let go_ret = self.use_go_type(return_type);
-            let (zero, packages) = self.zero_value(return_type);
-            self.require_packages(&packages);
-            return (go_ret, format!("{}\nreturn {}\n", inner_call, zero));
+            let zero = self.zero_value_expression(return_type);
+            return (
+                go_ret,
+                vec![expression_statement(inner_call), plain_return(zero)],
+            );
         }
 
         if !self.adapter_needs_conversion(method) {
             if method.interface_returns_void {
-                return (String::new(), format!("{}\n", inner_call));
+                return (String::new(), vec![expression_statement(inner_call)]);
             }
             let peeled = self.facts.peel_alias(return_type);
             let go_ret_abi = if abi_matches_type(interface_abi, &peeled) {
@@ -407,27 +432,31 @@ impl Planner<'_> {
                 user_abi
             };
             let go_ret = self.render_lowered_return_ty(go_ret_abi, return_type);
-            return (go_ret, format!("return {}\n", inner_call));
+            return (go_ret, vec![plain_return(inner_call)]);
         }
 
         let logical_ty = self.facts.peel_alias(return_type);
         let go_ret = self.render_lowered_return_ty(interface_abi, return_type);
         if interface_abi.is_passthrough() {
             let statements = self.lower_abi_to_tagged_return(inner_call, user_abi, &logical_ty);
-            return (go_ret, crate::Renderer.render_setup(&statements));
+            return (go_ret, statements);
         }
-        let (setup, tagged) = self.lower_abi_to_tagged(inner_call, user_abi, &logical_ty);
-        let mut body = crate::Renderer.render_setup(&setup);
+        let (mut statements, tagged) = self.lower_abi_to_tagged(inner_call, user_abi, &logical_ty);
         let subject = if user_abi.is_passthrough() {
             let res = self.fresh_var(Some("res"));
             self.declare(&res);
-            write_line!(body, "{} := {}", res, tagged);
-            res
+            statements.push(define(res.clone(), tagged));
+            GoExpression::name(res)
         } else {
             tagged
         };
-        render_lowered_result_return(self, &mut body, &subject, &logical_ty, interface_abi);
-        (go_ret, body)
+        statements.extend(emit_lowered_result_return(
+            self,
+            &subject,
+            &logical_ty,
+            interface_abi,
+        ));
+        (go_ret, statements)
     }
 }
 

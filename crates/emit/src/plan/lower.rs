@@ -1,6 +1,6 @@
 use crate::Planner;
-use crate::Renderer;
 use crate::abi::transition::try_emit_lowered_tail_return;
+use crate::calls::comma_ok::PairCondition;
 use crate::calls::predicates::strip_negations;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
@@ -10,9 +10,10 @@ use crate::definitions::functions::{is_breakless_loop, is_go_never, is_test_cont
 use crate::expressions::{flip_comparison, flip_preserves_nan};
 use crate::names::go_name::{prelude_qualifier, testkit_qualifier};
 use crate::plan::bodies::{
-    ElseArm, ExpressionStatementForm, IfPlan, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
-    LoweredStatement, PlacePlan, directed,
+    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
+    PlacePlan, define, directed, directed_first, expression_statement,
 };
+use crate::plan::go_expression::CompositeLayout;
 use crate::plan::placement::{collapse_declared_temp, requires_temp_var, try_elide_tail_let};
 use crate::plan::values::{GoExpression, OperandForm, ValuePlan};
 use crate::utils::wrap_if_struct_literal;
@@ -76,10 +77,11 @@ impl Planner<'_> {
         ty: &Type,
     ) -> ValuePlan {
         let (result_var, declaration) = self.operand_temp_declaration(ty);
+        let target = GoExpression::name(result_var.clone());
         let block = self.lower_branching_to_block(
             expression,
             &PlacePlan::Assign {
-                local: &result_var,
+                local: &target,
                 target_ty: Some(ty),
             },
         );
@@ -102,7 +104,7 @@ impl Planner<'_> {
         };
         let (result_var, declaration) = self.operand_temp_declaration(ty);
         let plan = self.with_loop(result_var.clone(), |this| {
-            this.lower_loop_with_header("for {\n".to_string(), body)
+            this.lower_loop_with_header(LoopHeader::Infinite, body)
         });
         ValuePlan::captured(vec![declaration, LoweredStatement::Loop(plan)], result_var)
     }
@@ -167,19 +169,14 @@ impl Planner<'_> {
             && let Some(return_ty) = return_ctx.ty().filter(|ty| !ty.is_unit())
         {
             let return_ty = return_ty.clone();
-            let (zero, packages) = self.zero_value(&return_ty);
-            self.require_packages(&packages);
+            let zero = self.zero_value_expression(&return_ty);
             statements.push(plain_return(zero));
         }
 
         LoweredBlock { statements }
     }
 
-    /// Lower a single statement. Structured variants are produced where lowering
-    /// has reached the construct; everything else captures the existing emitter
-    /// output as `RawGo`. `return_ctx` is the enclosing function/lambda/try/
-    /// recover return context, threaded so nested `return` lowering has an
-    /// explicit context.
+    /// Lower a single statement in the enclosing return context.
     pub(crate) fn lower_statement(&mut self, expression: &Expression) -> LoweredStatement {
         match expression {
             Expression::If {
@@ -293,23 +290,12 @@ impl Planner<'_> {
             }
             Expression::WhileLet { .. } => self.lower_while_let_statement(expression),
             Expression::Assert { .. } => self.lower_assert_statement(expression),
-            // Top-level items (Struct/Enum/etc) shouldn't appear inside
-            // function bodies, but dispatch handles them defensively. They
-            // carry their own directive (via `emit_top_item`) so the wrapper
-            // does not add one.
             Expression::Struct { .. }
             | Expression::Enum { .. }
             | Expression::TypeAlias { .. }
             | Expression::Interface { .. }
             | Expression::ImplBlock { .. } => {
-                let directive = self.maybe_line_directive(&expression.get_span());
-                let code = self.emit_top_item(expression);
-                let mut buffer = directive;
-                if !code.is_empty() {
-                    buffer.push_str(&code);
-                    buffer.push('\n');
-                }
-                LoweredStatement::RawGo(buffer)
+                unreachable!("the parser rejects item definitions inside function bodies")
             }
             Expression::Call { .. } if self.is_test_log_call(expression) => {
                 self.lower_test_log_statement(expression)
@@ -335,7 +321,9 @@ impl Planner<'_> {
             Expression::Task { .. } | Expression::Defer { .. }
         ) {
             let value = self.plan_operand(unwrapped, ExpressionContext::value());
-            LoweredStatement::Expression(ExpressionStatementForm::Async { value })
+            LoweredStatement::Body(LoweredBlock {
+                statements: value.setup,
+            })
         } else if let Expression::Propagate {
             expression: inner, ..
         } = unwrapped
@@ -388,11 +376,25 @@ impl Planner<'_> {
             .current_test_handle()
             .expect("assert without a test handle should be rejected by semantics");
         let span = operand.get_span();
-        let test = LoweredStatement::RawGo(format!(
-            "if {failure_condition} {{\n{handle}.FailAssert({}, {}, {}, \"{kind}\", \"{message}\"{operands})\n}}\n",
-            span.file_id,
-            span.byte_offset,
-            span.byte_offset + span.byte_length,
+        let literal = |text: String| GoExpression::literal(text);
+        let mut arguments = vec![
+            literal(span.file_id.to_string()),
+            literal(span.byte_offset.to_string()),
+            literal((span.byte_offset + span.byte_length).to_string()),
+            literal(format!("\"{kind}\"")),
+            literal(format!("\"{message}\"")),
+        ];
+        arguments.extend(operands);
+        let fail = GoExpression::call(
+            GoExpression::name(format!("{handle}.FailAssert")),
+            arguments,
+        );
+        let test = LoweredStatement::If(IfPlan::plain(
+            failure_condition,
+            LoweredBlock {
+                statements: vec![expression_statement(fail)],
+            },
+            ElseArm::None,
         ));
         // The block exists only to scope the temps.
         if statements.is_empty() {
@@ -427,7 +429,7 @@ impl Planner<'_> {
 
     fn lower_test_log_statement(&mut self, expression: &Expression) -> LoweredStatement {
         let (mut statements, call) = self.lower_test_log_call(expression);
-        statements.push(LoweredStatement::RawGo(format!("{call}\n")));
+        statements.push(expression_statement(call));
         LoweredStatement::Block(LoweredBlock { statements })
     }
 
@@ -502,7 +504,7 @@ impl Planner<'_> {
         AssertShape {
             failure_condition: match flipped {
                 Some(_) => condition,
-                None => format!("!({condition})"),
+                None => negate_parenthesized(condition),
             },
             kind: "relation",
             message: format!("expected {operator}"),
@@ -520,7 +522,8 @@ impl Planner<'_> {
         self.require_stdlib();
         let recv_ty = recv.get_type();
         let (lhs, rhs) = self.stage_assert_operands(recv, arg, LiteralInlining::Denied, statements);
-        let failure_condition = self.render_inequality(&lhs.rendered, &rhs.rendered, &recv_ty, &[]);
+        let failure_condition =
+            self.inequality_expression(lhs.rendered.clone(), rhs.rendered.clone(), &recv_ty, &[]);
         AssertShape {
             failure_condition,
             kind: "labeled",
@@ -550,7 +553,7 @@ impl Planner<'_> {
             // its parentheses.
             let (setup, condition) = self.lower_condition(operand);
             statements.extend(setup);
-            format!("!({condition})")
+            negate_parenthesized(condition)
         } else {
             let (setup, condition) = self.plan_unary_not(operand, ctx).into_parts();
             statements.extend(setup);
@@ -560,7 +563,7 @@ impl Planner<'_> {
             failure_condition,
             kind: "bare",
             message: "assertion failed".to_string(),
-            operands: String::new(),
+            operands: Vec::new(),
         }
     }
 
@@ -647,15 +650,12 @@ impl Planner<'_> {
                     value: Some(value),
                 }
             } else {
-                LoweredStatement::TempBind {
-                    name: name.clone(),
-                    value,
-                }
+                define(name.clone(), value)
             },
         );
         AssertOperand {
             expression: temp_identifier(&name, expression),
-            rendered: name,
+            rendered: GoExpression::name(name),
         }
     }
 
@@ -709,21 +709,30 @@ impl Planner<'_> {
 
     fn lower_infinite_loop(&mut self, body: &Expression) -> LoopPlan {
         self.with_loop("_", |this| {
-            this.lower_loop_with_header("for {\n".to_string(), body)
+            this.lower_loop_with_header(LoopHeader::Infinite, body)
         })
     }
 
-    fn lower_condition(&mut self, condition: &Expression) -> (Vec<LoweredStatement>, String) {
+    fn lower_condition(&mut self, condition: &Expression) -> (Vec<LoweredStatement>, GoExpression) {
         let plan = self.plan_operand(condition, ExpressionContext::value().condition());
         plan.into_parts()
     }
 
-    fn lower_if_condition(&mut self, condition: &Expression) -> (Vec<LoweredStatement>, String) {
+    fn lower_if_condition(
+        &mut self,
+        condition: &Expression,
+    ) -> (Vec<LoweredStatement>, PairCondition) {
         if let Some(fused) = self.lower_fused_predicate_condition(condition) {
             return fused;
         }
         let (setup, rendered) = self.lower_condition(condition);
-        (setup, wrap_if_struct_literal(rendered))
+        (
+            setup,
+            PairCondition {
+                initializer: None,
+                condition: wrap_if_struct_literal(rendered),
+            },
+        )
     }
 
     fn lower_while(&mut self, condition: &Expression, body: &Expression) -> LoopPlan {
@@ -731,32 +740,58 @@ impl Planner<'_> {
             let (target, negated) = strip_negations(condition);
             if let Some(exit) = this.lower_fused_predicate_value(target, !negated) {
                 let (setup, failure) = exit.into_parts();
-                let setup_text = Renderer.render_setup(&setup);
-                let header = format!("for {{\n{setup_text}if {failure} {{ break }}\n");
-                return this.lower_loop_with_header(header, body);
+                return this.lower_loop_with_exit_test(setup, failure, body);
             }
             let (setup, rendered) = this.lower_condition(condition);
-            let header = if !setup.is_empty() {
-                let setup_text = Renderer.render_setup(&setup);
-                format!("for {{\n{}if !({}) {{ break }}\n", setup_text, rendered)
-            } else if matches!(
+            if !setup.is_empty() {
+                let exit = GoExpression::unary("!", GoExpression::parenthesized(rendered));
+                return this.lower_loop_with_exit_test(setup, exit, body);
+            }
+            let header = if matches!(
                 condition.unwrap_parens(),
                 Expression::Literal {
                     literal: Literal::Boolean(true),
                     ..
                 }
             ) {
-                "for {\n".to_string()
+                LoopHeader::Infinite
             } else {
-                format!("for {} {{\n", wrap_if_struct_literal(rendered))
+                LoopHeader::While(wrap_if_struct_literal(rendered))
             };
             this.lower_loop_with_header(header, body)
         })
     }
 
+    fn lower_loop_with_exit_test(
+        &mut self,
+        setup: Vec<LoweredStatement>,
+        exit: GoExpression,
+        body: &Expression,
+    ) -> LoopPlan {
+        let mut statements = setup;
+        statements.push(LoweredStatement::If(IfPlan::plain(
+            exit,
+            LoweredBlock {
+                statements: vec![LoweredStatement::Break(LoopTransfer::Unlabeled)],
+            },
+            ElseArm::None,
+        )));
+        let lowered_body = self.with_scope(|this| this.lower_block_as_body(body));
+        statements.extend(lowered_body.statements);
+        self.build_source_loop(
+            Vec::new(),
+            LoopHeader::Infinite,
+            LoweredBlock { statements },
+        )
+    }
+
     /// Shared loop lowering once the header is known. The caller must have an
     /// active loop context.
-    pub(crate) fn lower_loop_with_header(&mut self, header: String, body: &Expression) -> LoopPlan {
+    pub(crate) fn lower_loop_with_header(
+        &mut self,
+        header: LoopHeader,
+        body: &Expression,
+    ) -> LoopPlan {
         let lowered_body = self.with_scope(|this| this.lower_block_as_body(body));
         self.build_source_loop(Vec::new(), header, lowered_body)
     }
@@ -764,7 +799,7 @@ impl Planner<'_> {
     pub(crate) fn build_source_loop(
         &mut self,
         prologue: Vec<LoweredStatement>,
-        header: String,
+        header: LoopHeader,
         mut body: LoweredBlock,
     ) -> LoopPlan {
         let target = self
@@ -855,7 +890,7 @@ impl Planner<'_> {
     fn lower_block_to_assign(
         &mut self,
         expression: &Expression,
-        local: &str,
+        local: &GoExpression,
         target_ty: Option<&Type>,
     ) -> LoweredBlock {
         if expression.get_type().is_result() || expression.get_type().is_option() {
@@ -890,7 +925,7 @@ impl Planner<'_> {
 
     /// Lower a single tail expression in return position to its return
     /// statements. Shared by branch-arm return lowering and function-body
-    /// lowering; only leaf values and lowered-ABI returns become `RawGo`,
+    /// lowering; leaf values and lowered-ABI returns become `Return` leaves,
     /// `if`/`if let`/`match`/`select` tails recurse structurally with a `Return` place.
     fn lower_return_tail(&mut self, last: &Expression) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
@@ -923,23 +958,18 @@ impl Planner<'_> {
                 statements.push(directed(directive, statement));
             }
             Expression::IfLet { .. } | Expression::Match { .. } => {
-                if !directive.is_empty() {
-                    statements.push(LoweredStatement::RawGo(directive));
-                }
                 let block = self.lower_branching_to_block(last, &PlacePlan::Return);
-                statements.extend(block.statements);
+                statements.extend(directed_first(directive, block.statements));
             }
             _ => {
-                if !directive.is_empty() {
-                    statements.push(LoweredStatement::RawGo(directive));
-                }
-                if let Some(tail) = try_emit_lowered_tail_return(self, last) {
-                    statements.extend(tail);
+                let tail = if let Some(tail) = try_emit_lowered_tail_return(self, last) {
+                    tail
                 } else if let Some(wrapped) = self.lower_wrapped_return(last) {
-                    statements.extend(wrapped);
+                    wrapped
                 } else {
-                    statements.extend(self.lower_plain_return_tail(last));
-                }
+                    self.lower_plain_return_tail(last)
+                };
+                statements.extend(directed_first(directive, tail));
             }
         }
 
@@ -952,19 +982,13 @@ impl Planner<'_> {
         return_span: &Span,
     ) -> Vec<LoweredStatement> {
         let directive = self.maybe_line_directive(return_span);
-        let mut statements: Vec<LoweredStatement> = Vec::new();
-        if !directive.is_empty() {
-            statements.push(LoweredStatement::RawGo(directive));
-        }
-        statements.push(self.lower_statement(last));
+        let mut statements = vec![self.lower_statement(last)];
         if !is_go_never(last) && !is_breakless_loop(last) {
             statements.push(LoweredStatement::UnreachablePanic);
         }
-        statements
+        directed_first(directive, statements)
     }
 
-    /// Kept as `RawGo`, not `ReturnForm::Plain`: a structured `Return` would
-    /// flatten the enclosing `else` for a multi-line return value.
     fn lower_plain_return_tail(&mut self, last: &Expression) -> Vec<LoweredStatement> {
         if requires_temp_var(last) {
             let staged = self.plan_operand(last, ExpressionContext::value());
@@ -976,13 +1000,9 @@ impl Planner<'_> {
         } else {
             let (mut statements, expression) = self.lower_tail_value(last);
             let return_ctx = self.return_ctx();
-            let mut coercion = String::new();
             let expression =
-                self.apply_type_coercion(&mut coercion, return_ctx.ty(), last, expression);
-            if !coercion.is_empty() {
-                statements.push(LoweredStatement::RawGo(coercion));
-            }
-            statements.push(plain_return(expression.rendered()));
+                self.apply_type_coercion(&mut statements, return_ctx.ty(), last, expression);
+            statements.push(plain_return(expression));
             statements
         }
     }
@@ -1003,7 +1023,8 @@ impl Planner<'_> {
 
         IfPlan {
             condition_setup,
-            condition,
+            initializer: condition.initializer,
+            condition: condition.condition,
             then_body,
             else_arm,
         }
@@ -1043,7 +1064,8 @@ impl Planner<'_> {
                     );
                     ElseArm::ElseIf(Box::new(IfPlan {
                         condition_setup,
-                        condition,
+                        initializer: condition.initializer,
+                        condition: condition.condition,
                         then_body,
                         else_arm: inner,
                     }))
@@ -1058,7 +1080,8 @@ impl Planner<'_> {
                 );
                 ElseArm::ElseIf(Box::new(IfPlan {
                     condition_setup,
-                    condition,
+                    initializer: condition.initializer,
+                    condition: condition.condition,
                     then_body,
                     else_arm: inner,
                 }))
@@ -1075,19 +1098,23 @@ impl Planner<'_> {
 }
 
 /// The lowered pieces of an `assert`: the condition under which it fails, the
-/// record kind, and any `, Operand{...}` arguments appended to the failure call.
+/// record kind, and any `Operand{...}` arguments appended to the failure call.
 struct AssertShape {
-    failure_condition: String,
+    failure_condition: GoExpression,
     kind: &'static str,
     message: String,
-    operands: String,
+    operands: Vec<GoExpression>,
 }
 
-/// An `assert` operand: the expression the test reads, and the Go text the
+/// An `assert` operand: the expression the test reads, and the Go value the
 /// failure call reports.
 struct AssertOperand {
     expression: Expression,
-    rendered: String,
+    rendered: GoExpression,
+}
+
+fn negate_parenthesized(condition: GoExpression) -> GoExpression {
+    GoExpression::unary("!", GoExpression::parenthesized(condition))
 }
 
 /// The equals lowering can read its left operand as a method receiver, where a
@@ -1098,11 +1125,29 @@ enum LiteralInlining {
     Denied,
 }
 
-fn paired_operands(lhs: &str, rhs: &str) -> String {
+fn paired_operands(lhs: &GoExpression, rhs: &GoExpression) -> Vec<GoExpression> {
     let (test_kit, prelude) = (testkit_qualifier(), prelude_qualifier());
-    format!(
-        ", {test_kit}.Operand{{Label: \"left\", Value: {prelude}.Debug({lhs})}}, {test_kit}.Operand{{Label: \"right\", Value: {prelude}.Debug({rhs})}}"
-    )
+    let operand = |label: &str, value: &GoExpression| {
+        GoExpression::composite(
+            Some(format!("{test_kit}.Operand")),
+            vec![
+                (
+                    Some("Label".to_string()),
+                    GoExpression::literal(format!("\"{label}\"")),
+                ),
+                (
+                    Some("Value".to_string()),
+                    GoExpression::call(
+                        GoExpression::name(format!("{prelude}.Debug")),
+                        vec![value.clone()],
+                    ),
+                ),
+            ],
+            CompositeLayout::Inline { padded: false },
+            false,
+        )
+    };
+    vec![operand("left", lhs), operand("right", rhs)]
 }
 
 /// A typed identifier for an already-bound temp, so the rebuilt comparison casts as usual.

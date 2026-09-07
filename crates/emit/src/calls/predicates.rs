@@ -1,8 +1,8 @@
 use crate::Planner;
-use crate::calls::comma_ok::CommaOkValueSlot;
+use crate::calls::comma_ok::{CommaOkValueSlot, PairCondition};
 use crate::patterns::matching::{OptionFusePlan, ResultFusePlan};
 use crate::plan::bodies::LoweredStatement;
-use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::values::{EvaluationEffect, ValuePlan};
 use syntax::ast::{Expression, UnaryOperator};
 use syntax::program::CallKind;
 
@@ -75,7 +75,7 @@ impl Planner<'_> {
         predicate: FusedPredicate<'_>,
         negated: bool,
         slot: CommaOkValueSlot,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> (Vec<LoweredStatement>, PairCondition) {
         match predicate {
             FusedPredicate::Result { fuse, succeeds } => {
                 let pair = fuse.bind(self, slot, None);
@@ -101,7 +101,7 @@ impl Planner<'_> {
     pub(crate) fn lower_fused_predicate_condition(
         &mut self,
         condition: &Expression,
-    ) -> Option<(Vec<LoweredStatement>, String)> {
+    ) -> Option<(Vec<LoweredStatement>, PairCondition)> {
         let (target, negated) = strip_negations(condition);
         let predicate = self.fused_predicate(target)?;
         Some(self.bind_fused_predicate(predicate, negated, CommaOkValueSlot::Unused))
@@ -115,9 +115,10 @@ impl Planner<'_> {
         let predicate = self.fused_predicate(expression)?;
         let (setup, condition) =
             self.bind_fused_predicate(predicate, negated, CommaOkValueSlot::Discarded);
+        debug_assert!(condition.initializer.is_none());
         Some(ValuePlan::plain_call(
             setup,
-            GoExpression::opaque_with_deferred_evaluation(condition, true),
+            condition.condition.with_deferred_evaluation(true),
             EvaluationEffect::EffectfulCall,
         ))
     }

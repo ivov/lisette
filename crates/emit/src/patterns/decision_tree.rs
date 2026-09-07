@@ -10,9 +10,12 @@ use syntax::program::DefinitionBody;
 use syntax::types::{Type, unqualified_name};
 
 use crate::Planner;
+use crate::control_flow::propagation::plain_return;
 use crate::names::packages::PackageRequirements;
 use crate::names::{generics, go_name};
 use crate::patterns::binding_decls::emit_pattern_literal;
+use crate::plan::bodies::{LoweredBlock, define_many};
+use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::values::GoExpression;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -197,77 +200,102 @@ enum CheckPolarity {
 }
 
 impl Check {
-    pub(crate) fn render(&self, subject: SubjectRoot<'_>) -> String {
+    pub(crate) fn render(&self, subject: SubjectRoot<'_>) -> GoExpression {
         self.render_with_polarity(subject, CheckPolarity::Positive)
     }
 
-    pub(crate) fn render_negated(&self, subject: SubjectRoot<'_>) -> String {
+    pub(crate) fn render_negated(&self, subject: SubjectRoot<'_>) -> GoExpression {
         self.render_with_polarity(subject, CheckPolarity::Negative)
     }
 
-    fn render_with_polarity(&self, subject: SubjectRoot<'_>, polarity: CheckPolarity) -> String {
+    fn render_with_polarity(
+        &self,
+        subject: SubjectRoot<'_>,
+        polarity: CheckPolarity,
+    ) -> GoExpression {
         let negative = matches!(polarity, CheckPolarity::Negative);
+        let length_of = |path: &AccessPath| {
+            GoExpression::call(
+                GoExpression::name("len".to_string()),
+                vec![path.render(subject)],
+            )
+        };
         match self {
             Check::EnumTag { path, tag_constant } => {
-                let rendered_path = path.render(subject).rendered();
                 let operator = if negative { "!=" } else { "==" };
-                format!("{rendered_path}.Tag {operator} {tag_constant}")
+                GoExpression::binary(
+                    GoExpression::selector(path.render(subject), "Tag".to_string()),
+                    operator,
+                    GoExpression::name(tag_constant.clone()),
+                )
             }
             Check::Literal { path, go_literal } => {
-                let rendered_path = path.render(subject).rendered();
+                let rendered_path = path.render(subject);
                 match (go_literal.as_str(), negative) {
                     ("true", false) | ("false", true) => rendered_path,
-                    ("true", true) | ("false", false) => format!("!{rendered_path}"),
-                    (_, false) => format!("{rendered_path} == {go_literal}"),
-                    (_, true) => format!("{rendered_path} != {go_literal}"),
+                    ("true", true) | ("false", false) => GoExpression::unary("!", rendered_path),
+                    (_, false) => {
+                        GoExpression::binary(rendered_path, "==", label_expression(go_literal))
+                    }
+                    (_, true) => {
+                        GoExpression::binary(rendered_path, "!=", label_expression(go_literal))
+                    }
                 }
             }
             Check::SliceLenEq { path, length } => {
-                let rendered_path = path.render(subject).rendered();
                 let operator = if negative { "!=" } else { "==" };
-                format!("len({rendered_path}) {operator} {length}")
+                GoExpression::binary(
+                    length_of(path),
+                    operator,
+                    GoExpression::literal(length.to_string()),
+                )
             }
             Check::SliceLenGe { path, min_length } => {
-                let rendered_path = path.render(subject).rendered();
                 let operator = if negative { "<" } else { ">=" };
-                format!("len({rendered_path}) {operator} {min_length}")
+                GoExpression::binary(
+                    length_of(path),
+                    operator,
+                    GoExpression::literal(min_length.to_string()),
+                )
             }
             Check::Or { alternatives } if !negative => {
-                let alt_strs: Vec<String> = alternatives
+                let alternative_count = alternatives.len();
+                let joined = alternatives
                     .iter()
                     .map(|checks| {
                         if checks.len() == 1 {
                             checks[0].render(subject)
                         } else {
-                            format!(
-                                "({})",
-                                checks
-                                    .iter()
-                                    .map(|c| c.render(subject))
-                                    .collect::<Vec<_>>()
-                                    .join(" && ")
-                            )
+                            GoExpression::parenthesized(join_conditions(checks, subject))
                         }
                     })
-                    .collect();
-                let joined = alt_strs.join(" || ");
-                if alt_strs.len() > 1 {
-                    format!("({})", joined)
+                    .reduce(|left, right| GoExpression::binary(left, "||", right))
+                    .expect("an or-check has at least one alternative");
+                if alternative_count > 1 {
+                    GoExpression::parenthesized(joined)
                 } else {
                     joined
                 }
             }
-            Check::TypeAssert { path, go_type } if !negative => format!(
-                "func() bool {{ _, ok := {}.({}); return ok }}()",
-                path.render(subject).rendered(),
-                go_type,
+            Check::TypeAssert { path, go_type } if !negative => GoExpression::immediate_call(
+                "bool".to_string(),
+                LoweredBlock {
+                    statements: vec![
+                        define_many(
+                            vec!["_".to_string(), "ok".to_string()],
+                            GoExpression::type_assertion(path.render(subject), go_type.clone()),
+                        ),
+                        plain_return(GoExpression::name("ok".to_string())),
+                    ],
+                },
+                FunctionLiteralLayout::Inline,
             ),
-            Check::Or { .. } | Check::TypeAssert { .. } => {
-                format!(
-                    "!({})",
-                    self.render_with_polarity(subject, CheckPolarity::Positive)
-                )
-            }
+            Check::Or { .. } | Check::TypeAssert { .. } => GoExpression::unary(
+                "!",
+                GoExpression::parenthesized(
+                    self.render_with_polarity(subject, CheckPolarity::Positive),
+                ),
+            ),
         }
     }
 
@@ -1698,12 +1726,33 @@ fn extract_root_assertion(checks: &mut Vec<Check>) -> Option<TypeAssertion> {
     }
 }
 
-pub(super) fn render_condition(checks: &[Check], subject_var: SubjectRoot<'_>) -> String {
+pub(super) fn render_condition(checks: &[Check], subject_var: SubjectRoot<'_>) -> GoExpression {
     if checks.is_empty() {
-        return "true".to_string();
+        return GoExpression::literal("true".to_string());
     }
+    join_conditions(checks, subject_var)
+}
 
-    let conditions: Vec<String> = checks.iter().map(|c| c.render(subject_var)).collect();
+fn join_conditions(checks: &[Check], subject: SubjectRoot<'_>) -> GoExpression {
+    checks
+        .iter()
+        .map(|check| check.render(subject))
+        .reduce(|left, right| GoExpression::binary(left, "&&", right))
+        .expect("join_conditions requires at least one check")
+}
 
-    conditions.join(" && ")
+pub(crate) fn label_expression(label: &str) -> GoExpression {
+    let is_name = label
+        .chars()
+        .next()
+        .is_some_and(|first| first.is_alphabetic() || first == '_')
+        && label
+            .chars()
+            .all(|character| character.is_alphanumeric() || character == '_' || character == '.')
+        && !matches!(label, "true" | "false" | "nil");
+    if is_name {
+        GoExpression::name(label.to_string())
+    } else {
+        GoExpression::literal(label.to_string())
+    }
 }

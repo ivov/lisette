@@ -3,9 +3,8 @@ use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate};
 use crate::patterns::decision_tree::{
     Check, PatternBinding, PatternInfo, SubjectRoot, render_condition,
 };
-use crate::plan::bodies::LoweredStatement;
-use crate::plan::placement::simple_assign;
-use crate::plan::values::{EvaluationEffect, ValuePlan};
+use crate::plan::bodies::{LoweredStatement, assign, define, define_many};
+use crate::plan::values::GoExpression;
 use crate::state::bindings::InlineExpr;
 use std::borrow::Cow;
 use syntax::ast::Expression;
@@ -28,24 +27,28 @@ pub(crate) fn apply_root_assertion<'s>(
         unreachable!("multi-type root assertions only reach match destructure paths")
     };
     planner.scope.record_go_use(subject);
-    let expression = format!("{}.({})", subject, go_type);
-    let var = planner.hoist_tmp_value_statement(statements, "asserted", &expression);
+    let expression =
+        GoExpression::type_assertion(GoExpression::name(subject.to_string()), go_type.clone());
+    let var = planner.hoist_tmp_value_statement(statements, "asserted", expression);
     Cow::Owned(var)
 }
 
 /// Hoist a root type assertion as comma-ok for refutable contexts (while-let,
-/// select arms, or-pattern let-else). Returns `(effective_subject, ok_var)`.
+/// select arms, or-pattern let-else). Returns `(effective_subject, ok_test)`.
 pub(crate) fn apply_refutable_root_assertion<'s>(
     planner: &mut Planner,
     statements: &mut Vec<LoweredStatement>,
     info: &PatternInfo,
     subject: &'s str,
-) -> (Cow<'s, str>, Option<String>) {
+) -> (Cow<'s, str>, Option<GoExpression>) {
     let Some(assertion) = info.root_assertion.as_ref() else {
         return (Cow::Borrowed(subject), None);
     };
     planner.scope.record_go_use(subject);
     let needs_asserted = info.requires_asserted_subject();
+    let assertion_of = |go_type: &String| {
+        GoExpression::type_assertion(GoExpression::name(subject.to_string()), go_type.clone())
+    };
     match assertion.go_types.as_slice() {
         [go_type] => {
             let asserted_lhs = if needs_asserted {
@@ -57,52 +60,53 @@ pub(crate) fn apply_refutable_root_assertion<'s>(
             };
             let ok = planner.fresh_var(Some("ok"));
             planner.declare(&ok);
-            statements.push(LoweredStatement::RawGo(format!(
-                "{}, {} := {}.({})\n",
-                asserted_lhs, ok, subject, go_type
-            )));
+            statements.push(define_many(
+                vec![asserted_lhs.clone(), ok.clone()],
+                assertion_of(go_type),
+            ));
             let effective = if needs_asserted {
                 Cow::Owned(asserted_lhs)
             } else {
                 Cow::Borrowed(subject)
             };
-            (effective, Some(ok))
+            (effective, Some(GoExpression::name(ok)))
         }
         multiple => {
             // No-binding interface or-pattern (`A | B`): no single asserted
             // form is possible across types.
-            let oks: Vec<String> = multiple
+            let oks = multiple
                 .iter()
                 .map(|t| {
                     let ok = planner.fresh_var(Some("ok"));
                     planner.declare(&ok);
-                    statements.push(LoweredStatement::RawGo(format!(
-                        "_, {} := {}.({})\n",
-                        ok, subject, t
-                    )));
-                    ok
+                    statements.push(define_many(
+                        vec!["_".to_string(), ok.clone()],
+                        assertion_of(t),
+                    ));
+                    GoExpression::name(ok)
                 })
-                .collect();
+                .reduce(|left, right| GoExpression::binary(left, "||", right))
+                .expect("a multi-type assertion names at least one type");
             (
                 Cow::Borrowed(subject),
-                Some(format!("({})", oks.join(" || "))),
+                Some(GoExpression::parenthesized(oks)),
             )
         }
     }
 }
 
-/// Combine an optional `ok` variable with rendered checks into a guard
-/// condition; returns `"true"` when both are absent.
+/// Combine an optional `ok` test with the rendered checks into a guard
+/// condition; `true` when both are absent.
 pub(crate) fn compose_refutable_condition(
-    ok_var: Option<&str>,
+    ok_test: Option<&GoExpression>,
     checks: &[Check],
     effective_subject: &str,
-) -> String {
+) -> GoExpression {
     let condition = render_condition(checks, SubjectRoot::Var(effective_subject));
-    match ok_var {
+    match ok_test {
         None => condition,
-        Some(ok) if condition == "true" => ok.to_string(),
-        Some(ok) => format!("{} && {}", ok, condition),
+        Some(ok) if checks.is_empty() => ok.clone(),
+        Some(ok) => GoExpression::binary(ok.clone(), "&&", condition),
     }
 }
 
@@ -120,10 +124,7 @@ pub(crate) fn tree_binding_statements(
             continue;
         };
 
-        let access_expression = binding
-            .path
-            .render(SubjectRoot::Var(subject_var))
-            .rendered();
+        let access_expression = binding.path.render(SubjectRoot::Var(subject_var));
 
         if analyze_inline_candidate(&binding.lisette_name, consumers) == InlineDecision::Inline {
             let composable = binding
@@ -157,10 +158,7 @@ pub(crate) fn tree_binding_statements(
                 fresh
             }
         };
-        statements.push(LoweredStatement::TempBind {
-            name,
-            value: access_expression,
-        });
+        statements.push(define(name, access_expression));
     }
 }
 
@@ -198,9 +196,6 @@ pub(crate) fn tree_assignment_statements(
         let name = registered_name.to_string();
         planner.scope.record_go_use(subject_var);
         let access_expression = binding.path.render(SubjectRoot::Var(subject_var));
-        statements.push(simple_assign(
-            &name,
-            ValuePlan::computed(Vec::new(), access_expression, EvaluationEffect::Pure),
-        ));
+        statements.push(assign(GoExpression::name(name), access_expression));
     }
 }

@@ -3,14 +3,30 @@ use crate::abi::callable::PayloadLayout;
 use crate::abi::coercion::{BridgeDirection, CoercionPlan, LayoutBridge};
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::calls::go_interop::build_tuple_literal;
-use crate::calls::go_interop::wrappers::{WrapperOutcome, WrapperTarget, leaf_block};
+use crate::calls::go_interop::wrappers::{
+    WrapperOutcome, WrapperTarget, is_nil, is_nil_interface, leaf_block, non_nil,
+};
 use crate::context::expression::ExpressionContext;
-use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG};
-use crate::plan::bodies::{ElseArm, IfPlan, LoopKind, LoopPlan, LoweredBlock, LoweredStatement};
+use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG, generic_call};
+use crate::plan::bodies::{
+    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign,
+    define_many,
+};
 use crate::plan::values::{GoExpression, ValuePlan};
-use std::iter;
 use syntax::ast::Expression;
 use syntax::types::Type;
+
+fn is_some(option: GoExpression) -> GoExpression {
+    GoExpression::binary(
+        GoExpression::selector(option, "Tag".to_string()),
+        "==",
+        GoExpression::name(OPTION_SOME_TAG.to_string()),
+    )
+}
+
+fn some_payload(option: GoExpression) -> GoExpression {
+    GoExpression::selector(option, "SomeVal".to_string())
+}
 
 impl Planner<'_> {
     /// `Some(e)` and `None` written straight into a nullable Go slot.
@@ -57,7 +73,7 @@ impl Planner<'_> {
             let value = if payload.is_identity() {
                 value
             } else {
-                GoExpression::opaque(self.plan_layout_bridge(setup, value.as_str(), payload))
+                self.plan_layout_bridge(setup, value, payload)
             };
             let Some(pointee) = pointee else {
                 return value.with_deferred_evaluation(contains_deferred_evaluation);
@@ -69,7 +85,7 @@ impl Planner<'_> {
             setup.push(LoweredStatement::VarDecl {
                 name: copy.clone(),
                 go_type,
-                value: Some(value.rendered()),
+                value: Some(value),
             });
             GoExpression::address_of(GoExpression::name(copy))
                 .with_deferred_evaluation(contains_deferred_evaluation)
@@ -79,21 +95,25 @@ impl Planner<'_> {
     /// Wrap a sentinel-call via `OptionFromCommaOk` with `raw != sentinel`.
     pub(crate) fn lower_sentinel_wrapping(
         &mut self,
-        call_str: &str,
+        call: GoExpression,
         option_ty: &Type,
         sentinel: i64,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
         self.require_stdlib();
         let mut statements = Vec::new();
-        let raw = self.hoist_tmp_value_statement(&mut statements, "ret", call_str);
+        let raw = self.hoist_tmp_value_statement(&mut statements, "ret", call);
+        let raw = || GoExpression::name(raw.clone());
         let inner_ty_str = self.use_go_type(&option_ty.ok_type());
-        let value_expr = format!(
-            "lisette.OptionFromCommaOk[{}]({}, {} != {})",
-            inner_ty_str, raw, raw, sentinel
+        let value = generic_call(
+            "lisette.OptionFromCommaOk",
+            format!("[{}]", inner_ty_str),
+            vec![
+                raw(),
+                GoExpression::binary(raw(), "!=", GoExpression::literal(sentinel.to_string())),
+            ],
         );
-        let outcome =
-            self.push_simple_wrapper_value(&mut statements, target, "option", &value_expr);
+        let outcome = self.push_simple_wrapper_value(&mut statements, target, "option", value);
         (statements, outcome)
     }
 
@@ -102,7 +122,7 @@ impl Planner<'_> {
     /// `Packed` one from a Lisette `(Tuple_n[...], bool)`.
     pub(crate) fn lower_comma_ok_wrapping(
         &mut self,
-        call_str: &str,
+        call: GoExpression,
         option_ty: &Type,
         layout: PayloadLayout,
         payload_bridge: Option<&LayoutBridge>,
@@ -121,9 +141,12 @@ impl Planner<'_> {
 
         if !needs_complex {
             let inner_ty_str = self.use_go_type(&inner_ty);
-            let value_expr = format!("lisette.OptionFromCommaOk[{}]({})", inner_ty_str, call_str);
-            let outcome =
-                self.push_simple_wrapper_value(&mut statements, target, "option", &value_expr);
+            let value = generic_call(
+                "lisette.OptionFromCommaOk",
+                format!("[{}]", inner_ty_str),
+                vec![call],
+            );
+            let outcome = self.push_simple_wrapper_value(&mut statements, target, "option", value);
             return (statements, outcome);
         }
 
@@ -139,26 +162,24 @@ impl Planner<'_> {
         let ok_var = self.fresh_var(Some("ret"));
         self.declare(&ok_var);
 
-        let all_vars: Vec<&str> = val_vars
-            .iter()
-            .map(|s| s.as_str())
-            .chain(iter::once(ok_var.as_str()))
-            .collect();
-        statements.push(LoweredStatement::RawGo(format!(
-            "{} := {}\n",
-            all_vars.join(", "),
-            call_str
-        )));
+        let mut all_vars = val_vars.clone();
+        all_vars.push(ok_var.clone());
+        statements.push(define_many(all_vars, call));
 
+        let first_val = GoExpression::name(val_vars[0].clone());
         let val_expression = if layout.is_flattened() && inner_tuple_arity.is_some() {
-            build_tuple_literal(self, &val_vars, &inner_ty)
+            let values = val_vars
+                .iter()
+                .map(|var| GoExpression::name(var.clone()))
+                .collect();
+            build_tuple_literal(self, values)
         } else {
-            val_vars[0].clone()
+            first_val.clone()
         };
         let (mut payload_setup, val_expression) = match payload_bridge {
             Some(bridge) => {
                 let mut setup = Vec::new();
-                let value = self.plan_layout_bridge(&mut setup, &val_expression, bridge);
+                let value = self.plan_layout_bridge(&mut setup, val_expression, bridge);
                 (setup, value)
             }
             None => (Vec::new(), val_expression),
@@ -169,12 +190,17 @@ impl Planner<'_> {
             fe.full_type_string()
         };
 
+        let ok = GoExpression::name(ok_var);
         let condition = if self.is_interface_option(option_ty) {
-            format!("{} && !lisette.IsNilInterface({})", ok_var, val_vars[0])
+            GoExpression::binary(
+                ok,
+                "&&",
+                GoExpression::unary("!", is_nil_interface(first_val)),
+            )
         } else if needs_nilable_validation {
-            format!("{} && {} != nil", ok_var, val_vars[0])
+            GoExpression::binary(ok, "&&", non_nil(first_val))
         } else {
-            ok_var.clone()
+            ok
         };
 
         let (sink, outcome) =
@@ -182,30 +208,29 @@ impl Planner<'_> {
 
         let some_wrapper = {
             let mut fe = FalliblePlanner::new(self, &fallible);
-            fe.emit_success(&val_expression)
+            fe.emit_success(val_expression)
         };
         let none_wrapper = {
             let mut fe = FalliblePlanner::new(self, &fallible);
             fe.emit_failure(None)
         };
 
-        let mut then_body = leaf_block(&sink, &some_wrapper);
+        let mut then_body = leaf_block(&sink, some_wrapper);
         payload_setup.append(&mut then_body.statements);
-        statements.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
+        statements.push(LoweredStatement::If(IfPlan::plain(
             condition,
-            then_body: LoweredBlock {
+            LoweredBlock {
                 statements: payload_setup,
             },
-            else_arm: ElseArm::from_body(leaf_block(&sink, &none_wrapper), false),
-        }));
+            ElseArm::from_body(leaf_block(&sink, none_wrapper), false),
+        )));
         (statements, outcome)
     }
 
     /// Wrap a nilable Go value into a tagged `Option` via `OptionFromNilable`.
     pub(crate) fn lower_nil_check_option_wrap(
         &mut self,
-        raw_value: &str,
+        raw_value: GoExpression,
         option_ty: &Type,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
@@ -214,28 +239,28 @@ impl Planner<'_> {
         let inner_ty = option_ty.ok_type();
         let inner_ty_str = self.use_go_type(&inner_ty);
         let is_nil_check = if self.is_interface_option(option_ty) {
-            format!("lisette.IsNilInterface({})", raw_value)
+            is_nil_interface(raw_value.clone())
         } else {
-            format!("{} == nil", raw_value)
+            is_nil(raw_value.clone())
         };
-        let value_expr = format!(
-            "lisette.OptionFromNilable[{}]({}, {})",
-            inner_ty_str, raw_value, is_nil_check
+        let value = generic_call(
+            "lisette.OptionFromNilable",
+            format!("[{}]", inner_ty_str),
+            vec![raw_value, is_nil_check],
         );
-        let outcome =
-            self.push_simple_wrapper_value(&mut statements, target, "option", &value_expr);
+        let outcome = self.push_simple_wrapper_value(&mut statements, target, "option", value);
         (statements, outcome)
     }
 
     pub(crate) fn plan_option_projection(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        option_value: &str,
+        option_value: GoExpression,
         slot_hint: &str,
         slot_ty: &str,
         address: bool,
-    ) -> String {
-        let opt_var = self.stable_source(statements, "opt", option_value);
+    ) -> GoExpression {
+        let option = self.stable_source(statements, "opt", option_value);
         let slot_var = self.fresh_var(Some(slot_hint));
         self.declare(&slot_var);
         statements.push(LoweredStatement::VarDecl {
@@ -245,33 +270,38 @@ impl Planner<'_> {
         });
 
         self.require_stdlib();
-        let amp = if address { "&" } else { "" };
-        let body = LoweredBlock {
-            statements: vec![LoweredStatement::RawGo(format!(
-                "{} = {}{}.SomeVal\n",
-                slot_var, amp, opt_var
-            ))],
+        let payload = some_payload(option.clone());
+        let payload = if address {
+            GoExpression::address_of(payload)
+        } else {
+            payload
         };
-        statements.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
-            condition: format!("{}.Tag == {}", opt_var, OPTION_SOME_TAG),
-            then_body: body,
-            else_arm: ElseArm::None,
-        }));
-        slot_var
+        let body = LoweredBlock {
+            statements: vec![assign(GoExpression::name(slot_var.clone()), payload)],
+        };
+        statements.push(LoweredStatement::If(IfPlan::plain(
+            is_some(option),
+            body,
+            ElseArm::None,
+        )));
+        GoExpression::name(slot_var)
     }
 
     /// Wrap a Go `*T` (T value-typed) into Lisette `Option<T>`.
     fn plan_pointer_to_option_wrap(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        ptr_value: &str,
+        pointer: GoExpression,
         option_ty: &Type,
-    ) -> String {
+    ) -> GoExpression {
         self.require_stdlib();
         let inner_ty_str = self.use_go_type(&option_ty.ok_type());
-        let value_expr = format!("lisette.OptionFromPointer[{}]({})", inner_ty_str, ptr_value);
-        self.hoist_tmp_value_statement(statements, "option", &value_expr)
+        let value = generic_call(
+            "lisette.OptionFromPointer",
+            format!("[{}]", inner_ty_str),
+            vec![pointer],
+        );
+        GoExpression::name(self.hoist_tmp_value_statement(statements, "option", value))
     }
 
     /// `FreshSlot` form of `lower_nil_check_option_wrap` (extends `statements`
@@ -279,23 +309,23 @@ impl Planner<'_> {
     pub(crate) fn plan_nil_check_option_wrap(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        raw_value: &str,
+        raw_value: GoExpression,
         option_ty: &Type,
-    ) -> String {
+    ) -> GoExpression {
         let (wrap_statements, outcome) =
             self.lower_nil_check_option_wrap(raw_value, option_ty, WrapperTarget::FreshSlot);
         statements.extend(wrap_statements);
-        outcome.expect("FreshSlot produces a slot")
+        GoExpression::name(outcome.expect("FreshSlot produces a slot"))
     }
 
     pub(crate) fn plan_layout_bridge(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        value: &str,
+        value: GoExpression,
         bridge: &LayoutBridge,
-    ) -> String {
+    ) -> GoExpression {
         match bridge {
-            LayoutBridge::Identity => value.to_string(),
+            LayoutBridge::Identity => value,
             LayoutBridge::UnwrapNullableOption {
                 target_payload,
                 payload,
@@ -364,8 +394,13 @@ impl Planner<'_> {
             }
             LayoutBridge::Reference { pointee } => {
                 let source = self.stable_source(statements, "src", value);
-                let pointee = self.plan_layout_bridge(statements, &format!("*{source}"), pointee);
-                self.hoist_tmp_value_statement(statements, "ref", &format!("&{pointee}"))
+                let pointee =
+                    self.plan_layout_bridge(statements, GoExpression::dereference(source), pointee);
+                GoExpression::name(self.hoist_tmp_value_statement(
+                    statements,
+                    "ref",
+                    GoExpression::address_of(pointee),
+                ))
             }
             LayoutBridge::Function { source, target, .. } => {
                 self.plan_function_layout_bridge(statements, value, source, target)
@@ -379,11 +414,11 @@ impl Planner<'_> {
     fn plan_option_projection_with_bridge(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        option_value: &str,
+        option_value: GoExpression,
         target_payload: &ValueLayout,
         payload_bridge: &LayoutBridge,
         address: bool,
-    ) -> String {
+    ) -> GoExpression {
         let option = self.stable_source(statements, "opt", option_value);
         let target_type = target_payload.go_type(self);
         let target_type = self.use_rendered_go_type(target_type);
@@ -404,34 +439,33 @@ impl Planner<'_> {
         let mut then_statements = Vec::new();
         let payload = self.plan_layout_bridge(
             &mut then_statements,
-            &format!("{}.SomeVal", option),
+            some_payload(option.clone()),
             payload_bridge,
         );
         let payload = if address {
-            format!("&{payload}")
+            GoExpression::address_of(payload)
         } else {
             payload
         };
-        then_statements.push(LoweredStatement::RawGo(format!("{slot} = {payload}\n")));
-        statements.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
-            condition: format!("{}.Tag == {}", option, OPTION_SOME_TAG),
-            then_body: LoweredBlock {
+        then_statements.push(assign(GoExpression::name(slot.clone()), payload));
+        statements.push(LoweredStatement::If(IfPlan::plain(
+            is_some(option),
+            LoweredBlock {
                 statements: then_statements,
             },
-            else_arm: ElseArm::None,
-        }));
-        slot
+            ElseArm::None,
+        )));
+        GoExpression::name(slot)
     }
 
     fn plan_option_wrap_with_bridge(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        raw_value: &str,
+        raw_value: GoExpression,
         option_type: &Type,
         payload_bridge: &LayoutBridge,
         pointer: bool,
-    ) -> String {
+    ) -> GoExpression {
         self.require_stdlib();
         let source = self.stable_source(statements, "raw", raw_value);
         let fallible = Fallible::from_type(option_type).expect("Option type expected");
@@ -448,48 +482,47 @@ impl Planner<'_> {
         });
 
         let raw_payload = if pointer {
-            format!("*{source}")
+            GoExpression::dereference(source.clone())
         } else {
             source.clone()
         };
         let mut then_statements = Vec::new();
-        let payload = self.plan_layout_bridge(&mut then_statements, &raw_payload, payload_bridge);
+        let payload = self.plan_layout_bridge(&mut then_statements, raw_payload, payload_bridge);
         let some = {
             let mut planner = FalliblePlanner::new(self, &fallible);
-            planner.emit_success(&payload)
+            planner.emit_success(payload)
         };
-        then_statements.push(LoweredStatement::RawGo(format!("{option} = {some}\n")));
+        then_statements.push(assign(GoExpression::name(option.clone()), some));
         let none = {
             let mut planner = FalliblePlanner::new(self, &fallible);
             planner.emit_failure(None)
         };
         let condition = if !pointer && self.is_interface_option(option_type) {
-            format!("!lisette.IsNilInterface({source})")
+            GoExpression::unary("!", is_nil_interface(source))
         } else {
-            format!("{source} != nil")
+            non_nil(source)
         };
-        statements.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
+        statements.push(LoweredStatement::If(IfPlan::plain(
             condition,
-            then_body: LoweredBlock {
+            LoweredBlock {
                 statements: then_statements,
             },
-            else_arm: ElseArm::from_body(
+            ElseArm::from_body(
                 LoweredBlock {
-                    statements: vec![LoweredStatement::RawGo(format!("{option} = {none}\n"))],
+                    statements: vec![assign(GoExpression::name(option.clone()), none)],
                 },
                 false,
             ),
-        }));
-        option
+        )));
+        GoExpression::name(option)
     }
 
     fn plan_aggregate_layout_bridge(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        value: &str,
+        value: GoExpression,
         bridge: &LayoutBridge,
-    ) -> String {
+    ) -> GoExpression {
         let LayoutBridge::Aggregate {
             source,
             target,
@@ -525,25 +558,31 @@ impl Planner<'_> {
             });
             output
         } else {
-            self.hoist_tmp_value_statement(
-                statements,
-                output_hint,
-                &format!("make({}, len({}))", target_type, source),
-            )
+            let make = GoExpression::call(
+                GoExpression::name("make".to_string()),
+                vec![
+                    GoExpression::type_name(target_type),
+                    GoExpression::call(GoExpression::name("len".to_string()), vec![source.clone()]),
+                ],
+            );
+            self.hoist_tmp_value_statement(statements, output_hint, make)
         };
         let index = self.fresh_var(Some("i"));
         self.declare(&index);
         let element = self.fresh_var(Some("v"));
         self.declare(&element);
         let mut key_statements = Vec::new();
-        let output_index = key_bridge.map_or_else(
-            || index.clone(),
-            |bridge| self.plan_layout_bridge(&mut key_statements, &index, bridge),
-        );
+        let output_index = match key_bridge {
+            Some(bridge) => self.plan_layout_bridge(
+                &mut key_statements,
+                GoExpression::name(index.clone()),
+                bridge,
+            ),
+            None => GoExpression::name(index.clone()),
+        };
         let mut body = self.plan_aggregate_element_bridge(
-            &output,
-            &output_index,
-            &element,
+            GoExpression::index(GoExpression::name(output.clone()), output_index),
+            GoExpression::name(element.clone()),
             source_layout,
             element_bridge,
         );
@@ -554,17 +593,20 @@ impl Planner<'_> {
         statements.push(LoweredStatement::Loop(LoopPlan {
             prologue: Vec::new(),
             kind: LoopKind::Generated { label: None },
-            header: format!("for {index}, {element} := range {source} {{\n"),
+            header: LoopHeader::Range {
+                key: Some(index),
+                value: Some(element),
+                iterable: source,
+            },
             body,
         }));
-        output
+        GoExpression::name(output)
     }
 
     fn plan_aggregate_element_bridge(
         &mut self,
-        output: &str,
-        index: &str,
-        element: &str,
+        slot: GoExpression,
+        element: GoExpression,
         source_layout: &ValueLayout,
         bridge: &LayoutBridge,
     ) -> LoweredBlock {
@@ -573,27 +615,23 @@ impl Planner<'_> {
             | LayoutBridge::UnwrapPointerOption { payload, .. } => {
                 let pointer = matches!(bridge, LayoutBridge::UnwrapPointerOption { .. });
                 let mut then_statements = Vec::new();
-                let projected = format!("{element}.SomeVal");
+                let projected = some_payload(element.clone());
                 let projected = if payload.is_identity() {
                     projected
                 } else {
-                    self.plan_layout_bridge(&mut then_statements, &projected, payload)
+                    self.plan_layout_bridge(&mut then_statements, projected, payload)
                 };
                 let projected = if pointer {
-                    format!("&{projected}")
+                    GoExpression::address_of(projected)
                 } else {
                     projected
                 };
-                then_statements.push(LoweredStatement::RawGo(format!(
-                    "{output}[{index}] = {projected}\n"
-                )));
+                then_statements.push(assign(slot.clone(), projected));
                 let needs_nil_else = matches!(source_layout, ValueLayout::Map { .. }) || pointer;
                 let else_arm = if needs_nil_else {
                     ElseArm::from_body(
                         LoweredBlock {
-                            statements: vec![LoweredStatement::RawGo(format!(
-                                "{output}[{index}] = nil\n"
-                            ))],
+                            statements: vec![assign(slot, GoExpression::nil())],
                         },
                         false,
                     )
@@ -601,14 +639,13 @@ impl Planner<'_> {
                     ElseArm::None
                 };
                 LoweredBlock {
-                    statements: vec![LoweredStatement::If(IfPlan {
-                        condition_setup: Vec::new(),
-                        condition: format!("{element}.Tag == {OPTION_SOME_TAG}"),
-                        then_body: LoweredBlock {
+                    statements: vec![LoweredStatement::If(IfPlan::plain(
+                        is_some(element),
+                        LoweredBlock {
                             statements: then_statements,
                         },
                         else_arm,
-                    })],
+                    ))],
                 }
             }
             LayoutBridge::WrapNullableOption {
@@ -623,49 +660,44 @@ impl Planner<'_> {
             } => {
                 let pointer = matches!(bridge, LayoutBridge::WrapPointerOption { .. });
                 let raw_payload = if pointer {
-                    format!("*{element}")
+                    GoExpression::dereference(element.clone())
                 } else {
-                    element.to_string()
+                    element.clone()
                 };
                 let mut then_statements = Vec::new();
                 let payload = if payload.is_identity() {
                     raw_payload
                 } else {
-                    self.plan_layout_bridge(&mut then_statements, &raw_payload, payload)
+                    self.plan_layout_bridge(&mut then_statements, raw_payload, payload)
                 };
                 let fallible = Fallible::from_type(option_type).expect("Option type expected");
                 let some = {
                     let mut planner = FalliblePlanner::new(self, &fallible);
-                    planner.emit_success(&payload)
+                    planner.emit_success(payload)
                 };
                 let none = {
                     let mut planner = FalliblePlanner::new(self, &fallible);
                     planner.emit_failure(None)
                 };
-                then_statements.push(LoweredStatement::RawGo(format!(
-                    "{output}[{index}] = {some}\n"
-                )));
+                then_statements.push(assign(slot.clone(), some));
                 let condition = if !pointer && self.is_interface_option(option_type) {
-                    format!("!lisette.IsNilInterface({element})")
+                    GoExpression::unary("!", is_nil_interface(element))
                 } else {
-                    format!("{element} != nil")
+                    non_nil(element)
                 };
                 LoweredBlock {
-                    statements: vec![LoweredStatement::If(IfPlan {
-                        condition_setup: Vec::new(),
+                    statements: vec![LoweredStatement::If(IfPlan::plain(
                         condition,
-                        then_body: LoweredBlock {
+                        LoweredBlock {
                             statements: then_statements,
                         },
-                        else_arm: ElseArm::from_body(
+                        ElseArm::from_body(
                             LoweredBlock {
-                                statements: vec![LoweredStatement::RawGo(format!(
-                                    "{output}[{index}] = {none}\n"
-                                ))],
+                                statements: vec![assign(slot, none)],
                             },
                             false,
                         ),
-                    })],
+                    ))],
                 }
             }
             LayoutBridge::Aggregate { .. }
@@ -673,17 +705,13 @@ impl Planner<'_> {
             | LayoutBridge::Function { .. } => {
                 let mut inner_statements = Vec::new();
                 let inner = self.plan_layout_bridge(&mut inner_statements, element, bridge);
-                inner_statements.push(LoweredStatement::RawGo(format!(
-                    "{output}[{index}] = {inner}\n"
-                )));
+                inner_statements.push(assign(slot, inner));
                 LoweredBlock {
                     statements: inner_statements,
                 }
             }
             LayoutBridge::Identity => LoweredBlock {
-                statements: vec![LoweredStatement::RawGo(format!(
-                    "{output}[{index}] = {element}\n"
-                ))],
+                statements: vec![assign(slot, element)],
             },
         }
     }

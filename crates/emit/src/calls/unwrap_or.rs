@@ -4,7 +4,7 @@ use crate::context::expression::ExpressionContext;
 use crate::patterns::matching::{OptionArms, OptionFusePlan, ResultFusePlan};
 use crate::plan::bodies::{AssignForm, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
 use crate::plan::placement::collapse_declared_temp;
-use crate::plan::values::ValuePlan;
+use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::{Expression, Literal, Pattern};
 use syntax::types::Type;
 
@@ -160,7 +160,7 @@ impl Planner<'_> {
                 let bound = fuse.bind(self, slot);
                 let failure = bound.none_condition(self);
                 let value = bound
-                    .value()
+                    .value_name()
                     .expect("a payload slot was requested")
                     .to_string();
                 (bound.statements, failure, value)
@@ -176,11 +176,12 @@ impl Planner<'_> {
         statements.append(&mut default.setup);
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
-            condition: failure,
+            initializer: failure.initializer,
+            condition: failure.condition,
             then_body: LoweredBlock {
                 statements: vec![LoweredStatement::Assign(AssignForm::Simple {
                     target_capture: Vec::new(),
-                    target_str: value.clone(),
+                    target: GoExpression::name(value.clone()),
                     value: default,
                 })],
             },
@@ -202,11 +203,12 @@ impl Planner<'_> {
             some_body: map.body,
             none_body: default,
         };
+        let target = GoExpression::name(target.to_string());
         self.lower_fused_option_arms(
             fuse,
             arms,
             &PlacePlan::Assign {
-                local: target,
+                local: &target,
                 target_ty: Some(target_ty),
             },
         )

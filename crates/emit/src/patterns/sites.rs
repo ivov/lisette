@@ -5,7 +5,7 @@ use syntax::ast::{Expression, MatchArm, Pattern, Span};
 use syntax::types::Type;
 
 use crate::Planner;
-use crate::calls::comma_ok::CommaOkValueSlot;
+use crate::calls::comma_ok::{CommaOkValueSlot, PairCondition};
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::{self, prelude_qualifier, testkit_qualifier};
 use crate::patterns::binding_decls::pattern_binds_name;
@@ -16,11 +16,13 @@ use crate::patterns::binding_emit::{
 use crate::patterns::decision_tree::{self, PatternInfo, SubjectRoot, render_condition};
 use crate::patterns::matching::{ArmBinding, field_binding, ok_pattern_field, some_pattern_field};
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
+    ElseArm, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan, define,
+    discard, expression_statement,
 };
+use crate::plan::go_expression::CompositeLayout;
+use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
 use crate::utils::wrap_if_struct_literal;
-use crate::write_line;
 
 #[derive(Clone, Copy)]
 pub(crate) struct AnnotatedPattern<'a> {
@@ -69,11 +71,16 @@ impl<'a> PatternSubject<'a> {
     }
 }
 
-/// For composite scrutinees, the declaration line is deferred so the caller can
+/// For composite scrutinees, the declaration is deferred so the caller can
 /// pick `var := expr` vs `_ = expr` based on body usage.
 enum ResolvedSubject {
-    Existing { var: String },
-    Composite { var: String, expression: String },
+    Existing {
+        var: String,
+    },
+    Composite {
+        var: String,
+        expression: GoExpression,
+    },
 }
 
 impl ResolvedSubject {
@@ -83,12 +90,12 @@ impl ResolvedSubject {
         }
     }
 
-    fn emit_declaration(self, output: &mut String, references: bool) {
+    fn push_declaration(self, statements: &mut Vec<LoweredStatement>, references: bool) {
         if let ResolvedSubject::Composite { var, expression } = self {
             if references {
-                write_line!(output, "{} := {}", var, expression);
+                statements.push(define(var, expression));
             } else {
-                write_line!(output, "_ = {}", expression);
+                statements.push(discard(expression));
             }
         }
     }
@@ -97,7 +104,7 @@ impl ResolvedSubject {
 struct RefutableAlternative<'s> {
     info: PatternInfo,
     subject: Cow<'s, str>,
-    ok_var: Option<String>,
+    ok_test: Option<GoExpression>,
 }
 
 /// The identifier under a chain of field accesses.
@@ -120,6 +127,14 @@ fn is_field_path(rendered: &str) -> bool {
     segments.next().is_some_and(go_name::is_plain_identifier)
         && rendered.contains('.')
         && segments.all(go_name::is_plain_identifier)
+}
+
+fn loop_break(planner: &Planner) -> LoweredStatement {
+    LoweredStatement::Break(
+        planner
+            .current_loop_id()
+            .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source),
+    )
 }
 
 impl Planner<'_> {
@@ -168,11 +183,13 @@ impl Planner<'_> {
                 let (op_setup, expression) = plan.into_parts();
                 setup.extend(op_setup);
                 if rests_in_stable_name
-                    || self.field_path_reads_in_place(scrutinee, &expression, |root| {
+                    || self.field_path_reads_in_place(scrutinee, expression.as_str(), |root| {
                         pattern_binds_name(pattern, root)
                     })
                 {
-                    return ResolvedSubject::Existing { var: expression };
+                    return ResolvedSubject::Existing {
+                        var: expression.rendered(),
+                    };
                 }
                 let var = self.fresh_var(temp_hint);
                 self.declare(&var);
@@ -200,15 +217,10 @@ impl Planner<'_> {
             tree_binding_statements(this, &mut body, &info.bindings, &effective, &[]);
             body
         });
-        let body_block = LoweredBlock { statements: body };
 
         let references = used.contains(resolved.var());
-        let mut declaration = String::new();
-        resolved.emit_declaration(&mut declaration, references);
-        if !declaration.is_empty() {
-            statements.push(LoweredStatement::RawGo(declaration));
-        }
-        statements.extend(body_block.statements);
+        resolved.push_declaration(&mut statements, references);
+        statements.extend(body);
         statements
     }
 
@@ -281,15 +293,10 @@ impl Planner<'_> {
                 this.lower_let_else_single_pattern(ap, subject, fail, subject_is_fixed)
             }
         });
-        let body_block = LoweredBlock { statements: body };
 
         let references = used.contains(resolved.var());
-        let mut declaration = String::new();
-        resolved.emit_declaration(&mut declaration, references);
-        if !declaration.is_empty() {
-            statements.push(LoweredStatement::RawGo(declaration));
-        }
-        statements.extend(body_block.statements);
+        resolved.push_declaration(&mut statements, references);
+        statements.extend(body);
         statements
     }
 
@@ -344,7 +351,7 @@ impl Planner<'_> {
     fn finish_fused_let_else(
         &mut self,
         mut statements: Vec<LoweredStatement>,
-        fail_condition: String,
+        fail_condition: PairCondition,
         binding: Option<(String, String)>,
         else_block: &Expression,
     ) -> Vec<LoweredStatement> {
@@ -352,7 +359,8 @@ impl Planner<'_> {
         let fail_body = self.lower_block_as_body(else_block);
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
-            condition: fail_condition,
+            initializer: fail_condition.initializer,
+            condition: fail_condition.condition,
             then_body: fail_body,
             else_arm: ElseArm::None,
         }));
@@ -390,16 +398,13 @@ impl Planner<'_> {
         }
         let staged = self.plan_operand(scrutinee, ExpressionContext::value());
         let (mut setup, value) = staged.into_parts();
-        if self
-            .field_path_reads_in_place(scrutinee, &value, |root| pattern_binds_name(pattern, root))
-        {
-            return (value, setup);
+        if self.field_path_reads_in_place(scrutinee, value.as_str(), |root| {
+            pattern_binds_name(pattern, root)
+        }) {
+            return (value.rendered(), setup);
         }
         let var = self.fresh_var(Some("subject"));
-        setup.push(LoweredStatement::TempBind {
-            name: var.clone(),
-            value,
-        });
+        setup.push(define(var.clone(), value));
         (var, setup)
     }
 
@@ -416,9 +421,8 @@ impl Planner<'_> {
         let scrutinee_ty = scrutinee.get_type();
         let (subject_var, subject_setup) = self.while_let_subject(pattern, scrutinee);
 
-        // Or-patterns with bindings render an `if/else if` chain that closes its
-        // own `for`, so they cannot wrap in a structured `Loop`; bridge them as
-        // one `RawGo`.
+        // Or-patterns with bindings lower to an `if/else if` chain whose
+        // terminal `else` breaks the loop.
         if let Pattern::Or { patterns, .. } = pattern
             && pattern_has_bindings(pattern)
         {
@@ -434,7 +438,7 @@ impl Planner<'_> {
             );
             let plan = self.build_source_loop(
                 Vec::new(),
-                "for {\n".to_string(),
+                LoopHeader::Infinite,
                 LoweredBlock {
                     statements: loop_body,
                 },
@@ -447,9 +451,9 @@ impl Planner<'_> {
         let info = decision_tree::collect_pattern_info(self, pattern, &scrutinee_ty);
         self.require_packages(&info.packages);
         let mut loop_body = subject_setup;
-        let (effective, ok_var) =
+        let (effective, ok_test) =
             apply_refutable_root_assertion(self, &mut loop_body, &info, &subject_var);
-        let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
+        let condition = compose_refutable_condition(ok_test.as_ref(), &info.checks, &effective);
 
         let then_body = self.with_scope(|this| {
             let mut then_body: Vec<LoweredStatement> = Vec::new();
@@ -460,26 +464,22 @@ impl Planner<'_> {
             then_body
         });
 
-        loop_body.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
+        loop_body.push(LoweredStatement::If(IfPlan::plain(
             condition,
-            then_body: LoweredBlock {
+            LoweredBlock {
                 statements: then_body,
             },
-            else_arm: ElseArm::from_body(
+            ElseArm::from_body(
                 LoweredBlock {
-                    statements: vec![LoweredStatement::Break(
-                        self.current_loop_id()
-                            .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source),
-                    )],
+                    statements: vec![loop_break(self)],
                 },
                 false,
             ),
-        }));
+        )));
 
         let plan = self.build_source_loop(
             Vec::new(),
-            "for {\n".to_string(),
+            LoopHeader::Infinite,
             LoweredBlock {
                 statements: loop_body,
             },
@@ -508,22 +508,20 @@ impl Planner<'_> {
         };
         let bound = fuse.bind(self, slot);
         let none_condition = bound.none_condition(self);
-        let value = bound.value().map(str::to_string);
+        let value = bound.value();
 
         let mut loop_body = bound.statements;
         loop_body.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
-            condition: none_condition,
+            initializer: none_condition.initializer,
+            condition: none_condition.condition,
             then_body: LoweredBlock {
-                statements: vec![LoweredStatement::Break(
-                    self.current_loop_id()
-                        .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source),
-                )],
+                statements: vec![loop_break(self)],
             },
             else_arm: ElseArm::None,
         }));
         let (body_block, _) = self.lower_fused_arm(
-            &[ArmBinding::copy(binding, value.as_deref())],
+            &[ArmBinding::copy(binding, value.as_ref())],
             body,
             &PlacePlan::Statement,
         );
@@ -531,7 +529,7 @@ impl Planner<'_> {
 
         let plan = self.build_source_loop(
             Vec::new(),
-            "for {\n".to_string(),
+            LoopHeader::Infinite,
             LoweredBlock {
                 statements: loop_body,
             },
@@ -553,16 +551,32 @@ impl Planner<'_> {
                 let testkit = testkit_qualifier();
                 let prelude = prelude_qualifier();
                 self.scope.record_go_use(subject_var);
-                let (file, lo, hi) = (
-                    span.file_id,
-                    span.byte_offset,
-                    span.byte_offset + span.byte_length,
+                let literal = |text: String| GoExpression::literal(text);
+                let operand = GoExpression::composite(
+                    Some(format!("{testkit}.Operand")),
+                    vec![(
+                        Some("Value".to_string()),
+                        GoExpression::call(
+                            GoExpression::name(format!("{prelude}.Debug")),
+                            vec![GoExpression::name(subject_var.to_string())],
+                        ),
+                    )],
+                    CompositeLayout::Inline { padded: false },
+                    false,
                 );
-                let call = format!(
-                    "{handle}.FailAssert({file}, {lo}, {hi}, \"let_assert\", \"pattern did not match\", {testkit}.Operand{{Value: {prelude}.Debug({subject_var})}})\n"
+                let call = GoExpression::call(
+                    GoExpression::name(format!("{handle}.FailAssert")),
+                    vec![
+                        literal(span.file_id.to_string()),
+                        literal(span.byte_offset.to_string()),
+                        literal((span.byte_offset + span.byte_length).to_string()),
+                        literal("\"let_assert\"".to_string()),
+                        literal("\"pattern did not match\"".to_string()),
+                        operand,
+                    ],
                 );
                 LoweredBlock {
-                    statements: vec![LoweredStatement::RawGo(call)],
+                    statements: vec![expression_statement(call)],
                 }
             }
         }
@@ -584,16 +598,18 @@ impl Planner<'_> {
         self.require_packages(&info.packages);
 
         let mut statements = Vec::new();
-        let (effective_subject, assert_ok_var) =
+        let (effective_subject, assert_ok) =
             apply_refutable_root_assertion(self, &mut statements, &info, subject_var);
 
         if subject_is_fixed {
             info.checks.retain(|check| {
-                !self.is_condition_established(&check.render(SubjectRoot::Var(&effective_subject)))
+                !self.is_condition_established(
+                    check.render(SubjectRoot::Var(&effective_subject)).as_str(),
+                )
             });
         }
 
-        if info.checks.is_empty() && assert_ok_var.is_none() {
+        if info.checks.is_empty() && assert_ok.is_none() {
             tree_binding_statements(
                 self,
                 &mut statements,
@@ -604,29 +620,34 @@ impl Planner<'_> {
             return statements;
         }
 
-        let mut guard_parts: Vec<String> = Vec::new();
-        if let Some(ref ok) = assert_ok_var {
-            guard_parts.push(format!("!{}", ok));
+        let mut guard_parts: Vec<GoExpression> = Vec::new();
+        if let Some(ok) = assert_ok {
+            guard_parts.push(GoExpression::unary("!", ok));
         }
         if !info.checks.is_empty() {
             self.scope.record_go_use(effective_subject.as_ref());
             let negated = match info.checks.as_slice() {
                 [check] => check.render_negated(SubjectRoot::Var(&effective_subject)),
-                _ => format!(
-                    "!({})",
-                    render_condition(&info.checks, SubjectRoot::Var(&effective_subject))
+                _ => GoExpression::unary(
+                    "!",
+                    GoExpression::parenthesized(render_condition(
+                        &info.checks,
+                        SubjectRoot::Var(&effective_subject),
+                    )),
                 ),
             };
             guard_parts.push(wrap_if_struct_literal(negated));
         }
-        let guard = guard_parts.join(" || ");
+        let guard = guard_parts
+            .into_iter()
+            .reduce(|left, right| GoExpression::binary(left, "||", right))
+            .expect("a refutable pattern has a check or a type assertion");
         let fail_body = self.lower_refutable_fail(fail, subject_var);
-        statements.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
-            condition: guard,
-            then_body: fail_body,
-            else_arm: ElseArm::None,
-        }));
+        statements.push(LoweredStatement::If(IfPlan::plain(
+            guard,
+            fail_body,
+            ElseArm::None,
+        )));
 
         tree_binding_statements(
             self,
@@ -670,14 +691,14 @@ impl Planner<'_> {
             let RefutableAlternative {
                 info,
                 subject,
-                ok_var,
+                ok_test,
             } = alternative;
             let mut assigns = Vec::new();
             tree_assignment_statements(self, &mut assigns, &info.bindings, &subject);
             let body = LoweredBlock {
                 statements: assigns,
             };
-            if info.checks.is_empty() && ok_var.is_none() {
+            if info.checks.is_empty() && ok_test.is_none() {
                 if pieces.is_empty() {
                     statements.extend(body.statements);
                 } else {
@@ -688,7 +709,7 @@ impl Planner<'_> {
             if !info.checks.is_empty() {
                 self.scope.record_go_use(&subject);
             }
-            let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &subject);
+            let condition = compose_refutable_condition(ok_test.as_ref(), &info.checks, &subject);
             pieces.push((condition, body));
         }
         statements.push(assemble_if_else_chain(
@@ -708,12 +729,12 @@ impl Planner<'_> {
             .into_iter()
             .map(|info| {
                 self.require_packages(&info.packages);
-                let (subject, ok_var) =
+                let (subject, ok_test) =
                     apply_refutable_root_assertion(self, statements, &info, subject);
                 RefutableAlternative {
                     info,
                     subject,
-                    ok_var,
+                    ok_test,
                 }
             })
             .collect()
@@ -758,10 +779,9 @@ impl Planner<'_> {
             let RefutableAlternative {
                 info,
                 subject: effective,
-                ok_var,
+                ok_test,
             } = alternative;
-            let condition =
-                compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
+            let condition = compose_refutable_condition(ok_test.as_ref(), &info.checks, &effective);
 
             let branch = self.with_scope(|this| {
                 let mut branch = Vec::new();
@@ -782,10 +802,7 @@ impl Planner<'_> {
         }
 
         let terminal = LoweredBlock {
-            statements: vec![LoweredStatement::Break(
-                self.current_loop_id()
-                    .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source),
-            )],
+            statements: vec![loop_break(self)],
         };
         statements.push(assemble_if_else_chain(pieces, terminal));
     }
@@ -835,10 +852,10 @@ impl Planner<'_> {
         let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
         self.require_packages(&info.packages);
         let mut statements = Vec::new();
-        let (effective, ok_var) =
+        let (effective, ok_test) =
             apply_refutable_root_assertion(self, &mut statements, &info, subject_var);
 
-        if info.checks.is_empty() && ok_var.is_none() {
+        if info.checks.is_empty() && ok_test.is_none() {
             with_tree_bindings(
                 self,
                 &mut statements,
@@ -856,7 +873,7 @@ impl Planner<'_> {
         if !info.checks.is_empty() {
             self.scope.record_go_use(effective.as_ref());
         }
-        let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
+        let condition = compose_refutable_condition(ok_test.as_ref(), &info.checks, &effective);
         let mut then_body = Vec::new();
         with_tree_bindings(
             self,
@@ -873,14 +890,13 @@ impl Planner<'_> {
             Some(body) => ElseArm::from_body(body, false),
             None => ElseArm::None,
         };
-        statements.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
+        statements.push(LoweredStatement::If(IfPlan::plain(
             condition,
-            then_body: LoweredBlock {
+            LoweredBlock {
                 statements: then_body,
             },
             else_arm,
-        }));
+        )));
         statements
     }
 }
@@ -955,24 +971,14 @@ impl Planner<'_> {
 /// nested if/else-if statement, built from the back. `pieces` must be
 /// non-empty.
 fn assemble_if_else_chain(
-    mut pieces: Vec<(String, LoweredBlock)>,
+    mut pieces: Vec<(GoExpression, LoweredBlock)>,
     terminal: LoweredBlock,
 ) -> LoweredStatement {
     let mut else_arm = ElseArm::from_body(terminal, false);
     while pieces.len() > 1 {
         let (condition, then_body) = pieces.pop().expect("len > 1");
-        else_arm = ElseArm::ElseIf(Box::new(IfPlan {
-            condition_setup: Vec::new(),
-            condition,
-            then_body,
-            else_arm,
-        }));
+        else_arm = ElseArm::ElseIf(Box::new(IfPlan::plain(condition, then_body, else_arm)));
     }
     let (condition, then_body) = pieces.pop().expect("pieces is non-empty");
-    LoweredStatement::If(IfPlan {
-        condition_setup: Vec::new(),
-        condition,
-        then_body,
-        else_arm,
-    })
+    LoweredStatement::If(IfPlan::plain(condition, then_body, else_arm))
 }

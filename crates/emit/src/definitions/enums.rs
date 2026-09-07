@@ -2,6 +2,7 @@ use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD, EnumLayout};
 use crate::definitions::structs::{StringFormat, should_synthesize_stringer};
 use crate::names::go_name::{self, prelude_qualifier};
+use crate::plan::values::GoExpression;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{Attribute, Generic};
 use syntax::program::{Definition, DefinitionBody};
@@ -148,13 +149,24 @@ impl Planner<'_> {
                 .iter()
                 .zip(layout_variant.fields.iter())
                 .map(|(sem_field, layout_field)| {
-                    let mut lhs = format!("{receiver}.{}", layout_field.go_name);
-                    let mut rhs = format!("{other}.{}", layout_field.go_name);
-                    if layout_field.is_recursive() {
-                        lhs = format!("(*{lhs})");
-                        rhs = format!("(*{rhs})");
-                    }
-                    self.render_equality(&lhs, &rhs, &sem_field.ty, &sem_generics)
+                    let field = |base: &str| {
+                        let access = GoExpression::selector(
+                            GoExpression::name(base.to_string()),
+                            layout_field.go_name.clone(),
+                        );
+                        if layout_field.is_recursive() {
+                            GoExpression::parenthesized(GoExpression::dereference(access))
+                        } else {
+                            access
+                        }
+                    };
+                    self.equality_expression(
+                        field(&receiver),
+                        field(&other),
+                        &sem_field.ty,
+                        &sem_generics,
+                    )
+                    .rendered()
                 })
                 .collect();
             cases.push(format!(

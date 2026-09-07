@@ -1,14 +1,14 @@
 mod nullable;
 mod wrappers;
 
-pub(crate) use wrappers::{NilGuard, WrapperTarget};
+pub(crate) use wrappers::{NilGuard, WrapperTarget, is_nil, non_nil, unexpected_nil_error};
 
 use crate::Planner;
 use crate::abi::callable::{CallableAbi, CallableReturnAbi, OptionReturnAbi};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge, resolve_layout_bridge};
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::context::expression::ExpressionContext;
-use crate::plan::bodies::LoweredStatement;
+use crate::plan::bodies::{LoweredStatement, define_many};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
@@ -26,18 +26,15 @@ impl Planner<'_> {
             let call = self.lower_call(call_expression, None, ExpressionContext::value());
             return call.map_expression_as_observable_computed(|setup, call| {
                 let values = self.create_temp_vars("ret", bridges.len());
-                setup.push(LoweredStatement::RawGo(format!(
-                    "{} := {}\n",
-                    values.join(", "),
-                    call
-                )));
+                setup.push(define_many(values.clone(), call));
                 let values = values
                     .into_iter()
                     .zip(&bridges)
-                    .map(|(value, bridge)| self.plan_layout_bridge(setup, &value, bridge))
+                    .map(|(value, bridge)| {
+                        self.plan_layout_bridge(setup, GoExpression::name(value), bridge)
+                    })
                     .collect::<Vec<_>>();
-                let tuple = self.plan_tuple_from_vars(setup, &values, result_ty);
-                GoExpression::name(tuple)
+                self.plan_tuple_from_vars(setup, values)
             });
         }
 
@@ -55,18 +52,21 @@ impl Planner<'_> {
         call_plan.map_expression_as_observable_computed(|setup, call| {
             let (wrap, value) = if payload_bridge.is_some() {
                 let (wrap, outcome) = self.lower_abi_wrapping_with_payload_bridge(
-                    call.as_str(),
+                    call,
                     &abi.result,
                     result_ty,
                     payload_bridge.as_ref(),
                     WrapperTarget::FreshSlot,
                 );
-                (wrap, outcome.expect("wrapper produced no slot"))
+                (
+                    wrap,
+                    GoExpression::name(outcome.expect("wrapper produced no slot")),
+                )
             } else {
-                self.lower_abi_to_tagged(call.as_str(), &abi.result, result_ty)
+                self.lower_abi_to_tagged(call, &abi.result, result_ty)
             };
             setup.extend(wrap);
-            GoExpression::name(value)
+            value
         })
     }
 
@@ -127,17 +127,17 @@ impl Planner<'_> {
 
     pub(crate) fn lower_abi_wrapping(
         &mut self,
-        call_str: &str,
+        call: GoExpression,
         abi: &CallableReturnAbi,
         result_ty: &Type,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, Option<String>) {
-        self.lower_abi_wrapping_with_payload_bridge(call_str, abi, result_ty, None, target)
+        self.lower_abi_wrapping_with_payload_bridge(call, abi, result_ty, None, target)
     }
 
     pub(crate) fn lower_abi_wrapping_with_payload_bridge(
         &mut self,
-        call_str: &str,
+        call: GoExpression,
         abi: &CallableReturnAbi,
         result_ty: &Type,
         payload_bridge: Option<&LayoutBridge>,
@@ -152,28 +152,32 @@ impl Planner<'_> {
             }
             CallableReturnAbi::BareError => {
                 self.require_stdlib();
-                self.lower_bare_error_wrapping(call_str, result_ty, target)
+                self.lower_bare_error_wrapping(call, result_ty, target)
             }
             CallableReturnAbi::Result { payload } => {
                 self.require_stdlib();
-                self.lower_result_wrapping(call_str, result_ty, *payload, payload_bridge, target)
+                self.lower_result_wrapping(call, result_ty, *payload, payload_bridge, target)
             }
             CallableReturnAbi::Partial { payload } => {
                 self.require_stdlib();
-                self.lower_partial_wrapping(call_str, result_ty, *payload, payload_bridge, target)
+                self.lower_partial_wrapping(call, result_ty, *payload, payload_bridge, target)
             }
             CallableReturnAbi::Option(OptionReturnAbi::CommaOk { payload }) => {
-                self.lower_comma_ok_wrapping(call_str, result_ty, *payload, payload_bridge, target)
+                self.lower_comma_ok_wrapping(call, result_ty, *payload, payload_bridge, target)
             }
             CallableReturnAbi::Option(OptionReturnAbi::Nullable) => {
                 let mut statements = Vec::new();
-                let raw_var = self.hoist_tmp_value_statement(&mut statements, "raw", call_str);
-                let (wrap, outcome) = self.lower_nil_check_option_wrap(&raw_var, result_ty, target);
+                let raw_var = self.hoist_tmp_value_statement(&mut statements, "raw", call);
+                let (wrap, outcome) = self.lower_nil_check_option_wrap(
+                    GoExpression::name(raw_var),
+                    result_ty,
+                    target,
+                );
                 statements.extend(wrap);
                 (statements, outcome)
             }
             CallableReturnAbi::Option(OptionReturnAbi::Sentinel(value)) => {
-                self.lower_sentinel_wrapping(call_str, result_ty, *value, target)
+                self.lower_sentinel_wrapping(call, result_ty, *value, target)
             }
         }
     }
@@ -192,11 +196,11 @@ impl Planner<'_> {
             return None;
         }
         let payload_bridge = self.go_return_payload_bridge(abi, result_ty);
-        let (mut statements, call_str) = self
+        let (mut statements, call) = self
             .lower_call(expression, None, ExpressionContext::value())
             .into_parts();
         let (wrap, _) = self.lower_abi_wrapping_with_payload_bridge(
-            &call_str,
+            call,
             &abi.result,
             result_ty,
             payload_bridge.as_ref(),
@@ -222,7 +226,7 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         call_expression: &Expression,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         let plan = self.plan_call(call_expression)?;
         if plan.resolved.abi.result.is_passthrough() {
             match plan.resolved.origin {
@@ -234,12 +238,12 @@ impl Planner<'_> {
             }
         }
 
-        let (call_setup, call_str) = self
+        let (call_setup, call) = self
             .lower_call(call_expression, None, ExpressionContext::value())
             .into_parts();
         setup.extend(call_setup);
 
-        Some(call_str)
+        Some(call)
     }
 
     pub(crate) fn create_temp_vars(&mut self, hint: &str, count: usize) -> Vec<String> {
@@ -252,33 +256,23 @@ impl Planner<'_> {
             .collect()
     }
 
-    fn emit_tuple_from_vars(
-        &mut self,
-        output: &mut String,
-        vars: &[String],
-        tuple_ty: &Type,
-    ) -> String {
-        let constructor = build_tuple_literal(self, vars, tuple_ty);
-        self.hoist_tmp_value(output, "tup", &constructor)
-    }
-
-    /// Structured counterpart of `emit_tuple_from_vars`.
     pub(crate) fn plan_tuple_from_vars(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        vars: &[String],
-        tuple_ty: &Type,
-    ) -> String {
-        let constructor = build_tuple_literal(self, vars, tuple_ty);
-        self.hoist_tmp_value_statement(statements, "tup", &constructor)
+        values: Vec<GoExpression>,
+    ) -> GoExpression {
+        let constructor = build_tuple_literal(self, values);
+        GoExpression::name(self.hoist_tmp_value_statement(statements, "tup", constructor))
     }
 }
 
 pub(super) fn build_tuple_literal(
     planner: &mut Planner,
-    vars: &[String],
-    _tuple_ty: &Type,
-) -> String {
+    values: Vec<GoExpression>,
+) -> GoExpression {
     planner.require_stdlib();
-    format!("lisette.MakeTuple{}({})", vars.len(), vars.join(", "))
+    GoExpression::call(
+        GoExpression::name(format!("lisette.MakeTuple{}", values.len())),
+        values,
+    )
 }

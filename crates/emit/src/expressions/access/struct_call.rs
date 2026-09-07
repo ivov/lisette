@@ -9,10 +9,13 @@ use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::context::expression::ExpressionContext;
+use crate::control_flow::propagation::plain_return;
 use crate::definitions::enum_layout;
 use crate::go_name;
-use crate::plan::bodies::LoweredStatement;
-use crate::plan::go_expression::CompositeLayout;
+use crate::plan::bodies::{
+    LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, discard,
+};
+use crate::plan::go_expression::{CompositeLayout, FunctionLiteralLayout};
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::utils::is_order_sensitive;
 use syntax::program::AliasKind;
@@ -553,10 +556,36 @@ impl Planner<'_> {
             return GoExpression::empty_composite(format!("[{}]{}", len, elem_go));
         }
         let zero = self.lisette_zero(elem);
+        let array_type = format!("[{len}]{elem_go}");
+        let arr = || GoExpression::name("arr".to_string());
+        let index = || GoExpression::name("i".to_string());
         // Go has no syntax to repeat a value across all N slots, so fill each index.
-        GoExpression::opaque(format!(
-            "func() [{len}]{elem_go} {{ var arr [{len}]{elem_go}; for i := range arr {{ arr[i] = {zero} }}; return arr }}()"
-        ))
+        GoExpression::immediate_call(
+            array_type.clone(),
+            LoweredBlock {
+                statements: vec![
+                    LoweredStatement::VarDecl {
+                        name: "arr".to_string(),
+                        go_type: array_type,
+                        value: None,
+                    },
+                    LoweredStatement::Loop(LoopPlan {
+                        prologue: Vec::new(),
+                        kind: LoopKind::Generated { label: None },
+                        header: LoopHeader::Range {
+                            key: Some("i".to_string()),
+                            value: None,
+                            iterable: arr(),
+                        },
+                        body: LoweredBlock {
+                            statements: vec![assign(GoExpression::index(arr(), index()), zero)],
+                        },
+                    }),
+                    plain_return(arr()),
+                ],
+            },
+            FunctionLiteralLayout::MultiLine,
+        )
     }
 
     /// True when Go's zero for the element already matches Lisette's.
@@ -598,7 +627,7 @@ impl Planner<'_> {
         if !needs_pointer {
             return value;
         }
-        let temp = self.hoist_tmp_value_statement(statements, "ptr", value.as_str());
+        let temp = self.hoist_tmp_value_statement(statements, "ptr", value);
         GoExpression::address_of(GoExpression::name(temp))
     }
 
@@ -759,12 +788,13 @@ impl Planner<'_> {
         fields
             .into_iter()
             .map(|field| {
-                if field.has_observable_evaluation {
-                    let temp =
-                        self.hoist_tmp_value_statement(statements, "field", field.value.as_str());
-                    (field.name, GoExpression::name(temp))
+                let has_observable_evaluation = field.has_observable_evaluation;
+                let (name, value) = field.into_pair();
+                if has_observable_evaluation {
+                    let temp = self.hoist_tmp_value_statement(statements, "field", value);
+                    (name, GoExpression::name(temp))
                 } else {
-                    field.into_pair()
+                    (name, value)
                 }
             })
             .collect()
@@ -781,13 +811,13 @@ impl Planner<'_> {
         }
 
         let (mut statements, base_value) = base_staged.into_parts();
-        let tmp = self.hoist_tmp_value_statement(&mut statements, "copy", &base_value);
+        let tmp = self.hoist_tmp_value_statement(&mut statements, "copy", base_value);
 
         for (name, value) in fields {
-            statements.push(LoweredStatement::RawGo(format!(
-                "{}.{} = {}\n",
-                tmp, name, value
-            )));
+            statements.push(assign(
+                GoExpression::selector(GoExpression::name(tmp.clone()), name.clone()),
+                value.clone(),
+            ));
         }
 
         (statements, GoExpression::name(tmp))
@@ -818,7 +848,7 @@ impl Planner<'_> {
         } = base_staged;
 
         if carried.is_empty() {
-            statements.push(LoweredStatement::RawGo(format!("_ = {}\n", base_value)));
+            statements.push(discard(base_value));
             return (
                 statements,
                 emit_struct_literal(
@@ -834,7 +864,7 @@ impl Planner<'_> {
             GoExpression::name(self.hoist_tmp_value_statement(
                 &mut statements,
                 "spread",
-                base_value.as_str(),
+                base_value,
             ))
         } else {
             base_value

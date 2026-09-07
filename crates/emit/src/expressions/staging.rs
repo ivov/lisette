@@ -3,7 +3,7 @@ use crate::abi::is_tagged_shape_fn_value;
 use crate::abi::transition::lower_arg_to_tagged;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
-use crate::plan::bodies::LoweredStatement;
+use crate::plan::bodies::{LoweredStatement, define};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::values::{
@@ -77,15 +77,15 @@ impl Planner<'_> {
 
         let staged = self.plan_operand(expression, ExpressionContext::value());
         let (mut setup, value) = staged.into_parts();
-        let temp_var = self.hoist_tmp_value_statement(&mut setup, prefix, &value);
+        let temp_var = self.hoist_tmp_value_statement(&mut setup, prefix, value);
         ValuePlan::captured(setup, temp_var)
     }
 
     /// Pin a staged operand's value into a temp so it evaluates before any
     /// later sibling.
     pub(crate) fn pin_staged(&mut self, staged: &mut ValuePlan, prefix: &str) {
-        let tmp =
-            self.hoist_tmp_value_statement(&mut staged.setup, prefix, staged.expression.as_str());
+        let value = mem::replace(&mut staged.expression, GoExpression::empty());
+        let tmp = self.hoist_tmp_value_statement(&mut staged.setup, prefix, value);
         staged.replace_with_pinned_name(tmp);
     }
 
@@ -114,15 +114,15 @@ impl Planner<'_> {
         expression: &Expression,
         prefix: &str,
         boundary: CaptureBoundary,
-    ) -> String {
+    ) -> GoExpression {
         let plan = self.lower_composite_value(expression, ExpressionContext::value());
         let requires_capture = boundary.requires_value_capture(plan.evaluation.stability);
-        let (value_setup, expression_string) = plan.into_parts();
+        let (value_setup, value) = plan.into_parts();
         setup.extend(value_setup);
         if requires_capture {
-            self.hoist_tmp_value_statement(setup, prefix, &expression_string)
+            GoExpression::name(self.hoist_tmp_value_statement(setup, prefix, value))
         } else {
-            expression_string
+            value
         }
     }
 
@@ -251,12 +251,12 @@ impl Planner<'_> {
                 .is_some()
         {
             return staged.map_expression_as_computed(|setup, value| {
-                let tagged = self.emit_lower_arg_to_tagged(
+                self.emit_lower_arg_to_tagged(
                     setup,
-                    value.as_str(),
+                    value,
                     param_ty.expect("detected lowering requires a parameter type"),
-                );
-                GoExpression::opaque_with_deferred_evaluation(tagged, true)
+                )
+                .with_deferred_evaluation(true)
             });
         }
 
@@ -290,16 +290,11 @@ impl Planner<'_> {
     pub(crate) fn emit_lower_arg_to_tagged(
         &mut self,
         setup: &mut Vec<LoweredStatement>,
-        value: &str,
+        value: GoExpression,
         param_ty: &Type,
-    ) -> String {
+    ) -> GoExpression {
         let cb_var = self.hoist_tmp_value_statement(setup, "cb", value);
-        let mut buffer = String::new();
-        let tagged = lower_arg_to_tagged(self, &mut buffer, &cb_var, param_ty);
-        if !buffer.is_empty() {
-            setup.push(LoweredStatement::RawGo(buffer));
-        }
-        tagged
+        lower_arg_to_tagged(self, setup, GoExpression::name(cb_var), param_ty)
     }
 
     pub(crate) fn stage_native_method_args_from(
@@ -418,10 +413,7 @@ impl Planner<'_> {
             if pins[i] || (eager && s_non_literal) {
                 let tmp = self.fresh_var(Some(prefix));
                 self.declare(&tmp);
-                setup.push(LoweredStatement::TempBind {
-                    name: tmp.clone(),
-                    value: s_expression.rendered(),
-                });
+                setup.push(define(tmp.clone(), s_expression));
                 results.push(GoExpression::name(tmp));
             } else {
                 results.push(s_expression);

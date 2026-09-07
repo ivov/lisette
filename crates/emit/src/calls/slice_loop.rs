@@ -5,9 +5,11 @@ use super::native::NativeCallResult;
 use super::{NativeCallContext, NativeMethodCall};
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
+use crate::control_flow::fallible::generic_call;
 use crate::names::go_name;
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, PlacePlan,
+    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
+    PlacePlan, assign, define,
 };
 use crate::plan::calls::CallableOrigin;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression};
@@ -133,6 +135,10 @@ struct SliceLoopShape<'a> {
     element_ty: Type,
 }
 
+fn name(text: &str) -> GoExpression {
+    GoExpression::name(text.to_string())
+}
+
 impl Planner<'_> {
     /// The parts of a `map`, `filter`, `fold`, or `find` call that inline as a loop.
     fn slice_loop_shape<'a>(
@@ -256,7 +262,8 @@ impl Planner<'_> {
         }
         let sequenced = self.sequence_values(stages, ctx.capture_boundary, "arg");
         let effect = sequenced.effect;
-        let (mut setup, values) = sequenced.into_rendered();
+        let mut setup = sequenced.setup;
+        let values = sequenced.values;
         let source = values[0].clone();
 
         let result = match (found, ctx.result_name) {
@@ -274,10 +281,10 @@ impl Planner<'_> {
                         value: None,
                     });
                 }
-                setup.push(LoweredStatement::TempBind {
-                    name: sink.flag.to_string(),
-                    value: "false".to_string(),
-                });
+                setup.push(define(
+                    sink.flag.to_string(),
+                    GoExpression::literal("false".to_string()),
+                ));
             }
             None => {
                 self.declare(&result);
@@ -316,16 +323,14 @@ impl Planner<'_> {
         });
 
         // Go rejects a range variable nothing reads.
-        let header = match (&index, element_name.as_str()) {
-            (Some(index), "_") => index.clone(),
-            (Some(index), element) => format!("{}, {}", index, element),
-            (None, "_") => String::new(),
-            (None, element) => format!("_, {}", element),
-        };
-        let header = if header.is_empty() {
-            format!("for range {} {{\n", source)
-        } else {
-            format!("for {} := range {} {{\n", header, source)
+        let header = LoopHeader::Range {
+            key: match (&index, element_name.as_str()) {
+                (Some(index), _) => Some(index.clone()),
+                (None, "_") => None,
+                (None, _) => Some("_".to_string()),
+            },
+            value: (element_name != "_").then_some(element_name),
+            iterable: source,
         };
         setup.push(LoweredStatement::Loop(LoopPlan {
             prologue: Vec::new(),
@@ -390,33 +395,43 @@ impl Planner<'_> {
         kind: SliceLoop,
         result: &str,
         result_ty: &Type,
-        source: &str,
-        init: Option<&String>,
+        source: &GoExpression,
+        init: Option<&GoExpression>,
     ) -> LoweredStatement {
         match kind {
             SliceLoop::Map => {
                 let element = self.first_type_argument_go_string(result_ty);
-                LoweredStatement::TempBind {
-                    name: result.to_string(),
-                    value: format!("make([]{}, len({}))", element, source),
-                }
+                define(
+                    result.to_string(),
+                    GoExpression::call(
+                        name("make"),
+                        vec![
+                            GoExpression::type_name(format!("[]{}", element)),
+                            GoExpression::call(name("len"), vec![source.clone()]),
+                        ],
+                    ),
+                )
             }
-            SliceLoop::Filter => LoweredStatement::RawGo(format!(
-                "var {} []{}\n",
-                result,
-                self.first_type_argument_go_string(result_ty)
-            )),
-            SliceLoop::Fold => LoweredStatement::TempBind {
+            SliceLoop::Filter => LoweredStatement::VarDecl {
                 name: result.to_string(),
-                value: init.expect("fold stages its initial value").clone(),
+                go_type: format!("[]{}", self.first_type_argument_go_string(result_ty)),
+                value: None,
             },
+            SliceLoop::Fold => define(
+                result.to_string(),
+                init.expect("fold stages its initial value").clone(),
+            ),
             SliceLoop::Find => {
                 self.require_stdlib();
                 let payload = self.first_type_argument_go_string(result_ty);
-                LoweredStatement::TempBind {
-                    name: result.to_string(),
-                    value: format!("{}.MakeOptionNone[{}]()", go_name::GO_STDLIB_PKG, payload),
-                }
+                define(
+                    result.to_string(),
+                    generic_call(
+                        &format!("{}.MakeOptionNone", go_name::GO_STDLIB_PKG),
+                        format!("[{}]", payload),
+                        Vec::new(),
+                    ),
+                )
             }
         }
     }
@@ -437,11 +452,11 @@ impl Planner<'_> {
         if let SliceLoop::Map | SliceLoop::Fold = kind {
             let (slot, target_ty) = match kind {
                 SliceLoop::Map => (
-                    format!("{}[{}]", result, index.expect("map binds a loop index")),
+                    GoExpression::index(name(result), name(index.expect("map binds a loop index"))),
                     self.first_type_argument(result_ty)
                         .expect("map returns a slice carrying its element type"),
                 ),
-                _ => (result.to_string(), result_ty.clone()),
+                _ => (name(result), result_ty.clone()),
             };
             let place = PlacePlan::Assign {
                 local: &slot,
@@ -454,45 +469,46 @@ impl Planner<'_> {
         let (mut statements, condition) = plan.into_parts();
         let then_body = match kind {
             SliceLoop::Filter => LoweredBlock {
-                statements: vec![LoweredStatement::RawGo(format!(
-                    "{} = append({}, {})\n",
-                    result, result, element_name
-                ))],
+                statements: vec![assign(
+                    name(result),
+                    GoExpression::call(name("append"), vec![name(result), name(element_name)]),
+                )],
             },
             SliceLoop::Find => {
                 let mut statements = Vec::new();
                 match found {
                     Some(sink) => {
                         if let Some(value) = sink.value {
-                            statements.push(LoweredStatement::RawGo(format!(
-                                "{value} = {element_name}\n"
-                            )));
+                            statements.push(assign(name(value), name(element_name)));
                         }
-                        statements.push(LoweredStatement::RawGo(format!("{} = true\n", sink.flag)));
+                        statements.push(assign(
+                            name(sink.flag),
+                            GoExpression::literal("true".to_string()),
+                        ));
                     }
                     None => {
                         self.require_stdlib();
                         let payload = self.use_go_type(element_ty);
-                        statements.push(LoweredStatement::RawGo(format!(
-                            "{} = {}.MakeOptionSome[{}]({})\n",
-                            result,
-                            go_name::GO_STDLIB_PKG,
-                            payload,
-                            element_name
-                        )));
+                        statements.push(assign(
+                            name(result),
+                            generic_call(
+                                &format!("{}.MakeOptionSome", go_name::GO_STDLIB_PKG),
+                                format!("[{}]", payload),
+                                vec![name(element_name)],
+                            ),
+                        ));
                     }
                 }
-                statements.push(LoweredStatement::RawGo("break\n".to_string()));
+                statements.push(LoweredStatement::Break(LoopTransfer::Unlabeled));
                 LoweredBlock { statements }
             }
             SliceLoop::Map | SliceLoop::Fold => unreachable!("assign-place kinds returned above"),
         };
-        statements.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
+        statements.push(LoweredStatement::If(IfPlan::plain(
             condition,
             then_body,
-            else_arm: ElseArm::None,
-        }));
+            ElseArm::None,
+        )));
         statements
     }
 

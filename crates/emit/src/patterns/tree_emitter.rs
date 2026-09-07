@@ -9,18 +9,20 @@ use crate::patterns::binding_emit::tree_binding_statements;
 use crate::patterns::decision_tree::{
     ChainTest, Decision, PatternBinding, SubjectRoot, SwitchBranch,
     SwitchKind as PatternSwitchKind, SwitchShape, compile_expanded_arms, decision_is_exhaustive,
-    expand_or_patterns, render_condition, tree_has_unguarded_terminal,
+    expand_or_patterns, label_expression, render_condition, tree_has_unguarded_terminal,
 };
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
-    SwitchCasePlan, SwitchKind, SwitchStatementPlan,
+    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
+    PlacePlan, SwitchCasePlan, SwitchKind, SwitchStatementPlan,
 };
 use crate::plan::placement::unreachable_panic_if_needed;
+use crate::plan::values::GoExpression;
 use crate::state::bindings::InlineExpr;
+use crate::types::go_type::split_top_level_type_list;
 use crate::utils::wrap_if_struct_literal;
 
 struct FlatCase<'d> {
-    conditions: Vec<String>,
+    conditions: Vec<GoExpression>,
     bindings: &'d [PatternBinding],
     decision: &'d Decision,
 }
@@ -81,11 +83,18 @@ fn guard_renders_inline(guard: &Expression) -> bool {
     }
 }
 
+fn join_and(conditions: Vec<GoExpression>) -> GoExpression {
+    conditions
+        .into_iter()
+        .reduce(|left, right| GoExpression::binary(left, "&&", right))
+        .expect("join_and requires at least one condition")
+}
+
 #[derive(Clone, Copy)]
 struct ChainGroup<'a> {
     indices: &'a [usize],
     tests: &'a [ChainTest],
-    conditions: &'a [Option<String>],
+    conditions: &'a [Option<GoExpression>],
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -351,7 +360,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             if condition.is_some() {
                 self.record_subject_use();
             }
-            let condition = condition.as_deref().unwrap_or("true").to_string();
+            let condition = condition
+                .clone()
+                .unwrap_or_else(|| GoExpression::literal("true".to_string()));
             let walk_ctx = if matches!(test.decision, Decision::Guard { .. }) {
                 &guard_ctx
             } else {
@@ -438,7 +449,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         statements.push(LoweredStatement::Loop(LoopPlan {
             prologue: Vec::new(),
             kind: LoopKind::Generated { label: Some(label) },
-            header: "for {\n".to_string(),
+            header: LoopHeader::Infinite,
             body: LoweredBlock { statements: body },
         }));
     }
@@ -502,7 +513,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let cases = collected
             .into_iter()
             .map(|case| SwitchCasePlan {
-                labels: case.conditions.join(" && "),
+                labels: vec![join_and(case.conditions.clone())],
                 body: self.lower_flat_case_body(&case, place),
             })
             .collect::<Vec<_>>();
@@ -530,7 +541,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn collect_flat_cases<'d>(
         &mut self,
         decision: &'d Decision,
-        conditions: &mut Vec<String>,
+        conditions: &mut Vec<GoExpression>,
         out: &mut Vec<FlatCase<'d>>,
         tail: bool,
     ) -> bool {
@@ -594,7 +605,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 branches,
                 fallback,
             } => {
-                let rendered_path = path.render(self.subject.root()).rendered();
+                let rendered_path = path.render(self.subject.root());
                 let (cased, lifted) = split_with_default_lift(branches, fallback.as_deref());
                 for branch in cased {
                     self.record_subject_use();
@@ -623,7 +634,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         &mut self,
         arm_index: usize,
         bindings: &[PatternBinding],
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         let lowered = self.with_binding_frame(|this| {
             this.install_path_overlays(bindings);
             this.lower_guard_condition(arm_index)
@@ -637,7 +648,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             .as_deref()
             .expect("a Guard decision has a guard expression");
         Some(if binds_looser_than_conjunction(guard) {
-            format!("({condition})")
+            GoExpression::parenthesized(condition)
         } else {
             condition
         })
@@ -739,7 +750,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             unreachable!("walk_switch requires a Switch decision");
         };
         let fallback = fallback.as_deref();
-        let rendered_path = path.render(self.subject.root()).rendered();
+        let rendered_path = path.render(self.subject.root());
         match shape {
             SwitchShape::TypeSwitch => {
                 self.record_subject_use();
@@ -766,10 +777,10 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 );
             }
             SwitchShape::Binary => {
-                let condition = format!(
-                    "{} == {}",
-                    render_switch_expression(&rendered_path, kind),
-                    branches[0].case_label
+                let condition = GoExpression::binary(
+                    render_switch_expression(rendered_path, kind),
+                    "==",
+                    label_expression(&branches[0].case_label),
                 );
                 self.walk_condition_branch(
                     statements,
@@ -789,16 +800,16 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     apply_leaf_terminator(statements, ctx, body_diverges);
                     return;
                 };
-                let condition = format!(
-                    "{} == {}",
-                    render_switch_expression(&rendered_path, kind),
-                    branch.case_label
+                let condition = GoExpression::binary(
+                    render_switch_expression(rendered_path, kind),
+                    "==",
+                    label_expression(&branch.case_label),
                 );
                 self.walk_condition_branch(statements, condition, &branch.decision, fallback, ctx);
             }
             SwitchShape::Multi => {
                 self.record_subject_use();
-                let expr = render_switch_expression(&rendered_path, kind);
+                let expr = render_switch_expression(rendered_path, kind);
                 let plan = self.lower_value_switch(expr, branches, fallback, ctx.arm_place);
                 let body_diverges =
                     capture_diverge(vec![LoweredStatement::Switch(plan)], statements);
@@ -810,7 +821,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn walk_condition_branch(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        condition: String,
+        condition: GoExpression,
         then_branch: &Decision,
         else_branch: &Decision,
         ctx: &WalkCtx,
@@ -818,7 +829,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         self.record_subject_use();
         let inner = WalkCtx::switch_case(ctx.arm_place);
         let then_statements = self.with_scope(|this| {
-            this.planner.scope.establish_condition(condition.clone());
+            this.planner.scope.establish_condition(condition.rendered());
             let mut then_statements: Vec<LoweredStatement> = Vec::new();
             this.walk(&mut then_statements, then_branch, &inner);
             then_statements
@@ -828,12 +839,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         };
         let then_diverges = then_body.ends_with_diverge();
         let else_arm = self.lower_else_or_flat(else_branch, &inner, then_diverges);
-        let plan = IfPlan {
-            condition_setup: Vec::new(),
-            condition,
-            then_body,
-            else_arm,
-        };
+        let plan = IfPlan::plain(condition, then_body, else_arm);
         let body_diverges = capture_diverge(vec![LoweredStatement::If(plan)], statements);
         apply_leaf_terminator(statements, ctx, body_diverges);
     }
@@ -892,6 +898,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 };
                 guard_statements.push(LoweredStatement::If(IfPlan {
                     condition_setup,
+                    initializer: None,
                     condition,
                     then_body,
                     else_arm,
@@ -949,16 +956,16 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
 
     fn lower_value_switch(
         &mut self,
-        expr: String,
+        subject: GoExpression,
         branches: &[SwitchBranch],
         fallback: Option<&Decision>,
         place: &PlacePlan,
     ) -> SwitchStatementPlan {
         let (regular, default) = split_with_default_lift(branches, fallback);
-        let case_plans = self.lower_switch_cases(regular, place, Some(&expr));
+        let case_plans = self.lower_switch_cases(regular, place, Some(&subject));
         let default_block = self.lower_switch_default(default, place);
         SwitchStatementPlan {
-            kind: SwitchKind::Value { subject: expr },
+            kind: SwitchKind::Value { subject },
             cases: case_plans,
             default: default_block,
             postlude: switch_postlude(place, default.is_some()),
@@ -967,7 +974,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
 
     fn lower_type_switch(
         &mut self,
-        base: String,
+        subject: GoExpression,
         branches: &[SwitchBranch],
         fallback: Option<&Decision>,
         place: &PlacePlan,
@@ -975,6 +982,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let (regular, default) = split_with_default_lift(branches, fallback);
         let arms = self.arms;
         let subject_ty = self.subject_ty.clone();
+        let base = subject.rendered();
         let ((case_plans, default_block), used) = self.planner.capture_go_uses(|planner| {
             let mut nested =
                 TreePlanner::new(planner, arms, MatchSubject::Var(base.clone()), subject_ty);
@@ -989,10 +997,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let binding = references_base.then(|| base.clone());
 
         SwitchStatementPlan {
-            kind: SwitchKind::Type {
-                subject: base,
-                binding,
-            },
+            kind: SwitchKind::Type { subject, binding },
             cases: case_plans,
             default: default_block,
             postlude: switch_postlude(place, default.is_some()),
@@ -1003,7 +1008,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         &mut self,
         branches: &[SwitchBranch],
         place: &PlacePlan,
-        subject: Option<&str>,
+        subject: Option<&GoExpression>,
     ) -> Vec<SwitchCasePlan> {
         let ctx = WalkCtx::switch_case(place);
         let mut case_plans = Vec::with_capacity(branches.len());
@@ -1020,8 +1025,15 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 this.walk(&mut body, &branch.decision, &ctx);
                 body
             });
+            let labels = match subject {
+                Some(_) => vec![label_expression(&branch.case_label)],
+                None => split_top_level_type_list(&branch.case_label)
+                    .into_iter()
+                    .map(|go_type| GoExpression::type_name(go_type.to_string()))
+                    .collect(),
+            };
             case_plans.push(SwitchCasePlan {
-                labels: branch.case_label.clone(),
+                labels,
                 body: LoweredBlock { statements: body },
             });
         }
@@ -1107,12 +1119,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             self.record_subject_use();
         }
         match first_condition {
-            Some(condition) => statements.push(LoweredStatement::If(IfPlan {
-                condition_setup: Vec::new(),
-                condition: condition.clone(),
-                then_body: body,
-                else_arm: ElseArm::None,
-            })),
+            Some(condition) => statements.push(LoweredStatement::If(IfPlan::plain(
+                condition.clone(),
+                body,
+                ElseArm::None,
+            ))),
             None => statements.push(LoweredStatement::Block(body)),
         }
     }
@@ -1201,6 +1212,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                         });
                         statements.push(LoweredStatement::If(IfPlan {
                             condition_setup,
+                            initializer: None,
                             condition,
                             then_body: LoweredBlock {
                                 statements: then_body,
@@ -1277,7 +1289,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn lower_guard_condition(
         &mut self,
         arm_index: usize,
-    ) -> Option<(Vec<LoweredStatement>, String)> {
+    ) -> Option<(Vec<LoweredStatement>, GoExpression)> {
         let guard_expression = self.arms[arm_index].guard.as_deref()?;
         let plan = self
             .planner
@@ -1286,7 +1298,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         Some((setup, wrap_if_struct_literal(value)))
     }
 
-    fn render_chain_conditions(&self, tests: &[ChainTest]) -> Vec<Option<String>> {
+    fn render_chain_conditions(&self, tests: &[ChainTest]) -> Vec<Option<GoExpression>> {
         tests
             .iter()
             .map(|test| {
@@ -1327,25 +1339,27 @@ fn split_with_default_lift<'t>(
 }
 
 fn switch_branch_condition(
-    rendered_path: &str,
+    rendered_path: &GoExpression,
     kind: &PatternSwitchKind,
     shape: &SwitchShape,
     case_label: &str,
-) -> String {
+) -> GoExpression {
     if matches!(shape, SwitchShape::Bool) && case_label == "true" {
-        return wrap_if_struct_literal(rendered_path.to_string());
+        return wrap_if_struct_literal(rendered_path.clone());
     }
-    format!(
-        "{} == {}",
-        render_switch_expression(rendered_path, kind),
-        case_label
+    GoExpression::binary(
+        render_switch_expression(rendered_path.clone(), kind),
+        "==",
+        label_expression(case_label),
     )
 }
 
-fn render_switch_expression(rendered_path: &str, kind: &PatternSwitchKind) -> String {
+fn render_switch_expression(rendered_path: GoExpression, kind: &PatternSwitchKind) -> GoExpression {
     match kind {
-        PatternSwitchKind::EnumTag => wrap_if_struct_literal(format!("{}.Tag", rendered_path)),
-        PatternSwitchKind::Value => wrap_if_struct_literal(rendered_path.to_string()),
+        PatternSwitchKind::EnumTag => {
+            wrap_if_struct_literal(GoExpression::selector(rendered_path, "Tag".to_string()))
+        }
+        PatternSwitchKind::Value => wrap_if_struct_literal(rendered_path),
         PatternSwitchKind::TypeSwitch => unreachable!("TypeSwitch handled separately"),
     }
 }
@@ -1392,10 +1406,10 @@ fn bindings_are_hoistable(tests: &[ChainTest], indices: &[usize]) -> bool {
     })
 }
 
-fn group_chain_tests_by_condition(conditions: &[Option<String>]) -> Vec<(&str, Vec<usize>)> {
+fn group_chain_tests_by_condition(conditions: &[Option<GoExpression>]) -> Vec<(&str, Vec<usize>)> {
     let mut groups: Vec<(&str, Vec<usize>)> = Vec::new();
     for (i, condition) in conditions.iter().enumerate() {
-        let key = condition.as_deref().unwrap_or("");
+        let key = condition.as_ref().map_or("", GoExpression::as_str);
         if let Some((last_key, indices)) = groups.last_mut()
             && *last_key == key
         {
@@ -1409,7 +1423,7 @@ fn group_chain_tests_by_condition(conditions: &[Option<String>]) -> Vec<(&str, V
 
 /// One non-catchall branch of a pattern chain: its condition and lowered body.
 struct ChainBranch {
-    condition: String,
+    condition: GoExpression,
     body: LoweredBlock,
 }
 
@@ -1420,23 +1434,17 @@ fn build_chain_plan(branches: Vec<ChainBranch>, trailing: ElseArm) -> IfPlan {
     let head = branches.remove(0);
     let mut else_arm = trailing;
     for branch in branches.into_iter().rev() {
-        else_arm = ElseArm::ElseIf(Box::new(IfPlan {
-            condition_setup: Vec::new(),
-            condition: branch.condition,
-            then_body: branch.body,
+        else_arm = ElseArm::ElseIf(Box::new(IfPlan::plain(
+            branch.condition,
+            branch.body,
             else_arm,
-        }));
+        )));
     }
-    IfPlan {
-        condition_setup: Vec::new(),
-        condition: head.condition,
-        then_body: head.body,
-        else_arm,
-    }
+    IfPlan::plain(head.condition, head.body, else_arm)
 }
 
 /// Build the post-switch unreachable panic (when the place requires a tail
-/// return and the switch is non-exhaustive), as a `RawGo` postlude.
+/// return and the switch is non-exhaustive) as the switch postlude.
 fn switch_postlude(place: &PlacePlan, has_default: bool) -> Vec<LoweredStatement> {
     unreachable_panic_if_needed(place, has_default)
         .into_iter()

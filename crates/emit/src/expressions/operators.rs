@@ -1,10 +1,11 @@
 use crate::Planner;
-use crate::Renderer;
 use crate::analyze::facts::EmitFacts;
 use crate::calls::predicates::strip_negations;
 use crate::context::expression::ExpressionContext;
+use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
-use crate::plan::bodies::LoweredStatement;
+use crate::plan::bodies::{LoweredBlock, LoweredStatement};
+use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::values::{
     CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
 };
@@ -152,14 +153,14 @@ impl Planner<'_> {
         let right_value = if right_staged.setup.is_empty() {
             right_staged.expression
         } else {
-            GoExpression::opaque_with_deferred_evaluation(
-                format!(
-                    "func() bool {{\n{}return {}\n}}()",
-                    Renderer.render_setup(&right_staged.setup),
-                    right_staged.expression
-                ),
-                true,
+            let mut statements = right_staged.setup;
+            statements.push(plain_return(right_staged.expression));
+            GoExpression::immediate_call(
+                "bool".to_string(),
+                LoweredBlock { statements },
+                FunctionLiteralLayout::MultiLine,
             )
+            .with_deferred_evaluation(true)
         };
 
         ValuePlan::computed(

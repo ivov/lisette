@@ -148,17 +148,13 @@ impl Planner<'_> {
         {
             let base_expr = expression.deref_inner().unwrap_or(expression);
             if is_order_sensitive(base_expr) {
-                base = GoExpression::name(self.hoist_tmp_value_statement(
-                    &mut setup,
-                    "base",
-                    &base.rendered(),
-                ));
+                base = GoExpression::name(self.hoist_tmp_value_statement(&mut setup, "base", base));
             }
             let Some(end_expression) = end_value else {
                 let length = GoExpression::name(self.hoist_tmp_value_statement(
                     &mut setup,
                     "len",
-                    &format!("len({})", base.rendered()),
+                    GoExpression::call(GoExpression::name("len".to_string()), vec![base.clone()]),
                 ));
                 return ValuePlan::computed(
                     setup,
@@ -171,14 +167,14 @@ impl Planner<'_> {
                     GoExpression::name(self.hoist_tmp_value_statement(
                         &mut setup,
                         "start",
-                        &start_expression.rendered(),
+                        start_expression,
                     ))
                 });
             }
             let end_variable = GoExpression::name(self.hoist_tmp_value_statement(
                 &mut setup,
                 "end",
-                &end_expression.rendered(),
+                end_expression,
             ));
             return ValuePlan::computed(
                 setup,

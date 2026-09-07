@@ -1,14 +1,21 @@
 use crate::Planner;
-use crate::Renderer;
 use crate::context::expression::ExpressionContext;
 use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
-use crate::plan::bodies::{LoweredBlock, LoweredStatement, directed};
-use crate::plan::values::CaptureBoundary;
+use crate::plan::bodies::{LoopHeader, LoweredBlock, LoweredStatement, define, directed, discard};
+use crate::plan::values::{CaptureBoundary, GoExpression};
 use crate::types::native::NativeGoType;
 use crate::types::shape::RangeShape;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::types::Type;
+
+fn range_header(key: &str, value: Option<&str>, iterable: GoExpression) -> LoopHeader {
+    LoopHeader::Range {
+        key: (key != "_").then(|| key.to_string()),
+        value: value.filter(|value| *value != "_").map(str::to_string),
+        iterable,
+    }
+}
 
 impl Planner<'_> {
     /// Lower a `for` statement, dispatching on iterable/pattern shape.
@@ -64,12 +71,12 @@ impl Planner<'_> {
     }
 
     /// Plan `expr` as an operand, pushing its setup into `prologue` and
-    /// returning the value text.
+    /// returning the value.
     pub(crate) fn capture_operand_into(
         &mut self,
         prologue: &mut Vec<LoweredStatement>,
         expr: &Expression,
-    ) -> String {
+    ) -> GoExpression {
         let plan = self.plan_operand(expr, ExpressionContext::value());
         let (setup, value) = plan.into_parts();
         prologue.extend(setup);
@@ -83,7 +90,7 @@ impl Planner<'_> {
         iterable: &Expression,
         range_shape: RangeShape,
         body: &Expression,
-    ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
+    ) -> (Vec<LoweredStatement>, LoopHeader, LoweredBlock) {
         self.with_scope(|this| {
             let mut prologue = Vec::new();
             let range_var = if this.is_unmutated_identifier(iterable) {
@@ -97,22 +104,22 @@ impl Planner<'_> {
                 )
             };
             let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
-            let header = match range_shape {
-                RangeShape::Range => format!(
-                    "for {} := {}.Start; {} < {}.End; {}++ {{\n",
-                    loop_var, range_var, loop_var, range_var, loop_var
-                ),
-                RangeShape::RangeInclusive => format!(
-                    "for {} := {}.Start; {} <= {}.End; {}++ {{\n",
-                    loop_var, range_var, loop_var, range_var, loop_var
-                ),
-                RangeShape::RangeFrom => format!(
-                    "for {} := {}.Start; ; {}++ {{\n",
-                    loop_var, range_var, loop_var
-                ),
+            let bound = |field: &str| GoExpression::selector(range_var.clone(), field.to_string());
+            let compare = |operator: &str| {
+                GoExpression::binary(GoExpression::name(loop_var.clone()), operator, bound("End"))
+            };
+            let condition = match range_shape {
+                RangeShape::Range => Some(compare("<")),
+                RangeShape::RangeInclusive => Some(compare("<=")),
+                RangeShape::RangeFrom => None,
                 RangeShape::RangeTo | RangeShape::RangeToInclusive => {
                     unreachable!("RangeTo/RangeToInclusive are not iterable")
                 }
+            };
+            let header = LoopHeader::Counted {
+                variable: loop_var,
+                start: bound("Start"),
+                condition,
             };
             let lowered_body = this.lower_block_as_body(body);
             (prologue, header, lowered_body)
@@ -125,16 +132,12 @@ impl Planner<'_> {
         binding: &Binding,
         receiver: &Expression,
         body: &Expression,
-    ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
+    ) -> (Vec<LoweredStatement>, LoopHeader, LoweredBlock) {
         self.with_scope(|this| {
             let mut prologue = Vec::new();
-            let receiver_str = this.capture_operand_into(&mut prologue, receiver);
+            let receiver = this.capture_operand_into(&mut prologue, receiver);
             let loop_var = this.bind_loop_pattern(&binding.pattern, None);
-            let header = if loop_var == "_" {
-                format!("for range {} {{\n", receiver_str)
-            } else {
-                format!("for _, {} := range {} {{\n", loop_var, receiver_str)
-            };
+            let header = range_header("_", Some(&loop_var), receiver);
             let lowered_body = this.lower_block_as_body(body);
             (prologue, header, lowered_body)
         })
@@ -146,7 +149,7 @@ impl Planner<'_> {
         binding: &Binding,
         receiver: &Expression,
         body: &Expression,
-    ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
+    ) -> (Vec<LoweredStatement>, LoopHeader, LoweredBlock) {
         self.with_scope(|this| {
             let mut prologue = Vec::new();
             let receiver_var = if this.is_unmutated_identifier(receiver) {
@@ -161,17 +164,28 @@ impl Planner<'_> {
             };
             let index_var = this.fresh_var(Some("i"));
             let loop_var = this.bind_loop_pattern(&binding.pattern, None);
-            let mut header = format!(
-                "for {} := 0; {} < len({}); {}++ {{\n",
-                index_var, index_var, receiver_var, index_var
-            );
+            let header = LoopHeader::Counted {
+                variable: index_var.clone(),
+                start: GoExpression::literal("0".to_string()),
+                condition: Some(GoExpression::binary(
+                    GoExpression::name(index_var.clone()),
+                    "<",
+                    GoExpression::call(
+                        GoExpression::name("len".to_string()),
+                        vec![receiver_var.clone()],
+                    ),
+                )),
+            };
+            let mut lowered_body = this.lower_block_as_body(body);
             if loop_var != "_" {
-                header.push_str(&format!(
-                    "{} := {}[{}]\n",
-                    loop_var, receiver_var, index_var
-                ));
+                lowered_body.statements.insert(
+                    0,
+                    define(
+                        loop_var,
+                        GoExpression::index(receiver_var, GoExpression::name(index_var)),
+                    ),
+                );
             }
-            let lowered_body = this.lower_block_as_body(body);
             (prologue, header, lowered_body)
         })
     }
@@ -182,12 +196,12 @@ impl Planner<'_> {
     fn capture_iterable_operand(
         &mut self,
         iterable: &Expression,
-    ) -> (Vec<LoweredStatement>, String, bool) {
+    ) -> (Vec<LoweredStatement>, GoExpression, bool) {
         let mut prologue = Vec::new();
         let iter_raw = self.capture_operand_into(&mut prologue, iterable);
         let iterable_ty = iterable.get_type();
         let mut iter_expression = if iterable_ty.is_ref() {
-            format!("*{}", iter_raw)
+            GoExpression::dereference(iter_raw)
         } else {
             iter_raw
         };
@@ -196,7 +210,10 @@ impl Planner<'_> {
             .is_some_and(|shape| matches!(shape, NativeGoType::Channel | NativeGoType::Receiver));
         if is_channel {
             self.require_stdlib();
-            iter_expression = format!("lisette.ChannelRange({})", iter_expression);
+            iter_expression = GoExpression::call(
+                GoExpression::name("lisette.ChannelRange".to_string()),
+                vec![iter_expression],
+            );
         }
         let single_var = is_channel || self.iter_seq_arity(&iterable_ty) == Some(1);
         (prologue, iter_expression, single_var)
@@ -208,17 +225,15 @@ impl Planner<'_> {
         binding: &Binding,
         iterable: &Expression,
         body: &Expression,
-    ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
+    ) -> (Vec<LoweredStatement>, LoopHeader, LoweredBlock) {
         let (prologue, iter_expression, single_var) = self.capture_iterable_operand(iterable);
 
         let (header, lowered_body) = self.with_scope(|this| {
             let loop_var = this.bind_loop_pattern(&binding.pattern, None);
-            let header = if loop_var == "_" {
-                format!("for range {} {{\n", iter_expression)
-            } else if single_var {
-                format!("for {} := range {} {{\n", loop_var, iter_expression)
+            let header = if single_var {
+                range_header(&loop_var, None, iter_expression)
             } else {
-                format!("for _, {} := range {} {{\n", loop_var, iter_expression)
+                range_header("_", Some(&loop_var), iter_expression)
             };
             (header, this.lower_block_as_body(body))
         });
@@ -233,7 +248,7 @@ impl Planner<'_> {
         binding: &Binding,
         iterable: &Expression,
         body: &Expression,
-    ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
+    ) -> (Vec<LoweredStatement>, LoopHeader, LoweredBlock) {
         let Pattern::Tuple { elements, .. } = &binding.pattern else {
             unreachable!("lower_map_tuple_for requires a tuple pattern");
         };
@@ -251,13 +266,13 @@ impl Planner<'_> {
 
         let (header, lowered_body) = self.with_scope(|this| {
             if first_is_simple && second_is_simple {
-                this.lower_map_tuple_simple_body(first, second, &iter_expression, body)
+                this.lower_map_tuple_simple_body(first, second, iter_expression, body)
             } else {
                 this.lower_map_tuple_compound_body(
                     first,
                     second,
                     &binding.ty,
-                    &iter_expression,
+                    iter_expression,
                     body,
                 )
             }
@@ -270,22 +285,22 @@ impl Planner<'_> {
         &mut self,
         first: &Pattern,
         second: &Pattern,
-        iter_expression: &str,
+        iter_expression: GoExpression,
         body: &Expression,
-    ) -> (String, LoweredBlock) {
+    ) -> (LoopHeader, LoweredBlock) {
         let first_is_discard =
             matches!(first, Pattern::WildCard { .. }) || self.go_name_for_binding(first).is_none();
         let second_is_discard = matches!(second, Pattern::WildCard { .. })
             || self.go_name_for_binding(second).is_none();
         let header = if first_is_discard && second_is_discard {
-            format!("for range {} {{\n", iter_expression)
+            range_header("_", None, iter_expression)
         } else if second_is_discard {
             let key = self.bind_loop_pattern(first, None);
-            format!("for {} := range {} {{\n", key, iter_expression)
+            range_header(&key, None, iter_expression)
         } else {
             let key = self.bind_loop_pattern(first, None);
             let value = self.bind_loop_pattern(second, None);
-            format!("for {}, {} := range {} {{\n", key, value, iter_expression)
+            range_header(&key, Some(&value), iter_expression)
         };
         (header, self.lower_block_as_body(body))
     }
@@ -297,9 +312,9 @@ impl Planner<'_> {
         first: &Pattern,
         second: &Pattern,
         binding_ty: &Type,
-        iter_expression: &str,
+        iter_expression: GoExpression,
         body: &Expression,
-    ) -> (String, LoweredBlock) {
+    ) -> (LoopHeader, LoweredBlock) {
         let element_tys: &[Type] = match binding_ty {
             Type::Tuple(tys) => tys.as_slice(),
             _ => &[],
@@ -309,48 +324,41 @@ impl Planner<'_> {
 
         let key_var = self.fresh_var(Some("key"));
         let value_var = self.fresh_var(Some("value"));
-        let header = format!(
-            "for {}, {} := range {} {{\n",
-            key_var, value_var, iter_expression
-        );
+        let header = LoopHeader::Range {
+            key: Some(key_var.clone()),
+            value: Some(value_var.clone()),
+            iterable: iter_expression,
+        };
 
-        let ((bindings, lowered_body), used) = self.capture_go_uses(|this| {
-            let mut bindings = String::new();
+        let ((mut bindings, lowered_body), used) = self.capture_go_uses(|this| {
             let key_statements = this.lower_irrefutable_pattern_site(
                 PatternSubject::for_value(key_var.clone()),
                 first,
                 first_ty,
             );
-            Renderer.render_lowered_block(
-                &mut bindings,
-                &LoweredBlock {
-                    statements: key_statements,
-                },
-            );
-            if !bindings.is_empty() {
+            let key_block = LoweredBlock {
+                statements: key_statements,
+            };
+            if !key_block.renders_empty() {
                 this.scope.record_go_use(&key_var);
             }
-            let after_key = bindings.len();
             let value_statements = this.lower_irrefutable_pattern_site(
                 PatternSubject::for_value(value_var.clone()),
                 second,
                 second_ty,
             );
-            Renderer.render_lowered_block(
-                &mut bindings,
-                &LoweredBlock {
-                    statements: value_statements,
-                },
-            );
-            if bindings.len() > after_key {
+            let value_block = LoweredBlock {
+                statements: value_statements,
+            };
+            if !value_block.renders_empty() {
                 this.scope.record_go_use(&value_var);
             }
+            let mut bindings = key_block.statements;
+            bindings.extend(value_block.statements);
             (bindings, this.lower_block_as_body(body))
         });
 
-        let mut inner = vec![LoweredStatement::RawGo(bindings)];
-        inner.extend(lowered_body.statements);
-        let body_block = LoweredBlock { statements: inner };
+        bindings.extend(lowered_body.statements);
 
         let references_value = used.contains(&value_var);
         let references_key = used.contains(&key_var);
@@ -358,12 +366,12 @@ impl Planner<'_> {
         // Discard guards: value first, then key (insertion order matters).
         let mut statements = Vec::new();
         if !references_value {
-            statements.push(LoweredStatement::RawGo(format!("_ = {}\n", value_var)));
+            statements.push(discard(GoExpression::name(value_var)));
         }
         if !references_key {
-            statements.push(LoweredStatement::RawGo(format!("_ = {}\n", key_var)));
+            statements.push(discard(GoExpression::name(key_var)));
         }
-        statements.extend(body_block.statements);
+        statements.extend(bindings);
         (header, LoweredBlock { statements })
     }
 
@@ -375,50 +383,44 @@ impl Planner<'_> {
         binding: &Binding,
         iterable: &Expression,
         body: &Expression,
-    ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
+    ) -> (Vec<LoweredStatement>, LoopHeader, LoweredBlock) {
         let (prologue, iter_expression, single_var) = self.capture_iterable_operand(iterable);
 
         let (header, body_block) = self.with_scope(|this| {
             if !pattern_has_bindings(&binding.pattern) {
-                let header = format!("for range {} {{\n", iter_expression);
+                let header = range_header("_", None, iter_expression);
                 (header, this.lower_block_as_body(body))
             } else {
                 let item_var = this.fresh_var(Some("item"));
                 let header = if single_var {
-                    format!("for {} := range {} {{\n", item_var, iter_expression)
+                    range_header(&item_var, None, iter_expression)
                 } else {
-                    format!("for _, {} := range {} {{\n", item_var, iter_expression)
+                    range_header("_", Some(&item_var), iter_expression)
                 };
-                let ((bindings, lowered_body), used) = this.capture_go_uses(|this| {
-                    let mut bindings = String::new();
+                let ((mut bindings, lowered_body), used) = this.capture_go_uses(|this| {
                     let binding_statements = this.lower_irrefutable_pattern_site(
                         PatternSubject::for_value(item_var.clone()),
                         &binding.pattern,
                         &binding.ty,
                     );
-                    Renderer.render_lowered_block(
-                        &mut bindings,
-                        &LoweredBlock {
-                            statements: binding_statements,
-                        },
-                    );
-                    if !bindings.is_empty() {
+                    let binding_block = LoweredBlock {
+                        statements: binding_statements,
+                    };
+                    if !binding_block.renders_empty() {
                         this.scope.record_go_use(&item_var);
                     }
-                    (bindings, this.lower_block_as_body(body))
+                    (binding_block.statements, this.lower_block_as_body(body))
                 });
 
-                let mut inner = vec![LoweredStatement::RawGo(bindings)];
-                inner.extend(lowered_body.statements);
-                let body_block = LoweredBlock { statements: inner };
+                bindings.extend(lowered_body.statements);
 
                 let references_item = used.contains(&item_var);
 
                 let mut statements = Vec::new();
                 if !references_item {
-                    statements.push(LoweredStatement::RawGo(format!("_ = {}\n", item_var)));
+                    statements.push(discard(GoExpression::name(item_var)));
                 }
-                statements.extend(body_block.statements);
+                statements.extend(bindings);
                 (header, LoweredBlock { statements })
             }
         });
@@ -431,7 +433,7 @@ impl Planner<'_> {
         binding: &Binding,
         iterable: &Expression,
         body: &Expression,
-    ) -> (Vec<LoweredStatement>, String, LoweredBlock) {
+    ) -> (Vec<LoweredStatement>, LoopHeader, LoweredBlock) {
         let Expression::Range {
             start,
             end,
@@ -451,7 +453,7 @@ impl Planner<'_> {
                 prologue.extend(setup);
                 (value, is_observable)
             }
-            None => ("0".to_string(), false),
+            None => (GoExpression::literal("0".to_string()), false),
         };
         let checkpoint = prologue.len();
         let end_expression = end.as_ref().map(|end| {
@@ -471,41 +473,37 @@ impl Planner<'_> {
             // hoist start into its own temp before them so it evaluates first.
             let var = self.fresh_var(Some("start"));
             self.declare(&var);
-            prologue.insert(
-                checkpoint,
-                LoweredStatement::TempBind {
-                    name: var.clone(),
-                    value: start_expression,
-                },
-            );
-            start_expression = var;
+            prologue.insert(checkpoint, define(var.clone(), start_expression));
+            start_expression = GoExpression::name(var);
         }
 
-        let counts_from_zero = !*inclusive && start_expression == "0";
+        let counts_from_zero = !*inclusive && start_expression.as_str() == "0";
         let (header, lowered_body) = self.with_scope(|this| {
             let header = match end_expression {
                 Some(end_expression) if counts_from_zero => {
                     let loop_var = this.bind_loop_pattern(&binding.pattern, None);
-                    if loop_var == "_" {
-                        format!("for range {} {{\n", end_expression)
-                    } else {
-                        format!("for {} := range {} {{\n", loop_var, end_expression)
-                    }
+                    range_header(&loop_var, None, end_expression)
                 }
                 Some(end_expression) => {
                     let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
                     let operator = if *inclusive { "<=" } else { "<" };
-                    format!(
-                        "for {} := {}; {} {} {}; {}++ {{\n",
-                        loop_var, start_expression, loop_var, operator, end_expression, loop_var
-                    )
+                    LoopHeader::Counted {
+                        variable: loop_var.clone(),
+                        start: start_expression,
+                        condition: Some(GoExpression::binary(
+                            GoExpression::name(loop_var),
+                            operator,
+                            end_expression,
+                        )),
+                    }
                 }
                 None => {
                     let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
-                    format!(
-                        "for {} := {}; ; {}++ {{\n",
-                        loop_var, start_expression, loop_var
-                    )
+                    LoopHeader::Counted {
+                        variable: loop_var,
+                        start: start_expression,
+                        condition: None,
+                    }
                 }
             };
             (header, this.lower_block_as_body(body))
