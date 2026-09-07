@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788795546800,
+  "lastUpdate": 1788795659226,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -34000,6 +34000,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 32536,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28034,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19300,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15235,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13940,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8840,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6285,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1874,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9949,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9fc631aec31a3890be4d8c2b13f4939ff4d3c450",
+          "message": "fix: pass function values to Go callbacks that return a tuple (#1415)",
+          "timestamp": "2026-09-07T17:40:30+02:00",
+          "tree_id": "786b70409b0a1dfa995318f5da2fe260d0259a26",
+          "url": "https://github.com/ivov/lisette/commit/9fc631aec31a3890be4d8c2b13f4939ff4d3c450"
+        },
+        "date": 1788795656438,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 140321,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32729,
             "unit": "lines"
           },
           {
