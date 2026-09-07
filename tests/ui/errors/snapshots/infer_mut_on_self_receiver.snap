@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `mut` has no effect
+   ╭─[test.lis:6:17]
+ 5 │ impl Counter {
+ 6 │   fn peek(self: mut Self) -> int {
+   ·                 ────┬───
+   ·                     ╰── invalid
+ 7 │     self.value
+   ╰────
+  help: Use `mut Ref<Self>` for a writable pointer, or remove `mut` for a copy · code: [infer.mut_without_effect]

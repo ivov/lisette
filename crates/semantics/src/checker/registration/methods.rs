@@ -4,6 +4,7 @@ use ecow::EcoString;
 use syntax::ast::{
     Annotation, Expression, Generic, Pattern, Span, Visibility as SyntacticVisibility,
 };
+use syntax::display::annotation_to_string;
 use syntax::program::MethodOrigin;
 use syntax::program::ValueKind;
 use syntax::program::{
@@ -195,6 +196,9 @@ impl TaskState {
             receiver_ty: &resolved.receiver_ty,
         };
 
+        self.scopes
+            .set_impl_receiver_type(resolved.receiver_ty.clone());
+
         // Static methods land in the parent scope, since this impl's generics scope drops here.
         let mut static_methods: Vec<(String, Type)> = Vec::new();
         for function in functions {
@@ -214,14 +218,18 @@ impl TaskState {
 
     fn reject_writable_impl_target(&mut self, annotation: &Annotation) {
         if let Annotation::Constructor {
-            name,
             writable: true,
+            mut_span,
             span,
             ..
         } = annotation
         {
-            self.sink
-                .push(diagnostics::infer::mut_without_effect(name, *span));
+            let labelled = mut_span.map_or(*span, |mut_span| mut_span.merge(*span));
+            let written = annotation_to_string(annotation);
+            self.sink.push(diagnostics::infer::mut_on_impl_target(
+                written.strip_prefix("mut ").unwrap_or(&written),
+                labelled,
+            ));
         }
     }
 

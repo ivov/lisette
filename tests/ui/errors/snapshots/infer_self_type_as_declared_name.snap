@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Reserved type name
+   ╭─[test.lis:2:8]
+ 1 │ 
+ 2 │ struct Self {
+   ·        ──┬─
+   ·          ╰── reserved
+ 3 │   value: int,
+   ╰────
+  help: Rename this struct. `Self` is reserved for the type of an `impl` block · code: [resolve.self_type_is_reserved]

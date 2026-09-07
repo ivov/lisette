@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type arguments on `Self`
+   ╭─[test.lis:6:21]
+ 5 │ impl Counter {
+ 6 │   fn peek(self: Ref<Self<int>>) -> int {
+   ·                     ────┬────
+   ·                         ╰── invalid
+ 7 │     self.value
+   ╰────
+  help: Use bare `Self`, which already means `Counter` · code: [resolve.self_type_with_arguments]

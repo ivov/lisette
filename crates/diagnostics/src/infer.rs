@@ -3,7 +3,7 @@ use crate::pattern;
 use std::fmt::Display;
 use std::mem;
 use syntax::ast::{Annotation, BinaryOperator, BindingKind, Span};
-use syntax::types::{SimpleKind, Type};
+use syntax::types::{SELF_TYPE_NAME, SimpleKind, Type};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MismatchedTailKind {
@@ -168,16 +168,40 @@ pub fn invalid_map_initialization(key: &Type, value: &Type, span: Span) -> Liset
         ))
 }
 
-pub fn self_type_not_supported(span: Span, impl_receiver: Option<&str>) -> LisetteDiagnostic {
-    let name_span = Span::new(span.file_id, span.byte_offset, 4); // "Self" is 4 chars
-    let help = match impl_receiver {
-        Some(name) => format!("Replace `Self` with `{}`.", name),
-        None => "Use a type parameter instead, e.g. `interface Comparable<T> { fn compare(other: T) -> int }`".to_string(),
-    };
+pub fn self_type_not_supported(span: Span) -> LisetteDiagnostic {
+    let name_span = Span::new(span.file_id, span.byte_offset, SELF_TYPE_NAME.len() as u32);
     LisetteDiagnostic::error("Use of `Self` type")
         .with_resolve_code("self_type_not_supported")
-        .with_span_label(&name_span, "invalid type")
-        .with_help(help)
+        .with_span_label(&name_span, "disallowed")
+        .with_help(
+            "`Self` is only allowed inside an `impl` block. \
+             Use a type parameter instead, e.g. \
+             `interface Comparable<T> { fn compare(other: T) -> int }`",
+        )
+}
+
+pub fn self_type_with_arguments(target: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Type arguments on `Self`")
+        .with_resolve_code("self_type_with_arguments")
+        .with_span_label(&span, "invalid")
+        .with_help(format!("Use bare `Self`, which already means `{target}`"))
+}
+
+pub fn self_type_as_impl_target(span: Span) -> LisetteDiagnostic {
+    let name_span = Span::new(span.file_id, span.byte_offset, SELF_TYPE_NAME.len() as u32);
+    LisetteDiagnostic::error("Use of `Self` type")
+        .with_resolve_code("self_type_as_impl_target")
+        .with_span_label(&name_span, "disallowed")
+        .with_help("Rename this type. `Self` is reserved for the type of an `impl` block.")
+}
+
+pub fn self_type_is_reserved(kind: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Reserved type name")
+        .with_resolve_code("self_type_is_reserved")
+        .with_span_label(&span, "reserved")
+        .with_help(format!(
+            "Rename this {kind}. `Self` is reserved for the type of an `impl` block"
+        ))
 }
 
 pub fn self_in_interface_method(span: Span) -> LisetteDiagnostic {
@@ -607,14 +631,23 @@ pub fn loop_binding_read_only(variable_name: &str, span: Span) -> LisetteDiagnos
         ))
 }
 
-pub fn mut_without_effect(target: &str, span: Span) -> LisetteDiagnostic {
+pub fn mut_without_effect(written: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`mut` has no effect")
         .with_infer_code("mut_without_effect")
-        .with_span_label(&span, format!("`{target}` cannot carry write permission"))
-        .with_help(
-            "Only `Slice`, `Map`, `Ref`, and `Unknown` can carry write permission, \
-             directly or through their contents. Remove `mut`",
-        )
+        .with_span_label(&span, "invalid")
+        .with_help(format!(
+            "Use `mut Ref<{written}>` for a writable pointer, or remove `mut` for a copy"
+        ))
+}
+
+pub fn mut_on_impl_target(target: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`mut` has no effect")
+        .with_infer_code("mut_on_impl_target")
+        .with_span_label(&span, "invalid")
+        .with_help(format!(
+            "Remove `mut`. An `impl` block names the type being implemented, \
+             and each method decides its own receiver, as in `self: mut Ref<{target}>`"
+        ))
 }
 
 pub fn mut_under_read_only_wrapper(

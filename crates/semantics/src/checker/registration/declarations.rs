@@ -1,6 +1,7 @@
 use super::*;
 use syntax::program::ValueKind;
 use syntax::types::CompoundKind;
+use syntax::types::SELF_TYPE_NAME;
 use syntax::types::SimpleKind;
 
 impl TaskState {
@@ -244,6 +245,30 @@ impl TaskState {
         self.register_type_bodies(store, items);
     }
 
+    fn reject_reserved_type_names(&mut self, items: &[Expression]) {
+        for item in items {
+            let (kind, name, name_span) = match item {
+                Expression::Struct {
+                    name, name_span, ..
+                } => ("struct", name, name_span),
+                Expression::Enum {
+                    name, name_span, ..
+                } => ("enum", name, name_span),
+                Expression::Interface {
+                    name, name_span, ..
+                } => ("interface", name, name_span),
+                Expression::TypeAlias {
+                    name, name_span, ..
+                } => ("alias", name, name_span),
+                _ => continue,
+            };
+            if name == SELF_TYPE_NAME {
+                self.sink
+                    .push(diagnostics::infer::self_type_is_reserved(kind, *name_span));
+            }
+        }
+    }
+
     pub(super) fn register_type_aliases(&mut self, store: &mut Store, items: &mut [Expression]) {
         for item in items {
             if matches!(item, Expression::TypeAlias { .. }) {
@@ -253,6 +278,7 @@ impl TaskState {
     }
 
     pub(super) fn register_type_bodies(&mut self, store: &mut Store, items: &mut [Expression]) {
+        self.reject_reserved_type_names(items);
         self.check_go_hints_in_items(items);
         for item in items {
             match item {

@@ -6,7 +6,8 @@ Lisette compiles to Go. Rust-like syntax, Go runtime. No ownership, no borrowing
 
 | Rust                      | Lisette                                                          |
 | ------------------------- | ---------------------------------------------------------------- |
-| `&T`, `&mut T`            | `Ref<T>`                                                         |
+| `&T`, `&mut T`            | `Ref<T>`, `mut Ref<T>`                                           |
+| `&self`, `&mut self`      | `self: Ref<Self>`, `self: mut Ref<Self>`                         |
 | `*ptr`                    | `ptr.*`                                                          |
 | `Vec<T>`                  | `Slice<T>`                                                       |
 | `[T; N]`                  | `Array<T, N>`                                                    |
@@ -128,7 +129,7 @@ impl User {
     f"User({self.name})"
   }
 
-  fn set_email(self: Ref<User>, email: string) {
+  fn set_email(self: mut Ref<Self>, email: string) {
     self.email = Some(email)
   }
 }

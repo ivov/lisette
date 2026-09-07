@@ -2473,3 +2473,105 @@ fn test() -> int {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn self_type_in_every_impl_position() {
+    let input = r#"
+struct Pair<T> {
+  first: T,
+  second: T,
+}
+
+impl<T> Pair<T> {
+  fn head(self) -> T {
+    self.first
+  }
+
+  fn peek(self: Ref<Self>) -> T {
+    self.second
+  }
+
+  fn swap(self: mut Ref<Self>) {
+    let held = self.first
+    self.first = self.second
+    self.second = held
+  }
+
+  fn twin(self, other: Self) -> Self {
+    other
+  }
+
+  fn boxed(self) -> Option<Self> {
+    Some(self)
+  }
+
+  fn local(self) -> T {
+    let copy: Self = self
+    copy.first
+  }
+}
+
+fn run() {
+  let mut p = Pair { first: 1, second: 2 }
+  p.swap()
+  let _ = p.head()
+  let _ = p.peek()
+  let _ = p.twin(p)
+  let _ = p.boxed()
+  let _ = p.local()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn self_type_does_not_capture_method_generics() {
+    let input = r#"
+struct Box<T> {
+  value: T,
+}
+
+impl<T> Box<T> {
+  fn map<U>(self, f: fn(T) -> U) -> Box<U> {
+    Box { value: f(self.value) }
+  }
+
+  fn same(self) -> Self {
+    self
+  }
+}
+
+fn run() {
+  let b = Box { value: 1 }
+  let _ = b.same()
+  let _ = b.map(|n| n == 1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn self_type_matches_the_spelled_out_receiver() {
+    let input = r#"
+struct Counter {
+  value: int,
+}
+
+impl Counter {
+  fn spelled(self: mut Ref<Counter>) {
+    self.value += 1
+  }
+
+  fn shorthand(self: mut Ref<Self>) {
+    self.value += 1
+  }
+}
+
+fn run() {
+  let mut c = Counter { value: 0 }
+  c.spelled()
+  c.shorthand()
+}
+"#;
+    assert_emit_snapshot!(input);
+}

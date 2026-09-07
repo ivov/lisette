@@ -48,6 +48,7 @@ use syntax::ast::Span;
 use syntax::doc::to_markdown;
 use syntax::program::File;
 use syntax::types;
+use syntax::types::SELF_TYPE_NAME;
 
 pub use crate::state::{Backend, SharedState};
 
@@ -828,6 +829,12 @@ impl Backend {
             return Ok(None);
         }
 
+        if new_name == SELF_TYPE_NAME && names_a_type(&snapshot, definition_span) {
+            return Err(validation::rename_error(format!(
+                "'{SELF_TYPE_NAME}' is reserved for the type of an `impl` block"
+            )));
+        }
+
         let Some(definition_source) = snapshot.source(definition_span.file_id) else {
             return Ok(None);
         };
@@ -1184,9 +1191,30 @@ fn general_completions(
     }
 
     const PRELUDE_TYPES: &[&str] = &[
-        "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64",
-        "float32", "float64", "string", "bool", "rune", "byte", "Option", "Result", "Slice", "Map",
-        "Channel", "Array",
+        "int",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float32",
+        "float64",
+        "string",
+        "bool",
+        "rune",
+        "byte",
+        "Option",
+        "Result",
+        "Slice",
+        "Map",
+        "Channel",
+        "Array",
+        "Ref",
+        SELF_TYPE_NAME,
     ];
     for ty in PRELUDE_TYPES {
         items.push(CompletionItem {
@@ -1276,6 +1304,23 @@ fn trailing_segment_span(usage_span: Span, snapshot: &AnalysisSnapshot) -> Span 
         }
         None => usage_span,
     }
+}
+
+fn names_a_type(snapshot: &AnalysisSnapshot, definition_span: Span) -> bool {
+    let Some(file) = snapshot.files().get(&definition_span.file_id) else {
+        return false;
+    };
+    let Some(expression) = find_expression_at(&file.items, definition_span.byte_offset) else {
+        return false;
+    };
+    matches!(
+        expression,
+        Expression::Struct { name_span, .. }
+            | Expression::Enum { name_span, .. }
+            | Expression::Interface { name_span, .. }
+            | Expression::TypeAlias { name_span, .. }
+        if *name_span == definition_span
+    )
 }
 
 fn usage_locations(

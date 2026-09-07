@@ -1,0 +1,94 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Pair<T> {
+    first: T,
+    second: T,
+  }
+  
+  impl<T> Pair<T> {
+    fn head(self) -> T {
+      self.first
+    }
+  
+    fn peek(self: Ref<Self>) -> T {
+      self.second
+    }
+  
+    fn swap(self: mut Ref<Self>) {
+      let held = self.first
+      self.first = self.second
+      self.second = held
+    }
+  
+    fn twin(self, other: Self) -> Self {
+      other
+    }
+  
+    fn boxed(self) -> Option<Self> {
+      Some(self)
+    }
+  
+    fn local(self) -> T {
+      let copy: Self = self
+      copy.first
+    }
+  }
+  
+  fn run() {
+    let mut p = Pair { first: 1, second: 2 }
+    p.swap()
+    let _ = p.head()
+    let _ = p.peek()
+    let _ = p.twin(p)
+    let _ = p.boxed()
+    let _ = p.local()
+  }
+---
+package main
+
+type Pair[T any] struct {
+	first  T
+	second T
+}
+
+func (p Pair[T]) head() T {
+	return p.first
+}
+
+func (p *Pair[T]) peek() T {
+	return p.second
+}
+
+func (p *Pair[T]) swap() {
+	held := p.first
+	p.first = p.second
+	p.second = held
+}
+
+func (p Pair[T]) twin(other Pair[T]) Pair[T] {
+	return other
+}
+
+func (p Pair[T]) boxed() (Pair[T], bool) {
+	return p, true
+}
+
+func (p Pair[T]) local() T {
+	copy_ := p
+	return copy_.first
+}
+
+func run() {
+	p := Pair[int]{
+		first:  1,
+		second: 2,
+	}
+	p.swap()
+	_ = p.head()
+	_ = p.peek()
+	_ = p.twin(p)
+	p.boxed()
+	_ = p.local()
+}

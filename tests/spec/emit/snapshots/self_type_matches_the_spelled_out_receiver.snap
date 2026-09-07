@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Counter {
+    value: int,
+  }
+  
+  impl Counter {
+    fn spelled(self: mut Ref<Counter>) {
+      self.value += 1
+    }
+  
+    fn shorthand(self: mut Ref<Self>) {
+      self.value += 1
+    }
+  }
+  
+  fn run() {
+    let mut c = Counter { value: 0 }
+    c.spelled()
+    c.shorthand()
+  }
+---
+package main
+
+type Counter struct {
+	value int
+}
+
+func (c *Counter) spelled() {
+	c.value++
+}
+
+func (c *Counter) shorthand() {
+	c.value++
+}
+
+func run() {
+	c := Counter{value: 0}
+	c.spelled()
+	c.shorthand()
+}

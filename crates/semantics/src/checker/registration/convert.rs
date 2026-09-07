@@ -6,10 +6,11 @@ use crate::checker::infer::expressions::comparison::{
 use std::mem;
 use syntax::EcoString;
 use syntax::ast::{Annotation, Generic, Span, VariantFields};
+use syntax::display::annotation_to_string;
 use syntax::program::{AliasKind, ConstantValue, DefinitionBody};
 use syntax::types::{
-    FunctionParameter, SimpleKind, Symbol, Type, build_named_substitution_map, substitute,
-    unqualified_name,
+    FunctionParameter, SELF_TYPE_NAME, SimpleKind, Symbol, Type, build_named_substitution_map,
+    substitute, unqualified_name,
 };
 
 use crate::checker::TaskState;
@@ -77,6 +78,20 @@ impl TypeArgumentChecks {
 }
 
 #[derive(Clone, Copy)]
+struct WriteQualifierSite<'a> {
+    report: Option<&'a Annotation>,
+    contents_span: Span,
+    read_only_wrapper: Option<ReadOnlyWrapper>,
+}
+
+fn written_without_mut(annotation: &Annotation) -> String {
+    let written = annotation_to_string(annotation);
+    written
+        .strip_prefix("mut ")
+        .map_or(written.clone(), str::to_owned)
+}
+
+#[derive(Clone, Copy)]
 struct ReadOnlyWrapper {
     name: &'static str,
     name_span: Span,
@@ -88,6 +103,7 @@ struct ConvertMode {
     type_argument_checks: TypeArgumentChecks,
     position: TypePosition,
     read_only_wrapper: Option<ReadOnlyWrapper>,
+    is_impl_target: bool,
 }
 
 impl ConvertMode {
@@ -97,6 +113,7 @@ impl ConvertMode {
             type_argument_checks: self.type_argument_checks.nested(),
             position: TypePosition::Value,
             read_only_wrapper: self.read_only_wrapper,
+            is_impl_target: false,
         }
     }
 }
@@ -129,6 +146,7 @@ impl TaskState {
                 type_argument_checks: TypeArgumentChecks::Deferred,
                 position: TypePosition::Bound,
                 read_only_wrapper: None,
+                is_impl_target: false,
             },
         )
     }
@@ -148,6 +166,7 @@ impl TaskState {
                 type_argument_checks: TypeArgumentChecks::All,
                 position: TypePosition::Value,
                 read_only_wrapper: None,
+                is_impl_target: false,
             },
         );
         store.normalized_annotation_type(&ty)
@@ -168,6 +187,7 @@ impl TaskState {
                 type_argument_checks: TypeArgumentChecks::All,
                 position: TypePosition::Value,
                 read_only_wrapper: None,
+                is_impl_target: false,
             },
         );
         store.normalized_annotation_type(&ty)
@@ -188,6 +208,7 @@ impl TaskState {
                 type_argument_checks: TypeArgumentChecks::Descendants,
                 position: TypePosition::Value,
                 read_only_wrapper: None,
+                is_impl_target: true,
             },
         );
         store.normalized_annotation_type(&ty)
@@ -292,6 +313,7 @@ impl TaskState {
             type_argument_checks,
             position,
             read_only_wrapper,
+            is_impl_target,
         } = mode;
 
         if type_name == "VarArgs" && !variadic_allowed {
@@ -300,6 +322,41 @@ impl TaskState {
                     annotation_span,
                 ));
             return Type::Error;
+        }
+
+        if type_name == SELF_TYPE_NAME {
+            if is_impl_target {
+                self.sink.push(diagnostics::infer::self_type_as_impl_target(
+                    annotation_span,
+                ));
+                return Type::Error;
+            }
+            let Some(target) = self.scopes.impl_receiver_type().cloned() else {
+                self.sink
+                    .push(diagnostics::infer::self_type_not_supported(annotation_span));
+                return Type::Error;
+            };
+            if !params.is_empty() {
+                self.sink.push(diagnostics::infer::self_type_with_arguments(
+                    &target.stringify(),
+                    annotation_span,
+                ));
+                return Type::Error;
+            }
+            if !writable {
+                return target;
+            }
+            let qualified_name = target.get_qualified_id().unwrap_or_default().to_string();
+            return self.apply_write_qualifier(
+                store,
+                &qualified_name,
+                target.make_writable(),
+                WriteQualifierSite {
+                    report: Some(annotation),
+                    contents_span,
+                    read_only_wrapper,
+                },
+            );
         }
 
         // Unit is internal: `()` desugars to Constructor { name: "Unit" }.
@@ -321,8 +378,8 @@ impl TaskState {
             }
             if writable {
                 self.sink.push(diagnostics::infer::mut_without_effect(
-                    type_name,
-                    annotation_span,
+                    &written_without_mut(annotation),
+                    contents_span,
                 ));
             }
             return Type::Parameter(type_name.into());
@@ -332,8 +389,8 @@ impl TaskState {
         if type_name == "Array" {
             if writable {
                 self.sink.push(diagnostics::infer::mut_without_effect(
-                    type_name,
-                    annotation_span,
+                    &written_without_mut(annotation),
+                    contents_span,
                 ));
             }
             return self.convert_array_annotation(store, params, annotation_span, span, mode);
@@ -342,14 +399,7 @@ impl TaskState {
         let Some((qualified_name, ty)) =
             self.resolve_type_with_arity(store, type_name, params.len())
         else {
-            if type_name == "Self" {
-                let receiver = self.scopes.impl_receiver_type().map(|ty| ty.stringify());
-                self.sink.push(diagnostics::infer::self_type_not_supported(
-                    annotation_span,
-                    receiver.as_deref(),
-                ));
-            } else if let Some((kind, help)) = self.classify_unregistered_variant(store, type_name)
-            {
+            if let Some((kind, help)) = self.classify_unregistered_variant(store, type_name) {
                 self.sink.push(diagnostics::infer::value_in_type_position(
                     type_name,
                     kind,
@@ -471,23 +521,46 @@ impl TaskState {
             self.check_map_key_comparable(store, key_ty, annotation_span);
         }
 
-        if writable && !writable_qualifier_has_effect(store, &qualified_name, &resolved_ty) {
-            self.sink.push(diagnostics::infer::mut_without_effect(
-                type_name,
-                annotation_span,
-            ));
-            return resolved_ty.shallow_demoted();
+        if !writable {
+            return resolved_ty;
         }
-        if writable && let Some(wrapper) = read_only_wrapper {
+        self.apply_write_qualifier(
+            store,
+            &qualified_name,
+            resolved_ty,
+            WriteQualifierSite {
+                report: (!is_impl_target).then_some(annotation),
+                contents_span,
+                read_only_wrapper,
+            },
+        )
+    }
+
+    fn apply_write_qualifier(
+        &mut self,
+        store: &Store,
+        qualified_name: &str,
+        writable_ty: Type,
+        site: WriteQualifierSite<'_>,
+    ) -> Type {
+        if !writable_qualifier_has_effect(store, qualified_name, &writable_ty) {
+            if let Some(annotation) = site.report {
+                self.sink.push(diagnostics::infer::mut_without_effect(
+                    &written_without_mut(annotation),
+                    site.contents_span,
+                ));
+            }
+            return writable_ty.shallow_demoted();
+        }
+        if let Some(wrapper) = site.read_only_wrapper {
             self.sink
                 .push(diagnostics::infer::mut_under_read_only_wrapper(
                     wrapper.name,
                     wrapper.name_span,
-                    contents_span,
+                    site.contents_span,
                 ));
         }
-
-        resolved_ty
+        writable_ty
     }
 
     fn convert_array_annotation(

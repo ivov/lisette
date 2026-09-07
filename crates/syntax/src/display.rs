@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::ast::Annotation;
 use crate::program::is_internal_package_id;
 use crate::types::SimpleKind;
 use crate::types::{GO_IMPORT_PREFIX, Symbol, Type};
@@ -182,5 +183,68 @@ impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (types, _generics) = Self::remove_vars(&[self]);
         write!(f, "{}", types[0].stringify())
+    }
+}
+
+pub fn annotation_to_string(ann: &Annotation) -> String {
+    match ann {
+        Annotation::Constructor {
+            name,
+            params,
+            writable,
+            ..
+        } => {
+            let rendered = if params.is_empty() {
+                name.to_string()
+            } else {
+                format!(
+                    "{}<{}>",
+                    name,
+                    params
+                        .iter()
+                        .map(annotation_to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            };
+            if *writable {
+                format!("mut {}", rendered)
+            } else {
+                rendered
+            }
+        }
+        Annotation::Function {
+            params,
+            return_type,
+            ..
+        } => {
+            let params_str = params
+                .iter()
+                .map(annotation_to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            if matches!(return_type.as_ref(), Annotation::Unknown) {
+                return format!("fn({})", params_str);
+            }
+            let ret = annotation_to_string(return_type);
+            if ret == "Unit" || ret == "()" {
+                format!("fn({})", params_str)
+            } else {
+                format!("fn({}) -> {}", params_str, ret)
+            }
+        }
+        Annotation::Tuple { elements, .. } => {
+            let inner = elements
+                .iter()
+                .map(annotation_to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("({})", inner)
+        }
+        Annotation::Constant { value, text, .. } => {
+            text.clone().unwrap_or_else(|| value.to_string())
+        }
+        Annotation::Unknown => "Unknown".to_string(),
+        Annotation::Opaque { .. } => String::new(),
     }
 }
