@@ -8,6 +8,7 @@ pub(crate) struct PackageState {
     escape_remap: HashMap<String, String>,
     generic_renames: HashMap<String, String>,
     go_const_bindings: HashSet<String>,
+    package_block_names: HashSet<String>,
 }
 
 impl PackageState {
@@ -35,6 +36,18 @@ impl PackageState {
 
     pub(crate) fn generic_rename(&self, source_name: &str) -> Option<&str> {
         self.generic_renames.get(source_name).map(String::as_str)
+    }
+
+    pub(crate) fn record_package_block_names(&mut self, names: HashSet<String>) {
+        self.package_block_names = names;
+    }
+
+    pub(crate) fn package_block_names(&self) -> &HashSet<String> {
+        &self.package_block_names
+    }
+
+    pub(crate) fn is_package_block_name(&self, go_name: &str) -> bool {
+        self.package_block_names.contains(go_name)
     }
 
     pub(crate) fn extend_go_const_bindings(&mut self, names: impl IntoIterator<Item = String>) {

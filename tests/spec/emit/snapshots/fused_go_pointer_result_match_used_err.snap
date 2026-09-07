@@ -25,12 +25,11 @@ import (
 )
 
 func test() {
-	file, err_1 := os.Create("f")
-	if err_1 != nil || file == nil {
-		if err_1 == nil {
-			err_1 = errors.New("unexpected nil")
+	file, e := os.Create("f")
+	if e != nil || file == nil {
+		if e == nil {
+			e = errors.New("unexpected nil")
 		}
-		e := err_1
 		fmt.Println(e)
 		return
 	}

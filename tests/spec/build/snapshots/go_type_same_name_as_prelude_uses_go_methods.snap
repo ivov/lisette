@@ -12,8 +12,8 @@ import (
 func main() {
 	m := sync.Map{}
 	m.Store("key", "value")
-	ret_1, ok_2 := m.Load("key")
-	if ok_2 {
+	ret_1, ok := m.Load("key")
+	if ok {
 		v := ret_1
 		fmt.Printf("got: %v\n", v)
 	} else {

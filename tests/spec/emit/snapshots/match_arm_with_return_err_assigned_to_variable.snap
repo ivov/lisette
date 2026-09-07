@@ -30,8 +30,8 @@ func safeDivide(a, b float64) (float64, bool) {
 
 func parseAndDivide(a, b float64) lisette.Result[string, string] {
 	var result float64
-	ret_1, ok_2 := safeDivide(a, b)
-	if ok_2 {
+	ret_1, ok := safeDivide(a, b)
+	if ok {
 		v := ret_1
 		result = v
 	} else {

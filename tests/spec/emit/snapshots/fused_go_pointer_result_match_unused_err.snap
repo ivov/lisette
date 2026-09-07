@@ -24,8 +24,8 @@ import (
 )
 
 func test() {
-	file, err_1 := os.Create("f")
-	if err_1 != nil || file == nil {
+	file, err := os.Create("f")
+	if err != nil || file == nil {
 		fmt.Println("error")
 		return
 	}

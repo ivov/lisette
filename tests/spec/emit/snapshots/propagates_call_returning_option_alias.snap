@@ -24,10 +24,9 @@ func source() (int, bool) {
 }
 
 func consume() (int, bool) {
-	ret_1, ret_2 := source()
-	if !ret_2 {
+	n, ok := source()
+	if !ok {
 		return 0, false
 	}
-	n := ret_1
 	return n + 1, true
 }

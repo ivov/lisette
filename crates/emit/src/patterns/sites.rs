@@ -14,7 +14,7 @@ use crate::patterns::binding_emit::{
     tree_assignment_statements, tree_binding_statements, with_tree_bindings,
 };
 use crate::patterns::decision_tree::{self, PatternInfo, SubjectRoot, render_condition};
-use crate::patterns::matching::{field_binding, ok_pattern_field, some_pattern_field};
+use crate::patterns::matching::{ArmBinding, field_binding, ok_pattern_field, some_pattern_field};
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
 };
@@ -272,7 +272,7 @@ impl Planner<'_> {
             Some((_, go_name)) => CommaOkValueSlot::Named(go_name.clone()),
             None => CommaOkValueSlot::Unused,
         };
-        let bound = fuse.bind(self, slot);
+        let bound = fuse.bind(self, slot, None);
         let fail_condition = self.pair_failure_condition(&bound);
         Some(self.finish_fused_let_else(bound.statements, fail_condition, binding, else_block))
     }
@@ -326,7 +326,7 @@ impl Planner<'_> {
     fn declare_fused_binding(&mut self, pattern: &Pattern) -> Option<(String, String)> {
         self.go_name_for_binding(pattern).map(|name| {
             let escaped = go_name::escape_reserved(&name).into_owned();
-            let go_name = if self.is_declared(&escaped) {
+            let go_name = if self.shadows_declaration(&escaped) {
                 self.fresh_var(Some(&name))
             } else {
                 escaped
@@ -477,7 +477,7 @@ impl Planner<'_> {
             else_arm: ElseArm::None,
         }));
         let (body_block, _) = self.lower_fused_arm(
-            &[binding.zip(bound.value.as_deref())],
+            &[ArmBinding::copy(binding, bound.value.as_deref())],
             body,
             &PlacePlan::Statement,
         );

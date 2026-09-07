@@ -27,9 +27,7 @@ func fallible(ok bool) (int, error) {
 }
 
 func test() {
-	_, err_1 := fallible(true)
-	if err_1 != nil {
-		e := err_1
+	if _, e := fallible(true); e != nil {
 		_ = e
 	}
 }

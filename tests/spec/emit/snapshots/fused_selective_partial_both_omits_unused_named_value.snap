@@ -16,9 +16,7 @@ package main
 import "os"
 
 func write(file *os.File) error {
-	_, err_2 := file.Write([]byte{'h', 'i'})
-	if err_2 != nil {
-		err := err_2
+	if _, err := file.Write([]byte{'h', 'i'}); err != nil {
 		return err
 	}
 	return nil

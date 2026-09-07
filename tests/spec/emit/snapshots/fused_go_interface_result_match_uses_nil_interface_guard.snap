@@ -22,15 +22,14 @@ import (
 )
 
 func test() {
-	ret_1, err_2 := net.Dial("tcp", "addr")
-	if err_2 == nil && !lisette.IsNilInterface(ret_1) {
+	ret_1, e := net.Dial("tcp", "addr")
+	if e == nil && !lisette.IsNilInterface(ret_1) {
 		conn := ret_1
 		_ = conn
 	} else {
-		if err_2 == nil {
-			err_2 = errors.New("unexpected nil")
+		if e == nil {
+			e = errors.New("unexpected nil")
 		}
-		e := err_2
 		fmt.Println(e)
 	}
 }

@@ -25,8 +25,8 @@ import (
 
 func test(name string) {
 	var label string
-	ret_1, err_2 := os.Open(name)
-	if err_2 == nil && ret_1 != nil {
+	ret_1, err := os.Open(name)
+	if err == nil && ret_1 != nil {
 		f := ret_1
 		label = f.Name()
 	} else {

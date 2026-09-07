@@ -24,10 +24,9 @@ func source() (int, error) {
 }
 
 func consume() (int, error) {
-	ret_1, ret_2 := source()
-	if ret_2 != nil {
-		return 0, ret_2
+	n, err := source()
+	if err != nil {
+		return 0, err
 	}
-	n := ret_1
 	return n + 1, nil
 }

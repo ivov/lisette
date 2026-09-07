@@ -35,8 +35,8 @@ func main() {
 	w := Wrap(Inner{items: []int{1}})
 	m := make(map[string]Outer)
 	m["a"] = Outer{w: &w}
-	o, ok_1 := m["a"]
-	if !ok_1 {
+	o, ok := m["a"]
+	if !ok {
 		return
 	}
 	inner := Inner{items: slices.Clone(Inner(*o.w).items)}

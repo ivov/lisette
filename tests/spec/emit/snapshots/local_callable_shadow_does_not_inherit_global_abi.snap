@@ -17,9 +17,9 @@ func apply(x int) (int, error) {
 }
 
 func main() {
-	apply := func(x int) int {
+	apply_1 := func(x int) int {
 		return x + 1
 	}
-	value := apply(1)
+	value := apply_1(1)
 	_ = value
 }

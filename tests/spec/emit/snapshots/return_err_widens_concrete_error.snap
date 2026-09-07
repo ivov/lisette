@@ -36,11 +36,9 @@ func bail() (int, error) {
 }
 
 func test() {
-	_, err_1 := bail()
-	if err_1 == nil {
+	if _, e := bail(); e == nil {
 		panic("expected error")
 	} else {
-		e := err_1
 		if e.Error() != "a failed" {
 			panic("wrong returned error")
 		}

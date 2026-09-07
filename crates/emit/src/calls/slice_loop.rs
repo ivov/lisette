@@ -224,7 +224,7 @@ impl Planner<'_> {
             None => match self.go_name_for_binding(pattern) {
                 Some(name) => {
                     let escaped = go_name::escape_reserved(&name).into_owned();
-                    if self.is_declared(&escaped) {
+                    if self.shadows_declaration(&escaped) {
                         self.fresh_var(Some(&name))
                     } else {
                         escaped

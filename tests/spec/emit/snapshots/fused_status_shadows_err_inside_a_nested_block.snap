@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn main() {
+    let first = match strconv.Atoi("1") {
+      Ok(n) => n,
+      Err(_) => { return },
+    }
+    if first > 0 {
+      let second = match strconv.Atoi("2") {
+        Ok(n) => n,
+        Err(err) => {
+          fmt.Println(err)
+          return
+        },
+      }
+      fmt.Println(second)
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	first, err := strconv.Atoi("1")
+	if err != nil {
+		return
+	}
+	if first > 0 {
+		second, err := strconv.Atoi("2")
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println(second)
+	}
+}

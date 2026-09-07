@@ -21,8 +21,8 @@ package main
 import "example.com/idx"
 
 func apply(f func(string, string) (int, bool), s string) int {
-	ret_1, ok_2 := f(s, "ll")
-	if ok_2 {
+	ret_1, ok := f(s, "ll")
+	if ok {
 		v := ret_1
 		return v
 	} else {

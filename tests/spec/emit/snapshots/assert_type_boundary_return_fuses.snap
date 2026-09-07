@@ -9,6 +9,6 @@ description: |
 package main
 
 func test(value any) (int, bool) {
-	ret_1, ok_2 := value.(int)
-	return ret_1, ok_2
+	ret_1, ok := value.(int)
+	return ret_1, ok
 }

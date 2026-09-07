@@ -3,8 +3,10 @@ use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::calls::dispatch::extract_native_method_name;
 use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
+use crate::escape_reserved;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::CallableOrigin;
+use crate::state::scope::PairStatusKind;
 use crate::types::native::NativeGoType;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -64,6 +66,7 @@ pub(crate) struct LoweredPair {
     status: String,
     success: PairSuccess,
     nil_guard: Option<NilGuard>,
+    initializer: Option<String>,
 }
 
 impl LoweredPair {
@@ -159,6 +162,7 @@ impl Planner<'_> {
             PairKind::CommaOk {
                 nil_guard: source.nil_guard,
             },
+            None,
         )
     }
 
@@ -168,13 +172,21 @@ impl Planner<'_> {
         expression: String,
         slot: CommaOkValueSlot,
         kind: PairKind,
+        status_hint: Option<&str>,
     ) -> LoweredPair {
-        let (carries_value, nil_guard, success, hint) = match kind {
-            PairKind::CommaOk { nil_guard } => (true, nil_guard, PairSuccess::Truthy, "ok"),
+        let (carries_value, nil_guard, success, status_kind) = match kind {
+            PairKind::CommaOk { nil_guard } => {
+                (true, nil_guard, PairSuccess::Truthy, PairStatusKind::Ok)
+            }
             PairKind::Error {
                 carries_value,
                 nil_guard,
-            } => (carries_value, nil_guard, PairSuccess::Nil, "err"),
+            } => (
+                carries_value,
+                nil_guard,
+                PairSuccess::Nil,
+                PairStatusKind::Error,
+            ),
         };
         let value = carries_value
             .then(|| match slot {
@@ -183,29 +195,59 @@ impl Planner<'_> {
                 CommaOkValueSlot::Unused => nil_guard.map(|_| self.fresh_pair_value()),
             })
             .flatten();
-        let status = self.fresh_var(Some(hint));
-        self.declare(&status);
+        let opens_if = value.is_none();
+        let status = self.pair_status(status_hint, status_kind, opens_if);
         let binding = match (carries_value, value.as_deref()) {
             (true, Some(value)) => format!("{value}, {status}"),
             (true, None) => format!("_, {status}"),
             (false, _) => status.clone(),
         };
-        statements.push(LoweredStatement::RawGo(format!(
-            "{binding} := {expression}\n"
-        )));
+        let line = format!("{binding} := {expression}");
+        let initializer = if opens_if {
+            Some(line)
+        } else {
+            statements.push(LoweredStatement::RawGo(format!("{line}\n")));
+            None
+        };
         LoweredPair {
             statements,
             value,
             status,
             success,
             nil_guard,
+            initializer,
         }
     }
 
-    fn fresh_pair_value(&mut self) -> String {
+    pub(crate) fn fresh_pair_value(&mut self) -> String {
         let v = self.fresh_var(Some("ret"));
         self.declare(&v);
         v
+    }
+
+    /// Fresh within a Go block; nested blocks may shadow outer statuses.
+    pub(crate) fn pair_status(
+        &mut self,
+        hint: Option<&str>,
+        kind: PairStatusKind,
+        opens_if: bool,
+    ) -> String {
+        let candidate = escape_reserved(hint.unwrap_or(match kind {
+            PairStatusKind::Error => "err",
+            PairStatusKind::Ok => "ok",
+        }));
+        let taken = (!opens_if && self.scope.current_block_declares(&candidate))
+            || self.scope.has_binding_for_go_name(&candidate)
+            || self.package.is_package_block_name(&candidate);
+        let name = if taken {
+            self.fresh_var(Some(&candidate))
+        } else {
+            candidate.into_owned()
+        };
+        if !opens_if {
+            self.declare(&name);
+        }
+        name
     }
 
     pub(crate) fn pair_success_condition(&mut self, pair: &LoweredPair) -> String {
@@ -223,23 +265,29 @@ impl Planner<'_> {
             (PairSuccess::Nil, true) => format!("{} == nil", pair.status),
             (PairSuccess::Nil, false) => format!("{} != nil", pair.status),
         };
-        let Some(guard) = pair.nil_guard else {
-            return status;
+        let condition = match pair.nil_guard {
+            None => status,
+            Some(guard) => {
+                if guard.is_interface() {
+                    self.require_stdlib();
+                }
+                let value = pair
+                    .value
+                    .as_deref()
+                    .expect("nil guard requires the value var");
+                let nil_condition = if success {
+                    guard.non_nil(value)
+                } else {
+                    guard.is_nil(value)
+                };
+                let operator = if success { "&&" } else { "||" };
+                format!("{status} {operator} {nil_condition}")
+            }
         };
-        if guard.is_interface() {
-            self.require_stdlib();
+        match &pair.initializer {
+            Some(initializer) => format!("{initializer}; {condition}"),
+            None => condition,
         }
-        let value = pair
-            .value
-            .as_deref()
-            .expect("nil guard requires the value var");
-        let nil_condition = if success {
-            guard.non_nil(value)
-        } else {
-            guard.is_nil(value)
-        };
-        let operator = if success { "&&" } else { "||" };
-        format!("{status} {operator} {nil_condition}")
     }
 
     /// Lower the pair-producing Go expression.

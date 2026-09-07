@@ -26,8 +26,7 @@ func divide(a, b int) (int, bool) {
 }
 
 func test() {
-	_, ok_1 := divide(100, 0)
-	if !ok_1 {
+	if _, ok := divide(100, 0); !ok {
 		fmt.Print("division by zero\n")
 	}
 }

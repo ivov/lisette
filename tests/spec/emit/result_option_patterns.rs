@@ -2228,3 +2228,149 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn fused_pairs_take_distinct_status_names_in_one_block() {
+    let input = r#"
+import "go:os"
+import "go:strconv"
+
+fn run(path: string) -> Result<int, error> {
+  let text = os.ReadFile(path)?
+  let Ok(n) = strconv.Atoi(os.Getenv("N")) else { return Ok(text.length()) }
+  os.Remove(path)?
+  Ok(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_status_avoids_a_live_err_binding() {
+    let input = r#"
+import "go:errors"
+import "go:strconv"
+
+fn run() -> Result<int, error> {
+  let err = errors.New("outer")
+  let n = strconv.Atoi("1")?
+  if n == 0 { return Err(err) }
+  Ok(n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_status_takes_the_err_arm_name() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn main() {
+  match strconv.Atoi("1") {
+    Ok(n) => fmt.Println(n),
+    Err(failure) => fmt.Println(failure),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_status_only_call_opens_the_if_initializer() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  if let Err(err) = os.Remove("a") {
+    fmt.Println(err)
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_status_shadows_err_inside_a_nested_block() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn main() {
+  let first = match strconv.Atoi("1") {
+    Ok(n) => n,
+    Err(_) => { return },
+  }
+  if first > 0 {
+    let second = match strconv.Atoi("2") {
+      Ok(n) => n,
+      Err(err) => {
+        fmt.Println(err)
+        return
+      },
+    }
+    fmt.Println(second)
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_status_of_another_kind_is_not_redeclared() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn run(m: Map<string, int>) {
+  let parsed = match strconv.Atoi("1") {
+    Ok(n) => n,
+    Err(ok) => {
+      fmt.Println(ok)
+      return
+    },
+  }
+  let Some(v) = m.get("a") else { return }
+  fmt.Println(parsed, v)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_propagate_in_call_args_binds_the_inner_pair_first() {
+    let input = r#"
+import "go:strconv"
+
+fn double(n: int) -> Result<int, error> { Ok(n * 2) }
+
+fn run() -> Result<int, error> {
+  let d = double(strconv.Atoi("1")?)?
+  Ok(d)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pairs_of_different_error_types_take_distinct_statuses() {
+    let input = r#"
+import "go:strconv"
+
+pub interface AppError {
+  fn Error() -> string
+  fn status() -> int
+}
+
+fn first() -> Result<int, AppError> { Ok(1) }
+
+fn run() -> Result<int, error> {
+  let a = first()?
+  let b = strconv.Atoi("2")?
+  Ok(a + b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

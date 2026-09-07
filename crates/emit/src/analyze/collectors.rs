@@ -111,17 +111,16 @@ impl Planner<'_> {
             return;
         }
 
-        let reserved = self.package_block_names(files);
+        let mut taken = self.package.package_block_names().clone();
         let mut colliding: Vec<&EcoString> = generic_names
             .iter()
-            .filter(|name| reserved.contains(go_name::escape_type_name(name).as_ref()))
+            .filter(|name| taken.contains(go_name::escape_type_name(name).as_ref()))
             .collect();
         if colliding.is_empty() {
             return;
         }
         colliding.sort();
 
-        let mut taken = reserved;
         taken.extend(generic_names.iter().map(EcoString::to_string));
 
         for name in colliding {

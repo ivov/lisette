@@ -21,8 +21,8 @@ func getValue(s string) (int, bool) {
 }
 
 func test() int {
-	x, ok_1 := getValue("ok")
-	if !ok_1 {
+	x, ok := getValue("ok")
+	if !ok {
 		return 0
 	}
 	return x

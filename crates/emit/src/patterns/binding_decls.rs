@@ -129,7 +129,7 @@ impl Planner<'_> {
                     .iter()
                     .any(|e| self.pattern_has_binding_collisions(e))
                     || if let RestPattern::Bind { name, .. } = rest {
-                        !self.facts.is_unused_rest_binding(rest) && self.is_declared(name)
+                        !self.facts.is_unused_rest_binding(rest) && self.shadows_declaration(name)
                     } else {
                         false
                     }
@@ -143,7 +143,7 @@ impl Planner<'_> {
                 ..
             } => {
                 self.pattern_has_binding_collisions(inner)
-                    || (!self.facts.is_unused_binding(p) && self.is_declared(name))
+                    || (!self.facts.is_unused_binding(p) && self.shadows_declaration(name))
             }
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
         }
@@ -227,7 +227,7 @@ impl Planner<'_> {
         go_name: String,
         resolved: &Type,
     ) {
-        let go_name = if self.is_declared(&go_name) {
+        let go_name = if self.shadows_declaration(&go_name) {
             self.fresh_var(Some(lisette_name))
         } else {
             go_name

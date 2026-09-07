@@ -14,12 +14,11 @@ func parseInt(s string) (int, error) {
 }
 
 func main() {
-	ret_1, err_2 := parseInt("42")
-	if err_2 == nil {
+	ret_1, e := parseInt("42")
+	if e == nil {
 		n := ret_1
 		fmt.Println(n)
 	} else {
-		e := err_2
 		fmt.Println(e)
 	}
 }

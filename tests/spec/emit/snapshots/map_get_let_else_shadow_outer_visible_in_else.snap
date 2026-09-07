@@ -15,8 +15,8 @@ description: |
 package main
 
 func test(m map[string]string, x int) string {
-	x_1, ok_2 := m["a"]
-	if !ok_2 {
+	x_1, ok := m["a"]
+	if !ok {
 		if x > 0 {
 			return "positive"
 		}

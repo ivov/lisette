@@ -35,23 +35,23 @@ type Holder struct {
 func main() {
 	m := make(map[string]Holder)
 	m["a"] = Holder{f: strconv.Atoi}
-	found, ok_1 := m["a"]
-	if !ok_1 {
+	found, ok := m["a"]
+	if !ok {
 		return
 	}
 	entry := found
 	entry.f = strconv.Atoi
 	m["a"] = entry
-	h, ok_2 := m["a"]
-	if !ok_2 {
+	h, ok_1 := m["a"]
+	if !ok_1 {
 		return
 	}
-	ret_3, ret_4 := h.f("1")
+	ret_2, ret_3 := h.f("1")
 	var r lisette.Result[int, error]
-	if ret_4 != nil {
-		r = lisette.MakeResultErr[int, error](ret_4)
+	if ret_3 != nil {
+		r = lisette.MakeResultErr[int, error](ret_3)
 	} else {
-		r = lisette.MakeResultOk[int, error](ret_3)
+		r = lisette.MakeResultOk[int, error](ret_2)
 	}
 	if r.Tag == lisette.ResultOk {
 		_ = r.OkVal

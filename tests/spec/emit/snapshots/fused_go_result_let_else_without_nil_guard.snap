@@ -16,8 +16,8 @@ package main
 import "strconv"
 
 func test(text string) int {
-	parsed, err_1 := strconv.Atoi(text)
-	if err_1 != nil {
+	parsed, err := strconv.Atoi(text)
+	if err != nil {
 		return -1
 	}
 	return parsed

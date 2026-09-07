@@ -27,23 +27,22 @@ import (
 
 func lookup(k string) (string, bool) {
 	tryResult_1 := func() lisette.Option[string] {
-		ret_2, ret_3 := os.LookupEnv(k)
-		if !ret_3 {
+		v, ok := os.LookupEnv(k)
+		if !ok {
 			return lisette.MakeOptionNone[string]()
 		}
-		v := ret_2
 		return lisette.MakeOptionSome[string](v)
 	}()
-	v_4 := tryResult_1
-	if v_4.Tag == lisette.OptionSome {
-		return v_4.SomeVal, true
+	v_2 := tryResult_1
+	if v_2.Tag == lisette.OptionSome {
+		return v_2.SomeVal, true
 	}
 	return "", false
 }
 
 func main() {
-	ret_1, ok_2 := lookup("HOME")
-	if ok_2 {
+	ret_1, ok := lookup("HOME")
+	if ok {
 		v := ret_1
 		_ = v
 	}

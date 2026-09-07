@@ -18,10 +18,9 @@ func maybeGet() (int, bool) {
 }
 
 func process() (int, bool) {
-	ret_1, ret_2 := maybeGet()
-	if !ret_2 {
+	x, ok := maybeGet()
+	if !ok {
 		return 0, false
 	}
-	x := ret_1
 	return x + 1, true
 }

@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:errors"
+  import "go:strconv"
+  
+  fn run() -> Result<int, error> {
+    let err = errors.New("outer")
+    let n = strconv.Atoi("1")?
+    if n == 0 { return Err(err) }
+    Ok(n)
+  }
+---
+package main
+
+import (
+	"errors"
+	"strconv"
+)
+
+func run() (int, error) {
+	err := errors.New("outer")
+	n, err_1 := strconv.Atoi("1")
+	if err_1 != nil {
+		return 0, err_1
+	}
+	if n == 0 {
+		return 0, err
+	}
+	return n, nil
+}

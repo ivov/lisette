@@ -28,8 +28,8 @@ func main() {
 	w := Wrap(Inner{x: 0})
 	m := make(map[string]*Wrap)
 	m["a"] = &w
-	r, ok_1 := m["a"]
-	if !ok_1 {
+	r, ok := m["a"]
+	if !ok {
 		return
 	}
 	inner := Inner(*r)

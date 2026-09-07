@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn main() {
+    if let Err(err) = os.Remove("a") {
+      fmt.Println(err)
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	if err := os.Remove("a"); err != nil {
+		fmt.Println(err)
+	}
+}

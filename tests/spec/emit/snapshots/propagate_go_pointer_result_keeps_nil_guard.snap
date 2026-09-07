@@ -17,9 +17,9 @@ import (
 )
 
 func openFirst(path string) (int, error) {
-	ret_1, ret_2 := os.Open(path)
-	if ret_2 != nil {
-		return 0, ret_2
+	ret_1, err := os.Open(path)
+	if err != nil {
+		return 0, err
 	}
 	if ret_1 == nil {
 		return 0, errors.New("unexpected nil")

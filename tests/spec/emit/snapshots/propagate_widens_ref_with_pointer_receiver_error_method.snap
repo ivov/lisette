@@ -41,20 +41,17 @@ func readValue() (int, *FileError) {
 }
 
 func load() (int, error) {
-	ret_1, ret_2 := readValue()
-	if ret_2 != nil {
-		return 0, ret_2
+	n, err := readValue()
+	if err != nil {
+		return 0, err
 	}
-	n := ret_1
 	return n, nil
 }
 
 func test() {
-	_, err_1 := load()
-	if err_1 == nil {
+	if _, e := load(); e == nil {
 		panic("expected error")
 	} else {
-		e := err_1
 		if e.Error() != "cannot open a.txt" {
 			panic("wrong ref error")
 		}

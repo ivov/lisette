@@ -28,28 +28,26 @@ import (
 
 func sumParsed(a, b string) (int, error) {
 	tryResult_1 := func() lisette.Result[int, error] {
-		ret_2, ret_3 := strconv.Atoi(a)
-		if ret_3 != nil {
-			return lisette.MakeResultErr[int, error](ret_3)
+		x, err := strconv.Atoi(a)
+		if err != nil {
+			return lisette.MakeResultErr[int, error](err)
 		}
-		x := ret_2
-		ret_4, ret_5 := strconv.Atoi(b)
-		if ret_5 != nil {
-			return lisette.MakeResultErr[int, error](ret_5)
+		y, err_2 := strconv.Atoi(b)
+		if err_2 != nil {
+			return lisette.MakeResultErr[int, error](err_2)
 		}
-		y := ret_4
 		return lisette.MakeResultOk[int, error](x + y)
 	}()
-	v_6 := tryResult_1
-	if v_6.Tag == lisette.ResultOk {
-		return v_6.OkVal, nil
+	v_3 := tryResult_1
+	if v_3.Tag == lisette.ResultOk {
+		return v_3.OkVal, nil
 	}
-	return 0, v_6.ErrVal
+	return 0, v_3.ErrVal
 }
 
 func main() {
-	ret_1, err_2 := sumParsed("3", "4")
-	if err_2 == nil {
+	ret_1, err := sumParsed("3", "4")
+	if err == nil {
 		n := ret_1
 		_ = n
 	}
