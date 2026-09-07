@@ -67,13 +67,13 @@ impl Planner<'_> {
                 && !left_ty.is_complex()
             {
                 let staged = self.plan_operand(left_expression, ctx);
-                return staged.map_rendered_as_computed(|_, value, _| {
+                return staged.map_expression_as_computed(|_, value| {
                     GoExpression::call(
                         GoExpression::name("complex".to_string()),
                         vec![
                             GoExpression::literal("0".to_string()),
                             GoExpression::binary(
-                                GoExpression::opaque_with_deferred_evaluation(value, true),
+                                value,
                                 "*",
                                 GoExpression::literal(imag_coef.to_string()),
                             ),
@@ -89,13 +89,13 @@ impl Planner<'_> {
                 && !right_ty.is_complex()
             {
                 let staged = self.plan_operand(right_expression, ctx);
-                return staged.map_rendered_as_computed(|_, value, _| {
+                return staged.map_expression_as_computed(|_, value| {
                     GoExpression::call(
                         GoExpression::name("complex".to_string()),
                         vec![
                             GoExpression::literal("0".to_string()),
                             GoExpression::binary(
-                                GoExpression::opaque_with_deferred_evaluation(value, true),
+                                value,
                                 "*",
                                 GoExpression::literal(imag_coef.to_string()),
                             ),
@@ -144,40 +144,27 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let left_staged = self.lower_composite_value(left_expression, ctx);
         let left_effect = left_staged.evaluation.effect;
-        let left_contains_deferred_evaluation =
-            left_staged.expression.contains_deferred_evaluation();
-        let (left_setup, left_value) = left_staged.into_parts();
 
         // Wrap RHS setup in an IIFE so it runs only when control reaches the
         // RHS. Hoisting it before the operator would defeat short-circuit.
         let right_staged = self.lower_composite_value(right_expression, ctx);
         let right_effect = right_staged.evaluation.effect;
-        let right_contains_deferred_evaluation =
-            right_staged.expression.contains_deferred_evaluation();
-        let (right_setup, right_value) = right_staged.into_parts();
-        let right_string = if right_setup.is_empty() {
-            right_value
+        let right_value = if right_staged.setup.is_empty() {
+            right_staged.expression
         } else {
-            format!(
-                "func() bool {{\n{}return {}\n}}()",
-                Renderer.render_setup(&right_setup),
-                right_value
+            GoExpression::opaque_with_deferred_evaluation(
+                format!(
+                    "func() bool {{\n{}return {}\n}}()",
+                    Renderer.render_setup(&right_staged.setup),
+                    right_staged.expression
+                ),
+                true,
             )
         };
 
         ValuePlan::computed(
-            left_setup,
-            GoExpression::binary(
-                GoExpression::opaque_with_deferred_evaluation(
-                    left_value,
-                    left_contains_deferred_evaluation,
-                ),
-                operator.to_string(),
-                GoExpression::opaque_with_deferred_evaluation(
-                    right_string,
-                    right_contains_deferred_evaluation || !right_setup.is_empty(),
-                ),
-            ),
+            left_staged.setup,
+            GoExpression::binary(left_staged.expression, operator.to_string(), right_value),
             left_effect.combine(right_effect),
         )
     }
@@ -227,13 +214,6 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let target = expression.unwrap_parens();
         let preserve_parens = matches!(expression, Expression::Paren { .. });
-        let wrap = |s: String| {
-            if preserve_parens {
-                format!("({})", s)
-            } else {
-                s
-            }
-        };
         if let Expression::Binary {
             operator: cmp,
             left,
@@ -261,9 +241,14 @@ impl Planner<'_> {
         if matches!(target, Expression::Call { .. }) {
             let mut setup: Vec<LoweredStatement> = Vec::new();
             if let Some(negated) = self.try_emit_negated_call(&mut setup, target) {
+                let negated = if preserve_parens {
+                    GoExpression::parenthesized(negated)
+                } else {
+                    negated
+                };
                 return ValuePlan::computed(
                     setup,
-                    GoExpression::opaque_with_deferred_evaluation(wrap(negated), true),
+                    negated.with_deferred_evaluation(true),
                     EvaluationEffect::EffectfulCall,
                 );
             }

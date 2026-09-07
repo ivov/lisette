@@ -6,6 +6,7 @@ use crate::context::expression::ExpressionContext;
 use crate::escape_reserved;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::CallableOrigin;
+use crate::plan::values::GoExpression;
 use crate::state::scope::PairStatusKind;
 use crate::types::native::NativeGoType;
 use std::borrow::Cow;
@@ -400,6 +401,15 @@ impl Planner<'_> {
 pub(super) fn parenthesize_prefixed(operand: String) -> String {
     if operand.starts_with('*') || operand.starts_with('&') {
         format!("({operand})")
+    } else {
+        operand
+    }
+}
+
+/// `*x` and `&x` bind looser than a postfix `[k]` or `.(T)`.
+pub(super) fn parenthesize_prefixed_expression(operand: GoExpression) -> GoExpression {
+    if operand.as_str().starts_with('*') || operand.as_str().starts_with('&') {
+        GoExpression::parenthesized(operand)
     } else {
         operand
     }

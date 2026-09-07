@@ -41,7 +41,7 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         result_var_name: Option<&str>,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> (Vec<LoweredStatement>, GoExpression) {
         let expression_ty = self.facts.peel_alias(&expression.get_type());
         let fallible = Fallible::from_type(&expression_ty)
             .expect("lower_propagate called on non-Result/Option type");
@@ -54,12 +54,18 @@ impl Planner<'_> {
         {
             statements.extend(head);
             self.declare_zero_for_dead_path(&mut statements, var_name, &fallible);
-            return (statements, String::new());
+            return (statements, GoExpression::empty());
         }
 
-        if let Some(fused) = self.try_lower_fused_propagate(expression, &fallible, result_var_name)
+        if let Some((statements, value)) =
+            self.try_lower_fused_propagate(expression, &fallible, result_var_name)
         {
-            return fused;
+            let value = if value.is_empty() {
+                GoExpression::empty()
+            } else {
+                GoExpression::name(value)
+            };
+            return (statements, value);
         }
 
         self.require_stdlib();
@@ -67,13 +73,16 @@ impl Planner<'_> {
         statements.extend(check_setup);
         statements.push(self.build_propagate_failure_check(&check_var, &fallible));
 
-        let ok_access = format!("{}.{}", check_var, fallible.ok_field());
+        let ok_access = GoExpression::selector(
+            GoExpression::name(check_var),
+            fallible.ok_field().to_string(),
+        );
         let value = match result_var_name {
             None => ok_access,
-            Some("_") => "_".to_string(),
+            Some("_") => GoExpression::name("_".to_string()),
             Some(name) => {
-                statements.push(self.bind_propagate_ok(name, &ok_access));
-                name.to_string()
+                statements.push(self.bind_propagate_ok(name, ok_access.as_str()));
+                GoExpression::name(name.to_string())
             }
         };
         (statements, value)
@@ -386,24 +395,20 @@ impl Planner<'_> {
 
         let plan = self.lower_value(expression, ExpressionContext::value());
         ReturnForm::Plain {
-            value: plan.map_rendered_as_computed(
-                |setup, raw_value, contains_deferred_evaluation| {
-                    let mut coercion_buffer = String::new();
-                    let final_value = self.apply_type_coercion(
-                        &mut coercion_buffer,
-                        return_ctx.ty(),
-                        expression,
-                        raw_value,
-                    );
-                    if !coercion_buffer.is_empty() {
-                        setup.push(LoweredStatement::RawGo(coercion_buffer));
-                    }
-                    GoExpression::opaque_with_deferred_evaluation(
-                        final_value,
-                        contains_deferred_evaluation,
-                    )
-                },
-            ),
+            value: plan.map_expression_as_computed(|setup, raw_value| {
+                let contains_deferred_evaluation = raw_value.contains_deferred_evaluation();
+                let mut coercion_buffer = String::new();
+                let final_value = self.apply_type_coercion(
+                    &mut coercion_buffer,
+                    return_ctx.ty(),
+                    expression,
+                    raw_value,
+                );
+                if !coercion_buffer.is_empty() {
+                    setup.push(LoweredStatement::RawGo(coercion_buffer));
+                }
+                final_value.with_deferred_evaluation(contains_deferred_evaluation)
+            }),
         }
     }
 
@@ -485,7 +490,11 @@ impl Planner<'_> {
         {
             let (setup, value) = self.lower_propagate(inner, None);
             statements.extend(setup);
-            statements.extend(self.wrapped_value_return(value, &return_ty, lowered.as_ref()));
+            statements.extend(self.wrapped_value_return(
+                value.rendered(),
+                &return_ty,
+                lowered.as_ref(),
+            ));
             return Some(statements);
         }
 
@@ -673,7 +682,7 @@ impl Planner<'_> {
             statements.extend(setup);
             let ok_ty = self.facts.peel_alias(return_ty).ok_type();
             let (projection, payload) =
-                transition::lowered_payload_values(self, shape, &ok_ty, &value);
+                transition::lowered_payload_values(self, shape, &ok_ty, value.as_str());
             statements.extend(projection);
             statements.push(transition::multi_value_return(
                 transition::lowered_ok_values(shape, payload),

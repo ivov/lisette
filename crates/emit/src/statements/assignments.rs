@@ -76,16 +76,12 @@ impl Planner<'_> {
         } else {
             self.value_slot_coercion(value, &target.get_type())
         };
-        let value = right_hand_side.map_rendered_as_computed(
-            |value_setup, rhs_value, contains_deferred_evaluation| {
-                let (coercion_setup, final_value) = coercion.lower(self, rhs_value);
-                value_setup.extend(coercion_setup);
-                GoExpression::opaque_with_deferred_evaluation(
-                    final_value,
-                    contains_deferred_evaluation,
-                )
-            },
-        );
+        let value = right_hand_side.map_expression_as_computed(|value_setup, rhs_value| {
+            let contains_deferred_evaluation = rhs_value.contains_deferred_evaluation();
+            let (coercion_setup, final_value) = coercion.lower(self, rhs_value);
+            value_setup.extend(coercion_setup);
+            final_value.with_deferred_evaluation(contains_deferred_evaluation)
+        });
         LoweredStatement::Assign(AssignForm::Simple {
             target_capture,
             target_str,
@@ -133,18 +129,15 @@ impl Planner<'_> {
         });
         let parenthesize_rhs =
             pinned_left.is_some() && matches!(rhs.unwrap_parens(), Expression::Binary { .. });
-        let mut right_hand_side =
-            right_hand_side.map_rendered(|_, staged_value, contains_deferred_evaluation| {
-                let rhs_value = if parenthesize_rhs {
-                    format!("({})", staged_value)
-                } else {
-                    staged_value
-                };
-                GoExpression::opaque_with_deferred_evaluation(
-                    rhs_value,
-                    contains_deferred_evaluation,
-                )
-            });
+        let mut right_hand_side = right_hand_side.map_expression(|_, staged_value| {
+            if parenthesize_rhs {
+                let contains_deferred_evaluation = staged_value.contains_deferred_evaluation();
+                GoExpression::parenthesized(staged_value)
+                    .with_deferred_evaluation(contains_deferred_evaluation)
+            } else {
+                staged_value
+            }
+        });
         if parenthesize_rhs {
             right_hand_side.make_observable_computed();
         }

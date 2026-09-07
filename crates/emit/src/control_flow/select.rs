@@ -7,6 +7,7 @@ use crate::plan::bodies::{
     ElseArm, IfPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan, SelectArmPlan,
     SelectStatementPlan,
 };
+use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::placement::unreachable_panic_if_needed;
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm};
@@ -14,8 +15,8 @@ use syntax::program::{ChannelOperation, channel_operation};
 use syntax::types::Type;
 
 enum PreparedChannelOperation {
-    Send(String, String),
-    Receive(String),
+    Send(GoExpression, GoExpression),
+    Receive(GoExpression),
 }
 
 struct SelectReceiveContext<'a> {
@@ -207,12 +208,7 @@ impl Planner<'_> {
         if let Some(ChannelOperation::Receive { channel }) = channel_operation(unwrapped) {
             let plan = self.lower_value(channel, ExpressionContext::value());
             if channel.get_type().is_ref() {
-                return plan.map_rendered(|_, value, contains_deferred_evaluation| {
-                    GoExpression::opaque_with_deferred_evaluation(
-                        cancel_deref_of_address(value),
-                        contains_deferred_evaluation,
-                    )
-                });
+                return plan.map_expression(|_, value| cancel_deref_of_address(value));
             }
             return plan;
         }
@@ -434,22 +430,26 @@ impl Planner<'_> {
             let channel = operation.channel();
             let channel_plan = self.lower_value(channel, ExpressionContext::value());
             let ch_has_call = needs_hoist && channel_plan.evaluation.effect.has_call();
-            let (op_setup, mut ch) = channel_plan.into_parts();
-            setup.extend(op_setup);
+            setup.extend(channel_plan.setup);
+            let mut ch = channel_plan.expression;
             if channel.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
             }
             if ch_has_call {
-                ch = self.hoist_tmp_value_statement(setup, "ch", &ch);
+                ch = GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", ch.as_str()));
             }
             match operation {
                 ChannelOperation::Send { value, .. } => {
                     let value_plan = self.lower_composite_value(value, ExpressionContext::value());
                     let val_has_call = needs_hoist && value_plan.evaluation.effect.has_call();
-                    let (val_setup, mut val) = value_plan.into_parts();
-                    setup.extend(val_setup);
+                    setup.extend(value_plan.setup);
+                    let mut val = value_plan.expression;
                     if val_has_call {
-                        val = self.hoist_tmp_value_statement(setup, "send_val", &val);
+                        val = GoExpression::name(self.hoist_tmp_value_statement(
+                            setup,
+                            "send_val",
+                            val.as_str(),
+                        ));
                     }
                     PreparedChannelOperation::Send(ch, val)
                 }
@@ -458,13 +458,13 @@ impl Planner<'_> {
         } else {
             let expression_plan = self.lower_value(send_expression, ExpressionContext::value());
             let expression_has_call = needs_hoist && expression_plan.evaluation.effect.has_call();
-            let (op_setup, mut ch) = expression_plan.into_parts();
-            setup.extend(op_setup);
+            setup.extend(expression_plan.setup);
+            let mut ch = expression_plan.expression;
             if send_expression.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
             }
             if expression_has_call {
-                ch = self.hoist_tmp_value_statement(setup, "ch", &ch);
+                ch = GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", ch.as_str()));
             }
             PreparedChannelOperation::Receive(ch)
         }
@@ -484,7 +484,7 @@ impl Planner<'_> {
                 body: block,
             },
             PreparedChannelOperation::Receive(ch) => SelectArmPlan::Send {
-                operation: GoExpression::receive(GoExpression::opaque(ch.clone())),
+                operation: GoExpression::receive(ch.clone()),
                 body: block,
             },
         }
@@ -585,13 +585,21 @@ impl Planner<'_> {
 
 /// `*&x` → `x` (avoids redundant deref when the emitter has already
 /// produced an `&`-prefixed expression).
-fn cancel_deref_of_address(ch: String) -> String {
-    if let Some(inner) = ch.strip_prefix("(&").and_then(|s| s.strip_suffix(')')) {
-        inner.to_string()
-    } else if let Some(inner) = ch.strip_prefix('&') {
-        inner.to_string()
-    } else {
-        format!("*{}", ch)
+/// `*&x` is `x`. Any other pointer gets dereferenced.
+fn cancel_deref_of_address(channel: GoExpression) -> GoExpression {
+    let contains_deferred_evaluation = channel.contains_deferred_evaluation();
+    let addressed = match channel.node() {
+        GoExpressionNode::AddressOf(inner) => Some(inner.as_ref()),
+        GoExpressionNode::Parenthesized(inner) => match inner.as_ref() {
+            GoExpressionNode::AddressOf(inner) => Some(inner.as_ref()),
+            _ => None,
+        },
+        _ => None,
+    };
+    match addressed {
+        Some(inner) => GoExpression::from_node(inner.clone())
+            .with_deferred_evaluation(contains_deferred_evaluation),
+        None => GoExpression::dereference(channel),
     }
 }
 

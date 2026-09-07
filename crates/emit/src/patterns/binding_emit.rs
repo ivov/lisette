@@ -5,7 +5,7 @@ use crate::patterns::decision_tree::{
 };
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::placement::simple_assign;
-use crate::plan::values::ValuePlan;
+use crate::plan::values::{EvaluationEffect, ValuePlan};
 use crate::state::bindings::InlineExpr;
 use std::borrow::Cow;
 use syntax::ast::Expression;
@@ -120,16 +120,19 @@ pub(crate) fn tree_binding_statements(
             continue;
         };
 
-        let access_expression = binding.path.render(SubjectRoot::Var(subject_var));
+        let access_expression = binding
+            .path
+            .render(SubjectRoot::Var(subject_var))
+            .rendered();
 
         if analyze_inline_candidate(&binding.lisette_name, consumers) == InlineDecision::Inline {
-            let safe_text = binding
+            let composable = binding
                 .path
                 .render_composable(SubjectRoot::Var(subject_var));
             planner.scope.bind_inline_expr(
                 &binding.lisette_name,
                 InlineExpr::new(
-                    safe_text,
+                    composable,
                     vec![subject_var.to_string()],
                     binding.path.contains_deferred_evaluation(),
                 ),
@@ -195,6 +198,9 @@ pub(crate) fn tree_assignment_statements(
         let name = registered_name.to_string();
         planner.scope.record_go_use(subject_var);
         let access_expression = binding.path.render(SubjectRoot::Var(subject_var));
-        statements.push(simple_assign(&name, ValuePlan::opaque(access_expression)));
+        statements.push(simple_assign(
+            &name,
+            ValuePlan::computed(Vec::new(), access_expression, EvaluationEffect::Pure),
+        ));
     }
 }

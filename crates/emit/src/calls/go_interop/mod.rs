@@ -24,12 +24,12 @@ impl Planner<'_> {
     ) -> ValuePlan {
         if let Some(bridges) = self.go_tuple_result_bridges(abi, result_ty) {
             let call = self.lower_call(call_expression, None, ExpressionContext::value());
-            return call.map_rendered_as_observable_computed(|setup, call_string, _| {
+            return call.map_expression_as_observable_computed(|setup, call| {
                 let values = self.create_temp_vars("ret", bridges.len());
                 setup.push(LoweredStatement::RawGo(format!(
                     "{} := {}\n",
                     values.join(", "),
-                    call_string
+                    call
                 )));
                 let values = values
                     .into_iter()
@@ -37,41 +37,37 @@ impl Planner<'_> {
                     .map(|(value, bridge)| self.plan_layout_bridge(setup, &value, bridge))
                     .collect::<Vec<_>>();
                 let tuple = self.plan_tuple_from_vars(setup, &values, result_ty);
-                GoExpression::opaque(tuple)
+                GoExpression::name(tuple)
             });
         }
 
         if let Some(bridge) = self.go_result_layout_bridge(abi, result_ty) {
             let call = self.lower_call(call_expression, None, ExpressionContext::value());
-            return call.map_rendered_as_observable_computed(
-                |setup, call_string, _contains_deferred_evaluation| {
-                    let (bridge_setup, value) = bridge.lower(self, call_string);
-                    setup.extend(bridge_setup);
-                    GoExpression::opaque(value)
-                },
-            );
+            return call.map_expression_as_observable_computed(|setup, call| {
+                let (bridge_setup, value) = bridge.lower(self, call);
+                setup.extend(bridge_setup);
+                value.with_deferred_evaluation(false)
+            });
         }
 
         let payload_bridge = self.go_return_payload_bridge(abi, result_ty);
         let call_plan = self.lower_call(call_expression, None, ExpressionContext::value());
-        call_plan.map_rendered_as_observable_computed(
-            |setup, call_string, _contains_deferred_evaluation| {
-                let (wrap, value) = if payload_bridge.is_some() {
-                    let (wrap, outcome) = self.lower_abi_wrapping_with_payload_bridge(
-                        &call_string,
-                        &abi.result,
-                        result_ty,
-                        payload_bridge.as_ref(),
-                        WrapperTarget::FreshSlot,
-                    );
-                    (wrap, outcome.expect("wrapper produced no slot"))
-                } else {
-                    self.lower_abi_to_tagged(&call_string, &abi.result, result_ty)
-                };
-                setup.extend(wrap);
-                GoExpression::opaque(value)
-            },
-        )
+        call_plan.map_expression_as_observable_computed(|setup, call| {
+            let (wrap, value) = if payload_bridge.is_some() {
+                let (wrap, outcome) = self.lower_abi_wrapping_with_payload_bridge(
+                    call.as_str(),
+                    &abi.result,
+                    result_ty,
+                    payload_bridge.as_ref(),
+                    WrapperTarget::FreshSlot,
+                );
+                (wrap, outcome.expect("wrapper produced no slot"))
+            } else {
+                self.lower_abi_to_tagged(call.as_str(), &abi.result, result_ty)
+            };
+            setup.extend(wrap);
+            GoExpression::name(value)
+        })
     }
 
     pub(crate) fn go_result_layout_bridge(

@@ -297,11 +297,14 @@ pub(crate) fn lowered_tuple_literal_values(
             _ => planner.lower_composite_value(e, ExpressionContext::value()),
         })
         .collect();
-    let (mut statements, parts) = planner
-        .sequence_values(stages, CaptureBoundary::SiblingSequence, "ret")
-        .into_rendered();
-    let parts = planner.coerce_elements_to_slots(&mut statements, elements, parts, &slot_tys);
-    (statements, parts)
+    let sequenced = planner.sequence_values(stages, CaptureBoundary::SiblingSequence, "ret");
+    let mut statements = sequenced.setup;
+    let parts =
+        planner.coerce_elements_to_slots(&mut statements, elements, sequenced.values, &slot_tys);
+    (
+        statements,
+        parts.iter().map(GoExpression::rendered).collect(),
+    )
 }
 
 impl Planner<'_> {
@@ -774,8 +777,9 @@ fn lower_nullable_slot_value(
     }
     let value = planner.lower_value(expression, ExpressionContext::value());
     let inner = planner.use_go_type(&slot_ty.ok_type());
-    value.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
-        let projected = planner.plan_option_projection(setup, &value, "unwrap", &inner, false);
-        GoExpression::opaque_with_deferred_evaluation(projected, true)
+    value.map_expression_as_computed(|setup, value| {
+        let projected =
+            planner.plan_option_projection(setup, value.as_str(), "unwrap", &inner, false);
+        GoExpression::name(projected).with_deferred_evaluation(true)
     })
 }

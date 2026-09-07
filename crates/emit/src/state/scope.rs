@@ -395,6 +395,11 @@ fn pop_keep_base<T>(stack: &mut Vec<T>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plan::values::GoExpression;
+
+    fn pair_first() -> GoExpression {
+        GoExpression::selector(GoExpression::name("pair".to_string()), "F0".to_string())
+    }
 
     #[test]
     fn exiting_block_restores_shadowed_binding() {
@@ -424,7 +429,7 @@ mod tests {
         scope.push_binding_frame();
         scope.bind_inline_expr(
             "value",
-            InlineExpr::new("pair.F0", vec!["pair".into()], false),
+            InlineExpr::new(pair_first(), vec!["pair".into()], false),
         );
         scope.enter_block();
         scope.bind("value", "inner");
@@ -432,7 +437,7 @@ mod tests {
         scope.exit_block();
         assert!(matches!(
             scope.resolve_identifier_binding("value"),
-            Some(BindingValue::InlineExpr(expr)) if expr.as_str() == "pair.F0"
+            Some(BindingValue::InlineExpr(expr)) if expr.expression().as_str() == "pair.F0"
         ));
         scope.pop_binding_frame();
         assert!(matches!(
@@ -465,7 +470,7 @@ mod tests {
         scope.enter_block();
         scope.bind("first", "inner");
         assert!(scope.has_binding_for_go_name("shared"));
-        scope.bind_inline_expr("second", InlineExpr::new("pair.F0", vec![], false));
+        scope.bind_inline_expr("second", InlineExpr::new(pair_first(), vec![], false));
         assert!(!scope.has_binding_for_go_name("shared"));
         scope.exit_block();
         assert!(scope.has_binding_for_go_name("shared"));

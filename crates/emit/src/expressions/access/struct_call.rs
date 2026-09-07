@@ -12,8 +12,8 @@ use crate::context::expression::ExpressionContext;
 use crate::definitions::enum_layout;
 use crate::go_name;
 use crate::plan::bodies::LoweredStatement;
+use crate::plan::go_expression::CompositeLayout;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
-use crate::types::go_type::render_conversion;
 use crate::utils::is_order_sensitive;
 use syntax::program::AliasKind;
 use syntax::types;
@@ -22,7 +22,7 @@ use syntax::types::SubstitutionMap;
 struct SpreadInput<'a> {
     base: &'a Expression,
     base_staged: ValuePlan,
-    field_pairs: Vec<(String, String)>,
+    field_pairs: Vec<(String, GoExpression)>,
     fields_contain_deferred_evaluation: bool,
 }
 
@@ -43,12 +43,12 @@ struct EnumCallContext {
 
 struct StructCallField {
     name: String,
-    value: String,
+    value: GoExpression,
     has_observable_evaluation: bool,
 }
 
 impl StructCallField {
-    fn into_pair(self) -> (String, String) {
+    fn into_pair(self) -> (String, GoExpression) {
         (self.name, self.value)
     }
 }
@@ -69,7 +69,7 @@ impl Planner<'_> {
         let tag_field = ctx.enum_ctx.as_ref().map(|e| {
             (
                 enum_layout::ENUM_TAG_FIELD.to_string(),
-                e.tag_constant.clone(),
+                GoExpression::name(e.tag_constant.clone()),
             )
         });
 
@@ -111,7 +111,8 @@ impl Planner<'_> {
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "field");
         let mut effect = sequenced.effect;
         let fields_contain_deferred_evaluation = sequenced.contains_deferred_evaluation();
-        let (mut setup, emitted_values) = sequenced.into_rendered();
+        let mut setup = sequenced.setup;
+        let emitted_values = sequenced.values;
 
         let mut fields =
             Vec::with_capacity(field_assignments.len() + usize::from(ctx.enum_ctx.is_some()));
@@ -162,10 +163,8 @@ impl Planner<'_> {
                         effect = effect.combine(EvaluationEffect::EffectfulCall);
                     }
                     setup.push(self.lower_statement(base));
-                    GoExpression::composite_literal(
-                        format!("{}{{}}", ctx.go_type),
-                        fields_contain_deferred_evaluation,
-                    )
+                    GoExpression::empty_composite(ctx.go_type.clone())
+                        .with_deferred_evaluation(fields_contain_deferred_evaluation)
                 } else {
                     let base_staged = self.plan_operand(base, ExpressionContext::value());
                     effect = effect.combine(base_staged.evaluation.effect);
@@ -190,13 +189,15 @@ impl Planner<'_> {
                 }
             }
             StructSpread::Autofill { .. } => match self.go_imported_newtype_zero(ty) {
-                Some(zero) => GoExpression::opaque(zero),
+                Some(zero) => zero.with_deferred_evaluation(false),
                 None => {
                     let mut field_pairs =
                         fields.into_iter().map(StructCallField::into_pair).collect();
                     self.append_autofills(&mut field_pairs, field_assignments, &ctx, is_go_struct);
-                    GoExpression::composite_literal(
-                        emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
+                    emit_struct_literal(
+                        &ctx.go_type,
+                        field_pairs,
+                        expression_ctx,
                         fields_contain_deferred_evaluation,
                     )
                 }
@@ -204,8 +205,10 @@ impl Planner<'_> {
             StructSpread::None => {
                 let field_pairs: Vec<_> =
                     fields.into_iter().map(StructCallField::into_pair).collect();
-                GoExpression::composite_literal(
-                    emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
+                emit_struct_literal(
+                    &ctx.go_type,
+                    field_pairs,
+                    expression_ctx,
                     fields_contain_deferred_evaluation,
                 )
             }
@@ -220,11 +223,11 @@ impl Planner<'_> {
     fn coerce_struct_field(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        mut value: String,
+        mut value: GoExpression,
         value_ty: &Type,
         field_ty: Option<&Type>,
         field_layout: Option<&ValueLayout>,
-    ) -> String {
+    ) -> GoExpression {
         if let Some(field_layout) = field_layout {
             let source_layout = self.value_layout(value_ty, SlotOrigin::Lisette);
             let coercion = CoercionPlan::bridge(self, &source_layout, field_layout);
@@ -250,7 +253,7 @@ impl Planner<'_> {
     /// maps need one, their nil being the sole zero that panics on write.
     fn append_autofills(
         &mut self,
-        field_pairs: &mut Vec<(String, String)>,
+        field_pairs: &mut Vec<(String, GoExpression)>,
         field_assignments: &[StructFieldAssignment],
         ctx: &StructCallContext<'_>,
         is_go_struct: bool,
@@ -272,7 +275,7 @@ impl Planner<'_> {
                     continue;
                 }
                 let zero = self.lisette_zero(&field_ty);
-                if is_go_zero_literal(&zero) {
+                if is_go_zero_literal(zero.as_str()) {
                     continue;
                 }
                 zero
@@ -283,13 +286,20 @@ impl Planner<'_> {
     }
 
     /// Empty-map literal in the field's Go type, sound as empty needs no coercion.
-    fn go_field_map_zero(&mut self, owner: &Type, field: &str, field_ty: &Type) -> Option<String> {
+    fn go_field_map_zero(
+        &mut self,
+        owner: &Type,
+        field: &str,
+        field_ty: &Type,
+    ) -> Option<GoExpression> {
         let layout = self.field_slot_layout(owner, None, field, field_ty)?;
         if !layout_is_map(&layout) {
             return None;
         }
         let go_type = layout.go_type(self);
-        Some(format!("{}{{}}", self.use_rendered_go_type(go_type)))
+        Some(GoExpression::empty_composite(
+            self.use_rendered_go_type(go_type),
+        ))
     }
 
     /// Look up unspecified fields of a Lisette-defined struct or enum struct variant,
@@ -349,7 +359,7 @@ impl Planner<'_> {
 
     /// Zero for `T{..}` on a Go-imported newtype, a named non-struct with
     /// no fields for the autofill to name.
-    fn go_imported_newtype_zero(&mut self, ty: &Type) -> Option<String> {
+    fn go_imported_newtype_zero(&mut self, ty: &Type) -> Option<GoExpression> {
         let Type::Nominal { id, .. } = ty else {
             return None;
         };
@@ -358,37 +368,40 @@ impl Planner<'_> {
         }
         let underlying = self.get_newtype_underlying(ty)?;
         let go_ty = self.use_go_type(ty);
-        self.go_newtype_zero(&go_ty, &underlying)
+        self.go_newtype_zero(go_ty, &underlying)
     }
 
     /// Zero for a Go named non-struct, in a form Go takes as an operand.
-    fn go_newtype_zero(&mut self, go_ty: &str, underlying: &Type) -> Option<String> {
+    fn go_newtype_zero(&mut self, go_ty: String, underlying: &Type) -> Option<GoExpression> {
         let underlying = self.facts.peel_underlying(underlying);
         if underlying.is_map() || matches!(underlying, Type::Array { .. }) {
-            return Some(format!("{}{{}}", go_ty));
+            return Some(GoExpression::empty_composite(go_ty));
         }
         if underlying.is_slice() {
-            return Some(render_conversion(go_ty, "nil"));
+            return Some(GoExpression::conversion(
+                go_ty,
+                GoExpression::literal("nil".to_string()),
+            ));
         }
         matches!(underlying, Type::Simple(_)).then(|| {
             let inner = self.lisette_zero(&underlying);
-            render_conversion(go_ty, &inner)
+            GoExpression::conversion(go_ty, inner)
         })
     }
 
-    fn go_imported_zero(&mut self, ty: &Type, id: &str) -> String {
+    fn go_imported_zero(&mut self, ty: &Type, id: &str) -> GoExpression {
         if self.facts.is_interface(ty) || self.facts.resolve_to_function_type(ty).is_some() {
-            return "nil".to_string();
+            return GoExpression::literal("nil".to_string());
         }
         let go_ty = self.use_go_type(ty);
         let is_newtype = self.facts.definition(id).is_some_and(|d| d.is_newtype());
         if is_newtype {
             if let Some(underlying) = self.get_newtype_underlying(ty)
-                && let Some(zero) = self.go_newtype_zero(&go_ty, &underlying)
+                && let Some(zero) = self.go_newtype_zero(go_ty.clone(), &underlying)
             {
                 return zero;
             }
-            return format!("*new({})", go_ty);
+            return dereferenced_new(go_ty);
         }
         let is_struct = matches!(
             self.facts.definition(id).map(|d| &d.body),
@@ -402,12 +415,12 @@ impl Planner<'_> {
             })
         );
         if !is_struct && !is_opaque {
-            return format!("*new({})", go_ty);
+            return dereferenced_new(go_ty);
         }
         if is_struct
             && let Some(fields) = self.lookup_unspecified_fields(ty, "", None, &HashSet::default())
         {
-            let mut pairs: Vec<(String, String)> = Vec::new();
+            let mut pairs: Vec<(String, GoExpression)> = Vec::new();
             for (name, field_ty) in fields {
                 let Some(zero) = self.go_field_map_zero(ty, &name, &field_ty) else {
                     continue;
@@ -421,19 +434,19 @@ impl Planner<'_> {
                 };
                 pairs.push((go_field_name, zero));
             }
-            return emit_struct_literal(&go_ty, &pairs, ExpressionContext::value());
+            return emit_struct_literal(&go_ty, pairs, ExpressionContext::value(), false);
         }
-        format!("{}{{}}", go_ty)
+        GoExpression::empty_composite(go_ty)
     }
 
-    pub(crate) fn lisette_zero(&mut self, ty: &Type) -> String {
+    pub(crate) fn lisette_zero(&mut self, ty: &Type) -> GoExpression {
         let layout = self.value_layout(ty, SlotOrigin::Lisette);
         match (ty, &layout) {
             (Type::Simple(kind), _) => match kind {
-                SimpleKind::Bool => "false".to_string(),
-                SimpleKind::String => "\"\"".to_string(),
-                SimpleKind::Unit => "struct{}{}".to_string(),
-                _ => "0".to_string(),
+                SimpleKind::Bool => GoExpression::literal("false".to_string()),
+                SimpleKind::String => GoExpression::literal("\"\"".to_string()),
+                SimpleKind::Unit => GoExpression::empty_composite("struct{}".to_string()),
+                _ => GoExpression::literal("0".to_string()),
             },
             (
                 Type::Compound {
@@ -444,7 +457,7 @@ impl Planner<'_> {
             ) => {
                 let element = element.go_type(self);
                 let go_type = format!("[]{}", self.use_rendered_go_type(element));
-                render_conversion(&go_type, "nil")
+                GoExpression::conversion(go_type, GoExpression::literal("nil".to_string()))
             }
             (
                 Type::Compound {
@@ -457,38 +470,44 @@ impl Planner<'_> {
                 let value = value.go_type(self);
                 let key = self.use_rendered_go_type(key);
                 let value = self.use_rendered_go_type(value);
-                format!("map[{key}]{value}{{}}")
+                GoExpression::empty_composite(format!("map[{key}]{value}"))
             }
-            (Type::Compound { .. }, _) => format!("{}{{}}", self.use_go_type(ty)),
+            (Type::Compound { .. }, _) => GoExpression::empty_composite(self.use_go_type(ty)),
             (Type::Nominal { id, params, .. }, _) => {
                 self.lisette_zero_nominal(ty, id.as_str(), params)
             }
             (Type::Tuple(slots), ValueLayout::Tuple { elements, .. }) => {
-                let parts: Vec<String> = elements
+                let parts: Vec<GoExpression> = elements
                     .iter()
                     .map(|element| self.lisette_zero(element.logical_type()))
                     .collect();
                 let callee = self.make_tuple_callee(slots, parts.len());
-                format!("{}({})", callee, parts.join(", "))
+                GoExpression::call(callee, parts)
             }
             (
                 Type::Array { .. },
                 ValueLayout::Array {
                     length, element, ..
                 },
-            ) => self.array_zero(*length, element.logical_type()).rendered(),
-            _ => format!("{}{{}}", self.use_go_type(ty)),
+            ) => self.array_zero(*length, element.logical_type()),
+            _ => GoExpression::empty_composite(self.use_go_type(ty)),
         }
     }
 
-    fn lisette_zero_nominal(&mut self, ty: &Type, id: &str, params: &[Type]) -> String {
+    fn lisette_zero_nominal(&mut self, ty: &Type, id: &str, params: &[Type]) -> GoExpression {
         if id == "prelude.Option" {
             let inner = params
                 .first()
                 .map(|a| self.use_go_type(a))
                 .unwrap_or_else(|| "any".to_string());
             self.require_stdlib();
-            return format!("{}.MakeOptionNone[{}]()", go_name::GO_STDLIB_PKG, inner);
+            return GoExpression::call(
+                GoExpression::instantiation(
+                    GoExpression::name(format!("{}.MakeOptionNone", go_name::GO_STDLIB_PKG)),
+                    format!("[{inner}]"),
+                ),
+                Vec::new(),
+            );
         }
         if go_name::is_go_import(id) {
             return self.go_imported_zero(ty, id);
@@ -496,12 +515,12 @@ impl Planner<'_> {
         if let Some(underlying) = self.get_newtype_underlying(ty) {
             let go_ty = self.use_go_type(ty);
             let inner = self.lisette_zero(&underlying);
-            return render_conversion(&go_ty, &inner);
+            return GoExpression::conversion(go_ty, inner);
         }
         if let Some(fields) = self.lookup_unspecified_fields(ty, "", None, &HashSet::default()) {
             let go_ty = self.use_go_type(ty);
             let is_tuple = self.is_tuple_struct_type(ty);
-            let pairs: Vec<(String, String)> = fields
+            let pairs: Vec<(String, GoExpression)> = fields
                 .into_iter()
                 .enumerate()
                 .filter(|(_, (_, field_ty))| !field_ty.is_slice())
@@ -518,12 +537,12 @@ impl Planner<'_> {
                     (go_name, self.lisette_zero(&field_ty))
                 })
                 .collect();
-            return emit_struct_literal(&go_ty, &pairs, ExpressionContext::value());
+            return emit_struct_literal(&go_ty, pairs, ExpressionContext::value(), false);
         }
         if let Some(underlying) = self.facts.underlying_type(ty) {
             return self.lisette_zero(&underlying);
         }
-        format!("{}{{}}", self.use_go_type(ty))
+        GoExpression::empty_composite(self.use_go_type(ty))
     }
 
     /// Array zero value, filling per index with `lisette_zero` when Go's own
@@ -531,7 +550,7 @@ impl Planner<'_> {
     pub(crate) fn array_zero(&mut self, len: u64, elem: &Type) -> GoExpression {
         let elem_go = self.use_go_type(elem);
         if len == 0 || self.element_go_zero_ok(elem) {
-            return GoExpression::composite_literal(format!("[{}]{}{{}}", len, elem_go), false);
+            return GoExpression::empty_composite(format!("[{}]{}", len, elem_go));
         }
         let zero = self.lisette_zero(elem);
         // Go has no syntax to repeat a value across all N slots, so fill each index.
@@ -568,10 +587,10 @@ impl Planner<'_> {
     fn wrap_recursive_enum_field(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        value: String,
+        value: GoExpression,
         field: &StructFieldAssignment,
         ctx: &StructCallContext<'_>,
-    ) -> String {
+    ) -> GoExpression {
         let needs_pointer = ctx
             .enum_ctx
             .as_ref()
@@ -579,8 +598,8 @@ impl Planner<'_> {
         if !needs_pointer {
             return value;
         }
-        let temp = self.hoist_tmp_value_statement(statements, "ptr", &value);
-        format!("&{}", temp)
+        let temp = self.hoist_tmp_value_statement(statements, "ptr", value.as_str());
+        GoExpression::address_of(GoExpression::name(temp))
     }
 
     /// Analyze a struct call to determine Go type and enum context.
@@ -736,13 +755,14 @@ impl Planner<'_> {
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         fields: Vec<StructCallField>,
-    ) -> Vec<(String, String)> {
+    ) -> Vec<(String, GoExpression)> {
         fields
             .into_iter()
             .map(|field| {
                 if field.has_observable_evaluation {
-                    let temp = self.hoist_tmp_value_statement(statements, "field", &field.value);
-                    (field.name, temp)
+                    let temp =
+                        self.hoist_tmp_value_statement(statements, "field", field.value.as_str());
+                    (field.name, GoExpression::name(temp))
                 } else {
                     field.into_pair()
                 }
@@ -753,7 +773,7 @@ impl Planner<'_> {
     fn lower_struct_update(
         &mut self,
         base_staged: ValuePlan,
-        fields: &[(String, String)],
+        fields: &[(String, GoExpression)],
     ) -> (Vec<LoweredStatement>, GoExpression) {
         // A spread that assigns nothing is its base, whatever shape that has.
         if fields.is_empty() {
@@ -791,36 +811,56 @@ impl Planner<'_> {
             .lookup_unspecified_fields(ctx.ty, ctx.name, ctx.enum_ctx.as_ref(), &assigned)
             .unwrap_or_default();
 
-        let (mut statements, base_value) = base_staged.into_parts();
+        let ValuePlan {
+            setup: mut statements,
+            expression: base_value,
+            ..
+        } = base_staged;
 
         if carried.is_empty() {
             statements.push(LoweredStatement::RawGo(format!("_ = {}\n", base_value)));
             return (
                 statements,
-                GoExpression::composite_literal(
-                    emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
+                emit_struct_literal(
+                    &ctx.go_type,
+                    field_pairs,
+                    expression_ctx,
                     fields_contain_deferred_evaluation,
                 ),
             );
         }
 
         let source = if is_order_sensitive(base) {
-            self.hoist_tmp_value_statement(&mut statements, "spread", &base_value)
+            GoExpression::name(self.hoist_tmp_value_statement(
+                &mut statements,
+                "spread",
+                base_value.as_str(),
+            ))
         } else {
             base_value
         };
         for (field_name, _) in carried {
             let slot = self.resolve_struct_call_field_name(&field_name, ctx);
-            field_pairs.push((slot.clone(), format!("{}.{}", source, slot)));
+            field_pairs.push((slot.clone(), GoExpression::selector(source.clone(), slot)));
         }
         (
             statements,
-            GoExpression::composite_literal(
-                emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
+            emit_struct_literal(
+                &ctx.go_type,
+                field_pairs,
+                expression_ctx,
                 fields_contain_deferred_evaluation,
             ),
         )
     }
+}
+
+/// `*new(T)`, the zero of a Go named type with no literal form.
+fn dereferenced_new(go_type: String) -> GoExpression {
+    GoExpression::dereference(GoExpression::call(
+        GoExpression::name("new".to_string()),
+        vec![GoExpression::type_name(go_type)],
+    ))
 }
 
 /// Whether a Go slot layout is a map, seeing through a named map type.
@@ -881,28 +921,31 @@ fn unspecified_pairs<'a>(
 
 pub(crate) fn emit_struct_literal(
     ty: &str,
-    fields: &[(String, String)],
+    fields: Vec<(String, GoExpression)>,
     ctx: ExpressionContext<'_>,
-) -> String {
-    let raw = if fields.is_empty() {
-        format!("{}{{}}", ty)
-    } else if fields.len() == 1 {
-        let (name, value) = &fields[0];
-        format!("{}{{ {}: {} }}", ty, name, value)
+    contains_deferred_evaluation: bool,
+) -> GoExpression {
+    let layout = if fields.len() > 1 {
+        CompositeLayout::MultiLine { indented: false }
     } else {
-        let field_strs: Vec<String> = fields
-            .iter()
-            .map(|(name, value)| format!("{}: {},", name, value))
-            .collect();
-        format!("{}{{\n{}\n}}", ty, field_strs.join("\n"))
+        CompositeLayout::Inline { padded: true }
     };
+    let literal = GoExpression::composite(
+        Some(ty.to_string()),
+        fields
+            .into_iter()
+            .map(|(name, value)| (Some(name), value))
+            .collect(),
+        layout,
+        contains_deferred_evaluation,
+    );
 
     // Generic composite literals (`Type[Args]{...}`) need inner parens in
     // condition contexts because gofmt strips outer condition parens for
     // generics, producing invalid Go in `if`/`for`/`switch`.
     if ctx.is_condition() && ty.contains('[') {
-        format!("({})", raw)
+        GoExpression::parenthesized(literal).with_deferred_evaluation(contains_deferred_evaluation)
     } else {
-        raw
+        literal
     }
 }

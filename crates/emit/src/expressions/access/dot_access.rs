@@ -12,11 +12,10 @@ use crate::context::expression::ExpressionContext;
 use crate::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::{EvaluationEffect, GoExpression, Stability, ValuePlan};
-use crate::types::go_type::render_conversion;
 use crate::utils::reads_value_member;
 
 struct NullableFieldAccess<'a> {
-    expression_string: &'a str,
+    base: &'a GoExpression,
     member: &'a str,
     field: &'a str,
     expression_ty: &'a Type,
@@ -43,14 +42,10 @@ impl Planner<'_> {
         let dot_access_kind = resolution.kind();
         let receiver_coercion = resolution.receiver_coercion();
 
-        if let Some(s) =
+        if let Some(expression) =
             self.try_emit_pre_receiver_dot(expression, member, result_ty, dot_access_kind, ctx)
         {
-            return ValuePlan::computed(
-                Vec::new(),
-                GoExpression::opaque(s),
-                EvaluationEffect::Pure,
-            );
+            return ValuePlan::computed(Vec::new(), expression, EvaluationEffect::Pure);
         }
 
         let expression_ty = expression.get_type();
@@ -71,23 +66,23 @@ impl Planner<'_> {
         } else {
             Stability::Observable
         };
-        let base_contains_deferred_evaluation = base_plan.expression.contains_deferred_evaluation();
-        let (mut setup, expression_string) = base_plan.into_parts();
+        let ValuePlan {
+            mut setup,
+            expression: base,
+            ..
+        } = base_plan;
+        let base_contains_deferred_evaluation = base.contains_deferred_evaluation();
 
-        if let Some(s) = self.try_emit_tuple_member_dot(
-            &expression_string,
-            &expression_ty,
-            member,
-            dot_access_kind,
-        ) {
+        if let Some(member_access) =
+            self.try_emit_tuple_member_dot(&base, &expression_ty, member, dot_access_kind)
+        {
             let is_newtype_conversion = matches!(
                 dot_access_kind,
                 Some(SemanticDotKind::TupleStructField { is_newtype: true })
             );
             return ValuePlan::computed(
                 setup,
-                GoExpression::opaque_with_deferred_evaluation(
-                    s,
+                member_access.with_deferred_evaluation(
                     base_contains_deferred_evaluation || is_newtype_conversion,
                 ),
                 effect,
@@ -102,10 +97,10 @@ impl Planner<'_> {
             .try_resolve_cross_package_const(&expression_ty, member)
             .unwrap_or_else(|| go_field_name(&expression_ty, member, is_exported, is_embedded));
 
-        if let Some(s) = self.plan_nullable_field_access(
+        if let Some(wrapped) = self.plan_nullable_field_access(
             &mut setup,
             NullableFieldAccess {
-                expression_string: &expression_string,
+                base: &base,
                 member,
                 field: &field,
                 expression_ty: &expression_ty,
@@ -113,29 +108,12 @@ impl Planner<'_> {
                 result_ty,
             },
         ) {
-            return ValuePlan::computed(setup, GoExpression::opaque(s), effect);
+            return ValuePlan::computed(setup, wrapped, effect);
         }
 
-        let selector = GoExpression::selector(
-            GoExpression::opaque_with_deferred_evaluation(
-                expression_string,
-                base_contains_deferred_evaluation,
-            ),
-            field,
-        );
-        let rendered_selector = selector.rendered();
-        let result = self.append_cross_package_type_args(
-            rendered_selector.clone(),
-            &expression_ty,
-            member,
-            result_ty,
-            ctx,
-        );
-        let expression = if result == rendered_selector {
-            selector
-        } else {
-            GoExpression::opaque_with_deferred_evaluation(result, base_contains_deferred_evaluation)
-        };
+        let selector = GoExpression::selector(base, field);
+        let expression =
+            self.append_cross_package_type_args(selector, &expression_ty, member, result_ty, ctx);
         ValuePlan::computed(setup, expression, effect).with_stability(stability)
     }
 
@@ -149,7 +127,7 @@ impl Planner<'_> {
         result_ty: &Type,
         dot_access_kind: Option<SemanticDotKind>,
         ctx: ExpressionContext<'_>,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         match dot_access_kind {
             Some(SemanticDotKind::EnumVariant) => self.emit_enum_variant_dot(member, result_ty),
             Some(SemanticDotKind::StaticMethod { .. }) => {
@@ -181,11 +159,11 @@ impl Planner<'_> {
     /// cast when the struct has a single field and no generics.
     fn try_emit_tuple_member_dot(
         &mut self,
-        expression_string: &str,
+        base: &GoExpression,
         expression_ty: &Type,
         member: &str,
         dot_access_kind: Option<SemanticDotKind>,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         let Ok(index) = member.parse::<usize>() else {
             return None;
         };
@@ -194,15 +172,13 @@ impl Planner<'_> {
                 let field = parse::TUPLE_FIELDS
                     .get(index)
                     .expect("oversize tuple arity");
-                Some(format!("{}.{}", expression_string, field))
+                Some(GoExpression::selector(base.clone(), field.to_string()))
             }
             Some(SemanticDotKind::TupleStructField { is_newtype }) => {
-                if is_newtype
-                    && let Some(cast) = self.try_emit_newtype_cast(expression_ty, expression_string)
-                {
+                if is_newtype && let Some(cast) = self.try_emit_newtype_cast(expression_ty, base) {
                     return Some(cast);
                 }
-                Some(format!("{}.F{}", expression_string, index))
+                Some(GoExpression::selector(base.clone(), format!("F{}", index)))
             }
             _ => None,
         }
@@ -242,9 +218,9 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         access: NullableFieldAccess<'_>,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         let NullableFieldAccess {
-            expression_string,
+            base,
             member,
             field,
             expression_ty,
@@ -258,9 +234,9 @@ impl Planner<'_> {
         if coercion.is_identity() {
             return None;
         }
-        let raw_access = format!("{}.{}", expression_string, field);
-        let raw_var = self.hoist_tmp_value_statement(setup, "raw", &raw_access);
-        let (coercion_setup, coerced) = coercion.lower(self, raw_var);
+        let raw_access = GoExpression::selector(base.clone(), field.to_string());
+        let raw_var = self.hoist_tmp_value_statement(setup, "raw", raw_access.as_str());
+        let (coercion_setup, coerced) = coercion.lower(self, GoExpression::name(raw_var));
         setup.extend(coercion_setup);
         Some(coerced)
     }
@@ -270,12 +246,12 @@ impl Planner<'_> {
     /// Callee-position accesses skip this because the call site re-instantiates.
     fn append_cross_package_type_args(
         &mut self,
-        base_access: String,
+        base_access: GoExpression,
         expression_ty: &Type,
         member: &str,
         result_ty: &Type,
         ctx: ExpressionContext<'_>,
-    ) -> String {
+    ) -> GoExpression {
         if ctx.is_callee() {
             return base_access;
         }
@@ -284,7 +260,7 @@ impl Planner<'_> {
         };
         let qualified = format!("{}.{}", package, member);
         match self.format_cross_package_type_args(&qualified, result_ty) {
-            Some(type_args) => format!("{}{}", base_access, type_args),
+            Some(type_args) => GoExpression::instantiation(base_access, type_args),
             None => base_access,
         }
     }
@@ -295,16 +271,16 @@ impl Planner<'_> {
     fn try_emit_newtype_cast(
         &mut self,
         expression_ty: &Type,
-        expression_string: &str,
-    ) -> Option<String> {
+        base: &GoExpression,
+    ) -> Option<GoExpression> {
         let field_ty = self.get_newtype_underlying(expression_ty)?;
         let go_type = self.use_go_type(&field_ty);
         let operand = if expression_ty.is_ref() {
-            format!("*{}", expression_string)
+            GoExpression::dereference(base.clone())
         } else {
-            expression_string.to_string()
+            base.clone()
         };
-        Some(render_conversion(&go_type, &operand))
+        Some(GoExpression::conversion(go_type, operand))
     }
 
     /// Compute whether a dot access context requires exported (capitalized) Go names.
@@ -333,31 +309,23 @@ impl Planner<'_> {
             (self.plan_operand(expression, ctx), false)
         };
         let is_absorbed_ref = self.is_absorbed_ref_generic(expression);
-        staged.map_rendered(
-            |setup, expression_string, mut contains_deferred_evaluation| {
-                let value = match (coercion, had_explicit_deref) {
-                    _ if is_absorbed_ref => expression_string,
-                    (Some(ReceiverCoercion::AutoAddress), true) => expression_string,
-                    (Some(ReceiverCoercion::AutoAddress), false) => {
-                        match expression.unwrap_parens() {
-                            Expression::Call { .. } => {
-                                contains_deferred_evaluation = false;
-                                self.hoist_tmp_value_statement(setup, "ref", &expression_string)
-                            }
-                            Expression::StructCall { .. } => {
-                                contains_deferred_evaluation = true;
-                                format!("(&{})", expression_string)
-                            }
-                            _ => expression_string,
-                        }
-                    }
-                    (Some(ReceiverCoercion::AutoDeref), _) => expression_string,
-                    (None, true) => expression_string,
-                    (None, false) => expression_string,
-                };
-                GoExpression::opaque_with_deferred_evaluation(value, contains_deferred_evaluation)
-            },
-        )
+        staged.map_expression(|setup, base| {
+            if is_absorbed_ref
+                || coercion != Some(ReceiverCoercion::AutoAddress)
+                || had_explicit_deref
+            {
+                return base;
+            }
+            match expression.unwrap_parens() {
+                Expression::Call { .. } => {
+                    GoExpression::name(self.hoist_tmp_value_statement(setup, "ref", base.as_str()))
+                }
+                Expression::StructCall { .. } => {
+                    GoExpression::parenthesized(GoExpression::address_of(base))
+                }
+                _ => base,
+            }
+        })
     }
 
     /// Check if expression has an absorbed `Ref<T>` generic (T already emitted as `*Concrete`).

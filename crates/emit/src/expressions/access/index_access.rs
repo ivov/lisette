@@ -45,11 +45,13 @@ impl Planner<'_> {
             );
             let effect = sequenced.effect;
             let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
-            let (setup, values) = sequenced.into_rendered();
-            let value = emit_range_var_slice(&values[0], &values[1], &range_kind, needs_cap);
+            let mut values = sequenced.values.into_iter();
+            let base = values.next().expect("range index has a base");
+            let range = values.next().expect("range index has a range");
+            let value = range_var_slice(base, &range, &range_kind, needs_cap);
             return ValuePlan::computed(
-                setup,
-                GoExpression::opaque_with_deferred_evaluation(value, contains_deferred_evaluation),
+                sequenced.setup,
+                value.with_deferred_evaluation(contains_deferred_evaluation),
                 effect,
             );
         }
@@ -203,22 +205,20 @@ impl Planner<'_> {
     }
 }
 
+/// The `[start:end]` bounds a range-typed value denotes, by range kind.
 pub(crate) fn range_var_bounds(
-    range_var: &str,
+    range: &GoExpression,
     range_kind: &str,
-) -> (Option<String>, Option<String>) {
+) -> (Option<GoExpression>, Option<GoExpression>) {
+    let start = || GoExpression::selector(range.clone(), "Start".to_string());
+    let end = || GoExpression::selector(range.clone(), "End".to_string());
+    let end_inclusive = || GoExpression::binary(end(), "+", GoExpression::literal("1".to_string()));
     match range_kind {
-        "Range" => (
-            Some(format!("{}.Start", range_var)),
-            Some(format!("{}.End", range_var)),
-        ),
-        "RangeInclusive" => (
-            Some(format!("{}.Start", range_var)),
-            Some(format!("{}.End+1", range_var)),
-        ),
-        "RangeFrom" => (Some(format!("{}.Start", range_var)), None),
-        "RangeTo" => (None, Some(format!("{}.End", range_var))),
-        "RangeToInclusive" => (None, Some(format!("{}.End+1", range_var))),
+        "Range" => (Some(start()), Some(end())),
+        "RangeInclusive" => (Some(start()), Some(end_inclusive())),
+        "RangeFrom" => (Some(start()), None),
+        "RangeTo" => (None, Some(end())),
+        "RangeToInclusive" => (None, Some(end_inclusive())),
         _ => unreachable!("unexpected range kind: {}", range_kind),
     }
 }
@@ -227,20 +227,18 @@ pub(crate) fn range_var_bounds(
 /// third index that caps capacity at length to block append-through-alias
 /// corruption; range field accesses (`.End`) are pure, so repeating them
 /// in the cap position is safe.
-fn emit_range_var_slice(base: &str, range: &str, range_kind: &str, needs_cap: bool) -> String {
+fn range_var_slice(
+    base: GoExpression,
+    range: &GoExpression,
+    range_kind: &str,
+    needs_cap: bool,
+) -> GoExpression {
     let (start, end) = range_var_bounds(range, range_kind);
-    let start_str = start.as_deref().unwrap_or("");
-    let end_str = end.as_deref().unwrap_or("");
-
     if !needs_cap {
-        return format!("{}[{}:{}]", base, start_str, end_str);
+        return GoExpression::slice(base, start.as_ref(), end.as_ref(), None);
     }
-
-    let bound = if end_str.is_empty() {
-        format!("len({})", base)
-    } else {
-        end_str.to_string()
-    };
-
-    format!("{}[{}:{}:{}]", base, start_str, bound, bound)
+    let bound = end.unwrap_or_else(|| {
+        GoExpression::call(GoExpression::name("len".to_string()), vec![base.clone()])
+    });
+    GoExpression::slice(base, start.as_ref(), Some(&bound), Some(&bound))
 }
