@@ -114,17 +114,21 @@ pub(crate) fn gate_local_typedef(typedef_path: &Path, stamp: &str) -> Result<(),
     if local_typedef_is_fresh(typedef_path, stamp) {
         return Ok(());
     }
-    let stamp_path = stamp_path_for_typedef(typedef_path);
     match fs::remove_file(typedef_path) {
         Ok(()) => {}
         Err(error) if error.kind() == ErrorKind::NotFound => {}
         Err(error) => return Err(error),
     }
+    write_local_stamp(typedef_path, stamp);
+    Ok(())
+}
+
+pub(crate) fn write_local_stamp(typedef_path: &Path, stamp: &str) {
+    let stamp_path = stamp_path_for_typedef(typedef_path);
     if let Some(parent) = stamp_path.parent() {
         let _ = fs::create_dir_all(parent);
     }
     let _ = fs::write(&stamp_path, stamp);
-    Ok(())
 }
 
 /// FNV-1a, matching the other deterministic hashes in the workspace.

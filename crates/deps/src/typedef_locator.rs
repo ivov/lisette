@@ -268,6 +268,12 @@ impl TypedefLocator {
             .as_deref()
     }
 
+    pub fn stamp_local_typedef(&self, typedef_path: &Path) {
+        if let Some(stamp) = self.local_stamp_value() {
+            local_source::write_local_stamp(typedef_path, stamp);
+        }
+    }
+
     pub fn from_project(project_root: &Path) -> Result<Self, String> {
         let (_, locator) = Self::from_project_with_manifest(project_root, Target::host())?;
         Ok(locator)

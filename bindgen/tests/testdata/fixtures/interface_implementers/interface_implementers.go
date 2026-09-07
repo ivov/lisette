@@ -55,6 +55,55 @@ type IntStore struct{}
 
 func (IntStore) Put(n *Node, value int) { n.Value = value }
 
+var _ Store[int] = IntStore{}
+
+type Box[T any] struct{ Value T }
+
+type Applier[T any] interface {
+	Apply(b *Box[T])
+}
+
+type GenericApplier[T any] struct{}
+
+func (*GenericApplier[T]) Apply(b *Box[T]) {
+	var zero T
+	b.Value = zero
+}
+
+type StringApplier interface {
+	Apply(b *Box[string])
+}
+
+var _ StringApplier = (*GenericApplier[string])(nil)
+
+type Labeled interface {
+	Applier[string]
+	Label() string
+}
+
+type LabeledApplier struct{}
+
+func (LabeledApplier) Apply(b *Box[string]) { b.Value = "" }
+func (LabeledApplier) Label() string        { return "" }
+
+type Peeker[T any] interface {
+	Peek(b *Box[T])
+}
+
+type IntPeeker struct{}
+
+func (IntPeeker) Peek(b *Box[int]) { _ = b.Value }
+
+type Pair[K comparable, V any] interface {
+	Set(m map[K]V, k K, v V)
+}
+
+type StringIntPair struct{}
+
+func (StringIntPair) Set(m map[string]int, k string, v int) { m[k] = v }
+
+var _ Pair[string, int] = StringIntPair{}
+
 type Router interface {
 	Serve(n *Node)
 }

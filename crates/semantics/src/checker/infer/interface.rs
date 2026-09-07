@@ -8,7 +8,7 @@ use syntax::program::{
     DefinitionBody, InterfaceRequirement, Methods, interface_declares_any_method,
     interface_requirements,
 };
-use syntax::types::{GO_IMPORT_PREFIX, Symbol, Type, unqualified_name};
+use syntax::types::{FunctionParameter, GO_IMPORT_PREFIX, Symbol, Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
 use syntax::go_names;
@@ -190,6 +190,16 @@ impl InferCtx<'_> {
                 .map_or_else(|| resolved.to_string(), str::to_owned);
             self.sink
                 .push(diagnostics::infer::builtin_type_cannot_implement_interface(
+                    unqualified_name(interface_qualified_id),
+                    &type_name,
+                    *span,
+                ));
+        } else if blocked_by_type_parameter_permission(&violations) {
+            let type_name = resolved
+                .get_name()
+                .map_or_else(|| resolved.to_string(), str::to_owned);
+            self.sink
+                .push(diagnostics::infer::unsupported_generic_go_interface(
                     unqualified_name(interface_qualified_id),
                     &type_name,
                     *span,
@@ -604,6 +614,12 @@ impl InferCtx<'_> {
                         .symbol_methods
                         .get(impl_method_name.as_str())
                         .and_then(|method| method.name_span);
+                    let through_type_parameter = interface_qualified_id.starts_with("go:")
+                        && permission_gap_only_at_type_parameters(
+                            &requirement.method.ty,
+                            &expected,
+                            &actual,
+                        );
                     check.push_violation(
                         interface_qualified_id,
                         requirement.parent_of.as_ref(),
@@ -612,6 +628,7 @@ impl InferCtx<'_> {
                             expected,
                             actual,
                             impl_span,
+                            through_type_parameter,
                         },
                     );
                 }
@@ -861,4 +878,147 @@ fn covariant_return_adjustment(
         impl_f.bounds.clone(),
         iface_ret.clone(),
     ))
+}
+
+fn blocked_by_type_parameter_permission(violations: &[InterfaceViolation]) -> bool {
+    let mut methods = violations
+        .iter()
+        .flat_map(|violation| &violation.methods)
+        .peekable();
+    methods.peek().is_some()
+        && methods.all(|method| {
+            matches!(
+                method,
+                InterfaceMethodViolation::Incompatible {
+                    through_type_parameter: true,
+                    ..
+                }
+            )
+        })
+}
+
+fn permission_gap_only_at_type_parameters(declared: &Type, expected: &Type, actual: &Type) -> bool {
+    let declared = declared.unwrap_forall();
+    match (
+        erase_at_parameters(declared, expected.unwrap_forall()),
+        erase_at_parameters(declared, actual.unwrap_forall()),
+    ) {
+        (Some(expected), Some(actual)) => expected == actual,
+        _ => false,
+    }
+}
+
+fn erase_at_parameters(declared: &Type, ty: &Type) -> Option<Type> {
+    match (declared, ty) {
+        (Type::Parameter(_), _) => Some(erase_permissions(ty)),
+        (Type::Function(declared), Type::Function(f)) => {
+            if declared.params.len() != f.params.len() {
+                return None;
+            }
+            let params = declared
+                .params
+                .iter()
+                .zip(&f.params)
+                .map(|(declared, param)| {
+                    erase_at_parameters(&declared.ty, &param.ty)
+                        .map(|ty| FunctionParameter::named(ty, param.name.clone()))
+                })
+                .collect::<Option<Vec<_>>>()?;
+            let return_type = erase_at_parameters(&declared.return_type, &f.return_type)?;
+            Some(f.rebuild(params, Vec::new(), Box::new(return_type)))
+        }
+        (
+            Type::Compound { args: declared, .. },
+            Type::Compound {
+                kind,
+                args,
+                writable,
+            },
+        ) if declared.len() == args.len() => {
+            let args = declared
+                .iter()
+                .zip(args)
+                .map(|(declared, arg)| erase_at_parameters(declared, arg))
+                .collect::<Option<Vec<_>>>()?;
+            Some(Type::Compound {
+                kind: *kind,
+                args,
+                writable: *writable,
+            })
+        }
+        (
+            Type::Nominal {
+                params: declared, ..
+            },
+            Type::Nominal {
+                id,
+                params,
+                writable,
+            },
+        ) if declared.len() == params.len() => {
+            let params = declared
+                .iter()
+                .zip(params)
+                .map(|(declared, param)| erase_at_parameters(declared, param))
+                .collect::<Option<Vec<_>>>()?;
+            Some(Type::Nominal {
+                id: id.clone(),
+                params,
+                writable: *writable,
+            })
+        }
+        (Type::Tuple(declared), Type::Tuple(elements)) if declared.len() == elements.len() => {
+            let elements = declared
+                .iter()
+                .zip(elements)
+                .map(|(declared, element)| erase_at_parameters(declared, element))
+                .collect::<Option<Vec<_>>>()?;
+            Some(Type::Tuple(elements))
+        }
+        (
+            Type::Array {
+                element: declared, ..
+            },
+            Type::Array { length, element },
+        ) => Some(Type::Array {
+            length: *length,
+            element: Box::new(erase_at_parameters(declared, element)?),
+        }),
+        _ => Some(ty.clone()),
+    }
+}
+
+fn erase_permissions(ty: &Type) -> Type {
+    match ty {
+        Type::Compound { kind, args, .. } => Type::Compound {
+            kind: *kind,
+            args: args.iter().map(erase_permissions).collect(),
+            writable: false,
+        },
+        Type::Nominal { id, params, .. } => Type::Nominal {
+            id: id.clone(),
+            params: params.iter().map(erase_permissions).collect(),
+            writable: false,
+        },
+        Type::Tuple(elements) => Type::Tuple(elements.iter().map(erase_permissions).collect()),
+        Type::Array { length, element } => Type::Array {
+            length: *length,
+            element: Box::new(erase_permissions(element)),
+        },
+        Type::Function(f) => f.rebuild(
+            f.params
+                .iter()
+                .map(|param| {
+                    FunctionParameter::named(erase_permissions(&param.ty), param.name.clone())
+                })
+                .collect(),
+            Vec::new(),
+            Box::new(erase_permissions(&f.return_type)),
+        ),
+        Type::Forall { vars, body } => Type::Forall {
+            vars: vars.clone(),
+            body: Box::new(erase_permissions(body)),
+        },
+        other => other.clone(),
+    }
 }

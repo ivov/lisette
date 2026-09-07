@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Not supported yet
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   lib.Use(lib.New())
+   ·           ────┬────
+   ·               ╰── unsupported
+ 4 │ }
+   ╰────
+  help: Lisette does not yet support using `Impl` as the generic Go interface `Applier` · code: [infer.unsupported_generic_go_interface]

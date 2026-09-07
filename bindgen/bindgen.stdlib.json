@@ -183,6 +183,9 @@
       "nilable_return": {
       },
       "non_mutating_param": {
+        "archive/zip": {
+          "pooledFlateWriter.Write": ["p"]
+        },
         "compress/flate": {
           "Writer.Write": ["data"]
         },
@@ -203,11 +206,15 @@
         "hash/crc32": {
           "Checksum": ["data"],
           "ChecksumIEEE": ["data"],
-          "Update": ["p"]
+          "Update": ["p"],
+          "digest.Write": ["p"]
         },
         "net/http/httputil": {
           "ClientConn.Do": ["req"],
           "ClientConn.Write": ["req"]
+        },
+        "testing/slogtest": {
+          "wrapper.Handle": ["r"]
         }
       },
       "mutates_param": {

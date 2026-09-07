@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ivov/lisette/bindgen/internal/config"
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/ssa"
 )
@@ -373,7 +374,7 @@ func NewMutationAnalysis(nilness *NilnessAnalysis, roots []*packages.Package) (a
 				}
 				for sel := range analysis.program.MethodSets.MethodSet(types.NewPointer(named)).Methods() {
 					if fn, ok := sel.Obj().(*types.Func); ok {
-						bound = append(bound, fn)
+						bound = append(bound, fn.Origin())
 					}
 				}
 			}
@@ -391,77 +392,183 @@ func NewMutationAnalysis(nilness *NilnessAnalysis, roots []*packages.Package) (a
 	for _, fn := range bound {
 		analysis.record(fn)
 	}
-	analysis.widenInterfaceMethods(wellTyped)
+	analysis.widenInterfaceMethods(wellTyped, nilness.cfg)
 	return analysis, nil
 }
 
 type implementation struct {
 	abstract *types.Func
 	concrete *types.Func
+	readOnly []bool
 }
 
-// widenInterfaceMethods marks an interface parameter writable when a same-package implementer writes it.
-func (a *MutationAnalysis) widenInterfaceMethods(pkgs []*packages.Package) {
-	var implementations []implementation
+func (a *MutationAnalysis) widenInterfaceMethods(pkgs []*packages.Package, cfg *config.Config) {
+	var interfaces, implementers []*types.Named
+	seen := make(map[string]bool)
+	consider := func(named *types.Named) {
+		key := types.TypeString(named, nil)
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		if iface, ok := named.Underlying().(*types.Interface); ok {
+			if iface.IsMethodSet() && iface.NumMethods() > 0 {
+				interfaces = append(interfaces, named)
+			}
+			return
+		}
+		implementers = append(implementers, named)
+	}
 	for _, pkg := range pkgs {
-		implementations = append(implementations, a.packageImplementations(pkg)...)
+		scope := pkg.Types.Scope()
+		for _, name := range scope.Names() {
+			if typeName, ok := scope.Lookup(name).(*types.TypeName); ok {
+				if named, ok := typeName.Type().(*types.Named); ok {
+					consider(named)
+				}
+			}
+		}
+		if pkg.TypesInfo == nil {
+			continue
+		}
+		// TypesInfo.Instances lists each instantiation written in the source, such as Generic[string].
+		for _, instance := range pkg.TypesInfo.Instances {
+			if named, ok := instance.Type.(*types.Named); ok {
+				consider(named)
+			}
+		}
+	}
+	byMethod := make(map[string][]*types.Named)
+	for _, implementer := range implementers {
+		receiver := types.NewPointer(selfInstantiated(implementer))
+		for sel := range a.program.MethodSets.MethodSet(receiver).Methods() {
+			byMethod[sel.Obj().Name()] = append(byMethod[sel.Obj().Name()], implementer)
+		}
+	}
+	var implementations []implementation
+	for _, iface := range interfaces {
+		for _, implementer := range candidateImplementers(iface, byMethod) {
+			for _, pair := range a.implementationPairs(iface, implementer) {
+				pair.readOnly = curatedReadOnly(cfg, pair.concrete)
+				implementations = append(implementations, pair)
+			}
+		}
 	}
 	for changed := true; changed; {
 		changed = false
 		for _, pair := range implementations {
-			if written, ok := a.verdicts[pair.concrete]; ok && a.mergeWrittenParams(pair.abstract, written) {
+			if written, ok := a.verdicts[pair.concrete]; ok && a.mergeWrittenParams(pair.abstract, written, pair.readOnly) {
 				changed = true
 			}
 		}
 	}
 }
 
-func (a *MutationAnalysis) packageImplementations(pkg *packages.Package) []implementation {
-	var interfaces []*types.Interface
-	var implementers []*types.Pointer
-	scope := pkg.Types.Scope()
-	for _, name := range scope.Names() {
-		typeName, ok := scope.Lookup(name).(*types.TypeName)
-		if !ok {
-			continue
-		}
-		named, ok := typeName.Type().(*types.Named)
-		if !ok || named.TypeParams().Len() > 0 {
-			continue
-		}
-		if iface, ok := named.Underlying().(*types.Interface); ok {
-			if iface.IsMethodSet() && iface.NumMethods() > 0 {
-				interfaces = append(interfaces, iface)
-			}
-			continue
-		}
-		implementers = append(implementers, types.NewPointer(named))
+func curatedReadOnly(cfg *config.Config, fn *types.Func) []bool {
+	sig := fn.Type().(*types.Signature)
+	if cfg == nil || sig.Recv() == nil || fn.Pkg() == nil {
+		return nil
 	}
-	var out []implementation
-	for _, iface := range interfaces {
-		for _, implementer := range implementers {
-			if !types.Implements(implementer, iface) {
-				continue
-			}
-			methods := a.program.MethodSets.MethodSet(implementer)
-			for method := range iface.Methods() {
-				if selection := methods.Lookup(method.Pkg(), method.Name()); selection != nil {
-					out = append(out, implementation{abstract: method, concrete: selection.Obj().(*types.Func)})
-				}
-			}
+	receiver := sig.Recv().Type()
+	if pointer, ok := receiver.(*types.Pointer); ok {
+		receiver = pointer.Elem()
+	}
+	named, ok := receiver.(*types.Named)
+	if !ok {
+		return nil
+	}
+	curated := cfg.NonMutatingParams(fn.Pkg().Path(), named.Obj().Name()+"."+fn.Name())
+	if len(curated) == 0 {
+		return nil
+	}
+	names := paramNames(sig)
+	readOnly := make([]bool, len(names))
+	for index, name := range names {
+		readOnly[index] = slices.Contains(curated, name)
+	}
+	return readOnly
+}
+
+func candidateImplementers(iface *types.Named, byMethod map[string][]*types.Named) []*types.Named {
+	var candidates []*types.Named
+	first := true
+	for method := range iface.Underlying().(*types.Interface).Methods() {
+		having := byMethod[method.Name()]
+		if first || len(having) < len(candidates) {
+			candidates, first = having, false
 		}
+	}
+	return candidates
+}
+
+func (a *MutationAnalysis) implementationPairs(iface, implementer *types.Named) []implementation {
+	interfaceType := interfaceFor(iface, implementer)
+	if interfaceType == nil {
+		return nil
+	}
+	receiver := types.NewPointer(selfInstantiated(implementer))
+	if !types.Implements(receiver, interfaceType) {
+		return nil
+	}
+	methods := a.program.MethodSets.MethodSet(receiver)
+	var out []implementation
+	for method := range interfaceType.Methods() {
+		selection := methods.Lookup(method.Pkg(), method.Name())
+		if selection == nil {
+			return nil
+		}
+		concrete := selection.Obj().(*types.Func)
+		out = append(out, implementation{abstract: method.Origin(), concrete: concrete.Origin()})
 	}
 	return out
 }
 
-func (a *MutationAnalysis) mergeWrittenParams(method *types.Func, written FunctionMutation) bool {
+// interfaceFor instantiates a generic interface with the implementer's type parameters.
+func interfaceFor(iface, implementer *types.Named) *types.Interface {
+	if iface.TypeArgs().Len() > 0 || iface.TypeParams().Len() == 0 {
+		return iface.Underlying().(*types.Interface)
+	}
+	own := implementer.TypeParams()
+	if own.Len() != iface.TypeParams().Len() || implementer.TypeArgs().Len() > 0 {
+		return nil
+	}
+	args := make([]types.Type, own.Len())
+	for i := range args {
+		args[i] = own.At(i)
+	}
+	instantiated, err := types.Instantiate(nil, iface, args, true)
+	if err != nil {
+		return nil
+	}
+	return instantiated.Underlying().(*types.Interface)
+}
+
+// selfInstantiated instantiates a generic type with its declared type parameters, so its methods use them too.
+func selfInstantiated(named *types.Named) types.Type {
+	params := named.TypeParams()
+	if params.Len() == 0 || named.TypeArgs().Len() > 0 {
+		return named
+	}
+	args := make([]types.Type, params.Len())
+	for i := range args {
+		args[i] = params.At(i)
+	}
+	instantiated, err := types.Instantiate(nil, named, args, false)
+	if err != nil {
+		return named
+	}
+	return instantiated
+}
+
+func (a *MutationAnalysis) mergeWrittenParams(method *types.Func, written FunctionMutation, readOnly []bool) bool {
 	facts, ok := a.verdicts[method]
 	if !ok {
 		facts = FunctionMutation{Params: make([]bool, method.Type().(*types.Signature).Params().Len())}
 	}
 	changed := false
 	for index := range facts.Params {
-		if !facts.Params[index] && written.Mutates(index) {
+		curated := index < len(readOnly) && readOnly[index]
+		if !facts.Params[index] && written.Mutates(index) && !curated {
 			facts.Params[index] = true
 			changed = true
 		}
@@ -480,7 +587,7 @@ func (a *MutationAnalysis) Function(obj types.Object) (FunctionMutation, bool) {
 	if !ok {
 		return FunctionMutation{}, false
 	}
-	facts, ok := a.verdicts[fn]
+	facts, ok := a.verdicts[fn.Origin()]
 	return facts, ok
 }
 
@@ -493,7 +600,7 @@ func (a *MutationAnalysis) Views(obj types.Object) (FunctionViews, bool) {
 	if !ok {
 		return FunctionViews{}, false
 	}
-	facts, ok := a.views[fn]
+	facts, ok := a.views[fn.Origin()]
 	return facts, ok
 }
 

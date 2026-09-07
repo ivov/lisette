@@ -8,7 +8,7 @@ use crate::handlers::reconciliation::{finalize_manifest_via, reconcile_declared_
 use crate::output::print_sync_summary;
 use crate::typedef_regen::prewarm_typedef_cache;
 use crate::typedef_scan::{SourceScanError, scan_source_imports};
-use crate::workspace::WorkspaceBindgen;
+use crate::workspace::{GoWorkspace, WorkspaceBindgen, warm_typedefs};
 use crate::{cli_error, error};
 use std::path::Path;
 
@@ -94,8 +94,10 @@ pub fn sync(script: Option<&str>) -> i32 {
             target,
         ));
         let locator = locator.with_bindgen(runner.clone());
+        let workspace = GoWorkspace::new(target_dir, typedef_cache_dir, target);
+        let warmed = warm_typedefs(project_root, &workspace, &locator);
         let result = prewarm_typedef_cache(&non_blank_imports, &locator);
-        (result, runner.progress_emitted())
+        (result, warmed || runner.progress_emitted())
     } else {
         (Ok(()), false)
     };

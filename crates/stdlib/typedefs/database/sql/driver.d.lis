@@ -140,7 +140,7 @@ pub struct NamedValue {
 /// path is used for the argument. Drivers may wish to return [ErrSkip] after
 /// they have exhausted their own special cases.
 pub interface NamedValueChecker {
-  fn CheckNamedValue(namedValue: Ref<NamedValue>) -> Result<(), error>
+  fn CheckNamedValue(namedValue: mut Ref<NamedValue>) -> Result<(), error>
 }
 
 /// NotNull is a type that implements [ValueConverter] by disallowing nil

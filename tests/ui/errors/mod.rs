@@ -5099,6 +5099,35 @@ fn main() {
 }
 
 #[test]
+fn infer_unsupported_generic_go_interface() {
+    let typedef = r#"
+pub struct Node {
+  pub Value: int,
+}
+
+pub interface Applier<T> {
+  fn Apply(items: mut Slice<T>)
+}
+
+pub type Impl<K>
+
+impl<K: Comparable> Impl<K> {
+  fn Apply(self, items: mut Slice<mut Ref<Node>>)
+}
+
+pub fn New() -> Impl<int>
+
+pub fn Use(a: Applier<Ref<Node>>)
+"#;
+    let input = r#"import "go:example.com/lib"
+fn main() {
+  lib.Use(lib.New())
+}
+"#;
+    assert_infer_error_snapshot!(input, &[("go:example.com/lib", typedef)]);
+}
+
+#[test]
 fn infer_comma_ok_abi_mismatch() {
     let typedef = r#"
 pub interface Lookup {

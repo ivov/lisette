@@ -857,6 +857,9 @@ impl GoWorkspace<'_> {
             }
             if atomic_write(&path, &entry.content).is_ok() {
                 written += 1;
+                if matches!(replacement, Some(deps::ResolvedReplacement::Local)) {
+                    locator.stamp_local_typedef(&path);
+                }
             }
         }
 
@@ -871,6 +874,10 @@ impl GoWorkspace<'_> {
 
     fn warm_stamp_matches(&self, content: &str) -> bool {
         fs::read_to_string(self.warm_stamp_path()).is_ok_and(|existing| existing == content)
+    }
+
+    pub(crate) fn invalidate_warm_stamp(&self) {
+        let _ = fs::remove_file(self.warm_stamp_path());
     }
 
     fn write_warm_stamp(&self, content: &str) {
@@ -888,39 +895,32 @@ pub(crate) fn warm_typedefs(
     project_root: &Path,
     workspace: &GoWorkspace<'_>,
     locator: &TypedefLocator,
-) {
+) -> bool {
     if locator.deps().is_empty() {
-        return;
+        return false;
     }
 
     let src_dir = project_root.join("src");
     let Ok(scanned) = typedef_scan::scan_source_imports(&src_dir) else {
-        return;
+        return false;
     };
 
-    // The warm batch writes no stamp sidecars, so the gate would discard its
-    // local typedefs. Those resolve through the stamp-gated lazy path instead.
-    let is_local = |pkg: &str| {
-        matches!(
-            locator.module_for_package(pkg),
-            Some((_, _, Some(deps::ResolvedReplacement::Local)))
-        )
-    };
+    // Local packages join the batch so bindgen sees an interface and its implementers together.
     let mut seen: HashSet<String> = HashSet::new();
     let mut roots: Vec<String> = scanned
         .non_blank()
-        .filter(|pkg| locator.is_declared_go_dep(pkg) && !is_local(pkg))
+        .filter(|pkg| locator.is_declared_go_dep(pkg))
         .filter(|pkg| seen.insert((*pkg).to_string()))
         .map(str::to_string)
         .collect();
     if roots.is_empty() {
-        return;
+        return false;
     }
     roots.sort();
 
     let stamp = warm_stamp_for(&roots, locator);
     if workspace.warm_stamp_matches(&stamp) {
-        return;
+        return false;
     }
 
     output::print_progress(&format!(
@@ -934,9 +934,10 @@ pub(crate) fn warm_typedefs(
             && workspace.cache_typedefs(&manifest, locator) > 0
         {
             workspace.write_warm_stamp(&stamp);
-            return;
+            return true;
         }
     }
+    true
 }
 
 fn warm_stamp_for(roots: &[String], locator: &TypedefLocator) -> String {
@@ -958,7 +959,13 @@ fn warm_stamp_for(roots: &[String], locator: &TypedefLocator) -> String {
             format!("{} {}", module, source)
         })
         .collect();
-    format!("{}\n--\n{}", roots.join("\n"), deps.join("\n"))
+    let local = locator.local_stamp_value().unwrap_or("");
+    format!(
+        "{}\n--\n{}\n--\n{}",
+        roots.join("\n"),
+        deps.join("\n"),
+        local
+    )
 }
 
 fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
@@ -1117,10 +1124,21 @@ impl Bindgen for WorkspaceBindgen {
             return Err(BindgenFailure::GoToolchainMissing);
         }
 
+        let workspace = GoWorkspace::new(&self.target_dir, &self.typedef_cache_dir, self.target);
+
+        if let Some(project_root) = self.target_dir.parent()
+            && let Ok((_, locator)) =
+                TypedefLocator::from_project_with_manifest(project_root, self.target)
+        {
+            warm_typedefs(project_root, &workspace, &locator);
+            if typedef_path.exists() {
+                self.progress_emitted.store(true, Ordering::Relaxed);
+                return Ok(());
+            }
+        }
+
         output::print_progress(&format!("Generating typedef for {}", pkg.package));
         self.progress_emitted.store(true, Ordering::Relaxed);
-
-        let workspace = GoWorkspace::new(&self.target_dir, &self.typedef_cache_dir, self.target);
 
         let module = GoModule {
             path: pkg.module.path,
