@@ -1,0 +1,73 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:bufio"
+  import "go:fmt"
+  import "go:strings"
+  
+  fn main() {
+    let mut forwarded = bufio.NewScanner(strings.NewReader("one two three"))
+    forwarded.Split(|data, at_eof| bufio.ScanWords(data, at_eof))
+    let mut count = 0
+    while forwarded.Scan() {
+      count += 1
+    }
+    fmt.Println(count)
+  
+    let mut rebuilt = bufio.NewScanner(strings.NewReader("four five"))
+    rebuilt.Split(|data, at_eof| {
+      let (advance, token) = bufio.ScanWords(data, at_eof)?
+      Ok((advance, token))
+    })
+    let mut words = 0
+    while rebuilt.Scan() {
+      words += 1
+    }
+    fmt.Println(words)
+  }
+---
+package main
+
+import (
+	"bufio"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strings"
+)
+
+func main() {
+	forwarded := bufio.NewScanner(strings.NewReader("one two three"))
+	forwarded.Split(func(data []byte, at_eof bool) (int, []byte, error) {
+		return bufio.ScanWords(data, at_eof)
+	})
+	count := 0
+	for forwarded.Scan() {
+		count++
+	}
+	fmt.Println(count)
+	rebuilt := bufio.NewScanner(strings.NewReader("four five"))
+	rebuilt.Split(func(data []byte, at_eof bool) (int, []byte, error) {
+		ret_1, ret_2, ret_3 := bufio.ScanWords(data, at_eof)
+		tup_4 := lisette.MakeTuple2(ret_1, ret_2)
+		var result_5 lisette.Result[lisette.Tuple2[int, []byte], error]
+		if ret_3 != nil {
+			result_5 = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_3)
+		} else {
+			result_5 = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup_4)
+		}
+		check_6 := result_5
+		if check_6.Tag != lisette.ResultOk {
+			return 0, nil, check_6.ErrVal
+		}
+		tmp_7 := check_6.OkVal
+		advance := tmp_7.First
+		token := tmp_7.Second
+		return advance, token, nil
+	})
+	words := 0
+	for rebuilt.Scan() {
+		words++
+	}
+	fmt.Println(words)
+}

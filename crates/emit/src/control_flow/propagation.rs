@@ -534,25 +534,35 @@ impl Planner<'_> {
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
         if let Some(shape) = lowered {
-            let ok_arg = if matches!(shape, CallableReturnAbi::BareError) {
+            let payload = if matches!(shape, CallableReturnAbi::BareError) {
                 if !args.is_empty() {
                     let (setup, _) = self
                         .lower_composite_value(&args[0], ExpressionContext::value())
                         .into_parts();
                     statements.extend(setup);
                 }
-                String::new()
+                Vec::new()
             } else if args.is_empty() {
-                "struct{}{}".to_string()
+                vec!["struct{}{}".to_string()]
+            } else if shape.has_flattened_payload()
+                && let Expression::Tuple { elements, .. } = args[0].unwrap_parens()
+            {
+                let (setup, parts) =
+                    transition::lowered_tuple_literal_values(self, elements, fallible.ok_ty());
+                statements.extend(setup);
+                parts
             } else {
                 let (setup, value) = self
                     .lower_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
                 statements.extend(setup);
-                value
+                let (projection, parts) =
+                    transition::lowered_payload_values(self, shape, fallible.ok_ty(), &value);
+                statements.extend(projection);
+                parts
             };
             statements.push(transition::multi_value_return(
-                transition::lowered_ok_values(shape, &ok_arg),
+                transition::lowered_ok_values(shape, payload),
             ));
         } else {
             let (setup, arg) = self

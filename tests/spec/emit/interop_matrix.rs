@@ -3051,3 +3051,150 @@ impl Client {
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/promoted", typedef)]);
 }
+
+#[test]
+fn interop_go_fn_value_with_tuple_error_result_forwards_to_go_callback_param() {
+    let input = r#"
+import "go:bufio"
+import "go:fmt"
+import "go:strings"
+
+fn main() {
+  let mut scanner = bufio.NewScanner(strings.NewReader("one two three"))
+  scanner.Split(bufio.ScanWords)
+  let mut count = 0
+  while scanner.Scan() {
+    count += 1
+  }
+  fmt.Println(count)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_closure_with_tuple_error_result_flattens_for_go_callback_param() {
+    let input = r#"
+import "go:bufio"
+import "go:fmt"
+import "go:strings"
+
+fn main() {
+  let mut forwarded = bufio.NewScanner(strings.NewReader("one two three"))
+  forwarded.Split(|data, at_eof| bufio.ScanWords(data, at_eof))
+  let mut count = 0
+  while forwarded.Scan() {
+    count += 1
+  }
+  fmt.Println(count)
+
+  let mut rebuilt = bufio.NewScanner(strings.NewReader("four five"))
+  rebuilt.Split(|data, at_eof| {
+    let (advance, token) = bufio.ScanWords(data, at_eof)?
+    Ok((advance, token))
+  })
+  let mut words = 0
+  while rebuilt.Scan() {
+    words += 1
+  }
+  fmt.Println(words)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_lisette_fn_value_with_tuple_error_result_adapts_to_go_callback_param() {
+    let input = r#"
+import "go:bufio"
+import "go:fmt"
+import "go:strings"
+
+fn split_words(data: Slice<byte>, at_eof: bool) -> Result<(int, Slice<byte>), error> {
+  bufio.ScanWords(data, at_eof)
+}
+
+fn count(input: string, split: bufio.SplitFunc) -> int {
+  let mut scanner = bufio.NewScanner(strings.NewReader(input))
+  scanner.Split(split)
+  let mut n = 0
+  while scanner.Scan() {
+    n += 1
+  }
+  n
+}
+
+fn main() {
+  fmt.Println(count("one two three", split_words))
+  fmt.Println(count("four five", bufio.ScanWords))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_lisette_fn_value_binds_to_annotated_go_fn_type() {
+    let input = r#"
+import "go:bufio"
+
+fn split_words(data: mut Slice<byte>, at_eof: bool) -> Result<(int, Slice<byte>), error> {
+  bufio.ScanWords(data, at_eof)
+}
+
+fn main() {
+  let annotated: bufio.SplitFunc = split_words
+  let forwarded: bufio.SplitFunc = bufio.ScanWords
+  let literal: bufio.SplitFunc = |data, at_eof| bufio.ScanWords(data, at_eof)
+  let _ = annotated
+  let _ = forwarded
+  let _ = literal
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_lisette_fn_value_casts_to_go_fn_type() {
+    let input = r#"
+import "go:bufio"
+
+fn split_words(data: mut Slice<byte>, at_eof: bool) -> Result<(int, Slice<byte>), error> {
+  bufio.ScanWords(data, at_eof)
+}
+
+fn main() {
+  let _ = split_words as bufio.SplitFunc
+  let _ = bufio.ScanWords as bufio.SplitFunc
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_lisette_fn_value_reaches_go_fn_type_return_field_and_assignment() {
+    let input = r#"
+import "go:bufio"
+
+struct Splitter {
+  split: bufio.SplitFunc,
+}
+
+fn split_words(data: mut Slice<byte>, at_eof: bool) -> Result<(int, Slice<byte>), error> {
+  bufio.ScanWords(data, at_eof)
+}
+
+fn pick() -> bufio.SplitFunc {
+  split_words
+}
+
+fn main() {
+  let mut assigned: bufio.SplitFunc = bufio.ScanWords
+  assigned = split_words
+  let holder = Splitter { split: split_words }
+  let _ = pick()
+  let _ = assigned
+  let _ = holder
+}
+"#;
+    assert_emit_snapshot!(input);
+}

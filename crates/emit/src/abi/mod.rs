@@ -9,6 +9,7 @@ use crate::names::go_name;
 use crate::names::go_name::PRELUDE_ERROR_ID;
 use crate::types::go_type::GoType;
 use callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use coercion::CoercionPlan;
 use layout::SlotOrigin;
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::types::Type;
@@ -67,6 +68,56 @@ impl Planner<'_> {
     fn is_go_named_function_type(&self, ty: &Type) -> bool {
         matches!(ty.unwrap_forall(), Type::Nominal { id, .. } if go_name::is_go_import(id))
             && self.facts.resolve_to_function_type(ty).is_some()
+    }
+
+    pub(crate) fn emitted_function_origin(
+        &self,
+        value: &Expression,
+        slot_origin: SlotOrigin,
+    ) -> SlotOrigin {
+        if is_closure_literal(value) || self.is_go_callable(value) {
+            slot_origin
+        } else {
+            self.function_type_origin(&value.get_type(), SlotOrigin::Lisette)
+        }
+    }
+
+    /// Non-identity for e.g. a Lisette `fn` bound to a Go-named function type.
+    pub(crate) fn function_slot_bridge(
+        &self,
+        value: &Expression,
+        target_ty: &Type,
+    ) -> CoercionPlan {
+        let slot_origin = self.function_type_origin(target_ty, SlotOrigin::Lisette);
+        let source_origin = self.emitted_function_origin(value, slot_origin);
+        self.function_type_slot_bridge(&value.get_type(), target_ty, source_origin)
+    }
+
+    pub(crate) fn function_type_slot_bridge(
+        &self,
+        value_ty: &Type,
+        target_ty: &Type,
+        source_origin: SlotOrigin,
+    ) -> CoercionPlan {
+        let slot_origin = self.function_type_origin(target_ty, SlotOrigin::Lisette);
+        if !slot_origin.declared_by_go()
+            || self.facts.resolve_to_function_type(value_ty).is_none()
+            || self.facts.resolve_to_function_type(target_ty).is_none()
+        {
+            return CoercionPlan::Identity;
+        }
+        let source = self.value_layout(value_ty, source_origin);
+        let target = self.value_layout(target_ty, slot_origin);
+        CoercionPlan::bridge(self, &source, &target)
+    }
+
+    pub(crate) fn value_slot_coercion(&self, value: &Expression, target_ty: &Type) -> CoercionPlan {
+        let bridge = self.function_slot_bridge(value, target_ty);
+        if bridge.is_identity() {
+            CoercionPlan::internal(self, &value.get_type(), target_ty)
+        } else {
+            bridge
+        }
     }
 
     /// Lowered shape for the slot at `origin`, or `None` to keep it tagged.
@@ -218,6 +269,13 @@ pub(crate) fn is_tagged_shape_fn_value(expression: &Expression) -> bool {
             resolution: IdentifierResolution::Definition(q),
             ..
         } if q.starts_with("prelude.")
+    )
+}
+
+pub(crate) fn is_closure_literal(expression: &Expression) -> bool {
+    matches!(
+        expression.unwrap_parens(),
+        Expression::Lambda { .. } | Expression::Function { .. }
     )
 }
 

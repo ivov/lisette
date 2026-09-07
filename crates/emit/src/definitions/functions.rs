@@ -180,7 +180,7 @@ impl Planner<'_> {
         let return_ctx = if suppress_lowering {
             ReturnContext::Tagged(return_ty.clone())
         } else {
-            self.return_context_for_type(return_ty.clone())
+            self.return_context_for_slot(return_ty.clone(), ctx.function_slot_origin())
         };
         let signature = if has_return {
             match return_ctx.lowered_shape() {

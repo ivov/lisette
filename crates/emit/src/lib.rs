@@ -33,8 +33,10 @@ pub use output::imports;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use abi::callable::{CallableReturnAbi, OptionReturnAbi};
 use abi::catalog::GoAbiCatalog;
+use abi::go_payload_layout;
+use abi::layout::SlotOrigin;
 use analyze::facts::{EmitFactsConfig, is_nullable_option};
 use diagnostics::LisetteDiagnostic;
 use names::go_name::GeneratedPackage;
@@ -127,17 +129,7 @@ pub(crate) fn classify_go_return_type(
     return_ty: &Type,
     go_hints: &[String],
 ) -> Option<CallableReturnAbi> {
-    let payload = || {
-        if return_ty
-            .ok_type()
-            .tuple_arity()
-            .is_some_and(|arity| arity >= 2)
-        {
-            PayloadLayout::Flattened
-        } else {
-            PayloadLayout::Packed
-        }
-    };
+    let payload = || go_payload_layout(return_ty);
     if return_ty.is_partial() {
         return Some(CallableReturnAbi::Partial { payload: payload() });
     }
@@ -261,9 +253,18 @@ impl Planner<'_> {
 
 impl<'a> Planner<'a> {
     fn return_context_for_type(&self, return_ty: Type) -> ReturnContext {
-        let return_ty = self.facts.peel_alias(&return_ty);
-        match self.classify_direct_emission(&return_ty) {
-            Some(shape) => ReturnContext::Lowered { return_ty, shape },
+        self.return_context_for_slot(return_ty, SlotOrigin::Lisette)
+    }
+
+    fn return_context_for_slot(&self, return_ty: Type, origin: SlotOrigin) -> ReturnContext {
+        let peeled = self.facts.peel_alias(&return_ty);
+        match self.classify_slot_emission(&peeled, origin) {
+            Some(shape) => ReturnContext::Lowered {
+                return_ty: peeled,
+                shape,
+            },
+            // A non-container keeps its declared name, so a Go-named
+            // function type still identifies its slot.
             None => ReturnContext::Tagged(return_ty),
         }
     }

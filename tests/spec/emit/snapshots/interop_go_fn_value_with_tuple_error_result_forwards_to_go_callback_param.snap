@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:bufio"
+  import "go:fmt"
+  import "go:strings"
+  
+  fn main() {
+    let mut scanner = bufio.NewScanner(strings.NewReader("one two three"))
+    scanner.Split(bufio.ScanWords)
+    let mut count = 0
+    while scanner.Scan() {
+      count += 1
+    }
+    fmt.Println(count)
+  }
+---
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"strings"
+)
+
+func main() {
+	scanner := bufio.NewScanner(strings.NewReader("one two three"))
+	scanner.Split(bufio.ScanWords)
+	count := 0
+	for scanner.Scan() {
+		count++
+	}
+	fmt.Println(count)
+}

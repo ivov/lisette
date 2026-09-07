@@ -1,0 +1,77 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:bufio"
+  
+  struct Splitter {
+    split: bufio.SplitFunc,
+  }
+  
+  fn split_words(data: mut Slice<byte>, at_eof: bool) -> Result<(int, Slice<byte>), error> {
+    bufio.ScanWords(data, at_eof)
+  }
+  
+  fn pick() -> bufio.SplitFunc {
+    split_words
+  }
+  
+  fn main() {
+    let mut assigned: bufio.SplitFunc = bufio.ScanWords
+    assigned = split_words
+    let holder = Splitter { split: split_words }
+    let _ = pick()
+    let _ = assigned
+    let _ = holder
+  }
+---
+package main
+
+import (
+	"bufio"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Splitter struct {
+	split bufio.SplitFunc
+}
+
+func splitWords(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
+	ret_1, ret_2, ret_3 := bufio.ScanWords(data, at_eof)
+	tup_4 := lisette.MakeTuple2(ret_1, ret_2)
+	var result_5 lisette.Result[lisette.Tuple2[int, []byte], error]
+	if ret_3 != nil {
+		result_5 = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_3)
+	} else {
+		result_5 = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup_4)
+	}
+	if result_5.Tag == lisette.ResultOk {
+		return result_5.OkVal, nil
+	}
+	return *new(lisette.Tuple2[int, []byte]), result_5.ErrVal
+}
+
+func pick() bufio.SplitFunc {
+	cb_1 := splitWords
+	return func(arg0 []byte, arg1 bool) (int, []byte, error) {
+		ret_2, ret_3 := cb_1(arg0, arg1)
+		return ret_2.First, ret_2.Second, ret_3
+	}
+}
+
+func main() {
+	var assigned bufio.SplitFunc = bufio.ScanWords
+	cb_1 := splitWords
+	assigned = func(arg0 []byte, arg1 bool) (int, []byte, error) {
+		ret_2, ret_3 := cb_1(arg0, arg1)
+		return ret_2.First, ret_2.Second, ret_3
+	}
+	cb_4 := splitWords
+	holder := Splitter{split: func(arg0 []byte, arg1 bool) (int, []byte, error) {
+		ret_5, ret_6 := cb_4(arg0, arg1)
+		return ret_5.First, ret_5.Second, ret_6
+	}}
+	_ = pick()
+	_ = assigned
+	_ = holder
+}

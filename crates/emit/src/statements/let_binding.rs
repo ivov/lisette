@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableReturnAbi};
-use crate::abi::coercion::CoercionPlan;
+use crate::abi::layout::SlotOrigin;
 use crate::calls::go_interop::WrapperTarget;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::Fallible;
@@ -221,10 +221,14 @@ impl Planner<'_> {
             return statements;
         }
 
-        let plan = self.lower_value(value, ExpressionContext::value());
+        let origin = self.function_type_origin(binding_ty, SlotOrigin::Lisette);
+        let plan = self.lower_value(
+            value,
+            ExpressionContext::value().with_function_slot_origin(origin),
+        );
         let constant = plan.expression.constant_kind();
         let (mut statements, value_expression) = plan.into_parts();
-        let coercion = CoercionPlan::internal(self, &value.get_type(), binding_ty);
+        let coercion = self.value_slot_coercion(value, binding_ty);
         let constant_needs_type =
             coercion.is_identity() && self.constant_needs_go_type(constant, binding_ty).is_some();
         let (coercion_setup, value_expression) = coercion.lower(self, value_expression);
