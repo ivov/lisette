@@ -103,24 +103,26 @@ impl Planner<'_> {
                 self.lower_discard_value(value)
             };
         };
-        if needs_temp {
-            let go_identifier = escape_reserved(raw_go_name);
-            if !self.shadows_declaration(&go_identifier)
-                && !self.scope.is_active_assign_target(&go_identifier)
-                && !self.scope.has_binding_for_go_name(&go_identifier)
-                && value.get_type().demoted() == binding_ty.demoted()
-            {
-                if let Some(statements) = self.lower_fused_result_match_into(value, &go_identifier)
-                {
-                    self.scope.bind(identifier, raw_go_name);
-                    return statements;
-                }
-                if let Some(statements) = self.lower_fused_option_match_into(value, &go_identifier)
-                {
-                    self.scope.bind(identifier, raw_go_name);
-                    return statements;
-                }
+        let go_identifier = escape_reserved(raw_go_name);
+        if !self.shadows_declaration(&go_identifier)
+            && !self.scope.is_active_assign_target(&go_identifier)
+            && !self.scope.has_binding_for_go_name(&go_identifier)
+            && value.get_type().demoted() == binding_ty.demoted()
+        {
+            if let Some(statements) = self.lower_fused_result_match_into(value, &go_identifier) {
+                self.scope.bind(identifier, raw_go_name);
+                return statements;
             }
+            if let Some(statements) = self.lower_fused_option_match_into(value, &go_identifier) {
+                self.scope.bind(identifier, raw_go_name);
+                return statements;
+            }
+            if let Some(statements) = self.lower_defaulted_call_into(value, &go_identifier) {
+                self.scope.bind(identifier, raw_go_name);
+                return statements;
+            }
+        }
+        if needs_temp {
             if self.shadows_declaration(&go_identifier)
                 || expression_contains_binding(value, identifier)
             {

@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn fallback() -> int {
+    fmt.Println("fallback ran")
+    0
+  }
+  
+  fn home_length() -> int {
+    os.LookupEnv("HOME").map_or(fallback(), |home| home.length())
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"os"
+)
+
+func fallback() int {
+	fmt.Println("fallback ran")
+	return 0
+}
+
+func homeLength() int {
+	option_1 := lisette.OptionFromCommaOk[string](os.LookupEnv("HOME"))
+	return lisette.OptionMapOr(option_1, fallback(), func(home string) int {
+		return len(home)
+	})
+}

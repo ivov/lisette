@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn one() -> Result<int, error> {
+    Ok(strconv.Atoi("bad").unwrap_or(strconv.Atoi("7")?))
+  }
+---
+package main
+
+import "strconv"
+
+func one() (int, error) {
+	ret_1, err := strconv.Atoi("bad")
+	ret_2, err_3 := strconv.Atoi("7")
+	if err_3 != nil {
+		return 0, err_3
+	}
+	default_4 := ret_2
+	if err != nil {
+		ret_1 = default_4
+	}
+	return ret_1, nil
+}

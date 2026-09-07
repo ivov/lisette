@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn main() {
+    let home = os.LookupEnv("HOME").unwrap_or("unset")
+    fmt.Println(home)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	home, ok := os.LookupEnv("HOME")
+	if !ok {
+		home = "unset"
+	}
+	fmt.Println(home)
+}

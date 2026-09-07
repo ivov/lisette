@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let counts = Map.new<string, int>()
+    fmt.Println(counts.get("a").unwrap_or(0) + 1)
+  }
+---
+package main
+
+import "fmt"
+
+func main() {
+	counts := make(map[string]int)
+	ret_1, ok := counts["a"]
+	if !ok {
+		ret_1 = 0
+	}
+	fmt.Println(ret_1 + 1)
+}

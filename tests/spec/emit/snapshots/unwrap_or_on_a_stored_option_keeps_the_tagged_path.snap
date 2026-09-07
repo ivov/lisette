@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn main() {
+    let home = os.LookupEnv("HOME")
+    fmt.Println(home.unwrap_or("unset"))
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"os"
+)
+
+func main() {
+	home := lisette.OptionFromCommaOk[string](os.LookupEnv("HOME"))
+	fmt.Println(home.UnwrapOr("unset"))
+}

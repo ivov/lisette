@@ -1,0 +1,60 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn message() -> string {
+    fmt.Println("message ran")
+    "ctx"
+  }
+  
+  fn predicate() -> bool {
+    strconv.Atoi("1").wrap_err(message()).is_err()
+  }
+  
+  fn defaulted() -> int {
+    strconv.Atoi("1").wrap_err(message()).unwrap_or(0)
+  }
+  
+  fn let_else() -> int {
+    let Ok(v) = strconv.Atoi("1").wrap_err(message()) else { return -1 }
+    v
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func message() string {
+	fmt.Println("message ran")
+	return "ctx"
+}
+
+func predicate() bool {
+	_, err := strconv.Atoi("1")
+	_ = message()
+	return err != nil
+}
+
+func defaulted() int {
+	ret_1, err := strconv.Atoi("1")
+	_ = message()
+	if err != nil {
+		ret_1 = 0
+	}
+	return ret_1
+}
+
+func letElse() int {
+	v, err := strconv.Atoi("1")
+	_ = message()
+	if err != nil {
+		return -1
+	}
+	return v
+}
