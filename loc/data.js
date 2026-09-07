@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788811820687,
+  "lastUpdate": 1788813057338,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -35335,6 +35335,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 34209,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28190,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19300,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15235,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13959,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8855,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6285,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "13206e146a45be1bc7fc2cca7402489af26ed778",
+          "message": "refactor: represent Go expressions as a tree inside `GoExpression` (#1430)",
+          "timestamp": "2026-09-07T22:30:31+02:00",
+          "tree_id": "ea2d6b4e44eb22c63c28a1f8776fc17bb68cb2c2",
+          "url": "https://github.com/ivov/lisette/commit/13206e146a45be1bc7fc2cca7402489af26ed778"
+        },
+        "date": 1788813054718,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 142253,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 34362,
             "unit": "lines"
           },
           {
