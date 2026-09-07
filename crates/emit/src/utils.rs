@@ -1,5 +1,6 @@
-use syntax::ast::{Expression, Literal, UnaryOperator};
-use syntax::program::DotAccessKind;
+use syntax::ast::{Expression, Literal};
+use syntax::program::{DotAccessKind, ReceiverCoercion};
+use syntax::types::Type;
 
 macro_rules! write_line {
     ($dst:expr, $($arg:tt)*) => {
@@ -115,49 +116,20 @@ pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
         || matches!(expression.unwrap_parens(), Expression::Identifier { .. }))
 }
 
-pub(crate) fn reads_mutable_operand(expression: &Expression) -> bool {
-    match expression.unwrap_parens() {
-        Expression::IndexedAccess { .. } | Expression::Call { .. } => true,
-        Expression::Unary {
-            operator: UnaryOperator::Deref,
-            ..
-        } => true,
-        Expression::DotAccess {
-            expression,
-            resolution,
-            ..
-        } => match resolution.kind() {
-            Some(
-                DotAccessKind::StructField { .. }
+pub(crate) fn reads_value_member(
+    kind: Option<DotAccessKind>,
+    coercion: Option<ReceiverCoercion>,
+    base: &Expression,
+    base_ty: &Type,
+) -> bool {
+    matches!(
+        kind,
+        Some(
+            DotAccessKind::StructField { .. }
                 | DotAccessKind::TupleStructField { .. }
                 | DotAccessKind::TupleElement,
-            ) => true,
-            _ => reads_mutable_operand(expression),
-        },
-        _ => false,
-    }
-}
-
-pub(crate) fn reads_unsequenced_mutable_operand(expression: &Expression) -> bool {
-    match expression.unwrap_parens() {
-        Expression::Call { .. } => false,
-        Expression::IndexedAccess { .. } => true,
-        Expression::Unary {
-            operator: UnaryOperator::Deref,
-            ..
-        } => true,
-        Expression::DotAccess {
-            expression,
-            resolution,
-            ..
-        } => match resolution.kind() {
-            Some(
-                DotAccessKind::StructField { .. }
-                | DotAccessKind::TupleStructField { .. }
-                | DotAccessKind::TupleElement,
-            ) => true,
-            _ => reads_unsequenced_mutable_operand(expression),
-        },
-        _ => false,
-    }
+        )
+    ) && coercion.is_none()
+        && base.deref_inner().is_none()
+        && !base_ty.is_ref()
 }

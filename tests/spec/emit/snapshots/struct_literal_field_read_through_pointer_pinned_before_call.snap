@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Suite { name: string }
+  struct Pair { a: string, b: string }
+  
+  fn rename(s: mut Ref<Suite>) -> string { s.name = "z"; "b" }
+  
+  fn pair(s: Ref<Suite>, other: mut Ref<Suite>) -> Pair {
+    Pair { a: s.name, b: rename(other) }
+  }
+---
+package main
+
+type Suite struct {
+	name string
+}
+
+type Pair struct {
+	a string
+	b string
+}
+
+func rename(s *Suite) string {
+	s.name = "z"
+	return "b"
+}
+
+func pair(s, other *Suite) Pair {
+	field_1 := s.name
+	return Pair{
+		a: field_1,
+		b: rename(other),
+	}
+}

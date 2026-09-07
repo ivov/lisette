@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Clock { now: int, step: int }
+  
+  fn run() -> int {
+    let mut a = Clock { now: 0, step: 1 }
+    let mut b = Clock { now: 10, step: 1 }
+    let mut c = &a
+    let swap = || -> int { c = &b; 5 }
+    c.now = swap()
+    a.now
+  }
+---
+package main
+
+type Clock struct {
+	now  int
+	step int
+}
+
+func run() int {
+	a := Clock{
+		now:  0,
+		step: 1,
+	}
+	b := Clock{
+		now:  10,
+		step: 1,
+	}
+	c := &a
+	swap := func() int {
+		c = &b
+		return 5
+	}
+	ref_1 := c
+	ref_1.now = swap()
+	return a.now
+}

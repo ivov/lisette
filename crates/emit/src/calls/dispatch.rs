@@ -8,7 +8,7 @@ use super::NativeCallContext;
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::is_prelude_container_type;
-use crate::calls::native::native_method_lowers_to_plain_call;
+use crate::calls::native::{native_method_is_pure, native_method_lowers_to_plain_call};
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
@@ -548,8 +548,10 @@ impl<'a> Planner<'a> {
         let result = self.lower_native_method(ctx);
         let effect = if matches!(origin, CallableOrigin::NativeConstructor(_)) {
             self.native_constructor_effect(ctx, result.argument_effect)
-        } else if matches!(origin, CallableOrigin::NativeMethod(_))
-            && matches!(ctx.method, "length" | "capacity")
+        } else if matches!(
+            origin,
+            CallableOrigin::NativeMethod(_) | CallableOrigin::NativeMethodIdentifier(_)
+        ) && native_method_is_pure(ctx.native_type, ctx.method)
         {
             EvaluationEffect::PureCall.combine(result.argument_effect)
         } else {

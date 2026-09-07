@@ -8,9 +8,11 @@ use crate::plan::calls::CallableOrigin;
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, SequencedValues, Stability, ValuePlan,
 };
+use crate::utils::reads_value_member;
 use std::iter;
 use std::mem;
-use syntax::ast::{Expression, IdentifierResolution};
+use syntax::ast::{Expression, IdentifierResolution, UnaryOperator};
+use syntax::program::DotAccessKind;
 use syntax::types::{FunctionParameter, Type};
 
 /// Folds `f(leading, spread...)` into `f(append([]T{leading}, spread...)...)`: Go rejects the former.
@@ -28,20 +30,30 @@ pub(crate) struct SpreadSequenceOptions {
 }
 
 #[derive(Default)]
-struct LaterStages {
+pub(crate) struct LaterStages {
     has_setup: bool,
     has_effectful_call: bool,
     has_pin: bool,
 }
 
 impl LaterStages {
+    pub(crate) fn sequenced(setup: &[LoweredStatement], effect: EvaluationEffect) -> Self {
+        Self {
+            has_setup: !setup.is_empty(),
+            has_effectful_call: effect.has_effectful_call(),
+            has_pin: false,
+        }
+    }
+
+    /// Setup can rebind any name, a call only a name mutated through an alias.
+    pub(crate) fn can_change(&self, stability: Stability) -> bool {
+        stability.is_observable()
+            && (self.has_setup || (self.has_effectful_call && !stability.is_stable_across_calls()))
+    }
+
     fn prepend(&mut self, stage: &ValuePlan) -> bool {
         let stage_has_setup = !stage.setup.is_empty();
-        let later_can_change_value = self.has_setup
-            || (self.has_effectful_call && !stage.evaluation.stability.is_stable_across_calls());
-        let value_pin = !stage_has_setup
-            && stage.evaluation.stability.is_observable()
-            && later_can_change_value;
+        let value_pin = !stage_has_setup && self.can_change(stage.evaluation.stability);
         let ordering_pin = stage.evaluation.effect.has_call()
             && stage.expression.contains_deferred_evaluation()
             && (self.has_setup || self.has_pin);
@@ -187,6 +199,39 @@ impl Planner<'_> {
             } => !self.facts.is_alias_mutated(*id),
             Expression::Identifier { .. } => true,
             _ => false,
+        }
+    }
+
+    pub(crate) fn place_read_stability(&self, place: &Expression) -> Stability {
+        match place.unwrap_parens() {
+            Expression::Identifier { .. } => self.identifier_read_stability(place),
+            Expression::Call { .. } => Stability::StableAcrossCalls,
+            Expression::DotAccess {
+                expression,
+                resolution,
+                ..
+            } => match resolution.kind() {
+                Some(
+                    DotAccessKind::StructField { .. }
+                    | DotAccessKind::TupleStructField { .. }
+                    | DotAccessKind::TupleElement,
+                ) if !reads_value_member(
+                    resolution.kind(),
+                    resolution.receiver_coercion(),
+                    expression,
+                    &expression.get_type(),
+                ) =>
+                {
+                    Stability::Observable
+                }
+                _ => self.place_read_stability(expression),
+            },
+            Expression::IndexedAccess { .. } => Stability::Observable,
+            Expression::Unary {
+                operator: UnaryOperator::Deref,
+                ..
+            } => Stability::Observable,
+            _ => Stability::StableAcrossCalls,
         }
     }
 

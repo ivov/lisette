@@ -49,7 +49,5 @@ func main() {
 	f := Flag(true)
 	t := Ticket(3)
 	o := lisette.MakeOptionSome(Flag(false))
-	arg_1 := bool(f)
-	arg_2 := int(t)
-	fmt.Println(arg_1, arg_2, read(f), deep(t), bool(o.UnwrapOr(Flag(true))))
+	fmt.Println(bool(f), int(t), read(f), deep(t), bool(o.UnwrapOr(Flag(true))))
 }

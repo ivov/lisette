@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Counter { total: int }
+  
+  fn price() -> int { 3 }
+  
+  fn run() -> int {
+    let mut c = Counter { total: 1 }
+    c.total = c.total + price()
+    c.total
+  }
+---
+package main
+
+type Counter struct {
+	total int
+}
+
+func price() int {
+	return 3
+}
+
+func run() int {
+	c := Counter{total: 1}
+	c.total += price()
+	return c.total
+}

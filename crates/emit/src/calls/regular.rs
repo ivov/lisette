@@ -13,6 +13,7 @@ use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
 use crate::context::expression::ExpressionContext;
+use crate::expressions::staging::LaterStages;
 use crate::expressions::staging::{SpreadSequenceOptions, VariadicCombine};
 use crate::names::generics::extract_type_mapping;
 use crate::plan::bodies::LoweredStatement;
@@ -20,7 +21,6 @@ use crate::plan::calls::{ArgumentPlan, CallPlan, CallableOrigin, ResolvedCallee}
 use crate::plan::values::{
     CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, SequencedValues, ValuePlan,
 };
-use crate::utils::{reads_mutable_operand, reads_unsequenced_mutable_operand};
 use crate::write_line;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::types::Type;
@@ -339,12 +339,10 @@ impl<'a> Planner<'a> {
             .and_then(|builtin| builtin_constant(builtin, &sequenced_args.values));
         let (args_setup, args_strings) = sequenced_args.into_rendered();
 
-        let delayed_after_arg_setup = !args_setup.is_empty() && reads_mutable_operand(function);
-        let racing_inline_arg_calls =
-            args_effect.has_effectful_call() && reads_unsequenced_mutable_operand(function);
         let callee_needs_pin = setup.is_empty()
             && type_args_string.is_empty()
-            && (delayed_after_arg_setup || racing_inline_arg_calls);
+            && LaterStages::sequenced(&args_setup, args_effect)
+                .can_change(self.place_read_stability(function));
         if callee_needs_pin {
             function_string =
                 self.hoist_tmp_value_statement(&mut setup, "callee", &function_string);

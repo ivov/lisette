@@ -14,7 +14,6 @@ package main
 func main() {
 	s := []int{1}
 	r := &s
-	ref_1 := r
-	*ref_1 = append(*r, 2)
+	*r = append(*r, 2)
 	_ = s
 }

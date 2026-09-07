@@ -324,7 +324,6 @@ pub(crate) enum CaptureBoundary {
     DeferSite,
     TaskSite,
     LoopLifetime,
-    AssignmentRightHandSide,
 }
 
 impl CaptureBoundary {
@@ -608,6 +607,11 @@ impl ValuePlan {
         } else {
             Stability::Observable
         };
+        self
+    }
+
+    pub(crate) fn with_stability(mut self, stability: Stability) -> Self {
+        self.evaluation.stability = stability;
         self
     }
 

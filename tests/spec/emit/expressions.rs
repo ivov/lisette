@@ -5039,6 +5039,132 @@ fn run() -> int {
 }
 
 #[test]
+fn pointer_receiver_field_assignment_reads_receiver_in_place() {
+    let input = r#"
+struct Clock { now: int, step: int }
+
+fn advance(now: int, step: int) -> int { now + step }
+
+impl Clock {
+  fn tick(self: mut Ref<Clock>) {
+    self.now = advance(self.now, self.step)
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pointer_field_assignment_pins_pointer_a_closure_retargets() {
+    let input = r#"
+struct Clock { now: int, step: int }
+
+fn run() -> int {
+  let mut a = Clock { now: 0, step: 1 }
+  let mut b = Clock { now: 10, step: 1 }
+  let mut c = &a
+  let swap = || -> int { c = &b; 5 }
+  c.now = swap()
+  a.now
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_literal_field_read_not_pinned_before_append() {
+    let input = r#"
+struct Suite { name: string, cases: Slice<string> }
+
+impl Suite {
+  fn with_case(self: Suite, name: string) -> Suite {
+    Suite { name: self.name, cases: self.cases.append(name) }
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_literal_field_read_pinned_before_mut_ref_to_its_root() {
+    let input = r#"
+struct Suite { name: string }
+struct Pair { a: string, b: string }
+
+fn rename(s: mut Ref<Suite>) -> string { s.name = "z"; "b" }
+
+fn run() -> string {
+  let mut s = Suite { name: "a" }
+  let p = Pair { a: s.name, b: rename(&s) }
+  p.a + p.b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_literal_field_read_through_pointer_pinned_before_call() {
+    let input = r#"
+struct Suite { name: string }
+struct Pair { a: string, b: string }
+
+fn rename(s: mut Ref<Suite>) -> string { s.name = "z"; "b" }
+
+fn pair(s: Ref<Suite>, other: mut Ref<Suite>) -> Pair {
+  Pair { a: s.name, b: rename(other) }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn value_field_callee_not_pinned_before_effectful_arg() {
+    let input = r#"
+struct Handler { f: fn(int) -> int }
+
+fn run(h: Handler) -> int {
+  let mut i = 0
+  let bump = || -> int { i = 1; 7 }
+  h.f(bump())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn value_field_callee_pinned_when_a_closure_reassigns_its_root() {
+    let input = r#"
+struct Handler { f: fn(int) -> int }
+
+fn f0(x: int) -> int { x + 10 }
+fn f1(x: int) -> int { x + 20 }
+
+fn run() -> int {
+  let mut h = Handler { f: f0 }
+  let swap = || -> int { h = Handler { f: f1 }; 7 }
+  h.f(swap())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn value_struct_compound_field_assignment_reads_field_in_place() {
+    let input = r#"
+struct Counter { total: int }
+
+fn price() -> int { 3 }
+
+fn run() -> int {
+  let mut c = Counter { total: 1 }
+  c.total = c.total + price()
+  c.total
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn pure_constructor_does_not_force_sibling_pins() {
     let input = r#"
 struct Wrap(int)

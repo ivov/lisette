@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Handler { f: fn(int) -> int }
+  
+  fn run(h: Handler) -> int {
+    let mut i = 0
+    let bump = || -> int { i = 1; 7 }
+    h.f(bump())
+  }
+---
+package main
+
+type Handler struct {
+	f func(int) int
+}
+
+func run(h Handler) int {
+	bump := func() int {
+		return 7
+	}
+	return h.f(bump())
+}
