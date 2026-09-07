@@ -968,6 +968,7 @@ impl Planner<'_> {
             method: "get",
             capture_boundary: CaptureBoundary::SiblingSequence,
             retired_receiver: None,
+            result_name: None,
         };
         let staged = self.stage_native_method(&ctx, NativeMethodForm::Dot);
         let receiver = super::comma_ok::parenthesize_prefixed(staged.receiver);

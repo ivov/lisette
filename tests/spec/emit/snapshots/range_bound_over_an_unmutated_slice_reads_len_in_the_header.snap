@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn main() {
+    let args = os.Args
+    for i in 1..args.length() {
+      fmt.Println(args[i])
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	args := os.Args
+	for i := 1; i < len(args); i++ {
+		fmt.Println(args[i])
+	}
+}

@@ -25,4 +25,5 @@ pub(super) struct NativeCallContext<'a> {
     pub method: &'a str,
     pub capture_boundary: CaptureBoundary,
     pub retired_receiver: Option<&'a Expression>,
+    pub result_name: Option<&'a str>,
 }

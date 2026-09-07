@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn items() -> Slice<int> { [1, 2, 3] }
+  
+  fn three() -> int {
+    let items = items().filter(|x| x > 1)
+    items.length()
+  }
+---
+package main
+
+func items() []int {
+	return []int{1, 2, 3}
+}
+
+func three() int {
+	var result_1 []int
+	for _, x := range items() {
+		if x > 1 {
+			result_1 = append(result_1, x)
+		}
+	}
+	items_2 := result_1
+	return len(items_2)
+}

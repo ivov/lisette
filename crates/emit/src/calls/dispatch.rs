@@ -13,7 +13,7 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{CallPlan, CallableOrigin};
-use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, Stability, ValuePlan};
 use crate::types::go_type::render_conversion;
 use crate::types::native::NativeGoType;
 use syntax::EcoString;
@@ -440,6 +440,7 @@ impl<'a> Planner<'a> {
             method,
             capture_boundary: CaptureBoundary::SiblingSequence,
             retired_receiver: None,
+            result_name: None,
         };
         self.try_emit_negated_native_method(setup, &native_ctx)
     }
@@ -521,6 +522,7 @@ impl<'a> Planner<'a> {
                     method,
                     capture_boundary: ctx.capture_boundary(),
                     retired_receiver: ctx.retired_receiver(),
+                    result_name: None,
                 };
                 return self.lower_native_call(&native_ctx, &plan.resolved.origin);
             }
@@ -535,7 +537,11 @@ impl<'a> Planner<'a> {
         self.lower_regular_call(call_expression, &plan, call_ty, ctx)
     }
 
-    fn lower_native_call(&mut self, ctx: &NativeCallContext, origin: &CallableOrigin) -> ValuePlan {
+    pub(super) fn lower_native_call(
+        &mut self,
+        ctx: &NativeCallContext,
+        origin: &CallableOrigin,
+    ) -> ValuePlan {
         if let Some(result) = self.try_lower_native_constructor(ctx) {
             return result;
         }
@@ -549,6 +555,18 @@ impl<'a> Planner<'a> {
         } else {
             EvaluationEffect::EffectfulCall
         };
+        let receiver = match ctx.function {
+            Expression::DotAccess { expression, .. } => Some(expression.as_ref()),
+            _ => ctx.args.first(),
+        };
+        // Channel length can change without rebinding the receiver.
+        let reads_fixed_length = matches!(ctx.method, "length" | "capacity")
+            && !matches!(origin, CallableOrigin::NativeConstructor(_))
+            && !matches!(
+                ctx.native_type,
+                NativeGoType::Channel | NativeGoType::Sender | NativeGoType::Receiver
+            )
+            && receiver.is_some_and(|receiver| self.is_unmutated_identifier(receiver));
         if result
             .setup
             .iter()
@@ -563,33 +581,37 @@ impl<'a> Planner<'a> {
         };
         let plain_call = !matches!(origin, CallableOrigin::NativeConstructor(_))
             && native_method_lowers_to_plain_call(ctx.native_type, ctx.method, receiver_arity);
-        if plain_call {
-            return ValuePlan::plain_call(
+        let mut plan = if plain_call {
+            ValuePlan::plain_call(
                 result.setup,
                 GoExpression::opaque_with_deferred_evaluation(result.value, true),
                 effect,
-            );
-        }
-
-        let contains_deferred_evaluation = match ctx.method {
-            "enumerate" => result.arguments_contain_deferred_evaluation,
-            "append" if receiver_arity == 0 => result.arguments_contain_deferred_evaluation,
-            _ => true,
-        };
-        let expression = if ctx.method == "byte_at" {
-            GoExpression::opaque_with_deferred_evaluation(
-                result.value,
-                result.arguments_contain_deferred_evaluation,
             )
-        } else if ctx.method == "is_empty" {
-            GoExpression::opaque_with_deferred_evaluation(result.value, true)
         } else {
-            GoExpression::opaque_with_deferred_evaluation(
-                result.value,
-                contains_deferred_evaluation,
-            )
+            let contains_deferred_evaluation = match ctx.method {
+                "enumerate" => result.arguments_contain_deferred_evaluation,
+                "append" if receiver_arity == 0 => result.arguments_contain_deferred_evaluation,
+                _ => true,
+            };
+            let expression = if ctx.method == "byte_at" {
+                GoExpression::opaque_with_deferred_evaluation(
+                    result.value,
+                    result.arguments_contain_deferred_evaluation,
+                )
+            } else if ctx.method == "is_empty" {
+                GoExpression::opaque_with_deferred_evaluation(result.value, true)
+            } else {
+                GoExpression::opaque_with_deferred_evaluation(
+                    result.value,
+                    contains_deferred_evaluation,
+                )
+            };
+            ValuePlan::computed(result.setup, expression, effect)
         };
-        ValuePlan::computed(result.setup, expression, effect)
+        if reads_fixed_length {
+            plan.evaluation.stability = Stability::Fixed;
+        }
+        plan
     }
 
     pub(super) fn infer_return_only_type_args(

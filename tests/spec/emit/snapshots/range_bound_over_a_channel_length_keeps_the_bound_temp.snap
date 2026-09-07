@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn six() {
+    let ch = Channel.buffered<int>(3)
+    ch.send(1)
+    ch.send(2)
+    ch.send(3)
+    let mut iterations = 0
+    for _i in 1..ch.length() {
+      let _ = ch.receive()
+      iterations += 1
+    }
+    fmt.Println("iterations", iterations)
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func six() {
+	ch := make(chan int, 3)
+	_ = lisette.ChannelSend(ch, 1)
+	_ = lisette.ChannelSend(ch, 2)
+	_ = lisette.ChannelSend(ch, 3)
+	iterations := 0
+	bound_1 := len(ch)
+	for i_2 := 1; i_2 < bound_1; i_2++ {
+		_ = lisette.ChannelReceive(ch)
+		iterations++
+	}
+	fmt.Println("iterations", iterations)
+}

@@ -121,6 +121,10 @@ impl Planner<'_> {
                 self.scope.bind(identifier, raw_go_name);
                 return statements;
             }
+            if let Some(statements) = self.lower_slice_loop_into(value, &go_identifier) {
+                self.scope.bind(identifier, raw_go_name);
+                return statements;
+            }
         }
         if needs_temp {
             if self.shadows_declaration(&go_identifier)
