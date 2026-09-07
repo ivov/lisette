@@ -8,6 +8,7 @@ use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::CallableOrigin;
 use crate::state::scope::PairStatusKind;
 use crate::types::native::NativeGoType;
+use std::borrow::Cow;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -42,6 +43,8 @@ pub(crate) enum CommaOkValueSlot {
     Arm(String),
     /// No payload use. The value is still captured when the nil guard needs it.
     Unused,
+    /// No payload use, bound as a statement so the status can serve as a value.
+    Discarded,
 }
 
 #[derive(Clone, Copy)]
@@ -92,7 +95,39 @@ impl LoweredPair {
 
     fn initializer(&self) -> Option<String> {
         let call = self.initializer_call.as_ref()?;
-        Some(format!("{} := {call}", self.binding()))
+        Some(format!("{} := {}", self.binding(), header_call(call)))
+    }
+}
+
+/// Go reads a bare `T{` in an `if` header as the block, so such a receiver takes parentheses.
+pub(crate) fn header_call(call: &str) -> Cow<'_, str> {
+    let mut rest = call.trim_start_matches(['&', '*']);
+    let type_name_end = rest
+        .find(|c: char| !(c.is_alphanumeric() || c == '_' || c == '.'))
+        .unwrap_or(rest.len());
+    if type_name_end == 0 {
+        return Cow::Borrowed(call);
+    }
+    rest = &rest[type_name_end..];
+    if let Some(after_bracket) = rest.strip_prefix('[') {
+        let mut depth = 1usize;
+        let close = after_bracket.char_indices().find(|(_, character)| {
+            match character {
+                '[' => depth += 1,
+                ']' => depth -= 1,
+                _ => {}
+            }
+            depth == 0
+        });
+        let Some((close, _)) = close else {
+            return Cow::Borrowed(call);
+        };
+        rest = &after_bracket[close + 1..];
+    }
+    if rest.starts_with('{') {
+        Cow::Owned(format!("({call})"))
+    } else {
+        Cow::Borrowed(call)
     }
 }
 
@@ -209,12 +244,14 @@ impl Planner<'_> {
                 PairStatusKind::Error,
             ),
         };
-        let opens_if = !matches!(slot, CommaOkValueSlot::Named(_) | CommaOkValueSlot::Temp);
+        let opens_if = matches!(slot, CommaOkValueSlot::Arm(_) | CommaOkValueSlot::Unused);
         let value = carries_value
             .then(|| match slot {
                 CommaOkValueSlot::Named(name) | CommaOkValueSlot::Arm(name) => Some(name),
                 CommaOkValueSlot::Temp => Some(self.fresh_pair_value()),
-                CommaOkValueSlot::Unused => nil_guard.map(|_| self.fresh_pair_value()),
+                CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => {
+                    nil_guard.map(|_| self.fresh_pair_value())
+                }
             })
             .flatten();
         let mut status = self.pair_status(status_hint, status_kind, opens_if);

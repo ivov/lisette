@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::Renderer;
 use crate::analyze::facts::EmitFacts;
+use crate::calls::predicates::strip_negations;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
@@ -247,6 +248,14 @@ impl Planner<'_> {
                 plan.parenthesized()
             } else {
                 plan
+            };
+        }
+        let (innermost, inner_negated) = strip_negations(expression);
+        if let Some(predicate) = self.lower_fused_predicate_value(innermost, !inner_negated) {
+            return if preserve_parens {
+                predicate.parenthesized()
+            } else {
+                predicate
             };
         }
         if matches!(target, Expression::Call { .. }) {

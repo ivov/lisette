@@ -2483,6 +2483,201 @@ fn main() {
 }
 
 #[test]
+fn is_err_on_go_call_opens_the_if_header() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  if os.Remove("missing.txt").is_err() {
+    fmt.Println("nothing to remove")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn negated_is_ok_on_go_call_flips_the_nil_test() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn main() {
+  if !strconv.Atoi("x").is_ok() {
+    fmt.Println("not a number")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn is_ok_on_pointer_returning_go_call_keeps_the_nil_guard() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  if os.Open("a").is_ok() {
+    fmt.Println("readable")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn is_err_on_lisette_result_calls_opens_the_if_header() {
+    let input = r#"
+import "go:fmt"
+
+fn count() -> Result<int, error> { Ok(1) }
+fn touch() -> Result<(), error> { Ok(()) }
+
+fn main() {
+  if count().is_err() {
+    fmt.Println("count failed")
+  }
+  if touch().is_err() {
+    fmt.Println("touch failed")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn is_some_on_map_get_opens_the_if_header() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let m = Map.new<string, int>()
+  if m.get("a").is_some() {
+    fmt.Println("has a")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn is_none_on_nullable_go_call_opens_the_if_header() {
+    let input = r#"
+import "go:context"
+import "go:fmt"
+
+fn main() {
+  let ctx = context.Background()
+  if ctx.Err().is_none() {
+    fmt.Println("clean")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn is_ok_as_a_value_binds_the_call_first() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn main() {
+  let raw = "8080"
+  let succeeded = strconv.Atoi(raw).is_ok()
+  let failed = !strconv.Atoi(raw).is_ok()
+  fmt.Println(succeeded, failed)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn predicate_value_is_pinned_before_a_later_sibling_binds_err() {
+    let input = r#"
+fn first() -> Result<int, error> { Ok(1) }
+fn second() -> Result<int, error> { Ok(2) }
+fn pick(flag: bool, n: int) -> int { if flag { n } else { 0 } }
+
+fn run() -> Result<int, error> {
+  Ok(pick(first().is_ok(), second()?))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn is_ok_in_a_while_condition_runs_the_call_each_iteration() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn main() {
+  let mut text = "1"
+  while strconv.Atoi(text).is_ok() {
+    text = text + "x"
+  }
+  fmt.Println(text)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn is_ok_under_logical_and_stays_an_expression() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn main() {
+  let ready = true
+  if ready && strconv.Atoi("1").is_ok() {
+    fmt.Println("both")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn is_ok_on_partial_keeps_the_tagged_path() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+fn write_all(file: Ref<os.File>) {
+  if file.Write(['h', 'i']).is_ok() {
+    fmt.Println("written")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_literal_receiver_in_an_if_header() {
+    let input = r#"
+import "go:fmt"
+
+struct Parser { src: string }
+
+impl Parser {
+  fn parse(self: Parser) -> Result<int, error> { Ok(self.src.length()) }
+}
+
+fn main() {
+  match Parser { src: "ab" }.parse() {
+    Ok(n) => fmt.Println(n),
+    Err(err) => fmt.Println(err),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn nested_propagate_in_call_args_binds_the_inner_pair_first() {
     let input = r#"
 import "go:strconv"
@@ -2492,6 +2687,22 @@ fn double(n: int) -> Result<int, error> { Ok(n * 2) }
 fn run() -> Result<int, error> {
   let d = double(strconv.Atoi("1")?)?
   Ok(d)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn if_let_header_parenthesizes_a_nested_generic_receiver() {
+    let input = r#"
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn parse(self) -> Option<int> { Some(1) }
+}
+
+fn eight() -> int {
+  if let Some(v) = Box { v: [1] }.parse() { v } else { 0 }
 }
 "#;
     assert_emit_snapshot!(input);

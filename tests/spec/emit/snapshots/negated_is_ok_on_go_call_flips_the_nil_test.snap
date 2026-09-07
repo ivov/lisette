@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn main() {
+    if !strconv.Atoi("x").is_ok() {
+      fmt.Println("not a number")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	if _, err := strconv.Atoi("x"); err != nil {
+		fmt.Println("not a number")
+	}
+}

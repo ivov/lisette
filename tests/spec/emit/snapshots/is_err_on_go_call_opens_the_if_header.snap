@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  fn main() {
+    if os.Remove("missing.txt").is_err() {
+      fmt.Println("nothing to remove")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	if err := os.Remove("missing.txt"); err != nil {
+		fmt.Println("nothing to remove")
+	}
+}

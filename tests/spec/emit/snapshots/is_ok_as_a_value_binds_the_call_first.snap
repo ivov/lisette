@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn main() {
+    let raw = "8080"
+    let succeeded = strconv.Atoi(raw).is_ok()
+    let failed = !strconv.Atoi(raw).is_ok()
+    fmt.Println(succeeded, failed)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	raw := "8080"
+	_, err := strconv.Atoi(raw)
+	succeeded := err == nil
+	_, err_1 := strconv.Atoi(raw)
+	failed := err_1 != nil
+	fmt.Println(succeeded, failed)
+}

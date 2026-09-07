@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::Renderer;
 use crate::abi::transition::try_emit_lowered_tail_return;
+use crate::calls::predicates::strip_negations;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::control_flow::targets::legalize_source_loop;
@@ -715,8 +716,23 @@ impl Planner<'_> {
         plan.into_parts()
     }
 
+    fn lower_if_condition(&mut self, condition: &Expression) -> (Vec<LoweredStatement>, String) {
+        if let Some(fused) = self.lower_fused_predicate_condition(condition) {
+            return fused;
+        }
+        let (setup, rendered) = self.lower_condition(condition);
+        (setup, wrap_if_struct_literal(rendered))
+    }
+
     fn lower_while(&mut self, condition: &Expression, body: &Expression) -> LoopPlan {
         self.with_loop("_", |this| {
+            let (target, negated) = strip_negations(condition);
+            if let Some(exit) = this.lower_fused_predicate_value(target, !negated) {
+                let (setup, failure) = exit.into_parts();
+                let setup_text = Renderer.render_setup(&setup);
+                let header = format!("for {{\n{setup_text}if {failure} {{ break }}\n");
+                return this.lower_loop_with_header(header, body);
+            }
             let (setup, rendered) = this.lower_condition(condition);
             let header = if !setup.is_empty() {
                 let setup_text = Renderer.render_setup(&setup);
@@ -976,8 +992,7 @@ impl Planner<'_> {
         alternative: Option<&Expression>,
         place: &PlacePlan,
     ) -> IfPlan {
-        let (condition_setup, condition_string) = self.lower_condition(condition);
-        let condition = wrap_if_struct_literal(condition_string);
+        let (condition_setup, condition) = self.lower_if_condition(condition);
 
         let then_body = self.with_scope(|this| this.lower_block_to_place(consequence, place));
 
@@ -1009,8 +1024,7 @@ impl Planner<'_> {
             ..
         } = alternative
         {
-            let (condition_setup, condition_string) = self.lower_condition(condition);
-            let condition = wrap_if_struct_literal(condition_string);
+            let (condition_setup, condition) = self.lower_if_condition(condition);
 
             // With-setup else-if renders as a nested block (`} else { setup; if
             // ... }`), so its body sits in an inner scope inside an outer scope
