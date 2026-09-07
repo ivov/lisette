@@ -6,9 +6,10 @@ description: |
   import "go:strconv"
   
   fn main() {
-    match strconv.Atoi("1") {
+    let n = 1
+    match strconv.Atoi("2") {
       Ok(n) => fmt.Println(n),
-      Err(failure) => fmt.Println(failure),
+      Err(_) => fmt.Println(n),
     }
   }
 ---
@@ -20,9 +21,10 @@ import (
 )
 
 func main() {
-	if n, failure := strconv.Atoi("1"); failure == nil {
-		fmt.Println(n)
+	n := 1
+	if n_1, err := strconv.Atoi("2"); err == nil {
+		fmt.Println(n_1)
 	} else {
-		fmt.Println(failure)
+		fmt.Println(n)
 	}
 }

@@ -1,18 +1,15 @@
 ---
-source: tests/spec/emit/partial.rs
+source: tests/spec/emit/result_option_patterns.rs
 description: |
   
-  import "go:os"
   import "go:fmt"
+  import "go:os"
   
   fn write_all(file: Ref<os.File>) {
     match file.Write(['h', 'i']) {
       Ok(n) => fmt.Println(n),
-      Both(n, _) => fmt.Println(n),
-      Err(e) => {
-        fmt.Println(e)
-        return
-      },
+      Both(m, e) => fmt.Println(m, e),
+      Err(e) => fmt.Println(e),
     }
   }
 ---
@@ -27,6 +24,6 @@ func writeAll(file *os.File) {
 	if n, e := file.Write([]byte{'h', 'i'}); e == nil {
 		fmt.Println(n)
 	} else {
-		fmt.Println(n)
+		fmt.Println(n, e)
 	}
 }

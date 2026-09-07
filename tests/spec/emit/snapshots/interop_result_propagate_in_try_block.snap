@@ -46,9 +46,7 @@ func sumParsed(a, b string) (int, error) {
 }
 
 func main() {
-	ret_1, err := sumParsed("3", "4")
-	if err == nil {
-		n := ret_1
+	if n, err := sumParsed("3", "4"); err == nil {
 		_ = n
 	}
 }

@@ -21,9 +21,7 @@ package main
 import "os"
 
 func apply(f func(string) (string, bool), key string) string {
-	ret_1, ok := f(key)
-	if ok {
-		v := ret_1
+	if v, ok := f(key); ok {
 		return v
 	} else {
 		return "unset"

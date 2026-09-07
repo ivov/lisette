@@ -16,9 +16,7 @@ package main
 import "fmt"
 
 func test(m map[string]int, key string) int {
-	ret_1, ok := m[key]
-	if ok {
-		v := ret_1
+	if v, ok := m[key]; ok {
 		return v
 	} else {
 		fmt.Print("missing\n")

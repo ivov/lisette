@@ -55,9 +55,7 @@ func test() {
 			panic("wrong literal error")
 		}
 	}
-	ret_1, err := bail(false)
-	if err == nil {
-		v := ret_1
+	if v, err := bail(false); err == nil {
 		if v != 1 {
 			panic("wrong ok value")
 		}

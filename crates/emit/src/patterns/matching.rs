@@ -12,6 +12,7 @@ use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, Place
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::state::scope::PairStatusKind;
+use std::mem;
 use syntax::ast::{Expression, MatchArm, Pattern};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
@@ -35,49 +36,102 @@ pub(super) enum OptionFusePlan<'a> {
 
 pub(super) struct BoundOption {
     pub(super) statements: Vec<LoweredStatement>,
-    pub(super) value: Option<String>,
-    pub(super) some_condition: String,
-    pub(super) none_condition: String,
+    source: BoundSource,
+}
+
+enum BoundSource {
+    Pair(LoweredPair),
+    Nullable {
+        value: String,
+        nil_guard: NilGuard,
+        initializer_call: Option<String>,
+    },
+}
+
+impl BoundOption {
+    pub(super) fn value(&self) -> Option<&str> {
+        match &self.source {
+            BoundSource::Pair(pair) => pair.value.as_deref(),
+            BoundSource::Nullable { value, .. } => Some(value),
+        }
+    }
+
+    pub(super) fn discard_value(&mut self) {
+        if let BoundSource::Pair(pair) = &mut self.source {
+            pair.discard_value();
+        }
+    }
+
+    pub(super) fn some_condition(&self, planner: &mut Planner<'_>) -> String {
+        self.condition(planner, true)
+    }
+
+    pub(super) fn none_condition(&self, planner: &mut Planner<'_>) -> String {
+        self.condition(planner, false)
+    }
+
+    fn condition(&self, planner: &mut Planner<'_>, success: bool) -> String {
+        match &self.source {
+            BoundSource::Pair(pair) if success => planner.pair_success_condition(pair),
+            BoundSource::Pair(pair) => planner.pair_failure_condition(pair),
+            BoundSource::Nullable {
+                value,
+                nil_guard,
+                initializer_call,
+            } => {
+                if nil_guard.is_interface() {
+                    planner.require_stdlib();
+                }
+                let test = if success {
+                    nil_guard.non_nil(value)
+                } else {
+                    nil_guard.is_nil(value)
+                };
+                match initializer_call {
+                    Some(call) => format!("{value} := {call}; {test}"),
+                    None => test,
+                }
+            }
+        }
+    }
 }
 
 impl OptionFusePlan<'_> {
     pub(super) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundOption {
         match self {
             Self::CommaOk { subject, source } => {
-                let pair = planner.bind_comma_ok_pair(subject, source, slot);
-                let some_condition = planner.pair_success_condition(&pair);
-                let none_condition = planner.pair_failure_condition(&pair);
+                let mut pair = planner.bind_comma_ok_pair(subject, source, slot);
                 BoundOption {
-                    statements: pair.statements,
-                    value: pair.value,
-                    some_condition,
-                    none_condition,
+                    statements: mem::take(&mut pair.statements),
+                    source: BoundSource::Pair(pair),
                 }
             }
             Self::Nullable { subject, nil_guard } => {
                 let (mut statements, call) = planner
                     .lower_call(subject, None, ExpressionContext::value())
                     .into_parts();
-                let value = match slot {
-                    CommaOkValueSlot::Named(name) => name,
-                    CommaOkValueSlot::Temp | CommaOkValueSlot::Unused => {
-                        let name = planner.fresh_var(Some("ret"));
-                        planner.declare(&name);
-                        name
-                    }
+                let (value, opens_if) = match slot {
+                    CommaOkValueSlot::Named(name) => (name, false),
+                    CommaOkValueSlot::Arm(name) => (name, true),
+                    CommaOkValueSlot::Temp => (planner.fresh_pair_value(), false),
+                    CommaOkValueSlot::Unused => (planner.fresh_pair_value(), true),
                 };
-                statements.push(LoweredStatement::TempBind {
-                    name: value.clone(),
-                    value: call,
-                });
-                if nil_guard.is_interface() {
-                    planner.require_stdlib();
-                }
+                let initializer_call = if opens_if {
+                    Some(call)
+                } else {
+                    statements.push(LoweredStatement::TempBind {
+                        name: value.clone(),
+                        value: call,
+                    });
+                    None
+                };
                 BoundOption {
                     statements,
-                    some_condition: nil_guard.non_nil(&value),
-                    none_condition: nil_guard.is_nil(&value),
-                    value: Some(value),
+                    source: BoundSource::Nullable {
+                        value,
+                        nil_guard,
+                        initializer_call,
+                    },
                 }
             }
         }
@@ -127,8 +181,9 @@ pub(super) enum ArmBinding<'a> {
 }
 
 impl<'a> ArmBinding<'a> {
-    pub(super) fn alias(name: Option<&'a str>, go_name: &'a str) -> Option<Self> {
-        name.map(|name| Self::Alias { name, go_name })
+    pub(super) fn alias(name: Option<&'a str>, go_name: Option<&'a str>) -> Option<Self> {
+        name.zip(go_name)
+            .map(|(name, go_name)| Self::Alias { name, go_name })
     }
 
     pub(super) fn copy(name: Option<&'a str>, value: Option<&'a str>) -> Option<Self> {
@@ -432,11 +487,12 @@ impl Planner<'_> {
 
         self.declare(go_name);
         let bound = fuse.bind(self, CommaOkValueSlot::Named(go_name.to_string()));
+        let none_condition = bound.none_condition(self);
         let fail_body = self.lower_block_as_body(arms.none_body);
         let mut statements = bound.statements;
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
-            condition: bound.none_condition,
+            condition: none_condition,
             then_body: fail_body,
             else_arm: ElseArm::None,
         }));
@@ -517,32 +573,29 @@ impl Planner<'_> {
 
         let has_nil_guard = fuse.has_nil_guard();
         let carries_payload = fuse.carries_payload();
-        let slot = match destination {
-            Some(name) => CommaOkValueSlot::Named(name.to_string()),
-            None if ok_name.is_some() => CommaOkValueSlot::Temp,
-            None => CommaOkValueSlot::Unused,
+        let slot = match (destination, ok_name) {
+            (Some(name), _) => CommaOkValueSlot::Named(name.to_string()),
+            (None, Some(name)) => CommaOkValueSlot::Arm(self.arm_value_name(name)),
+            (None, None) => CommaOkValueSlot::Unused,
         };
-        let bound = fuse.bind(self, slot, err_name);
-        let ok_condition = self.pair_success_condition(&bound);
-        let err_condition = self.pair_failure_condition(&bound);
+        let mut bound = fuse.bind(self, slot, err_name);
 
         let then_body = destination.is_none().then(|| {
             // A call returning only `error` has no value, so `Ok(x)` takes unit.
-            let ok_value = if carries_payload {
-                bound.value.as_deref()
+            let ok_binding = if carries_payload {
+                ArmBinding::alias(ok_name, bound.value.as_deref())
             } else {
-                Some(UNIT_VALUE)
+                ArmBinding::copy(ok_name, Some(UNIT_VALUE))
             };
-            let ok_binding = ArmBinding::copy(ok_name, ok_value);
-            self.lower_fused_arm(&[ok_binding], &ok.arm.expression, place)
-                .0
+            let (body, uses) = self.lower_fused_arm(&[ok_binding], &ok.arm.expression, place);
+            (body, uses.first().copied().unwrap_or(false))
         });
         let arm_place = if destination.is_some() {
             &PlacePlan::Statement
         } else {
             place
         };
-        let err_binding = ArmBinding::alias(err_name, bound.status());
+        let err_binding = ArmBinding::alias(err_name, Some(bound.status()));
         let (mut else_body, err_used) =
             self.lower_fused_arm(&[err_binding], &err.arm.expression, arm_place);
 
@@ -556,6 +609,12 @@ impl Planner<'_> {
                 )),
             );
         }
+        if matches!(then_body, Some((_, false))) {
+            bound.discard_value();
+        }
+        let then_body = then_body.map(|(body, _)| body);
+        let ok_condition = self.pair_success_condition(&bound);
+        let err_condition = self.pair_failure_condition(&bound);
         let mut statements = bound.statements;
 
         let Some(then_body) = then_body else {
@@ -624,43 +683,38 @@ impl Planner<'_> {
 
         let ok_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
         let nilable = self.partial_ok_is_nilable(&ok_ty);
-        let val_used = ok_name.is_some() || both_val.is_some() || nilable;
 
         let (mut statements, call_str) = self
             .lower_call(subject, None, ExpressionContext::value())
             .into_parts();
-        let val_var = val_used.then(|| self.fresh_pair_value());
-        let err_var = self.pair_status(
-            both_err.or(err_name),
-            PairStatusKind::Error,
-            val_var.is_none(),
-        );
-        let bind_line = match &val_var {
-            Some(v) => format!("{}, {} := {}", v, err_var, call_str),
-            None => format!("_, {} := {}", err_var, call_str),
+        let val_var = match ok_name.or(both_val) {
+            Some(name) => Some(self.arm_value_name(name)),
+            None => nilable.then(|| self.fresh_var(Some("ret"))),
         };
-        let condition = if val_var.is_some() {
-            statements.push(LoweredStatement::RawGo(format!("{bind_line}\n")));
-            format!("{} == nil", err_var)
-        } else {
-            format!("{bind_line}; {} == nil", err_var)
-        };
+        let mut err_var = self.pair_status(both_err.or(err_name), PairStatusKind::Error, true);
+        if val_var.as_deref() == Some(err_var.as_str()) {
+            err_var = self.fresh_var(Some(&err_var));
+        }
 
-        let (ok_body, _) = self.lower_fused_arm(
-            &[ArmBinding::copy(ok_name, val_var.as_deref())],
+        let (ok_body, ok_uses) = self.lower_fused_arm(
+            &[ArmBinding::alias(ok_name, val_var.as_deref())],
             &ok_arm.expression,
             place,
         );
-        let both_body = self
-            .lower_fused_arm(
-                &[
-                    ArmBinding::copy(both_val, val_var.as_deref()),
-                    ArmBinding::alias(both_err, &err_var),
-                ],
-                &both_arm.expression,
-                place,
-            )
-            .0;
+        let (both_body, both_uses) = self.lower_fused_arm(
+            &[
+                ArmBinding::alias(both_val, val_var.as_deref()),
+                ArmBinding::alias(both_err, Some(&err_var)),
+            ],
+            &both_arm.expression,
+            place,
+        );
+        let val_used = nilable || ok_uses[0] || both_uses[0];
+        let header = match val_var.as_deref().filter(|_| val_used) {
+            Some(v) => format!("{}, {} := {}", v, err_var, call_str),
+            None => format!("_, {} := {}", err_var, call_str),
+        };
+        let condition = format!("{header}; {} == nil", err_var);
 
         let nil_check = val_var
             .as_deref()
@@ -669,7 +723,7 @@ impl Planner<'_> {
         let else_arm = match nil_check {
             Some(check) => {
                 let (err_body, _) = self.lower_fused_arm(
-                    &[ArmBinding::alias(err_name, &err_var)],
+                    &[ArmBinding::alias(err_name, Some(&err_var))],
                     &err_arm.expression,
                     place,
                 );
@@ -733,13 +787,18 @@ impl Planner<'_> {
 
         let condition_needs_value = nil_guard.is_some()
             && matches!(arms.variant, PartialVariant::Both | PartialVariant::Err);
-        let may_need_value = value_binding.is_some() || condition_needs_value;
-        let value = may_need_value.then(|| self.fresh_pair_value());
-        let error = self.pair_status(error_binding, PairStatusKind::Error, value.is_none());
+        let value = match value_binding {
+            Some(name) => Some(self.arm_value_name(name)),
+            None => condition_needs_value.then(|| self.fresh_var(Some("ret"))),
+        };
+        let mut error = self.pair_status(error_binding, PairStatusKind::Error, true);
+        if value.as_deref() == Some(error.as_str()) {
+            error = self.fresh_var(Some(&error));
+        }
         let (selected, binding_uses) = self.lower_fused_arm(
             &[
-                ArmBinding::copy(value_binding, value.as_deref()),
-                ArmBinding::alias(error_binding, &error),
+                ArmBinding::alias(value_binding, value.as_deref()),
+                ArmBinding::alias(error_binding, Some(&error)),
             ],
             &arms.selected.expression,
             place,
@@ -781,14 +840,7 @@ impl Planner<'_> {
                 format!("{error} != nil && {}", guard.is_nil(value))
             }
         };
-        let condition = if value_slot.is_some() {
-            statements.push(LoweredStatement::RawGo(format!(
-                "{result_slots} := {call}\n"
-            )));
-            condition
-        } else {
-            format!("{result_slots} := {call}; {condition}")
-        };
+        let condition = format!("{result_slots} := {call}; {condition}");
         let selected_diverges = selected.ends_with_diverge();
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
@@ -810,22 +862,24 @@ impl Planner<'_> {
         let fuse = self.option_fuse_plan(subject)?;
         let arms = classify_option_arms(arms)?;
 
-        let slot = if arms.some_binding.is_some() {
-            CommaOkValueSlot::Temp
-        } else {
-            CommaOkValueSlot::Unused
+        let slot = match arms.some_binding {
+            Some(name) => CommaOkValueSlot::Arm(self.arm_value_name(name)),
+            None => CommaOkValueSlot::Unused,
         };
-        let bound = fuse.bind(self, slot);
+        let mut bound = fuse.bind(self, slot);
 
-        let some_binding = ArmBinding::copy(arms.some_binding, bound.value.as_deref());
-        let (then_body, _) = self.lower_fused_arm(&[some_binding], arms.some_body, place);
+        let some_binding = ArmBinding::alias(arms.some_binding, bound.value());
+        let (then_body, some_uses) = self.lower_fused_arm(&[some_binding], arms.some_body, place);
         let (else_body, _) = self.lower_fused_arm(&[], arms.none_body, place);
+        if !some_uses.first().copied().unwrap_or(false) {
+            bound.discard_value();
+        }
 
         let invert = then_body.renders_empty() && !else_body.renders_empty();
         let condition = if invert {
-            bound.none_condition
+            bound.none_condition(self)
         } else {
-            bound.some_condition
+            bound.some_condition(self)
         };
         let plan = if invert {
             IfPlan {

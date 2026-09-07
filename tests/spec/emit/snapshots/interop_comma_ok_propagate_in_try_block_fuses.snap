@@ -41,9 +41,7 @@ func lookup(k string) (string, bool) {
 }
 
 func main() {
-	ret_1, ok := lookup("HOME")
-	if ok {
-		v := ret_1
+	if v, ok := lookup("HOME"); ok {
 		_ = v
 	}
 }

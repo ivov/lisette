@@ -11,9 +11,7 @@ import (
 
 func main() {
 	parse := strconv.Atoi
-	ret_1, e := parse("42")
-	if e == nil {
-		n := ret_1
+	if n, e := parse("42"); e == nil {
 		fmt.Printf("parsed: %d\n", n)
 	} else {
 		msg := e.Error()

@@ -39,14 +39,11 @@ func main() {
 		}
 		return wrapped_4, ret_3
 	}
-	ret_7, e := f()
-	if e == nil {
-		xs := ret_7
+	if xs, e := f(); e == nil {
 		fmt.Println("ok", len(xs))
-	} else if ret_7 == nil {
+	} else if xs == nil {
 		fmt.Println("err", e)
 	} else {
-		xs := ret_7
 		fmt.Println("both", len(xs), e)
 	}
 }

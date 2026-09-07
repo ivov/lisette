@@ -16,9 +16,7 @@ package main
 import "example.com/reg"
 
 func main() {
-	ret_1 := reg.Lookup()
-	if ret_1 != nil {
-		idx := ret_1
+	if idx := reg.Lookup(); idx != nil {
 		_ = idx
 	}
 }

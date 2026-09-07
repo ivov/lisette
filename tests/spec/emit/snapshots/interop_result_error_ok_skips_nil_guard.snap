@@ -16,9 +16,7 @@ package main
 import "example.com/legacy"
 
 func main() {
-	ret_1, err := legacy.Close()
-	if err == nil {
-		stored := ret_1
+	if stored, err := legacy.Close(); err == nil {
 		_ = stored
 	}
 }

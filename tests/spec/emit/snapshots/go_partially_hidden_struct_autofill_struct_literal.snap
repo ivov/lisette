@@ -18,9 +18,7 @@ import "container/ring"
 
 func test() int {
 	r := ring.Ring{Value: 1}
-	ret_1, ok := r.Value.(int)
-	if ok {
-		n := ret_1
+	if n, ok := r.Value.(int); ok {
 		return n
 	} else {
 		return 0

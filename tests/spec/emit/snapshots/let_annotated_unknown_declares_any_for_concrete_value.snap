@@ -28,9 +28,7 @@ func identity(value int) int {
 }
 
 func describe(value any) string {
-	ret_1, ok := value.(string)
-	if ok {
-		text := ret_1
+	if text, ok := value.(string); ok {
 		return text
 	} else {
 		return ""

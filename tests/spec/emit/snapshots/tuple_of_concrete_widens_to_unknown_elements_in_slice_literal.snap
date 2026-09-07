@@ -21,9 +21,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func second(pair lisette.Tuple2[string, any]) int {
-	ret_1, ok := pair.Second.(int)
-	if ok {
-		value := ret_1
+	if value, ok := pair.Second.(int); ok {
 		return value
 	} else {
 		return 0

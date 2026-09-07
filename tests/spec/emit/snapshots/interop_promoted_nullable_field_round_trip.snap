@@ -53,20 +53,18 @@ func root(t *template.Template) (*parse.ListNode, error) {
 
 func main() {
 	t := template.New("greeting")
-	ret_1, e := t.Parse("hello {{.}}")
-	if e == nil && ret_1 != nil {
-		parsed := ret_1
+	if parsed, e := t.Parse("hello {{.}}"); e == nil && parsed != nil {
 		if _, e := root(parsed); e == nil {
 			fmt.Println("root is available")
 		} else {
 			fmt.Println("error", e)
 		}
-		opt_2 := lisette.MakeOptionNone[*parse.ListNode]()
-		var unwrap_3 *parse.ListNode
-		if opt_2.Tag == lisette.OptionSome {
-			unwrap_3 = opt_2.SomeVal
+		opt_1 := lisette.MakeOptionNone[*parse.ListNode]()
+		var unwrap_2 *parse.ListNode
+		if opt_1.Tag == lisette.OptionSome {
+			unwrap_2 = opt_1.SomeVal
 		}
-		parsed.Root = unwrap_3
+		parsed.Root = unwrap_2
 		if _, e := root(parsed); e == nil {
 			fmt.Println("root is available")
 		} else {

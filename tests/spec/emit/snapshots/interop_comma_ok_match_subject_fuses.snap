@@ -16,9 +16,7 @@ package main
 import "os"
 
 func main() {
-	ret_1, ok := os.LookupEnv("HOME")
-	if ok {
-		v := ret_1
+	if v, ok := os.LookupEnv("HOME"); ok {
 		_ = v
 	}
 }

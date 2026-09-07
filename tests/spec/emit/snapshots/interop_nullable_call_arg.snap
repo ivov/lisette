@@ -21,8 +21,7 @@ package main
 import "flag"
 
 func apply(f func(string) *flag.Flag, name string) bool {
-	ret_1 := f(name)
-	if ret_1 != nil {
+	if ret_1 := f(name); ret_1 != nil {
 		return true
 	} else {
 		return false

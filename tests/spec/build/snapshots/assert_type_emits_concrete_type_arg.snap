@@ -11,9 +11,7 @@ import (
 
 func main() {
 	raw := store.GetValue("count")
-	ret_1, ok := raw.(int)
-	if ok {
-		n := ret_1
+	if n, ok := raw.(int); ok {
 		fmt.Print(n)
 	} else {
 		fmt.Print("not an int")

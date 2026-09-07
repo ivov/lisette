@@ -28,12 +28,9 @@ func attempt(ok bool) (int, error) {
 }
 
 func test() int {
-	ret_1, err := attempt(true)
-	if err == nil {
-		n := ret_1
+	if n, err := attempt(true); err == nil {
 		return n
 	} else {
-		n := ret_1
 		return n
 	}
 }
