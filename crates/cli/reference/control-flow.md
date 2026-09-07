@@ -75,7 +75,6 @@ Iterates over a collection or range, for its side effects.
 for item in items {
   fmt.Println(item)
 }
-
 // !callout-above[/item/] a mutable copy of each element
 for mut item in items {
   item *= 2
@@ -102,7 +101,6 @@ If the element is a slice, map or ref, `for mut` allows writing through it.
 
 ```lisette
 let mut rows = [[1, 2], [3, 4]]
-
 // !callout-above[/row/] `mut Slice<int>`
 for mut row in rows {
   // !callout-right changes `rows`

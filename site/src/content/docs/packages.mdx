@@ -70,7 +70,6 @@ pub fn save(user: User) -> Result<(), error> {
   }
   Ok(())
 }
-
 // !callout-above[/validate/] private
 fn validate(user: User) -> bool {
   !user.email.is_empty()
@@ -92,7 +91,6 @@ impl User {
   pub fn greet(self) -> string {
     "hi " + self.name
   }
-
   // !callout-above[/label/] private
   fn label(self) -> string {
     f"{self.name} <{self.email}>"
@@ -106,13 +104,13 @@ Reaching a private field or method from another package is an error:
 import "models"
 
 fn handle(user: models.User) {
-  // !callout-ok-right ok, public field
+  // !callout-ok-right public field
   let name = user.name
-  // !callout-ok-right ok, public method
+  // !callout-ok-right public method
   let greeting = user.greet()
-  // !callout-error-right error, private to `models`
+  // !callout-error-right error: private to `models`
   let email = user.email
-  // !callout-error-right error, private to `models`
+  // !callout-error-right error: private to `models`
   let label = user.label()
 }
 ```

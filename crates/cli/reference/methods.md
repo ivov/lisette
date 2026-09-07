@@ -52,7 +52,7 @@ A value receiver reads a copy:
 
 ```lisette
 impl Rectangle {
-  // !callout[/Rectangle/] copy of `Rectangle` instance
+  // !callout-above[/Rectangle/] copy of `Rectangle` instance
   fn area(self: Rectangle) -> float64 {
     self.width * self.height
   }
@@ -63,7 +63,7 @@ A `Ref` receiver reads the original:
 
 ```lisette
 impl Rectangle {
-  // !callout[/Ref/] read-only pointer to `Rectangle` instance
+  // !callout-above[/Ref/] read-only pointer to `Rectangle` instance
   fn perimeter(self: Ref<Rectangle>) -> float64 {
     2.0 * (self.width + self.height)
   }
@@ -74,7 +74,7 @@ A `mut Ref` receiver writes to the original:
 
 ```lisette
 impl Rectangle {
-  // !callout[/Ref/] writable pointer to `Rectangle` instance
+  // !callout-above[/Ref/] writable pointer to `Rectangle` instance
   fn scale(self: mut Ref<Rectangle>, factor: float64) {
     self.width *= factor
     self.height *= factor
@@ -90,7 +90,7 @@ A value receiver may omit the type:
 
 ```lisette
 impl Rectangle {
-  // !callout[/self/] same as `self: Rectangle`
+  // !callout-above[/self/] same as `self: Rectangle`
   fn area(self) -> float64 {
     self.width * self.height
   }
@@ -108,14 +108,13 @@ struct CoordinatePair<T> {
 }
 
 impl<T> CoordinatePair<T> {
-  // !callout[/Self/] `CoordinatePair<T>`
+  // !callout-above[/Self/] same as `CoordinatePair<T>`
   fn swap(self: mut Ref<Self>) {
     let held = self.first
     self.first = self.second
     self.second = held
   }
-
-  // !callout[/Self/] `CoordinatePair<T>`
+  // !callout-above[/Self/] same as `CoordinatePair<T>`
   fn swapped(self) -> Self {
     CoordinatePair { first: self.second, second: self.first }
   }

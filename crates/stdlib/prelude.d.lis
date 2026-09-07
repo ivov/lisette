@@ -209,7 +209,7 @@ impl<T> Option<T> {
   /// `default` if `None`.
   ///
   /// Example:
-  ///   // !callout[/map_or_else/] runs `default` only if `id` was absent
+  ///   // !callout-above[/map_or_else/] runs `default` only if `id` was absent
   ///   let length = users.get(id).map_or_else(
   ///     || 0,
   ///     |name| name.length(),
@@ -335,7 +335,7 @@ impl<T, E> Result<T, E> {
   ///
   /// Example:
   ///   let raw = "8080"
-  ///   // !callout[/unwrap_or_else/] runs `f` only if `raw` failed to parse
+  ///   // !callout-above[/unwrap_or_else/] runs `f` only if `raw` failed to parse
   ///   let port = strconv.Atoi(raw).unwrap_or_else(|failure| {
   ///     fmt.Println(failure.Error())
   ///     80
@@ -370,7 +370,7 @@ impl<T, E> Result<T, E> {
   ///
   /// Example:
   ///   let raw = "8080"
-  ///   // !callout[/map_or_else/] port, or parse error
+  ///   // !callout-above[/map_or_else/] port, or parse error
   ///   let shown = strconv.Atoi(raw).map_or_else(
   ///     |failure| failure.Error(),
   ///     strconv.Itoa,
@@ -382,7 +382,7 @@ impl<T, E> Result<T, E> {
   ///
   /// Example:
   ///   let raw = "8080"
-  ///   // !callout[/and_then/] a second check, run only if `raw` parsed
+  ///   // !callout-above[/and_then/] a second check, run only if `raw` parsed
   ///   let port = strconv.Atoi(raw).and_then(|n| {
   ///     if n <= 65535 { Ok(n) } else { Err(errors.New("port out of range")) }
   ///   })

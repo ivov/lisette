@@ -74,9 +74,9 @@ impl Rectangle {
 let mut rect = Rectangle { width: 10.0, height: 5.0 }
 let shape = &rect
 
-// !callout-right equivalent to `shape.*.area()`
+// !callout-right same as `shape.*.area()`
 let a = shape.area()
-// !callout-right equivalent to `(&rect).scale(2.0)`
+// !callout-right same as `(&rect).scale(2.0)`
 rect.scale(2.0)
 ```
 
