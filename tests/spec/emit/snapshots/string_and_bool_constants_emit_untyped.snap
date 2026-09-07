@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  const NAME = "app"
+  const DEBUG = true
+  const LIMIT = 3
+  
+  fn label() -> string {
+    if DEBUG { NAME } else { "" }
+  }
+  
+  fn cap() -> int { LIMIT }
+---
+package main
+
+const Name = "app"
+
+const Debug = true
+
+const Limit int = 3
+
+func label() string {
+	if Debug {
+		return Name
+	}
+	return ""
+}
+
+func cap_() int {
+	return Limit
+}

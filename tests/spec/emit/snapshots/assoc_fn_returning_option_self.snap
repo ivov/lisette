@@ -27,7 +27,7 @@ func Thing_maybeCreate(name string) (Thing, bool) {
 	if len(name) > 0 {
 		return Thing{name: name}, true
 	}
-	return *new(Thing), false
+	return Thing{}, false
 }
 
 func test() (Thing, bool) {

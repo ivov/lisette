@@ -379,6 +379,32 @@ fn test() -> float64 {
 }
 
 #[test]
+fn cast_of_a_parenthesized_operand_emits_one_pair() {
+    let input = r#"
+fn gray(r: int, g: int) -> uint8 {
+  ((r / 256 + g / 256) / 2) as uint8
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_and_bool_constants_emit_untyped() {
+    let input = r#"
+const NAME = "app"
+const DEBUG = true
+const LIMIT = 3
+
+fn label() -> string {
+  if DEBUG { NAME } else { "" }
+}
+
+fn cap() -> int { LIMIT }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn cast_string_to_byte_slice() {
     let input = r#"
 fn test() -> Slice<byte> {

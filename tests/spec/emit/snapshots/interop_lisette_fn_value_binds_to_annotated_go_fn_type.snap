@@ -36,7 +36,7 @@ func splitWords(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
 	if result_5.Tag == lisette.ResultOk {
 		return result_5.OkVal, nil
 	}
-	return *new(lisette.Tuple2[int, []byte]), result_5.ErrVal
+	return lisette.Tuple2[int, []byte]{}, result_5.ErrVal
 }
 
 func main() {

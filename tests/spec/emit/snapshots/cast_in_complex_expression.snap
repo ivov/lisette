@@ -15,5 +15,5 @@ func test() float64 {
 	a := 3
 	b := 4
 	c := 2
-	return (float64((a + b))) / (float64(c))
+	return float64(a+b) / float64(c)
 }

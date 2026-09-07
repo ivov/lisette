@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  fn pair(ok: bool) -> Option<(string, int)> {
+    if ok { Some(("a", 1)) } else { None }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func pair(ok bool) (lisette.Tuple2[string, int], bool) {
+	if ok {
+		return lisette.MakeTuple2[string, int]("a", 1), true
+	}
+	return lisette.Tuple2[string, int]{}, false
+}

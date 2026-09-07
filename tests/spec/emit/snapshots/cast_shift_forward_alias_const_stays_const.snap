@@ -16,5 +16,5 @@ const Shift int = Later
 const Later int = 60 + 8
 
 func scale() float64 {
-	return float64((1 << Shift))
+	return float64(1 << Shift)
 }

@@ -18,5 +18,5 @@ func test(s []int) (lisette.Tuple2[int, int], bool) {
 	if v_2.Tag == lisette.OptionSome {
 		return v_2.SomeVal, true
 	}
-	return *new(lisette.Tuple2[int, int]), false
+	return lisette.Tuple2[int, int]{}, false
 }

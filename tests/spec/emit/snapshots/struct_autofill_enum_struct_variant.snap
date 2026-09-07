@@ -37,9 +37,7 @@ type Action struct {
 
 func test() Action {
 	return Action{
-		Tag:  ActionMove,
-		X:    5,
-		Y:    0,
-		Dist: 0,
+		Tag: ActionMove,
+		X:   5,
 	}
 }

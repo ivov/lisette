@@ -455,6 +455,22 @@ impl Planner<'_> {
                     | CompoundKind::Receiver,
                 ..
             }) => "nil".to_string(),
+            ValueLayout::Tuple { .. } | ValueLayout::TaggedOption { .. } => {
+                format!("{}{{}}", go_ty.code)
+            }
+            ValueLayout::Plain(Type::Nominal { id, .. })
+                if self
+                    .facts
+                    .definition(id.as_str())
+                    .is_some_and(|definition| {
+                        matches!(
+                            definition.body,
+                            DefinitionBody::Struct { .. } | DefinitionBody::Enum { .. }
+                        )
+                    }) =>
+            {
+                format!("{}{{}}", go_ty.code)
+            }
             _ => format!("*new({})", go_ty.code),
         };
         (value, packages)

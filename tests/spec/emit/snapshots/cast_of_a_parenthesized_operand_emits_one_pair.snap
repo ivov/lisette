@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn gray(r: int, g: int) -> uint8 {
+    ((r / 256 + g / 256) / 2) as uint8
+  }
+---
+package main
+
+func gray(r, g int) uint8 {
+	return uint8((r/256 + g/256) / 2)
+}

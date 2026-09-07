@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Counter {
+    label: string,
+    i: int,
+    rows: int,
+    ratio: float64,
+    done: bool,
+    parent: Option<int>,
+    tags: Slice<string>,
+    hits: Map<string, int>,
+  }
+  
+  fn make() -> Counter {
+    Counter { label: "x", .. }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Counter struct {
+	label  string
+	i      int
+	rows   int
+	ratio  float64
+	done   bool
+	parent lisette.Option[int]
+	tags   []string
+	hits   map[string]int
+}
+
+func make_() Counter {
+	return Counter{
+		label: "x",
+		hits:  map[string]int{},
+	}
+}

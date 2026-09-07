@@ -2392,6 +2392,37 @@ fn make() -> Probe {
 }
 
 #[test]
+fn autofill_omits_zero_fields_and_keeps_maps() {
+    let input = r#"
+struct Counter {
+  label: string,
+  i: int,
+  rows: int,
+  ratio: float64,
+  done: bool,
+  parent: Option<int>,
+  tags: Slice<string>,
+  hits: Map<string, int>,
+}
+
+fn make() -> Counter {
+  Counter { label: "x", .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn option_tuple_return_zero_is_a_composite_literal() {
+    let input = r#"
+fn pair(ok: bool) -> Option<(string, int)> {
+  if ok { Some(("a", 1)) } else { None }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn tuple_struct_multi_field_def() {
     let input = r#"
 struct Point(int, int)

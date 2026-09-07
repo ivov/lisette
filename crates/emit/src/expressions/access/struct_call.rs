@@ -271,7 +271,11 @@ impl Planner<'_> {
                 if field_ty.is_slice() {
                     continue;
                 }
-                self.lisette_zero(&field_ty)
+                let zero = self.lisette_zero(&field_ty);
+                if is_go_zero_literal(&zero) {
+                    continue;
+                }
+                zero
             };
             let go_field_name = self.resolve_struct_call_field_name(&field_name, ctx);
             field_pairs.push((go_field_name, zero));
@@ -856,6 +860,12 @@ fn apply_substitution(ty: &Type, map: &SubstitutionMap) -> Type {
     } else {
         types::substitute(ty, map)
     }
+}
+
+/// Go gives an omitted field this value already.
+fn is_go_zero_literal(value: &str) -> bool {
+    matches!(value, "0" | "0.0" | "false" | "\"\"" | "nil" | "struct{}{}")
+        || (value.starts_with("lisette.MakeOptionNone[") && value.ends_with("]()"))
 }
 
 fn unspecified_pairs<'a>(

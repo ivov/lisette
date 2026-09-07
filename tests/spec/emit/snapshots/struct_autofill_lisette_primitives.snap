@@ -17,9 +17,5 @@ type Conf struct {
 }
 
 func test() Conf {
-	return Conf{
-		name:  "x",
-		count: 0,
-		on:    false,
-	}
+	return Conf{name: "x"}
 }
