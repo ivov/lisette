@@ -97,7 +97,30 @@ impl Rectangle {
 }
 ```
 
-Calling a method never needs an explicit `&` or `.*`, because Lisette [auto-adds them](/docs/references/#implicit--and--in-method-calls) as needed.
+## `Self`
+
+Instead of spelling out the type, a method may use `Self` for the type being implemented:
+
+```lisette
+struct CoordinatePair<T> {
+  first: T,
+  second: T,
+}
+
+impl<T> CoordinatePair<T> {
+  // !callout[/Self/] `CoordinatePair<T>`
+  fn swap(self: mut Ref<Self>) {
+    let held = self.first
+    self.first = self.second
+    self.second = held
+  }
+
+  // !callout[/Self/] `CoordinatePair<T>`
+  fn swapped(self) -> Self {
+    CoordinatePair { first: self.second, second: self.first }
+  }
+}
+```
 
 ## Associated functions
 

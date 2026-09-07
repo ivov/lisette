@@ -153,6 +153,8 @@ pub fn unqualified_name(id: &str) -> &str {
 
 pub const GO_IMPORT_PREFIX: &str = "go:";
 
+pub const SELF_TYPE_NAME: &str = "Self";
+
 /// Resolve the package of a qualified ID. For `go:` IDs containing `/`,
 /// does a longest-prefix match against known packages to disambiguate paths
 /// whose package segment contains dots (e.g. `gopkg.in/yaml.v3`). Otherwise

@@ -1584,7 +1584,7 @@ impl mut Batch {
   }
 }"#,
     )
-    .assert_infer_code("mut_without_effect");
+    .assert_infer_code("mut_on_impl_target");
 }
 
 #[test]

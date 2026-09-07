@@ -757,6 +757,33 @@ fn rename_rejects_keywords() {
 }
 
 #[test]
+fn rename_rejects_self_as_a_type_name() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "struct Counter { value: int }\n");
+
+    let error = client.try_rename(TEST_URI, 0, 7, "Self").unwrap_err();
+    assert_eq!(error, "'Self' is reserved for the type of an `impl` block");
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_allows_self_as_an_enum_variant() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "enum Target { First, Other }\nfn main() { let _ = Target.First }\n",
+    );
+
+    let edit = client.rename(TEST_URI, 0, 14, "Self");
+    assert!(edit.is_some());
+
+    client.shutdown();
+}
+
+#[test]
 fn rename_function() {
     let mut client = TestClient::new();
     client.initialize();

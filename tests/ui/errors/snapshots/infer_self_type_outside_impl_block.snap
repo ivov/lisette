@@ -2,11 +2,11 @@
 source: tests/ui/errors/mod.rs
 ---
   ✕ Use of `Self` type
-   ╭─[test.lis:3:21]
- 2 │ interface Comparable {
- 3 │   fn compare(other: Self) -> int
-   ·                     ──┬─
-   ·                       ╰── disallowed
+   ╭─[test.lis:5:12]
  4 │ }
+ 5 │ fn peek(c: Self) -> int {
+   ·            ──┬─
+   ·              ╰── disallowed
+ 6 │   c.value
    ╰────
   help: `Self` is only allowed inside an `impl` block. Use a type parameter instead, e.g. `interface Comparable<T> { fn compare(other: T) -> int }` · code: [resolve.self_type_not_supported]

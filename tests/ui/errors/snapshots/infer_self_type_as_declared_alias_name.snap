@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Reserved type name
+   ╭─[test.lis:2:6]
+ 1 │ 
+ 2 │ type Self = int
+   ·      ──┬─
+   ·        ╰── reserved
+   ╰────
+  help: Rename this alias. `Self` is reserved for the type of an `impl` block · code: [resolve.self_type_is_reserved]

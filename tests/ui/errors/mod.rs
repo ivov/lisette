@@ -11457,14 +11457,27 @@ interface Greeter {
 }
 
 #[test]
-fn infer_self_type_in_impl_block() {
+fn infer_self_type_outside_impl_block() {
     let input = r#"
-struct DiffReporter {
-  pub diffs: Slice<string>,
+struct Counter {
+  value: int,
 }
-impl DiffReporter {
-  pub fn PushStep(self: Ref<Self>, step: string) {
-    let _ = step
+fn peek(c: Self) -> int {
+  c.value
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_self_type_with_type_arguments() {
+    let input = r#"
+struct Stack<T> {
+  pub items: Slice<T>,
+}
+impl<T> Stack<T> {
+  pub fn Peek(self: Ref<Self<int>>) -> T {
+    self.items[0]
   }
 }
 "#;
@@ -11472,14 +11485,62 @@ impl DiffReporter {
 }
 
 #[test]
-fn infer_self_type_in_generic_impl_block() {
+fn infer_self_type_with_type_arguments_on_non_generic_impl() {
     let input = r#"
-struct Stack<T> {
-  pub items: Slice<T>,
+struct Counter {
+  value: int,
 }
-impl<T> Stack<T> {
-  pub fn Peek(self: Ref<Self>) -> T {
-    self.items[0]
+impl Counter {
+  fn peek(self: Ref<Self<int>>) -> int {
+    self.value
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_self_type_as_impl_target() {
+    let input = r#"
+struct Counter {
+  value: int,
+}
+impl Self {
+  fn peek(self) -> int {
+    self.value
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_self_type_as_declared_name() {
+    let input = r#"
+struct Self {
+  value: int,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_self_type_as_declared_alias_name() {
+    let input = r#"
+type Self = int
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mut_on_self_receiver() {
+    let input = r#"
+struct Counter {
+  value: int,
+}
+impl Counter {
+  fn peek(self: mut Self) -> int {
+    self.value
   }
 }
 "#;

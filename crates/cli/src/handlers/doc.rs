@@ -9,6 +9,7 @@ use stdlib::{
 };
 use syntax::ast::EnumVariant;
 use syntax::ast::{Annotation, Binding, Expression, Generic, Pattern, StructFields, VariantFields};
+use syntax::display::annotation_to_string;
 use syntax::doc::{dedent, drop_callout_lines, split_example};
 use syntax::program::DefinitionBody;
 
@@ -69,66 +70,6 @@ struct GoPackageIndex {
     functions: Vec<FunctionInfo>,
     constants: Vec<ConstInfo>,
     variables: Vec<VarInfo>,
-}
-
-fn annotation_to_string(ann: &Annotation) -> String {
-    match ann {
-        Annotation::Constructor {
-            name,
-            params,
-            writable,
-            ..
-        } => {
-            let rendered = if params.is_empty() {
-                name.to_string()
-            } else {
-                format!(
-                    "{}<{}>",
-                    name,
-                    params
-                        .iter()
-                        .map(annotation_to_string)
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            };
-            if *writable {
-                format!("mut {}", rendered)
-            } else {
-                rendered
-            }
-        }
-        Annotation::Function {
-            params,
-            return_type,
-            ..
-        } => {
-            let params_str = params
-                .iter()
-                .map(annotation_to_string)
-                .collect::<Vec<_>>()
-                .join(", ");
-            let ret = annotation_to_string(return_type);
-            if ret == "Unit" || ret == "()" {
-                format!("fn({})", params_str)
-            } else {
-                format!("fn({}) -> {}", params_str, ret)
-            }
-        }
-        Annotation::Tuple { elements, .. } => {
-            let inner = elements
-                .iter()
-                .map(annotation_to_string)
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("({})", inner)
-        }
-        Annotation::Constant { value, text, .. } => {
-            text.clone().unwrap_or_else(|| value.to_string())
-        }
-        Annotation::Unknown => "Unknown".to_string(),
-        Annotation::Opaque { .. } => String::new(),
-    }
 }
 
 fn generics_to_string(generics: &[Generic]) -> String {

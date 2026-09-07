@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Box<T> {
+    value: T,
+  }
+  
+  impl<T> Box<T> {
+    fn map<U>(self, f: fn(T) -> U) -> Box<U> {
+      Box { value: f(self.value) }
+    }
+  
+    fn same(self) -> Self {
+      self
+    }
+  }
+  
+  fn run() {
+    let b = Box { value: 1 }
+    let _ = b.same()
+    let _ = b.map(|n| n == 1)
+  }
+---
+package main
+
+type Box[T any] struct {
+	value T
+}
+
+func Box_map[T any, U any](self Box[T], f func(T) U) Box[U] {
+	return Box[U]{value: f(self.value)}
+}
+
+func (b Box[T]) same() Box[T] {
+	return b
+}
+
+func run() {
+	b := Box[int]{value: 1}
+	_ = b.same()
+	_ = Box_map(b, func(n int) bool {
+		return n == 1
+	})
+}
