@@ -2,7 +2,7 @@ use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
-use crate::types::go_type::render_conversion;
+use crate::plan::go_expression::GoExpressionNode;
 use std::fmt::{self, Display, Formatter};
 use syntax::ast::Expression;
 use syntax::types::SimpleKind;
@@ -74,6 +74,7 @@ fn unary_constant(operator: &str, value: Option<ConstantKind>) -> Option<Constan
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GoExpression {
+    node: GoExpressionNode,
     rendered: String,
     contains_deferred_evaluation: bool,
     composite_literal: bool,
@@ -83,12 +84,14 @@ pub(crate) struct GoExpression {
 
 impl GoExpression {
     fn new(
-        rendered: String,
+        node: GoExpressionNode,
         contains_deferred_evaluation: bool,
         composite_literal: bool,
         syntax_form: OperandForm,
     ) -> Self {
+        let rendered = node.print();
         Self {
+            node,
             rendered,
             contains_deferred_evaluation,
             composite_literal,
@@ -111,7 +114,12 @@ impl GoExpression {
     }
 
     pub(crate) fn name(value: String) -> Self {
-        Self::new(value, false, false, OperandForm::Name)
+        Self::new(
+            GoExpressionNode::Identifier(value),
+            false,
+            false,
+            OperandForm::Name,
+        )
     }
 
     pub(crate) fn opaque(rendered: String) -> Self {
@@ -123,7 +131,7 @@ impl GoExpression {
         contains_deferred_evaluation: bool,
     ) -> Self {
         Self::new(
-            rendered,
+            GoExpressionNode::Raw(rendered),
             contains_deferred_evaluation,
             false,
             OperandForm::Other,
@@ -131,23 +139,32 @@ impl GoExpression {
     }
 
     pub(crate) fn literal(rendered: String) -> Self {
-        Self::new(rendered, false, false, OperandForm::Literal)
+        Self::new(
+            GoExpressionNode::Literal(rendered),
+            false,
+            false,
+            OperandForm::Literal,
+        )
     }
 
     pub(crate) fn call(callee: GoExpression, arguments: Vec<GoExpression>) -> Self {
-        let mut rendered = format!("{callee}(");
-        for (index, argument) in arguments.iter().enumerate() {
-            if index > 0 {
-                rendered.push_str(", ");
-            }
-            rendered.push_str(argument.as_str());
-        }
-        rendered.push(')');
-        Self::new(rendered, true, false, OperandForm::Call)
+        let node = GoExpressionNode::Call {
+            callee: Box::new(callee.node),
+            arguments: arguments
+                .into_iter()
+                .map(|argument| argument.node)
+                .collect(),
+        };
+        Self::new(node, true, false, OperandForm::Call)
     }
 
     pub(crate) fn receive(channel: GoExpression) -> Self {
-        Self::opaque_with_deferred_evaluation(format!("<-{channel}"), true)
+        Self::new(
+            GoExpressionNode::Receive(Box::new(channel.node)),
+            true,
+            false,
+            OperandForm::Other,
+        )
     }
 
     pub(crate) fn binary(
@@ -155,51 +172,62 @@ impl GoExpression {
         operator: impl Into<String>,
         right: GoExpression,
     ) -> Self {
-        Self::render_binary(left, operator.into(), right, " ")
-    }
-
-    pub(crate) fn compact_binary(
-        left: GoExpression,
-        operator: impl Into<String>,
-        right: GoExpression,
-    ) -> Self {
-        Self::render_binary(left, operator.into(), right, "")
-    }
-
-    fn render_binary(left: Self, operator: String, right: Self, separator: &str) -> Self {
+        let operator = operator.into();
         let deferred = left.contains_deferred_evaluation() || right.contains_deferred_evaluation();
         let constant = binary_constant(left.constant, &operator, right.constant);
-        Self::opaque_with_deferred_evaluation(
-            format!("{left}{separator}{operator}{separator}{right}"),
-            deferred,
-        )
-        .with_constant(constant)
+        let node = GoExpressionNode::Binary {
+            operator,
+            left: Box::new(left.node),
+            right: Box::new(right.node),
+        };
+        Self::new(node, deferred, false, OperandForm::Other).with_constant(constant)
     }
 
     pub(crate) fn selector(base: GoExpression, field: String) -> Self {
         let deferred = base.contains_deferred_evaluation();
-        Self::opaque_with_deferred_evaluation(format!("{base}.{field}"), deferred)
+        let node = GoExpressionNode::Selector {
+            base: Box::new(base.node),
+            field,
+        };
+        Self::new(node, deferred, false, OperandForm::Other)
     }
 
     pub(crate) fn index(base: GoExpression, index: GoExpression) -> Self {
         let deferred = base.contains_deferred_evaluation() || index.contains_deferred_evaluation();
-        Self::opaque_with_deferred_evaluation(format!("{base}[{index}]"), deferred)
+        let node = GoExpressionNode::Index {
+            base: Box::new(base.node),
+            index: Box::new(index.node),
+        };
+        Self::new(node, deferred, false, OperandForm::Other)
     }
 
     pub(crate) fn conversion(go_type: String, value: GoExpression) -> Self {
-        Self::opaque_with_deferred_evaluation(render_conversion(&go_type, value.as_str()), true)
+        let node = GoExpressionNode::Conversion {
+            go_type,
+            operand: Box::new(value.node),
+        };
+        Self::new(node, true, false, OperandForm::Other)
     }
 
     fn parenthesized(value: GoExpression) -> Self {
         let constant = value.constant;
-        Self::opaque_with_deferred_evaluation(format!("({value})"), true).with_constant(constant)
+        Self::new(
+            GoExpressionNode::Parenthesized(Box::new(value.node)),
+            true,
+            false,
+            OperandForm::Other,
+        )
+        .with_constant(constant)
     }
 
     fn unary(operator: &str, value: GoExpression) -> Self {
         let deferred = value.contains_deferred_evaluation();
         let constant = unary_constant(operator, value.constant);
-        Self::opaque_with_deferred_evaluation(render_unary(operator, &value.rendered()), deferred)
-            .with_constant(constant)
+        let node = GoExpressionNode::Unary {
+            operator: operator.to_string(),
+            operand: Box::new(value.node),
+        };
+        Self::new(node, deferred, false, OperandForm::Other).with_constant(constant)
     }
 
     pub(crate) fn slice(
@@ -208,29 +236,25 @@ impl GoExpression {
         end: Option<&GoExpression>,
         capacity: Option<&GoExpression>,
     ) -> Self {
-        let mut range = format!(
-            "{}:{}",
-            start.map(GoExpression::rendered).unwrap_or_default(),
-            end.map(GoExpression::rendered).unwrap_or_default()
-        );
-        if let Some(capacity) = capacity {
-            range.push(':');
-            range.push_str(&capacity.rendered());
-        }
-        let contains_deferred_evaluation = start
-            .into_iter()
-            .chain(end)
-            .chain(capacity)
-            .any(GoExpression::contains_deferred_evaluation);
-        Self::index(
-            base,
-            Self::opaque_with_deferred_evaluation(range, contains_deferred_evaluation),
-        )
+        let deferred = base.contains_deferred_evaluation()
+            || start
+                .into_iter()
+                .chain(end)
+                .chain(capacity)
+                .any(GoExpression::contains_deferred_evaluation);
+        let bound = |bound: Option<&GoExpression>| bound.map(|bound| Box::new(bound.node.clone()));
+        let node = GoExpressionNode::Slice {
+            base: Box::new(base.node),
+            low: bound(start),
+            high: bound(end),
+            max: bound(capacity),
+        };
+        Self::new(node, deferred, false, OperandForm::Other)
     }
 
     pub(crate) fn composite_literal(rendered: String, contains_deferred_evaluation: bool) -> Self {
         Self::new(
-            rendered,
+            GoExpressionNode::CompositeLiteral(rendered),
             contains_deferred_evaluation,
             true,
             OperandForm::Literal,
@@ -399,14 +423,6 @@ impl SequencedValues {
         self.values
             .iter()
             .any(GoExpression::contains_deferred_evaluation)
-    }
-}
-
-fn render_unary(op: &str, value: &str) -> String {
-    if op == "-" && value.starts_with('-') {
-        format!("-({value})")
-    } else {
-        format!("{op}{value}")
     }
 }
 

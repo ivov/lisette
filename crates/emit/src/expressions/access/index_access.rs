@@ -125,7 +125,7 @@ impl Planner<'_> {
         let mut start_value = start.map(|_| values.next().expect("slice access has a start"));
         let mut end_value = end.map(|_| values.next().expect("slice access has an end"));
         if inclusive && let Some(end_expression) = end_value.take() {
-            end_value = Some(GoExpression::compact_binary(
+            end_value = Some(GoExpression::binary(
                 end_expression,
                 "+",
                 GoExpression::literal("1".to_string()),

@@ -72,7 +72,7 @@ impl Planner<'_> {
                         GoExpression::name("complex".to_string()),
                         vec![
                             GoExpression::literal("0".to_string()),
-                            GoExpression::compact_binary(
+                            GoExpression::binary(
                                 GoExpression::opaque_with_deferred_evaluation(value, true),
                                 "*",
                                 GoExpression::literal(imag_coef.to_string()),
@@ -94,7 +94,7 @@ impl Planner<'_> {
                         GoExpression::name("complex".to_string()),
                         vec![
                             GoExpression::literal("0".to_string()),
-                            GoExpression::compact_binary(
+                            GoExpression::binary(
                                 GoExpression::opaque_with_deferred_evaluation(value, true),
                                 "*",
                                 GoExpression::literal(imag_coef.to_string()),

@@ -1,5 +1,6 @@
 pub(crate) mod bodies;
 pub(crate) mod calls;
+pub(crate) mod go_expression;
 pub(crate) mod lower;
 pub(crate) mod placement;
 pub(crate) mod values;
