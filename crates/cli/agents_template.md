@@ -117,6 +117,7 @@ struct User {
   name: string,
   #[json(omitempty)]
   email: Option<string>,
+  role: Role,
 }
 
 enum Role {
@@ -136,9 +137,15 @@ impl User {
 
 fn fetch_body(url: string) -> Result<string, error> {
   let resp = http.Get(url)?
-  defer resp.Body.Close()
-  let body = io.ReadAll(resp.Body)?
-  Ok(body as string)
+  let Some(body) = resp.Body else {
+    return Err(errors.New("empty response body"))
+  };
+  defer body.Close()
+  match io.ReadAll(body) {
+    Partial.Ok(data) => Ok(data as string),
+    Partial.Err(e) => Err(e),
+    Partial.Both(_, e) => Err(e),
+  }
 }
 
 fn find_admin(users: Slice<User>) -> Result<User, error> {
@@ -149,9 +156,16 @@ fn find_admin(users: Slice<User>) -> Result<User, error> {
 }
 
 fn main() {
+  let mut bob = User {
+    name: "Bob",
+    email: None,
+    role: Role.Member { team: "core" },
+  }
+  bob.set_email("bob@co.com")
+
   let users = [
-    User { name: "Alice", email: Some("alice@co.com") },
-    User { name: "Bob", email: None },
+    User { name: "Alice", email: Some("alice@co.com"), role: Role.Admin },
+    bob,
   ]
 
   let names = users
@@ -163,6 +177,13 @@ fn main() {
     fmt.Println(f"slug: {slug}")
   }
 
+  for user in users {
+    match user.role {
+      Admin => fmt.Println(f"{user.name} is an admin"),
+      Member { team } => fmt.Println(f"{user.name} is on team {team}"),
+    }
+  }
+
   match find_admin(users) {
     Ok(admin) => fmt.Println(admin.display()),
     Err(e) => fmt.Println(f"error: {e}"),
@@ -172,7 +193,7 @@ fn main() {
   task { ch.send(42) }
   match ch.receive() {
     Some(v) => fmt.Println(v),
-    None => {},
+    None => fmt.Println("channel closed"),
   }
 
   let result = recover { fetch_body("http://example.com") }
