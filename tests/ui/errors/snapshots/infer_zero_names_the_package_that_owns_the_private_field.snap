@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `Point` has no zero value
+   ╭─[main.lis:5:11]
+ 4 │ fn main() {
+ 5 │   let p = zero<shapes.Point>();
+   ·           ──────────┬─────────
+   ·                     ╰── `Point` does not satisfy `Zeroable`
+ 6 │ }
+   ╰────
+  help: `Point.x` is private to package `shapes`, so Lisette cannot produce a zero for it. Build the value through a constructor that `shapes` exposes · code: [infer.not_zeroable_bound]

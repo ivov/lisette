@@ -3297,6 +3297,150 @@ fn test() {
 }
 
 #[test]
+fn infer_zero_of_ref_is_not_zeroable() {
+    let input = r#"
+fn test() {
+  let r = zero<Ref<int>>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_map_is_not_zeroable() {
+    let input = r#"
+fn test() {
+  let m = zero<Map<string, int>>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_function_is_not_zeroable() {
+    let input = r#"
+fn test() {
+  let f = zero<fn(int) -> int>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_unknown_is_not_zeroable() {
+    let input = r#"
+fn test() {
+  let u = zero<Unknown>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_error_is_not_zeroable() {
+    let input = r#"
+fn test() {
+  let e = zero<error>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_interface_is_not_zeroable() {
+    let input = r#"
+interface Speaker {
+  fn Speak() -> string
+}
+
+fn test() {
+  let s = zero<Speaker>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_enum_is_not_zeroable() {
+    let input = r#"
+enum Color { Red, Green }
+
+fn test() {
+  let c = zero<Color>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_channel_is_not_zeroable() {
+    let input = r#"
+fn test() {
+  let c = zero<Channel<int>>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_names_the_field_that_has_no_zero() {
+    let input = r#"
+struct HasFn { f: fn(int) -> int }
+
+fn test() {
+  let s = zero<HasFn>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_names_the_map_field_that_has_no_zero() {
+    let input = r#"
+struct HasMap { m: Map<string, int> }
+
+fn test() {
+  let s = zero<HasMap>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_type_parameter_needs_the_zeroable_bound() {
+    let input = r#"
+fn empty<T>() -> T {
+  zero<T>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_forwarded_needs_the_zeroable_bound() {
+    let input = r#"
+fn empty<T: Zeroable>() -> T {
+  zero<T>()
+}
+
+fn forward<T>() -> T {
+  empty<T>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_without_a_type_argument() {
+    let input = r#"
+fn test() {
+  let x = zero()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_map_read_no_zero_in_deref_write() {
     let input = r#"
 fn test() {
@@ -7535,6 +7679,34 @@ import "shapes"
 
 fn main() {
   let q = shapes.Point { y: 10, .. };
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_package("main", fs);
+    assert_multipackage_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn infer_zero_names_the_package_that_owns_the_private_field() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "shapes",
+        "lib.lis",
+        r#"
+pub struct Point {
+  x: int,
+  pub y: int,
+}
+"#,
+    );
+
+    let source = r#"
+import "shapes"
+
+fn main() {
+  let p = zero<shapes.Point>();
 }
 "#;
     fs.add_file("main", "main.lis", source);

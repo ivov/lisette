@@ -31,6 +31,30 @@ impl NoZero {
             _ => None,
         }
     }
+
+    /// The reason in the shape the `Zeroable` diagnostic renders.
+    pub fn cause(&self) -> diagnostics::infer::NotZeroableCause<'_> {
+        match &self.reason {
+            NoZeroReason::HiddenGoState { go_type } => {
+                diagnostics::infer::NotZeroableCause::HiddenGoState { go_type }
+            }
+            NoZeroReason::EnumWithoutDefault => {
+                diagnostics::infer::NotZeroableCause::EnumWithoutDefault
+            }
+            NoZeroReason::PrivateField {
+                struct_name,
+                field,
+                owning_package,
+            } => diagnostics::infer::NotZeroableCause::PrivateField {
+                struct_name,
+                field,
+                owning_package,
+            },
+            NoZeroReason::NoZeroForType | NoZeroReason::NilMap => {
+                diagnostics::infer::NotZeroableCause::Type
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -49,6 +73,9 @@ pub enum NoZeroReason {
     HiddenGoState { go_type: EcoString },
     /// The leaf type is a `Map`, whose Go zero is nil.
     NilMap,
+    /// An enum with no variant marked `#[default]`. Split from `NoZeroForType`
+    /// because the remedy is specific: mark a variant.
+    EnumWithoutDefault,
 }
 
 /// Who supplies the zero value of a `Map` reached while walking a type.
@@ -299,6 +326,11 @@ impl ZeroWalk<'_> {
                 default_variant: Some(_),
                 ..
             } => Ok(()),
+            DefinitionBody::Enum { .. } => Err(NoZero {
+                chain: vec![],
+                reason: NoZeroReason::EnumWithoutDefault,
+                leaf_ty: Box::new(original_ty.clone()),
+            }),
             _ => Err(NoZero {
                 chain: vec![],
                 reason: NoZeroReason::NoZeroForType,

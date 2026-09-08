@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  import "go:encoding/json"
+  
+  pub fn parse_json<T: Zeroable>(data: Slice<byte>) -> Result<T, error> {
+    let mut result = zero<T>()
+    json.Unmarshal(data, &result)?
+    Ok(result)
+  }
+---
+package main
+
+import "encoding/json"
+
+func ParseJson[T any](data []byte) (T, error) {
+	var result T
+	if err := json.Unmarshal(data, &result); err != nil {
+		return *new(T), err
+	}
+	return result, nil
+}

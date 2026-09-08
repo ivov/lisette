@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `Unknown` has no zero value
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let u = zero<Unknown>()
+   ·           ───────┬───────
+   ·                  ╰── `Unknown` does not satisfy `Zeroable`
+ 4 │ }
+   ╰────
+  help: `Zeroable` admits only types whose zero value Lisette can produce, and `Unknown` has none. Build this value explicitly instead, e.g. `Map.new<K, V>()` for a map or `Channel.new<T>()` for a channel · code: [infer.not_zeroable_bound]

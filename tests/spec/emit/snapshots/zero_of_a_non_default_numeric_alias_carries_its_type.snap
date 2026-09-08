@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  type Score = float64
+  
+  fn f() -> Unknown {
+    zero<Score>()
+  }
+---
+package main
+
+type Score = float64
+
+func f() any {
+	return Score(0)
+}

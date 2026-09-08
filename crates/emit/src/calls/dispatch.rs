@@ -69,6 +69,22 @@ pub(crate) fn all_type_params_inferrable(
     })
 }
 
+/// The written type argument, or the return type inference settled on.
+fn zero_call_type(
+    function: &Expression,
+    type_args: ResolvedCallTypeArguments<'_>,
+    call_ty: Option<&Type>,
+) -> Type {
+    if !type_args.is_empty() {
+        return type_args[0].clone();
+    }
+    let ty = function.get_type();
+    if let Some(signature) = ty.as_function_type() {
+        return signature.return_type.as_ref().clone();
+    }
+    call_ty.cloned().unwrap_or(Type::Error)
+}
+
 fn extract_return_type_param(function: &Expression) -> Option<Type> {
     let ty = function.get_type();
     let f = ty.as_function_type()?;
@@ -546,6 +562,17 @@ impl<'a> Planner<'a> {
                 {
                     return result;
                 }
+            }
+            CallableOrigin::Zero => {
+                let ty = zero_call_type(function, resolved_type_args, call_ty);
+                let value = self.lisette_zero(&ty);
+                // Nothing types a free expression, so an untyped `0` would
+                // default to `int`.
+                let value = match self.constant_needs_go_type(value.constant_kind(), &ty) {
+                    Some(go_type) => GoExpression::conversion(go_type, value),
+                    None => value,
+                };
+                return ValuePlan::computed(Vec::new(), value, EvaluationEffect::Pure);
             }
             CallableOrigin::AssertType => {
                 let (setup, value) = self.lower_assert_type(function, args, resolved_type_args);

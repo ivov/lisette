@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  enum Status { Active, Paused, #[default] Stopped }
+  
+  fn f() -> Status {
+    zero<Status>()
+  }
+---
+package main
+
+func MakeStatusActive() Status {
+	return Status{Tag: StatusActive}
+}
+
+func MakeStatusPaused() Status {
+	return Status{Tag: StatusPaused}
+}
+
+func MakeStatusStopped() Status {
+	return Status{Tag: StatusStopped}
+}
+
+type StatusTag uint8
+
+const (
+	StatusActive  StatusTag = 1
+	StatusPaused  StatusTag = 2
+	StatusStopped StatusTag = 0
+)
+
+type Status struct {
+	Tag StatusTag
+}
+
+func f() Status {
+	return Status{}
+}

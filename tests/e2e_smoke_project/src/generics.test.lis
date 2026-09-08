@@ -1,3 +1,4 @@
+import "go:encoding/json"
 import "go:regexp/syntax"
 import "go:time"
 
@@ -200,6 +201,65 @@ fn generic_call_keeps_a_literal_at_its_newtype() {
   assert ticket.0 == 7
 }
 
+#[test]
+fn zero_of_primitives() {
+  assert zero<int>() == 0
+  assert zero<float64>() == 0.0
+  assert zero<string>() == ""
+  assert zero<bool>() == false
+}
+
+#[test]
+fn zero_of_struct_zeroes_every_field() {
+  let p = zero<Point>()
+  assert p.x == 0
+  assert p.y == 0
+}
+
+#[test]
+fn zero_of_option_is_none() {
+  let opt = zero<Option<int>>()
+  assert opt.is_none()
+}
+
+#[test]
+fn zero_of_slice_is_empty_but_appendable() {
+  let s = zero<Slice<int>>()
+  assert s.is_empty()
+  assert s.append(1).length() == 1
+}
+
+#[test]
+fn zero_of_a_tuple_keeps_its_element_types() {
+  let t = zero<(int, float64)>()
+  assert t.0 == 0
+  assert t.1 < 0.5
+}
+
+#[test]
+fn zero_of_an_enum_is_its_default_variant() {
+  // `Grey` is neither first nor last, so tag 0 cannot land there by accident.
+  assert zero<ZeroTone>() == ZeroTone.Grey
+  assert zero<ZeroTone>() != ZeroTone.Black
+  assert pick<ZeroTone>() == ZeroTone.Grey
+  assert pick<ZeroTone>() != ZeroTone.White
+}
+
+#[test]
+fn zero_of_type_parameter_round_trips_through_json() {
+  let raw: Slice<byte> = "{\"name\":\"alice\",\"age\":30}" as Slice<byte>
+  let person = parse_json<Person>(raw).unwrap_or(Person { name: "", age: 0 })
+  assert person.name == "alice"
+  assert person.age == 30
+}
+
+#[test]
+fn zero_of_type_parameter_reports_bad_json() {
+  let raw: Slice<byte> = "not json" as Slice<byte>
+  let parsed: Result<Person, error> = parse_json<Person>(raw)
+  assert parsed.is_err()
+}
+
 impl<T> Box<T> {
   fn get(self: Box<T>) -> T {
     self.value
@@ -237,4 +297,25 @@ struct Measurement { reading: (int, float64) }
 
 fn echo_value<T>(value: T) -> T {
   value
+}
+
+#[json]
+struct Person {
+  #[json("name")]
+  name: string,
+  #[json("age")]
+  age: int,
+}
+
+#[equality]
+enum ZeroTone { Black, #[default] Grey, White }
+
+fn pick<T: Zeroable>() -> T {
+  zero<T>()
+}
+
+fn parse_json<T: Zeroable>(data: Slice<byte>) -> Result<T, error> {
+  let mut result = zero<T>()
+  json.Unmarshal(data, &result)?
+  Ok(result)
 }

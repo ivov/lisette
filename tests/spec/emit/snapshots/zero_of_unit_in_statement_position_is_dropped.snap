@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn f() -> int {
+    let _ = zero<()>()
+    1
+  }
+---
+package main
+
+func f() int {
+	return 1
+}

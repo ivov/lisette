@@ -79,7 +79,7 @@ fn check_one(
     let span = *span;
     if matches!(
         value,
-        "imaginary" | "assert_type" | "complex" | "real" | "panic"
+        "imaginary" | "assert_type" | "complex" | "real" | "panic" | "zero"
     ) {
         let qualified = Symbol::from_parts(package_id, value);
         if store.get_definition(&qualified).is_none() {

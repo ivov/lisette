@@ -13,6 +13,7 @@ use syntax::types::SimpleKind;
 pub(crate) enum BuiltinBound {
     Ordered,
     Comparable,
+    Zeroable,
 }
 
 impl BuiltinBound {
@@ -20,6 +21,7 @@ impl BuiltinBound {
         match qualified {
             "go:cmp.Ordered" | "prelude.Ordered" => Some(Self::Ordered),
             "prelude.Comparable" => Some(Self::Comparable),
+            "prelude.Zeroable" => Some(Self::Zeroable),
             _ => None,
         }
     }
@@ -28,6 +30,7 @@ impl BuiltinBound {
         match self {
             Self::Ordered => "cmp.Ordered",
             Self::Comparable => "Comparable",
+            Self::Zeroable => "Zeroable",
         }
     }
 
@@ -675,16 +678,21 @@ impl InferCtx<'_> {
         span: &Span,
     ) -> Dispatched {
         let store = self.store;
-        let bound_ty = bound.ty.resolve_in(&self.env);
-        let Some(builtin) = bound_ty
-            .get_qualified_id()
-            .and_then(BuiltinBound::from_qualified_id)
-        else {
+        let Some(builtin) = self.builtin_bound(bound) else {
             return Dispatched::Fallthrough;
         };
 
         self.check_builtin_bound_argument(store, resolved_generic, builtin, *span, None);
         Dispatched::Handled
+    }
+
+    /// The built-in this bound names, if it names one at all.
+    pub(crate) fn builtin_bound(&self, bound: &Bound) -> Option<BuiltinBound> {
+        bound
+            .ty
+            .resolve_in(&self.env)
+            .get_qualified_id()
+            .and_then(BuiltinBound::from_qualified_id)
     }
 
     fn unification_diagnostic(

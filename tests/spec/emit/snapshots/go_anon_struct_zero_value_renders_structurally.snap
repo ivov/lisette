@@ -4,7 +4,7 @@ description: |
   
   import anon "go:example.com/anon"
   
-  fn zero() {
+  fn fill() {
     anon.TakesAnon(anon.AnonX { .. })
   }
 ---
@@ -12,6 +12,6 @@ package main
 
 import "example.com/anon"
 
-func zero() {
+func fill() {
 	anon.TakesAnon(struct{ X int }{})
 }

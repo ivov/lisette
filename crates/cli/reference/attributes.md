@@ -381,7 +381,12 @@ let job = Job { name: "build", .. }
 let by_name = Map.new<string, Status>()
 // !callout[/missing/] `Status.Stopped`
 let missing = by_name["absent"]
+
+// !callout-right `Status.Stopped`
+let blank = zero<Status>()
 ```
+
+A `#[default]` variant is also what makes an enum satisfy [`Zeroable`](/docs/types/#zero-values), so it can instantiate a `<T: Zeroable>` type parameter.
 
 ## `#[allow]`
 

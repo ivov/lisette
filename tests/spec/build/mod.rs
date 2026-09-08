@@ -60,13 +60,13 @@ fn unnecessary_mut_holds_while_permission_errors_stand() {
         r#"
 import "go:fmt"
 
-fn zero(items: Slice<int>) {
+fn clear_first(items: Slice<int>) {
     items[0] = 0
 }
 
 fn main() {
     let mut xs = [1, 2]
-    zero(xs)
+    clear_first(xs)
     fmt.Println(xs)
 }
 "#,

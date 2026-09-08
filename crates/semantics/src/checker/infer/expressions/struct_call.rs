@@ -779,6 +779,9 @@ impl InferCtx<'_> {
                 NoZeroReason::HiddenGoState { go_type } => {
                     diagnostics::infer::FieldNoZeroCause::HiddenGoState { go_type }
                 }
+                NoZeroReason::EnumWithoutDefault => {
+                    diagnostics::infer::FieldNoZeroCause::EnumWithoutDefault
+                }
                 NoZeroReason::NoZeroForType | NoZeroReason::NilMap => {
                     diagnostics::infer::FieldNoZeroCause::Type
                 }

@@ -26,7 +26,7 @@ export const LISETTE_PRIMITIVE_TYPES = [
   "complex64", "complex128",
   "bool", "string", "error",
   // Built-in type + built-in functions
-  "Never", "panic", "assert_type",
+  "Never", "panic", "assert_type", "zero",
 ];
 
 // Generic/compound types

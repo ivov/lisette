@@ -19,6 +19,7 @@ use crate::checker::state::PendingArraySizeCheck;
 use crate::generics::apply_bounds;
 use crate::prelude::PRELUDE_PACKAGE_ID;
 use crate::store::Store;
+use crate::zero::{self, MapZero};
 
 enum ArraySizeError {
     NotInteger,
@@ -1051,7 +1052,9 @@ impl TaskState {
         equals_hint: Option<diagnostics::infer::EquatableFieldHint<'_>>,
     ) {
         let resolved = store.deep_resolve_alias(&argument.resolve_in(&self.env));
-        if resolved.is_variable() {
+        // A type that already failed to resolve carries its own diagnostic;
+        // a bound error on top of it buries the real one.
+        if resolved.is_variable() || resolved.contains_error() {
             return;
         }
         if let Type::Parameter(parameter) = &resolved {
@@ -1100,6 +1103,19 @@ impl TaskState {
                     .push(diagnostics::infer::not_orderable_bound(span));
             }
             BuiltinBound::Ordered => {}
+            BuiltinBound::Zeroable => {
+                let from_package = self.cursor.package_id().to_string();
+                if let Err(no_zero) = zero::has_zero(store, &resolved, &from_package, MapZero::Nil)
+                {
+                    let chain: Vec<&str> = no_zero.chain.iter().map(EcoString::as_str).collect();
+                    self.sink.push(diagnostics::infer::not_zeroable_bound(
+                        &no_zero.leaf_ty.stringify(),
+                        &chain,
+                        no_zero.cause(),
+                        span,
+                    ));
+                }
+            }
         }
     }
 }

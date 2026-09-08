@@ -1428,6 +1428,7 @@ pub fn private_field_in_autofill(
 
 pub enum FieldNoZeroCause<'a> {
     Type,
+    EnumWithoutDefault,
     PrivateField {
         struct_name: &'a str,
         field: &'a str,
@@ -1473,6 +1474,12 @@ pub fn field_no_zero(
              zero value. Obtain one from its documented Go constructor and pass it explicitly, \
              or wrap the field type in `Option<T>`.",
             path, go_type
+        ),
+        FieldNoZeroCause::EnumWithoutDefault => format!(
+            "Field `{}` is the enum `{}`, which has no zero value because no variant is \
+             marked `#[default]`. Mark one, provide an explicit value, or wrap the field \
+             type in `Option<T>`.",
+            path, field_ty
         ),
         FieldNoZeroCause::Type if chain.is_empty() => format!(
             "Field `{}` of type `{}` has no zero value. Provide an explicit value, \
@@ -4842,6 +4849,68 @@ pub fn slice_make_no_zero(
             &span,
             format!("`Slice.make` zero-fills every element, but `{element}` has none"),
         )
+        .with_help(help)
+}
+
+pub enum NotZeroableCause<'a> {
+    Type,
+    EnumWithoutDefault,
+    PrivateField {
+        struct_name: &'a str,
+        field: &'a str,
+        owning_package: &'a str,
+    },
+    HiddenGoState {
+        go_type: &'a str,
+    },
+}
+
+pub fn not_zeroable_bound(
+    leaf: &dyn Display,
+    chain: &[&str],
+    cause: NotZeroableCause<'_>,
+    span: Span,
+) -> LisetteDiagnostic {
+    // A chain means the offending type sits inside the one that was written.
+    let at = if chain.is_empty() {
+        String::new()
+    } else {
+        format!(" at `{}`", chain.join("."))
+    };
+    let help = match cause {
+        NotZeroableCause::HiddenGoState { go_type } => format!(
+            "`{go_type}`{at} has Go-side state hidden from Lisette, so it has no zero value. \
+             Obtain the value from its documented Go constructor instead."
+        ),
+        NotZeroableCause::EnumWithoutDefault => format!(
+            "`{leaf}`{at} is an enum with no variant marked `#[default]`, so it has no zero \
+             value. Mark the variant that should be the zero, or build the value explicitly."
+        ),
+        NotZeroableCause::PrivateField {
+            struct_name,
+            field,
+            owning_package,
+        } => format!(
+            "`{struct_name}.{field}` is private to package `{owning_package}`, so Lisette \
+             cannot produce a zero for it. Build the value through a constructor that \
+             `{owning_package}` exposes."
+        ),
+        NotZeroableCause::Type => format!(
+            "`Zeroable` admits only types whose zero value Lisette can produce, and \
+             `{leaf}`{at} has none. Build this value explicitly instead, e.g. \
+             `Map.new<K, V>()` for a map or `Channel.new<T>()` for a channel"
+        ),
+    };
+    // The leaf of a private field is the field's *type*, and `int` has a zero
+    // value; what it lacks is a way to be written from here.
+    let subject = match cause {
+        NotZeroableCause::PrivateField { struct_name, .. } => struct_name.to_string(),
+        _ => leaf.to_string(),
+    };
+    LisetteDiagnostic::error(format!("`{subject}` has no zero value"))
+        .with_infer_code("not_zeroable_bound")
+        // Any `Zeroable`-bounded callee reaches here, not just `zero()`.
+        .with_span_label(&span, format!("`{subject}` does not satisfy `Zeroable`"))
         .with_help(help)
 }
 

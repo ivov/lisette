@@ -87,6 +87,10 @@ impl Planner<'_> {
         let has_ordered = bounds.iter().any(is_ordered_bound);
         let mut named_bounds: Vec<String> = Vec::new();
         for bound in bounds {
+            if is_zeroable_bound(bound) {
+                // Lisette-only constraint: every Go type is zeroable.
+                continue;
+            }
             let rendered = if is_comparable_bound(bound) {
                 if has_ordered {
                     continue;
@@ -109,6 +113,10 @@ impl Planner<'_> {
             multiple => format!("interface {{ {} }}", multiple.join("; ")),
         }
     }
+}
+
+fn is_zeroable_bound(bound: &Type) -> bool {
+    bound.get_qualified_id() == Some("prelude.Zeroable")
 }
 
 fn is_comparable_bound(bound: &Type) -> bool {

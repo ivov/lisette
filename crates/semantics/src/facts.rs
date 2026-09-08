@@ -155,6 +155,8 @@ pub enum GenericBoundOrigin {
     FunctionReference {
         name: EcoString,
     },
+    /// A bound on a call whose type argument was still unresolved.
+    Call,
 }
 
 #[derive(Debug, Clone)]

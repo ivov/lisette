@@ -91,7 +91,7 @@ let names = ["Alice", "Bob"]
 
 ### Bounds
 
-A type parameter can carry a bound `T: Constraint` that constrains which types may instantiate it. Any [interface](/docs/interfaces/) serves as a constraint, and the prelude [supplies](/docs/prelude/constraints/) two: `Comparable` and `Ordered`.
+A type parameter can carry a bound `T: Constraint` that constrains which types may instantiate it. Any [interface](/docs/interfaces/) serves as a constraint, and the prelude [supplies](/docs/prelude/constraints/) three: `Comparable`, `Ordered` and `Zeroable`.
 
 ```lisette
 interface Display {
@@ -190,3 +190,34 @@ let b = true
 let n = b as int
 ```
 
+## Zero values
+
+`zero<T>()` returns the zero value of `T`: `0` for a number, `""` for a string, `false` for a bool, `None` for an `Option`, and a struct with every field zeroed.
+
+```lisette
+// !callout-right `0`
+let n = zero<int>()
+// !callout-right `false`
+let flag: bool = zero()
+```
+
+Its use is inside a generic function, where there is otherwise no way to name a starting value for an unknown type:
+
+```lisette
+fn parse_json<T: Zeroable>(data: Slice<byte>) -> Result<T, error> {
+  let mut result = zero<T>()
+  json.Unmarshal(data, &result)?
+  Ok(result)
+}
+```
+
+The `Zeroable` [bound](#bounds) admits only types that have a zero value. `Ref<T>`, `Map<K, V>`, `Channel<T>`, interfaces and function types do not, and neither does a struct holding one of them — build those explicitly, with `Map.new<K, V>()` and the like.
+
+An enum has no zero value until one of its variants is marked [`#[default]`](/docs/attributes/#default), which then makes it `Zeroable`:
+
+```lisette
+enum Status { Active, Paused, #[default] Stopped }
+
+// !callout-right `Stopped`
+let s = zero<Status>()
+```

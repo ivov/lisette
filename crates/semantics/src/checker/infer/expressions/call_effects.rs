@@ -1,5 +1,5 @@
 use crate::checker::EnvResolve;
-use syntax::ast::{Expression, Span, StructFields};
+use syntax::ast::{Expression, IdentifierResolution, Span, StructFields};
 use syntax::program::{CallKind, Definition, DefinitionBody, DotAccessResolution, NativeTypeKind};
 use syntax::types::{FunctionParameter, Symbol, Type, peel_to_range_type};
 
@@ -75,11 +75,19 @@ impl InferCtx<'_> {
                     }
                 }
             }
-            Expression::Identifier { value, .. } => {
+            Expression::Identifier {
+                value, resolution, ..
+            } => {
                 let qualified = self.qualify_name(value);
                 let definition = store.get_definition(&qualified);
-                if definition.is_none() && value == "assert_type" {
-                    return CallKind::AssertType;
+                // A local binding of the same name is the user's own callable.
+                let shadowed = matches!(resolution, IdentifierResolution::Binding(_));
+                if definition.is_none() && !shadowed {
+                    match value.as_str() {
+                        "assert_type" => return CallKind::AssertType,
+                        "zero" => return CallKind::Zero,
+                        _ => {}
+                    }
                 }
                 if self.is_tuple_struct_definition(definition, callee) {
                     return CallKind::TupleStructConstructor;

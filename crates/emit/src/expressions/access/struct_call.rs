@@ -17,7 +17,9 @@ use crate::plan::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, discard,
 };
 use crate::plan::go_expression::{CompositeLayout, FunctionLiteralLayout};
-use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::values::{
+    CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
+};
 use crate::types::go_type::GoType;
 use crate::utils::is_order_sensitive;
 use syntax::program::AliasKind;
@@ -431,11 +433,15 @@ impl Planner<'_> {
     pub(crate) fn lisette_zero(&mut self, ty: &Type) -> GoExpression {
         let layout = self.value_layout(ty, SlotOrigin::Lisette);
         match (ty, &layout) {
+            // Tagged so `constant_needs_go_type` can type them where a slot needs it.
             (Type::Simple(kind), _) => match kind {
-                SimpleKind::Bool => GoExpression::literal("false".to_string()),
-                SimpleKind::String => GoExpression::literal("\"\"".to_string()),
+                SimpleKind::Bool => GoExpression::constant("false".to_string(), ConstantKind::Bool),
+                SimpleKind::String => {
+                    GoExpression::constant("\"\"".to_string(), ConstantKind::String)
+                }
                 SimpleKind::Unit => GoExpression::empty_composite("struct{}".to_string()),
-                _ => GoExpression::literal("0".to_string()),
+                // Go's `0` is an untyped *integer* constant, even for a float slot.
+                _ => GoExpression::constant("0".to_string(), ConstantKind::Int),
             },
             (
                 Type::Compound {
@@ -479,6 +485,10 @@ impl Planner<'_> {
                     length, element, ..
                 },
             ) => self.array_zero(*length, element.logical_type()),
+            (Type::Parameter(name), _) => {
+                let go_name = self.generic_go_name(name);
+                dereferenced_new(go_name.to_string())
+            }
             _ => GoExpression::empty_composite(self.use_go_type(ty)),
         }
     }

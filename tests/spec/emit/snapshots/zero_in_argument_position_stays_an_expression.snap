@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn take(n: int) -> int { n }
+  
+  fn f() -> int {
+    take(zero<int>())
+  }
+---
+package main
+
+func take(n int) int {
+	return n
+}
+
+func f() int {
+	return take(0)
+}

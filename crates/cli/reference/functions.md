@@ -65,6 +65,8 @@ Type arguments are required when inference has nothing to work with:
 let nums = Slice.new<int>()
 // !callout-right no entries to infer `K` and `V` from
 let counts = Map.new<string, int>()
+// !callout-right no argument to infer `T` from
+let start = zero<int>()
 ```
 
 ## Write permission in parameters

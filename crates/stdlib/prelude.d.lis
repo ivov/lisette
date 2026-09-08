@@ -1173,6 +1173,18 @@ type Comparable
 ///   let words = descending("pear", "apple")
 type Ordered
 
+/// Satisfied by every type whose Go zero value is also a valid Lisette value.
+/// Not satisfied by `Ref<T>`, `Map<K, V>`, `Channel<T>`, interfaces, function
+/// types, or an enum with no `#[default]` variant.
+///
+/// Example:
+///   fn parse_json<T: Zeroable>(data: Slice<byte>) -> Result<T, error> {
+///     let mut result = zero<T>()
+///     json.Unmarshal(data, &result)?
+///     Ok(result)
+///   }
+type Zeroable
+
 /// Equivalent to Go's `...T`.
 ///
 /// Example:
@@ -1273,6 +1285,14 @@ interface error {
 ///   // !callout-right `Some(n)` if the expected type, else `None`
 ///   let n = assert_type<int>(value)?
 fn assert_type<T>(value: Unknown) -> Option<T>
+
+/// Returns the zero value of `T` — `0`, `""`, `false`, `None`, an empty
+/// struct, or the Go zero of a type parameter.
+///
+/// Example:
+///   // !callout-right `0`
+///   let n = zero<int>()
+fn zero<T: Zeroable>() -> T
 
 /// Creates a complex number from real and imaginary parts.
 ///

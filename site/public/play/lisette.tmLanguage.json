@@ -213,7 +213,7 @@
         },
         {
           "name": "support.function.builtin.lisette",
-          "match": "\\b(panic|assert_type)\\b"
+          "match": "\\b(panic|assert_type|zero)\\b"
         },
         {
           "name": "constant.language.lisette",

@@ -39,6 +39,16 @@ impl InferCtx<'_> {
         }
     }
 
+    /// Re-check a call's bound once inference settles. `Zeroable`'s argument is
+    /// fixed by the expected type, so it is still a variable at the call.
+    pub(crate) fn register_deferred_call_obligation(&mut self, bound: &Bound, span: Span) {
+        self.register_generic_bound_obligation(
+            applied_function_bound(bound),
+            &GenericBoundOrigin::Call,
+            span,
+        );
+    }
+
     fn register_generic_bound_obligation(
         &mut self,
         bound: AppliedGenericBound,

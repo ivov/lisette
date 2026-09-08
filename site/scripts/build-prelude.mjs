@@ -137,8 +137,8 @@ const PAGES = [
     description: "The functions callable without an import",
     noLink: true,
     sections: [],
-    functions: ["assert_type", "complex", "imaginary", "max", "min", "panic", "real"],
-    order: ["assert_type", "complex", "imaginary", "max", "min", "panic", "real"],
+    functions: ["assert_type", "complex", "imaginary", "max", "min", "panic", "real", "zero"],
+    order: ["assert_type", "complex", "imaginary", "max", "min", "panic", "real", "zero"],
   },
   {
     slug: "types",
@@ -151,9 +151,9 @@ const PAGES = [
   {
     slug: "constraints",
     title: "Constraints",
-    description: "The two markers usable as type-parameter bounds",
+    description: "The three markers usable as type-parameter bounds",
     noLink: true,
-    sections: ["Comparable", "Ordered"],
+    sections: ["Comparable", "Ordered", "Zeroable"],
   },
 ];
 

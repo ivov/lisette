@@ -1,4 +1,5 @@
 use crate::checker::EnvResolve;
+use crate::checker::infer::BuiltinBound;
 use crate::facts::GenericCallCheck;
 use crate::facts::SliceMakeCheck;
 use ecow::EcoString;
@@ -1338,6 +1339,9 @@ impl InferCtx<'_> {
             let resolved_ty = bound.generic.resolve_in(&self.env);
 
             if resolved_ty.is_variable() {
+                if self.builtin_bound(bound) == Some(BuiltinBound::Zeroable) {
+                    self.register_deferred_call_obligation(bound, *fallback_span);
+                }
                 continue;
             }
 

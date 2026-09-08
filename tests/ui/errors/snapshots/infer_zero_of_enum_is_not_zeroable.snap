@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `Color` has no zero value
+   ╭─[test.lis:5:11]
+ 4 │ fn test() {
+ 5 │   let c = zero<Color>()
+   ·           ──────┬──────
+   ·                 ╰── `Color` does not satisfy `Zeroable`
+ 6 │ }
+   ╰────
+  help: `Color` is an enum with no variant marked `#[default]`, so it has no zero value. Mark the variant that should be the zero, or build the value explicitly · code: [infer.not_zeroable_bound]
