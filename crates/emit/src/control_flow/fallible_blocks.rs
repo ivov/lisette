@@ -5,6 +5,7 @@ use crate::abi::transition;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement, define};
 use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::placement::is_unit_call;
@@ -15,8 +16,6 @@ use syntax::types::Type;
 impl Planner<'_> {
     /// `try { ... }` → `result := func() T { ... }()`; value is the bound result var.
     pub(crate) fn lower_try_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
-        self.require_stdlib();
-
         let return_ctx = self.return_ctx();
         let ty = self.facts.peel_alias(ty);
         let effective_ty = resolve_fallible_block_type(items, &ty, Some(&return_ctx));
@@ -160,7 +159,6 @@ impl Planner<'_> {
             };
             statements.push(transition::multi_value_return(values));
         } else {
-            self.require_stdlib();
             let err_arg = err_arg.map(|value| {
                 self.convert_error_to_return_context(&mut statements, value, fallible)
             });
@@ -175,8 +173,6 @@ impl Planner<'_> {
 
     /// `recover { ... }` → `result := lisette.RecoverBlock(func() T { ... })`.
     pub(crate) fn lower_recover_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
-        self.require_stdlib();
-
         let return_ctx = self.return_ctx();
         let ty = self.facts.peel_alias(ty);
         let effective_ty = resolve_fallible_block_type(items, &ty, Some(&return_ctx));
@@ -197,7 +193,7 @@ impl Planner<'_> {
         let setup = vec![define(
             result_var.clone(),
             GoExpression::call(
-                GoExpression::name("lisette.RecoverBlock".to_string()),
+                GoExpression::generated(GeneratedPackage::Prelude, "RecoverBlock"),
                 vec![GoExpression::function_literal(
                     String::new(),
                     inner_ty_str,

@@ -29,34 +29,22 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
         if let Some(BindingValue::InlineExpr(expr)) = self.scope.resolve_identifier_binding(value) {
-            let expression = expr.expression().clone();
-            let refs = expr.refs().to_vec();
-            for go_name in &refs {
-                self.scope.record_go_use(go_name);
-            }
-            return expression;
+            return expr.expression().clone();
         }
         let bound_go_name = self
             .scope
             .resolve_binding_go_name(value)
             .map(str::to_string);
-        if let Some(go_name) = &bound_go_name {
-            self.scope.record_go_use(go_name);
-        }
         match self.classify_identifier(value, ty, ctx) {
             IdentifierKind::UnitValue => GoExpression::empty_composite("struct{}".to_string()),
             IdentifierKind::PublicFunction { capitalized } => GoExpression::name(capitalized),
             IdentifierKind::UnitConstructor { name, type_args } => GoExpression::call(
-                GoExpression::instantiation(
-                    GoExpression::name(self.resolve_go_name(&name, None, false)),
-                    type_args,
-                ),
+                GoExpression::instantiation(self.resolve_go_name(&name, None, false), type_args),
                 Vec::new(),
             ),
-            IdentifierKind::ConstructorFunction { name, type_args } => GoExpression::instantiation(
-                GoExpression::name(self.resolve_go_name(&name, None, false)),
-                type_args,
-            ),
+            IdentifierKind::ConstructorFunction { name, type_args } => {
+                GoExpression::instantiation(self.resolve_go_name(&name, None, false), type_args)
+            }
             IdentifierKind::Regular { name } => {
                 if let Some(expression) = self.try_emit_method_expression(&name, ty) {
                     return expression;
@@ -66,9 +54,9 @@ impl Planner<'_> {
                 if !ctx.is_callee()
                     && let Some(type_args) = self.format_generic_value_type_args(&name, ty)
                 {
-                    return GoExpression::instantiation(GoExpression::name(go_name), type_args);
+                    return GoExpression::instantiation(go_name, type_args);
                 }
-                GoExpression::name(go_name)
+                go_name
             }
         }
     }
@@ -319,7 +307,7 @@ impl Planner<'_> {
     pub(crate) fn try_resolve_cross_package_static_method(
         &mut self,
         qualified: Option<&str>,
-    ) -> Option<String> {
+    ) -> Option<GoExpression> {
         let id = qualified?;
         let package_name = self.facts.package_for_qualified_name(id)?.to_string();
         if self.facts.is_current_package(&package_name) {

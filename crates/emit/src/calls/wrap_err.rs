@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::literals::convert_escape_sequences;
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::{Expression, FormatStringPart, Literal};
@@ -123,11 +124,13 @@ impl Planner<'_> {
         error: GoExpression,
     ) -> GoExpression {
         messages.iter().fold(error, |error, message| {
-            self.require_fmt();
             let mut args = vec![GoExpression::literal(format!("\"{}: %w\"", message.format))];
             args.extend(message.args.iter().cloned());
             args.push(error);
-            GoExpression::call(GoExpression::name("fmt.Errorf".to_string()), args)
+            GoExpression::call(
+                GoExpression::generated(GeneratedPackage::Fmt, "Errorf"),
+                args,
+            )
         })
     }
 }

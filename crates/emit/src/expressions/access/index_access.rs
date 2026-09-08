@@ -44,16 +44,11 @@ impl Planner<'_> {
                 "base",
             );
             let effect = sequenced.effect;
-            let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
             let mut values = sequenced.values.into_iter();
             let base = values.next().expect("range index has a base");
             let range = values.next().expect("range index has a range");
             let value = range_var_slice(base, &range, &range_kind, needs_cap);
-            return ValuePlan::computed(
-                sequenced.setup,
-                value.with_deferred_evaluation(contains_deferred_evaluation),
-                effect,
-            );
+            return ValuePlan::computed(sequenced.setup, value, effect);
         }
 
         self.sequence_indexed_access(expression, base_staged, index, "base")
@@ -142,10 +137,7 @@ impl Planner<'_> {
             );
         }
 
-        if end_value
-            .as_ref()
-            .is_none_or(GoExpression::contains_deferred_evaluation)
-        {
+        if end_value.as_ref().is_none_or(GoExpression::does_work) {
             let base_expr = expression.deref_inner().unwrap_or(expression);
             if is_order_sensitive(base_expr) {
                 base = GoExpression::name(self.hoist_tmp_value_statement(&mut setup, "base", base));

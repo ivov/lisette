@@ -1,3 +1,4 @@
+use crate::plan::bodies::GoUses;
 use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, UnaryOperator};
 use syntax::types::Type;
 
@@ -9,7 +10,7 @@ use crate::patterns::binding_emit::tree_binding_statements;
 use crate::patterns::decision_tree::{
     ChainTest, Decision, PatternBinding, SubjectRoot, SwitchBranch,
     SwitchKind as PatternSwitchKind, SwitchShape, compile_expanded_arms, decision_is_exhaustive,
-    expand_or_patterns, label_expression, render_condition, tree_has_unguarded_terminal,
+    expand_or_patterns, render_condition, tree_has_unguarded_terminal,
 };
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
@@ -179,10 +180,6 @@ impl MatchSubject {
             Self::Elements(names) => SubjectRoot::Elements(names),
         }
     }
-
-    fn names(&self) -> Vec<&str> {
-        self.root().names()
-    }
 }
 
 pub(crate) struct TreePlanner<'a, 'e> {
@@ -233,12 +230,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             }
         }
         LoweredBlock { statements }
-    }
-
-    fn record_subject_use(&mut self) {
-        for name in self.subject.names().to_vec() {
-            self.planner.scope.record_go_use(name);
-        }
     }
 
     fn with_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
@@ -357,9 +348,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let mut branches: Vec<ChainBranch> = Vec::with_capacity(regular_len);
         let mut last_diverges = false;
         for (test, condition) in tests[..regular_len].iter().zip(&conditions) {
-            if condition.is_some() {
-                self.record_subject_use();
-            }
             let condition = condition
                 .clone()
                 .unwrap_or_else(|| GoExpression::literal("true".to_string()));
@@ -585,7 +573,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                         }
                         continue;
                     }
-                    self.record_subject_use();
                     conditions.push(render_condition(&test.checks, self.subject.root()));
                     let flattened = self.collect_flat_cases(&test.decision, conditions, out, false);
                     conditions.pop();
@@ -608,7 +595,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 let rendered_path = path.render(self.subject.root());
                 let (cased, lifted) = split_with_default_lift(branches, fallback.as_deref());
                 for branch in cased {
-                    self.record_subject_use();
                     conditions.push(switch_branch_condition(
                         &rendered_path,
                         kind,
@@ -660,14 +646,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 continue;
             }
             let composable = binding.path.render_composable(self.subject.root());
-            self.planner.scope.bind_inline_expr(
-                &binding.lisette_name,
-                InlineExpr::new(
-                    composable,
-                    vec![self.subject.var().to_string()],
-                    binding.path.contains_deferred_evaluation(),
-                ),
-            );
+            self.planner
+                .scope
+                .bind_inline_expr(&binding.lisette_name, InlineExpr::new(composable));
         }
     }
 
@@ -753,7 +734,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let rendered_path = path.render(self.subject.root());
         match shape {
             SwitchShape::TypeSwitch => {
-                self.record_subject_use();
                 let plan = self.lower_type_switch(rendered_path, branches, fallback, ctx.arm_place);
                 let body_diverges =
                     capture_diverge(vec![LoweredStatement::Switch(plan)], statements);
@@ -762,11 +742,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             SwitchShape::Bool => {
                 let true_branch = branches
                     .iter()
-                    .find(|branch| branch.case_label == "true")
+                    .find(|branch| branch.case_label.as_str() == "true")
                     .expect("Bool shape requires a true-labeled branch");
                 let false_branch = branches
                     .iter()
-                    .find(|branch| branch.case_label == "false")
+                    .find(|branch| branch.case_label.as_str() == "false")
                     .expect("Bool shape requires a false-labeled branch");
                 self.walk_condition_branch(
                     statements,
@@ -780,7 +760,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 let condition = GoExpression::binary(
                     render_switch_expression(rendered_path, kind),
                     "==",
-                    label_expression(&branches[0].case_label),
+                    branches[0].case_label.clone(),
                 );
                 self.walk_condition_branch(
                     statements,
@@ -803,12 +783,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 let condition = GoExpression::binary(
                     render_switch_expression(rendered_path, kind),
                     "==",
-                    label_expression(&branch.case_label),
+                    branch.case_label.clone(),
                 );
                 self.walk_condition_branch(statements, condition, &branch.decision, fallback, ctx);
             }
             SwitchShape::Multi => {
-                self.record_subject_use();
                 let expr = render_switch_expression(rendered_path, kind);
                 let plan = self.lower_value_switch(expr, branches, fallback, ctx.arm_place);
                 let body_diverges =
@@ -826,7 +805,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         else_branch: &Decision,
         ctx: &WalkCtx,
     ) {
-        self.record_subject_use();
         let inner = WalkCtx::switch_case(ctx.arm_place);
         let then_statements = self.with_scope(|this| {
             this.planner.scope.establish_condition(condition.rendered());
@@ -983,18 +961,23 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let arms = self.arms;
         let subject_ty = self.subject_ty.clone();
         let base = subject.rendered();
-        let ((case_plans, default_block), used) = self.planner.capture_go_uses(|planner| {
-            let mut nested =
-                TreePlanner::new(planner, arms, MatchSubject::Var(base.clone()), subject_ty);
-            let case_plans = nested.lower_switch_cases(regular, place, None);
-            let default_block = nested.lower_switch_default(default, place);
-            (case_plans, default_block)
-        });
+        let mut nested = TreePlanner::new(
+            self.planner,
+            arms,
+            MatchSubject::Var(base.clone()),
+            subject_ty,
+        );
+        let case_plans = nested.lower_switch_cases(regular, place, None);
+        let default_block = nested.lower_switch_default(default, place);
 
         // Keep the `base :=` type-switch binding only when a case references it;
         // Go rejects an unused `:= base` assignment otherwise.
-        let references_base = used.contains(&base);
-        let binding = references_base.then(|| base.clone());
+        let mut used = GoUses::default();
+        used.extend_cases(&case_plans);
+        if let Some(block) = &default_block {
+            used.extend(&block.statements);
+        }
+        let binding = used.contains(&base).then(|| base.clone());
 
         SwitchStatementPlan {
             kind: SwitchKind::Type { subject, binding },
@@ -1015,7 +998,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         for branch in branches {
             // A case listing several labels establishes none of them on its own.
             let established = subject
-                .filter(|_| !branch.case_label.contains(','))
+                .filter(|_| !branch.case_label.as_str().contains(','))
                 .map(|subject| format!("{} == {}", subject, branch.case_label));
             let body = self.with_scope(|this| {
                 if let Some(condition) = established {
@@ -1026,8 +1009,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 body
             });
             let labels = match subject {
-                Some(_) => vec![label_expression(&branch.case_label)],
-                None => split_top_level_type_list(&branch.case_label)
+                Some(_) => vec![branch.case_label.clone()],
+                None => split_top_level_type_list(branch.case_label.as_str())
                     .into_iter()
                     .map(|go_type| GoExpression::type_name(go_type.to_string()))
                     .collect(),
@@ -1115,9 +1098,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
 
         let body = LoweredBlock { statements: body };
         let first_condition = &conditions[indices[0]];
-        if first_condition.is_some() {
-            self.record_subject_use();
-        }
         match first_condition {
             Some(condition) => statements.push(LoweredStatement::If(IfPlan::plain(
                 condition.clone(),
@@ -1342,15 +1322,15 @@ fn switch_branch_condition(
     rendered_path: &GoExpression,
     kind: &PatternSwitchKind,
     shape: &SwitchShape,
-    case_label: &str,
+    case_label: &GoExpression,
 ) -> GoExpression {
-    if matches!(shape, SwitchShape::Bool) && case_label == "true" {
+    if matches!(shape, SwitchShape::Bool) && case_label.as_str() == "true" {
         return wrap_if_struct_literal(rendered_path.clone());
     }
     GoExpression::binary(
         render_switch_expression(rendered_path.clone(), kind),
         "==",
-        label_expression(case_label),
+        case_label.clone(),
     )
 }
 

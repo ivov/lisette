@@ -5,7 +5,7 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::expressions::staging::SpreadSequenceOptions;
-use crate::names::go_name::is_plain_identifier;
+use crate::names::go_name::{GeneratedPackage, is_plain_identifier};
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::plan::bodies::{
     AssignForm, BreakValueAction, BreakValuePlan, ElseArm, LoopHeader, LoopTransfer, LoweredBlock,
@@ -99,7 +99,7 @@ pub(crate) fn collapse_declared_temp(statements: &mut Vec<LoweredStatement>, nam
                 || target.as_str() != name
                 || !target_capture.is_empty()
                 || !value.setup.is_empty()
-                || value.expression.contains_deferred_evaluation()
+                || value.expression.does_work()
             {
                 return;
             }
@@ -149,7 +149,7 @@ fn single_simple_assign_value(body: &LoweredBlock, name: &str) -> Option<GoExpre
     (target.as_str() == name
         && target_capture.is_empty()
         && value.setup.is_empty()
-        && !value.expression.contains_deferred_evaluation())
+        && !value.expression.does_work())
     .then(|| value.expression.clone())
 }
 
@@ -603,9 +603,7 @@ impl Planner<'_> {
         }
         let value = self.lower_value(last, ExpressionContext::value());
         let value = value.map_expression_as_computed(|setup, expression| {
-            let contains_deferred_evaluation = expression.contains_deferred_evaluation();
-            let expression = self.apply_type_coercion(setup, target_ty, last, expression);
-            expression.with_deferred_evaluation(contains_deferred_evaluation)
+            self.apply_type_coercion(setup, target_ty, last, expression)
         });
         vec![simple_assign(target, value)]
     }
@@ -654,10 +652,12 @@ impl Planner<'_> {
             };
             capture.extend(ordering.setup);
             let value = if method == "reserve" {
-                self.require_slices();
                 let mut all = vec![receiver];
                 all.extend(arguments);
-                GoExpression::call(GoExpression::name("slices.Grow".to_string()), all)
+                GoExpression::call(
+                    GoExpression::generated(GeneratedPackage::Slices, "Grow"),
+                    all,
+                )
             } else if arguments.is_empty() {
                 receiver
             } else {

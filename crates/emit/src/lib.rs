@@ -43,7 +43,8 @@ use names::go_name::GeneratedPackage;
 use names::packages::{PackageRequirements, PackageUse};
 use plan::PackagePlan;
 use plan::bodies::{LoopId, LoweredBlock, LoweredStatement, define};
-use plan::values::GoExpression;
+use plan::go_expression::GoExpressionNode;
+use plan::values::{GoExpression, ValuePlan};
 use state::adapter_registry::AdapterRegistry;
 use state::file_namespace::FileNamespace;
 use state::package_state::{FunctionEmissionContext, PackageState};
@@ -206,18 +207,6 @@ impl Planner<'_> {
         self.require_generated_package(GeneratedPackage::Errors);
     }
 
-    fn require_slices(&mut self) {
-        self.require_generated_package(GeneratedPackage::Slices);
-    }
-
-    fn require_strings(&mut self) {
-        self.require_generated_package(GeneratedPackage::Strings);
-    }
-
-    fn require_maps(&mut self) {
-        self.require_generated_package(GeneratedPackage::Maps);
-    }
-
     fn require_json(&mut self) {
         self.require_generated_package(GeneratedPackage::Json);
     }
@@ -249,6 +238,32 @@ impl Planner<'_> {
 
     fn require_packages(&mut self, requirements: &PackageRequirements) {
         self.namespace.absorb(requirements);
+    }
+
+    fn collect_imports(&mut self, statements: &[LoweredStatement]) {
+        let namespace = &mut self.namespace;
+        for statement in statements {
+            statement.visit_expressions(&mut |node| require_qualified(namespace, node));
+        }
+    }
+
+    fn collect_value_imports(&mut self, value: &ValuePlan) {
+        let namespace = &mut self.namespace;
+        value.visit_expressions(&mut |node| require_qualified(namespace, node));
+    }
+
+    fn render_expression(&mut self, expression: &GoExpression) -> String {
+        let namespace = &mut self.namespace;
+        expression
+            .node()
+            .visit(&mut |node| require_qualified(namespace, node));
+        expression.rendered()
+    }
+}
+
+fn require_qualified(namespace: &mut FileNamespace, node: &GoExpressionNode) {
+    if let GoExpressionNode::Qualified { package, .. } = node {
+        namespace.require(package.clone());
     }
 }
 
@@ -551,13 +566,6 @@ impl<'a> Planner<'a> {
             self.scope.deactivate_assign_target(target);
         }
         result
-    }
-
-    fn capture_go_uses<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> (R, HashSet<String>) {
-        self.scope.enter_use_region();
-        let result = f(self);
-        let uses = self.scope.exit_use_region();
-        (result, uses)
     }
 
     fn fresh_var(&mut self, hint: Option<&str>) -> String {

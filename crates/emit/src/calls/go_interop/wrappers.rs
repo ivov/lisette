@@ -4,17 +4,19 @@ use crate::abi::coercion::{LayoutBridge, resolve_layout_bridge};
 use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::abi::transition::multi_value_return;
 use crate::control_flow::fallible::{
-    Fallible, FalliblePlanner, PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR, generic_call,
+    Fallible, FalliblePlanner, PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR, prelude_call,
 };
 use crate::control_flow::propagation::plain_return;
 use crate::is_order_sensitive;
 use crate::names::go_name;
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, assign, define, define_many,
     expression_statement,
 };
 use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::values::GoExpression;
+use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::{FunctionParameter, Type};
@@ -29,7 +31,7 @@ pub(crate) fn non_nil(value: GoExpression) -> GoExpression {
 
 pub(crate) fn is_nil_interface(value: GoExpression) -> GoExpression {
     GoExpression::call(
-        GoExpression::name("lisette.IsNilInterface".to_string()),
+        GoExpression::generated(GeneratedPackage::Prelude, "IsNilInterface"),
         vec![value],
     )
 }
@@ -55,10 +57,6 @@ impl NilGuard {
             NilGuard::Pointer => non_nil(value),
             NilGuard::Interface => GoExpression::unary("!", is_nil_interface(value)),
         }
-    }
-
-    pub(crate) fn is_interface(self) -> bool {
-        matches!(self, NilGuard::Interface)
     }
 }
 
@@ -225,7 +223,6 @@ impl Planner<'_> {
             CallableReturnAbi::Option(OptionReturnAbi::Nullable) => {
                 let raw = self.hoist_tmp_value_statement(statements, "raw", call);
                 let condition = if self.is_interface_option(source.result.logical_type()) {
-                    self.require_stdlib();
                     is_nil_interface(GoExpression::name(raw.clone()))
                 } else {
                     is_nil(GoExpression::name(raw.clone()))
@@ -427,7 +424,6 @@ impl Planner<'_> {
         let err_ty = partial_ty.err_type();
         let ok_ty_str = self.use_go_type(&ok_ty);
         let err_ty_str = self.use_go_type(&err_ty);
-        let pkg = go_name::GO_STDLIB_PKG;
 
         let mut statements = Vec::new();
         let (err_var, val_value) = self.push_go_returns(&mut statements, call, &ok_ty, layout);
@@ -436,12 +432,15 @@ impl Planner<'_> {
         let nil_check = self.partial_ok_nil_check(&ok_ty, val());
 
         let type_params = format!("[{}, {}]", ok_ty_str, err_ty_str);
-        let result_ty_str = format!("{pkg}.Partial{type_params}");
+        let result_ty_str = self.use_rendered_go_type(GoType::stdlib(format!(
+            "{}.Partial{type_params}",
+            go_name::GO_STDLIB_PKG
+        )));
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
 
         let (mut both_setup, both_value) = self.plan_optional_payload_bridge(val(), payload_bridge);
-        let both = generic_call(
+        let both = prelude_call(
             PARTIAL_BOTH_CTOR,
             type_params.clone(),
             vec![both_value, err()],
@@ -454,7 +453,7 @@ impl Planner<'_> {
         let (mut ok_setup, ok_value) = self.plan_optional_payload_bridge(val(), payload_bridge);
         ok_setup.push(leaf_statement(
             &sink,
-            generic_call(PARTIAL_OK_CTOR, type_params.clone(), vec![ok_value]),
+            prelude_call(PARTIAL_OK_CTOR, type_params.clone(), vec![ok_value]),
         ));
         let ok_body = LoweredBlock {
             statements: ok_setup,
@@ -465,7 +464,7 @@ impl Planner<'_> {
                 check,
                 leaf_block(
                     &sink,
-                    generic_call(PARTIAL_ERR_CTOR, type_params, vec![err()]),
+                    prelude_call(PARTIAL_ERR_CTOR, type_params, vec![err()]),
                 ),
                 ElseArm::from_body(both_body, false),
             );
@@ -509,9 +508,6 @@ impl Planner<'_> {
         value: GoExpression,
     ) -> Option<GoExpression> {
         let guard = self.partial_ok_nil_guard(ok_ty)?;
-        if guard.is_interface() {
-            self.require_stdlib();
-        }
         Some(guard.is_nil(value))
     }
 
@@ -590,7 +586,6 @@ impl Planner<'_> {
             } else {
                 is_nil(nil_check)
             };
-            self.require_errors();
             let nil_err = {
                 let mut fe = FalliblePlanner::new(self, &fallible);
                 fe.emit_failure(Some(unexpected_nil_error()))
@@ -742,8 +737,6 @@ impl Planner<'_> {
         expression: &Expression,
         abi: &CallableAbi,
     ) -> GoExpression {
-        self.require_stdlib();
-
         let (return_type, param_strs, call) = self
             .wrapper_call_parts(setup, expression)
             .expect("expected function type");
@@ -792,8 +785,6 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
     ) -> GoExpression {
-        self.require_stdlib();
-
         let (return_type, param_strs, call) = self
             .wrapper_call_parts(setup, expression)
             .expect("expected function type");
@@ -858,7 +849,7 @@ impl Planner<'_> {
 
 pub(crate) fn unexpected_nil_error() -> GoExpression {
     GoExpression::call(
-        GoExpression::name("errors.New".to_string()),
+        GoExpression::generated(GeneratedPackage::Errors, "New"),
         vec![GoExpression::literal("\"unexpected nil\"".to_string())],
     )
 }

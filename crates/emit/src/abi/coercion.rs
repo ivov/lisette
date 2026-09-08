@@ -136,12 +136,10 @@ impl CoercionPlan {
             Self::Identity => value,
             Self::WrapAsInterface(plan) => {
                 let adapter_name = planner.ensure_adapter_type(plan);
-                let deferred = value.contains_deferred_evaluation();
                 GoExpression::composite(
                     Some(adapter_name),
-                    vec![(Some("inner".to_string()), value)],
+                    vec![(Some(GoExpression::name("inner".to_string())), value)],
                     CompositeLayout::Inline { padded: false },
-                    deferred,
                 )
             }
             Self::WrapNewtype { ty } => {

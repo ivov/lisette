@@ -50,10 +50,12 @@ impl Planner<'_> {
 
         let expression_ty = expression.get_type();
 
-        let base_plan = if let Some(package) = expression_ty.as_import_namespace() {
-            ValuePlan::captured(Vec::new(), self.require_package_import(package))
-        } else {
-            self.plan_coerced_expression(expression, receiver_coercion, ctx)
+        let package = expression_ty
+            .as_import_namespace()
+            .map(|package| self.package_use_for_package(package));
+        let base_plan = match &package {
+            Some(package) => ValuePlan::captured(Vec::new(), package.qualifier().to_string()),
+            None => self.plan_coerced_expression(expression, receiver_coercion, ctx),
         };
         let effect = base_plan.evaluation.effect;
         let stability = if reads_value_member(
@@ -71,23 +73,10 @@ impl Planner<'_> {
             expression: base,
             ..
         } = base_plan;
-        let base_contains_deferred_evaluation = base.contains_deferred_evaluation();
-
         if let Some(member_access) =
             self.try_emit_tuple_member_dot(&base, &expression_ty, member, dot_access_kind)
         {
-            let is_newtype_conversion = matches!(
-                dot_access_kind,
-                Some(SemanticDotKind::TupleStructField { is_newtype: true })
-            );
-            return ValuePlan::computed(
-                setup,
-                member_access.with_deferred_evaluation(
-                    base_contains_deferred_evaluation || is_newtype_conversion,
-                ),
-                effect,
-            )
-            .with_stability(stability);
+            return ValuePlan::computed(setup, member_access, effect).with_stability(stability);
         }
 
         let is_exported =
@@ -111,7 +100,10 @@ impl Planner<'_> {
             return ValuePlan::computed(setup, wrapped, effect);
         }
 
-        let selector = GoExpression::selector(base, field);
+        let selector = match package {
+            Some(package) => GoExpression::qualified(package, field),
+            None => GoExpression::selector(base, field),
+        };
         let expression =
             self.append_cross_package_type_args(selector, &expression_ty, member, result_ty, ctx);
         ValuePlan::computed(setup, expression, effect).with_stability(stability)

@@ -3,6 +3,9 @@ use std::borrow::Cow;
 use syntax::go_names::ENUM_TAG_FIELD;
 use syntax::types::Type;
 
+use crate::names::packages::PackageUse;
+use crate::plan::values::GoExpression;
+
 pub(crate) const GO_IMPORT_PREFIX: &str = "go:";
 
 pub(crate) fn is_go_import(id: &str) -> bool {
@@ -116,15 +119,15 @@ pub(crate) fn sanitize_package_name(name: &str) -> Cow<'_, str> {
 }
 
 pub(crate) struct ResolvedName {
-    pub(crate) name: String,
-    pub(crate) package: Option<GeneratedPackage>,
+    name: String,
+    package: Option<PackageUse>,
 }
 
 impl ResolvedName {
     fn stdlib(name: String) -> Self {
         Self {
             name,
-            package: Some(GeneratedPackage::Prelude),
+            package: Some(PackageUse::generated(GeneratedPackage::Prelude)),
         }
     }
 
@@ -132,6 +135,20 @@ impl ResolvedName {
         Self {
             name,
             package: None,
+        }
+    }
+
+    fn foreign(name: String, package: PackageUse) -> Self {
+        Self {
+            name,
+            package: Some(package),
+        }
+    }
+
+    pub(crate) fn into_expression(self) -> GoExpression {
+        match self.package {
+            Some(package) => GoExpression::qualified(package, self.name),
+            None => GoExpression::name(self.name),
         }
     }
 }
@@ -146,7 +163,7 @@ impl ResolvedName {
 pub(crate) fn resolve(name: &str) -> ResolvedName {
     if let Some(rest) = name.strip_prefix(PRELUDE_PREFIX) {
         let go_name: String = rest.split('.').map(snake_to_camel).collect();
-        ResolvedName::stdlib(format!("{}.{}", GO_STDLIB_PKG, go_name))
+        ResolvedName::stdlib(go_name)
     } else {
         ResolvedName::local(escape_reserved(&name.replace('.', "_")).into_owned())
     }
@@ -157,13 +174,13 @@ pub(crate) fn variant(
     ty: &Type,
     enum_package: &str,
     current_package: &str,
-    package_alias: Option<&str>,
+    package: Option<PackageUse>,
 ) -> ResolvedName {
     let Type::Nominal { id, .. } = ty else {
         return ResolvedName::local(identifier.replace('.', "_"));
     };
 
-    variant_by_id(identifier, id, enum_package, current_package, package_alias)
+    variant_by_id(identifier, id, enum_package, current_package, package)
 }
 
 pub(crate) fn variant_by_id(
@@ -171,19 +188,21 @@ pub(crate) fn variant_by_id(
     enum_id: &str,
     enum_package: &str,
     current_package: &str,
-    package_alias: Option<&str>,
+    package: Option<PackageUse>,
 ) -> ResolvedName {
     let is_prelude = enum_id.starts_with(PRELUDE_PREFIX);
     let enum_name = unqualified_name(enum_id);
     let variant_name = unqualified_name(identifier);
 
     if is_prelude {
-        ResolvedName::stdlib(format!("{}.{enum_name}{variant_name}", GO_STDLIB_PKG))
+        ResolvedName::stdlib(format!("{enum_name}{variant_name}"))
     } else {
         let base = enum_tag_constant(enum_name, variant_name);
         if enum_package != current_package {
-            let pkg = package_alias.unwrap_or_else(|| go_package_name(enum_package));
-            ResolvedName::local(format!("{pkg}.{base}"))
+            match package {
+                Some(package) => ResolvedName::foreign(base, package),
+                None => ResolvedName::local(format!("{}.{base}", go_package_name(enum_package))),
+            }
         } else {
             ResolvedName::local(base)
         }
@@ -318,7 +337,7 @@ pub(crate) fn qualify_method(
     method: &str,
     current_package: &str,
     is_public: bool,
-    package_alias: Option<&str>,
+    package_use: Option<PackageUse>,
 ) -> ResolvedName {
     let Some(package) = package else {
         let method_name = if is_public {
@@ -330,12 +349,7 @@ pub(crate) fn qualify_method(
     };
 
     if package == PRELUDE_PACKAGE {
-        ResolvedName::stdlib(format!(
-            "{}.{}{}",
-            GO_STDLIB_PKG,
-            type_name,
-            snake_to_camel(method)
-        ))
+        ResolvedName::stdlib(format!("{}{}", type_name, snake_to_camel(method)))
     } else if package == current_package {
         let method_name = if is_public {
             snake_to_camel(method)
@@ -344,7 +358,10 @@ pub(crate) fn qualify_method(
         };
         ResolvedName::local(format!("{}_{}", type_name, method_name))
     } else {
-        let pkg = package_alias.unwrap_or_else(|| go_package_name(package));
-        ResolvedName::local(format!("{}.{}_{}", pkg, type_name, snake_to_camel(method)))
+        let name = format!("{}_{}", type_name, snake_to_camel(method));
+        match package_use {
+            Some(package_use) => ResolvedName::foreign(name, package_use),
+            None => ResolvedName::local(format!("{}.{name}", go_package_name(package))),
+        }
     }
 }

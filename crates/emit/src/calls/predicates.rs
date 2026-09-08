@@ -118,7 +118,7 @@ impl Planner<'_> {
         debug_assert!(condition.initializer.is_none());
         Some(ValuePlan::plain_call(
             setup,
-            condition.condition.with_deferred_evaluation(true),
+            condition.condition,
             EvaluationEffect::EffectfulCall,
         ))
     }

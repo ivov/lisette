@@ -160,7 +160,6 @@ impl Planner<'_> {
                 LoweredBlock { statements },
                 FunctionLiteralLayout::MultiLine,
             )
-            .with_deferred_evaluation(true)
         };
 
         ValuePlan::computed(
@@ -247,11 +246,7 @@ impl Planner<'_> {
                 } else {
                     negated
                 };
-                return ValuePlan::computed(
-                    setup,
-                    negated.with_deferred_evaluation(true),
-                    EvaluationEffect::EffectfulCall,
-                );
+                return ValuePlan::computed(setup, negated, EvaluationEffect::EffectfulCall);
             }
         }
 

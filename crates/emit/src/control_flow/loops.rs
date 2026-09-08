@@ -1,7 +1,9 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
+use crate::names::go_name::GeneratedPackage;
 use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
+use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{LoopHeader, LoweredBlock, LoweredStatement, define, directed, discard};
 use crate::plan::values::{CaptureBoundary, GoExpression};
 use crate::types::native::NativeGoType;
@@ -209,9 +211,8 @@ impl Planner<'_> {
             .native_shape(&iterable_ty)
             .is_some_and(|shape| matches!(shape, NativeGoType::Channel | NativeGoType::Receiver));
         if is_channel {
-            self.require_stdlib();
             iter_expression = GoExpression::call(
-                GoExpression::name("lisette.ChannelRange".to_string()),
+                GoExpression::generated(GeneratedPackage::Prelude, "ChannelRange"),
                 vec![iter_expression],
             );
         }
@@ -330,36 +331,19 @@ impl Planner<'_> {
             iterable: iter_expression,
         };
 
-        let ((mut bindings, lowered_body), used) = self.capture_go_uses(|this| {
-            let key_statements = this.lower_irrefutable_pattern_site(
-                PatternSubject::for_value(key_var.clone()),
-                first,
-                first_ty,
-            );
-            let key_block = LoweredBlock {
-                statements: key_statements,
-            };
-            if !key_block.renders_empty() {
-                this.scope.record_go_use(&key_var);
-            }
-            let value_statements = this.lower_irrefutable_pattern_site(
-                PatternSubject::for_value(value_var.clone()),
-                second,
-                second_ty,
-            );
-            let value_block = LoweredBlock {
-                statements: value_statements,
-            };
-            if !value_block.renders_empty() {
-                this.scope.record_go_use(&value_var);
-            }
-            let mut bindings = key_block.statements;
-            bindings.extend(value_block.statements);
-            (bindings, this.lower_block_as_body(body))
-        });
+        let mut bindings = self.lower_irrefutable_pattern_site(
+            PatternSubject::for_value(key_var.clone()),
+            first,
+            first_ty,
+        );
+        bindings.extend(self.lower_irrefutable_pattern_site(
+            PatternSubject::for_value(value_var.clone()),
+            second,
+            second_ty,
+        ));
+        bindings.extend(self.lower_block_as_body(body).statements);
 
-        bindings.extend(lowered_body.statements);
-
+        let used = GoUses::of(&bindings);
         let references_value = used.contains(&value_var);
         let references_key = used.contains(&key_var);
 
@@ -397,24 +381,14 @@ impl Planner<'_> {
                 } else {
                     range_header("_", Some(&item_var), iter_expression)
                 };
-                let ((mut bindings, lowered_body), used) = this.capture_go_uses(|this| {
-                    let binding_statements = this.lower_irrefutable_pattern_site(
-                        PatternSubject::for_value(item_var.clone()),
-                        &binding.pattern,
-                        &binding.ty,
-                    );
-                    let binding_block = LoweredBlock {
-                        statements: binding_statements,
-                    };
-                    if !binding_block.renders_empty() {
-                        this.scope.record_go_use(&item_var);
-                    }
-                    (binding_block.statements, this.lower_block_as_body(body))
-                });
+                let mut bindings = this.lower_irrefutable_pattern_site(
+                    PatternSubject::for_value(item_var.clone()),
+                    &binding.pattern,
+                    &binding.ty,
+                );
+                bindings.extend(this.lower_block_as_body(body).statements);
 
-                bindings.extend(lowered_body.statements);
-
-                let references_item = used.contains(&item_var);
+                let references_item = GoUses::of(&bindings).contains(&item_var);
 
                 let mut statements = Vec::new();
                 if !references_item {

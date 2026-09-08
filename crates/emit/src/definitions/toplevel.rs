@@ -107,6 +107,7 @@ impl Planner<'_> {
         ty: &Type,
     ) -> String {
         let plan = self.build_const_plan(identifier, expression, ty, ConstScope::Package);
+        self.collect_value_imports(&plan.value);
         let mut out = String::new();
         Renderer.render_const_declaration(&mut out, &plan);
         out.trim_end_matches('\n').to_string()

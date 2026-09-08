@@ -26,7 +26,6 @@ pub(crate) fn apply_root_assertion<'s>(
     let [go_type] = assertion.go_types.as_slice() else {
         unreachable!("multi-type root assertions only reach match destructure paths")
     };
-    planner.scope.record_go_use(subject);
     let expression =
         GoExpression::type_assertion(GoExpression::name(subject.to_string()), go_type.clone());
     let var = planner.hoist_tmp_value_statement(statements, "asserted", expression);
@@ -44,7 +43,6 @@ pub(crate) fn apply_refutable_root_assertion<'s>(
     let Some(assertion) = info.root_assertion.as_ref() else {
         return (Cow::Borrowed(subject), None);
     };
-    planner.scope.record_go_use(subject);
     let needs_asserted = info.requires_asserted_subject();
     let assertion_of = |go_type: &String| {
         GoExpression::type_assertion(GoExpression::name(subject.to_string()), go_type.clone())
@@ -130,18 +128,11 @@ pub(crate) fn tree_binding_statements(
             let composable = binding
                 .path
                 .render_composable(SubjectRoot::Var(subject_var));
-            planner.scope.bind_inline_expr(
-                &binding.lisette_name,
-                InlineExpr::new(
-                    composable,
-                    vec![subject_var.to_string()],
-                    binding.path.contains_deferred_evaluation(),
-                ),
-            );
+            planner
+                .scope
+                .bind_inline_expr(&binding.lisette_name, InlineExpr::new(composable));
             continue;
         }
-
-        planner.scope.record_go_use(subject_var);
         let name = if planner.scope.has_binding_for_go_name(go_name) {
             let fresh = planner.fresh_var(Some(&binding.lisette_name));
             planner.scope.bind(&binding.lisette_name, &fresh);
@@ -194,7 +185,6 @@ pub(crate) fn tree_assignment_statements(
             continue;
         };
         let name = registered_name.to_string();
-        planner.scope.record_go_use(subject_var);
         let access_expression = binding.path.render(SubjectRoot::Var(subject_var));
         statements.push(assign(GoExpression::name(name), access_expression));
     }

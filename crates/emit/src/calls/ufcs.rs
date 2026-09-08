@@ -1,5 +1,5 @@
 use crate::calls::dispatch::{CallArgShape, all_type_params_inferrable};
-use crate::calls::native::{apply_inline_import, native_method_lowers_to_plain_call};
+use crate::calls::native::native_method_lowers_to_plain_call;
 use crate::plan::calls::plan_variadic_spread;
 use rustc_hash::FxHashMap as HashMap;
 
@@ -121,7 +121,7 @@ impl Planner<'_> {
             callee: &call_plan.resolved,
         };
 
-        let (setup, receiver_arg, emitted_args, arguments_contain_deferred_evaluation) =
+        let (setup, receiver_arg, emitted_args) =
             self.lower_ufcs_call_args(site, receiver, args, spread, coercion);
         let receiver_arg = match coercion {
             Some(ReceiverCoercion::AutoDeref) => GoExpression::dereference(receiver_arg),
@@ -129,19 +129,16 @@ impl Planner<'_> {
         };
 
         if let Some(inlined) =
-            try_inline_native_ufcs(self, receiver, member, &receiver_arg, &emitted_args)
+            try_inline_native_ufcs(receiver, member, &receiver_arg, &emitted_args)
         {
             let native_type = NativeGoType::from_type(&receiver.get_type())
                 .expect("inlined UFCS receiver has a native type");
             let plain_call =
                 native_method_lowers_to_plain_call(&native_type, member, emitted_args.len());
-            let deferred_evaluation =
-                plain_call || member == "is_empty" || arguments_contain_deferred_evaluation;
-            let expression = inlined.with_deferred_evaluation(deferred_evaluation);
             return if plain_call {
-                ValuePlan::plain_call(setup, expression, EvaluationEffect::EffectfulCall)
+                ValuePlan::plain_call(setup, inlined, EvaluationEffect::EffectfulCall)
             } else {
-                ValuePlan::computed(setup, expression, EvaluationEffect::EffectfulCall)
+                ValuePlan::computed(setup, inlined, EvaluationEffect::EffectfulCall)
             };
         }
 
@@ -173,7 +170,7 @@ impl Planner<'_> {
         args: &[Expression],
         spread: Option<&Expression>,
         coercion: Option<ReceiverCoercion>,
-    ) -> (Vec<LoweredStatement>, GoExpression, Vec<GoExpression>, bool) {
+    ) -> (Vec<LoweredStatement>, GoExpression, Vec<GoExpression>) {
         let UfcsCallSite { function, callee } = site;
         // The DotAccess function type curries `self` out, so its params line
         // up 1:1 with the user args. Pair each so a function-typed param
@@ -260,15 +257,9 @@ impl Planner<'_> {
                 boundary: CaptureBoundary::SiblingSequence,
             },
         );
-        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let mut all_values = sequenced.values;
         let receiver_arg = all_values.remove(0);
-        (
-            sequenced.setup,
-            receiver_arg,
-            all_values,
-            contains_deferred_evaluation,
-        )
+        (sequenced.setup, receiver_arg, all_values)
     }
 
     fn stage_ufcs_arg(
@@ -313,7 +304,7 @@ impl Planner<'_> {
             || self.method_needs_export(member);
 
         let qualified_method_name = self.qualify_method_call(qualified_name, member, is_public);
-        GoExpression::instantiation(GoExpression::name(qualified_method_name), type_args_string)
+        GoExpression::instantiation(qualified_method_name, type_args_string)
     }
 
     fn coerce_receiver_address_stage(
@@ -397,22 +388,13 @@ impl Planner<'_> {
 }
 
 fn try_inline_native_ufcs(
-    planner: &mut Planner,
     receiver: &Expression,
     member: &str,
     receiver_arg: &GoExpression,
     emitted_args: &[GoExpression],
 ) -> Option<GoExpression> {
     let native_type = NativeGoType::from_type(&receiver.get_type())?;
-    let (inlined, extra_import) = super::native::try_inline_native_method(
-        &native_type,
-        member,
-        receiver_arg,
-        emitted_args,
-        false,
-    )?;
-    apply_inline_import(planner, extra_import);
-    Some(inlined)
+    super::native::try_inline_native_method(&native_type, member, receiver_arg, emitted_args, false)
 }
 
 fn is_address_of_composite_literal(arg: Option<&Expression>) -> bool {

@@ -7,7 +7,8 @@ use crate::calls::go_interop::wrappers::{
     WrapperOutcome, WrapperTarget, is_nil, is_nil_interface, leaf_block, non_nil,
 };
 use crate::context::expression::ExpressionContext;
-use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG, generic_call};
+use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG, prelude_call};
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign,
     define_many,
@@ -20,7 +21,7 @@ fn is_some(option: GoExpression) -> GoExpression {
     GoExpression::binary(
         GoExpression::selector(option, "Tag".to_string()),
         "==",
-        GoExpression::name(OPTION_SOME_TAG.to_string()),
+        GoExpression::generated(GeneratedPackage::Prelude, OPTION_SOME_TAG),
     )
 }
 
@@ -69,14 +70,13 @@ impl Planner<'_> {
         }
         let inner = self.lower_composite_value(inner, ExpressionContext::value());
         Some(inner.map_expression_as_computed(|setup, value| {
-            let contains_deferred_evaluation = value.contains_deferred_evaluation();
             let value = if payload.is_identity() {
                 value
             } else {
                 self.plan_layout_bridge(setup, value, payload)
             };
             let Some(pointee) = pointee else {
-                return value.with_deferred_evaluation(contains_deferred_evaluation);
+                return value;
             };
             let go_type = pointee.go_type(self);
             let go_type = self.use_rendered_go_type(go_type);
@@ -88,7 +88,6 @@ impl Planner<'_> {
                 value: Some(value),
             });
             GoExpression::address_of(GoExpression::name(copy))
-                .with_deferred_evaluation(contains_deferred_evaluation)
         }))
     }
 
@@ -100,13 +99,12 @@ impl Planner<'_> {
         sentinel: i64,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
-        self.require_stdlib();
         let mut statements = Vec::new();
         let raw = self.hoist_tmp_value_statement(&mut statements, "ret", call);
         let raw = || GoExpression::name(raw.clone());
         let inner_ty_str = self.use_go_type(&option_ty.ok_type());
-        let value = generic_call(
-            "lisette.OptionFromCommaOk",
+        let value = prelude_call(
+            "OptionFromCommaOk",
             format!("[{}]", inner_ty_str),
             vec![
                 raw(),
@@ -128,7 +126,6 @@ impl Planner<'_> {
         payload_bridge: Option<&LayoutBridge>,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
-        self.require_stdlib();
         let mut statements = Vec::new();
 
         let inner_ty = option_ty.ok_type();
@@ -141,8 +138,8 @@ impl Planner<'_> {
 
         if !needs_complex {
             let inner_ty_str = self.use_go_type(&inner_ty);
-            let value = generic_call(
-                "lisette.OptionFromCommaOk",
+            let value = prelude_call(
+                "OptionFromCommaOk",
                 format!("[{}]", inner_ty_str),
                 vec![call],
             );
@@ -172,7 +169,7 @@ impl Planner<'_> {
                 .iter()
                 .map(|var| GoExpression::name(var.clone()))
                 .collect();
-            build_tuple_literal(self, values)
+            build_tuple_literal(values)
         } else {
             first_val.clone()
         };
@@ -234,7 +231,6 @@ impl Planner<'_> {
         option_ty: &Type,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
-        self.require_stdlib();
         let mut statements = Vec::new();
         let inner_ty = option_ty.ok_type();
         let inner_ty_str = self.use_go_type(&inner_ty);
@@ -243,8 +239,8 @@ impl Planner<'_> {
         } else {
             is_nil(raw_value.clone())
         };
-        let value = generic_call(
-            "lisette.OptionFromNilable",
+        let value = prelude_call(
+            "OptionFromNilable",
             format!("[{}]", inner_ty_str),
             vec![raw_value, is_nil_check],
         );
@@ -269,7 +265,6 @@ impl Planner<'_> {
             value: None,
         });
 
-        self.require_stdlib();
         let payload = some_payload(option.clone());
         let payload = if address {
             GoExpression::address_of(payload)
@@ -294,10 +289,9 @@ impl Planner<'_> {
         pointer: GoExpression,
         option_ty: &Type,
     ) -> GoExpression {
-        self.require_stdlib();
         let inner_ty_str = self.use_go_type(&option_ty.ok_type());
-        let value = generic_call(
-            "lisette.OptionFromPointer",
+        let value = prelude_call(
+            "OptionFromPointer",
             format!("[{}]", inner_ty_str),
             vec![pointer],
         );
@@ -466,7 +460,6 @@ impl Planner<'_> {
         payload_bridge: &LayoutBridge,
         pointer: bool,
     ) -> GoExpression {
-        self.require_stdlib();
         let source = self.stable_source(statements, "raw", raw_value);
         let fallible = Fallible::from_type(option_type).expect("Option type expected");
         let option_type_string = {
@@ -536,7 +529,6 @@ impl Planner<'_> {
         let target_layout: &ValueLayout = target;
         let element_bridge: &LayoutBridge = element;
         let key_bridge = key.as_deref();
-        self.require_stdlib();
         let source = self.stable_source(statements, "src", value);
         let direction = key_bridge
             .and_then(LayoutBridge::direction)

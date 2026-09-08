@@ -12,6 +12,7 @@ use crate::calls::native::{native_method_is_pure, native_method_lowers_to_plain_
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, define,
 };
@@ -401,7 +402,6 @@ impl<'a> Planner<'a> {
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "entry");
         let effect = sequenced.effect;
-        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let mut setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
 
@@ -425,13 +425,13 @@ impl<'a> Planner<'a> {
             } else {
                 coerced_value
             };
-            lowered.push((Some(coerced_key.rendered()), coerced_value));
+            lowered.push((Some(coerced_key), coerced_value));
         }
 
         let layout = CompositeLayout::for_elements(lowered.len(), widest);
         Some(ValuePlan::computed(
             setup,
-            GoExpression::composite(Some(map_ty), lowered, layout, contains_deferred_evaluation),
+            GoExpression::composite(Some(map_ty), lowered, layout),
             self.native_constructor_effect(ctx, effect),
         ))
     }
@@ -631,24 +631,9 @@ impl<'a> Planner<'a> {
         let plain_call = !matches!(origin, CallableOrigin::NativeConstructor(_))
             && native_method_lowers_to_plain_call(ctx.native_type, ctx.method, receiver_arity);
         let mut plan = if plain_call {
-            ValuePlan::plain_call(
-                result.setup,
-                result.value.with_deferred_evaluation(true),
-                effect,
-            )
+            ValuePlan::plain_call(result.setup, result.value, effect)
         } else {
-            let contains_deferred_evaluation = match ctx.method {
-                "byte_at" | "enumerate" => result.arguments_contain_deferred_evaluation,
-                "append" if receiver_arity == 0 => result.arguments_contain_deferred_evaluation,
-                _ => true,
-            };
-            ValuePlan::computed(
-                result.setup,
-                result
-                    .value
-                    .with_deferred_evaluation(contains_deferred_evaluation),
-                effect,
-            )
+            ValuePlan::computed(result.setup, result.value, effect)
         };
         if reads_fixed_length {
             plan.evaluation.stability = Stability::Fixed;
@@ -719,7 +704,6 @@ impl<'a> Planner<'a> {
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "arg");
         let effect = EvaluationEffect::PureCall.combine(sequenced.effect);
-        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let mut setup = sequenced.setup;
 
         let mut field_pairs = Vec::with_capacity(target.field_tys.len());
@@ -739,12 +723,7 @@ impl<'a> Planner<'a> {
 
         Some(ValuePlan::computed(
             setup,
-            emit_struct_literal(
-                &target.go_ty,
-                field_pairs,
-                ctx,
-                contains_deferred_evaluation,
-            ),
+            emit_struct_literal(&target.go_ty, field_pairs, ctx),
             effect,
         ))
     }
@@ -818,12 +797,11 @@ impl<'a> Planner<'a> {
             }
             None => (Vec::new(), Vec::new()),
         };
-        self.require_stdlib();
         (
             setup,
             GoExpression::call(
                 GoExpression::instantiation(
-                    GoExpression::name(format!("{}.AssertType", go_name::GO_STDLIB_PKG)),
+                    GoExpression::generated(GeneratedPackage::Prelude, "AssertType"),
                     format!("[{target_ty}]"),
                 ),
                 arguments,

@@ -12,11 +12,13 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::enum_layout;
 use crate::go_name;
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, discard,
 };
 use crate::plan::go_expression::{CompositeLayout, FunctionLiteralLayout};
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
+use crate::types::go_type::GoType;
 use crate::utils::is_order_sensitive;
 use syntax::program::AliasKind;
 use syntax::types;
@@ -26,7 +28,6 @@ struct SpreadInput<'a> {
     base: &'a Expression,
     base_staged: ValuePlan,
     field_pairs: Vec<(String, GoExpression)>,
-    fields_contain_deferred_evaluation: bool,
 }
 
 struct StructCallContext<'a> {
@@ -39,7 +40,7 @@ struct StructCallContext<'a> {
 struct EnumCallContext {
     enum_id: String,
     variant_name: String,
-    tag_constant: String,
+    tag_constant: GoExpression,
     /// Fields that need pointer wrapping (recursive types).
     pointer_fields: HashSet<String>,
 }
@@ -72,7 +73,7 @@ impl Planner<'_> {
         let tag_field = ctx.enum_ctx.as_ref().map(|e| {
             (
                 enum_layout::ENUM_TAG_FIELD.to_string(),
-                GoExpression::name(e.tag_constant.clone()),
+                e.tag_constant.clone(),
             )
         });
 
@@ -113,7 +114,6 @@ impl Planner<'_> {
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "field");
         let mut effect = sequenced.effect;
-        let fields_contain_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let mut setup = sequenced.setup;
         let emitted_values = sequenced.values;
 
@@ -167,7 +167,6 @@ impl Planner<'_> {
                     }
                     setup.push(self.lower_statement(base));
                     GoExpression::empty_composite(ctx.go_type.clone())
-                        .with_deferred_evaluation(fields_contain_deferred_evaluation)
                 } else {
                     let base_staged = self.plan_operand(base, ExpressionContext::value());
                     effect = effect.combine(base_staged.evaluation.effect);
@@ -178,7 +177,6 @@ impl Planner<'_> {
                                 base,
                                 base_staged,
                                 field_pairs,
-                                fields_contain_deferred_evaluation,
                             },
                             &ctx,
                             field_assignments,
@@ -192,28 +190,18 @@ impl Planner<'_> {
                 }
             }
             StructSpread::Autofill { .. } => match self.go_imported_newtype_zero(ty) {
-                Some(zero) => zero.with_deferred_evaluation(false),
+                Some(zero) => zero,
                 None => {
                     let mut field_pairs =
                         fields.into_iter().map(StructCallField::into_pair).collect();
                     self.append_autofills(&mut field_pairs, field_assignments, &ctx, is_go_struct);
-                    emit_struct_literal(
-                        &ctx.go_type,
-                        field_pairs,
-                        expression_ctx,
-                        fields_contain_deferred_evaluation,
-                    )
+                    emit_struct_literal(&ctx.go_type, field_pairs, expression_ctx)
                 }
             },
             StructSpread::None => {
                 let field_pairs: Vec<_> =
                     fields.into_iter().map(StructCallField::into_pair).collect();
-                emit_struct_literal(
-                    &ctx.go_type,
-                    field_pairs,
-                    expression_ctx,
-                    fields_contain_deferred_evaluation,
-                )
+                emit_struct_literal(&ctx.go_type, field_pairs, expression_ctx)
             }
         };
 
@@ -437,7 +425,7 @@ impl Planner<'_> {
                 };
                 pairs.push((go_field_name, zero));
             }
-            return emit_struct_literal(&go_ty, pairs, ExpressionContext::value(), false);
+            return emit_struct_literal(&go_ty, pairs, ExpressionContext::value());
         }
         GoExpression::empty_composite(go_ty)
     }
@@ -503,10 +491,9 @@ impl Planner<'_> {
                 .first()
                 .map(|a| self.use_go_type(a))
                 .unwrap_or_else(|| "any".to_string());
-            self.require_stdlib();
             return GoExpression::call(
                 GoExpression::instantiation(
-                    GoExpression::name(format!("{}.MakeOptionNone", go_name::GO_STDLIB_PKG)),
+                    GoExpression::generated(GeneratedPackage::Prelude, "MakeOptionNone"),
                     format!("[{inner}]"),
                 ),
                 Vec::new(),
@@ -540,7 +527,7 @@ impl Planner<'_> {
                     (go_name, self.lisette_zero(&field_ty))
                 })
                 .collect();
-            return emit_struct_literal(&go_ty, pairs, ExpressionContext::value(), false);
+            return emit_struct_literal(&go_ty, pairs, ExpressionContext::value());
         }
         if let Some(underlying) = self.facts.underlying_type(ty) {
             return self.lisette_zero(&underlying);
@@ -638,10 +625,6 @@ impl Planner<'_> {
 
         let go_type = self.compute_struct_call_go_type(name, ty, is_prelude, enum_id.is_some());
 
-        if let Some(ref id) = enum_id {
-            self.add_enum_imports_if_needed(name, id);
-        }
-
         let enum_ctx = enum_id.map(|id| self.compute_enum_call_context(name, &id));
 
         StructCallContext {
@@ -694,8 +677,9 @@ impl Planner<'_> {
                 } else {
                     go_name::snake_to_camel(type_name)
                 };
-                let pkg = self.require_package_import(&canonical);
-                return format!("{}.{}{}", pkg, member, type_args);
+                let package = self.package_use_for_package(&canonical);
+                let go_type = format!("{}.{}{}", package.qualifier(), member, type_args);
+                return self.use_rendered_go_type(GoType::with_package(go_type, package));
             }
         }
 
@@ -744,21 +728,6 @@ impl Planner<'_> {
             variant_name,
             tag_constant,
             pointer_fields,
-        }
-    }
-
-    fn add_enum_imports_if_needed(&mut self, name: &str, enum_id: &str) {
-        if let Some(enum_package) = self.facts.package_for_qualified_name(enum_id)
-            && !self.facts.is_current_package(enum_package)
-        {
-            let enum_package = enum_package.to_string();
-            self.require_package_import(&enum_package);
-        }
-
-        let parts: Vec<&str> = name.split('.').collect();
-        if parts.len() == 3 {
-            let package = self.canonical_package(parts[0]);
-            self.require_package_import(&package);
         }
     }
 
@@ -834,7 +803,6 @@ impl Planner<'_> {
             base,
             base_staged,
             mut field_pairs,
-            fields_contain_deferred_evaluation,
         } = input;
         let assigned: HashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
         let carried = self
@@ -851,12 +819,7 @@ impl Planner<'_> {
             statements.push(discard(base_value));
             return (
                 statements,
-                emit_struct_literal(
-                    &ctx.go_type,
-                    field_pairs,
-                    expression_ctx,
-                    fields_contain_deferred_evaluation,
-                ),
+                emit_struct_literal(&ctx.go_type, field_pairs, expression_ctx),
             );
         }
 
@@ -875,12 +838,7 @@ impl Planner<'_> {
         }
         (
             statements,
-            emit_struct_literal(
-                &ctx.go_type,
-                field_pairs,
-                expression_ctx,
-                fields_contain_deferred_evaluation,
-            ),
+            emit_struct_literal(&ctx.go_type, field_pairs, expression_ctx),
         )
     }
 }
@@ -953,7 +911,6 @@ pub(crate) fn emit_struct_literal(
     ty: &str,
     fields: Vec<(String, GoExpression)>,
     ctx: ExpressionContext<'_>,
-    contains_deferred_evaluation: bool,
 ) -> GoExpression {
     let layout = if fields.len() > 1 {
         CompositeLayout::MultiLine { indented: false }
@@ -964,17 +921,16 @@ pub(crate) fn emit_struct_literal(
         Some(ty.to_string()),
         fields
             .into_iter()
-            .map(|(name, value)| (Some(name), value))
+            .map(|(name, value)| (Some(GoExpression::name(name)), value))
             .collect(),
         layout,
-        contains_deferred_evaluation,
     );
 
     // Generic composite literals (`Type[Args]{...}`) need inner parens in
     // condition contexts because gofmt strips outer condition parens for
     // generics, producing invalid Go in `if`/`for`/`switch`.
     if ctx.is_condition() && ty.contains('[') {
-        GoExpression::parenthesized(literal).with_deferred_evaluation(contains_deferred_evaluation)
+        GoExpression::parenthesized(literal)
     } else {
         literal
     }

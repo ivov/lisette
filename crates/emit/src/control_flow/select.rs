@@ -3,6 +3,7 @@ use crate::context::expression::ExpressionContext;
 use crate::patterns::sites::{
     self, AnnotatedPattern, PatternSubject, TypedSubject, unwrap_some_pattern,
 };
+use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan, SelectArmPlan,
     SelectStatementPlan, assign, discard,
@@ -286,24 +287,22 @@ impl Planner<'_> {
         let (receiver_var, ok_var, then_statements) = self.with_binding_frame(|this| {
             let receiver_var = prepare_receiver(this);
             let ok_var = this.fresh_ok_var();
-            let (body_statements, used) = this.capture_go_uses(|this| {
-                if let Some(pattern) = inner_pattern {
-                    this.lower_select_receive_pattern_site(
-                        TypedSubject {
-                            var: &receiver_var,
-                            ty: &ctx.element_ty,
-                        },
-                        AnnotatedPattern { pattern },
-                        ctx.body,
-                        ctx.default_body,
-                        ctx.place,
-                    )
-                } else {
-                    this.lower_block_to_place(ctx.body, ctx.place).statements
-                }
-            });
+            let body_statements = if let Some(pattern) = inner_pattern {
+                this.lower_select_receive_pattern_site(
+                    TypedSubject {
+                        var: &receiver_var,
+                        ty: &ctx.element_ty,
+                    },
+                    AnnotatedPattern { pattern },
+                    ctx.body,
+                    ctx.default_body,
+                    ctx.place,
+                )
+            } else {
+                this.lower_block_to_place(ctx.body, ctx.place).statements
+            };
             let mut then_statements: Vec<LoweredStatement> = Vec::new();
-            if !used.contains(&receiver_var) {
+            if !GoUses::of(&body_statements).contains(&receiver_var) {
                 then_statements.push(discard(GoExpression::name(receiver_var.clone())));
             }
             then_statements.extend(body_statements);
@@ -501,27 +500,23 @@ impl Planner<'_> {
                 this.classify_receive_var_pattern(receiver_var_pattern);
             let ok_var = this.fresh_ok_var();
 
-            let (arms_plan, used) = this.capture_go_uses(|this| {
-                let some_block = this.lower_receive_some_arm(
-                    some_arm,
-                    match_arms,
-                    TypedSubject {
-                        var: &case_var,
-                        ty: element_ty,
-                    },
-                    needs_receiver_destructure,
-                    place,
-                );
-                let none_block = this.capture_scoped_block(|this| {
-                    sites::lower_none_arm_body(this, match_arms, place)
-                });
-
-                let arms_plan = build_receive_arms_plan(&ok_var, some_block, none_block);
-                if arms_plan.is_some() {
-                    this.scope.record_go_use(&ok_var);
-                }
-                arms_plan
-            });
+            let some_block = this.lower_receive_some_arm(
+                some_arm,
+                match_arms,
+                TypedSubject {
+                    var: &case_var,
+                    ty: element_ty,
+                },
+                needs_receiver_destructure,
+                place,
+            );
+            let none_block = this
+                .capture_scoped_block(|this| sites::lower_none_arm_body(this, match_arms, place));
+            let arms_plan = build_receive_arms_plan(&ok_var, some_block, none_block);
+            let mut used = GoUses::default();
+            if let Some(plan) = &arms_plan {
+                used.extend_if(plan);
+            }
 
             // Per-var discards (emitted when the body does not reference the var)
             // precede the structured body inside the `case x, ok := <-ch:` arm.
@@ -579,7 +574,6 @@ impl Planner<'_> {
 
 /// `*&x` is `x`. Any other pointer gets dereferenced.
 fn cancel_deref_of_address(channel: GoExpression) -> GoExpression {
-    let contains_deferred_evaluation = channel.contains_deferred_evaluation();
     let addressed = match channel.node() {
         GoExpressionNode::AddressOf(inner) => Some(inner.as_ref()),
         GoExpressionNode::Parenthesized(inner) => match inner.as_ref() {
@@ -589,8 +583,7 @@ fn cancel_deref_of_address(channel: GoExpression) -> GoExpression {
         _ => None,
     };
     match addressed {
-        Some(inner) => GoExpression::from_node(inner.clone())
-            .with_deferred_evaluation(contains_deferred_evaluation),
+        Some(inner) => GoExpression::from_node(inner.clone()),
         None => GoExpression::dereference(channel),
     }
 }

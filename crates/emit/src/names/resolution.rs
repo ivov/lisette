@@ -2,7 +2,8 @@ use syntax::types::unqualified_name;
 
 use crate::Planner;
 use crate::names::go_name;
-use crate::names::packages::{PackageRequirements, PackageUse};
+use crate::names::packages::PackageUse;
+use crate::plan::values::GoExpression;
 use syntax::program;
 
 impl Planner<'_> {
@@ -13,12 +14,12 @@ impl Planner<'_> {
         name: &str,
         qualified: Option<&str>,
         locally_bound: bool,
-    ) -> String {
+    ) -> GoExpression {
         if !locally_bound
             && !name.contains('.')
             && let Some(remapped) = self.package.escape_remap(name)
         {
-            return remapped.to_string();
+            return GoExpression::name(remapped.to_string());
         }
 
         if let Some(go_call) = self.try_resolve_cross_package_static_method(qualified) {
@@ -47,11 +48,7 @@ impl Planner<'_> {
             name
         };
 
-        let resolved = go_name::resolve(&name);
-        if let Some(package) = resolved.package {
-            self.require_generated_package(package);
-        }
-        resolved.name
+        go_name::resolve(&name).into_expression()
     }
 
     pub(crate) fn resolve_alias_type_name(&self, type_part: &str) -> Option<String> {
@@ -109,27 +106,6 @@ impl Planner<'_> {
             .unwrap_or_else(|| go_name::escape_reserved(lisette_name).into_owned())
     }
 
-    /// Record `package`'s Go import and return the package
-    /// qualifier exactly as the import renders it: `format_import` sanitizes
-    /// default package names and prints explicit aliases verbatim, so
-    /// references must follow the same rule.
-    pub(crate) fn record_package_import(
-        &self,
-        package: &str,
-        requirements: &mut PackageRequirements,
-    ) -> String {
-        let package = self.package_use_for_package(package);
-        let qualifier = package.qualifier().to_string();
-        requirements.require(package);
-        qualifier
-    }
-
-    /// Record a package reference in the current file namespace.
-    pub(crate) fn require_package_import(&mut self, package: &str) -> String {
-        let package = self.package_use_for_package(package);
-        self.namespace.reference(package)
-    }
-
     pub(crate) fn canonical_package(&self, package: &str) -> String {
         self.namespace
             .package_for_alias(package)
@@ -137,6 +113,7 @@ impl Planner<'_> {
             .to_string()
     }
 
+    /// The qualifier is the one the import renders: sanitized default names, aliases as written.
     pub(crate) fn package_use_for_package(&self, package: &str) -> PackageUse {
         if package == go_name::TEST_PRELUDE_PACKAGE {
             return PackageUse::generated(go_name::GeneratedPackage::TestKit);
@@ -167,50 +144,43 @@ impl Planner<'_> {
         type_id: &str,
         method: &str,
         is_public: bool,
-    ) -> String {
+    ) -> GoExpression {
         let package = self
             .facts
             .package_for_qualified_name(type_id)
             .map(str::to_string);
         let type_name = unqualified_name(type_id);
-        let computed_alias = match package.as_deref() {
-            Some(m) if self.facts.is_foreign_package(m) => Some(self.require_package_import(m)),
+        let package_use = match package.as_deref() {
+            Some(m) if self.facts.is_foreign_package(m) => Some(self.package_use_for_package(m)),
             _ => None,
         };
-        let resolved = go_name::qualify_method(
+        go_name::qualify_method(
             package.as_deref(),
             type_name,
             method,
             self.facts.current_package(),
             is_public,
-            computed_alias.as_deref(),
-        );
-        if let Some(package) = resolved.package {
-            self.require_generated_package(package);
-        }
-        resolved.name
+            package_use,
+        )
+        .into_expression()
     }
 
-    pub(crate) fn resolve_variant(&mut self, identifier: &str, enum_id: &str) -> String {
+    pub(crate) fn resolve_variant(&mut self, identifier: &str, enum_id: &str) -> GoExpression {
         let enum_package = self
             .facts
             .package_for_qualified_name(enum_id)
             .unwrap_or(enum_id);
-        let computed_alias = if self.facts.is_foreign_package(enum_package) {
-            Some(self.require_package_import(enum_package))
-        } else {
-            None
-        };
-        let resolved = go_name::variant_by_id(
+        let package_use = self
+            .facts
+            .is_foreign_package(enum_package)
+            .then(|| self.package_use_for_package(enum_package));
+        go_name::variant_by_id(
             identifier,
             enum_id,
             enum_package,
             self.facts.current_package(),
-            computed_alias.as_deref(),
-        );
-        if let Some(package) = resolved.package {
-            self.require_generated_package(package);
-        }
-        resolved.name
+            package_use,
+        )
+        .into_expression()
     }
 }

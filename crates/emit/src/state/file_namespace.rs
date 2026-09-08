@@ -40,12 +40,6 @@ impl FileNamespace {
         self.imports.package_for_alias(alias)
     }
 
-    pub(crate) fn reference(&mut self, package: PackageUse) -> String {
-        let qualifier = package.qualifier().to_string();
-        self.requirements.require(package);
-        qualifier
-    }
-
     pub(crate) fn require(&mut self, package: PackageUse) {
         self.requirements.require(package);
     }
