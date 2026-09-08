@@ -1,7 +1,6 @@
 use super::propagation::plain_return;
 use crate::Planner;
 use crate::ReturnContext;
-use crate::abi::transition;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
@@ -103,11 +102,9 @@ impl Planner<'_> {
         value: GoExpression,
         fallible: &Fallible,
     ) -> LoweredStatement {
-        let ok_return = {
-            let mut fe = FalliblePlanner::new(self, fallible);
-            fe.emit_success(value)
-        };
-        plain_return(ok_return)
+        self.success_return(fallible, value, None)
+            .pop()
+            .expect("a tagged success return is one statement")
     }
 
     /// `Err(...)?` and `None?` short-circuit directly into a return. `None`
@@ -146,28 +143,9 @@ impl Planner<'_> {
             _ => return None,
         };
 
-        let return_ctx = self.return_ctx();
-        if let Some(shape) = return_ctx.lowered_shape() {
-            let return_ty = return_ctx.expect_ty();
-            let values = if fallible.is_result() {
-                let err_expr = err_arg.expect("`Err` carries an error payload");
-                let err_expr =
-                    self.convert_error_to_return_context(&mut statements, err_expr, fallible);
-                transition::lowered_err_values(self, &shape, &return_ty, err_expr)
-            } else {
-                transition::lowered_none_values(self, &shape, &return_ty)
-            };
-            statements.push(transition::multi_value_return(values));
-        } else {
-            let err_arg = err_arg.map(|value| {
-                self.convert_error_to_return_context(&mut statements, value, fallible)
-            });
-            let err_return = {
-                let mut fe = FalliblePlanner::new(self, fallible);
-                fe.emit_contextual_failure(err_arg)
-            };
-            statements.push(plain_return(err_return));
-        }
+        let error = err_arg
+            .map(|value| self.convert_error_to_return_context(&mut statements, value, fallible));
+        statements.push(self.failure_return(fallible, error));
         Some(statements)
     }
 

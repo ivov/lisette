@@ -3,6 +3,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use crate::ReturnContext;
 use crate::context::lowering::LoopContext;
 use crate::plan::bodies::LoopId;
+use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::values::GoExpression;
 use crate::state::bindings::{BindingValue, InlineExpr};
 
 pub(crate) struct ScopeState {
@@ -19,7 +21,7 @@ struct ScopeFrame {
     bindings: HashMap<String, BindingValue>,
     declarations: DeclarationScope,
     /// Conditions the branch being lowered has already tested in this scope.
-    established: Vec<String>,
+    established: Vec<GoExpression>,
 }
 
 enum DeclarationScope {
@@ -181,7 +183,7 @@ impl ScopeState {
     }
 
     /// Record that the block being lowered runs only when `condition` holds.
-    pub(crate) fn establish_condition(&mut self, condition: String) {
+    pub(crate) fn establish_condition(&mut self, condition: GoExpression) {
         self.frames
             .iter_mut()
             .rev()
@@ -191,12 +193,12 @@ impl ScopeState {
             .push(condition);
     }
 
-    pub(crate) fn is_condition_established(&self, condition: &str) -> bool {
+    pub(crate) fn is_condition_established(&self, condition: &GoExpression) -> bool {
         for frame in self.frames.iter().rev() {
             if frame
                 .established
                 .iter()
-                .any(|established| established == condition)
+                .any(|established| established.node() == condition.node())
             {
                 return true;
             }
@@ -284,12 +286,17 @@ impl ScopeState {
         self.loop_stack.last().map(|context| context.id)
     }
 
-    pub(crate) fn activate_assign_target(&mut self, var: &str) -> bool {
-        self.assign_targets.insert(var.to_string())
+    pub(crate) fn activate_assign_target(&mut self, target: &GoExpression) -> bool {
+        match target.node() {
+            GoExpressionNode::Identifier(name) => self.assign_targets.insert(name.clone()),
+            _ => false,
+        }
     }
 
-    pub(crate) fn deactivate_assign_target(&mut self, var: &str) {
-        self.assign_targets.remove(var);
+    pub(crate) fn deactivate_assign_target(&mut self, target: &GoExpression) {
+        if let GoExpressionNode::Identifier(name) = target.node() {
+            self.assign_targets.remove(name);
+        }
     }
 
     pub(crate) fn is_active_assign_target(&self, var: &str) -> bool {

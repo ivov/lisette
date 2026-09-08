@@ -288,9 +288,10 @@ impl Planner<'_> {
             let receiver_var = prepare_receiver(this);
             let ok_var = this.fresh_ok_var();
             let body_statements = if let Some(pattern) = inner_pattern {
+                let receiver_subject = GoExpression::name(receiver_var.clone());
                 this.lower_select_receive_pattern_site(
                     TypedSubject {
-                        var: &receiver_var,
+                        var: &receiver_subject,
                         ty: &ctx.element_ty,
                     },
                     AnnotatedPattern { pattern },
@@ -313,7 +314,7 @@ impl Planner<'_> {
             Some(body) => ElseArm::from_body(body, false),
             None => ElseArm::None,
         };
-        let receive_vars = format!("{}, {}", receiver_var, ok_var);
+        let receive_vars = vec![receiver_var, ok_var.clone()];
         let if_plan = IfPlan::plain(
             GoExpression::name(ok_var),
             LoweredBlock {
@@ -322,7 +323,7 @@ impl Planner<'_> {
             else_arm,
         );
         SelectArmPlan::Receive {
-            receive_vars: Some(receive_vars),
+            receive_vars,
             channel: ctx.channel.clone(),
             body: LoweredBlock {
                 statements: vec![LoweredStatement::If(if_plan)],
@@ -365,7 +366,7 @@ impl Planner<'_> {
                 (ok_var, body)
             });
             return SelectArmPlan::Receive {
-                receive_vars: Some(format!("_, {}", ok_var)),
+                receive_vars: vec!["_".to_string(), ok_var],
                 channel: ctx.channel.clone(),
                 body: LoweredBlock { statements: body },
             };
@@ -385,12 +386,12 @@ impl Planner<'_> {
             let receive_vars = if let Pattern::Identifier { identifier, .. } = effective_pattern
                 && let Some(go_name) = this.go_name_for_binding(effective_pattern)
             {
-                Some(this.scope.bind(identifier, go_name))
+                vec![this.scope.bind(identifier, go_name)]
             } else if matches!(
                 effective_pattern,
                 Pattern::Identifier { .. } | Pattern::WildCard { .. }
             ) {
-                None
+                Vec::new()
             } else {
                 let receiver_var = this.fresh_var(Some("recv"));
                 body_statements.extend(this.lower_irrefutable_pattern_site(
@@ -398,7 +399,7 @@ impl Planner<'_> {
                     effective_pattern,
                     &ctx.element_ty,
                 ));
-                Some(receiver_var)
+                vec![receiver_var]
             };
             let block = this.lower_block_to_place(ctx.body, ctx.place);
             body_statements.extend(block.statements);
@@ -476,7 +477,7 @@ impl Planner<'_> {
                 body: block,
             },
             PreparedChannelOperation::Receive(ch) => SelectArmPlan::Receive {
-                receive_vars: None,
+                receive_vars: Vec::new(),
                 channel: ch.clone(),
                 body: block,
             },
@@ -500,11 +501,12 @@ impl Planner<'_> {
                 this.classify_receive_var_pattern(receiver_var_pattern);
             let ok_var = this.fresh_ok_var();
 
+            let case_subject = GoExpression::name(case_var.clone());
             let some_block = this.lower_receive_some_arm(
                 some_arm,
                 match_arms,
                 TypedSubject {
-                    var: &case_var,
+                    var: &case_subject,
                     ty: element_ty,
                 },
                 needs_receiver_destructure,
@@ -531,7 +533,7 @@ impl Planner<'_> {
                 body_statements.push(LoweredStatement::If(plan));
             }
             SelectArmPlan::Receive {
-                receive_vars: Some(format!("{}, {}", case_var, ok_var)),
+                receive_vars: vec![case_var, ok_var],
                 channel: channel.clone(),
                 body: LoweredBlock {
                     statements: body_statements,

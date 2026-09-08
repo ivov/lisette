@@ -389,7 +389,7 @@ impl Planner<'_> {
         ];
         arguments.extend(operands);
         let fail = GoExpression::call(
-            GoExpression::name(format!("{handle}.FailAssert")),
+            GoExpression::selector(GoExpression::name(handle), "FailAssert".to_string()),
             arguments,
         );
         let test = LoweredStatement::If(IfPlan::plain(

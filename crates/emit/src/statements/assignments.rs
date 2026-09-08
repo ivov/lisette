@@ -6,13 +6,57 @@ use crate::expressions::staging::LaterStages;
 use crate::is_order_sensitive;
 use crate::names::go_name;
 use crate::plan::bodies::{AssignForm, CompoundKind, LoweredBlock, LoweredStatement, define};
-use crate::plan::values::{GoExpression, ValuePlan};
+use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
 use crate::state::bindings::BindingValue;
 use syntax::ast::Literal;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::program::DotAccessResolution;
 use syntax::types::Type;
+
+#[derive(Clone, Copy)]
+pub(crate) struct PlaceOrdering<'a> {
+    right_hand_side: Option<&'a ValuePlan>,
+    read_twice: bool,
+}
+
+impl<'a> PlaceOrdering<'a> {
+    pub(crate) fn before(right_hand_side: &'a ValuePlan) -> Self {
+        Self {
+            right_hand_side: Some(right_hand_side),
+            read_twice: false,
+        }
+    }
+
+    fn alone() -> Self {
+        Self {
+            right_hand_side: None,
+            read_twice: false,
+        }
+    }
+
+    fn read_twice(self) -> Self {
+        Self {
+            read_twice: true,
+            ..self
+        }
+    }
+
+    fn later(self) -> LaterStages {
+        self.right_hand_side
+            .map_or_else(LaterStages::default, |value| {
+                LaterStages::sequenced(&value.setup, value.evaluation.effect)
+            })
+    }
+
+    fn pins(self, plan: &ValuePlan) -> bool {
+        let mut later = self.later();
+        later.can_change(plan.evaluation.stability)
+            || later.prepend(plan)
+            || (self.read_twice && plan.expression.does_work())
+    }
+}
 
 impl Planner<'_> {
     pub(crate) fn build_assignment_plan(
@@ -67,7 +111,7 @@ impl Planner<'_> {
             )
         });
         let (target_capture, target_place) =
-            self.capture_assignment_target(target, Some(&right_hand_side));
+            self.capture_assignment_target(target, PlaceOrdering::before(&right_hand_side));
         let coercion = if is_literal_slot {
             CoercionPlan::Identity
         } else if let Some((_target_ty, target_layout)) = go_field_slot {
@@ -104,7 +148,8 @@ impl Planner<'_> {
             } else {
                 CompoundKind::Decrement
             };
-            let (target_capture, target_place) = self.capture_assignment_target(target, None);
+            let (target_capture, target_place) =
+                self.capture_assignment_target(target, PlaceOrdering::alone());
             return AssignForm::Compound {
                 target_capture,
                 target: target_place,
@@ -113,10 +158,14 @@ impl Planner<'_> {
         }
 
         let right_hand_side = self.plan_operand(rhs, ExpressionContext::value());
-        let (mut target_capture, target_place) =
-            self.capture_assignment_target(target, Some(&right_hand_side));
-        let needs_left_pin =
-            later_stages(Some(&right_hand_side)).can_change(self.place_read_stability(target));
+        let mut ordering = PlaceOrdering::before(&right_hand_side);
+        let needs_left_pin = ordering
+            .later()
+            .can_change(self.place_read_stability(target));
+        if needs_left_pin {
+            ordering = ordering.read_twice();
+        }
+        let (mut target_capture, target_place) = self.capture_assignment_target(target, ordering);
         let pinned_left = needs_left_pin.then(|| {
             let tmp = self.fresh_var(Some("left"));
             self.declare(&tmp);
@@ -135,19 +184,13 @@ impl Planner<'_> {
         }
     }
 
-    /// Emit a left-value target, capturing order-sensitive sub-expressions into
-    /// preceding statements when the target reads must be pinned before the RHS.
     fn capture_assignment_target(
         &mut self,
         target: &Expression,
-        right_hand_side: Option<&ValuePlan>,
+        ordering: PlaceOrdering,
     ) -> (Vec<LoweredStatement>, GoExpression) {
         let mut target_capture: Vec<LoweredStatement> = Vec::new();
-        let target = if is_order_sensitive(target) {
-            self.emit_left_value_capturing(&mut target_capture, target, right_hand_side)
-        } else {
-            self.emit_left_value(&mut target_capture, target)
-        };
+        let target = self.lower_place(&mut target_capture, target, ordering);
         (target_capture, target)
     }
 
@@ -162,10 +205,11 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn emit_left_value(
+    pub(crate) fn lower_place(
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
+        ordering: PlaceOrdering,
     ) -> GoExpression {
         let expression = expression.unwrap_parens();
         match expression {
@@ -176,38 +220,116 @@ impl Planner<'_> {
                     .to_string(),
             ),
             Expression::DotAccess {
-                expression,
+                expression: base,
                 member,
                 resolution,
                 ..
             } => {
-                let base = expression.deref_inner().unwrap_or(expression);
-                let base = self.capture_operand_into(setup, base);
-                let expression_ty = expression.get_type();
-                self.format_dot_access_lvalue(base, &expression_ty, member, resolution)
+                let base_value = if let Some(inner) = base.deref_inner() {
+                    self.place_operand(setup, inner, "ref", ordering)
+                } else if reads_through_reference(base) || !is_place_expression(base) {
+                    self.place_operand(setup, base, "ref", ordering)
+                } else {
+                    self.lower_place(setup, base, ordering)
+                };
+                let expression_ty = base.get_type();
+                self.format_dot_access_lvalue(base_value, &expression_ty, member, resolution)
             }
             Expression::IndexedAccess {
-                expression, index, ..
-            } => {
-                let base = if let Some(inner) = expression.deref_inner() {
-                    let inner = self.capture_operand_into(setup, inner);
-                    GoExpression::dereference(inner)
-                } else {
-                    self.capture_operand_into(setup, expression)
-                };
-                let index = self.capture_operand_into(setup, index);
-                GoExpression::index(base, index)
-            }
+                expression: base,
+                index,
+                ..
+            } => self.lower_indexed_place(setup, base, index, ordering),
             Expression::Unary {
                 operator: UnaryOperator::Deref,
-                expression,
+                expression: pointee,
                 ..
-            } => self.emit_deref_lvalue(setup, expression, None),
+            } => self.emit_deref_lvalue(setup, pointee, ordering),
             Expression::Call { .. } if expression.get_type().is_ref() => {
-                let call = self.capture_operand_into(setup, expression);
+                let (call_setup, call) = self
+                    .lower_composite_value(expression, ExpressionContext::value())
+                    .into_parts();
+                setup.extend(call_setup);
                 GoExpression::name(self.hoist_tmp_value_statement(setup, "ref", call))
             }
             _ => GoExpression::name("_".to_string()),
+        }
+    }
+
+    fn lower_indexed_place(
+        &mut self,
+        setup: &mut Vec<LoweredStatement>,
+        base: &Expression,
+        index: &Expression,
+        ordering: PlaceOrdering,
+    ) -> GoExpression {
+        let base_expression = if let Some(inner) = base.deref_inner() {
+            GoExpression::dereference(self.place_operand(setup, inner, "ref", ordering))
+        } else if is_place_expression(base) {
+            self.lower_place(setup, base, ordering)
+        } else {
+            self.place_operand(setup, base, "base", ordering)
+        };
+        let index_plan = self.lower_composite_value(index, ExpressionContext::value());
+        let pin_index = ordering.pins(&index_plan);
+        let base_effect = if base_expression.does_work() {
+            EvaluationEffect::EffectfulCall
+        } else {
+            EvaluationEffect::Pure
+        };
+        let base_plan = ValuePlan::computed(Vec::new(), base_expression, base_effect)
+            .with_stability(self.place_read_stability(base));
+        let mut later = ordering.later();
+        later.prepend(&index_plan);
+        let pin_base = ordering.pins(&base_plan)
+            || later.prepend(&base_plan)
+            || (is_order_sensitive(base)
+                && (base_plan.expression.does_work() || index_plan.evaluation.effect.has_call()));
+        let base_expression = if pin_base {
+            self.pin_place_base(setup, base, base_plan.expression)
+        } else {
+            base_plan.expression
+        };
+        setup.extend(index_plan.setup);
+        let index_expression = if pin_index {
+            GoExpression::name(self.hoist_tmp_value_statement(setup, "idx", index_plan.expression))
+        } else {
+            index_plan.expression
+        };
+        GoExpression::index(base_expression, index_expression)
+    }
+
+    fn pin_place_base(
+        &mut self,
+        setup: &mut Vec<LoweredStatement>,
+        base: &Expression,
+        expression: GoExpression,
+    ) -> GoExpression {
+        let pinned = if !matches!(self.emit_shape_ty(&base.get_type()), Type::Array { .. }) {
+            expression
+        } else if let GoExpressionNode::Dereference(pointer) = expression.node() {
+            GoExpression::from_node(pointer.as_ref().clone())
+        } else {
+            GoExpression::address_of(expression)
+        };
+        GoExpression::name(self.hoist_tmp_value_statement(setup, "base", pinned))
+    }
+
+    fn place_operand(
+        &mut self,
+        setup: &mut Vec<LoweredStatement>,
+        expression: &Expression,
+        prefix: &str,
+        ordering: PlaceOrdering,
+    ) -> GoExpression {
+        let plan = self.lower_composite_value(expression, ExpressionContext::value());
+        let pin = ordering.pins(&plan);
+        let (value_setup, value) = plan.into_parts();
+        setup.extend(value_setup);
+        if pin {
+            GoExpression::name(self.hoist_tmp_value_statement(setup, prefix, value))
+        } else {
+            value
         }
     }
 
@@ -218,11 +340,11 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         pointee: &Expression,
-        right_hand_side: Option<&ValuePlan>,
+        ordering: PlaceOrdering,
     ) -> GoExpression {
         let pointee_plan = self.plan_operand(pointee, ExpressionContext::value());
         let needs_capture = matches!(pointee.unwrap_parens(), Expression::Call { .. })
-            || later_stages(right_hand_side).can_change(pointee_plan.evaluation.stability);
+            || ordering.pins(&pointee_plan);
         let (pointee_setup, pointee_value) = pointee_plan.into_parts();
         setup.extend(pointee_setup);
         if needs_capture {
@@ -262,118 +384,25 @@ impl Planner<'_> {
         };
         GoExpression::selector(base, field)
     }
+}
 
-    /// Emit a left-value, capturing side-effecting subexpressions (index, base)
-    /// to temp vars so they evaluate before any RHS temps, but leaving the
-    /// structural lvalue intact (so assigning to it mutates the original).
-    pub(crate) fn emit_left_value_capturing(
-        &mut self,
-        setup: &mut Vec<LoweredStatement>,
-        expression: &Expression,
-        right_hand_side: Option<&ValuePlan>,
-    ) -> GoExpression {
-        let expression = expression.unwrap_parens();
-        match expression {
-            Expression::IndexedAccess {
-                expression: base,
-                index,
-                ..
-            } => {
-                if assignment_requires_target_capture(right_hand_side) {
-                    let base = self.emit_indexed_base_lvalue(setup, base, right_hand_side);
-                    let index =
-                        self.capture_assignment_operand(setup, index, "idx", right_hand_side);
-                    GoExpression::index(base, index)
-                } else {
-                    self.emit_indexed_lvalue_inline(setup, base, index)
-                }
-            }
-            Expression::DotAccess {
-                expression: base,
-                member,
-                resolution,
-                ..
-            } => {
-                let base_value = if let Some(inner) = base.deref_inner() {
-                    self.capture_assignment_operand(setup, inner, "ref", right_hand_side)
-                } else if is_order_sensitive(base) {
-                    self.emit_left_value_capturing(setup, base, right_hand_side)
-                } else if base.get_type().is_ref() {
-                    self.capture_assignment_operand(setup, base, "ref", right_hand_side)
-                } else {
-                    self.emit_left_value(setup, base)
-                };
-                let expression_ty = base.get_type();
-                self.format_dot_access_lvalue(base_value, &expression_ty, member, resolution)
-            }
-            Expression::Unary {
-                operator: UnaryOperator::Deref,
-                expression: inner,
-                ..
-            } => self.emit_deref_lvalue(setup, inner, right_hand_side),
-            _ => self.emit_left_value(setup, expression),
-        }
-    }
-
-    fn emit_indexed_lvalue_inline(
-        &mut self,
-        setup: &mut Vec<LoweredStatement>,
-        base: &Expression,
-        index: &Expression,
-    ) -> GoExpression {
-        let base_staged = self.stage_base_with_deref(base);
-        let (seq_setup, value) = self
-            .sequence_indexed_access(base, base_staged, index, "base")
-            .into_parts();
-        setup.extend(seq_setup);
-        value
-    }
-
-    fn emit_indexed_base_lvalue(
-        &mut self,
-        setup: &mut Vec<LoweredStatement>,
-        base: &Expression,
-        right_hand_side: Option<&ValuePlan>,
-    ) -> GoExpression {
-        if let Some(inner) = base.deref_inner() {
-            let inner = self.capture_assignment_operand(setup, inner, "base", right_hand_side);
-            GoExpression::dereference(inner)
-        } else {
-            self.capture_assignment_operand(setup, base, "base", right_hand_side)
-        }
-    }
-
-    fn capture_assignment_operand(
-        &mut self,
-        setup: &mut Vec<LoweredStatement>,
-        expression: &Expression,
-        prefix: &str,
-        right_hand_side: Option<&ValuePlan>,
-    ) -> GoExpression {
-        let plan = self.lower_composite_value(expression, ExpressionContext::value());
-        let pin = later_stages(right_hand_side).can_change(plan.evaluation.stability);
-        let (value_setup, value) = plan.into_parts();
-        setup.extend(value_setup);
-        if pin {
-            GoExpression::name(self.hoist_tmp_value_statement(setup, prefix, value))
-        } else {
-            value
-        }
+fn is_place_expression(expression: &Expression) -> bool {
+    let expression = expression.unwrap_parens();
+    match expression {
+        Expression::Identifier { .. }
+        | Expression::DotAccess { .. }
+        | Expression::IndexedAccess { .. } => true,
+        Expression::Unary {
+            operator: UnaryOperator::Deref,
+            ..
+        } => true,
+        Expression::Call { .. } => expression.get_type().is_ref(),
+        _ => false,
     }
 }
 
-fn later_stages(right_hand_side: Option<&ValuePlan>) -> LaterStages {
-    right_hand_side.map_or_else(LaterStages::default, |value| {
-        LaterStages::sequenced(&value.setup, value.evaluation.effect)
-    })
-}
-
-fn assignment_has_setup(right_hand_side: Option<&ValuePlan>) -> bool {
-    right_hand_side.is_some_and(|value| !value.setup.is_empty())
-}
-
-fn assignment_has_effectful_call(right_hand_side: Option<&ValuePlan>) -> bool {
-    right_hand_side.is_some_and(|value| value.evaluation.effect.has_effectful_call())
+fn reads_through_reference(base: &Expression) -> bool {
+    matches!(base.unwrap_parens(), Expression::Identifier { .. }) && base.get_type().is_ref()
 }
 
 fn resolution_exports_field(resolution: &DotAccessResolution) -> bool {
@@ -384,10 +413,6 @@ fn resolution_exports_field(resolution: &DotAccessResolution) -> bool {
             ..
         }
     )
-}
-
-fn assignment_requires_target_capture(right_hand_side: Option<&ValuePlan>) -> bool {
-    assignment_has_setup(right_hand_side) || assignment_has_effectful_call(right_hand_side)
 }
 
 /// Recognize compound assignment: either `x += y` syntax (caller supplies

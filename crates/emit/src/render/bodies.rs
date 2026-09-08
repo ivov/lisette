@@ -100,9 +100,10 @@ impl Renderer {
                 channel,
                 body,
             } => {
-                match receive_vars {
-                    Some(vars) => write_line!(output, "case {} := <-{}:", vars, channel),
-                    None => write_line!(output, "case <-{}:", channel),
+                if receive_vars.is_empty() {
+                    write_line!(output, "case <-{}:", channel);
+                } else {
+                    write_line!(output, "case {} := <-{}:", receive_vars.join(", "), channel);
                 }
                 self.render_lowered_block(output, body);
             }

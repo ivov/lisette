@@ -50,7 +50,6 @@ func test() {
 	e := MakeEC()
 	if e.Tag == EA {
 	} else if e.Tag == EB {
-		_ = e.B
 	} else {
 		if x != 5 {
 			panic("shadow")

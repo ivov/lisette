@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct _foo { x: int }
+  
+  impl _foo {
+    fn get(self) -> int { self.x }
+  }
+---
+package main
+
+type _foo struct {
+	x int
+}
+
+func (f _foo) get() int {
+	return f.x
+}

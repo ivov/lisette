@@ -7022,3 +7022,26 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn underscore_type_name_gets_a_receiver_letter() {
+    let input = r#"
+struct _foo { x: int }
+
+impl _foo {
+  fn get(self) -> int { self.x }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn builtin_named_struct_spells_its_promoted_stringer_receiver_alike() {
+    let input = r#"
+#[display]
+struct Inner { v: int }
+
+struct cap { embed Inner }
+"#;
+    assert_emit_snapshot!(input);
+}

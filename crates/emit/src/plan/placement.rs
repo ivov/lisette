@@ -16,7 +16,7 @@ use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{
     CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
 };
-use crate::statements::assignments::is_lvalue_chain;
+use crate::statements::assignments::{PlaceOrdering, is_lvalue_chain};
 use crate::types::native::NativeGoType;
 use std::slice;
 use syntax::ast::Pattern;
@@ -562,7 +562,7 @@ impl Planner<'_> {
             let Some((last, rest)) = items.split_last() else {
                 return Vec::new();
             };
-            this.with_assign_target(target.as_str(), |this| {
+            this.with_assign_target(target, |this| {
                 let mut statements = Vec::new();
                 for item in rest {
                     statements.push(this.lower_statement(item));
@@ -667,7 +667,7 @@ impl Planner<'_> {
             let (arguments, ordering) = self.lower_growth_args(func, args, spread.as_deref());
             let mut capture: Vec<LoweredStatement> = Vec::new();
             let receiver_lv =
-                self.emit_left_value_capturing(&mut capture, unwrapped, Some(&ordering));
+                self.lower_place(&mut capture, unwrapped, PlaceOrdering::before(&ordering));
             let grows = !arguments.is_empty();
             let receiver = if grows && receiver_lv.as_str() != target.as_str() {
                 let clippable =

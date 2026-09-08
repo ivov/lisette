@@ -1,0 +1,48 @@
+struct Buffer { data: Array<int, 4> }
+
+#[test]
+fn compound_assignment_runs_an_effectful_index_once() {
+  let mut counter = 0
+  let next = || { counter += 1; counter - 1 }
+  let mut values = [0, 0, 0]
+  values[next()] += 5
+  values[next()] -= 2
+  assert counter == 2
+  assert values[0] == 5
+  assert values[1] == -2
+}
+
+#[test]
+fn compound_assignment_on_a_map_runs_an_effectful_key_once() {
+  let mut lookups = 0
+  let key = || { lookups += 1; "k" }
+  let mut counts = Map.new<string, int>()
+  counts["k"] = 1
+  counts[key()] += 3
+  assert lookups == 1
+  assert counts["k"] == 4
+}
+
+#[test]
+fn array_field_write_through_an_effectful_index_reaches_the_field() {
+  let mut counter = 0
+  let next = || { counter += 1; counter - 1 }
+  let mut buffer = Buffer { data: Array.new<int, 4>() }
+  buffer.data[next()] = 7
+  buffer.data[next()] = 8
+  buffer.data[next() - 2] += 1
+  assert buffer.data[0] == 8
+  assert buffer.data[1] == 8
+  assert buffer.data[2] == 0
+}
+
+#[test]
+fn nested_array_write_through_an_effectful_index_reaches_the_element() {
+  let mut counter = 0
+  let next = || { counter += 1; counter - 1 }
+  let mut grid: Array<Array<int, 2>, 2> = [[0, 0], [0, 0]]
+  grid[next()][1] = 5
+  grid[next()][0] = 6
+  assert grid[0][1] == 5
+  assert grid[1][0] == 6
+}

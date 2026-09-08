@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Buffer { data: Array<int, 4> }
+  
+  fn main() {
+    let mut counter = 0
+    let next = || { counter += 1; counter - 1 }
+    let mut buffer = Buffer { data: Array.new<int, 4>() }
+    buffer.data[next()] = 7
+    buffer.data[next()] += 1
+    let _ = buffer
+  }
+---
+package main
+
+type Buffer struct {
+	data [4]int
+}
+
+func main() {
+	counter := 0
+	next := func() int {
+		counter++
+		return counter - 1
+	}
+	buffer := Buffer{data: [4]int{}}
+	base_1 := &buffer.data
+	base_1[next()] = 7
+	base_2 := &buffer.data
+	base_2[next()]++
+	_ = buffer
+}

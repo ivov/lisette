@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn main() {
+    let mut counter = 0
+    let next = || { counter += 1; counter - 1 }
+    let mut values = [0, 0, 0]
+    values[next()] += next() * 10
+    let _ = values
+  }
+---
+package main
+
+func main() {
+	counter := 0
+	next := func() int {
+		counter++
+		return counter - 1
+	}
+	values := []int{0, 0, 0}
+	idx_1 := next()
+	left_2 := values[idx_1]
+	values[idx_1] = left_2 + next()*10
+	_ = values
+}

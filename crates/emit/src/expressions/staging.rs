@@ -51,7 +51,7 @@ impl LaterStages {
             && (self.has_setup || (self.has_effectful_call && !stability.is_stable_across_calls()))
     }
 
-    fn prepend(&mut self, stage: &ValuePlan) -> bool {
+    pub(crate) fn prepend(&mut self, stage: &ValuePlan) -> bool {
         let stage_has_setup = !stage.setup.is_empty();
         let value_pin = !stage_has_setup && self.can_change(stage.evaluation.stability);
         let ordering_pin = stage.evaluation.effect.has_call()

@@ -7,7 +7,6 @@ use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::SpreadSequenceOptions;
 use crate::names::generics::extract_type_mapping;
-use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::go_expression::GoExpressionNode;
@@ -340,11 +339,7 @@ impl Planner<'_> {
         is_public: bool,
         spread: Option<&Expression>,
     ) -> ValuePlan {
-        let go_method = if is_public {
-            go_name::snake_to_camel(method)
-        } else {
-            go_name::unexported_method_go_name(method)
-        };
+        let go_method = self.method_go_name(method, is_public);
 
         let stages: Vec<ValuePlan> = args
             .iter()

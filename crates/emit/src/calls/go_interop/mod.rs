@@ -10,7 +10,7 @@ use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredStatement, define_many};
-use crate::plan::calls::CallableOrigin;
+use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -270,4 +270,84 @@ pub(super) fn build_tuple_literal(values: Vec<GoExpression>) -> GoExpression {
         ),
         values,
     )
+}
+
+pub(crate) struct LoweredCall<'a> {
+    pub(crate) call: &'a Expression,
+    pub(crate) wraps: Vec<&'a Expression>,
+    pub(crate) shape: CallableReturnAbi,
+    pub(crate) origin: CallableOrigin,
+    pub(crate) ok_ty: Type,
+    pub(crate) nil_guard: Option<NilGuard>,
+    pub(crate) payload_bridge: Option<LayoutBridge>,
+    pub(crate) layout_bridge: Option<CoercionPlan>,
+}
+
+impl LoweredCall<'_> {
+    pub(crate) fn is_result(&self) -> bool {
+        matches!(
+            self.shape,
+            CallableReturnAbi::Result { .. } | CallableReturnAbi::BareError
+        )
+    }
+
+    pub(crate) fn is_bridged(&self) -> bool {
+        self.payload_bridge.is_some() || self.layout_bridge.is_some()
+    }
+
+    pub(crate) fn has_tuple_payload(&self, planner: &Planner<'_>) -> bool {
+        matches!(planner.facts.peel_alias(&self.ok_ty), Type::Tuple(_))
+    }
+}
+
+impl Planner<'_> {
+    pub(crate) fn lowered_call<'a>(&self, subject: &'a Expression) -> Option<LoweredCall<'a>> {
+        let (call, wraps) = self.peel_wrap_err(subject);
+        let plan = self.plan_call(call)?;
+        self.lowered_call_of(call, wraps, &plan)
+    }
+
+    pub(crate) fn lowered_call_of<'a>(
+        &self,
+        call: &'a Expression,
+        wraps: Vec<&'a Expression>,
+        plan: &CallPlan<'_>,
+    ) -> Option<LoweredCall<'a>> {
+        let shape = plan.resolved.abi.result.clone();
+        if !matches!(
+            shape,
+            CallableReturnAbi::Result { .. }
+                | CallableReturnAbi::BareError
+                | CallableReturnAbi::Option(_)
+        ) {
+            return None;
+        }
+        let ty = call.get_type();
+        let ok_ty = self.facts.peel_alias(&ty).ok_type();
+        let nil_guard = match &shape {
+            CallableReturnAbi::Result { .. } => self.result_nil_guard(&ok_ty),
+            CallableReturnAbi::Option(_) => {
+                if self.is_interface_option(&ty) {
+                    Some(NilGuard::Interface)
+                } else if self.facts.is_nullable_option(&ty) {
+                    Some(NilGuard::Pointer)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        let payload_bridge = self.go_return_payload_bridge(&plan.resolved.abi, &ty);
+        let layout_bridge = self.go_result_layout_bridge(&plan.resolved.abi, &ty);
+        Some(LoweredCall {
+            call,
+            wraps,
+            shape,
+            origin: plan.resolved.origin.clone(),
+            ok_ty,
+            nil_guard,
+            payload_bridge,
+            layout_bridge,
+        })
+    }
 }

@@ -2,9 +2,9 @@ use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::transition;
 use crate::calls::comma_ok::CommaOkValueSlot;
-use crate::calls::go_interop::{NilGuard, non_nil, unexpected_nil_error};
+use crate::calls::go_interop::{LoweredCall, non_nil, unexpected_nil_error};
 use crate::context::expression::ExpressionContext;
-use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
+use crate::control_flow::fallible::{ConstructorKind, Fallible};
 use crate::definitions::functions::is_go_never;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{
@@ -146,22 +146,10 @@ impl Planner<'_> {
         err_expr: GoExpression,
     ) -> (Vec<LoweredStatement>, Vec<GoExpression>) {
         let mut setup = Vec::new();
-        let return_ctx = self.return_ctx();
-        let values = if let Some(shape) = return_ctx.lowered_shape() {
-            let return_ty = return_ctx.expect_ty();
-            // Option propagation: failure carries no payload, so return a
-            // shape-specific `None` rather than an err-return.
-            if fallible.is_result() {
-                let err_expr = self.convert_error_to_return_context(&mut setup, err_expr, fallible);
-                transition::lowered_err_values(self, &shape, &return_ty, err_expr)
-            } else {
-                transition::lowered_none_values(self, &shape, &return_ty)
-            }
-        } else {
-            let err_expr = self.convert_error_to_return_context(&mut setup, err_expr, fallible);
-            let mut fe = FalliblePlanner::new(self, fallible);
-            vec![fe.emit_contextual_failure(Some(err_expr))]
-        };
+        let error = fallible
+            .is_result()
+            .then(|| self.convert_error_to_return_context(&mut setup, err_expr, fallible));
+        let values = self.failure_return_values(fallible, error);
         (setup, values)
     }
 
@@ -173,11 +161,15 @@ impl Planner<'_> {
         fallible: &Fallible,
         result_var_name: Option<&str>,
     ) -> Option<(Vec<LoweredStatement>, GoExpression)> {
-        let (call, wraps) = self.peel_wrap_err(expression);
-        let plan = self.plan_call(call)?;
-        let expression_ty = call.get_type();
-        let ok_ty = self.facts.peel_alias(&expression_ty).ok_type();
-        let shape = plan.resolved.abi.result.clone();
+        let LoweredCall {
+            call,
+            wraps,
+            shape,
+            ok_ty,
+            nil_guard,
+            payload_bridge,
+            ..
+        } = self.lowered_call(expression)?;
         let comma_ok = match shape {
             CallableReturnAbi::Result {
                 payload: PayloadLayout::Packed,
@@ -194,22 +186,6 @@ impl Planner<'_> {
             _ => return None,
         };
         let has_value_slot = !matches!(shape, CallableReturnAbi::BareError);
-        let nil_guard = if comma_ok {
-            if self.is_interface_option(&expression_ty) {
-                Some(NilGuard::Interface)
-            } else if self.facts.is_nullable_option(&expression_ty) {
-                Some(NilGuard::Pointer)
-            } else {
-                None
-            }
-        } else if has_value_slot {
-            self.result_nil_guard(&ok_ty)
-        } else {
-            None
-        };
-        let payload_bridge = has_value_slot
-            .then(|| self.go_return_payload_bridge(&plan.resolved.abi, &expression_ty))
-            .flatten();
         let return_ctx = self.return_ctx();
         let has_fallible_return = return_ctx.lowered_shape().is_some()
             || return_ctx
@@ -422,13 +398,7 @@ impl Planner<'_> {
         {
             // Only `None` reaches here. `Err` always has a payload, so an
             // identifier failure constructor must be a payload-less Option.
-            statements.extend(self.lower_failure_constructor_return(
-                &[],
-                &fallible,
-                &return_ty,
-                lowered.as_ref(),
-                &[],
-            ));
+            statements.extend(self.lower_failure_constructor_return(&[], &fallible, &[]));
             return Some(statements);
         }
 
@@ -519,16 +489,14 @@ impl Planner<'_> {
             && !wraps.is_empty()
             && fallible.classify_constructor(inner_callee) == Some(ConstructorKind::Failure)
         {
-            return self.lower_failure_constructor_return(
-                inner_args, fallible, return_ty, lowered, &wraps,
-            );
+            return self.lower_failure_constructor_return(inner_args, fallible, &wraps);
         }
         match fallible.classify_constructor(call_expression) {
             Some(ConstructorKind::Success) => {
                 self.lower_success_constructor_return(args, fallible, lowered)
             }
             Some(ConstructorKind::Failure) => {
-                self.lower_failure_constructor_return(args, fallible, return_ty, lowered, &[])
+                self.lower_failure_constructor_return(args, fallible, &[])
             }
             None => self.lower_wrapped_passthrough_return(expression, return_ty, lowered),
         }
@@ -541,47 +509,44 @@ impl Planner<'_> {
         lowered: Option<&CallableReturnAbi>,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
-        if let Some(shape) = lowered {
-            let payload = if matches!(shape, CallableReturnAbi::BareError) {
+        match lowered {
+            Some(CallableReturnAbi::BareError) => {
                 if !args.is_empty() {
                     let (setup, _) = self
                         .lower_composite_value(&args[0], ExpressionContext::value())
                         .into_parts();
                     statements.extend(setup);
                 }
-                Vec::new()
-            } else if args.is_empty() {
-                vec![GoExpression::empty_composite("struct{}".to_string())]
-            } else if shape.has_flattened_payload()
-                && let Expression::Tuple { elements, .. } = args[0].unwrap_parens()
+                statements.push(transition::multi_value_return(
+                    transition::lowered_ok_values(&CallableReturnAbi::BareError, Vec::new()),
+                ));
+            }
+            Some(shape) if args.is_empty() => {
+                statements.push(transition::multi_value_return(
+                    transition::lowered_ok_values(
+                        shape,
+                        vec![GoExpression::empty_composite("struct{}".to_string())],
+                    ),
+                ));
+            }
+            Some(shape)
+                if shape.has_flattened_payload()
+                    && let Expression::Tuple { elements, .. } = args[0].unwrap_parens() =>
             {
                 let (setup, parts) =
                     transition::lowered_tuple_literal_values(self, elements, fallible.ok_ty());
                 statements.extend(setup);
-                parts
-            } else {
+                statements.push(transition::multi_value_return(
+                    transition::lowered_ok_values(shape, parts),
+                ));
+            }
+            _ => {
                 let (setup, value) = self
                     .lower_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
                 statements.extend(setup);
-                let (projection, parts) =
-                    transition::lowered_payload_values(self, shape, fallible.ok_ty(), value);
-                statements.extend(projection);
-                parts
-            };
-            statements.push(transition::multi_value_return(
-                transition::lowered_ok_values(shape, payload),
-            ));
-        } else {
-            let (setup, arg) = self
-                .lower_composite_value(&args[0], ExpressionContext::value())
-                .into_parts();
-            let success = {
-                let mut fe = FalliblePlanner::new(self, fallible);
-                fe.emit_success(arg)
-            };
-            statements.extend(setup);
-            statements.push(plain_return(success));
+                statements.extend(self.success_return(fallible, value, lowered));
+            }
         }
         statements
     }
@@ -590,8 +555,6 @@ impl Planner<'_> {
         &mut self,
         args: &[Expression],
         fallible: &Fallible,
-        return_ty: &Type,
-        lowered: Option<&CallableReturnAbi>,
         wraps: &[&Expression],
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
@@ -612,17 +575,7 @@ impl Planner<'_> {
             statements.extend(message_setup);
             self.wrap_error(&wraps, error)
         });
-        let returned = if let Some(shape) = lowered {
-            let values = match error {
-                Some(error) => transition::lowered_err_values(self, shape, return_ty, error),
-                None => transition::lowered_none_values(self, shape, return_ty),
-            };
-            transition::multi_value_return(values)
-        } else {
-            let mut fe = FalliblePlanner::new(self, fallible);
-            plain_return(fe.emit_failure(error))
-        };
-        statements.push(returned);
+        statements.push(self.failure_return(fallible, error));
         statements
     }
 
@@ -639,18 +592,15 @@ impl Planner<'_> {
                 shape,
                 CallableReturnAbi::Result { .. } | CallableReturnAbi::BareError
             )
-            && !self.peel_wrap_err(expression).1.is_empty()
-            && self.result_fuse_plan(expression).is_some()
+            && self
+                .result_fuse_plan(expression)
+                .is_some_and(|plan| plan.wraps_error())
         {
             let (setup, value) = self.lower_propagate(expression, None);
             statements.extend(setup);
-            let ok_ty = self.facts.peel_alias(return_ty).ok_type();
-            let (projection, payload) =
-                transition::lowered_payload_values(self, shape, &ok_ty, value);
-            statements.extend(projection);
-            statements.push(transition::multi_value_return(
-                transition::lowered_ok_values(shape, payload),
-            ));
+            let fallible = Fallible::from_type(&self.facts.peel_alias(return_ty))
+                .expect("a lowered Result shape has a fallible return type");
+            statements.extend(self.success_return(&fallible, value, Some(shape)));
             return statements;
         }
         if let Some(shape) = lowered

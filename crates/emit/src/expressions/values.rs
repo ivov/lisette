@@ -8,9 +8,8 @@ use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::emit_lisette_callback_wrapper;
 use crate::context::expression::ExpressionContext;
-use crate::is_order_sensitive;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{LoweredBlock, LoweredStatement, assign, discard, expression_statement};
+use crate::plan::bodies::{LoweredBlock, LoweredStatement, discard, expression_statement};
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::values::{
@@ -293,8 +292,14 @@ impl Planner<'_> {
                     EvaluationEffect::Pure,
                 )
             }
-            Expression::Assignment { target, value, .. } => {
-                let setup = self.lower_assignment_operand(target, value);
+            Expression::Assignment {
+                target,
+                value,
+                compound_operator,
+                ..
+            } => {
+                let setup =
+                    vec![self.build_assignment_plan(target, value, compound_operator.as_ref())];
                 ValuePlan::computed(
                     setup,
                     GoExpression::empty_composite("struct{}".to_string()),
@@ -500,61 +505,6 @@ impl Planner<'_> {
             current = inner;
         }
         false
-    }
-
-    fn lower_assignment_operand(
-        &mut self,
-        target: &Expression,
-        value: &Expression,
-    ) -> Vec<LoweredStatement> {
-        let go_field_layout = match target {
-            Expression::DotAccess {
-                expression: receiver,
-                member,
-                ty,
-                resolution,
-                ..
-            } => self.field_slot_layout(
-                &receiver.get_type(),
-                resolution.declaring_type(),
-                member,
-                ty,
-            ),
-            _ => None,
-        };
-        let literal_slot = go_field_layout
-            .as_ref()
-            .and_then(|layout| self.lower_option_literal_into_layout(value, layout));
-        let is_literal_slot = literal_slot.is_some();
-        let right_hand_side = literal_slot
-            .unwrap_or_else(|| self.lower_composite_value(value, ExpressionContext::value()));
-        let mut setup: Vec<LoweredStatement> = Vec::new();
-        let target_place = if is_order_sensitive(target) {
-            self.emit_left_value_capturing(&mut setup, target, Some(&right_hand_side))
-        } else {
-            self.emit_left_value(&mut setup, target)
-        };
-        let ValuePlan {
-            setup: rhs_setup,
-            expression: rhs_value,
-            ..
-        } = right_hand_side;
-        setup.extend(rhs_setup);
-
-        if let Some(target_layout) = go_field_layout
-            && !is_literal_slot
-        {
-            let source_layout = self.value_layout(&value.get_type(), SlotOrigin::Lisette);
-            let coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
-            if !coercion.is_identity() {
-                let (coercion_setup, unwrapped) = coercion.lower(self, rhs_value);
-                setup.extend(coercion_setup);
-                setup.push(assign(target_place, unwrapped));
-                return setup;
-            }
-        }
-        setup.push(assign(target_place, rhs_value));
-        setup
     }
 
     pub(crate) fn plan_range_value(
