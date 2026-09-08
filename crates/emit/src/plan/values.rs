@@ -295,11 +295,6 @@ impl GoExpression {
         Self::new(node)
     }
 
-    pub(crate) fn parenthesized(value: GoExpression) -> Self {
-        let constant = value.constant;
-        Self::new(GoExpressionNode::Parenthesized(Box::new(value.node))).with_constant(constant)
-    }
-
     pub(crate) fn unary(operator: &str, value: GoExpression) -> Self {
         let constant = unary_constant(operator, value.constant);
         let node = GoExpressionNode::Unary {
@@ -336,6 +331,15 @@ impl GoExpression {
 
     pub(crate) fn rendered(&self) -> String {
         self.rendered.clone()
+    }
+
+    pub(crate) fn print_header(&self) -> String {
+        self.node.print_header()
+    }
+
+    pub(crate) fn rename_identifier(&mut self, from: &str, to: &str) {
+        self.node.rename_identifier(from, to);
+        self.rendered = self.node.print();
     }
 
     pub(crate) fn as_str(&self) -> &str {
@@ -729,18 +733,6 @@ impl ValuePlan {
         (self.setup, self.expression)
     }
 
-    pub(crate) fn parenthesized(mut self) -> Self {
-        if matches!(self.evaluation.form, OperandForm::Call)
-            || (self.evaluation.stability.is_stable_across_calls()
-                && !matches!(self.evaluation.form, OperandForm::Name))
-        {
-            self.evaluation.stability = Stability::Observable;
-        }
-        self.evaluation.form = OperandForm::Other;
-        self.expression = GoExpression::parenthesized(self.expression);
-        self
-    }
-
     pub(crate) fn conversion(mut self, go_type: String) -> Self {
         self.expression = GoExpression::conversion(go_type, self.expression);
         self.evaluation.form = OperandForm::Other;
@@ -771,12 +763,7 @@ impl Planner<'_> {
             return ValuePlan::plain_call(setup, call, EvaluationEffect::EffectfulCall);
         }
         match expression {
-            Expression::Paren { expression, .. } if self.is_conversion_cast(expression) => {
-                self.plan_operand(expression, ctx)
-            }
-            Expression::Paren { expression, .. } => {
-                self.plan_operand(expression, ctx).parenthesized()
-            }
+            Expression::Paren { expression, .. } => self.plan_operand(expression, ctx),
             Expression::Cast { expression, ty, .. } => self.plan_cast(expression, ty, ctx),
             Expression::IndexedAccess {
                 expression, index, ..
@@ -806,7 +793,7 @@ impl Planner<'_> {
                 spread,
                 ty,
                 ..
-            } => self.plan_struct_call(name, field_assignments, spread, ty, ctx),
+            } => self.plan_struct_call(name, field_assignments, spread, ty),
             Expression::Reference {
                 expression: inner,
                 ty,

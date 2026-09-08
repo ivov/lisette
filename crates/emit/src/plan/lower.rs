@@ -16,7 +16,6 @@ use crate::plan::bodies::{
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::placement::{collapse_declared_temp, requires_temp_var, try_elide_tail_let};
 use crate::plan::values::{GoExpression, OperandForm, ValuePlan};
-use crate::utils::wrap_if_struct_literal;
 use std::slice;
 use syntax::ast::{
     BinaryOperator, Expression, IdentifierResolution, IfLetAlternative, Literal, MatchArm, Pattern,
@@ -87,7 +86,11 @@ impl Planner<'_> {
         );
         let mut setup = vec![declaration];
         setup.extend(block.statements);
-        collapse_declared_temp(&mut setup, &result_var);
+        collapse_declared_temp(
+            &mut setup,
+            &result_var,
+            self.short_declaration_keeps_type(ty),
+        );
         ValuePlan::captured(setup, result_var)
     }
 
@@ -499,7 +502,7 @@ impl Planner<'_> {
         AssertShape {
             failure_condition: match flipped {
                 Some(_) => condition,
-                None => negate_parenthesized(condition),
+                None => GoExpression::unary("!", condition),
             },
             kind: "relation",
             message: format!("expected {operator}"),
@@ -532,7 +535,7 @@ impl Planner<'_> {
         operand: &Expression,
         statements: &mut Vec<LoweredStatement>,
     ) -> AssertShape {
-        let ctx = ExpressionContext::value().condition();
+        let ctx = ExpressionContext::value();
         let failure_condition = if let Expression::Unary {
             operator: UnaryOperator::Not,
             expression: negated,
@@ -541,17 +544,15 @@ impl Planner<'_> {
         {
             let (setup, condition) = self.plan_operand(negated, ctx).into_parts();
             statements.extend(setup);
-            wrap_if_struct_literal(condition)
+            condition
         } else if matches!(operand, Expression::Binary { .. }) {
-            // `!` binds tighter than `&&` and `||`, so a binary predicate keeps
-            // its parentheses.
             let (setup, condition) = self.lower_condition(operand);
             statements.extend(setup);
-            negate_parenthesized(condition)
+            GoExpression::unary("!", condition)
         } else {
             let (setup, condition) = self.plan_unary_not(operand, ctx).into_parts();
             statements.extend(setup);
-            wrap_if_struct_literal(condition)
+            condition
         };
         AssertShape {
             failure_condition,
@@ -708,7 +709,7 @@ impl Planner<'_> {
     }
 
     fn lower_condition(&mut self, condition: &Expression) -> (Vec<LoweredStatement>, GoExpression) {
-        let plan = self.plan_operand(condition, ExpressionContext::value().condition());
+        let plan = self.plan_operand(condition, ExpressionContext::value());
         plan.into_parts()
     }
 
@@ -724,7 +725,7 @@ impl Planner<'_> {
             setup,
             PairCondition {
                 initializer: None,
-                condition: wrap_if_struct_literal(rendered),
+                condition: rendered,
             },
         )
     }
@@ -738,7 +739,7 @@ impl Planner<'_> {
             }
             let (setup, rendered) = this.lower_condition(condition);
             if !setup.is_empty() {
-                let exit = GoExpression::unary("!", GoExpression::parenthesized(rendered));
+                let exit = GoExpression::unary("!", rendered);
                 return this.lower_loop_with_exit_test(setup, exit, body);
             }
             let header = if matches!(
@@ -750,7 +751,7 @@ impl Planner<'_> {
             ) {
                 LoopHeader::Infinite
             } else {
-                LoopHeader::While(wrap_if_struct_literal(rendered))
+                LoopHeader::While(rendered)
             };
             this.lower_loop_with_header(header, body)
         })
@@ -1105,10 +1106,6 @@ struct AssertShape {
 struct AssertOperand {
     expression: Expression,
     rendered: GoExpression,
-}
-
-fn negate_parenthesized(condition: GoExpression) -> GoExpression {
-    GoExpression::unary("!", GoExpression::parenthesized(condition))
 }
 
 /// The equals lowering can read its left operand as a method receiver, where a

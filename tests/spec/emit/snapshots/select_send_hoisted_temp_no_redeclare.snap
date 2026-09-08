@@ -31,6 +31,4 @@ func main() {
 	case ref_1 <- 1:
 	default:
 	}
-	ref_1_2 := 2
-	_ = ref_1_2
 }

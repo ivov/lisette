@@ -61,7 +61,6 @@ pub(crate) enum GoExpressionNode {
         left: Box<GoExpressionNode>,
         right: Box<GoExpressionNode>,
     },
-    Parenthesized(Box<GoExpressionNode>),
     Conversion {
         go_type: String,
         operand: Box<GoExpressionNode>,
@@ -146,7 +145,6 @@ impl GoExpressionNode {
             | Self::Conversion { operand, .. }
             | Self::AddressOf(operand)
             | Self::Dereference(operand)
-            | Self::Parenthesized(operand)
             | Self::Spread(operand) => operand.does_work(),
             Self::Binary { left, right, .. } => left.does_work() || right.does_work(),
         }
@@ -154,33 +152,49 @@ impl GoExpressionNode {
 
     pub(crate) fn visit(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
         visit(self);
+        if let Self::FunctionLiteral { body, .. } = self {
+            body.visit_expressions(visit);
+        } else {
+            self.visit_children(&mut |child| child.visit(visit));
+        }
+    }
+
+    pub(crate) fn rename_identifier(&mut self, from: &str, to: &str) {
+        match self {
+            Self::Identifier(name) if name == from => *name = to.to_string(),
+            _ => self.visit_children_mut(&mut |child| child.rename_identifier(from, to)),
+        }
+    }
+
+    pub(crate) fn visit_children(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
         match self {
             Self::Identifier(_)
             | Self::Qualified { .. }
             | Self::Literal(_)
             | Self::Type(_)
             | Self::Empty
-            | Self::Verbatim(_) => {}
+            | Self::Verbatim(_)
+            | Self::FunctionLiteral { .. } => {}
             Self::CompositeLiteral { elements, .. } => {
                 for element in elements {
                     if let Some(key) = &element.key {
-                        key.visit(visit);
+                        visit(key);
                     }
-                    element.value.visit(visit);
+                    visit(&element.value);
                 }
             }
             Self::Call { callee, arguments } => {
-                callee.visit(visit);
+                visit(callee);
                 for argument in arguments {
-                    argument.visit(visit);
+                    visit(argument);
                 }
             }
             Self::Instantiation { base, .. }
             | Self::Selector { base, .. }
-            | Self::TypeAssertion { base, .. } => base.visit(visit),
+            | Self::TypeAssertion { base, .. } => visit(base),
             Self::Index { base, index } => {
-                base.visit(visit);
-                index.visit(visit);
+                visit(base);
+                visit(index);
             }
             Self::Slice {
                 base,
@@ -188,33 +202,158 @@ impl GoExpressionNode {
                 high,
                 max,
             } => {
-                base.visit(visit);
+                visit(base);
                 for bound in [low, high, max].into_iter().flatten() {
-                    bound.visit(visit);
+                    visit(bound);
                 }
             }
             Self::Unary { operand, .. }
             | Self::Conversion { operand, .. }
             | Self::AddressOf(operand)
             | Self::Dereference(operand)
-            | Self::Parenthesized(operand)
-            | Self::Spread(operand) => operand.visit(visit),
+            | Self::Spread(operand) => visit(operand),
             Self::Binary { left, right, .. } => {
-                left.visit(visit);
-                right.visit(visit);
+                visit(left);
+                visit(right);
             }
-            Self::FunctionLiteral { body, .. } => body.visit_expressions(visit),
         }
     }
 
-    /// Print the node token for token, since `gofmt` owns the spacing.
+    fn visit_children_mut(&mut self, visit: &mut impl FnMut(&mut GoExpressionNode)) {
+        match self {
+            Self::Identifier(_)
+            | Self::Qualified { .. }
+            | Self::Literal(_)
+            | Self::Type(_)
+            | Self::Empty
+            | Self::Verbatim(_)
+            | Self::FunctionLiteral { .. } => {}
+            Self::CompositeLiteral { elements, .. } => {
+                for element in elements {
+                    if let Some(key) = &mut element.key {
+                        visit(key);
+                    }
+                    visit(&mut element.value);
+                }
+            }
+            Self::Call { callee, arguments } => {
+                visit(callee);
+                for argument in arguments {
+                    visit(argument);
+                }
+            }
+            Self::Instantiation { base, .. }
+            | Self::Selector { base, .. }
+            | Self::TypeAssertion { base, .. } => visit(base),
+            Self::Index { base, index } => {
+                visit(base);
+                visit(index);
+            }
+            Self::Slice {
+                base,
+                low,
+                high,
+                max,
+            } => {
+                visit(base);
+                for bound in [low, high, max].into_iter().flatten() {
+                    visit(bound);
+                }
+            }
+            Self::Unary { operand, .. }
+            | Self::Conversion { operand, .. }
+            | Self::AddressOf(operand)
+            | Self::Dereference(operand)
+            | Self::Spread(operand) => visit(operand),
+            Self::Binary { left, right, .. } => {
+                visit(left);
+                visit(right);
+            }
+        }
+    }
+
     pub(crate) fn print(&self) -> String {
         let mut output = String::new();
-        self.write(&mut output);
+        self.write(&mut output, Slot::FREE);
         output
     }
 
-    fn write(&self, output: &mut String) {
+    pub(crate) fn print_header(&self) -> String {
+        let mut output = String::new();
+        self.write(&mut output, Slot::HEADER);
+        output
+    }
+
+    fn binding(&self) -> Binding {
+        match self {
+            Self::Literal(text) if text.starts_with(['-', '+']) => {
+                Binding::Prefix(text.chars().next().unwrap_or(' '))
+            }
+            Self::Identifier(_)
+            | Self::Qualified { .. }
+            | Self::Literal(_)
+            | Self::Type(_)
+            | Self::CompositeLiteral { .. }
+            | Self::Call { .. }
+            | Self::Instantiation { .. }
+            | Self::Selector { .. }
+            | Self::Index { .. }
+            | Self::Slice { .. }
+            | Self::TypeAssertion { .. }
+            | Self::Conversion { .. }
+            | Self::Spread(_)
+            | Self::FunctionLiteral { .. }
+            | Self::Empty => Binding::Primary,
+            Self::Unary { operator, .. } => Binding::Prefix(operator.chars().next().unwrap_or(' ')),
+            Self::AddressOf(_) => Binding::Prefix('&'),
+            Self::Dereference(_) => Binding::Prefix('*'),
+            Self::Binary { operator, .. } => Binding::Binary(binary_level(operator)),
+            Self::Verbatim(_) => Binding::Unknown,
+        }
+    }
+
+    fn needs_parens(&self, slot: Slot) -> bool {
+        if slot.header
+            && matches!(
+                self,
+                Self::CompositeLiteral {
+                    go_type: Some(_),
+                    ..
+                }
+            )
+        {
+            return true;
+        }
+        match (self.binding(), slot.kind) {
+            (Binding::Unknown, SlotKind::Free) => false,
+            (Binding::Unknown, _) => true,
+            (Binding::Primary, SlotKind::Postfix) => {
+                matches!(self, Self::Literal(_) | Self::FunctionLiteral { .. })
+            }
+            (Binding::Primary, _) => false,
+            (Binding::Prefix(sign), SlotKind::Prefix(operator)) => {
+                sign == operator && matches!(sign, '-' | '+' | '&')
+            }
+            (Binding::Prefix(_), SlotKind::Callee | SlotKind::Postfix) => true,
+            (Binding::Prefix(_), _) => false,
+            (Binding::Binary(level), SlotKind::Left(parent)) => level < parent,
+            (Binding::Binary(level), SlotKind::Right(parent)) => level <= parent,
+            (Binding::Binary(_), SlotKind::Free) => false,
+            (Binding::Binary(_), _) => true,
+        }
+    }
+
+    fn write_child(child: &Self, slot: Slot, output: &mut String) {
+        if child.needs_parens(slot) {
+            output.push('(');
+            child.write(output, Slot::FREE);
+            output.push(')');
+        } else {
+            child.write(output, slot);
+        }
+    }
+
+    fn write(&self, output: &mut String, slot: Slot) {
         match self {
             Self::Identifier(text)
             | Self::Literal(text)
@@ -263,13 +402,13 @@ impl GoExpressionNode {
                 }
             }
             Self::Call { callee, arguments } => {
-                callee.write(output);
+                Self::write_child(callee, slot.with(SlotKind::Callee), output);
                 output.push('(');
                 for (index, argument) in arguments.iter().enumerate() {
                     if index > 0 {
                         output.push_str(", ");
                     }
-                    argument.write(output);
+                    argument.write(output, Slot::FREE);
                 }
                 output.push(')');
             }
@@ -277,18 +416,18 @@ impl GoExpressionNode {
                 base,
                 type_arguments,
             } => {
-                base.write(output);
+                Self::write_child(base, slot.with(SlotKind::Postfix), output);
                 output.push_str(type_arguments);
             }
             Self::Selector { base, field } => {
-                base.write(output);
+                Self::write_child(base, slot.with(SlotKind::Postfix), output);
                 output.push('.');
                 output.push_str(field);
             }
             Self::Index { base, index } => {
-                base.write(output);
+                Self::write_child(base, slot.with(SlotKind::Postfix), output);
                 output.push('[');
-                index.write(output);
+                index.write(output, Slot::FREE);
                 output.push(']');
             }
             Self::Slice {
@@ -297,68 +436,57 @@ impl GoExpressionNode {
                 high,
                 max,
             } => {
-                base.write(output);
+                Self::write_child(base, slot.with(SlotKind::Postfix), output);
                 output.push('[');
                 if let Some(low) = low {
-                    low.write(output);
+                    low.write(output, Slot::FREE);
                 }
                 output.push(':');
                 if let Some(high) = high {
-                    high.write(output);
+                    high.write(output, Slot::FREE);
                 }
                 if let Some(max) = max {
                     output.push(':');
-                    max.write(output);
+                    max.write(output, Slot::FREE);
                 }
                 output.push(']');
             }
             Self::TypeAssertion { base, go_type } => {
-                base.write(output);
+                Self::write_child(base, slot.with(SlotKind::Postfix), output);
                 output.push_str(".(");
                 output.push_str(go_type);
                 output.push(')');
             }
             Self::Unary { operator, operand } => {
-                let operand = operand.print();
-                // Go reads `--x` as a decrement, so a negated negative keeps its parentheses.
-                if operator == "-" && operand.starts_with('-') {
-                    output.push_str("-(");
-                    output.push_str(&operand);
-                    output.push(')');
-                } else {
-                    output.push_str(operator);
-                    output.push_str(&operand);
-                }
+                output.push_str(operator);
+                let sign = operator.chars().next().unwrap_or(' ');
+                Self::write_child(operand, slot.with(SlotKind::Prefix(sign)), output);
             }
             Self::AddressOf(operand) => {
                 output.push('&');
-                operand.write(output);
+                Self::write_child(operand, slot.with(SlotKind::Prefix('&')), output);
             }
             Self::Dereference(operand) => {
                 output.push('*');
-                operand.write(output);
+                Self::write_child(operand, slot.with(SlotKind::Prefix('*')), output);
             }
             Self::Binary {
                 operator,
                 left,
                 right,
             } => {
-                left.write(output);
+                let level = binary_level(operator);
+                Self::write_child(left, slot.with(SlotKind::Left(level)), output);
                 output.push(' ');
                 output.push_str(operator);
                 output.push(' ');
-                right.write(output);
-            }
-            Self::Parenthesized(inner) => {
-                output.push('(');
-                inner.write(output);
-                output.push(')');
+                Self::write_child(right, slot.with(SlotKind::Right(level)), output);
             }
             Self::Conversion { go_type, operand } => {
                 output.push_str(&render_conversion(go_type, &operand.print()));
             }
             Self::Spread(operand) => {
-                operand.write(output);
+                Self::write_child(operand, slot.with(SlotKind::Postfix), output);
                 output.push_str("...");
             }
             Self::FunctionLiteral {
@@ -407,12 +535,149 @@ impl GoExpressionNode {
     }
 }
 
+#[derive(Clone, Copy)]
+struct Slot {
+    kind: SlotKind,
+    header: bool,
+}
+
+impl Slot {
+    const FREE: Self = Self {
+        kind: SlotKind::Free,
+        header: false,
+    };
+    const HEADER: Self = Self {
+        kind: SlotKind::Free,
+        header: true,
+    };
+
+    fn with(self, kind: SlotKind) -> Self {
+        Self {
+            kind,
+            header: self.header,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum SlotKind {
+    Free,
+    Left(u8),
+    Right(u8),
+    Prefix(char),
+    Callee,
+    Postfix,
+}
+
+enum Binding {
+    Primary,
+    Prefix(char),
+    Binary(u8),
+    Unknown,
+}
+
+fn binary_level(operator: &str) -> u8 {
+    match operator {
+        "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" => 5,
+        "+" | "-" | "|" | "^" => 4,
+        "==" | "!=" | "<" | "<=" | ">" | ">=" => 3,
+        "&&" => 2,
+        "||" => 1,
+        _ => 0,
+    }
+}
+
 impl CompositeElement {
     fn write(&self, output: &mut String) {
         if let Some(key) = &self.key {
-            key.write(output);
+            key.write(output, Slot::FREE);
             output.push_str(": ");
         }
-        self.value.write(output);
+        self.value.write(output, Slot::FREE);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn name(text: &str) -> GoExpressionNode {
+        GoExpressionNode::Identifier(text.to_string())
+    }
+
+    fn binary(left: GoExpressionNode, operator: &str, right: GoExpressionNode) -> GoExpressionNode {
+        GoExpressionNode::Binary {
+            operator: operator.to_string(),
+            left: Box::new(left),
+            right: Box::new(right),
+        }
+    }
+
+    fn literal_struct(go_type: &str) -> GoExpressionNode {
+        GoExpressionNode::CompositeLiteral {
+            go_type: Some(go_type.to_string()),
+            elements: Vec::new(),
+            layout: CompositeLayout::Inline { padded: true },
+        }
+    }
+
+    #[test]
+    fn looser_operand_takes_parentheses() {
+        let shifted = binary(binary(name("a"), "+", name("b")), "<<", name("c"));
+        assert_eq!(shifted.print(), "(a + b) << c");
+        let sum = binary(binary(name("a"), "*", name("b")), "+", name("c"));
+        assert_eq!(sum.print(), "a * b + c");
+    }
+
+    #[test]
+    fn equal_operand_on_the_right_takes_parentheses() {
+        let nested = binary(name("a"), "-", binary(name("b"), "-", name("c")));
+        assert_eq!(nested.print(), "a - (b - c)");
+        let flat = binary(binary(name("a"), "-", name("b")), "-", name("c"));
+        assert_eq!(flat.print(), "a - b - c");
+    }
+
+    #[test]
+    fn repeated_sign_takes_parentheses() {
+        let negate = |operand| GoExpressionNode::Unary {
+            operator: "-".to_string(),
+            operand: Box::new(operand),
+        };
+        assert_eq!(negate(negate(name("x"))).print(), "-(-x)");
+        assert_eq!(
+            negate(GoExpressionNode::Literal("-1".to_string())).print(),
+            "-(-1)"
+        );
+        let not = |operand| GoExpressionNode::Unary {
+            operator: "!".to_string(),
+            operand: Box::new(operand),
+        };
+        assert_eq!(not(not(name("x"))).print(), "!!x");
+    }
+
+    #[test]
+    fn postfix_on_prefix_takes_parentheses() {
+        let field = GoExpressionNode::Selector {
+            base: Box::new(GoExpressionNode::Dereference(Box::new(name("node")))),
+            field: "Child".to_string(),
+        };
+        assert_eq!(field.print(), "(*node).Child");
+        let call = GoExpressionNode::Call {
+            callee: Box::new(GoExpressionNode::Dereference(Box::new(name("f")))),
+            arguments: vec![name("x")],
+        };
+        assert_eq!(call.print(), "(*f)(x)");
+    }
+
+    #[test]
+    fn composite_literal_takes_parentheses_in_a_header() {
+        let compared = binary(name("x"), "==", literal_struct("Point"));
+        assert_eq!(compared.print(), "x == Point{}");
+        assert_eq!(compared.print_header(), "x == (Point{})");
+        let called = GoExpressionNode::Call {
+            callee: Box::new(name("f")),
+            arguments: vec![literal_struct("Point")],
+        };
+        assert_eq!(called.print_header(), "f(Point{})");
     }
 }

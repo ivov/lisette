@@ -14,8 +14,6 @@ package main
 import "slices"
 
 func test(arr []int) {
-	view := arr[1:4:4]
 	owned := slices.Clone(arr[1:4:4])
 	owned[0] = 99
-	_ = view
 }

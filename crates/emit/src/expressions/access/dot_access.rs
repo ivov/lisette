@@ -312,9 +312,7 @@ impl Planner<'_> {
                 Expression::Call { .. } => {
                     GoExpression::name(self.hoist_tmp_value_statement(setup, "ref", base))
                 }
-                Expression::StructCall { .. } => {
-                    GoExpression::parenthesized(GoExpression::address_of(base))
-                }
+                Expression::StructCall { .. } => GoExpression::address_of(base),
                 _ => base,
             }
         })

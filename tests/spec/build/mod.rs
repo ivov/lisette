@@ -9012,7 +9012,7 @@ fn assert_bare_predicate_parenthesizes_a_struct_literal() {
     );
 
     assert!(
-        go.contains("if (!Point{"),
+        go.contains("if !(Point{"),
         "a condition opening with a composite literal must be parenthesized, got:\n{go}"
     );
 }

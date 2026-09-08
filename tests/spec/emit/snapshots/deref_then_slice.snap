@@ -9,6 +9,6 @@ description: |
 package main
 
 func rest(items *[]int) []int {
-	len_1 := len((*items))
+	len_1 := len(*items)
 	return (*items)[1:len_1:len_1]
 }

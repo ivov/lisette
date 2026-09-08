@@ -33,9 +33,7 @@ func primeCache(bar Bar[int]) {
 }
 
 func cachedCollision(bar Bar[int]) {
-	_lisAdapter_Bar_Box_1 := 1
 	consume(_lisAdapter_Bar_Box_2{inner: bar})
-	_ = _lisAdapter_Bar_Box_1
 }
 
 func main() {

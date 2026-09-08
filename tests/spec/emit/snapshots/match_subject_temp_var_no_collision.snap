@@ -21,6 +21,4 @@ func main() {
 	if opt.Tag == lisette.OptionSome {
 		_ = opt.SomeVal
 	}
-	subject_1 := 7
-	_ = subject_1
 }

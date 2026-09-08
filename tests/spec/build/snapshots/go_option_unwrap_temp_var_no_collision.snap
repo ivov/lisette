@@ -23,7 +23,5 @@ func main() {
 	} else {
 		req = lisette.MakeResultOk[*http.Request, error](ret_1)
 	}
-	unwrap_2 := 7
-	_ = unwrap_2
 	fmt.Println(req)
 }

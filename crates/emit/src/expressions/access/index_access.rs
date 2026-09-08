@@ -88,8 +88,7 @@ impl Planner<'_> {
         };
         let mut staged = self
             .plan_operand(inner, ExpressionContext::value())
-            .unary("*")
-            .parenthesized();
+            .unary("*");
         staged.make_observable();
         staged
     }

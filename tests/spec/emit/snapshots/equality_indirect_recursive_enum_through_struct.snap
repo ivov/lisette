@@ -42,7 +42,7 @@ func (t Tree) equals(other Tree) bool {
 	}
 	switch t.Tag {
 	case TreeNode:
-		return (*t.Node).equals((*other.Node))
+		return (*t.Node).equals(*other.Node)
 	default:
 		return true
 	}

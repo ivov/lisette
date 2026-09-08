@@ -18,9 +18,7 @@ func test(opt lisette.Option[int]) {
 	current := opt
 	for {
 		if current.Tag == lisette.OptionSome {
-			x := current.SomeVal
 			current = lisette.MakeOptionNone[int]()
-			_ = x
 		} else {
 			break
 		}

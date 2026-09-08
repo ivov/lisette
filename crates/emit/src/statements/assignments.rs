@@ -121,23 +121,11 @@ impl Planner<'_> {
             let tmp = self.fresh_var(Some("left"));
             self.declare(&tmp);
             target_capture.push(define(tmp.clone(), target_place.clone()));
-            tmp
+            GoExpression::name(tmp)
         });
-        let parenthesize_rhs =
-            pinned_left.is_some() && matches!(rhs.unwrap_parens(), Expression::Binary { .. });
-        let mut right_hand_side = right_hand_side.map_expression(|_, staged_value| {
-            if parenthesize_rhs {
-                GoExpression::parenthesized(staged_value)
-            } else {
-                staged_value
-            }
-        });
-        if parenthesize_rhs {
-            right_hand_side.make_observable_computed();
-        }
         let kind = CompoundKind::OpAssign {
             op_text: format!("{}", op),
-            rhs: right_hand_side,
+            rhs: Box::new(right_hand_side),
             pinned_left,
         };
         AssignForm::Compound {
@@ -203,7 +191,7 @@ impl Planner<'_> {
             } => {
                 let base = if let Some(inner) = expression.deref_inner() {
                     let inner = self.capture_operand_into(setup, inner);
-                    GoExpression::parenthesized(GoExpression::dereference(inner))
+                    GoExpression::dereference(inner)
                 } else {
                     self.capture_operand_into(setup, expression)
                 };
@@ -349,7 +337,7 @@ impl Planner<'_> {
     ) -> GoExpression {
         if let Some(inner) = base.deref_inner() {
             let inner = self.capture_assignment_operand(setup, inner, "base", right_hand_side);
-            GoExpression::parenthesized(GoExpression::dereference(inner))
+            GoExpression::dereference(inner)
         } else {
             self.capture_assignment_operand(setup, base, "base", right_hand_side)
         }

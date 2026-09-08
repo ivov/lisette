@@ -15,8 +15,6 @@ description: |
 package main
 
 func foo() (int, bool) {
-	tmp_1 := 7
-	_ = tmp_1
 	if true {
 		return 1, true
 	}

@@ -213,7 +213,6 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         let target = expression.unwrap_parens();
-        let preserve_parens = matches!(expression, Expression::Paren { .. });
         if let Expression::Binary {
             operator: cmp,
             left,
@@ -223,29 +222,15 @@ impl Planner<'_> {
             && let Some(flipped) = flip_comparison(cmp)
             && flip_preserves_nan(&self.facts, cmp, left, right)
         {
-            let plan = self.plan_binary(&flipped, left, right, ctx);
-            return if preserve_parens {
-                plan.parenthesized()
-            } else {
-                plan
-            };
+            return self.plan_binary(&flipped, left, right, ctx);
         }
         let (innermost, inner_negated) = strip_negations(expression);
         if let Some(predicate) = self.lower_fused_predicate_value(innermost, !inner_negated) {
-            return if preserve_parens {
-                predicate.parenthesized()
-            } else {
-                predicate
-            };
+            return predicate;
         }
         if matches!(target, Expression::Call { .. }) {
             let mut setup: Vec<LoweredStatement> = Vec::new();
             if let Some(negated) = self.try_emit_negated_call(&mut setup, target) {
-                let negated = if preserve_parens {
-                    GoExpression::parenthesized(negated)
-                } else {
-                    negated
-                };
                 return ValuePlan::computed(setup, negated, EvaluationEffect::EffectfulCall);
             }
         }

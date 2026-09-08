@@ -155,7 +155,7 @@ impl Planner<'_> {
                             layout_field.go_name.clone(),
                         );
                         if layout_field.is_recursive() {
-                            GoExpression::parenthesized(GoExpression::dereference(access))
+                            GoExpression::dereference(access)
                         } else {
                             access
                         }

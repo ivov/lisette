@@ -33,6 +33,6 @@ func makeFoo() Foo {
 }
 
 func test() {
-	ref_1 := (makeFoo())
+	ref_1 := makeFoo()
 	ref_1.increment()
 }

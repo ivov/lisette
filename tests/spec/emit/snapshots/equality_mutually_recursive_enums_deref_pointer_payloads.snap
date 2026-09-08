@@ -45,7 +45,7 @@ func (a A) equals(other A) bool {
 	}
 	switch a.Tag {
 	case AX:
-		return (*a.X).equals((*other.X))
+		return (*a.X).equals(*other.X)
 	default:
 		return true
 	}
@@ -68,7 +68,7 @@ func (b B) equals(other B) bool {
 	}
 	switch b.Tag {
 	case BY:
-		return (*b.Y).equals((*other.Y))
+		return (*b.Y).equals(*other.Y)
 	default:
 		return true
 	}

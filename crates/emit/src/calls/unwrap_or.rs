@@ -265,7 +265,11 @@ impl Planner<'_> {
             &result_var,
             &ty,
         ));
-        collapse_declared_temp(&mut statements, &result_var);
+        collapse_declared_temp(
+            &mut statements,
+            &result_var,
+            self.short_declaration_keeps_type(&ty),
+        );
         Some(ValuePlan::captured(statements, result_var))
     }
 }

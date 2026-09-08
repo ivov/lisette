@@ -39,7 +39,7 @@ type List struct {
 
 func listSum(l List) int {
 	if l.Tag == ListCons {
-		return l.Cons0 + listSum((*l.Cons1))
+		return l.Cons0 + listSum(*l.Cons1)
 	}
 	return 0
 }

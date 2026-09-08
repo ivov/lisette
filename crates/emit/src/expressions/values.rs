@@ -436,14 +436,6 @@ impl Planner<'_> {
         inner.conversion(go_type)
     }
 
-    /// `T(x)` is a primary expression, so parentheses around it add nothing.
-    pub(crate) fn is_conversion_cast(&self, expression: &Expression) -> bool {
-        matches!(
-            expression.unwrap_parens(),
-            Expression::Cast { ty, .. } if !self.facts.is_interface(ty)
-        )
-    }
-
     fn shift_pin_go_type(&mut self, expression: &Expression, target_ty: &Type) -> Option<String> {
         let target_is_float = self
             .facts
@@ -607,7 +599,7 @@ impl Planner<'_> {
             fields.push(("End".to_string(), values.next().expect("range has an end")));
         }
 
-        let value = emit_struct_literal(&type_string, fields, ExpressionContext::value());
+        let value = emit_struct_literal(&type_string, fields);
         ValuePlan::computed(sequenced.setup, value, effect)
     }
 

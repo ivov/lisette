@@ -23,7 +23,7 @@ func (b Box[T]) parse() (int, bool) {
 }
 
 func eight() int {
-	if v, ok := (Box[[]int]{v: []int{1}}.parse()); ok {
+	if v, ok := (Box[[]int]{v: []int{1}}).parse(); ok {
 		return v
 	} else {
 		return 0

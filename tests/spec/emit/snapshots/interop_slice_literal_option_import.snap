@@ -2,16 +2,16 @@
 source: tests/spec/emit/interop_matrix.rs
 description: |
   
-  fn main() {
+  fn empty() -> Slice<Option<int>> {
     let xs: Slice<Option<int>> = []
-    let _ = xs
+    xs
   }
 ---
 package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func main() {
+func empty() []lisette.Option[int] {
 	xs := []lisette.Option[int]{}
-	_ = xs
+	return xs
 }

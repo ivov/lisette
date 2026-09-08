@@ -250,8 +250,8 @@ pub(crate) enum CompoundKind {
     /// into `pinned_left`, rendered as `target = pinned_left op rhs`.
     OpAssign {
         op_text: String,
-        rhs: ValuePlan,
-        pinned_left: Option<String>,
+        rhs: Box<ValuePlan>,
+        pinned_left: Option<GoExpression>,
     },
 }
 
@@ -457,6 +457,26 @@ fn visit_statements(statements: &[LoweredStatement], visit: &mut impl FnMut(&GoE
     }
 }
 
+pub(crate) fn for_each_statement(
+    statements: &[LoweredStatement],
+    f: &mut impl FnMut(&LoweredStatement),
+) {
+    for statement in statements {
+        f(statement);
+        statement.for_each_nested_statement(f);
+    }
+}
+
+pub(crate) fn for_each_statements_mut(
+    statements: &mut Vec<LoweredStatement>,
+    f: &mut impl FnMut(&mut Vec<LoweredStatement>),
+) {
+    f(statements);
+    for statement in statements {
+        statement.for_each_nested_statements_mut(f);
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct GoUses {
     names: HashSet<String>,
@@ -580,8 +600,14 @@ impl LoweredStatement {
                 } => {
                     visit_statements(target_capture, visit);
                     target.node().visit(visit);
-                    if let CompoundKind::OpAssign { rhs, .. } = kind {
+                    if let CompoundKind::OpAssign {
+                        rhs, pinned_left, ..
+                    } = kind
+                    {
                         rhs.visit_expressions(visit);
+                        if let Some(left) = pinned_left {
+                            left.node().visit(visit);
+                        }
                     }
                 }
                 AssignForm::Simple {
@@ -649,6 +675,168 @@ impl LoweredStatement {
                 expression.node().visit(visit)
             }
             LoweredStatement::Directed { inner, .. } => inner.visit_expressions(visit),
+        }
+    }
+
+    fn for_each_nested_statement(&self, f: &mut impl FnMut(&LoweredStatement)) {
+        match self {
+            LoweredStatement::If(plan) => plan.for_each_statement(f),
+            LoweredStatement::Loop(plan) => {
+                for_each_statement(&plan.prologue, f);
+                for_each_statement(&plan.body.statements, f);
+            }
+            LoweredStatement::Block(body)
+            | LoweredStatement::Body(body)
+            | LoweredStatement::WhileLet(body) => for_each_statement(&body.statements, f),
+            LoweredStatement::Const(plan) => for_each_statement(&plan.value.setup, f),
+            LoweredStatement::Return(form) => match form {
+                ReturnForm::Plain { value } => for_each_statement(&value.setup, f),
+                ReturnForm::Unit { side_effect } => {
+                    if let Some(body) = side_effect {
+                        for_each_statement(&body.statements, f);
+                    }
+                }
+                ReturnForm::Multi { .. } => {}
+                ReturnForm::Body { body } => for_each_statement(&body.statements, f),
+            },
+            LoweredStatement::BreakValue(
+                BreakValuePlan::Diverged { value } | BreakValuePlan::Transfer { value, .. },
+            ) => for_each_statement(&value.setup, f),
+            LoweredStatement::Let(plan) => {
+                if let Some(declaration) = &plan.declaration {
+                    f(declaration);
+                    declaration.for_each_nested_statement(f);
+                }
+                for_each_statement(&plan.body.statements, f);
+            }
+            LoweredStatement::Assign(form) => match form {
+                AssignForm::Compound {
+                    target_capture,
+                    kind,
+                    ..
+                } => {
+                    for_each_statement(target_capture, f);
+                    if let CompoundKind::OpAssign { rhs, .. } = kind {
+                        for_each_statement(&rhs.setup, f);
+                    }
+                }
+                AssignForm::Simple {
+                    target_capture,
+                    value,
+                    ..
+                } => {
+                    for_each_statement(target_capture, f);
+                    for_each_statement(&value.setup, f);
+                }
+            },
+            LoweredStatement::Select(plan) => {
+                for_each_statement(&plan.setup, f);
+                for arm in &plan.arms {
+                    for_each_statement(&arm.body().statements, f);
+                }
+                for_each_statement(&plan.postlude, f);
+            }
+            LoweredStatement::Switch(plan) => {
+                for case in &plan.cases {
+                    for_each_statement(&case.body.statements, f);
+                }
+                if let Some(default) = &plan.default {
+                    for_each_statement(&default.statements, f);
+                }
+                for_each_statement(&plan.postlude, f);
+            }
+            LoweredStatement::Directed { inner, .. } => {
+                f(inner);
+                inner.for_each_nested_statement(f);
+            }
+            LoweredStatement::Break(_)
+            | LoweredStatement::Continue(_)
+            | LoweredStatement::Async { .. }
+            | LoweredStatement::Define(_)
+            | LoweredStatement::AssignMany { .. }
+            | LoweredStatement::VarDecl { .. }
+            | LoweredStatement::Discard(_)
+            | LoweredStatement::ExpressionStatement { .. }
+            | LoweredStatement::UnreachablePanic => {}
+        }
+    }
+
+    fn for_each_nested_statements_mut(&mut self, f: &mut impl FnMut(&mut Vec<LoweredStatement>)) {
+        match self {
+            LoweredStatement::If(plan) => plan.for_each_statements_mut(f),
+            LoweredStatement::Loop(plan) => {
+                for_each_statements_mut(&mut plan.prologue, f);
+                for_each_statements_mut(&mut plan.body.statements, f);
+            }
+            LoweredStatement::Block(body)
+            | LoweredStatement::Body(body)
+            | LoweredStatement::WhileLet(body) => for_each_statements_mut(&mut body.statements, f),
+            LoweredStatement::Const(plan) => for_each_statements_mut(&mut plan.value.setup, f),
+            LoweredStatement::Return(form) => match form {
+                ReturnForm::Plain { value } => for_each_statements_mut(&mut value.setup, f),
+                ReturnForm::Unit { side_effect } => {
+                    if let Some(body) = side_effect {
+                        for_each_statements_mut(&mut body.statements, f);
+                    }
+                }
+                ReturnForm::Multi { .. } => {}
+                ReturnForm::Body { body } => for_each_statements_mut(&mut body.statements, f),
+            },
+            LoweredStatement::BreakValue(
+                BreakValuePlan::Diverged { value } | BreakValuePlan::Transfer { value, .. },
+            ) => for_each_statements_mut(&mut value.setup, f),
+            LoweredStatement::Let(plan) => {
+                if let Some(declaration) = &mut plan.declaration {
+                    declaration.for_each_nested_statements_mut(f);
+                }
+                for_each_statements_mut(&mut plan.body.statements, f);
+            }
+            LoweredStatement::Assign(form) => match form {
+                AssignForm::Compound {
+                    target_capture,
+                    kind,
+                    ..
+                } => {
+                    for_each_statements_mut(target_capture, f);
+                    if let CompoundKind::OpAssign { rhs, .. } = kind {
+                        for_each_statements_mut(&mut rhs.setup, f);
+                    }
+                }
+                AssignForm::Simple {
+                    target_capture,
+                    value,
+                    ..
+                } => {
+                    for_each_statements_mut(target_capture, f);
+                    for_each_statements_mut(&mut value.setup, f);
+                }
+            },
+            LoweredStatement::Select(plan) => {
+                for_each_statements_mut(&mut plan.setup, f);
+                for arm in &mut plan.arms {
+                    for_each_statements_mut(&mut arm.body_mut().statements, f);
+                }
+                for_each_statements_mut(&mut plan.postlude, f);
+            }
+            LoweredStatement::Switch(plan) => {
+                for case in &mut plan.cases {
+                    for_each_statements_mut(&mut case.body.statements, f);
+                }
+                if let Some(default) = &mut plan.default {
+                    for_each_statements_mut(&mut default.statements, f);
+                }
+                for_each_statements_mut(&mut plan.postlude, f);
+            }
+            LoweredStatement::Directed { inner, .. } => inner.for_each_nested_statements_mut(f),
+            LoweredStatement::Break(_)
+            | LoweredStatement::Continue(_)
+            | LoweredStatement::Async { .. }
+            | LoweredStatement::Define(_)
+            | LoweredStatement::AssignMany { .. }
+            | LoweredStatement::VarDecl { .. }
+            | LoweredStatement::Discard(_)
+            | LoweredStatement::ExpressionStatement { .. }
+            | LoweredStatement::UnreachablePanic => {}
         }
     }
 
@@ -779,6 +967,26 @@ impl SwitchCasePlan {
 }
 
 impl IfPlan {
+    fn for_each_statement(&self, f: &mut impl FnMut(&LoweredStatement)) {
+        for_each_statement(&self.condition_setup, f);
+        for_each_statement(&self.then_body.statements, f);
+        match &self.else_arm {
+            ElseArm::None => {}
+            ElseArm::ElseIf(plan) => plan.for_each_statement(f),
+            ElseArm::Else { body, .. } => for_each_statement(&body.statements, f),
+        }
+    }
+
+    fn for_each_statements_mut(&mut self, f: &mut impl FnMut(&mut Vec<LoweredStatement>)) {
+        for_each_statements_mut(&mut self.condition_setup, f);
+        for_each_statements_mut(&mut self.then_body.statements, f);
+        match &mut self.else_arm {
+            ElseArm::None => {}
+            ElseArm::ElseIf(plan) => plan.for_each_statements_mut(f),
+            ElseArm::Else { body, .. } => for_each_statements_mut(&mut body.statements, f),
+        }
+    }
+
     fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
         visit_statements(&self.condition_setup, visit);
         if let Some(initializer) = &self.initializer {

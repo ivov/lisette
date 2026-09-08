@@ -14,7 +14,5 @@ package main
 func noop() {}
 
 func main() {
-	(noop())
-	x := struct{}{}
-	_ = x
+	noop()
 }

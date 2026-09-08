@@ -21,7 +21,7 @@ func test() {
 	for (Point{
 		x: 1,
 		y: 2,
-	}.x > 0) {
+	}).x > 0 {
 		break
 	}
 }
