@@ -62,15 +62,22 @@ impl Renderer {
     fn render_switch(&self, output: &mut String, plan: &SwitchStatementPlan) {
         match &plan.kind {
             SwitchKind::Conditional => output.push_str("switch {\n"),
-            SwitchKind::Value { subject } => write_line!(output, "switch {} {{", subject),
+            SwitchKind::Value { subject } => {
+                write_line!(output, "switch {} {{", subject.print_header())
+            }
             SwitchKind::Type {
                 subject,
                 binding: Some(binding),
-            } => write_line!(output, "switch {} := {}.(type) {{", binding, subject),
+            } => write_line!(
+                output,
+                "switch {} := {}.(type) {{",
+                binding,
+                subject.print_header()
+            ),
             SwitchKind::Type {
                 subject,
                 binding: None,
-            } => write_line!(output, "switch {}.(type) {{", subject),
+            } => write_line!(output, "switch {}.(type) {{", subject.print_header()),
         }
         for case in &plan.cases {
             write_line!(output, "case {}:", join_expressions(&case.labels));
@@ -207,20 +214,20 @@ impl Renderer {
                         rhs,
                         pinned_left,
                     } => {
-                        let rhs_text = self.render_value(output, rhs);
+                        for statement in &rhs.setup {
+                            self.render_statement(output, statement);
+                        }
                         match pinned_left {
                             Some(left) => {
-                                write_line!(
-                                    output,
-                                    "{} = {} {} {}",
-                                    target,
-                                    left,
-                                    op_text,
-                                    rhs_text
-                                )
+                                let value = GoExpression::binary(
+                                    left.clone(),
+                                    op_text.as_str(),
+                                    rhs.expression.clone(),
+                                );
+                                write_line!(output, "{} = {}", target, value)
                             }
                             None => {
-                                write_line!(output, "{} {}= {}", target, op_text, rhs_text)
+                                write_line!(output, "{} {}= {}", target, op_text, rhs.expression)
                             }
                         }
                     }
@@ -340,20 +347,27 @@ impl Renderer {
         }
         match &plan.header {
             LoopHeader::Infinite => output.push_str("for {\n"),
-            LoopHeader::While(condition) => write_line!(output, "for {} {{", condition),
+            LoopHeader::While(condition) => {
+                write_line!(output, "for {} {{", condition.print_header())
+            }
             LoopHeader::Range {
                 key,
                 value,
                 iterable,
             } => match (key, value) {
-                (None, None) => write_line!(output, "for range {} {{", iterable),
-                (Some(key), None) => write_line!(output, "for {} := range {} {{", key, iterable),
+                (None, None) => write_line!(output, "for range {} {{", iterable.print_header()),
+                (Some(key), None) => write_line!(
+                    output,
+                    "for {} := range {} {{",
+                    key,
+                    iterable.print_header()
+                ),
                 (key, Some(value)) => write_line!(
                     output,
                     "for {}, {} := range {} {{",
                     key.as_deref().unwrap_or("_"),
                     value,
-                    iterable
+                    iterable.print_header()
                 ),
             },
             LoopHeader::Counted {
@@ -364,8 +378,10 @@ impl Renderer {
                 output,
                 "for {} := {}; {}; {}++ {{",
                 variable,
-                start,
-                condition.as_ref().map_or("", GoExpression::as_str),
+                start.print_header(),
+                condition
+                    .as_ref()
+                    .map_or(String::new(), GoExpression::print_header),
                 variable
             ),
         }
@@ -377,10 +393,12 @@ impl Renderer {
         debug_assert!(!plan.condition.is_empty(), "if condition must not be empty");
         output.push_str("if ");
         if let Some(initializer) = &plan.initializer {
-            self.render_definition(output, initializer);
+            output.push_str(&initializer.names.join(", "));
+            output.push_str(" := ");
+            output.push_str(&initializer.value.print_header());
             output.push_str("; ");
         }
-        output.push_str(plan.condition.as_str());
+        output.push_str(&plan.condition.print_header());
         output.push_str(" {\n");
     }
 

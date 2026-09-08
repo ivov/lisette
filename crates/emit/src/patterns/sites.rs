@@ -23,7 +23,6 @@ use crate::plan::bodies::{
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
-use crate::utils::wrap_if_struct_literal;
 
 #[derive(Clone, Copy)]
 pub(crate) struct AnnotatedPattern<'a> {
@@ -621,13 +620,10 @@ impl Planner<'_> {
                 [check] => check.render_negated(SubjectRoot::Var(&effective_subject)),
                 _ => GoExpression::unary(
                     "!",
-                    GoExpression::parenthesized(render_condition(
-                        &info.checks,
-                        SubjectRoot::Var(&effective_subject),
-                    )),
+                    render_condition(&info.checks, SubjectRoot::Var(&effective_subject)),
                 ),
             };
-            guard_parts.push(wrap_if_struct_literal(negated));
+            guard_parts.push(negated);
         }
         let guard = guard_parts
             .into_iter()

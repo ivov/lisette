@@ -27,7 +27,5 @@ func main() {
 	s := []int{1, 2, 3}
 	range_1 := makeRange()
 	sub := s[range_1.Start:range_1.End:range_1.End]
-	range_1_2 := 7
 	_ = sub
-	_ = range_1_2
 }

@@ -20,7 +20,7 @@ func test(opt lisette.Option[int]) int {
 	current := opt
 	sum := 0
 	for {
-		if (current.Tag == lisette.OptionSome && current.SomeVal == 1) || (current.Tag == lisette.OptionSome && current.SomeVal == 2) || (current.Tag == lisette.OptionSome && current.SomeVal == 3) {
+		if current.Tag == lisette.OptionSome && current.SomeVal == 1 || current.Tag == lisette.OptionSome && current.SomeVal == 2 || current.Tag == lisette.OptionSome && current.SomeVal == 3 {
 			sum++
 			current = lisette.MakeOptionNone[int]()
 		} else {

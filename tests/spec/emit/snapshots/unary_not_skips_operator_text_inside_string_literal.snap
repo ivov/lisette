@@ -9,5 +9,5 @@ description: |
 package main
 
 func test(s string) bool {
-	return ("x == y" != s)
+	return "x == y" != s
 }

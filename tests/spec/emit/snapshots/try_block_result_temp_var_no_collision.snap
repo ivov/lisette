@@ -28,8 +28,6 @@ func foo() lisette.Result[int, string] {
 		return lisette.MakeResultOk[int, any](check_2.OkVal)
 	}()
 	_ = tryResult_1
-	tryResult_1_3 := 7
-	_ = tryResult_1_3
 	return lisette.MakeResultOk[int, string](0)
 }
 

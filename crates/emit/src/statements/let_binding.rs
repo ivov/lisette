@@ -327,7 +327,11 @@ impl Planner<'_> {
             &GoExpression::name(name.to_string()),
             Some(binding_ty),
         ));
-        collapse_declared_temp(&mut statements, name);
+        collapse_declared_temp(
+            &mut statements,
+            name,
+            self.short_declaration_keeps_type(binding_ty),
+        );
         statements
     }
 

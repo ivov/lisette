@@ -364,10 +364,6 @@ fn retired_covers_receiver(target: &Expression, receiver: &Expression) -> bool {
     }
 }
 
-fn is_selector_chain(rendered: &str) -> bool {
-    rendered.split('.').all(go_name::is_plain_identifier)
-}
-
 fn build_inline(
     form: InlineForm,
     package: InlinePackage,
@@ -409,11 +405,7 @@ fn build_inline(
             vec![receiver.clone()],
         ),
         InlineForm::Index => {
-            let base = if is_selector_chain(receiver.as_str()) {
-                receiver.clone()
-            } else {
-                GoExpression::parenthesized(receiver.clone())
-            };
+            let base = receiver.clone();
             let index = arguments
                 .first()
                 .expect("an index rule takes one argument")
@@ -763,11 +755,7 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
     ) -> GoExpression {
         let base = if self.receiver_is_addressable(expression) {
-            if receiver.as_str().starts_with('*') {
-                GoExpression::parenthesized(receiver)
-            } else {
-                receiver
-            }
+            receiver
         } else {
             GoExpression::name(self.hoist_tmp_value_statement(setup, "arr", receiver))
         };
@@ -896,11 +884,7 @@ impl Planner<'_> {
             self.pin_staged(&mut staged, "arr");
         }
         staged.map_expression_as_observable_computed(|_setup, array| {
-            let base = if array.as_str().starts_with('*') {
-                GoExpression::parenthesized(array)
-            } else {
-                array
-            };
+            let base = array;
             GoExpression::slice(base, None, None, None)
         })
     }
@@ -1001,7 +985,7 @@ impl Planner<'_> {
             result_name: None,
         };
         let mut staged = self.stage_native_method(&ctx, NativeMethodForm::Dot);
-        let receiver = super::comma_ok::parenthesize_prefixed_expression(staged.receiver);
+        let receiver = staged.receiver;
         let key = staged.arguments.remove(0);
         (staged.setup, GoExpression::index(receiver, key))
     }

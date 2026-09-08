@@ -28,7 +28,6 @@ func main() {
 			wrapped_2[i_3] = lisette.MakeOptionNone[int]()
 		}
 	}
-	values := wrapped_2
 	ret_5, ret_6 := nested.MaybeValues()
 	var maybe_values lisette.Option[[]lisette.Option[int]]
 	if ret_6 {
@@ -44,6 +43,5 @@ func main() {
 	} else {
 		maybe_values = lisette.MakeOptionNone[[]lisette.Option[int]]()
 	}
-	_ = values
 	_ = maybe_values
 }

@@ -54,8 +54,6 @@ func main() {
 	})
 	tup_11 := lisette.MakeTuple2(ret_9, ret_10)
 	xs := tup_11.First
-	n := tup_11.Second
-	_ = n
 	if xs.Tag == lisette.OptionSome {
 		for _, x := range xs.SomeVal {
 			_ = x

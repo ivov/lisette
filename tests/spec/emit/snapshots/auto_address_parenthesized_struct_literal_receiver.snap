@@ -25,5 +25,5 @@ func (f *Foo) increment() {
 }
 
 func test() {
-	(&(Foo{value: 42})).increment()
+	(&Foo{value: 42}).increment()
 }

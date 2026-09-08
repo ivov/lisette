@@ -40,7 +40,5 @@ func makeBox() Box {
 func main() {
 	ref_1 := makeBox()
 	v := ref_1.inc()
-	ref_1_2 := 7
 	_ = v
-	_ = ref_1_2
 }

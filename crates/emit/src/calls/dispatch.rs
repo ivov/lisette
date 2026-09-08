@@ -723,7 +723,7 @@ impl<'a> Planner<'a> {
 
         Some(ValuePlan::computed(
             setup,
-            emit_struct_literal(&target.go_ty, field_pairs, ctx),
+            emit_struct_literal(&target.go_ty, field_pairs),
             effect,
         ))
     }

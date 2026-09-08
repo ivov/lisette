@@ -20,7 +20,5 @@ func test(c bool) int {
 	if c {
 		return 0
 	}
-	count_1 := 5
-	_ = count_1
 	return count
 }

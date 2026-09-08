@@ -26,7 +26,7 @@ func test() {
 	i := 0
 	for {
 		v_1 := i < 3
-		if !(lisette.MakeTuple2[bool, int](v_1, bump(&i)).First) {
+		if !lisette.MakeTuple2[bool, int](v_1, bump(&i)).First {
 			break
 		}
 		_ = i

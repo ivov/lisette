@@ -1882,3 +1882,18 @@ fn classify(n: int) -> string {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn match_one_arm_float_result_declares_with_short_form() {
+    let input = r#"
+struct Pair(float64, float64)
+
+fn area(p: Pair) -> float64 {
+  let a = match p {
+    Pair(x, y) => x * y,
+  };
+  a
+}
+"#;
+    assert_emit_snapshot!(input);
+}

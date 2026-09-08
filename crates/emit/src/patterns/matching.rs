@@ -3,7 +3,7 @@ use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
 use crate::calls::NativeMethodCall;
 use crate::calls::bounds::BoundsCheckedIndex;
 use crate::calls::comma_ok::CommaOkSource;
-use crate::calls::comma_ok::{CommaOkValueSlot, LoweredPair, PairCondition, PairKind, header_call};
+use crate::calls::comma_ok::{CommaOkValueSlot, LoweredPair, PairCondition, PairKind};
 use crate::calls::go_interop::{NilGuard, is_nil, non_nil, unexpected_nil_error};
 use crate::calls::slice_loop::FoundSink;
 use crate::calls::wrap_err::WrapMessage;
@@ -151,7 +151,7 @@ impl BoundOption {
                 PairCondition {
                     initializer: initializer_call.as_ref().map(|call| Definition {
                         names: vec![value.clone()],
-                        value: header_call(call.clone()),
+                        value: call.clone(),
                     }),
                     condition: test,
                 }
@@ -879,7 +879,7 @@ impl Planner<'_> {
         };
         let initializer = Definition {
             names: vec![bound_value, err_var.clone()],
-            value: header_call(call),
+            value: call,
         };
 
         let nil_check = val_var
@@ -1006,7 +1006,7 @@ impl Planner<'_> {
             condition_setup: Vec::new(),
             initializer: Some(Definition {
                 names: vec![bound_value, error.clone()],
-                value: header_call(call),
+                value: call,
             }),
             condition,
             then_body: selected,

@@ -372,10 +372,9 @@ impl Planner<'_> {
         };
         let receiver = match addressed {
             Some(inner) if is_address_of_composite_literal(args.first()) => {
-                GoExpression::parenthesized(GoExpression::address_of(inner))
+                GoExpression::address_of(inner)
             }
             Some(inner) => inner,
-            None if receiver.as_str().starts_with('*') => GoExpression::parenthesized(receiver),
             None => receiver,
         };
 

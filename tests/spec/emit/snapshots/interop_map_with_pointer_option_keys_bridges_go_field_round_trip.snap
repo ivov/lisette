@@ -39,6 +39,4 @@ func main() {
 		option_9 := lisette.OptionFromPointer[int](i_7)
 		wrapped_6[option_9] = v_8
 	}
-	roundtrip := wrapped_6
-	_ = roundtrip
 }

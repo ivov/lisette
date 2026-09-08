@@ -576,10 +576,6 @@ impl Planner<'_> {
 fn cancel_deref_of_address(channel: GoExpression) -> GoExpression {
     let addressed = match channel.node() {
         GoExpressionNode::AddressOf(inner) => Some(inner.as_ref()),
-        GoExpressionNode::Parenthesized(inner) => match inner.as_ref() {
-            GoExpressionNode::AddressOf(inner) => Some(inner.as_ref()),
-            _ => None,
-        },
         _ => None,
     };
     match addressed {

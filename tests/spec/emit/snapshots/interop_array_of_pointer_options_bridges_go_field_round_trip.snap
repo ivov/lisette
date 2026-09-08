@@ -38,6 +38,4 @@ func main() {
 			wrapped_5[i_6] = lisette.MakeOptionNone[int]()
 		}
 	}
-	roundtrip := wrapped_5
-	_ = roundtrip
 }

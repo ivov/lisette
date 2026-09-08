@@ -9,5 +9,5 @@ description: |
 package main
 
 func test(a, b float64) bool {
-	return (a != b)
+	return a != b
 }

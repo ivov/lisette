@@ -30,7 +30,7 @@ func (p Parser) parse() (int, error) {
 }
 
 func main() {
-	if n, err := (Parser{src: "ab"}.parse()); err == nil {
+	if n, err := (Parser{src: "ab"}).parse(); err == nil {
 		fmt.Println(n)
 	} else {
 		fmt.Println(err)

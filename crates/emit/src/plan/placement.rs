@@ -5,14 +5,17 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::expressions::staging::SpreadSequenceOptions;
-use crate::names::go_name::{GeneratedPackage, is_plain_identifier};
+use crate::names::go_name::GeneratedPackage;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::plan::bodies::{
     AssignForm, BreakValueAction, BreakValuePlan, ElseArm, LoopHeader, LoopTransfer, LoweredBlock,
     LoweredStatement, PlacePlan, define, discard, expression_statement,
 };
 use crate::plan::calls::plan_variadic_spread;
-use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::values::{
+    CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
+};
 use crate::statements::assignments::is_lvalue_chain;
 use crate::types::native::NativeGoType;
 use std::slice;
@@ -74,7 +77,11 @@ pub(crate) fn rebind_trailing_temp(
 }
 
 /// Collapse `var x T` plus the one statement that fills it into `x := value`.
-pub(crate) fn collapse_declared_temp(statements: &mut Vec<LoweredStatement>, name: &str) {
+pub(crate) fn collapse_declared_temp(
+    statements: &mut Vec<LoweredStatement>,
+    name: &str,
+    value_has_declared_type: bool,
+) {
     let [
         LoweredStatement::VarDecl {
             name: declared,
@@ -95,7 +102,7 @@ pub(crate) fn collapse_declared_temp(statements: &mut Vec<LoweredStatement>, nam
             target,
             value,
         }) => {
-            if !matches!(go_type.as_str(), "int" | "string" | "bool")
+            if !infers_declared_type(go_type, &value.expression, value_has_declared_type)
                 || target.as_str() != name
                 || !target_capture.is_empty()
                 || !value.setup.is_empty()
@@ -133,6 +140,42 @@ pub(crate) fn collapse_declared_temp(statements: &mut Vec<LoweredStatement>, nam
     statements[0] = define(name.to_string(), value);
 }
 
+fn infers_declared_type(
+    go_type: &str,
+    value: &GoExpression,
+    value_has_declared_type: bool,
+) -> bool {
+    if let Some(kind) = value.constant_kind() {
+        return match kind {
+            ConstantKind::Int => go_type == "int",
+            ConstantKind::Rune => matches!(go_type, "rune" | "int32"),
+            ConstantKind::Float => go_type == "float64",
+            ConstantKind::Complex => go_type == "complex128",
+            ConstantKind::Bool => go_type == "bool",
+            ConstantKind::String => go_type == "string",
+        };
+    }
+    match value.node() {
+        GoExpressionNode::Literal(text) => {
+            matches!(go_type, "int" | "string" | "bool") && text != "nil"
+        }
+        GoExpressionNode::CompositeLiteral {
+            go_type: Some(literal_type),
+            ..
+        } => literal_type == go_type,
+        GoExpressionNode::CompositeLiteral { go_type: None, .. }
+        | GoExpressionNode::FunctionLiteral { .. }
+        | GoExpressionNode::Verbatim(_) => false,
+        GoExpressionNode::Binary { operator, .. } => match operator.as_str() {
+            "==" | "!=" | "<" | "<=" | ">" | ">=" | "&&" | "||" => go_type == "bool",
+            "<<" | ">>" => go_type == "int",
+            _ => value_has_declared_type,
+        },
+        GoExpressionNode::Unary { operator, .. } if operator == "!" => go_type == "bool",
+        _ => value_has_declared_type && !go_type.contains("chan"),
+    }
+}
+
 /// The value of a body that is exactly one plain `name = value`.
 fn single_simple_assign_value(body: &LoweredBlock, name: &str) -> Option<GoExpression> {
     let [LoweredStatement::Assign(assign)] = body.statements.as_slice() else {
@@ -160,34 +203,18 @@ fn join_boolean_branches(
 ) -> Option<GoExpression> {
     let and = |left: GoExpression, right: GoExpression| GoExpression::binary(left, "&&", right);
     let or = |left: GoExpression, right: GoExpression| GoExpression::binary(left, "||", right);
+    let not = |operand: &GoExpression| GoExpression::unary("!", operand.clone());
     Some(match (then_value.as_str(), else_value.as_str()) {
         ("true", "false") => condition.clone(),
-        ("false", "true") => negate_condition(condition),
+        ("false", "true") => not(condition),
         // Both-literal same-value arms would drop the condition's evaluation.
         ("true", "true") | ("false", "false") => return None,
-        (_, "false") => and(and_operand(condition), and_operand(then_value)),
+        (_, "false") => and(condition.clone(), then_value.clone()),
         ("true", _) => or(condition.clone(), else_value.clone()),
-        ("false", _) => and(negate_condition(condition), and_operand(else_value)),
-        (_, "true") => or(negate_condition(condition), then_value.clone()),
+        ("false", _) => and(not(condition), else_value.clone()),
+        (_, "true") => or(not(condition), then_value.clone()),
         _ => return None,
     })
-}
-
-fn negate_condition(condition: &GoExpression) -> GoExpression {
-    if is_plain_identifier(condition.as_str()) {
-        GoExpression::unary("!", condition.clone())
-    } else {
-        GoExpression::unary("!", GoExpression::parenthesized(condition.clone()))
-    }
-}
-
-/// Parenthesize a synthesized `&&` operand, keeping bare identifiers bare.
-fn and_operand(operand: &GoExpression) -> GoExpression {
-    if is_plain_identifier(operand.as_str()) {
-        operand.clone()
-    } else {
-        GoExpression::parenthesized(operand.clone())
-    }
 }
 
 pub(crate) fn requires_temp_var(expression: &Expression) -> bool {
@@ -297,6 +324,13 @@ pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -
 }
 
 impl Planner<'_> {
+    pub(crate) fn short_declaration_keeps_type(&self, ty: &Type) -> bool {
+        let peeled = self.facts.peel_alias(ty);
+        !self.facts.is_interface_or_unknown(&peeled)
+            && !(matches!(peeled, Type::Nominal { .. })
+                && self.facts.underlying_simple_kind(&peeled).is_some())
+    }
+
     /// Lower a discarded expression into structured statements: a bare
     /// side-effecting call (`f()`), a `_ = value` discard, or a propagate.
     pub(crate) fn lower_discard_value(&mut self, value: &Expression) -> Vec<LoweredStatement> {

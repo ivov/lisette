@@ -298,10 +298,6 @@ impl<'a> Planner<'a> {
             ..
         } = callee_staged;
 
-        if function.deref_inner().is_some() {
-            callee = GoExpression::parenthesized(callee);
-        }
-
         let mut type_args_string = self.resolve_call_type_args(CallTypeArgsRequest {
             function,
             callee: &call_plan.resolved,

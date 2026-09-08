@@ -476,9 +476,8 @@ fn third_party_go_import_path_emitted_in_full() {
     let input = r#"
 import "go:github.com/bwmarrin/discordgo"
 
-fn test() {
-  let s = discordgo.Session{}
-  let _ = s
+fn session() -> discordgo.Session {
+  discordgo.Session{}
 }
 "#;
     let typedef = r#"

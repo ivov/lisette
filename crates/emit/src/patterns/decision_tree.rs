@@ -97,8 +97,7 @@ impl AccessPath {
     pub(crate) fn render(&self, subject: SubjectRoot<'_>) -> GoExpression {
         let (root, segments) = subject.resolve(&self.segments);
         let mut result = GoExpression::name(root);
-        let last = segments.len().saturating_sub(1);
-        for (i, seg) in segments.iter().enumerate() {
+        for seg in segments {
             result = match seg {
                 PathSegment::Field(name) => GoExpression::selector(result, name.clone()),
                 PathSegment::Index(index) => {
@@ -119,10 +118,7 @@ impl AccessPath {
                         None,
                     ),
                 ),
-                PathSegment::Deref if i == last => GoExpression::dereference(result),
-                PathSegment::Deref => {
-                    GoExpression::parenthesized(GoExpression::dereference(result))
-                }
+                PathSegment::Deref => GoExpression::dereference(result),
                 PathSegment::NewtypeCast(go_type) => {
                     GoExpression::conversion(go_type.clone(), result)
                 }
@@ -130,17 +126,6 @@ impl AccessPath {
             };
         }
         result
-    }
-
-    /// Like `render`, but a tail-`Deref` is parenthesized so the result is
-    /// safe as a selector receiver, index target, or call callee.
-    pub(crate) fn render_composable(&self, subject: SubjectRoot<'_>) -> GoExpression {
-        let rendered = self.render(subject);
-        if matches!(self.segments.last(), Some(PathSegment::Deref)) {
-            GoExpression::parenthesized(rendered)
-        } else {
-            rendered
-        }
     }
 
     pub(crate) fn contains_deferred_evaluation(&self) -> bool {
@@ -247,25 +232,11 @@ impl Check {
                     GoExpression::literal(min_length.to_string()),
                 )
             }
-            Check::Or { alternatives } if !negative => {
-                let alternative_count = alternatives.len();
-                let joined = alternatives
-                    .iter()
-                    .map(|checks| {
-                        if checks.len() == 1 {
-                            checks[0].render(subject)
-                        } else {
-                            GoExpression::parenthesized(join_conditions(checks, subject))
-                        }
-                    })
-                    .reduce(|left, right| GoExpression::binary(left, "||", right))
-                    .expect("an or-check has at least one alternative");
-                if alternative_count > 1 {
-                    GoExpression::parenthesized(joined)
-                } else {
-                    joined
-                }
-            }
+            Check::Or { alternatives } if !negative => alternatives
+                .iter()
+                .map(|checks| join_conditions(checks, subject))
+                .reduce(|left, right| GoExpression::binary(left, "||", right))
+                .expect("an or-check has at least one alternative"),
             Check::TypeAssert { path, go_type } if !negative => GoExpression::immediate_call(
                 "bool".to_string(),
                 LoweredBlock {
@@ -281,9 +252,7 @@ impl Check {
             ),
             Check::Or { .. } | Check::TypeAssert { .. } => GoExpression::unary(
                 "!",
-                GoExpression::parenthesized(
-                    self.render_with_polarity(subject, CheckPolarity::Positive),
-                ),
+                self.render_with_polarity(subject, CheckPolarity::Positive),
             ),
         }
     }

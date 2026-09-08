@@ -1,5 +1,4 @@
 use super::NativeMethodCall;
-use super::comma_ok::parenthesize_prefixed_expression;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::plan::bodies::LoweredStatement;
@@ -68,8 +67,7 @@ impl Planner<'_> {
                 ),
             )
         };
-        let element =
-            GoExpression::index(parenthesize_prefixed_expression(receiver.clone()), index);
+        let element = GoExpression::index(receiver.clone(), index);
         (
             setup,
             BoundsCheckedIndex {

@@ -17,7 +17,7 @@ func ident[T any](v T) T {
 }
 
 func test() float64 {
-	var parenthesized float64 = -(1)
-	negated := ident(float64(-(1)))
+	var parenthesized float64 = -1
+	negated := ident(float64(-1))
 	return parenthesized/2.0 + negated/2.0
 }

@@ -15,6 +15,4 @@ func doNothing() {}
 
 func test() {
 	doNothing()
-	r := struct{}{}
-	_ = r
 }

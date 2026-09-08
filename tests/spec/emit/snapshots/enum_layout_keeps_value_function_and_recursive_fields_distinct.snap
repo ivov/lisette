@@ -57,7 +57,7 @@ func read(node Node) int {
 	case NodeCallback:
 		return node.Callback()
 	default:
-		return read((*node.Child))
+		return read(*node.Child)
 	}
 }
 

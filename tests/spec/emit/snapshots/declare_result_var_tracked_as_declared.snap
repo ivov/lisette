@@ -18,6 +18,4 @@ func main() {
 		tmp_1 = 2
 	}
 	_ = tmp_1
-	tmp_1_2 := 3
-	_ = tmp_1_2
 }

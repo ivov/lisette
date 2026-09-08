@@ -8,6 +8,7 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement};
+use crate::plan::cleanup::clean_up;
 use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::values::GoExpression;
 use crate::state::package_state::FunctionEmissionContext;
@@ -68,7 +69,8 @@ impl Planner<'_> {
         body: &Expression,
         should_return: bool,
     ) {
-        let lowered = self.lower_function_body(body, should_return);
+        let mut lowered = self.lower_function_body(body, should_return);
+        clean_up(&mut lowered.statements);
         self.collect_imports(&lowered.statements);
         Renderer.render_lowered_block(output, &lowered);
     }

@@ -85,10 +85,7 @@ pub(crate) fn apply_refutable_root_assertion<'s>(
                 })
                 .reduce(|left, right| GoExpression::binary(left, "||", right))
                 .expect("a multi-type assertion names at least one type");
-            (
-                Cow::Borrowed(subject),
-                Some(GoExpression::parenthesized(oks)),
-            )
+            (Cow::Borrowed(subject), Some(oks))
         }
     }
 }
@@ -125,9 +122,7 @@ pub(crate) fn tree_binding_statements(
         let access_expression = binding.path.render(SubjectRoot::Var(subject_var));
 
         if analyze_inline_candidate(&binding.lisette_name, consumers) == InlineDecision::Inline {
-            let composable = binding
-                .path
-                .render_composable(SubjectRoot::Var(subject_var));
+            let composable = binding.path.render(SubjectRoot::Var(subject_var));
             planner
                 .scope
                 .bind_inline_expr(&binding.lisette_name, InlineExpr::new(composable));

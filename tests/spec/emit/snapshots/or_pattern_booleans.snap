@@ -12,7 +12,7 @@ description: |
 package main
 
 func test(a, b bool) string {
-	if (a && b) || (!a && !b) {
+	if a && b || !a && !b {
 		return "same"
 	}
 	return "different"

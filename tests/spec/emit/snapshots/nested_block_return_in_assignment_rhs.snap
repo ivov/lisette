@@ -12,12 +12,10 @@ description: |
 package main
 
 func test() int {
-	x := 0
 	{
 		{
 			return 1
 		}
 	}
-	_ = x
 	return 2
 }

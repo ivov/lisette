@@ -4,16 +4,14 @@ description: |
   
   import "go:github.com/bwmarrin/discordgo"
   
-  fn test() {
-    let s = discordgo.Session{}
-    let _ = s
+  fn session() -> discordgo.Session {
+    discordgo.Session{}
   }
 ---
 package main
 
 import "github.com/bwmarrin/discordgo"
 
-func test() {
-	s := discordgo.Session{}
-	_ = s
+func session() discordgo.Session {
+	return discordgo.Session{}
 }

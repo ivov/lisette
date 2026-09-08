@@ -43,5 +43,5 @@ func countLeaves[T any](tree Tree[T]) int {
 		return 1
 	}
 	right := *tree.Right
-	return countLeaves((*tree.Left)) + countLeaves(right)
+	return countLeaves(*tree.Left) + countLeaves(right)
 }

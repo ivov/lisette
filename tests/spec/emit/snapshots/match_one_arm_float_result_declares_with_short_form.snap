@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  struct Pair(float64, float64)
+  
+  fn area(p: Pair) -> float64 {
+    let a = match p {
+      Pair(x, y) => x * y,
+    };
+    a
+  }
+---
+package main
+
+type Pair struct {
+	F0 float64
+	F1 float64
+}
+
+func area(p Pair) float64 {
+	a := p.F0 * p.F1
+	return a
+}

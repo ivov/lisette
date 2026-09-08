@@ -20,7 +20,6 @@ use crate::plan::placement::unreachable_panic_if_needed;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::InlineExpr;
 use crate::types::go_type::split_top_level_type_list;
-use crate::utils::wrap_if_struct_literal;
 
 struct FlatCase<'d> {
     conditions: Vec<GoExpression>,
@@ -33,16 +32,6 @@ fn decision_arm_index(decision: &Decision) -> usize {
         Decision::Success { arm_index, .. } | Decision::Guard { arm_index, .. } => *arm_index,
         _ => unreachable!("a flattened case body lowers from an arm leaf"),
     }
-}
-
-fn binds_looser_than_conjunction(guard: &Expression) -> bool {
-    matches!(
-        guard,
-        Expression::Binary {
-            operator: BinaryOperator::Or,
-            ..
-        }
-    )
 }
 
 fn guard_renders_inline(guard: &Expression) -> bool {
@@ -629,15 +618,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         if !setup.is_empty() {
             return None;
         }
-        let guard = self.arms[arm_index]
-            .guard
-            .as_deref()
-            .expect("a Guard decision has a guard expression");
-        Some(if binds_looser_than_conjunction(guard) {
-            GoExpression::parenthesized(condition)
-        } else {
-            condition
-        })
+        Some(condition)
     }
 
     fn install_path_overlays(&mut self, bindings: &[PatternBinding]) {
@@ -645,7 +626,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             if binding.go_name.is_none() {
                 continue;
             }
-            let composable = binding.path.render_composable(self.subject.root());
+            let composable = binding.path.render(self.subject.root());
             self.planner
                 .scope
                 .bind_inline_expr(&binding.lisette_name, InlineExpr::new(composable));
@@ -750,7 +731,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     .expect("Bool shape requires a false-labeled branch");
                 self.walk_condition_branch(
                     statements,
-                    wrap_if_struct_literal(rendered_path),
+                    rendered_path,
                     &true_branch.decision,
                     &false_branch.decision,
                     ctx,
@@ -1273,9 +1254,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let guard_expression = self.arms[arm_index].guard.as_deref()?;
         let plan = self
             .planner
-            .plan_operand(guard_expression, ExpressionContext::value().condition());
+            .plan_operand(guard_expression, ExpressionContext::value());
         let (setup, value) = plan.into_parts();
-        Some((setup, wrap_if_struct_literal(value)))
+        Some((setup, value))
     }
 
     fn render_chain_conditions(&self, tests: &[ChainTest]) -> Vec<Option<GoExpression>> {
@@ -1325,7 +1306,7 @@ fn switch_branch_condition(
     case_label: &GoExpression,
 ) -> GoExpression {
     if matches!(shape, SwitchShape::Bool) && case_label.as_str() == "true" {
-        return wrap_if_struct_literal(rendered_path.clone());
+        return rendered_path.clone();
     }
     GoExpression::binary(
         render_switch_expression(rendered_path.clone(), kind),
@@ -1336,10 +1317,8 @@ fn switch_branch_condition(
 
 fn render_switch_expression(rendered_path: GoExpression, kind: &PatternSwitchKind) -> GoExpression {
     match kind {
-        PatternSwitchKind::EnumTag => {
-            wrap_if_struct_literal(GoExpression::selector(rendered_path, "Tag".to_string()))
-        }
-        PatternSwitchKind::Value => wrap_if_struct_literal(rendered_path),
+        PatternSwitchKind::EnumTag => GoExpression::selector(rendered_path, "Tag".to_string()),
+        PatternSwitchKind::Value => rendered_path,
         PatternSwitchKind::TypeSwitch => unreachable!("TypeSwitch handled separately"),
     }
 }

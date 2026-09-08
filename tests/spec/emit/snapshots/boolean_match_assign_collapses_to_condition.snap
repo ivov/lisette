@@ -38,6 +38,6 @@ type Node struct {
 }
 
 func test(node Node) bool {
-	matched := (node.Tag == NodeNumber) && (node.Number == 42)
+	matched := node.Tag == NodeNumber && node.Number == 42
 	return matched
 }

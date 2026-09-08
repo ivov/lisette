@@ -26,6 +26,6 @@ func (s *S) inc() {
 
 func main() {
 	s := S{x: 1}
-	r := &(s)
+	r := &s
 	r.inc()
 }

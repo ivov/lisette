@@ -888,9 +888,9 @@ fn main() {
 #[test]
 fn interop_slice_literal_option_import() {
     let input = r#"
-fn main() {
+fn empty() -> Slice<Option<int>> {
   let xs: Slice<Option<int>> = []
-  let _ = xs
+  xs
 }
 "#;
     assert_emit_snapshot!(input);
@@ -918,9 +918,8 @@ fn interop_package_const_aliased_import() {
     let input = r#"
 import t "go:time"
 
-fn main() {
-  let d = t.Second
-  let _ = d
+fn second() -> t.Duration {
+  t.Second
 }
 "#;
     assert_emit_snapshot!(input);
@@ -944,9 +943,8 @@ fn interop_package_const_nested_package() {
     let input = r#"
 import "go:debug/dwarf"
 
-fn main() {
-  let t = dwarf.TagArrayType
-  let _ = t
+fn tag() -> dwarf.Tag {
+  dwarf.TagArrayType
 }
 "#;
     assert_emit_snapshot!(input);

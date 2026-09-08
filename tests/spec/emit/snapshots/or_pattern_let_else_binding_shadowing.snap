@@ -30,6 +30,4 @@ func main() {
 		return
 	}
 	_ = x
-	x_2 := 2
-	_ = x_2
 }

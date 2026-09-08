@@ -5,6 +5,7 @@ use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
 use crate::names::go_name::GO_IMPORT_PREFIX;
 use crate::plan::bodies::{LoweredStatement, define, expression_statement};
+use crate::plan::cleanup::clean_up;
 use crate::plan::values::GoExpression;
 use crate::write_line;
 use ecow::EcoString;
@@ -396,7 +397,8 @@ impl Planner<'_> {
         method: &AdapterMethod,
         inner_call: GoExpression,
     ) -> (String, String) {
-        let (go_ret, statements) = self.plan_adapter_body(method, inner_call);
+        let (go_ret, mut statements) = self.plan_adapter_body(method, inner_call);
+        clean_up(&mut statements);
         self.collect_imports(&statements);
         (go_ret, crate::Renderer.render_setup(&statements))
     }

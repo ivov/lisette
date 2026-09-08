@@ -18,9 +18,7 @@ func test(res lisette.Result[int, string]) {
 	current := res
 	for {
 		if current.Tag == lisette.ResultOk {
-			value := current.OkVal
 			current = lisette.MakeResultErr[int, string]("done")
-			_ = value
 		} else {
 			break
 		}

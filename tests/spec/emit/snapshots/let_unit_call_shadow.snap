@@ -17,9 +17,5 @@ func foo() {}
 
 func main() {
 	foo()
-	x := struct{}{}
-	_ = x
 	foo()
-	x_1 := struct{}{}
-	_ = x_1
 }

@@ -5,21 +5,11 @@ use crate::abi::layout::SlotOrigin;
 use crate::plan::values::CaptureBoundary;
 
 /// Whether the expression is being emitted as the callee of a call.
-/// Independent of [`SyntaxContext`]: a callee can appear inside a condition.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum CalleeRole {
     #[default]
     Value,
     Callee,
-}
-
-/// The enclosing syntactic context. `Condition` is `if`/`for`/`switch` head,
-/// where Go forbids unparenthesized composite literals.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum SyntaxContext {
-    #[default]
-    Plain,
-    Condition,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,7 +34,6 @@ pub(crate) enum ArgumentTarget {
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct ExpressionContext<'a> {
     callee_role: CalleeRole,
-    syntax_context: SyntaxContext,
     expected_slot_type: Option<&'a Type>,
     function_value_abi_target: FunctionValueAbiTarget,
     argument_target: ArgumentTarget,
@@ -59,11 +48,6 @@ impl<'a> ExpressionContext<'a> {
 
     pub(crate) fn callee(mut self) -> Self {
         self.callee_role = CalleeRole::Callee;
-        self
-    }
-
-    pub(crate) fn condition(mut self) -> Self {
-        self.syntax_context = SyntaxContext::Condition;
         self
     }
 
@@ -115,10 +99,6 @@ impl<'a> ExpressionContext<'a> {
 
     pub(crate) fn is_callee(self) -> bool {
         matches!(self.callee_role, CalleeRole::Callee)
-    }
-
-    pub(crate) fn is_condition(self) -> bool {
-        matches!(self.syntax_context, SyntaxContext::Condition)
     }
 
     pub(crate) fn forces_tagged_go_function(self) -> bool {

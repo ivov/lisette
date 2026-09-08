@@ -13,5 +13,5 @@ package main
 func noop() {}
 
 func main() {
-	(noop())
+	noop()
 }

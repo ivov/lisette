@@ -66,7 +66,6 @@ impl Planner<'_> {
         field_assignments: &[StructFieldAssignment],
         spread: &StructSpread,
         ty: &Type,
-        expression_ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         let ctx = self.analyze_struct_call(name, ty);
 
@@ -180,7 +179,6 @@ impl Planner<'_> {
                             },
                             &ctx,
                             field_assignments,
-                            expression_ctx,
                         )
                     } else {
                         self.lower_struct_update(base_staged, &field_pairs)
@@ -195,13 +193,13 @@ impl Planner<'_> {
                     let mut field_pairs =
                         fields.into_iter().map(StructCallField::into_pair).collect();
                     self.append_autofills(&mut field_pairs, field_assignments, &ctx, is_go_struct);
-                    emit_struct_literal(&ctx.go_type, field_pairs, expression_ctx)
+                    emit_struct_literal(&ctx.go_type, field_pairs)
                 }
             },
             StructSpread::None => {
                 let field_pairs: Vec<_> =
                     fields.into_iter().map(StructCallField::into_pair).collect();
-                emit_struct_literal(&ctx.go_type, field_pairs, expression_ctx)
+                emit_struct_literal(&ctx.go_type, field_pairs)
             }
         };
 
@@ -425,7 +423,7 @@ impl Planner<'_> {
                 };
                 pairs.push((go_field_name, zero));
             }
-            return emit_struct_literal(&go_ty, pairs, ExpressionContext::value());
+            return emit_struct_literal(&go_ty, pairs);
         }
         GoExpression::empty_composite(go_ty)
     }
@@ -527,7 +525,7 @@ impl Planner<'_> {
                     (go_name, self.lisette_zero(&field_ty))
                 })
                 .collect();
-            return emit_struct_literal(&go_ty, pairs, ExpressionContext::value());
+            return emit_struct_literal(&go_ty, pairs);
         }
         if let Some(underlying) = self.facts.underlying_type(ty) {
             return self.lisette_zero(&underlying);
@@ -797,7 +795,6 @@ impl Planner<'_> {
         input: SpreadInput<'_>,
         ctx: &StructCallContext<'_>,
         field_assignments: &[StructFieldAssignment],
-        expression_ctx: ExpressionContext<'_>,
     ) -> (Vec<LoweredStatement>, GoExpression) {
         let SpreadInput {
             base,
@@ -817,10 +814,7 @@ impl Planner<'_> {
 
         if carried.is_empty() {
             statements.push(discard(base_value));
-            return (
-                statements,
-                emit_struct_literal(&ctx.go_type, field_pairs, expression_ctx),
-            );
+            return (statements, emit_struct_literal(&ctx.go_type, field_pairs));
         }
 
         let source = if is_order_sensitive(base) {
@@ -836,10 +830,7 @@ impl Planner<'_> {
             let slot = self.resolve_struct_call_field_name(&field_name, ctx);
             field_pairs.push((slot.clone(), GoExpression::selector(source.clone(), slot)));
         }
-        (
-            statements,
-            emit_struct_literal(&ctx.go_type, field_pairs, expression_ctx),
-        )
+        (statements, emit_struct_literal(&ctx.go_type, field_pairs))
     }
 }
 
@@ -907,31 +898,18 @@ fn unspecified_pairs<'a>(
         .collect()
 }
 
-pub(crate) fn emit_struct_literal(
-    ty: &str,
-    fields: Vec<(String, GoExpression)>,
-    ctx: ExpressionContext<'_>,
-) -> GoExpression {
+pub(crate) fn emit_struct_literal(ty: &str, fields: Vec<(String, GoExpression)>) -> GoExpression {
     let layout = if fields.len() > 1 {
         CompositeLayout::MultiLine { indented: false }
     } else {
         CompositeLayout::Inline { padded: true }
     };
-    let literal = GoExpression::composite(
+    GoExpression::composite(
         Some(ty.to_string()),
         fields
             .into_iter()
             .map(|(name, value)| (Some(GoExpression::name(name)), value))
             .collect(),
         layout,
-    );
-
-    // Generic composite literals (`Type[Args]{...}`) need inner parens in
-    // condition contexts because gofmt strips outer condition parens for
-    // generics, producing invalid Go in `if`/`for`/`switch`.
-    if ctx.is_condition() && ty.contains('[') {
-        GoExpression::parenthesized(literal)
-    } else {
-        literal
-    }
+    )
 }

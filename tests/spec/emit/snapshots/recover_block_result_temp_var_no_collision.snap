@@ -17,7 +17,5 @@ func main() {
 	result := lisette.RecoverBlock(func() int {
 		return 1
 	})
-	recoverResult_1_2 := 7
-	_ = recoverResult_1_2
 	_ = result
 }

@@ -26,7 +26,5 @@ func main() {
 	for i := range bound_1 {
 		sum += i
 	}
-	bound_1_2 := 7
 	_ = sum
-	_ = bound_1_2
 }

@@ -102,41 +102,8 @@ impl LoweredPair {
         let call = self.initializer_call.as_ref()?;
         Some(Definition {
             names: self.binding(),
-            value: header_call(call.clone()),
+            value: call.clone(),
         })
-    }
-}
-
-/// Go reads a bare `T{` in an `if` header as the block, so such a receiver takes parentheses.
-pub(crate) fn header_call(call: GoExpression) -> GoExpression {
-    let text = call.as_str();
-    let mut rest = text.trim_start_matches(['&', '*']);
-    let type_name_end = rest
-        .find(|c: char| !(c.is_alphanumeric() || c == '_' || c == '.'))
-        .unwrap_or(rest.len());
-    if type_name_end == 0 {
-        return call;
-    }
-    rest = &rest[type_name_end..];
-    if let Some(after_bracket) = rest.strip_prefix('[') {
-        let mut depth = 1usize;
-        let close = after_bracket.char_indices().find(|(_, character)| {
-            match character {
-                '[' => depth += 1,
-                ']' => depth -= 1,
-                _ => {}
-            }
-            depth == 0
-        });
-        let Some((close, _)) = close else {
-            return call;
-        };
-        rest = &after_bracket[close + 1..];
-    }
-    if rest.starts_with('{') {
-        GoExpression::parenthesized(call)
-    } else {
-        call
     }
 }
 
@@ -395,20 +362,10 @@ impl Planner<'_> {
                 let (setup, operand) = self
                     .lower_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
-                let operand = parenthesize_prefixed_expression(operand);
                 let target_ty = self.facts.peel_alias(&expression.get_type()).ok_type();
                 let target = self.use_go_type(&target_ty);
                 (setup, GoExpression::type_assertion(operand, target))
             }
         }
-    }
-}
-
-/// `*x` and `&x` bind looser than a postfix `[k]` or `.(T)`.
-pub(super) fn parenthesize_prefixed_expression(operand: GoExpression) -> GoExpression {
-    if operand.as_str().starts_with('*') || operand.as_str().starts_with('&') {
-        GoExpression::parenthesized(operand)
-    } else {
-        operand
     }
 }
