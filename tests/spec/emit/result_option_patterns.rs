@@ -2595,7 +2595,7 @@ fn main() {
 }
 
 #[test]
-fn predicate_value_is_pinned_before_a_later_sibling_binds_err() {
+fn predicate_value_stays_inline_when_a_later_sibling_binds_err() {
     let input = r#"
 fn first() -> Result<int, error> { Ok(1) }
 fn second() -> Result<int, error> { Ok(2) }

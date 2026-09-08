@@ -160,13 +160,13 @@ impl Planner<'_> {
                             access
                         }
                     };
-                    self.equality_expression(
+                    let comparison = self.equality_expression(
                         field(&receiver),
                         field(&other),
                         &sem_field.ty,
                         &sem_generics,
-                    )
-                    .rendered()
+                    );
+                    self.render_expression(&comparison)
                 })
                 .collect();
             cases.push(format!(

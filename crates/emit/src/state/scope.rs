@@ -13,8 +13,6 @@ pub(crate) struct ScopeState {
     return_ctx_stack: Vec<ReturnContext>,
     test_handle_stack: Vec<String>,
     assign_targets: HashSet<String>,
-    /// Go identifiers referenced during lowering, for structural liveness.
-    use_frames: Vec<HashSet<String>>,
 }
 
 struct ScopeFrame {
@@ -61,29 +59,6 @@ impl ScopeState {
             return_ctx_stack: vec![ReturnContext::None],
             test_handle_stack: Vec::new(),
             assign_targets: HashSet::default(),
-            use_frames: Vec::new(),
-        }
-    }
-
-    pub(crate) fn enter_use_region(&mut self) {
-        self.use_frames.push(HashSet::default());
-    }
-
-    /// Pop and return the region's uses, merging them into the enclosing region.
-    pub(crate) fn exit_use_region(&mut self) -> HashSet<String> {
-        let frame = self
-            .use_frames
-            .pop()
-            .expect("a use region must be entered before it is exited");
-        if let Some(parent) = self.use_frames.last_mut() {
-            parent.extend(frame.iter().cloned());
-        }
-        frame
-    }
-
-    pub(crate) fn record_go_use(&mut self, go_name: &str) {
-        if let Some(frame) = self.use_frames.last_mut() {
-            frame.insert(go_name.to_string());
         }
     }
 
@@ -427,10 +402,7 @@ mod tests {
         scope.bind("value", "outer");
         scope.mark_go_const("value");
         scope.push_binding_frame();
-        scope.bind_inline_expr(
-            "value",
-            InlineExpr::new(pair_first(), vec!["pair".into()], false),
-        );
+        scope.bind_inline_expr("value", InlineExpr::new(pair_first()));
         scope.enter_block();
         scope.bind("value", "inner");
         scope.bind("value", "rebound");
@@ -470,7 +442,7 @@ mod tests {
         scope.enter_block();
         scope.bind("first", "inner");
         assert!(scope.has_binding_for_go_name("shared"));
-        scope.bind_inline_expr("second", InlineExpr::new(pair_first(), vec![], false));
+        scope.bind_inline_expr("second", InlineExpr::new(pair_first()));
         assert!(!scope.has_binding_for_go_name("shared"));
         scope.exit_block();
         assert!(scope.has_binding_for_go_name("shared"));

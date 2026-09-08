@@ -69,6 +69,7 @@ impl Planner<'_> {
         should_return: bool,
     ) {
         let lowered = self.lower_function_body(body, should_return);
+        self.collect_imports(&lowered.statements);
         Renderer.render_lowered_block(output, &lowered);
     }
 
@@ -411,6 +412,7 @@ impl Planner<'_> {
                 &pattern,
                 &param_ty,
             );
+            self.collect_imports(&statements);
             Renderer.render_lowered_block(body, &LoweredBlock { statements });
         }
         self.emit_function_body(

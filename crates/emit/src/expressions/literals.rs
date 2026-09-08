@@ -3,6 +3,7 @@ use std::fmt::Write;
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::context::expression::ExpressionContext;
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::values::{
     CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
@@ -109,7 +110,6 @@ impl Planner<'_> {
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "v");
         let effect = sequenced.effect;
-        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let mut setup = sequenced.setup;
 
         let mut wrapped = Vec::with_capacity(sequenced.values.len());
@@ -133,7 +133,7 @@ impl Planner<'_> {
         let layout = CompositeLayout::for_elements(wrapped.len(), widest);
         ValuePlan::computed(
             setup,
-            GoExpression::composite(Some(go_type), wrapped, layout, contains_deferred_evaluation),
+            GoExpression::composite(Some(go_type), wrapped, layout),
             effect,
         )
     }
@@ -196,7 +196,6 @@ impl Planner<'_> {
             return ValuePlan::evaluated_literal(setup, format!("\"{}\"", format_string), effect);
         }
 
-        self.require_fmt();
         // Solo-expression f-strings round-trip through fmt.Sprint, which skips
         // the format-string parse. Excluded: `%c`, because Sprint on a rune
         // prints the integer codepoint instead of the character.
@@ -205,7 +204,10 @@ impl Planner<'_> {
         {
             return ValuePlan::observable_call(
                 setup,
-                GoExpression::call(GoExpression::name("fmt.Sprint".to_string()), args),
+                GoExpression::call(
+                    GoExpression::generated(GeneratedPackage::Fmt, "Sprint"),
+                    args,
+                ),
                 effect,
             );
         }
@@ -213,7 +215,10 @@ impl Planner<'_> {
         arguments.extend(args);
         ValuePlan::observable_call(
             setup,
-            GoExpression::call(GoExpression::name("fmt.Sprintf".to_string()), arguments),
+            GoExpression::call(
+                GoExpression::generated(GeneratedPackage::Fmt, "Sprintf"),
+                arguments,
+            ),
             effect,
         )
     }

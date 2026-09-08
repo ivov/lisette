@@ -1,8 +1,10 @@
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::names::go_name;
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::GoExpression;
+use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -12,17 +14,17 @@ pub(crate) const RESULT_ERR_FIELD: &str = "ErrVal";
 pub(crate) const PARTIAL_OK_FIELD: &str = "OkVal";
 pub(crate) const PARTIAL_ERR_FIELD: &str = "ErrVal";
 
-pub(crate) const RESULT_OK_TAG: &str = "lisette.ResultOk";
-pub(crate) const OPTION_SOME_TAG: &str = "lisette.OptionSome";
-pub(crate) const PARTIAL_OK_TAG: &str = "lisette.PartialOk";
-pub(crate) const PARTIAL_ERR_TAG: &str = "lisette.PartialErr";
-const RESULT_OK_CTOR: &str = "lisette.MakeResultOk";
-const OPTION_SOME_CTOR: &str = "lisette.MakeOptionSome";
-const RESULT_ERR_CTOR: &str = "lisette.MakeResultErr";
-const OPTION_NONE_CTOR: &str = "lisette.MakeOptionNone";
-pub(crate) const PARTIAL_OK_CTOR: &str = "lisette.MakePartialOk";
-pub(crate) const PARTIAL_BOTH_CTOR: &str = "lisette.MakePartialBoth";
-pub(crate) const PARTIAL_ERR_CTOR: &str = "lisette.MakePartialErr";
+pub(crate) const RESULT_OK_TAG: &str = "ResultOk";
+pub(crate) const OPTION_SOME_TAG: &str = "OptionSome";
+pub(crate) const PARTIAL_OK_TAG: &str = "PartialOk";
+pub(crate) const PARTIAL_ERR_TAG: &str = "PartialErr";
+const RESULT_OK_CTOR: &str = "MakeResultOk";
+const OPTION_SOME_CTOR: &str = "MakeOptionSome";
+const RESULT_ERR_CTOR: &str = "MakeResultErr";
+const OPTION_NONE_CTOR: &str = "MakeOptionNone";
+pub(crate) const PARTIAL_OK_CTOR: &str = "MakePartialOk";
+pub(crate) const PARTIAL_BOTH_CTOR: &str = "MakePartialBoth";
+pub(crate) const PARTIAL_ERR_CTOR: &str = "MakePartialErr";
 
 pub(crate) enum Fallible {
     Result { ok_ty: Type, err_ty: Type },
@@ -129,11 +131,11 @@ impl Fallible {
     ) -> GoExpression {
         match self {
             Self::Option { .. } => {
-                generic_call(OPTION_SOME_CTOR, format!("[{}]", inner_ty), vec![value])
+                prelude_call(OPTION_SOME_CTOR, format!("[{}]", inner_ty), vec![value])
             }
             Self::Result { .. } => {
                 let err_ty = err_ty.expect("Result must have error type");
-                generic_call(
+                prelude_call(
                     RESULT_OK_CTOR,
                     format!("[{}, {}]", inner_ty, err_ty),
                     vec![value],
@@ -143,13 +145,16 @@ impl Fallible {
     }
 }
 
-pub(crate) fn generic_call(
+pub(crate) fn prelude_call(
     callee: &str,
     type_arguments: String,
     arguments: Vec<GoExpression>,
 ) -> GoExpression {
     GoExpression::call(
-        GoExpression::instantiation(GoExpression::name(callee.to_string()), type_arguments),
+        GoExpression::instantiation(
+            GoExpression::generated(GeneratedPackage::Prelude, callee),
+            type_arguments,
+        ),
         arguments,
     )
 }
@@ -224,10 +229,9 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
     }
 
     pub(crate) fn full_type_string(&mut self) -> String {
-        self.planner.require_stdlib();
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.ok_type_string();
-        if self.fallible.is_result() {
+        let code = if self.fallible.is_result() {
             let err_ty = self.planner.use_go_type(
                 self.fallible
                     .err_ty()
@@ -242,11 +246,11 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
             )
         } else {
             format!("{}.{}[{}]", pkg, self.fallible.struct_name(), inner_ty)
-        }
+        };
+        self.planner.use_rendered_go_type(GoType::stdlib(code))
     }
 
     pub(crate) fn emit_success(&mut self, value: GoExpression) -> GoExpression {
-        self.planner.require_stdlib();
         let inner_ty = self.ok_type_string();
         let err_ty = self.err_type_string();
         self.fallible
@@ -254,7 +258,6 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
     }
 
     pub(crate) fn emit_failure(&mut self, error_value: Option<GoExpression>) -> GoExpression {
-        self.planner.require_stdlib();
         let inner_ty = self.ok_type_string();
         if self.fallible.is_result() {
             let err_ty = self.err_type_string().expect("Result must have error type");
@@ -269,7 +272,6 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
         &mut self,
         error_value: Option<GoExpression>,
     ) -> GoExpression {
-        self.planner.require_stdlib();
         let inner_ty = self.contextual_ok_type_string();
         if self.fallible.is_result() {
             let err_ty = self
@@ -298,7 +300,10 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
             format!("[{}]", inner_ty)
         };
         GoExpression::call(
-            GoExpression::instantiation(GoExpression::name(constructor.to_string()), type_args),
+            GoExpression::instantiation(
+                GoExpression::generated(GeneratedPackage::Prelude, constructor),
+                type_args,
+            ),
             arg.into_iter().collect(),
         )
     }
@@ -310,11 +315,11 @@ fn make_failure(
     error_value: Option<GoExpression>,
 ) -> GoExpression {
     match err_ty {
-        Some(err_ty) => generic_call(
+        Some(err_ty) => prelude_call(
             RESULT_ERR_CTOR,
             format!("[{}, {}]", inner_ty, err_ty),
             error_value.into_iter().collect(),
         ),
-        None => generic_call(OPTION_NONE_CTOR, format!("[{}]", inner_ty), Vec::new()),
+        None => prelude_call(OPTION_NONE_CTOR, format!("[{}]", inner_ty), Vec::new()),
     }
 }

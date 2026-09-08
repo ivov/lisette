@@ -9,6 +9,7 @@ use crate::control_flow::fallible::{
     OPTION_SOME_TAG, PARTIAL_ERR_TAG, PARTIAL_OK_TAG, RESULT_OK_TAG,
 };
 use crate::control_flow::propagation::plain_return;
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, ReturnForm, define, define_many,
 };
@@ -52,7 +53,7 @@ fn has_tag(value: &GoExpression, tag: &str) -> GoExpression {
     GoExpression::binary(
         GoExpression::selector(value.clone(), "Tag".to_string()),
         "==",
-        GoExpression::name(tag.to_string()),
+        GoExpression::generated(GeneratedPackage::Prelude, tag),
     )
 }
 
@@ -179,7 +180,6 @@ pub(crate) fn emit_lowered_result_return(
     return_ty: &Type,
     shape: &CallableReturnAbi,
 ) -> Vec<LoweredStatement> {
-    planner.require_stdlib();
     let p = result_value;
     let ok_ty = || planner.facts.peel_alias(return_ty).ok_type();
     match shape {
@@ -378,7 +378,6 @@ fn emit_return_adapter(
     let return_type = lisette_return_type;
 
     if return_type.is_result() {
-        planner.require_stdlib();
         let shape = if return_type.ok_type().is_unit() {
             CallableReturnAbi::BareError
         } else {
@@ -395,7 +394,6 @@ fn emit_return_adapter(
         ));
     }
     if return_type.is_partial() {
-        planner.require_stdlib();
         let shape = CallableReturnAbi::Partial {
             payload: PayloadLayout::Packed,
         };
@@ -408,7 +406,6 @@ fn emit_return_adapter(
         ));
     }
     if return_type.is_option() {
-        planner.require_stdlib();
         let encoding = if planner.facts.is_nilable_go_type(&return_type.ok_type()) {
             OptionReturnAbi::Nullable
         } else {
@@ -426,7 +423,6 @@ fn emit_return_adapter(
         ));
     }
     if return_type.tuple_arity().is_some_and(|n| n >= 2) {
-        planner.require_stdlib();
         return emit_tuple_return_adapter(planner, inner_call, return_type);
     }
     None
@@ -799,8 +795,6 @@ fn lower_nullable_slot_value(
     let value = planner.lower_value(expression, ExpressionContext::value());
     let inner = planner.use_go_type(&slot_ty.ok_type());
     value.map_expression_as_computed(|setup, value| {
-        planner
-            .plan_option_projection(setup, value, "unwrap", &inner, false)
-            .with_deferred_evaluation(true)
+        planner.plan_option_projection(setup, value, "unwrap", &inner, false)
     })
 }

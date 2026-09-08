@@ -6,6 +6,7 @@ use crate::calls::go_interop::{NilGuard, non_nil, unexpected_nil_error};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::is_go_never;
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{
     Definition, LoweredBlock, LoweredStatement, PlacePlan, ReturnForm, assign, define,
 };
@@ -56,7 +57,6 @@ impl Planner<'_> {
             return fused;
         }
 
-        self.require_stdlib();
         let (check_setup, check) = self.hoist_propagate_check_var(expression);
         statements.extend(check_setup);
         statements.push(self.build_propagate_failure_check(&check, &fallible));
@@ -106,8 +106,8 @@ impl Planner<'_> {
         expression: &Expression,
     ) -> (Vec<LoweredStatement>, GoExpression) {
         let plan = self.plan_operand(expression, ExpressionContext::value());
-        let requires_capture = !matches!(expression, Expression::Identifier { .. })
-            || plan.expression.contains_deferred_evaluation();
+        let requires_capture =
+            !matches!(expression, Expression::Identifier { .. }) || plan.expression.does_work();
         let (mut setup, value) = plan.into_parts();
         if requires_capture {
             let check = self.hoist_tmp_value_statement(&mut setup, "check", value);
@@ -133,7 +133,7 @@ impl Planner<'_> {
             GoExpression::binary(
                 GoExpression::selector(check.clone(), "Tag".to_string()),
                 "!=",
-                GoExpression::name(fallible.success_tag().to_string()),
+                GoExpression::generated(GeneratedPackage::Prelude, fallible.success_tag()),
             ),
             setup,
             values,
@@ -263,16 +263,11 @@ impl Planner<'_> {
 
         if comma_ok {
             let failure_condition = match nil_guard {
-                Some(guard) => {
-                    if guard.is_interface() {
-                        self.require_stdlib();
-                    }
-                    GoExpression::binary(
-                        GoExpression::unary("!", outcome()),
-                        "||",
-                        guard.is_nil(guarded_value()),
-                    )
-                }
+                Some(guard) => GoExpression::binary(
+                    GoExpression::unary("!", outcome()),
+                    "||",
+                    guard.is_nil(guarded_value()),
+                ),
                 None => GoExpression::unary("!", outcome()),
             };
             let (failure_setup, failure_values) =
@@ -293,10 +288,6 @@ impl Planner<'_> {
                 failure_values,
             ));
             if let Some(guard) = nil_guard {
-                if guard.is_interface() {
-                    self.require_stdlib();
-                }
-                self.require_errors();
                 let error = self.wrap_error(&wraps, unexpected_nil_error());
                 let (nil_setup, nil_failure) = self.propagate_failure_values(fallible, error);
                 statements.push(transition::tag_check(
@@ -384,10 +375,7 @@ impl Planner<'_> {
         let plan = self.lower_value(expression, ExpressionContext::value());
         ReturnForm::Plain {
             value: plan.map_expression_as_computed(|setup, raw_value| {
-                let contains_deferred_evaluation = raw_value.contains_deferred_evaluation();
-                let final_value =
-                    self.apply_type_coercion(setup, return_ctx.ty(), expression, raw_value);
-                final_value.with_deferred_evaluation(contains_deferred_evaluation)
+                self.apply_type_coercion(setup, return_ctx.ty(), expression, raw_value)
             }),
         }
     }

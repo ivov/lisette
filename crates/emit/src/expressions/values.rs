@@ -9,6 +9,7 @@ use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::emit_lisette_callback_wrapper;
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement, assign, discard, expression_statement};
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::go_expression::FunctionLiteralLayout;
@@ -50,7 +51,7 @@ impl Planner<'_> {
                     return value.map_expression_as_computed(|setup, value| {
                         let (bridge_setup, value) = layout_coercion.lower(self, value);
                         setup.extend(bridge_setup);
-                        value.with_deferred_evaluation(true)
+                        value
                     });
                 }
             }
@@ -117,7 +118,7 @@ impl Planner<'_> {
             return call.map_expression_as_observable_computed(|setup, call| {
                 let (bridge_setup, value) = bridge.lower(self, call);
                 setup.extend(bridge_setup);
-                value.with_deferred_evaluation(false)
+                value
             });
         }
 
@@ -245,9 +246,9 @@ impl Planner<'_> {
                 if adapter_setup.is_empty() {
                     plan
                 } else {
-                    plan.map_expression_as_computed(|setup, identifier| {
+                    plan.map_expression_as_computed(|setup, _| {
                         setup.extend(adapter_setup);
-                        value.with_deferred_evaluation(identifier.contains_deferred_evaluation())
+                        value
                     })
                 }
             }
@@ -296,8 +297,7 @@ impl Planner<'_> {
                 let setup = self.lower_assignment_operand(target, value);
                 ValuePlan::computed(
                     setup,
-                    GoExpression::empty_composite("struct{}".to_string())
-                        .with_deferred_evaluation(false),
+                    GoExpression::empty_composite("struct{}".to_string()),
                     EvaluationEffect::Pure,
                 )
             }
@@ -335,8 +335,8 @@ impl Planner<'_> {
     }
 
     pub(crate) fn make_tuple_callee(&mut self, slot_types: &[Type], arity: usize) -> GoExpression {
-        self.require_stdlib();
-        let callee = GoExpression::name(format!("lisette.MakeTuple{}", arity));
+        let callee =
+            GoExpression::generated(GeneratedPackage::Prelude, format!("MakeTuple{arity}"));
         if slot_types.len() != arity {
             return callee;
         }
@@ -406,7 +406,7 @@ impl Planner<'_> {
             let mut converted = inner.map_expression_as_computed(|setup, value| {
                 let (coercion_setup, coerced) = coercion.lower(self, value);
                 setup.extend(coercion_setup);
-                coerced.with_deferred_evaluation(true)
+                coerced
             });
             if !converted.evaluation.stability.is_stable_across_calls() {
                 converted.make_observable();
@@ -424,7 +424,7 @@ impl Planner<'_> {
                 .map_expression_as_computed(|setup, value| {
                     let (bridge_setup, bridged) = function_bridge.lower(self, value);
                     setup.extend(bridge_setup);
-                    bridged.with_deferred_evaluation(true)
+                    bridged
                 })
                 .conversion(go_type);
         }
@@ -593,7 +593,6 @@ impl Planner<'_> {
 
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "range");
         let effect = sequenced.effect;
-        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let mut values = sequenced.values.into_iter();
         let mut fields = Vec::new();
         if has_start {
@@ -608,12 +607,7 @@ impl Planner<'_> {
             fields.push(("End".to_string(), values.next().expect("range has an end")));
         }
 
-        let value = emit_struct_literal(
-            &type_string,
-            fields,
-            ExpressionContext::value(),
-            contains_deferred_evaluation,
-        );
+        let value = emit_struct_literal(&type_string, fields, ExpressionContext::value());
         ValuePlan::computed(sequenced.setup, value, effect)
     }
 

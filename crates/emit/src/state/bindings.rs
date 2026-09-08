@@ -3,28 +3,15 @@ use crate::plan::values::GoExpression;
 #[derive(Clone, Debug)]
 pub(crate) struct InlineExpr {
     expression: GoExpression,
-    /// Emitter vars the expression references, recorded as uses on substitution.
-    refs: Vec<String>,
 }
 
 impl InlineExpr {
-    pub(crate) fn new(
-        expression: GoExpression,
-        refs: Vec<String>,
-        contains_deferred_evaluation: bool,
-    ) -> Self {
-        Self {
-            expression: expression.with_deferred_evaluation(contains_deferred_evaluation),
-            refs,
-        }
+    pub(crate) fn new(expression: GoExpression) -> Self {
+        Self { expression }
     }
 
     pub(crate) fn expression(&self) -> &GoExpression {
         &self.expression
-    }
-
-    pub(crate) fn refs(&self) -> &[String] {
-        &self.refs
     }
 }
 

@@ -1,5 +1,6 @@
 //! The Go expression tree behind `GoExpression`.
 
+use crate::names::packages::PackageUse;
 use crate::plan::bodies::LoweredBlock;
 use crate::render::Renderer;
 use crate::types::go_type::render_conversion;
@@ -8,6 +9,10 @@ use std::slice;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GoExpressionNode {
     Identifier(String),
+    Qualified {
+        package: PackageUse,
+        name: String,
+    },
     Literal(String),
     /// A Go type in operand position, such as the element type of `make`.
     Type(String),
@@ -82,7 +87,7 @@ pub(crate) enum FunctionLiteralLayout {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CompositeElement {
-    pub key: Option<String>,
+    pub key: Option<GoExpressionNode>,
     pub value: GoExpressionNode,
 }
 
@@ -109,6 +114,99 @@ impl CompositeLayout {
 }
 
 impl GoExpressionNode {
+    /// The node holds a call or a type assertion. A function literal only defines code.
+    pub(crate) fn does_work(&self) -> bool {
+        match self {
+            Self::Identifier(_)
+            | Self::Qualified { .. }
+            | Self::Literal(_)
+            | Self::Type(_)
+            | Self::Empty
+            | Self::Verbatim(_)
+            | Self::FunctionLiteral { .. } => false,
+            Self::Call { .. } | Self::TypeAssertion { .. } => true,
+            Self::CompositeLiteral { elements, .. } => {
+                elements.iter().any(|element| element.value.does_work())
+            }
+            Self::Instantiation { base, .. } | Self::Selector { base, .. } => base.does_work(),
+            Self::Index { base, index } => base.does_work() || index.does_work(),
+            Self::Slice {
+                base,
+                low,
+                high,
+                max,
+            } => {
+                base.does_work()
+                    || [low, high, max]
+                        .into_iter()
+                        .flatten()
+                        .any(|bound| bound.does_work())
+            }
+            Self::Unary { operand, .. }
+            | Self::Conversion { operand, .. }
+            | Self::AddressOf(operand)
+            | Self::Dereference(operand)
+            | Self::Parenthesized(operand)
+            | Self::Spread(operand) => operand.does_work(),
+            Self::Binary { left, right, .. } => left.does_work() || right.does_work(),
+        }
+    }
+
+    pub(crate) fn visit(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
+        visit(self);
+        match self {
+            Self::Identifier(_)
+            | Self::Qualified { .. }
+            | Self::Literal(_)
+            | Self::Type(_)
+            | Self::Empty
+            | Self::Verbatim(_) => {}
+            Self::CompositeLiteral { elements, .. } => {
+                for element in elements {
+                    if let Some(key) = &element.key {
+                        key.visit(visit);
+                    }
+                    element.value.visit(visit);
+                }
+            }
+            Self::Call { callee, arguments } => {
+                callee.visit(visit);
+                for argument in arguments {
+                    argument.visit(visit);
+                }
+            }
+            Self::Instantiation { base, .. }
+            | Self::Selector { base, .. }
+            | Self::TypeAssertion { base, .. } => base.visit(visit),
+            Self::Index { base, index } => {
+                base.visit(visit);
+                index.visit(visit);
+            }
+            Self::Slice {
+                base,
+                low,
+                high,
+                max,
+            } => {
+                base.visit(visit);
+                for bound in [low, high, max].into_iter().flatten() {
+                    bound.visit(visit);
+                }
+            }
+            Self::Unary { operand, .. }
+            | Self::Conversion { operand, .. }
+            | Self::AddressOf(operand)
+            | Self::Dereference(operand)
+            | Self::Parenthesized(operand)
+            | Self::Spread(operand) => operand.visit(visit),
+            Self::Binary { left, right, .. } => {
+                left.visit(visit);
+                right.visit(visit);
+            }
+            Self::FunctionLiteral { body, .. } => body.visit_expressions(visit),
+        }
+    }
+
     /// Print the node token for token, since `gofmt` owns the spacing.
     pub(crate) fn print(&self) -> String {
         let mut output = String::new();
@@ -122,6 +220,11 @@ impl GoExpressionNode {
             | Self::Literal(text)
             | Self::Type(text)
             | Self::Verbatim(text) => output.push_str(text),
+            Self::Qualified { package, name } => {
+                output.push_str(package.qualifier());
+                output.push('.');
+                output.push_str(name);
+            }
             Self::Empty => {}
             Self::CompositeLiteral {
                 go_type,
@@ -307,7 +410,7 @@ impl GoExpressionNode {
 impl CompositeElement {
     fn write(&self, output: &mut String) {
         if let Some(key) = &self.key {
-            output.push_str(key);
+            key.write(output);
             output.push_str(": ");
         }
         self.value.write(output);

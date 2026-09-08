@@ -16,6 +16,7 @@ use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::LaterStages;
 use crate::expressions::staging::{SpreadSequenceOptions, VariadicCombine};
 use crate::names::generics::extract_type_mapping;
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, define,
 };
@@ -214,7 +215,7 @@ fn collapse_fmt_print(
                 format.insert_str(close_quote, "\\n");
             }
             Some(GoExpression::call(
-                GoExpression::name("fmt.Printf".to_string()),
+                GoExpression::generated(GeneratedPackage::Fmt, "Printf"),
                 inner.into_iter().map(GoExpression::from_node).collect(),
             ))
         }
@@ -416,20 +417,17 @@ impl<'a> Planner<'a> {
             .expect("sequenced exactly one argument");
         let call = match call_arguments_of(value.node(), "fmt.Sprintf") {
             Some(arguments) => GoExpression::call(
-                GoExpression::name("fmt.Errorf".to_string()),
+                GoExpression::generated(GeneratedPackage::Fmt, "Errorf"),
                 arguments
                     .iter()
                     .cloned()
                     .map(GoExpression::from_node)
                     .collect(),
             ),
-            None => {
-                let qualifier = self.require_package_import("go:errors");
-                GoExpression::call(
-                    GoExpression::name(format!("{}.New", qualifier)),
-                    vec![value],
-                )
-            }
+            None => GoExpression::call(
+                GoExpression::qualified(self.package_use_for_package("go:errors"), "New"),
+                vec![value],
+            ),
         };
         Some(ValuePlan::plain_call(sequenced.setup, call, effect))
     }
@@ -626,7 +624,6 @@ impl<'a> Planner<'a> {
                 let argument = self.lower_composite_value(arg, arg_ctx);
                 argument.map_expression_as_computed(|setup, value| {
                     self.emit_lower_arg_to_tagged(setup, value, target)
-                        .with_deferred_evaluation(true)
                 })
             }
             ArgumentPlan::Direct => self.lower_direct_arg(arg, ctx, param, declared_param_ty),
@@ -780,10 +777,9 @@ impl<'a> Planner<'a> {
             return argument;
         }
         argument.map_expression_as_computed(|setup, value| {
-            let contains_deferred_evaluation = value.contains_deferred_evaluation();
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
-            coerced.with_deferred_evaluation(contains_deferred_evaluation)
+            coerced
         })
     }
 
@@ -887,7 +883,6 @@ impl<'a> Planner<'a> {
         Some(argument.map_expression_as_computed(|setup, value| {
             emit_fn_arg_shape_adapter(self, setup, value, &arg_fn, &arg_abi, &param_abi)
                 .expect("fn_arg_shapes resolved a function signature")
-                .with_deferred_evaluation(true)
         }))
     }
 
@@ -1045,31 +1040,26 @@ impl<'a> Planner<'a> {
                 ExpressionContext::value().with_forced_tagged_go_function(true),
             ),
         };
-        argument.map_expression_as_computed(|setup, value| {
-            let contains_deferred_evaluation = value.contains_deferred_evaluation()
-                || !matches!(transition, AbiTransition::Identity);
-            let result = match transition {
-                AbiTransition::Identity => value,
-                AbiTransition::LowerFromTagged => {
-                    let param_fn_ty = self
-                        .facts
-                        .resolve_to_function_type(effective_param_ty.unwrap_forall())
-                        .expect("callback target resolves to a fn type");
-                    emit_lisette_callback_wrapper(self, setup, value, &param_fn_ty)
-                }
-                AbiTransition::WrapToTagged | AbiTransition::Reencode => {
-                    let arg_fn_ty = self
-                        .facts
-                        .resolve_to_function_type(arg.get_type().unwrap_forall())
-                        .expect("callback source resolves to a fn type");
-                    emit_fn_arg_shape_adapter(self, setup, value, &arg_fn_ty, source, target)
-                        .expect("callback ABI transition has a function signature")
-                }
-                AbiTransition::Incompatible => {
-                    unreachable!("type-checked callback ABIs must describe the same result")
-                }
-            };
-            result.with_deferred_evaluation(contains_deferred_evaluation)
+        argument.map_expression_as_computed(|setup, value| match transition {
+            AbiTransition::Identity => value,
+            AbiTransition::LowerFromTagged => {
+                let param_fn_ty = self
+                    .facts
+                    .resolve_to_function_type(effective_param_ty.unwrap_forall())
+                    .expect("callback target resolves to a fn type");
+                emit_lisette_callback_wrapper(self, setup, value, &param_fn_ty)
+            }
+            AbiTransition::WrapToTagged | AbiTransition::Reencode => {
+                let arg_fn_ty = self
+                    .facts
+                    .resolve_to_function_type(arg.get_type().unwrap_forall())
+                    .expect("callback source resolves to a fn type");
+                emit_fn_arg_shape_adapter(self, setup, value, &arg_fn_ty, source, target)
+                    .expect("callback ABI transition has a function signature")
+            }
+            AbiTransition::Incompatible => {
+                unreachable!("type-checked callback ABIs must describe the same result")
+            }
         })
     }
 
@@ -1165,7 +1155,7 @@ impl<'a> Planner<'a> {
         value.map_expression_as_computed(|setup, value| {
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
-            coerced.with_deferred_evaluation(true)
+            coerced
         })
     }
 
@@ -1217,7 +1207,7 @@ impl<'a> Planner<'a> {
         Some(value.map_expression_as_computed(|setup, value| {
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
-            coerced.with_deferred_evaluation(true)
+            coerced
         }))
     }
 }

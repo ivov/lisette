@@ -5,6 +5,7 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::expressions::access::index_access::range_var_bounds;
 use crate::names::go_name;
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement};
 use crate::plan::calls::plan_variadic_spread;
 use crate::plan::go_expression::FunctionLiteralLayout;
@@ -19,7 +20,6 @@ pub(super) struct NativeCallResult {
     pub setup: Vec<LoweredStatement>,
     pub value: GoExpression,
     pub argument_effect: EvaluationEffect,
-    pub arguments_contain_deferred_evaluation: bool,
 }
 
 impl NativeCallResult {
@@ -27,23 +27,21 @@ impl NativeCallResult {
         setup: Vec<LoweredStatement>,
         value: GoExpression,
         argument_effect: EvaluationEffect,
-        arguments_contain_deferred_evaluation: bool,
     ) -> Self {
         Self {
             setup,
             value,
             argument_effect,
-            arguments_contain_deferred_evaluation,
         }
     }
 }
 
 #[derive(Clone, Copy)]
-pub(super) enum InlineImport {
+enum InlinePackage {
     None,
     Slices,
     Strings,
-    Stdlib,
+    Prelude,
 }
 
 /// The Go shape a native method inlines to, given the receiver and arguments.
@@ -66,7 +64,7 @@ struct InlineRule {
     method: &'static str,
     arity: RuleArity,
     form: InlineForm,
-    import: InlineImport,
+    package: InlinePackage,
 }
 
 #[derive(Clone, Copy)]
@@ -107,14 +105,14 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "length",
         arity: RuleArity::Exact(0),
         form: InlineForm::Call("len"),
-        import: InlineImport::None,
+        package: InlinePackage::None,
     },
     InlineRule {
         types: &[N::Slice, N::Channel, N::Sender, N::Receiver],
         method: "capacity",
         arity: RuleArity::Exact(0),
         form: InlineForm::Call("cap"),
-        import: InlineImport::None,
+        package: InlinePackage::None,
     },
     InlineRule {
         types: &[
@@ -128,28 +126,28 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "is_empty",
         arity: RuleArity::Exact(0),
         form: InlineForm::IsEmpty,
-        import: InlineImport::None,
+        package: InlinePackage::None,
     },
     InlineRule {
         types: &[N::Slice],
         method: "enumerate",
         arity: RuleArity::Exact(0),
         form: InlineForm::Receiver,
-        import: InlineImport::None,
+        package: InlinePackage::None,
     },
     InlineRule {
         types: &[N::String],
         method: "bytes",
         arity: RuleArity::Exact(0),
         form: InlineForm::Conversion("[]byte"),
-        import: InlineImport::None,
+        package: InlinePackage::None,
     },
     InlineRule {
         types: &[N::String],
         method: "runes",
         arity: RuleArity::Exact(0),
         form: InlineForm::Conversion("[]rune"),
-        import: InlineImport::None,
+        package: InlinePackage::None,
     },
     // Single-arg methods
     InlineRule {
@@ -157,84 +155,84 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "delete",
         arity: RuleArity::Exact(1),
         form: InlineForm::Call("delete"),
-        import: InlineImport::None,
+        package: InlinePackage::None,
     },
     InlineRule {
         types: &[N::Slice],
         method: "copy_from",
         arity: RuleArity::Exact(1),
         form: InlineForm::Call("copy"),
-        import: InlineImport::None,
+        package: InlinePackage::None,
     },
     InlineRule {
         types: &[N::Slice],
         method: "contains",
         arity: RuleArity::Exact(1),
-        form: InlineForm::Call("slices.Contains"),
-        import: InlineImport::Slices,
+        form: InlineForm::Call("Contains"),
+        package: InlinePackage::Slices,
     },
     InlineRule {
         types: &[N::String],
         method: "contains",
         arity: RuleArity::Exact(1),
-        form: InlineForm::Call("strings.Contains"),
-        import: InlineImport::Strings,
+        form: InlineForm::Call("Contains"),
+        package: InlinePackage::Strings,
     },
     InlineRule {
         types: &[N::String],
         method: "split",
         arity: RuleArity::Exact(1),
-        form: InlineForm::Call("strings.Split"),
-        import: InlineImport::Strings,
+        form: InlineForm::Call("Split"),
+        package: InlinePackage::Strings,
     },
     InlineRule {
         types: &[N::String],
         method: "starts_with",
         arity: RuleArity::Exact(1),
-        form: InlineForm::Call("strings.HasPrefix"),
-        import: InlineImport::Strings,
+        form: InlineForm::Call("HasPrefix"),
+        package: InlinePackage::Strings,
     },
     InlineRule {
         types: &[N::String],
         method: "ends_with",
         arity: RuleArity::Exact(1),
-        form: InlineForm::Call("strings.HasSuffix"),
-        import: InlineImport::Strings,
+        form: InlineForm::Call("HasSuffix"),
+        package: InlinePackage::Strings,
     },
     InlineRule {
         types: &[N::String],
         method: "byte_at",
         arity: RuleArity::Exact(1),
         form: InlineForm::Index,
-        import: InlineImport::None,
+        package: InlinePackage::None,
     },
     InlineRule {
         types: &[N::String],
         method: "rune_at",
         arity: RuleArity::Exact(1),
-        form: InlineForm::Call("lisette.RuneAt"),
-        import: InlineImport::Stdlib,
+        form: InlineForm::Call("RuneAt"),
+        package: InlinePackage::Prelude,
     },
     InlineRule {
         types: &[N::Slice],
         method: "join",
         arity: RuleArity::Exact(1),
-        form: InlineForm::Call("strings.Join"),
-        import: InlineImport::Strings,
+        form: InlineForm::Call("Join"),
+        package: InlinePackage::Strings,
     },
     InlineRule {
         types: &[N::Slice],
         method: "any",
         arity: RuleArity::Exact(1),
-        form: InlineForm::Call("slices.ContainsFunc"),
-        import: InlineImport::Slices,
+        form: InlineForm::Call("ContainsFunc"),
+        package: InlinePackage::Slices,
     },
     InlineRule {
         types: &[N::Slice],
         method: "reserve",
         arity: RuleArity::Exact(1),
-        form: InlineForm::Call("slices.Grow"),
-        import: InlineImport::Slices,
+        form: InlineForm::Call("Grow"),
+        package: InlinePackage::Slices,
     },
     // Variadic methods
     InlineRule {
@@ -242,7 +240,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "append",
         arity: RuleArity::Variadic,
         form: InlineForm::Call("append"),
-        import: InlineImport::None,
+        package: InlinePackage::None,
     },
 ];
 
@@ -372,15 +370,26 @@ fn is_selector_chain(rendered: &str) -> bool {
 
 fn build_inline(
     form: InlineForm,
+    package: InlinePackage,
     receiver: &GoExpression,
     arguments: &[GoExpression],
     negated: bool,
 ) -> GoExpression {
     match form {
         InlineForm::Call(callee) => {
+            let callee = match package {
+                InlinePackage::None => GoExpression::name(callee.to_string()),
+                InlinePackage::Slices => GoExpression::generated(GeneratedPackage::Slices, callee),
+                InlinePackage::Strings => {
+                    GoExpression::generated(GeneratedPackage::Strings, callee)
+                }
+                InlinePackage::Prelude => {
+                    GoExpression::generated(GeneratedPackage::Prelude, callee)
+                }
+            };
             let mut all = vec![receiver.clone()];
             all.extend(arguments.iter().cloned());
-            GoExpression::call(GoExpression::name(callee.to_string()), all)
+            GoExpression::call(callee, all)
         }
         InlineForm::IsEmpty => {
             let operator = if negated { "!=" } else { "==" };
@@ -432,19 +441,22 @@ pub(super) fn try_inline_native_method(
     receiver: &GoExpression,
     arguments: &[GoExpression],
     negated: bool,
-) -> Option<(GoExpression, InlineImport)> {
+) -> Option<GoExpression> {
     // Go's `append` requires at least 2 args, so zero-arg `append` returns
     // the receiver unchanged.
     if !negated && method == "append" && arguments.is_empty() {
-        return Some((receiver.clone(), InlineImport::None));
+        return Some(receiver.clone());
     }
     let rule = lookup_inline_rule(native_type, method, arguments.len())?;
     if negated && !matches!(rule.form, InlineForm::IsEmpty) {
         return None;
     }
-    Some((
-        build_inline(rule.form, receiver, arguments, negated),
-        rule.import,
+    Some(build_inline(
+        rule.form,
+        rule.package,
+        receiver,
+        arguments,
+        negated,
     ))
 }
 
@@ -528,24 +540,21 @@ fn has_inline_negation(native_type: &NativeGoType, method: &str, arity: usize) -
 /// Resolve the inline rule for a dot-access form, applying the static-receiver
 /// fallback when the standard receiver shape does not match.
 fn apply_inline_lookup(
-    planner: &mut Planner,
     native_type: &NativeGoType,
     method: &str,
     receiver: &GoExpression,
     emitted_args: &[GoExpression],
     negated: bool,
 ) -> Option<GoExpression> {
-    if let Some((inlined, import)) =
+    if let Some(inlined) =
         try_inline_native_method(native_type, method, receiver, emitted_args, negated)
     {
-        apply_inline_import(planner, import);
         return Some(inlined);
     }
     if let Some((static_receiver, remaining)) = emitted_args.split_first()
-        && let Some((inlined, import)) =
+        && let Some(inlined) =
             try_inline_native_method(native_type, method, static_receiver, remaining, negated)
     {
-        apply_inline_import(planner, import);
         return Some(inlined);
     }
     None
@@ -562,17 +571,11 @@ struct StagedNativeMethod {
     receiver: GoExpression,
     arguments: Vec<GoExpression>,
     effect: EvaluationEffect,
-    contains_deferred_evaluation: bool,
 }
 
 impl StagedNativeMethod {
     fn finish(self, value: GoExpression) -> NativeCallResult {
-        NativeCallResult::new(
-            self.setup,
-            value,
-            self.effect,
-            self.contains_deferred_evaluation,
-        )
+        NativeCallResult::new(self.setup, value, self.effect)
     }
 }
 
@@ -626,12 +629,11 @@ impl Planner<'_> {
                 && self.needs_custom_equality(&element, &[])
             {
                 let mut staged = self.stage_native_method(ctx, form);
-                self.require_slices();
                 let searched = staged.arguments[0].clone();
                 let target = self.hoist_tmp_value_statement(&mut staged.setup, "want", searched);
                 let predicate = self.contains_predicate(&element, GoExpression::name(target), &[]);
                 let body = GoExpression::call(
-                    GoExpression::name("slices.ContainsFunc".to_string()),
+                    GoExpression::generated(GeneratedPackage::Slices, "ContainsFunc"),
                     vec![staged.receiver.clone(), predicate],
                 );
                 return staged.finish(body);
@@ -680,7 +682,6 @@ impl Planner<'_> {
 
         let inlined = match form {
             NativeMethodForm::Dot => apply_inline_lookup(
-                self,
                 ctx.native_type,
                 ctx.method,
                 &staged.receiver,
@@ -693,22 +694,19 @@ impl Planner<'_> {
                 &staged.receiver,
                 &staged.arguments,
                 false,
-            )
-            .map(|(value, import)| {
-                apply_inline_import(self, import);
-                value
-            }),
+            ),
         };
         if let Some(inlined) = inlined {
             return staged.finish(inlined);
         }
 
-        self.require_stdlib();
-        let fn_name = format!(
-            "{}.{}{}",
-            go_name::GO_STDLIB_PKG,
-            ctx.native_type.method_prefix(),
-            go_name::snake_to_camel(ctx.method)
+        let fn_name = GoExpression::generated(
+            GeneratedPackage::Prelude,
+            format!(
+                "{}{}",
+                ctx.native_type.method_prefix(),
+                go_name::snake_to_camel(ctx.method)
+            ),
         );
         let type_args = match form {
             NativeMethodForm::Dot
@@ -726,7 +724,7 @@ impl Planner<'_> {
         let mut emitted_args = vec![staged.receiver.clone()];
         emitted_args.extend(staged.arguments.iter().cloned());
         staged.finish(GoExpression::call(
-            GoExpression::instantiation(GoExpression::name(fn_name), type_args),
+            GoExpression::instantiation(fn_name, type_args),
             emitted_args,
         ))
     }
@@ -741,16 +739,16 @@ impl Planner<'_> {
     ) -> GoExpression {
         match method {
             "to_slice" => {
-                self.require_slices();
                 let view = self.sliceable_receiver(receiver_expr, receiver, setup);
-                GoExpression::call(GoExpression::name("slices.Clone".to_string()), vec![view])
+                GoExpression::call(
+                    GoExpression::generated(GeneratedPackage::Slices, "Clone"),
+                    vec![view],
+                )
             }
             "get" => {
-                self.require_stdlib();
                 let view = self.sliceable_receiver(receiver_expr, receiver, setup);
-                let pkg = go_name::GO_STDLIB_PKG;
                 GoExpression::call(
-                    GoExpression::name(format!("{pkg}.SliceGet")),
+                    GoExpression::generated(GeneratedPackage::Prelude, "SliceGet"),
                     vec![view, index.expect("get needs an index")],
                 )
             }
@@ -831,18 +829,14 @@ impl Planner<'_> {
             return None;
         }
         let staged = self.stage_native_method(ctx, form);
-        let (inlined, import) = match form {
-            NativeMethodForm::Dot => {
-                let value = apply_inline_lookup(
-                    self,
-                    ctx.native_type,
-                    ctx.method,
-                    &staged.receiver,
-                    &staged.arguments,
-                    true,
-                )?;
-                (value, InlineImport::None)
-            }
+        let inlined = match form {
+            NativeMethodForm::Dot => apply_inline_lookup(
+                ctx.native_type,
+                ctx.method,
+                &staged.receiver,
+                &staged.arguments,
+                true,
+            )?,
             NativeMethodForm::Identifier => try_inline_native_method(
                 ctx.native_type,
                 ctx.method,
@@ -852,7 +846,6 @@ impl Planner<'_> {
             )?,
         };
         setup.extend(staged.setup);
-        apply_inline_import(self, import);
         Some(inlined)
     }
 
@@ -908,9 +901,7 @@ impl Planner<'_> {
             } else {
                 array
             };
-            let contains_deferred_evaluation = base.contains_deferred_evaluation();
             GoExpression::slice(base, None, None, None)
-                .with_deferred_evaluation(contains_deferred_evaluation)
         })
     }
 
@@ -969,7 +960,6 @@ impl Planner<'_> {
             self.finalize_spread_stage(&mut sequenced.values, spread_index, false, combine);
         }
         let effect = sequenced.effect;
-        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let mut values = sequenced.values;
         let receiver = values.remove(0);
         StagedNativeMethod {
@@ -977,7 +967,6 @@ impl Planner<'_> {
             receiver,
             arguments: values,
             effect,
-            contains_deferred_evaluation,
         }
     }
 
@@ -1023,7 +1012,6 @@ impl Planner<'_> {
         args: &[Expression],
         capture_boundary: CaptureBoundary,
     ) -> NativeCallResult {
-        self.require_stdlib();
         let arg = &args[0];
         let is_ref_receiver = receiver_expr.get_type().is_ref();
         let deref = |raw: GoExpression| -> GoExpression {
@@ -1050,7 +1038,6 @@ impl Planner<'_> {
             }
             let sequenced = self.sequence_values(stages, capture_boundary, "arg");
             let effect = sequenced.effect;
-            let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
             let mut values = sequenced.values.into_iter();
             let receiver = values.next().expect("substring has a receiver");
             let start_bound = start
@@ -1068,7 +1055,6 @@ impl Planner<'_> {
                 sequenced.setup,
                 substring_call(deref(receiver), start_bound, end_bound),
                 effect,
-                contains_deferred_evaluation,
             );
         }
 
@@ -1081,7 +1067,6 @@ impl Planner<'_> {
         let sequenced =
             self.sequence_values(vec![receiver_staged, range_staged], capture_boundary, "arg");
         let effect = sequenced.effect;
-        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let mut values = sequenced.values.into_iter();
         let receiver = values.next().expect("substring has a receiver");
         let range = values.next().expect("substring has a range");
@@ -1090,7 +1075,6 @@ impl Planner<'_> {
             sequenced.setup,
             substring_call(deref(receiver), start, end),
             effect,
-            contains_deferred_evaluation,
         )
     }
 
@@ -1136,23 +1120,21 @@ impl Planner<'_> {
             return GoExpression::binary(lhs, operator, rhs);
         }
         if peeled.is_slice() {
-            self.require_slices();
             return match peeled.inner() {
                 Some(elem) if self.needs_custom_equality(&elem, generics) => {
                     let eq = self.equality_closure(&elem, generics);
                     negate(GoExpression::call(
-                        GoExpression::name("slices.EqualFunc".to_string()),
+                        GoExpression::generated(GeneratedPackage::Slices, "EqualFunc"),
                         vec![lhs, rhs, eq],
                     ))
                 }
                 _ => negate(GoExpression::call(
-                    GoExpression::name("slices.Equal".to_string()),
+                    GoExpression::generated(GeneratedPackage::Slices, "Equal"),
                     vec![lhs, rhs],
                 )),
             };
         }
         if peeled.is_map() {
-            self.require_maps();
             let value = peeled
                 .as_compound()
                 .and_then(|(_, args)| args.get(1).cloned());
@@ -1160,12 +1142,12 @@ impl Planner<'_> {
                 Some(value) if self.needs_custom_equality(&value, generics) => {
                     let eq = self.equality_closure(&value, generics);
                     negate(GoExpression::call(
-                        GoExpression::name("maps.EqualFunc".to_string()),
+                        GoExpression::generated(GeneratedPackage::Maps, "EqualFunc"),
                         vec![lhs, rhs, eq],
                     ))
                 }
                 _ => negate(GoExpression::call(
-                    GoExpression::name("maps.Equal".to_string()),
+                    GoExpression::generated(GeneratedPackage::Maps, "Equal"),
                     vec![lhs, rhs],
                 )),
             };
@@ -1242,7 +1224,6 @@ fn substring_call(
     start: Option<GoExpression>,
     end: Option<GoExpression>,
 ) -> GoExpression {
-    let pkg = go_name::GO_STDLIB_PKG;
     let (function, bounds) = match (start, end) {
         (Some(start), Some(end)) => ("Substring", vec![start, end]),
         (Some(start), None) => ("SubstringFrom", vec![start]),
@@ -1251,14 +1232,8 @@ fn substring_call(
     };
     let mut arguments = vec![receiver];
     arguments.extend(bounds);
-    GoExpression::call(GoExpression::name(format!("{pkg}.{function}")), arguments)
-}
-
-pub(super) fn apply_inline_import(planner: &mut Planner, import: InlineImport) {
-    match import {
-        InlineImport::Slices => planner.require_slices(),
-        InlineImport::Strings => planner.require_strings(),
-        InlineImport::Stdlib => planner.require_stdlib(),
-        InlineImport::None => {}
-    }
+    GoExpression::call(
+        GoExpression::generated(GeneratedPackage::Prelude, function),
+        arguments,
+    )
 }

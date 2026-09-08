@@ -8,7 +8,7 @@ use crate::control_flow::targets::legalize_source_loop;
 use crate::definitions::ConstScope;
 use crate::definitions::functions::{is_breakless_loop, is_go_never, is_test_context_ty};
 use crate::expressions::{flip_comparison, flip_preserves_nan};
-use crate::names::go_name::{prelude_qualifier, testkit_qualifier};
+use crate::names::go_name::{GeneratedPackage, testkit_qualifier};
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, define, directed, directed_first, expression_statement,
@@ -452,16 +452,12 @@ impl Planner<'_> {
         else {
             unreachable!("lower_test_log_call requires a method receiver");
         };
-        self.require_testkit();
-        self.require_stdlib();
-
         let mut statements = Vec::new();
         let handle = self.lower_value(receiver, ExpressionContext::value());
         statements.extend(handle.setup);
         let value = self.lower_value(&args[0], ExpressionContext::value());
         statements.extend(value.setup);
 
-        let prelude = prelude_qualifier();
         let span = args[0].get_span();
         let call = GoExpression::call(
             GoExpression::selector(handle.expression, "Log".to_string()),
@@ -470,7 +466,7 @@ impl Planner<'_> {
                 GoExpression::literal(span.byte_offset.to_string()),
                 GoExpression::literal((span.byte_offset + span.byte_length).to_string()),
                 GoExpression::call(
-                    GoExpression::name(format!("{prelude}.Debug")),
+                    GoExpression::generated(GeneratedPackage::Prelude, "Debug"),
                     vec![value.expression],
                 ),
             ],
@@ -487,7 +483,6 @@ impl Planner<'_> {
         right: &Expression,
         statements: &mut Vec<LoweredStatement>,
     ) -> AssertShape {
-        self.require_stdlib();
         let (lhs, rhs) =
             self.stage_assert_operands(left, right, LiteralInlining::Allowed, statements);
         let flipped = flip_comparison(operator)
@@ -519,7 +514,6 @@ impl Planner<'_> {
         arg: &Expression,
         statements: &mut Vec<LoweredStatement>,
     ) -> AssertShape {
-        self.require_stdlib();
         let recv_ty = recv.get_type();
         let (lhs, rhs) = self.stage_assert_operands(recv, arg, LiteralInlining::Denied, statements);
         let failure_condition =
@@ -1126,25 +1120,24 @@ enum LiteralInlining {
 }
 
 fn paired_operands(lhs: &GoExpression, rhs: &GoExpression) -> Vec<GoExpression> {
-    let (test_kit, prelude) = (testkit_qualifier(), prelude_qualifier());
+    let test_kit = testkit_qualifier();
     let operand = |label: &str, value: &GoExpression| {
         GoExpression::composite(
             Some(format!("{test_kit}.Operand")),
             vec![
                 (
-                    Some("Label".to_string()),
+                    Some(GoExpression::name("Label".to_string())),
                     GoExpression::literal(format!("\"{label}\"")),
                 ),
                 (
-                    Some("Value".to_string()),
+                    Some(GoExpression::name("Value".to_string())),
                     GoExpression::call(
-                        GoExpression::name(format!("{prelude}.Debug")),
+                        GoExpression::generated(GeneratedPackage::Prelude, "Debug"),
                         vec![value.clone()],
                     ),
                 ),
             ],
             CompositeLayout::Inline { padded: false },
-            false,
         )
     };
     vec![operand("left", lhs), operand("right", rhs)]

@@ -477,8 +477,9 @@ impl Planner<'_> {
                 let field = |base: &str| {
                     GoExpression::selector(GoExpression::name(base.to_string()), go_field.clone())
                 };
-                self.equality_expression(field(&receiver), field(&other), &f.ty, generics)
-                    .rendered()
+                let comparison =
+                    self.equality_expression(field(&receiver), field(&other), &f.ty, generics);
+                self.render_expression(&comparison)
             })
             .collect();
         let body = if comparisons.is_empty() {

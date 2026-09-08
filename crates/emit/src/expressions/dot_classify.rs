@@ -3,6 +3,7 @@ use crate::context::expression::ExpressionContext;
 use crate::expressions::identifiers::method_expression;
 use crate::names::go_name;
 use crate::plan::values::GoExpression;
+use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::program::DefinitionBody;
 use syntax::types::{Type, unqualified_name};
@@ -72,22 +73,17 @@ impl Planner<'_> {
 
         let make_fn = if needs_qualifier {
             if make_fn_name.starts_with(go_name::PRELUDE_PREFIX) {
-                let resolved = go_name::resolve(&make_fn_name);
-                if let Some(package) = resolved.package {
-                    self.require_generated_package(package);
-                }
-                resolved.name.to_string()
+                go_name::resolve(&make_fn_name).into_expression()
             } else {
-                let pkg = self.require_package_import(enum_package);
-                format!("{}.{}", pkg, make_fn_name)
+                GoExpression::qualified(
+                    self.package_use_for_package(enum_package),
+                    make_fn_name.to_string(),
+                )
             }
         } else {
-            make_fn_name.to_string()
+            GoExpression::name(make_fn_name.to_string())
         };
-        Some(GoExpression::instantiation(
-            GoExpression::name(make_fn),
-            type_args,
-        ))
+        Some(GoExpression::instantiation(make_fn, type_args))
     }
 
     fn emit_unit_variant_constructor(
@@ -122,19 +118,17 @@ impl Planner<'_> {
         let type_args = self.format_type_args(params);
 
         let callee = if is_prelude {
-            let resolved = go_name::resolve(&make_fn);
-            if let Some(package) = resolved.package {
-                self.require_generated_package(package);
-            }
-            resolved.name.to_string()
+            go_name::resolve(&make_fn).into_expression()
         } else if is_cross_package {
-            let pkg = self.require_package_import(enum_package);
-            format!("{}.{}", pkg, make_fn)
+            GoExpression::qualified(
+                self.package_use_for_package(enum_package),
+                make_fn.to_string(),
+            )
         } else {
-            make_fn.to_string()
+            GoExpression::name(make_fn.to_string())
         };
         Some(GoExpression::call(
-            GoExpression::instantiation(GoExpression::name(callee), type_args),
+            GoExpression::instantiation(callee, type_args),
             Vec::new(),
         ))
     }
@@ -161,9 +155,7 @@ impl Planner<'_> {
         let resolved_name = format!("{}.{}", real_type, member);
 
         let capitalized = self.capitalize_static_method_if_public(&resolved_name);
-        let go_name = self.resolve_go_name(&capitalized, None, false);
-
-        Some(GoExpression::name(go_name))
+        Some(self.resolve_go_name(&capitalized, None, false))
     }
 
     /// Instance method used as a value (e.g. `lib.Point.area` callback →
@@ -222,12 +214,14 @@ impl Planner<'_> {
             go_name::unexported_method_go_name(member)
         };
 
-        let pkg = self.require_package_import(package_name);
+        let package = self.package_use_for_package(package_name);
         let go_type_name = go_name::snake_to_camel(type_name);
         let type_args = self.method_expression_type_args(result_ty);
+        let receiver_type = format!("{}.{}{}", package.qualifier(), go_type_name, type_args);
+        let receiver_type = self.use_rendered_go_type(GoType::with_package(receiver_type, package));
 
         Some(method_expression(
-            format!("{}.{}{}", pkg, go_type_name, type_args),
+            receiver_type,
             is_pointer_receiver,
             go_method,
         ))
@@ -331,9 +325,6 @@ impl Planner<'_> {
             String::new()
         };
 
-        Some(GoExpression::instantiation(
-            GoExpression::name(qualified_name),
-            type_args,
-        ))
+        Some(GoExpression::instantiation(qualified_name, type_args))
     }
 }

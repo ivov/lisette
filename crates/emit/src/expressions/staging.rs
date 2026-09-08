@@ -2,7 +2,7 @@ use crate::Planner;
 use crate::abi::is_tagged_shape_fn_value;
 use crate::abi::transition::lower_arg_to_tagged;
 use crate::context::expression::ExpressionContext;
-use crate::names::go_name;
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredStatement, define};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::go_expression::CompositeLayout;
@@ -55,7 +55,7 @@ impl LaterStages {
         let stage_has_setup = !stage.setup.is_empty();
         let value_pin = !stage_has_setup && self.can_change(stage.evaluation.stability);
         let ordering_pin = stage.evaluation.effect.has_call()
-            && stage.expression.contains_deferred_evaluation()
+            && stage.expression.does_work()
             && (self.has_setup || self.has_pin);
         let pinned = value_pin || ordering_pin;
 
@@ -256,7 +256,6 @@ impl Planner<'_> {
                     value,
                     param_ty.expect("detected lowering requires a parameter type"),
                 )
-                .with_deferred_evaluation(true)
             });
         }
 
@@ -332,10 +331,9 @@ impl Planner<'_> {
         combine: Option<VariadicCombine>,
     ) {
         if wrap_to_any {
-            self.require_stdlib();
             let spread_value = mem::replace(&mut values[spread_index], GoExpression::empty());
             values[spread_index] = GoExpression::call(
-                GoExpression::name(format!("{}.SliceToAny", go_name::GO_STDLIB_PKG)),
+                GoExpression::generated(GeneratedPackage::Prelude, "SliceToAny"),
                 vec![spread_value],
             );
         }
@@ -351,7 +349,6 @@ impl Planner<'_> {
                     Some(format!("[]{element_go}")),
                     combined.into_iter().map(|value| (None, value)).collect(),
                     CompositeLayout::Inline { padded: false },
-                    false,
                 );
                 let appended = GoExpression::call(
                     GoExpression::name("append".to_string()),

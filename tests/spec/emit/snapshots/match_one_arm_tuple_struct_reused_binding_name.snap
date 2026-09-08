@@ -35,7 +35,6 @@ func test() string {
 	}
 	_ = p.F0 + p.F1
 	n := Name("hello")
-	var b string
-	b = string(n)
+	b := string(n)
 	return b
 }

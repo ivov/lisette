@@ -357,9 +357,6 @@ impl Planner<'_> {
         let condition = match pair.nil_guard {
             None => status,
             Some(guard) => {
-                if guard.is_interface() {
-                    self.require_stdlib();
-                }
                 let value = GoExpression::name(
                     pair.value
                         .clone()

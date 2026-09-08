@@ -8,6 +8,7 @@ use crate::abi::callable::{CallableAbi, CallableReturnAbi, OptionReturnAbi};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge, resolve_layout_bridge};
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::context::expression::ExpressionContext;
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredStatement, define_many};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::values::{GoExpression, ValuePlan};
@@ -43,7 +44,7 @@ impl Planner<'_> {
             return call.map_expression_as_observable_computed(|setup, call| {
                 let (bridge_setup, value) = bridge.lower(self, call);
                 setup.extend(bridge_setup);
-                value.with_deferred_evaluation(false)
+                value
             });
         }
 
@@ -150,16 +151,11 @@ impl Planner<'_> {
             | CallableReturnAbi::Tuple { .. } => {
                 unreachable!("direct and tuple results do not use a scalar wrapper")
             }
-            CallableReturnAbi::BareError => {
-                self.require_stdlib();
-                self.lower_bare_error_wrapping(call, result_ty, target)
-            }
+            CallableReturnAbi::BareError => self.lower_bare_error_wrapping(call, result_ty, target),
             CallableReturnAbi::Result { payload } => {
-                self.require_stdlib();
                 self.lower_result_wrapping(call, result_ty, *payload, payload_bridge, target)
             }
             CallableReturnAbi::Partial { payload } => {
-                self.require_stdlib();
                 self.lower_partial_wrapping(call, result_ty, *payload, payload_bridge, target)
             }
             CallableReturnAbi::Option(OptionReturnAbi::CommaOk { payload }) => {
@@ -261,18 +257,17 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
         values: Vec<GoExpression>,
     ) -> GoExpression {
-        let constructor = build_tuple_literal(self, values);
+        let constructor = build_tuple_literal(values);
         GoExpression::name(self.hoist_tmp_value_statement(statements, "tup", constructor))
     }
 }
 
-pub(super) fn build_tuple_literal(
-    planner: &mut Planner,
-    values: Vec<GoExpression>,
-) -> GoExpression {
-    planner.require_stdlib();
+pub(super) fn build_tuple_literal(values: Vec<GoExpression>) -> GoExpression {
     GoExpression::call(
-        GoExpression::name(format!("lisette.MakeTuple{}", values.len())),
+        GoExpression::generated(
+            GeneratedPackage::Prelude,
+            format!("MakeTuple{}", values.len()),
+        ),
         values,
     )
 }

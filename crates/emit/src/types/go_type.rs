@@ -35,7 +35,7 @@ impl GoType {
         }
     }
 
-    fn stdlib(code: impl Into<String>) -> Self {
+    pub(crate) fn stdlib(code: impl Into<String>) -> Self {
         let mut result = Self::new(code);
         result
             .requirements
@@ -43,7 +43,7 @@ impl GoType {
         result
     }
 
-    fn with_package(code: impl Into<String>, package: PackageUse) -> Self {
+    pub(crate) fn with_package(code: impl Into<String>, package: PackageUse) -> Self {
         let mut result = Self::new(code);
         result.requirements.require(package);
         result

@@ -1,7 +1,9 @@
 //! Lowered body IR: the typed vocabulary `plan::lower` produces and `render/`
 //! consumes.
 
+use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
+use rustc_hash::FxHashSet as HashSet;
 use syntax::types::Type;
 
 pub(crate) fn define(name: String, value: GoExpression) -> LoweredStatement {
@@ -449,7 +451,54 @@ impl ElseArm {
     }
 }
 
+fn visit_statements(statements: &[LoweredStatement], visit: &mut impl FnMut(&GoExpressionNode)) {
+    for statement in statements {
+        statement.visit_expressions(visit);
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct GoUses {
+    names: HashSet<String>,
+}
+
+impl GoUses {
+    pub(crate) fn of(statements: &[LoweredStatement]) -> Self {
+        let mut uses = Self::default();
+        uses.extend(statements);
+        uses
+    }
+
+    pub(crate) fn extend(&mut self, statements: &[LoweredStatement]) {
+        visit_statements(statements, &mut |node| self.record(node));
+    }
+
+    pub(crate) fn extend_cases(&mut self, cases: &[SwitchCasePlan]) {
+        for case in cases {
+            case.visit_expressions(&mut |node| self.record(node));
+        }
+    }
+
+    pub(crate) fn extend_if(&mut self, plan: &IfPlan) {
+        plan.visit_expressions(&mut |node| self.record(node));
+    }
+
+    pub(crate) fn contains(&self, name: &str) -> bool {
+        self.names.contains(name)
+    }
+
+    fn record(&mut self, node: &GoExpressionNode) {
+        if let GoExpressionNode::Identifier(name) = node {
+            self.names.insert(name.clone());
+        }
+    }
+}
+
 impl LoweredBlock {
+    pub(crate) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
+        visit_statements(&self.statements, visit);
+    }
+
     /// Whether the block's last rendered line is `break`, `continue`,
     /// `return`, or `panic(...)`.
     pub(crate) fn ends_with_diverge(&self) -> bool {
@@ -471,6 +520,138 @@ impl LoweredBlock {
 }
 
 impl LoweredStatement {
+    pub(crate) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
+        match self {
+            LoweredStatement::If(plan) => plan.visit_expressions(visit),
+            LoweredStatement::Loop(plan) => {
+                visit_statements(&plan.prologue, visit);
+                match &plan.header {
+                    LoopHeader::Infinite => {}
+                    LoopHeader::While(condition) => condition.node().visit(visit),
+                    LoopHeader::Range { iterable, .. } => iterable.node().visit(visit),
+                    LoopHeader::Counted {
+                        start, condition, ..
+                    } => {
+                        start.node().visit(visit);
+                        if let Some(condition) = condition {
+                            condition.node().visit(visit);
+                        }
+                    }
+                }
+                plan.body.visit_expressions(visit);
+            }
+            LoweredStatement::Block(body)
+            | LoweredStatement::Body(body)
+            | LoweredStatement::WhileLet(body) => body.visit_expressions(visit),
+            LoweredStatement::Break(_)
+            | LoweredStatement::Continue(_)
+            | LoweredStatement::UnreachablePanic => {}
+            LoweredStatement::Const(plan) => plan.value.visit_expressions(visit),
+            LoweredStatement::Return(form) => match form {
+                ReturnForm::Plain { value } => value.visit_expressions(visit),
+                ReturnForm::Unit { side_effect } => {
+                    if let Some(body) = side_effect {
+                        body.visit_expressions(visit);
+                    }
+                }
+                ReturnForm::Multi { values } => {
+                    for value in values {
+                        value.node().visit(visit);
+                    }
+                }
+                ReturnForm::Body { body } => body.visit_expressions(visit),
+            },
+            LoweredStatement::BreakValue(plan) => match plan {
+                BreakValuePlan::Diverged { value } | BreakValuePlan::Transfer { value, .. } => {
+                    value.visit_expressions(visit)
+                }
+            },
+            LoweredStatement::Let(plan) => {
+                if let Some(declaration) = &plan.declaration {
+                    declaration.visit_expressions(visit);
+                }
+                plan.body.visit_expressions(visit);
+            }
+            LoweredStatement::Assign(form) => match form {
+                AssignForm::Compound {
+                    target_capture,
+                    target,
+                    kind,
+                } => {
+                    visit_statements(target_capture, visit);
+                    target.node().visit(visit);
+                    if let CompoundKind::OpAssign { rhs, .. } = kind {
+                        rhs.visit_expressions(visit);
+                    }
+                }
+                AssignForm::Simple {
+                    target_capture,
+                    target,
+                    value,
+                } => {
+                    visit_statements(target_capture, visit);
+                    target.node().visit(visit);
+                    value.visit_expressions(visit);
+                }
+            },
+            LoweredStatement::Async { call, .. } => call.node().visit(visit),
+            LoweredStatement::Select(plan) => {
+                visit_statements(&plan.setup, visit);
+                for arm in &plan.arms {
+                    match arm {
+                        SelectArmPlan::Receive { channel, body, .. } => {
+                            channel.node().visit(visit);
+                            body.visit_expressions(visit);
+                        }
+                        SelectArmPlan::Send {
+                            channel,
+                            value,
+                            body,
+                        } => {
+                            channel.node().visit(visit);
+                            value.node().visit(visit);
+                            body.visit_expressions(visit);
+                        }
+                        SelectArmPlan::Default { body } => body.visit_expressions(visit),
+                    }
+                }
+                visit_statements(&plan.postlude, visit);
+            }
+            LoweredStatement::Switch(plan) => {
+                match &plan.kind {
+                    SwitchKind::Conditional => {}
+                    SwitchKind::Value { subject } | SwitchKind::Type { subject, .. } => {
+                        subject.node().visit(visit)
+                    }
+                }
+                for case in &plan.cases {
+                    case.visit_expressions(visit);
+                }
+                if let Some(default) = &plan.default {
+                    default.visit_expressions(visit);
+                }
+                visit_statements(&plan.postlude, visit);
+            }
+            LoweredStatement::Define(definition) => definition.value.node().visit(visit),
+            LoweredStatement::AssignMany { targets, value } => {
+                for target in targets {
+                    target.node().visit(visit);
+                }
+                value.node().visit(visit);
+            }
+            LoweredStatement::VarDecl { value, .. } => {
+                if let Some(value) = value {
+                    value.node().visit(visit);
+                }
+            }
+            LoweredStatement::Discard(expression)
+            | LoweredStatement::ExpressionStatement { expression, .. } => {
+                expression.node().visit(visit)
+            }
+            LoweredStatement::Directed { inner, .. } => inner.visit_expressions(visit),
+        }
+    }
+
     /// The Go name this statement binds, seeing through a sourcemap directive.
     pub(crate) fn bound_name(&self) -> Option<&str> {
         match self {
@@ -588,7 +769,30 @@ impl LoweredStatement {
     }
 }
 
+impl SwitchCasePlan {
+    fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
+        for label in &self.labels {
+            label.node().visit(visit);
+        }
+        self.body.visit_expressions(visit);
+    }
+}
+
 impl IfPlan {
+    fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
+        visit_statements(&self.condition_setup, visit);
+        if let Some(initializer) = &self.initializer {
+            initializer.value.node().visit(visit);
+        }
+        self.condition.node().visit(visit);
+        self.then_body.visit_expressions(visit);
+        match &self.else_arm {
+            ElseArm::None => {}
+            ElseArm::ElseIf(plan) => plan.visit_expressions(visit),
+            ElseArm::Else { body, .. } => body.visit_expressions(visit),
+        }
+    }
+
     fn ends_with_diverge(&self) -> bool {
         if !self.then_body.ends_with_diverge() {
             return false;

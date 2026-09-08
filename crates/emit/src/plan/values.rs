@@ -1,6 +1,8 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
+use crate::names::go_name::GeneratedPackage;
+use crate::names::packages::PackageUse;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement};
 use crate::plan::go_expression::{
     CompositeElement, CompositeLayout, FunctionLiteralLayout, GoExpressionNode,
@@ -78,26 +80,15 @@ fn unary_constant(operator: &str, value: Option<ConstantKind>) -> Option<Constan
 pub(crate) struct GoExpression {
     node: GoExpressionNode,
     rendered: String,
-    contains_deferred_evaluation: bool,
-    composite_literal: bool,
-    syntax_form: OperandForm,
     constant: Option<ConstantKind>,
 }
 
 impl GoExpression {
-    fn new(
-        node: GoExpressionNode,
-        contains_deferred_evaluation: bool,
-        composite_literal: bool,
-        syntax_form: OperandForm,
-    ) -> Self {
+    fn new(node: GoExpressionNode) -> Self {
         let rendered = node.print();
         Self {
             node,
             rendered,
-            contains_deferred_evaluation,
-            composite_literal,
-            syntax_form,
             constant: None,
         }
     }
@@ -116,12 +107,18 @@ impl GoExpression {
     }
 
     pub(crate) fn name(value: String) -> Self {
-        Self::new(
-            GoExpressionNode::Identifier(value),
-            false,
-            false,
-            OperandForm::Name,
-        )
+        Self::new(GoExpressionNode::Identifier(value))
+    }
+
+    pub(crate) fn qualified(package: PackageUse, name: impl Into<String>) -> Self {
+        Self::new(GoExpressionNode::Qualified {
+            package,
+            name: name.into(),
+        })
+    }
+
+    pub(crate) fn generated(package: GeneratedPackage, name: impl Into<String>) -> Self {
+        Self::qualified(PackageUse::generated(package), name)
     }
 
     pub(crate) fn nil() -> Self {
@@ -130,59 +127,38 @@ impl GoExpression {
 
     /// The value of a lowering that produced only statements.
     pub(crate) fn empty() -> Self {
-        Self::new(GoExpressionNode::Empty, false, false, OperandForm::Other)
+        Self::new(GoExpressionNode::Empty)
     }
 
     pub(crate) fn verbatim(source: String) -> Self {
-        Self::new(
-            GoExpressionNode::Verbatim(source),
-            false,
-            false,
-            OperandForm::Other,
-        )
+        Self::new(GoExpressionNode::Verbatim(source))
     }
 
     pub(crate) fn literal(rendered: String) -> Self {
-        Self::new(
-            GoExpressionNode::Literal(rendered),
-            false,
-            false,
-            OperandForm::Literal,
-        )
+        Self::new(GoExpressionNode::Literal(rendered))
     }
 
     pub(crate) fn type_name(go_type: String) -> Self {
-        Self::new(
-            GoExpressionNode::Type(go_type),
-            false,
-            false,
-            OperandForm::Other,
-        )
+        Self::new(GoExpressionNode::Type(go_type))
     }
 
     pub(crate) fn composite(
         go_type: Option<String>,
-        elements: Vec<(Option<String>, GoExpression)>,
+        elements: Vec<(Option<GoExpression>, GoExpression)>,
         layout: CompositeLayout,
-        contains_deferred_evaluation: bool,
     ) -> Self {
         let node = GoExpressionNode::CompositeLiteral {
             go_type,
             elements: elements
                 .into_iter()
                 .map(|(key, value)| CompositeElement {
-                    key,
+                    key: key.map(|key| key.node),
                     value: value.node,
                 })
                 .collect(),
             layout,
         };
-        Self::new(
-            node,
-            contains_deferred_evaluation,
-            true,
-            OperandForm::Literal,
-        )
+        Self::new(node)
     }
 
     /// `T{}` with no elements.
@@ -191,19 +167,13 @@ impl GoExpression {
             Some(go_type),
             Vec::new(),
             CompositeLayout::Inline { padded: true },
-            false,
         )
     }
 
     /// The callee without its type arguments, for a call site that re-instantiates.
     pub(crate) fn without_instantiation(self) -> Self {
         match self.node {
-            GoExpressionNode::Instantiation { base, .. } => Self::new(
-                *base,
-                self.contains_deferred_evaluation,
-                self.composite_literal,
-                self.syntax_form,
-            ),
+            GoExpressionNode::Instantiation { base, .. } => Self::new(*base),
             _ => self,
         }
     }
@@ -223,12 +193,11 @@ impl GoExpression {
         if type_arguments.is_empty() {
             return base;
         }
-        let deferred = base.contains_deferred_evaluation();
         let node = GoExpressionNode::Instantiation {
             base: Box::new(base.node),
             type_arguments,
         };
-        Self::new(node, deferred, false, base.syntax_form)
+        Self::new(node)
     }
 
     pub(crate) fn type_assertion(base: GoExpression, go_type: String) -> Self {
@@ -236,37 +205,19 @@ impl GoExpression {
             base: Box::new(base.node),
             go_type,
         };
-        Self::new(node, true, false, OperandForm::Other)
+        Self::new(node)
     }
 
     pub(crate) fn address_of(operand: GoExpression) -> Self {
-        let deferred = operand.contains_deferred_evaluation();
-        Self::new(
-            GoExpressionNode::AddressOf(Box::new(operand.node)),
-            deferred,
-            false,
-            OperandForm::Other,
-        )
+        Self::new(GoExpressionNode::AddressOf(Box::new(operand.node)))
     }
 
     pub(crate) fn dereference(operand: GoExpression) -> Self {
-        let deferred = operand.contains_deferred_evaluation();
-        Self::new(
-            GoExpressionNode::Dereference(Box::new(operand.node)),
-            deferred,
-            false,
-            OperandForm::Other,
-        )
+        Self::new(GoExpressionNode::Dereference(Box::new(operand.node)))
     }
 
     pub(crate) fn spread(operand: GoExpression) -> Self {
-        let deferred = operand.contains_deferred_evaluation();
-        Self::new(
-            GoExpressionNode::Spread(Box::new(operand.node)),
-            deferred,
-            false,
-            OperandForm::Other,
-        )
+        Self::new(GoExpressionNode::Spread(Box::new(operand.node)))
     }
 
     pub(crate) fn function_literal(
@@ -275,17 +226,12 @@ impl GoExpression {
         body: LoweredBlock,
         layout: FunctionLiteralLayout,
     ) -> Self {
-        Self::new(
-            GoExpressionNode::FunctionLiteral {
-                parameters,
-                result,
-                body,
-                layout,
-            },
-            false,
-            false,
-            OperandForm::Other,
-        )
+        Self::new(GoExpressionNode::FunctionLiteral {
+            parameters,
+            result,
+            body,
+            layout,
+        })
     }
 
     pub(crate) fn immediate_call(
@@ -307,7 +253,7 @@ impl GoExpression {
                 .map(|argument| argument.node)
                 .collect(),
         };
-        Self::new(node, true, false, OperandForm::Call)
+        Self::new(node)
     }
 
     pub(crate) fn binary(
@@ -316,32 +262,29 @@ impl GoExpression {
         right: GoExpression,
     ) -> Self {
         let operator = operator.into();
-        let deferred = left.contains_deferred_evaluation() || right.contains_deferred_evaluation();
         let constant = binary_constant(left.constant, &operator, right.constant);
         let node = GoExpressionNode::Binary {
             operator,
             left: Box::new(left.node),
             right: Box::new(right.node),
         };
-        Self::new(node, deferred, false, OperandForm::Other).with_constant(constant)
+        Self::new(node).with_constant(constant)
     }
 
     pub(crate) fn selector(base: GoExpression, field: String) -> Self {
-        let deferred = base.contains_deferred_evaluation();
         let node = GoExpressionNode::Selector {
             base: Box::new(base.node),
             field,
         };
-        Self::new(node, deferred, false, OperandForm::Other)
+        Self::new(node)
     }
 
     pub(crate) fn index(base: GoExpression, index: GoExpression) -> Self {
-        let deferred = base.contains_deferred_evaluation() || index.contains_deferred_evaluation();
         let node = GoExpressionNode::Index {
             base: Box::new(base.node),
             index: Box::new(index.node),
         };
-        Self::new(node, deferred, false, OperandForm::Other)
+        Self::new(node)
     }
 
     pub(crate) fn conversion(go_type: String, value: GoExpression) -> Self {
@@ -349,28 +292,21 @@ impl GoExpression {
             go_type,
             operand: Box::new(value.node),
         };
-        Self::new(node, true, false, OperandForm::Other)
+        Self::new(node)
     }
 
     pub(crate) fn parenthesized(value: GoExpression) -> Self {
         let constant = value.constant;
-        Self::new(
-            GoExpressionNode::Parenthesized(Box::new(value.node)),
-            true,
-            false,
-            OperandForm::Other,
-        )
-        .with_constant(constant)
+        Self::new(GoExpressionNode::Parenthesized(Box::new(value.node))).with_constant(constant)
     }
 
     pub(crate) fn unary(operator: &str, value: GoExpression) -> Self {
-        let deferred = value.contains_deferred_evaluation();
         let constant = unary_constant(operator, value.constant);
         let node = GoExpressionNode::Unary {
             operator: operator.to_string(),
             operand: Box::new(value.node),
         };
-        Self::new(node, deferred, false, OperandForm::Other).with_constant(constant)
+        Self::new(node).with_constant(constant)
     }
 
     pub(crate) fn slice(
@@ -379,12 +315,6 @@ impl GoExpression {
         end: Option<&GoExpression>,
         capacity: Option<&GoExpression>,
     ) -> Self {
-        let deferred = base.contains_deferred_evaluation()
-            || start
-                .into_iter()
-                .chain(end)
-                .chain(capacity)
-                .any(GoExpression::contains_deferred_evaluation);
         let bound = |bound: Option<&GoExpression>| bound.map(|bound| Box::new(bound.node.clone()));
         let node = GoExpressionNode::Slice {
             base: Box::new(base.node),
@@ -392,18 +322,12 @@ impl GoExpression {
             high: bound(end),
             max: bound(capacity),
         };
-        Self::new(node, deferred, false, OperandForm::Other)
+        Self::new(node)
     }
 
-    /// Lift a subtree taken out of another expression. The parent supplies the facts.
+    /// Lift a subtree taken out of another expression.
     pub(crate) fn from_node(node: GoExpressionNode) -> Self {
-        Self::new(node, false, false, OperandForm::Other)
-    }
-
-    /// Override the derived flag where a lowering path computes it itself.
-    pub(crate) fn with_deferred_evaluation(mut self, contains_deferred_evaluation: bool) -> Self {
-        self.contains_deferred_evaluation = contains_deferred_evaluation;
-        self
+        Self::new(node)
     }
 
     pub(crate) fn node(&self) -> &GoExpressionNode {
@@ -419,23 +343,35 @@ impl GoExpression {
     }
 
     pub(crate) fn is_composite_literal(&self) -> bool {
-        self.composite_literal
+        matches!(self.node, GoExpressionNode::CompositeLiteral { .. })
     }
 
     pub(crate) fn is_literal(&self) -> bool {
-        matches!(self.syntax_form, OperandForm::Literal)
+        matches!(self.syntax_form(), OperandForm::Literal)
     }
 
     fn syntax_form(&self) -> OperandForm {
-        self.syntax_form
+        syntax_form(&self.node)
     }
 
     pub(crate) fn is_empty(&self) -> bool {
         self.rendered.is_empty()
     }
 
-    pub(crate) fn contains_deferred_evaluation(&self) -> bool {
-        self.contains_deferred_evaluation
+    pub(crate) fn does_work(&self) -> bool {
+        self.node.does_work()
+    }
+}
+
+fn syntax_form(node: &GoExpressionNode) -> OperandForm {
+    match node {
+        GoExpressionNode::Identifier(_) | GoExpressionNode::Qualified { .. } => OperandForm::Name,
+        GoExpressionNode::Literal(_) | GoExpressionNode::CompositeLiteral { .. } => {
+            OperandForm::Literal
+        }
+        GoExpressionNode::Call { .. } => OperandForm::Call,
+        GoExpressionNode::Instantiation { base, .. } => syntax_form(base),
+        _ => OperandForm::Other,
     }
 }
 
@@ -559,15 +495,14 @@ pub(crate) struct SequencedValues {
     pub effect: EvaluationEffect,
 }
 
-impl SequencedValues {
-    pub(crate) fn contains_deferred_evaluation(&self) -> bool {
-        self.values
-            .iter()
-            .any(GoExpression::contains_deferred_evaluation)
-    }
-}
-
 impl ValuePlan {
+    pub(crate) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
+        for statement in &self.setup {
+            statement.visit_expressions(visit);
+        }
+        self.expression.node().visit(visit);
+    }
+
     fn from_facts(
         setup: Vec<LoweredStatement>,
         expression: GoExpression,

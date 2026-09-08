@@ -12,6 +12,7 @@ use crate::names::go_name::is_plain_identifier;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::decision_tree;
 use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
+use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, assign, define,
     discard, expression_statement,
@@ -141,9 +142,6 @@ impl BoundOption {
                 nil_guard,
                 initializer_call,
             } => {
-                if nil_guard.is_interface() {
-                    planner.require_stdlib();
-                }
                 let tested = GoExpression::name(value.clone());
                 let test = if success {
                     nil_guard.non_nil(tested)
@@ -408,15 +406,13 @@ impl Planner<'_> {
         let (subject_var, declaration) =
             self.lower_match_subject_var(&mut statements, subject, arms);
 
-        let (block, used_set) = self.capture_go_uses(|this| {
-            this.lower_match_tree(
-                arms,
-                MatchSubject::Var(subject_var.clone()),
-                subject_ty,
-                place,
-            )
-        });
-        let used = used_set.contains(&subject_var);
+        let block = self.lower_match_tree(
+            arms,
+            MatchSubject::Var(subject_var.clone()),
+            subject_ty,
+            place,
+        );
+        let used = GoUses::of(&block.statements).contains(&subject_var);
 
         match declaration {
             SubjectDeclaration::PlainDiscard { var } => {
@@ -763,7 +759,6 @@ impl Planner<'_> {
 
         let err_read = err_used.first().copied().unwrap_or(false) || !wraps.is_empty();
         if has_nil_guard && err_read {
-            self.require_errors();
             else_body.statements.insert(
                 0,
                 LoweredStatement::If(IfPlan::plain(
@@ -997,18 +992,12 @@ impl Planner<'_> {
             PartialVariant::Ok => is_nil(err()),
             PartialVariant::Both => match nil_guard {
                 Some(guard) => {
-                    if guard.is_interface() {
-                        self.require_stdlib();
-                    }
                     GoExpression::binary(non_nil(err()), "&&", guard.non_nil(guarded_value()))
                 }
                 None => non_nil(err()),
             },
             PartialVariant::Err => {
                 let guard = nil_guard.expect("non-nilable Err returned above");
-                if guard.is_interface() {
-                    self.require_stdlib();
-                }
                 GoExpression::binary(non_nil(err()), "&&", guard.is_nil(guarded_value()))
             }
         };
@@ -1101,8 +1090,8 @@ impl Planner<'_> {
                     })
                 })
                 .collect();
-            let (body_block, used) =
-                this.capture_go_uses(|this| this.lower_block_to_place(body, place));
+            let body_block = this.lower_block_to_place(body, place);
+            let used = GoUses::of(&body_block.statements);
             let mut statements = Vec::new();
             let binding_uses = bound
                 .iter()

@@ -1,4 +1,5 @@
 use crate::patterns::binding_decls::pattern_has_bindings;
+use crate::plan::bodies::GoUses;
 use std::borrow::Cow;
 
 use syntax::ast::{Expression, MatchArm, Pattern, Span};
@@ -7,7 +8,7 @@ use syntax::types::Type;
 use crate::Planner;
 use crate::calls::comma_ok::{CommaOkValueSlot, PairCondition};
 use crate::context::expression::ExpressionContext;
-use crate::names::go_name::{self, prelude_qualifier, testkit_qualifier};
+use crate::names::go_name::{self, GeneratedPackage, testkit_qualifier};
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::binding_emit::{
     apply_refutable_root_assertion, apply_root_assertion, compose_refutable_condition,
@@ -211,14 +212,11 @@ impl Planner<'_> {
         let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
         self.require_packages(&info.packages);
 
-        let (body, used) = self.capture_go_uses(|this| {
-            let mut body = Vec::new();
-            let effective = apply_root_assertion(this, &mut body, &info, resolved.var());
-            tree_binding_statements(this, &mut body, &info.bindings, &effective, &[]);
-            body
-        });
+        let mut body = Vec::new();
+        let effective = apply_root_assertion(self, &mut body, &info, resolved.var());
+        tree_binding_statements(self, &mut body, &info.bindings, &effective, &[]);
 
-        let references = used.contains(resolved.var());
+        let references = GoUses::of(&body).contains(resolved.var());
         resolved.push_declaration(&mut statements, references);
         statements.extend(body);
         statements
@@ -286,15 +284,13 @@ impl Planner<'_> {
         };
 
         let subject_is_fixed = self.is_unmutated_identifier(scrutinee);
-        let (body, used) = self.capture_go_uses(|this| {
-            if matches!(ap.pattern, Pattern::Or { .. }) {
-                this.lower_let_else_or_pattern(ap, binding_ty, subject, fail)
-            } else {
-                this.lower_let_else_single_pattern(ap, subject, fail, subject_is_fixed)
-            }
-        });
+        let body = if matches!(ap.pattern, Pattern::Or { .. }) {
+            self.lower_let_else_or_pattern(ap, binding_ty, subject, fail)
+        } else {
+            self.lower_let_else_single_pattern(ap, subject, fail, subject_is_fixed)
+        };
 
-        let references = used.contains(resolved.var());
+        let references = GoUses::of(&body).contains(resolved.var());
         resolved.push_declaration(&mut statements, references);
         statements.extend(body);
         statements
@@ -547,22 +543,18 @@ impl Planner<'_> {
                     .current_test_handle()
                     .expect("let assert without a test handle should be rejected by semantics");
                 self.require_testkit();
-                self.require_stdlib();
                 let testkit = testkit_qualifier();
-                let prelude = prelude_qualifier();
-                self.scope.record_go_use(subject_var);
                 let literal = |text: String| GoExpression::literal(text);
                 let operand = GoExpression::composite(
                     Some(format!("{testkit}.Operand")),
                     vec![(
-                        Some("Value".to_string()),
+                        Some(GoExpression::name("Value".to_string())),
                         GoExpression::call(
-                            GoExpression::name(format!("{prelude}.Debug")),
+                            GoExpression::generated(GeneratedPackage::Prelude, "Debug"),
                             vec![GoExpression::name(subject_var.to_string())],
                         ),
                     )],
                     CompositeLayout::Inline { padded: false },
-                    false,
                 );
                 let call = GoExpression::call(
                     GoExpression::name(format!("{handle}.FailAssert")),
@@ -625,7 +617,6 @@ impl Planner<'_> {
             guard_parts.push(GoExpression::unary("!", ok));
         }
         if !info.checks.is_empty() {
-            self.scope.record_go_use(effective_subject.as_ref());
             let negated = match info.checks.as_slice() {
                 [check] => check.render_negated(SubjectRoot::Var(&effective_subject)),
                 _ => GoExpression::unary(
@@ -705,9 +696,6 @@ impl Planner<'_> {
                     statements.push(assemble_if_else_chain(pieces, body));
                 }
                 return statements;
-            }
-            if !info.checks.is_empty() {
-                self.scope.record_go_use(&subject);
             }
             let condition = compose_refutable_condition(ok_test.as_ref(), &info.checks, &subject);
             pieces.push((condition, body));
@@ -868,10 +856,6 @@ impl Planner<'_> {
                 },
             );
             return statements;
-        }
-
-        if !info.checks.is_empty() {
-            self.scope.record_go_use(effective.as_ref());
         }
         let condition = compose_refutable_condition(ok_test.as_ref(), &info.checks, &effective);
         let mut then_body = Vec::new();

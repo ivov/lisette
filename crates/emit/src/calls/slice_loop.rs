@@ -5,7 +5,7 @@ use super::native::NativeCallResult;
 use super::{NativeCallContext, NativeMethodCall};
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
-use crate::control_flow::fallible::generic_call;
+use crate::control_flow::fallible::prelude_call;
 use crate::names::go_name;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
@@ -350,7 +350,6 @@ impl Planner<'_> {
             setup,
             result,
             effect.combine(EvaluationEffect::EffectfulCall),
-            false,
         ))
     }
 
@@ -422,15 +421,10 @@ impl Planner<'_> {
                 init.expect("fold stages its initial value").clone(),
             ),
             SliceLoop::Find => {
-                self.require_stdlib();
                 let payload = self.first_type_argument_go_string(result_ty);
                 define(
                     result.to_string(),
-                    generic_call(
-                        &format!("{}.MakeOptionNone", go_name::GO_STDLIB_PKG),
-                        format!("[{}]", payload),
-                        Vec::new(),
-                    ),
+                    prelude_call("MakeOptionNone", format!("[{}]", payload), Vec::new()),
                 )
             }
         }
@@ -487,12 +481,11 @@ impl Planner<'_> {
                         ));
                     }
                     None => {
-                        self.require_stdlib();
                         let payload = self.use_go_type(element_ty);
                         statements.push(assign(
                             name(result),
-                            generic_call(
-                                &format!("{}.MakeOptionSome", go_name::GO_STDLIB_PKG),
+                            prelude_call(
+                                "MakeOptionSome",
                                 format!("[{}]", payload),
                                 vec![name(element_name)],
                             ),

@@ -72,13 +72,6 @@ impl<'a> SubjectRoot<'a> {
             Self::Elements(names) => (names[element_index(segments)].clone(), &segments[1..]),
         }
     }
-
-    pub(crate) fn names(&self) -> Vec<&'a str> {
-        match self {
-            Self::Var(var) => vec![var],
-            Self::Elements(names) => names.iter().map(String::as_str).collect(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -167,11 +160,11 @@ impl AccessPath {
 pub(crate) enum Check {
     EnumTag {
         path: AccessPath,
-        tag_constant: String,
+        tag_constant: GoExpression,
     },
     Literal {
         path: AccessPath,
-        go_literal: String,
+        go_literal: GoExpression,
     },
     SliceLenEq {
         path: AccessPath,
@@ -226,7 +219,7 @@ impl Check {
                 GoExpression::binary(
                     GoExpression::selector(path.render(subject), "Tag".to_string()),
                     operator,
-                    GoExpression::name(tag_constant.clone()),
+                    tag_constant.clone(),
                 )
             }
             Check::Literal { path, go_literal } => {
@@ -234,12 +227,8 @@ impl Check {
                 match (go_literal.as_str(), negative) {
                     ("true", false) | ("false", true) => rendered_path,
                     ("true", true) | ("false", false) => GoExpression::unary("!", rendered_path),
-                    (_, false) => {
-                        GoExpression::binary(rendered_path, "==", label_expression(go_literal))
-                    }
-                    (_, true) => {
-                        GoExpression::binary(rendered_path, "!=", label_expression(go_literal))
-                    }
+                    (_, false) => GoExpression::binary(rendered_path, "==", go_literal.clone()),
+                    (_, true) => GoExpression::binary(rendered_path, "!=", go_literal.clone()),
                 }
             }
             Check::SliceLenEq { path, length } => {
@@ -310,14 +299,14 @@ impl Check {
         }
     }
 
-    fn as_enum_tag(&self) -> Option<&str> {
+    fn as_enum_tag(&self) -> Option<&GoExpression> {
         match self {
             Check::EnumTag { tag_constant, .. } => Some(tag_constant),
             _ => None,
         }
     }
 
-    fn as_literal(&self) -> Option<&str> {
+    fn as_literal(&self) -> Option<&GoExpression> {
         match self {
             Check::Literal { go_literal, .. } => Some(go_literal),
             _ => None,
@@ -519,7 +508,7 @@ pub(crate) fn tree_has_unguarded_terminal(tree: &Decision) -> bool {
 
 #[derive(Debug)]
 pub(crate) struct SwitchBranch {
-    pub case_label: String,
+    pub case_label: GoExpression,
     pub decision: Decision,
 }
 
@@ -667,12 +656,12 @@ fn validate_switch_arms(
 }
 
 struct GroupedBranches {
-    branches: Vec<(String, Vec<ArmInfo>)>,
+    branches: Vec<(GoExpression, Vec<ArmInfo>)>,
     fallback: Vec<ArmInfo>,
 }
 
 fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches {
-    let mut branches: Vec<(String, Vec<ArmInfo>)> = Vec::new();
+    let mut branches: Vec<(GoExpression, Vec<ArmInfo>)> = Vec::new();
     let mut fallback = Vec::new();
 
     for arm in arms {
@@ -684,15 +673,18 @@ fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches
         let (case_label, inner_checks) = match kind {
             SwitchKind::EnumTag => {
                 let tag = arm.checks[0].as_enum_tag().unwrap();
-                (tag.to_string(), arm.checks[1..].to_vec())
+                (tag.clone(), arm.checks[1..].to_vec())
             }
             SwitchKind::Value => {
                 let lit = arm.checks[0].as_literal().unwrap();
-                (lit.to_string(), arm.checks[1..].to_vec())
+                (lit.clone(), arm.checks[1..].to_vec())
             }
             SwitchKind::TypeSwitch => {
                 let assertion = arm.root_assertion.as_ref().unwrap();
-                (assertion.go_types.join(", "), arm.checks.clone())
+                (
+                    GoExpression::type_name(assertion.go_types.join(", ")),
+                    arm.checks.clone(),
+                )
             }
         };
         let inner_arm = ArmInfo {
@@ -716,7 +708,7 @@ fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches
 /// Splice the catchall into any fail-prone case body: Go `switch` cases do not
 /// fall through to `default`, so a failed inner check has nowhere else to go.
 fn build_switch_branches(
-    branches: Vec<(String, Vec<ArmInfo>)>,
+    branches: Vec<(GoExpression, Vec<ArmInfo>)>,
     fallback_arms: &[ArmInfo],
 ) -> Vec<SwitchBranch> {
     branches
@@ -840,7 +832,7 @@ fn collect_checks_and_bindings(
         Pattern::Literal { literal, .. } => {
             collector.checks.push(Check::Literal {
                 path: path.clone(),
-                go_literal: emit_pattern_literal(literal),
+                go_literal: GoExpression::literal(emit_pattern_literal(literal)),
             });
         }
 
@@ -1177,8 +1169,7 @@ fn collect_enum_variant_checks(
     collect_tagged_enum_checks(planner, path, &variant_data, collector);
 }
 
-/// Emit a const pattern as a Go `case` constant (e.g. `time.Friday`), requiring
-/// the constant's package import when it is cross-package.
+/// Emit a const pattern as a Go `case` constant (e.g. `time.Friday`).
 fn collect_const_pattern_check(
     planner: &Planner,
     path: &AccessPath,
@@ -1187,20 +1178,15 @@ fn collect_const_pattern_check(
 ) {
     let const_name = unqualified_name(qualified_name);
     let go_literal = match planner.facts.package_for_qualified_name(qualified_name) {
-        Some(package) => {
-            if planner.facts.is_current_package(package) {
-                local_const_go_name(planner, const_name)
+        Some(package) if !planner.facts.is_current_package(package) => {
+            let member = if go_name::is_go_import(package) {
+                const_name.to_string()
             } else {
-                let member = if go_name::is_go_import(package) {
-                    const_name.to_string()
-                } else {
-                    go_name::screaming_snake_to_camel(const_name)
-                };
-                let qualifier = planner.record_package_import(package, &mut collector.packages);
-                format!("{}.{}", qualifier, member)
-            }
+                go_name::screaming_snake_to_camel(const_name)
+            };
+            GoExpression::qualified(planner.package_use_for_package(package), member)
         }
-        None => local_const_go_name(planner, const_name),
+        _ => GoExpression::name(local_const_go_name(planner, const_name)),
     };
     collector.checks.push(Check::Literal {
         path: path.clone(),
@@ -1228,16 +1214,18 @@ fn handle_foreign_variant_literal(
     if planner.as_enum(ty).is_some() || !identifier.contains('.') {
         return false;
     }
-    if let Some((package, _)) = identifier.split_once('.')
-        && planner.facts.is_foreign_package(package)
-    {
-        collector
-            .packages
-            .require(planner.package_use_for_package(&planner.canonical_package(package)));
-    }
+    let go_literal = match identifier.split_once('.') {
+        Some((package, member)) if planner.facts.is_foreign_package(package) => {
+            GoExpression::qualified(
+                planner.package_use_for_package(&planner.canonical_package(package)),
+                member,
+            )
+        }
+        _ => GoExpression::name(identifier.to_string()),
+    };
     collector.checks.push(Check::Literal {
         path: path.clone(),
-        go_literal: identifier.to_string(),
+        go_literal,
     });
     true
 }
@@ -1302,24 +1290,20 @@ fn collect_tagged_enum_checks(
     collector: &mut PatternCollector,
 ) {
     let enum_package = enum_package_of(planner, variant.ty);
-    let alias = if planner.facts.is_foreign_package(enum_package) {
-        Some(planner.record_package_import(enum_package, &mut collector.packages))
-    } else {
-        None
-    };
+    let package = planner
+        .facts
+        .is_foreign_package(enum_package)
+        .then(|| planner.package_use_for_package(enum_package));
     let resolved = go_name::variant(
         variant.identifier,
         variant.ty,
         enum_package,
         planner.facts.current_package(),
-        alias.as_deref(),
+        package,
     );
-    if let Some(package) = resolved.package {
-        collector.packages.require_generated(package);
-    }
     collector.checks.push(Check::EnumTag {
         path: path.clone(),
-        tag_constant: resolved.name.clone(),
+        tag_constant: resolved.into_expression(),
     });
 
     let variant_name = variant
@@ -1437,24 +1421,20 @@ fn resolve_struct_child_path(
     let enum_info = detect_enum_info(resolution);
     if enum_info.is_some() {
         let enum_package = enum_package_of(planner, ty);
-        let alias = if planner.facts.is_foreign_package(enum_package) {
-            Some(planner.record_package_import(enum_package, &mut collector.packages))
-        } else {
-            None
-        };
+        let package = planner
+            .facts
+            .is_foreign_package(enum_package)
+            .then(|| planner.package_use_for_package(enum_package));
         let resolved = go_name::variant(
             identifier,
             ty,
             enum_package,
             planner.facts.current_package(),
-            alias.as_deref(),
+            package,
         );
-        if let Some(package) = resolved.package {
-            collector.packages.require_generated(package);
-        }
         collector.checks.push(Check::EnumTag {
             path: path.clone(),
-            tag_constant: resolved.name.clone(),
+            tag_constant: resolved.into_expression(),
         });
     }
     (enum_info, path.clone())
@@ -1739,20 +1719,4 @@ fn join_conditions(checks: &[Check], subject: SubjectRoot<'_>) -> GoExpression {
         .map(|check| check.render(subject))
         .reduce(|left, right| GoExpression::binary(left, "&&", right))
         .expect("join_conditions requires at least one check")
-}
-
-pub(crate) fn label_expression(label: &str) -> GoExpression {
-    let is_name = label
-        .chars()
-        .next()
-        .is_some_and(|first| first.is_alphabetic() || first == '_')
-        && label
-            .chars()
-            .all(|character| character.is_alphanumeric() || character == '_' || character == '.')
-        && !matches!(label, "true" | "false" | "nil");
-    if is_name {
-        GoExpression::name(label.to_string())
-    } else {
-        GoExpression::literal(label.to_string())
-    }
 }

@@ -397,6 +397,7 @@ impl Planner<'_> {
         inner_call: GoExpression,
     ) -> (String, String) {
         let (go_ret, statements) = self.plan_adapter_body(method, inner_call);
+        self.collect_imports(&statements);
         (go_ret, crate::Renderer.render_setup(&statements))
     }
 
