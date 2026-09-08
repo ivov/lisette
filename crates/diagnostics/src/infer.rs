@@ -2525,20 +2525,32 @@ pub fn uninferred_binding(name: &str, span: Span) -> LisetteDiagnostic {
         ))
 }
 
-pub fn unconstrained_type_param(param_name: &str, span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Unconstrained type parameter")
-        .with_infer_code("unconstrained_type_param")
-        .with_span_label(
-            &span,
+/// `example` spells this call with an explicit type argument. `in_signature`
+/// separates an ambiguous call from a parameter no call could ever pin down.
+pub fn unconstrained_type_param(
+    param_name: &str,
+    example: &str,
+    in_signature: bool,
+    span: Span,
+) -> LisetteDiagnostic {
+    let (label, help) = if in_signature {
+        (
+            format!("nothing here determines `{param_name}`"),
+            format!("Supply the type argument explicitly: `{example}`"),
+        )
+    } else {
+        (
+            format!("`{param_name}` is not used in a parameter or return type"),
             format!(
-                "`{}` is not constrained by parameters or return type",
-                param_name
+                "`{param_name}` can never be inferred from a call. Use it in a parameter or \
+                 return type, or supply it explicitly: `{example}`"
             ),
         )
-        .with_help(format!(
-            "Use `{}` in a parameter or return type, or provide an explicit type argument: `func<SomeType>(...)`",
-            param_name
-        ))
+    };
+    LisetteDiagnostic::error("Unconstrained type parameter")
+        .with_infer_code("unconstrained_type_param")
+        .with_span_label(&span, label)
+        .with_help(help)
 }
 
 pub fn instantiation_cycle(
@@ -3354,7 +3366,7 @@ pub fn propagate_in_pipeline(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid `?` in pipeline")
         .with_parse_code("propagate_in_pipeline")
         .with_span_label(&span, "propagate operator used here")
-        .with_help("Extract the `?` operation to a `let` binding: `let result = (... |> func)?`")
+        .with_help("Extract the `?` operation to a `let` binding: `let result = (... |> parse)?`")
 }
 
 pub fn invalid_pipeline_target(span: Span) -> LisetteDiagnostic {

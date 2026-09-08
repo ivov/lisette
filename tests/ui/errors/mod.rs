@@ -1533,6 +1533,50 @@ fn main() {
     assert_multipackage_infer_error_snapshot!(result, source);
 }
 
+// `unconstrained_type_param` splits on whether the parameter reaches the signature.
+#[test]
+fn infer_unconstrained_type_param_absent_from_signature() {
+    let input = r#"
+interface Display { fn show() -> string }
+
+fn require_display<T: Display>() {}
+
+fn test() {
+  require_display()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unconstrained_type_param_present_but_call_is_ambiguous() {
+    let input = r#"
+fn make<T: Comparable>() -> T { panic("todo") }
+
+fn test() {
+  let _ = make()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unconstrained_type_param_names_the_method_not_the_receiver() {
+    let input = r#"
+struct Bag {}
+
+impl Bag {
+  fn pick<T: Comparable>(self: Bag) -> T { panic("todo") }
+}
+
+fn test() {
+  let b = Bag {}
+  let _ = b.pick()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
 #[test]
 fn infer_imported_function_shortened_type_args_rejected() {
     let mut fs = MockFileSystem::new();

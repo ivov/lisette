@@ -2,7 +2,7 @@
 
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, Generic, Span};
-use syntax::types::{Bound, Type};
+use syntax::types::Type;
 
 use semantics::generics::{
     bound_implied, bound_requires_evidence, nested_type_obligations, type_obligations,
@@ -66,9 +66,8 @@ fn visit_expression(
             ..
         } => {
             let callee_ty = callee.get_type();
-            let bounds = callee_ty.get_bounds();
-            if !bounds.is_empty() {
-                check_unconstrained_bounded(bounds, span, sink);
+            if !callee_ty.get_bounds().is_empty() {
+                check_unconstrained_bounded(&callee_ty, callee_name(callee).as_deref(), span, sink);
             }
         }
         _ => {}
@@ -79,14 +78,49 @@ fn visit_expression(
     }
 }
 
-fn check_unconstrained_bounded(bounds: &[Bound], span: &Span, sink: &LocalSink) {
-    for bound in bounds {
-        if matches!(&bound.generic, Type::Var { .. }) {
-            sink.push(diagnostics::infer::unconstrained_type_param(
-                &bound.param_name,
-                *span,
-            ));
+/// How the callee is spelled here, so the suggested type argument can be pasted.
+/// `get_var_name` would hand back a `DotAccess` receiver (`pkg.f()` → `pkg`), and
+/// the member alone is not callable (`b.pick()` → `pick`).
+fn callee_name(callee: &Expression) -> Option<String> {
+    match callee.unwrap_parens() {
+        Expression::Identifier { value, .. } => Some(value.to_string()),
+        Expression::DotAccess {
+            expression, member, ..
+        } => Some(match expression.get_var_name() {
+            Some(base) => format!("{base}.{member}"),
+            None => member.to_string(),
+        }),
+        _ => None,
+    }
+}
+
+fn check_unconstrained_bounded(
+    callee_ty: &Type,
+    callee: Option<&str>,
+    span: &Span,
+    sink: &LocalSink,
+) {
+    let signature = callee_ty.as_function_type();
+    let example_args = match signature {
+        Some(f) if f.params.is_empty() => "()",
+        _ => "(...)",
+    };
+    let example = format!("{}<SomeType>{example_args}", callee.unwrap_or("f"));
+    for bound in callee_ty.get_bounds() {
+        if !matches!(&bound.generic, Type::Var { .. }) {
+            continue;
         }
+        // Absent from the signature, no call could ever pin the parameter down.
+        let in_signature = signature.is_some_and(|f| {
+            f.params.iter().any(|p| p.ty.contains_type(&bound.generic))
+                || f.return_type.contains_type(&bound.generic)
+        });
+        sink.push(diagnostics::infer::unconstrained_type_param(
+            &bound.param_name,
+            &example,
+            in_signature,
+            *span,
+        ));
     }
 }
 

@@ -7,4 +7,4 @@ source: tests/ui/errors/mod.rs
    ·                  ────┬────
    ·                      ╰── propagate operator used here
    ╰────
-  help: Extract the `?` operation to a `let` binding: `let result = (... |> func)?` · code: [parse.propagate_in_pipeline]
+  help: Extract the `?` operation to a `let` binding: `let result = (... |> parse)?` · code: [parse.propagate_in_pipeline]
