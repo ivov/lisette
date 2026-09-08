@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788888257743,
+  "lastUpdate": 1788891101384,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -35859,6 +35859,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/1a00f7be0348fa54e700b3ee0d1b83df2cc64a76"
         },
         "date": 1788888255757,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 143293,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 35402,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28190,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19300,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15235,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13959,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8855,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6285,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2c2b39cb9235d3d650f93c4f10fe145c3f6d7e11",
+          "message": "docs: update stale example in agents template (#1436)",
+          "timestamp": "2026-09-08T20:11:17+02:00",
+          "tree_id": "4e17bab822dcf0ebac5916294c3c7f3a348b35da",
+          "url": "https://github.com/ivov/lisette/commit/2c2b39cb9235d3d650f93c4f10fe145c3f6d7e11"
+        },
+        "date": 1788891100032,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
