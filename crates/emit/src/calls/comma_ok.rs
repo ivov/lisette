@@ -46,31 +46,37 @@ pub(crate) enum CommaOkValueSlot {
     Discarded,
 }
 
-#[derive(Clone, Copy)]
-enum PairSuccess {
-    Truthy,
-    Nil,
-}
-
 pub(crate) enum PairKind {
-    CommaOk {
-        nil_guard: Option<NilGuard>,
-    },
-    Error {
-        carries_value: bool,
-        nil_guard: Option<NilGuard>,
-    },
+    CommaOk { nil_guard: Option<NilGuard> },
+    Result { nil_guard: Option<NilGuard> },
+    BareError,
 }
 
 /// A bound two-result expression and the rule that distinguishes success.
 pub(crate) struct LoweredPair {
     pub(crate) statements: Vec<LoweredStatement>,
-    pub(crate) value: Option<String>,
+    value: PairValue,
     status: String,
-    success: PairSuccess,
-    nil_guard: Option<NilGuard>,
-    has_value_slot: bool,
+    status_kind: PairStatusKind,
     initializer_call: Option<GoExpression>,
+}
+
+enum PairValue {
+    Absent,
+    Discarded,
+    Named {
+        name: String,
+        nil_guard: Option<NilGuard>,
+    },
+}
+
+impl PairValue {
+    fn name(&self) -> Option<&str> {
+        match self {
+            Self::Named { name, .. } => Some(name),
+            Self::Absent | Self::Discarded => None,
+        }
+    }
 }
 
 pub(crate) struct PairCondition {
@@ -83,17 +89,27 @@ impl LoweredPair {
         &self.status
     }
 
+    pub(crate) fn value(&self) -> Option<&str> {
+        self.value.name()
+    }
+
     pub(crate) fn discard_value(&mut self) {
-        if self.nil_guard.is_none() {
-            self.value = None;
+        if matches!(
+            self.value,
+            PairValue::Named {
+                nil_guard: None,
+                ..
+            }
+        ) {
+            self.value = PairValue::Discarded;
         }
     }
 
     fn binding(&self) -> Vec<String> {
-        match (self.has_value_slot, &self.value) {
-            (true, Some(value)) => vec![value.clone(), self.status.clone()],
-            (true, None) => vec!["_".to_string(), self.status.clone()],
-            (false, _) => vec![self.status.clone()],
+        match &self.value {
+            PairValue::Named { name, .. } => vec![name.clone(), self.status.clone()],
+            PairValue::Discarded => vec!["_".to_string(), self.status.clone()],
+            PairValue::Absent => vec![self.status.clone()],
         }
     }
 
@@ -191,41 +207,36 @@ impl Planner<'_> {
         kind: PairKind,
         status_hint: Option<&str>,
     ) -> LoweredPair {
-        let (carries_value, nil_guard, success, status_kind) = match kind {
-            PairKind::CommaOk { nil_guard } => {
-                (true, nil_guard, PairSuccess::Truthy, PairStatusKind::Ok)
-            }
-            PairKind::Error {
-                carries_value,
-                nil_guard,
-            } => (
-                carries_value,
-                nil_guard,
-                PairSuccess::Nil,
-                PairStatusKind::Error,
-            ),
+        let status_kind = match kind {
+            PairKind::CommaOk { .. } => PairStatusKind::Ok,
+            PairKind::Result { .. } | PairKind::BareError => PairStatusKind::Error,
         };
         let opens_if = matches!(slot, CommaOkValueSlot::Arm(_) | CommaOkValueSlot::Unused);
-        let value = carries_value
-            .then(|| match slot {
-                CommaOkValueSlot::Named(name) | CommaOkValueSlot::Arm(name) => Some(name),
-                CommaOkValueSlot::Temp => Some(self.fresh_pair_value()),
-                CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => {
-                    nil_guard.map(|_| self.fresh_pair_value())
+        let value = match kind {
+            PairKind::BareError => PairValue::Absent,
+            PairKind::CommaOk { nil_guard } | PairKind::Result { nil_guard } => {
+                let name = match slot {
+                    CommaOkValueSlot::Named(name) | CommaOkValueSlot::Arm(name) => Some(name),
+                    CommaOkValueSlot::Temp => Some(self.fresh_pair_value()),
+                    CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => {
+                        nil_guard.map(|_| self.fresh_pair_value())
+                    }
+                };
+                match name {
+                    Some(name) => PairValue::Named { name, nil_guard },
+                    None => PairValue::Discarded,
                 }
-            })
-            .flatten();
+            }
+        };
         let mut status = self.pair_status(status_hint, status_kind, opens_if);
-        if opens_if && value.as_deref() == Some(status.as_str()) {
+        if opens_if && value.name() == Some(status.as_str()) {
             status = self.fresh_var(Some(&status));
         }
         let mut pair = LoweredPair {
             statements,
             value,
             status,
-            success,
-            nil_guard,
-            has_value_slot: carries_value,
+            status_kind,
             initializer_call: None,
         };
         if opens_if {
@@ -300,20 +311,18 @@ impl Planner<'_> {
 
     fn pair_condition(&mut self, pair: &LoweredPair, success: bool) -> PairCondition {
         let status = GoExpression::name(pair.status.clone());
-        let status = match (pair.success, success) {
-            (PairSuccess::Truthy, true) => status,
-            (PairSuccess::Truthy, false) => GoExpression::unary("!", status),
-            (PairSuccess::Nil, true) => is_nil(status),
-            (PairSuccess::Nil, false) => non_nil(status),
+        let status = match (pair.status_kind, success) {
+            (PairStatusKind::Ok, true) => status,
+            (PairStatusKind::Ok, false) => GoExpression::unary("!", status),
+            (PairStatusKind::Error, true) => is_nil(status),
+            (PairStatusKind::Error, false) => non_nil(status),
         };
-        let condition = match pair.nil_guard {
-            None => status,
-            Some(guard) => {
-                let value = GoExpression::name(
-                    pair.value
-                        .clone()
-                        .expect("nil guard requires the value var"),
-                );
+        let condition = match &pair.value {
+            PairValue::Named {
+                name,
+                nil_guard: Some(guard),
+            } => {
+                let value = GoExpression::name(name.clone());
                 let nil_condition = if success {
                     guard.non_nil(value)
                 } else {
@@ -322,6 +331,7 @@ impl Planner<'_> {
                 let operator = if success { "&&" } else { "||" };
                 GoExpression::binary(status, operator, nil_condition)
             }
+            _ => status,
         };
         PairCondition {
             initializer: pair.initializer(),

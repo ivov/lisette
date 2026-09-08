@@ -15,8 +15,6 @@ use super::OutputImport;
 /// one record avoids synchronizing separate lookup and emission collections.
 pub(crate) struct ImportPlan {
     imports: Vec<PlannedImport>,
-    package_aliases: HashMap<String, usize>,
-    alias_packages: HashMap<String, usize>,
 }
 
 struct PlannedImport {
@@ -40,8 +38,6 @@ impl ImportPlan {
         go_package_names: &HashMap<String, String>,
     ) -> Self {
         let mut imports = Vec::new();
-        let mut package_aliases = HashMap::default();
-        let mut alias_packages = HashMap::default();
 
         for import in file.imports() {
             let is_blank = matches!(import.alias, Some(ImportAlias::Blank(_)));
@@ -60,11 +56,6 @@ impl ImportPlan {
             };
             let (path, go_alias) = resolve_import(&import, go_module, go_package_names);
             let package = import.name.to_string();
-            let index = imports.len();
-            if let Some(alias) = &source_alias {
-                package_aliases.insert(package.clone(), index);
-                alias_packages.insert(alias.clone(), index);
-            }
             imports.push(PlannedImport {
                 package,
                 source_alias,
@@ -74,52 +65,29 @@ impl ImportPlan {
             });
         }
 
-        Self {
-            imports,
-            package_aliases,
-            alias_packages,
-        }
+        Self { imports }
     }
 
     pub(crate) fn package_alias(&self, package: &str) -> Option<&str> {
-        self.package_aliases
-            .get(package)
-            .and_then(|index| self.imports[*index].source_alias.as_deref())
+        self.imports.iter().rev().find_map(|import| {
+            (import.package == package)
+                .then_some(import.source_alias.as_deref())
+                .flatten()
+        })
     }
 
     pub(crate) fn package_for_alias(&self, alias: &str) -> Option<&str> {
-        self.alias_packages
-            .get(alias)
-            .map(|index| self.imports[*index].package.as_str())
-    }
-
-    fn into_builder_state(self) -> (HashMap<String, String>, HashMap<String, String>) {
-        let mut imports = HashMap::default();
-        let mut dropped_aliases = HashMap::default();
-        for import in self.imports {
-            match import.disposition {
-                ImportDisposition::Emit => {
-                    imports.insert(import.path, import.go_alias);
-                }
-                ImportDisposition::DropUnused if !import.go_alias.is_empty() => {
-                    dropped_aliases.insert(import.path, import.go_alias);
-                }
-                ImportDisposition::DropUnused => {}
-            }
-        }
-        (imports, dropped_aliases)
+        self.imports.iter().rev().find_map(|import| {
+            (import.source_alias.as_deref() == Some(alias)).then_some(import.package.as_str())
+        })
     }
 }
 
 pub struct ImportBuilder<'a> {
     go_package_names: &'a HashMap<String, String>,
     go_package_ids: &'a HashSet<String>,
-    imports: HashMap<String, String>,
-    /// Additional qualifiers requested for a path already present under a
-    /// different qualifier.
-    duplicate_imports: HashSet<(String, String)>,
-    dropped_aliases: HashMap<String, String>,
-    used_packages: HashSet<String>,
+    source_imports: Vec<PlannedImport>,
+    requirements: PackageRequirements,
 }
 
 impl<'a> ImportBuilder<'a> {
@@ -130,10 +98,8 @@ impl<'a> ImportBuilder<'a> {
         Self {
             go_package_names,
             go_package_ids,
-            imports: HashMap::default(),
-            duplicate_imports: HashSet::default(),
-            dropped_aliases: HashMap::default(),
-            used_packages: HashSet::default(),
+            source_imports: Vec::new(),
+            requirements: PackageRequirements::default(),
         }
     }
 
@@ -142,75 +108,82 @@ impl<'a> ImportBuilder<'a> {
         go_package_names: &'a HashMap<String, String>,
         go_package_ids: &'a HashSet<String>,
     ) -> Self {
-        let (imports, dropped_aliases) = plan.into_builder_state();
         Self {
-            go_package_names,
-            go_package_ids,
-            imports,
-            duplicate_imports: HashSet::default(),
-            dropped_aliases,
-            used_packages: HashSet::default(),
+            source_imports: plan.imports,
+            ..Self::new(go_package_names, go_package_ids)
         }
     }
 
     pub fn extend_with_packages(&mut self, package_ids: &HashSet<PackageId>) {
         for package_id in package_ids {
             let qualifier = self
-                .dropped_aliases
-                .get(package_id.as_str())
+                .source_imports
+                .iter()
+                .rev()
+                .find(|import| {
+                    import.path == package_id.as_str()
+                        && matches!(import.disposition, ImportDisposition::DropUnused)
+                        && !import.go_alias.is_empty()
+                })
+                .map(|import| &import.go_alias)
                 .or_else(|| {
                     self.go_package_names
                         .get(&format!("{}{package_id}", go_name::GO_IMPORT_PREFIX))
                 })
                 .cloned()
                 .unwrap_or_default();
-            self.require_package_use(&PackageUse::new(package_id.to_string(), qualifier));
+            self.requirements
+                .require(PackageUse::new(package_id.to_string(), qualifier));
         }
     }
 
     pub(crate) fn extend_with_package_uses(&mut self, requirements: &PackageRequirements) {
-        for package in requirements.iter() {
-            self.require_package_use(package);
-        }
+        self.requirements.extend(requirements);
     }
 
-    fn require_package_use(&mut self, package: &PackageUse) {
-        let path = package.package().path();
-        let qualifier = package.qualifier();
-        self.used_packages.insert(path.to_string());
-        match self.imports.get(path) {
-            Some(alias) if effective_qualifier(path, alias, self.go_package_ids) == qualifier => {}
-            Some(_) => {
-                self.duplicate_imports
-                    .insert((path.to_string(), qualifier.to_string()));
-            }
-            None => {
-                let alias = self
-                    .dropped_aliases
-                    .get(path)
-                    .filter(|alias| {
-                        effective_qualifier(path, alias, self.go_package_ids) == qualifier
-                    })
-                    .cloned()
-                    .unwrap_or_else(|| qualifier.to_string());
-                self.imports.insert(path.to_string(), alias);
-            }
-        }
-    }
-
-    pub fn build(mut self) -> (Vec<OutputImport>, Vec<LisetteDiagnostic>) {
-        self.imports
-            .retain(|path, alias| alias == "_" || self.used_packages.contains(path));
+    pub fn build(self) -> (Vec<OutputImport>, Vec<LisetteDiagnostic>) {
         let mut entries: Vec<OutputImport> = self
-            .imports
-            .into_iter()
-            .map(|(path, alias)| OutputImport { path, alias })
+            .source_imports
+            .iter()
+            .filter(|import| {
+                matches!(import.disposition, ImportDisposition::Emit)
+                    && (import.go_alias == "_"
+                        || self
+                            .requirements
+                            .iter()
+                            .any(|used| used.package().path() == import.path))
+            })
+            .map(|import| OutputImport {
+                path: import.path.clone(),
+                alias: import.go_alias.clone(),
+            })
             .collect();
-        entries.extend(
-            self.duplicate_imports
-                .into_iter()
-                .map(|(path, alias)| OutputImport { path, alias }),
-        );
+        for package in self.requirements.iter() {
+            let path = package.package().path();
+            let qualifier = package.qualifier();
+            if entries.iter().any(|entry| {
+                entry.path == path
+                    && effective_qualifier(path, &entry.alias, self.go_package_ids) == qualifier
+            }) {
+                continue;
+            }
+            let alias = self
+                .source_imports
+                .iter()
+                .rev()
+                .find(|import| {
+                    import.path == path
+                        && matches!(import.disposition, ImportDisposition::DropUnused)
+                        && !import.go_alias.is_empty()
+                        && effective_qualifier(path, &import.go_alias, self.go_package_ids)
+                            == qualifier
+                })
+                .map_or_else(|| qualifier.to_string(), |import| import.go_alias.clone());
+            entries.push(OutputImport {
+                path: path.to_string(),
+                alias,
+            });
+        }
         entries.sort();
         entries.dedup();
         let diagnostics = detect_collisions(&entries, self.go_package_ids);
@@ -304,14 +277,7 @@ mod tests {
     use super::*;
     use syntax::FileParseStatus;
 
-    #[test]
-    fn import_plan_indexes_the_last_matching_alias() {
-        let source = r#"
-import early "one"
-import late "one"
-import shared "two"
-import shared "three"
-"#;
+    fn import_plan(source: &str, unused: &[&str]) -> ImportPlan {
         let parsed = syntax::build_ast(source, 0);
         assert!(parsed.errors.is_empty());
         let file = File {
@@ -326,9 +292,67 @@ import shared "three"
             file_comment: None,
         };
 
-        let plan = ImportPlan::build(&file, "module", &HashSet::default(), &HashMap::default());
+        ImportPlan::build(
+            &file,
+            "module",
+            &unused.iter().map(|name| (*name).into()).collect(),
+            &HashMap::default(),
+        )
+    }
 
+    #[test]
+    fn import_plan_resolves_the_last_matching_alias() {
+        let plan = import_plan(
+            r#"
+import early "one"
+import late "one"
+import shared "two"
+import shared "three"
+"#,
+            &[],
+        );
         assert_eq!(plan.package_alias("one"), Some("late"));
         assert_eq!(plan.package_for_alias("shared"), Some("three"));
+    }
+
+    fn imports_for(source: &str, unused: &[&str], uses: &[(&str, &str)]) -> Vec<OutputImport> {
+        let names = HashMap::default();
+        let ids = HashSet::default();
+        let mut builder = ImportBuilder::from_plan(import_plan(source, unused), &names, &ids);
+        let mut requirements = PackageRequirements::default();
+        for (path, qualifier) in uses {
+            requirements.require(PackageUse::new(*path, *qualifier));
+        }
+        builder.extend_with_package_uses(&requirements);
+        let (imports, diagnostics) = builder.build();
+        assert!(diagnostics.is_empty());
+        imports
+    }
+
+    fn imported(path: &str, alias: &str) -> OutputImport {
+        OutputImport {
+            path: path.to_string(),
+            alias: alias.to_string(),
+        }
+    }
+
+    #[test]
+    fn generated_uses_recover_dropped_aliases_and_deduplicate_qualifiers() {
+        let source = r#"import renamed "go:fmt""#;
+        let expected = vec![imported("fmt", "fmt"), imported("fmt", "renamed")];
+        for uses in [
+            vec![("fmt", "renamed"), ("fmt", "fmt"), ("fmt", "renamed")],
+            vec![("fmt", "fmt"), ("fmt", "renamed")],
+        ] {
+            assert_eq!(imports_for(source, &["renamed"], &uses), expected);
+        }
+    }
+
+    #[test]
+    fn blank_import_can_also_be_used_by_generated_code() {
+        assert_eq!(
+            imports_for(r#"import _ "go:fmt""#, &[], &[("fmt", "fmt")]),
+            vec![imported("fmt", "_"), imported("fmt", "fmt")]
+        );
     }
 }

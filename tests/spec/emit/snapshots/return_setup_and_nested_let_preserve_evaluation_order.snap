@@ -1,0 +1,56 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn mark(trace: mut Ref<int>, value: int) -> int {
+    trace.* = trace.* * 100 + value
+    value
+  }
+  
+  fn choose(trace: mut Ref<int>, flag: bool) -> int {
+    return {
+      let result = if flag { mark(trace, 10) } else { mark(trace, 20) }
+      result + mark(trace, 1)
+    }
+  }
+  
+  fn main() {
+    let mut trace = 0
+    let first = choose(&trace, true)
+    if first != 11 || trace != 1001 { panic("then return evaluated out of order") }
+    let second = choose(&trace, false)
+    if second != 21 || trace != 10012001 { panic("else return evaluated out of order") }
+  }
+---
+package main
+
+func mark(trace *int, value int) int {
+	*trace = *trace*100 + value
+	return value
+}
+
+func choose(trace *int, flag bool) int {
+	var tmp_1 int
+	{
+		var result int
+		if flag {
+			result = mark(trace, 10)
+		} else {
+			result = mark(trace, 20)
+		}
+		tmp_1 = result + mark(trace, 1)
+	}
+	return tmp_1
+}
+
+func main() {
+	trace := 0
+	first := choose(&trace, true)
+	if first != 11 || trace != 1001 {
+		panic("then return evaluated out of order")
+	}
+	second := choose(&trace, false)
+	if second != 21 || trace != 10012001 {
+		panic("else return evaluated out of order")
+	}
+}

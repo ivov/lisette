@@ -9,6 +9,7 @@ use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement};
 use crate::plan::calls::plan_variadic_spread;
 use crate::plan::go_expression::FunctionLiteralLayout;
+use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::statements::assignments::lvalues_match;
 use crate::types::native::NativeGoType;
@@ -295,11 +296,15 @@ pub(super) fn native_method_is_pure(native_type: &NativeGoType, method: &str) ->
     }
 }
 
-pub(crate) fn is_clip_safe_path(value: &str) -> bool {
-    !value.is_empty()
-        && value
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
+pub(crate) fn is_clip_safe_path(value: &GoExpression) -> bool {
+    fn is_path(node: &GoExpressionNode) -> bool {
+        match node {
+            GoExpressionNode::Identifier(_) | GoExpressionNode::Qualified { .. } => true,
+            GoExpressionNode::Selector { base, .. } => is_path(base),
+            _ => false,
+        }
+    }
+    is_path(value.node())
 }
 
 fn growth_clip_applies(ctx: &NativeCallContext, receiver: &Expression) -> bool {
@@ -506,7 +511,7 @@ fn array_to_slice_receiver(expression: &Expression) -> Option<&Expression> {
     }
 }
 
-pub(super) fn native_method_lowers_to_plain_call(
+pub(crate) fn native_method_lowers_to_plain_call(
     native_type: &NativeGoType,
     method: &str,
     receiver_arity: usize,
@@ -883,7 +888,7 @@ impl Planner<'_> {
         if !self.receiver_is_addressable(array) {
             self.pin_staged(&mut staged, "arr");
         }
-        staged.map_expression_as_observable_computed(|_setup, array| {
+        staged.map_observable_expression(|_setup, array| {
             let base = array;
             GoExpression::slice(base, None, None, None)
         })
@@ -928,20 +933,17 @@ impl Planner<'_> {
             let receiver = stages.remove(0).unary("*");
             stages.insert(0, receiver);
         }
-        if growth_clip_applies(ctx, receiver) && !is_clip_safe_path(stages[0].expression.as_str()) {
+        if growth_clip_applies(ctx, receiver) && !is_clip_safe_path(&stages[0].expression) {
             self.pin_staged(&mut stages[0], "recv");
         }
-        let spread_index = spread_stage.map(|stage| {
-            stages.push(stage);
-            stages.len() - 1
-        });
+        stages.extend(spread_stage);
 
         let receiver_offset = matches!(form, NativeMethodForm::Dot) as usize;
         let combine = plan_variadic_spread(&self.facts, ctx.function, ctx.spread)
             .map(|plan| plan.combine(receiver_offset));
         let mut sequenced = self.sequence_values(stages, ctx.capture_boundary, "arg");
-        if let Some(spread_index) = spread_index {
-            self.finalize_spread_stage(&mut sequenced.values, spread_index, false, combine);
+        if ctx.spread.is_some() {
+            self.finalize_spread_stage(&mut sequenced.values, false, combine);
         }
         let effect = sequenced.effect;
         let mut values = sequenced.values;

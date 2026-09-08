@@ -119,7 +119,7 @@ impl Planner<'_> {
             let is_whole_literal = coercion.is_identity() && value.is_composite_literal();
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
-            widest = widest.max(coerced.as_str().len());
+            widest = widest.max(coerced.rendered().len());
             wrapped.push((
                 None,
                 if is_whole_literal {

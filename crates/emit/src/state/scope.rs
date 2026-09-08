@@ -237,10 +237,10 @@ impl ScopeState {
         }
     }
 
-    pub(crate) fn push_loop(&mut self, result_var: String) {
+    pub(crate) fn push_loop(&mut self, result: GoExpression) {
         let id = LoopId(self.next_loop_id);
         self.next_loop_id += 1;
-        self.loop_stack.push(LoopContext { id, result_var });
+        self.loop_stack.push(LoopContext { id, result });
     }
 
     pub(crate) fn pop_loop(&mut self) {
@@ -278,8 +278,8 @@ impl ScopeState {
             .clone()
     }
 
-    pub(crate) fn current_loop_result_var(&self) -> Option<&str> {
-        self.loop_stack.last().map(|c| c.result_var.as_str())
+    pub(crate) fn current_loop_result(&self) -> Option<&GoExpression> {
+        self.loop_stack.last().map(|context| &context.result)
     }
 
     pub(crate) fn current_loop_id(&self) -> Option<LoopId> {
@@ -416,7 +416,7 @@ mod tests {
         scope.exit_block();
         assert!(matches!(
             scope.resolve_identifier_binding("value"),
-            Some(BindingValue::InlineExpr(expr)) if expr.expression().as_str() == "pair.F0"
+            Some(BindingValue::InlineExpr(expr)) if expr.expression().rendered() == "pair.F0"
         ));
         scope.pop_binding_frame();
         assert!(matches!(

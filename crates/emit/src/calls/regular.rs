@@ -199,7 +199,7 @@ fn collapse_fmt_print(
     args: &[Expression],
     arguments: &[GoExpression],
 ) -> Option<GoExpression> {
-    let print = FmtPrint::from_callee(callee.as_str())?;
+    let print = FmtPrint::from_callee(&callee.rendered())?;
     let ([arg_expression], [argument]) = (args, arguments) else {
         return None;
     };
@@ -546,11 +546,9 @@ impl<'a> Planner<'a> {
                 self.lower_variadic_spread_slot_bridge(spread, ctx.plan.resolved.abi.params.last())
         {
             stages.push(stage);
-            let spread_index = stages.len() - 1;
             let mut sequenced = self.sequence_values(stages, ctx.capture_boundary, "arg");
             self.finalize_spread_stage(
                 &mut sequenced.values,
-                spread_index,
                 ctx.wrap_spread_to_any,
                 ctx.combine_variadic.clone(),
             );
@@ -618,7 +616,7 @@ impl<'a> Planner<'a> {
                     effective_param_ty.expect("TaggedGoLowering requires effective_param_ty");
                 let arg_ctx = self.direct_arg_emit_ctx(param, true);
                 let argument = self.lower_composite_value(arg, arg_ctx);
-                argument.map_expression_as_computed(|setup, value| {
+                argument.map_expression(|setup, value| {
                     self.emit_lower_arg_to_tagged(setup, value, target)
                 })
             }
@@ -772,7 +770,7 @@ impl<'a> Planner<'a> {
         if coercion.is_identity() {
             return argument;
         }
-        argument.map_expression_as_computed(|setup, value| {
+        argument.map_expression(|setup, value| {
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
             coerced
@@ -876,7 +874,7 @@ impl<'a> Planner<'a> {
             arg,
             ExpressionContext::value().with_function_slot_origin(param_origin),
         );
-        Some(argument.map_expression_as_computed(|setup, value| {
+        Some(argument.map_expression(|setup, value| {
             emit_fn_arg_shape_adapter(self, setup, value, &arg_fn, &arg_abi, &param_abi)
                 .expect("fn_arg_shapes resolved a function signature")
         }))
@@ -917,7 +915,7 @@ impl<'a> Planner<'a> {
 
         let source = self
             .lower_value(spread, ExpressionContext::value())
-            .map_expression_as_name(|setup, source_value| {
+            .map_expression(|setup, source_value| {
                 GoExpression::name(self.hoist_tmp_value_statement(setup, "src", source_value))
             });
         let source_variable = source.expression.clone();
@@ -955,7 +953,7 @@ impl<'a> Planner<'a> {
             closure,
         ));
 
-        Some(source.map_expression_as_name(|setup, _source_value| {
+        Some(source.map_expression(|setup, _source_value| {
             setup.push(define(
                 adapted.clone(),
                 GoExpression::call(
@@ -1036,7 +1034,7 @@ impl<'a> Planner<'a> {
                 ExpressionContext::value().with_forced_tagged_go_function(true),
             ),
         };
-        argument.map_expression_as_computed(|setup, value| match transition {
+        argument.map_expression(|setup, value| match transition {
             AbiTransition::Identity => value,
             AbiTransition::LowerFromTagged => {
                 let param_fn_ty = self
@@ -1148,7 +1146,7 @@ impl<'a> Planner<'a> {
         } else {
             self.lower_value(argument, ExpressionContext::value())
         };
-        value.map_expression_as_computed(|setup, value| {
+        value.map_expression(|setup, value| {
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
             coerced
@@ -1200,7 +1198,7 @@ impl<'a> Planner<'a> {
         } else {
             self.lower_value(spread, ExpressionContext::value())
         };
-        Some(value.map_expression_as_computed(|setup, value| {
+        Some(value.map_expression(|setup, value| {
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
             coerced

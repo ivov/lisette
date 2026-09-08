@@ -1,5 +1,6 @@
 use crate::abi::callable::CallableReturnAbi;
 use crate::plan::bodies::LoopId;
+use crate::plan::values::GoExpression;
 use syntax::types::Type;
 
 #[derive(Clone)]
@@ -72,5 +73,5 @@ impl ReturnContext {
 
 pub(crate) struct LoopContext {
     pub(crate) id: LoopId,
-    pub(crate) result_var: String,
+    pub(crate) result: GoExpression,
 }

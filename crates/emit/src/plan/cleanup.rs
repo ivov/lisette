@@ -4,9 +4,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::names::go_name;
 use crate::plan::bodies::{
-    AssignForm, BreakValueAction, BreakValuePlan, CompoundKind, Definition, ElseArm, LoopHeader,
-    LoweredStatement, ReturnForm, SelectArmPlan, SwitchKind, for_each_statement,
-    for_each_statements_mut,
+    AssignForm, CompoundKind, Definition, ElseArm, LoopHeader, LoweredStatement, SelectArmPlan,
+    SwitchKind, for_each_statement, for_each_statements_mut,
 };
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::GoExpression;
@@ -132,13 +131,6 @@ impl NameUses {
                     self.write_through(target);
                 }
             }
-            LoweredStatement::BreakValue(BreakValuePlan::Transfer { action, .. }) => match action {
-                BreakValueAction::UnitCallIntoResult { result_var }
-                | BreakValueAction::AssignToResult { result_var } => {
-                    self.writes.insert(result_var.clone());
-                }
-                BreakValueAction::Discard => {}
-            },
             _ => {}
         }
     }
@@ -204,10 +196,7 @@ fn replace_only_read(statement: &mut LoweredStatement, temp: &str, source: &str)
             siblings.extend(pinned_left.as_mut());
             rename_in(siblings, Some(0), temp, source)
         }
-        LoweredStatement::Return(ReturnForm::Plain { value }) if value.setup.is_empty() => {
-            rename_in(vec![&mut value.expression], None, temp, source)
-        }
-        LoweredStatement::Return(ReturnForm::Multi { values }) => {
+        LoweredStatement::Return(values) => {
             rename_in(values.iter_mut().collect(), None, temp, source)
         }
         LoweredStatement::ExpressionStatement { expression, .. } => {

@@ -69,7 +69,7 @@ impl Planner<'_> {
             return None;
         }
         let inner = self.lower_composite_value(inner, ExpressionContext::value());
-        Some(inner.map_expression_as_computed(|setup, value| {
+        Some(inner.map_expression(|setup, value| {
             let value = if payload.is_identity() {
                 value
             } else {

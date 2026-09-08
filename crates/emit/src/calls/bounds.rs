@@ -43,12 +43,15 @@ impl Planner<'_> {
             )
         };
         let literal = |text: &str| GoExpression::literal(text.to_string());
-        let (in_bounds, out_of_bounds) = if index.as_str() == "0" {
+        let (in_bounds, out_of_bounds) = if index.as_literal() == Some("0") {
             (
                 GoExpression::binary(length(), ">", literal("0")),
                 GoExpression::binary(length(), "==", literal("0")),
             )
-        } else if index.as_str().parse::<u64>().is_ok() {
+        } else if index
+            .as_literal()
+            .is_some_and(|value| value.parse::<u64>().is_ok())
+        {
             (
                 GoExpression::binary(length(), ">", index.clone()),
                 GoExpression::binary(length(), "<=", index.clone()),

@@ -24,7 +24,7 @@ struct SelectReceiveContext<'a> {
     channel: &'a GoExpression,
     body: &'a Expression,
     default_body: Option<&'a Expression>,
-    retry_var: Option<&'a str>,
+    retry_var: Option<&'a GoExpression>,
     element_ty: Type,
     place: &'a PlacePlan<'a>,
 }
@@ -109,7 +109,7 @@ impl Planner<'_> {
                         channel: &channel,
                         body,
                         default_body,
-                        retry_var: binding.is_some_pattern().then_some(channel.as_str()),
+                        retry_var: binding.is_some_pattern().then_some(&channel),
                         element_ty,
                         place,
                     };
@@ -261,10 +261,7 @@ impl Planner<'_> {
         if let Some(retry_var) = ctx.retry_var {
             return Some(LoweredBlock {
                 statements: vec![
-                    assign(
-                        GoExpression::name(retry_var.to_string()),
-                        GoExpression::nil(),
-                    ),
+                    assign(retry_var.clone(), GoExpression::nil()),
                     LoweredStatement::Continue(LoopTransfer::Unlabeled),
                 ],
             });

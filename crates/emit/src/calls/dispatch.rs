@@ -418,8 +418,8 @@ impl<'a> Planner<'a> {
                 value_coercion.is_identity() && staged_value.is_composite_literal();
             let (value_setup, coerced_value) = value_coercion.lower(self, staged_value);
             setup.extend(value_setup);
-            widest =
-                widest.max(coerced_key.as_str().len() + coerced_value.as_str().len() + ": ".len());
+            widest = widest
+                .max(coerced_key.rendered().len() + coerced_value.rendered().len() + ": ".len());
             let coerced_value = if is_whole_literal {
                 coerced_value.elide_composite_type(&value_go_ty)
             } else {
@@ -616,11 +616,12 @@ impl<'a> Planner<'a> {
                 NativeGoType::Channel | NativeGoType::Sender | NativeGoType::Receiver
             )
             && receiver.is_some_and(|receiver| self.is_unmutated_identifier(receiver));
-        if result
-            .setup
-            .iter()
-            .any(|statement| statement.binds_name(result.value.as_str()))
-        {
+        if result.setup.iter().any(|statement| {
+            result
+                .value
+                .as_identifier()
+                .is_some_and(|name| statement.binds_name(name))
+        }) {
             return ValuePlan::captured_with_effect(result.setup, result.value.rendered(), effect);
         }
         let receiver_arity = if matches!(origin, CallableOrigin::NativeMethodIdentifier(_)) {
@@ -850,7 +851,7 @@ impl<'a> Planner<'a> {
     }
 }
 
-pub(super) fn extract_native_method_name(function: &Expression) -> &str {
+pub(crate) fn extract_native_method_name(function: &Expression) -> &str {
     match function {
         Expression::DotAccess { member, .. } => member,
         Expression::Identifier { value, .. } => {

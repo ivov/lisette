@@ -120,7 +120,7 @@ impl Planner<'_> {
         } else {
             self.value_slot_coercion(value, &target.get_type())
         };
-        let value = right_hand_side.map_expression_as_computed(|value_setup, rhs_value| {
+        let value = right_hand_side.map_expression(|value_setup, rhs_value| {
             let (coercion_setup, final_value) = coercion.lower(self, rhs_value);
             value_setup.extend(coercion_setup);
             final_value

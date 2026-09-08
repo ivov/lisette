@@ -2,8 +2,9 @@ use crate::Planner;
 use crate::Renderer;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
-use crate::plan::bodies::ConstPlan;
-use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::bodies::{ConstPlan, LoweredStatement};
+use crate::plan::values::GoExpression;
+use std::slice;
 use syntax::ast::{Expression, Generic};
 use syntax::types::{SimpleKind, Type};
 
@@ -84,7 +85,6 @@ impl Planner<'_> {
         } else {
             raw_value.expression
         };
-        let value = ValuePlan::computed(Vec::new(), value, EvaluationEffect::Pure);
         if is_const && matches!(scope, ConstScope::Local) {
             self.scope.mark_go_const(identifier);
         }
@@ -102,10 +102,14 @@ impl Planner<'_> {
         expression: &Expression,
         ty: &Type,
     ) -> String {
-        let plan = self.build_const_plan(identifier, expression, ty, ConstScope::Package);
-        self.collect_value_imports(&plan.value);
-        let mut out = String::new();
-        Renderer.render_const_declaration(&mut out, &plan);
+        let statement = LoweredStatement::Const(self.build_const_plan(
+            identifier,
+            expression,
+            ty,
+            ConstScope::Package,
+        ));
+        self.collect_imports(slice::from_ref(&statement));
+        let out = Renderer.render_setup(slice::from_ref(&statement));
         out.trim_end_matches('\n').to_string()
     }
 }

@@ -1,5 +1,8 @@
 use crate::abi::is_tagged_shape_fn_value;
+use crate::calls::dispatch::extract_native_method_name;
+use crate::calls::native::native_method_lowers_to_plain_call;
 use crate::expressions::access::struct_call::emit_struct_literal;
+use crate::types::native::NativeGoType;
 use syntax::program::DefinitionBody;
 
 use crate::Planner;
@@ -47,7 +50,7 @@ impl Planner<'_> {
                 let layout_coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
                 if !layout_coercion.is_identity() {
                     let value = self.plan_operand(expression, ctx);
-                    return value.map_expression_as_computed(|setup, value| {
+                    return value.map_expression(|setup, value| {
                         let (bridge_setup, value) = layout_coercion.lower(self, value);
                         setup.extend(bridge_setup);
                         value
@@ -88,7 +91,7 @@ impl Planner<'_> {
         {
             return self
                 .lower_value(expression, ctx)
-                .map_expression_as_observable_computed(|setup, call| {
+                .map_observable_expression(|setup, call| {
                     if !call.is_empty() {
                         setup.push(expression_statement(call));
                     }
@@ -114,7 +117,7 @@ impl Planner<'_> {
             let call_type =
                 matches!(result_transition, AbiTransition::Identity).then_some(result_type);
             let call = self.lower_call_with_plan(expression, call_type, context, plan);
-            return call.map_expression_as_observable_computed(|setup, call| {
+            return call.map_observable_expression(|setup, call| {
                 let (bridge_setup, value) = bridge.lower(self, call);
                 setup.extend(bridge_setup);
                 value
@@ -245,7 +248,7 @@ impl Planner<'_> {
                 if adapter_setup.is_empty() {
                     plan
                 } else {
-                    plan.map_expression_as_computed(|setup, _| {
+                    plan.map_expression(|setup, _| {
                         setup.extend(adapter_setup);
                         value
                     })
@@ -287,7 +290,7 @@ impl Planner<'_> {
             } => {
                 let plan = self.build_return_plan(return_expression);
                 ValuePlan::computed(
-                    vec![LoweredStatement::Return(plan)],
+                    plan.statements,
                     GoExpression::empty(),
                     EvaluationEffect::Pure,
                 )
@@ -408,7 +411,7 @@ impl Planner<'_> {
             let inner = self.lower_value(expression, ctx);
             let source_ty = expression.get_type();
             let coercion = CoercionPlan::internal(self, &source_ty, ty);
-            let mut converted = inner.map_expression_as_computed(|setup, value| {
+            let mut converted = inner.map_expression(|setup, value| {
                 let (coercion_setup, coerced) = coercion.lower(self, value);
                 setup.extend(coercion_setup);
                 coerced
@@ -426,7 +429,7 @@ impl Planner<'_> {
         let function_bridge = self.function_slot_bridge(expression, ty);
         if !function_bridge.is_identity() {
             return inner
-                .map_expression_as_computed(|setup, value| {
+                .map_expression(|setup, value| {
                     let (bridge_setup, bridged) = function_bridge.lower(self, value);
                     setup.extend(bridge_setup);
                     bridged
@@ -461,7 +464,7 @@ impl Planner<'_> {
     pub(crate) fn plan_reference(&mut self, inner: &Expression, ty: &Type) -> ValuePlan {
         if inner.get_type().is_unit() && matches!(inner.unwrap_parens(), Expression::Call { .. }) {
             let staged = self.plan_operand(inner.unwrap_parens(), ExpressionContext::value());
-            return staged.map_expression_as_observable_computed(|setup, staged_value| {
+            return staged.map_observable_expression(|setup, staged_value| {
                 if !staged_value.is_empty() {
                     setup.push(expression_statement(staged_value));
                 }
@@ -475,7 +478,7 @@ impl Planner<'_> {
         }
 
         let inner_plan = self.lower_value(inner, ExpressionContext::value());
-        inner_plan.map_expression_as_observable_computed(|setup, emitted| {
+        inner_plan.map_observable_expression(|setup, emitted| {
             if inner.get_type() == *ty {
                 emitted
             } else if self.is_go_unaddressable(inner)
@@ -586,7 +589,7 @@ impl Planner<'_> {
             expression,
             ExpressionContext::value().with_capture_boundary(CaptureBoundary::DirectDelayedCall),
         );
-        if needs_iife_for_async(expression, plan.evaluation.form) {
+        if needs_iife_for_async(expression, &plan.expression) {
             let capture_boundary = if keyword == "defer" {
                 CaptureBoundary::DeferSite
             } else {
@@ -680,19 +683,26 @@ fn tail_return_slots(planner: &Planner<'_>, inferred: &[Type]) -> Option<Vec<Typ
     (slots.len() == inferred.len()).then(|| slots.clone())
 }
 
-fn is_native_method_call(expression: &Expression) -> bool {
-    matches!(
-        expression.unwrap_parens(),
-        Expression::Call {
-            call_kind: CallKind::NativeMethod(_) | CallKind::NativeMethodIdentifier(_),
-            ..
-        }
-    )
-}
-
-fn needs_iife_for_async(expression: &Expression, form: OperandForm) -> bool {
-    if !is_native_method_call(expression) {
+fn needs_iife_for_async(expression: &Expression, value: &GoExpression) -> bool {
+    let Expression::Call {
+        expression: callee,
+        args,
+        call_kind,
+        ..
+    } = expression.unwrap_parens()
+    else {
         return false;
-    }
-    !matches!(form, OperandForm::Call)
+    };
+    let (kind, arity) = match call_kind {
+        CallKind::NativeMethod(kind) => (*kind, args.len()),
+        CallKind::NativeMethodIdentifier(kind) => (*kind, args.len().saturating_sub(1)),
+        _ => return false,
+    };
+    // Capture len/append operands at the async site despite their call syntax.
+    !matches!(value.syntax_form(), OperandForm::Call)
+        || !native_method_lowers_to_plain_call(
+            &NativeGoType::from_kind(kind),
+            extract_native_method_name(callee.unwrap_parens()),
+            arity,
+        )
 }

@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn main() {
+    let mut values = [0, 0]
+    let mut index = 0
+    values[index] = loop {
+      index = 1
+      match Some(7) {
+        Some(value) => break value,
+        None => continue,
+      }
+    }
+    if values[0] != 7 || values[1] != 0 { panic("loop result used the changed index") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	values := []int{0, 0}
+	index := 0
+	base_3 := values
+	idx_4 := index
+	var tmp_1 int
+	for {
+		index = 1
+		subject_2 := lisette.MakeOptionSome(7)
+		if subject_2.Tag == lisette.OptionSome {
+			tmp_1 = subject_2.SomeVal
+			break
+		}
+		continue
+	}
+	base_3[idx_4] = tmp_1
+	if values[0] != 7 || values[1] != 0 {
+		panic("loop result used the changed index")
+	}
+}

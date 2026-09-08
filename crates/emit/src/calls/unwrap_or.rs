@@ -153,7 +153,10 @@ impl Planner<'_> {
             FusedCall::Result(fuse) => {
                 let pair = fuse.bind(self, slot, None);
                 let failure = self.pair_failure_condition(&pair);
-                let value = pair.value.clone().expect("a payload slot was requested");
+                let value = pair
+                    .value()
+                    .expect("a payload slot was requested")
+                    .to_string();
                 (pair.statements, failure, value)
             }
             FusedCall::Option(fuse) => {

@@ -12,7 +12,7 @@ use crate::control_flow::fallible::{
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{
-    Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, ReturnForm, define, define_many,
+    Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, define, define_many,
 };
 use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
@@ -21,7 +21,7 @@ use syntax::parse::TUPLE_FIELDS;
 
 /// A bare `return v0, v1, ...` statement leaf.
 pub(crate) fn multi_value_return(values: Vec<GoExpression>) -> LoweredStatement {
-    LoweredStatement::Return(ReturnForm::Multi { values })
+    LoweredStatement::Return(values)
 }
 
 /// An `if <condition> { <setup...> return <then_values...> }` tag-check leaf (no else).
@@ -801,7 +801,7 @@ fn lower_nullable_slot_value(
     }
     let value = planner.lower_value(expression, ExpressionContext::value());
     let inner = planner.use_go_type(&slot_ty.ok_type());
-    value.map_expression_as_computed(|setup, value| {
+    value.map_expression(|setup, value| {
         planner.plan_option_projection(setup, value, &inner, &LayoutBridge::Identity, false)
     })
 }

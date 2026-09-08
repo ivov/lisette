@@ -2601,3 +2601,29 @@ fn run() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn return_setup_and_nested_let_preserve_evaluation_order() {
+    let input = r#"
+fn mark(trace: mut Ref<int>, value: int) -> int {
+  trace.* = trace.* * 100 + value
+  value
+}
+
+fn choose(trace: mut Ref<int>, flag: bool) -> int {
+  return {
+    let result = if flag { mark(trace, 10) } else { mark(trace, 20) }
+    result + mark(trace, 1)
+  }
+}
+
+fn main() {
+  let mut trace = 0
+  let first = choose(&trace, true)
+  if first != 11 || trace != 1001 { panic("then return evaluated out of order") }
+  let second = choose(&trace, false)
+  if second != 21 || trace != 10012001 { panic("else return evaluated out of order") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
