@@ -252,34 +252,93 @@ impl Planner<'_> {
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         option_value: GoExpression,
-        slot_hint: &str,
         slot_ty: &str,
+        payload_bridge: &LayoutBridge,
         address: bool,
     ) -> GoExpression {
         let option = self.stable_source(statements, "opt", option_value);
-        let slot_var = self.fresh_var(Some(slot_hint));
-        self.declare(&slot_var);
+        let slot = self.fresh_var(Some(if address { "ptr" } else { "unwrap" }));
+        self.declare(&slot);
         statements.push(LoweredStatement::VarDecl {
-            name: slot_var.clone(),
+            name: slot.clone(),
             go_type: slot_ty.to_string(),
             value: None,
         });
-
-        let payload = some_payload(option.clone());
-        let payload = if address {
-            GoExpression::address_of(payload)
-        } else {
-            payload
-        };
-        let body = LoweredBlock {
-            statements: vec![assign(GoExpression::name(slot_var.clone()), payload)],
-        };
+        let body = self.project_some_into(
+            GoExpression::name(slot.clone()),
+            option.clone(),
+            payload_bridge,
+            address,
+        );
         statements.push(LoweredStatement::If(IfPlan::plain(
             is_some(option),
             body,
             ElseArm::None,
         )));
-        GoExpression::name(slot_var)
+        GoExpression::name(slot)
+    }
+
+    fn project_some_into(
+        &mut self,
+        slot: GoExpression,
+        option: GoExpression,
+        payload_bridge: &LayoutBridge,
+        address: bool,
+    ) -> LoweredBlock {
+        let mut statements = Vec::new();
+        let payload =
+            self.plan_layout_bridge(&mut statements, some_payload(option), payload_bridge);
+        let payload = if address {
+            GoExpression::address_of(payload)
+        } else {
+            payload
+        };
+        statements.push(assign(slot, payload));
+        LoweredBlock { statements }
+    }
+
+    fn wrap_nilable_into(
+        &mut self,
+        slot: GoExpression,
+        raw: GoExpression,
+        option_type: &Type,
+        payload_bridge: &LayoutBridge,
+        pointer: bool,
+    ) -> LoweredStatement {
+        let fallible = Fallible::from_type(option_type).expect("Option type expected");
+        let raw_payload = if pointer {
+            GoExpression::dereference(raw.clone())
+        } else {
+            raw.clone()
+        };
+        let mut then_statements = Vec::new();
+        let payload = self.plan_layout_bridge(&mut then_statements, raw_payload, payload_bridge);
+        let some = {
+            let mut planner = FalliblePlanner::new(self, &fallible);
+            planner.emit_success(payload)
+        };
+        then_statements.push(assign(slot.clone(), some));
+        let none = {
+            let mut planner = FalliblePlanner::new(self, &fallible);
+            planner.emit_failure(None)
+        };
+        let condition = if !pointer && self.is_interface_option(option_type) {
+            GoExpression::unary("!", is_nil_interface(raw))
+        } else {
+            non_nil(raw)
+        };
+        LoweredStatement::If(IfPlan::plain(
+            condition,
+            LoweredBlock {
+                statements: then_statements,
+            },
+            ElseArm::from_body(
+                LoweredBlock {
+                    statements: vec![assign(slot, none)],
+                },
+                false,
+            ),
+        ))
     }
 
     /// Wrap a Go `*T` (T value-typed) into Lisette `Option<T>`.
@@ -325,38 +384,18 @@ impl Planner<'_> {
                 payload,
                 ..
             } => {
-                if payload.is_identity() {
-                    let slot_type = target_payload.go_type(self);
-                    let slot_type = self.use_rendered_go_type(slot_type);
-                    self.plan_option_projection(statements, value, "unwrap", &slot_type, false)
-                } else {
-                    self.plan_option_projection_with_bridge(
-                        statements,
-                        value,
-                        target_payload,
-                        payload,
-                        false,
-                    )
-                }
+                let slot_type = target_payload.go_type(self);
+                let slot_type = self.use_rendered_go_type(slot_type);
+                self.plan_option_projection(statements, value, &slot_type, payload, false)
             }
             LayoutBridge::UnwrapPointerOption {
                 target_payload,
                 payload,
                 ..
             } => {
-                if payload.is_identity() {
-                    let slot_type = target_payload.go_type(self);
-                    let slot_type = format!("*{}", self.use_rendered_go_type(slot_type));
-                    self.plan_option_projection(statements, value, "ptr", &slot_type, true)
-                } else {
-                    self.plan_option_projection_with_bridge(
-                        statements,
-                        value,
-                        target_payload,
-                        payload,
-                        true,
-                    )
-                }
+                let slot_type = target_payload.go_type(self);
+                let slot_type = format!("*{}", self.use_rendered_go_type(slot_type));
+                self.plan_option_projection(statements, value, &slot_type, payload, true)
             }
             LayoutBridge::WrapNullableOption {
                 option_type,
@@ -405,53 +444,6 @@ impl Planner<'_> {
         }
     }
 
-    fn plan_option_projection_with_bridge(
-        &mut self,
-        statements: &mut Vec<LoweredStatement>,
-        option_value: GoExpression,
-        target_payload: &ValueLayout,
-        payload_bridge: &LayoutBridge,
-        address: bool,
-    ) -> GoExpression {
-        let option = self.stable_source(statements, "opt", option_value);
-        let target_type = target_payload.go_type(self);
-        let target_type = self.use_rendered_go_type(target_type);
-        let slot_type = if address {
-            format!("*{target_type}")
-        } else {
-            target_type
-        };
-        let slot_hint = if address { "ptr" } else { "unwrap" };
-        let slot = self.fresh_var(Some(slot_hint));
-        self.declare(&slot);
-        statements.push(LoweredStatement::VarDecl {
-            name: slot.clone(),
-            go_type: slot_type,
-            value: None,
-        });
-
-        let mut then_statements = Vec::new();
-        let payload = self.plan_layout_bridge(
-            &mut then_statements,
-            some_payload(option.clone()),
-            payload_bridge,
-        );
-        let payload = if address {
-            GoExpression::address_of(payload)
-        } else {
-            payload
-        };
-        then_statements.push(assign(GoExpression::name(slot.clone()), payload));
-        statements.push(LoweredStatement::If(IfPlan::plain(
-            is_some(option),
-            LoweredBlock {
-                statements: then_statements,
-            },
-            ElseArm::None,
-        )));
-        GoExpression::name(slot)
-    }
-
     fn plan_option_wrap_with_bridge(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
@@ -473,40 +465,13 @@ impl Planner<'_> {
             go_type: option_type_string,
             value: None,
         });
-
-        let raw_payload = if pointer {
-            GoExpression::dereference(source.clone())
-        } else {
-            source.clone()
-        };
-        let mut then_statements = Vec::new();
-        let payload = self.plan_layout_bridge(&mut then_statements, raw_payload, payload_bridge);
-        let some = {
-            let mut planner = FalliblePlanner::new(self, &fallible);
-            planner.emit_success(payload)
-        };
-        then_statements.push(assign(GoExpression::name(option.clone()), some));
-        let none = {
-            let mut planner = FalliblePlanner::new(self, &fallible);
-            planner.emit_failure(None)
-        };
-        let condition = if !pointer && self.is_interface_option(option_type) {
-            GoExpression::unary("!", is_nil_interface(source))
-        } else {
-            non_nil(source)
-        };
-        statements.push(LoweredStatement::If(IfPlan::plain(
-            condition,
-            LoweredBlock {
-                statements: then_statements,
-            },
-            ElseArm::from_body(
-                LoweredBlock {
-                    statements: vec![assign(GoExpression::name(option.clone()), none)],
-                },
-                false,
-            ),
-        )));
+        statements.push(self.wrap_nilable_into(
+            GoExpression::name(option.clone()),
+            source,
+            option_type,
+            payload_bridge,
+            pointer,
+        ));
         GoExpression::name(option)
     }
 
@@ -606,19 +571,8 @@ impl Planner<'_> {
             LayoutBridge::UnwrapNullableOption { payload, .. }
             | LayoutBridge::UnwrapPointerOption { payload, .. } => {
                 let pointer = matches!(bridge, LayoutBridge::UnwrapPointerOption { .. });
-                let mut then_statements = Vec::new();
-                let projected = some_payload(element.clone());
-                let projected = if payload.is_identity() {
-                    projected
-                } else {
-                    self.plan_layout_bridge(&mut then_statements, projected, payload)
-                };
-                let projected = if pointer {
-                    GoExpression::address_of(projected)
-                } else {
-                    projected
-                };
-                then_statements.push(assign(slot.clone(), projected));
+                let then_block =
+                    self.project_some_into(slot.clone(), element.clone(), payload, pointer);
                 let needs_nil_else = matches!(source_layout, ValueLayout::Map { .. }) || pointer;
                 let else_arm = if needs_nil_else {
                     ElseArm::from_body(
@@ -633,9 +587,7 @@ impl Planner<'_> {
                 LoweredBlock {
                     statements: vec![LoweredStatement::If(IfPlan::plain(
                         is_some(element),
-                        LoweredBlock {
-                            statements: then_statements,
-                        },
+                        then_block,
                         else_arm,
                     ))],
                 }
@@ -651,45 +603,14 @@ impl Planner<'_> {
                 ..
             } => {
                 let pointer = matches!(bridge, LayoutBridge::WrapPointerOption { .. });
-                let raw_payload = if pointer {
-                    GoExpression::dereference(element.clone())
-                } else {
-                    element.clone()
-                };
-                let mut then_statements = Vec::new();
-                let payload = if payload.is_identity() {
-                    raw_payload
-                } else {
-                    self.plan_layout_bridge(&mut then_statements, raw_payload, payload)
-                };
-                let fallible = Fallible::from_type(option_type).expect("Option type expected");
-                let some = {
-                    let mut planner = FalliblePlanner::new(self, &fallible);
-                    planner.emit_success(payload)
-                };
-                let none = {
-                    let mut planner = FalliblePlanner::new(self, &fallible);
-                    planner.emit_failure(None)
-                };
-                then_statements.push(assign(slot.clone(), some));
-                let condition = if !pointer && self.is_interface_option(option_type) {
-                    GoExpression::unary("!", is_nil_interface(element))
-                } else {
-                    non_nil(element)
-                };
                 LoweredBlock {
-                    statements: vec![LoweredStatement::If(IfPlan::plain(
-                        condition,
-                        LoweredBlock {
-                            statements: then_statements,
-                        },
-                        ElseArm::from_body(
-                            LoweredBlock {
-                                statements: vec![assign(slot, none)],
-                            },
-                            false,
-                        ),
-                    ))],
+                    statements: vec![self.wrap_nilable_into(
+                        slot,
+                        element,
+                        option_type,
+                        payload,
+                        pointer,
+                    )],
                 }
             }
             LayoutBridge::Aggregate { .. }

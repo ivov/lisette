@@ -117,12 +117,8 @@ impl NameUses {
             }
             LoweredStatement::Select(plan) => {
                 for arm in &plan.arms {
-                    if let SelectArmPlan::Receive {
-                        receive_vars: Some(names),
-                        ..
-                    } = arm
-                    {
-                        for name in names.split(", ") {
+                    if let SelectArmPlan::Receive { receive_vars, .. } = arm {
+                        for name in receive_vars {
                             self.bind(name);
                         }
                     }

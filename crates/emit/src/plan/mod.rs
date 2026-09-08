@@ -20,11 +20,12 @@ impl Planner<'_> {
     /// Resolve package-wide names and collisions before any item is rendered.
     pub(crate) fn build_package_plan(&mut self, files: &[&File]) -> PackagePlan {
         self.collect_escape_remap(files);
-        let package_block_names = self.package_block_names(files);
+        let collected = self.collect_names(files);
+        let package_block_names = self.package_block_names(files, &collected);
         self.package.record_package_block_names(package_block_names);
         self.derive_package_go_consts(files);
         self.collect_generic_renames(files);
-        let collision_diagnostics = self.detect_name_collisions(files);
+        let collision_diagnostics = self.name_collision_diagnostics(files, collected);
 
         let package_id = self.facts.current_package();
         let package_name = if self.facts.is_entry_package(package_id) {

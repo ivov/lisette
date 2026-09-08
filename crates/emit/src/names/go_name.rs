@@ -82,13 +82,31 @@ pub(crate) fn go_package_name(package: &str) -> &str {
     package.rsplit('/').next().unwrap_or(package)
 }
 
+pub(crate) fn free_method_part(method: &str, exported: bool) -> String {
+    if exported {
+        snake_to_camel(method)
+    } else {
+        snake_to_lower_camel(method)
+    }
+}
+
+pub(crate) fn fresh_suffixed(base: &str, taken: impl Fn(&str) -> bool) -> String {
+    if !taken(base) {
+        return base.to_string();
+    }
+    (2..)
+        .map(|n| format!("{base}_{n}"))
+        .find(|candidate| !taken(candidate))
+        .expect("freshening counter is unbounded")
+}
+
 pub(crate) fn is_plain_identifier(value: &str) -> bool {
     let mut chars = value.chars();
     match chars.next() {
-        Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+        Some(c) if c.is_alphabetic() || c == '_' => {}
         _ => return false,
     }
-    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+    chars.all(|c| c.is_alphanumeric() || c == '_')
 }
 
 pub(crate) fn sanitize_package_name(name: &str) -> Cow<'_, str> {
@@ -148,6 +166,7 @@ impl ResolvedName {
     pub(crate) fn into_expression(self) -> GoExpression {
         match self.package {
             Some(package) => GoExpression::qualified(package, self.name),
+            None if self.name.is_empty() => GoExpression::empty(),
             None => GoExpression::name(self.name),
         }
     }
@@ -340,22 +359,14 @@ pub(crate) fn qualify_method(
     package_use: Option<PackageUse>,
 ) -> ResolvedName {
     let Some(package) = package else {
-        let method_name = if is_public {
-            snake_to_camel(method)
-        } else {
-            snake_to_lower_camel(method)
-        };
+        let method_name = free_method_part(method, is_public);
         return ResolvedName::local(format!("{}_{}", type_name, method_name));
     };
 
     if package == PRELUDE_PACKAGE {
         ResolvedName::stdlib(format!("{}{}", type_name, snake_to_camel(method)))
     } else if package == current_package {
-        let method_name = if is_public {
-            snake_to_camel(method)
-        } else {
-            snake_to_lower_camel(method)
-        };
+        let method_name = free_method_part(method, is_public);
         ResolvedName::local(format!("{}_{}", type_name, method_name))
     } else {
         let name = format!("{}_{}", type_name, snake_to_camel(method));

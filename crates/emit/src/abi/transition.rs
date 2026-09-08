@@ -2,6 +2,7 @@ use syntax::types::Type;
 
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::coercion::LayoutBridge;
 use crate::abi::tuple_element_types;
 use crate::calls::go_interop::WrapperTarget;
 use crate::context::expression::ExpressionContext;
@@ -272,7 +273,13 @@ fn lowered_tuple_values(
             let raw = field(tuple_value, TUPLE_FIELDS[i]);
             if planner.facts.is_nullable_option(slot_ty) {
                 let inner = planner.use_go_type(&slot_ty.ok_type());
-                planner.plan_option_projection(&mut statements, raw, "unwrap", &inner, false)
+                planner.plan_option_projection(
+                    &mut statements,
+                    raw,
+                    &inner,
+                    &LayoutBridge::Identity,
+                    false,
+                )
             } else {
                 raw
             }
@@ -795,6 +802,6 @@ fn lower_nullable_slot_value(
     let value = planner.lower_value(expression, ExpressionContext::value());
     let inner = planner.use_go_type(&slot_ty.ok_type());
     value.map_expression_as_computed(|setup, value| {
-        planner.plan_option_projection(setup, value, "unwrap", &inner, false)
+        planner.plan_option_projection(setup, value, &inner, &LayoutBridge::Identity, false)
     })
 }

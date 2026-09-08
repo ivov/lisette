@@ -529,25 +529,6 @@ fn build_go_import_typed(code: String, package: PackageUse, param_types: &[GoTyp
     result
 }
 
-pub(crate) fn split_top_level_type_list(list: &str) -> Vec<&str> {
-    let mut entries = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0;
-    for (i, c) in list.char_indices() {
-        match c {
-            '[' | '(' => depth += 1,
-            ']' | ')' => depth -= 1,
-            ',' if depth == 0 => {
-                entries.push(list[start..i].trim());
-                start = i + 1;
-            }
-            _ => {}
-        }
-    }
-    entries.push(list[start..].trim());
-    entries
-}
-
 /// Split a recipe like `Map<K, V>, K, V` on commas outside angle brackets, so a
 /// nested `Map<K, V>` stays one entry.
 fn split_top_level_commas(recipe: &str) -> Vec<&str> {

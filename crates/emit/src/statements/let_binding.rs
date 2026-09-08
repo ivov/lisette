@@ -448,22 +448,14 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 };
                 let statements = if self.assert {
                     let span = self.binding.pattern.get_span();
-                    self.planner.lower_let_assert_pattern_site(
-                        ap,
-                        &self.binding.ty,
-                        self.value,
-                        span,
-                    )
+                    self.planner
+                        .lower_let_assert_pattern_site(ap, self.value, span)
                 } else {
                     let else_block = self
                         .else_block
                         .expect("LetKind::Refutable without else block must be `let assert`");
-                    self.planner.lower_let_else_pattern_site(
-                        ap,
-                        &self.binding.ty,
-                        self.value,
-                        else_block,
-                    )
+                    self.planner
+                        .lower_let_else_pattern_site(ap, self.value, else_block)
                 };
                 LoweredBlock { statements }
             }

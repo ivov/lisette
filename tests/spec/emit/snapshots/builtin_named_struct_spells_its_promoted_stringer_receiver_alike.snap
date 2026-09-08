@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[display]
+  struct Inner { v: int }
+  
+  struct cap { embed Inner }
+---
+package main
+
+import "fmt"
+
+type Inner struct {
+	v int
+}
+
+func (i Inner) String() string {
+	return fmt.Sprintf("Inner { v: %v }", i.v)
+}
+
+func (i Inner) toString() string {
+	return i.String()
+}
+
+type cap_ struct {
+	Inner
+}
+
+func (c cap_) String() string {
+	return fmt.Sprintf("{%v}", c.Inner)
+}

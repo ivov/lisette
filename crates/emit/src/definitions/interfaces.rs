@@ -69,11 +69,7 @@ impl Planner<'_> {
             self.use_go_type(&raw_return_ty)
         };
 
-        let method_name = if is_public || self.method_needs_export(func.name) {
-            go_name::snake_to_camel(func.name)
-        } else {
-            go_name::unexported_method_go_name(func.name)
-        };
+        let method_name = self.method_go_name(func.name, is_public);
 
         if return_type == "struct{}" {
             format!("{}({})", method_name, args.join(", "))

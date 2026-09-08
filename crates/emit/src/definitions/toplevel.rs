@@ -57,11 +57,7 @@ impl Planner<'_> {
         ty: &Type,
         scope: ConstScope,
     ) -> ConstPlan {
-        let target_name = self
-            .package
-            .escape_remap(identifier)
-            .map(str::to_string)
-            .unwrap_or_else(|| go_name::screaming_snake_to_camel(identifier));
+        let target_name = self.const_go_name(identifier);
         let initial_go_name = self.scope.bind(identifier, target_name);
         let go_identifier = if self.try_declare(&initial_go_name) {
             initial_go_name

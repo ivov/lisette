@@ -85,15 +85,11 @@ impl Planner<'_> {
             self.method_needs_export(method_part)
         };
 
-        if is_public {
-            format!("{}.{}", type_part, go_name::snake_to_camel(method_part))
-        } else {
-            format!(
-                "{}.{}",
-                type_part,
-                go_name::snake_to_lower_camel(method_part)
-            )
-        }
+        format!(
+            "{}.{}",
+            type_part,
+            go_name::free_method_part(method_part, is_public)
+        )
     }
 
     pub(crate) fn reference_go_name(&self, lisette_name: &str) -> String {

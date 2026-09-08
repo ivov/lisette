@@ -9,17 +9,17 @@ use crate::patterns::binding_decls::{is_catchall_pattern, is_unconditional_catch
 use crate::patterns::binding_emit::tree_binding_statements;
 use crate::patterns::decision_tree::{
     ChainTest, Decision, PatternBinding, SubjectRoot, SwitchBranch,
-    SwitchKind as PatternSwitchKind, SwitchShape, compile_expanded_arms, decision_is_exhaustive,
-    expand_or_patterns, render_condition, tree_has_unguarded_terminal,
+    SwitchKind as PatternSwitchKind, SwitchLabel, SwitchShape, compile_expanded_arms,
+    decision_is_exhaustive, expand_or_patterns, render_condition, tree_has_unguarded_terminal,
 };
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, SwitchCasePlan, SwitchKind, SwitchStatementPlan,
 };
+use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::placement::unreachable_panic_if_needed;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::InlineExpr;
-use crate::types::go_type::split_top_level_type_list;
 
 struct FlatCase<'d> {
     conditions: Vec<GoExpression>,
@@ -150,13 +150,12 @@ impl<'a> WalkCtx<'a> {
 }
 
 pub(crate) enum MatchSubject {
-    Var(String),
-    Elements(Vec<String>),
+    Var(GoExpression),
+    Elements(Vec<GoExpression>),
 }
 
 impl MatchSubject {
-    /// The one name a binding resolves against.
-    fn var(&self) -> &str {
+    fn var(&self) -> &GoExpression {
         match self {
             Self::Var(var) => var,
             Self::Elements(_) => unreachable!("tuple elements carry no bindings"),
@@ -166,7 +165,7 @@ impl MatchSubject {
     pub(crate) fn root(&self) -> SubjectRoot<'_> {
         match self {
             Self::Var(var) => SubjectRoot::Var(var),
-            Self::Elements(names) => SubjectRoot::Elements(names),
+            Self::Elements(elements) => SubjectRoot::Elements(elements),
         }
     }
 }
@@ -588,7 +587,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                         &rendered_path,
                         kind,
                         shape,
-                        &branch.case_label,
+                        &branch.label,
                     ));
                     let flattened =
                         self.collect_flat_cases(&branch.decision, conditions, out, false);
@@ -723,11 +722,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             SwitchShape::Bool => {
                 let true_branch = branches
                     .iter()
-                    .find(|branch| branch.case_label.as_str() == "true")
+                    .find(|branch| branch.label.boolean() == Some(true))
                     .expect("Bool shape requires a true-labeled branch");
                 let false_branch = branches
                     .iter()
-                    .find(|branch| branch.case_label.as_str() == "false")
+                    .find(|branch| branch.label.boolean() == Some(false))
                     .expect("Bool shape requires a false-labeled branch");
                 self.walk_condition_branch(
                     statements,
@@ -741,7 +740,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 let condition = GoExpression::binary(
                     render_switch_expression(rendered_path, kind),
                     "==",
-                    branches[0].case_label.clone(),
+                    branches[0].label.value().clone(),
                 );
                 self.walk_condition_branch(
                     statements,
@@ -764,7 +763,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 let condition = GoExpression::binary(
                     render_switch_expression(rendered_path, kind),
                     "==",
-                    branch.case_label.clone(),
+                    branch.label.value().clone(),
                 );
                 self.walk_condition_branch(statements, condition, &branch.decision, fallback, ctx);
             }
@@ -788,7 +787,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     ) {
         let inner = WalkCtx::switch_case(ctx.arm_place);
         let then_statements = self.with_scope(|this| {
-            this.planner.scope.establish_condition(condition.rendered());
+            this.planner.scope.establish_condition(condition.clone());
             let mut then_statements: Vec<LoweredStatement> = Vec::new();
             this.walk(&mut then_statements, then_branch, &inner);
             then_statements
@@ -941,11 +940,18 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let (regular, default) = split_with_default_lift(branches, fallback);
         let arms = self.arms;
         let subject_ty = self.subject_ty.clone();
-        let base = subject.rendered();
+        let binding_name = match subject.node() {
+            GoExpressionNode::Identifier(name) => name.clone(),
+            _ => {
+                let name = self.planner.fresh_var(Some("subject"));
+                self.planner.declare(&name);
+                name
+            }
+        };
         let mut nested = TreePlanner::new(
             self.planner,
             arms,
-            MatchSubject::Var(base.clone()),
+            MatchSubject::Var(GoExpression::name(binding_name.clone())),
             subject_ty,
         );
         let case_plans = nested.lower_switch_cases(regular, place, None);
@@ -958,7 +964,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         if let Some(block) = &default_block {
             used.extend(&block.statements);
         }
-        let binding = used.contains(&base).then(|| base.clone());
+        let binding = used.contains(&binding_name).then_some(binding_name);
 
         SwitchStatementPlan {
             kind: SwitchKind::Type { subject, binding },
@@ -977,10 +983,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let ctx = WalkCtx::switch_case(place);
         let mut case_plans = Vec::with_capacity(branches.len());
         for branch in branches {
-            // A case listing several labels establishes none of them on its own.
-            let established = subject
-                .filter(|_| !branch.case_label.as_str().contains(','))
-                .map(|subject| format!("{} == {}", subject, branch.case_label));
+            let established = match (subject, &branch.label) {
+                (Some(subject), SwitchLabel::Value(label)) => {
+                    Some(GoExpression::binary(subject.clone(), "==", label.clone()))
+                }
+                _ => None,
+            };
             let body = self.with_scope(|this| {
                 if let Some(condition) = established {
                     this.planner.scope.establish_condition(condition);
@@ -989,11 +997,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 this.walk(&mut body, &branch.decision, &ctx);
                 body
             });
-            let labels = match subject {
-                Some(_) => vec![branch.case_label.clone()],
-                None => split_top_level_type_list(branch.case_label.as_str())
-                    .into_iter()
-                    .map(|go_type| GoExpression::type_name(go_type.to_string()))
+            let labels = match &branch.label {
+                SwitchLabel::Value(label) => vec![label.clone()],
+                SwitchLabel::Types(go_types) => go_types
+                    .iter()
+                    .map(|go_type| GoExpression::type_name(go_type.clone()))
                     .collect(),
             };
             case_plans.push(SwitchCasePlan {
@@ -1303,15 +1311,15 @@ fn switch_branch_condition(
     rendered_path: &GoExpression,
     kind: &PatternSwitchKind,
     shape: &SwitchShape,
-    case_label: &GoExpression,
+    label: &SwitchLabel,
 ) -> GoExpression {
-    if matches!(shape, SwitchShape::Bool) && case_label.as_str() == "true" {
+    if matches!(shape, SwitchShape::Bool) && label.boolean() == Some(true) {
         return rendered_path.clone();
     }
     GoExpression::binary(
         render_switch_expression(rendered_path.clone(), kind),
         "==",
-        case_label.clone(),
+        label.value().clone(),
     )
 }
 
@@ -1365,10 +1373,12 @@ fn bindings_are_hoistable(tests: &[ChainTest], indices: &[usize]) -> bool {
     })
 }
 
-fn group_chain_tests_by_condition(conditions: &[Option<GoExpression>]) -> Vec<(&str, Vec<usize>)> {
-    let mut groups: Vec<(&str, Vec<usize>)> = Vec::new();
+fn group_chain_tests_by_condition(
+    conditions: &[Option<GoExpression>],
+) -> Vec<(Option<&GoExpression>, Vec<usize>)> {
+    let mut groups: Vec<(Option<&GoExpression>, Vec<usize>)> = Vec::new();
     for (i, condition) in conditions.iter().enumerate() {
-        let key = condition.as_ref().map_or("", GoExpression::as_str);
+        let key = condition.as_ref();
         if let Some((last_key, indices)) = groups.last_mut()
             && *last_key == key
         {

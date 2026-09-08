@@ -1,3 +1,4 @@
+use crate::names::go_name;
 use syntax::ast::{Expression, Literal};
 use syntax::program::{DotAccessKind, ReceiverCoercion};
 use syntax::types::Type;
@@ -9,17 +10,33 @@ macro_rules! write_line {
 }
 pub(crate) use write_line;
 
-pub(crate) fn receiver_name(type_name: &str) -> String {
+fn receiver_letter(type_name: &str) -> String {
     type_name
         .trim_start_matches('*')
         .split('[')
         .next()
         .unwrap_or(type_name)
         .chars()
-        .next()
-        .unwrap_or('x')
-        .to_lowercase()
-        .to_string()
+        .find(|character| character.is_alphabetic())
+        .map_or_else(
+            || "r".to_string(),
+            |letter| letter.to_lowercase().to_string(),
+        )
+}
+
+pub(crate) fn fresh_receiver_name(type_name: &str, taken: impl Fn(&str) -> bool) -> String {
+    let letter = receiver_letter(type_name);
+    if !taken(&letter) {
+        return letter;
+    }
+    let doubled = format!("{letter}{letter}");
+    if !taken(&doubled) {
+        return doubled;
+    }
+    (2..)
+        .map(|n| format!("{letter}{n}"))
+        .find(|candidate| !taken(candidate))
+        .expect("freshening counter is unbounded")
 }
 
 fn receiver_generic_names(receiver_generics: &str) -> impl Iterator<Item = &str> {
@@ -32,17 +49,9 @@ fn receiver_generic_names(receiver_generics: &str) -> impl Iterator<Item = &str>
 }
 
 pub(crate) fn synthesized_receiver_name(type_name: &str, receiver_generics: &str) -> String {
-    let generic_names: Vec<&str> = receiver_generic_names(receiver_generics).collect();
-    let mut receiver = receiver_name(type_name);
-    if generic_names.contains(&receiver.as_str()) {
-        receiver = format!("{receiver}{receiver}");
-        let mut counter = 2;
-        while generic_names.contains(&receiver.as_str()) {
-            receiver = format!("{}{}", receiver_name(type_name), counter);
-            counter += 1;
-        }
-    }
-    receiver
+    fresh_receiver_name(type_name, |name| {
+        receiver_generic_names(receiver_generics).any(|generic| generic == name)
+    })
 }
 
 pub(crate) fn synthesized_local_name(
@@ -50,16 +59,9 @@ pub(crate) fn synthesized_local_name(
     receiver: &str,
     receiver_generics: &str,
 ) -> String {
-    let reserved = |name: &str| {
+    go_name::fresh_suffixed(base, |name| {
         name == receiver || receiver_generic_names(receiver_generics).any(|g| g == name)
-    };
-    if !reserved(base) {
-        return base.to_string();
-    }
-    (2..)
-        .map(|n| format!("{base}_{n}"))
-        .find(|candidate| !reserved(candidate))
-        .expect("freshening counter is unbounded")
+    })
 }
 
 /// Group consecutive parameters with the same Go type: `a int, b int` → `a, b int`.

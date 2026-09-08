@@ -124,10 +124,7 @@ impl Planner<'_> {
         taken.extend(generic_names.iter().map(EcoString::to_string));
 
         for name in colliding {
-            let fresh = (2..)
-                .map(|n| format!("{}_{}", name, n))
-                .find(|candidate| !taken.contains(candidate))
-                .expect("freshening counter is unbounded");
+            let fresh = go_name::fresh_suffixed(name, |candidate| taken.contains(candidate));
             taken.insert(fresh.clone());
             self.package.record_generic_rename(name.to_string(), fresh);
         }

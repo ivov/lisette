@@ -10,7 +10,6 @@ use crate::plan::values::GoExpression;
 use crate::state::scope::PairStatusKind;
 use crate::types::native::NativeGoType;
 use syntax::ast::Expression;
-use syntax::types::Type;
 
 /// How an Option-typed scrutinee produces its Go comma-ok pair.
 enum CommaOkPair {
@@ -120,7 +119,6 @@ impl Planner<'_> {
         else {
             return None;
         };
-        let expression_ty = expression.get_type();
         match &plan.resolved.origin {
             CallableOrigin::AssertType => {
                 let [operand] = args.as_slice() else {
@@ -146,34 +144,21 @@ impl Planner<'_> {
                 })
             }
             _ => {
+                let lowered = self.lowered_call_of(expression, Vec::new(), &plan)?;
                 if !matches!(
-                    plan.resolved.abi.result,
+                    lowered.shape,
                     CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
                         payload: PayloadLayout::Packed,
                     })
-                ) {
-                    return None;
-                }
-                let ok_ty = self.facts.peel_alias(&expression_ty).ok_type();
-                if ok_ty.is_unit() || matches!(self.facts.peel_alias(&ok_ty), Type::Tuple(_)) {
-                    return None;
-                }
-                if self
-                    .go_return_payload_bridge(&plan.resolved.abi, &expression_ty)
-                    .is_some()
+                ) || lowered.ok_ty.is_unit()
+                    || lowered.has_tuple_payload(self)
+                    || lowered.payload_bridge.is_some()
                 {
                     return None;
                 }
-                let nil_guard = if self.is_interface_option(&expression_ty) {
-                    Some(NilGuard::Interface)
-                } else if self.facts.is_nullable_option(&expression_ty) {
-                    Some(NilGuard::Pointer)
-                } else {
-                    None
-                };
                 Some(CommaOkSource {
                     pair: CommaOkPair::LoweredCall,
-                    nil_guard,
+                    nil_guard: lowered.nil_guard,
                 })
             }
         }

@@ -6,7 +6,6 @@ use super::{NativeCallContext, NativeMethodCall};
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::prelude_call;
-use crate::names::go_name;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, assign, define,
@@ -368,25 +367,17 @@ impl Planner<'_> {
         let Pattern::Identifier { identifier, .. } = pattern else {
             unreachable!("callback parameters are checked for identifier patterns");
         };
-        let go_name = match existing {
-            Some(name) => name,
+        match existing {
+            Some(name) => {
+                self.declare(&name);
+                self.scope.bind(identifier.as_str(), name.clone());
+                name
+            }
             None => match self.go_name_for_binding(pattern) {
-                Some(name) => {
-                    let escaped = go_name::escape_reserved(&name).into_owned();
-                    if self.shadows_declaration(&escaped) {
-                        self.fresh_var(Some(&name))
-                    } else {
-                        escaped
-                    }
-                }
+                Some(name) => self.claim_declared_binding(identifier, name),
                 None => "_".to_string(),
             },
-        };
-        if go_name != "_" {
-            self.declare(&go_name);
-            self.scope.bind(identifier.as_str(), go_name.clone());
         }
-        go_name
     }
 
     fn slice_loop_declaration(

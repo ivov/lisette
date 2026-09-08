@@ -485,13 +485,29 @@ impl<'a> Planner<'a> {
     }
 
     /// Whether an enclosing branch already tested this exact condition.
-    fn is_condition_established(&self, condition: &str) -> bool {
+    fn is_condition_established(&self, condition: &GoExpression) -> bool {
         self.scope.is_condition_established(condition)
     }
 
     /// Unconditionally marks `go_name` as declared in the current block.
     fn declare(&mut self, go_name: &str) {
         self.scope.declare_go_name(go_name);
+    }
+
+    fn claim_declared_binding(
+        &mut self,
+        lisette_name: &str,
+        preferred: impl Into<String>,
+    ) -> String {
+        let go_name = self.scope.bind(lisette_name, preferred);
+        let go_name = if self.shadows_declaration(&go_name) {
+            let fresh = self.fresh_var(Some(lisette_name));
+            self.scope.bind(lisette_name, fresh)
+        } else {
+            go_name
+        };
+        self.declare(&go_name);
+        go_name
     }
 
     /// Bind `value` to a name that can be read more than once.
@@ -559,7 +575,11 @@ impl<'a> Planner<'a> {
         result
     }
 
-    fn with_assign_target<R>(&mut self, target: &str, f: impl FnOnce(&mut Self) -> R) -> R {
+    fn with_assign_target<R>(
+        &mut self,
+        target: &GoExpression,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
         let newly_active = self.scope.activate_assign_target(target);
         let result = f(self);
         if newly_active {

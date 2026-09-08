@@ -21,8 +21,8 @@ func main() {
 	}
 	var tmp_1 struct{}
 	if true {
-		base_2 := xss[i]
-		base_2[0] = bump()
+		base_3 := xss[i]
+		base_3[0] = bump()
 		tmp_1 = struct{}{}
 	}
 	_ = tmp_1

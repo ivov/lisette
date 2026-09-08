@@ -1897,3 +1897,35 @@ fn area(p: Pair) -> float64 {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn type_switch_on_a_field_path_binds_a_fresh_subject() {
+    let input = r#"
+interface Shape {
+  fn area() -> int
+}
+
+struct Circle { r: int }
+
+impl Circle {
+  fn area(self) -> int { self.r }
+}
+
+struct Square { s: int }
+
+impl Square {
+  fn area(self) -> int { self.s * self.s }
+}
+
+struct Holder { shape: Shape }
+
+fn describe(h: Ref<Holder>) -> int {
+  match h.shape {
+    Circle { r } => r,
+    Square { s } => s,
+    _ => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

@@ -107,6 +107,10 @@ impl GoExpression {
     }
 
     pub(crate) fn name(value: String) -> Self {
+        debug_assert!(
+            go_name::is_plain_identifier(&value),
+            "an identifier node holds one Go name, got `{value}`"
+        );
         Self::new(GoExpressionNode::Identifier(value))
     }
 

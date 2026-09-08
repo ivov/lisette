@@ -8,7 +8,6 @@ use crate::calls::go_interop::{NilGuard, is_nil, non_nil, unexpected_nil_error};
 use crate::calls::slice_loop::FoundSink;
 use crate::calls::wrap_err::WrapMessage;
 use crate::context::expression::ExpressionContext;
-use crate::names::go_name::is_plain_identifier;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::decision_tree;
 use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
@@ -18,6 +17,7 @@ use crate::plan::bodies::{
     discard, expression_statement,
 };
 use crate::plan::calls::{CallPlan, CallableOrigin};
+use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::state::scope::PairStatusKind;
 use crate::types::native::NativeGoType;
@@ -31,6 +31,12 @@ pub(crate) struct ResultFusePlan<'a> {
     shape: CallableReturnAbi,
     nil_guard: Option<NilGuard>,
     wraps: Vec<&'a Expression>,
+}
+
+impl ResultFusePlan<'_> {
+    pub(crate) fn wraps_error(&self) -> bool {
+        !self.wraps.is_empty()
+    }
 }
 
 pub(crate) enum OptionFusePlan<'a> {
@@ -406,22 +412,17 @@ impl Planner<'_> {
         let (subject_var, declaration) =
             self.lower_match_subject_var(&mut statements, subject, arms);
 
-        let block = self.lower_match_tree(
-            arms,
-            MatchSubject::Var(subject_var.clone()),
-            subject_ty,
-            place,
-        );
-        let used = GoUses::of(&block.statements).contains(&subject_var);
+        let block = self.lower_match_tree(arms, MatchSubject::Var(subject_var), subject_ty, place);
+        let used = GoUses::of(&block.statements);
 
         match declaration {
             SubjectDeclaration::PlainDiscard { var } => {
-                if !used {
+                if !used.contains(&var) {
                     statements.push(discard(GoExpression::name(var)));
                 }
             }
             SubjectDeclaration::Deferred { var, expression } => {
-                if used {
+                if used.contains(&var) {
                     statements.push(define(var, expression));
                 } else {
                     statements.push(discard(expression));
@@ -479,16 +480,16 @@ impl Planner<'_> {
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "arg");
         statements.extend(sequenced.setup);
 
-        let mut names = Vec::with_capacity(elements.len());
+        let mut roots = Vec::with_capacity(elements.len());
         for ((value, tested), element) in sequenced.values.iter().zip(&tested).zip(elements) {
             // An untested element still runs, but nothing may name it.
             if !tested && !is_inert_value(element, value) {
                 statements.push(discard(value.clone()));
             }
-            names.push(value.rendered());
+            roots.push(value.clone());
         }
 
-        let block = self.lower_match_tree(arms, MatchSubject::Elements(names), subject_ty, place);
+        let block = self.lower_match_tree(arms, MatchSubject::Elements(roots), subject_ty, place);
         statements.extend(block.statements);
         Some(statements)
     }
@@ -509,40 +510,24 @@ impl Planner<'_> {
         &self,
         subject: &'a Expression,
     ) -> Option<ResultFusePlan<'a>> {
-        let (subject, wraps) = self.peel_wrap_err(subject);
-        let plan = self.plan_call(subject)?;
-        let shape = plan.resolved.abi.result.clone();
-        let nil_guard = match &plan.resolved.origin {
-            CallableOrigin::GoInterop
-                if matches!(
-                    shape,
-                    CallableReturnAbi::BareError | CallableReturnAbi::Result { .. }
-                ) =>
-            {
-                let ok_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
-                if matches!(self.facts.peel_alias(&ok_ty), Type::Tuple(_)) {
+        let lowered = self.lowered_call(subject)?;
+        if !lowered.is_result() {
+            return None;
+        }
+        let nil_guard = match lowered.origin {
+            CallableOrigin::GoInterop => {
+                if lowered.has_tuple_payload(self) || lowered.payload_bridge.is_some() {
                     return None;
                 }
-                if self
-                    .go_return_payload_bridge(&plan.resolved.abi, &subject.get_type())
-                    .is_some()
-                {
-                    return None;
-                }
-                self.result_nil_guard(&ok_ty)
+                lowered.nil_guard
             }
-            CallableOrigin::GoInterop => return None,
             _ => None,
         };
-        matches!(
-            shape,
-            CallableReturnAbi::BareError | CallableReturnAbi::Result { .. }
-        )
-        .then_some(ResultFusePlan {
-            subject,
-            shape,
+        Some(ResultFusePlan {
+            subject: lowered.call,
+            shape: lowered.shape,
             nil_guard,
-            wraps,
+            wraps: lowered.wraps,
         })
     }
 
@@ -583,28 +568,15 @@ impl Planner<'_> {
             }
         }
 
-        let plan = self.plan_call(subject)?;
+        let lowered = self.lowered_call(subject)?;
         if !matches!(
-            plan.resolved.abi.result,
+            lowered.shape,
             CallableReturnAbi::Option(OptionReturnAbi::Nullable)
-        ) || self
-            .go_result_layout_bridge(&plan.resolved.abi, &subject.get_type())
-            .is_some()
-            || self
-                .go_return_payload_bridge(&plan.resolved.abi, &subject.get_type())
-                .is_some()
+        ) || lowered.is_bridged()
         {
             return None;
         }
-
-        let option_ty = subject.get_type();
-        let nil_guard = if self.is_interface_option(&option_ty) {
-            NilGuard::Interface
-        } else if self.facts.is_nullable_option(&option_ty) {
-            NilGuard::Pointer
-        } else {
-            return None;
-        };
+        let nil_guard = lowered.nil_guard?;
         Some(OptionFusePlan::Nullable { subject, nil_guard })
     }
 
@@ -1120,7 +1092,7 @@ impl Planner<'_> {
         setup: &mut Vec<LoweredStatement>,
         subject: &Expression,
         arms: &[MatchArm],
-    ) -> (String, SubjectDeclaration) {
+    ) -> (GoExpression, SubjectDeclaration) {
         let any_guard = arms.iter().any(|arm| arm.has_guard());
         if let Expression::Identifier { value, .. } = subject
             && !any_guard
@@ -1131,30 +1103,36 @@ impl Planner<'_> {
                 .any(|arm| pattern_binds_name(&arm.pattern, &name));
             if self.can_reuse_subject_identifier(&name, has_collision) {
                 let var = self.reference_go_name(&name);
-                return (var.clone(), SubjectDeclaration::PlainDiscard { var });
+                return (
+                    GoExpression::name(var.clone()),
+                    SubjectDeclaration::PlainDiscard { var },
+                );
             }
         }
         if matches!(subject, Expression::Literal { .. }) {
             let staged = self.plan_operand(subject, ExpressionContext::value());
             let (subject_setup, value) = staged.into_parts();
             setup.extend(subject_setup);
-            return (value.rendered(), SubjectDeclaration::None);
+            return (value, SubjectDeclaration::None);
         }
         let staged = self.lower_composite_value(subject, ExpressionContext::value());
         let rests_in_stable_name = self.plan_rests_in_stable_name(&staged);
         let (subject_setup, value) = staged.into_parts();
         setup.extend(subject_setup);
-        let reads_in_place = is_plain_identifier(value.as_str())
-            || self.field_path_reads_in_place(subject, value.as_str(), |root| {
+        let reads_in_place = matches!(value.node(), GoExpressionNode::Identifier(_))
+            || self.field_path_reads_in_place(subject, &value, |root| {
                 arms.iter()
                     .any(|arm| pattern_binds_name(&arm.pattern, root))
             });
         if !any_guard && reads_in_place {
-            return (value.rendered(), SubjectDeclaration::None);
+            return (value, SubjectDeclaration::None);
         }
-        if any_guard && rests_in_stable_name {
-            let var = value.rendered();
-            return (var.clone(), SubjectDeclaration::PlainDiscard { var });
+        if any_guard
+            && rests_in_stable_name
+            && let GoExpressionNode::Identifier(var) = value.node()
+        {
+            let var = var.clone();
+            return (value, SubjectDeclaration::PlainDiscard { var });
         }
         let var = self.fresh_var(Some("subject"));
         self.declare(&var);
@@ -1162,7 +1140,7 @@ impl Planner<'_> {
             var: var.clone(),
             expression: value,
         };
-        (var, declaration)
+        (GoExpression::name(var), declaration)
     }
 }
 

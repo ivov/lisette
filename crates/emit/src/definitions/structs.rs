@@ -427,19 +427,11 @@ impl Planner<'_> {
     }
 
     pub(crate) fn to_string_method_go_name(&self) -> String {
-        self.method_go_name("to_string")
+        self.method_go_name("to_string", false)
     }
 
     pub(crate) fn equals_method_go_name(&self) -> String {
-        self.method_go_name("equals")
-    }
-
-    fn method_go_name(&self, method: &str) -> String {
-        if self.method_needs_export(method) {
-            go_name::snake_to_camel(method)
-        } else {
-            go_name::unexported_method_go_name(method)
-        }
+        self.method_go_name("equals", false)
     }
 
     pub(crate) fn append_to_string_method(
@@ -662,7 +654,7 @@ fn emit_struct_shadow_stringer_method(
     fields: &[StringerField],
 ) -> String {
     let receiver = synthesized_receiver_name(name, receiver_generics);
-    let go_type_name = go_name::escape_keyword(name);
+    let go_type_name = go_name::escape_type_name(name);
     let receiver_type = format!("{go_type_name}{receiver_generics}");
     if fields.is_empty() {
         return format!(

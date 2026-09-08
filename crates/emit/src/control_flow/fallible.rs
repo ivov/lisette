@@ -1,5 +1,8 @@
 use crate::Planner;
+use crate::abi::callable::CallableReturnAbi;
 use crate::abi::coercion::CoercionPlan;
+use crate::abi::transition;
+use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::LoweredStatement;
@@ -194,6 +197,57 @@ impl Planner<'_> {
             return value;
         };
         self.coerce_value(statements, value, &from, &to)
+    }
+
+    pub(crate) fn failure_return_values(
+        &mut self,
+        fallible: &Fallible,
+        error: Option<GoExpression>,
+    ) -> Vec<GoExpression> {
+        let return_ctx = self.return_ctx();
+        if let Some(shape) = return_ctx.lowered_shape() {
+            let return_ty = return_ctx.expect_ty();
+            return match error {
+                Some(error) if fallible.is_result() => {
+                    transition::lowered_err_values(self, &shape, &return_ty, error)
+                }
+                _ => transition::lowered_none_values(self, &shape, &return_ty),
+            };
+        }
+        let mut fallible_planner = FalliblePlanner::new(self, fallible);
+        vec![fallible_planner.emit_contextual_failure(error)]
+    }
+
+    pub(crate) fn failure_return(
+        &mut self,
+        fallible: &Fallible,
+        error: Option<GoExpression>,
+    ) -> LoweredStatement {
+        let lowered = self.return_ctx().lowered_shape().is_some();
+        let mut values = self.failure_return_values(fallible, error);
+        if lowered {
+            transition::multi_value_return(values)
+        } else {
+            plain_return(values.remove(0))
+        }
+    }
+
+    pub(crate) fn success_return(
+        &mut self,
+        fallible: &Fallible,
+        value: GoExpression,
+        lowered: Option<&CallableReturnAbi>,
+    ) -> Vec<LoweredStatement> {
+        let Some(shape) = lowered else {
+            let success = FalliblePlanner::new(self, fallible).emit_success(value);
+            return vec![plain_return(success)];
+        };
+        let (mut statements, payload) =
+            transition::lowered_payload_values(self, shape, fallible.ok_ty(), value);
+        statements.push(transition::multi_value_return(
+            transition::lowered_ok_values(shape, payload),
+        ));
+        statements
     }
 }
 

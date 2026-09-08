@@ -13,7 +13,7 @@ use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::values::GoExpression;
 use crate::state::package_state::FunctionEmissionContext;
 use crate::types::native::NativeGoType;
-use crate::utils::{group_params, receiver_name};
+use crate::utils::{fresh_receiver_name, group_params};
 use syntax::EcoString;
 use syntax::ast::{
     Annotation, Binding, Expression, FunctionDefinitionView, Generic, Pattern, Span,
@@ -255,17 +255,8 @@ impl Planner<'_> {
         }
     }
 
-    /// Bind and declare a parameter; freshens the Go name on collision.
     fn declare_param(&mut self, lisette_name: &str, raw_go_name: impl Into<String>) -> String {
-        let go_id = self.scope.bind(lisette_name, raw_go_name);
-        let go_id = if self.shadows_declaration(&go_id) {
-            let fresh = self.fresh_var(Some(lisette_name));
-            self.scope.bind(lisette_name, fresh)
-        } else {
-            go_id
-        };
-        self.declare(&go_id);
-        go_id
+        self.claim_declared_binding(lisette_name, raw_go_name)
     }
 
     pub(crate) fn emit_function(
@@ -369,15 +360,10 @@ impl Planner<'_> {
         has_receiver: bool,
         is_public: bool,
     ) -> String {
-        if is_public {
-            go_name::snake_to_camel(function_definition.name)
-        } else if has_receiver {
-            go_name::unexported_method_go_name(function_definition.name)
-        } else if let Some(remapped) = self.package.escape_remap(function_definition.name.as_str())
-        {
-            remapped.to_string()
+        if has_receiver {
+            self.method_go_name(function_definition.name, is_public)
         } else {
-            go_name::escape_reserved(function_definition.name).into_owned()
+            self.free_function_go_name(function_definition.name, is_public)
         }
     }
 
@@ -450,19 +436,9 @@ impl Planner<'_> {
 
         let actual_ty = receiver_override.unwrap_or(receiver_ty);
         let ty_string = self.use_go_type(actual_ty);
-        let mut receiver_var = receiver_name(&ty_string);
-
-        let taken = |this: &Self, name: &String| {
-            param_names.contains(name) || this.shadows_declaration(name)
-        };
-        if taken(self, &receiver_var) {
-            receiver_var = format!("{}{}", receiver_var, receiver_var);
-            let mut counter = 2;
-            while taken(self, &receiver_var) {
-                receiver_var = format!("{}{}", receiver_name(&ty_string), counter);
-                counter += 1;
-            }
-        }
+        let receiver_var = fresh_receiver_name(&ty_string, |name| {
+            param_names.iter().any(|param| param == name) || self.shadows_declaration(name)
+        });
 
         let receiver_part = format!("({} {})", receiver_var, ty_string);
 
@@ -632,7 +608,6 @@ impl Planner<'_> {
         }
 
         let receiver_ty = &function_definition.params[0].ty;
-        let _ty_str = self.use_go_type(receiver_ty);
 
         (&function_definition.params[1..], Some(receiver_ty.clone()))
     }

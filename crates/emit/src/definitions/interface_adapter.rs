@@ -125,11 +125,7 @@ impl Planner<'_> {
         let mut seen = HashSet::default();
         for requirement in interface_requirements(target, |id| self.facts.definition(id)) {
             // Parents may spell one Go method with different source names.
-            let selector = if self.method_needs_export(&requirement.name) {
-                go_name::snake_to_camel(&requirement.name)
-            } else {
-                go_name::unexported_method_go_name(&requirement.name)
-            };
+            let selector = self.method_go_name(&requirement.name, false);
             if !seen.insert(selector) {
                 continue;
             }
@@ -331,11 +327,7 @@ impl Planner<'_> {
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let go_method_name = if this.method_needs_export(&method.name) {
-                go_name::snake_to_camel(&method.name)
-            } else {
-                go_name::unexported_method_go_name(&method.name)
-            };
+            let go_method_name = this.method_go_name(&method.name, false);
             let inner_call = GoExpression::call(
                 GoExpression::selector(
                     GoExpression::selector(

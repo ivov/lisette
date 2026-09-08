@@ -273,17 +273,12 @@ impl Planner<'_> {
             return None;
         }
 
-        let should_export = self
+        let is_public = self
             .facts
             .method(&qualified_name, method_part)
             .map(|method| method.visibility.is_public())
-            .unwrap_or(false)
-            || self.method_needs_export(method_part);
-        let go_method = if should_export {
-            go_name::snake_to_camel(method_part)
-        } else {
-            go_name::unexported_method_go_name(method_part)
-        };
+            .unwrap_or(false);
+        let go_method = self.method_go_name(method_part, is_public);
 
         let type_args = if let Type::Nominal { ref params, .. } = stripped {
             if params.is_empty() {

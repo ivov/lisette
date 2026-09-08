@@ -315,9 +315,9 @@ pub(crate) struct SelectStatementPlan {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SelectArmPlan {
     /// `case <receive_vars> := <-<channel>:`, or `case <-<channel>:` when
-    /// `receive_vars` is `None`.
+    /// `receive_vars` is empty.
     Receive {
-        receive_vars: Option<String>,
+        receive_vars: Vec<String>,
         channel: GoExpression,
         body: LoweredBlock,
     },

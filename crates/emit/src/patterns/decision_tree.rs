@@ -15,7 +15,7 @@ use crate::names::packages::PackageRequirements;
 use crate::names::{generics, go_name};
 use crate::patterns::binding_decls::emit_pattern_literal;
 use crate::plan::bodies::{LoweredBlock, define_many};
-use crate::plan::go_expression::FunctionLiteralLayout;
+use crate::plan::go_expression::{FunctionLiteralLayout, GoExpressionNode};
 use crate::plan::values::GoExpression;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,18 +58,17 @@ fn checked_tuple_element(path: &AccessPath, arity: usize) -> Option<usize> {
         .position(|tuple_field| tuple_field == field)
 }
 
-/// One subject, or one name per element when the match never builds its tuple.
 #[derive(Clone, Copy)]
 pub(crate) enum SubjectRoot<'a> {
-    Var(&'a str),
-    Elements(&'a [String]),
+    Var(&'a GoExpression),
+    Elements(&'a [GoExpression]),
 }
 
 impl<'a> SubjectRoot<'a> {
-    fn resolve<'p>(&self, segments: &'p [PathSegment]) -> (String, &'p [PathSegment]) {
+    fn resolve<'p>(&self, segments: &'p [PathSegment]) -> (GoExpression, &'p [PathSegment]) {
         match self {
-            Self::Var(var) => ((*var).to_string(), segments),
-            Self::Elements(names) => (names[element_index(segments)].clone(), &segments[1..]),
+            Self::Var(var) => ((*var).clone(), segments),
+            Self::Elements(elements) => (elements[element_index(segments)].clone(), &segments[1..]),
         }
     }
 }
@@ -96,7 +95,7 @@ impl AccessPath {
 
     pub(crate) fn render(&self, subject: SubjectRoot<'_>) -> GoExpression {
         let (root, segments) = subject.resolve(&self.segments);
-        let mut result = GoExpression::name(root);
+        let mut result = root;
         for seg in segments {
             result = match seg {
                 PathSegment::Field(name) => GoExpression::selector(result, name.clone()),
@@ -209,11 +208,13 @@ impl Check {
             }
             Check::Literal { path, go_literal } => {
                 let rendered_path = path.render(subject);
-                match (go_literal.as_str(), negative) {
-                    ("true", false) | ("false", true) => rendered_path,
-                    ("true", true) | ("false", false) => GoExpression::unary("!", rendered_path),
-                    (_, false) => GoExpression::binary(rendered_path, "==", go_literal.clone()),
-                    (_, true) => GoExpression::binary(rendered_path, "!=", go_literal.clone()),
+                match (boolean_literal(go_literal), negative) {
+                    (Some(true), false) | (Some(false), true) => rendered_path,
+                    (Some(true), true) | (Some(false), false) => {
+                        GoExpression::unary("!", rendered_path)
+                    }
+                    (None, false) => GoExpression::binary(rendered_path, "==", go_literal.clone()),
+                    (None, true) => GoExpression::binary(rendered_path, "!=", go_literal.clone()),
                 }
             }
             Check::SliceLenEq { path, length } => {
@@ -313,6 +314,7 @@ pub(crate) struct PatternBinding {
     /// `None` when the binding is unused.
     pub go_name: Option<String>,
     pub path: AccessPath,
+    pub ty: Option<Type>,
 }
 
 /// Root-path Go-interface type assertion lifted out of `checks`.
@@ -406,7 +408,6 @@ pub(crate) enum SwitchKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SwitchShape {
     TypeSwitch,
-    /// Two branches with `"true"`/`"false"` labels, no fallback.
     Bool,
     /// Two branches, no fallback, not `Bool`.
     Binary,
@@ -423,8 +424,8 @@ fn classify_switch_shape(
         (SwitchKind::TypeSwitch, _, _) => SwitchShape::TypeSwitch,
         (SwitchKind::Value, [left, right], None)
             if matches!(
-                (left.case_label.as_str(), right.case_label.as_str()),
-                ("true", "false") | ("false", "true")
+                (left.label.boolean(), right.label.boolean()),
+                (Some(true), Some(false)) | (Some(false), Some(true))
             ) =>
         {
             SwitchShape::Bool
@@ -475,9 +476,39 @@ pub(crate) fn tree_has_unguarded_terminal(tree: &Decision) -> bool {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SwitchLabel {
+    Value(GoExpression),
+    Types(Vec<String>),
+}
+
+impl SwitchLabel {
+    pub(crate) fn boolean(&self) -> Option<bool> {
+        match self {
+            Self::Value(value) => boolean_literal(value),
+            Self::Types(_) => None,
+        }
+    }
+
+    pub(crate) fn value(&self) -> &GoExpression {
+        match self {
+            Self::Value(value) => value,
+            Self::Types(_) => unreachable!("a value switch carries value labels"),
+        }
+    }
+}
+
+pub(crate) fn boolean_literal(expression: &GoExpression) -> Option<bool> {
+    match expression.node() {
+        GoExpressionNode::Literal(text) if text == "true" => Some(true),
+        GoExpressionNode::Literal(text) if text == "false" => Some(false),
+        _ => None,
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct SwitchBranch {
-    pub case_label: GoExpression,
+    pub label: SwitchLabel,
     pub decision: Decision,
 }
 
@@ -625,12 +656,12 @@ fn validate_switch_arms(
 }
 
 struct GroupedBranches {
-    branches: Vec<(GoExpression, Vec<ArmInfo>)>,
+    branches: Vec<(SwitchLabel, Vec<ArmInfo>)>,
     fallback: Vec<ArmInfo>,
 }
 
 fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches {
-    let mut branches: Vec<(GoExpression, Vec<ArmInfo>)> = Vec::new();
+    let mut branches: Vec<(SwitchLabel, Vec<ArmInfo>)> = Vec::new();
     let mut fallback = Vec::new();
 
     for arm in arms {
@@ -642,16 +673,16 @@ fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches
         let (case_label, inner_checks) = match kind {
             SwitchKind::EnumTag => {
                 let tag = arm.checks[0].as_enum_tag().unwrap();
-                (tag.clone(), arm.checks[1..].to_vec())
+                (SwitchLabel::Value(tag.clone()), arm.checks[1..].to_vec())
             }
             SwitchKind::Value => {
                 let lit = arm.checks[0].as_literal().unwrap();
-                (lit.clone(), arm.checks[1..].to_vec())
+                (SwitchLabel::Value(lit.clone()), arm.checks[1..].to_vec())
             }
             SwitchKind::TypeSwitch => {
                 let assertion = arm.root_assertion.as_ref().unwrap();
                 (
-                    GoExpression::type_name(assertion.go_types.join(", ")),
+                    SwitchLabel::Types(assertion.go_types.clone()),
                     arm.checks.clone(),
                 )
             }
@@ -677,7 +708,7 @@ fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches
 /// Splice the catchall into any fail-prone case body: Go `switch` cases do not
 /// fall through to `default`, so a failed inner check has nowhere else to go.
 fn build_switch_branches(
-    branches: Vec<(GoExpression, Vec<ArmInfo>)>,
+    branches: Vec<(SwitchLabel, Vec<ArmInfo>)>,
     fallback_arms: &[ArmInfo],
 ) -> Vec<SwitchBranch> {
     branches
@@ -693,10 +724,7 @@ fn build_switch_branches(
             } else {
                 build_tree(inner_arms)
             };
-            SwitchBranch {
-                case_label: label,
-                decision,
-            }
+            SwitchBranch { label, decision }
         })
         .collect()
 }
@@ -795,6 +823,7 @@ fn collect_checks_and_bindings(
                 lisette_name: identifier.to_string(),
                 go_name,
                 path: path.clone(),
+                ty: path_ty.cloned(),
             });
         }
 
@@ -826,14 +855,9 @@ fn collect_checks_and_bindings(
             collect_tuple_checks(planner, path, elements, path_ty, collector);
         }
 
-        Pattern::Slice {
-            prefix,
-            rest,
-            resolution,
-            ..
-        } => {
+        Pattern::Slice { .. } => {
             collector.requires_materialized_subject = true;
-            collect_slice_checks(planner, path, prefix, rest, resolution, collector);
+            collect_slice_checks(planner, path, pattern, path_ty, collector);
         }
 
         Pattern::Or { patterns, .. } => {
@@ -851,6 +875,7 @@ fn collect_checks_and_bindings(
                 lisette_name: name.to_string(),
                 go_name,
                 path: path.clone(),
+                ty: path_ty.cloned(),
             });
         }
     }
@@ -885,11 +910,19 @@ fn collect_tuple_checks(
 fn collect_slice_checks(
     planner: &Planner,
     path: &AccessPath,
-    prefix: &[Pattern],
-    rest: &RestPattern,
-    resolution: &SequencePatternResolution,
+    pattern: &Pattern,
+    path_ty: Option<&Type>,
     collector: &mut PatternCollector,
 ) {
+    let Pattern::Slice {
+        prefix,
+        rest,
+        resolution,
+        ..
+    } = pattern
+    else {
+        return;
+    };
     let array_info = match resolution {
         SequencePatternResolution::Array {
             length,
@@ -925,7 +958,7 @@ fn collect_slice_checks(
 
     if let RestPattern::Bind { name, .. } = rest {
         let go_name = planner.go_name_for_rest_binding(rest);
-        let segment = match &array_info {
+        let (segment, rest_ty) = match &array_info {
             Some((length, element_type)) => {
                 let sub_length = length.saturating_sub(prefix.len() as u64);
                 let sub_ty = Type::Array {
@@ -934,17 +967,21 @@ fn collect_slice_checks(
                 };
                 let go_type = planner.go_type(&sub_ty);
                 collector.packages.extend(go_type.requirements());
-                PathSegment::ArraySliceFrom {
-                    offset: prefix.len(),
-                    go_type: go_type.code,
-                }
+                (
+                    PathSegment::ArraySliceFrom {
+                        offset: prefix.len(),
+                        go_type: go_type.code,
+                    },
+                    Some(sub_ty),
+                )
             }
-            None => PathSegment::SliceFrom(prefix.len()),
+            None => (PathSegment::SliceFrom(prefix.len()), path_ty.cloned()),
         };
         collector.bindings.push(PatternBinding {
             lisette_name: name.to_string(),
             go_name,
             path: path.push(segment),
+            ty: rest_ty,
         });
     }
 }
@@ -1298,6 +1335,7 @@ fn collect_tagged_enum_checks(
                     lisette_name: identifier.to_string(),
                     go_name: None,
                     path: field_path,
+                    ty: None,
                 });
             }
         } else {

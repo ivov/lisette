@@ -5596,3 +5596,34 @@ fn first(r: Ref<string>) -> byte {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn compound_assignment_runs_an_effectful_index_once() {
+    let input = r#"
+fn main() {
+  let mut counter = 0
+  let next = || { counter += 1; counter - 1 }
+  let mut values = [0, 0, 0]
+  values[next()] += next() * 10
+  let _ = values
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_field_write_through_an_effectful_index_pins_the_address() {
+    let input = r#"
+struct Buffer { data: Array<int, 4> }
+
+fn main() {
+  let mut counter = 0
+  let next = || { counter += 1; counter - 1 }
+  let mut buffer = Buffer { data: Array.new<int, 4>() }
+  buffer.data[next()] = 7
+  buffer.data[next()] += 1
+  let _ = buffer
+}
+"#;
+    assert_emit_snapshot!(input);
+}

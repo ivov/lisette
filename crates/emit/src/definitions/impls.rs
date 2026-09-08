@@ -1,6 +1,5 @@
 use crate::Planner;
 use crate::expressions::top_items::emit_doc;
-use crate::names::go_name;
 use syntax::EcoString;
 use syntax::ast::{Expression, FunctionDefinitionView, Generic, Pattern, Visibility};
 use syntax::types::{Type, build_substitution_map, substitute, type_args_match_params};
@@ -64,12 +63,9 @@ impl Planner<'_> {
         let is_free_function = !has_self || is_ufcs;
 
         let code = if is_free_function {
-            let method_name = if should_export {
-                go_name::snake_to_camel(function.name)
-            } else {
-                go_name::snake_to_lower_camel(function.name)
-            };
-            let free_name = format!("{}_{}", ctx.receiver_name, method_name).into();
+            let free_name = self
+                .free_method_base_name(ctx.receiver_name, function.name, is_public)
+                .into();
             let mut combined_generics = ctx.generics.to_vec();
             combined_generics.extend(function.generics.iter().cloned());
             let generic_bounds = self.free_function_generic_bounds(ctx, function.generics);

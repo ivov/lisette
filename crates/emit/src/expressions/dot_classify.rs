@@ -169,11 +169,7 @@ impl Planner<'_> {
         is_pointer_receiver: bool,
     ) -> Option<GoExpression> {
         if let Expression::Identifier { value, .. } = expression {
-            let go_method = if is_exported {
-                go_name::snake_to_camel(member)
-            } else {
-                go_name::unexported_method_go_name(member)
-            };
+            let go_method = self.method_go_name(member, is_exported);
             let type_name = self
                 .resolve_alias_type_name(value)
                 .unwrap_or_else(|| value.to_string());
@@ -208,11 +204,7 @@ impl Planner<'_> {
         };
         let package_name = package_name.as_str();
 
-        let go_method = if is_exported {
-            go_name::snake_to_camel(member)
-        } else {
-            go_name::unexported_method_go_name(member)
-        };
+        let go_method = self.method_go_name(member, is_exported);
 
         let package = self.package_use_for_package(package_name);
         let go_type_name = go_name::snake_to_camel(type_name);
