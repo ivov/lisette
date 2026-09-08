@@ -106,7 +106,7 @@ impl Planner<'_> {
             unreachable!("plan_loop_as_operand_temp called on non-Loop expression");
         };
         let (result_var, declaration) = self.operand_temp_declaration(ty);
-        let plan = self.with_loop(result_var.clone(), |this| {
+        let plan = self.with_loop(GoExpression::name(result_var.clone()), |this| {
             this.lower_loop_with_header(LoopHeader::Infinite, body)
         });
         ValuePlan::captured(vec![declaration, LoweredStatement::Loop(plan)], result_var)
@@ -226,7 +226,7 @@ impl Planner<'_> {
                 value: Some(value), ..
             } => {
                 let plan = self.build_break_value_plan(value);
-                self.directed_at(expression, LoweredStatement::BreakValue(plan))
+                self.directed_at(expression, LoweredStatement::Body(plan))
             }
             Expression::Const {
                 identifier,
@@ -244,7 +244,7 @@ impl Planner<'_> {
                 expression: value, ..
             } => {
                 let plan = self.build_return_plan(value);
-                self.directed_at(expression, LoweredStatement::Return(plan))
+                self.directed_at(expression, LoweredStatement::Body(plan))
             }
             Expression::Let {
                 binding,
@@ -252,14 +252,8 @@ impl Planner<'_> {
                 mode,
                 ..
             } => {
-                let plan = self.build_let_plan(
-                    binding,
-                    value,
-                    mode.else_block(),
-                    binding.is_mutable(),
-                    mode.is_assert(),
-                );
-                self.directed_at(expression, LoweredStatement::Let(plan))
+                let plan = self.build_let_plan(binding, value, mode);
+                self.directed_at(expression, LoweredStatement::Body(plan))
             }
             Expression::Assignment {
                 target,
@@ -596,8 +590,8 @@ impl Planner<'_> {
         let expression_ty = expression.get_type();
         let go_type = self.use_go_type(&expression_ty);
         let inlines = plan.setup.is_empty()
-            && match plan.evaluation.form {
-                OperandForm::Name => names_inline,
+            && match plan.expression.syntax_form() {
+                OperandForm::Name => names_inline && plan.expression.as_identifier().is_some(),
                 OperandForm::Call => false,
                 _ => {
                     let constant = plan.expression.constant_kind();
@@ -698,12 +692,14 @@ impl Planner<'_> {
             unreachable!("lower_while_let_statement requires a WhileLet expression");
         };
         let directive = self.maybe_line_directive(&expression.get_span());
-        let body = self.with_loop("_", |this| this.lower_while_let(pattern, scrutinee, body));
+        let body = self.with_loop(GoExpression::name("_".to_string()), |this| {
+            this.lower_while_let(pattern, scrutinee, body)
+        });
         directed(directive, LoweredStatement::WhileLet(body))
     }
 
     fn lower_infinite_loop(&mut self, body: &Expression) -> LoopPlan {
-        self.with_loop("_", |this| {
+        self.with_loop(GoExpression::name("_".to_string()), |this| {
             this.lower_loop_with_header(LoopHeader::Infinite, body)
         })
     }
@@ -731,7 +727,7 @@ impl Planner<'_> {
     }
 
     fn lower_while(&mut self, condition: &Expression, body: &Expression) -> LoopPlan {
-        self.with_loop("_", |this| {
+        self.with_loop(GoExpression::name("_".to_string()), |this| {
             let (target, negated) = strip_negations(condition);
             if let Some(exit) = this.lower_fused_predicate_value(target, !negated) {
                 let (setup, failure) = exit.into_parts();

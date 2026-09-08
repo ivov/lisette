@@ -8,8 +8,8 @@ use crate::expressions::staging::SpreadSequenceOptions;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::plan::bodies::{
-    AssignForm, BreakValueAction, BreakValuePlan, ElseArm, LoopHeader, LoopTransfer, LoweredBlock,
-    LoweredStatement, PlacePlan, define, discard, expression_statement,
+    AssignForm, ElseArm, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
+    assign, define, discard, expression_statement,
 };
 use crate::plan::calls::plan_variadic_spread;
 use crate::plan::go_expression::GoExpressionNode;
@@ -103,7 +103,7 @@ pub(crate) fn collapse_declared_temp(
             value,
         }) => {
             if !infers_declared_type(go_type, &value.expression, value_has_declared_type)
-                || target.as_str() != name
+                || target.as_identifier() != Some(name)
                 || !target_capture.is_empty()
                 || !value.setup.is_empty()
                 || value.expression.does_work()
@@ -189,7 +189,7 @@ fn single_simple_assign_value(body: &LoweredBlock, name: &str) -> Option<GoExpre
     else {
         return None;
     };
-    (target.as_str() == name
+    (target.as_identifier() == Some(name)
         && target_capture.is_empty()
         && value.setup.is_empty()
         && !value.expression.does_work())
@@ -204,15 +204,15 @@ fn join_boolean_branches(
     let and = |left: GoExpression, right: GoExpression| GoExpression::binary(left, "&&", right);
     let or = |left: GoExpression, right: GoExpression| GoExpression::binary(left, "||", right);
     let not = |operand: &GoExpression| GoExpression::unary("!", operand.clone());
-    Some(match (then_value.as_str(), else_value.as_str()) {
-        ("true", "false") => condition.clone(),
-        ("false", "true") => not(condition),
+    Some(match (then_value.as_literal(), else_value.as_literal()) {
+        (Some("true"), Some("false")) => condition.clone(),
+        (Some("false"), Some("true")) => not(condition),
         // Both-literal same-value arms would drop the condition's evaluation.
-        ("true", "true") | ("false", "false") => return None,
-        (_, "false") => and(condition.clone(), then_value.clone()),
-        ("true", _) => or(condition.clone(), else_value.clone()),
-        ("false", _) => and(not(condition), else_value.clone()),
-        (_, "true") => or(not(condition), then_value.clone()),
+        (Some("true"), Some("true")) | (Some("false"), Some("false")) => return None,
+        (_, Some("false")) => and(condition.clone(), then_value.clone()),
+        (Some("true"), _) => or(condition.clone(), else_value.clone()),
+        (Some("false"), _) => and(not(condition), else_value.clone()),
+        (_, Some("true")) => or(not(condition), then_value.clone()),
         _ => return None,
     })
 }
@@ -417,7 +417,7 @@ impl Planner<'_> {
         }
 
         if let Expression::Loop { body, .. } = expression {
-            let plan = self.with_loop(target.as_str(), |this| {
+            let plan = self.with_loop(target.clone(), |this| {
                 this.lower_loop_with_header(LoopHeader::Infinite, body)
             });
             return vec![LoweredStatement::Loop(plan)];
@@ -636,7 +636,7 @@ impl Planner<'_> {
             return self.lower_branching_to_block(last, &place).statements;
         }
         let value = self.lower_value(last, ExpressionContext::value());
-        let value = value.map_expression_as_computed(|setup, expression| {
+        let value = value.map_expression(|setup, expression| {
             self.apply_type_coercion(setup, target_ty, last, expression)
         });
         vec![simple_assign(target, value)]
@@ -669,17 +669,16 @@ impl Planner<'_> {
             let receiver_lv =
                 self.lower_place(&mut capture, unwrapped, PlaceOrdering::before(&ordering));
             let grows = !arguments.is_empty();
-            let receiver = if grows && receiver_lv.as_str() != target.as_str() {
-                let clippable =
-                    if is_clip_safe_path(receiver_lv.as_str()) && ordering.setup.is_empty() {
-                        receiver_lv
-                    } else {
-                        GoExpression::name(self.hoist_tmp_value_statement(
-                            &mut capture,
-                            "recv",
-                            receiver_lv,
-                        ))
-                    };
+            let receiver = if grows && receiver_lv.node() != target.node() {
+                let clippable = if is_clip_safe_path(&receiver_lv) && ordering.setup.is_empty() {
+                    receiver_lv
+                } else {
+                    GoExpression::name(self.hoist_tmp_value_statement(
+                        &mut capture,
+                        "recv",
+                        receiver_lv,
+                    ))
+                };
                 clip_shared_capacity(clippable)
             } else {
                 receiver_lv
@@ -805,31 +804,33 @@ impl Planner<'_> {
         ValuePlan::captured(statements, result_var)
     }
 
-    /// Build a `BreakValuePlan` for a `break value` statement.
-    pub(crate) fn build_break_value_plan(&mut self, val: &Expression) -> BreakValuePlan {
-        let value = self.lower_value(val, ExpressionContext::value());
-        let value_is_empty = value.is_empty();
-        let is_propagate_diverged = value_is_empty && matches!(val, Expression::Propagate { .. });
-        if is_propagate_diverged {
-            return BreakValuePlan::Diverged { value };
+    pub(crate) fn build_break_value_plan(&mut self, val: &Expression) -> LoweredBlock {
+        let (mut statements, value) = self
+            .lower_value(val, ExpressionContext::value())
+            .into_parts();
+        if value.is_empty() && matches!(val, Expression::Propagate { .. }) {
+            return LoweredBlock { statements };
         }
 
-        let action = if let Some(result_var) = self.current_loop_result_var().map(str::to_string) {
+        if let Some(target) = self.current_loop_result().cloned() {
             if is_unit_call(val) {
-                BreakValueAction::UnitCallIntoResult { result_var }
-            } else {
-                BreakValueAction::AssignToResult { result_var }
+                if !value.is_empty() {
+                    statements.push(expression_statement(value));
+                }
+                statements.push(assign(
+                    target,
+                    GoExpression::empty_composite("struct{}".to_string()),
+                ));
+            } else if !value.is_empty() {
+                statements.push(assign(target, value));
             }
-        } else {
-            BreakValueAction::Discard
-        };
+        } else if !value.is_empty() {
+            statements.push(discard(value));
+        }
         let target = self
             .current_loop_id()
             .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source);
-        BreakValuePlan::Transfer {
-            value,
-            action,
-            target,
-        }
+        statements.push(LoweredStatement::Break(target));
+        LoweredBlock { statements }
     }
 }

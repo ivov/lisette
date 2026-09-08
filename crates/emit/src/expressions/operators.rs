@@ -68,7 +68,7 @@ impl Planner<'_> {
                 && !left_ty.is_complex()
             {
                 let staged = self.plan_operand(left_expression, ctx);
-                return staged.map_expression_as_computed(|_, value| {
+                return staged.map_expression(|_, value| {
                     GoExpression::call(
                         GoExpression::name("complex".to_string()),
                         vec![
@@ -90,7 +90,7 @@ impl Planner<'_> {
                 && !right_ty.is_complex()
             {
                 let staged = self.plan_operand(right_expression, ctx);
-                return staged.map_expression_as_computed(|_, value| {
+                return staged.map_expression(|_, value| {
                     GoExpression::call(
                         GoExpression::name("complex".to_string()),
                         vec![

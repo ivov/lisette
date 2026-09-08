@@ -3,7 +3,7 @@ use crate::abi::is_tagged_shape_fn_value;
 use crate::abi::transition::lower_arg_to_tagged;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{LoweredStatement, define};
+use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::CallableOrigin;
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::values::{
@@ -250,7 +250,7 @@ impl Planner<'_> {
                 .detect_lower_arg_to_tagged(expression, param_ty)
                 .is_some()
         {
-            return staged.map_expression_as_computed(|setup, value| {
+            return staged.map_expression(|setup, value| {
                 self.emit_lower_arg_to_tagged(
                     setup,
                     value,
@@ -326,41 +326,34 @@ impl Planner<'_> {
     pub(crate) fn finalize_spread_stage(
         &mut self,
         values: &mut Vec<GoExpression>,
-        spread_index: usize,
         wrap_to_any: bool,
         combine: Option<VariadicCombine>,
     ) {
+        let mut spread = values.pop().expect("a spread argument is always last");
         if wrap_to_any {
-            let spread_value = mem::replace(&mut values[spread_index], GoExpression::empty());
-            values[spread_index] = GoExpression::call(
+            spread = GoExpression::call(
                 GoExpression::generated(GeneratedPackage::Prelude, "SliceToAny"),
-                vec![spread_value],
+                vec![spread],
             );
         }
-        match combine {
-            Some(c) if spread_index > c.fixed_count => {
-                let element_go = self.use_go_type(&c.element_ty);
-                let mut combined: Vec<GoExpression> =
-                    values.drain(c.fixed_count..=spread_index).collect();
-                let spread_value = combined
-                    .pop()
-                    .expect("the spread value follows the leading arguments");
-                let leading = GoExpression::composite(
-                    Some(format!("[]{element_go}")),
-                    combined.into_iter().map(|value| (None, value)).collect(),
-                    CompositeLayout::Inline { padded: false },
-                );
-                let appended = GoExpression::call(
-                    GoExpression::name("append".to_string()),
-                    vec![leading, GoExpression::spread(spread_value)],
-                );
-                values.insert(c.fixed_count, GoExpression::spread(appended));
-            }
-            _ => {
-                let spread_value = mem::replace(&mut values[spread_index], GoExpression::empty());
-                values[spread_index] = GoExpression::spread(spread_value);
-            }
+        if let Some(combine) = combine
+            && values.len() > combine.fixed_count
+        {
+            let element_go = self.use_go_type(&combine.element_ty);
+            let leading = GoExpression::composite(
+                Some(format!("[]{element_go}")),
+                values
+                    .drain(combine.fixed_count..)
+                    .map(|value| (None, value))
+                    .collect(),
+                CompositeLayout::Inline { padded: false },
+            );
+            spread = GoExpression::call(
+                GoExpression::name("append".to_string()),
+                vec![leading, GoExpression::spread(spread)],
+            );
         }
+        values.push(GoExpression::spread(spread));
     }
 
     /// Sequence value plans while preserving left-to-right evaluation order.
@@ -368,7 +361,7 @@ impl Planner<'_> {
     /// observable value into a temporary.
     pub(crate) fn sequence_values(
         &mut self,
-        mut stages: Vec<ValuePlan>,
+        stages: Vec<ValuePlan>,
         boundary: CaptureBoundary,
         prefix: &str,
     ) -> SequencedValues {
@@ -392,28 +385,30 @@ impl Planner<'_> {
         // also pin when a later sibling pins or carries setup. A value
         // already reduced to a temp by its own setup evaluates nothing
         // inline and needs no ordering pin.
-        let mut pins = vec![false; stages.len()];
         let mut later = LaterStages::default();
-        for i in (0..stages.len()).rev() {
-            pins[i] = later.prepend(&stages[i]);
-        }
+        let stages: Vec<_> = stages
+            .into_iter()
+            .rev()
+            .map(|stage| {
+                let pin = later.prepend(&stage);
+                (stage, pin)
+            })
+            .collect();
 
-        let mut setup: Vec<LoweredStatement> = Vec::new();
+        let mut setup = Vec::new();
         let mut results = Vec::with_capacity(stages.len());
-        for i in 0..stages.len() {
-            let s_non_literal = !stages[i].evaluation.stability.is_fixed();
-            let s_expression = mem::replace(&mut stages[i].expression, GoExpression::empty());
-            let s_setup = mem::take(&mut stages[i].setup);
-
-            setup.extend(s_setup);
-
-            if pins[i] || (eager && s_non_literal) {
-                let tmp = self.fresh_var(Some(prefix));
-                self.declare(&tmp);
-                setup.push(define(tmp.clone(), s_expression));
+        for (stage, pin) in stages.into_iter().rev() {
+            let ValuePlan {
+                setup: stage_setup,
+                expression,
+                evaluation,
+            } = stage;
+            setup.extend(stage_setup);
+            if pin || (eager && !evaluation.stability.is_fixed()) {
+                let tmp = self.hoist_tmp_value_statement(&mut setup, prefix, expression);
                 results.push(GoExpression::name(tmp));
             } else {
-                results.push(s_expression);
+                results.push(expression);
             }
         }
         SequencedValues {
@@ -430,21 +425,15 @@ impl Planner<'_> {
         adapter_params: Option<&[FunctionParameter]>,
         options: SpreadSequenceOptions,
     ) -> SequencedValues {
-        let spread_index = spread.map(|spread| {
+        if let Some(spread) = spread {
             let stage = self
                 .try_emit_variadic_spread_adapter(spread, adapter_params)
                 .unwrap_or_else(|| self.plan_operand(spread, ExpressionContext::value()));
             stages.push(stage);
-            stages.len() - 1
-        });
+        }
         let mut sequenced = self.sequence_values(stages, options.boundary, "arg");
-        if let Some(i) = spread_index {
-            self.finalize_spread_stage(
-                &mut sequenced.values,
-                i,
-                options.wrap_to_any,
-                options.combine,
-            );
+        if spread.is_some() {
+            self.finalize_spread_stage(&mut sequenced.values, options.wrap_to_any, options.combine);
         }
         sequenced
     }

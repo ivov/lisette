@@ -323,7 +323,7 @@ impl Planner<'_> {
             stage.into_addressed_location()
         } else if stage.setup.is_empty() {
             stage.expression = addressed;
-            stage.make_observable_computed();
+            stage.make_observable();
             stage
         } else {
             let tmp = self.hoist_tmp_value_statement(&mut stage.setup, "ref", addressed);

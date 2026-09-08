@@ -7,7 +7,7 @@ use crate::control_flow::fallible::Fallible;
 use crate::escape_reserved;
 use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
 use crate::plan::bodies::{
-    LetPlan, LoweredBlock, LoweredStatement, define, define_many, expression_statement,
+    LoweredBlock, LoweredStatement, define, define_many, expression_statement,
 };
 use crate::plan::calls::CallableOrigin;
 use crate::plan::placement::{
@@ -15,7 +15,7 @@ use crate::plan::placement::{
     requires_temp_var,
 };
 use crate::plan::values::GoExpression;
-use syntax::ast::{Binding, Expression, Pattern};
+use syntax::ast::{Binding, Expression, LetMode, Pattern};
 use syntax::types::Type;
 
 #[derive(Clone, Copy)]
@@ -260,10 +260,9 @@ impl Planner<'_> {
             return statements;
         }
         // A temp no source binding answers to has no other reader to break.
-        if !self
-            .scope
-            .has_binding_for_go_name(value_expression.as_str())
-            && rebind_trailing_temp(&mut statements, &go_identifier, value_expression.as_str())
+        if let Some(name) = value_expression.as_identifier()
+            && !self.scope.has_binding_for_go_name(name)
+            && rebind_trailing_temp(&mut statements, &go_identifier, name)
         {
             return statements;
         }
@@ -378,157 +377,106 @@ impl Planner<'_> {
     }
 }
 
-enum LetKind {
-    SimpleIdentifier,
-    Discard,
-    ComplexPattern,
-    MultiValueCall,
-    Refutable,
-}
-
 struct LetPlanner<'a, 'e> {
     planner: &'a mut Planner<'e>,
     binding: &'a Binding,
     value: &'a Expression,
-    else_block: Option<&'a Expression>,
-    mutable: bool,
-    assert: bool,
+    mode: &'a LetMode,
 }
 
 impl<'a, 'e> LetPlanner<'a, 'e> {
-    fn new(
-        planner: &'a mut Planner<'e>,
-        binding: &'a Binding,
-        value: &'a Expression,
-        else_block: Option<&'a Expression>,
-        mutable: bool,
-        assert: bool,
-    ) -> Self {
-        Self {
-            planner,
-            binding,
-            value,
-            else_block,
-            mutable,
-            assert,
-        }
-    }
-
-    fn build(mut self) -> LetPlan {
-        // Never-typed values diverge (break/continue/return). Declare the
-        // binding so dead code can reference it, then emit the value as a
-        // statement.
+    fn build(mut self) -> LoweredBlock {
+        // Declare the binding so unreachable code still typechecks.
         if self.value.get_type().is_never() {
-            let declaration = if let Pattern::Identifier { identifier, .. } = &self.binding.pattern
+            let mut statements = Vec::new();
+            if let Pattern::Identifier { identifier, .. } = &self.binding.pattern
                 && let Some(raw_go_name) = self.planner.go_name_for_binding(&self.binding.pattern)
             {
                 let go_identifier = self.planner.scope.bind(identifier, &raw_go_name);
                 self.planner.try_declare(&go_identifier);
                 let var_ty = self.planner.use_go_type(&self.binding.ty);
-                Some(Box::new(LoweredStatement::VarDecl {
+                statements.push(LoweredStatement::VarDecl {
                     name: go_identifier,
                     go_type: var_ty,
                     value: None,
-                }))
-            } else {
-                None
-            };
-            return LetPlan {
-                declaration,
-                body: LoweredBlock {
-                    statements: vec![self.planner.lower_statement(self.value)],
-                },
-            };
+                });
+            }
+            statements.push(self.planner.lower_statement(self.value));
+            return LoweredBlock { statements };
         }
 
-        let body = match self.classify() {
-            LetKind::Refutable => {
-                let ap = AnnotatedPattern {
-                    pattern: &self.binding.pattern,
-                };
-                let statements = if self.assert {
-                    let span = self.binding.pattern.get_span();
-                    self.planner
-                        .lower_let_assert_pattern_site(ap, self.value, span)
-                } else {
-                    let else_block = self
-                        .else_block
-                        .expect("LetKind::Refutable without else block must be `let assert`");
-                    self.planner
-                        .lower_let_else_pattern_site(ap, self.value, else_block)
-                };
-                LoweredBlock { statements }
-            }
-            LetKind::SimpleIdentifier => self.lower_simple_identifier(),
-            LetKind::Discard => self.lower_discard(),
-            LetKind::MultiValueCall => self.lower_multi_value_call(),
-            LetKind::ComplexPattern => {
-                let value_ty = self.value.get_type();
-                let statements = self.planner.lower_irrefutable_pattern_site(
-                    PatternSubject::expression(self.value, &self.binding.pattern, None),
-                    &self.binding.pattern,
-                    &value_ty,
-                );
-                LoweredBlock { statements }
-            }
+        let pattern = AnnotatedPattern {
+            pattern: &self.binding.pattern,
         };
-        LetPlan {
-            declaration: None,
-            body,
-        }
-    }
-
-    fn classify(&self) -> LetKind {
-        if self.else_block.is_some() || self.assert {
-            return LetKind::Refutable;
+        match self.mode {
+            LetMode::Plain => {}
+            LetMode::Assert | LetMode::InvalidAssertElse { .. } => {
+                return LoweredBlock {
+                    statements: self.planner.lower_let_assert_pattern_site(
+                        pattern,
+                        self.value,
+                        self.binding.pattern.get_span(),
+                    ),
+                };
+            }
+            LetMode::Else { block, .. } => {
+                return LoweredBlock {
+                    statements: self
+                        .planner
+                        .lower_let_else_pattern_site(pattern, self.value, block),
+                };
+            }
         }
 
         match &self.binding.pattern {
-            Pattern::Identifier { .. } => LetKind::SimpleIdentifier,
-            Pattern::WildCard { .. } => LetKind::Discard,
+            Pattern::Identifier { identifier, .. } => {
+                return self.lower_simple_identifier(identifier);
+            }
+            Pattern::WildCard { .. } => return self.lower_discard(),
             Pattern::Tuple { elements, .. } => {
-                let all_unused = elements.iter().all(|el| match el {
+                let all_unused = elements.iter().all(|element| match element {
                     Pattern::WildCard { .. } => true,
-                    Pattern::Identifier { .. } => self.planner.facts.is_unused_binding(el),
+                    Pattern::Identifier { .. } => self.planner.facts.is_unused_binding(element),
                     _ => false,
                 });
                 if all_unused {
-                    LetKind::Discard
-                } else if self.can_use_multi_value_optimization() {
-                    LetKind::MultiValueCall
-                } else {
-                    LetKind::ComplexPattern
+                    return self.lower_discard();
+                }
+                if elements.iter().all(|element| {
+                    matches!(
+                        element,
+                        Pattern::Identifier { .. } | Pattern::WildCard { .. }
+                    )
+                }) && self.can_use_multi_value_optimization()
+                {
+                    return self.lower_multi_value_call(elements);
                 }
             }
-            _ => LetKind::ComplexPattern,
+            _ => {}
+        }
+        let value_ty = self.value.get_type();
+        LoweredBlock {
+            statements: self.planner.lower_irrefutable_pattern_site(
+                PatternSubject::expression(self.value, &self.binding.pattern, None),
+                &self.binding.pattern,
+                &value_ty,
+            ),
         }
     }
 
-    /// `let (a, b) = go_func()` is a direct Go destructure when the pattern
-    /// is simple, the call returns multiple values, and the result is not
-    /// `Result` (which would need wrapping).
     fn can_use_multi_value_optimization(&self) -> bool {
-        let Pattern::Tuple { .. } = &self.binding.pattern else {
-            return false;
-        };
-
-        let has_multi_return_go_strategy = self.planner.plan_call(self.value).is_some_and(|plan| {
-            matches!(plan.resolved.origin, CallableOrigin::GoInterop)
-                && plan.resolved.abi.result.is_multi_return()
-                && self
-                    .planner
-                    .go_tuple_result_bridges(&plan.resolved.abi, &self.value.get_type())
-                    .is_none()
-        });
-        has_multi_return_go_strategy
-            && !self.value.get_type().is_result()
-            && extract_simple_tuple_vars(&self.binding.pattern).is_some()
+        !self.value.get_type().is_result()
+            && self.planner.plan_call(self.value).is_some_and(|plan| {
+                matches!(plan.resolved.origin, CallableOrigin::GoInterop)
+                    && plan.resolved.abi.result.is_multi_return()
+                    && self
+                        .planner
+                        .go_tuple_result_bridges(&plan.resolved.abi, &self.value.get_type())
+                        .is_none()
+            })
     }
 
-    fn lower_simple_identifier(&mut self) -> LoweredBlock {
-        let Pattern::Identifier { identifier, .. } = &self.binding.pattern else {
-            unreachable!("lower_simple_identifier called with non-identifier pattern");
-        };
+    fn lower_simple_identifier(&mut self, identifier: &str) -> LoweredBlock {
         let raw_go_name = self.planner.go_name_for_binding(&self.binding.pattern);
         if matches!(self.value, Expression::Propagate { .. }) {
             let statements = self.planner.lower_let_propagate(
@@ -544,7 +492,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 identifier,
                 value: self.value,
                 binding_ty: &self.binding.ty,
-                mutable: self.mutable,
+                mutable: self.binding.is_mutable(),
             },
             raw_go_name.as_deref(),
         );
@@ -557,41 +505,25 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         }
     }
 
-    fn lower_multi_value_call(&mut self) -> LoweredBlock {
-        let Pattern::Tuple { elements, .. } = &self.binding.pattern else {
-            unreachable!("lower_multi_value_call called with non-tuple pattern");
-        };
-
-        let vars = extract_simple_tuple_vars(&self.binding.pattern)
-            .expect("multi-value optimization requires simple tuple vars");
-
-        let mut any_new = false;
-        let mut planned: Vec<Option<(&str, String)>> = Vec::new();
-        let go_vars: Vec<String> = vars
+    fn lower_multi_value_call(&mut self, elements: &[Pattern]) -> LoweredBlock {
+        // Bind after lowering the initializer so it sees the previous bindings.
+        let planned: Vec<Option<(&str, String)>> = elements
             .iter()
-            .zip(elements.iter())
-            .map(|(var, pattern)| {
-                if var == "_" {
-                    planned.push(None);
-                    "_".to_string()
-                } else if let Pattern::Identifier { identifier, .. } = pattern
-                    && let Some(go_name) = self.planner.go_name_for_binding(pattern)
-                {
-                    let escaped = escape_reserved(&go_name).into_owned();
-                    let name = if self.planner.shadows_declaration(&escaped) {
-                        let fresh = self.planner.fresh_var(Some(identifier));
-                        any_new = true;
-                        fresh
-                    } else {
-                        any_new = true;
-                        escaped
-                    };
-                    planned.push(Some((identifier, name.clone())));
-                    name
-                } else {
-                    planned.push(None);
-                    "_".to_string()
+            .map(|pattern| {
+                let Pattern::Identifier { identifier, .. } = pattern else {
+                    return None;
+                };
+                if identifier == "_" {
+                    return None;
                 }
+                let go_name = self.planner.go_name_for_binding(pattern)?;
+                let escaped = escape_reserved(&go_name).into_owned();
+                let name = if self.planner.shadows_declaration(&escaped) {
+                    self.planner.fresh_var(Some(identifier))
+                } else {
+                    escaped
+                };
+                Some((identifier.as_str(), name))
             })
             .collect();
 
@@ -605,7 +537,12 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             self.planner.try_declare(go_name);
         }
 
-        statements.push(if any_new {
+        let go_vars = planned
+            .iter()
+            .map(|binding| binding.as_ref().map_or("_", |(_, name)| name))
+            .map(str::to_string)
+            .collect();
+        statements.push(if planned.iter().any(Option::is_some) {
             define_many(go_vars, call)
         } else {
             LoweredStatement::AssignMany {
@@ -617,39 +554,19 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
     }
 }
 
-/// Variable names from a simple tuple pattern (identifiers or wildcards);
-/// `None` when any element is composite.
-fn extract_simple_tuple_vars(pattern: &Pattern) -> Option<Vec<String>> {
-    let Pattern::Tuple { elements, .. } = pattern else {
-        return None;
-    };
-
-    let mut vars = Vec::with_capacity(elements.len());
-
-    for element in elements {
-        match element {
-            Pattern::Identifier { identifier, .. } => {
-                vars.push(identifier.to_string());
-            }
-            Pattern::WildCard { .. } => {
-                vars.push("_".to_string());
-            }
-            _ => return None,
-        }
-    }
-
-    Some(vars)
-}
-
 impl Planner<'_> {
     pub(crate) fn build_let_plan(
         &mut self,
         binding: &Binding,
         value: &Expression,
-        else_block: Option<&Expression>,
-        mutable: bool,
-        assert: bool,
-    ) -> LetPlan {
-        LetPlanner::new(self, binding, value, else_block, mutable, assert).build()
+        mode: &LetMode,
+    ) -> LoweredBlock {
+        LetPlanner {
+            planner: self,
+            binding,
+            value,
+            mode,
+        }
+        .build()
     }
 }

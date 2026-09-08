@@ -1,7 +1,7 @@
 use crate::plan::bodies::{
-    AssignForm, BreakValueAction, BreakValuePlan, CompoundKind, ConstPlan, Definition, ElseArm,
-    IfPlan, LetPlan, LoopHeader, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
-    ReturnForm, SelectArmPlan, SelectStatementPlan, SwitchKind, SwitchStatementPlan,
+    AssignForm, CompoundKind, ConstPlan, Definition, ElseArm, IfPlan, LoopHeader, LoopPlan,
+    LoopTransfer, LoweredBlock, LoweredStatement, SelectArmPlan, SelectStatementPlan, SwitchKind,
+    SwitchStatementPlan,
 };
 use crate::plan::values::{GoExpression, ValuePlan};
 use crate::render::Renderer;
@@ -10,7 +10,7 @@ use crate::write_line;
 fn join_expressions(values: &[GoExpression]) -> String {
     values
         .iter()
-        .map(GoExpression::as_str)
+        .map(GoExpression::rendered)
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -125,7 +125,7 @@ impl Renderer {
     fn render_definition(&self, output: &mut String, definition: &Definition) {
         output.push_str(&definition.names.join(", "));
         output.push_str(" := ");
-        output.push_str(definition.value.as_str());
+        output.push_str(&definition.value.rendered());
     }
 
     fn render_statement(&self, output: &mut String, statement: &LoweredStatement) {
@@ -143,14 +143,13 @@ impl Renderer {
             LoweredStatement::Const(plan) => {
                 self.render_const_declaration(output, plan);
             }
-            LoweredStatement::Return(plan) => {
-                self.render_return_statement(output, plan);
-            }
-            LoweredStatement::BreakValue(plan) => {
-                self.render_break_value(output, plan);
-            }
-            LoweredStatement::Let(plan) => {
-                self.render_let_statement(output, plan);
+            LoweredStatement::Return(values) => {
+                output.push_str("return");
+                if !values.is_empty() {
+                    output.push(' ');
+                    output.push_str(&join_expressions(values));
+                }
+                output.push('\n');
             }
             LoweredStatement::Assign(plan) => {
                 self.render_assign_statement(output, plan);
@@ -190,13 +189,6 @@ impl Renderer {
             }
             LoweredStatement::UnreachablePanic => output.push_str("panic(\"unreachable\")\n"),
         }
-    }
-
-    fn render_let_statement(&self, output: &mut String, plan: &LetPlan) {
-        if let Some(declaration) = &plan.declaration {
-            self.render_statement(output, declaration);
-        }
-        self.render_lowered_block(output, &plan.body);
     }
 
     fn render_assign_statement(&self, output: &mut String, plan: &AssignForm) {
@@ -253,27 +245,6 @@ impl Renderer {
         }
     }
 
-    fn render_return_statement(&self, output: &mut String, plan: &ReturnForm) {
-        match plan {
-            ReturnForm::Plain { value } => {
-                let value_text = self.render_value(output, value);
-                write_line!(output, "return {}", value_text);
-            }
-            ReturnForm::Unit { side_effect } => {
-                if let Some(body) = side_effect {
-                    self.render_lowered_block(output, body);
-                }
-                output.push_str("return\n");
-            }
-            ReturnForm::Multi { values } => {
-                write_line!(output, "return {}", join_expressions(values));
-            }
-            ReturnForm::Body { body } => {
-                self.render_lowered_block(output, body);
-            }
-        }
-    }
-
     fn render_transfer(&self, output: &mut String, keyword: &str, target: &LoopTransfer) {
         match target {
             LoopTransfer::Unlabeled => write_line!(output, "{}", keyword),
@@ -286,46 +257,8 @@ impl Renderer {
         }
     }
 
-    fn render_break_value(&self, output: &mut String, plan: &BreakValuePlan) {
-        match plan {
-            BreakValuePlan::Diverged { value } => {
-                self.render_value(output, value);
-            }
-            BreakValuePlan::Transfer {
-                value,
-                action,
-                target,
-            } => {
-                let value_text = self.render_value(output, value);
-                match action {
-                    BreakValueAction::UnitCallIntoResult { result_var } => {
-                        if !value_text.is_empty() {
-                            write_line!(output, "{}", value_text);
-                        }
-                        write_line!(output, "{} = struct{{}}{{}}", result_var);
-                    }
-                    BreakValueAction::AssignToResult { result_var } => {
-                        if !value_text.is_empty() {
-                            write_line!(output, "{} = {}", result_var, value_text);
-                        }
-                    }
-                    BreakValueAction::Discard => {
-                        if !value_text.is_empty() {
-                            write_line!(output, "_ = {}", value_text);
-                        }
-                    }
-                }
-                self.render_transfer(output, "break", target);
-            }
-        }
-    }
-
-    /// Render a `ConstPlan` as `const|var name ty = value` plus a trailing
-    /// newline. The directive (if any) is emitted by the caller before this
-    /// call. Setup statements that the value plan carries are flushed before
-    /// the declaration line.
-    pub(crate) fn render_const_declaration(&self, output: &mut String, plan: &ConstPlan) {
-        let value_text = self.render_value(output, &plan.value);
+    fn render_const_declaration(&self, output: &mut String, plan: &ConstPlan) {
+        let value_text = &plan.value;
         let keyword = if plan.is_const { "const" } else { "var" };
         if plan.ty_str.is_empty() {
             write_line!(output, "{} {} = {}", keyword, plan.name, value_text);

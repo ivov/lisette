@@ -25,7 +25,7 @@ impl Planner<'_> {
     ) -> ValuePlan {
         if let Some(bridges) = self.go_tuple_result_bridges(abi, result_ty) {
             let call = self.lower_call(call_expression, None, ExpressionContext::value());
-            return call.map_expression_as_observable_computed(|setup, call| {
+            return call.map_observable_expression(|setup, call| {
                 let values = self.create_temp_vars("ret", bridges.len());
                 setup.push(define_many(values.clone(), call));
                 let values = values
@@ -41,7 +41,7 @@ impl Planner<'_> {
 
         if let Some(bridge) = self.go_result_layout_bridge(abi, result_ty) {
             let call = self.lower_call(call_expression, None, ExpressionContext::value());
-            return call.map_expression_as_observable_computed(|setup, call| {
+            return call.map_observable_expression(|setup, call| {
                 let (bridge_setup, value) = bridge.lower(self, call);
                 setup.extend(bridge_setup);
                 value
@@ -50,7 +50,7 @@ impl Planner<'_> {
 
         let payload_bridge = self.go_return_payload_bridge(abi, result_ty);
         let call_plan = self.lower_call(call_expression, None, ExpressionContext::value());
-        call_plan.map_expression_as_observable_computed(|setup, call| {
+        call_plan.map_observable_expression(|setup, call| {
             let (wrap, value) = if payload_bridge.is_some() {
                 let (wrap, outcome) = self.lower_abi_wrapping_with_payload_bridge(
                     call,

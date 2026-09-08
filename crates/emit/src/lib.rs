@@ -44,7 +44,7 @@ use names::packages::{PackageRequirements, PackageUse};
 use plan::PackagePlan;
 use plan::bodies::{LoopId, LoweredBlock, LoweredStatement, define};
 use plan::go_expression::GoExpressionNode;
-use plan::values::{GoExpression, ValuePlan};
+use plan::values::GoExpression;
 use state::adapter_registry::AdapterRegistry;
 use state::file_namespace::FileNamespace;
 use state::package_state::{FunctionEmissionContext, PackageState};
@@ -247,11 +247,6 @@ impl Planner<'_> {
         }
     }
 
-    fn collect_value_imports(&mut self, value: &ValuePlan) {
-        let namespace = &mut self.namespace;
-        value.visit_expressions(&mut |node| require_qualified(namespace, node));
-    }
-
     fn render_expression(&mut self, expression: &GoExpression) -> String {
         let namespace = &mut self.namespace;
         expression
@@ -421,15 +416,15 @@ impl<'a> Planner<'a> {
         }
     }
 
-    fn with_loop<R>(&mut self, result_var: impl Into<String>, f: impl FnOnce(&mut Self) -> R) -> R {
-        self.scope.push_loop(result_var.into());
+    fn with_loop<R>(&mut self, result: GoExpression, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.scope.push_loop(result);
         let result = f(self);
         self.scope.pop_loop();
         result
     }
 
-    fn current_loop_result_var(&self) -> Option<&str> {
-        self.scope.current_loop_result_var()
+    fn current_loop_result(&self) -> Option<&GoExpression> {
+        self.scope.current_loop_result()
     }
 
     fn current_loop_id(&self) -> Option<LoopId> {
@@ -517,7 +512,7 @@ impl<'a> Planner<'a> {
         hint: &str,
         value: GoExpression,
     ) -> GoExpression {
-        if go_name::is_plain_identifier(value.as_str()) {
+        if value.as_identifier().is_some() {
             return value;
         }
         GoExpression::name(self.hoist_tmp_value_statement(statements, hint, value))

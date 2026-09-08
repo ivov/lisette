@@ -79,16 +79,13 @@ fn unary_constant(operator: &str, value: Option<ConstantKind>) -> Option<Constan
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GoExpression {
     node: GoExpressionNode,
-    rendered: String,
     constant: Option<ConstantKind>,
 }
 
 impl GoExpression {
     fn new(node: GoExpressionNode) -> Self {
-        let rendered = node.print();
         Self {
             node,
-            rendered,
             constant: None,
         }
     }
@@ -188,7 +185,6 @@ impl GoExpression {
             && go_type.as_deref() == Some(element_type)
         {
             *go_type = None;
-            self.rendered = self.node.print();
         }
         self
     }
@@ -334,7 +330,7 @@ impl GoExpression {
     }
 
     pub(crate) fn rendered(&self) -> String {
-        self.rendered.clone()
+        self.node.print()
     }
 
     pub(crate) fn print_header(&self) -> String {
@@ -343,11 +339,20 @@ impl GoExpression {
 
     pub(crate) fn rename_identifier(&mut self, from: &str, to: &str) {
         self.node.rename_identifier(from, to);
-        self.rendered = self.node.print();
     }
 
-    pub(crate) fn as_str(&self) -> &str {
-        &self.rendered
+    pub(crate) fn as_identifier(&self) -> Option<&str> {
+        match &self.node {
+            GoExpressionNode::Identifier(name) => Some(name),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_literal(&self) -> Option<&str> {
+        match &self.node {
+            GoExpressionNode::Literal(value) => Some(value),
+            _ => None,
+        }
     }
 
     pub(crate) fn is_composite_literal(&self) -> bool {
@@ -358,12 +363,16 @@ impl GoExpression {
         matches!(self.syntax_form(), OperandForm::Literal)
     }
 
-    fn syntax_form(&self) -> OperandForm {
+    pub(crate) fn syntax_form(&self) -> OperandForm {
         syntax_form(&self.node)
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.rendered.is_empty()
+        match &self.node {
+            GoExpressionNode::Empty => true,
+            GoExpressionNode::Verbatim(source) => source.is_empty(),
+            _ => false,
+        }
     }
 
     pub(crate) fn does_work(&self) -> bool {
@@ -385,7 +394,7 @@ fn syntax_form(node: &GoExpressionNode) -> OperandForm {
 
 impl Display for GoExpression {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.rendered)
+        formatter.write_str(&self.node.print())
     }
 }
 
@@ -454,34 +463,25 @@ impl CaptureBoundary {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct EvaluationFacts {
-    pub form: OperandForm,
     pub stability: Stability,
     pub effect: EvaluationEffect,
 }
 
 impl EvaluationFacts {
-    const fn new(form: OperandForm, stability: Stability, effect: EvaluationEffect) -> Self {
-        Self {
-            form,
-            stability,
-            effect,
-        }
+    const fn new(stability: Stability, effect: EvaluationEffect) -> Self {
+        Self { stability, effect }
     }
 
     const fn literal() -> Self {
-        Self::new(
-            OperandForm::Literal,
-            Stability::Literal,
-            EvaluationEffect::Pure,
-        )
+        Self::new(Stability::Literal, EvaluationEffect::Pure)
     }
 
     const fn value(effect: EvaluationEffect) -> Self {
-        Self::new(OperandForm::Other, Stability::Observable, effect)
+        Self::new(Stability::Observable, effect)
     }
 
     const fn call(effect: EvaluationEffect) -> Self {
-        Self::new(OperandForm::Call, Stability::StableAcrossCalls, effect)
+        Self::new(Stability::StableAcrossCalls, effect)
     }
 
     const fn with_stability(self, stability: Stability) -> Self {
@@ -547,7 +547,7 @@ impl ValuePlan {
         Self::from_facts(
             setup,
             GoExpression::literal(rendered),
-            EvaluationFacts::new(OperandForm::Literal, Stability::Observable, effect),
+            EvaluationFacts::new(Stability::Observable, effect),
         )
     }
 
@@ -564,7 +564,7 @@ impl ValuePlan {
         Self::from_facts(
             setup,
             GoExpression::name(name),
-            EvaluationFacts::new(OperandForm::Name, Stability::Fixed, effect),
+            EvaluationFacts::new(Stability::Fixed, effect),
         )
     }
 
@@ -585,9 +585,7 @@ impl ValuePlan {
         let evaluation = match expression.syntax_form() {
             OperandForm::Literal => EvaluationFacts::literal(),
             OperandForm::Call => EvaluationFacts::call(EvaluationEffect::PureCall),
-            OperandForm::Name => {
-                EvaluationFacts::new(OperandForm::Name, stability, EvaluationEffect::Pure)
-            }
+            OperandForm::Name => EvaluationFacts::new(stability, EvaluationEffect::Pure),
             OperandForm::Other => EvaluationFacts::value(EvaluationEffect::Pure).with_stability(
                 if stability.is_observable() {
                     Stability::Observable
@@ -640,29 +638,11 @@ impl ValuePlan {
         Self::from_facts(setup, expression, evaluation)
     }
 
-    pub(crate) fn map_expression_as_computed(
+    pub(crate) fn map_observable_expression(
         self,
         transform: impl FnOnce(&mut Vec<LoweredStatement>, GoExpression) -> GoExpression,
     ) -> Self {
         let mut plan = self.map_expression(transform);
-        plan.evaluation.form = OperandForm::Other;
-        plan
-    }
-
-    pub(crate) fn map_expression_as_name(
-        self,
-        transform: impl FnOnce(&mut Vec<LoweredStatement>, GoExpression) -> GoExpression,
-    ) -> Self {
-        let mut plan = self.map_expression(transform);
-        plan.evaluation.form = OperandForm::Name;
-        plan
-    }
-
-    pub(crate) fn map_expression_as_observable_computed(
-        self,
-        transform: impl FnOnce(&mut Vec<LoweredStatement>, GoExpression) -> GoExpression,
-    ) -> Self {
-        let mut plan = self.map_expression_as_computed(transform);
         plan.make_observable();
         plan
     }
@@ -678,26 +658,19 @@ impl ValuePlan {
         self
     }
 
-    pub(crate) fn make_observable_computed(&mut self) {
-        self.evaluation.form = OperandForm::Other;
-        self.make_observable();
-    }
-
     pub(crate) fn into_addressed_location(mut self) -> Self {
-        self.evaluation.form = OperandForm::Other;
         self.evaluation.stability = Stability::StableAcrossCalls;
         self
     }
 
     pub(crate) fn replace_with_pinned_name(&mut self, name: String) {
         self.expression = GoExpression::name(name);
-        self.evaluation.form = OperandForm::Name;
         self.evaluation.effect = EvaluationEffect::Pure;
     }
 
     pub(crate) fn with_pure_constructor_evaluation(mut self) -> Self {
         self.evaluation.effect = EvaluationEffect::PureCall.combine(self.evaluation.effect);
-        self.evaluation.stability = if matches!(self.evaluation.form, OperandForm::Call) {
+        self.evaluation.stability = if matches!(self.expression.syntax_form(), OperandForm::Call) {
             Stability::StableAcrossCalls
         } else {
             Stability::Observable
@@ -739,7 +712,6 @@ impl ValuePlan {
 
     pub(crate) fn conversion(mut self, go_type: String) -> Self {
         self.expression = GoExpression::conversion(go_type, self.expression);
-        self.evaluation.form = OperandForm::Other;
         if !self.evaluation.stability.is_stable_across_calls() {
             self.evaluation.stability = Stability::Observable;
         }
@@ -748,7 +720,6 @@ impl ValuePlan {
 
     pub(crate) fn unary(mut self, operator: &'static str) -> Self {
         self.expression = GoExpression::unary(operator, self.expression);
-        self.evaluation.form = OperandForm::Other;
         self.evaluation.stability = Stability::Observable;
         self
     }

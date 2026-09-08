@@ -264,7 +264,7 @@ impl Planner<'_> {
                     continue;
                 }
                 let zero = self.lisette_zero(&field_ty);
-                if is_go_zero_literal(zero.as_str()) {
+                if is_go_zero_literal(&zero.rendered()) {
                     continue;
                 }
                 zero

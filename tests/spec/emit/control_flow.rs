@@ -3871,3 +3871,22 @@ fn test(opt: Option<int>) {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn loop_break_value_preserves_captured_index_target() {
+    let input = r#"
+fn main() {
+  let mut values = [0, 0]
+  let mut index = 0
+  values[index] = loop {
+    index = 1
+    match Some(7) {
+      Some(value) => break value,
+      None => continue,
+    }
+  }
+  if values[0] != 7 || values[1] != 0 { panic("loop result used the changed index") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

@@ -91,7 +91,7 @@ impl BoundOption {
 
     pub(crate) fn value_name(&self) -> Option<&str> {
         match &self.source {
-            BoundSource::Pair(pair) => pair.value.as_deref(),
+            BoundSource::Pair(pair) => pair.value(),
             BoundSource::Nullable { value, .. } => Some(value),
             BoundSource::Index { .. } => None,
             BoundSource::Found { value, .. } => value.as_deref(),
@@ -296,9 +296,12 @@ impl ResultFusePlan<'_> {
             setup,
             call,
             slot,
-            PairKind::Error {
-                carries_value,
-                nil_guard: self.nil_guard,
+            if carries_value {
+                PairKind::Result {
+                    nil_guard: self.nil_guard,
+                }
+            } else {
+                PairKind::BareError
             },
             error_name,
         );
@@ -713,7 +716,7 @@ impl Planner<'_> {
         let then_body = destination.is_none().then(|| {
             // A call returning only `error` has no value, so `Ok(x)` takes unit.
             let ok_binding = if carries_payload {
-                ArmBinding::alias(ok_name, bound.value.as_deref())
+                ArmBinding::alias(ok_name, bound.value())
             } else {
                 ArmBinding::copy(ok_name, Some(&unit))
             };

@@ -49,7 +49,7 @@ impl Planner<'_> {
         let map_tuple = self.for_loop_is_map_tuple(binding, iterable);
 
         let directive = self.maybe_line_directive(&full_expression.get_span());
-        let plan = self.with_loop("_", |this| {
+        let plan = self.with_loop(GoExpression::name("_".to_string()), |this| {
             let (prologue, header, lowered_body) = if is_range {
                 this.lower_range_for(binding, iterable, body)
             } else if let Some(range_shape) = stored_range {
@@ -451,7 +451,7 @@ impl Planner<'_> {
             start_expression = GoExpression::name(var);
         }
 
-        let counts_from_zero = !*inclusive && start_expression.as_str() == "0";
+        let counts_from_zero = !*inclusive && start_expression.as_literal() == Some("0");
         let (header, lowered_body) = self.with_scope(|this| {
             let header = match end_expression {
                 Some(end_expression) if counts_from_zero => {

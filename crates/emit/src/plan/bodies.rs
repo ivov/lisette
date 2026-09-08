@@ -120,9 +120,7 @@ pub(crate) enum LoweredStatement {
     Break(LoopTransfer),
     Continue(LoopTransfer),
     Const(ConstPlan),
-    Return(ReturnForm),
-    BreakValue(BreakValuePlan),
-    Let(LetPlan),
+    Return(Vec<GoExpression>),
     Assign(AssignForm),
     Async {
         keyword: String,
@@ -163,66 +161,7 @@ pub(crate) struct ConstPlan {
     pub(crate) is_const: bool,
     pub(crate) name: String,
     pub(crate) ty_str: String,
-    pub(crate) value: ValuePlan,
-}
-
-/// A source `return expr` statement, classified by `ReturnForm`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ReturnForm {
-    Plain {
-        value: ValuePlan,
-    },
-    /// Bare `return` for a unit-typed function. `side_effect` is run first
-    /// when the returned expression is impure.
-    Unit {
-        side_effect: Option<LoweredBlock>,
-    },
-    /// `return v0, v1, ...` for a lowered multi-value ABI return.
-    Multi {
-        values: Vec<GoExpression>,
-    },
-    /// An already-lowered return sequence.
-    Body {
-        body: LoweredBlock,
-    },
-}
-
-/// A `break value` statement. A diverged value terminates on its own; all
-/// other values carry the action and transfer needed to finish the break.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum BreakValuePlan {
-    Diverged {
-        value: ValuePlan,
-    },
-    Transfer {
-        value: ValuePlan,
-        action: BreakValueAction,
-        target: LoopTransfer,
-    },
-}
-
-/// What to do with a non-diverging `break value` after its setup has run.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum BreakValueAction {
-    /// Inside a loop with a result slot, when the value is a unit-typed
-    /// call: emit `<value>` as a side-effect statement (skipped if value
-    /// text is empty), then `<result_var> = struct{}{}`, then break.
-    UnitCallIntoResult { result_var: String },
-    /// Inside a loop with a result slot: emit `<result_var> = <value>`
-    /// (skipped if value text is empty), then break.
-    AssignToResult { result_var: String },
-    /// No result slot: emit `_ = <value>` (skipped if value text is empty),
-    /// then break.
-    Discard,
-}
-
-/// A lowered `let` binding.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct LetPlan {
-    /// Optional `var X T` emitted before a never-typed value so dead code can
-    /// still reference the binding.
-    pub(crate) declaration: Option<Box<LoweredStatement>>,
-    pub(crate) body: LoweredBlock,
+    pub(crate) value: GoExpression,
 }
 
 /// An assignment statement, structured by shape.
@@ -566,31 +505,11 @@ impl LoweredStatement {
             LoweredStatement::Break(_)
             | LoweredStatement::Continue(_)
             | LoweredStatement::UnreachablePanic => {}
-            LoweredStatement::Const(plan) => plan.value.visit_expressions(visit),
-            LoweredStatement::Return(form) => match form {
-                ReturnForm::Plain { value } => value.visit_expressions(visit),
-                ReturnForm::Unit { side_effect } => {
-                    if let Some(body) = side_effect {
-                        body.visit_expressions(visit);
-                    }
+            LoweredStatement::Const(plan) => plan.value.node().visit(visit),
+            LoweredStatement::Return(values) => {
+                for value in values {
+                    value.node().visit(visit);
                 }
-                ReturnForm::Multi { values } => {
-                    for value in values {
-                        value.node().visit(visit);
-                    }
-                }
-                ReturnForm::Body { body } => body.visit_expressions(visit),
-            },
-            LoweredStatement::BreakValue(plan) => match plan {
-                BreakValuePlan::Diverged { value } | BreakValuePlan::Transfer { value, .. } => {
-                    value.visit_expressions(visit)
-                }
-            },
-            LoweredStatement::Let(plan) => {
-                if let Some(declaration) = &plan.declaration {
-                    declaration.visit_expressions(visit);
-                }
-                plan.body.visit_expressions(visit);
             }
             LoweredStatement::Assign(form) => match form {
                 AssignForm::Compound {
@@ -688,27 +607,6 @@ impl LoweredStatement {
             LoweredStatement::Block(body)
             | LoweredStatement::Body(body)
             | LoweredStatement::WhileLet(body) => for_each_statement(&body.statements, f),
-            LoweredStatement::Const(plan) => for_each_statement(&plan.value.setup, f),
-            LoweredStatement::Return(form) => match form {
-                ReturnForm::Plain { value } => for_each_statement(&value.setup, f),
-                ReturnForm::Unit { side_effect } => {
-                    if let Some(body) = side_effect {
-                        for_each_statement(&body.statements, f);
-                    }
-                }
-                ReturnForm::Multi { .. } => {}
-                ReturnForm::Body { body } => for_each_statement(&body.statements, f),
-            },
-            LoweredStatement::BreakValue(
-                BreakValuePlan::Diverged { value } | BreakValuePlan::Transfer { value, .. },
-            ) => for_each_statement(&value.setup, f),
-            LoweredStatement::Let(plan) => {
-                if let Some(declaration) = &plan.declaration {
-                    f(declaration);
-                    declaration.for_each_nested_statement(f);
-                }
-                for_each_statement(&plan.body.statements, f);
-            }
             LoweredStatement::Assign(form) => match form {
                 AssignForm::Compound {
                     target_capture,
@@ -751,6 +649,8 @@ impl LoweredStatement {
             }
             LoweredStatement::Break(_)
             | LoweredStatement::Continue(_)
+            | LoweredStatement::Return(_)
+            | LoweredStatement::Const(_)
             | LoweredStatement::Async { .. }
             | LoweredStatement::Define(_)
             | LoweredStatement::AssignMany { .. }
@@ -771,26 +671,6 @@ impl LoweredStatement {
             LoweredStatement::Block(body)
             | LoweredStatement::Body(body)
             | LoweredStatement::WhileLet(body) => for_each_statements_mut(&mut body.statements, f),
-            LoweredStatement::Const(plan) => for_each_statements_mut(&mut plan.value.setup, f),
-            LoweredStatement::Return(form) => match form {
-                ReturnForm::Plain { value } => for_each_statements_mut(&mut value.setup, f),
-                ReturnForm::Unit { side_effect } => {
-                    if let Some(body) = side_effect {
-                        for_each_statements_mut(&mut body.statements, f);
-                    }
-                }
-                ReturnForm::Multi { .. } => {}
-                ReturnForm::Body { body } => for_each_statements_mut(&mut body.statements, f),
-            },
-            LoweredStatement::BreakValue(
-                BreakValuePlan::Diverged { value } | BreakValuePlan::Transfer { value, .. },
-            ) => for_each_statements_mut(&mut value.setup, f),
-            LoweredStatement::Let(plan) => {
-                if let Some(declaration) = &mut plan.declaration {
-                    declaration.for_each_nested_statements_mut(f);
-                }
-                for_each_statements_mut(&mut plan.body.statements, f);
-            }
             LoweredStatement::Assign(form) => match form {
                 AssignForm::Compound {
                     target_capture,
@@ -830,6 +710,8 @@ impl LoweredStatement {
             LoweredStatement::Directed { inner, .. } => inner.for_each_nested_statements_mut(f),
             LoweredStatement::Break(_)
             | LoweredStatement::Continue(_)
+            | LoweredStatement::Return(_)
+            | LoweredStatement::Const(_)
             | LoweredStatement::Async { .. }
             | LoweredStatement::Define(_)
             | LoweredStatement::AssignMany { .. }
@@ -897,19 +779,7 @@ impl LoweredStatement {
             | LoweredStatement::AssignMany { .. }
             | LoweredStatement::UnreachablePanic => true,
             LoweredStatement::Body(body) => !body.renders_empty(),
-            LoweredStatement::Return(plan) => match plan {
-                ReturnForm::Body { body } => !body.renders_empty(),
-                ReturnForm::Plain { .. } | ReturnForm::Unit { .. } | ReturnForm::Multi { .. } => {
-                    true
-                }
-            },
-            LoweredStatement::BreakValue(plan) => match plan {
-                BreakValuePlan::Diverged { value } => {
-                    value.setup.iter().any(LoweredStatement::emits_output)
-                }
-                BreakValuePlan::Transfer { .. } => true,
-            },
-            LoweredStatement::Let(plan) => plan.declaration.is_some() || !plan.body.renders_empty(),
+            LoweredStatement::Return(_) => true,
             LoweredStatement::Assign(plan) => match plan {
                 AssignForm::Compound { .. } | AssignForm::Simple { .. } => true,
             },
@@ -930,8 +800,6 @@ impl LoweredStatement {
             LoweredStatement::Body(body) => body.ends_with_diverge(),
             LoweredStatement::Break(_) | LoweredStatement::Continue(_) => true,
             LoweredStatement::Return(_) => true,
-            LoweredStatement::BreakValue(_) => true,
-            LoweredStatement::Let(plan) => plan.body.ends_with_diverge(),
             LoweredStatement::Assign(plan) => match plan {
                 AssignForm::Compound { .. } | AssignForm::Simple { .. } => false,
             },

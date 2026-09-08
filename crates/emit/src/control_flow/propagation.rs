@@ -7,10 +7,8 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible};
 use crate::definitions::functions::is_go_never;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{
-    Definition, LoweredBlock, LoweredStatement, PlacePlan, ReturnForm, assign, define,
-};
-use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::bodies::{Definition, LoweredBlock, LoweredStatement, PlacePlan, assign, define};
+use crate::plan::values::GoExpression;
 use crate::state::scope::PairStatusKind;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -23,9 +21,7 @@ struct WrappedReturnInfo<'a> {
 }
 
 pub(crate) fn plain_return(value: GoExpression) -> LoweredStatement {
-    LoweredStatement::Return(ReturnForm::Plain {
-        value: ValuePlan::computed(Vec::new(), value, EvaluationEffect::Pure),
-    })
+    LoweredStatement::Return(vec![value])
 }
 
 impl Planner<'_> {
@@ -313,7 +309,7 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn build_return_plan(&mut self, expression: &Expression) -> ReturnForm {
+    pub(crate) fn build_return_plan(&mut self, expression: &Expression) -> LoweredBlock {
         let return_ctx = self.return_ctx();
         let is_unit = return_ctx.ty().is_some_and(Type::is_unit);
         if is_unit {
@@ -325,35 +321,28 @@ impl Planner<'_> {
                     | Expression::Identifier { .. }
                     | Expression::Literal { .. }
             );
-            let side_effect = if is_pure {
-                None
-            } else {
-                let body = LoweredBlock {
-                    statements: vec![self.lower_statement(expression)],
-                };
-                (!body.renders_empty()).then_some(body)
-            };
-            return ReturnForm::Unit { side_effect };
+            let mut statements = Vec::new();
+            if !is_pure {
+                statements.push(self.lower_statement(expression));
+            }
+            statements.push(LoweredStatement::Return(Vec::new()));
+            return LoweredBlock { statements };
         }
 
         if let Some(statements) = transition::try_emit_lowered_tail_return(self, expression) {
-            return ReturnForm::Body {
-                body: LoweredBlock { statements },
-            };
+            return LoweredBlock { statements };
         }
 
         if let Some(statements) = self.lower_wrapped_return(expression) {
-            return ReturnForm::Body {
-                body: LoweredBlock { statements },
-            };
+            return LoweredBlock { statements };
         }
 
-        let plan = self.lower_value(expression, ExpressionContext::value());
-        ReturnForm::Plain {
-            value: plan.map_expression_as_computed(|setup, raw_value| {
-                self.apply_type_coercion(setup, return_ctx.ty(), expression, raw_value)
-            }),
-        }
+        let (mut statements, value) = self
+            .lower_value(expression, ExpressionContext::value())
+            .into_parts();
+        let value = self.apply_type_coercion(&mut statements, return_ctx.ty(), expression, value);
+        statements.push(plain_return(value));
+        LoweredBlock { statements }
     }
 
     /// Lower a Result/Option-wrapped return into structured statement IR.
@@ -621,8 +610,11 @@ impl Planner<'_> {
         {
             let pair = self.bind_comma_ok_pair(expression, source, CommaOkValueSlot::Temp);
             let ok = GoExpression::name(pair.status().to_string());
-            let value =
-                GoExpression::name(pair.value.expect("Temp slot always captures the value"));
+            let value = GoExpression::name(
+                pair.value()
+                    .expect("Temp slot always captures the value")
+                    .to_string(),
+            );
             let mut statements = pair.statements;
             statements.push(transition::multi_value_return(vec![value, ok]));
             return statements;
