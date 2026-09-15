@@ -503,6 +503,26 @@ impl LisetteDiagnostic {
         self.severity == Severity::Advice
     }
 
+    /// Everything the reader sees. Two diagnostics equal here are
+    /// indistinguishable on screen, so only one is worth printing.
+    pub fn dedup_key(&self) -> String {
+        let mut key = format!(
+            "{:?}\u{1}{}\u{1}{}\u{1}{}",
+            self.severity,
+            self.code.as_deref().unwrap_or(""),
+            self.message,
+            self.help.as_deref().unwrap_or(""),
+        );
+        for label in &self.labels {
+            key.push('\u{2}');
+            key.push_str(&format!(
+                "{}:{}:{}:{}",
+                label.span.file_id, label.span.byte_offset, label.span.byte_length, label.text
+            ));
+        }
+        key
+    }
+
     pub fn sort_key(a: &Self, b: &Self) -> Ordering {
         a.file_id()
             .cmp(&b.file_id())

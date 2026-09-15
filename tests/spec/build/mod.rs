@@ -9855,3 +9855,42 @@ fn main() {
 
     assert_build_snapshot!(fs, "github.com/user/myproject");
 }
+
+#[test]
+fn a_rejected_bound_reports_once() {
+    // The bound is re-checked at several unification stages; the canonicalized
+    // output must still carry it once.
+    for source in [
+        "fn main() { let _ = zero<Map<string, int>>() }",
+        "fn main() { let _ = zero<Channel<int>>() }",
+    ] {
+        let mut fs = MockFileSystem::new();
+        fs.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
+        let analysis = compile_check_script(fs);
+        let count = analysis
+            .diagnostics()
+            .iter()
+            .filter(|d| d.code_str() == Some("infer.not_zeroable_bound"))
+            .count();
+        assert_eq!(count, 1, "expected one diagnostic for {source}");
+    }
+}
+
+#[test]
+fn distinct_errors_sharing_a_span_both_survive() {
+    // `field_no_zero` carries the field only in its help, so collapsing on
+    // title and span alone would drop one of these.
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        "struct Bad { a: Channel<int>, b: fn(int) -> int, n: int }\nfn main() { let _ = Bad { n: 1, .. } }",
+    );
+    let analysis = compile_check_script(fs);
+    let count = analysis
+        .diagnostics()
+        .iter()
+        .filter(|d| d.code_str() == Some("infer.field_no_zero"))
+        .count();
+    assert_eq!(count, 2);
+}
