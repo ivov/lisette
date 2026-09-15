@@ -280,3 +280,22 @@ fn pair<T: Zeroable>() -> (T, int) {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn zero_of_embedded_and_tuple_structs() {
+    let input = r#"
+struct Base { x: int, tag: string }
+struct Mid { embed Base, y: float64 }
+struct Top { embed Mid, z: bool }
+struct Meters(int)
+
+fn nested() -> Top {
+  zero<Top>()
+}
+
+fn newtype() -> Meters {
+  zero<Meters>()
+}
+"#;
+    assert_emit_snapshot!(input);
+}

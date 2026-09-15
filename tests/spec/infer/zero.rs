@@ -225,3 +225,39 @@ fn slice_make_refuses_a_parameter_that_is_not_zeroable() {
     infer("fn buf<T: Comparable>(n: int) -> Slice<T> { Slice.make<T>(n) }")
         .assert_infer_code("slice_make_no_zero");
 }
+
+#[test]
+fn zero_of_an_embedded_struct() {
+    infer(
+        "struct Base { x: int, tag: string }\nstruct Mid { embed Base, y: float64 }\nstruct Top { embed Mid, z: bool }\nfn f() { let _ = zero<Top>() }",
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn zero_rejection_reaches_through_an_embed() {
+    infer(
+        "struct Bad { m: Map<string, int> }\nstruct Embeds { embed Bad, ok: int }\nfn f() { let _ = zero<Embeds>() }",
+    )
+    .assert_infer_code("not_zeroable_bound");
+}
+
+#[test]
+fn zero_of_a_generic_embed_resolves_the_parameter() {
+    infer(
+        "struct Gen<T> { v: T }\nstruct Embeds<T> { embed Gen<T>, n: int }\nfn f<T: Zeroable>() -> Embeds<T> { zero<Embeds<T>>() }",
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn zero_of_a_tuple_struct() {
+    infer("struct Meters(int)\nfn f() { let _ = zero<Meters>() }").assert_no_errors();
+    infer("struct Pair(int, string)\nfn f() { let _ = zero<Pair>() }").assert_no_errors();
+}
+
+#[test]
+fn zero_of_a_nested_generic_struct() {
+    infer("struct Box<T> { v: T }\nfn f<T: Zeroable>() -> Box<Box<T>> { zero<Box<Box<T>>>() }")
+        .assert_no_errors();
+}

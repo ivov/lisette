@@ -16093,3 +16093,17 @@ fn take(items: Ref<mut Slice<mut Ref<P>>>) {
 "#;
     assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn infer_zero_names_the_embedded_field_that_has_no_zero() {
+    let input = r#"
+struct Bad { m: Map<string, int> }
+
+struct Embeds { embed Bad, ok: int }
+
+fn f() {
+  let _ = zero<Embeds>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}

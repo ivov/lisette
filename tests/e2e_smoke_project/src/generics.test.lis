@@ -252,6 +252,15 @@ fn zero_of_a_wrapper_around_a_parameter_is_fully_zeroed() {
 }
 
 #[test]
+fn zero_of_an_embedded_struct_zeroes_every_level() {
+  let top = zero<ZeroTop>()
+  assert top.x == 0
+  assert top.tag == ""
+  assert top.y == 0.0
+  assert top.z == false
+}
+
+#[test]
 fn zero_of_a_tuple_keeps_its_element_types() {
   let t = zero<(int, float64)>()
   assert t.0 == 0
@@ -375,3 +384,9 @@ fn blank_box<T: Zeroable>() -> ZeroBox<T> {
 fn blank_array<T: Zeroable>() -> Array<T, 2> {
   zero<Array<T, 2>>()
 }
+
+struct ZeroBase { x: int, tag: string }
+
+struct ZeroMid { embed ZeroBase, y: float64 }
+
+struct ZeroTop { embed ZeroMid, z: bool }
