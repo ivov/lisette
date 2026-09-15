@@ -220,3 +220,22 @@ fn f() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn a_local_binding_named_zero_keeps_its_calls_in_statement_position() {
+    // `zero<T>()` is droppable as a discarded statement; a binding that merely
+    // shares the name is not, and dropping it would take its effects with it.
+    let input = r#"
+import "go:fmt"
+
+fn f() -> int {
+  let zero = || {
+    fmt.Println("effect")
+    42
+  }
+  let _ = zero()
+  zero()
+}
+"#;
+    assert_emit_snapshot!(input);
+}

@@ -165,3 +165,9 @@ fn zero_inferred_as_unknown_is_rejected_like_the_written_form() {
     infer("import \"go:fmt\"\nfn f() { let x = zero()\n  fmt.Println(x) }")
         .assert_infer_code("not_zeroable_bound");
 }
+
+#[test]
+fn a_binding_named_zero_is_not_the_builtin() {
+    infer("fn add(zero: int) -> int { zero + 1 }").assert_no_errors();
+    infer("fn f() -> int { let zero = 5\n  zero + 1 }").assert_no_errors();
+}

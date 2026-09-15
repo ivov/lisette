@@ -1620,3 +1620,29 @@ fn name(c: palette.Color) -> string {
         result.errors
     );
 }
+
+#[test]
+fn builtin_names_can_be_local_bindings() {
+    // The builtin is only the builtin when nothing nearer answers to the name.
+    // `Some`/`None`/`Ok`/`Err` stay reserved; `panic` stays reserved because the
+    // emitter injects `panic("unreachable")` under the Go builtin name.
+    for name in [
+        "zero",
+        "real",
+        "imaginary",
+        "complex",
+        "assert_type",
+        "max",
+        "min",
+        "len",
+        "make",
+        "println",
+    ] {
+        infer(&format!("fn f() -> int {{ let {name} = 5\n  {name} + 1 }}")).assert_no_errors();
+        infer(&format!("fn g({name}: int) -> int {{ {name} + 1 }}")).assert_no_errors();
+    }
+    // `panic` must stay non-shadowable: a live binding would shadow the Go
+    // builtin that emit injects for `panic("unreachable")`, breaking codegen.
+    infer("fn f() -> int { let panic = 5\n  panic + 1 }")
+        .assert_infer_code("native_constructor_value");
+}

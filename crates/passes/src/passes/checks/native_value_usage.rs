@@ -1,5 +1,5 @@
 use diagnostics::LocalSink;
-use syntax::ast::{Expression, StructKind};
+use syntax::ast::{Expression, IdentifierResolution, StructKind};
 use syntax::program::{Definition, DefinitionBody, NativeTypeKind};
 use syntax::types::{FunctionType, Symbol, Type, unqualified_name};
 
@@ -70,13 +70,22 @@ fn check_one(
     sink: &LocalSink,
 ) {
     let Expression::Identifier {
-        value, ty, span, ..
+        value,
+        ty,
+        span,
+        resolution,
     } = identifier
     else {
         return;
     };
     let value = value.as_str();
     let span = *span;
+    // A local binding of the same name is the user's own value, not the builtin.
+    // `panic` is the exception: emit injects `panic("unreachable")` under the Go
+    // builtin name, which a binding in scope would shadow into a compile error.
+    if value != "panic" && matches!(resolution, IdentifierResolution::Binding(_)) {
+        return;
+    }
     if matches!(
         value,
         "imaginary" | "assert_type" | "complex" | "real" | "panic" | "zero"

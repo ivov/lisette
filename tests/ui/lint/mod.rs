@@ -14783,8 +14783,8 @@ fn replaceable_with_autofill_binding_zero_no_warning() {
 struct Conf { count: int, more: int, name: string }
 
 fn main() -> int {
-  let nought = 0;
-  let c = Conf { count: nought, more: nought, name: "x" };
+  let zero = 0;
+  let c = Conf { count: zero, more: zero, name: "x" };
   c.count + c.more + c.name.length()
 }
 "#
