@@ -577,10 +577,12 @@ impl InferCtx<'_> {
                 });
             }
             DeferredCallCheckTarget::SliceMake => {
+                let param_bounds = self.visible_parameter_bounds();
                 self.facts.deferred.slice_makes.push(SliceMakeCheck {
                     ty,
                     span,
                     package_id,
+                    param_bounds,
                 });
             }
         }

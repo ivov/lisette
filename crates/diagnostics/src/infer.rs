@@ -4839,12 +4839,16 @@ pub fn channel_no_make_constructor(span: Span) -> LisetteDiagnostic {
 pub fn slice_make_no_zero(
     element: &dyn Display,
     hidden_go_state: Option<&str>,
+    unbounded_parameter: bool,
     span: Span,
 ) -> LisetteDiagnostic {
     let help = match hidden_go_state {
         Some(go_type) => format!(
             "`{go_type}` has Go-side state hidden from Lisette, so it has no zero value. Build \
              the slice from a list literal of values obtained from its documented Go constructor."
+        ),
+        None if unbounded_parameter => format!(
+            "Add the bound `<{element}: Zeroable>`, or build the slice from a list literal."
         ),
         None => {
             "Build the slice from a list literal instead, e.g. `let xs = [a, b, c]`".to_string()

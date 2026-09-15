@@ -230,6 +230,28 @@ fn zero_of_slice_is_empty_but_appendable() {
 }
 
 #[test]
+fn zero_of_array_is_fully_zeroed() {
+  let a = zero<Array<int, 3>>()
+  assert a.length() == 3
+  assert a[0] == 0
+  assert a[2] == 0
+  let s = zero<Array<string, 2>>()
+  assert s[0] == ""
+}
+
+#[test]
+fn zero_of_a_wrapper_around_a_parameter_is_fully_zeroed() {
+  let b = blank_box<int>()
+  assert b.v == 0
+  assert b.n == 0
+  let s = blank_box<string>()
+  assert s.v == ""
+  let arr = blank_array<int>()
+  assert arr[0] == 0
+  assert arr.length() == 2
+}
+
+#[test]
 fn zero_of_a_tuple_keeps_its_element_types() {
   let t = zero<(int, float64)>()
   assert t.0 == 0
@@ -342,4 +364,14 @@ struct ZeroDog { name: string }
 
 impl ZeroDog {
   fn speak(self) -> string { self.name }
+}
+
+struct ZeroBox<T> { v: T, n: int }
+
+fn blank_box<T: Zeroable>() -> ZeroBox<T> {
+  zero<ZeroBox<T>>()
+}
+
+fn blank_array<T: Zeroable>() -> Array<T, 2> {
+  zero<Array<T, 2>>()
 }

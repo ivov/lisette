@@ -1105,8 +1105,14 @@ impl TaskState {
             BuiltinBound::Ordered => {}
             BuiltinBound::Zeroable => {
                 let from_package = self.cursor.package_id().to_string();
-                if let Err(no_zero) = zero::has_zero(store, &resolved, &from_package, MapZero::Nil)
-                {
+                let param_bounds = self.visible_parameter_bounds();
+                if let Err(no_zero) = zero::has_zero_in_scope(
+                    store,
+                    &resolved,
+                    &from_package,
+                    MapZero::Nil,
+                    &param_bounds,
+                ) {
                     let chain: Vec<&str> = no_zero.chain.iter().map(EcoString::as_str).collect();
                     self.sink.push(diagnostics::infer::not_zeroable_bound(
                         &no_zero.leaf_ty.stringify(),

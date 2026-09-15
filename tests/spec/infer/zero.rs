@@ -16,6 +16,32 @@ fn zero_of_slice() {
 }
 
 #[test]
+fn zero_of_array() {
+    infer("zero<Array<int, 3>>()").assert_last_type(array_type(3, int_type()));
+}
+
+#[test]
+fn zero_of_a_wrapper_around_a_zeroable_parameter() {
+    for wrapper in ["Array<T, 2>", "Slice<T>", "Option<T>", "(T, int)"] {
+        infer(&format!(
+            "fn f<T: Zeroable>() -> {wrapper} {{ zero<{wrapper}>() }}"
+        ))
+        .assert_no_errors();
+    }
+    infer("struct Box<T> { v: T }\nfn f<T: Zeroable>() -> Box<T> { zero<Box<T>>() }")
+        .assert_no_errors();
+}
+
+#[test]
+fn zero_of_a_wrapper_around_a_parameter_that_is_not_zeroable() {
+    // The bound is what carries the proof; without it the element is unknown.
+    infer("fn f<T>() -> Array<T, 2> { zero<Array<T, 2>>() }")
+        .assert_infer_code("not_zeroable_bound");
+    infer("struct Box<T> { v: T }\nfn f<T: Comparable>() -> Box<T> { zero<Box<T>>() }")
+        .assert_infer_code("not_zeroable_bound");
+}
+
+#[test]
 fn zero_of_struct() {
     infer("struct Point { x: int, y: int }\nfn f() { let _ = zero<Point>() }").assert_no_errors();
 }
@@ -184,4 +210,18 @@ fn autofill_refuses_a_field_whose_parameter_is_not_zeroable() {
         .assert_infer_code("field_no_zero");
     infer("struct Box<T> { v: T, n: int }\nfn blank<T>() -> Box<T> { Box { n: 1, .. } }")
         .assert_infer_code("field_no_zero");
+}
+
+#[test]
+fn slice_make_accepts_a_zeroable_parameter() {
+    infer("fn buf<T: Zeroable>(n: int) -> Slice<T> { Slice.make<T>(n) }").assert_no_errors();
+    infer("fn buf<T: Zeroable>() -> Array<T, 4> { Array.new<T, 4>() }").assert_no_errors();
+}
+
+#[test]
+fn slice_make_refuses_a_parameter_that_is_not_zeroable() {
+    infer("fn buf<T>(n: int) -> Slice<T> { Slice.make<T>(n) }")
+        .assert_infer_code("slice_make_no_zero");
+    infer("fn buf<T: Comparable>(n: int) -> Slice<T> { Slice.make<T>(n) }")
+        .assert_infer_code("slice_make_no_zero");
 }

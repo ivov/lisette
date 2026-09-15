@@ -251,3 +251,32 @@ fn blank<T: Zeroable>() -> Box<T> {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn zero_of_array_and_slice() {
+    let input = r#"
+fn f() {
+  let a = zero<Array<int, 3>>()
+  let b = zero<Array<string, 2>>()
+  let s = zero<Slice<int>>()
+  let _ = (a, b, s)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn zero_of_a_wrapper_around_a_type_parameter() {
+    let input = r#"
+struct Box<T> { v: T, n: int }
+
+fn blank<T: Zeroable>() -> Box<T> {
+  zero<Box<T>>()
+}
+
+fn pair<T: Zeroable>() -> (T, int) {
+  zero<(T, int)>()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
