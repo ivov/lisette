@@ -188,3 +188,35 @@ fn f() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn zero_into_an_interface_slot_keeps_the_concrete_zero() {
+    // A wider slot zeroes to nil, so the shortcut must not claim this one.
+    let input = r#"
+interface Speaker { fn speak() -> string }
+struct Dog { name: string }
+impl Dog { fn speak(self) -> string { "woof" } }
+
+fn f() -> string {
+  let s: Speaker = zero<Dog>()
+  s.speak()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn zero_into_an_unknown_slot_keeps_the_concrete_zero() {
+    let input = r#"
+struct Point { x: int, y: float64 }
+
+fn f() {
+  let n: Unknown = zero<int>()
+  let s: Unknown = zero<string>()
+  let b: Unknown = zero<bool>()
+  let p: Unknown = zero<Point>()
+  let _ = (n, s, b, p)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

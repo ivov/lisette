@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  struct Point { x: int, y: float64 }
+  
+  fn f() {
+    let n: Unknown = zero<int>()
+    let s: Unknown = zero<string>()
+    let b: Unknown = zero<bool>()
+    let p: Unknown = zero<Point>()
+    let _ = (n, s, b, p)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Point struct {
+	x int
+	y float64
+}
+
+func f() {
+	var n any = 0
+	var s any = ""
+	var b any = false
+	var p any = Point{
+		x: 0,
+		y: 0,
+	}
+	_ = lisette.MakeTuple4[any, any, any, any](n, s, b, p)
+}

@@ -251,10 +251,12 @@ impl Planner<'_> {
             bound
         };
 
-        // `let x = zero<T>()` is Go's own `var x T`, which reads better than
-        // `x := *new(T)`. Discarding `value_expression` is safe only under an
-        // identity coercion.
-        if is_zero_call(value) && statements.is_empty() && coercion_is_identity {
+        // Drops the computed value for a bare `var x T`, so only where the slot zeroes to it.
+        if is_zero_call(value)
+            && statements.is_empty()
+            && coercion_is_identity
+            && !needs_explicit_type_declaration(self, value, binding_ty)
+        {
             let var_ty = self.use_go_type(binding_ty);
             statements.push(LoweredStatement::VarDecl {
                 name: go_identifier,

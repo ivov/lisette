@@ -260,6 +260,22 @@ fn zero_of_type_parameter_reports_bad_json() {
   assert parsed.is_err()
 }
 
+#[test]
+fn zero_into_an_interface_slot_is_not_nil() {
+  // A nil interface would panic on the call; the empty name proves the boxed
+  // value is a zeroed `ZeroDog` and not just any non-nil value.
+  let speaker: ZeroSpeaker = zero<ZeroDog>()
+  assert speaker.speak() == ""
+}
+
+#[test]
+fn zero_into_an_unknown_slot_keeps_its_type() {
+  let n: Unknown = zero<int>()
+  assert assert_type<int>(n).unwrap_or(-1) == 0
+  let s: Unknown = zero<string>()
+  assert assert_type<string>(s).unwrap_or("missing") == ""
+}
+
 impl<T> Box<T> {
   fn get(self: Box<T>) -> T {
     self.value
@@ -318,4 +334,12 @@ fn parse_json<T: Zeroable>(data: Slice<byte>) -> Result<T, error> {
   let mut result = zero<T>()
   json.Unmarshal(data, &result)?
   Ok(result)
+}
+
+interface ZeroSpeaker { fn speak() -> string }
+
+struct ZeroDog { name: string }
+
+impl ZeroDog {
+  fn speak(self) -> string { self.name }
 }

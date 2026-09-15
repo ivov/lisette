@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  interface Speaker { fn speak() -> string }
+  struct Dog { name: string }
+  impl Dog { fn speak(self) -> string { "woof" } }
+  
+  fn f() -> string {
+    let s: Speaker = zero<Dog>()
+    s.speak()
+  }
+---
+package main
+
+type Speaker interface {
+	speak() string
+}
+
+type Dog struct {
+	name string
+}
+
+func (d Dog) speak() string {
+	return "woof"
+}
+
+func f() string {
+	var s Speaker = Dog{name: ""}
+	return s.speak()
+}
