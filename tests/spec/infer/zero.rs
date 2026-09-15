@@ -171,3 +171,17 @@ fn a_binding_named_zero_is_not_the_builtin() {
     infer("fn add(zero: int) -> int { zero + 1 }").assert_no_errors();
     infer("fn f() -> int { let zero = 5\n  zero + 1 }").assert_no_errors();
 }
+
+#[test]
+fn autofill_zeroes_a_field_whose_type_is_a_zeroable_parameter() {
+    infer("struct Box<T: Zeroable> { v: T, n: int }\nfn blank<T: Zeroable>() -> Box<T> { Box { n: 1, .. } }")
+        .assert_no_errors();
+}
+
+#[test]
+fn autofill_refuses_a_field_whose_parameter_is_not_zeroable() {
+    infer("struct Box<T: Comparable> { v: T, n: int }\nfn blank<T: Comparable>() -> Box<T> { Box { n: 1, .. } }")
+        .assert_infer_code("field_no_zero");
+    infer("struct Box<T> { v: T, n: int }\nfn blank<T>() -> Box<T> { Box { n: 1, .. } }")
+        .assert_infer_code("field_no_zero");
+}

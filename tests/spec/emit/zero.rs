@@ -239,3 +239,15 @@ fn f() -> int {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn autofill_of_a_zeroable_parameter_field_lowers_to_new() {
+    let input = r#"
+struct Box<T: Zeroable> { v: T, n: int }
+
+fn blank<T: Zeroable>() -> Box<T> {
+  Box { n: 1, .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

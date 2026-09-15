@@ -1428,6 +1428,7 @@ pub fn private_field_in_autofill(
 
 pub enum FieldNoZeroCause<'a> {
     Type,
+    TypeParameterUnbounded,
     EnumWithoutDefault,
     PrivateField {
         struct_name: &'a str,
@@ -1474,6 +1475,12 @@ pub fn field_no_zero(
              zero value. Obtain one from its documented Go constructor and pass it explicitly, \
              or wrap the field type in `Option<T>`.",
             path, go_type
+        ),
+        FieldNoZeroCause::TypeParameterUnbounded => format!(
+            "Field `{}` is the type parameter `{}`, which has no zero value unless it is \
+             bounded. Add the bound `<{}: Zeroable>`, provide an explicit value, or wrap the \
+             field type in `Option<T>`.",
+            path, field_ty, field_ty
         ),
         FieldNoZeroCause::EnumWithoutDefault => format!(
             "Field `{}` is the enum `{}`, which has no zero value because no variant is \

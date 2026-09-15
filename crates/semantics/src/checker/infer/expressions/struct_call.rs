@@ -782,6 +782,9 @@ impl InferCtx<'_> {
                 NoZeroReason::EnumWithoutDefault => {
                     diagnostics::infer::FieldNoZeroCause::EnumWithoutDefault
                 }
+                NoZeroReason::TypeParameterUnbounded => {
+                    diagnostics::infer::FieldNoZeroCause::TypeParameterUnbounded
+                }
                 NoZeroReason::NoZeroForType | NoZeroReason::NilMap => {
                     diagnostics::infer::FieldNoZeroCause::Type
                 }
@@ -804,7 +807,8 @@ impl InferCtx<'_> {
         map_zero: MapZero,
     ) -> Result<(), NoZero> {
         let store = self.store;
-        zero::has_zero(store, ty, from_package, map_zero)
+        let param_bounds = self.visible_parameter_bounds();
+        zero::has_zero_in_scope(store, ty, from_package, map_zero, &param_bounds)
     }
 }
 
