@@ -157,3 +157,11 @@ fn zero_infers_an_unbounded_parameter_from_a_later_assignment_and_rejects_it() {
 fn zero_of_unit_is_allowed() {
     infer("fn f() { let u = zero<()>()\n  let _ = u }").assert_no_errors();
 }
+
+#[test]
+fn zero_inferred_as_unknown_is_rejected_like_the_written_form() {
+    // A variadic `any` parameter pins `T` to `Unknown`, which must not slip
+    // past the bound just because inference chose it rather than the author.
+    infer("import \"go:fmt\"\nfn f() { let x = zero()\n  fmt.Println(x) }")
+        .assert_infer_code("not_zeroable_bound");
+}

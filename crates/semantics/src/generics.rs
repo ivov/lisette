@@ -160,9 +160,15 @@ impl TaskState {
             let argument = store.deep_resolve_alias(&obligation.argument);
             let required = store.deep_resolve_alias(&obligation.required);
             let key = (obligation.span, argument.to_string(), required.to_string());
+            let builtin = required
+                .get_qualified_id()
+                .and_then(BuiltinBound::from_qualified_id);
+            // An `Unknown` might satisfy other bounds, but its zero is always nil.
+            let unknown_defeats_evidence =
+                store.contains_unknown(&argument) && builtin != Some(BuiltinBound::Zeroable);
             if !seen.insert(key)
                 || argument.contains_error()
-                || store.contains_unknown(&argument)
+                || unknown_defeats_evidence
                 || required.contains_error()
             {
                 continue;
@@ -196,10 +202,7 @@ impl TaskState {
                 continue;
             }
 
-            if let Some(builtin) = required
-                .get_qualified_id()
-                .and_then(BuiltinBound::from_qualified_id)
-            {
+            if let Some(builtin) = builtin {
                 let equals_hint = match &obligation.origin {
                     GenericBoundOrigin::Construction {
                         name,
