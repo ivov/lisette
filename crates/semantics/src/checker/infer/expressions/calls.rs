@@ -686,6 +686,7 @@ impl InferCtx<'_> {
                 if let Err(no_zero) = self.has_zero(&array_ty, &from_package, MapZero::Built) {
                     self.sink.push(diagnostics::infer::array_new_no_zero(
                         &no_zero.leaf_ty.stringify(),
+                        matches!(*no_zero.leaf_ty, Type::Parameter(_)),
                         span,
                     ));
                 }

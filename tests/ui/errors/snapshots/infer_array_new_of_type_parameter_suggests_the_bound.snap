@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `T` has no zero value
+   ╭─[test.lis:3:3]
+ 2 │ fn blank<T>() -> Array<T, 2> {
+ 3 │   Array.new<T, 2>()
+   ·   ────────┬────────
+   ·           ╰── `Array.new` zero-fills every element, but `T` has none
+ 4 │ }
+   ╰────
+  help: Add the bound `<T: Zeroable>`, or build the array from a list literal · code: [infer.array_new_no_zero]

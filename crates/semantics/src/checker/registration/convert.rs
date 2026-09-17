@@ -19,7 +19,7 @@ use crate::checker::state::PendingArraySizeCheck;
 use crate::generics::apply_bounds;
 use crate::prelude::PRELUDE_PACKAGE_ID;
 use crate::store::Store;
-use crate::zero::{self, MapZero};
+use crate::zero::{self, MapZero, NoZeroReason};
 
 enum ArraySizeError {
     NotInteger,
@@ -1114,10 +1114,28 @@ impl TaskState {
                     &param_bounds,
                 ) {
                     let chain: Vec<&str> = no_zero.chain.iter().map(EcoString::as_str).collect();
+                    let struct_name = match &resolved {
+                        Type::Nominal { id, .. }
+                            if !chain.is_empty()
+                                && matches!(
+                                    store.get_definition(id.as_str()).map(|d| &d.body),
+                                    Some(DefinitionBody::Struct { .. })
+                                ) =>
+                        {
+                            Some(id.last_segment().to_string())
+                        }
+                        _ => None,
+                    };
+                    let cause = match (&no_zero.reason, &struct_name) {
+                        (NoZeroReason::NilMap, Some(struct_name)) => {
+                            diagnostics::infer::NotZeroableCause::NilMapField { struct_name }
+                        }
+                        _ => no_zero.cause(),
+                    };
                     self.sink.push(diagnostics::infer::not_zeroable_bound(
                         &no_zero.leaf_ty.stringify(),
                         &chain,
-                        no_zero.cause(),
+                        cause,
                         span,
                     ));
                 }

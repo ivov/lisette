@@ -3407,6 +3407,16 @@ fn test() {
 }
 
 #[test]
+fn infer_array_new_of_type_parameter_suggests_the_bound() {
+    let input = r#"
+fn blank<T>() -> Array<T, 2> {
+  Array.new<T, 2>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_zero_of_type_parameter_needs_the_zeroable_bound() {
     let input = r#"
 fn empty<T>() -> T {

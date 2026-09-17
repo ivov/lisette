@@ -4801,16 +4801,24 @@ pub fn array_from_cannot_infer_size(span: Span) -> LisetteDiagnostic {
         )
 }
 
-pub fn array_new_no_zero(element: &dyn Display, span: Span) -> LisetteDiagnostic {
+pub fn array_new_no_zero(
+    element: &dyn Display,
+    unbounded_parameter: bool,
+    span: Span,
+) -> LisetteDiagnostic {
+    let help = if unbounded_parameter {
+        format!("Add the bound `<{element}: Zeroable>`, or build the array from a list literal.")
+    } else {
+        "Build the array from a list literal instead, e.g. `let xs: Array<int, 3> = [1, 2, 3]`"
+            .to_string()
+    };
     LisetteDiagnostic::error(format!("`{element}` has no zero value"))
         .with_infer_code("array_new_no_zero")
         .with_span_label(
             &span,
             format!("`Array.new` zero-fills every element, but `{element}` has none"),
         )
-        .with_help(
-            "Build the array from a list literal instead, e.g. `let xs: Array<int, 3> = [1, 2, 3]`",
-        )
+        .with_help(help)
 }
 
 pub fn negative_size_literal(what: &str, span: Span) -> LisetteDiagnostic {
@@ -4865,6 +4873,10 @@ pub fn slice_make_no_zero(
 
 pub enum NotZeroableCause<'a> {
     Type,
+    /// A map field inside a struct, which autofill can build and generic code cannot.
+    NilMapField {
+        struct_name: &'a str,
+    },
     EnumWithoutDefault,
     PrivateField {
         struct_name: &'a str,
@@ -4892,6 +4904,10 @@ pub fn not_zeroable_bound(
         NotZeroableCause::HiddenGoState { go_type } => format!(
             "`{go_type}`{at} has Go-side state hidden from Lisette, so it has no zero value. \
              Obtain the value from its documented Go constructor instead."
+        ),
+        NotZeroableCause::NilMapField { struct_name } => format!(
+            "`{leaf}`{at} is a map, whose Go zero is nil. `{struct_name} {{ .. }}` creates the \
+             map, but generic code cannot, so `{struct_name}` is not `Zeroable`."
         ),
         NotZeroableCause::EnumWithoutDefault => format!(
             "`{leaf}`{at} is an enum with no variant marked `#[default]`, so it has no zero \
