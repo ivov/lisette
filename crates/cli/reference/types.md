@@ -190,34 +190,27 @@ let b = true
 let n = b as int
 ```
 
-## Zero values
+## Types with zero values
 
-`zero<T>()` returns the zero value of `T`: `0` for a number, `""` for a string, `false` for a bool, `None` for an `Option`, and a struct with every field zeroed.
+These types have a zero value:
 
-```lisette
-// !callout-right `0`
-let n = zero<int>()
-// !callout-right `false`
-let flag: bool = zero()
-```
+| Type | Zero value |
+| --- | --- |
+| numeric | `0` |
+| `string` | `""` |
+| `bool` | `false` |
+| `Option<T>` | `None` |
+| `Slice<T>` | `[]` |
+| `Array<T, N>` | `N` zero values of `T` |
+| enum with [default](/docs/attributes/#default) | default variant |
 
-Its use is inside a generic function, where there is otherwise no way to name a starting value for an unknown type:
-
-```lisette
-fn parse_json<T: Zeroable>(data: Slice<byte>) -> Result<T, error> {
-  let mut result = zero<T>()
-  json.Unmarshal(data, &result)?
-  Ok(result)
-}
-```
-
-The `Zeroable` [bound](#bounds) admits only types that have a zero value. `Ref<T>`, `Map<K, V>`, `Channel<T>`, interfaces and function types do not, and neither does a struct holding one of them — build those explicitly, with `Map.new<K, V>()` and the like.
-
-An enum has no zero value until one of its variants is marked [`#[default]`](/docs/attributes/#default), which then makes it `Zeroable`:
+A struct or tuple has a zero value if it only contains types with zero values:
 
 ```lisette
-enum Status { Active, Paused, #[default] Stopped }
-
-// !callout-right `Stopped`
-let s = zero<Status>()
+// !callout-right zero value is `Point { x: 0, y: 0 }`
+struct Point { x: int, y: int }
+// !callout-right zero value is `(0, "")`
+type Pair = (int, string)
 ```
+
+See [`zero()`](/docs/prelude/functions/#zero) and [`Zeroable`](/docs/prelude/constraints/#zeroable).
