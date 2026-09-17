@@ -445,7 +445,7 @@ impl Planner<'_> {
             },
             (
                 Type::Compound {
-                    kind: CompoundKind::Slice,
+                    kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice,
                     ..
                 },
                 ValueLayout::Slice { element, .. },
@@ -588,7 +588,7 @@ impl Planner<'_> {
         match ty {
             Type::Simple(_) => true,
             Type::Compound {
-                kind: CompoundKind::Slice,
+                kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice,
                 ..
             } => true,
             Type::Array { element, .. } => self.element_go_zero_ok(element),

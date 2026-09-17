@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn f() -> (EnumeratedSlice<int>, EnumeratedSlice<int>) {
+    let xs = zero<EnumeratedSlice<int>>()
+    (xs, zero<EnumeratedSlice<int>>())
+  }
+---
+package main
+
+func f() ([]int, []int) {
+	var xs []int
+	return xs, ([]int)(nil)
+}

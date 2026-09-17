@@ -337,3 +337,14 @@ fn f() -> Ref<()> {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn zero_of_enumerated_slice_is_nil_in_every_position() {
+    let input = r#"
+fn f() -> (EnumeratedSlice<int>, EnumeratedSlice<int>) {
+  let xs = zero<EnumeratedSlice<int>>()
+  (xs, zero<EnumeratedSlice<int>>())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
