@@ -3441,6 +3441,26 @@ fn test() {
 }
 
 #[test]
+fn infer_zero_in_defer_has_nothing_to_run() {
+    let input = r#"
+fn test() {
+  defer zero<int>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_in_task_has_nothing_to_run() {
+    let input = r#"
+fn test() {
+  task zero<int>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_zero_of_type_parameter_needs_the_zeroable_bound() {
     let input = r#"
 fn empty<T>() -> T {

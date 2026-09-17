@@ -4888,6 +4888,18 @@ pub enum NotZeroableCause<'a> {
     },
 }
 
+pub fn zero_has_no_effect(keyword: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Nothing to run")
+        .with_infer_code("zero_has_no_effect")
+        .with_span_label(
+            &span,
+            format!("`zero` only produces a value, so `{keyword}` has nothing to run"),
+        )
+        .with_help(format!(
+            "Remove the `{keyword}`, or {keyword} the function that uses the value"
+        ))
+}
+
 pub fn not_zeroable_bound(
     leaf: &dyn Display,
     chain: &[&str],

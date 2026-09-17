@@ -1,5 +1,6 @@
 use crate::checker::EnvResolve;
 use syntax::ast::{Expression, Span};
+use syntax::program::CallKind;
 use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
@@ -109,6 +110,7 @@ impl InferCtx<'_> {
         }
 
         self.check_deferred_lock(&new_expression);
+        self.check_zero_has_effect(&new_expression, "defer", span);
 
         Expression::Defer {
             expression: new_expression.into(),
@@ -152,6 +154,20 @@ impl InferCtx<'_> {
             .find_map(Self::find_propagate)
     }
 
+    /// `zero<T>()` only produces a value, so running it later or elsewhere does nothing.
+    fn check_zero_has_effect(&mut self, expression: &Expression, keyword: &str, span: Span) {
+        if matches!(
+            expression.unwrap_parens(),
+            Expression::Call {
+                call_kind: CallKind::Zero,
+                ..
+            }
+        ) {
+            self.sink
+                .push(diagnostics::infer::zero_has_no_effect(keyword, span));
+        }
+    }
+
     pub(super) fn infer_task(
         &mut self,
         expression: Box<Expression>,
@@ -179,6 +195,8 @@ impl InferCtx<'_> {
                 new_expression
             })
         });
+
+        self.check_zero_has_effect(&new_expression, "task", span);
 
         Expression::Task {
             expression: new_expression.into(),
