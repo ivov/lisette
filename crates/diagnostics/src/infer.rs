@@ -4902,8 +4902,8 @@ pub fn not_zeroable_bound(
     };
     let help = match cause {
         NotZeroableCause::HiddenGoState { go_type } => format!(
-            "`{go_type}`{at} has Go-side state hidden from Lisette, so it has no zero value. \
-             Obtain the value from its documented Go constructor instead."
+            "`{go_type}`{at} keeps its state in fields that Lisette cannot see, so there is no \
+             safe empty value. Create it with a constructor function from its Go package."
         ),
         NotZeroableCause::NilMapField { struct_name } => format!(
             "`{leaf}`{at} is a map, whose Go zero is nil. `{struct_name} {{ .. }}` creates the \

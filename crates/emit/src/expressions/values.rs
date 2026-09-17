@@ -15,6 +15,7 @@ use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement, discard, expression_statement};
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::go_expression::FunctionLiteralLayout;
+use crate::plan::placement::is_unit_call;
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, OperandForm, ValuePlan,
 };
@@ -83,11 +84,9 @@ impl Planner<'_> {
         expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        if expression.get_type().is_unit()
-            && matches!(
-                expression.unwrap_parens(),
-                Expression::Call { .. } | Expression::Block { .. }
-            )
+        if is_unit_call(expression)
+            || (expression.get_type().is_unit()
+                && matches!(expression.unwrap_parens(), Expression::Block { .. }))
         {
             return self
                 .lower_value(expression, ctx)

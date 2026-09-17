@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn takes_unit(_u: ()) -> int { 1 }
+  
+  fn f() -> int {
+    let t = (zero<()>(), 2)
+    takes_unit(zero<()>()) + t.1
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func takesUnit(_ struct{}) int {
+	return 1
+}
+
+func f() int {
+	t := lisette.MakeTuple2[struct{}, int](struct{}{}, 2)
+	return takesUnit(struct{}{}) + t.Second
+}

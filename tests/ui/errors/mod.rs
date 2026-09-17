@@ -3417,6 +3417,18 @@ fn blank<T>() -> Array<T, 2> {
 }
 
 #[test]
+fn infer_zero_of_opaque_go_type_points_at_its_constructor() {
+    let input = r#"
+import "go:regexp"
+
+fn test() {
+  let re = zero<regexp.Regexp>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_zero_of_type_parameter_needs_the_zeroable_bound() {
     let input = r#"
 fn empty<T>() -> T {

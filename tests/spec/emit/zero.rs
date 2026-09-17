@@ -313,3 +313,16 @@ fn arr<T: Zeroable>() -> Array<T, 2> {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn zero_of_unit_in_argument_and_tuple_positions_is_a_value() {
+    let input = r#"
+fn takes_unit(_u: ()) -> int { 1 }
+
+fn f() -> int {
+  let t = (zero<()>(), 2)
+  takes_unit(zero<()>()) + t.1
+}
+"#;
+    assert_emit_snapshot!(input);
+}

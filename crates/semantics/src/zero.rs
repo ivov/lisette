@@ -341,9 +341,16 @@ impl ZeroWalk<'_> {
                     if def.is_zero_safe() {
                         return Ok(());
                     }
+                    let reason = if id.as_str().starts_with(types::GO_IMPORT_PREFIX) {
+                        NoZeroReason::HiddenGoState {
+                            go_type: go_display_name(id),
+                        }
+                    } else {
+                        NoZeroReason::NoZeroForType
+                    };
                     return Err(NoZero {
                         chain: vec![],
-                        reason: NoZeroReason::NoZeroForType,
+                        reason,
                         leaf_ty: Box::new(original_ty.clone()),
                     });
                 }
