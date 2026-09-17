@@ -261,3 +261,18 @@ fn zero_of_a_nested_generic_struct() {
     infer("struct Box<T> { v: T }\nfn f<T: Zeroable>() -> Box<Box<T>> { zero<Box<Box<T>>>() }")
         .assert_no_errors();
 }
+
+#[test]
+fn map_bracket_read_accepts_a_zeroable_parameter() {
+    infer("fn pick<K: Comparable, V: Zeroable>(m: Map<K, V>, k: K) -> V { m[k] }")
+        .assert_no_errors();
+}
+
+#[test]
+fn map_bracket_read_sees_an_impl_block_bound() {
+    infer(
+        "struct Store<T: Zeroable> { items: Map<string, T> }\n\
+         impl<T: Zeroable> Store<T> {\n  fn pick(self, key: string) -> T { self.items[key] }\n}",
+    )
+    .assert_no_errors();
+}

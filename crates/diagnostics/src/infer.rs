@@ -1542,8 +1542,8 @@ pub fn map_read_no_zero(
             format!(
                 "Bracket reads can return a zero value when the key is missing, but the type \
                  parameter `{value_ty}` can be instantiated with a type that has no zero value, \
-                 such as `Ref<T>`, so this bracket read is disallowed. Use \
-                 `{receiver}.get(key)` instead"
+                 such as `Ref<T>`, so this bracket read is disallowed. Add the bound \
+                 `<{value_ty}: Zeroable>`, or use `{receiver}.get(key)`"
             ),
         ),
         MapReadNoZeroCause::NoZero => (
