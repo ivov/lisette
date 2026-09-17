@@ -1105,23 +1105,24 @@ impl TaskState {
             BuiltinBound::Ordered => {}
             BuiltinBound::Zeroable => {
                 let param_bounds = self.visible_parameter_bounds();
-                self.check_zeroable_argument(store, &resolved, span, &param_bounds);
+                let from_package = self.cursor.package_id().to_string();
+                self.check_zeroable_argument(store, &resolved, span, &param_bounds, &from_package);
             }
         }
     }
 
-    /// `param_bounds` is the generic scope of the call. A deferred check runs
-    /// after that scope is gone, so it hands over the bounds it captured.
+    /// `param_bounds` and `from_package` describe the call site. A deferred
+    /// check runs after that scope is gone, so it hands over what it captured.
     pub(crate) fn check_zeroable_argument(
         &mut self,
         store: &Store,
         resolved: &Type,
         span: Span,
         param_bounds: &[(EcoString, Vec<Type>)],
+        from_package: &str,
     ) {
-        let from_package = self.cursor.package_id().to_string();
         if let Err(no_zero) =
-            zero::has_zero_in_scope(store, resolved, &from_package, MapZero::Nil, param_bounds)
+            zero::has_zero_in_scope(store, resolved, from_package, MapZero::Nil, param_bounds)
         {
             let chain: Vec<&str> = no_zero.chain.iter().map(EcoString::as_str).collect();
             let struct_name = match resolved {

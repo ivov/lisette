@@ -208,6 +208,7 @@ impl TaskState {
                     &argument,
                     obligation.span,
                     &obligation.available_bounds,
+                    &obligation.package_id,
                 );
                 continue;
             }

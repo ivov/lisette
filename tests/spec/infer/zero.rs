@@ -291,3 +291,19 @@ fn map_bracket_read_sees_the_receiver_declared_bound() {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn zero_deferred_in_another_package_keeps_that_package() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "model",
+        "model.lis",
+        "pub struct Point { x: int }\npub fn blank() -> Point { let p = zero()\n  p }\n",
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        "import \"model\"\nfn f() -> model.Point { model.blank() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
