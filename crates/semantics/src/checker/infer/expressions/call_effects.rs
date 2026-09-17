@@ -80,7 +80,6 @@ impl InferCtx<'_> {
             } => {
                 let qualified = self.qualify_name(value);
                 let definition = store.get_definition(&qualified);
-                // A local binding of the same name is the user's own callable.
                 let shadowed = matches!(resolution, IdentifierResolution::Binding(_));
                 if definition.is_none() && !shadowed {
                     match value.as_str() {

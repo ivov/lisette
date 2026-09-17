@@ -80,9 +80,6 @@ fn check_one(
     };
     let value = value.as_str();
     let span = *span;
-    // A local binding of the same name is the user's own value, not the builtin.
-    // `panic` is the exception: emit injects `panic("unreachable")` under the Go
-    // builtin name, which a binding in scope would shadow into a compile error.
     if value != "panic" && matches!(resolution, IdentifierResolution::Binding(_)) {
         return;
     }

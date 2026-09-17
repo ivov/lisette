@@ -5294,18 +5294,18 @@ pub struct Node {
 }
 
 pub interface Applier<T> {
-  fn Apply(items: mut Slice<T>)
+  fn Apply() -> T
 }
 
 pub type Impl<K>
 
 impl<K: Comparable> Impl<K> {
-  fn Apply(self, items: mut Slice<mut Ref<Node>>)
+  fn Apply(self) -> Ref<Node>
 }
 
 pub fn New() -> Impl<int>
 
-pub fn Use(a: Applier<Ref<Node>>)
+pub fn Use(a: Applier<mut Ref<mut Node>>)
 "#;
     let input = r#"import "go:example.com/lib"
 fn main() {
