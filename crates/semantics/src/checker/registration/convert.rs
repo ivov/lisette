@@ -5,7 +5,7 @@ use crate::checker::infer::expressions::comparison::{
 };
 use std::mem;
 use syntax::EcoString;
-use syntax::ast::{Annotation, Generic, Span, VariantFields};
+use syntax::ast::{Annotation, Generic, Span, StructFields, VariantFields};
 use syntax::display::annotation_to_string;
 use syntax::program::{AliasKind, ConstantValue, DefinitionBody};
 use syntax::types::{
@@ -1119,7 +1119,10 @@ impl TaskState {
                             if !chain.is_empty()
                                 && matches!(
                                     store.get_definition(id.as_str()).map(|d| &d.body),
-                                    Some(DefinitionBody::Struct { .. })
+                                    Some(DefinitionBody::Struct {
+                                        fields: StructFields::Record(_),
+                                        ..
+                                    })
                                 ) =>
                         {
                             Some(id.last_segment().to_string())

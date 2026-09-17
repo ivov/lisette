@@ -3429,6 +3429,18 @@ fn test() {
 }
 
 #[test]
+fn infer_zero_of_newtype_over_map_does_not_suggest_autofill() {
+    let input = r#"
+struct Tags(Map<string, string>)
+
+fn test() {
+  let t = zero<Tags>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_zero_of_type_parameter_needs_the_zeroable_bound() {
     let input = r#"
 fn empty<T>() -> T {
