@@ -1104,45 +1104,53 @@ impl TaskState {
             }
             BuiltinBound::Ordered => {}
             BuiltinBound::Zeroable => {
-                let from_package = self.cursor.package_id().to_string();
                 let param_bounds = self.visible_parameter_bounds();
-                if let Err(no_zero) = zero::has_zero_in_scope(
-                    store,
-                    &resolved,
-                    &from_package,
-                    MapZero::Nil,
-                    &param_bounds,
-                ) {
-                    let chain: Vec<&str> = no_zero.chain.iter().map(EcoString::as_str).collect();
-                    let struct_name = match &resolved {
-                        Type::Nominal { id, .. }
-                            if !chain.is_empty()
-                                && matches!(
-                                    store.get_definition(id.as_str()).map(|d| &d.body),
-                                    Some(DefinitionBody::Struct {
-                                        fields: StructFields::Record(_),
-                                        ..
-                                    })
-                                ) =>
-                        {
-                            Some(id.last_segment().to_string())
-                        }
-                        _ => None,
-                    };
-                    let cause = match (&no_zero.reason, &struct_name) {
-                        (NoZeroReason::NilMap, Some(struct_name)) => {
-                            diagnostics::infer::NotZeroableCause::NilMapField { struct_name }
-                        }
-                        _ => no_zero.cause(),
-                    };
-                    self.sink.push(diagnostics::infer::not_zeroable_bound(
-                        &no_zero.leaf_ty.stringify(),
-                        &chain,
-                        cause,
-                        span,
-                    ));
-                }
+                self.check_zeroable_argument(store, &resolved, span, &param_bounds);
             }
+        }
+    }
+
+    /// `param_bounds` is the generic scope of the call. A deferred check runs
+    /// after that scope is gone, so it hands over the bounds it captured.
+    pub(crate) fn check_zeroable_argument(
+        &mut self,
+        store: &Store,
+        resolved: &Type,
+        span: Span,
+        param_bounds: &[(EcoString, Vec<Type>)],
+    ) {
+        let from_package = self.cursor.package_id().to_string();
+        if let Err(no_zero) =
+            zero::has_zero_in_scope(store, resolved, &from_package, MapZero::Nil, param_bounds)
+        {
+            let chain: Vec<&str> = no_zero.chain.iter().map(EcoString::as_str).collect();
+            let struct_name = match resolved {
+                Type::Nominal { id, .. }
+                    if !chain.is_empty()
+                        && matches!(
+                            store.get_definition(id.as_str()).map(|d| &d.body),
+                            Some(DefinitionBody::Struct {
+                                fields: StructFields::Record(_),
+                                ..
+                            })
+                        ) =>
+                {
+                    Some(id.last_segment().to_string())
+                }
+                _ => None,
+            };
+            let cause = match (&no_zero.reason, &struct_name) {
+                (NoZeroReason::NilMap, Some(struct_name)) => {
+                    diagnostics::infer::NotZeroableCause::NilMapField { struct_name }
+                }
+                _ => no_zero.cause(),
+            };
+            self.sink.push(diagnostics::infer::not_zeroable_bound(
+                &no_zero.leaf_ty.stringify(),
+                &chain,
+                cause,
+                span,
+            ));
         }
     }
 }

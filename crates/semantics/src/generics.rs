@@ -202,6 +202,15 @@ impl TaskState {
                 continue;
             }
 
+            if builtin == Some(BuiltinBound::Zeroable) {
+                self.check_zeroable_argument(
+                    store,
+                    &argument,
+                    obligation.span,
+                    &obligation.available_bounds,
+                );
+                continue;
+            }
             if let Some(builtin) = builtin {
                 let equals_hint = match &obligation.origin {
                     GenericBoundOrigin::Construction {
