@@ -326,3 +326,14 @@ fn f() -> int {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn reference_to_zero_of_unit_is_a_value() {
+    let input = r#"
+fn f() -> Ref<()> {
+  let p = &zero<()>()
+  p
+}
+"#;
+    assert_emit_snapshot!(input);
+}

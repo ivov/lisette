@@ -461,7 +461,7 @@ impl Planner<'_> {
     /// Plan a `&inner` reference, hoisting to a temp when the inner is
     /// Go-unaddressable.
     pub(crate) fn plan_reference(&mut self, inner: &Expression, ty: &Type) -> ValuePlan {
-        if inner.get_type().is_unit() && matches!(inner.unwrap_parens(), Expression::Call { .. }) {
+        if is_unit_call(inner) {
             let staged = self.plan_operand(inner.unwrap_parens(), ExpressionContext::value());
             return staged.map_observable_expression(|setup, staged_value| {
                 if !staged_value.is_empty() {

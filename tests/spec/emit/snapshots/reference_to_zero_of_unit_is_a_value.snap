@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn f() -> Ref<()> {
+    let p = &zero<()>()
+    p
+  }
+---
+package main
+
+func f() *struct{} {
+	ref_1 := struct{}{}
+	p := &ref_1
+	return p
+}
