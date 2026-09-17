@@ -1,4 +1,4 @@
-use crate::_harness::infer;
+use crate::_harness::{infer, infer_with_go_typedefs};
 
 #[test]
 fn direct_alias_write_refused() {
@@ -2517,4 +2517,132 @@ fn poke(p: Pair) {
     )
     .assert_infer_code_once("write_through_read_only")
     .assert_error_contains("`.0` is declared writable, but `p` is read-only");
+}
+
+const GRAPHICS_TYPEDEF: &str = r#"
+pub type Image
+
+pub interface Game {
+  fn Draw(screen: Ref<Image>)
+}
+
+pub fn FillCircle(screen: mut Ref<Image>)
+
+pub fn RunGame(game: Game)
+"#;
+
+#[test]
+fn go_interface_accepts_writing_parameter() {
+    let input = r#"import "go:example.com/gfx"
+
+struct Board {}
+
+impl Board {
+  fn Draw(self, screen: mut Ref<gfx.Image>) {
+    gfx.FillCircle(screen)
+  }
+}
+
+fn main() {
+  gfx.RunGame(Board {})
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/gfx", GRAPHICS_TYPEDEF)]).assert_no_errors();
+}
+
+#[test]
+fn go_interface_call_keeps_the_declared_permission() {
+    let input = r#"import "go:example.com/gfx"
+
+fn drive(game: gfx.Game, screen: Ref<gfx.Image>) {
+  game.Draw(screen)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/gfx", GRAPHICS_TYPEDEF)]).assert_no_errors();
+}
+
+#[test]
+fn go_interface_accepts_writing_parameter_element() {
+    let typedef = r#"
+pub struct Node {
+  pub Value: int,
+}
+
+pub interface Filler {
+  fn Fill(nodes: Slice<Ref<Node>>)
+}
+
+pub fn Run(f: Filler)
+"#;
+    let input = r#"import "go:example.com/lib"
+
+struct Zeroing {}
+
+impl Zeroing {
+  fn Fill(self, nodes: mut Slice<mut Ref<lib.Node>>) {
+    nodes[0].Value = 0
+  }
+}
+
+fn main() {
+  lib.Run(Zeroing {})
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn go_generic_interface_accepts_writable_type_argument() {
+    let typedef = r#"
+pub struct Message {}
+
+pub interface BaseModel<M> {
+  fn Generate(input: mut Slice<M>) -> Result<M, error>
+}
+
+pub type ChatModel
+
+impl ChatModel {
+  fn Generate(self, input: mut Slice<mut Ref<mut Message>>) -> Result<mut Ref<mut Message>, error>
+}
+
+pub fn NewChatModel() -> mut Ref<ChatModel>
+
+pub fn Use(m: BaseModel<Ref<Message>>)
+"#;
+    let input = r#"import "go:example.com/lib"
+fn main() {
+  lib.Use(lib.NewChatModel())
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn go_interface_refuses_read_only_return() {
+    let typedef = r#"
+pub struct Node {}
+
+pub interface Source {
+  fn Next() -> mut Ref<Node>
+}
+
+pub fn Run(s: Source)
+"#;
+    let input = r#"import "go:example.com/lib"
+
+struct Once {}
+
+impl Once {
+  fn Next(self) -> Ref<lib.Node> {
+    &lib.Node {}
+  }
+}
+
+fn main() {
+  lib.Run(Once {})
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
+        .assert_infer_code("interface_not_implemented");
 }

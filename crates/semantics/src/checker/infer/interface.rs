@@ -614,7 +614,8 @@ impl InferCtx<'_> {
                         .symbol_methods
                         .get(impl_method_name.as_str())
                         .and_then(|method| method.name_span);
-                    let through_type_parameter = interface_qualified_id.starts_with("go:")
+                    let through_type_parameter = interface_qualified_id
+                        .starts_with(GO_IMPORT_PREFIX)
                         && permission_gap_only_at_type_parameters(
                             &requirement.method.ty,
                             &expected,
@@ -706,11 +707,6 @@ impl InferCtx<'_> {
         };
         let impl_method_without_receiver = Self::remove_first_param(&instantiated_method);
 
-        let strip_bounds = |ty: &Type| match ty {
-            Type::Function(f) => f.rebuild(f.params.clone(), vec![], f.return_type.clone()),
-            other => other.clone(),
-        };
-
         let impl_for_unify = covariant_return_adjustment(
             site.interface_qualified_id,
             method_name,
@@ -719,6 +715,8 @@ impl InferCtx<'_> {
             store,
         )
         .unwrap_or_else(|| impl_method_without_receiver.clone());
+
+        let go_interface = site.interface_qualified_id.starts_with(GO_IMPORT_PREFIX);
 
         enum Mismatch {
             Receiver,
@@ -733,15 +731,14 @@ impl InferCtx<'_> {
                     this.try_unify(receiver, &candidate_ty, &Span::dummy())
                         .map_err(|_| Mismatch::Receiver)?;
                 }
-                this.try_unify(
-                    &strip_bounds(method_ty),
-                    &strip_bounds(&impl_for_unify),
-                    &Span::dummy(),
-                )
-                .map_err(|_| {
-                    resolved_impl_method = Some(impl_method_without_receiver.resolve_in(&this.env));
-                    Mismatch::Signature
-                })
+                let required = signature_to_match(method_ty, go_interface);
+                let provided = signature_to_match(&impl_for_unify, go_interface);
+                this.try_unify(&required, &provided, &Span::dummy())
+                    .map_err(|_| {
+                        resolved_impl_method =
+                            Some(impl_method_without_receiver.resolve_in(&this.env));
+                        Mismatch::Signature
+                    })
             })
         });
 
@@ -920,8 +917,7 @@ fn erase_at_parameters(declared: &Type, ty: &Type) -> Option<Type> {
                 .iter()
                 .zip(&f.params)
                 .map(|(declared, param)| {
-                    erase_at_parameters(&declared.ty, &param.ty)
-                        .map(|ty| FunctionParameter::named(ty, param.name.clone()))
+                    erase_at_parameters(&declared.ty, &param.ty).map(|ty| param.with_type(ty))
                 })
                 .collect::<Option<Vec<_>>>()?;
             let return_type = erase_at_parameters(&declared.return_type, &f.return_type)?;
@@ -988,6 +984,25 @@ fn erase_at_parameters(declared: &Type, ty: &Type) -> Option<Type> {
     }
 }
 
+fn signature_to_match(ty: &Type, clear_parameter_permissions: bool) -> Type {
+    let Type::Function(f) = ty else {
+        return ty.clone();
+    };
+    let params = if clear_parameter_permissions {
+        strip_permissions(&f.params)
+    } else {
+        f.params.clone()
+    };
+    f.rebuild(params, vec![], f.return_type.clone())
+}
+
+fn strip_permissions(params: &[FunctionParameter]) -> Vec<FunctionParameter> {
+    params
+        .iter()
+        .map(|param| param.with_type(erase_permissions(&param.ty)))
+        .collect()
+}
+
 fn erase_permissions(ty: &Type) -> Type {
     match ty {
         Type::Compound { kind, args, .. } => Type::Compound {
@@ -1006,12 +1021,7 @@ fn erase_permissions(ty: &Type) -> Type {
             element: Box::new(erase_permissions(element)),
         },
         Type::Function(f) => f.rebuild(
-            f.params
-                .iter()
-                .map(|param| {
-                    FunctionParameter::named(erase_permissions(&param.ty), param.name.clone())
-                })
-                .collect(),
+            strip_permissions(&f.params),
             Vec::new(),
             Box::new(erase_permissions(&f.return_type)),
         ),
