@@ -134,8 +134,8 @@ impl ZeroWalk<'_> {
     fn parameter_is_zeroable(&self, name: &str) -> bool {
         self.param_bounds
             .iter()
-            .find(|(parameter, _)| parameter == name)
-            .is_some_and(|(_, bounds)| {
+            .filter(|(parameter, _)| parameter == name)
+            .any(|(_, bounds)| {
                 bounds
                     .iter()
                     .any(|bound| bound.get_qualified_id() == Some("prelude.Zeroable"))

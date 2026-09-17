@@ -1,6 +1,7 @@
 use diagnostics::infer::MapReadNoZeroCause;
 use ecow::EcoString;
 use syntax::ast::{Expression, Span};
+use syntax::program::DefinitionBody;
 use syntax::types::{CompoundKind, Type};
 
 use crate::checker::EnvResolve;
@@ -35,6 +36,28 @@ impl InferCtx<'_> {
                     .unwrap_or_default();
                 (generic.name.clone(), resolved)
             }));
+        }
+        // An impl also inherits the bounds its receiver type declares.
+        if let Expression::ImplBlock { ty, .. } = expression
+            && let Type::Nominal { id, params, .. } = ty
+            && let Some(
+                DefinitionBody::Struct {
+                    generics: declared, ..
+                }
+                | DefinitionBody::Enum {
+                    generics: declared, ..
+                },
+            ) = self.store.get_definition(id.as_str()).map(|d| &d.body)
+        {
+            for (declared, param) in declared.iter().zip(params) {
+                if let Type::Parameter(name) = param {
+                    let inherited = declared
+                        .resolved_bounds()
+                        .map(|bounds| bounds.cloned().collect())
+                        .unwrap_or_default();
+                    bounds.push((name.clone(), inherited));
+                }
+            }
         }
         match expression {
             Expression::Assignment {

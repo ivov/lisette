@@ -282,3 +282,12 @@ fn zero_deferred_inside_a_wrapper_sees_the_bound() {
     infer("fn f<T: Zeroable>(v: (T, int)) -> (T, int) { let mut x = zero()\n  x = v\n  x }")
         .assert_no_errors();
 }
+
+#[test]
+fn map_bracket_read_sees_the_receiver_declared_bound() {
+    infer(
+        "struct Store<T: Zeroable> { items: Map<string, T> }\n\
+         impl<T> Store<T> {\n  fn pick(self, key: string) -> T { self.items[key] }\n}",
+    )
+    .assert_no_errors();
+}
