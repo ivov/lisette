@@ -35,16 +35,7 @@ type Top struct {
 type Meters int
 
 func nested() Top {
-	return Top{
-		Mid: Mid{
-			Base: Base{
-				x:   0,
-				tag: "",
-			},
-			y: 0,
-		},
-		z: false,
-	}
+	return Top{}
 }
 
 func newtype() Meters {

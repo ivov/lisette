@@ -22,10 +22,7 @@ type Box[T any] struct {
 }
 
 func blank[T any]() Box[T] {
-	return Box[T]{
-		v: *new(T),
-		n: 0,
-	}
+	return Box[T]{}
 }
 
 func pair[T any]() (T, int) {

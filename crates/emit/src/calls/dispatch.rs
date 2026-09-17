@@ -85,6 +85,20 @@ fn zero_call_type(
     call_ty.cloned().unwrap_or(Type::Error)
 }
 
+impl Planner<'_> {
+    fn is_plain_struct(&self, ty: &Type) -> bool {
+        let Type::Nominal { id, .. } = ty else {
+            return false;
+        };
+        !go_name::is_go_import(id.as_str())
+            && self.get_newtype_underlying(ty).is_none()
+            && matches!(
+                self.facts.definition(id.as_str()).map(|d| &d.body),
+                Some(DefinitionBody::Struct { .. })
+            )
+    }
+}
+
 fn extract_return_type_param(function: &Expression) -> Option<Type> {
     let ty = function.get_type();
     let f = ty.as_function_type()?;
@@ -565,7 +579,11 @@ impl<'a> Planner<'a> {
             }
             CallableOrigin::Zero => {
                 let ty = zero_call_type(function, resolved_type_args, call_ty);
-                let value = self.lisette_zero(&ty);
+                let value = if self.is_plain_struct(&ty) {
+                    GoExpression::empty_composite(self.use_go_type(&ty))
+                } else {
+                    self.lisette_zero(&ty)
+                };
                 // Nothing types a free expression, so an untyped `0` would
                 // default to `int`.
                 let value = match self.constant_needs_go_type(value.constant_kind(), &ty) {

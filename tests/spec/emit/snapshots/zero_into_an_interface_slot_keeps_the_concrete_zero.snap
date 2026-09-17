@@ -26,6 +26,6 @@ func (d Dog) speak() string {
 }
 
 func f() string {
-	var s Speaker = Dog{name: ""}
+	var s Speaker = Dog{}
 	return s.speak()
 }
