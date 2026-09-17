@@ -1620,3 +1620,24 @@ fn name(c: palette.Color) -> string {
         result.errors
     );
 }
+
+#[test]
+fn builtin_names_can_be_local_bindings() {
+    for name in [
+        "real",
+        "imaginary",
+        "complex",
+        "assert_type",
+        "max",
+        "min",
+        "len",
+        "make",
+        "println",
+    ] {
+        infer(&format!("fn f() -> int {{ let {name} = 5\n  {name} + 1 }}")).assert_no_errors();
+        infer(&format!("fn g({name}: int) -> int {{ {name} + 1 }}")).assert_no_errors();
+    }
+    infer("fn f() -> int { let assert_type = || 1\n  assert_type() }").assert_no_errors();
+    infer("fn f() -> int { let panic = 5\n  panic + 1 }")
+        .assert_infer_code("native_constructor_value");
+}

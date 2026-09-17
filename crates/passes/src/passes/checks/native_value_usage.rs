@@ -1,5 +1,5 @@
 use diagnostics::LocalSink;
-use syntax::ast::{Expression, StructKind};
+use syntax::ast::{Expression, IdentifierResolution, StructKind};
 use syntax::program::{Definition, DefinitionBody, NativeTypeKind};
 use syntax::types::{FunctionType, Symbol, Type, unqualified_name};
 
@@ -70,13 +70,19 @@ fn check_one(
     sink: &LocalSink,
 ) {
     let Expression::Identifier {
-        value, ty, span, ..
+        value,
+        ty,
+        span,
+        resolution,
     } = identifier
     else {
         return;
     };
     let value = value.as_str();
     let span = *span;
+    if value != "panic" && matches!(resolution, IdentifierResolution::Binding(_)) {
+        return;
+    }
     if matches!(
         value,
         "imaginary" | "assert_type" | "complex" | "real" | "panic"

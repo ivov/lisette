@@ -1,5 +1,5 @@
 use crate::checker::EnvResolve;
-use syntax::ast::{Expression, Span, StructFields};
+use syntax::ast::{Expression, IdentifierResolution, Span, StructFields};
 use syntax::program::{CallKind, Definition, DefinitionBody, DotAccessResolution, NativeTypeKind};
 use syntax::types::{FunctionParameter, Symbol, Type, peel_to_range_type};
 
@@ -75,10 +75,13 @@ impl InferCtx<'_> {
                     }
                 }
             }
-            Expression::Identifier { value, .. } => {
+            Expression::Identifier {
+                value, resolution, ..
+            } => {
                 let qualified = self.qualify_name(value);
                 let definition = store.get_definition(&qualified);
-                if definition.is_none() && value == "assert_type" {
+                let shadowed = matches!(resolution, IdentifierResolution::Binding(_));
+                if definition.is_none() && !shadowed && value == "assert_type" {
                     return CallKind::AssertType;
                 }
                 if self.is_tuple_struct_definition(definition, callee) {
