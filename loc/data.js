@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789647247278,
+  "lastUpdate": 1789647627198,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -36146,6 +36146,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "passes",
             "value": 19300,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15235,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13959,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8855,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6285,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2922,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "142001bdc431cb3d991ddf163f15c971d377541e",
+          "message": "fix: let a local binding shadow a prelude builtin name (#1441)\n\nCo-authored-by: Patrik Storm <storm.patrik@gmail.com>",
+          "timestamp": "2026-09-17T14:19:59+02:00",
+          "tree_id": "8288cc933eacb0744e324a35c8189821449bf7dc",
+          "url": "https://github.com/ivov/lisette/commit/142001bdc431cb3d991ddf163f15c971d377541e"
+        },
+        "date": 1789647624311,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 142996,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 35088,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28201,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19306,
             "unit": "lines"
           },
           {
