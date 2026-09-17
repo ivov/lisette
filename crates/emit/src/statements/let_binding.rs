@@ -251,7 +251,7 @@ impl Planner<'_> {
             bound
         };
 
-        // Drops the computed value for a bare `var x T`, so only where the slot zeroes to it.
+        // A bare `var x T` only where the slot's zero is the value.
         if is_zero_call(value)
             && statements.is_empty()
             && coercion_is_identity

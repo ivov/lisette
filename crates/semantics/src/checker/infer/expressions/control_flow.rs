@@ -154,7 +154,6 @@ impl InferCtx<'_> {
             .find_map(Self::find_propagate)
     }
 
-    /// `zero<T>()` only produces a value, so running it later or elsewhere does nothing.
     fn check_zero_has_effect(&mut self, expression: &Expression, keyword: &str, span: Span) {
         if matches!(
             expression.unwrap_parens(),

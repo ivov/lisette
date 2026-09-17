@@ -1533,7 +1533,6 @@ fn main() {
     assert_multipackage_infer_error_snapshot!(result, source);
 }
 
-// `unconstrained_type_param` splits on whether the parameter reaches the signature.
 #[test]
 fn infer_unconstrained_type_param_absent_from_signature() {
     let input = r#"

@@ -686,7 +686,6 @@ impl InferCtx<'_> {
         Dispatched::Handled
     }
 
-    /// The built-in this bound names, if it names one at all.
     pub(crate) fn builtin_bound(&self, bound: &Bound) -> Option<BuiltinBound> {
         bound
             .ty

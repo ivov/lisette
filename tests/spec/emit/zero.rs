@@ -51,7 +51,6 @@ fn f() {
 
 #[test]
 fn a_local_binding_named_zero_is_called_not_zeroed() {
-    // Calling a local named `zero` must not lower to a zero value.
     let input = r#"
 fn f() -> int {
   let zero = || 42
@@ -191,7 +190,6 @@ fn f() {
 
 #[test]
 fn zero_into_an_interface_slot_keeps_the_concrete_zero() {
-    // A wider slot zeroes to nil, so the shortcut must not claim this one.
     let input = r#"
 interface Speaker { fn speak() -> string }
 struct Dog { name: string }
@@ -223,8 +221,6 @@ fn f() {
 
 #[test]
 fn a_local_binding_named_zero_keeps_its_calls_in_statement_position() {
-    // `zero<T>()` is droppable as a discarded statement; a binding that merely
-    // shares the name is not, and dropping it would take its effects with it.
     let input = r#"
 import "go:fmt"
 

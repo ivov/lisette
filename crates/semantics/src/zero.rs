@@ -32,7 +32,6 @@ impl NoZero {
         }
     }
 
-    /// The reason in the shape the `Zeroable` diagnostic renders.
     pub fn cause(&self) -> diagnostics::infer::NotZeroableCause<'_> {
         match &self.reason {
             NoZeroReason::HiddenGoState { go_type } => {
@@ -73,11 +72,9 @@ pub enum NoZeroReason {
     HiddenGoState { go_type: EcoString },
     /// The leaf type is a `Map`, whose Go zero is nil.
     NilMap,
-    /// A type parameter without a `Zeroable` bound. Split from `NoZeroForType`
-    /// because the remedy is specific: add the bound.
+    /// A type parameter without a `Zeroable` bound.
     TypeParameterUnbounded,
-    /// An enum with no variant marked `#[default]`. Split from `NoZeroForType`
-    /// because the remedy is specific: mark a variant.
+    /// An enum with no variant marked `#[default]`.
     EnumWithoutDefault,
 }
 
@@ -219,7 +216,7 @@ impl ZeroWalk<'_> {
                 self.walk_nominal(id, params, ty)
             }
             Type::Forall { body, .. } => self.walk(body),
-            // Only `Zeroable` promises a zero; `Comparable` admits channels.
+            // `Comparable` admits channels, so only `Zeroable` promises a zero.
             Type::Parameter(name) if self.parameter_is_zeroable(name) => Ok(()),
             Type::Parameter(_) => Err(NoZero {
                 chain: vec![],

@@ -34,7 +34,6 @@ fn zero_of_a_wrapper_around_a_zeroable_parameter() {
 
 #[test]
 fn zero_of_a_wrapper_around_a_parameter_that_is_not_zeroable() {
-    // The bound is what carries the proof; without it the element is unknown.
     infer("fn f<T>() -> Array<T, 2> { zero<Array<T, 2>>() }")
         .assert_infer_code("not_zeroable_bound");
     infer("struct Box<T> { v: T }\nfn f<T: Comparable>() -> Box<T> { zero<Box<T>>() }")
@@ -106,14 +105,12 @@ fn zero_of_enum_is_rejected() {
 
 #[test]
 fn a_bad_type_argument_does_not_cascade_a_zero_error() {
-    // The reversed type arguments are the only mistake; a bound error buries it.
     infer("fn f() { let _ = zero<Array<3, int>>() }")
         .assert_infer_code_count("not_zeroable_bound", 0);
 }
 
 #[test]
 fn zero_as_a_bare_value_is_rejected_like_other_prelude_functions() {
-    // Generic, so as a bare value it would reach emit as `zero[int]`.
     infer("fn f() { let g: fn() -> int = zero\nlet _ = g }")
         .assert_infer_code("native_constructor_value");
 }
@@ -151,8 +148,6 @@ fn zero_rejection_reaches_through_a_map_field() {
 
 #[test]
 fn zero_without_a_type_argument_is_rejected() {
-    // Two diagnostics for one mistake, pre-existing: `fn make<T: Comparable>() -> T`
-    // called as `make()` does the same.
     infer("fn f() { let _ = zero() }")
         .assert_infer_code_count("missing_type_argument", 1)
         .assert_infer_code_count("unconstrained_type_param", 1);
@@ -186,8 +181,6 @@ fn zero_of_unit_is_allowed() {
 
 #[test]
 fn zero_inferred_as_unknown_is_rejected_like_the_written_form() {
-    // A variadic `any` parameter pins `T` to `Unknown`, which must not slip
-    // past the bound just because inference chose it rather than the author.
     infer("import \"go:fmt\"\nfn f() { let x = zero()\n  fmt.Println(x) }")
         .assert_infer_code("not_zeroable_bound");
 }

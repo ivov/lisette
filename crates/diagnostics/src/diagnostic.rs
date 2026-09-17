@@ -503,8 +503,7 @@ impl LisetteDiagnostic {
         self.severity == Severity::Advice
     }
 
-    /// Everything the reader sees. Two diagnostics equal here are
-    /// indistinguishable on screen, so only one is worth printing.
+    /// Everything the reader sees, so equal keys look the same on screen.
     pub fn dedup_key(&self) -> String {
         let mut key = format!(
             "{:?}\u{1}{}\u{1}{}\u{1}{}",

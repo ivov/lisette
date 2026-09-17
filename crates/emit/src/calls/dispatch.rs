@@ -69,7 +69,6 @@ pub(crate) fn all_type_params_inferrable(
     })
 }
 
-/// The written type argument, or the return type inference settled on.
 fn zero_call_type(
     function: &Expression,
     type_args: ResolvedCallTypeArguments<'_>,
@@ -584,8 +583,7 @@ impl<'a> Planner<'a> {
                 } else {
                     self.lisette_zero(&ty)
                 };
-                // Nothing types a free expression, so an untyped `0` would
-                // default to `int`.
+                // An untyped `0` with nothing to type it would default to `int`.
                 let value = match self.constant_needs_go_type(value.constant_kind(), &ty) {
                     Some(go_type) => GoExpression::conversion(go_type, value),
                     None => value,

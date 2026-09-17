@@ -9858,8 +9858,6 @@ fn main() {
 
 #[test]
 fn a_rejected_bound_reports_once() {
-    // The bound is re-checked at several unification stages; the canonicalized
-    // output must still carry it once.
     for source in [
         "fn main() { let _ = zero<Map<string, int>>() }",
         "fn main() { let _ = zero<Channel<int>>() }",
@@ -9878,8 +9876,6 @@ fn a_rejected_bound_reports_once() {
 
 #[test]
 fn distinct_errors_sharing_a_span_both_survive() {
-    // `field_no_zero` carries the field only in its help, so collapsing on
-    // title and span alone would drop one of these.
     let mut fs = MockFileSystem::new();
     fs.add_file(
         ENTRY_PACKAGE_ID,

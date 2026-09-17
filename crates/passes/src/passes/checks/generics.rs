@@ -78,9 +78,7 @@ fn visit_expression(
     }
 }
 
-/// How the callee is spelled here, so the suggested type argument can be pasted.
-/// `get_var_name` would hand back a `DotAccess` receiver (`pkg.f()` → `pkg`), and
-/// the member alone is not callable (`b.pick()` → `pick`).
+/// The callee as written, so the suggested type argument pastes back.
 fn callee_name(callee: &Expression) -> Option<String> {
     match callee.unwrap_parens() {
         Expression::Identifier { value, .. } => Some(value.to_string()),

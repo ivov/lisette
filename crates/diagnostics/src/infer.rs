@@ -2539,8 +2539,6 @@ pub fn uninferred_binding(name: &str, span: Span) -> LisetteDiagnostic {
         ))
 }
 
-/// `example` spells this call with an explicit type argument. `in_signature`
-/// separates an ambiguous call from a parameter no call could ever pin down.
 pub fn unconstrained_type_param(
     param_name: &str,
     example: &str,
@@ -4906,7 +4904,6 @@ pub fn not_zeroable_bound(
     cause: NotZeroableCause<'_>,
     span: Span,
 ) -> LisetteDiagnostic {
-    // A chain means the offending type sits inside the one that was written.
     let at = if chain.is_empty() {
         String::new()
     } else {
@@ -4940,15 +4937,13 @@ pub fn not_zeroable_bound(
              `Map.new<K, V>()` for a map or `Channel.new<T>()` for a channel"
         ),
     };
-    // The leaf of a private field is the field's *type*, and `int` has a zero
-    // value; what it lacks is a way to be written from here.
+    // The leaf of a private field has a zero, so name the struct instead.
     let subject = match cause {
         NotZeroableCause::PrivateField { struct_name, .. } => struct_name.to_string(),
         _ => leaf.to_string(),
     };
     LisetteDiagnostic::error(format!("`{subject}` has no zero value"))
         .with_infer_code("not_zeroable_bound")
-        // Any `Zeroable`-bounded callee reaches here, not just `zero()`.
         .with_span_label(&span, format!("`{subject}` does not satisfy `Zeroable`"))
         .with_help(help)
 }

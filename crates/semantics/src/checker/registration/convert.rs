@@ -1052,8 +1052,7 @@ impl TaskState {
         equals_hint: Option<diagnostics::infer::EquatableFieldHint<'_>>,
     ) {
         let resolved = store.deep_resolve_alias(&argument.resolve_in(&self.env));
-        // A type that already failed to resolve carries its own diagnostic;
-        // a bound error on top of it buries the real one.
+        // A bound error on an unresolved type would bury its own diagnostic.
         if resolved.is_variable() || resolved.contains_error() {
             return;
         }
@@ -1111,8 +1110,7 @@ impl TaskState {
         }
     }
 
-    /// `param_bounds` and `from_package` describe the call site. A deferred
-    /// check runs after that scope is gone, so it hands over what it captured.
+    /// A deferred check runs after the call's scope is gone, so the caller passes what it captured.
     pub(crate) fn check_zeroable_argument(
         &mut self,
         store: &Store,

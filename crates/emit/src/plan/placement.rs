@@ -40,7 +40,6 @@ pub(crate) fn unreachable_panic_if_needed(
 fn is_side_effect_free_discard(expression: &Expression) -> bool {
     match expression {
         Expression::Unit { .. } => true,
-        // `zero<T>()` computes nothing; discarding it drops the whole statement.
         _ if is_zero_call(expression) => true,
         Expression::Literal { literal, .. } => matches!(
             literal,
@@ -55,7 +54,6 @@ fn is_side_effect_free_discard(expression: &Expression) -> bool {
     }
 }
 
-/// A whole `zero<T>()` call, which computes nothing.
 pub(crate) fn is_zero_call(expression: &Expression) -> bool {
     matches!(
         expression.unwrap_parens(),
