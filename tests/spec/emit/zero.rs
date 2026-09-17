@@ -241,7 +241,7 @@ fn f() -> int {
 }
 
 #[test]
-fn autofill_of_a_zeroable_parameter_field_lowers_to_new() {
+fn autofill_of_a_zeroable_parameter_field_is_omitted() {
     let input = r#"
 struct Box<T: Zeroable> { v: T, n: int }
 
@@ -295,6 +295,20 @@ fn nested() -> Top {
 
 fn newtype() -> Meters {
   zero<Meters>()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_make_and_array_new_of_a_zeroable_parameter_keep_go_zero() {
+    let input = r#"
+fn buf<T: Zeroable>(n: int) -> Slice<T> {
+  Slice.make<T>(n)
+}
+
+fn arr<T: Zeroable>() -> Array<T, 2> {
+  Array.new<T, 2>()
 }
 "#;
     assert_emit_snapshot!(input);

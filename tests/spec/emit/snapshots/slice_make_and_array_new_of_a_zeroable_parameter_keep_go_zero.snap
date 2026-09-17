@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn buf<T: Zeroable>(n: int) -> Slice<T> {
+    Slice.make<T>(n)
+  }
+  
+  fn arr<T: Zeroable>() -> Array<T, 2> {
+    Array.new<T, 2>()
+  }
+---
+package main
+
+func buf[T any](n int) []T {
+	return make([]T, n)
+}
+
+func arr[T any]() [2]T {
+	return [2]T{}
+}

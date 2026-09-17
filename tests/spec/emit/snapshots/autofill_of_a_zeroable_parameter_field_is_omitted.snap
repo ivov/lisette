@@ -16,8 +16,5 @@ type Box[T any] struct {
 }
 
 func blank[T any]() Box[T] {
-	return Box[T]{
-		n: 1,
-		v: *new(T),
-	}
+	return Box[T]{n: 1}
 }

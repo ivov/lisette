@@ -262,7 +262,7 @@ impl Planner<'_> {
                     None => continue,
                 }
             } else {
-                if field_ty.is_slice() {
+                if field_ty.is_slice() || matches!(field_ty, Type::Parameter(_)) {
                     continue;
                 }
                 let zero = self.lisette_zero(&field_ty);
@@ -593,6 +593,7 @@ impl Planner<'_> {
             } => true,
             Type::Array { element, .. } => self.element_go_zero_ok(element),
             Type::Tuple(elements) => elements.iter().all(|e| self.element_go_zero_ok(e)),
+            Type::Parameter(_) => true,
             Type::Nominal { id, .. } => matches!(
                 &self.facts.definition(id.as_str()).map(|d| &d.body),
                 Some(DefinitionBody::Enum {
