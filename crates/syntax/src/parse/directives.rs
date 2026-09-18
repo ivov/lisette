@@ -1,7 +1,6 @@
 use super::Parser;
 use crate::ast::{Expression, Literal};
 use crate::lex::TokenKind::*;
-use crate::types::Type;
 
 impl<'source> Parser<'source> {
     pub(crate) fn parse_directive(&mut self) -> Expression {
@@ -16,10 +15,7 @@ impl<'source> Parser<'source> {
                 if self.is(LeftParen) {
                     self.collect_delimited_expressions(LeftParen, RightParen);
                 }
-                Expression::Unit {
-                    ty: Type::uninferred(),
-                    span: self.span_from_offset(start.byte_offset),
-                }
+                Self::error_expression(self.span_from_offset(start.byte_offset))
             }
         }
     }

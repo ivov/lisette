@@ -66,7 +66,7 @@ impl InferCtx<'_> {
                 ..
             } => self.infer_lambda(params, return_annotation, body, span, expected_ty),
 
-            Expression::Unit { span, .. } => self.infer_unit(span, expected_ty),
+            Expression::Unit { ty, span } => self.infer_unit(ty, span, expected_ty),
 
             Expression::Identifier {
                 ref value, span, ..

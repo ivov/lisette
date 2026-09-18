@@ -37,6 +37,9 @@ mod patterns;
 mod pratt;
 mod strings;
 
+#[cfg(test)]
+mod recovery_tests;
+
 pub use error::ParseError;
 
 pub struct ParseResult {
@@ -320,10 +323,7 @@ impl<'source> Parser<'source> {
                     self.error_misplaced_attribute(attribute.span);
                 }
                 if self.is(RightCurlyBrace) || self.at_eof() {
-                    ast::Expression::Unit {
-                        ty: Type::uninferred(),
-                        span: self.span_from_token(self.current_token()),
-                    }
+                    Self::error_expression(self.span_from_token(self.current_token()))
                 } else {
                     self.parse_block_item()
                 }
@@ -768,6 +768,21 @@ impl<'source> Parser<'source> {
                 | RightParen
                 | RightSquareBracket
                 | Comma
+                | Let
+                | For
+                | While
+                | Loop
+                | If
+                | Match
+                | Return
+                | Break
+                | Continue
+                | Defer
+                | Assert
+                | Task
+                | Try
+                | Recover
+                | Select
                 | Function
                 | Struct
                 | Enum
@@ -822,10 +837,6 @@ impl<'source> Parser<'source> {
     }
 
     fn resync_on_error(&mut self) {
-        if !self.at_eof() {
-            self.next();
-        }
-
         while !self.at_sync_point() && !self.at_eof() {
             self.next();
         }
@@ -1347,8 +1358,12 @@ impl<'source> Parser<'source> {
 
         self.resync_on_error();
 
+        Self::error_expression(span)
+    }
+
+    fn error_expression(span: Span) -> ast::Expression {
         ast::Expression::Unit {
-            ty: Type::uninferred(),
+            ty: Type::Error,
             span,
         }
     }

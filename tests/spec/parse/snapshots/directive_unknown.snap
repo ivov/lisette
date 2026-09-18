@@ -25,9 +25,7 @@ description: |
             Block {
                 items: [
                     Unit {
-                        ty: Var {
-                            id: uninferred,
-                        },
+                        ty: Error,
                         span: Span {
                             file_id: 0,
                             byte_offset: 13,

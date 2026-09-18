@@ -247,7 +247,12 @@ impl InferCtx<'_> {
                 .is_some_and(|ty| self.store.is_interpolatable(&ty.resolve_in(&self.env)))
     }
 
-    pub(super) fn infer_unit(&mut self, span: Span, expected_ty: &Type) -> Expression {
+    pub(super) fn infer_unit(&mut self, ty: Type, span: Span, expected_ty: &Type) -> Expression {
+        if matches!(ty, Type::Error) {
+            self.unify(expected_ty, &ty, &span);
+            return Expression::Unit { ty, span };
+        }
+
         let new_ty = self.new_type_var();
         let unit_ty = self.type_unit();
         self.unify(&new_ty, &unit_ty, &span);

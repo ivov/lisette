@@ -36,10 +36,7 @@ impl<'source> Parser<'source> {
         }
         let span = self.span_from_token(self.current_token());
         self.resync_on_error();
-        Expression::Unit {
-            ty: Type::uninferred(),
-            span,
-        }
+        Self::error_expression(span)
     }
 
     pub(super) fn parse_atomic_expression(&mut self, context: ExpressionContext) -> Expression {
@@ -87,10 +84,7 @@ impl<'source> Parser<'source> {
                     "Use `select { let v = ch.receive() => ... }` to receive from a channel",
                 );
                 self.resync_on_error();
-                Expression::Unit {
-                    ty: Type::uninferred(),
-                    span,
-                }
+                Self::error_expression(span)
             }
 
             Backtick => self.recover_unexpected_backtick(),
@@ -500,10 +494,9 @@ impl<'source> Parser<'source> {
 
         self.consume_balanced_parens();
 
-        Some(Expression::Unit {
-            ty: Type::uninferred(),
-            span: self.span_from_offset(span.byte_offset),
-        })
+        Some(Self::error_expression(
+            self.span_from_offset(span.byte_offset),
+        ))
     }
 
     fn classify_go_make(&self) -> Option<GoMakeKind> {
@@ -607,7 +600,11 @@ impl<'source> Parser<'source> {
             {
                 break;
             }
+            let start_position = self.stream.position;
             let arg = self.parse_expression();
+            if self.at_item_boundary() {
+                self.ensure_progress(start_position, RightParen);
+            }
             if self.is(Ellipsis) {
                 self.next();
                 self.expect_comma_or(RightParen);
@@ -636,11 +633,9 @@ impl<'source> Parser<'source> {
             return false;
         }
         let span = self.track_fn_as_lambda_error();
+        self.next(); // discard the rejected `fn`, which is itself a recovery anchor
         self.resync_on_error();
-        args.push(Expression::Unit {
-            ty: Type::uninferred(),
-            span,
-        });
+        args.push(Self::error_expression(span));
         true
     }
 
@@ -655,10 +650,7 @@ impl<'source> Parser<'source> {
         let body = if self.is(LeftCurlyBrace) {
             self.parse_block_expression()
         } else {
-            Expression::Unit {
-                ty: Type::uninferred(),
-                span: self.span_from_offset(start.byte_offset),
-            }
+            Self::error_expression(self.span_from_offset(start.byte_offset))
         };
 
         Expression::Lambda {
@@ -1028,11 +1020,9 @@ impl<'source> Parser<'source> {
 
             if self.is(Function) && self.stream.peek_ahead(1).kind == LeftParen {
                 let span = self.track_fn_as_lambda_error();
+                self.next(); // discard the rejected `fn`, which is itself a recovery anchor
                 self.resync_on_error();
-                expressions.push(Expression::Unit {
-                    ty: Type::uninferred(),
-                    span,
-                });
+                expressions.push(Self::error_expression(span));
                 continue;
             }
 
@@ -1042,7 +1032,12 @@ impl<'source> Parser<'source> {
                     break;
                 }
             }
+            let start_position = self.stream.position;
             expressions.push(self.parse_expression());
+            if self.at_item_boundary() {
+                // A keyword followed by a delimiter cannot start a declaration here.
+                self.ensure_progress(start_position, close);
+            }
             has_trailing_comma = self.is(Comma);
             self.expect_comma_or(close);
         }
@@ -1112,11 +1107,7 @@ impl<'source> Parser<'source> {
             let stub_span = self.span_from_offset(start.byte_offset);
             return Expression::Let {
                 binding: Box::new(binding),
-                value: Box::new(Expression::Block {
-                    ty: Type::uninferred(),
-                    items: vec![],
-                    span: stub_span,
-                }),
+                value: Box::new(Self::error_expression(stub_span)),
                 mode: if assert {
                     LetMode::Assert
                 } else {
@@ -1127,9 +1118,34 @@ impl<'source> Parser<'source> {
             };
         }
 
+        let equal = self.current_token();
         self.ensure(Equal);
 
-        let expression = self.parse_expression();
+        let expression = if equal.kind == Equal
+            && ((self.at_item_boundary() && !self.is(Function))
+                || self.at_function_declaration()
+                || matches!(
+                    self.current_token().kind,
+                    For | While
+                        | Assert
+                        | Pub
+                        | Semicolon
+                        | RightCurlyBrace
+                        | RightParen
+                        | RightSquareBracket
+                        | Comma
+                        | EOF
+                )) {
+            let span = self.span_from_token(equal);
+            self.errors.push(
+                ParseError::new("Missing initializer", span, "expected expression after `=`")
+                    .with_parse_code("expected_expression")
+                    .with_help("Add a value to initialize the binding"),
+            );
+            Self::error_expression(span)
+        } else {
+            self.parse_expression()
+        };
 
         let else_clause = if self.is(Else) {
             let else_token = self.current_token();
@@ -1222,10 +1238,7 @@ impl<'source> Parser<'source> {
 
             self.track_error(label, help);
             self.resync_on_error();
-            return Expression::Unit {
-                ty: Type::uninferred(),
-                span: self.span_from_offset(start.byte_offset),
-            };
+            return Self::error_expression(self.span_from_offset(start.byte_offset));
         }
 
         self.next();
@@ -1622,7 +1635,8 @@ impl<'source> Parser<'source> {
         }
 
         match self.current_token().kind {
-            Return | Break | Continue => false,
+            Let | Struct | Enum | Impl | Interface | Type | Const | Import | Pub | For | While
+            | Assert | Return | Break | Continue => false,
 
             Match | If | Task | Defer | Try | Recover | Select | Loop | Function => matches!(
                 self.stream.peek_ahead(1).kind,
