@@ -85,6 +85,7 @@ fn relativize(rel: &Path) -> Option<String> {
 mod tests {
     use super::*;
     use std::fs as stdfs;
+    #[cfg(unix)]
     use std::os::unix::fs::symlink;
 
     #[test]
