@@ -448,6 +448,7 @@ impl<'a> InferCtx<'a> {
         f: impl FnOnce(&mut Self) -> Result<T, E>,
     ) -> Result<T, E> {
         let diagnostics_before = self.sink.checkpoint();
+        let bounds_before = self.facts.deferred.generic_bounds.len();
         let speculation = self.env.begin_speculation();
         match f(self) {
             Ok(value) => {
@@ -459,6 +460,7 @@ impl<'a> InferCtx<'a> {
                 self.env
                     .end_speculation(speculation, SpeculationOutcome::Rollback);
                 self.sink.rollback(diagnostics_before);
+                self.facts.deferred.generic_bounds.truncate(bounds_before);
                 Err(error)
             }
         }
@@ -467,11 +469,13 @@ impl<'a> InferCtx<'a> {
     /// Runs `f` and discards every unification and diagnostic it produced.
     pub(crate) fn probe<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
         let diagnostics_before = self.sink.checkpoint();
+        let bounds_before = self.facts.deferred.generic_bounds.len();
         let speculation = self.env.begin_speculation();
         let value = f(self);
         self.env
             .end_speculation(speculation, SpeculationOutcome::Rollback);
         self.sink.rollback(diagnostics_before);
+        self.facts.deferred.generic_bounds.truncate(bounds_before);
         value
     }
 

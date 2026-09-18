@@ -35,8 +35,8 @@ func (p Person) greet() string {
 	return "Hello, " + p.name
 }
 
-func greetRef[T Greetable](item T) string {
-	return item.greet()
+func greetRef[T Greetable](item *T) string {
+	return (*item).greet()
 }
 
 func test() {

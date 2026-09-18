@@ -3,7 +3,7 @@ use crate::pattern;
 use std::fmt::Display;
 use std::mem;
 use syntax::ast::{Annotation, BinaryOperator, BindingKind, Span};
-use syntax::types::{SELF_TYPE_NAME, SimpleKind, Type};
+use syntax::types::{FunctionParameter, SELF_TYPE_NAME, SimpleKind, Type};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MismatchedTailKind {
@@ -3142,11 +3142,17 @@ pub fn unsupported_generic_go_interface(
         ))
 }
 
+pub struct BoundParameterHint<'a> {
+    pub generic: &'a str,
+    pub parameter: Option<&'a FunctionParameter>,
+}
+
 pub fn pointer_receiver_interface_mismatch(
     interface_name: &str,
     type_name: &str,
     methods: &[String],
     span: Span,
+    parameter_hint: Option<BoundParameterHint<'_>>,
 ) -> LisetteDiagnostic {
     let methods_str = methods
         .iter()
@@ -3158,16 +3164,33 @@ pub fn pointer_receiver_interface_mismatch(
     } else {
         format!("{} mutate through `self: Ref<{}>`", methods_str, type_name)
     };
+    let help = match parameter_hint {
+        Some(BoundParameterHint {
+            generic,
+            parameter: Some(parameter),
+        }) => format!(
+            "`{generic}: {interface_name}` requires `{generic}` itself to implement `{interface_name}`. For a helper that only calls interface methods, change `{name}: {ty}` to `{name}: {generic}` so `{generic}` can be `Ref<{type_name}>` and keep passing the reference.",
+            name = parameter.name.as_deref().unwrap_or("_"),
+            ty = parameter.ty,
+        ),
+        Some(BoundParameterHint {
+            generic,
+            parameter: None,
+        }) => format!(
+            "`{generic}: {interface_name}` requires `{generic}` itself to implement `{interface_name}`. To use the reference implementation, `{generic}` must be `Ref<{type_name}>`. For a helper that only calls interface methods, change a `Ref<{generic}>` or `mut Ref<{generic}>` parameter to `{generic}` and pass the reference."
+        ),
+        None => format!(
+            "{}, so `{}` is satisfied by a `Ref<{}>`, not a value. Take a reference with `&` (for example `&{} {{ ... }}`).",
+            mutates, interface_name, type_name, type_name
+        ),
+    };
     LisetteDiagnostic::error("Interface not implemented")
         .with_infer_code("interface_not_implemented")
         .with_span_label(
             &span,
             format!("`{}` does not implement `{}`", type_name, interface_name),
         )
-        .with_help(format!(
-            "{}, so `{}` is satisfied by a `Ref<{}>`, not a value. Take a reference with `&` (for example `&{} {{ ... }}`).",
-            mutates, interface_name, type_name, type_name
-        ))
+        .with_help(help)
 }
 
 pub fn interface_needs_writable_receiver(

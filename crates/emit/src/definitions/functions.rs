@@ -1,5 +1,3 @@
-use rustc_hash::FxHashSet as HashSet;
-
 use crate::Planner;
 use crate::Renderer;
 use crate::ReturnContext;
@@ -312,39 +310,33 @@ impl Planner<'_> {
         }
 
         let mut body = String::new();
-        let signature = self.with_function_state(
-            params_to_process,
-            &generic_context,
-            function_definition.generics,
-            resolved_generic_bounds,
-            |this| {
-                let (params_string, return_ty, deferred_patterns) = this.build_signature_tail(
-                    function_definition,
-                    params_to_process,
-                    return_shape.as_ref(),
-                );
-                parts.push(params_string);
-                if !return_ty.is_empty() {
-                    parts.push(return_ty);
-                }
-                let signature = parts.join(" ");
+        let signature = self.with_function_state(&generic_context, |this| {
+            let (params_string, return_ty, deferred_patterns) = this.build_signature_tail(
+                function_definition,
+                params_to_process,
+                return_shape.as_ref(),
+            );
+            parts.push(params_string);
+            if !return_ty.is_empty() {
+                parts.push(return_ty);
+            }
+            let signature = parts.join(" ");
 
-                let test_handle = function_definition.params.iter().find_map(|param| {
-                    is_test_context_ty(&param.ty)
-                        .then(|| this.go_name_for_binding(&param.pattern))
-                        .flatten()
-                });
-                this.with_test_handle(test_handle, |this| {
-                    this.emit_function_body_with_deferred_patterns(
-                        &mut body,
-                        function_definition,
-                        deferred_patterns,
-                        &return_ctx,
-                    );
-                });
-                signature
-            },
-        );
+            let test_handle = function_definition.params.iter().find_map(|param| {
+                is_test_context_ty(&param.ty)
+                    .then(|| this.go_name_for_binding(&param.pattern))
+                    .flatten()
+            });
+            this.with_test_handle(test_handle, |this| {
+                this.emit_function_body_with_deferred_patterns(
+                    &mut body,
+                    function_definition,
+                    deferred_patterns,
+                    &return_ctx,
+                );
+            });
+            signature
+        });
 
         let trimmed_body = body.trim_end();
         if trimmed_body.is_empty() {
@@ -502,51 +494,11 @@ impl Planner<'_> {
             .collect()
     }
 
-    fn with_function_state<F, R>(
-        &mut self,
-        params: &[Binding],
-        generic_context: &[(EcoString, Vec<Type>)],
-        signature_generics: &[Generic],
-        resolved_signature_generics: Option<&[(EcoString, Vec<Type>)]>,
-        f: F,
-    ) -> R
+    fn with_function_state<F, R>(&mut self, generic_context: &[(EcoString, Vec<Type>)], f: F) -> R
     where
         F: FnOnce(&mut Self) -> R,
     {
-        let bounded_generics: HashSet<&str> = match resolved_signature_generics {
-            Some(generics) => generics
-                .iter()
-                .filter(|(_, bounds)| !bounds.is_empty())
-                .map(|(name, _)| name.as_str())
-                .collect(),
-            None => signature_generics
-                .iter()
-                .filter(|generic| {
-                    generic
-                        .resolved_bounds()
-                        .expect("generic bounds must be resolved before emission")
-                        .next()
-                        .is_some()
-                })
-                .map(|generic| generic.name.as_str())
-                .collect(),
-        };
-        let absorbed_ref_generics = params
-            .iter()
-            .filter_map(|param| {
-                if !param.ty.is_ref() {
-                    return None;
-                }
-                let inner = param.ty.inner()?;
-                let Type::Parameter(name) = inner else {
-                    return None;
-                };
-                bounded_generics
-                    .contains(name.as_str())
-                    .then(|| name.to_string())
-            })
-            .collect();
-        let context = FunctionEmissionContext::for_function(generic_context, absorbed_ref_generics);
+        let context = FunctionEmissionContext::for_function(generic_context);
         self.function_contexts.push(context);
         let result = f(self);
         self.function_contexts
@@ -579,11 +531,7 @@ impl Planner<'_> {
                 }
             };
 
-            let param_type = self
-                .current_function_context()
-                .and_then(|context| context.absorbed_ref_inner(&param.ty))
-                .unwrap_or_else(|| param.ty.clone());
-            params.push((name, self.use_go_type(&param_type)));
+            params.push((name, self.use_go_type(&param.ty)));
         }
         (format!("({})", group_params(&params)), deferred_patterns)
     }

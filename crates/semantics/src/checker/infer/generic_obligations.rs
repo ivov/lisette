@@ -6,6 +6,13 @@ use crate::facts::{GenericBoundObligation, GenericBoundOrigin};
 use crate::generics::{AppliedGenericBound, bound_requires_evidence, type_obligations};
 
 impl InferCtx<'_> {
+    pub(super) fn defer_function_bound(&mut self, bound: &Bound, name: Option<&str>, span: Span) {
+        let origin = GenericBoundOrigin::FunctionReference {
+            name: name.unwrap_or("function").into(),
+        };
+        self.register_generic_bound_obligation(applied_function_bound(bound), &origin, span);
+    }
+
     pub(crate) fn register_construction_obligations(
         &mut self,
         written_name: &str,
@@ -40,14 +47,6 @@ impl InferCtx<'_> {
     }
 
     /// `Zeroable`'s argument comes from the expected type, so it is still a variable at the call.
-    pub(crate) fn register_deferred_call_obligation(&mut self, bound: &Bound, span: Span) {
-        self.register_generic_bound_obligation(
-            applied_function_bound(bound),
-            &GenericBoundOrigin::Call,
-            span,
-        );
-    }
-
     fn register_generic_bound_obligation(
         &mut self,
         bound: AppliedGenericBound,

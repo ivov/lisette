@@ -3,7 +3,7 @@ use syntax::parse;
 use syntax::program::{
     Definition, DefinitionBody, DotAccessKind as SemanticDotKind, ReceiverCoercion,
 };
-use syntax::types::{Symbol, Type};
+use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
@@ -285,10 +285,6 @@ impl Planner<'_> {
         is_import_namespace_identifier || self.type_uses_exported_members(expression_ty)
     }
 
-    /// Emit the base expression with receiver coercion applied.
-    ///
-    /// Handles explicit deref (`.*`), absorbed `Ref<T>` generics, and auto-address/auto-deref
-    /// coercions. Returns the Go expression string ready for member access.
     fn plan_coerced_expression(
         &mut self,
         expression: &Expression,
@@ -300,12 +296,16 @@ impl Planner<'_> {
         } else {
             (self.plan_operand(expression, ctx), false)
         };
-        let is_absorbed_ref = self.is_absorbed_ref_generic(expression);
+        let receiver = expression.deref_inner().unwrap_or(expression);
+        let needs_deref = matches!(
+            receiver.get_type().as_compound(),
+            Some((CompoundKind::Ref, [Type::Parameter(_), ..]))
+        );
         staged.map_expression(|setup, base| {
-            if is_absorbed_ref
-                || coercion != Some(ReceiverCoercion::AutoAddress)
-                || had_explicit_deref
-            {
+            if needs_deref {
+                return GoExpression::dereference(base);
+            }
+            if coercion != Some(ReceiverCoercion::AutoAddress) || had_explicit_deref {
                 return base;
             }
             match expression.unwrap_parens() {
@@ -316,16 +316,6 @@ impl Planner<'_> {
                 _ => base,
             }
         })
-    }
-
-    /// Check if expression has an absorbed `Ref<T>` generic (T already emitted as `*Concrete`).
-    /// When true, suppress auto-deref coercion: the pointer is already the right type.
-    fn is_absorbed_ref_generic(&self, expression: &Expression) -> bool {
-        let check_expression = expression.deref_inner().unwrap_or(expression);
-        let expression_ty = check_expression.get_type();
-        self.current_function_context()
-            .and_then(|context| context.absorbed_ref_inner(&expression_ty))
-            .is_some()
     }
 
     pub(crate) fn try_emit_tuple_struct_field_access(

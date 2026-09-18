@@ -105,16 +105,20 @@ impl Planner<'_> {
         }
     }
 
+    fn emit_ref_type(&self, inner: &Type) -> GoType {
+        let inner_type = self.go_type(inner);
+        let mut result = GoType::new(format!("*{}", inner_type.code));
+        result.merge(&inner_type);
+        result
+    }
+
     fn emit_compound(&self, kind: CompoundKind, args: &[Type], ty: &Type) -> GoType {
         use syntax::types::CompoundKind;
 
         if kind == CompoundKind::Ref
             && let Some(inner) = args.first()
         {
-            let inner_type = self.go_type(inner);
-            let mut result = GoType::new(format!("*{}", inner_type.code));
-            result.merge(&inner_type);
-            return result;
+            return self.emit_ref_type(inner);
         }
 
         if let Some(native) = NativeGoType::from_type(ty) {
@@ -239,10 +243,7 @@ impl Planner<'_> {
         if qualified_name == "prelude.Ref"
             && let Some(inner) = params.first()
         {
-            let inner_type = self.go_type(inner);
-            let mut result = GoType::new(format!("*{}", inner_type.code));
-            result.merge(&inner_type);
-            return result;
+            return self.emit_ref_type(inner);
         }
 
         if let Some(native) = NativeGoType::from_type(ty) {

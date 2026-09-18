@@ -668,6 +668,354 @@ fn run_forwards_go_flags() {
 }
 
 #[test]
+fn run_bounded_generic_reference_params_keep_their_pointer() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+
+interface Speaker {
+  fn speak() -> string
+}
+
+interface Counter {
+  fn increment()
+}
+
+struct Person { name: string }
+
+impl Person {
+  fn speak(self) -> string { self.name }
+}
+
+struct Hits { total: int }
+
+impl Hits {
+  fn increment(self: mut Ref<Hits>) {
+    self.total += 1
+  }
+}
+
+fn store_if_new<T: Comparable>(slot: mut Ref<T>, value: T) -> bool {
+  if slot.* == value {
+    return false
+  }
+  slot.* = value
+  true
+}
+
+fn read_speaker<T: Speaker>(slot: Ref<T>) -> T {
+  let _ = slot.speak()
+  slot.*
+}
+
+fn copy_over<T: Speaker>(dst: mut Ref<T>, src: Ref<T>) -> string {
+  dst.* = src.*
+  dst.speak()
+}
+
+fn increment_all<T: Counter>(items: Slice<T>) {
+  for item in items {
+    item.increment()
+  }
+}
+
+fn main() {
+  let mut count = 7
+  let replaced = store_if_new(&count, 1)
+  let mut a = Person { name: "a" }
+  let b = Person { name: "b" }
+  let copied = copy_over(&a, &b)
+  let mut home = Hits { total: 0 }
+  let mut away = Hits { total: 3 }
+  increment_all([&home, &away])
+  fmt.Println(count, replaced, copied, read_speaker(&a).speak(), home.total, away.total)
+}
+"#,
+        "1 true b b 1 4",
+    );
+}
+
+#[test]
+fn run_bounded_generic_reference_dereferences_the_type_parameter() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+
+interface Speaker {
+  fn speak() -> string
+}
+
+struct Person { name: string }
+
+impl Person {
+  fn speak(self) -> string { self.name }
+}
+
+fn pick<T: Speaker>(a: Ref<T>, b: T) -> string {
+  a.speak() + b.speak()
+}
+
+fn take<T: Speaker>(a: Ref<T>) -> T {
+  a.*
+}
+
+fn first<T: Speaker>(xs: Slice<Ref<T>>) -> string {
+  xs[0].speak()
+}
+
+fn main() {
+  let p = Person { name: "a" }
+  let q = Person { name: "b" }
+  fmt.Println(pick(&p, q), take(&p).speak(), first([&p]))
+}
+"#,
+        "ab a a",
+    );
+}
+
+#[test]
+fn run_bounded_generics_compose_across_calls_and_values() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+
+interface Speaker { fn speak() -> string }
+interface Voice { fn speak() -> string }
+struct Person { name: string }
+impl Person { fn speak(self) -> string { self.name } }
+
+fn show<T: Speaker>(slot: Ref<T>) -> string { slot.speak() }
+fn pick<T: Speaker, U>(slot: Ref<T>, value: U) -> U {
+  let _ = slot.speak()
+  value
+}
+fn empty<T: Speaker, U>(slot: Ref<T>) -> Slice<U> {
+  let _ = slot.speak()
+  []
+}
+fn invoke<T>(f: fn(Ref<T>) -> string, slot: Ref<T>) -> string { f(slot) }
+fn identity<T>(value: T) -> T { value }
+fn copy_and_show<T: Speaker>(slot: Ref<T>) -> string {
+  let copy = slot.*
+  let reference = &copy
+  let refs: Slice<Ref<T>> = [identity(reference)]
+  let inferred = show
+  let annotated: fn(Ref<T>) -> string = show
+  let speaker = reference.* as Voice
+  inferred(refs[0]) + invoke(annotated, reference) + speaker.speak()
+}
+
+interface Bumper { fn bump() }
+struct Counter { n: int }
+impl Counter { fn bump(self) { let _ = self.n } }
+fn use_bound<T: Bumper, U>(slot: Ref<T>, value: U) -> U { slot.bump(); value }
+
+interface Container<V: Speaker> { fn count() -> int }
+struct Basket {}
+impl Basket { fn count(self) -> int { 1 } }
+fn dependent<T: Speaker, U: Container<T>>(slot: Ref<T>, basket: U) -> string {
+  let _ = basket.count()
+  slot.speak()
+}
+
+fn main() {
+  let p = Person { name: "p" }
+  let xs: Slice<int> = empty(&p)
+  let c = Counter { n: 3 }
+  let inferred = use_bound(&c, c)
+  let explicit = use_bound<Counter, Counter>(&c, c)
+  fmt.Println(pick<Person, int>(&p, 7), xs.length(), copy_and_show(&p), inferred.n, explicit.n, dependent(&p, Basket {}))
+}
+"#,
+        "7 0 ppp 3 3 p",
+    );
+}
+
+#[test]
+fn run_bounded_generics_across_packages_and_aliases() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/bounds")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"refpackages\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/bounds/bounds.lis"),
+        r#"
+pub interface Speaker { fn speak() -> string }
+pub type Talker = Speaker
+pub struct Person { pub name: string }
+impl Person { pub fn speak(self) -> string { self.name } }
+pub fn show<T: Speaker>(slot: Ref<T>) -> string { slot.speak() }
+pub fn value<T: Talker>(item: T) -> string { item.speak() }
+pub fn relay<T: Talker, PT>(slot: Ref<T>, value: PT) -> PT {
+  let f = show
+  let _ = f(slot)
+  value
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"
+import "go:fmt"
+import "bounds"
+fn wrapper<T: bounds.Speaker>(slot: Ref<T>) -> string {
+  let f = bounds.show
+  let g: fn(Ref<T>) -> string = bounds.show
+  f(slot) + g(slot)
+}
+fn main() {
+  let p = bounds.Person { name: "x" }
+  fmt.Println(bounds.relay<bounds.Person, int>(&p, 4), wrapper(&p), bounds.value(p))
+}
+"#,
+    )
+    .unwrap();
+    let output = lis_run(&project, scratch.path(), &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "lis run failed:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert_eq!(stdout.trim(), "4 xx x", "stderr: {stderr}");
+}
+
+fn assert_generic_program_runs(source: &str, expected: &str) {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"boundregression\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(project.join("src/main.lis"), source).unwrap();
+    let output = lis_run(&project, scratch.path(), &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "lis run failed:\n{stdout}\n{stderr}"
+    );
+    assert_eq!(stdout.trim(), expected, "stderr: {stderr}");
+}
+
+#[test]
+fn run_bounded_generics_preserve_compatible_callback_joins() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+interface Speaker { fn speak() -> string }
+struct Person { name: string }
+impl Person { fn speak(self) -> string { self.name } }
+type Pointer<T: Speaker> = Ref<T>
+fn by_value<T: Speaker>(slot: Pointer<T>) -> string { slot.speak() }
+fn by_reference<T: Speaker>(slot: Ref<T>) -> string { slot.speak() }
+fn main() {
+  let p = Person { name: "p" }
+  let chosen = if true { by_value } else { by_reference }
+  fmt.Println(chosen(&p))
+  let first = by_value
+  let second = by_reference
+  let _ = first(&p)
+  let _ = second(&p)
+  let chosen_after_calls = if false { first } else { second }
+  fmt.Println(chosen_after_calls(&p))
+  let callbacks = [by_value, by_reference]
+  for callback in callbacks { fmt.Println(callback(&p)) }
+}
+"#,
+        "p\np\np\np",
+    );
+}
+
+#[test]
+fn run_bounded_generics_keep_arguments_inferred_through_other_bounds() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+interface Source<U> { fn get() -> U }
+struct Person {}
+impl Person { fn get(self) -> int { 7 } }
+fn read<T: Source<U>, U: Comparable>(slot: Ref<T>) { fmt.Println(slot.get()) }
+struct Helper {}
+impl Helper {
+  fn read<T: Source<U>, U: Comparable>(self, slot: Ref<T>) { fmt.Println(slot.get()) }
+}
+fn main() {
+  let p = Person {}
+  read(&p)
+  read<Person, int>(&p)
+  let callback: fn(Ref<Person>) = read
+  callback(&p)
+  Helper {}.read(&p)
+}
+"#,
+        "7\n7\n7\n7",
+    );
+}
+
+#[test]
+fn run_bounded_generics_keep_explicit_arguments_absent_from_value_types() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+interface Source<U> { fn get() -> U }
+struct Person {}
+impl Person { fn get(self) -> int { 7 } }
+fn print_value<T: Source<U>, U>(slot: Ref<T>) { fmt.Println(slot.get()) }
+fn read<T: Source<int>, Unused>(slot: Ref<T>) -> int { slot.get() }
+fn main() {
+  let p = Person {}
+  print_value<Person, int>(&p)
+  fmt.Println(read<Person, bool>(&p))
+}
+"#,
+        "7\n7",
+    );
+}
+
+#[test]
+fn run_bounded_generics_survive_generated_adapters_and_generic_methods() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+interface Speaker { fn speak() -> string }
+struct Person {}
+impl Person { fn speak(self) -> string { "p" } }
+interface Box<U> { fn get() -> U }
+struct Bar<S> { x: Option<S> }
+impl<S> Bar<S> { fn get(self) -> Option<S> { self.x } }
+fn consume<U>(box: Box<Option<U>>) { let _ = box.get() }
+
+struct Helper<U> { value: U }
+impl<U> Helper<U> {
+  fn show<T: Speaker>(self, slot: Ref<T>) -> string { slot.speak() }
+  fn print_value<T: Speaker, Unused>(self, slot: Ref<T>) { fmt.Println(slot.speak()) }
+}
+fn outer<T: Speaker, U>(slot: Ref<T>, item: U) -> string {
+  consume(Bar { x: Some(slot.*) })
+  consume(Bar { x: Some(item) })
+  let helper = Helper { value: 1 }
+  helper.print_value<T, bool>(slot)
+  helper.show(slot) + helper.show<T>(slot)
+}
+fn main() { let p = Person {}; fmt.Println(outer(&p, 2)) }
+"#,
+        "p\npp",
+    );
+}
+
+#[test]
 fn run_unused_equality_type_keeps_nested_user_equals() {
     if !go_available() {
         eprintln!("skipping run_unused_equality_type_keeps_nested_user_equals: `go` not found");

@@ -27,8 +27,6 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
         if obligation.argument.has_unbound_variables() {
             let required_name = bound_display_name(store, &obligation.required);
             let diagnostic = match &obligation.origin {
-                // The call's own `generic_calls` check owns this span.
-                GenericBoundOrigin::Call => continue,
                 GenericBoundOrigin::FunctionReference { name } => {
                     diagnostics::infer::cannot_infer_bounded_function_reference(
                         name,

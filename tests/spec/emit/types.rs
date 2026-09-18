@@ -3502,29 +3502,32 @@ fn apply_mapper<M: Mapper<int, string>>(m: M, val: int) -> string {
 }
 
 #[test]
-fn ref_bounded_generic_absorbs_ref_into_type_param() {
+fn bounded_generic_accepts_reference_type_argument() {
     let input = r#"
-interface Mutable {
-  fn mutate(val: string)
+interface Counter {
+  fn increment()
 }
 
-struct Box {
-  content: string,
+struct Hits {
+  total: int,
 }
 
-impl Box {
-  fn mutate(self: mut Ref<Box>, val: string) {
-    self.content = val
+impl Hits {
+  fn increment(self: mut Ref<Hits>) {
+    self.total += 1
   }
 }
 
-fn apply_mutation<T: Mutable>(item: mut Ref<T>, val: string) {
-  item.mutate(val)
+fn increment_all<T: Counter>(items: Slice<T>) {
+  for item in items {
+    item.increment()
+  }
 }
 
 fn test() {
-  let mut b = Box { content: "original" }
-  apply_mutation(&b, "changed")
+  let mut home = Hits { total: 0 }
+  let mut away = Hits { total: 3 }
+  increment_all([&home, &away])
 }
 "#;
     assert_emit_snapshot!(input);
@@ -3550,6 +3553,91 @@ fn greet_ref<T: Greetable>(item: Ref<T>) -> string {
 fn test() {
   let p = Person { name: "Alice" }
   greet_ref(&p)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn ref_builtin_bounded_generic_stays_a_pointer() {
+    let input = r#"
+fn store_if_new<T: Comparable>(slot: mut Ref<T>, value: T) -> bool {
+  if slot.* == value {
+    return false
+  }
+  slot.* = value
+  true
+}
+
+fn store_if_larger<T: Ordered>(slot: mut Ref<T>, value: T) {
+  if value > slot.* {
+    slot.* = value
+  }
+}
+
+fn test() {
+  let mut count = 7
+  let _ = store_if_new(&count, 1)
+  store_if_larger(&count, 2)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn ref_bounded_generic_in_value_position_stays_a_pointer() {
+    let input = r#"
+interface Speaker {
+  fn speak() -> string
+}
+
+struct Person { name: string }
+
+impl Person {
+  fn speak(self) -> string { self.name }
+}
+
+fn set_speaker<T: Speaker>(slot: mut Ref<T>, value: T) -> string {
+  slot.* = value
+  slot.speak()
+}
+
+fn read_speaker<T: Speaker>(slot: Ref<T>) -> T {
+  let _ = slot.speak()
+  slot.*
+}
+
+fn test() {
+  let mut p = Person { name: "a" }
+  let _ = set_speaker(&p, Person { name: "b" })
+  let _ = read_speaker(&p)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn ref_bounded_generic_writes_through_the_pointer() {
+    let input = r#"
+interface Speaker {
+  fn speak() -> string
+}
+
+struct Person { name: string }
+
+impl Person {
+  fn speak(self) -> string { self.name }
+}
+
+fn copy_over<T: Speaker>(dst: mut Ref<T>, src: Ref<T>) -> string {
+  dst.* = src.*
+  dst.speak()
+}
+
+fn test() {
+  let mut a = Person { name: "a" }
+  let b = Person { name: "b" }
+  let _ = copy_over(&a, &b)
 }
 "#;
     assert_emit_snapshot!(input);

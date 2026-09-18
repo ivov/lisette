@@ -5,7 +5,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::Planner;
 use crate::names::go_name;
 use syntax::EcoString;
-use syntax::ast::Generic;
+use syntax::ast::{Generic, ResolvedCallTypeArguments};
 use syntax::types::{SubstitutionMap, Type};
 
 fn build_type_map(generics: &[Generic], type_args: &[Type]) -> SubstitutionMap {
@@ -18,6 +18,44 @@ fn build_type_map(generics: &[Generic], type_args: &[Type]) -> SubstitutionMap {
 
 pub(crate) use syntax::types::substitute;
 
+/// Explicit method arguments omit impl generics.
+pub(crate) fn type_argument_mapping(
+    definition: &Type,
+    instantiated: &Type,
+    explicit: Option<ResolvedCallTypeArguments<'_>>,
+    receiver: Option<&Type>,
+) -> Option<HashMap<String, Type>> {
+    let Type::Forall { vars, body } = definition else {
+        return None;
+    };
+    let mut mapping = HashMap::default();
+    if let (Type::Function(declared), Type::Function(actual)) = (body.as_ref(), instantiated) {
+        // Bound-only arguments cannot be recovered from value types.
+        for bound in &actual.bounds {
+            mapping.insert(bound.param_name.to_string(), bound.generic.clone());
+        }
+        let offset = declared.params.len().checked_sub(actual.params.len())?;
+        if let Some(receiver) = receiver
+            && let Some(parameter) = declared.params.first()
+        {
+            extract_type_mapping(&parameter.ty.strip_refs(), receiver, &mut mapping);
+        }
+        for (parameter, argument) in declared.params[offset..].iter().zip(&actual.params) {
+            extract_type_mapping(&parameter.ty, &argument.ty, &mut mapping);
+        }
+        extract_type_mapping(&declared.return_type, &actual.return_type, &mut mapping);
+    } else {
+        extract_type_mapping(body, instantiated, &mut mapping);
+    }
+    if let Some(explicit) = explicit {
+        let offset = vars.len().checked_sub(explicit.len())?;
+        for (name, argument) in vars[offset..].iter().zip(explicit.iter()) {
+            mapping.insert(name.to_string(), argument.clone());
+        }
+    }
+    Some(mapping)
+}
+
 /// Substitute a field's type using generics and their concrete type arguments.
 pub(crate) fn resolve_field_type(
     generics: &[Generic],
@@ -29,6 +67,48 @@ pub(crate) fn resolve_field_type(
 }
 
 impl Planner<'_> {
+    pub(crate) fn format_type_args_from_forall(
+        &mut self,
+        definition_ty: &Type,
+        instantiated_ty: &Type,
+        collapsed_recipe: Option<&str>,
+    ) -> Option<String> {
+        let mapping = type_argument_mapping(definition_ty, instantiated_ty, None, None)?;
+
+        if let Some(recipe) = collapsed_recipe {
+            return self.reconstruct_collapsed_type_args(recipe, &mapping);
+        }
+
+        self.format_generic_instantiation(definition_ty, &mapping)
+    }
+
+    pub(crate) fn format_generic_instantiation(
+        &mut self,
+        definition_ty: &Type,
+        mapping: &HashMap<String, Type>,
+    ) -> Option<String> {
+        let Type::Forall { vars, .. } = definition_ty else {
+            return None;
+        };
+        if vars.is_empty() {
+            return None;
+        }
+
+        let args: Vec<String> = vars
+            .iter()
+            .filter_map(|var| {
+                let concrete = mapping.get(var.as_str())?;
+                Some(self.use_go_type(concrete))
+            })
+            .collect();
+
+        if args.len() != vars.len() || args.iter().any(|a| a.contains("interface{}")) {
+            return None;
+        }
+
+        Some(format!("[{}]", args.join(", ")))
+    }
+
     pub(crate) fn generic_go_name<'a>(&'a self, source_name: &'a str) -> Cow<'a, str> {
         match self.package.generic_rename(source_name) {
             Some(renamed) => Cow::Borrowed(renamed),
