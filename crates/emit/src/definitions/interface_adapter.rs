@@ -12,7 +12,7 @@ use ecow::EcoString;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::go_names;
 use syntax::go_names::ConformanceCandidate;
-use syntax::program::{Definition, DefinitionBody, interface_requirements};
+use syntax::program::{Definition, DefinitionBody, InterfaceRequirement, interface_requirements};
 use syntax::types::{
     SubstitutionMap, Symbol, Type, build_substitution_map, substitute, unqualified_name,
 };
@@ -138,13 +138,8 @@ impl Planner<'_> {
                 requirement.name.as_str(),
                 &own_candidate,
             )?;
-            let (method, adapted) = self.build_adapter_method(
-                &requirement.name,
-                &requirement.method.ty,
-                &requirement.method.go_hints,
-                impl_ty,
-                source_stripped,
-            )?;
+            let (method, adapted) =
+                self.build_adapter_method(&requirement, impl_ty, source_stripped)?;
             any_adapted |= adapted;
             methods.push(method);
         }
@@ -172,9 +167,7 @@ impl Planner<'_> {
     /// Returns the method plan and whether its physical Go signature differs.
     fn build_adapter_method(
         &self,
-        method_name: &EcoString,
-        interface_method_ty: &Type,
-        interface_hints: &[String],
+        requirement: &InterfaceRequirement,
         impl_ty: &Type,
         concrete_ty: &Type,
     ) -> Option<(AdapterMethod, bool)> {
@@ -187,16 +180,24 @@ impl Planner<'_> {
             .collect();
         let return_type = substitute(&f.return_type, &substitution);
 
-        let user_abi = self.callable_return_abi(&f.return_type);
-        let interface_return = &interface_method_ty.as_function_type()?.return_type;
-        let interface_abi =
-            self.callable_return_abi_with_go_hints(interface_return, interface_hints);
+        let user_abi = if self.facts.method_uses_tagged_return(&requirement.name) {
+            self.value_return_abi(&return_type)
+        } else {
+            self.callable_return_abi(&f.return_type)
+        };
+        let interface_return = &requirement.method.ty.as_function_type()?.return_type;
+        let interface_abi = self.interface_method_return_abi(
+            &requirement.declaring_interface,
+            &requirement.name,
+            interface_return,
+            &requirement.method.go_hints,
+        );
         let interface_returns_void = self
             .lowered_return_go_type(&interface_abi, interface_return)
             .code
             == "struct{}";
         let method = AdapterMethod {
-            name: method_name.clone(),
+            name: requirement.name.clone(),
             param_types,
             return_type,
             user_abi,
@@ -238,6 +239,21 @@ impl Planner<'_> {
             });
         }
         base
+    }
+
+    pub(crate) fn interface_method_return_abi(
+        &self,
+        interface_id: &str,
+        method_name: &str,
+        return_ty: &Type,
+        hints: &[String],
+    ) -> CallableReturnAbi {
+        if !go_name::is_go_import(interface_id) && self.facts.method_uses_tagged_return(method_name)
+        {
+            self.value_return_abi(return_ty)
+        } else {
+            self.callable_return_abi_with_go_hints(return_ty, hints)
+        }
     }
 
     pub(crate) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> String {

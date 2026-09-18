@@ -6,7 +6,7 @@ use crate::expressions::staging::VariadicCombine;
 use crate::types::native::NativeGoType;
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::program::{
-    CallKind, Definition, Method, NativeTypeKind, Visibility, resolved_definition,
+    CallKind, Definition, DotAccessKind, Method, NativeTypeKind, Visibility, resolved_definition,
 };
 use syntax::types::{FunctionParameter, Type};
 
@@ -428,11 +428,53 @@ impl<'a> Planner<'a> {
         if is_prelude_container_constructor(inner) {
             return None;
         }
+        if self.callee_uses_tagged_method_return(callee) {
+            return None;
+        }
         let declared_return = declared_type.and_then(|ty| ty.unwrap_forall().get_function_ret());
         let classify_ty = declared_return.unwrap_or(f.return_type.as_ref());
         let origin = self.function_type_origin(&callee_ty, SlotOrigin::Lisette);
 
         self.classify_slot_emission(classify_ty, origin)
+    }
+
+    pub(crate) fn callee_uses_tagged_method_return(&self, callee: &Expression) -> bool {
+        let callee_definition = resolved_definition(callee);
+        if callee_definition.is_some_and(|id| {
+            id.starts_with("go:")
+                || id.starts_with("prelude.")
+                || id
+                    .rsplit_once('.')
+                    .is_some_and(|(owner, name)| self.facts.is_ufcs_method(owner, name))
+        }) {
+            return false;
+        }
+        let method_name = match callee.unwrap_parens() {
+            Expression::DotAccess {
+                expression: receiver,
+                member,
+                resolution,
+                ..
+            } if matches!(
+                resolution.kind(),
+                Some(
+                    DotAccessKind::InstanceMethod { .. }
+                        | DotAccessKind::InstanceMethodValue { .. }
+                )
+            ) && NativeGoType::from_type(&self.facts.strip_and_peel(&receiver.get_type()))
+                .is_none()
+                && !receiver_is_prelude_type(&receiver.get_type()) =>
+            {
+                Some(member.as_str())
+            }
+            Expression::Identifier { .. } => callee_definition.and_then(|id| {
+                let (owner, name) = id.rsplit_once('.')?;
+                self.facts.method(owner, name)?;
+                Some(name)
+            }),
+            _ => None,
+        };
+        method_name.is_some_and(|name| self.facts.method_uses_tagged_return(name))
     }
 
     /// Resolve a Go-interop call's strategy.

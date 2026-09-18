@@ -6531,6 +6531,29 @@ fn main() {
 }
 
 #[test]
+fn generic_option_return_interface_bounds_preserve_concrete_types() {
+    let input = r#"
+interface Box<U> { fn get() -> U }
+struct Bar<S> { x: Option<S> }
+impl<S> Bar<S> { fn get(self) -> Option<S> { self.x } }
+
+fn read<T: Box<Option<int>>>(value: T) -> int {
+  value.get().unwrap_or(0)
+}
+fn outer<T: Box<Option<int>>>(slot: Ref<T>) -> int {
+  slot.get().unwrap_or(0)
+}
+fn main() {
+  let some = Bar { x: Some(7) }
+  let none: Bar<int> = Bar { x: None }
+  if read(some) != 7 || read(none) != 0 { panic("value bound") }
+  if outer(&some) != 7 || outer(&none) != 0 { panic("reference bound") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn generic_struct_adapter_declares_its_type_parameters() {
     let input = r#"
 interface Box<U> {

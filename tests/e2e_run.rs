@@ -985,6 +985,187 @@ fn main() {
 }
 
 #[test]
+fn run_generic_option_return_interface_bounds() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+
+interface Box<U> { fn get() -> U }
+struct Bar<S> { x: Option<S> }
+impl<S> Bar<S> { fn get(self) -> Option<S> { self.x } }
+
+fn read<T: Box<Option<int>>>(value: T) -> int {
+  value.get().unwrap_or(0)
+}
+fn outer<T: Box<Option<int>>>(slot: Ref<T>) -> int {
+  slot.get().unwrap_or(0)
+}
+fn relay<U, T: Box<U>>(value: T) -> U { value.get() }
+fn identity<T: Box<Option<int>>>(value: T) -> T {
+  let _ = value.get()
+  value
+}
+fn callback<T: Box<Option<int>>>(value: T) -> int {
+  let getter = value.get
+  getter().unwrap_or(0)
+}
+fn main() {
+  let some = Bar { x: Some(7) }
+  let none: Bar<int> = Bar { x: None }
+  fmt.Println(read(some), read(none))
+  fmt.Println(outer(&some), outer(&none))
+  fmt.Println(relay(some).unwrap_or(0), relay(none).unwrap_or(0))
+  fmt.Println(identity(some).x.unwrap_or(0), identity(none).x.unwrap_or(0))
+  fmt.Println(callback(some), callback(none))
+  let getter = some.get
+  fmt.Println(getter().unwrap_or(0), Bar.get(none).unwrap_or(0))
+}
+"#,
+        "7 0\n7 0\n7 0\n7 0\n7 0\n7 0",
+    );
+}
+
+#[test]
+fn run_generic_option_return_interface_bounds_with_nullable_payloads() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+
+interface Box<U> { fn get() -> U }
+struct Thing { x: int }
+struct Bar<S> { x: Option<S> }
+impl<S> Bar<S> { fn get(self) -> Option<S> { self.x } }
+struct Direct { x: Option<Ref<Thing>> }
+impl Direct { fn get(self) -> Option<Ref<Thing>> { self.x } }
+struct Stored<U> { x: U }
+impl<U> Stored<U> { fn get(self) -> U { self.x } }
+
+fn read<T: Box<Option<Ref<Thing>>>>(value: T) -> int {
+  match value.get() { Some(thing) => thing.x, None => 0 }
+}
+fn read_ref<T: Box<Option<Ref<Thing>>>>(slot: Ref<T>) -> int {
+  read(slot.*)
+}
+fn main() {
+  let thing = Thing { x: 7 }
+  let some = Bar { x: Some(&thing) }
+  let none: Bar<Ref<Thing>> = Bar { x: None }
+  fmt.Println(read(some), read(none), read_ref(&some), read_ref(&none))
+  fmt.Println(read(Direct { x: Some(&thing) }), read(Direct { x: None }))
+  let stored_none: Stored<Option<Ref<Thing>>> = Stored { x: None }
+  fmt.Println(read(Stored { x: Some(&thing) }), read(stored_none))
+}
+"#,
+        "7 0 7 0\n7 0\n7 0",
+    );
+}
+
+#[test]
+fn run_generic_option_return_interface_bounds_across_packages() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/boxes")).unwrap();
+    fs::create_dir_all(project.join("src/values")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"optionbounds\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/boxes/boxes.lis"),
+        r#"
+pub interface Box<U> { fn get() -> U }
+pub interface IntBox { embed Box<Option<int>> }
+pub type Bound = IntBox
+pub interface Fixed { fn get() -> Option<int> }
+pub fn read<T: Bound>(value: T) -> int { value.get().unwrap_or(0) }
+pub fn read_ref<T: Bound>(slot: Ref<T>) -> int { read(slot.*) }
+pub fn read_fixed(value: Fixed) -> int { value.get().unwrap_or(0) }
+pub struct Holder<T: Bound> { pub value: T }
+impl<T: Bound> Holder<T> {
+  pub fn read(self) -> int { self.value.get().unwrap_or(0) }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/values/values.lis"),
+        r#"
+pub struct Bar<S> { pub x: Option<S> }
+impl<S> Bar<S> { pub fn get(self) -> Option<S> { self.x } }
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"
+import "go:fmt"
+import "boxes"
+import "values"
+
+fn get() -> Option<int> { Some(7) }
+struct Helper {}
+impl Helper { fn get<U>(self, value: U) -> Option<U> { Some(value) } }
+fn main() {
+  let some = values.Bar { x: Some(7) }
+  let none: values.Bar<int> = values.Bar { x: None }
+  fmt.Println(boxes.read(some), boxes.read(none))
+  fmt.Println(boxes.read_ref(&some), boxes.read_ref(&none))
+  fmt.Println(boxes.read_fixed(some), boxes.read_fixed(none))
+  fmt.Println((boxes.Holder { value: some }).read(), (boxes.Holder { value: none }).read())
+  let getter = some.get
+  fmt.Println(getter().unwrap_or(0), get().unwrap_or(0), (Helper {}).get(7).unwrap_or(0))
+}
+"#,
+    )
+    .unwrap();
+
+    let check = lis(&project, "check");
+    assert!(
+        check.status.success(),
+        "lis check failed:\n{}\n{}",
+        String::from_utf8_lossy(&check.stdout),
+        String::from_utf8_lossy(&check.stderr),
+    );
+    let output = lis_run(&project, scratch.path(), &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "lis run failed:\n{stdout}\n{stderr}"
+    );
+    assert_eq!(
+        stdout.trim(),
+        "7 0\n7 0\n7 0\n7 0\n7 7 7",
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
+fn run_generic_return_bound_preserves_go_interface_adapters() {
+    assert_generic_program_runs(
+        r#"
+import "go:fmt"
+import "go:io"
+
+interface Source<U> { fn ReadByte() -> U }
+struct Reader {}
+impl Reader { fn ReadByte(self) -> Result<uint8, error> { Ok(7) } }
+
+fn read<T: Source<Result<uint8, error>>>(value: T) -> uint8 {
+  value.ReadByte().unwrap_or(0)
+}
+fn read_go(value: io.ByteReader) -> uint8 { value.ReadByte().unwrap_or(0) }
+fn main() { fmt.Println(read(Reader {}), read_go(Reader {})) }
+"#,
+        "7 7",
+    );
+}
+
+#[test]
 fn run_bounded_generics_survive_generated_adapters_and_generic_methods() {
     assert_generic_program_runs(
         r#"

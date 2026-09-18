@@ -274,6 +274,12 @@ impl<'a> EmitFacts<'a> {
         self.globals.exported_method_names.contains(method)
     }
 
+    pub(crate) fn method_uses_tagged_return(&self, method: &str) -> bool {
+        self.globals
+            .tagged_method_names
+            .contains(&go_name::snake_to_camel(method))
+    }
+
     pub(crate) fn make_function_name(&self, enum_id: &str, variant_name: &str) -> Option<String> {
         let definition = self.definition(enum_id)?;
         let DefinitionBody::Enum { variants, .. } = &definition.body else {

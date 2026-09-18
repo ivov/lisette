@@ -9,7 +9,7 @@ use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
-use crate::abi::transition::emit_lisette_callback_wrapper;
+use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement, discard, expression_statement};
@@ -72,6 +72,28 @@ impl Planner<'_> {
                     .stable_across_calls_if(
                         self.identifier_immune_to_calls(expression.unwrap_parens()),
                     );
+            }
+        }
+
+        if !ctx.is_callee()
+            && !ctx.forces_tagged_go_function()
+            && self.callee_uses_tagged_method_return(expression)
+            && let Some(function) = expression.get_type().as_function_type()
+        {
+            let target = self.slot_return_abi(&function.return_type, ctx.function_slot_origin());
+            if target.is_lowered() {
+                let value = self.plan_operand(expression, ctx);
+                return value.map_expression(|setup, value| {
+                    emit_fn_arg_shape_adapter(
+                        self,
+                        setup,
+                        value,
+                        &expression.get_type(),
+                        &CallableReturnAbi::Tagged,
+                        &target,
+                    )
+                    .expect("method value has a function signature")
+                });
             }
         }
 
