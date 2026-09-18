@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789739578334,
+  "lastUpdate": 1789744119706,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -37016,6 +37016,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/b77f27f81b22d22a4e0f94aeaf3d0e2e57b020be"
         },
         "date": 1789739576045,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 143786,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 35315,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28431,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19344,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15261,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13959,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9004,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2944,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d86a3cde3bad94405682e44a1e4f47a8b65ad941",
+          "message": "ci: build Windows binaries on Linux runners (#1449)",
+          "timestamp": "2026-09-18T17:08:13+02:00",
+          "tree_id": "57ff171bc30cb6d26435da1232d7dc1427547403",
+          "url": "https://github.com/ivov/lisette/commit/d86a3cde3bad94405682e44a1e4f47a8b65ad941"
+        },
+        "date": 1789744117660,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
