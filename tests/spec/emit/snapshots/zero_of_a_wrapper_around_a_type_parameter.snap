@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  struct Box<T> { v: T, n: int }
+  
+  fn blank<T: Zeroable>() -> Box<T> {
+    zero<Box<T>>()
+  }
+  
+  fn pair<T: Zeroable>() -> (T, int) {
+    zero<(T, int)>()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Box[T any] struct {
+	v T
+	n int
+}
+
+func blank[T any]() Box[T] {
+	return Box[T]{}
+}
+
+func pair[T any]() (T, int) {
+	tup_1 := lisette.MakeTuple2[T, int](*new(T), 0)
+	return tup_1.First, tup_1.Second
+}

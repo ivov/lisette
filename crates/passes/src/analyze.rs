@@ -142,6 +142,9 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     // phase ordering, FxHashMap iteration, or parallel inference scheduling.
     let mut all_diagnostics = sink.into_diagnostics();
     all_diagnostics.sort_by(LisetteDiagnostic::sort_key);
+    // A bound re-checked at several stages reports the same thing each time.
+    let mut seen = HashSet::default();
+    all_diagnostics.retain(|diagnostic| seen.insert(diagnostic.dedup_key()));
     all_diagnostics.splice(0..0, entry_parse_errors.into_iter().map(Into::into));
 
     let has_permission_errors = all_diagnostics.iter().any(|diagnostic| {

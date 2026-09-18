@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  struct Box<T: Zeroable> { v: T, n: int }
+  
+  fn blank<T: Zeroable>() -> Box<T> {
+    Box { n: 1, .. }
+  }
+---
+package main
+
+type Box[T any] struct {
+	v T
+	n int
+}
+
+func blank[T any]() Box[T] {
+	return Box[T]{n: 1}
+}

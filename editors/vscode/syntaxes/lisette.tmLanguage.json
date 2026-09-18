@@ -213,7 +213,7 @@
         },
         {
           "name": "support.function.builtin.lisette",
-          "match": "\\b(panic|assert_type)\\b"
+          "match": "\\b(?:(assert_type|max|min|zero)(?=[(<])|(complex|imaginary|panic|real)(?=\\())"
         },
         {
           "name": "constant.language.lisette",

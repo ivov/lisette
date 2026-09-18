@@ -1534,6 +1534,49 @@ fn main() {
 }
 
 #[test]
+fn infer_unconstrained_type_param_absent_from_signature() {
+    let input = r#"
+interface Display { fn show() -> string }
+
+fn require_display<T: Display>() {}
+
+fn test() {
+  require_display()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unconstrained_type_param_present_but_call_is_ambiguous() {
+    let input = r#"
+fn make<T: Comparable>() -> T { panic("todo") }
+
+fn test() {
+  let _ = make()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unconstrained_type_param_names_the_method_not_the_receiver() {
+    let input = r#"
+struct Bag {}
+
+impl Bag {
+  fn pick<T: Comparable>(self: Bag) -> T { panic("todo") }
+}
+
+fn test() {
+  let b = Bag {}
+  let _ = b.pick()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_imported_function_shortened_type_args_rejected() {
     let mut fs = MockFileSystem::new();
 
@@ -3247,6 +3290,204 @@ import "go:archive/zip"
 
 fn test() {
   let files = Slice.make<zip.File>(4)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_ref_is_not_zeroable() {
+    let input = r#"
+fn test() {
+  let r = zero<Ref<int>>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_map_is_not_zeroable() {
+    let input = r#"
+fn test() {
+  let m = zero<Map<string, int>>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_function_is_not_zeroable() {
+    let input = r#"
+fn test() {
+  let f = zero<fn(int) -> int>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_unknown_is_not_zeroable() {
+    let input = r#"
+fn test() {
+  let u = zero<Unknown>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_error_is_not_zeroable() {
+    let input = r#"
+fn test() {
+  let e = zero<error>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_interface_is_not_zeroable() {
+    let input = r#"
+interface Speaker {
+  fn Speak() -> string
+}
+
+fn test() {
+  let s = zero<Speaker>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_enum_is_not_zeroable() {
+    let input = r#"
+enum Color { Red, Green }
+
+fn test() {
+  let c = zero<Color>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_channel_is_not_zeroable() {
+    let input = r#"
+fn test() {
+  let c = zero<Channel<int>>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_names_the_field_that_has_no_zero() {
+    let input = r#"
+struct HasFn { f: fn(int) -> int }
+
+fn test() {
+  let s = zero<HasFn>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_names_the_map_field_that_has_no_zero() {
+    let input = r#"
+struct HasMap { m: Map<string, int> }
+
+fn test() {
+  let s = zero<HasMap>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_array_new_of_type_parameter_suggests_the_bound() {
+    let input = r#"
+fn blank<T>() -> Array<T, 2> {
+  Array.new<T, 2>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_opaque_go_type_points_at_its_constructor() {
+    let input = r#"
+import "go:regexp"
+
+fn test() {
+  let re = zero<regexp.Regexp>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_newtype_over_map_does_not_suggest_autofill() {
+    let input = r#"
+struct Tags(Map<string, string>)
+
+fn test() {
+  let t = zero<Tags>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_in_defer_has_nothing_to_run() {
+    let input = r#"
+fn test() {
+  defer zero<int>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_in_task_has_nothing_to_run() {
+    let input = r#"
+fn test() {
+  task zero<int>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_of_type_parameter_needs_the_zeroable_bound() {
+    let input = r#"
+fn empty<T>() -> T {
+  zero<T>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_forwarded_needs_the_zeroable_bound() {
+    let input = r#"
+fn empty<T: Zeroable>() -> T {
+  zero<T>()
+}
+
+fn forward<T>() -> T {
+  empty<T>()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_without_a_type_argument() {
+    let input = r#"
+fn test() {
+  let x = zero()
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -7527,6 +7768,34 @@ import "shapes"
 
 fn main() {
   let q = shapes.Point { y: 10, .. };
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_package("main", fs);
+    assert_multipackage_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn infer_zero_names_the_package_that_owns_the_private_field() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "shapes",
+        "lib.lis",
+        r#"
+pub struct Point {
+  x: int,
+  pub y: int,
+}
+"#,
+    );
+
+    let source = r#"
+import "shapes"
+
+fn main() {
+  let p = zero<shapes.Point>();
 }
 "#;
     fs.add_file("main", "main.lis", source);
@@ -15909,6 +16178,20 @@ struct P { x: int }
 
 fn take(items: Ref<mut Slice<mut Ref<P>>>) {
   let _ = items
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_zero_names_the_embedded_field_that_has_no_zero() {
+    let input = r#"
+struct Bad { m: Map<string, int> }
+
+struct Embeds { embed Bad, ok: int }
+
+fn f() {
+  let _ = zero<Embeds>()
 }
 "#;
     assert_infer_error_snapshot!(input);

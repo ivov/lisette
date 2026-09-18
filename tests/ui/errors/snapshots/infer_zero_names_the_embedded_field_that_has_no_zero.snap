@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `Map<string, int>` has no zero value
+   ╭─[test.lis:7:11]
+ 6 │ fn f() {
+ 7 │   let _ = zero<Embeds>()
+   ·           ───────┬──────
+   ·                  ╰── `Map<string, int>` does not satisfy `Zeroable`
+ 8 │ }
+   ╰────
+  help: `Map<string, int>` at `Bad.m` is a map, whose Go zero is nil. `Embeds { .. }` creates the map, but generic code cannot, so `Embeds` is not `Zeroable` · code: [infer.not_zeroable_bound]

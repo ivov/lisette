@@ -91,6 +91,8 @@ pub(crate) enum CallableOrigin {
     TupleStructConstructor,
     /// Type assertion: `assert_type<T>(x)`.
     AssertType,
+    /// Zero value: `zero<T>()`.
+    Zero,
 }
 
 /// Per-argument adaptation; first applicable wins.
@@ -174,6 +176,7 @@ impl<'a> Planner<'a> {
             match kind {
                 Some(CallKind::TupleStructConstructor) => CallableOrigin::TupleStructConstructor,
                 Some(CallKind::AssertType) => CallableOrigin::AssertType,
+                Some(CallKind::Zero) => CallableOrigin::Zero,
                 Some(CallKind::UfcsMethod) => CallableOrigin::UfcsMethod,
                 Some(CallKind::NativeConstructor(kind)) => CallableOrigin::NativeConstructor(kind),
                 Some(CallKind::NativeMethod(kind)) => CallableOrigin::NativeMethod(kind),

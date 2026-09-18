@@ -91,7 +91,7 @@ let names = ["Alice", "Bob"]
 
 ### Bounds
 
-A type parameter can carry a bound `T: Constraint` that constrains which types may instantiate it. Any [interface](/docs/interfaces/) serves as a constraint, and the prelude [supplies](/docs/prelude/constraints/) two: `Comparable` and `Ordered`.
+A type parameter can carry a bound `T: Constraint` that constrains which types may instantiate it. Any [interface](/docs/interfaces/) serves as a constraint, and the prelude [supplies](/docs/prelude/constraints/) three: `Comparable`, `Ordered` and `Zeroable`.
 
 ```lisette
 interface Display {
@@ -190,3 +190,27 @@ let b = true
 let n = b as int
 ```
 
+## Types with zero values
+
+These types have a zero value:
+
+| Type | Zero value |
+| --- | --- |
+| numeric | `0` |
+| `string` | `""` |
+| `bool` | `false` |
+| `Option<T>` | `None` |
+| `Slice<T>` | `[]` |
+| `Array<T, N>` | `N` zero values of `T` |
+| enum with [default](/docs/attributes/#default) | default variant |
+
+A struct or tuple has a zero value if it only contains types with zero values:
+
+```lisette
+// !callout-right zero value is `Point { x: 0, y: 0 }`
+struct Point { x: int, y: int }
+// !callout-right zero value is `(0, "")`
+type Pair = (int, string)
+```
+
+See [`zero()`](/docs/prelude/functions/#zero) and [`Zeroable`](/docs/prelude/constraints/#zeroable).

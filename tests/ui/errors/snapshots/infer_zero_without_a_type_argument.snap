@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Unconstrained type parameter
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let x = zero()
+   ·           ───┬──
+   ·              ╰── nothing here determines `T`
+ 4 │ }
+   ╰────
+  help: Supply the type argument explicitly: `zero<SomeType>()` · code: [infer.unconstrained_type_param]

@@ -1173,6 +1173,17 @@ type Comparable
 ///   let words = descending("pear", "apple")
 type Ordered
 
+/// Satisfied by any type that has a [zero value](/docs/types/#types-with-zero-values).
+/// Typically used with [`zero()`](/docs/prelude/functions/#zero).
+///
+/// Example:
+///   fn parse_json<T: Zeroable>(data: Slice<byte>) -> Result<T, error> {
+///     let mut parsed = zero<T>()
+///     json.Unmarshal(data, &parsed)?
+///     Ok(parsed)
+///   }
+type Zeroable
+
 /// Equivalent to Go's `...T`.
 ///
 /// Example:
@@ -1273,6 +1284,17 @@ interface error {
 ///   // !callout-right `Some(n)` if the expected type, else `None`
 ///   let n = assert_type<int>(value)?
 fn assert_type<T>(value: Unknown) -> Option<T>
+
+/// Returns the [zero value](/docs/types/#types-with-zero-values) of `T` if
+/// [`Zeroable`](/docs/prelude/constraints/#zeroable).
+///
+/// Example:
+///   fn reset<T: Zeroable>(items: mut Slice<T>) {
+///     for i in 0..items.length() {
+///       items[i] = zero<T>()
+///     }
+///   }
+fn zero<T: Zeroable>() -> T
 
 /// Creates a complex number from real and imaginary parts.
 ///

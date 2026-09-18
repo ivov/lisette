@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn f() -> int {
+    let zero = || {
+      fmt.Println("effect")
+      42
+    }
+    let _ = zero()
+    zero()
+  }
+---
+package main
+
+import "fmt"
+
+func f() int {
+	zero := func() int {
+		fmt.Println("effect")
+		return 42
+	}
+	_ = zero()
+	return zero()
+}

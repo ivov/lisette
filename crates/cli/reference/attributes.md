@@ -381,6 +381,9 @@ let job = Job { name: "build", .. }
 let by_name = Map.new<string, Status>()
 // !callout[/missing/] `Status.Stopped`
 let missing = by_name["absent"]
+
+// !callout[/initial/] `Status.Stopped`
+let initial = zero<Status>()
 ```
 
 ## `#[allow]`

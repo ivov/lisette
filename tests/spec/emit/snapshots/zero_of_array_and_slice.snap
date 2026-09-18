@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn f() {
+    let a = zero<Array<int, 3>>()
+    let b = zero<Array<string, 2>>()
+    let s = zero<Slice<int>>()
+    let _ = (a, b, s)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func f() {
+	var a [3]int
+	var b [2]string
+	var s []int
+	_ = lisette.MakeTuple3[[3]int, [2]string, []int](a, b, s)
+}

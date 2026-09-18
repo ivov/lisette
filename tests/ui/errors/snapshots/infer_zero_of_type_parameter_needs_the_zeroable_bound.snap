@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing bound on type parameter
+   ╭─[test.lis:3:3]
+ 2 │ fn empty<T>() -> T {
+ 3 │   zero<T>()
+   ·   ────┬────
+   ·       ╰── does not satisfy `Zeroable`
+ 4 │ }
+   ╰────
+  help: The parameter must be `Zeroable` but the argument is unbounded. Add this bound to the enclosing function: `<T: Zeroable>` · code: [infer.missing_bound_on_param]

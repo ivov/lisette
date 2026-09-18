@@ -81,8 +81,12 @@ impl InferCtx<'_> {
                 let qualified = self.qualify_name(value);
                 let definition = store.get_definition(&qualified);
                 let shadowed = matches!(resolution, IdentifierResolution::Binding(_));
-                if definition.is_none() && !shadowed && value == "assert_type" {
-                    return CallKind::AssertType;
+                if definition.is_none() && !shadowed {
+                    match value.as_str() {
+                        "assert_type" => return CallKind::AssertType,
+                        "zero" => return CallKind::Zero,
+                        _ => {}
+                    }
                 }
                 if self.is_tuple_struct_definition(definition, callee) {
                     return CallKind::TupleStructConstructor;

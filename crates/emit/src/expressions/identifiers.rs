@@ -59,7 +59,9 @@ impl Planner<'_> {
                 }
                 let resolved = self.capitalize_static_method_if_public(&name);
                 let go_name = self.resolve_go_name(&resolved, qualified, bound_go_name.is_some());
+                // A local binding has no generic recipe, even when it shadows a definition.
                 if !ctx.is_callee()
+                    && bound_go_name.is_none()
                     && let Some(type_args) = self.format_generic_value_type_args(&name, ty)
                 {
                     return GoExpression::instantiation(go_name, type_args);

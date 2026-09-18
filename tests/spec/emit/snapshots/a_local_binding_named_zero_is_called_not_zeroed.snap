@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn f() -> int {
+    let zero = || 42
+    zero()
+  }
+---
+package main
+
+func f() int {
+	zero := func() int {
+		return 42
+	}
+	return zero()
+}

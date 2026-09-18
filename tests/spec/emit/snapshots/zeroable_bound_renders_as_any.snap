@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn pair<T: Zeroable>(value: T) -> (T, T) {
+    (value, zero<T>())
+  }
+---
+package main
+
+func pair[T any](value T) (T, T) {
+	return value, *new(T)
+}

@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn widened() -> Unknown {
+    zero<float64>()
+  }
+---
+package main
+
+func widened() any {
+	return float64(0)
+}

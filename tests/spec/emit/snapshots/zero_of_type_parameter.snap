@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn empty<T: Zeroable>() -> T {
+    zero<T>()
+  }
+---
+package main
+
+func empty[T any]() T {
+	return *new(T)
+}

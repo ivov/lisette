@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Unconstrained type parameter
+   ╭─[test.lis:7:3]
+ 6 │ fn test() {
+ 7 │   require_display()
+   ·   ────────┬────────
+   ·           ╰── `T` is not used in a parameter or return type
+ 8 │ }
+   ╰────
+  help: `T` can never be inferred from a call. Use it in a parameter or return type, or supply it explicitly: `require_display<SomeType>()` · code: [infer.unconstrained_type_param]

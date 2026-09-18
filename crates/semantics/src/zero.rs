@@ -31,6 +31,29 @@ impl NoZero {
             _ => None,
         }
     }
+
+    pub fn cause(&self) -> diagnostics::infer::NotZeroableCause<'_> {
+        match &self.reason {
+            NoZeroReason::HiddenGoState { go_type } => {
+                diagnostics::infer::NotZeroableCause::HiddenGoState { go_type }
+            }
+            NoZeroReason::EnumWithoutDefault => {
+                diagnostics::infer::NotZeroableCause::EnumWithoutDefault
+            }
+            NoZeroReason::PrivateField {
+                struct_name,
+                field,
+                owning_package,
+            } => diagnostics::infer::NotZeroableCause::PrivateField {
+                struct_name,
+                field,
+                owning_package,
+            },
+            NoZeroReason::NoZeroForType
+            | NoZeroReason::NilMap
+            | NoZeroReason::TypeParameterUnbounded => diagnostics::infer::NotZeroableCause::Type,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -49,6 +72,10 @@ pub enum NoZeroReason {
     HiddenGoState { go_type: EcoString },
     /// The leaf type is a `Map`, whose Go zero is nil.
     NilMap,
+    /// A type parameter without a `Zeroable` bound.
+    TypeParameterUnbounded,
+    /// An enum with no variant marked `#[default]`.
+    EnumWithoutDefault,
 }
 
 /// Who supplies the zero value of a `Map` reached while walking a type.
@@ -69,10 +96,22 @@ pub fn has_zero(
     from_package: &str,
     map_zero: MapZero,
 ) -> Result<(), NoZero> {
+    has_zero_in_scope(store, ty, from_package, map_zero, &[])
+}
+
+/// As `has_zero`, but told what the type parameters in scope are bounded by.
+pub fn has_zero_in_scope(
+    store: &Store,
+    ty: &Type,
+    from_package: &str,
+    map_zero: MapZero,
+    param_bounds: &[(EcoString, Vec<Type>)],
+) -> Result<(), NoZero> {
     ZeroWalk {
         store,
         from_package,
         map_zero,
+        param_bounds,
         visited: Vec::new(),
     }
     .walk(ty)
@@ -82,11 +121,23 @@ struct ZeroWalk<'a> {
     store: &'a Store,
     from_package: &'a str,
     map_zero: MapZero,
+    param_bounds: &'a [(EcoString, Vec<Type>)],
     visited: Vec<Type>,
 }
 
 impl ZeroWalk<'_> {
     const MAX_ZERO_DEPTH: usize = 256;
+
+    fn parameter_is_zeroable(&self, name: &str) -> bool {
+        self.param_bounds
+            .iter()
+            .filter(|(parameter, _)| parameter == name)
+            .any(|(_, bounds)| {
+                bounds
+                    .iter()
+                    .any(|bound| bound.get_qualified_id() == Some("prelude.Zeroable"))
+            })
+    }
 
     fn walk(&mut self, ty: &Type) -> Result<(), NoZero> {
         match ty {
@@ -165,11 +216,14 @@ impl ZeroWalk<'_> {
                 self.walk_nominal(id, params, ty)
             }
             Type::Forall { body, .. } => self.walk(body),
-            Type::Var { .. }
-            | Type::Uninferred
-            | Type::Ignored
-            | Type::Parameter(_)
-            | Type::ReceiverPlaceholder => {
+            // `Comparable` admits channels, so only `Zeroable` promises a zero.
+            Type::Parameter(name) if self.parameter_is_zeroable(name) => Ok(()),
+            Type::Parameter(_) => Err(NoZero {
+                chain: vec![],
+                reason: NoZeroReason::TypeParameterUnbounded,
+                leaf_ty: Box::new(ty.clone()),
+            }),
+            Type::Var { .. } | Type::Uninferred | Type::Ignored | Type::ReceiverPlaceholder => {
                 // Conservative: unresolved/abstract types have no known zero.
                 Err(NoZero {
                     chain: vec![],
@@ -284,9 +338,16 @@ impl ZeroWalk<'_> {
                     if def.is_zero_safe() {
                         return Ok(());
                     }
+                    let reason = if id.as_str().starts_with(types::GO_IMPORT_PREFIX) {
+                        NoZeroReason::HiddenGoState {
+                            go_type: go_display_name(id),
+                        }
+                    } else {
+                        NoZeroReason::NoZeroForType
+                    };
                     return Err(NoZero {
                         chain: vec![],
-                        reason: NoZeroReason::NoZeroForType,
+                        reason,
                         leaf_ty: Box::new(original_ty.clone()),
                     });
                 }
@@ -299,6 +360,11 @@ impl ZeroWalk<'_> {
                 default_variant: Some(_),
                 ..
             } => Ok(()),
+            DefinitionBody::Enum { .. } => Err(NoZero {
+                chain: vec![],
+                reason: NoZeroReason::EnumWithoutDefault,
+                leaf_ty: Box::new(original_ty.clone()),
+            }),
             _ => Err(NoZero {
                 chain: vec![],
                 reason: NoZeroReason::NoZeroForType,

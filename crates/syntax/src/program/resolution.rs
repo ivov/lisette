@@ -282,6 +282,8 @@ pub enum CallKind {
     TupleStructConstructor,
     /// Type assertion (`assert_type`)
     AssertType,
+    /// Zero value of a type (`zero`)
+    Zero,
     /// UFCS method call: `receiver.method()` where method is a free function
     UfcsMethod,
     /// Native type constructor (e.g., `Channel.new`, `Map.new`, `Slice.new`)

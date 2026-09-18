@@ -1428,6 +1428,8 @@ pub fn private_field_in_autofill(
 
 pub enum FieldNoZeroCause<'a> {
     Type,
+    TypeParameterUnbounded,
+    EnumWithoutDefault,
     PrivateField {
         struct_name: &'a str,
         field: &'a str,
@@ -1473,6 +1475,18 @@ pub fn field_no_zero(
              zero value. Obtain one from its documented Go constructor and pass it explicitly, \
              or wrap the field type in `Option<T>`.",
             path, go_type
+        ),
+        FieldNoZeroCause::TypeParameterUnbounded => format!(
+            "Field `{}` is the type parameter `{}`, which has no zero value unless it is \
+             bounded. Add the bound `<{}: Zeroable>`, provide an explicit value, or wrap the \
+             field type in `Option<T>`.",
+            path, field_ty, field_ty
+        ),
+        FieldNoZeroCause::EnumWithoutDefault => format!(
+            "Field `{}` is the enum `{}`, which has no zero value because no variant is \
+             marked `#[default]`. Mark one, provide an explicit value, or wrap the field \
+             type in `Option<T>`.",
+            path, field_ty
         ),
         FieldNoZeroCause::Type if chain.is_empty() => format!(
             "Field `{}` of type `{}` has no zero value. Provide an explicit value, \
@@ -1528,8 +1542,8 @@ pub fn map_read_no_zero(
             format!(
                 "Bracket reads can return a zero value when the key is missing, but the type \
                  parameter `{value_ty}` can be instantiated with a type that has no zero value, \
-                 such as `Ref<T>`, so this bracket read is disallowed. Use \
-                 `{receiver}.get(key)` instead"
+                 such as `Ref<T>`, so this bracket read is disallowed. Add the bound \
+                 `<{value_ty}: Zeroable>`, or use `{receiver}.get(key)`"
             ),
         ),
         MapReadNoZeroCause::NoZero => (
@@ -2525,20 +2539,30 @@ pub fn uninferred_binding(name: &str, span: Span) -> LisetteDiagnostic {
         ))
 }
 
-pub fn unconstrained_type_param(param_name: &str, span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Unconstrained type parameter")
-        .with_infer_code("unconstrained_type_param")
-        .with_span_label(
-            &span,
+pub fn unconstrained_type_param(
+    param_name: &str,
+    example: &str,
+    in_signature: bool,
+    span: Span,
+) -> LisetteDiagnostic {
+    let (label, help) = if in_signature {
+        (
+            format!("nothing here determines `{param_name}`"),
+            format!("Supply the type argument explicitly: `{example}`"),
+        )
+    } else {
+        (
+            format!("`{param_name}` is not used in a parameter or return type"),
             format!(
-                "`{}` is not constrained by parameters or return type",
-                param_name
+                "`{param_name}` can never be inferred from a call. Use it in a parameter or \
+                 return type, or supply it explicitly: `{example}`"
             ),
         )
-        .with_help(format!(
-            "Use `{}` in a parameter or return type, or provide an explicit type argument: `func<SomeType>(...)`",
-            param_name
-        ))
+    };
+    LisetteDiagnostic::error("Unconstrained type parameter")
+        .with_infer_code("unconstrained_type_param")
+        .with_span_label(&span, label)
+        .with_help(help)
 }
 
 pub fn instantiation_cycle(
@@ -3377,7 +3401,7 @@ pub fn propagate_in_pipeline(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid `?` in pipeline")
         .with_parse_code("propagate_in_pipeline")
         .with_span_label(&span, "propagate operator used here")
-        .with_help("Extract the `?` operation to a `let` binding: `let result = (... |> func)?`")
+        .with_help("Extract the `?` operation to a `let` binding: `let result = (... |> parse)?`")
 }
 
 pub fn invalid_pipeline_target(span: Span) -> LisetteDiagnostic {
@@ -4798,16 +4822,24 @@ pub fn array_from_cannot_infer_size(span: Span) -> LisetteDiagnostic {
         )
 }
 
-pub fn array_new_no_zero(element: &dyn Display, span: Span) -> LisetteDiagnostic {
+pub fn array_new_no_zero(
+    element: &dyn Display,
+    unbounded_parameter: bool,
+    span: Span,
+) -> LisetteDiagnostic {
+    let help = if unbounded_parameter {
+        format!("Add the bound `<{element}: Zeroable>`, or build the array from a list literal.")
+    } else {
+        "Build the array from a list literal instead, e.g. `let xs: Array<int, 3> = [1, 2, 3]`"
+            .to_string()
+    };
     LisetteDiagnostic::error(format!("`{element}` has no zero value"))
         .with_infer_code("array_new_no_zero")
         .with_span_label(
             &span,
             format!("`Array.new` zero-fills every element, but `{element}` has none"),
         )
-        .with_help(
-            "Build the array from a list literal instead, e.g. `let xs: Array<int, 3> = [1, 2, 3]`",
-        )
+        .with_help(help)
 }
 
 pub fn negative_size_literal(what: &str, span: Span) -> LisetteDiagnostic {
@@ -4836,12 +4868,16 @@ pub fn channel_no_make_constructor(span: Span) -> LisetteDiagnostic {
 pub fn slice_make_no_zero(
     element: &dyn Display,
     hidden_go_state: Option<&str>,
+    unbounded_parameter: bool,
     span: Span,
 ) -> LisetteDiagnostic {
     let help = match hidden_go_state {
         Some(go_type) => format!(
             "`{go_type}` has Go-side state hidden from Lisette, so it has no zero value. Build \
              the slice from a list literal of values obtained from its documented Go constructor."
+        ),
+        None if unbounded_parameter => format!(
+            "Add the bound `<{element}: Zeroable>`, or build the slice from a list literal."
         ),
         None => {
             "Build the slice from a list literal instead, e.g. `let xs = [a, b, c]`".to_string()
@@ -4853,6 +4889,85 @@ pub fn slice_make_no_zero(
             &span,
             format!("`Slice.make` zero-fills every element, but `{element}` has none"),
         )
+        .with_help(help)
+}
+
+pub enum NotZeroableCause<'a> {
+    Type,
+    /// A map field inside a struct, which autofill can build and generic code cannot.
+    NilMapField {
+        struct_name: &'a str,
+    },
+    EnumWithoutDefault,
+    PrivateField {
+        struct_name: &'a str,
+        field: &'a str,
+        owning_package: &'a str,
+    },
+    HiddenGoState {
+        go_type: &'a str,
+    },
+}
+
+pub fn zero_has_no_effect(keyword: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Nothing to run")
+        .with_infer_code("zero_has_no_effect")
+        .with_span_label(
+            &span,
+            format!("`zero` only produces a value, so `{keyword}` has nothing to run"),
+        )
+        .with_help(format!(
+            "Remove the `{keyword}`, or {keyword} the function that uses the value"
+        ))
+}
+
+pub fn not_zeroable_bound(
+    leaf: &dyn Display,
+    chain: &[&str],
+    cause: NotZeroableCause<'_>,
+    span: Span,
+) -> LisetteDiagnostic {
+    let at = if chain.is_empty() {
+        String::new()
+    } else {
+        format!(" at `{}`", chain.join("."))
+    };
+    let help = match cause {
+        NotZeroableCause::HiddenGoState { go_type } => format!(
+            "`{go_type}`{at} keeps its state in fields that Lisette cannot see, so there is no \
+             safe empty value. Create it with a constructor function from its Go package."
+        ),
+        NotZeroableCause::NilMapField { struct_name } => format!(
+            "`{leaf}`{at} is a map, whose Go zero is nil. `{struct_name} {{ .. }}` creates the \
+             map, but generic code cannot, so `{struct_name}` is not `Zeroable`."
+        ),
+        NotZeroableCause::EnumWithoutDefault => format!(
+            "`{leaf}`{at} is an enum with no variant marked `#[default]`, so it has no zero \
+             value. Mark the variant that should be the zero, or build the value explicitly."
+        ),
+        NotZeroableCause::PrivateField {
+            struct_name,
+            field,
+            owning_package,
+        } => format!(
+            "`{struct_name}.{field}` is private to package `{owning_package}`, so Lisette \
+             cannot produce a zero for it. Build the value through a constructor that \
+             `{owning_package}` exposes."
+        ),
+        NotZeroableCause::Type => format!(
+            "`Zeroable` admits only types whose zero value Lisette can produce, and \
+             `{leaf}`{at} has none. Build this value explicitly instead, e.g. \
+             `Map.new<K, V>()` for a map or `Channel.new<T>()` for a channel"
+        ),
+    };
+    // The leaf of a private field has a zero, so name the struct instead.
+    let subject = match cause {
+        NotZeroableCause::PrivateField { struct_name, .. } => struct_name.to_string(),
+        _ => leaf.to_string(),
+    };
+    LisetteDiagnostic::error(format!("`{subject}` has no zero value"))
+        .with_infer_code("not_zeroable_bound")
+        .with_span_label(&span, format!("`{subject}` does not satisfy `Zeroable`"))
         .with_help(help)
 }
 

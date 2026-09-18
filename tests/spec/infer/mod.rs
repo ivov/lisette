@@ -17,3 +17,4 @@ mod refutability;
 mod r#try;
 mod types;
 mod write_permission;
+mod zero;

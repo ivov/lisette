@@ -639,6 +639,7 @@ fn is_reserved_import_alias(name: &str) -> bool {
         | "Result"
         | "Comparable"
         | "Ordered"
+        | "Zeroable"
         | "Some"
         | "None"
         | "Ok"
@@ -646,5 +647,6 @@ fn is_reserved_import_alias(name: &str) -> bool {
         // Lisette prelude functions not already covered by Go builtins above
         | "assert_type"
         | "imaginary"
+        | "zero"
     )
 }

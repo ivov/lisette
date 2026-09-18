@@ -1624,6 +1624,7 @@ fn name(c: palette.Color) -> string {
 #[test]
 fn builtin_names_can_be_local_bindings() {
     for name in [
+        "zero",
         "real",
         "imaginary",
         "complex",

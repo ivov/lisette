@@ -11,8 +11,8 @@ use crate::plan::bodies::{
 };
 use crate::plan::calls::CallableOrigin;
 use crate::plan::placement::{
-    collapse_declared_temp, expression_contains_binding, is_unit_call, rebind_trailing_temp,
-    requires_temp_var,
+    collapse_declared_temp, expression_contains_binding, is_unit_call, is_zero_call,
+    rebind_trailing_temp, requires_temp_var,
 };
 use crate::plan::values::GoExpression;
 use syntax::ast::{Binding, Expression, LetMode, Pattern};
@@ -234,8 +234,9 @@ impl Planner<'_> {
         let constant = plan.expression.constant_kind();
         let mut statements = plan.setup;
         let coercion = self.value_slot_coercion(value, binding_ty);
+        let coercion_is_identity = coercion.is_identity();
         let constant_needs_type =
-            coercion.is_identity() && self.constant_needs_go_type(constant, binding_ty).is_some();
+            coercion_is_identity && self.constant_needs_go_type(constant, binding_ty).is_some();
         let (coercion_setup, value_expression) = coercion.lower(self, plan.expression);
         statements.extend(coercion_setup);
 
@@ -249,6 +250,21 @@ impl Planner<'_> {
         } else {
             bound
         };
+
+        // A bare `var x T` only where the slot's zero is the value.
+        if is_zero_call(value)
+            && statements.is_empty()
+            && coercion_is_identity
+            && !needs_explicit_type_declaration(self, value, binding_ty)
+        {
+            let var_ty = self.use_go_type(binding_ty);
+            statements.push(LoweredStatement::VarDecl {
+                name: go_identifier,
+                go_type: var_ty,
+                value: None,
+            });
+            return statements;
+        }
 
         if constant_needs_type || needs_explicit_type_declaration(self, value, binding_ty) {
             let var_ty = self.use_go_type(binding_ty);

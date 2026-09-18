@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  interface Speaker { fn Speak() -> string }
+  
+  fn greet<T: Zeroable + Speaker>() -> string {
+    zero<T>().Speak()
+  }
+---
+package main
+
+type Speaker interface {
+	Speak() string
+}
+
+func greet[T Speaker]() string {
+	return (*new(T)).Speak()
+}

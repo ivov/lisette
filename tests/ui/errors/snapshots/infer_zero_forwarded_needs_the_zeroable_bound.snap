@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing bound on type parameter
+   ╭─[test.lis:7:3]
+ 6 │ fn forward<T>() -> T {
+ 7 │   empty<T>()
+   ·   ─────┬────
+   ·        ╰── does not satisfy `Zeroable`
+ 8 │ }
+   ╰────
+  help: The parameter must be `Zeroable` but the argument is unbounded. Add this bound to the enclosing function: `<T: Zeroable>` · code: [infer.missing_bound_on_param]

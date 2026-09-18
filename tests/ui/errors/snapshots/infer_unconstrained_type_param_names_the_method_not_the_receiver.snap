@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Unconstrained type parameter
+    ╭─[test.lis:10:11]
+  9 │   let b = Bag {}
+ 10 │   let _ = b.pick()
+    ·           ────┬───
+    ·               ╰── nothing here determines `T`
+ 11 │ }
+    ╰────
+  help: Supply the type argument explicitly: `b.pick<SomeType>()` · code: [infer.unconstrained_type_param]

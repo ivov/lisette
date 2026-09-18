@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn f() {
+    let n = zero<int>()
+    let x = zero<float64>()
+    let s = zero<string>()
+    let b = zero<bool>()
+    let _ = (n, x, s, b)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func f() {
+	var n int
+	var x float64
+	var s string
+	var b bool
+	_ = lisette.MakeTuple4[int, float64, string, bool](n, x, s, b)
+}

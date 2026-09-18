@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn f() {
+    let p = zero<Point>()
+    let o = zero<Option<int>>()
+    let s = zero<Slice<int>>()
+    let _ = (p, o, s)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Point struct {
+	x int
+	y int
+}
+
+func f() {
+	var p Point
+	var o lisette.Option[int]
+	var s []int
+	_ = lisette.MakeTuple3[Point, lisette.Option[int], []int](p, o, s)
+}

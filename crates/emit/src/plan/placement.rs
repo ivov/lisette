@@ -21,6 +21,7 @@ use crate::types::native::NativeGoType;
 use std::slice;
 use syntax::ast::Pattern;
 use syntax::ast::{Expression, Literal};
+use syntax::program::CallKind;
 use syntax::types::Type;
 
 /// Append `panic("unreachable")` after a branch construct in return position
@@ -39,6 +40,7 @@ pub(crate) fn unreachable_panic_if_needed(
 fn is_side_effect_free_discard(expression: &Expression) -> bool {
     match expression {
         Expression::Unit { .. } => true,
+        _ if is_zero_call(expression) => true,
         Expression::Literal { literal, .. } => matches!(
             literal,
             Literal::Integer { .. }
@@ -52,8 +54,21 @@ fn is_side_effect_free_discard(expression: &Expression) -> bool {
     }
 }
 
+pub(crate) fn is_zero_call(expression: &Expression) -> bool {
+    matches!(
+        expression.unwrap_parens(),
+        Expression::Call {
+            call_kind: CallKind::Zero,
+            ..
+        }
+    )
+}
+
 pub(crate) fn is_unit_call(expression: &Expression) -> bool {
-    expression.get_type().is_unit() && matches!(expression.unwrap_parens(), Expression::Call { .. })
+    // `zero<()>()` yields a value rather than running for its effect.
+    expression.get_type().is_unit()
+        && matches!(expression.unwrap_parens(), Expression::Call { call_kind, .. }
+            if *call_kind != CallKind::Zero)
 }
 
 /// A `target = value` assignment with no lvalue capture.

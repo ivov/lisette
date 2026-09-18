@@ -178,6 +178,8 @@ pub struct SliceMakeCheck {
     pub ty: Type,
     pub span: Span,
     pub package_id: String,
+    /// Recorded here because the check runs after inference, out of scope.
+    pub param_bounds: Vec<(EcoString, Vec<Type>)>,
 }
 
 #[derive(Debug, Clone)]

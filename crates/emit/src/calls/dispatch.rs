@@ -69,6 +69,35 @@ pub(crate) fn all_type_params_inferrable(
     })
 }
 
+fn zero_call_type(
+    function: &Expression,
+    type_args: ResolvedCallTypeArguments<'_>,
+    call_ty: Option<&Type>,
+) -> Type {
+    if !type_args.is_empty() {
+        return type_args[0].clone();
+    }
+    let ty = function.get_type();
+    if let Some(signature) = ty.as_function_type() {
+        return signature.return_type.as_ref().clone();
+    }
+    call_ty.cloned().unwrap_or(Type::Error)
+}
+
+impl Planner<'_> {
+    fn is_plain_struct(&self, ty: &Type) -> bool {
+        let Type::Nominal { id, .. } = ty else {
+            return false;
+        };
+        !go_name::is_go_import(id.as_str())
+            && self.get_newtype_underlying(ty).is_none()
+            && matches!(
+                self.facts.definition(id.as_str()).map(|d| &d.body),
+                Some(DefinitionBody::Struct { .. })
+            )
+    }
+}
+
 fn extract_return_type_param(function: &Expression) -> Option<Type> {
     let ty = function.get_type();
     let f = ty.as_function_type()?;
@@ -546,6 +575,20 @@ impl<'a> Planner<'a> {
                 {
                     return result;
                 }
+            }
+            CallableOrigin::Zero => {
+                let ty = zero_call_type(function, resolved_type_args, call_ty);
+                let value = if self.is_plain_struct(&ty) {
+                    GoExpression::empty_composite(self.use_go_type(&ty))
+                } else {
+                    self.lisette_zero(&ty)
+                };
+                // An untyped `0` with nothing to type it would default to `int`.
+                let value = match self.constant_needs_go_type(value.constant_kind(), &ty) {
+                    Some(go_type) => GoExpression::conversion(go_type, value),
+                    None => value,
+                };
+                return ValuePlan::computed(Vec::new(), value, EvaluationEffect::Pure);
             }
             CallableOrigin::AssertType => {
                 let (setup, value) = self.lower_assert_type(function, args, resolved_type_args);

@@ -976,7 +976,7 @@ fn prelude_categories(index: &PreludeIndex) -> Vec<(&'static str, Vec<String>)> 
         .map(|f| format!("{}()", f.name))
         .collect();
 
-    let constraint_leaves: Vec<String> = ["Comparable", "Ordered"]
+    let constraint_leaves: Vec<String> = ["Comparable", "Ordered", "Zeroable"]
         .iter()
         .map(|s| s.to_string())
         .collect();

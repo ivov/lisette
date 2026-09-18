@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Nothing to run
+   ╭─[test.lis:3:3]
+ 2 │ fn test() {
+ 3 │   task zero<int>()
+   ·   ────────┬───────
+   ·           ╰── `zero` only produces a value, so `task` has nothing to run
+ 4 │ }
+   ╰────
+  help: Remove the `task`, or task the function that uses the value · code: [infer.zero_has_no_effect]

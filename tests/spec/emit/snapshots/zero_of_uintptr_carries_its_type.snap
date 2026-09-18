@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn f() -> Unknown {
+    zero<uintptr>()
+  }
+---
+package main
+
+func f() any {
+	return uintptr(0)
+}

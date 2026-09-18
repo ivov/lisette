@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `Speaker` has no zero value
+   ╭─[test.lis:7:11]
+ 6 │ fn test() {
+ 7 │   let s = zero<Speaker>()
+   ·           ───────┬───────
+   ·                  ╰── `Speaker` does not satisfy `Zeroable`
+ 8 │ }
+   ╰────
+  help: `Zeroable` admits only types whose zero value Lisette can produce, and `Speaker` has none. Build this value explicitly instead, e.g. `Map.new<K, V>()` for a map or `Channel.new<T>()` for a channel · code: [infer.not_zeroable_bound]

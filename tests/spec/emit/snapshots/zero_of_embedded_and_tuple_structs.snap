@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  struct Base { x: int, tag: string }
+  struct Mid { embed Base, y: float64 }
+  struct Top { embed Mid, z: bool }
+  struct Meters(int)
+  
+  fn nested() -> Top {
+    zero<Top>()
+  }
+  
+  fn newtype() -> Meters {
+    zero<Meters>()
+  }
+---
+package main
+
+type Base struct {
+	x   int
+	tag string
+}
+
+type Mid struct {
+	Base
+	y float64
+}
+
+type Top struct {
+	Mid
+	z bool
+}
+
+type Meters int
+
+func nested() Top {
+	return Top{}
+}
+
+func newtype() Meters {
+	return Meters(0)
+}

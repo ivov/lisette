@@ -46,6 +46,7 @@ impl InferCtx<'_> {
         }
     }
 
+    /// `Zeroable`'s argument comes from the expected type, so it is still a variable at the call.
     fn register_generic_bound_obligation(
         &mut self,
         bound: AppliedGenericBound,

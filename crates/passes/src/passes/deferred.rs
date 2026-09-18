@@ -85,10 +85,17 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
         if element_ty.is_error() || element_ty.is_variable() {
             continue;
         }
-        if let Err(no_zero) = zero::has_zero(store, element_ty, &check.package_id, MapZero::Built) {
+        if let Err(no_zero) = zero::has_zero_in_scope(
+            store,
+            element_ty,
+            &check.package_id,
+            MapZero::Built,
+            &check.param_bounds,
+        ) {
             sink.push(diagnostics::infer::slice_make_no_zero(
                 &no_zero.leaf_ty.stringify(),
                 no_zero.hidden_go_state(),
+                matches!(*no_zero.leaf_ty, Type::Parameter(_)),
                 check.span,
             ));
         }

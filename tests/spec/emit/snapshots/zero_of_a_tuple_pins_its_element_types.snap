@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn take(t: (int, float64)) -> float64 { t.1 }
+  
+  fn f() -> float64 {
+    take(zero<(int, float64)>())
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func take(t lisette.Tuple2[int, float64]) float64 {
+	return t.Second
+}
+
+func f() float64 {
+	return take(lisette.MakeTuple2[int, float64](0, 0))
+}

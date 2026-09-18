@@ -5963,7 +5963,7 @@ fn go_anon_struct_zero_value_renders_structurally() {
     let input = r#"
 import anon "go:example.com/anon"
 
-fn zero() {
+fn fill() {
   anon.TakesAnon(anon.AnonX { .. })
 }
 "#;

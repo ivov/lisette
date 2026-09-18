@@ -12,6 +12,7 @@ use syntax::types::SimpleKind;
 pub(crate) enum BuiltinBound {
     Ordered,
     Comparable,
+    Zeroable,
 }
 
 impl BuiltinBound {
@@ -19,6 +20,7 @@ impl BuiltinBound {
         match qualified {
             "go:cmp.Ordered" | "prelude.Ordered" => Some(Self::Ordered),
             "prelude.Comparable" => Some(Self::Comparable),
+            "prelude.Zeroable" => Some(Self::Zeroable),
             _ => None,
         }
     }
@@ -27,6 +29,7 @@ impl BuiltinBound {
         match self {
             Self::Ordered => "cmp.Ordered",
             Self::Comparable => "Comparable",
+            Self::Zeroable => "Zeroable",
         }
     }
 

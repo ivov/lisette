@@ -60,13 +60,13 @@ fn unnecessary_mut_holds_while_permission_errors_stand() {
         r#"
 import "go:fmt"
 
-fn zero(items: Slice<int>) {
+fn clear_first(items: Slice<int>) {
     items[0] = 0
 }
 
 fn main() {
     let mut xs = [1, 2]
-    zero(xs)
+    clear_first(xs)
     fmt.Println(xs)
 }
 "#,
@@ -9854,4 +9854,39 @@ fn main() {
     );
 
     assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn a_rejected_bound_reports_once() {
+    for source in [
+        "fn main() { let _ = zero<Map<string, int>>() }",
+        "fn main() { let _ = zero<Channel<int>>() }",
+    ] {
+        let mut fs = MockFileSystem::new();
+        fs.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
+        let analysis = compile_check_script(fs);
+        let count = analysis
+            .diagnostics()
+            .iter()
+            .filter(|d| d.code_str() == Some("infer.not_zeroable_bound"))
+            .count();
+        assert_eq!(count, 1, "expected one diagnostic for {source}");
+    }
+}
+
+#[test]
+fn distinct_errors_sharing_a_span_both_survive() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        "struct Bad { a: Channel<int>, b: fn(int) -> int, n: int }\nfn main() { let _ = Bad { n: 1, .. } }",
+    );
+    let analysis = compile_check_script(fs);
+    let count = analysis
+        .diagnostics()
+        .iter()
+        .filter(|d| d.code_str() == Some("infer.field_no_zero"))
+        .count();
+    assert_eq!(count, 2);
 }

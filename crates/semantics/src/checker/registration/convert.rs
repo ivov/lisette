@@ -5,7 +5,7 @@ use crate::checker::infer::expressions::comparison::{
 };
 use std::mem;
 use syntax::EcoString;
-use syntax::ast::{Annotation, Generic, Span, VariantFields};
+use syntax::ast::{Annotation, Generic, Span, StructFields, VariantFields};
 use syntax::display::annotation_to_string;
 use syntax::program::{AliasKind, ConstantValue, DefinitionBody};
 use syntax::types::{
@@ -19,6 +19,7 @@ use crate::checker::state::PendingArraySizeCheck;
 use crate::generics::apply_bounds;
 use crate::prelude::PRELUDE_PACKAGE_ID;
 use crate::store::Store;
+use crate::zero::{self, MapZero, NoZeroReason};
 
 enum ArraySizeError {
     NotInteger,
@@ -1051,7 +1052,8 @@ impl TaskState {
         equals_hint: Option<diagnostics::infer::EquatableFieldHint<'_>>,
     ) {
         let resolved = store.deep_resolve_alias(&argument.resolve_in(&self.env));
-        if resolved.is_variable() {
+        // A bound error on an unresolved type would bury its own diagnostic.
+        if resolved.is_variable() || resolved.contains_error() {
             return;
         }
         if let Type::Parameter(parameter) = &resolved {
@@ -1100,6 +1102,54 @@ impl TaskState {
                     .push(diagnostics::infer::not_orderable_bound(span));
             }
             BuiltinBound::Ordered => {}
+            BuiltinBound::Zeroable => {
+                let param_bounds = self.visible_parameter_bounds();
+                let from_package = self.cursor.package_id().to_string();
+                self.check_zeroable_argument(store, &resolved, span, &param_bounds, &from_package);
+            }
+        }
+    }
+
+    /// A deferred check runs after the call's scope is gone, so the caller passes what it captured.
+    pub(crate) fn check_zeroable_argument(
+        &mut self,
+        store: &Store,
+        resolved: &Type,
+        span: Span,
+        param_bounds: &[(EcoString, Vec<Type>)],
+        from_package: &str,
+    ) {
+        if let Err(no_zero) =
+            zero::has_zero_in_scope(store, resolved, from_package, MapZero::Nil, param_bounds)
+        {
+            let chain: Vec<&str> = no_zero.chain.iter().map(EcoString::as_str).collect();
+            let struct_name = match resolved {
+                Type::Nominal { id, .. }
+                    if !chain.is_empty()
+                        && matches!(
+                            store.get_definition(id.as_str()).map(|d| &d.body),
+                            Some(DefinitionBody::Struct {
+                                fields: StructFields::Record(_),
+                                ..
+                            })
+                        ) =>
+                {
+                    Some(id.last_segment().to_string())
+                }
+                _ => None,
+            };
+            let cause = match (&no_zero.reason, &struct_name) {
+                (NoZeroReason::NilMap, Some(struct_name)) => {
+                    diagnostics::infer::NotZeroableCause::NilMapField { struct_name }
+                }
+                _ => no_zero.cause(),
+            };
+            self.sink.push(diagnostics::infer::not_zeroable_bound(
+                &no_zero.leaf_ty.stringify(),
+                &chain,
+                cause,
+                span,
+            ));
         }
     }
 }
