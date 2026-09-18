@@ -62,7 +62,8 @@ impl Planner<'_> {
             .clone();
         let qualified_id = self.facts.qualified_current(interface_name);
         let hints = self.go_interface_method_hints(&qualified_id, func.name);
-        let return_abi = self.callable_return_abi_with_go_hints(&raw_return_ty, &hints);
+        let return_abi =
+            self.interface_method_return_abi(&qualified_id, func.name, &raw_return_ty, &hints);
         let return_type = if return_abi.is_lowered() {
             self.render_lowered_return_ty(&return_abi, &raw_return_ty)
         } else {

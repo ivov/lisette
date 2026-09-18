@@ -274,7 +274,15 @@ impl Planner<'_> {
             resolved_generic_bounds,
         );
         let directive = self.maybe_line_directive(&function_definition.name_span);
-        let return_ctx = self.return_context_for_type(function_definition.return_type.clone());
+        let return_ctx = if receiver.is_some()
+            && self
+                .facts
+                .method_uses_tagged_return(function_definition.name)
+        {
+            ReturnContext::Tagged(function_definition.return_type.clone())
+        } else {
+            self.return_context_for_type(function_definition.return_type.clone())
+        };
         let return_shape = return_ctx.lowered_shape();
 
         let (native_override, receiver) = change_go_builtin_methods(function_definition, receiver);

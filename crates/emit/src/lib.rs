@@ -52,9 +52,10 @@ use state::scope::ScopeState;
 use syntax::ast::{Expression, Span};
 use syntax::program;
 use syntax::program::{
-    Definition, DefinitionBody, EmitInput, EqualityIndex, File, MutationInfo, TestIndex, UnusedInfo,
+    Definition, DefinitionBody, EmitInput, EqualityIndex, File, MutationInfo, TestIndex,
+    UnusedInfo, interface_requirements,
 };
-use syntax::types::{Symbol, Type};
+use syntax::types::{Symbol, Type, peel_alias};
 use types::go_type::GoType;
 
 #[derive(Clone, Debug)]
@@ -72,6 +73,8 @@ pub fn root_package_name(go_module: &str) -> String {
 pub(crate) struct GlobalEmitData {
     go_abi_catalog: GoAbiCatalog,
     exported_method_names: HashSet<String>,
+    /// Method selectors whose interface bounds require a single generic result.
+    tagged_method_names: HashSet<String>,
 }
 
 impl GlobalEmitData {
@@ -79,13 +82,61 @@ impl GlobalEmitData {
         let mut globals = GlobalEmitData {
             go_abi_catalog: GoAbiCatalog::from_definitions(definitions),
             exported_method_names: HashSet::default(),
+            tagged_method_names: HashSet::default(),
         };
 
         for (key, definition) in definitions.iter() {
             globals.register_exported_methods(key, definition);
+            globals.register_bound_returns(definition, definitions);
         }
 
         globals
+    }
+
+    fn register_bound_returns(
+        &mut self,
+        definition: &Definition,
+        definitions: &HashMap<Symbol, Definition>,
+    ) {
+        let function_bounds = definition
+            .ty
+            .as_function_type()
+            .into_iter()
+            .flat_map(|function| &function.bounds)
+            .map(|bound| &bound.ty);
+        let type_bounds = definition
+            .body
+            .generics()
+            .into_iter()
+            .flatten()
+            .flat_map(|generic| generic.resolved_bounds().into_iter().flatten());
+        let method_bounds = definition
+            .methods()
+            .into_iter()
+            .flat_map(|methods| methods.values())
+            .filter_map(|method| method.ty.as_function_type())
+            .flat_map(|function| &function.bounds)
+            .map(|bound| &bound.ty);
+        for bound in function_bounds.chain(type_bounds).chain(method_bounds) {
+            for requirement in interface_requirements(bound, |id| definitions.get(id)) {
+                if go_name::is_go_import(&requirement.declaring_interface) {
+                    continue;
+                }
+                let Some(return_ty) = requirement.method.ty.unwrap_forall().get_function_ret()
+                else {
+                    continue;
+                };
+                if matches!(
+                    peel_alias(return_ty, |id| definitions.get(id)),
+                    Type::Parameter(_)
+                ) {
+                    // A generic result must keep one value for every instantiation.
+                    // Implementations must expose that same ABI to satisfy a Go bound.
+                    self.tagged_method_names
+                        .insert(go_name::snake_to_camel(&requirement.name));
+                }
+            }
+        }
     }
 
     fn register_exported_methods(&mut self, key: &Symbol, definition: &Definition) {

@@ -1,0 +1,55 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Box<U> { fn get() -> U }
+  struct Bar<S> { x: Option<S> }
+  impl<S> Bar<S> { fn get(self) -> Option<S> { self.x } }
+  
+  fn read<T: Box<Option<int>>>(value: T) -> int {
+    value.get().unwrap_or(0)
+  }
+  fn outer<T: Box<Option<int>>>(slot: Ref<T>) -> int {
+    slot.get().unwrap_or(0)
+  }
+  fn main() {
+    let some = Bar { x: Some(7) }
+    let none: Bar<int> = Bar { x: None }
+    if read(some) != 7 || read(none) != 0 { panic("value bound") }
+    if outer(&some) != 7 || outer(&none) != 0 { panic("reference bound") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Box[U any] interface {
+	get() U
+}
+
+type Bar[S any] struct {
+	x lisette.Option[S]
+}
+
+func (b Bar[S]) get() lisette.Option[S] {
+	return b.x
+}
+
+func read[T Box[lisette.Option[int]]](value T) int {
+	return value.get().UnwrapOr(0)
+}
+
+func outer[T Box[lisette.Option[int]]](slot *T) int {
+	return (*slot).get().UnwrapOr(0)
+}
+
+func main() {
+	some := Bar[int]{x: lisette.MakeOptionSome(7)}
+	none := Bar[int]{x: lisette.MakeOptionNone[int]()}
+	if read(some) != 7 || read(none) != 0 {
+		panic("value bound")
+	}
+	if outer(&some) != 7 || outer(&none) != 0 {
+		panic("reference bound")
+	}
+}
