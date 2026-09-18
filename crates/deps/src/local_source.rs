@@ -157,7 +157,6 @@ impl Fnv {
 mod tests {
     use super::*;
     use std::fs;
-    use std::fs::Permissions;
 
     fn local_dep(path: &str) -> GoDependency {
         GoDependency::Replaced {
@@ -281,6 +280,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn gate_keeps_old_stamp_when_eviction_fails() {
+        use std::fs::Permissions;
         use std::os::unix::fs::PermissionsExt;
 
         let dir = tempfile::tempdir().unwrap();
