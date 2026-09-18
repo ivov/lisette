@@ -2,6 +2,55 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.12.2](https://github.com/ivov/lisette/compare/lisette-v0.12.1...lisette-v0.12.2) - 2026-09-18
+
+### Features
+
+- feat: `zero<T: Zeroable>()` for the zero value of a type [#1439](https://github.com/ivov/lisette/pull/1439) [`abc5d4c`](https://github.com/ivov/lisette/commit/abc5d4c2d60e61ad1584cd46a40ba61de76e0184)
+- feat: idiomatic Go for parens and temps [#1434](https://github.com/ivov/lisette/pull/1434) [`e01a9ad`](https://github.com/ivov/lisette/commit/e01a9adfcaacb4e5a283ebc6ad83f9aa3f8f3def)
+- feat: idiomatic Go for casts, zero fills, and zero values [#1429](https://github.com/ivov/lisette/pull/1429) [`7025769`](https://github.com/ivov/lisette/commit/702576931c718031d6d8c71e4054c14ce53fa1a3)
+- feat: idiomatic Go for `get` and `find` in binding sites [#1428](https://github.com/ivov/lisette/pull/1428) [`7e2422d`](https://github.com/ivov/lisette/commit/7e2422d2ea8a683c5394757c17016732c732f4e6)
+- feat: idiomatic Go for call operands with stable values [#1427](https://github.com/ivov/lisette/pull/1427) [`6505a3c`](https://github.com/ivov/lisette/commit/6505a3c4b7ca1b231ce548851b440e5b1caa060b)
+- feat: idiomatic Go for slice lengths and `let` map results [#1426](https://github.com/ivov/lisette/pull/1426) [`7dfd2f3`](https://github.com/ivov/lisette/commit/7dfd2f3f70d1dec551e3076022b8c13ea40a3cdb)
+- feat: idiomatic Go for `match` on field paths and loop results [#1425](https://github.com/ivov/lisette/pull/1425) [`b1f5b9d`](https://github.com/ivov/lisette/commit/b1f5b9d64822e24f27fde2356caff9659cf7ff9c)
+- feat: idiomatic Go for `Some` and `None` in nullable Go slots [#1424](https://github.com/ivov/lisette/pull/1424) [`c98c4ab`](https://github.com/ivov/lisette/commit/c98c4abad42deb5a19bc47210dd0237ce999034a)
+- feat: idiomatic Go for `unwrap_or` and `map_or` on Go calls [#1423](https://github.com/ivov/lisette/pull/1423) [`839e132`](https://github.com/ivov/lisette/commit/839e13284d6114ea4b133952a3c99cea877e7463)
+- feat: idiomatic Go for `wrap_err` on Go calls [#1422](https://github.com/ivov/lisette/pull/1422) [`25cd3fb`](https://github.com/ivov/lisette/commit/25cd3fb6cd37e23fc44d8cc29b22170fedcb4815)
+- feat: idiomatic Go for `is_err` and `is_some` on Go calls [#1420](https://github.com/ivov/lisette/pull/1420) [`698f91a`](https://github.com/ivov/lisette/commit/698f91a2f9fcd5e867afd1f13641bbabef437866)
+- feat: idiomatic Go for `let` bound from a matched Go call [#1419](https://github.com/ivov/lisette/pull/1419) [`60f880d`](https://github.com/ivov/lisette/commit/60f880dc31c1b17e0e80b3eba0a4a147c0591fb2)
+- feat: idiomatic Go for two-arm `match` on Go calls [#1418](https://github.com/ivov/lisette/pull/1418) [`d0028d9`](https://github.com/ivov/lisette/commit/d0028d9050aca4e03b38daa3d5cc68e455a981ff)
+- feat: idiomatic Go for error variables of fallible Go calls [#1417](https://github.com/ivov/lisette/pull/1417) [`495a4bb`](https://github.com/ivov/lisette/commit/495a4bb444ebd38243ef1315f5161a027b59fe63)
+- feat: `Self` as receiver shorthand [#1413](https://github.com/ivov/lisette/pull/1413) [`2a37ed3`](https://github.com/ivov/lisette/commit/2a37ed373ffc2fce591c5c37e05e86072246d4d9)
+
+### Fixes
+
+- fix: emission of generic type aliases [#1446](https://github.com/ivov/lisette/pull/1446) [`2c127d4`](https://github.com/ivov/lisette/commit/2c127d40ed7ae57cf35d8edf59c1ff7c401ede43)
+- fix: keep same-line statement and param comments when formatting [#1445](https://github.com/ivov/lisette/pull/1445) [`d037b57`](https://github.com/ivov/lisette/commit/d037b57a75c3084386c2883ed6c697fbe5f93bc4)
+- fix: return `Option` as one value from generic interface methods [#1443](https://github.com/ivov/lisette/pull/1443) [`749bbce`](https://github.com/ivov/lisette/commit/749bbceb0e28718192de0007ced2dbbfa372ebf8)
+- fix: keep pointer on a `Ref<T>` param when `T` has a bound [#1442](https://github.com/ivov/lisette/pull/1442) [`319f450`](https://github.com/ivov/lisette/commit/319f4508f932940c667621de240202c0f77522e5)
+- fix: let a local binding shadow a prelude builtin name [#1441](https://github.com/ivov/lisette/pull/1441) [`142001b`](https://github.com/ivov/lisette/commit/142001bdc431cb3d991ddf163f15c971d377541e)
+- fix: accept `mut` params when implementing a Go interface [#1440](https://github.com/ivov/lisette/pull/1440) [`8c18a53`](https://github.com/ivov/lisette/commit/8c18a5375793e7bc7f35ac41f2bfba8da5342588)
+- fix: widen `mut` on Go interface params across packages [#1421](https://github.com/ivov/lisette/pull/1421) [`8f5b717`](https://github.com/ivov/lisette/commit/8f5b7171860bbfba03a2a2b4b6cb79d3c0fe0224)
+- fix: pass function values to Go callbacks that return a tuple [#1415](https://github.com/ivov/lisette/pull/1415) [`9fc631a`](https://github.com/ivov/lisette/commit/9fc631aec31a3890be4d8c2b13f4939ff4d3c450)
+- fix: drop `mut` on structs with no writable field in bindgen [#1414](https://github.com/ivov/lisette/pull/1414) [`17812eb`](https://github.com/ivov/lisette/commit/17812ebff007b49816bc4eea5bf6c16e9305f4d8)
+
+### Internals
+
+- test: support building tests on Windows [#1448](https://github.com/ivov/lisette/pull/1448) [`c40ba21`](https://github.com/ivov/lisette/commit/c40ba21a1c4c5ca53f4e96460ccd373639220727)
+- refactor: scope LSP completions and caret boundaries [#1447](https://github.com/ivov/lisette/pull/1447) [`400414b`](https://github.com/ivov/lisette/commit/400414b62b769d0f09f5250c3e23270ff5bf26ec)
+- refactor: stop parse recovery from discarding next statement [#1444](https://github.com/ivov/lisette/pull/1444) [`3c4a83f`](https://github.com/ivov/lisette/commit/3c4a83f796027cf6ec905b775d112c4d3b0443bf)
+- refactor: simplify statement plans [#1437](https://github.com/ivov/lisette/pull/1437) [`21b76fd`](https://github.com/ivov/lisette/commit/21b76fd1fcd3f04dcf0ae8ebe40000ea4448c0f4)
+- docs: update stale example in agents template [#1436](https://github.com/ivov/lisette/pull/1436) [`2c2b39c`](https://github.com/ivov/lisette/commit/2c2b39cb9235d3d650f93c4f10fe145c3f6d7e11)
+- refactor: lower pattern subjects and labels to `GoExpressionNode` [#1435](https://github.com/ivov/lisette/pull/1435) [`1a00f7b`](https://github.com/ivov/lisette/commit/1a00f7be0348fa54e700b3ee0d1b83df2cc64a76)
+- refactor: derive pins, imports, and uses from `GoExpressionNode` [#1433](https://github.com/ivov/lisette/pull/1433) [`14bcd4c`](https://github.com/ivov/lisette/commit/14bcd4c97a5fbc13fa55a752ecaf4215183e55ff)
+- refactor: build statements from `GoExpressionNode` [#1432](https://github.com/ivov/lisette/pull/1432) [`b667a22`](https://github.com/ivov/lisette/commit/b667a22efc9c0b25f4c06abcc7e96bd54e25a606)
+- refactor: lower expression producers to `GoExpressionNode` trees [#1431](https://github.com/ivov/lisette/pull/1431) [`047ecd4`](https://github.com/ivov/lisette/commit/047ecd4cae9165786df293a26cf21e69d458782e)
+- refactor: represent Go expressions as a tree inside `GoExpression` [#1430](https://github.com/ivov/lisette/pull/1430) [`13206e1`](https://github.com/ivov/lisette/commit/13206e146a45be1bc7fc2cca7402489af26ed778)
+- docs: move callouts above their lines and align wording [#1416](https://github.com/ivov/lisette/pull/1416) [`5c39da0`](https://github.com/ivov/lisette/commit/5c39da0c31f40ebda153be5dac2c489657803d17)
+- refactor: flatten tuple payloads in Go function wrappers [#1410](https://github.com/ivov/lisette/pull/1410) [`95a48ce`](https://github.com/ivov/lisette/commit/95a48ce2ccbc6b376275427a885ee8a058d173b8)
+- refactor: share lowered-return and arg-slot utils in `emit` crate [#1408](https://github.com/ivov/lisette/pull/1408) [`d7e4e0e`](https://github.com/ivov/lisette/commit/d7e4e0e44f205567120d3bdfb9723fdc7d5f38d2)
+
+
 ## [0.12.1](https://github.com/ivov/lisette/compare/lisette-v0.12.0...lisette-v0.12.1) - 2026-09-06
 
 ### Features
