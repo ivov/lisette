@@ -22,3 +22,5 @@ features = ["self-upgrade"]
 
 [dist.github-custom-runners]
 x86_64-apple-darwin = "macos-14"
+x86_64-pc-windows-msvc = "ubuntu-22.04"
+aarch64-pc-windows-msvc = "ubuntu-22.04"
