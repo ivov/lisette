@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Interface not implemented
+    ╭─[test.lis:24:3]
+ 23 │   let mut home = Hits { total: 0 }
+ 24 │   increment_all<Hits>([&home])
+    ·   ──────────────┬─────────────
+    ·                 ╰── `Hits` does not implement `Counter`
+ 25 │ }
+    ╰────
+  help: `T: Counter` requires `T` itself to implement `Counter`. To use the reference implementation, `T` must be `Ref<Hits>`. For a helper that only calls interface methods, change a `Ref<T>` or `mut Ref<T>` parameter to `T` and pass the reference · code: [infer.interface_not_implemented]

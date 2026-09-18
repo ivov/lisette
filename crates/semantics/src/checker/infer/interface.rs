@@ -79,12 +79,36 @@ impl InferCtx<'_> {
     }
 
     pub(crate) fn check_concrete_bound(&mut self, ty: &Type, bound: &Type, span: &Span) {
+        self.check_concrete_bound_with_hint(ty, bound, span, None);
+    }
+
+    pub(super) fn check_concrete_bound_with_hint(
+        &mut self,
+        ty: &Type,
+        bound: &Type,
+        span: &Span,
+        parameter_hint: Option<diagnostics::infer::BoundParameterHint<'_>>,
+    ) {
         let bound = self.store.deep_resolve_alias(bound);
         if !self.store.is_interface(&bound) {
             return;
         }
-        if self.satisfies_interface(ty, &bound, span).is_ok() {
-            let _ = self.check_pointer_receivers(ty, &bound, span);
+        let store = self.store;
+        let resolved = store.peel_alias(&ty.resolve_in(&self.env));
+        let methods = if resolved.is_ref()
+            && resolved
+                .inner()
+                .is_some_and(|inner| store.peel_alias(&inner).is_ref())
+        {
+            Methods::default()
+        } else {
+            self.get_all_methods(store, &resolved)
+        };
+        if self
+            .satisfies_interface_with_methods(&resolved, &bound, span, &methods)
+            .is_ok()
+        {
+            let _ = self.check_pointer_receivers(&resolved, &bound, span, parameter_hint);
         }
     }
 
@@ -93,6 +117,18 @@ impl InferCtx<'_> {
         ty: &Type,
         interface_ty: &Type,
         span: &Span,
+    ) -> Result<(), Vec<InterfaceViolation>> {
+        let store = self.store;
+        let methods = self.get_all_methods(store, ty);
+        self.satisfies_interface_with_methods(ty, interface_ty, span, &methods)
+    }
+
+    fn satisfies_interface_with_methods(
+        &mut self,
+        ty: &Type,
+        interface_ty: &Type,
+        span: &Span,
+        methods: &Methods,
     ) -> Result<(), Vec<InterfaceViolation>> {
         let interface_ty = self.store.deep_resolve_alias(interface_ty);
         let Type::Nominal {
@@ -134,7 +170,7 @@ impl InferCtx<'_> {
                 adapter_capable,
                 violations: Vec::new(),
             };
-            this.collect_interface_violations(&mut check, &requirements);
+            this.collect_interface_violations(&mut check, &requirements, methods);
             check.violations
         }) else {
             return Ok(());
@@ -252,14 +288,12 @@ impl InferCtx<'_> {
         }
     }
 
-    /// In Go, if any method has a pointer receiver, only a pointer satisfies the
-    /// interface. Runs on direct value-to-interface assignment and bounds checking,
-    /// minus generics absorbed via a `Ref<T>` param (see `generic_absorbed_via_ref_param`).
     pub(super) fn check_pointer_receivers(
         &mut self,
         ty: &Type,
         interface_ty: &Type,
         span: &Span,
+        parameter_hint: Option<diagnostics::infer::BoundParameterHint<'_>>,
     ) -> Result<(), Vec<InterfaceViolation>> {
         let store = self.store;
         let peeled = store.peel_alias(ty);
@@ -300,6 +334,7 @@ impl InferCtx<'_> {
                 &type_name,
                 &ptr_methods,
                 *span,
+                parameter_hint,
             )
         };
         self.sink.push(diagnostic);
@@ -495,11 +530,11 @@ impl InferCtx<'_> {
         &mut self,
         check: &mut ConformanceTraversal<'_>,
         requirements: &[InterfaceRequirement],
+        symbol_methods: &Methods,
     ) {
         let store = self.store;
         let ty = check.receiver;
         let span = check.span;
-        let symbol_methods = self.get_all_methods(store, ty);
         let resolved_receiver = store.deep_resolve_alias(&ty.strip_refs().resolve_in(&self.env));
         let receiver_id = match &resolved_receiver {
             Type::Nominal { id, .. } => Some(id.clone()),
@@ -527,7 +562,7 @@ impl InferCtx<'_> {
                 .is_some_and(|d| d.visibility.is_public());
             let site = ConformanceSite {
                 ty,
-                symbol_methods: &symbol_methods,
+                symbol_methods,
                 interface_qualified_id,
                 interface_is_public,
                 receiver_id: receiver_id.as_ref().map(|id| id.as_str()),

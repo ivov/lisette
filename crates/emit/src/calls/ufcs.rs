@@ -1,12 +1,11 @@
 use crate::calls::dispatch::{CallArgShape, all_type_params_inferrable};
 use crate::calls::native::native_method_lowers_to_plain_call;
 use crate::plan::calls::plan_variadic_spread;
-use rustc_hash::FxHashMap as HashMap;
 
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::SpreadSequenceOptions;
-use crate::names::generics::extract_type_mapping;
+use crate::names::generics::type_argument_mapping;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::go_expression::GoExpressionNode;
@@ -43,56 +42,19 @@ impl Planner<'_> {
             return None;
         };
 
-        let mut receiver_mapping: HashMap<String, Type> = HashMap::default();
-        if let Some(self_param) = f.params.first() {
-            extract_type_mapping(
-                &self_param.ty.strip_refs(),
-                receiver_ty,
-                &mut receiver_mapping,
-            );
-        }
-
-        if !type_args.is_empty() {
-            let impl_count = vars.len().saturating_sub(type_args.len());
-            let mut go_type_strs = Vec::with_capacity(vars.len());
-            for (index, var) in vars.iter().enumerate() {
-                let go_type = if index < impl_count {
-                    self.use_go_type(receiver_mapping.get(var.as_str())?)
-                } else {
-                    self.use_go_type(type_args.get(index - impl_count)?)
-                };
-                go_type_strs.push(go_type);
-            }
-            return (!go_type_strs.is_empty()).then(|| format!("[{}]", go_type_strs.join(", ")));
-        }
-
         let receiver_count = callee.receiver_offset.min(1);
-        if all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape) {
+        if type_args.is_empty()
+            && all_type_params_inferrable(vars, &f.params, receiver_count, arg_shape)
+        {
             return None;
         }
-
-        let mut inferred_mapping: HashMap<String, Type> = HashMap::default();
-        if let Type::Function(inst) = function.get_type() {
-            let self_curried = inst.params.len() + 1 == f.params.len();
-            let declared = if self_curried {
-                &f.params[1..]
-            } else {
-                &f.params[..]
-            };
-            for (decl, conc) in declared.iter().zip(inst.params.iter()) {
-                extract_type_mapping(&decl.ty, &conc.ty, &mut inferred_mapping);
-            }
-            extract_type_mapping(&f.return_type, &inst.return_type, &mut inferred_mapping);
-        }
-
-        let mut go_type_strs = Vec::with_capacity(vars.len());
-        for var in vars {
-            let resolved = receiver_mapping
-                .get(var.as_str())
-                .or_else(|| inferred_mapping.get(var.as_str()))?;
-            go_type_strs.push(self.use_go_type(resolved));
-        }
-        (!go_type_strs.is_empty()).then(|| format!("[{}]", go_type_strs.join(", ")))
+        let mapping = type_argument_mapping(
+            definition_ty,
+            &function.get_type(),
+            Some(type_args),
+            Some(receiver_ty),
+        )?;
+        self.format_generic_instantiation(definition_ty, &mapping)
     }
 
     pub(super) fn lower_ufcs_call(

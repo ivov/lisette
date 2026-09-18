@@ -1,0 +1,59 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Speaker {
+    fn speak() -> string
+  }
+  
+  struct Person { name: string }
+  
+  impl Person {
+    fn speak(self) -> string { self.name }
+  }
+  
+  fn set_speaker<T: Speaker>(slot: mut Ref<T>, value: T) -> string {
+    slot.* = value
+    slot.speak()
+  }
+  
+  fn read_speaker<T: Speaker>(slot: Ref<T>) -> T {
+    let _ = slot.speak()
+    slot.*
+  }
+  
+  fn test() {
+    let mut p = Person { name: "a" }
+    let _ = set_speaker(&p, Person { name: "b" })
+    let _ = read_speaker(&p)
+  }
+---
+package main
+
+type Speaker interface {
+	speak() string
+}
+
+type Person struct {
+	name string
+}
+
+func (p Person) speak() string {
+	return p.name
+}
+
+func setSpeaker[T Speaker](slot *T, value T) string {
+	*slot = value
+	return (*slot).speak()
+}
+
+func readSpeaker[T Speaker](slot *T) T {
+	_ = (*slot).speak()
+	return *slot
+}
+
+func test() {
+	p := Person{name: "a"}
+	_ = setSpeaker(&p, Person{name: "b"})
+	_ = readSpeaker(&p)
+}

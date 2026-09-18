@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Interface not implemented
+    ╭─[test.lis:24:3]
+ 23 │   let mut home = Hits { total: 0 }
+ 24 │   increment_all([&home])
+    ·   ───────────┬──────────
+    ·              ╰── `Hits` does not implement `Counter`
+ 25 │ }
+    ╰────
+  help: `Hits.increment` mutates through `self: Ref<Hits>`, so `Counter` is satisfied by a `Ref<Hits>`, not a value. Take a reference with `&` (for example `&Hits { ... }`) · code: [infer.interface_not_implemented]

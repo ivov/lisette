@@ -12,7 +12,6 @@ use syntax::types::{
 };
 
 use super::super::context::{Expectation, ExpectationRole, UseContext};
-use super::super::unify::Dispatched;
 use super::permission::{ConstructionGrant, MissingSupply};
 use super::struct_call::same_nominal;
 use crate::checker::infer::InferCtx;
@@ -292,7 +291,13 @@ impl InferCtx<'_> {
             Some((CompoundKind::Map, _))
         );
         self.unify(expected_ty, &return_ty, &span);
-        self.unify_trait_bounds(&bounds, &parameters, &new_args, &span);
+        self.unify_trait_bounds(
+            &bounds,
+            &callee_expression,
+            callee_path.as_deref(),
+            &new_args,
+            &span,
+        );
 
         let resolved_return = store.deep_resolve_alias(&return_ty.resolve_in(&self.env));
         if call_kind == CallKind::TupleStructConstructor
@@ -1329,43 +1334,37 @@ impl InferCtx<'_> {
     fn unify_trait_bounds(
         &mut self,
         bounds: &[Bound],
-        signature_params: &[FunctionParameter],
+        callee: &Expression,
+        callee_name: Option<&str>,
         args: &[Expression],
         fallback_span: &Span,
     ) {
-        let store = self.store;
+        if bounds.is_empty() {
+            return;
+        }
+        let signature = self.declared_callee_type(callee.unwrap_parens());
         for bound in bounds {
             let resolved_ty = bound.generic.resolve_in(&self.env);
-
-            if resolved_ty.is_variable() {
-                continue;
-            }
-
             let span = args
                 .iter()
                 .find(|arg| arg.get_type().resolve_in(&self.env) == resolved_ty)
                 .map(|arg| arg.get_span())
                 .unwrap_or_else(|| *fallback_span);
-
-            if self.dispatch_builtin_bound(bound, &resolved_ty, &span) == Dispatched::Handled {
-                continue;
-            }
-
-            let interface_ty = bound.ty.resolve_in(&self.env);
-            if !store.is_interface(&interface_ty) {
-                continue;
-            }
-
-            if self
-                .satisfies_interface(&resolved_ty, &interface_ty, &span)
-                .is_ok()
-                && !self.generic_absorbed_via_ref_param(
-                    &bound.generic,
-                    signature_params.iter().map(|param| &param.ty),
-                )
-            {
-                let _ = self.check_pointer_receivers(&resolved_ty, &interface_ty, &span);
-            }
+            let parameter_hint = signature.as_function_type().and_then(|function| {
+                function.params.iter().find_map(|parameter| {
+                    let ty = self.store.deep_resolve_alias(&parameter.ty);
+                    matches!(
+                        ty.as_compound(),
+                        Some((CompoundKind::Ref, [Type::Parameter(name)]))
+                            if *name == bound.param_name
+                    )
+                    .then_some(diagnostics::infer::BoundParameterHint {
+                        generic: &bound.param_name,
+                        parameter: Some(parameter),
+                    })
+                })
+            });
+            self.check_bound(bound, &span, callee_name, parameter_hint);
         }
     }
 }

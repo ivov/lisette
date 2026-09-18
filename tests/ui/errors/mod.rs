@@ -4937,6 +4937,42 @@ fn test() {
 }
 
 #[test]
+fn infer_reference_parameter_bound_points_to_signature() {
+    let input = r#"
+interface Counter {
+  fn increment()
+}
+
+struct Hits {
+  total: int,
+}
+
+impl Hits {
+  fn increment(self: mut Ref<Hits>) {
+    self.total += 1
+  }
+}
+
+fn increment_all<T: Counter>(items: Slice<Ref<T>>) {
+  for item in items {
+    item.increment()
+  }
+}
+
+fn test() {
+  let mut home = Hits { total: 0 }
+  increment_all([&home])
+}
+"#;
+    assert_infer_error_snapshot!(input);
+
+    let explicit = input.replace("increment_all([&home]", "increment_all<Hits>([&home]");
+    insta::with_settings!({ snapshot_suffix => "explicit" }, {
+        assert_infer_error_snapshot!(&explicit);
+    });
+}
+
+#[test]
 fn infer_result_does_not_implement_interface() {
     let input = r#"
 struct Ctx {}

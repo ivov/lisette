@@ -60,34 +60,14 @@ impl PackageState {
 }
 
 pub(crate) struct FunctionEmissionContext {
-    absorbed_ref_generics: HashSet<String>,
     generic_context: Vec<(EcoString, Vec<Type>)>,
 }
 
 impl FunctionEmissionContext {
-    pub(crate) fn for_function(
-        generic_context: &[(EcoString, Vec<Type>)],
-        absorbed_ref_generics: HashSet<String>,
-    ) -> Self {
+    pub(crate) fn for_function(generic_context: &[(EcoString, Vec<Type>)]) -> Self {
         Self {
-            absorbed_ref_generics,
             generic_context: generic_context.to_vec(),
         }
-    }
-
-    pub(crate) fn is_absorbed_ref_generic(&self, name: &str) -> bool {
-        self.absorbed_ref_generics.contains(name)
-    }
-
-    pub(crate) fn absorbed_ref_inner(&self, ty: &Type) -> Option<Type> {
-        if !ty.is_ref() {
-            return None;
-        }
-        let inner = ty.inner()?;
-        let Type::Parameter(name) = &inner else {
-            return None;
-        };
-        self.is_absorbed_ref_generic(name).then_some(inner)
     }
 
     pub(crate) fn generic_context(&self) -> &[(EcoString, Vec<Type>)] {

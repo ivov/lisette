@@ -6,6 +6,13 @@ use crate::facts::{GenericBoundObligation, GenericBoundOrigin};
 use crate::generics::{AppliedGenericBound, bound_requires_evidence, type_obligations};
 
 impl InferCtx<'_> {
+    pub(super) fn defer_function_bound(&mut self, bound: &Bound, name: Option<&str>, span: Span) {
+        let origin = GenericBoundOrigin::FunctionReference {
+            name: name.unwrap_or("function").into(),
+        };
+        self.register_generic_bound_obligation(applied_function_bound(bound), &origin, span);
+    }
+
     pub(crate) fn register_construction_obligations(
         &mut self,
         written_name: &str,
