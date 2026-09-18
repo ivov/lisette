@@ -1,6 +1,5 @@
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
 
 use crate::heap;
 use crate::protocol::Url;
@@ -118,8 +117,13 @@ impl SharedState {
         let token = CancellationToken::new();
         let run_token = token.clone();
         let run_key = key.clone();
+        let delay = {
+            let mut workspace = self.workspace_mut();
+            workspace.set_pending_diagnostics(&key, token);
+            workspace.diagnostics_delay(&key)
+        };
         thread::spawn(move || {
-            thread::sleep(Duration::from_millis(300));
+            thread::sleep(delay);
             if run_token.is_cancelled() {
                 return;
             }
@@ -133,7 +137,6 @@ impl SharedState {
                 .workspace_mut()
                 .finish_diagnostics(&run_key, &run_token);
         });
-        self.workspace_mut().set_pending_diagnostics(&key, token);
     }
 
     fn documents_for(&self, key: &AnalysisKey) -> Vec<Url> {

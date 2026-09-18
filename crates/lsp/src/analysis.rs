@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::sync::{Arc, PoisonError};
+use std::time::{Duration, Instant};
 
 use crate::protocol::*;
 use rustc_hash::FxHashMap;
@@ -95,6 +96,36 @@ pub(crate) fn type_name(ty: &Type, snapshot: &AnalysisSnapshot) -> Option<String
 
 pub(crate) fn offset_in_span(offset: u32, span: &Span) -> bool {
     offset >= span.byte_offset && offset < span.byte_offset + span.byte_length
+}
+
+/// Resolve a caret to a character, preferring a name on either side of a boundary.
+/// AST spans stay half open so adjacent expressions never overlap during descent.
+pub(crate) fn cursor_offset(source: &str, offset: u32) -> Option<u32> {
+    let offset = offset as usize;
+    let after = source.get(offset..)?;
+    let is_name_char = |c: char| c.is_alphanumeric() || c == '_';
+    if after.chars().next().is_some_and(is_name_char) {
+        return Some(offset as u32);
+    }
+
+    let before = source.get(..offset)?;
+    let start = before.trim_end_matches(is_name_char).len();
+    if before[start..]
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_alphabetic() || c == '_')
+    {
+        return before
+            .char_indices()
+            .next_back()
+            .map(|(index, _)| index as u32);
+    }
+
+    after
+        .chars()
+        .next()
+        .filter(|c| !c.is_whitespace())
+        .map(|_| offset as u32)
 }
 
 /// Look up the package name for an import alias in a file.
@@ -340,8 +371,9 @@ impl SharedState {
             (workspace.generation(), input)
         };
 
+        let started = Instant::now();
         let built = self.run_analysis(key, input);
-        let installed = self.install_build(key, generation, built);
+        let installed = self.install_build(key, generation, built, started.elapsed());
         drop(guard);
         heap::release_freed_pages();
         installed
@@ -352,11 +384,13 @@ impl SharedState {
         key: &AnalysisKey,
         generation: u64,
         built: Result<AnalysisSnapshot, Vec<Diagnostic>>,
+        duration: Duration,
     ) -> Result<Arc<AnalysisSnapshot>, AnalysisError> {
         let mut workspace = self.workspace_mut();
         if workspace.generation() != generation {
             return Err(AnalysisError::Superseded);
         }
+        workspace.record_analysis_duration(key, duration);
         let snapshot = Arc::new(built.map_err(AnalysisError::Diagnostics)?);
         if !workspace.install(key, generation, Arc::clone(&snapshot)) {
             return Err(AnalysisError::Superseded);

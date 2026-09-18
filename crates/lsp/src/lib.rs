@@ -12,6 +12,7 @@ mod patterns;
 mod position;
 mod project;
 pub mod protocol;
+mod scope;
 mod signature_help;
 mod snapshot;
 mod state;
@@ -24,7 +25,7 @@ use crate::protocol::RpcResult as Result;
 use crate::protocol::*;
 use syntax::ast::IdentifierResolution;
 
-use crate::analysis::{convert_diagnostic, offset_in_span, type_name};
+use crate::analysis::{convert_diagnostic, cursor_offset, offset_in_span, type_name};
 use crate::completion::{
     DotContext, attribute_completions, definition_to_completion_kind, detect_dot_context,
     detect_struct_literal_field_context, get_instance_completions, get_package_prefix,
@@ -201,7 +202,9 @@ impl Backend {
         };
         let file = cursor.document.file;
         let line_index = cursor.document.line_index;
-        let offset = cursor.offset;
+        let Some(offset) = cursor_offset(&file.source, cursor.offset) else {
+            return Ok(None);
+        };
 
         let Some(expression) = find_expression_at(&file.items, offset) else {
             return Ok(None);
@@ -276,7 +279,9 @@ impl Backend {
         };
         let file_id = cursor.document.file_id;
         let file = cursor.document.file;
-        let offset = cursor.offset;
+        let Some(offset) = cursor_offset(&file.source, cursor.offset) else {
+            return Ok(None);
+        };
 
         let Some(expression) = find_expression_at(&file.items, offset) else {
             return Ok(None);
@@ -556,7 +561,9 @@ impl Backend {
         };
         let file_id = cursor.document.file_id;
         let file = cursor.document.file;
-        let offset = cursor.offset;
+        let Some(offset) = cursor_offset(&file.source, cursor.offset) else {
+            return Ok(None);
+        };
 
         let definition_span = resolve_symbol_definition_span(&snapshot, file, file_id, offset);
 
@@ -616,7 +623,9 @@ impl Backend {
         let file_id = cursor.document.file_id;
         let file = cursor.document.file;
         let line_index = cursor.document.line_index;
-        let offset = cursor.offset;
+        let Some(offset) = cursor_offset(&file.source, cursor.offset) else {
+            return Ok(None);
+        };
 
         let rename_response =
             |span: Span, placeholder: &str| -> Result<Option<PrepareRenameResponse>> {
@@ -698,7 +707,7 @@ impl Backend {
             }
             | Expression::TypeAlias {
                 name, name_span, ..
-            } => {
+            } if offset_in_span(offset, name_span) => {
                 let qname = format!("{}.{}", file.package_id, name);
                 validation::check_rename_guards(&qname)?;
                 rename_response(*name_span, name)
@@ -716,6 +725,9 @@ impl Backend {
                 {
                     validation::check_rename_guards(&qname)?;
                     return rename_response(field.name_span, &field.name);
+                }
+                if !offset_in_span(offset, name_span) {
+                    return Ok(None);
                 }
                 validation::check_rename_guards(&qname)?;
                 rename_response(*name_span, name)
@@ -735,6 +747,9 @@ impl Backend {
                     validation::check_rename_guards(&qname)?;
                     return rename_response(variant.name_span, &variant.name);
                 }
+                if !offset_in_span(offset, name_span) {
+                    return Ok(None);
+                }
                 let qualified_name = format!("{}.{}", file.package_id, name);
                 validation::check_rename_guards(&qualified_name)?;
                 rename_response(*name_span, name)
@@ -742,13 +757,13 @@ impl Backend {
 
             Expression::VariableDeclaration {
                 name, name_span, ..
-            } => rename_response(*name_span, name),
+            } if offset_in_span(offset, name_span) => rename_response(*name_span, name),
 
             Expression::Const {
                 identifier,
                 identifier_span,
                 ..
-            } => {
+            } if offset_in_span(offset, identifier_span) => {
                 let qname = format!("{}.{}", file.package_id, identifier);
                 validation::check_rename_guards(&qname)?;
                 rename_response(*identifier_span, identifier)
@@ -806,7 +821,9 @@ impl Backend {
         };
         let file_id = cursor.document.file_id;
         let file = cursor.document.file;
-        let offset = cursor.offset;
+        let Some(offset) = cursor_offset(&file.source, cursor.offset) else {
+            return Ok(None);
+        };
 
         let mut edits: HashMap<Url, Vec<TextEdit>> = HashMap::new();
 
@@ -1248,16 +1265,6 @@ fn general_completions(
         }
     }
 
-    for binding in snapshot.bindings_in_file(document.file_id) {
-        if binding.span.byte_offset < offset {
-            items.push(CompletionItem {
-                label: binding.name.clone(),
-                kind: Some(CompletionItemKind::VARIABLE),
-                ..Default::default()
-            });
-        }
-    }
-
     for import in file.imports() {
         let alias = import
             .effective_alias(&snapshot.analysis.emit_input.go_package_names)
@@ -1277,6 +1284,15 @@ fn general_completions(
         document.line_index,
         target,
     ));
+
+    let bindings = scope::visible_bindings(file, offset, snapshot);
+    items.retain(|item| !bindings.contains_key(&item.label));
+    items.extend(bindings.into_iter().map(|(name, ty)| CompletionItem {
+        label: name,
+        kind: Some(CompletionItemKind::VARIABLE),
+        detail: Some(ty.to_string()),
+        ..Default::default()
+    }));
 
     items
 }

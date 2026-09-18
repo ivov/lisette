@@ -548,7 +548,9 @@ pub(crate) fn resolve_symbol_definition_span(
 
                 Expression::Function { name_span, .. }
                 | Expression::Interface { name_span, .. }
-                | Expression::TypeAlias { name_span, .. } => Some(*name_span),
+                | Expression::TypeAlias { name_span, .. } => {
+                    offset_in_span(offset, name_span).then_some(*name_span)
+                }
 
                 Expression::Struct {
                     name,
@@ -562,7 +564,7 @@ pub(crate) fn resolve_symbol_definition_span(
                         let qualified = format!("{}.{}", file.package_id, name);
                         find_struct_field_span(&qualified, &f.name, snapshot)
                     })
-                    .or(Some(*name_span)),
+                    .or_else(|| offset_in_span(offset, name_span).then_some(*name_span)),
 
                 Expression::Enum {
                     name,
@@ -579,13 +581,15 @@ pub(crate) fn resolve_symbol_definition_span(
                             .get(qualified.as_str())
                             .and_then(|d| d.name_span)
                     })
-                    .or(Some(*name_span)),
+                    .or_else(|| offset_in_span(offset, name_span).then_some(*name_span)),
 
                 Expression::Const {
                     identifier_span, ..
-                } => Some(*identifier_span),
+                } => offset_in_span(offset, identifier_span).then_some(*identifier_span),
 
-                Expression::VariableDeclaration { name_span, .. } => Some(*name_span),
+                Expression::VariableDeclaration { name_span, .. } => {
+                    offset_in_span(offset, name_span).then_some(*name_span)
+                }
 
                 Expression::StructCall {
                     name,
