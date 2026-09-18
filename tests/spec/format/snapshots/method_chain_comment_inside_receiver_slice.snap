@@ -7,10 +7,8 @@ description: |-
 ---
 fn test() {
   [
-    "Lilian",
-    // comment
-    "Lisette",
-    // comment
+    "Lilian", // comment
+    "Lisette", // comment
     "Lisa",
   ].length()
 }

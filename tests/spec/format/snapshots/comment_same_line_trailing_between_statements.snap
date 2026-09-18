@@ -1,0 +1,12 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  fn test() {
+    let x = 1 // trailing on x
+    let y = 2
+  }
+---
+fn test() {
+  let x = 1 // trailing on x
+  let y = 2
+}

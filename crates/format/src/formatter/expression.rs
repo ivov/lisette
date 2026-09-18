@@ -223,14 +223,14 @@ impl<'a> Formatter<'a> {
             return Document::str("[]");
         }
 
-        let elements_docs: Vec<_> = elements.iter().map(|e| self.expression(e)).collect();
-        let elements_doc = join(elements_docs, strict_break(",", ", "));
+        let entries = self.expression_entries(elements);
+        let joined = Self::join_pattern_entries(entries, "");
 
         Document::str("[")
             .append(strict_break("", ""))
-            .append(elements_doc)
+            .append(joined.body)
             .nest(INDENT_WIDTH)
-            .append(strict_break(",", ""))
+            .append(joined.close_separator)
             .append("]")
             .group()
     }
@@ -297,8 +297,19 @@ impl<'a> Formatter<'a> {
                 }
             }
 
-            let item = self.expression(item);
-            docs.push(prepend_comments(item, leading.document));
+            let item_doc = self.expression(item);
+            docs.push(prepend_comments(item_doc, leading.document));
+
+            let next_start = items
+                .get(i + 1)
+                .map_or(block_end, |next| next.get_span().byte_offset);
+            if let Some(trailing) = self
+                .comments
+                .take_trailing_comments_after(item.get_span().end(), next_start)
+            {
+                docs.push(Document::str(" "));
+                docs.push(trailing);
+            }
         }
 
         let trailing = self.comments.take_split_at_line_start(block_end);
@@ -714,7 +725,7 @@ impl<'a> Formatter<'a> {
                     .group()
                     .next_break_does_not_fit();
             }
-            let mut entries = self.call_arg_entries(args);
+            let mut entries = self.expression_entries(args);
             let spread_start = spread_expr.get_span().byte_offset;
             self.push_pattern_entry(&mut entries, spread_start, |formatter| {
                 formatter
@@ -730,12 +741,12 @@ impl<'a> Formatter<'a> {
             .split_last()
             .filter(|(last, _)| is_inlinable_arg(last, args.len()))
         else {
-            let entries = self.call_arg_entries(args);
+            let entries = self.expression_entries(args);
             let joined = Self::join_pattern_entries(entries, "");
             return Self::wrap_args(head, joined.body, joined.close_separator);
         };
 
-        let mut entries = self.call_arg_entries(init);
+        let mut entries = self.expression_entries(init);
         let last_start = last.get_span().byte_offset;
         self.push_pattern_entry(&mut entries, last_start, |formatter| {
             formatter.expression(last).group().next_break_fits()
@@ -752,16 +763,6 @@ impl<'a> Formatter<'a> {
             .append(close_sep)
             .append(")")
             .group()
-    }
-
-    fn call_arg_entries(&mut self, args: &'a [Expression]) -> Vec<PatternEntry<'a>> {
-        let mut entries: Vec<PatternEntry<'a>> = Vec::with_capacity(args.len());
-        for arg in args {
-            self.push_pattern_entry(&mut entries, arg.get_span().byte_offset, |s| {
-                s.expression(arg)
-            });
-        }
-        entries
     }
 
     fn format_method_chain(
@@ -836,14 +837,14 @@ impl<'a> Formatter<'a> {
             return Document::str("()");
         }
 
-        let elements_docs: Vec<_> = elements.iter().map(|e| self.expression(e)).collect();
-        let elements_doc = join(elements_docs, strict_break(",", ", "));
+        let entries = self.expression_entries(elements);
+        let joined = Self::join_pattern_entries(entries, "");
 
         Document::str("(")
             .append(strict_break("", ""))
-            .append(elements_doc)
+            .append(joined.body)
             .nest(INDENT_WIDTH)
-            .append(strict_break(",", ""))
+            .append(joined.close_separator)
             .append(")")
             .group()
     }
@@ -927,16 +928,16 @@ impl<'a> Formatter<'a> {
         body: &'a Expression,
         _span: &'a Span,
     ) -> Document<'a> {
-        let params_docs: Vec<_> = params.iter().map(|p| self.binding(p)).collect();
-
-        let params_doc = if params_docs.is_empty() {
+        let params_doc = if params.is_empty() {
             Document::str("||")
         } else {
+            let entries = self.parameter_entries(params);
+            let joined = Self::join_pattern_entries(entries, "");
             Document::str("|")
                 .append(strict_break("", ""))
-                .append(join(params_docs, strict_break(",", ", ")))
+                .append(joined.body)
                 .nest(INDENT_WIDTH)
-                .append(strict_break(",", ""))
+                .append(joined.close_separator)
                 .append("|")
                 .group()
                 .measure_flat()

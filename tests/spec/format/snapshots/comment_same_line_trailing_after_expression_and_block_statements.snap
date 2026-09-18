@@ -1,0 +1,20 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  fn test() {
+    foo() // trailing on call
+    x = 2 // trailing on assignment
+    if ready {
+      bar() // inside block
+    } // trailing on if
+    baz()
+  }
+---
+fn test() {
+  foo() // trailing on call
+  x = 2 // trailing on assignment
+  if ready {
+    bar() // inside block
+  } // trailing on if
+  baz()
+}
