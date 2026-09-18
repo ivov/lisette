@@ -886,6 +886,144 @@ fn main() {
     assert_eq!(stdout.trim(), "4 xx x", "stderr: {stderr}");
 }
 
+#[test]
+fn generic_type_alias_static_method_value_runs() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+
+struct Holder<U> { value: U }
+impl<U> Holder<U> {
+  fn echo(value: U) -> U { value }
+}
+type H = Holder<int>
+
+fn main() {
+  let f: fn(int) -> int = H.echo
+  fmt.Println(f(7))
+}
+"#,
+        "7",
+    );
+}
+
+#[test]
+fn generic_type_alias_static_method_chain_runs() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+
+struct Holder<U> { value: U }
+impl<U> Holder<U> {
+  fn echo(value: U) -> U { value }
+  fn choose<V>(value: U, other: V) -> V { other }
+  fn empty() -> Slice<U> { [] }
+}
+type H = Holder<int>
+type Chained = H
+
+fn main() {
+  let echo: fn(int) -> int = Chained.echo
+  let choose: fn(int, string) -> string = Chained.choose
+  let empty: fn() -> Slice<int> = Chained.empty
+  fmt.Println(echo(7), choose(7, "value"), empty().length())
+}
+"#,
+        "7 value 0",
+    );
+}
+
+#[test]
+fn generic_type_alias_static_method_calls_run() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+
+struct Holder<U> { value: U }
+impl<U> Holder<U> {
+  fn echo(value: U) -> U { value }
+  fn choose<V>(value: U, other: V) -> V { other }
+  fn empty() -> Slice<U> { [] }
+}
+type H = Holder<int>
+type Chained = H
+
+fn main() {
+  fmt.Println(H.echo(7), Chained.echo(8))
+  fmt.Println(H.choose(7, "inferred"), Chained.choose(7, "chained"))
+  let values: Slice<int> = Chained.empty()
+  fmt.Println(values.length())
+}
+"#,
+        "7 8\ninferred chained\n0",
+    );
+}
+
+#[test]
+fn generic_type_alias_static_method_value_with_unused_impl_parameter_runs() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+
+struct Holder<T> { value: T }
+impl<U> Holder<U> {
+  fn echo<V>(value: V) -> V { value }
+}
+type H = Holder<int>
+
+fn main() {
+  let f: fn(string) -> string = H.echo
+  fmt.Println(f("seven"))
+}
+"#,
+        "seven",
+    );
+}
+
+#[test]
+fn generic_type_alias_identity_runs() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+
+type Identity<U> = U
+
+fn print_value<U>(value: Identity<U>) { fmt.Println(value) }
+
+fn main() {
+  print_value(7)
+}
+"#,
+        "7",
+    );
+}
+
+#[test]
+fn generic_type_alias_identity_nested_and_chained_runs() {
+    assert_generic_program_runs(
+        r#"import "go:fmt"
+
+type Identity<U> = U
+type Chained<V> = Identity<V>
+type Doubled<U> = Identity<Identity<U>>
+type Concrete = Chained<int>
+type Second<A, B> = Chained<B>
+type Values<U> = Slice<Identity<U>>
+
+struct Holder<U> { value: Chained<U> }
+
+fn first<U>(values: Slice<Identity<U>>) -> Chained<U> { values[0] }
+fn second<A, B>(left: A, right: Second<A, B>) -> Second<A, B> { right }
+fn echo<U>(value: Identity<U>) -> Identity<U> { value }
+fn echo_doubled<U>(value: Doubled<U>) -> Doubled<U> { value }
+
+fn main() {
+  let values: Values<int> = [7]
+  let value: Concrete = first(values)
+  let holder: Holder<int> = Holder { value }
+  let callback: fn(Identity<int>) -> Chained<int> = echo
+  fmt.Println(holder.value, second("left", value), callback(value), echo_doubled(7))
+}
+"#,
+        "7 7 7 7",
+    );
+}
+
 fn assert_generic_program_runs(source: &str, expected: &str) {
     if !go_available() {
         return;

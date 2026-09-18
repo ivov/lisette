@@ -61,6 +61,13 @@ impl Planner<'_> {
                 ty,
                 ..
             } => {
+                if self
+                    .facts
+                    .type_parameter_alias_index(&self.facts.qualified_current(name))
+                    .is_some()
+                {
+                    return String::new();
+                }
                 let doc_comment = emit_doc(doc);
                 let code = self.emit_type_alias(name, generics, ty);
                 format!("{}{}", doc_comment, code)
