@@ -1,0 +1,55 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Counter {
+    fn increment()
+  }
+  
+  struct Hits {
+    total: int,
+  }
+  
+  impl Hits {
+    fn increment(self: mut Ref<Hits>) {
+      self.total += 1
+    }
+  }
+  
+  fn increment_all<T: Counter>(items: Slice<T>) {
+    for item in items {
+      item.increment()
+    }
+  }
+  
+  fn test() {
+    let mut home = Hits { total: 0 }
+    let mut away = Hits { total: 3 }
+    increment_all([&home, &away])
+  }
+---
+package main
+
+type Counter interface {
+	increment()
+}
+
+type Hits struct {
+	total int
+}
+
+func (h *Hits) increment() {
+	h.total++
+}
+
+func incrementAll[T Counter](items []T) {
+	for _, item := range items {
+		item.increment()
+	}
+}
+
+func test() {
+	home := Hits{total: 0}
+	away := Hits{total: 3}
+	incrementAll([]*Hits{&home, &away})
+}

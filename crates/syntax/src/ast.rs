@@ -2135,7 +2135,7 @@ impl Expression {
     /// Inner expression of an explicit `x.*` deref, or `None` for anything else.
     #[inline]
     pub fn deref_inner(&self) -> Option<&Expression> {
-        match self {
+        match self.unwrap_parens() {
             Expression::Unary {
                 operator: UnaryOperator::Deref,
                 expression,

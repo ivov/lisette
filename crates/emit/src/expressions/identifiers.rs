@@ -1,6 +1,5 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
-use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
@@ -37,7 +36,16 @@ impl Planner<'_> {
             .map(str::to_string);
         match self.classify_identifier(value, ty, ctx) {
             IdentifierKind::UnitValue => GoExpression::empty_composite("struct{}".to_string()),
-            IdentifierKind::PublicFunction { capitalized } => GoExpression::name(capitalized),
+            IdentifierKind::PublicFunction { capitalized } => {
+                let function = GoExpression::name(capitalized);
+                if !ctx.is_callee()
+                    && let Some(type_args) = self.format_generic_value_type_args(value, ty)
+                {
+                    GoExpression::instantiation(function, type_args)
+                } else {
+                    function
+                }
+            }
             IdentifierKind::UnitConstructor { name, type_args } => GoExpression::call(
                 GoExpression::instantiation(self.resolve_go_name(&name, None, false), type_args),
                 Vec::new(),
@@ -144,44 +152,6 @@ impl Planner<'_> {
         } else {
             self.format_type_args(ret_params)
         }
-    }
-
-    /// Match a generic definition's `Forall` body against an instantiated type
-    /// and render the Go type-argument list `[T1, T2]`. `None` when the
-    /// definition is not generic, a var is unresolved, or any arg is `interface{}`.
-    fn format_type_args_from_forall(
-        &mut self,
-        definition_ty: &Type,
-        instantiated_ty: &Type,
-        collapsed_recipe: Option<&str>,
-    ) -> Option<String> {
-        let Type::Forall { vars, body } = definition_ty else {
-            return None;
-        };
-        if vars.is_empty() {
-            return None;
-        }
-
-        let mut mapping = rustc_hash::FxHashMap::default();
-        extract_type_mapping(body, instantiated_ty, &mut mapping);
-
-        if let Some(recipe) = collapsed_recipe {
-            return self.reconstruct_collapsed_type_args(recipe, &mapping);
-        }
-
-        let args: Vec<String> = vars
-            .iter()
-            .filter_map(|var| {
-                let concrete = mapping.get(var.as_str())?;
-                Some(self.use_go_type(concrete))
-            })
-            .collect();
-
-        if args.len() != vars.len() || args.iter().any(|a| a.contains("interface{}")) {
-            return None;
-        }
-
-        Some(format!("[{}]", args.join(", ")))
     }
 
     /// Recover the type-arg list from the identifier's instantiated type by

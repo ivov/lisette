@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  fn store_if_new<T: Comparable>(slot: mut Ref<T>, value: T) -> bool {
+    if slot.* == value {
+      return false
+    }
+    slot.* = value
+    true
+  }
+  
+  fn store_if_larger<T: Ordered>(slot: mut Ref<T>, value: T) {
+    if value > slot.* {
+      slot.* = value
+    }
+  }
+  
+  fn test() {
+    let mut count = 7
+    let _ = store_if_new(&count, 1)
+    store_if_larger(&count, 2)
+  }
+---
+package main
+
+import "cmp"
+
+func storeIfNew[T comparable](slot *T, value T) bool {
+	if *slot == value {
+		return false
+	}
+	*slot = value
+	return true
+}
+
+func storeIfLarger[T cmp.Ordered](slot *T, value T) {
+	if value > *slot {
+		*slot = value
+	}
+}
+
+func test() {
+	count := 7
+	_ = storeIfNew(&count, 1)
+	storeIfLarger(&count, 2)
+}

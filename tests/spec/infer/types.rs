@@ -6548,7 +6548,7 @@ fn main() { let c = Counter { n: 0 }; use_bound(c) }
 }
 
 #[test]
-fn pointer_receiver_through_ref_bound_accepted() {
+fn pointer_receiver_through_ref_bound_rejected() {
     infer(
         r#"
 interface Bumper { fn bump() }
@@ -6558,7 +6558,7 @@ fn use_bound<T: Bumper>(x: Ref<T>) { x.bump() }
 fn main() { let mut c = Counter { n: 0 }; use_bound(&c) }
 "#,
     )
-    .assert_no_errors();
+    .assert_infer_code("interface_not_implemented");
 }
 
 #[test]
@@ -6577,7 +6577,7 @@ fn main() { apply(use_bound) }
 }
 
 #[test]
-fn pointer_receiver_through_ref_bound_function_value_accepted() {
+fn pointer_receiver_through_ref_bound_function_value_rejected() {
     infer(
         r#"
 interface Bumper { fn bump() }
@@ -6588,7 +6588,7 @@ fn apply(f: fn(Ref<Counter>)) { let mut c = Counter { n: 0 }; f(&c) }
 fn main() { apply(use_bound) }
 "#,
     )
-    .assert_no_errors();
+    .assert_infer_code("interface_not_implemented");
 }
 
 #[test]
@@ -6610,7 +6610,7 @@ fn main() {
 }
 
 #[test]
-fn pointer_receiver_through_repeated_ref_bound_accepted() {
+fn pointer_receiver_through_repeated_ref_bound_rejected() {
     infer(
         r#"
 interface Bumper { fn bump() }
@@ -6624,7 +6624,127 @@ fn main() {
 }
 "#,
     )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn pointer_receiver_through_ref_bound_returning_the_value_rejected() {
+    infer(
+        r#"
+interface Bumper { fn bump() }
+struct Counter { n: int }
+impl Counter { fn bump(self: Ref<Counter>) { let _ = self.n } }
+fn use_bound<T: Bumper>(x: Ref<T>) -> T { x.bump(); x.* }
+fn main() {
+  let mut c = Counter { n: 0 }
+  let _ = use_bound(&c)
+}
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn reference_parameters_keep_the_bound_on_the_type_argument() {
+    for (signature, call) in [
+        ("slot: Ref<T>", "&c"),
+        ("slot: mut Ref<T>", "&c"),
+        ("slot: Pointer<T>", "&c"),
+        ("slot: BoundedPointer<T>", "&c"),
+        ("slot: Slice<Ref<T>>", "[&c]"),
+    ] {
+        let source = format!(
+            r#"
+interface Bumper {{ fn bump() }}
+struct Counter {{ n: int }}
+impl Counter {{ fn bump(self: Ref<Counter>) {{ let _ = self.n }} }}
+type Pointer<U> = Ref<U>
+type BoundedPointer<U: Bumper> = Ref<U>
+fn use_bound<T: Bumper>({signature}) {{ let _ = slot }}
+fn main() {{ let mut c = Counter {{ n: 0 }}; use_bound({call}) }}
+"#
+        );
+        infer(&source).assert_infer_code("interface_not_implemented");
+    }
+}
+
+#[test]
+fn bounded_generic_accepts_a_reference_as_its_type_argument() {
+    infer(
+        r#"
+interface Bumper { fn bump() }
+struct Counter { n: int }
+impl Counter { fn bump(self: Ref<Counter>) { let _ = self.n } }
+fn use_bound<T: Bumper>(value: T) { value.bump() }
+fn invoke<T>(f: fn(T), value: T) { f(value) }
+fn main() {
+  let c = Counter { n: 0 }
+  use_bound(&c)
+  use_bound<Ref<Counter>>(&c)
+  let f: fn(Ref<Counter>) = use_bound
+  f(&c)
+  invoke(f, &c)
+}
+"#,
+    )
     .assert_no_errors();
+}
+
+#[test]
+fn generic_bounds_do_not_inherit_methods_through_multiple_references() {
+    for body in [
+        "show(borrow(borrow(&p)))",
+        "show<Ref<Ref<Person>>>(borrow(borrow(&p)))",
+        "let f: fn(Ref<Ref<Ref<Person>>>) = show; f(borrow(borrow(&p)))",
+    ] {
+        let source = format!(
+            r#"
+interface Speaker {{ fn speak() -> string }}
+struct Person {{}}
+impl Person {{ fn speak(self: Ref<Person>) -> string {{ "p" }} }}
+fn borrow<U>(value: U) -> Ref<U> {{ &value }}
+fn show<T: Speaker>(slot: Ref<T>) {{ let _ = slot.speak() }}
+fn main() {{ let p = Person {{}}; {body} }}
+"#
+        );
+        infer(&source).assert_infer_code("interface_not_implemented");
+    }
+}
+
+#[test]
+fn reference_parameters_preserve_value_bounds_in_function_bodies() {
+    for body in [
+        "let value = slot.*; let _ = value.speak()",
+        "let _ = consume(slot.*)",
+        "let _ = slot.* as Speaker",
+        "let _values: Slice<Container<T>> = []",
+        "let _value = Container { item: slot.* }",
+        "let f: fn(T) -> string = consume; let _ = f(slot.*)",
+    ] {
+        let source = format!(
+            r#"
+interface Speaker {{ fn speak() -> string }}
+struct Container<U: Speaker> {{ item: U }}
+fn consume<U: Speaker>(value: U) -> string {{ value.speak() }}
+fn use_bound<T: Speaker>(slot: Ref<T>) {{ {body} }}
+"#
+        );
+        infer(&source).assert_no_errors();
+    }
+}
+
+#[test]
+fn deferred_generic_bound_rejects_an_invalid_callback_argument() {
+    infer(
+        r#"
+interface Speaker { fn speak() -> string }
+struct Silent {}
+fn bounded<T: Speaker>(slot: Ref<T>) { let _ = slot.speak() }
+fn apply<T>(f: fn(Ref<T>), slot: Ref<T>) { f(slot) }
+fn main() { let value = Silent {}; apply(bounded, &value) }
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
 }
 
 #[test]

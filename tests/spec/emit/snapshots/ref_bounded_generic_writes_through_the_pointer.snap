@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Speaker {
+    fn speak() -> string
+  }
+  
+  struct Person { name: string }
+  
+  impl Person {
+    fn speak(self) -> string { self.name }
+  }
+  
+  fn copy_over<T: Speaker>(dst: mut Ref<T>, src: Ref<T>) -> string {
+    dst.* = src.*
+    dst.speak()
+  }
+  
+  fn test() {
+    let mut a = Person { name: "a" }
+    let b = Person { name: "b" }
+    let _ = copy_over(&a, &b)
+  }
+---
+package main
+
+type Speaker interface {
+	speak() string
+}
+
+type Person struct {
+	name string
+}
+
+func (p Person) speak() string {
+	return p.name
+}
+
+func copyOver[T Speaker](dst, src *T) string {
+	*dst = *src
+	return (*dst).speak()
+}
+
+func test() {
+	a := Person{name: "a"}
+	b := Person{name: "b"}
+	_ = copyOver(&a, &b)
+}
