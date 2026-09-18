@@ -230,6 +230,12 @@ impl Planner<'_> {
     }
 
     fn emit_constructor(&self, qualified_name: &str, params: &[Type], ty: &Type) -> GoType {
+        if let Some(index) = self.facts.type_parameter_alias_index(qualified_name)
+            && let Some(target) = params.get(index)
+        {
+            return self.go_type(target);
+        }
+
         if let Some(go) = self.anon_struct_go_type(qualified_name) {
             return go;
         }

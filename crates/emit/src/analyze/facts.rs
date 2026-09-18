@@ -4,8 +4,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::LazyLock;
 use syntax::ast::{BindingId, Pattern, RestPattern, Span};
 use syntax::program::{
-    Definition, DefinitionBody, EqualityIndex, Method, MutationInfo, PackageId, TestIndex,
-    UnusedInfo,
+    AliasKind, Definition, DefinitionBody, EqualityIndex, Method, MutationInfo, PackageId,
+    TestIndex, UnusedInfo,
 };
 use syntax::types;
 use syntax::types::SimpleKind;
@@ -102,6 +102,38 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn peel_alias(&self, ty: &Type) -> Type {
         peel_alias(self.definitions, ty)
+    }
+
+    pub(crate) fn type_parameter_alias_index(&self, id: &str) -> Option<usize> {
+        self.type_parameter_alias_index_inner(id, &mut HashSet::default())
+    }
+
+    fn type_parameter_alias_index_inner(
+        &self,
+        id: &str,
+        visiting: &mut HashSet<String>,
+    ) -> Option<usize> {
+        let DefinitionBody::TypeAlias {
+            generics,
+            alias: AliasKind::Transparent { target, .. },
+            ..
+        } = &self.definition(id)?.body
+        else {
+            return None;
+        };
+        if !visiting.insert(id.to_string()) {
+            return None;
+        }
+        let mut target = target;
+        while let Type::Nominal { id, params, .. } = target {
+            let index = self.type_parameter_alias_index_inner(id, visiting)?;
+            target = params.get(index)?;
+        }
+        visiting.remove(id);
+        let Type::Parameter(name) = target else {
+            return None;
+        };
+        generics.iter().position(|generic| generic.name == *name)
     }
 
     pub(crate) fn underlying_type(&self, ty: &Type) -> Option<Type> {

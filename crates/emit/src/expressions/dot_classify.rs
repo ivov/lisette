@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::identifiers::method_expression;
+use crate::names::generics::type_argument_mapping;
 use crate::names::go_name;
 use crate::plan::values::GoExpression;
 use crate::types::go_type::GoType;
@@ -32,7 +33,7 @@ impl Planner<'_> {
         if let Some(s) = self.emit_cross_package_static_method(expression, member, result_ty, ctx) {
             return Some(s);
         }
-        if let Some(s) = self.emit_alias_static_method(expression, member, result_ty) {
+        if let Some(s) = self.emit_alias_static_method(expression, member, result_ty, ctx) {
             return Some(s);
         }
         None
@@ -140,6 +141,7 @@ impl Planner<'_> {
         expression: &Expression,
         member: &str,
         result_ty: &Type,
+        ctx: ExpressionContext<'_>,
     ) -> Option<GoExpression> {
         let func_ty = result_ty.unwrap_forall();
         if !matches!(func_ty, Type::Function(_)) {
@@ -155,7 +157,35 @@ impl Planner<'_> {
         let resolved_name = format!("{}.{}", real_type, member);
 
         let capitalized = self.capitalize_static_method_if_public(&resolved_name);
-        Some(self.resolve_go_name(&capitalized, None, false))
+        let function = self.resolve_go_name(&capitalized, None, false);
+        let type_args = if !ctx.is_callee() {
+            self.format_alias_static_method_type_args(&expression.get_type(), member, result_ty)
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+        Some(GoExpression::instantiation(function, type_args))
+    }
+
+    fn format_alias_static_method_type_args(
+        &mut self,
+        owner_ty: &Type,
+        member: &str,
+        result_ty: &Type,
+    ) -> Option<String> {
+        let Type::Nominal { id, params, .. } = self.facts.peel_alias(owner_ty) else {
+            return None;
+        };
+        let qualified_method = format!("{}.{}", id, member);
+        let definition_ty = &self.facts.definition(&qualified_method)?.ty;
+        let Type::Forall { vars, .. } = definition_ty else {
+            return None;
+        };
+        let mut mapping = type_argument_mapping(definition_ty, result_ty, None, None)?;
+        for (var, argument) in vars.iter().zip(params) {
+            mapping.entry(var.to_string()).or_insert(argument);
+        }
+        self.format_generic_instantiation(definition_ty, &mapping)
     }
 
     /// Instance method used as a value (e.g. `lib.Point.area` callback →
