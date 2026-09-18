@@ -1,0 +1,18 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  fn test() {
+    let xs = [
+      1, // trailing on first
+      // leading for second
+      2,
+    ]
+  }
+---
+fn test() {
+  let xs = [
+    1, // trailing on first
+    // leading for second
+    2,
+  ]
+}

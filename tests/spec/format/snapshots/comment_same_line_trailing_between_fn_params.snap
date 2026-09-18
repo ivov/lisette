@@ -1,0 +1,16 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  fn test(
+    a: int, // trailing on a
+    b: int,
+  ) -> int {
+    a + b
+  }
+---
+fn test(
+  a: int, // trailing on a
+  b: int,
+) -> int {
+  a + b
+}

@@ -1,0 +1,16 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  interface Adder {
+    fn add(
+      a: int, // trailing on a
+      b: int,
+    ) -> int
+  }
+---
+interface Adder {
+  fn add(
+    a: int, // trailing on a
+    b: int,
+  ) -> int
+}

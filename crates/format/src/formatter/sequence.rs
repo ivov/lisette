@@ -1,6 +1,7 @@
 use super::Formatter;
 use crate::comments::{SplitComments, prepend_comments};
 use crate::lindig::{Document, strict_break};
+use syntax::ast::{Binding, Expression};
 
 pub(super) struct SiblingEntry<'a> {
     pub(super) leading: Option<Document<'a>>,
@@ -21,6 +22,29 @@ pub(super) struct JoinedPattern<'a> {
 }
 
 impl<'a> Formatter<'a> {
+    pub(super) fn expression_entries(
+        &mut self,
+        expressions: &'a [Expression],
+    ) -> Vec<PatternEntry<'a>> {
+        let mut entries = Vec::with_capacity(expressions.len());
+        for expression in expressions {
+            self.push_pattern_entry(&mut entries, expression.get_span().byte_offset, |s| {
+                s.expression(expression)
+            });
+        }
+        entries
+    }
+
+    pub(super) fn parameter_entries(&mut self, params: &'a [Binding]) -> Vec<PatternEntry<'a>> {
+        let mut entries = Vec::with_capacity(params.len());
+        for param in params {
+            self.push_pattern_entry(&mut entries, param.pattern.get_span().byte_offset, |s| {
+                s.binding(param)
+            });
+        }
+        entries
+    }
+
     fn sibling_lead_split(&mut self, has_prev: bool, next_start: u32) -> SplitComments<'a> {
         if has_prev {
             self.comments.take_split_at_line_start(next_start)

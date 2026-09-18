@@ -2079,6 +2079,139 @@ fn struct_embedded_field() {
 }
 
 #[test]
+fn comment_same_line_trailing_between_statements() {
+    assert_format_snapshot!(
+        r#"fn test() {
+  let x = 1 // trailing on x
+  let y = 2
+}"#
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_on_last_of_inline_statements() {
+    assert_format_snapshot!(
+        r#"fn test() {
+  let x = 1; let y = 2; // trailing on y
+  let z = 3
+}"#
+    );
+}
+
+#[test]
+fn mixed_trailing_and_leading_statement_comments() {
+    assert_format_snapshot!(
+        r#"fn test() {
+  let x = 1 // trailing on x
+  // leading for y
+  let y = 2
+}"#
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_between_statements_with_blank_line() {
+    assert_format_snapshot!(
+        r#"fn test() {
+  let x = 1 // trailing on x
+
+  // leading for y
+  let y = 2
+}"#
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_after_expression_and_block_statements() {
+    assert_format_snapshot!(
+        r#"fn test() {
+  foo() // trailing on call
+  x = 2 // trailing on assignment
+  if ready {
+    bar() // inside block
+  } // trailing on if
+  baz()
+}"#
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_between_fn_params() {
+    assert_format_snapshot!(
+        r#"fn test(
+  a: int, // trailing on a
+  b: int,
+) -> int {
+  a + b
+}"#
+    );
+}
+
+#[test]
+fn mixed_trailing_and_leading_fn_param_comments() {
+    assert_format_snapshot!(
+        r#"fn test(
+  a: int, // trailing on a
+  // leading for b
+  b: int,
+) -> int {
+  a + b
+}"#
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_between_lambda_params() {
+    assert_format_snapshot!(
+        r#"fn test() {
+  let f = |
+    a: int, // trailing on a
+    b: int,
+  | a + b
+  f(1, 2)
+}"#
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_between_interface_method_params() {
+    assert_format_snapshot!(
+        r#"interface Adder {
+  fn add(
+    a: int, // trailing on a
+    b: int,
+  ) -> int
+}"#
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_between_slice_elements() {
+    assert_format_snapshot!(
+        r#"fn test() {
+  let xs = [
+    1, // trailing on first
+    // leading for second
+    2,
+  ]
+}"#
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_between_tuple_elements() {
+    assert_format_snapshot!(
+        r#"fn test() {
+  let pair = (
+    1, // trailing on first
+    // leading for second
+    2,
+  )
+}"#
+    );
+}
+
+#[test]
 fn file_comment_block() {
     assert_format_snapshot!(
         "//! Copyright 2026 Acme Corp.\n//! SPDX-License-Identifier: Apache-2.0\n\nimport \"go:fmt\"\n\nfn main() {\n  fmt.Println(1)\n}"

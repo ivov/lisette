@@ -35,9 +35,7 @@ impl<'a> Formatter<'a> {
     ) -> Document<'a> {
         let generics_doc = Self::generics(generics);
 
-        let params_docs: Vec<_> = params.iter().map(|p| self.binding(p)).collect();
-
-        let params_doc = Self::wrap_params(params_docs);
+        let params_doc = self.wrap_params(params);
 
         let return_doc = if return_annotation.is_unknown() {
             Document::Sequence(vec![])
@@ -58,18 +56,19 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    fn wrap_params(params_docs: Vec<Document<'a>>) -> Document<'a> {
-        if params_docs.is_empty() {
+    fn wrap_params(&mut self, params: &'a [Binding]) -> Document<'a> {
+        if params.is_empty() {
             return Document::str("()");
         }
 
-        let params_doc = join(params_docs, strict_break(",", ", "));
+        let entries = self.parameter_entries(params);
+        let joined = Self::join_pattern_entries(entries, "");
 
         Document::str("(")
             .append(strict_break("", ""))
-            .append(params_doc)
+            .append(joined.body)
             .nest(INDENT_WIDTH)
-            .append(strict_break(",", ""))
+            .append(joined.close_separator)
             .append(")")
     }
 
@@ -419,8 +418,7 @@ impl<'a> Formatter<'a> {
                 let between_attrs_and_keyword = self.comments.take_comments_before(keyword_start);
                 let generics_doc = Self::generics(generics);
 
-                let params_docs: Vec<_> = params.iter().map(|p| self.binding(p)).collect();
-                let params_doc = Self::wrap_params(params_docs);
+                let params_doc = self.wrap_params(params);
 
                 let return_doc = if return_annotation.is_unknown() {
                     Document::Sequence(vec![])
