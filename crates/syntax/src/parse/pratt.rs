@@ -44,10 +44,7 @@ impl<'source> Parser<'source> {
         }
         let span = self.span_from_token(self.current_token());
         self.resync_on_error();
-        ast::Expression::Unit {
-            ty: Type::uninferred(),
-            span,
-        }
+        Self::error_expression(span)
     }
 
     fn pratt_parse_inner(&mut self, min_prec: u8, context: ExpressionContext) -> ast::Expression {

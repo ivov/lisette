@@ -2577,6 +2577,86 @@ fn diagnostics_parse_error() {
 }
 
 #[test]
+fn recovery_missing_initializer_points_to_equals() {
+    let (source, positions) =
+        cursors("fn main() {\n  let total: int ~=\n  let other = 2\n  let copy = ~other\n}");
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+
+    let diagnostics = client.await_diagnostics();
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(
+        diagnostics[0].code,
+        Some(NumberOrString::String("parse.expected_expression".into()))
+    );
+    let (line, character) = positions[0];
+    assert_eq!(diagnostics[0].range.start, Position::new(line, character));
+    let (line, character) = positions[1];
+    let hover = client.hover(TEST_URI, line, character).unwrap();
+    assert_eq!(hover_content(&hover), "```lisette\nint\n```");
+    client.shutdown();
+}
+
+#[test]
+fn recovery_preserves_later_binding_and_other_function_types() {
+    for initializer in ["@", "1 + @", "add(@, 2)"] {
+        let (source, positions) = cursors(&format!(
+            "fn add(a: int, b: int) -> int {{ a + b }}\n\
+             fn broken() {{\n  let bad = {initializer}\n  let total = add(1, 2)\n  let copy = ~total\n}}\n\
+             fn intact() {{\n  let other = add(3, 4)\n  let copy = ~other\n}}"
+        ));
+        let mut client = TestClient::new();
+        client.initialize();
+        client.open(TEST_URI, &source);
+        let diagnostics = client.await_diagnostics();
+        assert_eq!(diagnostics.len(), 1, "{initializer}: {diagnostics:?}");
+        for (line, character) in positions {
+            let hover = client.hover(TEST_URI, line, character).unwrap();
+            assert_eq!(
+                hover_content(&hover),
+                "```lisette\nint\n```",
+                "{initializer}"
+            );
+        }
+        client.shutdown();
+    }
+}
+
+#[test]
+fn recovery_placeholders_do_not_produce_type_errors() {
+    for source in [
+        "fn main() { let n: int = @ }",
+        "fn take(n: int) {}\nfn main() { take(@) }",
+        "fn take(n: int, m: int) {}\nfn main() { take(, 2) }",
+        "fn main() { let n: int; }",
+        "fn main() { let n: int = make([]int) }",
+        "fn main() { let n: int = <-ch }",
+    ] {
+        let mut client = TestClient::new();
+        client.initialize();
+        client.open(TEST_URI, source);
+        let diagnostics = client.await_diagnostics();
+        assert_eq!(diagnostics.len(), 1, "{source}: {diagnostics:?}");
+        assert!(
+            matches!(&diagnostics[0].code, Some(NumberOrString::String(code)) if code.starts_with("parse.")),
+            "{source}: {diagnostics:?}"
+        );
+        client.shutdown();
+    }
+}
+
+#[test]
+fn recovery_placeholder_binding_has_no_hover_type() {
+    let (source, line, character) = cursor("fn main() { let ~bad = @ }");
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    assert!(client.hover(TEST_URI, line, character).is_none());
+    client.shutdown();
+}
+
+#[test]
 fn diagnostics_update_after_fix() {
     let mut client = TestClient::new();
     client.initialize();

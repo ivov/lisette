@@ -702,10 +702,7 @@ impl<'source> Parser<'source> {
         self.parse_expression();
         self.error_var_initializer(self.span_from_token(start));
 
-        Expression::Unit {
-            ty: Type::uninferred(),
-            span: self.span_from_offset(start.byte_offset),
-        }
+        Self::error_expression(self.span_from_offset(start.byte_offset))
     }
 
     pub(crate) fn parse_impl_block(&mut self) -> Expression {

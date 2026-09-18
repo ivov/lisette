@@ -110,10 +110,7 @@ impl<'source> Parser<'source> {
         }
         let span = self.span_from_token(self.current_token());
         self.resync_on_error();
-        Expression::Unit {
-            ty: Type::uninferred(),
-            span,
-        }
+        Self::error_expression(span)
     }
 
     fn parse_if_let_expression(&mut self, start: crate::lex::Token) -> Expression {
