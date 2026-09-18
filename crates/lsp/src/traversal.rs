@@ -1,25 +1,24 @@
+use std::iter::successors;
+
 use syntax::ast::Expression;
 
 use crate::offset_in_span;
 
 pub(crate) fn find_expression_at(items: &[Expression], offset: u32) -> Option<&Expression> {
-    items
-        .iter()
-        .find_map(|item| find_in_expression(item, offset))
+    expression_ancestors(items, offset).last()
 }
 
-fn find_in_expression(expression: &Expression, offset: u32) -> Option<&Expression> {
-    if !offset_in_span(offset, &expression.get_span()) {
-        return None;
-    }
-
-    let mut current = expression;
-    loop {
-        match child_containing_offset(current, offset) {
-            Some(child) => current = child,
-            None => return Some(current),
-        }
-    }
+/// Walk from the outermost expression to the node at `offset`.
+pub(crate) fn expression_ancestors(
+    items: &[Expression],
+    offset: u32,
+) -> impl Iterator<Item = &Expression> {
+    let root = items
+        .iter()
+        .find(|item| offset_in_span(offset, &item.get_span()));
+    successors(root, move |expression| {
+        child_containing_offset(expression, offset)
+    })
 }
 
 /// Find which immediate child of `expression` contains `offset`, without recursing.

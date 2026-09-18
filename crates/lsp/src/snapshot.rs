@@ -22,7 +22,6 @@ pub(crate) struct AnalysisSnapshot {
     sources: HashMap<u32, SnapshotSource>,
     file_ids_by_uri: HashMap<Url, u32>,
     binding_ids_by_file: HashMap<u32, Vec<BindingId>>,
-    binding_ids_by_file_and_name: HashMap<u32, HashMap<String, Vec<BindingId>>>,
     packages: PackageResolver,
 }
 
@@ -94,17 +93,9 @@ impl AnalysisSnapshot {
 
         let bindings = analysis.bindings();
         let mut binding_ids_by_file: HashMap<u32, Vec<BindingId>> = HashMap::default();
-        let mut binding_ids_by_file_and_name: HashMap<u32, HashMap<String, Vec<BindingId>>> =
-            HashMap::default();
         for (&binding_id, binding) in bindings {
             binding_ids_by_file
                 .entry(binding.span.file_id)
-                .or_default()
-                .push(binding_id);
-            binding_ids_by_file_and_name
-                .entry(binding.span.file_id)
-                .or_default()
-                .entry(binding.name.clone())
                 .or_default()
                 .push(binding_id);
         }
@@ -119,17 +110,12 @@ impl AnalysisSnapshot {
             });
         };
         binding_ids_by_file.values_mut().for_each(sort_bindings);
-        binding_ids_by_file_and_name
-            .values_mut()
-            .flat_map(HashMap::values_mut)
-            .for_each(sort_bindings);
 
         Self {
             analysis,
             sources,
             file_ids_by_uri,
             binding_ids_by_file,
-            binding_ids_by_file_and_name,
             packages,
         }
     }
@@ -176,14 +162,6 @@ impl AnalysisSnapshot {
         self.analysis.bindings()
     }
 
-    pub(crate) fn bindings_in_file(&self, file_id: u32) -> impl Iterator<Item = &BindingFact> {
-        self.binding_ids_by_file
-            .get(&file_id)
-            .into_iter()
-            .flatten()
-            .filter_map(|binding_id| self.bindings().get(binding_id))
-    }
-
     pub(crate) fn binding_at(&self, file_id: u32, offset: u32) -> Option<&BindingFact> {
         let binding_ids = self.binding_ids_by_file.get(&file_id)?;
         let end = binding_ids
@@ -193,20 +171,6 @@ impl AnalysisSnapshot {
             .rev()
             .filter_map(|binding_id| self.bindings().get(binding_id))
             .find(|binding| offset_in_span(offset, &binding.span))
-    }
-
-    pub(crate) fn binding_named_before(
-        &self,
-        file_id: u32,
-        name: &str,
-        offset: u32,
-    ) -> Option<&BindingFact> {
-        let binding_ids = self.binding_ids_by_file_and_name.get(&file_id)?.get(name)?;
-        let end = binding_ids
-            .partition_point(|binding_id| self.bindings()[binding_id].span.byte_offset < offset);
-        binding_ids[..end]
-            .last()
-            .and_then(|binding_id| self.bindings().get(binding_id))
     }
 
     pub(crate) fn usages(&self) -> &HashSet<Usage> {

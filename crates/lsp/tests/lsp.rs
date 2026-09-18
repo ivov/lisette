@@ -9390,7 +9390,7 @@ enum Shape { Move { x: int, y: int }, Stay }
 fn main() {
   let s = Shape.Move { x: 1, y: 2 }
   match s {
-    Shape.Move { x, y } => x + y,
+    Shape.Move  { x, y } => x + y,
     Stay => 0,
   }
 }";
@@ -9406,8 +9406,12 @@ fn main() {
     );
 
     let r2 = client.goto_definition(TEST_URI, 4, 14);
+    let location = definition_location(&r2.expect("name end resolves the variant")).unwrap();
+    assert_eq!(location.range.start, Position::new(0, 13));
+
+    let r3 = client.goto_definition(TEST_URI, 4, 15);
     assert!(
-        r2.is_none(),
+        r3.is_none(),
         "cursor on trailing whitespace must not resolve to anything"
     );
 
@@ -13934,5 +13938,311 @@ fn goto_definition_array_size_constant() {
     assert!(loc.is_some());
     assert_eq!(loc.unwrap().range.start.line, 0);
 
+    client.shutdown();
+}
+
+#[test]
+fn completion_only_offers_locals_from_enclosing_scopes() {
+    let (source, positions) = cursors(
+        "fn alpha(alpha_param: int) { let only_in_alpha = 1 }\n\
+         fn beta(beta_param: string) {\n\
+           let only_in_beta = true\n\
+           let pick = only_in_beta~\n\
+           if true { let inner_only = 1; ~ }\n\
+           let after = only_in_beta~\n\
+           let later = 2\n\
+         }\n\
+         fn gamma() { ~ }",
+    );
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+
+    for (index, (line, character)) in positions.into_iter().enumerate() {
+        let response = client.completion(TEST_URI, line, character).unwrap();
+        let labels = completion_labels(&response);
+        for name in ["only_in_alpha", "alpha_param", "later", "after"] {
+            assert!(
+                !labels.iter().any(|label| label == name),
+                "offered {name} at cursor {index}"
+            );
+        }
+        for name in ["alpha", "beta", "gamma"] {
+            assert!(labels.iter().any(|label| label == name), "missing {name}");
+        }
+        assert_eq!(
+            labels.iter().any(|name| name == "pick"),
+            index == 1 || index == 2
+        );
+        assert_eq!(labels.iter().any(|name| name == "inner_only"), index == 1);
+        if index < 3 {
+            assert_eq!(
+                completion_item(&response, "only_in_beta").detail.as_deref(),
+                Some("bool")
+            );
+            assert_eq!(
+                completion_item(&response, "beta_param").detail.as_deref(),
+                Some("string")
+            );
+        } else {
+            assert!(
+                !labels
+                    .iter()
+                    .any(|name| name == "only_in_beta" || name == "beta_param")
+            );
+        }
+    }
+    client.shutdown();
+}
+
+#[test]
+fn completion_shadows_outer_bindings_and_definitions_with_one_typed_item() {
+    let (source, positions) = cursors(
+        "fn value() {}\n\
+         fn main() {\n\
+           let value = 1\n\
+           if true {\n\
+             let value = value~ + 1\n\
+             let value = \"inner\"\n\
+             ~\n\
+           }\n\
+           ~\n\
+         }",
+    );
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    for ((line, character), expected_type) in positions.into_iter().zip(["int", "string", "int"]) {
+        let response = client.completion(TEST_URI, line, character).unwrap();
+        let values: Vec<_> = completion_items(&response)
+            .iter()
+            .filter(|item| item.label == "value")
+            .collect();
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].detail.as_deref(), Some(expected_type));
+        assert_eq!(values[0].kind, Some(CompletionItemKind::VARIABLE));
+    }
+    client.shutdown();
+}
+
+#[test]
+fn completion_respects_pattern_and_closure_scopes() {
+    let cases = [
+        (
+            "fn main() { let ch = Channel.new<int>(); select { let Some(received) = ch.receive() => { ~ }, _ => {} } }",
+            "received",
+            Some("int"),
+        ),
+        (
+            "fn main() { let ch = Channel.new<int>(); select { let Some(received) = ch.receive() => {}, _ => { ~ } } }",
+            "received",
+            None,
+        ),
+        (
+            "fn main() { let ch = Channel.new<int>(); select { match ch.receive() { Some(received) => { ~ }, None => {} } } }",
+            "received",
+            Some("int"),
+        ),
+        (
+            "fn main() { let ch = Channel.new<int>(); select { match ch.receive() { Some(received) => {}, None => { ~ } } } }",
+            "received",
+            None,
+        ),
+        (
+            "fn main() { let previous = 1; previous~",
+            "previous",
+            Some("int"),
+        ),
+        ("fn main() { let previous = 1; ~", "previous", Some("int")),
+        ("fn main() { let previous = 1; }~", "previous", None),
+        ("fn main() { let previous = 1; } ~", "previous", None),
+        (
+            "fn main() { let (number, text) = (1, \"hi\"); ~ }",
+            "text",
+            Some("string"),
+        ),
+        (
+            "fn main() { let (number, text) = (1, ~\"hi\"); }",
+            "text",
+            None,
+        ),
+        (
+            "fn main() { for element in [1, 2] { ~ } }",
+            "element",
+            Some("int"),
+        ),
+        ("fn main() { for element in [~1, 2] {} }", "element", None),
+        ("fn main() { for element in [1, 2] {} ~ }", "element", None),
+        (
+            "fn main() { if let Some(found) = Some(1) { ~ } }",
+            "found",
+            Some("int"),
+        ),
+        (
+            "fn main() { if let Some(found) = Some(1) {} else { ~ } }",
+            "found",
+            None,
+        ),
+        (
+            "fn main() { while let Some(found) = Some(1) { ~ } }",
+            "found",
+            Some("int"),
+        ),
+        (
+            "fn main() { while let Some(found) = Some(~1) {} }",
+            "found",
+            None,
+        ),
+        (
+            "fn main() { match Some(1) { Some(found) if found > ~0 => {}, _ => {} } }",
+            "found",
+            Some("int"),
+        ),
+        (
+            "fn main() { match Some(1) { Some(found) => { ~ }, _ => {} } }",
+            "found",
+            Some("int"),
+        ),
+        (
+            "fn main() { match Some(1) { Some(found) => {}, _ => { ~ } } }",
+            "found",
+            None,
+        ),
+        (
+            "fn main() { let outer = 1; let closure = |param: string| { ~ } }",
+            "param",
+            Some("string"),
+        ),
+        (
+            "fn main() { let outer = 1; let closure = |param: string| { ~ } }",
+            "outer",
+            Some("int"),
+        ),
+        (
+            "fn main() { let outer = 1; let closure = |param: string| { ~ } }",
+            "closure",
+            None,
+        ),
+        (
+            "fn main() { let closure = |param: string| {}; ~ }",
+            "param",
+            None,
+        ),
+        (
+            "fn main() { let Some(found) = Some(1) else { ~ return }; }",
+            "found",
+            None,
+        ),
+        (
+            "fn main() { let Some(found) = Some(1) else { return }; ~ }",
+            "found",
+            Some("int"),
+        ),
+    ];
+    let mut client = TestClient::new();
+    client.initialize();
+    for (index, (fixture, name, expected_type)) in cases.into_iter().enumerate() {
+        let (source, line, character) = cursor(fixture);
+        client.open(TEST_URI, &source);
+        let response = client.completion(TEST_URI, line, character).unwrap();
+        let item = completion_items(&response)
+            .iter()
+            .find(|item| item.label == name);
+        assert_eq!(
+            item.map(|item| item.detail.as_deref()),
+            expected_type.map(Some),
+            "case {index}: {fixture}"
+        );
+        client.close(TEST_URI);
+    }
+    client.shutdown();
+}
+
+#[test]
+fn symbol_requests_resolve_name_ends_and_stop_one_character_later() {
+    let (source, positions) = cursors(
+        "fn compute~  () -> int {\n\
+           let total~  = 1\n\
+           total~  + total  \n\
+         }",
+    );
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    for (index, (line, character)) in positions.into_iter().enumerate() {
+        let expected = if index == 0 { 1 } else { 3 };
+        assert!(client.goto_definition(TEST_URI, line, character).is_some());
+        assert!(client.hover(TEST_URI, line, character).is_some());
+        assert!(client.prepare_rename(TEST_URI, line, character).is_some());
+        assert_eq!(
+            client
+                .references(TEST_URI, line, character, true)
+                .unwrap()
+                .len(),
+            expected
+        );
+        let edits = client
+            .rename(TEST_URI, line, character, "renamed")
+            .unwrap()
+            .changes
+            .unwrap();
+        assert_eq!(edits.values().map(Vec::len).sum::<usize>(), expected);
+
+        assert!(
+            client
+                .goto_definition(TEST_URI, line, character + 1)
+                .is_none()
+        );
+        assert!(client.hover(TEST_URI, line, character + 1).is_none());
+        assert!(
+            client
+                .prepare_rename(TEST_URI, line, character + 1)
+                .is_none()
+        );
+        assert!(
+            client
+                .references(TEST_URI, line, character + 1, true)
+                .is_none()
+        );
+        assert!(
+            client
+                .rename(TEST_URI, line, character + 1, "renamed")
+                .is_none()
+        );
+    }
+    client.shutdown();
+}
+
+#[test]
+fn symbol_boundaries_distinguish_receivers_members_and_unicode_names() {
+    let (source, positions) = cursors(
+        "struct Record { field: int }\n\
+         fn read(value: Record, café: int) -> int {\n\
+           value~.~field~ + café~\n\
+         }",
+    );
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    for ((line, character), expected_line) in positions.into_iter().zip([1, 0, 0, 1]) {
+        let definition = client.goto_definition(TEST_URI, line, character).unwrap();
+        assert_eq!(
+            definition_location(&definition).unwrap().range.start.line,
+            expected_line
+        );
+        assert_eq!(
+            client
+                .references(TEST_URI, line, character, true)
+                .unwrap()
+                .len(),
+            2
+        );
+        assert!(client.prepare_rename(TEST_URI, line, character).is_some());
+        assert!(
+            client
+                .rename(TEST_URI, line, character, "renamed")
+                .is_some()
+        );
+    }
     client.shutdown();
 }

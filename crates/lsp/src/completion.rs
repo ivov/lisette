@@ -7,11 +7,10 @@ use syntax::program::DefinitionBody;
 use syntax::types::Type;
 
 use crate::definition::get_root_expression;
-use crate::hover;
+use crate::scope::visible_bindings;
 use crate::snapshot::AnalysisSnapshot;
 use crate::traversal::{find_enclosing_impl_type, find_expression_at};
 use crate::type_name;
-use syntax::ast::Pattern;
 use syntax::ast::StructFieldAssignment;
 use syntax::attributes;
 use syntax::program;
@@ -84,7 +83,7 @@ fn element_type_name(ty: &Type, snapshot: &AnalysisSnapshot) -> Option<String> {
     }
 }
 
-/// Resolve a variable name to its type's qualified name by scanning usages.
+/// Resolve a visible variable name to its type's qualified name.
 /// When `indexed` is true, extracts the element type for collection types.
 pub(crate) fn resolve_variable_type(
     var_name: &str,
@@ -93,50 +92,8 @@ pub(crate) fn resolve_variable_type(
     snapshot: &AnalysisSnapshot,
     indexed: bool,
 ) -> Option<String> {
-    let binding = snapshot.binding_named_before(file.id, var_name, offset)?;
-
-    let expression = find_expression_at(&file.items, binding.span.byte_offset)?;
-    let borrowed_ty = match expression {
-        Expression::Let {
-            binding: let_binding,
-            ..
-        } => {
-            let matches_name = match &let_binding.pattern {
-                Pattern::Identifier { identifier, .. } => identifier == var_name,
-                Pattern::AsBinding { name, .. } => name == var_name,
-                _ => false,
-            };
-            if matches_name {
-                Some(&let_binding.ty)
-            } else {
-                None
-            }
-        }
-        Expression::Identifier { ty, .. } => Some(ty),
-        Expression::For {
-            binding: for_binding,
-            ..
-        } => Some(&for_binding.ty),
-        Expression::Function { params, .. } | Expression::Lambda { params, .. } => {
-            let param = params.iter().find(|p| match &p.pattern {
-                Pattern::Identifier { identifier, .. } => identifier == var_name,
-                Pattern::AsBinding { name, .. } => name == var_name,
-                _ => false,
-            })?;
-            Some(&param.ty)
-        }
-        _ => None,
-    };
-
-    let owned_ty;
-    let ty = if let Some(t) = borrowed_ty {
-        t
-    } else {
-        let (t, _) = hover::get_hover_type_and_span(snapshot, expression, binding.span.byte_offset);
-        owned_ty = t;
-        &owned_ty
-    };
-
+    let bindings = visible_bindings(file, offset, snapshot);
+    let ty = bindings.get(var_name)?;
     let (resolved, _) = Type::remove_vars(&[ty]);
     let ty = &resolved[0];
 

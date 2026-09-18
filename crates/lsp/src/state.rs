@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::time::Duration;
 
 use crate::protocol::{Client, Url};
 use deps::BindgenSetup;
@@ -59,6 +60,7 @@ struct SharedAnalysis {
     current: Option<Arc<AnalysisSnapshot>>,
     pending_diagnostics: Option<CancellationToken>,
     build: Arc<Mutex<()>>,
+    last_analysis_duration: Duration,
 }
 
 impl Workspace {
@@ -132,6 +134,20 @@ impl Workspace {
         if let Some(previous) = analysis.pending_diagnostics.replace(token) {
             previous.cancel();
         }
+    }
+
+    pub(crate) fn record_analysis_duration(&mut self, key: &AnalysisKey, duration: Duration) {
+        if let Some(analysis) = self.analyses.get_mut(key) {
+            analysis.last_analysis_duration = duration;
+        }
+    }
+
+    pub(crate) fn diagnostics_delay(&self, key: &AnalysisKey) -> Duration {
+        self.analyses
+            .get(key)
+            .map(|analysis| analysis.last_analysis_duration)
+            .unwrap_or_default()
+            .max(Duration::from_millis(50))
     }
 
     pub(crate) fn finish_diagnostics(&mut self, key: &AnalysisKey, token: &CancellationToken) {
@@ -340,6 +356,38 @@ mod tests {
             workspace.generation(),
             generation,
             "a build in flight for the dropped key must not install"
+        );
+    }
+
+    #[test]
+    fn diagnostics_delay_tracks_each_analysis_across_invalidations() {
+        let mut workspace = Workspace::default();
+        workspace.ensure(&key());
+        assert_eq!(
+            workspace.diagnostics_delay(&key()),
+            Duration::from_millis(50)
+        );
+
+        workspace.record_analysis_duration(&key(), Duration::from_millis(240));
+        workspace.invalidate_all();
+        assert_eq!(
+            workspace.diagnostics_delay(&key()),
+            Duration::from_millis(240)
+        );
+
+        let other = AnalysisKey::Document {
+            uri: uri("other.lis"),
+        };
+        workspace.ensure(&other);
+        assert_eq!(
+            workspace.diagnostics_delay(&other),
+            Duration::from_millis(50)
+        );
+
+        workspace.record_analysis_duration(&key(), Duration::from_millis(8));
+        assert_eq!(
+            workspace.diagnostics_delay(&key()),
+            Duration::from_millis(50)
         );
     }
 
