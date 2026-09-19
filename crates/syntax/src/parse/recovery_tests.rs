@@ -1,4 +1,4 @@
-use super::Parser;
+use super::{MAX_DEPTH, Parser};
 use crate::ast::Expression;
 use crate::{build_ast, build_ast_recovering};
 
@@ -114,5 +114,25 @@ fn valid_multiline_initializers_are_still_expressions() {
             "{initializer}: {:?}",
             result.errors
         );
+    }
+}
+
+#[test]
+fn lists_make_progress_after_the_nesting_limit() {
+    let parens = "(".repeat(MAX_DEPTH as usize + 8);
+    let brackets = "[".repeat(MAX_DEPTH as usize + 8);
+    let blocks = "{".repeat(MAX_DEPTH as usize);
+
+    for source in [
+        format!("fn f({parens} let"),
+        format!("fn f({brackets} let"),
+        format!("fn f(E({parens} let"),
+        format!("const c = |{parens} let"),
+        format!("fn f(){blocks}fn,,fn"),
+        format!("fn f(){blocks}struct((fn("),
+        format!("fn f(){blocks}enum(#n(fn("),
+    ] {
+        let result = Parser::lex_and_parse_file(&source, 0);
+        assert!(result.has_errors(), "{source}");
     }
 }
