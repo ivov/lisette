@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn middle(arr: Array<int, 3>) -> Option<int> {
+    let m = arr.get(1)?
+    Some(m)
+  }
+  
+  fn main() {
+    let _ = middle([1, 2, 3])
+  }
+---
+package main
+
+func middle(arr [3]int) (int, bool) {
+	if len(arr) <= 1 {
+		return 0, false
+	}
+	m := arr[1]
+	return m, true
+}
+
+func main() {
+	middle([3]int{1, 2, 3})
+}

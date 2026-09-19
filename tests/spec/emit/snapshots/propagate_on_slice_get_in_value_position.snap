@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn sum_ends(xs: Slice<int>) -> Option<int> {
+    Some(xs.get(0)? + xs.get(1)?)
+  }
+  
+  fn main() {
+    let _ = sum_ends([1, 2])
+  }
+---
+package main
+
+func sumEnds(xs []int) (int, bool) {
+	if len(xs) == 0 {
+		return 0, false
+	}
+	elem_1 := xs[0]
+	if len(xs) <= 1 {
+		return 0, false
+	}
+	elem_2 := xs[1]
+	return elem_1 + elem_2, true
+}
+
+func main() {
+	sumEnds([]int{1, 2})
+}

@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn check(xs: Slice<int>) -> Option<int> {
+    xs.get(0)?
+    Some(1)
+  }
+  
+  fn main() {
+    let _ = check([1])
+  }
+---
+package main
+
+func check(xs []int) (int, bool) {
+	if len(xs) == 0 {
+		return 0, false
+	}
+	return 1, true
+}
+
+func main() {
+	check([]int{1})
+}

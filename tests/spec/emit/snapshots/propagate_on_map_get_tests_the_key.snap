@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn lookup(m: Map<string, int>, k: string) -> Option<int> {
+    let v = m.get(k)?
+    Some(v + 1)
+  }
+  
+  fn main() {
+    let _ = lookup(Map.new<string, int>(), "a")
+  }
+---
+package main
+
+func lookup(m map[string]int, k string) (int, bool) {
+	v, ok := m[k]
+	if !ok {
+		return 0, false
+	}
+	return v + 1, true
+}
+
+func main() {
+	lookup(make(map[string]int), "a")
+}
