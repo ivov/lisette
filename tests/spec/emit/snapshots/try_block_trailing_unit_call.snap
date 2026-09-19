@@ -22,15 +22,12 @@ import lisette "github.com/ivov/lisette/prelude"
 func noop() {}
 
 func f() lisette.Result[struct{}, string] {
-	tryResult_1 := func() lisette.Result[struct{}, string] {
-		check_2 := lisette.MakeResultOk[int, string](1)
-		if check_2.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[struct{}, string](check_2.ErrVal)
-		}
-		noop()
-		return lisette.MakeResultOk[struct{}, string](struct{}{})
-	}()
-	return tryResult_1
+	check_1 := lisette.MakeResultOk[int, string](1)
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[struct{}, string](check_1.ErrVal)
+	}
+	noop()
+	return lisette.MakeResultOk[struct{}, string](struct{}{})
 }
 
 func test() lisette.Result[struct{}, string] {

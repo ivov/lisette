@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn first_two(xs: Slice<int>) -> Option<int> {
+    try {
+      let a = xs.get(0)?
+      let b = xs.get(1)?
+      a + b
+    }
+  }
+  
+  fn main() {
+    let _ = first_two([1, 2])
+  }
+---
+package main
+
+func firstTwo(xs []int) (int, bool) {
+	if len(xs) == 0 {
+		return 0, false
+	}
+	a := xs[0]
+	if len(xs) <= 1 {
+		return 0, false
+	}
+	b := xs[1]
+	return a + b, true
+}
+
+func main() {
+	firstTwo([]int{1, 2})
+}

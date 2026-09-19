@@ -21,27 +21,18 @@ description: |
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"strconv"
-)
+import "strconv"
 
 func sumParsed(a, b string) (int, error) {
-	tryResult_1 := func() lisette.Result[int, error] {
-		x, err := strconv.Atoi(a)
-		if err != nil {
-			return lisette.MakeResultErr[int, error](err)
-		}
-		y, err_2 := strconv.Atoi(b)
-		if err_2 != nil {
-			return lisette.MakeResultErr[int, error](err_2)
-		}
-		return lisette.MakeResultOk[int, error](x + y)
-	}()
-	if tryResult_1.Tag == lisette.ResultOk {
-		return tryResult_1.OkVal, nil
+	x, err := strconv.Atoi(a)
+	if err != nil {
+		return 0, err
 	}
-	return 0, tryResult_1.ErrVal
+	y, err_1 := strconv.Atoi(b)
+	if err_1 != nil {
+		return 0, err_1
+	}
+	return x + y, nil
 }
 
 func main() {

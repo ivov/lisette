@@ -3890,3 +3890,153 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn try_tail_with_a_lowered_result_return_lowers_in_place() {
+    let input = r#"
+import "go:errors"
+
+fn parse_port(text: string) -> Result<int, error> {
+  if text == "80" { Ok(80) } else { Err(errors.New("bad port")) }
+}
+
+fn address(host: string, port: string) -> Result<string, error> {
+  try {
+    let n = parse_port(port)?
+    f"{host}:{n}"
+  }
+}
+
+fn main() {
+  let _ = address("localhost", "80")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn try_tail_with_a_tagged_result_return_lowers_in_place() {
+    let input = r#"
+fn risky(n: int) -> Result<int, string> {
+  if n > 0 { Ok(n) } else { Err("bad") }
+}
+
+fn run() -> Result<int, string> {
+  try {
+    let a = risky(1)?
+    let b = risky(2)?
+    a + b
+  }
+}
+
+fn main() {
+  let _ = run()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn try_tail_with_a_comma_ok_option_return_lowers_in_place() {
+    let input = r#"
+fn first_two(xs: Slice<int>) -> Option<int> {
+  try {
+    let a = xs.get(0)?
+    let b = xs.get(1)?
+    a + b
+  }
+}
+
+fn main() {
+  let _ = first_two([1, 2])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn try_tail_with_a_nullable_option_return_lowers_in_place() {
+    let input = r#"
+fn head(xss: Slice<Slice<int>>) -> Option<Slice<int>> {
+  try {
+    let xs = xss.get(0)?
+    xs
+  }
+}
+
+fn main() {
+  let _ = head([[1]])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn try_tail_after_other_statements_lowers_in_place() {
+    let input = r#"
+import "go:fmt"
+
+fn risky(n: int) -> Result<int, string> {
+  if n > 0 { Ok(n) } else { Err("bad") }
+}
+
+fn run(n: int) -> Result<int, string> {
+  fmt.Println("start")
+  let base = n * 2
+  try {
+    let a = risky(base)?
+    a + base
+  }
+}
+
+fn main() {
+  let _ = run(1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn try_tail_ending_in_a_loop_returns_the_unit_success() {
+    let input = r#"
+fn check(n: int) -> Result<(), string> {
+  if n > 0 { Ok(()) } else { Err("bad") }
+}
+
+fn check_all(xs: Slice<int>) -> Result<(), string> {
+  try {
+    for x in xs {
+      check(x)?
+    }
+  }
+}
+
+fn main() {
+  let _ = check_all([1, 2])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn try_tail_binding_that_shadows_an_outer_name_gets_a_fresh_name() {
+    let input = r#"
+fn risky(n: int) -> Result<int, string> {
+  if n > 0 { Ok(n) } else { Err("bad") }
+}
+
+fn run() -> Result<int, string> {
+  let n = 1
+  let _ = n
+  try {
+    let n = risky(2)?
+    n
+  }
+}
+
+fn main() {
+  let _ = run()
+}
+"#;
+    assert_emit_snapshot!(input);
+}

@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn risky(n: int) -> Result<int, string> {
+    if n > 0 { Ok(n) } else { Err("bad") }
+  }
+  
+  fn run() -> Result<int, string> {
+    let n = 1
+    let _ = n
+    try {
+      let n = risky(2)?
+      n
+    }
+  }
+  
+  fn main() {
+    let _ = run()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func risky(n int) lisette.Result[int, string] {
+	if n > 0 {
+		return lisette.MakeResultOk[int, string](n)
+	}
+	return lisette.MakeResultErr[int, string]("bad")
+}
+
+func run() lisette.Result[int, string] {
+	check_2 := risky(2)
+	if check_2.Tag != lisette.ResultOk {
+		return check_2
+	}
+	n_1 := check_2.OkVal
+	return lisette.MakeResultOk[int, string](n_1)
+}
+
+func main() {
+	_ = run()
+}

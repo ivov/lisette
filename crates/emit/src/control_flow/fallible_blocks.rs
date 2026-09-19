@@ -1,6 +1,7 @@
 use super::propagation::plain_return;
 use crate::Planner;
 use crate::ReturnContext;
+use crate::abi::callable::CallableReturnAbi;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
@@ -41,21 +42,55 @@ impl Planner<'_> {
     }
 
     fn lower_try_body(&mut self, items: &[Expression], fallible: &Fallible) -> LoweredBlock {
+        LoweredBlock {
+            statements: self.lower_try_items(items, fallible, None),
+        }
+    }
+
+    /// A `try` block ending a function of its own type lowers without the closure.
+    pub(crate) fn lower_try_tail_in_place(
+        &mut self,
+        items: &[Expression],
+        ty: &Type,
+    ) -> Option<Vec<LoweredStatement>> {
+        let return_ctx = self.return_ctx();
+        let return_ty = self.facts.peel_alias(return_ctx.ty()?);
+        let effective_ty =
+            resolve_fallible_block_type(items, &self.facts.peel_alias(ty), Some(&return_ctx));
+        if return_ty.demoted() != effective_ty.demoted() {
+            return None;
+        }
+        let fallible = Fallible::from_type(&effective_ty)?;
+        let lowered = return_ctx.lowered_shape();
+        Some(self.with_binding_frame(|planner| {
+            planner.lower_try_items(items, &fallible, lowered.as_ref())
+        }))
+    }
+
+    fn lower_try_items(
+        &mut self,
+        items: &[Expression],
+        fallible: &Fallible,
+        lowered: Option<&CallableReturnAbi>,
+    ) -> Vec<LoweredStatement> {
         let Some((last, rest)) = items.split_last() else {
-            return LoweredBlock {
-                statements: vec![self.lower_try_unit_return(fallible)],
-            };
+            return self.lower_try_unit_return(fallible, lowered);
         };
         let mut statements: Vec<LoweredStatement> =
             rest.iter().map(|item| self.lower_statement(item)).collect();
-        statements.extend(self.lower_try_tail(last, fallible));
-        LoweredBlock { statements }
+        statements.extend(self.lower_try_tail(last, fallible, lowered));
+        statements
     }
 
     /// Tail of a `try` block: never tail (statement + unreachable panic),
     /// statement-only/unit-call tail (statement + success unit return), or a
     /// value tail (success-wrapped return; unit return when the value is empty).
-    fn lower_try_tail(&mut self, last: &Expression, fallible: &Fallible) -> Vec<LoweredStatement> {
+    fn lower_try_tail(
+        &mut self,
+        last: &Expression,
+        fallible: &Fallible,
+        lowered: Option<&CallableReturnAbi>,
+    ) -> Vec<LoweredStatement> {
         if last.diverges().is_some() || last.get_type().is_never() {
             let mut statements = vec![self.lower_statement(last)];
             if !is_go_never(last) && !is_breakless_loop(last) {
@@ -75,36 +110,29 @@ impl Planner<'_> {
                 | Expression::Loop { .. }
         );
         if is_statement_only || is_unit_call(last) {
-            return vec![
-                self.lower_statement(last),
-                self.lower_try_unit_return(fallible),
-            ];
+            let mut statements = vec![self.lower_statement(last)];
+            statements.extend(self.lower_try_unit_return(fallible, lowered));
+            return statements;
         }
 
         let (mut statements, final_expression) = self
             .lower_value(last, ExpressionContext::value())
             .into_parts();
         if final_expression.is_empty() {
-            statements.push(self.lower_try_unit_return(fallible));
+            statements.extend(self.lower_try_unit_return(fallible, lowered));
         } else {
-            statements.push(self.lower_try_success_return(final_expression, fallible));
+            statements.extend(self.success_return(fallible, final_expression, lowered));
         }
         statements
     }
 
-    fn lower_try_unit_return(&mut self, fallible: &Fallible) -> LoweredStatement {
-        let unit_val = self.zero_value_expression(fallible.ok_ty());
-        self.lower_try_success_return(unit_val, fallible)
-    }
-
-    fn lower_try_success_return(
+    fn lower_try_unit_return(
         &mut self,
-        value: GoExpression,
         fallible: &Fallible,
-    ) -> LoweredStatement {
-        self.success_return(fallible, value, None)
-            .pop()
-            .expect("a tagged success return is one statement")
+        lowered: Option<&CallableReturnAbi>,
+    ) -> Vec<LoweredStatement> {
+        let unit_val = self.zero_value_expression(fallible.ok_ty());
+        self.success_return(fallible, unit_val, lowered)
     }
 
     /// `Err(...)?` and `None?` short-circuit directly into a return. `None`

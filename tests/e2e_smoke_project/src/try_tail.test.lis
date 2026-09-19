@@ -1,0 +1,36 @@
+import "go:errors"
+
+fn parse_port(text: string) -> Result<int, error> {
+  if text == "80" { Ok(80) } else { Err(errors.New("bad port")) }
+}
+
+fn address(host: string, port: string) -> Result<string, error> {
+  try {
+    let n = parse_port(port)?
+    f"{host}:{n}"
+  }
+}
+
+fn risky(n: int) -> Result<int, string> {
+  if n > 0 { Ok(n) } else { Err("bad") }
+}
+
+fn sum_two(a: int, b: int) -> Result<int, string> {
+  try {
+    let x = risky(a)?
+    let y = risky(b)?
+    x + y
+  }
+}
+
+#[test]
+fn try_tail_returns_the_tail_value() {
+  assert address("localhost", "80").unwrap_or("none") == "localhost:80"
+  assert sum_two(1, 2) == Ok(3)
+}
+
+#[test]
+fn try_tail_early_exit_returns_the_error_and_skips_the_tail() {
+  assert address("localhost", "http").is_err()
+  assert sum_two(1, 0) == Err("bad")
+}

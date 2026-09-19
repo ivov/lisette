@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn head(xss: Slice<Slice<int>>) -> Option<Slice<int>> {
+    try {
+      let xs = xss.get(0)?
+      xs
+    }
+  }
+  
+  fn main() {
+    let _ = head([[1]])
+  }
+---
+package main
+
+func head(xss [][]int) ([]int, bool) {
+	if len(xss) == 0 {
+		return nil, false
+	}
+	xs := xss[0]
+	return xs, true
+}
+
+func main() {
+	head([][]int{{1}})
+}

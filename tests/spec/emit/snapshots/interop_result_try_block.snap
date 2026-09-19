@@ -33,17 +33,11 @@ import (
 )
 
 func make_() (func(string) (int, error), error) {
-	tryResult_1 := func() lisette.Result[func(string) (int, error), error] {
-		check_2 := lisette.MakeResultOk[int, error](1)
-		if check_2.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[func(string) (int, error), error](check_2.ErrVal)
-		}
-		return lisette.MakeResultOk[func(string) (int, error), error](strconv.Atoi)
-	}()
-	if tryResult_1.Tag == lisette.ResultOk {
-		return tryResult_1.OkVal, nil
+	check_1 := lisette.MakeResultOk[int, error](1)
+	if check_1.Tag != lisette.ResultOk {
+		return nil, check_1.ErrVal
 	}
-	return nil, tryResult_1.ErrVal
+	return strconv.Atoi, nil
 }
 
 func main() {

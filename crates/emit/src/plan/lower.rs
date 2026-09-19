@@ -952,6 +952,11 @@ impl Planner<'_> {
                 let block = self.lower_branching_to_block(last, &PlacePlan::Return);
                 statements.extend(directed_first(directive, block.statements));
             }
+            Expression::TryBlock { items, ty, .. }
+                if let Some(inlined) = self.lower_try_tail_in_place(items, ty) =>
+            {
+                statements.extend(directed_first(directive, inlined));
+            }
             _ => {
                 let tail = if let Some(tail) = try_emit_lowered_tail_return(self, last) {
                     tail

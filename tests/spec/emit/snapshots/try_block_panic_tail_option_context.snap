@@ -14,15 +14,9 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() (int, bool) {
-	tryResult_1 := func() lisette.Option[int] {
-		check_2 := lisette.MakeOptionSome(1)
-		if check_2.Tag != lisette.OptionSome {
-			return check_2
-		}
-		panic("fatal")
-	}()
-	if tryResult_1.Tag == lisette.OptionSome {
-		return tryResult_1.SomeVal, true
+	check_1 := lisette.MakeOptionSome(1)
+	if check_1.Tag != lisette.OptionSome {
+		return 0, false
 	}
-	return 0, false
+	panic("fatal")
 }
