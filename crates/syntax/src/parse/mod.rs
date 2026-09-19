@@ -733,6 +733,7 @@ impl<'source> Parser<'source> {
         if self.depth >= MAX_DEPTH {
             let span = self.span_from_token(self.current_token());
             self.track_error_at(span, "too deeply nested", "Reduce nesting depth");
+            self.next();
             return None;
         }
         self.depth += 1;
