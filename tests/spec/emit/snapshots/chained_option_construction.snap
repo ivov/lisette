@@ -21,9 +21,8 @@ func getValue() (int, bool) {
 
 func test() (int, bool) {
 	x := lisette.OptionFromCommaOk[int](getValue())
-	v_1 := x
-	if v_1.Tag == lisette.OptionSome {
-		return v_1.SomeVal, true
+	if x.Tag == lisette.OptionSome {
+		return x.SomeVal, true
 	}
 	return 0, false
 }

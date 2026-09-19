@@ -38,11 +38,10 @@ func sumParsed(a, b string) (int, error) {
 		}
 		return lisette.MakeResultOk[int, error](x + y)
 	}()
-	v_3 := tryResult_1
-	if v_3.Tag == lisette.ResultOk {
-		return v_3.OkVal, nil
+	if tryResult_1.Tag == lisette.ResultOk {
+		return tryResult_1.OkVal, nil
 	}
-	return 0, v_3.ErrVal
+	return 0, tryResult_1.ErrVal
 }
 
 func main() {

@@ -18,9 +18,8 @@ func test(flag bool) (int, bool) {
 	} else {
 		result = lisette.MakeOptionNone[int]()
 	}
-	v_1 := result
-	if v_1.Tag == lisette.OptionSome {
-		return v_1.SomeVal, true
+	if result.Tag == lisette.OptionSome {
+		return result.SomeVal, true
 	}
 	return 0, false
 }

@@ -740,7 +740,13 @@ impl LoweredStatement {
     }
 
     pub(crate) fn binds_name(&self, go_name: &str) -> bool {
-        self.bound_name() == Some(go_name)
+        match self {
+            LoweredStatement::Directed { inner, .. } => inner.binds_name(go_name),
+            LoweredStatement::Define(Definition { names, .. }) => {
+                names.iter().any(|name| name == go_name)
+            }
+            _ => self.bound_name() == Some(go_name),
+        }
     }
 
     /// `false` when the statement binds nothing.

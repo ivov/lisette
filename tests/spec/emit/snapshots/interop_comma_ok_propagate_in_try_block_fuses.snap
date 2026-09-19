@@ -33,9 +33,8 @@ func lookup(k string) (string, bool) {
 		}
 		return lisette.MakeOptionSome[string](v)
 	}()
-	v_2 := tryResult_1
-	if v_2.Tag == lisette.OptionSome {
-		return v_2.SomeVal, true
+	if tryResult_1.Tag == lisette.OptionSome {
+		return tryResult_1.SomeVal, true
 	}
 	return "", false
 }

@@ -1,0 +1,53 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:errors"
+  
+  fn parse_port(text: string) -> Result<int, error> {
+    if text == "80" { Ok(80) } else { Err(errors.New("bad port")) }
+  }
+  
+  fn address(host: string, port: string) -> Result<string, error> {
+    try {
+      let n = parse_port(port)?
+      f"{host}:{n}"
+    }
+  }
+  
+  fn main() {
+    let _ = address("localhost", "80")
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func parsePort(text string) (int, error) {
+	if text == "80" {
+		return 80, nil
+	}
+	return 0, errors.New("bad port")
+}
+
+func address(host, port string) (string, error) {
+	tryResult_1 := func() lisette.Result[string, error] {
+		n, err := parsePort(port)
+		if err != nil {
+			return lisette.MakeResultErr[string, error](err)
+		}
+		return lisette.MakeResultOk[string, error](fmt.Sprintf("%s:%d", host, n))
+	}()
+	if tryResult_1.Tag == lisette.ResultOk {
+		return tryResult_1.OkVal, nil
+	}
+	return "", tryResult_1.ErrVal
+}
+
+func main() {
+	address("localhost", "80")
+}
