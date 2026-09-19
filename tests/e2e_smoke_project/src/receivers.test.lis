@@ -1,0 +1,27 @@
+struct Counter { n: int }
+
+impl Counter {
+  fn add(self: mut Ref<Counter>, k: int) {
+    self.n += k
+  }
+
+  fn plus(self, k: int) -> int {
+    self.n + k
+  }
+}
+
+#[test]
+fn pointer_receiver_sees_the_argument_effects() {
+  let mut c = Counter { n: 1 }
+  let bump = || -> int { c.n += 10; 1 }
+  c.add(bump())
+  assert c.n == 12
+}
+
+#[test]
+fn value_receiver_reads_before_the_arguments_run() {
+  let mut c = Counter { n: 1 }
+  let bump = || -> int { c.n += 10; 1 }
+  assert c.plus(bump()) == 2
+  assert c.n == 11
+}

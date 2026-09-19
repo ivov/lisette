@@ -244,8 +244,7 @@ impl<'a> Planner<'a> {
             .resolve_to_function_type(function.get_type().unwrap_forall())
             .unwrap_or_else(|| function.get_type().unwrap_forall().clone());
         let declared_params = declared_type.and_then(|ty| ty.unwrap_forall().get_function_params());
-        let receiver_offset =
-            declared_params.map_or(0, |params| params.len().saturating_sub(arg_count));
+        let receiver_offset = receiver_offset(declared_params, &instantiated, arg_count);
         let params = build_param_abi(
             self,
             &instantiated,
@@ -362,12 +361,11 @@ impl<'a> Planner<'a> {
         let (id, declaration) = self.resolve_callee_definition(function);
         let declared = declaration.map(CallableDeclaration::ty);
         let declared_params = declared.and_then(|ty| ty.unwrap_forall().get_function_params());
-        let receiver_offset =
-            declared_params.map_or(0, |params| params.len().saturating_sub(arg_count));
         let instantiated = self
             .facts
             .resolve_to_function_type(function.get_type().unwrap_forall())
             .unwrap_or_else(|| function.get_type().unwrap_forall().clone());
+        let receiver_offset = receiver_offset(declared_params, &instantiated, arg_count);
         let origin = if self.is_go_callable(function) {
             CallableOrigin::GoInterop
         } else {
@@ -538,6 +536,21 @@ fn receiver_is_prelude_type(ty: &Type) -> bool {
         ty.strip_refs().unwrap_forall(),
         Type::Nominal { id, .. } if id.starts_with("prelude.")
     )
+}
+
+/// Declared parameters the receiver takes up, a variadic parameter counted once.
+fn receiver_offset(
+    declared_params: Option<&[FunctionParameter]>,
+    instantiated: &Type,
+    arg_count: usize,
+) -> usize {
+    let Some(declared) = declared_params else {
+        return 0;
+    };
+    let supplied = instantiated
+        .get_function_params()
+        .map_or(arg_count, <[FunctionParameter]>::len);
+    declared.len().saturating_sub(supplied)
 }
 
 fn build_param_abi(

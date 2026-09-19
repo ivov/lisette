@@ -2819,3 +2819,128 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn pointer_receiver_method_with_call_arguments_is_not_pinned() {
+    let input = r#"
+struct Counter { n: int }
+
+impl Counter {
+  fn add(self: mut Ref<Counter>, k: int) {
+    self.n += k
+  }
+}
+
+fn main() {
+  let mut c = Counter { n: 1 }
+  let bump = || -> int { c.n += 10; 1 }
+  c.add(bump())
+  let _ = c
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn value_receiver_method_with_mutating_arguments_keeps_the_pin() {
+    let input = r#"
+struct Counter { n: int }
+
+impl Counter {
+  fn plus(self, k: int) -> int {
+    self.n + k
+  }
+}
+
+fn main() {
+  let mut c = Counter { n: 1 }
+  let bump = || -> int { c.n += 10; 1 }
+  let v = c.plus(bump())
+  let _ = v
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pointer_receiver_method_on_a_pointer_local_keeps_the_pin() {
+    let input = r#"
+struct Counter { n: int }
+
+impl Counter {
+  fn add(self: mut Ref<Counter>, k: int) {
+    self.n += k
+  }
+}
+
+fn main() {
+  let mut a = Counter { n: 1 }
+  let mut b = Counter { n: 2 }
+  let mut p = &a
+  let swap = || -> int { p = &b; 1 }
+  p.add(swap())
+  let _ = (a, b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pointer_receiver_method_on_an_indexed_element_keeps_the_pin() {
+    let input = r#"
+struct Counter { n: int }
+
+impl Counter {
+  fn add(self: mut Ref<Counter>, k: int) {
+    self.n += k
+  }
+}
+
+fn main() {
+  let mut cs = [Counter { n: 1 }, Counter { n: 2 }]
+  let mut i = 0
+  let bump = || -> int { i = 1; 1 }
+  cs[i].add(bump())
+  let _ = cs
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_pointer_receiver_method_with_call_arguments_is_not_pinned() {
+    let input = r#"
+import "go:bytes"
+
+fn main() {
+  let mut buf = bytes.Buffer {}
+  let mut n = 0
+  let next = || -> int { n += 1; n }
+  buf.Grow(next())
+  let _ = buf.Len()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pointer_receiver_variadic_method_with_call_arguments_is_not_pinned() {
+    let input = r#"
+struct Counter { n: int }
+
+impl Counter {
+  fn add_all(self: mut Ref<Counter>, ks: VarArgs<int>) {
+    for k in ks { self.n += k }
+  }
+}
+
+fn main() {
+  let mut c = Counter { n: 1 }
+  let bump = || -> int { c.n += 10; 1 }
+  c.add_all(bump(), bump())
+  c.add_all(bump())
+  let _ = c
+}
+"#;
+    assert_emit_snapshot!(input);
+}
