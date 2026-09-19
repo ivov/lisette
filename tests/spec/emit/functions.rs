@@ -2627,3 +2627,195 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn tuple_let_from_lisette_function_destructures_the_multi_return() {
+    let input = r#"
+import "go:fmt"
+
+fn pair(flag: bool) -> (string, bool) {
+  if flag { ("yes", true) } else { ("no", false) }
+}
+
+fn main() {
+  let (word, ok) = pair(true)
+  fmt.Println(word, ok)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_let_from_generic_function_destructures_the_multi_return() {
+    let input = r#"
+import "go:fmt"
+
+fn first_and_len<T>(xs: Slice<T>) -> (Option<T>, int) {
+  (xs.get(0), xs.length())
+}
+
+fn main() {
+  let (head, n) = first_and_len([1, 2, 3])
+  fmt.Println(head, n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_let_from_method_destructures_the_multi_return() {
+    let input = r#"
+import "go:fmt"
+
+struct Store { count: int }
+
+impl Store {
+  fn split(self) -> (int, int) {
+    (self.count / 2, self.count - self.count / 2)
+  }
+}
+
+fn main() {
+  let store = Store { count: 7 }
+  let (left, right) = store.split()
+  fmt.Println(left, right)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_let_from_ufcs_call_destructures_the_multi_return() {
+    let input = r#"
+import "go:fmt"
+
+struct Interval { lo: int, hi: int }
+
+impl Interval {
+  fn bounds(self) -> (int, int) {
+    (self.lo, self.hi)
+  }
+}
+
+fn main() {
+  let r = Interval { lo: 1, hi: 9 }
+  let (low, high) = Interval.bounds(r)
+  fmt.Println(low, high)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_let_from_interface_method_destructures_the_multi_return() {
+    let input = r#"
+import "go:fmt"
+
+interface Splitter {
+  fn split() -> (int, int)
+}
+
+struct Even { n: int }
+
+impl Even {
+  fn split(self) -> (int, int) {
+    (self.n / 2, self.n / 2)
+  }
+}
+
+fn total(s: Splitter) -> int {
+  let (a, b) = s.split()
+  a + b
+}
+
+fn main() {
+  fmt.Println(total(Even { n: 8 }))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_let_with_wildcard_element_from_lisette_function() {
+    let input = r#"
+import "go:fmt"
+
+fn pair(flag: bool) -> (string, bool) {
+  if flag { ("yes", true) } else { ("no", false) }
+}
+
+fn main() {
+  let (_, only_flag) = pair(false)
+  fmt.Println(only_flag)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_let_with_unused_elements_from_lisette_function_discards() {
+    let input = r#"
+import "go:fmt"
+
+fn pair(flag: bool) -> (string, bool) {
+  fmt.Println("called")
+  if flag { ("yes", true) } else { ("no", false) }
+}
+
+fn main() {
+  let (_, _) = pair(false)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_let_from_lisette_function_avoids_package_names() {
+    let input = r#"
+import "go:fmt"
+
+fn bounds() -> (int, int) {
+  (1, 10)
+}
+
+fn low() -> int { 0 }
+
+fn main() {
+  let (low, high) = bounds()
+  fmt.Println(low, high)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_let_from_closure_value_reads_the_tuple_value() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let pair = |n: int| (n, n + 1)
+  let (a, b) = pair(3)
+  fmt.Println(a, b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_let_from_lisette_function_shadowing_an_outer_binding() {
+    let input = r#"
+import "go:fmt"
+
+fn pair(n: int) -> (int, int) {
+  (n, n * 2)
+}
+
+fn main() {
+  let a = 5
+  let (a, b) = pair(a)
+  fmt.Println(a, b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn first_and_len<T>(xs: Slice<T>) -> (Option<T>, int) {
+    (xs.get(0), xs.length())
+  }
+  
+  fn main() {
+    let (head, n) = first_and_len([1, 2, 3])
+    fmt.Println(head, n)
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func firstAndLen[T any](xs []T) (lisette.Option[T], int) {
+	return lisette.SliceGet(xs, 0), len(xs)
+}
+
+func main() {
+	head, n := firstAndLen([]int{1, 2, 3})
+	fmt.Println(head, n)
+}

@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Store { count: int }
+  
+  impl Store {
+    fn split(self) -> (int, int) {
+      (self.count / 2, self.count - self.count / 2)
+    }
+  }
+  
+  fn main() {
+    let store = Store { count: 7 }
+    let (left, right) = store.split()
+    fmt.Println(left, right)
+  }
+---
+package main
+
+import "fmt"
+
+type Store struct {
+	count int
+}
+
+func (s Store) split() (int, int) {
+	return s.count / 2, s.count - s.count/2
+}
+
+func main() {
+	store := Store{count: 7}
+	left, right := store.split()
+	fmt.Println(left, right)
+}

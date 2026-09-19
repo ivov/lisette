@@ -69,16 +69,6 @@ impl CallableReturnAbi {
         !self.is_passthrough()
     }
 
-    pub(crate) fn is_multi_return(&self) -> bool {
-        matches!(
-            self,
-            Self::Result { .. }
-                | Self::Partial { .. }
-                | Self::Option(OptionReturnAbi::CommaOk { .. })
-                | Self::Tuple { .. }
-        )
-    }
-
     pub(crate) fn payload(&self) -> Option<PayloadLayout> {
         match self {
             Self::Result { payload }
