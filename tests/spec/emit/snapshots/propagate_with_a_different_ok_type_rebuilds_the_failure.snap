@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn count() -> Result<int, string> {
+    Ok(1)
+  }
+  
+  fn label() -> Result<string, string> {
+    let n = count()?
+    Ok(f"{n}")
+  }
+  
+  fn main() {
+    let _ = label()
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func count() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](1)
+}
+
+func label() lisette.Result[string, string] {
+	check_1 := count()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[string, string](check_1.ErrVal)
+	}
+	n := check_1.OkVal
+	return lisette.MakeResultOk[string, string](fmt.Sprint(n))
+}
+
+func main() {
+	_ = label()
+}

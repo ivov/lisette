@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn main() {
+    let opt: Option<int> = Some(4)
+    let doubled = try {
+      let v = opt?
+      v * 2
+    }
+    let _ = doubled
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	opt := lisette.MakeOptionSome(4)
+	var doubled lisette.Option[int]
+	tryResult_1 := func() lisette.Option[int] {
+		if opt.Tag != lisette.OptionSome {
+			return opt
+		}
+		v := opt.SomeVal
+		return lisette.MakeOptionSome[int](v * 2)
+	}()
+	doubled = tryResult_1
+	_ = doubled
+}

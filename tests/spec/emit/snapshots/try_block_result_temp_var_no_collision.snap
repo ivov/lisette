@@ -23,7 +23,7 @@ func foo() lisette.Result[int, string] {
 	tryResult_1 := func() lisette.Result[int, any] {
 		check_2 := lisette.MakeResultOk[int, any](1)
 		if check_2.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[int, any](check_2.ErrVal)
+			return check_2
 		}
 		return lisette.MakeResultOk[int, any](check_2.OkVal)
 	}()

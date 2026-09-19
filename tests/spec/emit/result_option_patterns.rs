@@ -3883,3 +3883,102 @@ fn six() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn propagate_of_the_return_type_returns_the_checked_value() {
+    let input = r#"
+fn check(n: int) -> Result<(), string> {
+  if n > 0 { Ok(()) } else { Err("not positive") }
+}
+
+fn run(n: int) -> Result<(), string> {
+  check(n)?
+  check(n + 1)?
+  Ok(())
+}
+
+fn main() {
+  let _ = run(1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_of_the_return_type_through_an_alias_returns_the_checked_value() {
+    let input = r#"
+type Outcome = Result<int, string>
+
+fn step() -> Outcome {
+  Ok(1)
+}
+
+fn run() -> Result<int, string> {
+  let n = step()?
+  Ok(n + 1)
+}
+
+fn run_aliased() -> Outcome {
+  let n = run()?
+  Ok(n + 1)
+}
+
+fn main() {
+  let _ = run_aliased()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_with_a_different_ok_type_rebuilds_the_failure() {
+    let input = r#"
+fn count() -> Result<int, string> {
+  Ok(1)
+}
+
+fn label() -> Result<string, string> {
+  let n = count()?
+  Ok(f"{n}")
+}
+
+fn main() {
+  let _ = label()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_in_a_try_block_of_the_same_type_returns_the_checked_value() {
+    let input = r#"
+fn risky(n: int) -> Result<int, string> {
+  if n > 0 { Ok(n) } else { Err("bad") }
+}
+
+fn main() {
+  let total = try {
+    let a = risky(1)?
+    let b = risky(2)?
+    a + b
+  }
+  let _ = total
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_on_an_option_local_in_a_try_block_returns_it() {
+    let input = r#"
+fn main() {
+  let opt: Option<int> = Some(4)
+  let doubled = try {
+    let v = opt?
+    v * 2
+  }
+  let _ = doubled
+}
+"#;
+    assert_emit_snapshot!(input);
+}

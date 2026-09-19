@@ -1,0 +1,55 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  type Outcome = Result<int, string>
+  
+  fn step() -> Outcome {
+    Ok(1)
+  }
+  
+  fn run() -> Result<int, string> {
+    let n = step()?
+    Ok(n + 1)
+  }
+  
+  fn run_aliased() -> Outcome {
+    let n = run()?
+    Ok(n + 1)
+  }
+  
+  fn main() {
+    let _ = run_aliased()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Outcome = lisette.Result[int, string]
+
+func step() Outcome {
+	return lisette.MakeResultOk[int, string](1)
+}
+
+func run() lisette.Result[int, string] {
+	check_1 := step()
+	if check_1.Tag != lisette.ResultOk {
+		return check_1
+	}
+	n := check_1.OkVal
+	return lisette.MakeResultOk[int, string](n + 1)
+}
+
+func runAliased() Outcome {
+	check_1 := run()
+	if check_1.Tag != lisette.ResultOk {
+		return check_1
+	}
+	n := check_1.OkVal
+	return lisette.MakeResultOk[int, string](n + 1)
+}
+
+func main() {
+	_ = runAliased()
+}

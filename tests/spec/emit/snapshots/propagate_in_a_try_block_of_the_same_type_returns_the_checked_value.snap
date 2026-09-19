@@ -1,0 +1,46 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn risky(n: int) -> Result<int, string> {
+    if n > 0 { Ok(n) } else { Err("bad") }
+  }
+  
+  fn main() {
+    let total = try {
+      let a = risky(1)?
+      let b = risky(2)?
+      a + b
+    }
+    let _ = total
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func risky(n int) lisette.Result[int, string] {
+	if n > 0 {
+		return lisette.MakeResultOk[int, string](n)
+	}
+	return lisette.MakeResultErr[int, string]("bad")
+}
+
+func main() {
+	var total lisette.Result[int, string]
+	tryResult_1 := func() lisette.Result[int, string] {
+		check_2 := risky(1)
+		if check_2.Tag != lisette.ResultOk {
+			return check_2
+		}
+		a := check_2.OkVal
+		check_3 := risky(2)
+		if check_3.Tag != lisette.ResultOk {
+			return check_3
+		}
+		b := check_3.OkVal
+		return lisette.MakeResultOk[int, string](a + b)
+	}()
+	total = tryResult_1
+	_ = total
+}

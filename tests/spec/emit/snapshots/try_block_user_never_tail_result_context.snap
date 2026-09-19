@@ -23,7 +23,7 @@ func test() lisette.Result[int, string] {
 	tryResult_1 := func() lisette.Result[int, string] {
 		check_2 := lisette.MakeResultOk[int, string](1)
 		if check_2.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[int, string](check_2.ErrVal)
+			return check_2
 		}
 		die()
 		panic("unreachable")

@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn check(n: int) -> Result<(), string> {
+    if n > 0 { Ok(()) } else { Err("not positive") }
+  }
+  
+  fn run(n: int) -> Result<(), string> {
+    check(n)?
+    check(n + 1)?
+    Ok(())
+  }
+  
+  fn main() {
+    let _ = run(1)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func check(n int) lisette.Result[struct{}, string] {
+	if n > 0 {
+		return lisette.MakeResultOk[struct{}, string](struct{}{})
+	}
+	return lisette.MakeResultErr[struct{}, string]("not positive")
+}
+
+func run(n int) lisette.Result[struct{}, string] {
+	check_1 := check(n)
+	if check_1.Tag != lisette.ResultOk {
+		return check_1
+	}
+	check_2 := check(n + 1)
+	if check_2.Tag != lisette.ResultOk {
+		return check_2
+	}
+	return lisette.MakeResultOk[struct{}, string](struct{}{})
+}
+
+func main() {
+	_ = run(1)
+}
