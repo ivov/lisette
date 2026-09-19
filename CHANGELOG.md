@@ -2,6 +2,17 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.12.3](https://github.com/ivov/lisette/compare/lisette-v0.12.2...lisette-v0.12.3) - 2026-09-19
+
+### Fixes
+
+- fix: stop parser looping on excessively nested source [#1453](https://github.com/ivov/lisette/pull/1453) [`fda50f1`](https://github.com/ivov/lisette/commit/fda50f1e19dc10d07ae08ffc3e14fb7e3ec544d1)
+
+### Internals
+
+- ci: build Windows binaries on Linux runners [#1449](https://github.com/ivov/lisette/pull/1449) [`d86a3cd`](https://github.com/ivov/lisette/commit/d86a3cde3bad94405682e44a1e4f47a8b65ad941)
+
+
 ## [0.12.2](https://github.com/ivov/lisette/compare/lisette-v0.12.1...lisette-v0.12.2) - 2026-09-18
 
 ### Features
