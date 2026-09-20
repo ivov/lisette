@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Person { name: string, email: Option<string> }
+  
+  fn marked_name() -> string { fmt.Println("name once"); "c" }
+  
+  fn test() -> Person {
+    Person { email: None, name: marked_name() }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Person struct {
+	name  string
+	email lisette.Option[string]
+}
+
+func markedName() string {
+	fmt.Println("name once")
+	return "c"
+}
+
+func test() Person {
+	return Person{name: markedName()}
+}

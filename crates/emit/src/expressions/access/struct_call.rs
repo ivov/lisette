@@ -130,6 +130,9 @@ impl Planner<'_> {
             .zip(field_slots)
             .zip(literal_slots)
         {
+            if self.omits_none_field(f, field_ty.as_ref(), &ctx, spread, is_go_struct) {
+                continue;
+            }
             let field_name = self.resolve_struct_call_field_name(&f.name, &ctx);
             value = self.wrap_recursive_enum_field(&mut setup, value, f, &ctx);
             let value_ty = f.value.get_type();
@@ -274,6 +277,23 @@ impl Planner<'_> {
             let go_field_name = self.resolve_struct_call_field_name(&field_name, ctx);
             field_pairs.push((go_field_name, zero));
         }
+    }
+
+    /// A fresh Lisette struct leaves a `None` field at its Go zero, which the
+    /// stored `Option` reads back as `None`.
+    fn omits_none_field(
+        &self,
+        field: &StructFieldAssignment,
+        field_ty: Option<&Type>,
+        ctx: &StructCallContext<'_>,
+        spread: &StructSpread,
+        is_go_struct: bool,
+    ) -> bool {
+        !is_go_struct
+            && ctx.enum_ctx.is_none()
+            && matches!(spread, StructSpread::None | StructSpread::Autofill { .. })
+            && field.value.unwrap_parens().is_none_literal()
+            && field_ty.is_some_and(|ty| self.facts.peel_alias(ty).is_option())
     }
 
     /// Empty-map literal in the field's Go type, sound as empty needs no coercion.

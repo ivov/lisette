@@ -1,0 +1,91 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Person { name: string, email: Option<string> }
+  
+  fn fresh(name: string) -> Person { Person { name, email: None } }
+  
+  fn clear(person: Person) -> Person { Person { email: None, ..person } }
+  
+  fn lookup(log: Channel<int>) -> Option<string> {
+    log.send(1)
+    None
+  }
+  
+  fn test() {
+    let old = Person { name: "a", email: Some("old") }
+    if !fresh("b").email.is_none() {
+      panic("a fresh email should be None")
+    }
+    if !clear(old).email.is_none() {
+      panic("a cleared email should be None")
+    }
+    if !old.email.is_some() {
+      panic("an update should leave the original alone")
+    }
+    let log = Channel.buffered<int>(4)
+    let looked_up = Person { name: "d", email: lookup(log) }
+    if !looked_up.email.is_none() {
+      panic("a looked-up email should be None")
+    }
+    if log.length() != 1 {
+      panic(f"expected one lookup, got {log.length()}")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Person struct {
+	name  string
+	email lisette.Option[string]
+}
+
+func fresh(name string) Person {
+	return Person{name: name}
+}
+
+func clear_(person Person) Person {
+	field_1 := lisette.MakeOptionNone[string]()
+	copy_2 := person
+	copy_2.email = field_1
+	return copy_2
+}
+
+func lookup(log chan int) (string, bool) {
+	_ = lisette.ChannelSend(log, 1)
+	return "", false
+}
+
+func test() {
+	old := Person{
+		name:  "a",
+		email: lisette.MakeOptionSome("old"),
+	}
+	if !fresh("b").email.IsNone() {
+		panic("a fresh email should be None")
+	}
+	if !clear_(old).email.IsNone() {
+		panic("a cleared email should be None")
+	}
+	if !old.email.IsSome() {
+		panic("an update should leave the original alone")
+	}
+	log := make(chan int, 4)
+	option_1 := lisette.OptionFromCommaOk[string](lookup(log))
+	looked_up := Person{
+		name:  "d",
+		email: option_1,
+	}
+	if !looked_up.email.IsNone() {
+		panic("a looked-up email should be None")
+	}
+	if len(log) != 1 {
+		panic(fmt.Sprintf("expected one lookup, got %d", len(log)))
+	}
+}
