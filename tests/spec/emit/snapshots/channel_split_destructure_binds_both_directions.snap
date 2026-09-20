@@ -3,9 +3,10 @@ source: tests/spec/emit/concurrency.rs
 description: |
   
   fn test() {
-    let ch = Channel.new<int>();
+    let ch = Channel.buffered<int>(1);
     let (tx, rx) = ch.split();
     tx.send(42);
+    let _ = rx.receive();
   }
 ---
 package main
@@ -13,7 +14,9 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() {
-	ch := make(chan int)
+	ch := make(chan int, 1)
 	tx := (chan<- int)(ch)
+	rx := (<-chan int)(ch)
 	_ = lisette.SenderSend(tx, 42)
+	_ = lisette.ReceiverReceive(rx)
 }

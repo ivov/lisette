@@ -2,18 +2,20 @@
 source: tests/spec/emit/concurrency.rs
 description: |
   
-  fn test() {
-    let ch = Channel.new<int>();
+  fn drain(ch: Ref<Channel<int>>) {
     let (tx, rx) = ch.split();
     tx.send(42);
+    let _ = rx.receive();
   }
 ---
 package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func test() {
-	ch := make(chan int)
-	tx := (chan<- int)(ch)
+func drain(ch *chan int) {
+	ch_1 := *ch
+	tx := (chan<- int)(ch_1)
+	rx := (<-chan int)(ch_1)
 	_ = lisette.SenderSend(tx, 42)
+	_ = lisette.ReceiverReceive(rx)
 }

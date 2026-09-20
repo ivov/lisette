@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  fn test() {
+    let ch = Channel.buffered<int>(2);
+    let (tx, rx) = ch.split();
+    tx.send(1);
+    tx.close();
+    let mut total = 0;
+    for value in rx {
+      total += value
+    }
+    if total != 1 {
+      panic(f"expected 1, got {total}")
+    }
+    match rx.receive() {
+      Some(value) => { panic(f"expected a drained channel, got {value}") },
+      None => {},
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test() {
+	ch := make(chan int, 2)
+	tx := (chan<- int)(ch)
+	rx := (<-chan int)(ch)
+	_ = lisette.SenderSend(tx, 1)
+	lisette.SenderClose(tx)
+	total := 0
+	for value := range lisette.ChannelRange(rx) {
+		total += value
+	}
+	if total != 1 {
+		panic(fmt.Sprintf("expected 1, got %d", total))
+	}
+	subject_1 := lisette.ReceiverReceive(rx)
+	if subject_1.Tag == lisette.OptionSome {
+		panic(fmt.Sprintf("expected a drained channel, got %d", subject_1.SomeVal))
+	}
+}
