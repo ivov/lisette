@@ -7,6 +7,7 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible};
 use crate::definitions::functions::is_go_never;
 use crate::names::go_name::GeneratedPackage;
+use crate::patterns::matching::OptionFusePlan;
 use crate::plan::bodies::{Definition, LoweredBlock, LoweredStatement, PlacePlan, assign, define};
 use crate::plan::values::GoExpression;
 use crate::state::scope::PairStatusKind;
@@ -656,6 +657,21 @@ impl Planner<'_> {
         lowered: Option<&CallableReturnAbi>,
     ) -> Vec<LoweredStatement> {
         let mut statements = Vec::new();
+        if let Some(shape @ CallableReturnAbi::Option(_)) = lowered
+            && self.facts.peel_alias(return_ty).demoted()
+                == self.facts.peel_alias(&expression.get_type()).demoted()
+            && matches!(
+                self.option_fuse_plan(expression),
+                Some(OptionFusePlan::Found { .. })
+            )
+        {
+            let (setup, value) = self.lower_propagate(expression, None);
+            statements.extend(setup);
+            let fallible = Fallible::from_type(&self.facts.peel_alias(return_ty))
+                .expect("an Option return has a fallible type");
+            statements.extend(self.success_return(&fallible, value, Some(shape)));
+            return statements;
+        }
         if let Some(shape) = lowered
             && matches!(
                 shape,

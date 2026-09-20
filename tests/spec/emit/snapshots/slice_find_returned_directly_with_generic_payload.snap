@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn first<T>(xs: Slice<T>, keep: fn(T) -> bool) -> Option<T> {
+    xs.find(keep)
+  }
+  
+  fn test() {
+    match first([1, 2, 3], |x| x > 1) {
+      Some(v) => { if v != 2 { panic("wrong element") } },
+      None => { panic("expected a hit") },
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func first[T any](xs []T, keep func(T) bool) (T, bool) {
+	v_1 := lisette.SliceFind(xs, keep)
+	if v_1.Tag == lisette.OptionSome {
+		return v_1.SomeVal, true
+	}
+	return *new(T), false
+}
+
+func test() {
+	if v, ok := first([]int{1, 2, 3}, func(x int) bool {
+		return x > 1
+	}); ok {
+		if v != 2 {
+			panic("wrong element")
+		}
+	} else {
+		panic("expected a hit")
+	}
+}

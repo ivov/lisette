@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  struct User { name: string }
+  
+  fn test(users: Slice<Ref<User>>, wanted: string) -> Option<Ref<User>> {
+    users.find(|u| u.name == wanted)
+  }
+---
+package main
+
+type User struct {
+	name string
+}
+
+func test(users []*User, wanted string) *User {
+	var ret_1 *User
+	found_2 := false
+	for _, u := range users {
+		if u.name == wanted {
+			ret_1 = u
+			found_2 = true
+			break
+		}
+	}
+	if !found_2 {
+		return nil
+	}
+	return ret_1
+}
