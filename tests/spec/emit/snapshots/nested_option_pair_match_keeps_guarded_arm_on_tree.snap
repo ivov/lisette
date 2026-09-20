@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn pick(n: int) -> Option<int> { if n < 0 { None } else { Some(n) } }
+  
+  fn test() -> string {
+    match pick(3) {
+      Some(v) if v > 2 => "big",
+      Some(_) => "small",
+      None => "none",
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func pick(n int) (int, bool) {
+	if n < 0 {
+		return 0, false
+	}
+	return n, true
+}
+
+func test() string {
+	option_1 := lisette.OptionFromCommaOk[int](pick(3))
+	if option_1.Tag == lisette.OptionSome {
+		if option_1.SomeVal > 2 {
+			return "big"
+		}
+		return "small"
+	}
+	return "none"
+}

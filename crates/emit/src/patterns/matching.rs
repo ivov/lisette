@@ -406,6 +406,11 @@ impl Planner<'_> {
             return LoweredBlock { statements };
         }
 
+        if let Some(fused) = self.lower_nested_option_pair_match(subject, arms, place) {
+            statements.extend(fused);
+            return LoweredBlock { statements };
+        }
+
         if let Some(elementwise) = self.lower_tuple_subject_match(subject, arms, place) {
             statements.extend(elementwise);
             return LoweredBlock { statements };
@@ -436,6 +441,80 @@ impl Planner<'_> {
         statements.extend(block.statements);
 
         LoweredBlock { statements }
+    }
+
+    /// Test an existing comma-ok source once, then run the payload patterns of
+    /// the `Some` arms against the bound value.
+    fn lower_nested_option_pair_match(
+        &mut self,
+        subject: &Expression,
+        arms: &[MatchArm],
+        place: &PlacePlan,
+    ) -> Option<Vec<LoweredStatement>> {
+        if arms.iter().any(MatchArm::has_guard) {
+            return None;
+        }
+        let fuse = self.option_fuse_plan(subject)?;
+        if !matches!(fuse, OptionFusePlan::CommaOk { .. }) {
+            return None;
+        }
+        let mut some_arms = Vec::new();
+        let mut none_body = None;
+        for arm in arms {
+            let Pattern::EnumVariant {
+                identifier,
+                fields,
+                rest: false,
+                ..
+            } = &arm.pattern
+            else {
+                return None;
+            };
+            match (identifier.as_str(), fields.as_slice()) {
+                ("Some" | "Option.Some", [payload]) => {
+                    let mut inner_arm = arm.clone();
+                    inner_arm.pattern = payload.clone();
+                    some_arms.push(inner_arm);
+                }
+                ("None" | "Option.None", []) if none_body.is_none() => {
+                    none_body = Some(arm.expression.as_ref());
+                }
+                _ => return None,
+            }
+        }
+        if some_arms.is_empty() {
+            return None;
+        }
+        let none_body = none_body?;
+        let payload_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
+        let mut bound = fuse.bind(self, CommaOkValueSlot::Temp);
+        let value = bound.value()?;
+        let condition = bound.some_condition(self);
+        let then_body = self.lower_match_tree(
+            &some_arms,
+            MatchSubject::Var(value.clone()),
+            payload_ty,
+            place,
+        );
+        let then_body = match then_body.statements.as_slice() {
+            [LoweredStatement::Block(inner)] => inner.clone(),
+            _ => then_body,
+        };
+        if let Some(name) = bound.value_name()
+            && !GoUses::of(&then_body.statements).contains(name)
+        {
+            bound.discard_value();
+        }
+        let else_body = self.lower_block_to_place(none_body, place);
+        let else_arm = ElseArm::from_body(else_body, then_body.ends_with_diverge());
+        bound.statements.push(LoweredStatement::If(IfPlan {
+            condition_setup: Vec::new(),
+            initializer: condition.initializer,
+            condition: condition.condition,
+            then_body,
+            else_arm,
+        }));
+        Some(bound.statements)
     }
 
     /// `match (a, b)` reads the operands where they sit, building no tuple.

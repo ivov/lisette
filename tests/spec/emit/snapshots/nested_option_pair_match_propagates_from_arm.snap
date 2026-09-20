@@ -1,0 +1,81 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct Wrapped { value: int }
+  
+  fn pick(n: int) -> Option<Wrapped> { if n < 0 { None } else { Some(Wrapped { value: n }) } }
+  
+  fn checked(n: int) -> Result<int, string> {
+    if n > 0 { Ok(n) } else { Err("not positive") }
+  }
+  
+  fn run(n: int) -> Result<int, string> {
+    match pick(n) {
+      Some(Wrapped { value }) => Ok(checked(value)?),
+      None => Err("missing"),
+    }
+  }
+  
+  fn test() {
+    match run(3) {
+      Ok(v) => { if v != 3 { panic("wrong value") } },
+      Err(_) => { panic("unexpected error") },
+    }
+    match run(0) {
+      Ok(_) => { panic("expected an error") },
+      Err(e) => { if e != "not positive" { panic("wrong error") } },
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Wrapped struct {
+	value int
+}
+
+func pick(n int) (Wrapped, bool) {
+	if n < 0 {
+		return Wrapped{}, false
+	}
+	return Wrapped{value: n}, true
+}
+
+func checked(n int) lisette.Result[int, string] {
+	if n > 0 {
+		return lisette.MakeResultOk[int, string](n)
+	}
+	return lisette.MakeResultErr[int, string]("not positive")
+}
+
+func run(n int) lisette.Result[int, string] {
+	ret_1, ok := pick(n)
+	if ok {
+		check_2 := checked(ret_1.value)
+		if check_2.Tag != lisette.ResultOk {
+			return check_2
+		}
+		return lisette.MakeResultOk[int, string](check_2.OkVal)
+	}
+	return lisette.MakeResultErr[int, string]("missing")
+}
+
+func test() {
+	subject_1 := run(3)
+	if subject_1.Tag == lisette.ResultOk {
+		if subject_1.OkVal != 3 {
+			panic("wrong value")
+		}
+	} else {
+		panic("unexpected error")
+	}
+	subject_2 := run(0)
+	if subject_2.Tag == lisette.ResultOk {
+		panic("expected an error")
+	}
+	if subject_2.ErrVal != "not positive" {
+		panic("wrong error")
+	}
+}

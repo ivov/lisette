@@ -1,0 +1,83 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct User { name: string, email: Option<string> }
+  
+  fn find(users: Slice<User>, name: string) -> Option<User> {
+    users.find(|u| u.name == name)
+  }
+  
+  fn describe(users: Slice<User>, wanted: string) -> string {
+    match find(users, wanted) {
+      Some(User { name, email: Some(email) }) => f"{name} <{email}>",
+      Some(User { name, email: None }) => f"{name} has no email",
+      None => f"no user named {wanted}",
+    }
+  }
+  
+  fn test() {
+    let users = [User { name: "alice", email: Some("a@example.com") }, User { name: "bob", email: None }]
+    if describe(users, "alice") != "alice <a@example.com>" {
+      panic("wrong description for a user with an email")
+    }
+    if describe(users, "bob") != "bob has no email" {
+      panic("wrong description for a user without an email")
+    }
+    if describe(users, "carol") != "no user named carol" {
+      panic("wrong description for a missing user")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type User struct {
+	name  string
+	email lisette.Option[string]
+}
+
+func find(users []User, name string) (User, bool) {
+	result_1 := lisette.MakeOptionNone[User]()
+	for _, u := range users {
+		if u.name == name {
+			result_1 = lisette.MakeOptionSome[User](u)
+			break
+		}
+	}
+	if result_1.Tag == lisette.OptionSome {
+		return result_1.SomeVal, true
+	}
+	return User{}, false
+}
+
+func describe(users []User, wanted string) string {
+	ret_1, ok := find(users, wanted)
+	if ok {
+		if ret_1.email.Tag == lisette.OptionSome {
+			return ret_1.name + " <" + ret_1.email.SomeVal + ">"
+		}
+		return ret_1.name + " has no email"
+	}
+	return "no user named " + wanted
+}
+
+func test() {
+	users := []User{
+		{
+			name:  "alice",
+			email: lisette.MakeOptionSome("a@example.com"),
+		},
+		{name: "bob"},
+	}
+	if describe(users, "alice") != "alice <a@example.com>" {
+		panic("wrong description for a user with an email")
+	}
+	if describe(users, "bob") != "bob has no email" {
+		panic("wrong description for a user without an email")
+	}
+	if describe(users, "carol") != "no user named carol" {
+		panic("wrong description for a missing user")
+	}
+}
