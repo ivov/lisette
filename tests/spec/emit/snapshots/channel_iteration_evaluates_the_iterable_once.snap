@@ -1,0 +1,57 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  fn make_jobs(log: Channel<int>) -> Channel<int> {
+    log.send(1)
+    let jobs = Channel.buffered<int>(2)
+    jobs.send(7)
+    jobs.close()
+    jobs
+  }
+  
+  fn test() {
+    let log = Channel.buffered<int>(4)
+    let mut total = 0
+    for v in make_jobs(log) {
+      total += v
+    }
+    if total != 7 {
+      panic(f"expected 7, got {total}")
+    }
+    if log.length() != 1 {
+      panic("the iterable ran more than once")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func makeJobs(log chan int) chan int {
+	_ = lisette.ChannelSend(log, 1)
+	jobs := make(chan int, 2)
+	_ = lisette.ChannelSend(jobs, 7)
+	lisette.ChannelClose(jobs)
+	return jobs
+}
+
+func test() {
+	log := make(chan int, 4)
+	total := 0
+	ch_1 := makeJobs(log)
+	if ch_1 != nil {
+		for v := range ch_1 {
+			total += v
+		}
+	}
+	if total != 7 {
+		panic(fmt.Sprintf("expected 7, got %d", total))
+	}
+	if len(log) != 1 {
+		panic("the iterable ran more than once")
+	}
+}
