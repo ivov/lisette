@@ -504,6 +504,99 @@ fn test(rx: Receiver<int>) {
 }
 
 #[test]
+fn channel_iteration_skips_a_nil_channel() {
+    let input = r#"
+import "go:context"
+
+fn test() {
+  let mut seen = 0
+  for _ in context.Background().Done() {
+    seen += 1
+  }
+  if seen != 0 {
+    panic("a nil channel must not yield values")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn channel_iteration_drains_a_closed_channel_with_break_and_continue() {
+    let input = r#"
+fn test() {
+  let ch = Channel.buffered<int>(5)
+  ch.send(1)
+  ch.send(-1)
+  ch.send(2)
+  ch.send(-2)
+  ch.send(4)
+  ch.close()
+  let mut total = 0
+  for v in ch {
+    if v == -1 { continue }
+    if v == -2 { break }
+    total += v
+  }
+  if total != 3 {
+    panic(f"expected 3, got {total}")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn channel_iteration_drains_a_live_producer() {
+    let input = r#"
+fn test() {
+  let ch = Channel.new<int>()
+  task {
+    ch.send(1)
+    ch.send(2)
+    ch.close()
+  }
+  let mut total = 0
+  for v in ch {
+    total += v
+  }
+  if total != 3 {
+    panic(f"expected 3, got {total}")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn channel_iteration_evaluates_the_iterable_once() {
+    let input = r#"
+fn make_jobs(log: Channel<int>) -> Channel<int> {
+  log.send(1)
+  let jobs = Channel.buffered<int>(2)
+  jobs.send(7)
+  jobs.close()
+  jobs
+}
+
+fn test() {
+  let log = Channel.buffered<int>(4)
+  let mut total = 0
+  for v in make_jobs(log) {
+    total += v
+  }
+  if total != 7 {
+    panic(f"expected 7, got {total}")
+  }
+  if log.length() != 1 {
+    panic("the iterable ran more than once")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn channel_split() {
     let input = r#"
 fn test() -> (Sender<int>, Receiver<int>) {

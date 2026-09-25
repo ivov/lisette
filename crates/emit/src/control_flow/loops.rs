@@ -1,10 +1,11 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
-use crate::names::go_name::GeneratedPackage;
 use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::GoUses;
-use crate::plan::bodies::{LoopHeader, LoweredBlock, LoweredStatement, define, directed, discard};
+use crate::plan::bodies::{
+    ElseArm, IfPlan, LoopHeader, LoweredBlock, LoweredStatement, define, directed, discard,
+};
 use crate::plan::values::{CaptureBoundary, GoExpression};
 use crate::types::native::NativeGoType;
 use crate::types::shape::RangeShape;
@@ -34,6 +35,9 @@ impl Planner<'_> {
         let iterable = iterable.as_ref();
         let body = body.as_ref();
         let iterable_ty = iterable.get_type();
+        let is_channel = self
+            .native_shape(&iterable_ty)
+            .is_some_and(|shape| matches!(shape, NativeGoType::Channel | NativeGoType::Receiver));
         let is_range = matches!(iterable, Expression::Range { .. });
         let stored_range = (!is_range)
             .then(|| self.range_shape(&iterable_ty))
@@ -67,9 +71,30 @@ impl Planner<'_> {
                 this.lower_pattern_site_for(binding, iterable, body)
             };
 
-            this.build_source_loop(prologue, header, lowered_body)
+            if is_channel {
+                let LoopHeader::Range { iterable, .. } = &header else {
+                    unreachable!("a channel loop always builds a range header");
+                };
+                let condition = GoExpression::binary(
+                    iterable.clone(),
+                    "!=",
+                    GoExpression::literal("nil".to_string()),
+                );
+                let plan = this.build_source_loop(Vec::new(), header, lowered_body);
+                LoweredStatement::If(IfPlan {
+                    condition_setup: prologue,
+                    initializer: None,
+                    condition,
+                    then_body: LoweredBlock {
+                        statements: vec![LoweredStatement::Loop(plan)],
+                    },
+                    else_arm: ElseArm::None,
+                })
+            } else {
+                LoweredStatement::Loop(this.build_source_loop(prologue, header, lowered_body))
+            }
         });
-        directed(directive, LoweredStatement::Loop(plan))
+        directed(directive, plan)
     }
 
     /// Plan `expr` as an operand, pushing its setup into `prologue` and
@@ -211,10 +236,7 @@ impl Planner<'_> {
             .native_shape(&iterable_ty)
             .is_some_and(|shape| matches!(shape, NativeGoType::Channel | NativeGoType::Receiver));
         if is_channel {
-            iter_expression = GoExpression::call(
-                GoExpression::generated(GeneratedPackage::Prelude, "ChannelRange"),
-                vec![iter_expression],
-            );
+            iter_expression = self.stable_source(&mut prologue, "ch", iter_expression);
         }
         let single_var = is_channel || self.iter_seq_arity(&iterable_ty) == Some(1);
         (prologue, iter_expression, single_var)

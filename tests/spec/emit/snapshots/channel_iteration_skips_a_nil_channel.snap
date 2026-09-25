@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  import "go:context"
+  
+  fn test() {
+    let mut seen = 0
+    for _ in context.Background().Done() {
+      seen += 1
+    }
+    if seen != 0 {
+      panic("a nil channel must not yield values")
+    }
+  }
+---
+package main
+
+import "context"
+
+func test() {
+	seen := 0
+	ch_1 := context.Background().Done()
+	if ch_1 != nil {
+		for range ch_1 {
+			seen++
+		}
+	}
+	if seen != 0 {
+		panic("a nil channel must not yield values")
+	}
+}

@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  fn test() {
+    let ch = Channel.new<int>()
+    task {
+      ch.send(1)
+      ch.send(2)
+      ch.close()
+    }
+    let mut total = 0
+    for v in ch {
+      total += v
+    }
+    if total != 3 {
+      panic(f"expected 3, got {total}")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test() {
+	ch := make(chan int)
+	go func() {
+		_ = lisette.ChannelSend(ch, 1)
+		_ = lisette.ChannelSend(ch, 2)
+		lisette.ChannelClose(ch)
+	}()
+	total := 0
+	if ch != nil {
+		for v := range ch {
+			total += v
+		}
+	}
+	if total != 3 {
+		panic(fmt.Sprintf("expected 3, got %d", total))
+	}
+}

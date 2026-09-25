@@ -14,14 +14,14 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 type Inbox = chan int
 
 func drain(ch Inbox) int {
 	total := 0
-	for value := range lisette.ChannelRange(ch) {
-		total += value
+	if ch != nil {
+		for value := range ch {
+			total += value
+		}
 	}
 	return total
 }
