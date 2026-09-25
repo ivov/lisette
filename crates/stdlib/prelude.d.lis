@@ -1174,7 +1174,6 @@ type Comparable
 type Ordered
 
 /// Satisfied by any type that has a [zero value](/docs/types/#types-with-zero-values).
-/// Typically used with [`zero()`](/docs/prelude/functions/#zero).
 ///
 /// Example:
 ///   fn parse_json<T: Zeroable>(data: Slice<byte>) -> Result<T, error> {

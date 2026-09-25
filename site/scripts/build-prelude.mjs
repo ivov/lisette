@@ -152,7 +152,7 @@ const PAGES = [
     slug: "constraints",
     title: "Constraints",
     description: "The three markers usable as type-parameter bounds",
-    noLink: true,
+    outro: SEE + "See [`zero()`](/docs/prelude/functions/#zero)",
     sections: ["Comparable", "Ordered", "Zeroable"],
   },
 ];
