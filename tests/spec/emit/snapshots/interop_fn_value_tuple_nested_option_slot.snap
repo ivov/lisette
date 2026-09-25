@@ -33,7 +33,7 @@ func apply(f func() (lisette.Option[[]lisette.Option[string]], int)) (lisette.Op
 
 func main() {
 	cb_1 := aws.Make
-	ret_9, ret_10 := apply(func() (lisette.Option[[]lisette.Option[string]], int) {
+	xs, n := apply(func() (lisette.Option[[]lisette.Option[string]], int) {
 		ret_2, ret_3 := cb_1()
 		var option_4 lisette.Option[[]lisette.Option[string]]
 		if ret_2 != nil {
@@ -52,8 +52,7 @@ func main() {
 		}
 		return option_4, ret_3
 	})
-	tup_11 := lisette.MakeTuple2(ret_9, ret_10)
-	xs := tup_11.First
+	_ = n
 	if xs.Tag == lisette.OptionSome {
 		for _, x := range xs.SomeVal {
 			_ = x

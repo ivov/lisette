@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn pair(n: int) -> (int, int) {
+    (n, n * 2)
+  }
+  
+  fn main() {
+    let a = 5
+    let (a, b) = pair(a)
+    fmt.Println(a, b)
+  }
+---
+package main
+
+import "fmt"
+
+func pair(n int) (int, int) {
+	return n, n * 2
+}
+
+func main() {
+	a := 5
+	a_1, b := pair(a)
+	fmt.Println(a_1, b)
+}

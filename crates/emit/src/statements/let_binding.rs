@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableReturnAbi};
 use crate::abi::layout::SlotOrigin;
+use crate::abi::tuple_element_types;
 use crate::calls::go_interop::WrapperTarget;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::Fallible;
@@ -9,7 +10,6 @@ use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
 use crate::plan::bodies::{
     LoweredBlock, LoweredStatement, define, define_many, expression_statement,
 };
-use crate::plan::calls::CallableOrigin;
 use crate::plan::placement::{
     collapse_declared_temp, expression_contains_binding, is_unit_call, is_zero_call,
     rebind_trailing_temp, requires_temp_var,
@@ -481,13 +481,16 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
     }
 
     fn can_use_multi_value_optimization(&self) -> bool {
-        !self.value.get_type().is_result()
+        let value_ty = self.value.get_type();
+        let slots_read_in_place = tuple_element_types(&self.planner.facts.peel_alias(&value_ty))
+            .iter()
+            .all(|slot_ty| !self.planner.facts.is_nullable_option(slot_ty));
+        slots_read_in_place
             && self.planner.plan_call(self.value).is_some_and(|plan| {
-                matches!(plan.resolved.origin, CallableOrigin::GoInterop)
-                    && plan.resolved.abi.result.is_multi_return()
+                matches!(plan.resolved.abi.result, CallableReturnAbi::Tuple { .. })
                     && self
                         .planner
-                        .go_tuple_result_bridges(&plan.resolved.abi, &self.value.get_type())
+                        .go_tuple_result_bridges(&plan.resolved.abi, &value_ty)
                         .is_none()
             })
     }

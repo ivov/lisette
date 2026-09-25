@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn pair(flag: bool) -> (string, bool) {
+    fmt.Println("called")
+    if flag { ("yes", true) } else { ("no", false) }
+  }
+  
+  fn main() {
+    let (_, _) = pair(false)
+  }
+---
+package main
+
+import "fmt"
+
+func pair(flag bool) (string, bool) {
+	fmt.Println("called")
+	if flag {
+		return "yes", true
+	}
+	return "no", false
+}
+
+func main() {
+	pair(false)
+}

@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Interval { lo: int, hi: int }
+  
+  impl Interval {
+    fn bounds(self) -> (int, int) {
+      (self.lo, self.hi)
+    }
+  }
+  
+  fn main() {
+    let r = Interval { lo: 1, hi: 9 }
+    let (low, high) = Interval.bounds(r)
+    fmt.Println(low, high)
+  }
+---
+package main
+
+import "fmt"
+
+type Interval struct {
+	lo int
+	hi int
+}
+
+func (i Interval) bounds() (int, int) {
+	return i.lo, i.hi
+}
+
+func main() {
+	r := Interval{
+		lo: 1,
+		hi: 9,
+	}
+	low, high := r.bounds()
+	fmt.Println(low, high)
+}

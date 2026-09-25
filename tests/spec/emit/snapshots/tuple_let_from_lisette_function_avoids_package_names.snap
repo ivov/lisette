@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn bounds() -> (int, int) {
+    (1, 10)
+  }
+  
+  fn low() -> int { 0 }
+  
+  fn main() {
+    let (low, high) = bounds()
+    fmt.Println(low, high)
+  }
+---
+package main
+
+import "fmt"
+
+func bounds() (int, int) {
+	return 1, 10
+}
+
+func low() int {
+	return 0
+}
+
+func main() {
+	low_1, high := bounds()
+	fmt.Println(low_1, high)
+}

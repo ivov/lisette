@@ -1,0 +1,51 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  interface Splitter {
+    fn split() -> (int, int)
+  }
+  
+  struct Even { n: int }
+  
+  impl Even {
+    fn split(self) -> (int, int) {
+      (self.n / 2, self.n / 2)
+    }
+  }
+  
+  fn total(s: Splitter) -> int {
+    let (a, b) = s.split()
+    a + b
+  }
+  
+  fn main() {
+    fmt.Println(total(Even { n: 8 }))
+  }
+---
+package main
+
+import "fmt"
+
+type Splitter interface {
+	split() (int, int)
+}
+
+type Even struct {
+	n int
+}
+
+func (e Even) split() (int, int) {
+	return e.n / 2, e.n / 2
+}
+
+func total(s Splitter) int {
+	a, b := s.split()
+	return a + b
+}
+
+func main() {
+	fmt.Println(total(Even{n: 8}))
+}

@@ -16,16 +16,10 @@ description: |
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"path"
-)
+import "path"
 
 func useSplit(f func(string) (string, string), p string) string {
-	ret_1, ret_2 := f(p)
-	tup_3 := lisette.MakeTuple2(ret_1, ret_2)
-	dir := tup_3.First
-	file := tup_3.Second
+	dir, file := f(p)
 	return dir + "/" + file
 }
 
