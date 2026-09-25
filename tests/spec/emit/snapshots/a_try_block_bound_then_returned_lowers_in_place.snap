@@ -1,0 +1,75 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn parse(text: string) -> Result<int, error> {
+    let parsed: Result<int, error> = try { strconv.Atoi(text)? + 1 }
+    parsed
+  }
+  
+  fn parse_then_default(text: string) -> int {
+    let parsed: Result<int, error> = try { strconv.Atoi(text)? + 1 }
+    parsed.unwrap_or(0)
+  }
+  
+  fn test() {
+    match parse("41") {
+      Ok(n) => { if n != 42 { panic("a parsed number should gain one") } },
+      Err(_) => { panic("expected a parsed number") },
+    }
+    match parse("x") {
+      Ok(_) => { panic("expected a parse failure") },
+      Err(_) => {},
+    }
+    if parse_then_default("41") != 42 { panic("a bound result should still add one") }
+    if parse_then_default("x") != 0 { panic("a failed parse should fall back to zero") }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func parse(text string) (int, error) {
+	ret_1, err := strconv.Atoi(text)
+	if err != nil {
+		return 0, err
+	}
+	return ret_1 + 1, nil
+}
+
+func parseThenDefault(text string) int {
+	var parsed lisette.Result[int, error]
+	tryResult_1 := func() lisette.Result[int, error] {
+		ret_2, err := strconv.Atoi(text)
+		if err != nil {
+			return lisette.MakeResultErr[int, error](err)
+		}
+		return lisette.MakeResultOk[int, error](ret_2 + 1)
+	}()
+	parsed = tryResult_1
+	return parsed.UnwrapOr(0)
+}
+
+func test() {
+	if n, err := parse("41"); err == nil {
+		if n != 42 {
+			panic("a parsed number should gain one")
+		}
+	} else {
+		panic("expected a parsed number")
+	}
+	if _, err := parse("x"); err == nil {
+		panic("expected a parse failure")
+	}
+	if parseThenDefault("41") != 42 {
+		panic("a bound result should still add one")
+	}
+	if parseThenDefault("x") != 0 {
+		panic("a failed parse should fall back to zero")
+	}
+}

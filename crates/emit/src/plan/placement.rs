@@ -262,7 +262,29 @@ pub(crate) fn requires_temp_var(expression: &Expression) -> bool {
 
 /// Match `...; let X = <CF>; X` so the caller can emit `<CF>` directly into
 /// the surrounding place, skipping the `X` temp.
-pub(crate) fn try_elide_tail_let(items: &[Expression]) -> Option<(&Expression, &[Expression])> {
+/// A branch in return position loses collapses that assignment keeps.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ElidableTail {
+    Branching,
+    FallibleBlock,
+}
+
+impl ElidableTail {
+    fn accepts(self, value: &Expression) -> bool {
+        match self {
+            Self::Branching => matches!(
+                value,
+                Expression::If { .. } | Expression::IfLet { .. } | Expression::Match { .. }
+            ),
+            Self::FallibleBlock => matches!(value, Expression::TryBlock { .. }),
+        }
+    }
+}
+
+pub(crate) fn try_elide_tail_let(
+    items: &[Expression],
+    elidable: ElidableTail,
+) -> Option<(&Expression, &[Expression])> {
     if items.len() < 2 {
         return None;
     }
@@ -292,13 +314,7 @@ pub(crate) fn try_elide_tail_let(items: &[Expression]) -> Option<(&Expression, &
     if identifier != tail_name {
         return None;
     }
-    // Only `If`, `IfLet`, and `Match` can be re-emitted at the surrounding place
-    // via branch lowering (`lower_branching_to_block`); other shapes still stage
-    // through temps so eliding the let would not save anything.
-    if !matches!(
-        value.as_ref(),
-        Expression::If { .. } | Expression::IfLet { .. } | Expression::Match { .. }
-    ) {
+    if !elidable.accepts(value.as_ref()) {
         return None;
     }
     let rest = &items[..items.len() - 2];

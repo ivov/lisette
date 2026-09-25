@@ -14,7 +14,9 @@ use crate::plan::bodies::{
     PlacePlan, define, directed, directed_first, expression_statement,
 };
 use crate::plan::go_expression::CompositeLayout;
-use crate::plan::placement::{collapse_declared_temp, requires_temp_var, try_elide_tail_let};
+use crate::plan::placement::{
+    ElidableTail, collapse_declared_temp, requires_temp_var, try_elide_tail_let,
+};
 use crate::plan::values::{GoExpression, OperandForm, ValuePlan};
 use std::slice;
 use syntax::ast::{
@@ -145,7 +147,9 @@ impl Planner<'_> {
             slice::from_ref(body)
         };
 
-        let Some((last, rest)) = items.split_last() else {
+        let Some((last, rest)) =
+            try_elide_tail_let(items, ElidableTail::FallibleBlock).or_else(|| items.split_last())
+        else {
             return LoweredBlock {
                 statements: Vec::new(),
             };
@@ -904,7 +908,9 @@ impl Planner<'_> {
             slice::from_ref(expression)
         };
 
-        let Some((last, rest)) = try_elide_tail_let(items).or_else(|| items.split_last()) else {
+        let Some((last, rest)) =
+            try_elide_tail_let(items, ElidableTail::Branching).or_else(|| items.split_last())
+        else {
             return LoweredBlock {
                 statements: Vec::new(),
             };

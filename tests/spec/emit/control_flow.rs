@@ -4077,3 +4077,34 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn a_try_block_bound_then_returned_lowers_in_place() {
+    let input = r#"
+import "go:strconv"
+
+fn parse(text: string) -> Result<int, error> {
+  let parsed: Result<int, error> = try { strconv.Atoi(text)? + 1 }
+  parsed
+}
+
+fn parse_then_default(text: string) -> int {
+  let parsed: Result<int, error> = try { strconv.Atoi(text)? + 1 }
+  parsed.unwrap_or(0)
+}
+
+fn test() {
+  match parse("41") {
+    Ok(n) => { if n != 42 { panic("a parsed number should gain one") } },
+    Err(_) => { panic("expected a parsed number") },
+  }
+  match parse("x") {
+    Ok(_) => { panic("expected a parse failure") },
+    Err(_) => {},
+  }
+  if parse_then_default("41") != 42 { panic("a bound result should still add one") }
+  if parse_then_default("x") != 0 { panic("a failed parse should fall back to zero") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
