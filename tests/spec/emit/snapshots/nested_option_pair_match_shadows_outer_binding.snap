@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct Wrapped { value: int }
+  
+  fn pick(n: int) -> Option<Wrapped> { if n < 0 { None } else { Some(Wrapped { value: n }) } }
+  
+  fn test() {
+    let value = 9
+    let picked = match pick(3) {
+      Some(Wrapped { value }) => value,
+      None => 0,
+    }
+    if picked != 3 || value != 9 {
+      panic("shadowed binding leaked")
+    }
+  }
+---
+package main
+
+type Wrapped struct {
+	value int
+}
+
+func pick(n int) (Wrapped, bool) {
+	if n < 0 {
+		return Wrapped{}, false
+	}
+	return Wrapped{value: n}, true
+}
+
+func test() {
+	value := 9
+	var picked int
+	ret_1, ok := pick(3)
+	if ok {
+		picked = ret_1.value
+	} else {
+		picked = 0
+	}
+	if picked != 3 || value != 9 {
+		panic("shadowed binding leaked")
+	}
+}

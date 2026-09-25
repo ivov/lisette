@@ -1,0 +1,71 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct Item { value: int }
+  
+  fn item(n: int) -> Option<Item> {
+    if n < 0 { None } else { Some(Item { value: n }) }
+  }
+  
+  fn exercise() -> int {
+    let mut total = 0
+    for n in [-1, 0, 1, 2] {
+      let v = match item(n) {
+        None => continue,
+        Some(Item { value: 0 }) => continue,
+        Some(Item { value: 2 }) => break,
+        Some(Item { value }) => value,
+      }
+      total += v
+    }
+    total
+  }
+  
+  fn test() {
+    if exercise() != 1 {
+      panic("wrong transfer target")
+    }
+  }
+---
+package main
+
+type Item struct {
+	value int
+}
+
+func item(n int) (Item, bool) {
+	if n < 0 {
+		return Item{}, false
+	}
+	return Item{value: n}, true
+}
+
+func exercise() int {
+	total := 0
+loop_1:
+	for _, n := range []int{-1, 0, 1, 2} {
+		var v int
+		ret_1, ok := item(n)
+		if ok {
+			switch ret_1.value {
+			case 0:
+				continue
+			case 2:
+				break loop_1
+			default:
+				v = ret_1.value
+			}
+		} else {
+			continue
+		}
+		total += v
+	}
+	return total
+}
+
+func test() {
+	if exercise() != 1 {
+		panic("wrong transfer target")
+	}
+}

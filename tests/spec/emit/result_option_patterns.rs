@@ -4177,3 +4177,182 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn nested_option_pair_match_runs_payload_patterns() {
+    let input = r#"
+struct User { name: string, email: Option<string> }
+
+fn find(users: Slice<User>, name: string) -> Option<User> {
+  users.find(|u| u.name == name)
+}
+
+fn describe(users: Slice<User>, wanted: string) -> string {
+  match find(users, wanted) {
+    Some(User { name, email: Some(email) }) => f"{name} <{email}>",
+    Some(User { name, email: None }) => f"{name} has no email",
+    None => f"no user named {wanted}",
+  }
+}
+
+fn test() {
+  let users = [User { name: "alice", email: Some("a@example.com") }, User { name: "bob", email: None }]
+  if describe(users, "alice") != "alice <a@example.com>" {
+    panic("wrong description for a user with an email")
+  }
+  if describe(users, "bob") != "bob has no email" {
+    panic("wrong description for a user without an email")
+  }
+  if describe(users, "carol") != "no user named carol" {
+    panic("wrong description for a missing user")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_option_pair_match_keeps_transfer_targets() {
+    let input = r#"
+struct Item { value: int }
+
+fn item(n: int) -> Option<Item> {
+  if n < 0 { None } else { Some(Item { value: n }) }
+}
+
+fn exercise() -> int {
+  let mut total = 0
+  for n in [-1, 0, 1, 2] {
+    let v = match item(n) {
+      None => continue,
+      Some(Item { value: 0 }) => continue,
+      Some(Item { value: 2 }) => break,
+      Some(Item { value }) => value,
+    }
+    total += v
+  }
+  total
+}
+
+fn test() {
+  if exercise() != 1 {
+    panic("wrong transfer target")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_option_pair_match_keeps_guarded_arm_on_tree() {
+    let input = r#"
+fn pick(n: int) -> Option<int> { if n < 0 { None } else { Some(n) } }
+
+fn test() -> string {
+  match pick(3) {
+    Some(v) if v > 2 => "big",
+    Some(_) => "small",
+    None => "none",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_option_pair_match_keeps_outer_catchall_on_tree() {
+    let input = r#"
+fn pick(n: int) -> Option<int> { if n < 0 { None } else { Some(n) } }
+
+fn test() -> string {
+  match pick(3) {
+    Some(0) => "zero",
+    _ => "other",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_option_pair_match_keeps_outer_or_pattern_on_tree() {
+    let input = r#"
+fn pick(n: int) -> Option<int> { if n < 0 { None } else { Some(n) } }
+
+fn test() -> int {
+  match pick(3) {
+    Some(0) | None => 0,
+    Some(v) => v,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_option_pair_match_leaves_two_arm_fusion_alone() {
+    let input = r#"
+fn pick(n: int) -> Option<int> { if n < 0 { None } else { Some(n) } }
+
+fn test() -> string {
+  match pick(3) {
+    Some(_) => "found",
+    None => "missing",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_option_pair_match_shadows_outer_binding() {
+    let input = r#"
+struct Wrapped { value: int }
+
+fn pick(n: int) -> Option<Wrapped> { if n < 0 { None } else { Some(Wrapped { value: n }) } }
+
+fn test() {
+  let value = 9
+  let picked = match pick(3) {
+    Some(Wrapped { value }) => value,
+    None => 0,
+  }
+  if picked != 3 || value != 9 {
+    panic("shadowed binding leaked")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_option_pair_match_propagates_from_arm() {
+    let input = r#"
+struct Wrapped { value: int }
+
+fn pick(n: int) -> Option<Wrapped> { if n < 0 { None } else { Some(Wrapped { value: n }) } }
+
+fn checked(n: int) -> Result<int, string> {
+  if n > 0 { Ok(n) } else { Err("not positive") }
+}
+
+fn run(n: int) -> Result<int, string> {
+  match pick(n) {
+    Some(Wrapped { value }) => Ok(checked(value)?),
+    None => Err("missing"),
+  }
+}
+
+fn test() {
+  match run(3) {
+    Ok(v) => { if v != 3 { panic("wrong value") } },
+    Err(_) => { panic("unexpected error") },
+  }
+  match run(0) {
+    Ok(_) => { panic("expected an error") },
+    Err(e) => { if e != "not positive" { panic("wrong error") } },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
