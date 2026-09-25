@@ -13,5 +13,5 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func test() {
 	_ = lisette.MakeOptionNone[int]()
-	_ = lisette.MakeOptionSome(42)
+	lisette.MakeOptionSome(42)
 }

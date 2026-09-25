@@ -25,11 +25,11 @@ func test() {
 	go func() {
 		found := 0
 		found = 1
-		_ = lisette.ChannelSend(ch, found)
+		lisette.ChannelSend(ch, found)
 	}()
 	go func() {
 		found := 0
 		found = 2
-		_ = lisette.ChannelSend(ch, found)
+		lisette.ChannelSend(ch, found)
 	}()
 }

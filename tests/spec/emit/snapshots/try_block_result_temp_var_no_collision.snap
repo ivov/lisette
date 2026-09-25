@@ -32,5 +32,5 @@ func foo() lisette.Result[int, string] {
 }
 
 func main() {
-	_ = foo()
+	foo()
 }

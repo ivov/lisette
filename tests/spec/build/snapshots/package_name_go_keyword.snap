@@ -7,7 +7,7 @@ package main
 import t "github.com/user/myproject/type"
 
 func main() {
-	_ = t.Foo()
+	t.Foo()
 }
 
 

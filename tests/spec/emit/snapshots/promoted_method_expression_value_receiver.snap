@@ -36,5 +36,5 @@ type Top struct {
 
 func main() {
 	f := Top.Describe
-	_ = f(Top{Mid: Mid{Base: Base{Id: 1}}})
+	f(Top{Mid: Mid{Base: Base{Id: 1}}})
 }

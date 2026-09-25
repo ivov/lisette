@@ -7,7 +7,7 @@ package main
 import print_ "github.com/user/myproject/print"
 
 func main() {
-	_ = print_.Hello()
+	print_.Hello()
 }
 
 

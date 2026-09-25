@@ -29,5 +29,5 @@ func makeRef() *Box {
 }
 
 func main() {
-	_ = (*makeRef()).add(1)
+	(*makeRef()).add(1)
 }

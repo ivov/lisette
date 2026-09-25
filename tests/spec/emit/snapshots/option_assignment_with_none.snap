@@ -12,6 +12,6 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() {
-	_ = lisette.MakeOptionSome(1)
+	lisette.MakeOptionSome(1)
 	_ = lisette.MakeOptionNone[int]()
 }

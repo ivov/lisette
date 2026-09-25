@@ -45,5 +45,5 @@ func copyOver[T Speaker](dst, src *T) string {
 func test() {
 	a := Person{name: "a"}
 	b := Person{name: "b"}
-	_ = copyOver(&a, &b)
+	copyOver(&a, &b)
 }

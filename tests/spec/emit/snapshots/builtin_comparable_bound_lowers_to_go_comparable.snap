@@ -17,5 +17,5 @@ func id[T comparable](x T) T {
 }
 
 func main() {
-	_ = id(1)
+	id(1)
 }

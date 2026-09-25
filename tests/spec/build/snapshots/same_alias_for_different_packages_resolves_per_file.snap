@@ -25,8 +25,8 @@ func MakeGadget() p.Gadget {
 package main
 
 func main() {
-	_ = MakeThing()
-	_ = MakeGadget()
+	MakeThing()
+	MakeGadget()
 }
 
 

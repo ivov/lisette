@@ -34,7 +34,7 @@ func test() {
 	ch_1 := makeJobs()
 	tx := (chan<- int)(ch_1)
 	rx := (<-chan int)(ch_1)
-	_ = lisette.SenderSend(tx, 7)
+	lisette.SenderSend(tx, 7)
 	subject_2 := lisette.ReceiverReceive(rx)
 	if subject_2.Tag == lisette.OptionSome {
 		value := subject_2.SomeVal

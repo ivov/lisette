@@ -37,5 +37,5 @@ func call(g simple.Greeter) string {
 
 func main() {
 	g := Greeter{}
-	_ = call(g)
+	call(g)
 }

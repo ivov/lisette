@@ -40,5 +40,5 @@ func checkAll(xs []int) lisette.Result[struct{}, string] {
 }
 
 func main() {
-	_ = checkAll([]int{1, 2})
+	checkAll([]int{1, 2})
 }

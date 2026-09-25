@@ -28,8 +28,8 @@ import (
 func test() {
 	ch := make(chan int)
 	go func() {
-		_ = lisette.ChannelSend(ch, 1)
-		_ = lisette.ChannelSend(ch, 2)
+		lisette.ChannelSend(ch, 1)
+		lisette.ChannelSend(ch, 2)
 		lisette.ChannelClose(ch)
 	}()
 	total := 0

@@ -7,7 +7,7 @@ package main
 import user_panic "github.com/user/myproject/panic"
 
 func main() {
-	_ = user_panic.Helper()
+	user_panic.Helper()
 	panic("boom")
 }
 

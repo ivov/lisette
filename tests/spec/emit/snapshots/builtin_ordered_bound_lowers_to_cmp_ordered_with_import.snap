@@ -19,5 +19,5 @@ func id[T cmp.Ordered](x T) T {
 }
 
 func main() {
-	_ = id(1)
+	id(1)
 }

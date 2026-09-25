@@ -17,5 +17,5 @@ func id[T any](x T) T {
 
 func main() {
 	f := id[int]
-	_ = f(1)
+	f(1)
 }

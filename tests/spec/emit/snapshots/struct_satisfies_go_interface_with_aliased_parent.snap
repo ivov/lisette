@@ -44,5 +44,5 @@ func describe(s shapes.Shape) string {
 
 func main() {
 	s := Square{}
-	_ = describe(s)
+	describe(s)
 }

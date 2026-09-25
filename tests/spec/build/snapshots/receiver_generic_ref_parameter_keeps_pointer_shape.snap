@@ -27,5 +27,5 @@ func (h Holder[T]) read(value *T) int {
 func main() {
 	holder := Holder[Item]{item: Item{n: 1}}
 	value := Item{n: 2}
-	_ = holder.read(&value)
+	holder.read(&value)
 }

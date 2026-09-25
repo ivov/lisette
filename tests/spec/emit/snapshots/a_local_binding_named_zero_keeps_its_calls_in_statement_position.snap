@@ -22,6 +22,6 @@ func f() int {
 		fmt.Println("effect")
 		return 42
 	}
-	_ = zero()
+	zero()
 	return zero()
 }

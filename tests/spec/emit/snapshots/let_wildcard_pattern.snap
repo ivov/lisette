@@ -15,5 +15,5 @@ func compute() int {
 }
 
 func test() {
-	_ = compute()
+	compute()
 }

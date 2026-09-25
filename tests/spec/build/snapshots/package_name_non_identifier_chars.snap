@@ -15,5 +15,5 @@ package main
 import fb "github.com/user/myproject/foo-bar"
 
 func main() {
-	_ = fb.Id(1)
+	fb.Id(1)
 }

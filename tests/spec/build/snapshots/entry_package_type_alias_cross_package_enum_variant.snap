@@ -10,7 +10,7 @@ type LocalColor = palette.Color
 
 func main() {
 	_ = palette.MakeColorRGB()
-	_ = palette.MakeColorNamed("teal")
+	palette.MakeColorNamed("teal")
 }
 
 

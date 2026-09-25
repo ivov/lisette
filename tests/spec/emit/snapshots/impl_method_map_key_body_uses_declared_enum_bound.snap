@@ -41,5 +41,5 @@ func (h Holder[T]) count() int {
 
 func main() {
 	h := MakeHolderEmpty[string]()
-	_ = h.count()
+	h.count()
 }

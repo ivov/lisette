@@ -19,5 +19,5 @@ func useReader(r io.Reader) int {
 
 func main() {
 	r := Reader{}
-	_ = useReader(r)
+	useReader(r)
 }

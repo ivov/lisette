@@ -15,7 +15,7 @@ func main() {
 		X: 0,
 		Y: 0,
 	}
-	_ = p1.ManhattanDistance(p2)
+	p1.ManhattanDistance(p2)
 }
 
 

@@ -16,6 +16,6 @@ import "example.com/ttl"
 
 func main() {
 	cache := ttl.New[string, int]()
-	_ = cache.Get("key")
+	cache.Get("key")
 	cache.Set("key", 1, ttl.DefaultTTL)
 }

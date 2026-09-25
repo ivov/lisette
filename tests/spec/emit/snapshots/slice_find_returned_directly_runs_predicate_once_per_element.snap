@@ -37,7 +37,7 @@ func firstPositive(s []int, seen chan int) (int, bool) {
 	for _, x := range s {
 		var tmp_3 bool
 		{
-			_ = lisette.ChannelSend(seen, x)
+			lisette.ChannelSend(seen, x)
 			tmp_3 = x > 0
 		}
 		if tmp_3 {

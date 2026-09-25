@@ -16,5 +16,5 @@ import (
 )
 
 func enqueue(ch chan func(int) (string, error)) {
-	_ = lisette.ChannelSend(ch, ext.MakeParser())
+	lisette.ChannelSend(ch, ext.MakeParser())
 }

@@ -22,5 +22,5 @@ func useRw(_ io.ReadWriter) int {
 
 func main() {
 	d := Dev{}
-	_ = useRw(d)
+	useRw(d)
 }

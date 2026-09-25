@@ -31,5 +31,5 @@ func (b Box[U]) less(other Box[U]) bool {
 func main() {
 	a := Box[int]{value: 1}
 	b := Box[int]{value: 2}
-	_ = a.less(b)
+	a.less(b)
 }

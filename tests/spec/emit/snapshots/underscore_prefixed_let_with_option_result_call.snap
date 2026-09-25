@@ -19,5 +19,5 @@ func getResult() lisette.Result[int, string] {
 }
 
 func test() {
-	_ = getResult()
+	getResult()
 }

@@ -3245,6 +3245,30 @@ fn main() {
 }
 
 #[test]
+fn a_discarded_call_stands_as_a_statement() {
+    let input = r#"
+struct Meters(int)
+
+fn bump(counter: mut Ref<int>) -> int {
+  counter.* += 1
+  counter.*
+}
+
+fn test() {
+  let mut counter = 0
+  let _ = bump(&counter)
+  let _ = Meters(2)
+  let xs = [1, 2]
+  let _ = xs.length()
+  let _ = xs.append(3)
+  if counter != 1 { panic("the discarded call should still run once") }
+  if xs.length() != 2 { panic("append should not change the original") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn select_match_receive_unused_binding() {
     let input = r#"
 fn main() {

@@ -22,5 +22,5 @@ func f() lisette.Result[struct{}, string] {
 }
 
 func main() {
-	_ = f()
+	f()
 }

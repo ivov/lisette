@@ -19,5 +19,5 @@ func find(haystack, needle string) int {
 }
 
 func main() {
-	_ = find("hello", "lo")
+	find("hello", "lo")
 }

@@ -35,7 +35,7 @@ func main() {
 loop_1:
 	for i := range 2 {
 		if i == 1 {
-			_ = lisette.ChannelSend(ch, 7)
+			lisette.ChannelSend(ch, 7)
 		}
 		ch_1 := ch
 		for {

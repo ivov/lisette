@@ -23,5 +23,5 @@ package main
 import L "github.com/user/myproject/lib"
 
 func main() {
-	_ = L.Point_New(3, 4)
+	L.Point_New(3, 4)
 }

@@ -23,5 +23,5 @@ func id[T comparable](table Table[T]) Table[T] {
 
 func main() {
 	t := make(map[string]int)
-	_ = id(t)
+	id(t)
 }

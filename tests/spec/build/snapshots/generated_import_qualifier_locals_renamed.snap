@@ -16,5 +16,5 @@ func show(fmt_ int) string {
 func main() {
 	ok := strings.Contains("abc", "a")
 	_ = ok
-	_ = show(2)
+	show(2)
 }

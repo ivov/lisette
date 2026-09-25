@@ -17,5 +17,5 @@ func isEmpty[T comparable]() bool {
 }
 
 func main() {
-	_ = isEmpty[int]()
+	isEmpty[int]()
 }

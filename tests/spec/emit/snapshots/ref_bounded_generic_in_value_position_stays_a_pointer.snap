@@ -48,12 +48,12 @@ func setSpeaker[T Speaker](slot *T, value T) string {
 }
 
 func readSpeaker[T Speaker](slot *T) T {
-	_ = (*slot).speak()
+	(*slot).speak()
 	return *slot
 }
 
 func test() {
 	p := Person{name: "a"}
-	_ = setSpeaker(&p, Person{name: "b"})
-	_ = readSpeaker(&p)
+	setSpeaker(&p, Person{name: "b"})
+	readSpeaker(&p)
 }

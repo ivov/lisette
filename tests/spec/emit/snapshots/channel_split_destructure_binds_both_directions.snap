@@ -17,6 +17,6 @@ func test() {
 	ch := make(chan int, 1)
 	tx := (chan<- int)(ch)
 	rx := (<-chan int)(ch)
-	_ = lisette.SenderSend(tx, 42)
-	_ = lisette.ReceiverReceive(rx)
+	lisette.SenderSend(tx, 42)
+	lisette.ReceiverReceive(rx)
 }

@@ -29,5 +29,5 @@ func (f *Foo) show() string {
 
 func test() {
 	foo := Foo{BarBaz: "quux"}
-	_ = foo.show()
+	foo.show()
 }

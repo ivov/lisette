@@ -33,5 +33,5 @@ func (t Text) toString() string {
 }
 
 func test() {
-	_ = lisette.MakeOptionSome[Printable](Text{content: "hello"})
+	lisette.MakeOptionSome[Printable](Text{content: "hello"})
 }

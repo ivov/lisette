@@ -18,5 +18,5 @@ func noop() {}
 func test() {
 	ch := make(chan struct{}, 1)
 	noop()
-	_ = lisette.ChannelSend(ch, struct{}{})
+	lisette.ChannelSend(ch, struct{}{})
 }

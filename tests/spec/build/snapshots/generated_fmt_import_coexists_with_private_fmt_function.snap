@@ -24,5 +24,5 @@ func fmt_() int {
 
 func main() {
 	_ = Thing{X: 1}
-	_ = fmt_()
+	fmt_()
 }

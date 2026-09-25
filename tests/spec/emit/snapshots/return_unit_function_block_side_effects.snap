@@ -24,7 +24,7 @@ func side() int {
 
 func main() {
 	{
-		_ = side()
+		side()
 	}
 	return
 }

@@ -45,6 +45,6 @@ func LocalPhase_Variants() []LocalPhase {
 }
 
 func main() {
-	_ = LocalPhase_Variants()
-	_ = PublicPhase_Variants()
+	LocalPhase_Variants()
+	PublicPhase_Variants()
 }

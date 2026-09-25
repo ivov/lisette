@@ -11,5 +11,5 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() {
-	_ = lisette.MakeResultOk[int, any](42)
+	lisette.MakeResultOk[int, any](42)
 }

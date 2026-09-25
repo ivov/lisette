@@ -7,7 +7,7 @@ package main
 import "github.com/user/myproject/models/user"
 
 func main() {
-	_ = user.User_New("Alice", "alice@test.com")
+	user.User_New("Alice", "alice@test.com")
 }
 
 

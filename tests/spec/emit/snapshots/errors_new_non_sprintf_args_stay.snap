@@ -39,7 +39,7 @@ func solo(msg string) error {
 }
 
 func main() {
-	_ = plain()
-	_ = noInterpolation()
-	_ = solo("y")
+	plain()
+	noInterpolation()
+	solo("y")
 }

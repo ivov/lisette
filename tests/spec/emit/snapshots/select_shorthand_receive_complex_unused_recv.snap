@@ -22,7 +22,7 @@ type P struct {
 
 func test() {
 	ch := make(chan P, 1)
-	_ = lisette.ChannelSend(ch, P{v: 1})
+	lisette.ChannelSend(ch, P{v: 1})
 	ch_1 := ch
 	for {
 		select {

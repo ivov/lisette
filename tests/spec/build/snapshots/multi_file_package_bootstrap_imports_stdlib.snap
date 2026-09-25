@@ -25,7 +25,7 @@ import (
 
 func main() {
 	f := foo.Foo_New(42)
-	_ = types.MakeMyEnumMaybe(lisette.MakeOptionSome(f))
+	types.MakeMyEnumMaybe(lisette.MakeOptionSome(f))
 	fmt.Println("OK")
 }
 

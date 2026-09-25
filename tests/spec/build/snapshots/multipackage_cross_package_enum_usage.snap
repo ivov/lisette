@@ -16,7 +16,7 @@ func describe(s shapes.ShapeKind) float64 {
 func main() {
 	circle := shapes.Circle{Radius: 5.0}
 	shape := shapes.MakeShapeKindCircleKind(circle)
-	_ = describe(shape)
+	describe(shape)
 }
 
 

@@ -23,5 +23,5 @@ func (s Service) GetSession() int {
 
 func main() {
 	s := Service{}
-	_ = s.GetSession()
+	s.GetSession()
 }

@@ -23,5 +23,5 @@ func (t Thing) toString() string {
 
 func main() {
 	_ = Thing{X: 1}
-	_ = f.Sprintf("x=%d", 1)
+	f.Sprintf("x=%d", 1)
 }

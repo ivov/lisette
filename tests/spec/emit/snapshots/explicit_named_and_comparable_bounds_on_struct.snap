@@ -50,7 +50,7 @@ type Box[T interface {
 
 func main() {
 	p := Person{value: "Ada"}
-	_ = p.name()
+	p.name()
 	b := Box[Person]{table: make(map[Person]int)}
 	_ = b
 }

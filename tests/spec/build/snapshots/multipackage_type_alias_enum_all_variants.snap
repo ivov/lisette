@@ -54,6 +54,6 @@ func main() {
 		X:   10,
 		Y:   20,
 	}
-	_ = events.MakeEventKeyPress("Enter")
+	events.MakeEventKeyPress("Enter")
 	_ = events.MakeEventClose()
 }

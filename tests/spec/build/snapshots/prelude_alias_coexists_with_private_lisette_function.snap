@@ -13,5 +13,5 @@ func lisette_() int {
 func main() {
 	x := lisette.MakeOptionSome(1)
 	_ = x
-	_ = lisette_()
+	lisette_()
 }

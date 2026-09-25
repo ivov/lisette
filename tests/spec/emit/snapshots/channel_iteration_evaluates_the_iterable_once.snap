@@ -32,9 +32,9 @@ import (
 )
 
 func makeJobs(log chan int) chan int {
-	_ = lisette.ChannelSend(log, 1)
+	lisette.ChannelSend(log, 1)
 	jobs := make(chan int, 2)
-	_ = lisette.ChannelSend(jobs, 7)
+	lisette.ChannelSend(jobs, 7)
 	lisette.ChannelClose(jobs)
 	return jobs
 }

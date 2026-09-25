@@ -16,7 +16,7 @@ import (
 )
 
 func convertAll(xs []int) {
-	_ = lisette.SliceMap(xs, func(arg0 int) lisette.Result[string, error] {
+	lisette.SliceMap(xs, func(arg0 int) lisette.Result[string, error] {
 		ret_1, ret_2 := ext.Parse(arg0)
 		if ret_2 != nil {
 			return lisette.MakeResultErr[string, error](ret_2)

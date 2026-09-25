@@ -33,6 +33,6 @@ func percent(rate int) error {
 }
 
 func main() {
-	_ = fail("x")
-	_ = percent(3)
+	fail("x")
+	percent(3)
 }

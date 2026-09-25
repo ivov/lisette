@@ -40,5 +40,5 @@ func run(n int) lisette.Result[struct{}, string] {
 }
 
 func main() {
-	_ = run(1)
+	run(1)
 }

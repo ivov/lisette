@@ -27,5 +27,5 @@ func consume() int {
 }
 
 func main() {
-	_ = consume()
+	consume()
 }

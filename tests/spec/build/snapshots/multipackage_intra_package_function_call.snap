@@ -7,7 +7,7 @@ package main
 import "github.com/user/myproject/math_utils"
 
 func main() {
-	_ = math_utils.DoubleSquare(3.0)
+	math_utils.DoubleSquare(3.0)
 }
 
 
