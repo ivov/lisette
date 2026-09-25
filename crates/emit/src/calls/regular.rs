@@ -102,6 +102,26 @@ fn receiver_type_binding(
     Some((declared, receiver.get_type().strip_refs()))
 }
 
+/// Arguments cannot change the address a pointer receiver takes of a local.
+fn pointer_receiver_on_value_local(
+    callee_expression: &Expression,
+    callee: &ResolvedCallee<'_>,
+) -> bool {
+    let Some((declared, _)) = receiver_type_binding(callee_expression, callee) else {
+        return false;
+    };
+    let Expression::DotAccess {
+        expression: receiver,
+        ..
+    } = callee_expression.unwrap_parens()
+    else {
+        return false;
+    };
+    declared.is_ref()
+        && matches!(receiver.unwrap_parens(), Expression::Identifier { .. })
+        && !receiver.get_type().is_ref()
+}
+
 /// Escape-aware close-quote search; plain `find` would collide with `\"` inside the literal.
 fn find_go_string_literal_close(s: &str) -> Option<usize> {
     let bytes = s.as_bytes();
@@ -346,6 +366,7 @@ impl<'a> Planner<'a> {
 
         let callee_needs_pin = setup.is_empty()
             && type_args_string.is_empty()
+            && !pointer_receiver_on_value_local(function, &call_plan.resolved)
             && LaterStages::sequenced(&args_setup, args_effect)
                 .can_change(self.place_read_stability(function));
         if callee_needs_pin {

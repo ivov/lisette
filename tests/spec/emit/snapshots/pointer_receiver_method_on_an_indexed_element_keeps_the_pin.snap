@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Counter { n: int }
+  
+  impl Counter {
+    fn add(self: mut Ref<Counter>, k: int) {
+      self.n += k
+    }
+  }
+  
+  fn main() {
+    let mut cs = [Counter { n: 1 }, Counter { n: 2 }]
+    let mut i = 0
+    let bump = || -> int { i = 1; 1 }
+    cs[i].add(bump())
+    let _ = cs
+  }
+---
+package main
+
+type Counter struct {
+	n int
+}
+
+func (c *Counter) add(k int) {
+	c.n += k
+}
+
+func main() {
+	cs := []Counter{{n: 1}, {n: 2}}
+	i := 0
+	bump := func() int {
+		i = 1
+		return 1
+	}
+	callee_1 := cs[i].add
+	callee_1(bump())
+	_ = cs
+}

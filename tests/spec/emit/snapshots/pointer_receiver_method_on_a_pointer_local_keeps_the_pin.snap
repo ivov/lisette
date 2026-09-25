@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Counter { n: int }
+  
+  impl Counter {
+    fn add(self: mut Ref<Counter>, k: int) {
+      self.n += k
+    }
+  }
+  
+  fn main() {
+    let mut a = Counter { n: 1 }
+    let mut b = Counter { n: 2 }
+    let mut p = &a
+    let swap = || -> int { p = &b; 1 }
+    p.add(swap())
+    let _ = (a, b)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Counter struct {
+	n int
+}
+
+func (c *Counter) add(k int) {
+	c.n += k
+}
+
+func main() {
+	a := Counter{n: 1}
+	b := Counter{n: 2}
+	p := &a
+	swap := func() int {
+		p = &b
+		return 1
+	}
+	callee_1 := p.add
+	callee_1(swap())
+	_ = lisette.MakeTuple2[Counter, Counter](a, b)
+}

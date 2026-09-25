@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:bytes"
+  
+  fn main() {
+    let mut buf = bytes.Buffer {}
+    let mut n = 0
+    let next = || -> int { n += 1; n }
+    buf.Grow(next())
+    let _ = buf.Len()
+  }
+---
+package main
+
+import "bytes"
+
+func main() {
+	buf := bytes.Buffer{}
+	n := 0
+	next := func() int {
+		n++
+		return n
+	}
+	buf.Grow(next())
+	_ = buf.Len()
+}

@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Counter { n: int }
+  
+  impl Counter {
+    fn add_all(self: mut Ref<Counter>, ks: VarArgs<int>) {
+      for k in ks { self.n += k }
+    }
+  }
+  
+  fn main() {
+    let mut c = Counter { n: 1 }
+    let bump = || -> int { c.n += 10; 1 }
+    c.add_all(bump(), bump())
+    c.add_all(bump())
+    let _ = c
+  }
+---
+package main
+
+type Counter struct {
+	n int
+}
+
+func (c *Counter) addAll(ks ...int) {
+	for _, k := range ks {
+		c.n += k
+	}
+}
+
+func main() {
+	c := Counter{n: 1}
+	bump := func() int {
+		c.n += 10
+		return 1
+	}
+	c.addAll(bump(), bump())
+	c.addAll(bump())
+	_ = c
+}
