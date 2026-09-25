@@ -39,19 +39,12 @@ type User struct {
 }
 
 func find(users []User, name string) (User, bool) {
-	var ret_1 User
-	found_2 := false
 	for _, u := range users {
 		if u.name == name {
-			ret_1 = u
-			found_2 = true
-			break
+			return u, true
 		}
 	}
-	if !found_2 {
-		return User{}, false
-	}
-	return ret_1, true
+	return User{}, false
 }
 
 func describe(users []User, wanted string) string {

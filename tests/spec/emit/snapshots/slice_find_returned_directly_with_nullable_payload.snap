@@ -15,17 +15,10 @@ type User struct {
 }
 
 func test(users []*User, wanted string) *User {
-	var ret_1 *User
-	found_2 := false
 	for _, u := range users {
 		if u.name == wanted {
-			ret_1 = u
-			found_2 = true
-			break
+			return u
 		}
 	}
-	if !found_2 {
-		return nil
-	}
-	return ret_1
+	return nil
 }

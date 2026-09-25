@@ -1,0 +1,80 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  struct User { name: string }
+  
+  fn first_even(xs: Slice<int>) -> Option<int> {
+    xs.find(|x| x % 2 == 0)
+  }
+  
+  fn named(users: Slice<User>, wanted: string) -> Option<User> {
+    let hit = users.find(|u| u.name == wanted)
+    hit
+  }
+  
+  fn test() {
+    match first_even([1, 4, 6]) {
+      Some(v) => { if v != 4 { panic("the first even number is four") } },
+      None => { panic("expected a hit") },
+    }
+    match first_even([1, 3]) {
+      Some(_) => { panic("expected no hit") },
+      None => {},
+    }
+    match named([User { name: "a" }], "a") {
+      Some(u) => { if u.name != "a" { panic("wrong user") } },
+      None => { panic("expected a user") },
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type User struct {
+	name string
+}
+
+func firstEven(xs []int) (int, bool) {
+	for _, x := range xs {
+		if x%2 == 0 {
+			return x, true
+		}
+	}
+	return 0, false
+}
+
+func named(users []User, wanted string) (User, bool) {
+	hit := lisette.MakeOptionNone[User]()
+	for _, u := range users {
+		if u.name == wanted {
+			hit = lisette.MakeOptionSome[User](u)
+			break
+		}
+	}
+	if hit.Tag == lisette.OptionSome {
+		return hit.SomeVal, true
+	}
+	return User{}, false
+}
+
+func test() {
+	if v, ok := firstEven([]int{1, 4, 6}); ok {
+		if v != 4 {
+			panic("the first even number is four")
+		}
+	} else {
+		panic("expected a hit")
+	}
+	if _, ok := firstEven([]int{1, 3}); ok {
+		panic("expected no hit")
+	}
+	if u, ok := named([]User{{name: "a"}}, "a"); ok {
+		if u.name != "a" {
+			panic("wrong user")
+		}
+	} else {
+		panic("expected a user")
+	}
+}

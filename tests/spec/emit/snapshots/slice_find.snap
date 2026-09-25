@@ -9,17 +9,10 @@ description: |
 package main
 
 func test(s []int) (int, bool) {
-	var ret_1 int
-	found_2 := false
 	for _, x := range s {
 		if x > 0 {
-			ret_1 = x
-			found_2 = true
-			break
+			return x, true
 		}
 	}
-	if !found_2 {
-		return 0, false
-	}
-	return ret_1, true
+	return 0, false
 }

@@ -32,8 +32,6 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func firstPositive(s []int, seen chan int) (int, bool) {
-	var ret_1 int
-	found_2 := false
 	for _, x := range s {
 		var tmp_3 bool
 		{
@@ -41,15 +39,10 @@ func firstPositive(s []int, seen chan int) (int, bool) {
 			tmp_3 = x > 0
 		}
 		if tmp_3 {
-			ret_1 = x
-			found_2 = true
-			break
+			return x, true
 		}
 	}
-	if !found_2 {
-		return 0, false
-	}
-	return ret_1, true
+	return 0, false
 }
 
 func test() {
