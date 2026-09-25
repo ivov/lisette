@@ -32,22 +32,22 @@ func pair[A any, B any](a A, b B) (lisette.Tuple2[A, B], error) {
 }
 
 func test() {
-	ret_1, ret_2 := pair[int, string](1, "x")
-	var result_3 lisette.Partial[lisette.Tuple2[int, string], error]
-	if ret_2 != nil {
-		result_3 = lisette.MakePartialBoth[lisette.Tuple2[int, string], error](ret_1, ret_2)
+	ret, ret_1 := pair[int, string](1, "x")
+	var result lisette.Partial[lisette.Tuple2[int, string], error]
+	if ret_1 != nil {
+		result = lisette.MakePartialBoth[lisette.Tuple2[int, string], error](ret, ret_1)
 	} else {
-		result_3 = lisette.MakePartialOk[lisette.Tuple2[int, string], error](ret_1)
+		result = lisette.MakePartialOk[lisette.Tuple2[int, string], error](ret)
 	}
-	switch result_3.Tag {
+	switch result.Tag {
 	case lisette.PartialOk:
-		_ = result_3.OkVal.First
-		_ = result_3.OkVal.Second
+		_ = result.OkVal.First
+		_ = result.OkVal.Second
 	case lisette.PartialErr:
-		_ = result_3.ErrVal
+		_ = result.ErrVal
 	default:
-		_ = result_3.OkVal.First
-		_ = result_3.OkVal.Second
-		_ = result_3.ErrVal
+		_ = result.OkVal.First
+		_ = result.OkVal.Second
+		_ = result.ErrVal
 	}
 }

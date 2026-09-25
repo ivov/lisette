@@ -36,13 +36,13 @@ func main() {
 	items := []Wrap{Wrap(Inner{x: 0})}
 	i := 0
 	inner := Inner(items[i])
-	var tmp_1 int
+	var tmp int
 	if true {
-		tmp_1 = bump(&i)
+		tmp = bump(&i)
 	} else {
-		tmp_1 = 0
+		tmp = 0
 	}
-	inner.x = tmp_1
+	inner.x = tmp
 	items[i] = Wrap(inner)
 	_ = items
 }

@@ -26,9 +26,9 @@ func main() {
 		return counter - 1
 	}
 	buffer := Buffer{data: [4]int{}}
+	base := &buffer.data
+	base[next()] = 7
 	base_1 := &buffer.data
-	base_1[next()] = 7
-	base_2 := &buffer.data
-	base_2[next()]++
+	base_1[next()]++
 	_ = buffer
 }

@@ -16,9 +16,9 @@ package main
 func test(s []int, factor int) []int {
 	seen := 0
 	doubled := make([]int, len(s))
-	for i_1, x := range s {
+	for i, x := range s {
 		seen++
-		doubled[i_1] = x * factor
+		doubled[i] = x * factor
 	}
 	return append(doubled[:len(doubled):len(doubled)], seen)
 }

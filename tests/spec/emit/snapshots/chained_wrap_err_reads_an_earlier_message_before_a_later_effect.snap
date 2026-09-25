@@ -28,10 +28,10 @@ func four(initial string) (int, error) {
 		return "outer"
 	}
 	n, err := strconv.Atoi("bad")
-	msg_1 := text
-	msg_2 := update()
+	msg := text
+	msg_1 := update()
 	if err != nil {
-		return 0, fmt.Errorf("%s: %w", msg_2, fmt.Errorf("%s: %w", msg_1, err))
+		return 0, fmt.Errorf("%s: %w", msg_1, fmt.Errorf("%s: %w", msg, err))
 	}
 	return n, nil
 }

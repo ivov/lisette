@@ -13,6 +13,6 @@ package main
 import "example.com/cfg"
 
 func main() {
-	var ptr_1 string = "custom"
-	cfg.Configure(&ptr_1)
+	var ptr string = "custom"
+	cfg.Configure(&ptr)
 }

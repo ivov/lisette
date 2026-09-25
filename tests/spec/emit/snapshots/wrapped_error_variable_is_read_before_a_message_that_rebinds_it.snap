@@ -26,7 +26,7 @@ func two() (int, error) {
 		e = errors.New("after")
 		return "context"
 	}
-	err_2 := e
-	msg_1 := update()
-	return 0, fmt.Errorf("%s: %w", msg_1, err_2)
+	err := e
+	msg := update()
+	return 0, fmt.Errorf("%s: %w", msg, err)
 }

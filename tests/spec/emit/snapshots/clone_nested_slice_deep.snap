@@ -19,7 +19,7 @@ import (
 
 func main() {
 	a := [][]int{{1, 2}, {3, 4}}
-	b := lisette.SliceCloneFunc(a, func(e_1 []int) []int { return slices.Clone(e_1) })
+	b := lisette.SliceCloneFunc(a, func(e []int) []int { return slices.Clone(e) })
 	b[0][0] = 9
 	_ = a
 	_ = b

@@ -21,7 +21,7 @@ func run() int {
 		p = &b
 		return 5
 	}
-	ref_1 := p
-	*ref_1 = repoint()
+	ref := p
+	*ref = repoint()
 	return a
 }

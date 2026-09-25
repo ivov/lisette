@@ -20,9 +20,9 @@ func returnsInt() lisette.Result[int, string] {
 }
 
 func returnsUnit() lisette.Result[struct{}, string] {
-	check_1 := returnsInt()
-	if check_1.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[struct{}, string](check_1.ErrVal)
+	check := returnsInt()
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[struct{}, string](check.ErrVal)
 	}
 	return lisette.MakeResultOk[struct{}, string](struct{}{})
 }

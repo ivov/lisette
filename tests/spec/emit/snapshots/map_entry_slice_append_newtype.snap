@@ -17,7 +17,7 @@ type Wrap []int
 func main() {
 	m := make(map[string]Wrap)
 	m["a"] = Wrap([]int{})
-	base_2 := m
-	recv_1 := ([]int)(m["a"])
-	base_2["a"] = Wrap(append(recv_1[:len(recv_1):len(recv_1)], 1))
+	base := m
+	recv := ([]int)(m["a"])
+	base["a"] = Wrap(append(recv[:len(recv):len(recv)], 1))
 }

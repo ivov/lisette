@@ -20,10 +20,10 @@ func mightFail() lisette.Result[int, string] {
 }
 
 func getValue() lisette.Result[int, string] {
-	check_1 := mightFail()
-	if check_1.Tag != lisette.ResultOk {
-		return check_1
+	check := mightFail()
+	if check.Tag != lisette.ResultOk {
+		return check
 	}
-	result := check_1.OkVal
+	result := check.OkVal
 	return lisette.MakeResultOk[int, string](result)
 }

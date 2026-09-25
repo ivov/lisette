@@ -20,22 +20,22 @@ import (
 
 func main() {
 	values := [2]lisette.Option[int]{lisette.MakeOptionSome(1), lisette.MakeOptionNone[int]()}
-	var unwrapped_1 [2]*int
-	for i_2, v_3 := range values {
-		if v_3.Tag == lisette.OptionSome {
-			unwrapped_1[i_2] = &v_3.SomeVal
+	var unwrapped [2]*int
+	for i, v := range values {
+		if v.Tag == lisette.OptionSome {
+			unwrapped[i] = &v.SomeVal
 		} else {
-			unwrapped_1[i_2] = nil
+			unwrapped[i] = nil
 		}
 	}
-	container := arrays.Container{Values: unwrapped_1}
-	raw_4 := container.Values
-	var wrapped_5 [2]lisette.Option[int]
-	for i_6, v_7 := range raw_4 {
-		if v_7 != nil {
-			wrapped_5[i_6] = lisette.MakeOptionSome[int](*v_7)
+	container := arrays.Container{Values: unwrapped}
+	raw := container.Values
+	var wrapped [2]lisette.Option[int]
+	for i_1, v_1 := range raw {
+		if v_1 != nil {
+			wrapped[i_1] = lisette.MakeOptionSome[int](*v_1)
 		} else {
-			wrapped_5[i_6] = lisette.MakeOptionNone[int]()
+			wrapped[i_1] = lisette.MakeOptionNone[int]()
 		}
 	}
 }

@@ -34,7 +34,7 @@ func source(p *Point) *Point {
 
 func main() {
 	point := Point{X: 1}
-	raw_1 := source(&point)
-	a := lisette.OptionFromNilable[*Point](raw_1, raw_1 == nil)
+	raw := source(&point)
+	a := lisette.OptionFromNilable[*Point](raw, raw == nil)
 	_ = a
 }

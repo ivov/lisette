@@ -42,8 +42,8 @@ func test() {
 	if total != 1 {
 		panic(fmt.Sprintf("expected 1, got %d", total))
 	}
-	subject_1 := lisette.ReceiverReceive(rx)
-	if subject_1.Tag == lisette.OptionSome {
-		panic(fmt.Sprintf("expected a drained channel, got %d", subject_1.SomeVal))
+	subject := lisette.ReceiverReceive(rx)
+	if subject.Tag == lisette.OptionSome {
+		panic(fmt.Sprintf("expected a drained channel, got %d", subject.SomeVal))
 	}
 }

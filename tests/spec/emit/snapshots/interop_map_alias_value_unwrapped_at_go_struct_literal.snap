@@ -44,17 +44,17 @@ func main() {
 	objects := make(map[string]lisette.Option[*ast.Object])
 	objects["present"] = lisette.MakeOptionSome(&obj)
 	objects["absent"] = lisette.MakeOptionNone[*ast.Object]()
-	unwrapped_1 := make(map[string]*ast.Object, len(objects))
-	for i_2, v_3 := range objects {
-		if v_3.Tag == lisette.OptionSome {
-			unwrapped_1[i_2] = v_3.SomeVal
+	unwrapped := make(map[string]*ast.Object, len(objects))
+	for i, v := range objects {
+		if v.Tag == lisette.OptionSome {
+			unwrapped[i] = v.SomeVal
 		} else {
-			unwrapped_1[i_2] = nil
+			unwrapped[i] = nil
 		}
 	}
 	scope := ast.Scope{
 		Outer:   nil,
-		Objects: unwrapped_1,
+		Objects: unwrapped,
 	}
 	_ = scope
 }

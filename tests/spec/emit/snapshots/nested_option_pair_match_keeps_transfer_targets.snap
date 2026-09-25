@@ -46,15 +46,15 @@ func exercise() int {
 loop_1:
 	for _, n := range []int{-1, 0, 1, 2} {
 		var v int
-		ret_1, ok := item(n)
+		ret, ok := item(n)
 		if ok {
-			switch ret_1.value {
+			switch ret.value {
 			case 0:
 				continue
 			case 2:
 				break loop_1
 			default:
-				v = ret_1.value
+				v = ret.value
 			}
 		} else {
 			continue

@@ -33,30 +33,30 @@ import (
 )
 
 func main() {
-	src_1 := []lisette.Option[ast.Expr]{}
-	unwrapped_2 := make([]ast.Expr, len(src_1))
-	for i_3, v_4 := range src_1 {
-		if v_4.Tag == lisette.OptionSome {
-			unwrapped_2[i_3] = v_4.SomeVal
+	src := []lisette.Option[ast.Expr]{}
+	unwrapped := make([]ast.Expr, len(src))
+	for i, v := range src {
+		if v.Tag == lisette.OptionSome {
+			unwrapped[i] = v.SomeVal
 		}
 	}
 	lit := ast.CompositeLit{
 		Type:       nil,
 		Lbrace:     token.Pos(0),
-		Elts:       unwrapped_2,
+		Elts:       unwrapped,
 		Rbrace:     token.Pos(0),
 		Incomplete: false,
 	}
-	raw_5 := lit.Elts
-	wrapped_6 := make([]lisette.Option[ast.Expr], len(raw_5))
-	for i_7, v_8 := range raw_5 {
-		if !lisette.IsNilInterface(v_8) {
-			wrapped_6[i_7] = lisette.MakeOptionSome[ast.Expr](v_8)
+	raw := lit.Elts
+	wrapped := make([]lisette.Option[ast.Expr], len(raw))
+	for i_1, v_1 := range raw {
+		if !lisette.IsNilInterface(v_1) {
+			wrapped[i_1] = lisette.MakeOptionSome[ast.Expr](v_1)
 		} else {
-			wrapped_6[i_7] = lisette.MakeOptionNone[ast.Expr]()
+			wrapped[i_1] = lisette.MakeOptionNone[ast.Expr]()
 		}
 	}
-	elts := wrapped_6
+	elts := wrapped
 	for _, elt := range elts {
 		if elt.Tag == lisette.OptionSome {
 			fmt.Println(elt.SomeVal.Pos())

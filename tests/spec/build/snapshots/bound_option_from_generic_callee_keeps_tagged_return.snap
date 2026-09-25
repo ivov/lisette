@@ -18,18 +18,18 @@ func Resolve[T any, R any](a T, f func(T) (R, bool)) (R, bool) {
 }
 
 func main() {
-	cb_1 := Lookup
-	ret_4, ret_5 := Resolve(0, func(arg0 int) (Face, bool) {
-		raw_2 := cb_1(arg0)
-		option_3 := lisette.OptionFromNilable[Face](raw_2, lisette.IsNilInterface(raw_2))
-		if option_3.Tag == lisette.OptionSome {
-			return option_3.SomeVal, true
+	cb := Lookup
+	ret, ret_1 := Resolve(0, func(arg0 int) (Face, bool) {
+		raw := cb(arg0)
+		option := lisette.OptionFromNilable[Face](raw, lisette.IsNilInterface(raw))
+		if option.Tag == lisette.OptionSome {
+			return option.SomeVal, true
 		}
 		return nil, false
 	})
 	var rez lisette.Option[Face]
-	if ret_5 && !lisette.IsNilInterface(ret_4) {
-		rez = lisette.MakeOptionSome[Face](ret_4)
+	if ret_1 && !lisette.IsNilInterface(ret) {
+		rez = lisette.MakeOptionSome[Face](ret)
 	} else {
 		rez = lisette.MakeOptionNone[Face]()
 	}

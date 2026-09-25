@@ -34,10 +34,10 @@ func (p Point) equals(other Point) bool {
 
 func userEquals(pts [2]Point, want Point) bool {
 	want_1 := want
-	return slices.ContainsFunc(slices.Clone(pts[:]), func(e_2 Point) bool { return e_2.equals(want_1) })
+	return slices.ContainsFunc(slices.Clone(pts[:]), func(e Point) bool { return e.equals(want_1) })
 }
 
 func nestedContainers(rows [2][]int, want []int) bool {
 	want_1 := want
-	return slices.ContainsFunc(slices.Clone(rows[:]), func(e_2 []int) bool { return slices.Equal(e_2, want_1) })
+	return slices.ContainsFunc(slices.Clone(rows[:]), func(e []int) bool { return slices.Equal(e, want_1) })
 }

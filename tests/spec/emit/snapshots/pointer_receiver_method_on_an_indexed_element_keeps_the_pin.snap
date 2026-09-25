@@ -35,7 +35,7 @@ func main() {
 		i = 1
 		return 1
 	}
-	callee_1 := cs[i].add
-	callee_1(bump())
+	callee := cs[i].add
+	callee(bump())
 	_ = cs
 }

@@ -22,8 +22,8 @@ func main() {
 		lisette.MakeTuple2[int, int](1, 2),
 		lisette.MakeTuple2[int, int](3, 4),
 	}
-	tmp_1 := pairs[0]
-	a := tmp_1.First
-	b := tmp_1.Second
+	tmp := pairs[0]
+	a := tmp.First
+	b := tmp.Second
 	fmt.Println(a, b)
 }

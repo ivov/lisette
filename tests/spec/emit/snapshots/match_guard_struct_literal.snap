@@ -24,16 +24,16 @@ func main() {
 		x: 1,
 		y: 2,
 	}
-match_1:
+match:
 	for {
 		if p == (Point{
 			x: 1,
 			y: 2,
 		}) {
-			break match_1
+			break match
 		}
 		{
-			break match_1
+			break match
 		}
 	}
 }

@@ -11,10 +11,10 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func at(m map[string][3]int, i int) (int, bool) {
-	arr_1 := m["k"]
-	v_2 := lisette.SliceGet(arr_1[:], i)
-	if v_2.Tag == lisette.OptionSome {
-		return v_2.SomeVal, true
+	arr := m["k"]
+	v := lisette.SliceGet(arr[:], i)
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
 	}
 	return 0, false
 }

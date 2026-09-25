@@ -48,12 +48,12 @@ func load() ([]byte, error) {
 }
 
 func main() {
-	ret_1, ret_2 := load()
-	var result_3 lisette.Result[[]byte, error]
-	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[[]byte, error](ret_2)
+	ret, ret_1 := load()
+	var result lisette.Result[[]byte, error]
+	if ret_1 != nil {
+		result = lisette.MakeResultErr[[]byte, error](ret_1)
 	} else {
-		result_3 = lisette.MakeResultOk[[]byte, error](ret_1)
+		result = lisette.MakeResultOk[[]byte, error](ret)
 	}
-	fmt.Println(result_3)
+	fmt.Println(result)
 }

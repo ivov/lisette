@@ -22,25 +22,25 @@ import (
 )
 
 func handler(client *promoted.Client) (promoted.Handler, error) {
-	raw_1 := client.Handler
-	option_2 := lisette.OptionFromNilable[promoted.Handler](raw_1, raw_1 == nil)
-	v_3 := lisette.OptionOkOrElse(option_2, func() error {
+	raw := client.Handler
+	option := lisette.OptionFromNilable[promoted.Handler](raw, raw == nil)
+	v := lisette.OptionOkOrElse(option, func() error {
 		return errors.New("handler is unavailable")
 	})
-	if v_3.Tag == lisette.ResultOk {
-		return v_3.OkVal, nil
+	if v.Tag == lisette.ResultOk {
+		return v.OkVal, nil
 	}
-	return *new(promoted.Handler), v_3.ErrVal
+	return *new(promoted.Handler), v.ErrVal
 }
 
 func group(client *promoted.Client) (*promoted.Group, error) {
-	raw_1 := client.Group
-	option_2 := lisette.OptionFromNilable[*promoted.Group](raw_1, raw_1 == nil)
-	v_3 := lisette.OptionOkOrElse(option_2, func() error {
+	raw := client.Group
+	option := lisette.OptionFromNilable[*promoted.Group](raw, raw == nil)
+	v := lisette.OptionOkOrElse(option, func() error {
 		return errors.New("group is unavailable")
 	})
-	if v_3.Tag == lisette.ResultOk {
-		return v_3.OkVal, nil
+	if v.Tag == lisette.ResultOk {
+		return v.OkVal, nil
 	}
-	return nil, v_3.ErrVal
+	return nil, v.ErrVal
 }

@@ -14,5 +14,5 @@ import (
 )
 
 func test(a, b []map[string]int) bool {
-	return slices.EqualFunc(a, b, func(a_1 map[string]int, b_2 map[string]int) bool { return maps.Equal(a_1, b_2) })
+	return slices.EqualFunc(a, b, func(a_1 map[string]int, b_1 map[string]int) bool { return maps.Equal(a_1, b_1) })
 }

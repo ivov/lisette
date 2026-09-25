@@ -21,11 +21,11 @@ func idx() int {
 }
 
 func run() int {
-	recv_1 := xs()
-	idx_2 := idx()
-	if idx_2 < 0 || idx_2 >= len(recv_1) {
+	recv := xs()
+	idx_1 := idx()
+	if idx_1 < 0 || idx_1 >= len(recv) {
 		return 0
 	}
-	v := recv_1[idx_2]
+	v := recv[idx_1]
 	return v
 }

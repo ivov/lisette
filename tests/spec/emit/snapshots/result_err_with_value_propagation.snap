@@ -20,10 +20,10 @@ func fallible() lisette.Result[int, string] {
 }
 
 func process() lisette.Result[int, string] {
-	check_1 := fallible()
-	if check_1.Tag != lisette.ResultOk {
-		return check_1
+	check := fallible()
+	if check.Tag != lisette.ResultOk {
+		return check
 	}
-	x := check_1.OkVal
+	x := check.OkVal
 	return lisette.MakeResultOk[int, string](x)
 }

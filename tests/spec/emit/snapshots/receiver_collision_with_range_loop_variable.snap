@@ -37,12 +37,12 @@ type IntList struct {
 
 func (i IntList) display() string {
 	s := "["
-	bound_1 := len(i.items)
-	for i_2 := range bound_1 {
-		if i_2 > 0 {
+	bound := len(i.items)
+	for i_1 := range bound {
+		if i_1 > 0 {
 			s += ", "
 		}
-		item := i.items[i_2]
+		item := i.items[i_1]
 		s += fmt.Sprint(item)
 	}
 	return s + "]"

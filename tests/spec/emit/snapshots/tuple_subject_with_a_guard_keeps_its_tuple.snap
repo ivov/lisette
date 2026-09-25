@@ -31,13 +31,13 @@ func bump(n int) bool {
 func test(start, b int) string {
 	a := start
 	a++
-	subject_1 := lisette.MakeTuple2[int, int](a, b)
-	if subject_1.First == 1 {
+	subject := lisette.MakeTuple2[int, int](a, b)
+	if subject.First == 1 {
 		if bump(a) {
 			return "first"
 		}
 	}
-	if subject_1.First == 2 {
+	if subject.First == 2 {
 		return "second"
 	}
 	{

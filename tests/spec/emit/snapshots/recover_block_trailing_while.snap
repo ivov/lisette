@@ -15,11 +15,11 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() lisette.Result[struct{}, lisette.PanicValue] {
-	recoverResult_1 := lisette.RecoverBlock(func() struct{} {
+	recoverResult := lisette.RecoverBlock(func() struct{} {
 		for {
 			break
 		}
 		return struct{}{}
 	})
-	return recoverResult_1
+	return recoverResult
 }

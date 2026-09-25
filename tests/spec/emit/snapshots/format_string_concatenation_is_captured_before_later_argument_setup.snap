@@ -31,14 +31,14 @@ func show(a, b string) string {
 }
 
 func run() (string, error) {
-	ret_1, err := next("one")
+	ret, err := next("one")
 	if err != nil {
 		return "", err
 	}
-	arg_4 := ret_1 + log("two")
-	ret_2, err_3 := next("three")
-	if err_3 != nil {
-		return "", err_3
+	arg := ret + log("two")
+	ret_1, err_1 := next("three")
+	if err_1 != nil {
+		return "", err_1
 	}
-	return show(arg_4, ret_2), nil
+	return show(arg, ret_1), nil
 }

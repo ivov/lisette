@@ -15,6 +15,6 @@ import "example.com/aws"
 
 func main() {
 	b := aws.Bucket{}
-	var ptr_1 string = "hi"
-	b.Name = &ptr_1
+	var ptr string = "hi"
+	b.Name = &ptr
 }

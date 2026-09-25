@@ -21,14 +21,14 @@ import (
 
 func three(d time.Duration, sh int) (int, error) {
 	a, err := strconv.Atoi("1")
-	msg_1 := fmt.Sprintf("took %v", d)
+	msg := fmt.Sprintf("took %v", d)
 	if err != nil {
-		return 0, fmt.Errorf("%s: %w", msg_1, err)
+		return 0, fmt.Errorf("%s: %w", msg, err)
 	}
-	b, err_2 := strconv.Atoi("2")
-	default_3 := int(1 << sh)
-	if err_2 != nil {
-		b = default_3
+	b, err_1 := strconv.Atoi("2")
+	default_1 := int(1 << sh)
+	if err_1 != nil {
+		b = default_1
 	}
 	return a + b, nil
 }

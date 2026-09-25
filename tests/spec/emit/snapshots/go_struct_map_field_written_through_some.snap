@@ -28,10 +28,10 @@ func test() string {
 		Type:    "X",
 		Headers: headers,
 	}
-	raw_1 := b.Headers
-	option_2 := lisette.OptionFromNilable[map[string]string](raw_1, raw_1 == nil)
-	if option_2.Tag == lisette.OptionSome {
-		return option_2.SomeVal["key"]
+	raw := b.Headers
+	option := lisette.OptionFromNilable[map[string]string](raw, raw == nil)
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal["key"]
 	}
 	return ""
 }

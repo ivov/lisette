@@ -12,15 +12,15 @@ description: |
 package main
 
 func test() {
-	var tmp_1 int
+	var tmp int
 	for {
-		var tmp_2 int
+		var tmp_1 int
 		if true {
-			tmp_1 = 1
+			tmp = 1
 			break
 		}
-		tmp_2 = 1
-		_ = tmp_2
+		tmp_1 = 1
+		_ = tmp_1
 	}
-	_ = tmp_1
+	_ = tmp
 }

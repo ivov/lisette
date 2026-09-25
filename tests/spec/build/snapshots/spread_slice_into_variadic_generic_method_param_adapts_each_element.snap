@@ -21,20 +21,20 @@ func Holder_Resolve[R any, E any](_ Holder, default_ R, _ ...func(int) lisette.R
 
 func main() {
 	fns := []func(int) (int, Face){Resultant}
-	arg_7 := Holder{}
-	src_1 := fns
-	adapted_2 := make([]func(int) lisette.Result[int, Face], len(src_1))
-	for i, cb_3 := range src_1 {
-		cb_4 := cb_3
-		adapted_2[i] = func(arg0 int) lisette.Result[int, Face] {
-			ret_5, ret_6 := cb_4(arg0)
-			if ret_6 != nil {
-				return lisette.MakeResultErr[int, Face](ret_6)
+	arg := Holder{}
+	src := fns
+	adapted := make([]func(int) lisette.Result[int, Face], len(src))
+	for i, cb := range src {
+		cb_1 := cb
+		adapted[i] = func(arg0 int) lisette.Result[int, Face] {
+			ret, ret_1 := cb_1(arg0)
+			if ret_1 != nil {
+				return lisette.MakeResultErr[int, Face](ret_1)
 			} else {
-				return lisette.MakeResultOk[int, Face](ret_5)
+				return lisette.MakeResultOk[int, Face](ret)
 			}
 		}
 	}
-	rez := Holder_Resolve[int, Face](arg_7, 0, adapted_2...)
+	rez := Holder_Resolve[int, Face](arg, 0, adapted...)
 	_ = rez
 }

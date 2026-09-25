@@ -16,7 +16,7 @@ func add1(x int) int {
 }
 
 func main() {
-	ref_1 := add1
-	f := &ref_1
+	ref := add1
+	f := &ref
 	_ = f
 }

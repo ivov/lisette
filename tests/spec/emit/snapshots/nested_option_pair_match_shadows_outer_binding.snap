@@ -33,9 +33,9 @@ func pick(n int) (Wrapped, bool) {
 func test() {
 	value := 9
 	var picked int
-	ret_1, ok := pick(3)
+	ret, ok := pick(3)
 	if ok {
-		picked = ret_1.value
+		picked = ret.value
 	} else {
 		picked = 0
 	}

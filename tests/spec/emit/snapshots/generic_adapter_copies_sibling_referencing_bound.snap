@@ -71,9 +71,9 @@ func (w Wrap[A, B]) get() (A, bool) {
 }
 
 func consume[A any](box Box[lisette.Option[A]]) {
-	subject_1 := box.get()
-	if subject_1.Tag == lisette.OptionSome {
-		_ = subject_1.SomeVal
+	subject := box.get()
+	if subject.Tag == lisette.OptionSome {
+		_ = subject.SomeVal
 	}
 }
 

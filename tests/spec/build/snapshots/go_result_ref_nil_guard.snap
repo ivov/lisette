@@ -12,14 +12,14 @@ import (
 )
 
 func main() {
-	ret_1, ret_2 := os.Open("/tmp/test.txt")
+	ret, ret_1 := os.Open("/tmp/test.txt")
 	var result lisette.Result[*os.File, error]
-	if ret_2 != nil {
-		result = lisette.MakeResultErr[*os.File, error](ret_2)
-	} else if ret_1 == nil {
+	if ret_1 != nil {
+		result = lisette.MakeResultErr[*os.File, error](ret_1)
+	} else if ret == nil {
 		result = lisette.MakeResultErr[*os.File, error](errors.New("unexpected nil"))
 	} else {
-		result = lisette.MakeResultOk[*os.File, error](ret_1)
+		result = lisette.MakeResultOk[*os.File, error](ret)
 	}
 	fmt.Print(result.IsOk())
 }

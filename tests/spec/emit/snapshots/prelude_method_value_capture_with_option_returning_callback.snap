@@ -13,14 +13,14 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
-	cb_1 := lisette.OptionAndThen[int, int]
+	cb := lisette.OptionAndThen[int, int]
 	f := func(arg0 lisette.Option[int], arg1 func(int) (int, bool)) (int, bool) {
-		tagged_2 := func(arg0 int) lisette.Option[int] {
+		tagged := func(arg0 int) lisette.Option[int] {
 			return lisette.OptionFromCommaOk[int](arg1(arg0))
 		}
-		opt_3 := cb_1(arg0, tagged_2)
-		if opt_3.Tag == lisette.OptionSome {
-			return opt_3.SomeVal, true
+		opt := cb(arg0, tagged)
+		if opt.Tag == lisette.OptionSome {
+			return opt.SomeVal, true
 		}
 		return 0, false
 	}

@@ -38,7 +38,7 @@ func makeBox() Box {
 }
 
 func main() {
-	ref_1 := makeBox()
-	v := ref_1.inc()
+	ref := makeBox()
+	v := ref.inc()
 	_ = v
 }

@@ -57,11 +57,11 @@ func validate(name string) lisette.Result[string, ValidationError] {
 }
 
 func load(name string) (string, error) {
-	check_1 := validate(name)
-	if check_1.Tag != lisette.ResultOk {
-		return "", check_1.ErrVal
+	check := validate(name)
+	if check.Tag != lisette.ResultOk {
+		return "", check.ErrVal
 	}
-	n := check_1.OkVal
+	n := check.OkVal
 	return n, nil
 }
 

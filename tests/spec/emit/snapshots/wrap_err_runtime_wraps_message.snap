@@ -25,11 +25,11 @@ import (
 
 func test() {
 	r := lisette.MakeResultErr[int, error](errors.New("boom"))
-	subject_1 := lisette.ResultWrapErr(r, "loading config")
-	if subject_1.Tag == lisette.ResultOk {
+	subject := lisette.ResultWrapErr(r, "loading config")
+	if subject.Tag == lisette.ResultOk {
 		panic("expected error")
 	}
-	if subject_1.ErrVal.Error() != "loading config: boom" {
+	if subject.ErrVal.Error() != "loading config: boom" {
 		panic("wrong wrapped message")
 	}
 }

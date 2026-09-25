@@ -43,12 +43,12 @@ func load() ([]int, error) {
 }
 
 func main() {
-	ret_1, ret_2 := load()
-	var result_3 lisette.Result[[]int, error]
-	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[[]int, error](ret_2)
+	ret, ret_1 := load()
+	var result lisette.Result[[]int, error]
+	if ret_1 != nil {
+		result = lisette.MakeResultErr[[]int, error](ret_1)
 	} else {
-		result_3 = lisette.MakeResultOk[[]int, error](ret_1)
+		result = lisette.MakeResultOk[[]int, error](ret)
 	}
-	fmt.Println(result_3)
+	fmt.Println(result)
 }

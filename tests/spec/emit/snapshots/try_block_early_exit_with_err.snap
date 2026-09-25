@@ -21,13 +21,13 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func test(bad bool) int {
 	var result lisette.Result[int, string]
-	tryResult_1 := func() lisette.Result[int, string] {
+	tryResult := func() lisette.Result[int, string] {
 		if bad {
 			return lisette.MakeResultErr[int, string]("failed")
 		}
 		return lisette.MakeResultOk[int, string](42)
 	}()
-	result = tryResult_1
+	result = tryResult
 	if result.Tag == lisette.ResultOk {
 		return result.OkVal
 	}

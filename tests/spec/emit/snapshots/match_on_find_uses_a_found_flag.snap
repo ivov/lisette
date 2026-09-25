@@ -13,15 +13,15 @@ package main
 
 func firstEven(nums []int) int {
 	var n int
-	found_1 := false
-	for _, n_2 := range nums {
-		if n_2%2 == 0 {
-			n = n_2
-			found_1 = true
+	found := false
+	for _, n_1 := range nums {
+		if n_1%2 == 0 {
+			n = n_1
+			found = true
 			break
 		}
 	}
-	if found_1 {
+	if found {
 		return n
 	}
 	return -1

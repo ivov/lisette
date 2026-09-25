@@ -20,8 +20,8 @@ import (
 func main() {
 	xs := []string{"hello"}
 	ys := lisette.SliceMap(xs, func(arg0 string) lisette.Option[int] {
-		ret_1 := idx.Find(arg0)
-		return lisette.OptionFromCommaOk[int](ret_1, ret_1 != -1)
+		ret := idx.Find(arg0)
+		return lisette.OptionFromCommaOk[int](ret, ret != -1)
 	})
 	_ = ys
 }

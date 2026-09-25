@@ -24,15 +24,15 @@ func test(opt lisette.Option[int]) int {
 		current_1 = lisette.MakeOptionNone[int]()
 		return false
 	}
-	subject_2 := current_1
-	if subject_2.Tag == lisette.OptionSome {
+	subject := current_1
+	if subject.Tag == lisette.OptionSome {
 		{
-			x := subject_2.SomeVal
+			x := subject.SomeVal
 			if clear_() {
 				return x
 			}
 		}
-		return subject_2.SomeVal
+		return subject.SomeVal
 	}
 	return 0
 }

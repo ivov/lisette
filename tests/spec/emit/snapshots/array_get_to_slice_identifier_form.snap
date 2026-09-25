@@ -18,9 +18,9 @@ import (
 )
 
 func at(xs [3]int, i int) (int, bool) {
-	v_1 := lisette.SliceGet(xs[:], i)
-	if v_1.Tag == lisette.OptionSome {
-		return v_1.SomeVal, true
+	v := lisette.SliceGet(xs[:], i)
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
 	}
 	return 0, false
 }

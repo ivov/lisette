@@ -35,11 +35,11 @@ func main() {
 		x: 1,
 		y: 0,
 	}}
-	want_1 := Point{
+	want := Point{
 		x: 1,
 		y: 9,
 	}
-	if !slices.ContainsFunc(xs, func(e_2 Point) bool { return e_2.equals(want_1) }) {
+	if !slices.ContainsFunc(xs, func(e Point) bool { return e.equals(want) }) {
 		panic("contains must use the user equals, not Go ==")
 	}
 }

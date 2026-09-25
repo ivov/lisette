@@ -19,7 +19,7 @@ import (
 )
 
 func main() {
-	if ret_1, err := os.Open("a"); err == nil && ret_1 != nil {
+	if ret, err := os.Open("a"); err == nil && ret != nil {
 		fmt.Println("readable")
 	}
 }

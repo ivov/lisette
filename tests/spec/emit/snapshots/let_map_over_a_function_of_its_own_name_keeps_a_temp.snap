@@ -16,12 +16,12 @@ func items() []int {
 }
 
 func three() int {
-	var result_1 []int
+	var result []int
 	for _, x := range items() {
 		if x > 1 {
-			result_1 = append(result_1, x)
+			result = append(result, x)
 		}
 	}
-	items_2 := result_1
-	return len(items_2)
+	items_1 := result
+	return len(items_1)
 }

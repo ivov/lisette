@@ -24,17 +24,17 @@ import (
 func main() {
 	f1 := &cli.Flag{Name: "a"}
 	f2 := &cli.Flag{Name: "b"}
-	src_1 := [][]lisette.Option[*cli.Flag]{{lisette.MakeOptionSome(f1), lisette.MakeOptionSome(f2)}}
-	unwrapped_2 := make([][]*cli.Flag, len(src_1))
-	for i_3, v_4 := range src_1 {
-		unwrapped_5 := make([]*cli.Flag, len(v_4))
-		for i_6, v_7 := range v_4 {
-			if v_7.Tag == lisette.OptionSome {
-				unwrapped_5[i_6] = v_7.SomeVal
+	src := [][]lisette.Option[*cli.Flag]{{lisette.MakeOptionSome(f1), lisette.MakeOptionSome(f2)}}
+	unwrapped := make([][]*cli.Flag, len(src))
+	for i, v := range src {
+		unwrapped_1 := make([]*cli.Flag, len(v))
+		for i_1, v_1 := range v {
+			if v_1.Tag == lisette.OptionSome {
+				unwrapped_1[i_1] = v_1.SomeVal
 			}
 		}
-		unwrapped_2[i_3] = unwrapped_5
+		unwrapped[i] = unwrapped_1
 	}
-	g := cli.Group{Flags: unwrapped_2}
+	g := cli.Group{Flags: unwrapped}
 	_ = g
 }

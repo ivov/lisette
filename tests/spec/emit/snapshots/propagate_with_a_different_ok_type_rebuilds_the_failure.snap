@@ -27,11 +27,11 @@ func count() lisette.Result[int, string] {
 }
 
 func label() lisette.Result[string, string] {
-	check_1 := count()
-	if check_1.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[string, string](check_1.ErrVal)
+	check := count()
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[string, string](check.ErrVal)
 	}
-	n := check_1.OkVal
+	n := check.OkVal
 	return lisette.MakeResultOk[string, string](fmt.Sprint(n))
 }
 

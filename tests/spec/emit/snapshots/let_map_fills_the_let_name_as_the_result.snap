@@ -32,8 +32,8 @@ func main() {
 		done: true,
 	}}
 	ids := make([]int, len(tasks))
-	for i_1, t := range tasks {
-		ids[i_1] = t.id
+	for i, t := range tasks {
+		ids[i] = t.id
 	}
 	var open []Task
 	for _, t := range tasks {

@@ -70,20 +70,20 @@ func doB(ok bool) lisette.Result[int, BError] {
 
 func test() {
 	var r lisette.Result[int, error]
-	tryResult_1 := func() lisette.Result[int, error] {
-		check_2 := doA(true)
-		if check_2.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[int, error](check_2.ErrVal)
+	tryResult := func() lisette.Result[int, error] {
+		check := doA(true)
+		if check.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[int, error](check.ErrVal)
 		}
-		a := check_2.OkVal
-		check_3 := doB(false)
-		if check_3.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[int, error](check_3.ErrVal)
+		a := check.OkVal
+		check_1 := doB(false)
+		if check_1.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[int, error](check_1.ErrVal)
 		}
-		b := check_3.OkVal
+		b := check_1.OkVal
 		return lisette.MakeResultOk[int, error](a + b)
 	}()
-	r = tryResult_1
+	r = tryResult
 	if r.Tag == lisette.ResultOk {
 		panic("expected error")
 	}

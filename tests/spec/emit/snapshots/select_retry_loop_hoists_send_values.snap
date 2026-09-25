@@ -34,24 +34,24 @@ func main() {
 	closed := make(chan int)
 	lisette.ChannelClose(closed)
 	out_ch := make(chan int)
-	var tmp_1 int
-	ch_2 := closed
-	send_val_3 := mark(log, 1)
+	var tmp int
+	ch := closed
+	send_val := mark(log, 1)
 	for {
 		select {
-		case v, ok := <-ch_2:
+		case v, ok := <-ch:
 			if ok {
-				tmp_1 = v
+				tmp = v
 			} else {
-				ch_2 = nil
+				ch = nil
 				continue
 			}
-		case out_ch <- send_val_3:
-			tmp_1 = 0
+		case out_ch <- send_val:
+			tmp = 0
 		default:
-			tmp_1 = -1
+			tmp = -1
 		}
 		break
 	}
-	_ = tmp_1
+	_ = tmp
 }

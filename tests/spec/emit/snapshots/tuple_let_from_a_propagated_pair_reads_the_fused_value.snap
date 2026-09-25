@@ -25,11 +25,11 @@ func hash(text string) (lisette.Tuple2[string, int], error) {
 }
 
 func run(text string) (int, error) {
-	ret_1, err := hash(text)
+	ret, err := hash(text)
 	if err != nil {
 		return 0, err
 	}
-	n := ret_1.Second
+	n := ret.Second
 	return n, nil
 }
 

@@ -30,7 +30,7 @@ func mark(trace *int, value int) int {
 }
 
 func choose(trace *int, flag bool) int {
-	var tmp_1 int
+	var tmp int
 	{
 		var result int
 		if flag {
@@ -38,9 +38,9 @@ func choose(trace *int, flag bool) int {
 		} else {
 			result = mark(trace, 20)
 		}
-		tmp_1 = result + mark(trace, 1)
+		tmp = result + mark(trace, 1)
 	}
-	return tmp_1
+	return tmp
 }
 
 func main() {

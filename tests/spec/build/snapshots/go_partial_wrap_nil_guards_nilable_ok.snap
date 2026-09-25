@@ -11,9 +11,9 @@ import (
 )
 
 func main() {
-	if ret_1, err := parser.ParseExpr("1 + 2"); err == nil {
+	if ret, err := parser.ParseExpr("1 + 2"); err == nil {
 		fmt.Print("ok")
-	} else if lisette.IsNilInterface(ret_1) {
+	} else if lisette.IsNilInterface(ret) {
 		fmt.Print("err")
 	} else {
 		fmt.Print("both")

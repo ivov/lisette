@@ -19,36 +19,36 @@ import (
 )
 
 func main() {
-	raw_1 := aws.Make()
-	var option_2 lisette.Option[*[]lisette.Option[string]]
-	if raw_1 != nil {
-		src_3 := *raw_1
-		wrapped_4 := make([]lisette.Option[string], len(src_3))
-		for i_5, v_6 := range src_3 {
-			if v_6 != nil {
-				wrapped_4[i_5] = lisette.MakeOptionSome[string](*v_6)
+	raw := aws.Make()
+	var option lisette.Option[*[]lisette.Option[string]]
+	if raw != nil {
+		src := *raw
+		wrapped := make([]lisette.Option[string], len(src))
+		for i, v := range src {
+			if v != nil {
+				wrapped[i] = lisette.MakeOptionSome[string](*v)
 			} else {
-				wrapped_4[i_5] = lisette.MakeOptionNone[string]()
+				wrapped[i] = lisette.MakeOptionNone[string]()
 			}
 		}
-		ref_7 := &wrapped_4
-		option_2 = lisette.MakeOptionSome[*[]lisette.Option[string]](ref_7)
+		ref := &wrapped
+		option = lisette.MakeOptionSome[*[]lisette.Option[string]](ref)
 	} else {
-		option_2 = lisette.MakeOptionNone[*[]lisette.Option[string]]()
+		option = lisette.MakeOptionNone[*[]lisette.Option[string]]()
 	}
-	if option_2.Tag == lisette.OptionSome {
-		src_8 := option_2.SomeVal
-		src_9 := *src_8
-		unwrapped_10 := make([]*string, len(src_9))
-		for i_11, v_12 := range src_9 {
-			if v_12.Tag == lisette.OptionSome {
-				unwrapped_10[i_11] = &v_12.SomeVal
+	if option.Tag == lisette.OptionSome {
+		src_1 := option.SomeVal
+		src_2 := *src_1
+		unwrapped := make([]*string, len(src_2))
+		for i_1, v_1 := range src_2 {
+			if v_1.Tag == lisette.OptionSome {
+				unwrapped[i_1] = &v_1.SomeVal
 			} else {
-				unwrapped_10[i_11] = nil
+				unwrapped[i_1] = nil
 			}
 		}
-		ref_13 := &unwrapped_10
-		aws.Use(ref_13)
+		ref_1 := &unwrapped
+		aws.Use(ref_1)
 	} else {
 		aws.Use(nil)
 	}

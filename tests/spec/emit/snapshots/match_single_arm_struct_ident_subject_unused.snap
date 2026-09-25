@@ -18,8 +18,8 @@ type P struct {
 
 func test() {
 	p := P{v: 1}
-	var tmp_1 struct{}
+	var tmp struct{}
 	_ = p
-	tmp_1 = struct{}{}
-	_ = tmp_1
+	tmp = struct{}{}
+	_ = tmp
 }

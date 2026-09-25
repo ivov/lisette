@@ -30,18 +30,18 @@ func main() {
 	} else {
 		body = lisette.MakeOptionNone[*os.File]()
 	}
-	var unwrap_1 io.Reader
+	var unwrap io.Reader
 	if body.Tag == lisette.OptionSome {
-		unwrap_1 = body.SomeVal
+		unwrap = body.SomeVal
 	}
-	ret_2, ret_3 := http.NewRequest("POST", "https://example.com", unwrap_1)
+	ret, ret_1 := http.NewRequest("POST", "https://example.com", unwrap)
 	var req lisette.Result[*http.Request, error]
-	if ret_3 != nil {
-		req = lisette.MakeResultErr[*http.Request, error](ret_3)
-	} else if ret_2 == nil {
+	if ret_1 != nil {
+		req = lisette.MakeResultErr[*http.Request, error](ret_1)
+	} else if ret == nil {
 		req = lisette.MakeResultErr[*http.Request, error](errors.New("unexpected nil"))
 	} else {
-		req = lisette.MakeResultOk[*http.Request, error](ret_2)
+		req = lisette.MakeResultOk[*http.Request, error](ret)
 	}
 	fmt.Println(req.IsOk())
 }

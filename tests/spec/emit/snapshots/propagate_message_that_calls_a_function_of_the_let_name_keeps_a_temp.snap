@@ -24,9 +24,9 @@ func n() int {
 
 func four() (int, error) {
 	n_1, err := strconv.Atoi("bad")
-	fmtarg_2 := n()
+	fmtarg := n()
 	if err != nil {
-		return 0, fmt.Errorf("%d: %w", fmtarg_2, err)
+		return 0, fmt.Errorf("%d: %w", fmtarg, err)
 	}
 	return n_1, nil
 }

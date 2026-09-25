@@ -31,12 +31,12 @@ func f() lisette.Result[int, string] {
 	ch := make(chan int, 1)
 	lisette.ChannelSend(ch, 7)
 	var x int
-	check_1 := g()
-	if check_1.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[int, string](check_1.ErrVal)
+	check := g()
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check.ErrVal)
 	}
 	select {
-	case v, ok := <-check_1.OkVal:
+	case v, ok := <-check.OkVal:
 		if ok {
 			x = v
 		} else {

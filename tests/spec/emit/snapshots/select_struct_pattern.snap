@@ -22,9 +22,9 @@ func test(ch <-chan Message) int {
 	ch_1 := ch
 	for {
 		select {
-		case recv_2, ok := <-ch_1:
+		case recv, ok := <-ch_1:
 			if ok {
-				return recv_2.id + recv_2.data
+				return recv.id + recv.data
 			}
 			ch_1 = nil
 			continue

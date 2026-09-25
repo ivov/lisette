@@ -25,8 +25,8 @@ func useFn(f func(string) (lisette.Tuple2[string, map[string]string], error)) {
 
 func main() {
 	useFn(func(arg0 string) (lisette.Tuple2[string, map[string]string], error) {
-		ret_1, ret_2, ret_3 := mime.ParseMediaType(arg0)
-		tup_4 := lisette.MakeTuple2(ret_1, ret_2)
-		return tup_4, ret_3
+		ret, ret_1, ret_2 := mime.ParseMediaType(arg0)
+		tup := lisette.MakeTuple2(ret, ret_1)
+		return tup, ret_2
 	})
 }

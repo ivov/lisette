@@ -17,8 +17,8 @@ func mayPanic() int {
 }
 
 func test() {
-	recoverResult_1 := lisette.RecoverBlock(func() int {
+	recoverResult := lisette.RecoverBlock(func() int {
 		return mayPanic()
 	})
-	_ = recoverResult_1
+	_ = recoverResult
 }

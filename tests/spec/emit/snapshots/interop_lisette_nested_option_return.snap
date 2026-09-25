@@ -37,6 +37,6 @@ func useIt(o lisette.Option[[]lisette.Option[string]]) {
 }
 
 func main() {
-	option_1 := lisette.OptionFromCommaOk[[]lisette.Option[string]](make_())
-	useIt(option_1)
+	option := lisette.OptionFromCommaOk[[]lisette.Option[string]](make_())
+	useIt(option)
 }

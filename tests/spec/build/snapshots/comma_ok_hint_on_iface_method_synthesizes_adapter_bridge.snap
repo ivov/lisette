@@ -33,10 +33,10 @@ func (a _lisAdapter_MyCache_ClientSessionCache_0) Put(arg0 string, arg1 *tls.Cli
 }
 
 func (a _lisAdapter_MyCache_ClientSessionCache_0) Get(arg0 string) (*tls.ClientSessionState, bool) {
-	raw_1 := a.inner.Get(arg0)
-	option_2 := lisette.OptionFromNilable[*tls.ClientSessionState](raw_1, raw_1 == nil)
-	if option_2.Tag == lisette.OptionSome {
-		return option_2.SomeVal, true
+	raw := a.inner.Get(arg0)
+	option := lisette.OptionFromNilable[*tls.ClientSessionState](raw, raw == nil)
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal, true
 	}
 	return nil, false
 }

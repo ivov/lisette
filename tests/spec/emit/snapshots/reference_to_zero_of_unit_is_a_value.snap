@@ -10,7 +10,7 @@ description: |
 package main
 
 func f() *struct{} {
-	ref_1 := struct{}{}
-	p := &ref_1
+	ref := struct{}{}
+	p := &ref
 	return p
 }

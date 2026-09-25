@@ -51,10 +51,10 @@ func fresh(name string) Person {
 }
 
 func clear_(person Person) Person {
-	field_1 := lisette.MakeOptionNone[string]()
-	copy_2 := person
-	copy_2.email = field_1
-	return copy_2
+	field := lisette.MakeOptionNone[string]()
+	copy_1 := person
+	copy_1.email = field
+	return copy_1
 }
 
 func lookup(log chan int) (string, bool) {
@@ -77,10 +77,10 @@ func test() {
 		panic("an update should leave the original alone")
 	}
 	log := make(chan int, 4)
-	option_1 := lisette.OptionFromCommaOk[string](lookup(log))
+	option := lisette.OptionFromCommaOk[string](lookup(log))
 	looked_up := Person{
 		name:  "d",
-		email: option_1,
+		email: option,
 	}
 	if !looked_up.email.IsNone() {
 		panic("a looked-up email should be None")

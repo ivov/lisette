@@ -29,15 +29,15 @@ func second() lisette.Result[int, string] {
 }
 
 func test() lisette.Result[int, string] {
-	check_1 := first()
+	check := first()
+	if check.Tag != lisette.ResultOk {
+		return check
+	}
+	x := check.OkVal
+	check_1 := second()
 	if check_1.Tag != lisette.ResultOk {
 		return check_1
 	}
-	x := check_1.OkVal
-	check_2 := second()
-	if check_2.Tag != lisette.ResultOk {
-		return check_2
-	}
-	y := check_2.OkVal
+	y := check_1.OkVal
 	return lisette.MakeResultOk[int, string](x + y)
 }

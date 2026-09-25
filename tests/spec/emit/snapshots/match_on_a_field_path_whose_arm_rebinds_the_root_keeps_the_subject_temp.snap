@@ -27,9 +27,9 @@ type Node struct {
 
 func main() {
 	t := Node{next: lisette.MakeOptionSome(2)}
-	subject_1 := t.next
-	if subject_1.Tag == lisette.OptionSome {
-		fmt.Println(subject_1.SomeVal)
+	subject := t.next
+	if subject.Tag == lisette.OptionSome {
+		fmt.Println(subject.SomeVal)
 	} else {
 		fmt.Println("end")
 	}

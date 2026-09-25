@@ -11,9 +11,9 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test(s []int) []int {
-	return lisette.EnumeratedSliceMap(s, func(arg_1 lisette.Tuple2[int, int]) int {
-		i := arg_1.First
-		v := arg_1.Second
+	return lisette.EnumeratedSliceMap(s, func(arg lisette.Tuple2[int, int]) int {
+		i := arg.First
+		v := arg.Second
 		return i * v
 	})
 }

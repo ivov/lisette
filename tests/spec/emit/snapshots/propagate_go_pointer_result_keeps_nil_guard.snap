@@ -17,11 +17,11 @@ import (
 )
 
 func openFirst(path string) (int, error) {
-	ret_1, err := os.Open(path)
+	ret, err := os.Open(path)
 	if err != nil {
 		return 0, err
 	}
-	if ret_1 == nil {
+	if ret == nil {
 		return 0, errors.New("unexpected nil")
 	}
 	return 0, nil

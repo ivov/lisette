@@ -26,6 +26,6 @@ func blank[T any]() Box[T] {
 }
 
 func pair[T any]() (T, int) {
-	tup_1 := lisette.MakeTuple2[T, int](*new(T), 0)
-	return tup_1.First, tup_1.Second
+	tup := lisette.MakeTuple2[T, int](*new(T), 0)
+	return tup.First, tup.Second
 }

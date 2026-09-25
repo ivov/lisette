@@ -20,8 +20,8 @@ func units() []struct{} {
 }
 
 func test(b bool) string {
-	base_1 := units()
-	_ = base_1[0]
+	base := units()
+	_ = base[0]
 	if b == true {
 		return "yes"
 	}

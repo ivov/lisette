@@ -13,6 +13,6 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func test() (chan<- int, <-chan int) {
 	ch := make(chan int)
-	tup_1 := lisette.ChannelSplit(ch)
-	return tup_1.First, tup_1.Second
+	tup := lisette.ChannelSplit(ch)
+	return tup.First, tup.Second
 }

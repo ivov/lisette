@@ -48,9 +48,9 @@ type Box[U any] interface {
 }
 
 func consume[T comparable](box Box[lisette.Option[[2]T]]) {
-	subject_1 := box.get()
-	if subject_1.Tag == lisette.OptionSome {
-		_ = subject_1.SomeVal
+	subject := box.get()
+	if subject.Tag == lisette.OptionSome {
+		_ = subject.SomeVal
 	}
 }
 

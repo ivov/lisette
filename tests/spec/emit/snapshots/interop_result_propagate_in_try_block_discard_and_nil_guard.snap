@@ -37,18 +37,18 @@ func openAndCheck(path, n string) (int, error) {
 	if f == nil {
 		return 0, errors.New("unexpected nil")
 	}
-	ret_1, err_2 := f.Stat()
+	ret, err_1 := f.Stat()
+	if err_1 != nil {
+		return 0, err_1
+	}
+	if lisette.IsNilInterface(ret) {
+		return 0, errors.New("unexpected nil")
+	}
+	ret_1, err_2 := strconv.Atoi(n)
 	if err_2 != nil {
 		return 0, err_2
 	}
-	if lisette.IsNilInterface(ret_1) {
-		return 0, errors.New("unexpected nil")
-	}
-	ret_3, err_4 := strconv.Atoi(n)
-	if err_4 != nil {
-		return 0, err_4
-	}
-	return ret_3, nil
+	return ret_1, nil
 }
 
 func main() {

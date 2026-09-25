@@ -43,7 +43,7 @@ func main() {
 		h:  &h,
 		np: &b,
 	}
-	ref_1 := h.p
-	*ref_1 = retarget(c)
+	ref := h.p
+	*ref = retarget(c)
 	_ = a
 }

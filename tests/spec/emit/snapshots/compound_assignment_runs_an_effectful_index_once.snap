@@ -19,8 +19,8 @@ func main() {
 		return counter - 1
 	}
 	values := []int{0, 0, 0}
-	idx_1 := next()
-	left_2 := values[idx_1]
-	values[idx_1] = left_2 + next()*10
+	idx := next()
+	left := values[idx]
+	values[idx] = left + next()*10
 	_ = values
 }

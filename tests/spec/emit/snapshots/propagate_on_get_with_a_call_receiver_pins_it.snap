@@ -22,11 +22,11 @@ func makeList() []int {
 }
 
 func head() (int, bool) {
-	recv_1 := makeList()
-	if len(recv_1) == 0 {
+	recv := makeList()
+	if len(recv) == 0 {
 		return 0, false
 	}
-	x := recv_1[0]
+	x := recv[0]
 	return x, true
 }
 

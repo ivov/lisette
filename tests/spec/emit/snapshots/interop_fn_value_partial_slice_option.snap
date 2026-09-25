@@ -23,21 +23,21 @@ import (
 )
 
 func main() {
-	cb_1 := aws.Read
+	cb := aws.Read
 	f := func() ([]lisette.Option[string], error) {
-		ret_2, ret_3 := cb_1()
-		if ret_2 == nil {
-			return nil, ret_3
+		ret, ret_1 := cb()
+		if ret == nil {
+			return nil, ret_1
 		}
-		wrapped_4 := make([]lisette.Option[string], len(ret_2))
-		for i_5, v_6 := range ret_2 {
-			if v_6 != nil {
-				wrapped_4[i_5] = lisette.MakeOptionSome[string](*v_6)
+		wrapped := make([]lisette.Option[string], len(ret))
+		for i, v := range ret {
+			if v != nil {
+				wrapped[i] = lisette.MakeOptionSome[string](*v)
 			} else {
-				wrapped_4[i_5] = lisette.MakeOptionNone[string]()
+				wrapped[i] = lisette.MakeOptionNone[string]()
 			}
 		}
-		return wrapped_4, ret_3
+		return wrapped, ret_1
 	}
 	if xs, e := f(); e == nil {
 		fmt.Println("ok", len(xs))

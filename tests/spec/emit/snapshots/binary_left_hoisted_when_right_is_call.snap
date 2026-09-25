@@ -22,7 +22,7 @@ func bump(i *int) int {
 
 func main() {
 	i := 0
-	left_1 := i
-	z := left_1 + bump(&i)
+	left := i
+	z := left + bump(&i)
 	_ = z
 }

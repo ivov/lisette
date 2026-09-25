@@ -27,9 +27,9 @@ func main() {
 	if !ok {
 		return
 	}
-	var tmp_1 []int
-	recv_2 := *o.items
-	tmp_1 = append(recv_2[:len(recv_2):len(recv_2)], 2)
-	_ = tmp_1
+	var tmp []int
+	recv := *o.items
+	tmp = append(recv[:len(recv):len(recv)], 2)
+	_ = tmp
 	_ = items
 }

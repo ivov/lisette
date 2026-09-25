@@ -35,23 +35,23 @@ import (
 )
 
 func parse(text string) (int, error) {
-	ret_1, err := strconv.Atoi(text)
+	ret, err := strconv.Atoi(text)
 	if err != nil {
 		return 0, err
 	}
-	return ret_1 + 1, nil
+	return ret + 1, nil
 }
 
 func parseThenDefault(text string) int {
 	var parsed lisette.Result[int, error]
-	tryResult_1 := func() lisette.Result[int, error] {
-		ret_2, err := strconv.Atoi(text)
+	tryResult := func() lisette.Result[int, error] {
+		ret, err := strconv.Atoi(text)
 		if err != nil {
 			return lisette.MakeResultErr[int, error](err)
 		}
-		return lisette.MakeResultOk[int, error](ret_2 + 1)
+		return lisette.MakeResultOk[int, error](ret + 1)
 	}()
-	parsed = tryResult_1
+	parsed = tryResult
 	return parsed.UnwrapOr(0)
 }
 

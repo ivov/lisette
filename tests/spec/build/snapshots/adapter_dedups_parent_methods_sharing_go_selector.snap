@@ -38,10 +38,10 @@ type _lisAdapter_S_Combined_0 struct {
 }
 
 func (a _lisAdapter_S_Combined_0) GetItem(arg0 string) (*Entry, bool) {
-	raw_1 := a.inner.GetItem(arg0)
-	option_2 := lisette.OptionFromNilable[*Entry](raw_1, raw_1 == nil)
-	if option_2.Tag == lisette.OptionSome {
-		return option_2.SomeVal, true
+	raw := a.inner.GetItem(arg0)
+	option := lisette.OptionFromNilable[*Entry](raw, raw == nil)
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal, true
 	}
 	return nil, false
 }

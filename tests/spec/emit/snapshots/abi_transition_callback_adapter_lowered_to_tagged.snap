@@ -17,14 +17,14 @@ func double(x int) (int, bool) {
 }
 
 func run() (int, bool) {
-	arg_3 := lisette.MakeOptionSome(2)
-	cb_1 := double
-	tagged_2 := func(arg0 int) lisette.Option[int] {
-		return lisette.OptionFromCommaOk[int](cb_1(arg0))
+	arg := lisette.MakeOptionSome(2)
+	cb := double
+	tagged := func(arg0 int) lisette.Option[int] {
+		return lisette.OptionFromCommaOk[int](cb(arg0))
 	}
-	v_4 := lisette.OptionAndThen(arg_3, tagged_2)
-	if v_4.Tag == lisette.OptionSome {
-		return v_4.SomeVal, true
+	v := lisette.OptionAndThen(arg, tagged)
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
 	}
 	return 0, false
 }

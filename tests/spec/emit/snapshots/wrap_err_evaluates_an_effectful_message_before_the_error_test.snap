@@ -29,9 +29,9 @@ func message() string {
 
 func two() (int, error) {
 	n, err := strconv.Atoi("2")
-	msg_1 := message()
+	msg := message()
 	if err != nil {
-		return 0, fmt.Errorf("%s: %w", msg_1, err)
+		return 0, fmt.Errorf("%s: %w", msg, err)
 	}
 	return n, nil
 }

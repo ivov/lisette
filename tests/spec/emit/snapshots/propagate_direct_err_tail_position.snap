@@ -15,11 +15,11 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func f() lisette.Result[int, string] {
-	check_1 := lisette.MakeResultErr[lisette.Result[int, string], string]("e")
-	if check_1.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[int, string](check_1.ErrVal)
+	check := lisette.MakeResultErr[lisette.Result[int, string], string]("e")
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check.ErrVal)
 	}
-	return check_1.OkVal
+	return check.OkVal
 }
 
 func test() lisette.Result[int, string] {

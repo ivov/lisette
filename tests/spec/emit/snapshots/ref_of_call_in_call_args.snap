@@ -25,7 +25,7 @@ func sideEffect() int {
 }
 
 func test() int {
-	left_2 := sideEffect()
-	ref_1 := makeInt()
-	return left_2 + readRef(&ref_1)
+	left := sideEffect()
+	ref := makeInt()
+	return left + readRef(&ref)
 }

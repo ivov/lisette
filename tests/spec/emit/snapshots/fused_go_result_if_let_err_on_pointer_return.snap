@@ -16,7 +16,7 @@ package main
 import "os"
 
 func test(name string) bool {
-	if ret_1, err := os.Open(name); err != nil || ret_1 == nil {
+	if ret, err := os.Open(name); err != nil || ret == nil {
 		return false
 	}
 	return true

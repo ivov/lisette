@@ -27,9 +27,9 @@ func main() {
 		x: 1,
 		y: 2,
 	}
-	copy_1 := p1
-	copy_1.x = 3
-	p2 := copy_1
-	copy_1_2 := 7
-	fmt.Println(p2.x, copy_1_2)
+	copy_2 := p1
+	copy_2.x = 3
+	p2 := copy_2
+	copy_1 := 7
+	fmt.Println(p2.x, copy_1)
 }

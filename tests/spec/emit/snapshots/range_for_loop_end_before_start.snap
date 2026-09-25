@@ -22,9 +22,9 @@ func bound() int {
 }
 
 func main() {
-	start_2 := start()
+	start_1 := start()
 	bound_1 := bound()
-	for i := start_2; i < bound_1; i++ {
+	for i := start_1; i < bound_1; i++ {
 		_ = i
 	}
 }

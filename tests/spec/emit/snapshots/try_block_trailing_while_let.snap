@@ -17,9 +17,9 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() lisette.Result[struct{}, string] {
-	check_1 := lisette.MakeResultOk[int, string](1)
-	if check_1.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[struct{}, string](check_1.ErrVal)
+	check := lisette.MakeResultOk[int, string](1)
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[struct{}, string](check.ErrVal)
 	}
 	o := lisette.MakeOptionSome(1)
 	for {

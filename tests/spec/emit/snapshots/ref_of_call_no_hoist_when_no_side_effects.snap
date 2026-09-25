@@ -20,6 +20,6 @@ func makeInt() int {
 }
 
 func test() int {
-	ref_1 := makeInt()
-	return takesTwo(1, &ref_1)
+	ref := makeInt()
+	return takesTwo(1, &ref)
 }

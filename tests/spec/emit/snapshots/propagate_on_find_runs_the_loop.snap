@@ -15,15 +15,15 @@ package main
 
 func firstBig(xs []int) (int, bool) {
 	var x int
-	found_1 := false
-	for _, x_2 := range xs {
-		if x_2 > 2 {
-			x = x_2
-			found_1 = true
+	found := false
+	for _, x_1 := range xs {
+		if x_1 > 2 {
+			x = x_1
+			found = true
 			break
 		}
 	}
-	if !found_1 {
+	if !found {
 		return 0, false
 	}
 	return x, true

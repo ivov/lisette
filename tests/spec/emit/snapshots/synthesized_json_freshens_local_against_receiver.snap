@@ -78,10 +78,10 @@ func (v *Vault) UnmarshalJSON(data []byte) error {
 }
 
 func test() int {
-	subject_1 := Vault{
+	subject := Vault{
 		Tag: VaultFull,
 		A:   1,
 		B:   2,
 	}
-	return subject_1.A + subject_1.B
+	return subject.A + subject.B
 }

@@ -21,10 +21,10 @@ func test() int {
 		lisette.MakeTuple2[int, int](3, 4),
 	}
 	sum := 0
-	for key_1, value_2 := range items {
-		_ = key_1
-		a := value_2.First
-		b := value_2.Second
+	for key, value := range items {
+		_ = key
+		a := value.First
+		b := value.Second
 		sum = sum + a + b
 	}
 	return sum

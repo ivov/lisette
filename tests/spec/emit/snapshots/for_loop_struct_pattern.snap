@@ -21,9 +21,9 @@ type Point struct {
 
 func test(points []Point) int {
 	sum := 0
-	for _, item_1 := range points {
-		x := item_1.x
-		y := item_1.y
+	for _, item := range points {
+		x := item.x
+		y := item.y
 		sum = sum + x + y
 	}
 	return sum

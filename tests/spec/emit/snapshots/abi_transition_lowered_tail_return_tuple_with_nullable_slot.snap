@@ -11,9 +11,9 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func run(x int, y lisette.Option[*int]) (int, *int) {
-	var unwrap_1 *int
+	var unwrap *int
 	if y.Tag == lisette.OptionSome {
-		unwrap_1 = y.SomeVal
+		unwrap = y.SomeVal
 	}
-	return x, unwrap_1
+	return x, unwrap
 }

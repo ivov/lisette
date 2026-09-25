@@ -19,6 +19,6 @@ func makeArr() [3]int {
 }
 
 func f() bool {
-	arr_1 := makeArr()
-	return slices.Contains(arr_1[:], 8)
+	arr := makeArr()
+	return slices.Contains(arr[:], 8)
 }

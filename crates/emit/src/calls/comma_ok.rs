@@ -230,6 +230,7 @@ impl Planner<'_> {
         };
         let mut status = self.pair_status(status_hint, status_kind, opens_if);
         if opens_if && value.name() == Some(status.as_str()) {
+            self.scope.reserve_go_name(&status);
             status = self.fresh_var(Some(&status));
         }
         let mut pair = LoweredPair {

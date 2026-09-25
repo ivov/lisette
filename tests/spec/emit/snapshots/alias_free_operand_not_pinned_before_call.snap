@@ -25,7 +25,7 @@ func run() int {
 		i = 1
 		return 10
 	}
-	arg_1 := i
-	items = append(items, arg_1, ibump())
+	arg := i
+	items = append(items, arg, ibump())
 	return items[0] + items[1]
 }

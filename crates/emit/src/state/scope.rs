@@ -1,5 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
+use syntax::go_names::is_go_reserved_word;
+
 use crate::ReturnContext;
 use crate::context::lowering::LoopContext;
 use crate::plan::bodies::LoopId;
@@ -8,7 +10,7 @@ use crate::plan::values::GoExpression;
 use crate::state::bindings::{BindingValue, InlineExpr};
 
 pub(crate) struct ScopeState {
-    next_var: usize,
+    issued: HashSet<String>,
     next_loop_id: u32,
     frames: Vec<ScopeFrame>,
     loop_stack: Vec<LoopContext>,
@@ -50,7 +52,7 @@ pub(crate) enum PairStatusKind {
 impl ScopeState {
     pub(crate) fn new() -> Self {
         Self {
-            next_var: 0,
+            issued: HashSet::default(),
             next_loop_id: 0,
             frames: vec![ScopeFrame {
                 bindings: HashMap::default(),
@@ -225,16 +227,26 @@ impl ScopeState {
     }
 
     pub(crate) fn fresh_go_name(&mut self, hint: Option<&str>) -> String {
-        loop {
-            self.next_var += 1;
-            let name = match hint {
-                Some(h) => format!("{}_{}", h, self.next_var),
-                None => format!("tmp_{}", self.next_var),
-            };
-            if !self.has_binding_for_go_name(&name) && !self.is_go_name_declared(&name) {
-                return name;
-            }
+        let base = hint.unwrap_or("tmp");
+        let mut candidate = base.to_string();
+        let mut suffix = 0;
+        while self.is_go_name_taken(&candidate) {
+            suffix += 1;
+            candidate = format!("{base}_{suffix}");
         }
+        self.issued.insert(candidate.clone());
+        candidate
+    }
+
+    pub(crate) fn reserve_go_name(&mut self, go_name: &str) {
+        self.issued.insert(go_name.to_string());
+    }
+
+    fn is_go_name_taken(&self, go_name: &str) -> bool {
+        is_go_reserved_word(go_name)
+            || self.issued.contains(go_name)
+            || self.has_binding_for_go_name(go_name)
+            || self.is_go_name_declared(go_name)
     }
 
     pub(crate) fn push_loop(&mut self, result: GoExpression) {
@@ -398,9 +410,26 @@ mod tests {
     #[test]
     fn fresh_name_skips_bound_go_name() {
         let mut scope = ScopeState::new();
-        scope.bind("value", "tmp_1");
+        scope.bind("value", "tmp");
 
-        assert_eq!(scope.fresh_go_name(None), "tmp_2");
+        assert_eq!(scope.fresh_go_name(None), "tmp_1");
+    }
+
+    #[test]
+    fn fresh_name_prefers_the_bare_hint_then_numbers_it() {
+        let mut scope = ScopeState::new();
+
+        assert_eq!(scope.fresh_go_name(Some("value")), "value");
+        assert_eq!(scope.fresh_go_name(Some("value")), "value_1");
+        assert_eq!(scope.fresh_go_name(Some("other")), "other");
+    }
+
+    #[test]
+    fn fresh_name_never_spells_a_go_reserved_word() {
+        let mut scope = ScopeState::new();
+
+        assert_eq!(scope.fresh_go_name(Some("range")), "range_1");
+        assert_eq!(scope.fresh_go_name(Some("len")), "len_1");
     }
 
     #[test]

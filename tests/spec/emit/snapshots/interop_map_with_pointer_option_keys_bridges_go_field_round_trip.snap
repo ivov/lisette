@@ -24,19 +24,19 @@ func main() {
 	values := make(map[lisette.Option[int]]string)
 	values[lisette.MakeOptionSome(1)] = "one"
 	values[lisette.MakeOptionNone[int]()] = "none"
-	unwrapped_1 := make(map[*int]string, len(values))
-	for i_2, v_3 := range values {
-		var ptr_4 *int
-		if i_2.Tag == lisette.OptionSome {
-			ptr_4 = &i_2.SomeVal
+	unwrapped := make(map[*int]string, len(values))
+	for i, v := range values {
+		var ptr *int
+		if i.Tag == lisette.OptionSome {
+			ptr = &i.SomeVal
 		}
-		unwrapped_1[ptr_4] = v_3
+		unwrapped[ptr] = v
 	}
-	container := maps.Container{Values: unwrapped_1}
-	raw_5 := container.Values
-	wrapped_6 := make(map[lisette.Option[int]]string, len(raw_5))
-	for i_7, v_8 := range raw_5 {
-		option_9 := lisette.OptionFromPointer[int](i_7)
-		wrapped_6[option_9] = v_8
+	container := maps.Container{Values: unwrapped}
+	raw := container.Values
+	wrapped := make(map[lisette.Option[int]]string, len(raw))
+	for i_1, v_1 := range raw {
+		option := lisette.OptionFromPointer[int](i_1)
+		wrapped[option] = v_1
 	}
 }

@@ -69,11 +69,11 @@ func query(ok bool) lisette.Result[string, DbError] {
 }
 
 func handler(ok bool) (int, AppError) {
-	check_1 := query(ok)
-	if check_1.Tag != lisette.ResultOk {
-		return 0, check_1.ErrVal
+	check := query(ok)
+	if check.Tag != lisette.ResultOk {
+		return 0, check.ErrVal
 	}
-	row := check_1.OkVal
+	row := check.OkVal
 	return len(row), nil
 }
 

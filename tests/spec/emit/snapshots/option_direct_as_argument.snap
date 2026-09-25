@@ -33,6 +33,6 @@ func unwrapOr(o lisette.Option[int], fallback int) int {
 }
 
 func test() int {
-	option_1 := lisette.OptionFromCommaOk[int](maybeInt(true))
-	return unwrapOr(option_1, 0)
+	option := lisette.OptionFromCommaOk[int](maybeInt(true))
+	return unwrapOr(option, 0)
 }

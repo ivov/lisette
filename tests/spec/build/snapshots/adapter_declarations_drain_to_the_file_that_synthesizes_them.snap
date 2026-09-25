@@ -15,10 +15,10 @@ type _lisAdapter_First_Cache_1 struct {
 }
 
 func (a _lisAdapter_First_Cache_1) get() (*Entry, bool) {
-	raw_1 := a.inner.get()
-	option_2 := lisette.OptionFromNilable[*Entry](raw_1, raw_1 == nil)
-	if option_2.Tag == lisette.OptionSome {
-		return option_2.SomeVal, true
+	raw := a.inner.get()
+	option := lisette.OptionFromNilable[*Entry](raw, raw == nil)
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal, true
 	}
 	return nil, false
 }
@@ -39,10 +39,10 @@ type _lisAdapter_Second_Cache_0 struct {
 }
 
 func (a _lisAdapter_Second_Cache_0) get() (*Entry, bool) {
-	raw_1 := a.inner.get()
-	option_2 := lisette.OptionFromNilable[*Entry](raw_1, raw_1 == nil)
-	if option_2.Tag == lisette.OptionSome {
-		return option_2.SomeVal, true
+	raw := a.inner.get()
+	option := lisette.OptionFromNilable[*Entry](raw, raw == nil)
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal, true
 	}
 	return nil, false
 }

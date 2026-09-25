@@ -12,9 +12,9 @@ package main
 
 import "example.com/shapes"
 
-func area(arg_1 shapes.Shape) int {
-	asserted_2 := arg_1.(shapes.Rect)
-	w := asserted_2.W
-	h := asserted_2.H
+func area(arg shapes.Shape) int {
+	asserted := arg.(shapes.Rect)
+	w := asserted.W
+	h := asserted.H
 	return w * h
 }

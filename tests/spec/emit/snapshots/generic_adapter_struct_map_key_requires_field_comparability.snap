@@ -58,9 +58,9 @@ type Pair[A any, B any] struct {
 }
 
 func consume[A comparable, B comparable](box Box[lisette.Option[map[Pair[A, B]]int]]) {
-	subject_1 := box.get()
-	if subject_1.Tag == lisette.OptionSome {
-		_ = subject_1.SomeVal
+	subject := box.get()
+	if subject.Tag == lisette.OptionSome {
+		_ = subject.SomeVal
 	}
 }
 
@@ -78,9 +78,9 @@ type _lisAdapter_Bar_Box_0[A comparable, B comparable] struct {
 }
 
 func (a _lisAdapter_Bar_Box_0[A, B]) get() lisette.Option[map[Pair[A, B]]int] {
-	ret_1, ret_2 := a.inner.get()
-	if ret_2 && ret_1 != nil {
-		return lisette.MakeOptionSome[map[Pair[A, B]]int](ret_1)
+	ret, ret_1 := a.inner.get()
+	if ret_1 && ret != nil {
+		return lisette.MakeOptionSome[map[Pair[A, B]]int](ret)
 	}
 	return lisette.MakeOptionNone[map[Pair[A, B]]int]()
 }

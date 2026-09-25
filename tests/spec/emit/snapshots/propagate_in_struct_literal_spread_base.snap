@@ -32,11 +32,11 @@ func getBase() lisette.Result[User, string] {
 }
 
 func overrideId() lisette.Result[User, string] {
-	check_1 := getBase()
-	if check_1.Tag != lisette.ResultOk {
-		return check_1
+	check := getBase()
+	if check.Tag != lisette.ResultOk {
+		return check
 	}
-	copy_2 := check_1.OkVal
-	copy_2.id = 2
-	return lisette.MakeResultOk[User, string](copy_2)
+	copy_1 := check.OkVal
+	copy_1.id = 2
+	return lisette.MakeResultOk[User, string](copy_1)
 }

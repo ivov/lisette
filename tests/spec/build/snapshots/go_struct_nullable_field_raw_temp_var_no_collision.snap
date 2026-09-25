@@ -17,9 +17,9 @@ func main() {
 		Sum:     "",
 		Replace: nil,
 	}
-	raw_1 := mod_.Replace
-	r := lisette.OptionFromNilable[*debug.Module](raw_1, raw_1 == nil)
-	raw_1_3 := 3
+	raw := mod_.Replace
+	r := lisette.OptionFromNilable[*debug.Module](raw, raw == nil)
+	raw_1 := 3
 	fmt.Println(r)
-	fmt.Println(raw_1_3)
+	fmt.Println(raw_1)
 }

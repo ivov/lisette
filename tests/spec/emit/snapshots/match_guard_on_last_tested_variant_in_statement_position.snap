@@ -24,22 +24,22 @@ func check(n int) lisette.Result[bool, string] {
 
 func test(o lisette.Option[int]) lisette.Result[int, string] {
 	out := 0
-match_1:
+match:
 	for {
 		if o.Tag == lisette.OptionSome {
 			out = 1
-			break match_1
+			break match
 		}
-		check_2 := check(0)
-		if check_2.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[int, string](check_2.ErrVal)
+		check_1 := check(0)
+		if check_1.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[int, string](check_1.ErrVal)
 		}
-		if check_2.OkVal {
+		if check_1.OkVal {
 			out = 2
-			break match_1
+			break match
 		}
 		out = 3
-		break match_1
+		break match
 	}
 	return lisette.MakeResultOk[int, string](out)
 }

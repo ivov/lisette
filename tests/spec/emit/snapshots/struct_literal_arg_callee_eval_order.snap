@@ -35,7 +35,7 @@ func run() int {
 		i = 1
 		return 7
 	}
-	callee_1 := fs[i]
-	y := callee_1(Box{v: bump()})
+	callee := fs[i]
+	y := callee(Box{v: bump()})
 	return y
 }

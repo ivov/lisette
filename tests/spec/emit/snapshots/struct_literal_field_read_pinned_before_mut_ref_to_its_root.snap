@@ -31,9 +31,9 @@ func rename(s *Suite) string {
 
 func run() string {
 	s := Suite{name: "a"}
-	field_1 := s.name
+	field := s.name
 	p := Pair{
-		a: field_1,
+		a: field,
 		b: rename(&s),
 	}
 	return p.a + p.b

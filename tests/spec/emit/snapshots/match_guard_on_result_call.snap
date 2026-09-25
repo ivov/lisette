@@ -21,9 +21,9 @@ func getValue() lisette.Result[int, string] {
 }
 
 func test() int {
-	subject_1 := getValue()
-	if subject_1.Tag == lisette.ResultOk {
-		x := subject_1.OkVal
+	subject := getValue()
+	if subject.Tag == lisette.ResultOk {
+		x := subject.OkVal
 		if x > 0 {
 			return x
 		}

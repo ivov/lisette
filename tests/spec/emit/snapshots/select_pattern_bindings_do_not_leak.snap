@@ -30,14 +30,14 @@ func main() {
 	ch1 := make(chan Point, 1)
 	x := 99
 	var result int
-	ch_1 := ch1
+	ch := ch1
 	for {
 		select {
-		case recv_2, ok := <-ch_1:
+		case recv, ok := <-ch:
 			if ok {
-				result = recv_2.x
+				result = recv.x
 			} else {
-				ch_1 = nil
+				ch = nil
 				continue
 			}
 		default:

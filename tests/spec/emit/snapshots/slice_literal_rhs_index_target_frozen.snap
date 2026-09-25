@@ -19,7 +19,7 @@ func run() int {
 		i = 1
 		return 5
 	}
-	idx_1 := i
-	xs[idx_1] = []int{bump()}
+	idx := i
+	xs[idx] = []int{bump()}
 	return xs[0][0]
 }

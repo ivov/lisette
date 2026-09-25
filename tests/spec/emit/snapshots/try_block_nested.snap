@@ -36,29 +36,29 @@ func riskyB() lisette.Result[int, string] {
 
 func test() int {
 	var outer lisette.Result[int, string]
-	tryResult_1 := func() lisette.Result[int, string] {
+	tryResult := func() lisette.Result[int, string] {
 		var inner lisette.Result[int, string]
-		tryResult_2 := func() lisette.Result[int, string] {
-			check_3 := riskyA()
-			if check_3.Tag != lisette.ResultOk {
-				return check_3
+		tryResult_1 := func() lisette.Result[int, string] {
+			check := riskyA()
+			if check.Tag != lisette.ResultOk {
+				return check
 			}
-			return lisette.MakeResultOk[int, string](check_3.OkVal)
+			return lisette.MakeResultOk[int, string](check.OkVal)
 		}()
-		inner = tryResult_2
+		inner = tryResult_1
 		var inner_val int
 		if inner.Tag == lisette.ResultOk {
 			inner_val = inner.OkVal
 		} else {
 			inner_val = 0
 		}
-		check_4 := riskyB()
-		if check_4.Tag != lisette.ResultOk {
-			return check_4
+		check_1 := riskyB()
+		if check_1.Tag != lisette.ResultOk {
+			return check_1
 		}
-		return lisette.MakeResultOk[int, string](inner_val + check_4.OkVal)
+		return lisette.MakeResultOk[int, string](inner_val + check_1.OkVal)
 	}()
-	outer = tryResult_1
+	outer = tryResult
 	if outer.Tag == lisette.ResultOk {
 		return outer.OkVal
 	}

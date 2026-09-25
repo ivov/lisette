@@ -23,10 +23,10 @@ func parse(s string) lisette.Result[int, string] {
 }
 
 func test() int {
-	subject_1 := parse("42")
-	if subject_1.Tag != lisette.ResultOk {
+	subject := parse("42")
+	if subject.Tag != lisette.ResultOk {
 		return -1
 	}
-	x := subject_1.OkVal
+	x := subject.OkVal
 	return x
 }

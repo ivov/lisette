@@ -18,8 +18,8 @@ import "fmt"
 
 func main() {
 	items := []int{1, 2, 3}
-	bound_1 := len(items)
-	for i := range bound_1 {
+	bound := len(items)
+	for i := range bound {
 		items = append(items, i)
 		fmt.Println(len(items))
 	}

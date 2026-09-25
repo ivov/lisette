@@ -48,12 +48,12 @@ func find(users []User, name string) (User, bool) {
 }
 
 func describe(users []User, wanted string) string {
-	ret_1, ok := find(users, wanted)
+	ret, ok := find(users, wanted)
 	if ok {
-		if ret_1.email.Tag == lisette.OptionSome {
-			return ret_1.name + " <" + ret_1.email.SomeVal + ">"
+		if ret.email.Tag == lisette.OptionSome {
+			return ret.name + " <" + ret.email.SomeVal + ">"
 		}
-		return ret_1.name + " has no email"
+		return ret.name + " has no email"
 	}
 	return "no user named " + wanted
 }

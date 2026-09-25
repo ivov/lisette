@@ -16,9 +16,9 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func test() int {
 	ch := make(chan int)
-	subject_1 := lisette.ChannelReceive(ch)
-	if subject_1.Tag == lisette.OptionSome {
-		return subject_1.SomeVal
+	subject := lisette.ChannelReceive(ch)
+	if subject.Tag == lisette.OptionSome {
+		return subject.SomeVal
 	}
 	return 0
 }

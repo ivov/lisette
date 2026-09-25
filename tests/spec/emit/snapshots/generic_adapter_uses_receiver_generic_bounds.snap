@@ -54,9 +54,9 @@ func (b Bar[S]) get() (S, bool) {
 }
 
 func consume[K comparable](box Box[lisette.Option[map[K]int]]) {
-	subject_1 := box.get()
-	if subject_1.Tag == lisette.OptionSome {
-		_ = subject_1.SomeVal
+	subject := box.get()
+	if subject.Tag == lisette.OptionSome {
+		_ = subject.SomeVal
 	}
 }
 
@@ -78,9 +78,9 @@ type _lisAdapter_Bar_Box_0[K comparable] struct {
 }
 
 func (a _lisAdapter_Bar_Box_0[K]) get() lisette.Option[map[K]int] {
-	ret_1, ret_2 := a.inner.get()
-	if ret_2 && ret_1 != nil {
-		return lisette.MakeOptionSome[map[K]int](ret_1)
+	ret, ret_1 := a.inner.get()
+	if ret_1 && ret != nil {
+		return lisette.MakeOptionSome[map[K]int](ret)
 	}
 	return lisette.MakeOptionNone[map[K]int]()
 }

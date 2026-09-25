@@ -19,7 +19,7 @@ func main() {
 		i++
 		return xs
 	}
-	base_1 := make_()
-	base_1[i] = 99
+	base := make_()
+	base[i] = 99
 	_ = xs
 }

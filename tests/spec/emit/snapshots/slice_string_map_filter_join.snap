@@ -14,15 +14,15 @@ package main
 import "strings"
 
 func test(items []string) string {
-	result_1 := make([]string, len(items))
-	for i_2, s := range items {
-		result_1[i_2] = s + "!"
+	result := make([]string, len(items))
+	for i, s := range items {
+		result[i] = s + "!"
 	}
-	var result_3 []string
-	for _, s := range result_1 {
+	var result_1 []string
+	for _, s := range result {
 		if len(s) > 2 {
-			result_3 = append(result_3, s)
+			result_1 = append(result_1, s)
 		}
 	}
-	return strings.Join(result_3, ", ")
+	return strings.Join(result_1, ", ")
 }

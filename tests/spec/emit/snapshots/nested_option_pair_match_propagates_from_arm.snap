@@ -51,31 +51,31 @@ func checked(n int) lisette.Result[int, string] {
 }
 
 func run(n int) lisette.Result[int, string] {
-	ret_1, ok := pick(n)
+	ret, ok := pick(n)
 	if ok {
-		check_2 := checked(ret_1.value)
-		if check_2.Tag != lisette.ResultOk {
-			return check_2
+		check := checked(ret.value)
+		if check.Tag != lisette.ResultOk {
+			return check
 		}
-		return lisette.MakeResultOk[int, string](check_2.OkVal)
+		return lisette.MakeResultOk[int, string](check.OkVal)
 	}
 	return lisette.MakeResultErr[int, string]("missing")
 }
 
 func test() {
-	subject_1 := run(3)
-	if subject_1.Tag == lisette.ResultOk {
-		if subject_1.OkVal != 3 {
+	subject := run(3)
+	if subject.Tag == lisette.ResultOk {
+		if subject.OkVal != 3 {
 			panic("wrong value")
 		}
 	} else {
 		panic("unexpected error")
 	}
-	subject_2 := run(0)
-	if subject_2.Tag == lisette.ResultOk {
+	subject_1 := run(0)
+	if subject_1.Tag == lisette.ResultOk {
 		panic("expected an error")
 	}
-	if subject_2.ErrVal != "not positive" {
+	if subject_1.ErrVal != "not positive" {
 		panic("wrong error")
 	}
 }

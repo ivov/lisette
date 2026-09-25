@@ -9,9 +9,9 @@ description: |
 package main
 
 func test(s []int) []int {
-	result_1 := make([]int, len(s))
-	for i_2, x := range s {
-		result_1[i_2] = x * 2
+	result := make([]int, len(s))
+	for i, x := range s {
+		result[i] = x * 2
 	}
-	return result_1
+	return result
 }

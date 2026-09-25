@@ -35,28 +35,28 @@ func main() {
 	ch2 := make(chan int, 1)
 	lisette.ChannelSend(ch1, 10)
 	lisette.ChannelSend(ch2, 20)
-	var tmp_1 int
-	ch_2 := choose(1, ch1)
-	ch_3 := choose(2, ch2)
+	var tmp int
+	ch := choose(1, ch1)
+	ch_1 := choose(2, ch2)
 	for {
 		select {
-		case v, ok := <-ch_2:
+		case v, ok := <-ch:
 			if ok {
-				tmp_1 = v
+				tmp = v
 			} else {
-				tmp_1 = -1
+				tmp = -1
 			}
-		case v, ok := <-ch_3:
+		case v, ok := <-ch_1:
 			if ok {
-				tmp_1 = v
+				tmp = v
 			} else {
-				ch_3 = nil
+				ch_1 = nil
 				continue
 			}
 		default:
-			tmp_1 = -2
+			tmp = -2
 		}
 		break
 	}
-	_ = tmp_1
+	_ = tmp
 }

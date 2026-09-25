@@ -19,8 +19,8 @@ import (
 )
 
 func main() {
-	option_1 := lisette.OptionFromCommaOk[string](os.LookupEnv("HOME"))
-	shown := lisette.OptionMap(option_1, func(h string) string {
+	option := lisette.OptionFromCommaOk[string](os.LookupEnv("HOME"))
+	shown := lisette.OptionMap(option, func(h string) string {
 		return "home=" + h
 	}).UnwrapOr("unset")
 	fmt.Println(shown)

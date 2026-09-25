@@ -19,7 +19,7 @@ import (
 )
 
 func test(name string) string {
-	if ret_1, err := os.Stat(name); err != nil || lisette.IsNilInterface(ret_1) {
+	if ret, err := os.Stat(name); err != nil || lisette.IsNilInterface(ret) {
 		return name
 	}
 	return "found"

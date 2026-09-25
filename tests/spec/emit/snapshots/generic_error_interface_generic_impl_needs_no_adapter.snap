@@ -52,11 +52,11 @@ func (b Bar[E]) get(fail bool) lisette.Result[int, E] {
 }
 
 func run[E error](foo Foo[E]) {
-	subject_1 := foo.get(false)
-	if subject_1.Tag == lisette.ResultOk {
-		_ = subject_1.OkVal
+	subject := foo.get(false)
+	if subject.Tag == lisette.ResultOk {
+		_ = subject.OkVal
 	} else {
-		_ = subject_1.ErrVal
+		_ = subject.ErrVal
 	}
 }
 

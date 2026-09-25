@@ -21,7 +21,7 @@ import (
 )
 
 func test() {
-	if ret_1, e := os.Create("f"); e == nil && ret_1 != nil {
+	if ret, e := os.Create("f"); e == nil && ret != nil {
 		fmt.Println("made")
 	} else {
 		if e == nil {

@@ -1,0 +1,62 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn sum(xs: Slice<int>) -> int {
+    xs.fold(0, |acc, x| acc + x)
+  }
+  
+  fn joined(parts: Slice<string>) -> string {
+    parts.fold("", |text, part| text + part)
+  }
+  
+  fn shadowed(xs: Slice<int>) -> int {
+    let acc = 100
+    let total = xs.fold(0, |acc, x| acc + x)
+    total + acc
+  }
+  
+  fn test() {
+    if sum([1, 2, 3]) != 6 { panic("the sum of one to three is six") }
+    if joined(["a", "b"]) != "ab" { panic("the parts should join in order") }
+    if shadowed([1, 2]) != 103 { panic("an outer acc should keep its own value") }
+  }
+---
+package main
+
+func sum(xs []int) int {
+	acc := 0
+	for _, x := range xs {
+		acc += x
+	}
+	return acc
+}
+
+func joined(parts []string) string {
+	text := ""
+	for _, part := range parts {
+		text += part
+	}
+	return text
+}
+
+func shadowed(xs []int) int {
+	acc := 100
+	total := 0
+	for _, x := range xs {
+		total += x
+	}
+	return total + acc
+}
+
+func test() {
+	if sum([]int{1, 2, 3}) != 6 {
+		panic("the sum of one to three is six")
+	}
+	if joined([]string{"a", "b"}) != "ab" {
+		panic("the parts should join in order")
+	}
+	if shadowed([]int{1, 2}) != 103 {
+		panic("an outer acc should keep its own value")
+	}
+}

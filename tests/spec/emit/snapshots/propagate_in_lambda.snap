@@ -27,16 +27,16 @@ func fallible() lisette.Result[int, string] {
 
 func test() int {
 	f := func(x int) lisette.Result[int, string] {
-		check_1 := fallible()
-		if check_1.Tag != lisette.ResultOk {
-			return check_1
+		check := fallible()
+		if check.Tag != lisette.ResultOk {
+			return check
 		}
-		v := check_1.OkVal
+		v := check.OkVal
 		return lisette.MakeResultOk[int, string](v + x)
 	}
-	subject_2 := f(5)
-	if subject_2.Tag == lisette.ResultOk {
-		return subject_2.OkVal
+	subject := f(5)
+	if subject.Tag == lisette.ResultOk {
+		return subject.OkVal
 	}
 	return -1
 }

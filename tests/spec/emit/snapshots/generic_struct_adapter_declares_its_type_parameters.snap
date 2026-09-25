@@ -43,17 +43,17 @@ type Bar[T any] struct {
 }
 
 func (b Bar[T]) get() (T, bool) {
-	v_1 := b.x
-	if v_1.Tag == lisette.OptionSome {
-		return v_1.SomeVal, true
+	v := b.x
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
 	}
 	return *new(T), false
 }
 
 func consume[T any](box Box[lisette.Option[T]]) {
-	subject_1 := box.get()
-	if subject_1.Tag == lisette.OptionSome {
-		_ = subject_1.SomeVal
+	subject := box.get()
+	if subject.Tag == lisette.OptionSome {
+		_ = subject.SomeVal
 	}
 }
 

@@ -30,9 +30,9 @@ type Task struct {
 }
 
 func describe(t *Task) string {
-	subject_1 := t.retries
-	if subject_1.Tag == lisette.OptionSome {
-		if subject_1.SomeVal > 3 {
+	subject := t.retries
+	if subject.Tag == lisette.OptionSome {
+		if subject.SomeVal > 3 {
 			return "many"
 		}
 		return "some"

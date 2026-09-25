@@ -42,9 +42,9 @@ func main() {
 		lisette.ChannelSend(ch, 1)
 	}()
 	select {
-	case recv_2, ok := <-ch:
+	case recv, ok := <-ch:
 		if ok {
-			fmt.Println(recv_2)
+			fmt.Println(recv)
 		}
 	default:
 		fmt.Println(x_1)

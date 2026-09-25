@@ -39,12 +39,12 @@ func main() {
 	}
 	cert := x509.Certificate{PublicKey: 0}
 	urls := []lisette.Option[*url.URL]{lisette.MakeOptionSome(&u)}
-	unwrapped_1 := make([]*url.URL, len(urls))
-	for i_2, v_3 := range urls {
-		if v_3.Tag == lisette.OptionSome {
-			unwrapped_1[i_2] = v_3.SomeVal
+	unwrapped := make([]*url.URL, len(urls))
+	for i, v := range urls {
+		if v.Tag == lisette.OptionSome {
+			unwrapped[i] = v.SomeVal
 		}
 	}
-	cert.URIs = unwrapped_1
+	cert.URIs = unwrapped
 	_ = cert
 }

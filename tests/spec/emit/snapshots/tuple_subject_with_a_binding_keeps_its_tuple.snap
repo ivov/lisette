@@ -20,8 +20,8 @@ func source() int {
 }
 
 func test(b bool) string {
-	subject_1 := lisette.MakeTuple2[int, bool](source(), b)
-	if subject_1.Second == true {
+	subject := lisette.MakeTuple2[int, bool](source(), b)
+	if subject.Second == true {
 		return "yes"
 	}
 	return "no"

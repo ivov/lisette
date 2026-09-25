@@ -23,7 +23,7 @@ func main() {
 		i++
 		return m
 	}
-	base_1 := make_()
-	base_1[fmt.Sprint(i)] = 99
+	base := make_()
+	base[fmt.Sprint(i)] = 99
 	_ = m
 }

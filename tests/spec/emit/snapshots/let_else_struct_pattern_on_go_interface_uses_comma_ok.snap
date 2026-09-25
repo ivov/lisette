@@ -14,11 +14,11 @@ package main
 import "example.com/shapes"
 
 func tryArea(s shapes.Shape) int {
-	asserted_1, ok_2 := s.(shapes.Rect)
-	if !ok_2 {
+	asserted, ok := s.(shapes.Rect)
+	if !ok {
 		return -1
 	}
-	w := asserted_1.W
-	h := asserted_1.H
+	w := asserted.W
+	h := asserted.H
 	return w * h
 }

@@ -28,9 +28,9 @@ func rename(s *Suite) string {
 }
 
 func pair(s, other *Suite) Pair {
-	field_1 := s.name
+	field := s.name
 	return Pair{
-		a: field_1,
+		a: field,
 		b: rename(other),
 	}
 }

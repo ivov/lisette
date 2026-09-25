@@ -28,7 +28,7 @@ func sum(a, b int) int {
 
 func main() {
 	i := 0
-	arg_1 := i
-	z := sum(arg_1, bump(&i))
+	arg := i
+	z := sum(arg, bump(&i))
 	_ = z
 }

@@ -70,9 +70,9 @@ func (b Bar[S]) get() (S, bool) {
 }
 
 func consume[T comparable](box Box[lisette.Option[Foo[T]]]) {
-	subject_1 := box.get()
-	if subject_1.Tag == lisette.OptionSome {
-		_ = subject_1.SomeVal
+	subject := box.get()
+	if subject.Tag == lisette.OptionSome {
+		_ = subject.SomeVal
 	}
 }
 
@@ -90,9 +90,9 @@ type _lisAdapter_Bar_Box_0[T comparable] struct {
 }
 
 func (a _lisAdapter_Bar_Box_0[T]) get() lisette.Option[Foo[T]] {
-	ret_1, ret_2 := a.inner.get()
-	if ret_2 && !lisette.IsNilInterface(ret_1) {
-		return lisette.MakeOptionSome[Foo[T]](ret_1)
+	ret, ret_1 := a.inner.get()
+	if ret_1 && !lisette.IsNilInterface(ret) {
+		return lisette.MakeOptionSome[Foo[T]](ret)
 	}
 	return lisette.MakeOptionNone[Foo[T]]()
 }

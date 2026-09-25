@@ -34,8 +34,8 @@ func target(calls *int) []int {
 func main() {
 	xs := [][]int{{1}, {2}, {3}}
 	calls := 0
-	want_1 := target(&calls)
-	found := slices.ContainsFunc(xs, func(e_2 []int) bool { return slices.Equal(e_2, want_1) })
+	want := target(&calls)
+	found := slices.ContainsFunc(xs, func(e []int) bool { return slices.Equal(e, want) })
 	if found {
 		panic("9 is not in the slice")
 	}

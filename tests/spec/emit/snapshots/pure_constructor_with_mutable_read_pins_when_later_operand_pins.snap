@@ -19,13 +19,13 @@ func run() int {
 		x = 20
 		return 2
 	}
-	v_2 := lisette.MakeOptionSome(x)
-	left_1 := x
+	v := lisette.MakeOptionSome(x)
+	left := x
 	elems := []lisette.Option[int]{
-		v_2,
-		lisette.MakeOptionSome(left_1 + bump()),
+		v,
+		lisette.MakeOptionSome(left + bump()),
 		lisette.MakeOptionSome(x),
 	}
-	left_3 := elems[0].UnwrapOr(-1) + elems[1].UnwrapOr(-1)
-	return left_3 + elems[2].UnwrapOr(-1)
+	left_1 := elems[0].UnwrapOr(-1) + elems[1].UnwrapOr(-1)
+	return left_1 + elems[2].UnwrapOr(-1)
 }

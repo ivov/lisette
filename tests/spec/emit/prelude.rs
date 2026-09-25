@@ -1867,3 +1867,29 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn a_fold_accumulator_takes_the_callback_binder_name() {
+    let input = r#"
+fn sum(xs: Slice<int>) -> int {
+  xs.fold(0, |acc, x| acc + x)
+}
+
+fn joined(parts: Slice<string>) -> string {
+  parts.fold("", |text, part| text + part)
+}
+
+fn shadowed(xs: Slice<int>) -> int {
+  let acc = 100
+  let total = xs.fold(0, |acc, x| acc + x)
+  total + acc
+}
+
+fn test() {
+  if sum([1, 2, 3]) != 6 { panic("the sum of one to three is six") }
+  if joined(["a", "b"]) != "ab" { panic("the parts should join in order") }
+  if shadowed([1, 2]) != 103 { panic("an outer acc should keep its own value") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

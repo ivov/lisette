@@ -13,11 +13,11 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
-	cb_1 := lisette.OptionMap[int, int]
+	cb := lisette.OptionMap[int, int]
 	f := func(arg0 lisette.Option[int], arg1 func(int) int) (int, bool) {
-		opt_2 := cb_1(arg0, arg1)
-		if opt_2.Tag == lisette.OptionSome {
-			return opt_2.SomeVal, true
+		opt := cb(arg0, arg1)
+		if opt.Tag == lisette.OptionSome {
+			return opt.SomeVal, true
 		}
 		return 0, false
 	}
