@@ -1972,6 +1972,91 @@ fn main() {
 }
 
 #[test]
+fn none_field_omitted_from_fresh_struct() {
+    let input = r#"
+struct Person { name: string, email: Option<string> }
+
+fn fresh(name: string) -> Person { Person { name, email: None } }
+
+fn clear(person: Person) -> Person { Person { email: None, ..person } }
+
+fn lookup(log: Channel<int>) -> Option<string> {
+  log.send(1)
+  None
+}
+
+fn test() {
+  let old = Person { name: "a", email: Some("old") }
+  if !fresh("b").email.is_none() {
+    panic("a fresh email should be None")
+  }
+  if !clear(old).email.is_none() {
+    panic("a cleared email should be None")
+  }
+  if !old.email.is_some() {
+    panic("an update should leave the original alone")
+  }
+  let log = Channel.buffered<int>(4)
+  let looked_up = Person { name: "d", email: lookup(log) }
+  if !looked_up.email.is_none() {
+    panic("a looked-up email should be None")
+  }
+  if log.length() != 1 {
+    panic(f"expected one lookup, got {log.length()}")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn none_field_before_effectful_field() {
+    let input = r#"
+import "go:fmt"
+
+struct Person { name: string, email: Option<string> }
+
+fn marked_name() -> string { fmt.Println("name once"); "c" }
+
+fn test() -> Person {
+  Person { email: None, name: marked_name() }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn none_field_kept_in_enum_variant() {
+    let input = r#"
+enum Slot {
+  Filled { email: Option<string> },
+  Empty,
+}
+
+fn test() -> Slot {
+  Slot.Filled { email: None }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn none_field_omitted_when_struct_autofills() {
+    let input = r#"
+struct Person { name: string, email: Option<string> }
+
+fn explicit() -> Person {
+  Person { email: None, .. }
+}
+
+fn unspecified() -> Person {
+  Person { name: "x", .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn empty_struct_literal() {
     let input = r#"
 struct Empty {}

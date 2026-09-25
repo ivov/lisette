@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Person { name: string, email: Option<string> }
+  
+  fn explicit() -> Person {
+    Person { email: None, .. }
+  }
+  
+  fn unspecified() -> Person {
+    Person { name: "x", .. }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Person struct {
+	name  string
+	email lisette.Option[string]
+}
+
+func explicit() Person {
+	return Person{}
+}
+
+func unspecified() Person {
+	return Person{name: "x"}
+}

@@ -45,7 +45,7 @@ func outer[T Box[lisette.Option[int]]](slot *T) int {
 
 func main() {
 	some := Bar[int]{x: lisette.MakeOptionSome(7)}
-	none := Bar[int]{x: lisette.MakeOptionNone[int]()}
+	none := Bar[int]{}
 	if read(some) != 7 || read(none) != 0 {
 		panic("value bound")
 	}

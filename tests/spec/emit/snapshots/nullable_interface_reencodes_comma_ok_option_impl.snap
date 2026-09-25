@@ -62,7 +62,7 @@ func useOpt(o Opt) {
 }
 
 func main() {
-	useOpt(_lisAdapter_Bar_Opt_0{inner: Bar[*Thing]{x: lisette.MakeOptionNone[*Thing]()}})
+	useOpt(_lisAdapter_Bar_Opt_0{inner: Bar[*Thing]{}})
 }
 
 type _lisAdapter_Bar_Opt_0 struct {

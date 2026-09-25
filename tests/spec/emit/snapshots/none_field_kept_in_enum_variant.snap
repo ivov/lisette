@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  enum Slot {
+    Filled { email: Option<string> },
+    Empty,
+  }
+  
+  fn test() -> Slot {
+    Slot.Filled { email: None }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func MakeSlotFilled(arg0 lisette.Option[string]) Slot {
+	return Slot{Tag: SlotFilled, Email: arg0}
+}
+
+func MakeSlotEmpty() Slot {
+	return Slot{Tag: SlotEmpty}
+}
+
+type SlotTag uint8
+
+const (
+	SlotFilled SlotTag = iota
+	SlotEmpty
+)
+
+type Slot struct {
+	Tag   SlotTag
+	Email lisette.Option[string]
+}
+
+func test() Slot {
+	return Slot{
+		Tag:   SlotFilled,
+		Email: lisette.MakeOptionNone[string](),
+	}
+}
