@@ -8,11 +8,78 @@ use crate::plan::bodies::{
     SwitchKind, for_each_statement, for_each_statements_mut,
 };
 use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::values::GoExpression;
+use crate::plan::values::{GoExpression, ValuePlan};
 
 pub(crate) fn clean_up(statements: &mut Vec<LoweredStatement>) {
     inline_name_aliases(statements);
     drop_unread_temps(statements);
+    fold_compound_assignments(statements);
+}
+
+fn fold_compound_assignments(statements: &mut Vec<LoweredStatement>) {
+    for_each_statements_mut(statements, &mut |block| {
+        for statement in block.iter_mut() {
+            if let Some(folded) = folded_compound_assignment(statement) {
+                *statement = folded;
+            }
+        }
+    });
+}
+
+fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredStatement> {
+    let LoweredStatement::Assign(AssignForm::Simple {
+        target_capture,
+        target,
+        value,
+    }) = statement
+    else {
+        return None;
+    };
+    if !target_capture.is_empty() || !value.setup.is_empty() {
+        return None;
+    }
+    let GoExpressionNode::Identifier(name) = target.node() else {
+        return None;
+    };
+    let GoExpressionNode::Binary {
+        operator,
+        left,
+        right,
+    } = value.expression.node()
+    else {
+        return None;
+    };
+    if !matches!(left.as_ref(), GoExpressionNode::Identifier(read) if read == name)
+        || !is_compound_operator(operator)
+    {
+        return None;
+    }
+
+    let kind = match (operator.as_str(), right.as_ref()) {
+        ("+", GoExpressionNode::Literal(one)) if one == "1" => CompoundKind::Increment,
+        ("-", GoExpressionNode::Literal(one)) if one == "1" => CompoundKind::Decrement,
+        _ => CompoundKind::OpAssign {
+            op_text: operator.clone(),
+            rhs: Box::new(ValuePlan::computed(
+                Vec::new(),
+                GoExpression::from_node(right.as_ref().clone()),
+                value.evaluation.effect,
+            )),
+            pinned_left: None,
+        },
+    };
+    Some(LoweredStatement::Assign(AssignForm::Compound {
+        target_capture: Vec::new(),
+        target: target.clone(),
+        kind,
+    }))
+}
+
+fn is_compound_operator(operator: &str) -> bool {
+    matches!(
+        operator,
+        "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "&^" | "<<" | ">>"
+    )
 }
 
 #[derive(Default)]

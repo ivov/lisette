@@ -3245,6 +3245,27 @@ fn main() {
 }
 
 #[test]
+fn an_accumulator_assignment_folds_into_a_compound_operator() {
+    let input = r#"
+fn test() {
+  let mut total = 0
+  let other = 5
+  for x in [1, 2, 3] {
+    total = total + x
+  }
+  total = total + 1
+  total = total - 1
+  total = other + total
+  let mut counts = Map.new<string, int>()
+  counts["a"] = counts["a"] + 1
+  if total != 11 { panic("the accumulator should total eleven") }
+  if counts["a"] != 1 { panic("the map entry should hold one") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn a_discarded_call_stands_as_a_statement() {
     let input = r#"
 struct Meters(int)
