@@ -17,5 +17,5 @@ func foo[T any](args T) T {
 }
 
 func test() {
-	_ = foo[any]("Lilian")
+	foo[any]("Lilian")
 }

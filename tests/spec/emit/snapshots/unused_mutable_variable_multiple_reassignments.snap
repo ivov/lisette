@@ -22,6 +22,6 @@ func g() int {
 }
 
 func test() {
-	_ = f()
-	_ = g()
+	f()
+	g()
 }

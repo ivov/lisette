@@ -16,6 +16,6 @@ func drain(ch *chan int) {
 	ch_1 := *ch
 	tx := (chan<- int)(ch_1)
 	rx := (<-chan int)(ch_1)
-	_ = lisette.SenderSend(tx, 42)
-	_ = lisette.ReceiverReceive(rx)
+	lisette.SenderSend(tx, 42)
+	lisette.ReceiverReceive(rx)
 }

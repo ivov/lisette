@@ -13,5 +13,5 @@ package main
 import "example.com/validator"
 
 func test() {
-	_ = validator.WithOption()
+	validator.WithOption()
 }

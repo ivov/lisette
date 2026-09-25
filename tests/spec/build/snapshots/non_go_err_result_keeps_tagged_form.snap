@@ -26,5 +26,5 @@ func run(l Loader) int {
 
 func main() {
 	l := Loader{}
-	_ = run(l)
+	run(l)
 }

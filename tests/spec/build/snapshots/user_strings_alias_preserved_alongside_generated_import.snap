@@ -10,6 +10,6 @@ import (
 )
 
 func main() {
-	_ = s.ToUpper("abc")
-	_ = strings.Contains("abc", "a")
+	s.ToUpper("abc")
+	strings.Contains("abc", "a")
 }

@@ -17,6 +17,6 @@ import (
 )
 
 func main() {
-	_ = dyn.Store("k", lisette.MakeOptionNone[any]())
-	_ = dyn.Store("k", lisette.MakeOptionSome(1))
+	dyn.Store("k", lisette.MakeOptionNone[any]())
+	dyn.Store("k", lisette.MakeOptionSome(1))
 }

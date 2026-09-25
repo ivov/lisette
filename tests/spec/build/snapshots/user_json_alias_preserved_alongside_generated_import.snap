@@ -50,6 +50,6 @@ func (s *Status) UnmarshalJSON(data []byte) error {
 
 func main() {
 	s := MakeStatusReady()
-	_ = js.Valid([]byte{})
+	js.Valid([]byte{})
 	_ = s
 }

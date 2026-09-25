@@ -7,7 +7,7 @@ package main
 import package_ "github.com/user/myproject/nested/deep/package"
 
 func main() {
-	_ = package_.Foo()
+	package_.Foo()
 }
 
 

@@ -21,5 +21,5 @@ func f(x t.Time) t.Duration {
 }
 
 func main() {
-	_ = f(t.Now())
+	f(t.Now())
 }

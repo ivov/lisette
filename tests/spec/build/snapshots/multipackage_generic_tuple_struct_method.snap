@@ -8,7 +8,7 @@ import "github.com/user/myproject/types"
 
 func main() {
 	w := types.Wrapper[int]{F0: 42}
-	_ = w.Unwrap()
+	w.Unwrap()
 }
 
 

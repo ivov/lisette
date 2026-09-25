@@ -19,7 +19,7 @@ func Resolve[R any, E any](default_ R, _ ...func(int) lisette.Result[R, E]) lise
 
 func main() {
 	cb_1 := Resultant
-	_ = Resolve(0, func(arg0 int) lisette.Result[int, Face] {
+	Resolve(0, func(arg0 int) lisette.Result[int, Face] {
 		ret_2, ret_3 := cb_1(arg0)
 		if ret_3 != nil {
 			return lisette.MakeResultErr[int, Face](ret_3)

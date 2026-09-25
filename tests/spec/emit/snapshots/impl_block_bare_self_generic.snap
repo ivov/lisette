@@ -27,5 +27,5 @@ func (c Container[T]) get() T {
 
 func main() {
 	c := Container[int]{value: 42}
-	_ = c.get()
+	c.get()
 }

@@ -31,5 +31,5 @@ func (b Box[T]) count() int {
 
 func main() {
 	b := Box[string]{value: "a"}
-	_ = b.count()
+	b.count()
 }

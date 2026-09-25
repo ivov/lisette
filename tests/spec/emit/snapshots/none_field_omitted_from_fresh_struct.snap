@@ -58,7 +58,7 @@ func clear_(person Person) Person {
 }
 
 func lookup(log chan int) (string, bool) {
-	_ = lisette.ChannelSend(log, 1)
+	lisette.ChannelSend(log, 1)
 	return "", false
 }
 

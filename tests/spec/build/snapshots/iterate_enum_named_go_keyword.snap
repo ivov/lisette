@@ -31,5 +31,5 @@ func map_variants() []map_ {
 }
 
 func main() {
-	_ = map_variants()
+	map_variants()
 }

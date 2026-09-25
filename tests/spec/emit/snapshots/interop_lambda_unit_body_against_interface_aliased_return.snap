@@ -23,5 +23,5 @@ func make_() scheduler.Cmd {
 }
 
 func main() {
-	_ = make_()
+	make_()
 }

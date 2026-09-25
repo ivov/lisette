@@ -30,11 +30,11 @@ import (
 
 func test() {
 	ch := make(chan int, 5)
-	_ = lisette.ChannelSend(ch, 1)
-	_ = lisette.ChannelSend(ch, -1)
-	_ = lisette.ChannelSend(ch, 2)
-	_ = lisette.ChannelSend(ch, -2)
-	_ = lisette.ChannelSend(ch, 4)
+	lisette.ChannelSend(ch, 1)
+	lisette.ChannelSend(ch, -1)
+	lisette.ChannelSend(ch, 2)
+	lisette.ChannelSend(ch, -2)
+	lisette.ChannelSend(ch, 4)
 	lisette.ChannelClose(ch)
 	total := 0
 	if ch != nil {

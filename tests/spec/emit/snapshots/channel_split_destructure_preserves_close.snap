@@ -31,7 +31,7 @@ func test() {
 	ch := make(chan int, 2)
 	tx := (chan<- int)(ch)
 	rx := (<-chan int)(ch)
-	_ = lisette.SenderSend(tx, 1)
+	lisette.SenderSend(tx, 1)
 	lisette.SenderClose(tx)
 	total := 0
 	if rx != nil {

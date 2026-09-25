@@ -12,6 +12,6 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() {
-	_ = lisette.MakeResultErr[int, string]("initial")
-	_ = lisette.MakeResultOk[int, string](42)
+	lisette.MakeResultErr[int, string]("initial")
+	lisette.MakeResultOk[int, string](42)
 }

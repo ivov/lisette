@@ -7,7 +7,7 @@ package main
 import "github.com/user/myproject/shapes"
 
 func main() {
-	_ = shapes.TestLocalStatic()
+	shapes.TestLocalStatic()
 }
 
 

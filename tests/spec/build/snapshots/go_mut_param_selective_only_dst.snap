@@ -9,5 +9,5 @@ import "encoding/hex"
 func main() {
 	dst := []uint8{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	src := []uint8{0xDE, 0xAD}
-	_ = hex.Encode(dst, src)
+	hex.Encode(dst, src)
 }

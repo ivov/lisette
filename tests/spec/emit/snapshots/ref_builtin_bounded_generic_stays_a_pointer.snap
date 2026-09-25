@@ -42,6 +42,6 @@ func storeIfLarger[T cmp.Ordered](slot *T, value T) {
 
 func test() {
 	count := 7
-	_ = storeIfNew(&count, 1)
+	storeIfNew(&count, 1)
 	storeIfLarger(&count, 2)
 }

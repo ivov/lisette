@@ -34,7 +34,7 @@ import (
 
 func main() {
 	ch := make(chan int, 1)
-	_ = lisette.ChannelSend(ch, 1)
+	lisette.ChannelSend(ch, 1)
 	total := 0
 loop_1:
 	for {

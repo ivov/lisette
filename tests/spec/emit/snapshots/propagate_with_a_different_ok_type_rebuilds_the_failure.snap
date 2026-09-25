@@ -36,5 +36,5 @@ func label() lisette.Result[string, string] {
 }
 
 func main() {
-	_ = label()
+	label()
 }

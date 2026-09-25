@@ -25,5 +25,5 @@ func Stack_new[T any]() Stack[T] {
 }
 
 func test() {
-	_ = Stack_new[int]()
+	Stack_new[int]()
 }

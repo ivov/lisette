@@ -71,7 +71,7 @@ func main() {
 		ret_5, ret_6 := cb_4(arg0, arg1)
 		return ret_5.First, ret_5.Second, ret_6
 	}}
-	_ = pick()
+	pick()
 	_ = assigned
 	_ = holder
 }

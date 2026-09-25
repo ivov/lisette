@@ -32,5 +32,5 @@ func main() {
 			}
 		}
 	}
-	_ = Resolve[int, Face](0, adapted_2...)
+	Resolve[int, Face](0, adapted_2...)
 }

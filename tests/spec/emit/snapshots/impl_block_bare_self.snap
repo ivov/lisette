@@ -31,5 +31,5 @@ func main() {
 		x: 10,
 		y: 20,
 	}
-	_ = p.sum()
+	p.sum()
 }

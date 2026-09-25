@@ -38,8 +38,8 @@ func (b Box[T]) same() Box[T] {
 
 func run() {
 	b := Box[int]{value: 1}
-	_ = b.same()
-	_ = Box_map(b, func(n int) bool {
+	b.same()
+	Box_map(b, func(n int) bool {
 		return n == 1
 	})
 }

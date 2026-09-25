@@ -38,7 +38,7 @@ func choose(raw string) int {
 		return 7
 	}
 	n, err := strconv.Atoi(raw)
-	_ = message()
+	message()
 	default_1 := fallback()
 	if err != nil {
 		n = default_1

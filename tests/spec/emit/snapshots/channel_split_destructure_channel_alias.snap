@@ -19,6 +19,6 @@ type Inbox = chan int
 func drain(ch Inbox) {
 	tx := (chan<- int)(ch)
 	rx := (<-chan int)(ch)
-	_ = lisette.SenderSend(tx, 42)
-	_ = lisette.ReceiverReceive(rx)
+	lisette.SenderSend(tx, 42)
+	lisette.ReceiverReceive(rx)
 }

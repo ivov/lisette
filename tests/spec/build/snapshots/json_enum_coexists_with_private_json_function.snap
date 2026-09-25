@@ -53,5 +53,5 @@ func json_() int {
 
 func main() {
 	_ = MakeStatusReady()
-	_ = json_()
+	json_()
 }

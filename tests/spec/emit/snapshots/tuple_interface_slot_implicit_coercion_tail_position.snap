@@ -41,5 +41,5 @@ func (m Model) View() string {
 }
 
 func main() {
-	_ = tea.NewProgram(Model{})
+	tea.NewProgram(Model{})
 }

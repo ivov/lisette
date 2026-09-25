@@ -7,7 +7,7 @@ package main
 import u "github.com/user/myproject/utils"
 
 func main() {
-	_ = u.Add(1, 2)
+	u.Add(1, 2)
 }
 
 

@@ -31,7 +31,7 @@ func message() string {
 
 func main() {
 	n, err := strconv.Atoi("2")
-	_ = message()
+	message()
 	if err == nil {
 		fmt.Println(n)
 	} else {

@@ -50,5 +50,5 @@ func count[T interface {
 }
 
 func main() {
-	_ = count(Person{value: "Ada"})
+	count(Person{value: "Ada"})
 }

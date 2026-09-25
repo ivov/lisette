@@ -44,5 +44,5 @@ func run() lisette.Result[int, string] {
 }
 
 func main() {
-	_ = run()
+	run()
 }

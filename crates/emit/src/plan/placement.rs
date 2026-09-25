@@ -34,6 +34,20 @@ pub(crate) fn unreachable_panic_if_needed(
     (place.is_return() && !is_exhaustive).then_some(LoweredStatement::UnreachablePanic)
 }
 
+fn calls_a_function(expression: &Expression) -> bool {
+    let Expression::Call { call_kind, .. } = expression else {
+        return false;
+    };
+    matches!(
+        call_kind,
+        CallKind::Regular
+            | CallKind::UfcsMethod
+            | CallKind::NativeMethod(_)
+            | CallKind::NativeMethodIdentifier(_)
+            | CallKind::ReceiverMethodUfcs { .. }
+    )
+}
+
 /// True when discarding `expression` is safe to omit: its value has no
 /// side effects. `FormatString` and `Slice` literals are excluded since they
 /// can hold sub-expressions that do.
@@ -391,7 +405,11 @@ impl Planner<'_> {
 
         let staged = self.plan_operand(value, ExpressionContext::value());
         let (mut statements, staged_value) = staged.into_parts();
-        statements.push(discard(staged_value));
+        if calls_a_function(unwrapped) && staged_value.stands_as_a_statement() {
+            statements.push(expression_statement(staged_value));
+        } else {
+            statements.push(discard(staged_value));
+        }
         statements
     }
 

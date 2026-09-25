@@ -44,5 +44,5 @@ func run(s mixed.Service) string {
 
 func main() {
 	s := Svc{}
-	_ = run(s)
+	run(s)
 }

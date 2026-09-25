@@ -26,13 +26,13 @@ import (
 
 func six() {
 	ch := make(chan int, 3)
-	_ = lisette.ChannelSend(ch, 1)
-	_ = lisette.ChannelSend(ch, 2)
-	_ = lisette.ChannelSend(ch, 3)
+	lisette.ChannelSend(ch, 1)
+	lisette.ChannelSend(ch, 2)
+	lisette.ChannelSend(ch, 3)
 	iterations := 0
 	bound_1 := len(ch)
 	for i_2 := 1; i_2 < bound_1; i_2++ {
-		_ = lisette.ChannelReceive(ch)
+		lisette.ChannelReceive(ch)
 		iterations++
 	}
 	fmt.Println("iterations", iterations)

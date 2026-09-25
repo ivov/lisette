@@ -29,5 +29,5 @@ func (c *Counter) inc() int {
 
 func main() {
 	c := Counter{x: 0}
-	_ = c.inc()
+	c.inc()
 }

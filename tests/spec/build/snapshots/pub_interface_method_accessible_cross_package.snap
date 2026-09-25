@@ -12,7 +12,7 @@ func greetAnyone(g types.Greetable) string {
 
 func main() {
 	p := types.Person{Name: "Alice"}
-	_ = greetAnyone(p)
+	greetAnyone(p)
 }
 
 

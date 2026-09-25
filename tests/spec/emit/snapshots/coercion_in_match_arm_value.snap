@@ -54,5 +54,5 @@ func pick(flag bool) io.Reader {
 }
 
 func main() {
-	_ = pick(true)
+	pick(true)
 }

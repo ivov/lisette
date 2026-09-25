@@ -32,7 +32,7 @@ import (
 func make_[sc_2 any](x sc_2) func() sc_2 {
 	return func() sc_2 {
 		sc_2_1 := 1
-		_ = sc.Itoa(sc_2_1)
+		sc.Itoa(sc_2_1)
 		opt := lisette.MakeOptionNone[sc_2]()
 		opt = lisette.MakeOptionSome(x)
 		if opt.Tag == lisette.OptionSome {

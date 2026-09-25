@@ -31,6 +31,6 @@ func (b Box) chan_() int {
 
 func main() {
 	b := Box{x: 1}
-	_ = b.range_()
-	_ = b.chan_()
+	b.range_()
+	b.chan_()
 }

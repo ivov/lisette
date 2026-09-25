@@ -19,5 +19,5 @@ func useIt(r Runner) int {
 }
 
 func main() {
-	_ = useIt(Job{})
+	useIt(Job{})
 }

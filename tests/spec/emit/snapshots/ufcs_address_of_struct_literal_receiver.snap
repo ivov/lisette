@@ -27,5 +27,5 @@ func (c *Counter) inc() int {
 }
 
 func main() {
-	_ = (&Counter{x: 0}).inc()
+	(&Counter{x: 0}).inc()
 }

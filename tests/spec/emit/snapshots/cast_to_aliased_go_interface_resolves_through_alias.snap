@@ -44,5 +44,5 @@ func run(s svc.Alias) int {
 
 func main() {
 	l := Loader{}
-	_ = run(l)
+	run(l)
 }

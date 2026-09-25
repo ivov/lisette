@@ -36,6 +36,6 @@ type MyResult[T any] struct {
 }
 
 func main() {
-	_ = MakeMyResultOk(42)
-	_ = MakeMyResultFail[int]("oops")
+	MakeMyResultOk(42)
+	MakeMyResultFail[int]("oops")
 }

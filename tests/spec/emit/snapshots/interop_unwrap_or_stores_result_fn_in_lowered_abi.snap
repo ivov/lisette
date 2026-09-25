@@ -16,5 +16,5 @@ import (
 )
 
 func pick(opt lisette.Option[func(int) (string, error)]) {
-	_ = opt.UnwrapOr(ext.MakeParser())
+	opt.UnwrapOr(ext.MakeParser())
 }

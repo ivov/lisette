@@ -24,5 +24,5 @@ func score[T comparable]() int {
 }
 
 func main() {
-	_ = score[int]()
+	score[int]()
 }

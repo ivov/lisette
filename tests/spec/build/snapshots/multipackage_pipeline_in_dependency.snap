@@ -7,7 +7,7 @@ package main
 import "github.com/user/myproject/utils"
 
 func main() {
-	_ = utils.Quadruple(10)
+	utils.Quadruple(10)
 }
 
 

@@ -17,7 +17,7 @@ func main() {
 	cb_1 := func(x int) (int, Face) {
 		return x, nil
 	}
-	_ = Resolve(42, func(arg0 int) lisette.Result[int, Face] {
+	Resolve(42, func(arg0 int) lisette.Result[int, Face] {
 		ret_2, ret_3 := cb_1(arg0)
 		if ret_3 != nil {
 			return lisette.MakeResultErr[int, Face](ret_3)

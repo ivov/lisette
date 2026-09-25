@@ -37,8 +37,8 @@ import (
 
 func main() {
 	ch := make(chan int, 2)
-	_ = lisette.ChannelSend(ch, 1)
-	_ = lisette.ChannelSend(ch, 2)
+	lisette.ChannelSend(ch, 1)
+	lisette.ChannelSend(ch, 2)
 	total := 0
 	for range 2 {
 		select {

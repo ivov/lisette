@@ -23,5 +23,5 @@ func count[T cmp.Ordered](x T) int {
 }
 
 func main() {
-	_ = count(1)
+	count(1)
 }

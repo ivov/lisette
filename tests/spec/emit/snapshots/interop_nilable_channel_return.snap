@@ -20,6 +20,6 @@ import (
 
 func main() {
 	if ch := reg.Events(); ch != nil {
-		_ = lisette.ChannelReceive(ch)
+		lisette.ChannelReceive(ch)
 	}
 }

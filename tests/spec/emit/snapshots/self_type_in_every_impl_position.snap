@@ -86,9 +86,9 @@ func run() {
 		second: 2,
 	}
 	p.swap()
-	_ = p.head()
-	_ = p.peek()
-	_ = p.twin(p)
+	p.head()
+	p.peek()
+	p.twin(p)
 	p.boxed()
-	_ = p.local()
+	p.local()
 }

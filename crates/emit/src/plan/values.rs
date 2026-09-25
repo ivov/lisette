@@ -375,6 +375,16 @@ impl GoExpression {
         }
     }
 
+    pub(crate) fn stands_as_a_statement(&self) -> bool {
+        let GoExpressionNode::Call { callee, .. } = &self.node else {
+            return false;
+        };
+        match callee.as_ref() {
+            GoExpressionNode::Identifier(name) => !is_value_only_builtin(name),
+            _ => true,
+        }
+    }
+
     pub(crate) fn does_work(&self) -> bool {
         self.node.does_work()
     }
@@ -800,4 +810,11 @@ impl Planner<'_> {
             _ => self.plan_operand_leaf(expression, ctx),
         }
     }
+}
+
+fn is_value_only_builtin(name: &str) -> bool {
+    matches!(
+        name,
+        "append" | "cap" | "complex" | "imag" | "len" | "make" | "max" | "min" | "new" | "real"
+    )
 }

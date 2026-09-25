@@ -13,5 +13,5 @@ package main
 import "example.com/cat"
 
 func main() {
-	_ = cat.Cat[int](1)
+	cat.Cat[int](1)
 }

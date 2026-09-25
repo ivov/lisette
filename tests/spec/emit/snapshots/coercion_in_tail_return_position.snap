@@ -37,5 +37,5 @@ func make_() io.Reader {
 }
 
 func main() {
-	_ = make_()
+	make_()
 }
