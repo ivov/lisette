@@ -11,7 +11,7 @@ package main
 func test(s []int) int {
 	result_1 := 0
 	for _, x := range s {
-		result_1 = result_1 + x
+		result_1 += x
 	}
 	return result_1
 }

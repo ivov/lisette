@@ -43,7 +43,7 @@ func main() {
 	}
 	total := 0
 	for _, t := range tasks {
-		total = total + t.id
+		total += t.id
 	}
 	fmt.Println(ids, len(open), total)
 }

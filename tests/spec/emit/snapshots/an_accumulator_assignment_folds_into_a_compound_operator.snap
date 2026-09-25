@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn test() {
+    let mut total = 0
+    let other = 5
+    for x in [1, 2, 3] {
+      total = total + x
+    }
+    total = total + 1
+    total = total - 1
+    total = other + total
+    let mut counts = Map.new<string, int>()
+    counts["a"] = counts["a"] + 1
+    if total != 11 { panic("the accumulator should total eleven") }
+    if counts["a"] != 1 { panic("the map entry should hold one") }
+  }
+---
+package main
+
+func test() {
+	total := 0
+	other := 5
+	for _, x := range []int{1, 2, 3} {
+		total += x
+	}
+	total++
+	total--
+	total = other + total
+	counts := make(map[string]int)
+	counts["a"] = counts["a"] + 1
+	if total != 11 {
+		panic("the accumulator should total eleven")
+	}
+	if counts["a"] != 1 {
+		panic("the map entry should hold one")
+	}
+}
