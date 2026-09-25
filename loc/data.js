@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790353094295,
+  "lastUpdate": 1790353380803,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -37649,6 +37649,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 35419,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28431,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19344,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15262,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13959,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9004,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2944,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f016b569d9d72e1784f23e31a67000874bb725d2",
+          "message": "feat: idiomatic Go for `try` blocks in tail position (#1461)",
+          "timestamp": "2026-09-25T18:22:38+02:00",
+          "tree_id": "314c68d41d6b70e240d90ed9f92d3f0f94fccd02",
+          "url": "https://github.com/ivov/lisette/commit/f016b569d9d72e1784f23e31a67000874bb725d2"
+        },
+        "date": 1790353379086,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 143921,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 35449,
             "unit": "lines"
           },
           {
