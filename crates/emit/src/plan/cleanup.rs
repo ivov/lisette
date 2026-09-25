@@ -4,8 +4,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::names::go_name;
 use crate::plan::bodies::{
-    AssignForm, CompoundKind, Definition, ElseArm, LoopHeader, LoweredBlock, LoweredStatement,
-    SelectArmPlan, SwitchKind, for_each_statement, for_each_statements_mut,
+    AssignForm, CompoundKind, Definition, ElseArm, LoopHeader, LoopTransfer, LoweredBlock,
+    LoweredStatement, SelectArmPlan, SwitchKind, for_each_statement, for_each_statements_mut,
 };
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{GoExpression, ValuePlan};
@@ -15,7 +15,180 @@ pub(crate) fn clean_up(statements: &mut Vec<LoweredStatement>) {
     inline_return_aliases(statements);
     drop_unread_temps(statements);
     fold_compound_assignments(statements);
+    return_found_elements_directly(statements);
     unwrap_terminal_else(statements);
+}
+
+fn return_found_elements_directly(statements: &mut Vec<LoweredStatement>) {
+    for_each_statements_mut(statements, &mut |block| {
+        let Some(found) = found_loop_return(block) else {
+            return;
+        };
+        let uses = NameUses::of(block);
+        if uses.reads(&found.flag) != 2 || uses.bindings(&found.flag) != 1 {
+            return;
+        }
+        if let Some(value) = &found.value
+            && (uses.reads(value) != 2 || uses.bindings(value) != 1)
+        {
+            return;
+        }
+
+        let mut success = found.success.clone();
+        if let (Some(value), Some(element)) = (&found.value, &found.element) {
+            for returned in &mut success {
+                returned.rename_identifier(value, element);
+            }
+        }
+
+        let LoweredStatement::Loop(plan) = &mut block[found.loop_at] else {
+            unreachable!("found_loop_return matched a loop");
+        };
+        let Some(LoweredStatement::If(hit)) = plan.body.statements.last_mut() else {
+            unreachable!("found_loop_return matched a trailing if");
+        };
+        hit.then_body = LoweredBlock {
+            statements: vec![LoweredStatement::Return(success)],
+        };
+
+        block.truncate(found.loop_at + 1);
+        block.push(LoweredStatement::Return(found.failure));
+        block.drain(found.declares_at..found.loop_at);
+    });
+}
+
+struct FoundLoopReturn {
+    declares_at: usize,
+    loop_at: usize,
+    flag: String,
+    value: Option<String>,
+    element: Option<String>,
+    success: Vec<GoExpression>,
+    failure: Vec<GoExpression>,
+}
+
+fn found_loop_return(block: &[LoweredStatement]) -> Option<FoundLoopReturn> {
+    let loop_at = block.len().checked_sub(3)?;
+    let define_at = loop_at.checked_sub(1)?;
+    let flag = false_define(&block[define_at])?;
+    let (declares_at, value) = match define_at.checked_sub(1).map(|at| (at, &block[at])) {
+        Some((
+            at,
+            LoweredStatement::VarDecl {
+                name, value: None, ..
+            },
+        )) => (at, Some(name.clone())),
+        _ => (define_at, None),
+    };
+    let LoweredStatement::Loop(plan) = &block[loop_at] else {
+        return None;
+    };
+    let element = found_hit(plan.body.statements.last()?, &flag, value.as_deref())?;
+    let failure = flag_guarded_return(&block[loop_at + 1], &flag)?;
+    let LoweredStatement::Return(success) = &block[loop_at + 2] else {
+        return None;
+    };
+    Some(FoundLoopReturn {
+        declares_at,
+        loop_at,
+        flag,
+        value,
+        element,
+        success: success.clone(),
+        failure,
+    })
+}
+
+fn false_define(statement: &LoweredStatement) -> Option<String> {
+    let LoweredStatement::Define(Definition { names, value }) = statement else {
+        return None;
+    };
+    let [name] = names.as_slice() else {
+        return None;
+    };
+    matches!(value.node(), GoExpressionNode::Literal(text) if text == "false").then(|| name.clone())
+}
+
+fn found_hit(
+    statement: &LoweredStatement,
+    flag: &str,
+    value: Option<&str>,
+) -> Option<Option<String>> {
+    let LoweredStatement::If(plan) = statement else {
+        return None;
+    };
+    if !matches!(plan.else_arm, ElseArm::None) || plan.initializer.is_some() {
+        return None;
+    }
+    let body = plan.then_body.statements.as_slice();
+    let (element, rest) = match (value, body) {
+        (Some(value), [first, rest @ ..]) => (Some(assigned_name(first, value)?), rest),
+        (None, rest) => (None, rest),
+        _ => return None,
+    };
+    match rest {
+        [raise, LoweredStatement::Break(LoopTransfer::Unlabeled)] if assigns_true(raise, flag) => {
+            Some(element)
+        }
+        _ => None,
+    }
+}
+
+fn assigned_name(statement: &LoweredStatement, target: &str) -> Option<String> {
+    let LoweredStatement::Assign(AssignForm::Simple {
+        target_capture,
+        target: place,
+        value,
+    }) = statement
+    else {
+        return None;
+    };
+    if !target_capture.is_empty() || !value.setup.is_empty() {
+        return None;
+    }
+    if !matches!(place.node(), GoExpressionNode::Identifier(name) if name == target) {
+        return None;
+    }
+    match value.expression.node() {
+        GoExpressionNode::Identifier(element) => Some(element.clone()),
+        _ => None,
+    }
+}
+
+fn assigns_true(statement: &LoweredStatement, target: &str) -> bool {
+    let LoweredStatement::Assign(AssignForm::Simple {
+        target_capture,
+        target: place,
+        value,
+    }) = statement
+    else {
+        return false;
+    };
+    target_capture.is_empty()
+        && value.setup.is_empty()
+        && matches!(place.node(), GoExpressionNode::Identifier(name) if name == target)
+        && matches!(value.expression.node(), GoExpressionNode::Literal(text) if text == "true")
+}
+
+fn flag_guarded_return(statement: &LoweredStatement, flag: &str) -> Option<Vec<GoExpression>> {
+    let LoweredStatement::If(plan) = statement else {
+        return None;
+    };
+    if !matches!(plan.else_arm, ElseArm::None) || plan.initializer.is_some() {
+        return None;
+    }
+    let GoExpressionNode::Unary { operator, operand } = plan.condition.node() else {
+        return None;
+    };
+    if operator != "!"
+        || !matches!(operand.as_ref(), GoExpressionNode::Identifier(name) if name == flag)
+    {
+        return None;
+    }
+    match plan.then_body.statements.as_slice() {
+        [LoweredStatement::Return(values)] => Some(values.clone()),
+        _ => None,
+    }
 }
 
 fn unwrap_terminal_else(statements: &mut Vec<LoweredStatement>) {

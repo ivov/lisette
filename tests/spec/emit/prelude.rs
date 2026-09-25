@@ -1835,3 +1835,35 @@ fn test(arr: Slice<int>, r: Prefix) -> Slice<int> {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn a_find_returned_directly_returns_where_it_hits() {
+    let input = r#"
+struct User { name: string }
+
+fn first_even(xs: Slice<int>) -> Option<int> {
+  xs.find(|x| x % 2 == 0)
+}
+
+fn named(users: Slice<User>, wanted: string) -> Option<User> {
+  let hit = users.find(|u| u.name == wanted)
+  hit
+}
+
+fn test() {
+  match first_even([1, 4, 6]) {
+    Some(v) => { if v != 4 { panic("the first even number is four") } },
+    None => { panic("expected a hit") },
+  }
+  match first_even([1, 3]) {
+    Some(_) => { panic("expected no hit") },
+    None => {},
+  }
+  match named([User { name: "a" }], "a") {
+    Some(u) => { if u.name != "a" { panic("wrong user") } },
+    None => { panic("expected a user") },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
