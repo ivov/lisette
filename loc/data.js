@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790355449225,
+  "lastUpdate": 1790370458348,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -38272,6 +38272,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 35642,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28431,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19344,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15262,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13959,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9004,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2944,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f0b39f15e5cee544288df23a4a0e7c3e5c74d05e",
+          "message": "feat: idiomatic Go for casts between an alias and its target (#1468)",
+          "timestamp": "2026-09-25T23:07:13+02:00",
+          "tree_id": "82df2aaab1897c42ca48012fe6d878e90ee0d1a1",
+          "url": "https://github.com/ivov/lisette/commit/f0b39f15e5cee544288df23a4a0e7c3e5c74d05e"
+        },
+        "date": 1790370456366,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 144135,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 35663,
             "unit": "lines"
           },
           {
