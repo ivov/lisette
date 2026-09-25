@@ -462,7 +462,32 @@ impl Planner<'_> {
             return inner.conversion(source_go_type).conversion(go_type);
         }
 
+        if self.is_identity_conversion(expression, &inner, ty) {
+            return inner;
+        }
+
         inner.conversion(go_type)
+    }
+
+    fn is_identity_conversion(
+        &self,
+        expression: &Expression,
+        inner: &ValuePlan,
+        ty: &Type,
+    ) -> bool {
+        if inner.expression.constant_kind().is_some() {
+            return false;
+        }
+        let source_ty = expression.get_type();
+        // A function-typed alias emits as a named Go type, so the conversion stands.
+        if self.facts.resolve_to_function_type(&source_ty).is_some()
+            || self.facts.resolve_to_function_type(ty).is_some()
+        {
+            return false;
+        }
+        let source = self.facts.peel_alias(&source_ty);
+        let target = self.facts.peel_alias(ty);
+        self.go_type(&source).code == self.go_type(&target).code
     }
 
     fn shift_pin_go_type(&mut self, expression: &Expression, target_ty: &Type) -> Option<String> {

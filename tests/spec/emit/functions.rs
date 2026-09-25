@@ -366,6 +366,59 @@ fn test() -> int {
 }
 
 #[test]
+fn cast_through_a_type_alias_drops_the_conversion() {
+    let input = r#"
+type Count = int
+
+fn total(n: Count) -> int {
+  n as int
+}
+
+fn tally(n: int) -> Count {
+  n as Count
+}
+
+fn test() {
+  if total(4) != 4 { panic("an alias cast should return its argument") }
+  if tally(5) != 5 { panic("an alias target should return its argument") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn cast_to_a_named_type_over_the_same_underlying_keeps_the_conversion() {
+    let input = r#"
+struct Meters(int)
+
+fn measure(n: int) -> Meters {
+  n as Meters
+}
+
+fn test() {
+  if measure(6) != Meters(6) { panic("a named type should keep its conversion") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn cast_of_a_constant_through_an_alias_keeps_the_conversion() {
+    let input = r#"
+type Count = int
+
+fn pinned() -> Count {
+  1 as Count
+}
+
+fn test() {
+  if pinned() != 1 { panic("a pinned constant should keep its value") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn cast_in_complex_expression() {
     let input = r#"
 fn test() -> float64 {

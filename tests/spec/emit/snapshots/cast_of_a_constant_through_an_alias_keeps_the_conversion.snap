@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  type Count = int
+  
+  fn pinned() -> Count {
+    1 as Count
+  }
+  
+  fn test() {
+    if pinned() != 1 { panic("a pinned constant should keep its value") }
+  }
+---
+package main
+
+type Count = int
+
+func pinned() Count {
+	return Count(1)
+}
+
+func test() {
+	if pinned() != 1 {
+		panic("a pinned constant should keep its value")
+	}
+}

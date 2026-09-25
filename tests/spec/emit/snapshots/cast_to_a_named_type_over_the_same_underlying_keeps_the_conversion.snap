@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Meters(int)
+  
+  fn measure(n: int) -> Meters {
+    n as Meters
+  }
+  
+  fn test() {
+    if measure(6) != Meters(6) { panic("a named type should keep its conversion") }
+  }
+---
+package main
+
+type Meters int
+
+func measure(n int) Meters {
+	return Meters(n)
+}
+
+func test() {
+	if measure(6) != Meters(6) {
+		panic("a named type should keep its conversion")
+	}
+}
