@@ -93,7 +93,6 @@ func (a _lisAdapter_Bar_Box_0[T]) get() lisette.Option[Foo[T]] {
 	ret_1, ret_2 := a.inner.get()
 	if ret_2 && !lisette.IsNilInterface(ret_1) {
 		return lisette.MakeOptionSome[Foo[T]](ret_1)
-	} else {
-		return lisette.MakeOptionNone[Foo[T]]()
 	}
+	return lisette.MakeOptionNone[Foo[T]]()
 }
