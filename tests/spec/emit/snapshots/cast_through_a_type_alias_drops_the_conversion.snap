@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  type Count = int
+  
+  fn total(n: Count) -> int {
+    n as int
+  }
+  
+  fn tally(n: int) -> Count {
+    n as Count
+  }
+  
+  fn test() {
+    if total(4) != 4 { panic("an alias cast should return its argument") }
+    if tally(5) != 5 { panic("an alias target should return its argument") }
+  }
+---
+package main
+
+type Count = int
+
+func total(n Count) int {
+	return n
+}
+
+func tally(n int) Count {
+	return n
+}
+
+func test() {
+	if total(4) != 4 {
+		panic("an alias cast should return its argument")
+	}
+	if tally(5) != 5 {
+		panic("an alias target should return its argument")
+	}
+}
