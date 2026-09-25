@@ -451,10 +451,10 @@ impl Planner<'_> {
         let Some(shape) = lowered else {
             return vec![plain_return(value)];
         };
-        // The destructure references the value multiple times (`.Tag`,
-        // `.OkVal`, `.ErrVal` etc.); hoist to avoid re-evaluating.
+        // The destructure reads the value several times (`.Tag`, `.OkVal`,
+        // `.ErrVal`), so anything but a name is bound once first.
         let mut statements = Vec::new();
-        let temp = GoExpression::name(self.hoist_tmp_value_statement(&mut statements, "v", value));
+        let temp = self.stable_source(&mut statements, "v", value);
         statements.extend(transition::emit_lowered_result_return(
             self, &temp, return_ty, shape,
         ));
@@ -676,8 +676,7 @@ impl Planner<'_> {
                 .lower_value(expression, ExpressionContext::value())
                 .into_parts();
             statements.extend(setup);
-            let temp =
-                GoExpression::name(self.hoist_tmp_value_statement(&mut statements, "v", value));
+            let temp = self.stable_source(&mut statements, "v", value);
             statements.extend(transition::emit_lowered_result_return(
                 self, &temp, return_ty, shape,
             ));

@@ -51,11 +51,10 @@ func openAndCheck(path, n string) (int, error) {
 		}
 		return lisette.MakeResultOk[int, error](ret_4)
 	}()
-	v_6 := tryResult_1
-	if v_6.Tag == lisette.ResultOk {
-		return v_6.OkVal, nil
+	if tryResult_1.Tag == lisette.ResultOk {
+		return tryResult_1.OkVal, nil
 	}
-	return 0, v_6.ErrVal
+	return 0, tryResult_1.ErrVal
 }
 
 func main() {

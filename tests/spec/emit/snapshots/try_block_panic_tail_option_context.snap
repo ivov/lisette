@@ -21,9 +21,8 @@ func test() (int, bool) {
 		}
 		panic("fatal")
 	}()
-	v_3 := tryResult_1
-	if v_3.Tag == lisette.OptionSome {
-		return v_3.SomeVal, true
+	if tryResult_1.Tag == lisette.OptionSome {
+		return tryResult_1.SomeVal, true
 	}
 	return 0, false
 }

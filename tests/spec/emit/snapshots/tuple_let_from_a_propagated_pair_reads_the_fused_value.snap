@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn hash(text: string) -> Result<(string, int), error> {
+    Ok((text, text.length()))
+  }
+  
+  fn run(text: string) -> Result<int, error> {
+    let (hex, n) = hash(text)?
+    let _ = hex
+    Ok(n)
+  }
+  
+  fn main() {
+    let _ = run("abc")
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func hash(text string) (lisette.Tuple2[string, int], error) {
+	return lisette.MakeTuple2[string, int](text, len(text)), nil
+}
+
+func run(text string) (int, error) {
+	ret_1, err := hash(text)
+	if err != nil {
+		return 0, err
+	}
+	n := ret_1.Second
+	return n, nil
+}
+
+func main() {
+	run("abc")
+}

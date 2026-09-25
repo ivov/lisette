@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let pairs = [(1, 2), (3, 4)]
+    let (a, b) = pairs[0]
+    fmt.Println(a, b)
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	pairs := []lisette.Tuple2[int, int]{
+		lisette.MakeTuple2[int, int](1, 2),
+		lisette.MakeTuple2[int, int](3, 4),
+	}
+	tmp_1 := pairs[0]
+	a := tmp_1.First
+	b := tmp_1.Second
+	fmt.Println(a, b)
+}

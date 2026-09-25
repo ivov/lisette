@@ -18,9 +18,8 @@ func test(s []int) (int, bool) {
 			break
 		}
 	}
-	v_2 := result_1
-	if v_2.Tag == lisette.OptionSome {
-		return v_2.SomeVal, true
+	if result_1.Tag == lisette.OptionSome {
+		return result_1.SomeVal, true
 	}
 	return 0, false
 }

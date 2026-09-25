@@ -3982,3 +3982,60 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn tuple_let_from_a_propagated_pair_reads_the_fused_value() {
+    let input = r#"
+fn hash(text: string) -> Result<(string, int), error> {
+  Ok((text, text.length()))
+}
+
+fn run(text: string) -> Result<int, error> {
+  let (hex, n) = hash(text)?
+  let _ = hex
+  Ok(n)
+}
+
+fn main() {
+  let _ = run("abc")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_let_from_an_indexed_element_keeps_the_temp() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let pairs = [(1, 2), (3, 4)]
+  let (a, b) = pairs[0]
+  fmt.Println(a, b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn try_block_tail_return_reads_the_try_result_in_place() {
+    let input = r#"
+import "go:errors"
+
+fn parse_port(text: string) -> Result<int, error> {
+  if text == "80" { Ok(80) } else { Err(errors.New("bad port")) }
+}
+
+fn address(host: string, port: string) -> Result<string, error> {
+  try {
+    let n = parse_port(port)?
+    f"{host}:{n}"
+  }
+}
+
+fn main() {
+  let _ = address("localhost", "80")
+}
+"#;
+    assert_emit_snapshot!(input);
+}

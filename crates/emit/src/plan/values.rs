@@ -693,8 +693,8 @@ impl ValuePlan {
         go_name::is_plain_identifier(rendered)
             && self
                 .setup
-                .last()
-                .is_some_and(|statement| statement.binds_name(rendered))
+                .iter()
+                .any(|statement| statement.binds_name(rendered))
     }
 
     pub(crate) fn rests_in_fixed_name(&self) -> bool {

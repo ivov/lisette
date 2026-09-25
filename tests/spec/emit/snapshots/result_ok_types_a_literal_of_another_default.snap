@@ -13,9 +13,8 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func test() (float64, error) {
 	widened := lisette.MakeResultOk[float64, error](1)
-	v_1 := widened
-	if v_1.Tag == lisette.ResultOk {
-		return v_1.OkVal, nil
+	if widened.Tag == lisette.ResultOk {
+		return widened.OkVal, nil
 	}
-	return 0.0, v_1.ErrVal
+	return 0.0, widened.ErrVal
 }
