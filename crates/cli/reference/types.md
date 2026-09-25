@@ -213,4 +213,4 @@ struct Point { x: int, y: int }
 type Pair = (int, string)
 ```
 
-See [`zero()`](/docs/prelude/functions/#zero) and [`Zeroable`](/docs/prelude/constraints/#zeroable).
+📚 See [`zero()`](/docs/prelude/functions/#zero) and [`Zeroable`](/docs/prelude/constraints/#zeroable)
