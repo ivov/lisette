@@ -38,10 +38,9 @@ loop_1:
 				if ok {
 					fmt.Println(msg)
 					break loop_1
-				} else {
-					ch_1 = nil
-					continue
 				}
+				ch_1 = nil
+				continue
 			default:
 				break loop_1
 			}

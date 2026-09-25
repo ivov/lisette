@@ -81,7 +81,6 @@ func (a _lisAdapter_Bar_Box_0[K]) get() lisette.Option[map[K]int] {
 	ret_1, ret_2 := a.inner.get()
 	if ret_2 && ret_1 != nil {
 		return lisette.MakeOptionSome[map[K]int](ret_1)
-	} else {
-		return lisette.MakeOptionNone[map[K]int]()
 	}
+	return lisette.MakeOptionNone[map[K]int]()
 }

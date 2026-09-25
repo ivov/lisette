@@ -10,9 +10,7 @@ package main
 
 func first(a [3]int, i int) int {
 	if i >= 0 && i < len(a) {
-		v := a[i]
-		return v
-	} else {
-		return 0
+		return a[i]
 	}
+	return 0
 }

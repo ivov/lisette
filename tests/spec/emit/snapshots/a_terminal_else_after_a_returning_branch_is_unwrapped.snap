@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn pick(xs: Slice<int>, i: int) -> int {
+    match xs.get(i) { Some(value) => value, None => -1 }
+  }
+  
+  fn test() {
+    if pick([7], 0) != 7 { panic("an index in range should return its element") }
+    if pick([7], 3) != -1 { panic("an index out of range should return minus one") }
+    if pick([], 0) != -1 { panic("an empty slice should return minus one") }
+  }
+---
+package main
+
+func pick(xs []int, i int) int {
+	if i >= 0 && i < len(xs) {
+		return xs[i]
+	}
+	return -1
+}
+
+func test() {
+	if pick([]int{7}, 0) != 7 {
+		panic("an index in range should return its element")
+	}
+	if pick([]int{7}, 3) != -1 {
+		panic("an index out of range should return minus one")
+	}
+	if pick([]int{}, 0) != -1 {
+		panic("an empty slice should return minus one")
+	}
+}

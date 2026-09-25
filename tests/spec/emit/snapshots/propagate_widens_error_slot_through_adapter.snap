@@ -89,7 +89,6 @@ func (a _lisAdapter_Boom_Failing_0) get() lisette.Result[int, error] {
 	ret_2, ret_3 := a.inner.get()
 	if ret_3 != nil {
 		return lisette.MakeResultErr[int, error](ret_3)
-	} else {
-		return lisette.MakeResultOk[int, error](ret_2)
 	}
+	return lisette.MakeResultOk[int, error](ret_2)
 }

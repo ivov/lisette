@@ -50,10 +50,9 @@ loop_1:
 						total++
 					}
 					break loop_1
-				} else {
-					ch_1 = nil
-					continue
 				}
+				ch_1 = nil
+				continue
 			default:
 				break loop_1
 			}

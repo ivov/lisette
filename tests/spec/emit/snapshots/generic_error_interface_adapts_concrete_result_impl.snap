@@ -53,7 +53,6 @@ func (a _lisAdapter_Bar_Foo_0) get() lisette.Result[int, error] {
 	ret_1, ret_2 := a.inner.get()
 	if ret_2 != nil {
 		return lisette.MakeResultErr[int, error](ret_2)
-	} else {
-		return lisette.MakeResultOk[int, error](ret_1)
 	}
+	return lisette.MakeResultOk[int, error](ret_1)
 }

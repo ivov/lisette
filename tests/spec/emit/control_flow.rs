@@ -4040,3 +4040,40 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn a_terminal_else_after_a_returning_branch_is_unwrapped() {
+    let input = r#"
+fn pick(xs: Slice<int>, i: int) -> int {
+  match xs.get(i) { Some(value) => value, None => -1 }
+}
+
+fn test() {
+  if pick([7], 0) != 7 { panic("an index in range should return its element") }
+  if pick([7], 3) != -1 { panic("an index out of range should return minus one") }
+  if pick([], 0) != -1 { panic("an empty slice should return minus one") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn a_terminal_else_keeps_its_block_when_an_initializer_binds_names() {
+    let input = r#"
+import "go:errors"
+
+fn attempt(ok: bool) -> Result<int, error> {
+  if ok { Ok(1) } else { Err(errors.New("nope")) }
+}
+
+fn read(ok: bool) -> int {
+  match attempt(ok) { Ok(n) => n, Err(_) => 0 }
+}
+
+fn test() {
+  if read(true) != 1 { panic("a success should return one") }
+  if read(false) != 0 { panic("a failure should return zero") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

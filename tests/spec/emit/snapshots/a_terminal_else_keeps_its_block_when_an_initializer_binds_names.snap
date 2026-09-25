@@ -1,0 +1,46 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:errors"
+  
+  fn attempt(ok: bool) -> Result<int, error> {
+    if ok { Ok(1) } else { Err(errors.New("nope")) }
+  }
+  
+  fn read(ok: bool) -> int {
+    match attempt(ok) { Ok(n) => n, Err(_) => 0 }
+  }
+  
+  fn test() {
+    if read(true) != 1 { panic("a success should return one") }
+    if read(false) != 0 { panic("a failure should return zero") }
+  }
+---
+package main
+
+import "errors"
+
+func attempt(ok bool) (int, error) {
+	if ok {
+		return 1, nil
+	}
+	return 0, errors.New("nope")
+}
+
+func read(ok bool) int {
+	if n, err := attempt(ok); err == nil {
+		return n
+	} else {
+		return 0
+	}
+}
+
+func test() {
+	if read(true) != 1 {
+		panic("a success should return one")
+	}
+	if read(false) != 0 {
+		panic("a failure should return zero")
+	}
+}

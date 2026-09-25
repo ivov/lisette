@@ -4,16 +4,113 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::names::go_name;
 use crate::plan::bodies::{
-    AssignForm, CompoundKind, Definition, ElseArm, LoopHeader, LoweredStatement, SelectArmPlan,
-    SwitchKind, for_each_statement, for_each_statements_mut,
+    AssignForm, CompoundKind, Definition, ElseArm, LoopHeader, LoweredBlock, LoweredStatement,
+    SelectArmPlan, SwitchKind, for_each_statement, for_each_statements_mut,
 };
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{GoExpression, ValuePlan};
 
 pub(crate) fn clean_up(statements: &mut Vec<LoweredStatement>) {
     inline_name_aliases(statements);
+    inline_return_aliases(statements);
     drop_unread_temps(statements);
     fold_compound_assignments(statements);
+    unwrap_terminal_else(statements);
+}
+
+fn unwrap_terminal_else(statements: &mut Vec<LoweredStatement>) {
+    for_each_statements_mut(statements, &mut |block| {
+        for statement in block.iter_mut() {
+            unwrap_terminal_else_of(statement);
+        }
+    });
+}
+
+fn unwrap_terminal_else_of(statement: &mut LoweredStatement) {
+    let mut plan = match statement {
+        LoweredStatement::Directed { inner, .. } => return unwrap_terminal_else_of(inner),
+        LoweredStatement::If(plan) => plan,
+        _ => return,
+    };
+    loop {
+        let then_diverges = plan.then_body.ends_with_diverge();
+        // An initializer binds its names for the whole statement, which an inlined body leaves.
+        let keeps_scope = plan.initializer.is_none();
+        match &mut plan.else_arm {
+            ElseArm::ElseIf(inner) => plan = inner,
+            ElseArm::Else { body, inline } => {
+                if then_diverges && keeps_scope && declares_no_names(body) {
+                    *inline = true;
+                }
+                return;
+            }
+            ElseArm::None => return,
+        }
+    }
+}
+
+fn declares_no_names(body: &LoweredBlock) -> bool {
+    body.statements.iter().all(|statement| {
+        let statement = match statement {
+            LoweredStatement::Directed { inner, .. } => inner.as_ref(),
+            other => other,
+        };
+        !matches!(
+            statement,
+            LoweredStatement::Define(_)
+                | LoweredStatement::VarDecl { .. }
+                | LoweredStatement::Const(_)
+                | LoweredStatement::Select(_)
+                | LoweredStatement::Switch(_)
+                | LoweredStatement::Loop(_)
+                | LoweredStatement::If(_)
+        )
+    })
+}
+
+fn inline_return_aliases(statements: &mut Vec<LoweredStatement>) {
+    let uses = NameUses::of(statements);
+    for_each_statements_mut(statements, &mut |list| {
+        let mut index = 0;
+        while index + 1 < list.len() {
+            let Some(name) = returned_alias(&list[index], &list[index + 1]) else {
+                index += 1;
+                continue;
+            };
+            if uses.reads(&name) != 1 || uses.bindings(&name) != 1 || uses.writes.contains(&name) {
+                index += 1;
+                continue;
+            }
+            let LoweredStatement::Define(Definition { value, .. }) = list.remove(index) else {
+                unreachable!("returned_alias matched a definition");
+            };
+            let LoweredStatement::Return(values) = &mut list[index] else {
+                unreachable!("returned_alias matched a return");
+            };
+            values[0] = value;
+            index += 1;
+        }
+    });
+}
+
+fn returned_alias(definition: &LoweredStatement, next: &LoweredStatement) -> Option<String> {
+    let LoweredStatement::Define(Definition { names, value }) = definition else {
+        return None;
+    };
+    let [name] = names.as_slice() else {
+        return None;
+    };
+    if value.does_work() {
+        return None;
+    }
+    let LoweredStatement::Return(values) = next else {
+        return None;
+    };
+    let [returned] = values.as_slice() else {
+        return None;
+    };
+    matches!(returned.node(), GoExpressionNode::Identifier(read) if read == name)
+        .then(|| name.clone())
 }
 
 fn fold_compound_assignments(statements: &mut Vec<LoweredStatement>) {
