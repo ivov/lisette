@@ -30,31 +30,25 @@ import (
 )
 
 func openAndCheck(path, n string) (int, error) {
-	tryResult_1 := func() lisette.Result[int, error] {
-		f, err := os.Open(path)
-		if err != nil {
-			return lisette.MakeResultErr[int, error](err)
-		}
-		if f == nil {
-			return lisette.MakeResultErr[int, error](errors.New("unexpected nil"))
-		}
-		ret_2, err_3 := f.Stat()
-		if err_3 != nil {
-			return lisette.MakeResultErr[int, error](err_3)
-		}
-		if lisette.IsNilInterface(ret_2) {
-			return lisette.MakeResultErr[int, error](errors.New("unexpected nil"))
-		}
-		ret_4, err_5 := strconv.Atoi(n)
-		if err_5 != nil {
-			return lisette.MakeResultErr[int, error](err_5)
-		}
-		return lisette.MakeResultOk[int, error](ret_4)
-	}()
-	if tryResult_1.Tag == lisette.ResultOk {
-		return tryResult_1.OkVal, nil
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
 	}
-	return 0, tryResult_1.ErrVal
+	if f == nil {
+		return 0, errors.New("unexpected nil")
+	}
+	ret_1, err_2 := f.Stat()
+	if err_2 != nil {
+		return 0, err_2
+	}
+	if lisette.IsNilInterface(ret_1) {
+		return 0, errors.New("unexpected nil")
+	}
+	ret_3, err_4 := strconv.Atoi(n)
+	if err_4 != nil {
+		return 0, err_4
+	}
+	return ret_3, nil
 }
 
 func main() {

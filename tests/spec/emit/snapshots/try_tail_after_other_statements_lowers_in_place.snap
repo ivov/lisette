@@ -1,0 +1,51 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn risky(n: int) -> Result<int, string> {
+    if n > 0 { Ok(n) } else { Err("bad") }
+  }
+  
+  fn run(n: int) -> Result<int, string> {
+    fmt.Println("start")
+    let base = n * 2
+    try {
+      let a = risky(base)?
+      a + base
+    }
+  }
+  
+  fn main() {
+    let _ = run(1)
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func risky(n int) lisette.Result[int, string] {
+	if n > 0 {
+		return lisette.MakeResultOk[int, string](n)
+	}
+	return lisette.MakeResultErr[int, string]("bad")
+}
+
+func run(n int) lisette.Result[int, string] {
+	fmt.Println("start")
+	base := n * 2
+	check_1 := risky(base)
+	if check_1.Tag != lisette.ResultOk {
+		return check_1
+	}
+	a := check_1.OkVal
+	return lisette.MakeResultOk[int, string](a + base)
+}
+
+func main() {
+	_ = run(1)
+}

@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn check(n: int) -> Result<(), string> {
+    if n > 0 { Ok(()) } else { Err("bad") }
+  }
+  
+  fn check_all(xs: Slice<int>) -> Result<(), string> {
+    try {
+      for x in xs {
+        check(x)?
+      }
+    }
+  }
+  
+  fn main() {
+    let _ = check_all([1, 2])
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func check(n int) lisette.Result[struct{}, string] {
+	if n > 0 {
+		return lisette.MakeResultOk[struct{}, string](struct{}{})
+	}
+	return lisette.MakeResultErr[struct{}, string]("bad")
+}
+
+func checkAll(xs []int) lisette.Result[struct{}, string] {
+	for _, x := range xs {
+		check_1 := check(x)
+		if check_1.Tag != lisette.ResultOk {
+			return check_1
+		}
+	}
+	return lisette.MakeResultOk[struct{}, string](struct{}{})
+}
+
+func main() {
+	_ = checkAll([]int{1, 2})
+}

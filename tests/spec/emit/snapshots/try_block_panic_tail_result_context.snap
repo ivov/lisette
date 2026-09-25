@@ -14,12 +14,9 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() lisette.Result[int, string] {
-	tryResult_1 := func() lisette.Result[int, string] {
-		check_2 := lisette.MakeResultOk[int, string](1)
-		if check_2.Tag != lisette.ResultOk {
-			return check_2
-		}
-		panic("fatal")
-	}()
-	return tryResult_1
+	check_1 := lisette.MakeResultOk[int, string](1)
+	if check_1.Tag != lisette.ResultOk {
+		return check_1
+	}
+	panic("fatal")
 }

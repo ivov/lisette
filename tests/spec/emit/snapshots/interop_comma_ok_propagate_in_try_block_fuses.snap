@@ -20,23 +20,14 @@ description: |
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"os"
-)
+import "os"
 
 func lookup(k string) (string, bool) {
-	tryResult_1 := func() lisette.Option[string] {
-		v, ok := os.LookupEnv(k)
-		if !ok {
-			return lisette.MakeOptionNone[string]()
-		}
-		return lisette.MakeOptionSome[string](v)
-	}()
-	if tryResult_1.Tag == lisette.OptionSome {
-		return tryResult_1.SomeVal, true
+	v, ok := os.LookupEnv(k)
+	if !ok {
+		return "", false
 	}
-	return "", false
+	return v, true
 }
 
 func main() {
