@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn first_big(xs: Slice<int>) -> Option<int> {
+    let x = xs.find(|x| x > 2)?
+    Some(x)
+  }
+  
+  fn main() {
+    let _ = first_big([1, 2, 3])
+  }
+---
+package main
+
+func firstBig(xs []int) (int, bool) {
+	var x int
+	found_1 := false
+	for _, x_2 := range xs {
+		if x_2 > 2 {
+			x = x_2
+			found_1 = true
+			break
+		}
+	}
+	if !found_1 {
+		return 0, false
+	}
+	return x, true
+}
+
+func main() {
+	firstBig([]int{1, 2, 3})
+}

@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn first_doubled(xs: Slice<int>) -> Option<int> {
+    let x = xs.get(0)?
+    Some(x * 2)
+  }
+  
+  fn main() {
+    let _ = first_doubled([1, 2])
+  }
+---
+package main
+
+func firstDoubled(xs []int) (int, bool) {
+	if len(xs) == 0 {
+		return 0, false
+	}
+	x := xs[0]
+	return x * 2, true
+}
+
+func main() {
+	firstDoubled([]int{1, 2})
+}

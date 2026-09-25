@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn make_list() -> Slice<int> {
+    [3, 4]
+  }
+  
+  fn head() -> Option<int> {
+    let x = make_list().get(0)?
+    Some(x)
+  }
+  
+  fn main() {
+    let _ = head()
+  }
+---
+package main
+
+func makeList() []int {
+	return []int{3, 4}
+}
+
+func head() (int, bool) {
+	recv_1 := makeList()
+	if len(recv_1) == 0 {
+		return 0, false
+	}
+	x := recv_1[0]
+	return x, true
+}
+
+func main() {
+	head()
+}

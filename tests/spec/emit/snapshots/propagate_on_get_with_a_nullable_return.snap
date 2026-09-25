@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn head_slice(xss: Slice<Slice<int>>) -> Option<Slice<int>> {
+    let xs = xss.get(0)?
+    Some(xs)
+  }
+  
+  fn main() {
+    let _ = head_slice([[1], [2]])
+  }
+---
+package main
+
+func headSlice(xss [][]int) ([]int, bool) {
+	if len(xss) == 0 {
+		return nil, false
+	}
+	xs := xss[0]
+	return xs, true
+}
+
+func main() {
+	headSlice([][]int{{1}, {2}})
+}

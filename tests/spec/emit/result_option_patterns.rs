@@ -4039,3 +4039,141 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn propagate_on_slice_get_tests_the_bounds() {
+    let input = r#"
+fn first_doubled(xs: Slice<int>) -> Option<int> {
+  let x = xs.get(0)?
+  Some(x * 2)
+}
+
+fn main() {
+  let _ = first_doubled([1, 2])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_on_slice_get_in_value_position() {
+    let input = r#"
+fn sum_ends(xs: Slice<int>) -> Option<int> {
+  Some(xs.get(0)? + xs.get(1)?)
+}
+
+fn main() {
+  let _ = sum_ends([1, 2])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_on_array_get_with_a_constant_index() {
+    let input = r#"
+fn middle(arr: Array<int, 3>) -> Option<int> {
+  let m = arr.get(1)?
+  Some(m)
+}
+
+fn main() {
+  let _ = middle([1, 2, 3])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_on_map_get_tests_the_key() {
+    let input = r#"
+fn lookup(m: Map<string, int>, k: string) -> Option<int> {
+  let v = m.get(k)?
+  Some(v + 1)
+}
+
+fn main() {
+  let _ = lookup(Map.new<string, int>(), "a")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_on_find_runs_the_loop() {
+    let input = r#"
+fn first_big(xs: Slice<int>) -> Option<int> {
+  let x = xs.find(|x| x > 2)?
+  Some(x)
+}
+
+fn main() {
+  let _ = first_big([1, 2, 3])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_on_get_with_a_call_receiver_pins_it() {
+    let input = r#"
+fn make_list() -> Slice<int> {
+  [3, 4]
+}
+
+fn head() -> Option<int> {
+  let x = make_list().get(0)?
+  Some(x)
+}
+
+fn main() {
+  let _ = head()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_on_slice_get_in_a_try_block() {
+    let input = r#"
+fn main() {
+  let xs = [1, 2]
+  let r = try {
+    let x = xs.get(0)?
+    x + 1
+  }
+  let _ = r
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_on_get_as_a_statement() {
+    let input = r#"
+fn check(xs: Slice<int>) -> Option<int> {
+  xs.get(0)?
+  Some(1)
+}
+
+fn main() {
+  let _ = check([1])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_on_get_with_a_nullable_return() {
+    let input = r#"
+fn head_slice(xss: Slice<Slice<int>>) -> Option<Slice<int>> {
+  let xs = xss.get(0)?
+  Some(xs)
+}
+
+fn main() {
+  let _ = head_slice([[1], [2]])
+}
+"#;
+    assert_emit_snapshot!(input);
+}

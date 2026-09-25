@@ -52,6 +52,11 @@ impl Planner<'_> {
         {
             return fused;
         }
+        if let Some(fused) =
+            self.try_lower_fused_option_propagate(expression, &fallible, result_var_name)
+        {
+            return fused;
+        }
 
         let (check_setup, check) = self.hoist_propagate_check_var(expression);
         statements.extend(check_setup);
@@ -195,12 +200,7 @@ impl Planner<'_> {
             _ => return None,
         };
         let has_value_slot = !matches!(shape, CallableReturnAbi::BareError);
-        let return_ctx = self.return_ctx();
-        let has_fallible_return = return_ctx.lowered_shape().is_some()
-            || return_ctx
-                .ty()
-                .is_some_and(|ty| Fallible::from_type(ty).is_some());
-        if !has_fallible_return {
+        if !self.returns_fallible() {
             return None;
         }
 
@@ -303,6 +303,73 @@ impl Planner<'_> {
             }
         };
         Some((statements, value))
+    }
+
+    /// Fuse `source?` on a native Option source into its Go test.
+    fn try_lower_fused_option_propagate(
+        &mut self,
+        expression: &Expression,
+        fallible: &Fallible,
+        result_var_name: Option<&str>,
+    ) -> Option<(Vec<LoweredStatement>, GoExpression)> {
+        if fallible.is_result() || !self.returns_fallible() {
+            return None;
+        }
+        let fuse = self.option_fuse_plan(expression)?;
+        let named = result_var_name.filter(|name| *name != "_" && !self.is_declared(name));
+        if let Some(name) = named {
+            self.declare(name);
+        }
+        let slot = match (named, result_var_name) {
+            (Some(name), _) => CommaOkValueSlot::Named(name.to_string()),
+            (None, Some("_")) => CommaOkValueSlot::Discarded,
+            (None, _) => CommaOkValueSlot::Temp,
+        };
+        let bound = fuse.bind(self, slot);
+        let failure = bound.none_condition(self);
+        let late_binding = bound.late_binding();
+        let payload = bound.value();
+        let reads_element = !bound.binds_value();
+        let mut statements = bound.statements;
+        let failure_values = self.failure_return_values(fallible, None);
+        statements.push(transition::tag_check_with_initializer(
+            failure.initializer,
+            failure.condition,
+            Vec::new(),
+            failure_values,
+        ));
+        statements.extend(late_binding);
+        let value = match result_var_name {
+            None => {
+                let payload = payload.expect("a propagated Option carries its payload");
+                if reads_element {
+                    GoExpression::name(self.hoist_tmp_value_statement(
+                        &mut statements,
+                        "elem",
+                        payload,
+                    ))
+                } else {
+                    payload
+                }
+            }
+            Some("_") => GoExpression::name("_".to_string()),
+            Some(name) => {
+                if named.is_none() {
+                    let payload = payload.expect("a propagated Option carries its payload");
+                    statements.push(self.bind_propagate_ok(name, payload));
+                }
+                GoExpression::name(name.to_string())
+            }
+        };
+        Some((statements, value))
+    }
+
+    fn returns_fallible(&self) -> bool {
+        let return_ctx = self.return_ctx();
+        return_ctx.lowered_shape().is_some()
+            || return_ctx
+                .ty()
+                .is_some_and(|ty| Fallible::from_type(ty).is_some())
     }
 
     /// Statement-position `inner?` (discards the ok value).

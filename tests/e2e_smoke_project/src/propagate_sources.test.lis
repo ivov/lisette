@@ -1,0 +1,61 @@
+fn first_doubled(xs: Slice<int>) -> Option<int> {
+  let x = xs.get(0)?
+  Some(x * 2)
+}
+
+fn lookup(m: Map<string, int>, k: string) -> Option<int> {
+  let v = m.get(k)?
+  Some(v + 1)
+}
+
+fn first_big(xs: Slice<int>) -> Option<int> {
+  let x = xs.find(|x| x > 2)?
+  Some(x)
+}
+
+fn sum_ends(xs: Slice<int>) -> Option<int> {
+  Some(xs.get(0)? + xs.get(1)?)
+}
+
+#[test]
+fn get_propagate_returns_the_element() {
+  assert first_doubled([4, 5]) == Some(8)
+}
+
+#[test]
+fn get_propagate_on_an_empty_slice_returns_none() {
+  assert first_doubled([]) == None
+}
+
+#[test]
+fn map_get_propagate_returns_the_value() {
+  let mut m = Map.new<string, int>()
+  m["a"] = 1
+  assert lookup(m, "a") == Some(2)
+  assert lookup(m, "b") == None
+}
+
+#[test]
+fn find_propagate_returns_the_match_or_none() {
+  assert first_big([1, 2, 3]) == Some(3)
+  assert first_big([1, 2]) == None
+}
+
+#[test]
+fn get_propagate_in_value_position_checks_both() {
+  assert sum_ends([1, 2]) == Some(3)
+  assert sum_ends([1]) == None
+}
+
+#[test]
+fn get_propagate_runs_an_effectful_index_once() {
+  let mut calls = 0
+  let next = || { calls += 1; 0 }
+  let xs = [7]
+  let picked = try {
+    let x = xs.get(next())?
+    x
+  }
+  assert picked == Some(7)
+  assert calls == 1
+}
