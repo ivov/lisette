@@ -14,17 +14,17 @@ description: |
 package main
 
 func test() {
-	var tmp_1 int
+	var tmp int
 	for {
 		x := 0
-		var tmp_2 int
+		var tmp_1 int
 		if 1 == 1 {
-			tmp_1 = 1
+			tmp = 1
 			break
 		}
-		tmp_2 = 1
-		x = tmp_2
+		tmp_1 = 1
+		x = tmp_1
 		_ = x
 	}
-	_ = tmp_1
+	_ = tmp
 }

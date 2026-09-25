@@ -16,12 +16,12 @@ func sumEnds(xs []int) (int, bool) {
 	if len(xs) == 0 {
 		return 0, false
 	}
-	elem_1 := xs[0]
+	elem := xs[0]
 	if len(xs) <= 1 {
 		return 0, false
 	}
-	elem_2 := xs[1]
-	return elem_1 + elem_2, true
+	elem_1 := xs[1]
+	return elem + elem_1, true
 }
 
 func main() {

@@ -19,11 +19,11 @@ import "example.com/shapes"
 
 func drain(ch <-chan shapes.Shape) int {
 	select {
-	case recv_1, ok := <-ch:
+	case recv, ok := <-ch:
 		if ok {
-			asserted_2, ok_3 := recv_1.(shapes.Rect)
-			if ok_3 {
-				return asserted_2.W * asserted_2.H
+			asserted, ok := recv.(shapes.Rect)
+			if ok {
+				return asserted.W * asserted.H
 			}
 			return -1
 		}

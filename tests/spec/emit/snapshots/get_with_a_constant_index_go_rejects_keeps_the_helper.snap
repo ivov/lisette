@@ -21,17 +21,17 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func pastTheEnd(xs [2]int) int {
-	subject_1 := lisette.SliceGet(xs[:], 2)
-	if subject_1.Tag == lisette.OptionSome {
-		return subject_1.SomeVal
+	subject := lisette.SliceGet(xs[:], 2)
+	if subject.Tag == lisette.OptionSome {
+		return subject.SomeVal
 	}
 	return -1
 }
 
 func negative(xs []int) int {
-	subject_1 := lisette.SliceGet(xs, -1)
-	if subject_1.Tag == lisette.OptionSome {
-		return subject_1.SomeVal
+	subject := lisette.SliceGet(xs, -1)
+	if subject.Tag == lisette.OptionSome {
+		return subject.SomeVal
 	}
 	return -1
 }

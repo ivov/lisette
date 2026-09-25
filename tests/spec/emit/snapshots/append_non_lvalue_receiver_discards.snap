@@ -21,6 +21,6 @@ func get() Items {
 }
 
 func main() {
-	recv_1 := get().items
-	_ = append(recv_1[:len(recv_1):len(recv_1)], 2)
+	recv := get().items
+	_ = append(recv[:len(recv):len(recv)], 2)
 }

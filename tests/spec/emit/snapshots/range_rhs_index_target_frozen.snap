@@ -36,8 +36,8 @@ func run() int {
 		i = 1
 		return 5
 	}
-	idx_1 := i
-	rs[idx_1] = lisette.Range[int]{
+	idx := i
+	rs[idx] = lisette.Range[int]{
 		Start: lo(),
 		End:   bump(),
 	}

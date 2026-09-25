@@ -11,11 +11,11 @@ description: |
 package main
 
 func main() {
-	var tmp_1 int
+	var tmp int
 	if true {
-		tmp_1 = 1
+		tmp = 1
 	} else {
-		tmp_1 = 2
+		tmp = 2
 	}
-	_ = tmp_1
+	_ = tmp
 }

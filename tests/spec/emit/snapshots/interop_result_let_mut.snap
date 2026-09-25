@@ -22,21 +22,21 @@ import (
 
 func main() {
 	f := strconv.Atoi
-	ret_1, ret_2 := f("42")
+	ret, ret_1 := f("42")
 	var r lisette.Result[int, error]
-	if ret_2 != nil {
-		r = lisette.MakeResultErr[int, error](ret_2)
+	if ret_1 != nil {
+		r = lisette.MakeResultErr[int, error](ret_1)
 	} else {
-		r = lisette.MakeResultOk[int, error](ret_1)
+		r = lisette.MakeResultOk[int, error](ret)
 	}
 	_ = r
 	f = strconv.Atoi
-	ret_3, ret_4 := f("99")
+	ret_2, ret_3 := f("99")
 	var r2 lisette.Result[int, error]
-	if ret_4 != nil {
-		r2 = lisette.MakeResultErr[int, error](ret_4)
+	if ret_3 != nil {
+		r2 = lisette.MakeResultErr[int, error](ret_3)
 	} else {
-		r2 = lisette.MakeResultOk[int, error](ret_3)
+		r2 = lisette.MakeResultOk[int, error](ret_2)
 	}
 	_ = r2
 }

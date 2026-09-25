@@ -59,8 +59,8 @@ func main() {
 		Tag: CarrierC,
 		P:   &i,
 	}
-	arg_2 := m[i][0]
-	base_1 := []int{bump(c)}
-	x := first(arg_2, base_1[0])
+	arg := m[i][0]
+	base := []int{bump(c)}
+	x := first(arg, base[0])
 	_ = x
 }

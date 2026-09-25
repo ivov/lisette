@@ -30,5 +30,5 @@ type Outer struct {
 }
 
 func (o Outer) equals(other Outer) bool {
-	return slices.EqualFunc(o.items, other.items, func(a_1 Inner, b_2 Inner) bool { return a_1.equals(b_2) })
+	return slices.EqualFunc(o.items, other.items, func(a Inner, b Inner) bool { return a.equals(b) })
 }

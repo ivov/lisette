@@ -14,15 +14,15 @@ package main
 func main() {
 	items := []int{10, 20}
 	i := 0
-	base_2 := items
-	idx_3 := i
-	var tmp_1 int
+	base := items
+	idx := i
+	var tmp int
 	if true {
 		i = 1
-		tmp_1 = 9
+		tmp = 9
 	} else {
-		tmp_1 = 0
+		tmp = 0
 	}
-	base_2[idx_3] = tmp_1
+	base[idx] = tmp
 	_ = items
 }

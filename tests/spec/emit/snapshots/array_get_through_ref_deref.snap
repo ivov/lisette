@@ -11,9 +11,9 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func at(a *[3]int, i int) (int, bool) {
-	v_1 := lisette.SliceGet((*a)[:], i)
-	if v_1.Tag == lisette.OptionSome {
-		return v_1.SomeVal, true
+	v := lisette.SliceGet((*a)[:], i)
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
 	}
 	return 0, false
 }

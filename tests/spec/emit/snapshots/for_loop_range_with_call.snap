@@ -20,8 +20,8 @@ func getEnd() int {
 
 func test() int {
 	sum := 0
-	bound_1 := getEnd()
-	for i := range bound_1 {
+	bound := getEnd()
+	for i := range bound {
 		sum += i
 	}
 	return sum

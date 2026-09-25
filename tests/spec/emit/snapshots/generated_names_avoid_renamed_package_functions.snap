@@ -53,22 +53,22 @@ func directLet() int {
 }
 
 func filteredLet() int {
-	var result_1 []int
+	var result []int
 	for _, x := range getItems() {
 		if x > 1 {
-			result_1 = append(result_1, x)
+			result = append(result, x)
 		}
 	}
-	getItems_2 := result_1
-	return len(getItems_2) + len(getItems())
+	getItems_1 := result
+	return len(getItems_1) + len(getItems())
 }
 
 func parameter(getItems_1 int) int {
-	tmp_2 := lisette.MakeTuple2[int, int](getItems_1, 2)
-	first := tmp_2.First
-	rest := tmp_2.Second
-	left_3 := first + rest
-	return left_3 + len(getItems())
+	tmp := lisette.MakeTuple2[int, int](getItems_1, 2)
+	first := tmp.First
+	rest := tmp.Second
+	left := first + rest
+	return left + len(getItems())
 }
 
 func armInOtherArm() {

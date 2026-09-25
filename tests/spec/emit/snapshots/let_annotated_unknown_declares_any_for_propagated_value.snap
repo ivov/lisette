@@ -45,11 +45,11 @@ func describe(value any) string {
 
 func run() (string, error) {
 	var value any
-	ret_1, err := fallible()
+	ret, err := fallible()
 	if err != nil {
 		return "", err
 	}
-	value = ret_1
+	value = ret
 	value = "two"
 	return describe(value), nil
 }

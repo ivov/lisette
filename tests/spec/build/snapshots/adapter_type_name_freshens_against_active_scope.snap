@@ -15,9 +15,9 @@ type Bar[T any] struct {
 }
 
 func (b Bar[T]) get() (T, bool) {
-	v_1 := b.value
-	if v_1.Tag == lisette.OptionSome {
-		return v_1.SomeVal, true
+	v := b.value
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
 	}
 	return *new(T), false
 }

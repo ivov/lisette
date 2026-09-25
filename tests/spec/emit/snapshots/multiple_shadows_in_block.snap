@@ -15,11 +15,11 @@ package main
 
 func test() int {
 	x := 5
-	var tmp_1 int
+	var tmp int
 	{
 		x := x * 2
-		x_2 := x + 100
-		tmp_1 = x_2
+		x_1 := x + 100
+		tmp = x_1
 	}
-	return tmp_1
+	return tmp
 }

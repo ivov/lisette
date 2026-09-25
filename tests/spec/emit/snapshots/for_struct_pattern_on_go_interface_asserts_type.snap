@@ -18,10 +18,10 @@ import "example.com/shapes"
 
 func sum(items []shapes.Shape) int {
 	total := 0
-	for _, item_1 := range items {
-		asserted_2 := item_1.(shapes.Rect)
-		w := asserted_2.W
-		h := asserted_2.H
+	for _, item := range items {
+		asserted := item.(shapes.Rect)
+		w := asserted.W
+		h := asserted.H
 		total += w * h
 	}
 	return total

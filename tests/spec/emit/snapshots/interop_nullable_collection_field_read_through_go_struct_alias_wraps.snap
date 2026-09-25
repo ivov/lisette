@@ -41,27 +41,27 @@ func main() {
 		Scheme: "https",
 		Host:   "example.com",
 	}
-	src_1 := []lisette.Option[*url.URL]{lisette.MakeOptionSome(&u)}
-	unwrapped_2 := make([]*url.URL, len(src_1))
-	for i_3, v_4 := range src_1 {
-		if v_4.Tag == lisette.OptionSome {
-			unwrapped_2[i_3] = v_4.SomeVal
+	src := []lisette.Option[*url.URL]{lisette.MakeOptionSome(&u)}
+	unwrapped := make([]*url.URL, len(src))
+	for i, v := range src {
+		if v.Tag == lisette.OptionSome {
+			unwrapped[i] = v.SomeVal
 		}
 	}
 	cert := x509.Certificate{
-		URIs:      unwrapped_2,
+		URIs:      unwrapped,
 		PublicKey: 0,
 	}
-	raw_5 := cert.URIs
-	wrapped_6 := make([]lisette.Option[*url.URL], len(raw_5))
-	for i_7, v_8 := range raw_5 {
-		if v_8 != nil {
-			wrapped_6[i_7] = lisette.MakeOptionSome[*url.URL](v_8)
+	raw := cert.URIs
+	wrapped := make([]lisette.Option[*url.URL], len(raw))
+	for i_1, v_1 := range raw {
+		if v_1 != nil {
+			wrapped[i_1] = lisette.MakeOptionSome[*url.URL](v_1)
 		} else {
-			wrapped_6[i_7] = lisette.MakeOptionNone[*url.URL]()
+			wrapped[i_1] = lisette.MakeOptionNone[*url.URL]()
 		}
 	}
-	urls := wrapped_6
+	urls := wrapped
 	first := urls[0]
 	if first.Tag == lisette.OptionSome {
 		_ = first.SomeVal

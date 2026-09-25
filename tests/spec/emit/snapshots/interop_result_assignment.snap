@@ -30,12 +30,12 @@ func fallback(_ string) (int, error) {
 func main() {
 	f := fallback
 	f = strconv.Atoi
-	ret_1, ret_2 := f("42")
+	ret, ret_1 := f("42")
 	var r lisette.Result[int, error]
-	if ret_2 != nil {
-		r = lisette.MakeResultErr[int, error](ret_2)
+	if ret_1 != nil {
+		r = lisette.MakeResultErr[int, error](ret_1)
 	} else {
-		r = lisette.MakeResultOk[int, error](ret_1)
+		r = lisette.MakeResultOk[int, error](ret)
 	}
 	if r.Tag == lisette.ResultOk {
 		_ = r.OkVal

@@ -21,20 +21,20 @@ package main
 import "strconv"
 
 func shifted(sh uint64) uint64 {
-	ret_1, err := strconv.ParseUint("bad", 10, 64)
-	default_2 := uint64(1 << sh)
+	ret, err := strconv.ParseUint("bad", 10, 64)
+	default_1 := uint64(1 << sh)
 	if err != nil {
-		ret_1 = default_2
+		ret = default_1
 	}
-	return ret_1
+	return ret
 }
 
 func negative() int64 {
-	ret_1, err := strconv.ParseInt("bad", 10, 64)
+	ret, err := strconv.ParseInt("bad", 10, 64)
 	if err != nil {
-		ret_1 = -1
+		ret = -1
 	}
-	return ret_1
+	return ret
 }
 
 func main() {

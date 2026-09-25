@@ -20,9 +20,9 @@ import "context"
 
 func test() {
 	seen := 0
-	ch_1 := context.Background().Done()
-	if ch_1 != nil {
-		for range ch_1 {
+	ch := context.Background().Done()
+	if ch != nil {
+		for range ch {
 			seen++
 		}
 	}

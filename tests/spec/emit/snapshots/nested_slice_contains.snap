@@ -11,6 +11,6 @@ package main
 import "slices"
 
 func test(a [][]int, value []int) bool {
-	want_1 := value
-	return slices.ContainsFunc(a, func(e_2 []int) bool { return slices.Equal(e_2, want_1) })
+	want := value
+	return slices.ContainsFunc(a, func(e []int) bool { return slices.Equal(e, want) })
 }

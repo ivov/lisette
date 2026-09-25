@@ -21,9 +21,9 @@ func test() int {
 		return 4
 	}
 	sum := 0
-	start_2 := n
-	bound_1 := consume()
-	for i := start_2; i < bound_1; i++ {
+	start := n
+	bound := consume()
+	for i := start; i < bound; i++ {
 		sum += i
 	}
 	return sum

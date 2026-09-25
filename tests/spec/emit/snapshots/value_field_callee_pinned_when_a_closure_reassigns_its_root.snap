@@ -33,6 +33,6 @@ func run() int {
 		h = Handler{f: f1}
 		return 7
 	}
-	callee_1 := h.f
-	return callee_1(swap())
+	callee := h.f
+	return callee(swap())
 }

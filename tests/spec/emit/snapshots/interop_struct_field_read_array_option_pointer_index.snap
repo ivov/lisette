@@ -22,18 +22,18 @@ import (
 
 func main() {
 	b := aws.Bucket{}
-	raw_1 := b.Slots
-	var wrapped_2 [2]lisette.Option[*aws.Node]
-	for i_3, v_4 := range raw_1 {
-		if v_4 != nil {
-			wrapped_2[i_3] = lisette.MakeOptionSome[*aws.Node](v_4)
+	raw := b.Slots
+	var wrapped [2]lisette.Option[*aws.Node]
+	for i, v_1 := range raw {
+		if v_1 != nil {
+			wrapped[i] = lisette.MakeOptionSome[*aws.Node](v_1)
 		} else {
-			wrapped_2[i_3] = lisette.MakeOptionNone[*aws.Node]()
+			wrapped[i] = lisette.MakeOptionNone[*aws.Node]()
 		}
 	}
-	slots := wrapped_2
-	subject_5 := slots[0]
-	if subject_5.Tag == lisette.OptionSome {
-		_ = subject_5.SomeVal
+	slots := wrapped
+	subject := slots[0]
+	if subject.Tag == lisette.OptionSome {
+		_ = subject.SomeVal
 	}
 }

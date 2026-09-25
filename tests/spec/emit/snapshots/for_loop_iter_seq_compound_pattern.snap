@@ -34,9 +34,9 @@ func main() {
 		x: 1,
 		y: 2,
 	}}
-	for item_1 := range slices.Values(points) {
-		x := item_1.x
-		y := item_1.y
+	for item := range slices.Values(points) {
+		x := item.x
+		y := item.y
 		fmt.Printf("%d,%d\n", x, y)
 	}
 }

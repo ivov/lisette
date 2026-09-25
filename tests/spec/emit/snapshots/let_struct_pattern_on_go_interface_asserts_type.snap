@@ -14,8 +14,8 @@ package main
 import "example.com/shapes"
 
 func area(s shapes.Shape) int {
-	asserted_1 := s.(shapes.Rect)
-	w := asserted_1.W
-	h := asserted_1.H
+	asserted := s.(shapes.Rect)
+	w := asserted.W
+	h := asserted.H
 	return w * h
 }

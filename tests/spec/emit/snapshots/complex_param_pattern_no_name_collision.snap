@@ -8,8 +8,8 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func f(arg_1 int, arg_2 lisette.Tuple2[int, int]) int {
-	x := arg_2.First
-	y := arg_2.Second
+func f(arg_1 int, arg lisette.Tuple2[int, int]) int {
+	x := arg.First
+	y := arg.Second
 	return arg_1 + x + y
 }

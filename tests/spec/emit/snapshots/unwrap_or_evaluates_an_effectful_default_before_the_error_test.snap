@@ -27,10 +27,10 @@ func fallback() int {
 }
 
 func one() int {
-	ret_1, err := strconv.Atoi("1")
-	default_2 := fallback()
+	ret, err := strconv.Atoi("1")
+	default_1 := fallback()
 	if err != nil {
-		ret_1 = default_2
+		ret = default_1
 	}
-	return ret_1
+	return ret
 }

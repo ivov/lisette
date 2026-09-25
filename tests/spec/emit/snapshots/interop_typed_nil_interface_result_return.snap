@@ -24,14 +24,14 @@ import (
 )
 
 func main() {
-	ret_1, ret_2 := os.Stat("/tmp")
+	ret, ret_1 := os.Stat("/tmp")
 	var info lisette.Result[fs.FileInfo, error]
-	if ret_2 != nil {
-		info = lisette.MakeResultErr[fs.FileInfo, error](ret_2)
-	} else if lisette.IsNilInterface(ret_1) {
+	if ret_1 != nil {
+		info = lisette.MakeResultErr[fs.FileInfo, error](ret_1)
+	} else if lisette.IsNilInterface(ret) {
 		info = lisette.MakeResultErr[fs.FileInfo, error](errors.New("unexpected nil"))
 	} else {
-		info = lisette.MakeResultOk[fs.FileInfo, error](ret_1)
+		info = lisette.MakeResultOk[fs.FileInfo, error](ret)
 	}
 	if info.Tag == lisette.ResultOk {
 		fmt.Println(info.OkVal.Size())

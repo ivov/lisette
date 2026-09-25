@@ -14,10 +14,10 @@ package main
 func run() {
 	dst := []int{0, 0, 0}
 	src := []int{1, 2, 3}
-	arg_1 := dst
-	arg_2 := src
+	arg := dst
+	arg_1 := src
 	defer func() {
-		_ = copy(arg_1, arg_2)
+		_ = copy(arg, arg_1)
 	}()
 	src = []int{9, 9, 9}
 }

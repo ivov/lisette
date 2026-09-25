@@ -44,11 +44,11 @@ func (q Quiet) Error() string {
 func test() {
 	errs := [2]error{Quiet{}, Quiet{}}
 	concrete := [2]Boom{{}, {}}
-	var boxed_1 [2]error
-	for i_2 := range concrete {
-		boxed_1[i_2] = concrete[i_2]
+	var boxed [2]error
+	for i := range concrete {
+		boxed[i] = concrete[i]
 	}
-	errs = boxed_1
+	errs = boxed
 	if errs[0].Error() != "boom" {
 		panic("assignment lost its interface elements")
 	}

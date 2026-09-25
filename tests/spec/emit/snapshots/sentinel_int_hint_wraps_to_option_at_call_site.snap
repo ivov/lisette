@@ -20,13 +20,13 @@ import (
 )
 
 func main() {
-	ret_1 := idx.Find("hello", "lo")
-	pos := lisette.OptionFromCommaOk[int](ret_1, ret_1 != -1)
-	var tmp_2 int
+	ret := idx.Find("hello", "lo")
+	pos := lisette.OptionFromCommaOk[int](ret, ret != -1)
+	var tmp int
 	if pos.Tag == lisette.OptionSome {
-		tmp_2 = pos.SomeVal
+		tmp = pos.SomeVal
 	} else {
-		tmp_2 = -2
+		tmp = -2
 	}
-	_ = tmp_2
+	_ = tmp
 }

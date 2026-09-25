@@ -22,12 +22,12 @@ import (
 
 func main() {
 	arr := []func(string) (int, error){strconv.Atoi}
-	ret_1, ret_2 := arr[0]("1")
+	ret, ret_1 := arr[0]("1")
 	var r lisette.Result[int, error]
-	if ret_2 != nil {
-		r = lisette.MakeResultErr[int, error](ret_2)
+	if ret_1 != nil {
+		r = lisette.MakeResultErr[int, error](ret_1)
 	} else {
-		r = lisette.MakeResultOk[int, error](ret_1)
+		r = lisette.MakeResultOk[int, error](ret)
 	}
 	if r.Tag == lisette.ResultOk {
 		_ = r.OkVal

@@ -33,7 +33,7 @@ func main() {
 		c.n += 10
 		return 1
 	}
-	callee_1 := c.plus
-	v := callee_1(bump())
+	callee := c.plus
+	v := callee(bump())
 	_ = v
 }

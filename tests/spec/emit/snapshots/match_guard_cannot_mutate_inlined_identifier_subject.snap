@@ -25,13 +25,13 @@ func bumpFalse(r *int) bool {
 
 func test() int {
 	x := 0
-	subject_1 := x
-	if subject_1 == 0 {
+	subject := x
+	if subject == 0 {
 		if bumpFalse(&x) {
 			return -1
 		}
 	}
-	if subject_1 == 1 {
+	if subject == 1 {
 		return 1
 	}
 	{

@@ -20,14 +20,14 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func foo() lisette.Result[int, string] {
-	tryResult_1 := func() lisette.Result[int, any] {
-		check_2 := lisette.MakeResultOk[int, any](1)
-		if check_2.Tag != lisette.ResultOk {
-			return check_2
+	tryResult := func() lisette.Result[int, any] {
+		check := lisette.MakeResultOk[int, any](1)
+		if check.Tag != lisette.ResultOk {
+			return check
 		}
-		return lisette.MakeResultOk[int, any](check_2.OkVal)
+		return lisette.MakeResultOk[int, any](check.OkVal)
 	}()
-	_ = tryResult_1
+	_ = tryResult
 	return lisette.MakeResultOk[int, string](0)
 }
 

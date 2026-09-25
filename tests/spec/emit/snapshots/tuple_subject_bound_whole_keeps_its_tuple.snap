@@ -13,9 +13,9 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test(a, b int) int {
-	subject_1 := lisette.MakeTuple2[int, int](a, b)
+	subject := lisette.MakeTuple2[int, int](a, b)
 	{
-		pair := subject_1
+		pair := subject
 		return pair.First + pair.Second
 	}
 }

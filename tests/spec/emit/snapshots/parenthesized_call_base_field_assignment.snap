@@ -24,7 +24,7 @@ func get(r *S) *S {
 
 func main() {
 	s := S{x: 0}
-	ref_1 := get(&s)
-	ref_1.x = 1
+	ref := get(&s)
+	ref.x = 1
 	_ = s
 }

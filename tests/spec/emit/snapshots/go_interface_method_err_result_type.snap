@@ -21,7 +21,7 @@ import (
 
 func main() {
 	ctx := context.Background()
-	raw_1 := ctx.Err()
-	err := lisette.OptionFromNilable[error](raw_1, lisette.IsNilInterface(raw_1))
+	raw := ctx.Err()
+	err := lisette.OptionFromNilable[error](raw, lisette.IsNilInterface(raw))
 	fmt.Printf("err=%v\n", err)
 }

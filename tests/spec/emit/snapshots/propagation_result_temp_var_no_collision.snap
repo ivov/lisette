@@ -18,11 +18,11 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func foo() lisette.Result[int, string] {
-	check_1 := lisette.MakeResultOk[int, string](1)
-	if check_1.Tag != lisette.ResultOk {
-		return check_1
+	check := lisette.MakeResultOk[int, string](1)
+	if check.Tag != lisette.ResultOk {
+		return check
 	}
-	y := check_1.OkVal + 1
+	y := check.OkVal + 1
 	return lisette.MakeResultOk[int, string](y)
 }
 

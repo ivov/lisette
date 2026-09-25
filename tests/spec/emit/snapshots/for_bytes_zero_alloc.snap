@@ -14,8 +14,8 @@ package main
 import "fmt"
 
 func test(s string) {
-	for i_1 := 0; i_1 < len(s); i_1++ {
-		b := s[i_1]
+	for i := 0; i < len(s); i++ {
+		b := s[i]
 		fmt.Println(b)
 	}
 }

@@ -21,25 +21,25 @@ import (
 )
 
 func splitWords(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
-	ret_1, ret_2, ret_3 := bufio.ScanWords(data, at_eof)
-	tup_4 := lisette.MakeTuple2(ret_1, ret_2)
-	var result_5 lisette.Result[lisette.Tuple2[int, []byte], error]
-	if ret_3 != nil {
-		result_5 = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_3)
+	ret, ret_1, ret_2 := bufio.ScanWords(data, at_eof)
+	tup := lisette.MakeTuple2(ret, ret_1)
+	var result lisette.Result[lisette.Tuple2[int, []byte], error]
+	if ret_2 != nil {
+		result = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_2)
 	} else {
-		result_5 = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup_4)
+		result = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup)
 	}
-	if result_5.Tag == lisette.ResultOk {
-		return result_5.OkVal, nil
+	if result.Tag == lisette.ResultOk {
+		return result.OkVal, nil
 	}
-	return lisette.Tuple2[int, []byte]{}, result_5.ErrVal
+	return lisette.Tuple2[int, []byte]{}, result.ErrVal
 }
 
 func main() {
-	cb_1 := splitWords
+	cb := splitWords
 	_ = bufio.SplitFunc(func(arg0 []byte, arg1 bool) (int, []byte, error) {
-		ret_2, ret_3 := cb_1(arg0, arg1)
-		return ret_2.First, ret_2.Second, ret_3
+		ret, ret_1 := cb(arg0, arg1)
+		return ret.First, ret.Second, ret_1
 	})
 	_ = bufio.SplitFunc(bufio.ScanWords)
 }

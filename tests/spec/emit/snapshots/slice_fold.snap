@@ -9,9 +9,9 @@ description: |
 package main
 
 func test(s []int) int {
-	result_1 := 0
+	acc := 0
 	for _, x := range s {
-		result_1 += x
+		acc += x
 	}
-	return result_1
+	return acc
 }

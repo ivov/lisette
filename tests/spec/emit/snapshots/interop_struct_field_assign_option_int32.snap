@@ -16,7 +16,7 @@ import "example.com/aws"
 
 func main() {
 	b := aws.ListInput{}
-	var ptr_1 int32 = 5
-	b.MaxItems = &ptr_1
+	var ptr int32 = 5
+	b.MaxItems = &ptr
 	b.MaxItems = nil
 }

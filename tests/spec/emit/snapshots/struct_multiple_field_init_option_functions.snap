@@ -46,10 +46,10 @@ func getString(s string) (string, bool) {
 }
 
 func test() {
-	option_1 := lisette.OptionFromCommaOk[int](getInt(5))
-	option_2 := lisette.OptionFromCommaOk[string](getString("hello"))
+	option := lisette.OptionFromCommaOk[int](getInt(5))
+	option_1 := lisette.OptionFromCommaOk[string](getString("hello"))
 	_ = MultiWrapper{
-		first:  option_1,
-		second: option_2,
+		first:  option,
+		second: option_1,
 	}
 }

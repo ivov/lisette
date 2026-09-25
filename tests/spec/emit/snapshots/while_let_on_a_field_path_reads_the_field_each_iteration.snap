@@ -31,13 +31,13 @@ func main() {
 		if cursor.next.Tag == lisette.OptionSome {
 			n := cursor.next.SomeVal
 			fmt.Println(n)
-			var tmp_1 lisette.Option[int]
+			var tmp lisette.Option[int]
 			if n > 0 {
-				tmp_1 = lisette.MakeOptionSome[int](n - 1)
+				tmp = lisette.MakeOptionSome[int](n - 1)
 			} else {
-				tmp_1 = lisette.MakeOptionNone[int]()
+				tmp = lisette.MakeOptionNone[int]()
 			}
-			cursor.next = tmp_1
+			cursor.next = tmp
 		} else {
 			break
 		}

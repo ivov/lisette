@@ -53,11 +53,11 @@ func (b Bar[E]) get() lisette.Result[int, E] {
 }
 
 func consume[E error](box Box[lisette.Result[int, E]]) {
-	subject_1 := box.get()
-	if subject_1.Tag == lisette.ResultOk {
-		_ = subject_1.OkVal
+	subject := box.get()
+	if subject.Tag == lisette.ResultOk {
+		_ = subject.OkVal
 	} else {
-		_ = subject_1.ErrVal
+		_ = subject.ErrVal
 	}
 }
 

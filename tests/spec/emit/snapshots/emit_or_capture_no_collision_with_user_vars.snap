@@ -18,8 +18,8 @@ import "fmt"
 
 func main() {
 	bound_0 := 10
-	bound_1 := 1 + 2
-	for i := range bound_1 {
+	bound := 1 + 2
+	for i := range bound {
 		fmt.Println(i)
 	}
 	fmt.Println(bound_0)

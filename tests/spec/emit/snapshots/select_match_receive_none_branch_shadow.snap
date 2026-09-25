@@ -27,9 +27,9 @@ func test() int {
 	lisette.ChannelClose(ch)
 	var out int
 	select {
-	case recv_1, ok := <-ch:
+	case recv, ok := <-ch:
 		if ok {
-			out = recv_1
+			out = recv
 		} else {
 			out = x
 		}

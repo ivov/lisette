@@ -39,8 +39,8 @@ type Dir struct {
 }
 
 func test() string {
-	subject_1 := MakeDirNorth()
-	switch subject_1.Tag {
+	subject := MakeDirNorth()
+	switch subject.Tag {
 	case DirNorth:
 		return "north"
 	case DirSouth:

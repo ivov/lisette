@@ -30,8 +30,8 @@ func six() {
 	lisette.ChannelSend(ch, 2)
 	lisette.ChannelSend(ch, 3)
 	iterations := 0
-	bound_1 := len(ch)
-	for i_2 := 1; i_2 < bound_1; i_2++ {
+	bound := len(ch)
+	for i := 1; i < bound; i++ {
 		lisette.ChannelReceive(ch)
 		iterations++
 	}

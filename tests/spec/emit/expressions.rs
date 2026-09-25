@@ -5672,3 +5672,40 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn a_generated_local_takes_a_readable_name_unless_it_is_taken() {
+    let input = r#"
+import "go:strconv"
+
+fn parse_twice(a: string, b: string) -> Result<int, error> {
+  let x = strconv.Atoi(a)?
+  let y = strconv.Atoi(b)?
+  Ok(x + y)
+}
+
+fn beside_a_user_name(text: string) -> Result<int, error> {
+  let ret = 7
+  let n = strconv.Atoi(text)?
+  Ok(n + ret)
+}
+
+fn over_a_later_binding(flag: bool) -> string {
+  let text = if flag { "yes" } else { "no" }
+  text
+}
+
+fn test() {
+  match parse_twice("1", "2") {
+    Ok(n) => { if n != 3 { panic("one plus two is three") } },
+    Err(_) => { panic("expected two parsed numbers") },
+  }
+  match beside_a_user_name("1") {
+    Ok(n) => { if n != 8 { panic("a user name must keep its own value") } },
+    Err(_) => { panic("expected a parsed number") },
+  }
+  if over_a_later_binding(true) != "yes" { panic("a later binding must not shadow the slot") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

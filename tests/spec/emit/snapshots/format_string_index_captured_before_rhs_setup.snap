@@ -18,15 +18,15 @@ func main() {
 	m := make(map[string]int)
 	m["0"] = 100
 	i := 0
-	base_2 := m
-	idx_3 := fmt.Sprint(i)
-	var tmp_1 int
+	base := m
+	idx := fmt.Sprint(i)
+	var tmp int
 	if true {
 		i++
-		tmp_1 = 7
+		tmp = 7
 	} else {
-		tmp_1 = 0
+		tmp = 0
 	}
-	base_2[idx_3] = tmp_1
+	base[idx] = tmp
 	_ = m
 }

@@ -26,9 +26,9 @@ func nested() lisette.Result[int, string] {
 }
 
 func test() lisette.Result[lisette.Result[int, string], string] {
-	check_1 := risky()
-	if check_1.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[lisette.Result[int, string], string](check_1.ErrVal)
+	check := risky()
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[lisette.Result[int, string], string](check.ErrVal)
 	}
 	return lisette.MakeResultOk[lisette.Result[int, string], string](nested())
 }

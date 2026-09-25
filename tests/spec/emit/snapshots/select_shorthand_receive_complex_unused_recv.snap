@@ -26,9 +26,9 @@ func test() {
 	ch_1 := ch
 	for {
 		select {
-		case recv_2, ok := <-ch_1:
+		case recv, ok := <-ch_1:
 			if ok {
-				_ = recv_2
+				_ = recv
 			} else {
 				ch_1 = nil
 				continue

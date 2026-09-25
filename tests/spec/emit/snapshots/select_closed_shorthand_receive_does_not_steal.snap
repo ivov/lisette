@@ -21,14 +21,14 @@ func test() int {
 	closed := make(chan int)
 	lisette.ChannelClose(closed)
 	sink := make(chan int, 1)
-	ch_1 := closed
+	ch := closed
 	for {
 		select {
-		case _, ok := <-ch_1:
+		case _, ok := <-ch:
 			if ok {
 				return 10
 			}
-			ch_1 = nil
+			ch = nil
 			continue
 		case sink <- 5:
 			return 20

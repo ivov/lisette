@@ -23,11 +23,11 @@ func main() {
 		lisette.MakeOptionSome(&n),
 		lisette.MakeOptionNone[*aws.Node](),
 	}
-	unwrapped_1 := make([]*aws.Node, len(xs))
-	for i_2, v_3 := range xs {
-		if v_3.Tag == lisette.OptionSome {
-			unwrapped_1[i_2] = v_3.SomeVal
+	unwrapped := make([]*aws.Node, len(xs))
+	for i, v := range xs {
+		if v.Tag == lisette.OptionSome {
+			unwrapped[i] = v.SomeVal
 		}
 	}
-	aws.Use(unwrapped_1...)
+	aws.Use(unwrapped...)
 }

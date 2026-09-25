@@ -14,8 +14,8 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() (int, bool) {
-	check_1 := lisette.MakeOptionSome(1)
-	if check_1.Tag != lisette.OptionSome {
+	check := lisette.MakeOptionSome(1)
+	if check.Tag != lisette.OptionSome {
 		return 0, false
 	}
 	panic("fatal")

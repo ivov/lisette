@@ -19,27 +19,27 @@ import (
 )
 
 func main() {
-	src_1 := nested.Values()
-	wrapped_2 := make([]lisette.Option[int], len(src_1))
-	for i_3, v_4 := range src_1 {
-		if v_4 != nil {
-			wrapped_2[i_3] = lisette.MakeOptionSome[int](*v_4)
+	src := nested.Values()
+	wrapped := make([]lisette.Option[int], len(src))
+	for i, v := range src {
+		if v != nil {
+			wrapped[i] = lisette.MakeOptionSome[int](*v)
 		} else {
-			wrapped_2[i_3] = lisette.MakeOptionNone[int]()
+			wrapped[i] = lisette.MakeOptionNone[int]()
 		}
 	}
-	ret_5, ret_6 := nested.MaybeValues()
+	ret, ret_1 := nested.MaybeValues()
 	var maybe_values lisette.Option[[]lisette.Option[int]]
-	if ret_6 {
-		wrapped_7 := make([]lisette.Option[int], len(ret_5))
-		for i_8, v_9 := range ret_5 {
-			if v_9 != nil {
-				wrapped_7[i_8] = lisette.MakeOptionSome[int](*v_9)
+	if ret_1 {
+		wrapped_1 := make([]lisette.Option[int], len(ret))
+		for i_1, v_1 := range ret {
+			if v_1 != nil {
+				wrapped_1[i_1] = lisette.MakeOptionSome[int](*v_1)
 			} else {
-				wrapped_7[i_8] = lisette.MakeOptionNone[int]()
+				wrapped_1[i_1] = lisette.MakeOptionNone[int]()
 			}
 		}
-		maybe_values = lisette.MakeOptionSome[[]lisette.Option[int]](wrapped_7)
+		maybe_values = lisette.MakeOptionSome[[]lisette.Option[int]](wrapped_1)
 	} else {
 		maybe_values = lisette.MakeOptionNone[[]lisette.Option[int]]()
 	}

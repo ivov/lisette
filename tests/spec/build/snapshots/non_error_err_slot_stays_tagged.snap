@@ -18,7 +18,7 @@ func parse(s string) lisette.Result[int, MyError] {
 }
 
 func main() {
-	subject_1 := parse("ok")
-	if subject_1.Tag == lisette.ResultOk {
+	subject := parse("ok")
+	if subject.Tag == lisette.ResultOk {
 	}
 }

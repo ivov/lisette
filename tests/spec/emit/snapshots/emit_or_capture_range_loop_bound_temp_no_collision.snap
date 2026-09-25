@@ -22,8 +22,8 @@ func makeBound() int {
 
 func main() {
 	sum := 0
-	bound_1 := makeBound()
-	for i := range bound_1 {
+	bound := makeBound()
+	for i := range bound {
 		sum += i
 	}
 	_ = sum

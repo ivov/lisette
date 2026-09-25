@@ -40,15 +40,15 @@ import (
 )
 
 func root(t *template.Template) (*parse.ListNode, error) {
-	raw_1 := t.Root
-	option_2 := lisette.OptionFromNilable[*parse.ListNode](raw_1, raw_1 == nil)
-	v_3 := lisette.OptionOkOrElse(option_2, func() error {
+	raw := t.Root
+	option := lisette.OptionFromNilable[*parse.ListNode](raw, raw == nil)
+	v := lisette.OptionOkOrElse(option, func() error {
 		return errors.New("root is unavailable")
 	})
-	if v_3.Tag == lisette.ResultOk {
-		return v_3.OkVal, nil
+	if v.Tag == lisette.ResultOk {
+		return v.OkVal, nil
 	}
-	return nil, v_3.ErrVal
+	return nil, v.ErrVal
 }
 
 func main() {

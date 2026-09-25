@@ -26,9 +26,9 @@ func get(ch chan int) chan int {
 
 func main() {
 	ch := make(chan int, 1)
-	ref_1 := get(ch)
+	ref := get(ch)
 	select {
-	case ref_1 <- 1:
+	case ref <- 1:
 	default:
 	}
 }

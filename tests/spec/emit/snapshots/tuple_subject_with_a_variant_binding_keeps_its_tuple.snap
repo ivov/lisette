@@ -40,10 +40,10 @@ type Event struct {
 }
 
 func test(e Event, b bool) int {
-	subject_1 := lisette.MakeTuple2[Event, bool](e, b)
-	if subject_1.First.Tag == EventClick {
-		if subject_1.Second == true {
-			return subject_1.First.Click0 + subject_1.First.Click1
+	subject := lisette.MakeTuple2[Event, bool](e, b)
+	if subject.First.Tag == EventClick {
+		if subject.Second == true {
+			return subject.First.Click0 + subject.First.Click1
 		}
 		return 0
 	}

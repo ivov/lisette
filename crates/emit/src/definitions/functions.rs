@@ -15,6 +15,7 @@ use crate::utils::{fresh_receiver_name, group_params};
 use syntax::EcoString;
 use syntax::ast::{
     Annotation, Binding, Expression, FunctionDefinitionView, Generic, Pattern, Span,
+    collect_pattern_bindings,
 };
 use syntax::types::{SimpleKind, Type, build_substitution_map, substitute};
 
@@ -67,10 +68,19 @@ impl Planner<'_> {
         body: &Expression,
         should_return: bool,
     ) {
+        self.reserve_source_binder_names(body);
         let mut lowered = self.lower_function_body(body, should_return);
         clean_up(&mut lowered.statements);
         self.collect_imports(&lowered.statements);
         Renderer.render_lowered_block(output, &lowered);
+    }
+
+    fn reserve_source_binder_names(&mut self, body: &Expression) {
+        let mut names: Vec<String> = Vec::new();
+        collect_binder_names(body, &mut names);
+        for name in names {
+            self.scope.reserve_go_name(&name);
+        }
     }
 
     pub(crate) fn emit_lambda(
@@ -615,4 +625,34 @@ fn change_go_builtin_methods(
     params.push(self_binding);
     params.extend(function_definition.params.iter().cloned());
     (Some((name, params)), None)
+}
+
+fn collect_binder_names(expression: &Expression, out: &mut Vec<String>) {
+    match expression {
+        Expression::Let { binding, .. } => push_binder_names(&binding.pattern, out),
+        Expression::Lambda { params, .. } => {
+            for param in params {
+                push_binder_names(&param.pattern, out);
+            }
+        }
+        Expression::IfLet { pattern, .. } => push_binder_names(pattern, out),
+        Expression::Match { arms, .. } => {
+            for arm in arms {
+                push_binder_names(&arm.pattern, out);
+            }
+        }
+        Expression::For { binding, .. } => push_binder_names(&binding.pattern, out),
+        _ => {}
+    }
+    for child in expression.children() {
+        collect_binder_names(child, out);
+    }
+}
+
+fn push_binder_names(pattern: &Pattern, out: &mut Vec<String>) {
+    out.extend(
+        collect_pattern_bindings(pattern)
+            .into_iter()
+            .map(|(name, _)| name),
+    );
 }

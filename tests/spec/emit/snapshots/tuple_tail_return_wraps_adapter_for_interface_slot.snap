@@ -53,10 +53,10 @@ func make_() (Box[lisette.Option[*Thing]], int) {
 }
 
 func test() {
-	ret_1, ret_2 := make_()
-	pair := lisette.MakeTuple2(ret_1, ret_2)
-	subject_4 := pair.First.get()
-	if subject_4.Tag == lisette.OptionSome {
+	ret, ret_1 := make_()
+	pair := lisette.MakeTuple2(ret, ret_1)
+	subject := pair.First.get()
+	if subject.Tag == lisette.OptionSome {
 		panic("expected None")
 	}
 }
@@ -66,6 +66,6 @@ type _lisAdapter_Bar_Box_0 struct {
 }
 
 func (a _lisAdapter_Bar_Box_0) get() lisette.Option[*Thing] {
-	raw_1 := a.inner.get()
-	return lisette.OptionFromNilable[*Thing](raw_1, raw_1 == nil)
+	raw := a.inner.get()
+	return lisette.OptionFromNilable[*Thing](raw, raw == nil)
 }

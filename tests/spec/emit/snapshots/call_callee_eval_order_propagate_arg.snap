@@ -34,11 +34,11 @@ func get(i *int) lisette.Result[int, string] {
 
 func run() lisette.Result[int, string] {
 	i := 0
-	callee_2 := makeF(&i)
-	check_1 := get(&i)
-	if check_1.Tag != lisette.ResultOk {
-		return check_1
+	callee := makeF(&i)
+	check := get(&i)
+	if check.Tag != lisette.ResultOk {
+		return check
 	}
-	y := callee_2(check_1.OkVal)
+	y := callee(check.OkVal)
 	return lisette.MakeResultOk[int, string](y)
 }

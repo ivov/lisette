@@ -25,8 +25,8 @@ func main() {
 	if !ok {
 		return
 	}
-	ref_2 := r
-	recv_1 := ([]int)(*r)
-	*ref_2 = Wrap(append(recv_1[:len(recv_1):len(recv_1)], 2))
+	ref := r
+	recv := ([]int)(*r)
+	*ref = Wrap(append(recv[:len(recv):len(recv)], 2))
 	_ = w
 }

@@ -15,10 +15,10 @@ func source() []int {
 }
 
 func test() []int {
-	src_1 := source()
-	result_2 := make([]int, len(src_1))
-	for i_3, x := range src_1 {
-		result_2[i_3] = x * 2
+	src := source()
+	result := make([]int, len(src))
+	for i, x := range src {
+		result[i] = x * 2
 	}
-	return result_2
+	return result
 }

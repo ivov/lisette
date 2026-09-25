@@ -29,19 +29,19 @@ import (
 )
 
 func run() error {
-	ret_1, err := aws.Make()
+	ret, err := aws.Make()
 	if err != nil {
 		return err
 	}
-	wrapped_2 := make([]lisette.Option[string], len(ret_1))
-	for i_3, v_4 := range ret_1 {
-		if v_4 != nil {
-			wrapped_2[i_3] = lisette.MakeOptionSome[string](*v_4)
+	wrapped := make([]lisette.Option[string], len(ret))
+	for i, v_1 := range ret {
+		if v_1 != nil {
+			wrapped[i] = lisette.MakeOptionSome[string](*v_1)
 		} else {
-			wrapped_2[i_3] = lisette.MakeOptionNone[string]()
+			wrapped[i] = lisette.MakeOptionNone[string]()
 		}
 	}
-	xs := wrapped_2
+	xs := wrapped
 	for _, x := range xs {
 		if x.Tag == lisette.OptionSome {
 			fmt.Println(x.SomeVal)

@@ -19,7 +19,7 @@ func main() {
 		i++
 		return i
 	}
-	base_1 := xss[i]
-	base_1[bump()] = 9
+	base := xss[i]
+	base[bump()] = 9
 	_ = xss
 }

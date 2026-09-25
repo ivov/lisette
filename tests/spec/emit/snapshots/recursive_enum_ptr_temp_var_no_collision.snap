@@ -43,7 +43,7 @@ type Node struct {
 }
 
 func main() {
-	ptr_1 := Node{
+	ptr := Node{
 		Tag:   NodeLeaf,
 		Value: 1,
 	}
@@ -53,10 +53,10 @@ func main() {
 	}
 	n := Node{
 		Tag:   NodeBranch,
-		Left:  &ptr_1,
+		Left:  &ptr,
 		Right: &ptr_2,
 	}
-	ptr_1_3 := 3
+	ptr_1 := 3
 	fmt.Println(n)
-	fmt.Println(ptr_1_3)
+	fmt.Println(ptr_1)
 }

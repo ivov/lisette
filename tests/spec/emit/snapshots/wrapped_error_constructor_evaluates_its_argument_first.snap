@@ -37,7 +37,7 @@ func makeError() error {
 }
 
 func five() (int, error) {
-	err_2 := makeError()
-	msg_1 := message()
-	return 0, fmt.Errorf("%s: %w", msg_1, err_2)
+	err := makeError()
+	msg := message()
+	return 0, fmt.Errorf("%s: %w", msg, err)
 }

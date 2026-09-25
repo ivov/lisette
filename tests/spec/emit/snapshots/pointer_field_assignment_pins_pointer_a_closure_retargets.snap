@@ -34,7 +34,7 @@ func run() int {
 		c = &b
 		return 5
 	}
-	ref_1 := c
-	ref_1.now = swap()
+	ref := c
+	ref.now = swap()
 	return a.now
 }

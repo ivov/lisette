@@ -19,15 +19,15 @@ import lisette "github.com/ivov/lisette/prelude"
 func test() lisette.Result[struct{}, string] {
 	x := 0
 	var r lisette.Result[struct{}, string]
-	tryResult_1 := func() lisette.Result[struct{}, string] {
-		check_2 := lisette.MakeResultOk[int, string](1)
-		if check_2.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[struct{}, string](check_2.ErrVal)
+	tryResult := func() lisette.Result[struct{}, string] {
+		check := lisette.MakeResultOk[int, string](1)
+		if check.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[struct{}, string](check.ErrVal)
 		}
 		x = 1
 		return lisette.MakeResultOk[struct{}, string](struct{}{})
 	}()
-	r = tryResult_1
+	r = tryResult
 	_ = x
 	return r
 }

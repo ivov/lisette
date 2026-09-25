@@ -30,20 +30,20 @@ func describe(raw string) string {
 
 func parse(raw string) (int, error) {
 	n, err := strconv.Atoi(raw)
-	msg_1 := describe(raw)
+	msg := describe(raw)
 	if err != nil {
-		return 0, fmt.Errorf("%s: %w", msg_1, err)
+		return 0, fmt.Errorf("%s: %w", msg, err)
 	}
 	return n, nil
 }
 
 func main() {
-	ret_1, ret_2 := parse("1")
-	var result_3 lisette.Result[int, error]
-	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[int, error](ret_2)
+	ret, ret_1 := parse("1")
+	var result lisette.Result[int, error]
+	if ret_1 != nil {
+		result = lisette.MakeResultErr[int, error](ret_1)
 	} else {
-		result_3 = lisette.MakeResultOk[int, error](ret_1)
+		result = lisette.MakeResultOk[int, error](ret)
 	}
-	fmt.Println(result_3)
+	fmt.Println(result)
 }

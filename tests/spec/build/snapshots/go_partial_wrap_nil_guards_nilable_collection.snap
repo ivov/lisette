@@ -12,9 +12,9 @@ import (
 
 func main() {
 	reader := strings.NewReader("hello")
-	if ret_1, err := io.ReadAll(reader); err == nil {
+	if ret, err := io.ReadAll(reader); err == nil {
 		fmt.Print("ok")
-	} else if ret_1 == nil {
+	} else if ret == nil {
 		fmt.Print("err")
 	} else {
 		fmt.Print("both")

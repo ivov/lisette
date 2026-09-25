@@ -38,11 +38,11 @@ func risky(n int) lisette.Result[int, string] {
 func run(n int) lisette.Result[int, string] {
 	fmt.Println("start")
 	base := n * 2
-	check_1 := risky(base)
-	if check_1.Tag != lisette.ResultOk {
-		return check_1
+	check := risky(base)
+	if check.Tag != lisette.ResultOk {
+		return check
 	}
-	a := check_1.OkVal
+	a := check.OkVal
 	return lisette.MakeResultOk[int, string](a + base)
 }
 

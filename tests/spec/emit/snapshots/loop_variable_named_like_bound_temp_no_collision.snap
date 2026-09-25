@@ -20,9 +20,9 @@ func makeBound() int {
 
 func main() {
 	sum := 0
-	bound_1 := makeBound()
-	for bound_1_2 := 0; bound_1_2 <= bound_1; bound_1_2++ {
-		sum += bound_1_2
+	bound := makeBound()
+	for bound_1 := 0; bound_1 <= bound; bound_1++ {
+		sum += bound_1
 	}
 	_ = sum
 }

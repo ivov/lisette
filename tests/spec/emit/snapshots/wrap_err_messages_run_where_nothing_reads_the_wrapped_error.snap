@@ -42,12 +42,12 @@ func predicate() bool {
 }
 
 func defaulted() int {
-	ret_1, err := strconv.Atoi("1")
+	ret, err := strconv.Atoi("1")
 	message()
 	if err != nil {
-		ret_1 = 0
+		ret = 0
 	}
-	return ret_1
+	return ret
 }
 
 func letElse() int {

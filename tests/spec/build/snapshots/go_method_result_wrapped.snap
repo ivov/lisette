@@ -13,12 +13,12 @@ import (
 
 func main() {
 	reader := bufio.NewReader(strings.NewReader("hello\nworld"))
-	ret_1, ret_2 := reader.ReadByte()
+	ret, ret_1 := reader.ReadByte()
 	var b lisette.Result[byte, error]
-	if ret_2 != nil {
-		b = lisette.MakeResultErr[byte, error](ret_2)
+	if ret_1 != nil {
+		b = lisette.MakeResultErr[byte, error](ret_1)
 	} else {
-		b = lisette.MakeResultOk[byte, error](ret_1)
+		b = lisette.MakeResultOk[byte, error](ret)
 	}
 	if b.Tag == lisette.ResultOk {
 		fmt.Print(b.OkVal)

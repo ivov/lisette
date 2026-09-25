@@ -48,21 +48,21 @@ func main() {
 	fmt.Println(count)
 	rebuilt := bufio.NewScanner(strings.NewReader("four five"))
 	rebuilt.Split(func(data []byte, at_eof bool) (int, []byte, error) {
-		ret_1, ret_2, ret_3 := bufio.ScanWords(data, at_eof)
-		tup_4 := lisette.MakeTuple2(ret_1, ret_2)
-		var result_5 lisette.Result[lisette.Tuple2[int, []byte], error]
-		if ret_3 != nil {
-			result_5 = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_3)
+		ret, ret_1, ret_2 := bufio.ScanWords(data, at_eof)
+		tup := lisette.MakeTuple2(ret, ret_1)
+		var result lisette.Result[lisette.Tuple2[int, []byte], error]
+		if ret_2 != nil {
+			result = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_2)
 		} else {
-			result_5 = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup_4)
+			result = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup)
 		}
-		check_6 := result_5
-		if check_6.Tag != lisette.ResultOk {
-			return 0, nil, check_6.ErrVal
+		check := result
+		if check.Tag != lisette.ResultOk {
+			return 0, nil, check.ErrVal
 		}
-		tmp_7 := check_6.OkVal
-		advance := tmp_7.First
-		token := tmp_7.Second
+		tmp := check.OkVal
+		advance := tmp.First
+		token := tmp.Second
 		return advance, token, nil
 	})
 	words := 0

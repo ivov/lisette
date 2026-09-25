@@ -27,14 +27,14 @@ import (
 func main() {
 	reader := strings.NewReader("hello world")
 	buffer := make([]byte, 8)
-	ret_1, ret_2 := reader.Read(buffer)
-	var result_3 lisette.Partial[int, error]
-	if ret_2 != nil {
-		result_3 = lisette.MakePartialBoth[int, error](ret_1, ret_2)
+	ret, ret_1 := reader.Read(buffer)
+	var result lisette.Partial[int, error]
+	if ret_1 != nil {
+		result = lisette.MakePartialBoth[int, error](ret, ret_1)
 	} else {
-		result_3 = lisette.MakePartialOk[int, error](ret_1)
+		result = lisette.MakePartialOk[int, error](ret)
 	}
-	n := result_3.UnwrapOr(0)
+	n := result.UnwrapOr(0)
 	if n != 8 {
 		panic("expected to read 8 bytes into the buffer")
 	}

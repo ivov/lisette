@@ -24,12 +24,12 @@ func source() (int, error) {
 }
 
 func main() {
-	ret_1, ret_2 := source()
+	ret, ret_1 := source()
 	var a lisette.Result[int, error]
-	if ret_2 != nil {
-		a = lisette.MakeResultErr[int, error](ret_2)
+	if ret_1 != nil {
+		a = lisette.MakeResultErr[int, error](ret_1)
 	} else {
-		a = lisette.MakeResultOk[int, error](ret_1)
+		a = lisette.MakeResultOk[int, error](ret)
 	}
 	_ = a
 }

@@ -26,8 +26,8 @@ func right() int {
 }
 
 func test() string {
-	subject_1 := lisette.MakeTuple2[int, int](left(), right())
-	if subject_1.Second == 1 || subject_1.First == 2 {
+	subject := lisette.MakeTuple2[int, int](left(), right())
+	if subject.Second == 1 || subject.First == 2 {
 		return "hit"
 	}
 	return "miss"

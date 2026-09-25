@@ -35,6 +35,6 @@ type List struct {
 }
 
 func test() List {
-	ref_1 := MakeListNil()
-	return MakeListCons(42, &ref_1)
+	ref := MakeListNil()
+	return MakeListCons(42, &ref)
 }

@@ -17,26 +17,26 @@ import (
 )
 
 func main() {
-	src_1 := aws.Make()
-	src_2 := *src_1
-	wrapped_3 := make([]lisette.Option[string], len(src_2))
-	for i_4, v_5 := range src_2 {
-		if v_5 != nil {
-			wrapped_3[i_4] = lisette.MakeOptionSome[string](*v_5)
+	src := aws.Make()
+	src_1 := *src
+	wrapped := make([]lisette.Option[string], len(src_1))
+	for i, v := range src_1 {
+		if v != nil {
+			wrapped[i] = lisette.MakeOptionSome[string](*v)
 		} else {
-			wrapped_3[i_4] = lisette.MakeOptionNone[string]()
+			wrapped[i] = lisette.MakeOptionNone[string]()
 		}
 	}
-	xs := &wrapped_3
-	src_7 := *xs
-	unwrapped_8 := make([]*string, len(src_7))
-	for i_9, v_10 := range src_7 {
-		if v_10.Tag == lisette.OptionSome {
-			unwrapped_8[i_9] = &v_10.SomeVal
+	xs := &wrapped
+	src_2 := *xs
+	unwrapped := make([]*string, len(src_2))
+	for i_1, v_1 := range src_2 {
+		if v_1.Tag == lisette.OptionSome {
+			unwrapped[i_1] = &v_1.SomeVal
 		} else {
-			unwrapped_8[i_9] = nil
+			unwrapped[i_1] = nil
 		}
 	}
-	ref_11 := &unwrapped_8
-	aws.Use(ref_11)
+	ref_1 := &unwrapped
+	aws.Use(ref_1)
 }

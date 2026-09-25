@@ -51,10 +51,10 @@ func makeBase() Cursor {
 }
 
 func test() Cursor {
-	spread_1 := makeBase()
+	spread := makeBase()
 	return Cursor{
 		Tag: CursorArea,
 		W:   3,
-		Id:  spread_1.Id,
+		Id:  spread.Id,
 	}
 }

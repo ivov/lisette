@@ -56,9 +56,9 @@ func (l Label) String() string {
 
 func parse(raw string, label Label) (int, error) {
 	n, err := strconv.Atoi(raw)
-	msg_1 := fmt.Sprintf("took %v", label)
+	msg := fmt.Sprintf("took %v", label)
 	if err != nil {
-		return 0, fmt.Errorf("%s: %w", msg_1, err)
+		return 0, fmt.Errorf("%s: %w", msg, err)
 	}
 	return n, nil
 }

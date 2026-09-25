@@ -17,15 +17,15 @@ import "fmt"
 func main() {
 	nums := []int{1, 2, 3}
 	var even int
-	found_1 := false
+	found := false
 	for _, n := range nums {
 		if n%2 == 0 {
 			even = n
-			found_1 = true
+			found = true
 			break
 		}
 	}
-	if !found_1 {
+	if !found {
 		return
 	}
 	fmt.Println(even)

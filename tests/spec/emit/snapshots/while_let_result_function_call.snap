@@ -33,9 +33,9 @@ func nextResult(counter int) lisette.Result[int, string] {
 func test() {
 	i := 0
 	for {
-		subject_1 := nextResult(i)
-		if subject_1.Tag == lisette.ResultOk {
-			fmt.Printf("Got: %d\n", subject_1.OkVal)
+		subject := nextResult(i)
+		if subject.Tag == lisette.ResultOk {
+			fmt.Printf("Got: %d\n", subject.OkVal)
 			i++
 		} else {
 			break

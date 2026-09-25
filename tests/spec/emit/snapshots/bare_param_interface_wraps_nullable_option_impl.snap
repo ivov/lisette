@@ -48,9 +48,9 @@ func (b Bar) get() *Thing {
 }
 
 func useBox(box Box[lisette.Option[*Thing]]) {
-	subject_1 := box.get()
-	if subject_1.Tag == lisette.OptionSome {
-		_ = subject_1.SomeVal
+	subject := box.get()
+	if subject.Tag == lisette.OptionSome {
+		_ = subject.SomeVal
 	}
 }
 
@@ -63,6 +63,6 @@ type _lisAdapter_Bar_Box_0 struct {
 }
 
 func (a _lisAdapter_Bar_Box_0) get() lisette.Option[*Thing] {
-	raw_1 := a.inner.get()
-	return lisette.OptionFromNilable[*Thing](raw_1, raw_1 == nil)
+	raw := a.inner.get()
+	return lisette.OptionFromNilable[*Thing](raw, raw == nil)
 }

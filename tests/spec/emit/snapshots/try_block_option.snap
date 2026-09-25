@@ -27,14 +27,14 @@ func maybeGet() (int, bool) {
 
 func test() int {
 	var opt lisette.Option[int]
-	tryResult_1 := func() lisette.Option[int] {
+	tryResult := func() lisette.Option[int] {
 		x, ok := maybeGet()
 		if !ok {
 			return lisette.MakeOptionNone[int]()
 		}
 		return lisette.MakeOptionSome[int](x + 1)
 	}()
-	opt = tryResult_1
+	opt = tryResult
 	if opt.Tag == lisette.OptionSome {
 		return opt.SomeVal
 	}

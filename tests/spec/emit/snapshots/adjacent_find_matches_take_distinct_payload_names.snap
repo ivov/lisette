@@ -20,28 +20,28 @@ import "fmt"
 
 func five(xs []int) int {
 	var x int
-	found_1 := false
+	found := false
 	for _, n := range xs {
 		if n > 1 {
 			x = n
+			found = true
+			break
+		}
+	}
+	if found {
+		fmt.Println(x)
+	}
+	var x_1 int
+	found_1 := false
+	for _, n := range xs {
+		if n > 2 {
+			x_1 = n
 			found_1 = true
 			break
 		}
 	}
 	if found_1 {
-		fmt.Println(x)
-	}
-	var x_2 int
-	found_3 := false
-	for _, n := range xs {
-		if n > 2 {
-			x_2 = n
-			found_3 = true
-			break
-		}
-	}
-	if found_3 {
-		fmt.Println(x_2)
+		fmt.Println(x_1)
 	}
 	return 0
 }

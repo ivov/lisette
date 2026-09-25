@@ -20,17 +20,17 @@ import "fmt"
 func main() {
 	rest := []int{99}
 	fmt.Println(rest[0])
-	subject_1 := []int{1, 2}
+	subject := []int{1, 2}
 	var x int
-	var rest_2 []int
-	if len(subject_1) >= 1 {
-		x = subject_1[0]
-		rest_2 = subject_1[1:]
-	} else if len(subject_1) >= 1 {
-		x = subject_1[0]
-		rest_2 = subject_1[1:]
+	var rest_1 []int
+	if len(subject) >= 1 {
+		x = subject[0]
+		rest_1 = subject[1:]
+	} else if len(subject) >= 1 {
+		x = subject[0]
+		rest_1 = subject[1:]
 	} else {
 		return
 	}
-	fmt.Println(x, rest_2[0])
+	fmt.Println(x, rest_1[0])
 }

@@ -20,36 +20,36 @@ import (
 
 func main() {
 	values := lisette.MakeOptionSome([]lisette.Option[int]{lisette.MakeOptionSome(1), lisette.MakeOptionNone[int]()})
-	var ptr_1 *[]*int
+	var ptr *[]*int
 	if values.Tag == lisette.OptionSome {
-		src_2 := values.SomeVal
-		unwrapped_3 := make([]*int, len(src_2))
-		for i_4, v_5 := range src_2 {
-			if v_5.Tag == lisette.OptionSome {
-				unwrapped_3[i_4] = &v_5.SomeVal
+		src := values.SomeVal
+		unwrapped := make([]*int, len(src))
+		for i, v := range src {
+			if v.Tag == lisette.OptionSome {
+				unwrapped[i] = &v.SomeVal
 			} else {
-				unwrapped_3[i_4] = nil
+				unwrapped[i] = nil
 			}
 		}
-		ptr_1 = &unwrapped_3
+		ptr = &unwrapped
 	}
-	container := nested.Container{Values: ptr_1}
-	raw_6 := container.Values
-	var option_7 lisette.Option[[]lisette.Option[int]]
-	if raw_6 != nil {
-		src_8 := *raw_6
-		wrapped_9 := make([]lisette.Option[int], len(src_8))
-		for i_10, v_11 := range src_8 {
-			if v_11 != nil {
-				wrapped_9[i_10] = lisette.MakeOptionSome[int](*v_11)
+	container := nested.Container{Values: ptr}
+	raw := container.Values
+	var option lisette.Option[[]lisette.Option[int]]
+	if raw != nil {
+		src_1 := *raw
+		wrapped := make([]lisette.Option[int], len(src_1))
+		for i_1, v_1 := range src_1 {
+			if v_1 != nil {
+				wrapped[i_1] = lisette.MakeOptionSome[int](*v_1)
 			} else {
-				wrapped_9[i_10] = lisette.MakeOptionNone[int]()
+				wrapped[i_1] = lisette.MakeOptionNone[int]()
 			}
 		}
-		option_7 = lisette.MakeOptionSome[[]lisette.Option[int]](wrapped_9)
+		option = lisette.MakeOptionSome[[]lisette.Option[int]](wrapped)
 	} else {
-		option_7 = lisette.MakeOptionNone[[]lisette.Option[int]]()
+		option = lisette.MakeOptionNone[[]lisette.Option[int]]()
 	}
-	roundtrip := option_7
+	roundtrip := option
 	_ = roundtrip
 }

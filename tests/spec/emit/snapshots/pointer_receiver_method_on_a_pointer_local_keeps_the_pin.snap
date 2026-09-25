@@ -39,7 +39,7 @@ func main() {
 		p = &b
 		return 1
 	}
-	callee_1 := p.add
-	callee_1(swap())
+	callee := p.add
+	callee(swap())
 	_ = lisette.MakeTuple2[Counter, Counter](a, b)
 }

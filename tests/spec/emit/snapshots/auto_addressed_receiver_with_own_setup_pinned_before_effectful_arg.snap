@@ -47,18 +47,18 @@ func bump(i *int) (int, error) {
 
 func run() error {
 	i := 0
-	ret_1, err := seed()
+	ret, err := seed()
 	if err != nil {
 		return err
 	}
-	ref_2 := &Cell{
-		a: ret_1,
+	ref := &Cell{
+		a: ret,
 		b: i,
 	}
-	ret_3, err_4 := bump(&i)
-	if err_4 != nil {
-		return err_4
+	ret_1, err_1 := bump(&i)
+	if err_1 != nil {
+		return err_1
 	}
-	Cell_add[int](ref_2, ret_3)
+	Cell_add[int](ref, ret_1)
 	return nil
 }

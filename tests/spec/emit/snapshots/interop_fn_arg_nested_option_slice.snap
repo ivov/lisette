@@ -17,19 +17,19 @@ import (
 )
 
 func main() {
-	src_1 := []lisette.Option[string]{
+	src := []lisette.Option[string]{
 		lisette.MakeOptionSome("hi"),
 		lisette.MakeOptionNone[string](),
 	}
-	unwrapped_2 := make([]*string, len(src_1))
-	for i_3, v_4 := range src_1 {
-		if v_4.Tag == lisette.OptionSome {
-			unwrapped_2[i_3] = &v_4.SomeVal
+	unwrapped := make([]*string, len(src))
+	for i, v := range src {
+		if v.Tag == lisette.OptionSome {
+			unwrapped[i] = &v.SomeVal
 		} else {
-			unwrapped_2[i_3] = nil
+			unwrapped[i] = nil
 		}
 	}
-	var ptr_5 []*string = unwrapped_2
-	aws.Use(&ptr_5)
+	var ptr []*string = unwrapped
+	aws.Use(&ptr)
 	aws.Use(nil)
 }

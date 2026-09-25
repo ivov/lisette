@@ -38,12 +38,12 @@ func arg() int {
 }
 
 func main() {
-	ref_2 := get()
-	var tmp_1 int
+	ref := get()
+	var tmp int
 	if arg() > 0 {
-		tmp_1 = 3
+		tmp = 3
 	} else {
-		tmp_1 = 4
+		tmp = 4
 	}
-	ref_2.x = tmp_1
+	ref.x = tmp
 }

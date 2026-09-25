@@ -15,13 +15,13 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func f() (int, bool) {
-	check_1 := lisette.MakeOptionNone[lisette.Option[int]]()
-	if check_1.Tag != lisette.OptionSome {
+	check := lisette.MakeOptionNone[lisette.Option[int]]()
+	if check.Tag != lisette.OptionSome {
 		return 0, false
 	}
-	v_2 := check_1.SomeVal
-	if v_2.Tag == lisette.OptionSome {
-		return v_2.SomeVal, true
+	v := check.SomeVal
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
 	}
 	return 0, false
 }

@@ -24,7 +24,7 @@ func end() int {
 func test() int {
 	xs := []int{10, 20, 30, 40}
 	start_1 := start()
-	end_2 := end()
-	ys := xs[start_1:end_2:end_2]
+	end_1 := end()
+	ys := xs[start_1:end_1:end_1]
 	return len(ys)
 }

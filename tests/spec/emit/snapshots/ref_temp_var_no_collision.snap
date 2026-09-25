@@ -29,8 +29,8 @@ func makeBox() Box {
 }
 
 func main() {
-	ref_1 := makeBox()
-	r := &ref_1
-	ref_1_2 := 3
-	fmt.Println(r.x, ref_1_2)
+	ref := makeBox()
+	r := &ref
+	ref_1 := 3
+	fmt.Println(r.x, ref_1)
 }

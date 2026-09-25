@@ -8946,11 +8946,11 @@ fn assert_relation_binds_a_call_operand_with_short_declaration() {
     let go = compile_test_source("#[test]\nfn smallest() {\n  assert min(3, 1, 2) == 1\n}");
 
     assert!(
-        go.contains("assertLeft_1 := min(3, 1, 2)"),
+        go.contains("assertLeft := min(3, 1, 2)"),
         "a called operand must bind through `:=`, got:\n{go}"
     );
     assert!(
-        go.contains("if assertLeft_1 != 1 {"),
+        go.contains("if assertLeft != 1 {"),
         "the failure test must negate the relation directly, got:\n{go}"
     );
 }
@@ -8962,7 +8962,7 @@ fn assert_relation_declares_an_imported_constant_operand() {
     );
 
     assert!(
-        go.contains("var assertRight_1 time.Duration = time.Second"),
+        go.contains("var assertRight time.Duration = time.Second"),
         "emit does not tell a typed Go constant from an untyped one, so every Go constant keeps its declaration, got:\n{go}"
     );
 }
@@ -8972,7 +8972,7 @@ fn assert_relation_binds_a_local_beside_a_called_operand() {
     let go = compile_test_source("#[test]\nfn totals() {\n  let n = 3\n  assert n == add(1, 2)\n}");
 
     assert!(
-        go.contains("assertLeft_1 := n"),
+        go.contains("assertLeft := n"),
         "a local read before a call must keep its temp, got:\n{go}"
     );
 }
@@ -9448,7 +9448,7 @@ fn discarded_subtest_handle_is_named_so_recover_can_target_it() {
         "a discarded subtest handle must be named so the deferred Recover has a receiver, got:\n{go}"
     );
     assert!(
-        go.contains("defer lisetteSub_") && go.contains(".Recover("),
+        go.contains("defer lisetteSub") && go.contains(".Recover("),
         "a subtest that only panics must still defer Recover on its synthesized handle, got:\n{go}"
     );
 }

@@ -43,22 +43,22 @@ func message() string {
 func six() int {
 	var a int
 	n, e := strconv.Atoi("1")
-	msg_1 := message()
+	msg := message()
 	if e == nil {
 		a = n
 	} else {
-		e = fmt.Errorf("%s: %w", msg_1, e)
+		e = fmt.Errorf("%s: %w", msg, e)
 		fmt.Println(e)
 		a = 0
 	}
 	var b int
-	n_3, e_4 := strconv.Atoi("2")
-	msg_2 := message()
-	if e_4 == nil {
-		b = n_3
+	n_1, e_1 := strconv.Atoi("2")
+	msg_1 := message()
+	if e_1 == nil {
+		b = n_1
 	} else {
-		e_4 = fmt.Errorf("%s: %w", msg_2, e_4)
-		fmt.Println(e_4)
+		e_1 = fmt.Errorf("%s: %w", msg_1, e_1)
+		fmt.Println(e_1)
 		b = 0
 	}
 	return a + b

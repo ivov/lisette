@@ -19,15 +19,15 @@ import (
 )
 
 func write(file *os.File) {
-	ret_1, ret_2 := file.Write([]byte{'h', 'i'})
-	var result_3 lisette.Partial[int, error]
-	if ret_2 != nil {
-		result_3 = lisette.MakePartialBoth[int, error](ret_1, ret_2)
+	ret, ret_1 := file.Write([]byte{'h', 'i'})
+	var result lisette.Partial[int, error]
+	if ret_1 != nil {
+		result = lisette.MakePartialBoth[int, error](ret, ret_1)
 	} else {
-		result_3 = lisette.MakePartialOk[int, error](ret_1)
+		result = lisette.MakePartialOk[int, error](ret)
 	}
-	if result_3.Tag == lisette.PartialOk {
-		if result_3.OkVal == 0 {
+	if result.Tag == lisette.PartialOk {
+		if result.OkVal == 0 {
 			panic("wrote nothing")
 		}
 	}

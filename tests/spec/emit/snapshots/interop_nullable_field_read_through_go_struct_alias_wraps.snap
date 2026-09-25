@@ -26,8 +26,8 @@ type MyFlag = flag.Flag
 
 func main() {
 	f := flag.Flag{}
-	raw_1 := f.Value
-	v := lisette.OptionFromNilable[flag.Value](raw_1, lisette.IsNilInterface(raw_1))
+	raw := f.Value
+	v := lisette.OptionFromNilable[flag.Value](raw, lisette.IsNilInterface(raw))
 	if v.Tag == lisette.OptionSome {
 		_ = v.SomeVal
 	}

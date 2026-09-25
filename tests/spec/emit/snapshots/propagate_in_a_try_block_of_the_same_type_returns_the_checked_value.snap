@@ -28,19 +28,19 @@ func risky(n int) lisette.Result[int, string] {
 
 func main() {
 	var total lisette.Result[int, string]
-	tryResult_1 := func() lisette.Result[int, string] {
-		check_2 := risky(1)
-		if check_2.Tag != lisette.ResultOk {
-			return check_2
+	tryResult := func() lisette.Result[int, string] {
+		check := risky(1)
+		if check.Tag != lisette.ResultOk {
+			return check
 		}
-		a := check_2.OkVal
-		check_3 := risky(2)
-		if check_3.Tag != lisette.ResultOk {
-			return check_3
+		a := check.OkVal
+		check_1 := risky(2)
+		if check_1.Tag != lisette.ResultOk {
+			return check_1
 		}
-		b := check_3.OkVal
+		b := check_1.OkVal
 		return lisette.MakeResultOk[int, string](a + b)
 	}()
-	total = tryResult_1
+	total = tryResult
 	_ = total
 }

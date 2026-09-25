@@ -22,5 +22,5 @@ func (b Box[T]) equals(other Box[T]) bool {
 }
 
 func test(a, b []Box[int]) bool {
-	return slices.EqualFunc(a, b, func(a_1 Box[int], b_2 Box[int]) bool { return a_1.equals(b_2) })
+	return slices.EqualFunc(a, b, func(a_1 Box[int], b_1 Box[int]) bool { return a_1.equals(b_1) })
 }

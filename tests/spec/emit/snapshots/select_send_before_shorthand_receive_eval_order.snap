@@ -44,24 +44,24 @@ func main() {
 	send_ch := make(chan int, 1)
 	recv_ch := make(chan int, 1)
 	lisette.ChannelSend(recv_ch, 42)
-	var tmp_1 int
-	send_val_2 := mark(log, 1)
-	ch_3 := choose(log, 2, recv_ch)
+	var tmp int
+	send_val := mark(log, 1)
+	ch := choose(log, 2, recv_ch)
 	for {
 		select {
-		case send_ch <- send_val_2:
-			tmp_1 = 0
-		case v, ok := <-ch_3:
+		case send_ch <- send_val:
+			tmp = 0
+		case v, ok := <-ch:
 			if ok {
-				tmp_1 = v
+				tmp = v
 			} else {
-				ch_3 = nil
+				ch = nil
 				continue
 			}
 		default:
-			tmp_1 = -1
+			tmp = -1
 		}
 		break
 	}
-	_ = tmp_1
+	_ = tmp
 }

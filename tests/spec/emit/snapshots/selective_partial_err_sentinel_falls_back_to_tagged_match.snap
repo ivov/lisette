@@ -21,19 +21,19 @@ import (
 )
 
 func main() {
-	ret_1, ret_2 := aws.Read()
-	var result_3 lisette.Partial[[]byte, error]
-	if ret_2 != nil {
-		if ret_1 == nil {
-			result_3 = lisette.MakePartialErr[[]byte, error](ret_2)
+	ret, ret_1 := aws.Read()
+	var result lisette.Partial[[]byte, error]
+	if ret_1 != nil {
+		if ret == nil {
+			result = lisette.MakePartialErr[[]byte, error](ret_1)
 		} else {
-			result_3 = lisette.MakePartialBoth[[]byte, error](ret_1, ret_2)
+			result = lisette.MakePartialBoth[[]byte, error](ret, ret_1)
 		}
 	} else {
-		result_3 = lisette.MakePartialOk[[]byte, error](ret_1)
+		result = lisette.MakePartialOk[[]byte, error](ret)
 	}
-	if result_3.Tag == lisette.PartialErr {
-		if result_3.ErrVal == io.EOF {
+	if result.Tag == lisette.PartialErr {
+		if result.ErrVal == io.EOF {
 			panic("empty")
 		}
 	}

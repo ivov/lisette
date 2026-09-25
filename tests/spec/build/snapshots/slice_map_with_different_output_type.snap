@@ -9,8 +9,8 @@ import "fmt"
 func main() {
 	nums := []int{1, 2, 3}
 	strs := make([]string, len(nums))
-	for i_1, x := range nums {
-		strs[i_1] = fmt.Sprintf("n=%d", x)
+	for i, x := range nums {
+		strs[i] = fmt.Sprintf("n=%d", x)
 	}
 	for _, s := range strs {
 		fmt.Println(s)

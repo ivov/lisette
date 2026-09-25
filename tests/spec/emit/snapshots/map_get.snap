@@ -9,6 +9,6 @@ description: |
 package main
 
 func test(m map[string]int, key string) (int, bool) {
-	ret_1, ok := m[key]
-	return ret_1, ok
+	ret, ok := m[key]
+	return ret, ok
 }

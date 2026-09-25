@@ -17,9 +17,9 @@ func (l Loader) Load(_ string) lisette.Result[int, LoadError] {
 }
 
 func run(l Loader) int {
-	subject_1 := l.Load("k")
-	if subject_1.Tag == lisette.ResultOk {
-		return subject_1.OkVal
+	subject := l.Load("k")
+	if subject.Tag == lisette.ResultOk {
+		return subject.OkVal
 	}
 	return -1
 }

@@ -18,11 +18,11 @@ import "example.com/shapes"
 
 func sumAreas(items map[string]shapes.Shape) int {
 	total := 0
-	for key_1, value_2 := range items {
-		_ = key_1
-		asserted_3 := value_2.(shapes.Rect)
-		w := asserted_3.W
-		h := asserted_3.H
+	for key, value := range items {
+		_ = key
+		asserted := value.(shapes.Rect)
+		w := asserted.W
+		h := asserted.H
 		total += w * h
 	}
 	return total

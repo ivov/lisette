@@ -268,6 +268,7 @@ impl Planner<'_> {
         let result = match (found, ctx.result_name) {
             (Some(sink), _) => sink.value.unwrap_or_default().to_string(),
             (None, Some(name)) => name.to_string(),
+            (None, None) if expects_accumulator => self.accumulator_slot_name(patterns[0]),
             (None, None) => self.fresh_var(Some("result")),
         };
         match found {
@@ -350,6 +351,16 @@ impl Planner<'_> {
             result,
             effect.combine(EvaluationEffect::EffectfulCall),
         ))
+    }
+
+    fn accumulator_slot_name(&mut self, pattern: &Pattern) -> String {
+        let Pattern::Identifier { identifier, .. } = pattern else {
+            return self.fresh_var(Some("result"));
+        };
+        match self.go_name_for_binding(pattern) {
+            Some(name) => self.claim_declared_binding(identifier, name),
+            None => self.fresh_var(Some("result")),
+        }
     }
 
     /// `filter` and `find` read the element back whatever the body does.

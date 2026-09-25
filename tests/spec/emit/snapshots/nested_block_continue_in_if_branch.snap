@@ -13,17 +13,17 @@ package main
 
 func test() {
 	for {
-		var tmp_1 int
+		var tmp int
 		if true {
 			{
 				continue
 			}
 			panic("unreachable")
 		}
-		var tmp_2 int
-		tmp_2 = 1
-		tmp_1 = tmp_2
-		_ = tmp_1
+		var tmp_1 int
+		tmp_1 = 1
+		tmp = tmp_1
+		_ = tmp
 		break
 	}
 }

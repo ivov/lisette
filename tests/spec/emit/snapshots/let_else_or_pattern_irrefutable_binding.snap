@@ -12,8 +12,8 @@ description: |
 package main
 
 func test() int {
-	subject_1 := 42
+	subject := 42
 	var x int
-	x = subject_1
+	x = subject
 	return x
 }

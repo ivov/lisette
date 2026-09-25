@@ -16,15 +16,15 @@ package main
 
 func test() int {
 	n := 0
-	var tmp_1 int
+	var tmp int
 	for {
-		var tmp_2 int
+		var tmp_1 int
 		if n == 5 {
-			tmp_1 = n
+			tmp = n
 			break
 		}
-		tmp_2 = n + 1
-		n = tmp_2
+		tmp_1 = n + 1
+		n = tmp_1
 	}
-	return tmp_1
+	return tmp
 }

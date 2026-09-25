@@ -45,15 +45,15 @@ func main() {
 	fmt.Println(x)
 	x_1 := 200
 	var result lisette.Result[int, string]
-	tryResult_2 := func() lisette.Result[int, string] {
-		check_3 := parse("42")
-		if check_3.Tag != lisette.ResultOk {
-			return check_3
+	tryResult := func() lisette.Result[int, string] {
+		check := parse("42")
+		if check.Tag != lisette.ResultOk {
+			return check
 		}
-		x := check_3.OkVal
+		x := check.OkVal
 		return lisette.MakeResultOk[int, string](x + 1)
 	}()
-	result = tryResult_2
+	result = tryResult
 	if result.Tag == lisette.ResultOk {
 		fmt.Println(result.OkVal)
 	} else {

@@ -41,14 +41,14 @@ type Color struct {
 
 func main() {
 	c := MakeColorRed()
-	var tmp_1 int
+	var tmp int
 	switch c.Tag {
 	case ColorRed:
-		tmp_1 = 1
+		tmp = 1
 	case ColorGreen:
-		tmp_1 = 2
+		tmp = 2
 	default:
-		tmp_1 = 3
+		tmp = 3
 	}
-	_ = tmp_1
+	_ = tmp
 }

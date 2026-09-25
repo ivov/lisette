@@ -23,14 +23,14 @@ func test() int {
 	first := make(chan int)
 	outbound := make(chan int)
 	var selected int
-	ch_1 := first
+	ch := first
 	for {
 		select {
-		case value, ok := <-ch_1:
+		case value, ok := <-ch:
 			if ok {
 				selected = value
 			} else {
-				ch_1 = nil
+				ch = nil
 				continue
 			}
 		case outbound <- 1:

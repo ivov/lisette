@@ -24,8 +24,8 @@ type Point struct {
 
 func main() {
 	var result int
-	subject_1 := Point{x: 1}.x
-	if subject_1 == 1 {
+	subject := Point{x: 1}.x
+	if subject == 1 {
 		result = 10
 	} else {
 		result = 0

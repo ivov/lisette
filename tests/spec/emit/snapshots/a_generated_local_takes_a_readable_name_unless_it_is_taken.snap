@@ -1,0 +1,89 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn parse_twice(a: string, b: string) -> Result<int, error> {
+    let x = strconv.Atoi(a)?
+    let y = strconv.Atoi(b)?
+    Ok(x + y)
+  }
+  
+  fn beside_a_user_name(text: string) -> Result<int, error> {
+    let ret = 7
+    let n = strconv.Atoi(text)?
+    Ok(n + ret)
+  }
+  
+  fn over_a_later_binding(flag: bool) -> string {
+    let text = if flag { "yes" } else { "no" }
+    text
+  }
+  
+  fn test() {
+    match parse_twice("1", "2") {
+      Ok(n) => { if n != 3 { panic("one plus two is three") } },
+      Err(_) => { panic("expected two parsed numbers") },
+    }
+    match beside_a_user_name("1") {
+      Ok(n) => { if n != 8 { panic("a user name must keep its own value") } },
+      Err(_) => { panic("expected a parsed number") },
+    }
+    if over_a_later_binding(true) != "yes" { panic("a later binding must not shadow the slot") }
+  }
+---
+package main
+
+import "strconv"
+
+func parseTwice(a, b string) (int, error) {
+	x, err := strconv.Atoi(a)
+	if err != nil {
+		return 0, err
+	}
+	y, err_1 := strconv.Atoi(b)
+	if err_1 != nil {
+		return 0, err_1
+	}
+	return x + y, nil
+}
+
+func besideAUserName(text string) (int, error) {
+	ret := 7
+	n, err := strconv.Atoi(text)
+	if err != nil {
+		return 0, err
+	}
+	return n + ret, nil
+}
+
+func overALaterBinding(flag bool) string {
+	var text string
+	if flag {
+		text = "yes"
+	} else {
+		text = "no"
+	}
+	return text
+}
+
+func test() {
+	if n, err := parseTwice("1", "2"); err == nil {
+		if n != 3 {
+			panic("one plus two is three")
+		}
+	} else {
+		panic("expected two parsed numbers")
+	}
+	if n, err := besideAUserName("1"); err == nil {
+		if n != 8 {
+			panic("a user name must keep its own value")
+		}
+	} else {
+		panic("expected a parsed number")
+	}
+	if overALaterBinding(true) != "yes" {
+		panic("a later binding must not shadow the slot")
+	}
+}

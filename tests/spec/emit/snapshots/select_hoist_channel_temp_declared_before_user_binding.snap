@@ -23,14 +23,14 @@ func getCh() chan int {
 
 func test() int {
 	var result int
-	ch_1 := getCh()
+	ch := getCh()
 	for {
 		select {
-		case v, ok := <-ch_1:
+		case v, ok := <-ch:
 			if ok {
 				result = v
 			} else {
-				ch_1 = nil
+				ch = nil
 				continue
 			}
 		default:
@@ -38,6 +38,6 @@ func test() int {
 		}
 		break
 	}
-	ch_1_2 := result + 1
-	return ch_1_2
+	ch_1 := result + 1
+	return ch_1
 }

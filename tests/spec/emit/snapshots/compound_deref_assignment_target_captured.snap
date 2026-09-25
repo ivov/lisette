@@ -35,9 +35,9 @@ func main() {
 	a := 1
 	b := 2
 	h := H{ptr: &a}
-	ref_1 := h.ptr
-	left_2 := *ref_1
-	*ref_1 = left_2 + h.repoint(&b)
+	ref := h.ptr
+	left := *ref
+	*ref = left + h.repoint(&b)
 	_ = a
 	_ = b
 }

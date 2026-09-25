@@ -14,6 +14,6 @@ import (
 )
 
 func test(a []map[string]int, value map[string]int) bool {
-	want_1 := value
-	return slices.ContainsFunc(a, func(e_2 map[string]int) bool { return maps.Equal(e_2, want_1) })
+	want := value
+	return slices.ContainsFunc(a, func(e map[string]int) bool { return maps.Equal(e, want) })
 }

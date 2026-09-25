@@ -55,11 +55,11 @@ type Holder struct {
 }
 
 func describe(h *Holder) int {
-	switch subject_1 := h.shape.(type) {
+	switch subject := h.shape.(type) {
 	case Circle:
-		return subject_1.r
+		return subject.r
 	case Square:
-		return subject_1.s
+		return subject.s
 	default:
 		return 0
 	}

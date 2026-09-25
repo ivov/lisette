@@ -20,9 +20,9 @@ func die() struct{} {
 }
 
 func test() lisette.Result[int, string] {
-	check_1 := lisette.MakeResultOk[int, string](1)
-	if check_1.Tag != lisette.ResultOk {
-		return check_1
+	check := lisette.MakeResultOk[int, string](1)
+	if check.Tag != lisette.ResultOk {
+		return check
 	}
 	die()
 	panic("unreachable")

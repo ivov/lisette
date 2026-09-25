@@ -23,5 +23,5 @@ func (o Order) equals(other Order) bool {
 }
 
 func test(a, b []Order) bool {
-	return slices.EqualFunc(a, b, func(a_1 Order, b_2 Order) bool { return a_1.equals(b_2) })
+	return slices.EqualFunc(a, b, func(a_1 Order, b_1 Order) bool { return a_1.equals(b_1) })
 }

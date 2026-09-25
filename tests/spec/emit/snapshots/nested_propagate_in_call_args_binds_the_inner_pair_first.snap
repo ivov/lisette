@@ -20,13 +20,13 @@ func double(n int) (int, error) {
 }
 
 func run() (int, error) {
-	ret_1, err := strconv.Atoi("1")
+	ret, err := strconv.Atoi("1")
 	if err != nil {
 		return 0, err
 	}
-	d, err_2 := double(ret_1)
-	if err_2 != nil {
-		return 0, err_2
+	d, err_1 := double(ret)
+	if err_1 != nil {
+		return 0, err_1
 	}
 	return d, nil
 }

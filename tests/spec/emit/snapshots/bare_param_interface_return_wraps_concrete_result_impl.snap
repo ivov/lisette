@@ -40,11 +40,11 @@ func (b Bar) get() (int, error) {
 }
 
 func useFoo(foo Foo[lisette.Result[int, error]]) {
-	subject_1 := foo.get()
-	if subject_1.Tag == lisette.ResultOk {
-		_ = subject_1.OkVal
+	subject := foo.get()
+	if subject.Tag == lisette.ResultOk {
+		_ = subject.OkVal
 	} else {
-		_ = subject_1.ErrVal
+		_ = subject.ErrVal
 	}
 }
 
@@ -57,9 +57,9 @@ type _lisAdapter_Bar_Foo_0 struct {
 }
 
 func (a _lisAdapter_Bar_Foo_0) get() lisette.Result[int, error] {
-	ret_1, ret_2 := a.inner.get()
-	if ret_2 != nil {
-		return lisette.MakeResultErr[int, error](ret_2)
+	ret, ret_1 := a.inner.get()
+	if ret_1 != nil {
+		return lisette.MakeResultErr[int, error](ret_1)
 	}
-	return lisette.MakeResultOk[int, error](ret_1)
+	return lisette.MakeResultOk[int, error](ret)
 }

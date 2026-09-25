@@ -9,11 +9,11 @@ description: |
 package main
 
 func test(s []int) []int {
-	var result_1 []int
+	var result []int
 	for _, x := range s {
 		if x > 0 {
-			result_1 = append(result_1, x)
+			result = append(result, x)
 		}
 	}
-	return result_1
+	return result
 }

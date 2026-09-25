@@ -13,12 +13,12 @@ description: |
 package main
 
 func test() int {
-	var tmp_1 int
+	var tmp int
 	{
 		{
 			return 1
 		}
 	}
-	_ = tmp_1
+	_ = tmp
 	return 3
 }

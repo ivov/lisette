@@ -58,11 +58,11 @@ func source() lisette.Result[int, Boom] {
 }
 
 func widen() (int, Failing[lisette.Result[int, error]]) {
-	check_1 := source()
-	if check_1.Tag != lisette.ResultOk {
-		return 0, _lisAdapter_Boom_Failing_0{inner: check_1.ErrVal}
+	check := source()
+	if check.Tag != lisette.ResultOk {
+		return 0, _lisAdapter_Boom_Failing_0{inner: check.ErrVal}
 	}
-	n := check_1.OkVal
+	n := check.OkVal
 	return n, nil
 }
 
@@ -70,9 +70,9 @@ func main() {
 	if _, f := widen(); f == nil {
 		panic("expected error")
 	} else {
-		subject_1 := f.get()
-		if subject_1.Tag == lisette.ResultOk {
-			if subject_1.OkVal != 1 {
+		subject := f.get()
+		if subject.Tag == lisette.ResultOk {
+			if subject.OkVal != 1 {
 				panic("wrong adapted value")
 			}
 		} else {
@@ -86,9 +86,9 @@ type _lisAdapter_Boom_Failing_0 struct {
 }
 
 func (a _lisAdapter_Boom_Failing_0) get() lisette.Result[int, error] {
-	ret_2, ret_3 := a.inner.get()
-	if ret_3 != nil {
-		return lisette.MakeResultErr[int, error](ret_3)
+	ret, ret_1 := a.inner.get()
+	if ret_1 != nil {
+		return lisette.MakeResultErr[int, error](ret_1)
 	}
-	return lisette.MakeResultOk[int, error](ret_2)
+	return lisette.MakeResultOk[int, error](ret)
 }

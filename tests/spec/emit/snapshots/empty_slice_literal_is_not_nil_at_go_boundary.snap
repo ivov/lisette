@@ -31,20 +31,20 @@ type Payload struct {
 
 func main() {
 	xs := []int{}
-	ret_1, err := json.Marshal(xs)
+	ret, err := json.Marshal(xs)
 	if err != nil {
-		ret_1 = []byte{}
+		ret = []byte{}
 	}
-	encoded := string(ret_1)
+	encoded := string(ret)
 	if encoded != "[]" {
 		panic("expected an explicit empty literal to encode as [], got " + encoded)
 	}
 	payload := Payload{Items: []int{}}
-	ret_2, err_3 := json.Marshal(payload)
-	if err_3 != nil {
-		ret_2 = []byte{}
+	ret_1, err_1 := json.Marshal(payload)
+	if err_1 != nil {
+		ret_1 = []byte{}
 	}
-	wrapped := string(ret_2)
+	wrapped := string(ret_1)
 	if wrapped != "{\"Items\":[]}" {
 		panic("expected an empty slice field to encode as [], got " + wrapped)
 	}

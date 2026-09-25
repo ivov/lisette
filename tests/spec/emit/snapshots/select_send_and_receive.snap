@@ -18,16 +18,16 @@ package main
 func test() int {
 	tx := make(chan int)
 	rx := make(chan int)
-	ch_1 := rx
+	ch := rx
 	for {
 		select {
 		case tx <- 42:
 			return 1
-		case v, ok := <-ch_1:
+		case v, ok := <-ch:
 			if ok {
 				return v
 			}
-			ch_1 = nil
+			ch = nil
 			continue
 		default:
 			return 0

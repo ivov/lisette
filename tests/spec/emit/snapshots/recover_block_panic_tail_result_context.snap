@@ -11,8 +11,8 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() lisette.Result[int, lisette.PanicValue] {
-	recoverResult_1 := lisette.RecoverBlock(func() int {
+	recoverResult := lisette.RecoverBlock(func() int {
 		panic("fatal")
 	})
-	return recoverResult_1
+	return recoverResult
 }

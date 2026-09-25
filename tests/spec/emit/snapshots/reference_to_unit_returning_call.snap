@@ -14,6 +14,6 @@ func noop() {}
 
 func main() {
 	noop()
-	ref_1 := struct{}{}
-	_ = &ref_1
+	ref := struct{}{}
+	_ = &ref
 }

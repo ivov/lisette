@@ -17,8 +17,8 @@ func makeI() int {
 
 func main() {
 	outer := [][]int{{1}, {2}, {3}}
-	base_2 := outer
-	idx_3 := makeI()
-	recv_1 := outer[makeI()]
-	base_2[idx_3] = append(recv_1[:len(recv_1):len(recv_1)], 4)
+	base := outer
+	idx := makeI()
+	recv := outer[makeI()]
+	base[idx] = append(recv[:len(recv):len(recv)], 4)
 }

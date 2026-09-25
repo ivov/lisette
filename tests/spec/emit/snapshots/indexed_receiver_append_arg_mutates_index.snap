@@ -24,7 +24,7 @@ func bump(i *int) int {
 func test() int {
 	xss := [][]int{{10}, {20}}
 	i := 0
-	recv_1 := xss[i]
-	ys := append(recv_1[:len(recv_1):len(recv_1)], bump(&i))
+	recv := xss[i]
+	ys := append(recv[:len(recv):len(recv)], bump(&i))
 	return ys[0]
 }

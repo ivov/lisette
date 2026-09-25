@@ -15,7 +15,7 @@ type Point struct {
 	Y int
 }
 
-func getX(arg_1 Point) int {
-	x := arg_1.X
+func getX(arg Point) int {
+	x := arg.X
 	return x
 }

@@ -15,11 +15,11 @@ func produce() (int, Cmd) {
 }
 
 func consume() int {
-	ret_1, ret_2 := produce()
-	option_3 := lisette.OptionFromNilable[Cmd](ret_2, ret_2 == nil)
-	tup_4 := lisette.MakeTuple2(ret_1, option_3)
-	n := tup_4.First
-	c := tup_4.Second
+	ret, ret_1 := produce()
+	option := lisette.OptionFromNilable[Cmd](ret_1, ret_1 == nil)
+	tup := lisette.MakeTuple2(ret, option)
+	n := tup.First
+	c := tup.Second
 	if c.Tag == lisette.OptionSome {
 		return n + c.SomeVal()
 	}

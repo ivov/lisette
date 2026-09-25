@@ -26,11 +26,11 @@ func run() lisette.Result[struct{}, string] {
 		p = &b
 		return lisette.MakeResultOk[int, string](5)
 	}
-	ref_2 := p
-	check_1 := bump()
-	if check_1.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[struct{}, string](check_1.ErrVal)
+	ref := p
+	check := bump()
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[struct{}, string](check.ErrVal)
 	}
-	*ref_2 = check_1.OkVal
+	*ref = check.OkVal
 	return lisette.MakeResultOk[struct{}, string](struct{}{})
 }

@@ -21,6 +21,6 @@ func get() *Item {
 }
 
 func main() {
-	ref_1 := get()
-	ref_1.x = 1
+	ref := get()
+	ref.x = 1
 }

@@ -64,17 +64,17 @@ func status() (int, error) {
 
 func armAfterMessage() {
 	n_1, e := strconv.Atoi("2")
-	msg_2 := n()
+	msg := n()
 	if e == nil {
 		fmt.Println(n_1)
 	} else {
-		e = fmt.Errorf("%s: %w", msg_2, e)
+		e = fmt.Errorf("%s: %w", msg, e)
 		fmt.Println(e)
 	}
 }
 
 func armInOtherArm() {
-	if n_1, err_2 := strconv.Atoi("bad"); err_2 == nil {
+	if n_1, err_1 := strconv.Atoi("bad"); err_1 == nil {
 		fmt.Println(n_1)
 	} else {
 		fmt.Println(n())
@@ -83,15 +83,15 @@ func armInOtherArm() {
 
 func findArm() {
 	var items_1 int
-	found_2 := false
+	found := false
 	for _, x := range items() {
 		if x > 1 {
 			items_1 = x
-			found_2 = true
+			found = true
 			break
 		}
 	}
-	if found_2 {
+	if found {
 		fmt.Println(items_1)
 	} else {
 		fmt.Println("none")

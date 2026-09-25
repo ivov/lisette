@@ -42,9 +42,9 @@ func makeJobs(log chan int) chan int {
 func test() {
 	log := make(chan int, 4)
 	total := 0
-	ch_1 := makeJobs(log)
-	if ch_1 != nil {
-		for v := range ch_1 {
+	ch := makeJobs(log)
+	if ch != nil {
+		for v := range ch {
 			total += v
 		}
 	}

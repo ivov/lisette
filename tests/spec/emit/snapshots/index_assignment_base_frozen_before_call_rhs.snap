@@ -17,7 +17,7 @@ func run() int {
 		xs = []int{7, 8, 9}
 		return 42
 	}
-	base_1 := xs
-	base_1[0] = swap()
+	base := xs
+	base[0] = swap()
 	return xs[0]
 }

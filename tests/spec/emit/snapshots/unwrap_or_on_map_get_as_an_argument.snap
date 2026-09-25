@@ -15,9 +15,9 @@ import "fmt"
 
 func main() {
 	counts := make(map[string]int)
-	ret_1, ok := counts["a"]
+	ret, ok := counts["a"]
 	if !ok {
-		ret_1 = 0
+		ret = 0
 	}
-	fmt.Println(ret_1 + 1)
+	fmt.Println(ret + 1)
 }

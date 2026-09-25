@@ -69,9 +69,9 @@ func (i IntHolder) h() int {
 }
 
 func consume[T any](box Box[lisette.Option[T]]) {
-	subject_1 := box.get()
-	if subject_1.Tag == lisette.OptionSome {
-		_ = subject_1.SomeVal
+	subject := box.get()
+	if subject.Tag == lisette.OptionSome {
+		_ = subject.SomeVal
 	}
 }
 

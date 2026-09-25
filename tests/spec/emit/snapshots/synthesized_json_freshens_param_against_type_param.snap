@@ -82,9 +82,9 @@ func (b *Box[data]) UnmarshalJSON(data_2 []byte) error {
 }
 
 func test() int {
-	subject_1 := MakeBoxFull(7)
-	if subject_1.Tag == BoxFull {
-		return subject_1.Full
+	subject := MakeBoxFull(7)
+	if subject.Tag == BoxFull {
+		return subject.Full
 	}
 	return 0
 }

@@ -24,9 +24,9 @@ func right() int {
 }
 
 func test() string {
-	arg_1 := left()
-	arg_2 := right()
-	if arg_1 == 1 && arg_2 == 2 {
+	arg := left()
+	arg_1 := right()
+	if arg == 1 && arg_1 == 2 {
 		return "one two"
 	}
 	return "other"

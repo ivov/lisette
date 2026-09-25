@@ -31,13 +31,13 @@ func makeJobs() chan int {
 }
 
 func test() {
-	ch_1 := makeJobs()
-	tx := (chan<- int)(ch_1)
-	rx := (<-chan int)(ch_1)
+	ch := makeJobs()
+	tx := (chan<- int)(ch)
+	rx := (<-chan int)(ch)
 	lisette.SenderSend(tx, 7)
-	subject_2 := lisette.ReceiverReceive(rx)
-	if subject_2.Tag == lisette.OptionSome {
-		value := subject_2.SomeVal
+	subject := lisette.ReceiverReceive(rx)
+	if subject.Tag == lisette.OptionSome {
+		value := subject.SomeVal
 		if value != 7 {
 			panic(fmt.Sprintf("expected 7, got %d", value))
 		}

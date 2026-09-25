@@ -67,9 +67,9 @@ func describe[WrapFull_2 any](w Wrap, _ WrapFull_2) int {
 }
 
 func build[MakeWrapFull_2 any](_ MakeWrapFull_2) int {
-	subject_1 := MakeWrapFull(7)
-	if subject_1.Tag == WrapFull {
-		return subject_1.Full
+	subject := MakeWrapFull(7)
+	if subject.Tag == WrapFull {
+		return subject.Full
 	}
 	return 0
 }

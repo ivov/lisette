@@ -24,7 +24,7 @@ func bump(i *int) int {
 func main() {
 	i := 0
 	items := []int{}
-	arg_1 := i
-	items = append(items, arg_1, bump(&i))
+	arg := i
+	items = append(items, arg, bump(&i))
 	_ = items
 }

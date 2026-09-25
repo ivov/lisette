@@ -24,13 +24,13 @@ func run() lisette.Result[struct{}, string] {
 		i = 1
 		return lisette.MakeResultOk[int, string](5)
 	}
-	base_2 := xs
-	idx_3 := i
-	left_4 := base_2[idx_3]
-	check_1 := bump()
-	if check_1.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[struct{}, string](check_1.ErrVal)
+	base := xs
+	idx := i
+	left := base[idx]
+	check := bump()
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[struct{}, string](check.ErrVal)
 	}
-	base_2[idx_3] = left_4 + check_1.OkVal
+	base[idx] = left + check.OkVal
 	return lisette.MakeResultOk[struct{}, string](struct{}{})
 }

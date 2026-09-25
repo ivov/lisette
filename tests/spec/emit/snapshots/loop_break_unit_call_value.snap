@@ -15,11 +15,11 @@ package main
 func noop() {}
 
 func test() {
-	var tmp_1 struct{}
+	var tmp struct{}
 	for {
 		noop()
-		tmp_1 = struct{}{}
+		tmp = struct{}{}
 		break
 	}
-	_ = tmp_1
+	_ = tmp
 }

@@ -17,13 +17,13 @@ import (
 )
 
 func three() (int, error) {
-	n, err_2 := strconv.Atoi("x")
-	ret_1, err := strconv.Atoi("0")
+	n, err_1 := strconv.Atoi("x")
+	ret, err := strconv.Atoi("0")
 	if err != nil {
 		return 0, err
 	}
-	if err_2 != nil {
-		return 0, fmt.Errorf("%d: %w", ret_1, err_2)
+	if err_1 != nil {
+		return 0, fmt.Errorf("%d: %w", ret, err_1)
 	}
 	return n, nil
 }

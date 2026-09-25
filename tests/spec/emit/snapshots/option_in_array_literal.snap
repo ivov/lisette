@@ -22,9 +22,9 @@ func maybe(x int) (int, bool) {
 }
 
 func test() {
-	option_1 := lisette.OptionFromCommaOk[int](maybe(1))
-	option_2 := lisette.OptionFromCommaOk[int](maybe(0))
-	option_3 := lisette.OptionFromCommaOk[int](maybe(3))
-	option_4 := lisette.OptionFromCommaOk[int](maybe(-1))
-	_ = []lisette.Option[int]{option_1, option_2, option_3, option_4}
+	option := lisette.OptionFromCommaOk[int](maybe(1))
+	option_1 := lisette.OptionFromCommaOk[int](maybe(0))
+	option_2 := lisette.OptionFromCommaOk[int](maybe(3))
+	option_3 := lisette.OptionFromCommaOk[int](maybe(-1))
+	_ = []lisette.Option[int]{option, option_1, option_2, option_3}
 }

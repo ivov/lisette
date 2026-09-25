@@ -21,14 +21,14 @@ import (
 )
 
 func main() {
-	ret_1, ret_2 := strconv.Atoi("42")
+	ret, ret_2 := strconv.Atoi("42")
 	var n lisette.Result[int, error]
 	if ret_2 != nil {
 		n = lisette.MakeResultErr[int, error](ret_2)
 	} else {
-		n = lisette.MakeResultOk[int, error](ret_1)
+		n = lisette.MakeResultOk[int, error](ret)
 	}
-	ret_1_3 := 7
+	ret_1 := 7
 	fmt.Println(n)
-	fmt.Println(ret_1_3)
+	fmt.Println(ret_1)
 }

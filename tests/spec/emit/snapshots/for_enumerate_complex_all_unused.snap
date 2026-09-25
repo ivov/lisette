@@ -18,8 +18,8 @@ func test() {
 		lisette.MakeTuple2[int, int](1, 2),
 		lisette.MakeTuple2[int, int](3, 4),
 	}
-	for key_1, value_2 := range items {
-		_ = value_2
-		_ = key_1
+	for key, value := range items {
+		_ = value
+		_ = key
 	}
 }

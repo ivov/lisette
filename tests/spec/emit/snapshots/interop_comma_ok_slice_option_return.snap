@@ -28,23 +28,23 @@ import (
 )
 
 func main() {
-	ret_1, ret_2 := aws.Fetch()
-	var option_6 lisette.Option[[]lisette.Option[string]]
-	if ret_2 {
-		wrapped_3 := make([]lisette.Option[string], len(ret_1))
-		for i_4, v_5 := range ret_1 {
-			if v_5 != nil {
-				wrapped_3[i_4] = lisette.MakeOptionSome[string](*v_5)
+	ret, ret_1 := aws.Fetch()
+	var option lisette.Option[[]lisette.Option[string]]
+	if ret_1 {
+		wrapped := make([]lisette.Option[string], len(ret))
+		for i, v_1 := range ret {
+			if v_1 != nil {
+				wrapped[i] = lisette.MakeOptionSome[string](*v_1)
 			} else {
-				wrapped_3[i_4] = lisette.MakeOptionNone[string]()
+				wrapped[i] = lisette.MakeOptionNone[string]()
 			}
 		}
-		option_6 = lisette.MakeOptionSome[[]lisette.Option[string]](wrapped_3)
+		option = lisette.MakeOptionSome[[]lisette.Option[string]](wrapped)
 	} else {
-		option_6 = lisette.MakeOptionNone[[]lisette.Option[string]]()
+		option = lisette.MakeOptionNone[[]lisette.Option[string]]()
 	}
-	if option_6.Tag == lisette.OptionSome {
-		for _, x := range option_6.SomeVal {
+	if option.Tag == lisette.OptionSome {
+		for _, x := range option.SomeVal {
 			if x.Tag == lisette.OptionSome {
 				fmt.Println(x.SomeVal)
 			} else {
