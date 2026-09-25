@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  fn test() {
+    let ch = Channel.buffered<int>(1);
+    ch.send(1);
+    let (_, rx) = ch.split();
+    let _ = rx.receive();
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	ch := make(chan int, 1)
+	_ = lisette.ChannelSend(ch, 1)
+	rx := (<-chan int)(ch)
+	_ = lisette.ReceiverReceive(rx)
+}

@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  fn make_jobs() -> Channel<int> {
+    Channel.buffered<int>(2)
+  }
+  
+  fn test() {
+    let (tx, rx) = make_jobs().split();
+    tx.send(7);
+    match rx.receive() {
+      Some(value) => {
+        if value != 7 {
+          panic(f"expected 7, got {value}")
+        }
+      },
+      None => { panic("sender and receiver split different channels") },
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func makeJobs() chan int {
+	return make(chan int, 2)
+}
+
+func test() {
+	ch_1 := makeJobs()
+	tx := (chan<- int)(ch_1)
+	rx := (<-chan int)(ch_1)
+	_ = lisette.SenderSend(tx, 7)
+	subject_2 := lisette.ReceiverReceive(rx)
+	if subject_2.Tag == lisette.OptionSome {
+		value := subject_2.SomeVal
+		if value != 7 {
+			panic(fmt.Sprintf("expected 7, got %d", value))
+		}
+	} else {
+		panic("sender and receiver split different channels")
+	}
+}

@@ -16,6 +16,7 @@ use crate::plan::placement::{
 };
 use crate::plan::values::GoExpression;
 use syntax::ast::{Binding, Expression, LetMode, Pattern};
+use syntax::program::NativeTypeKind;
 use syntax::types::Type;
 
 #[derive(Clone, Copy)]
@@ -458,6 +459,9 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 if all_unused {
                     return self.lower_discard();
                 }
+                if let Some(block) = self.lower_channel_split(elements) {
+                    return block;
+                }
                 if elements.iter().all(|element| {
                     matches!(
                         element,
@@ -478,6 +482,69 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 &value_ty,
             ),
         }
+    }
+
+    fn lower_channel_split(&mut self, elements: &[Pattern]) -> Option<LoweredBlock> {
+        let slot_types = self.channel_split_slot_types(elements)?;
+        let call = self.planner.native_method_call(self.value)?;
+        if call.kind != NativeTypeKind::Channel || call.method != "split" {
+            return None;
+        }
+        let (mut statements, receiver) = self
+            .planner
+            .lower_value(call.receiver, ExpressionContext::value())
+            .into_parts();
+        let receiver = if call.receiver.get_type().is_ref() {
+            GoExpression::dereference(receiver)
+        } else {
+            receiver
+        };
+        let receiver = self.planner.stable_source(&mut statements, "ch", receiver);
+        let planned: Vec<_> = elements
+            .iter()
+            .zip(slot_types)
+            .filter_map(|(pattern, slot_ty)| {
+                let Pattern::Identifier { identifier, .. } = pattern else {
+                    return None;
+                };
+                let raw_go_name = self.planner.go_name_for_binding(pattern)?;
+                let go_name = self.planner.choose_let_go_name(
+                    identifier,
+                    &raw_go_name,
+                    self.planner.scope.has_binding_for_go_name(&raw_go_name),
+                );
+                Some((identifier, go_name, self.planner.use_go_type(&slot_ty)))
+            })
+            .collect();
+        for (identifier, go_name, go_type) in planned {
+            self.planner.scope.bind(identifier, &go_name);
+            self.planner.try_declare(&go_name);
+            statements.push(define(
+                go_name,
+                GoExpression::conversion(go_type, receiver.clone()),
+            ));
+        }
+        Some(LoweredBlock { statements })
+    }
+
+    fn channel_split_slot_types(&self, elements: &[Pattern]) -> Option<Vec<Type>> {
+        let pair_of_names = elements.len() == 2
+            && elements.iter().all(|element| {
+                matches!(
+                    element,
+                    Pattern::Identifier { .. } | Pattern::WildCard { .. }
+                )
+            });
+        if !pair_of_names {
+            return None;
+        }
+        let slot_types = tuple_element_types(&self.planner.facts.peel_alias(&self.binding.ty));
+        let directional = [NativeTypeKind::Sender, NativeTypeKind::Receiver];
+        (slot_types.len() == directional.len()
+            && slot_types.iter().zip(directional).all(|(slot_ty, kind)| {
+                NativeTypeKind::from_type(&self.planner.facts.peel_alias(slot_ty)) == Some(kind)
+            }))
+        .then_some(slot_types)
     }
 
     fn can_use_multi_value_optimization(&self) -> bool {

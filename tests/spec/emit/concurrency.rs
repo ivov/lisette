@@ -527,6 +527,118 @@ fn test() {
 }
 
 #[test]
+fn channel_split_destructure_binds_both_directions() {
+    let input = r#"
+fn test() {
+  let ch = Channel.buffered<int>(1);
+  let (tx, rx) = ch.split();
+  tx.send(42);
+  let _ = rx.receive();
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn channel_split_destructure_wildcard_sender() {
+    let input = r#"
+fn test() {
+  let ch = Channel.buffered<int>(1);
+  ch.send(1);
+  let (_, rx) = ch.split();
+  let _ = rx.receive();
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn channel_split_destructure_shadowed_name() {
+    let input = r#"
+fn test() {
+  let tx = Channel.buffered<int>(1);
+  let (tx, rx) = tx.split();
+  tx.send(42);
+  let _ = rx.receive();
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn channel_split_destructure_ref_receiver() {
+    let input = r#"
+fn drain(ch: Ref<Channel<int>>) {
+  let (tx, rx) = ch.split();
+  tx.send(42);
+  let _ = rx.receive();
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn channel_split_destructure_channel_alias() {
+    let input = r#"
+type Inbox = Channel<int>
+
+fn drain(ch: Inbox) {
+  let (tx, rx) = ch.split();
+  tx.send(42);
+  let _ = rx.receive();
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn channel_split_destructure_evaluates_receiver_once() {
+    let input = r#"
+fn make_jobs() -> Channel<int> {
+  Channel.buffered<int>(2)
+}
+
+fn test() {
+  let (tx, rx) = make_jobs().split();
+  tx.send(7);
+  match rx.receive() {
+    Some(value) => {
+      if value != 7 {
+        panic(f"expected 7, got {value}")
+      }
+    },
+    None => { panic("sender and receiver split different channels") },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn channel_split_destructure_preserves_close() {
+    let input = r#"
+fn test() {
+  let ch = Channel.buffered<int>(2);
+  let (tx, rx) = ch.split();
+  tx.send(1);
+  tx.close();
+  let mut total = 0;
+  for value in rx {
+    total += value
+  }
+  if total != 1 {
+    panic(f"expected 1, got {total}")
+  }
+  match rx.receive() {
+    Some(value) => { panic(f"expected a drained channel, got {value}") },
+    None => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn select_match_receive() {
     let input = r#"
 fn process(v: int) {}
