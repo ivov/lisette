@@ -39,17 +39,19 @@ type User struct {
 }
 
 func find(users []User, name string) (User, bool) {
-	result_1 := lisette.MakeOptionNone[User]()
+	var ret_1 User
+	found_2 := false
 	for _, u := range users {
 		if u.name == name {
-			result_1 = lisette.MakeOptionSome[User](u)
+			ret_1 = u
+			found_2 = true
 			break
 		}
 	}
-	if result_1.Tag == lisette.OptionSome {
-		return result_1.SomeVal, true
+	if !found_2 {
+		return User{}, false
 	}
-	return User{}, false
+	return ret_1, true
 }
 
 func describe(users []User, wanted string) string {

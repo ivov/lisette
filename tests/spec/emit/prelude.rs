@@ -934,6 +934,77 @@ fn test(s: Slice<int>) -> Option<int> {
 }
 
 #[test]
+fn slice_find_returned_directly_runs_predicate_once_per_element() {
+    let input = r#"
+fn first_positive(s: Slice<int>, seen: Channel<int>) -> Option<int> {
+  s.find(|x| {
+    seen.send(x)
+    x > 0
+  })
+}
+
+fn test() {
+  let seen = Channel.buffered<int>(8)
+  match first_positive([-1, 0, 3, 4], seen) {
+    Some(v) => { if v != 3 { panic("wrong first hit") } },
+    None => { panic("expected a hit") },
+  }
+  if seen.length() != 3 {
+    panic("predicate ran past the first hit")
+  }
+  match first_positive([-1, 0], seen) {
+    Some(_) => { panic("expected no hit") },
+    None => {},
+  }
+  if seen.length() != 5 {
+    panic("predicate did not see every element")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_find_returned_directly_with_nullable_payload() {
+    let input = r#"
+struct User { name: string }
+
+fn test(users: Slice<Ref<User>>, wanted: string) -> Option<Ref<User>> {
+  users.find(|u| u.name == wanted)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_find_returned_directly_with_generic_payload() {
+    let input = r#"
+fn first<T>(xs: Slice<T>, keep: fn(T) -> bool) -> Option<T> {
+  xs.find(keep)
+}
+
+fn test() {
+  match first([1, 2, 3], |x| x > 1) {
+    Some(v) => { if v != 2 { panic("wrong element") } },
+    None => { panic("expected a hit") },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_find_bound_to_a_name_keeps_option() {
+    let input = r#"
+fn test(s: Slice<int>) -> Option<int> {
+  let found = s.find(|x| x > 0)
+  found
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_clone() {
     let input = r#"
 fn test(s: Slice<int>) -> Slice<int> {

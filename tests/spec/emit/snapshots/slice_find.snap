@@ -8,18 +8,18 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func test(s []int) (int, bool) {
-	result_1 := lisette.MakeOptionNone[int]()
+	var ret_1 int
+	found_2 := false
 	for _, x := range s {
 		if x > 0 {
-			result_1 = lisette.MakeOptionSome[int](x)
+			ret_1 = x
+			found_2 = true
 			break
 		}
 	}
-	if result_1.Tag == lisette.OptionSome {
-		return result_1.SomeVal, true
+	if !found_2 {
+		return 0, false
 	}
-	return 0, false
+	return ret_1, true
 }
