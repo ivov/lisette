@@ -17,7 +17,7 @@ func test() (int, bool) {
 	tryResult_1 := func() lisette.Option[int] {
 		check_2 := lisette.MakeOptionSome(1)
 		if check_2.Tag != lisette.OptionSome {
-			return lisette.MakeOptionNone[int]()
+			return check_2
 		}
 		panic("fatal")
 	}()

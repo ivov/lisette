@@ -23,7 +23,7 @@ func f() lisette.Result[int, string] {
 	}
 	check_2 := check_1.OkVal
 	if check_2.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[int, string](check_2.ErrVal)
+		return check_2
 	}
 	return lisette.MakeResultOk[int, string](check_2.OkVal)
 }

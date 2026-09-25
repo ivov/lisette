@@ -48,7 +48,7 @@ func main() {
 	tryResult_2 := func() lisette.Result[int, string] {
 		check_3 := parse("42")
 		if check_3.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[int, string](check_3.ErrVal)
+			return check_3
 		}
 		x := check_3.OkVal
 		return lisette.MakeResultOk[int, string](x + 1)

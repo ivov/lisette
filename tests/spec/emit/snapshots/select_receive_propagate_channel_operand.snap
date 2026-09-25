@@ -30,7 +30,7 @@ func f() lisette.Result[int, string] {
 	var x int
 	check_1 := g()
 	if check_1.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[int, string](check_1.ErrVal)
+		return check_1
 	}
 	ch_2 := chans[check_1.OkVal]
 	for {

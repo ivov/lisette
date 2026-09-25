@@ -34,12 +34,12 @@ func test() int {
 	tryResult_1 := func() lisette.Result[int, string] {
 		check_2 := getA()
 		if check_2.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[int, string](check_2.ErrVal)
+			return check_2
 		}
 		a := check_2.OkVal
 		check_3 := getB()
 		if check_3.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[int, string](check_3.ErrVal)
+			return check_3
 		}
 		b := check_3.OkVal
 		return lisette.MakeResultOk[int, string](a + b)

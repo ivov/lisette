@@ -31,12 +31,12 @@ func second() lisette.Result[int, string] {
 func test() lisette.Result[int, string] {
 	check_1 := first()
 	if check_1.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[int, string](check_1.ErrVal)
+		return check_1
 	}
 	x := check_1.OkVal
 	check_2 := second()
 	if check_2.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[int, string](check_2.ErrVal)
+		return check_2
 	}
 	y := check_2.OkVal
 	return lisette.MakeResultOk[int, string](x + y)

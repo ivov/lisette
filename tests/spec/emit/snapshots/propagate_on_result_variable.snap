@@ -15,7 +15,7 @@ import lisette "github.com/ivov/lisette/prelude"
 func test() lisette.Result[int, string] {
 	r := lisette.MakeResultOk[int, string](42)
 	if r.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[int, string](r.ErrVal)
+		return r
 	}
 	x := r.OkVal
 	return lisette.MakeResultOk[int, string](x + 1)

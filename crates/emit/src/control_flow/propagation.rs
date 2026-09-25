@@ -55,7 +55,7 @@ impl Planner<'_> {
 
         let (check_setup, check) = self.hoist_propagate_check_var(expression);
         statements.extend(check_setup);
-        statements.push(self.build_propagate_failure_check(&check, &fallible));
+        statements.push(self.build_propagate_failure_check(&check, &fallible, &expression_ty));
 
         let ok_access = GoExpression::selector(check, fallible.ok_field().to_string());
         let value = match result_var_name {
@@ -118,13 +118,18 @@ impl Planner<'_> {
         &mut self,
         check: &GoExpression,
         fallible: &Fallible,
+        expression_ty: &Type,
     ) -> LoweredStatement {
-        let err_expr = if fallible.is_result() {
-            GoExpression::selector(check.clone(), "ErrVal".to_string())
+        let (setup, values) = if self.returns_tagged_type(expression_ty) {
+            (Vec::new(), vec![check.clone()])
         } else {
-            check.clone()
+            let err_expr = if fallible.is_result() {
+                GoExpression::selector(check.clone(), "ErrVal".to_string())
+            } else {
+                check.clone()
+            };
+            self.propagate_failure_values(fallible, err_expr)
         };
-        let (setup, values) = self.propagate_failure_values(fallible, err_expr);
         transition::tag_check(
             GoExpression::binary(
                 GoExpression::selector(check.clone(), "Tag".to_string()),
@@ -134,6 +139,14 @@ impl Planner<'_> {
             setup,
             values,
         )
+    }
+
+    fn returns_tagged_type(&self, ty: &Type) -> bool {
+        let return_ctx = self.return_ctx();
+        return_ctx.lowered_shape().is_none()
+            && return_ctx
+                .ty()
+                .is_some_and(|return_ty| self.facts.peel_alias(return_ty).demoted() == ty.demoted())
     }
 
     fn propagate_failure_values(

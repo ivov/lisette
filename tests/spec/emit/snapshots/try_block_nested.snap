@@ -41,7 +41,7 @@ func test() int {
 		tryResult_2 := func() lisette.Result[int, string] {
 			check_3 := riskyA()
 			if check_3.Tag != lisette.ResultOk {
-				return lisette.MakeResultErr[int, string](check_3.ErrVal)
+				return check_3
 			}
 			return lisette.MakeResultOk[int, string](check_3.OkVal)
 		}()
@@ -54,7 +54,7 @@ func test() int {
 		}
 		check_4 := riskyB()
 		if check_4.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[int, string](check_4.ErrVal)
+			return check_4
 		}
 		return lisette.MakeResultOk[int, string](inner_val + check_4.OkVal)
 	}()
