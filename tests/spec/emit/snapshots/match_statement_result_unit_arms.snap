@@ -29,8 +29,7 @@ func divide(a, b int) lisette.Result[int, string] {
 }
 
 func test() {
-	subject := divide(10, 2)
-	if subject.Tag == lisette.ResultOk {
+	if divide(10, 2).Tag == lisette.ResultOk {
 		noop()
 	} else {
 		noop()

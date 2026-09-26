@@ -39,8 +39,7 @@ type Color struct {
 }
 
 func test(c *Color) int {
-	subject := *c
-	switch subject.Tag {
+	switch (*c).Tag {
 	case ColorRed:
 		return 1
 	case ColorGreen:

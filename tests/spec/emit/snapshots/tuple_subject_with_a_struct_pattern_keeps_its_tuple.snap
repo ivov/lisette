@@ -24,8 +24,7 @@ func makeBox() Box {
 }
 
 func test(b bool) string {
-	subject := lisette.MakeTuple2[Box, bool](makeBox(), b)
-	if subject.Second == true {
+	if lisette.MakeTuple2[Box, bool](makeBox(), b).Second == true {
 		return "yes"
 	}
 	return "no"
