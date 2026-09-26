@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn trio(n: int) -> (int, string, bool) {
+    (n, "a", true)
+  }
+  
+  fn main() {
+    let t = trio(3)
+    fmt.Println(t.1)
+  }
+---
+package main
+
+import "fmt"
+
+func trio(n int) (int, string, bool) {
+	return n, "a", true
+}
+
+func main() {
+	_, t1, _ := trio(3)
+	fmt.Println(t1)
+}

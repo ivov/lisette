@@ -37,6 +37,7 @@ use abi::callable::{CallableReturnAbi, OptionReturnAbi};
 use abi::catalog::GoAbiCatalog;
 use abi::go_payload_layout;
 use abi::layout::SlotOrigin;
+use analyze::component_uses::ComponentDemand;
 use analyze::facts::{EmitFactsConfig, is_nullable_option};
 use diagnostics::LisetteDiagnostic;
 use names::go_name::GeneratedPackage;
@@ -243,7 +244,7 @@ pub struct Planner<'a> {
     scope: ScopeState,
     adapter_registry: AdapterRegistry,
     namespace: FileNamespace,
-    component_lets: HashMap<Span, (bool, bool)>,
+    component_lets: HashMap<Span, ComponentDemand>,
 }
 
 impl Planner<'_> {

@@ -1,4 +1,5 @@
 use crate::Planner;
+use crate::calls::go_interop::build_tuple_literal;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::values::GoExpression;
@@ -35,6 +36,12 @@ impl Planner<'_> {
         {
             let components = components.clone();
             return self.option_from_components(&components);
+        }
+        if let Some(BindingValue::TupleComponents(tuple)) =
+            self.scope.resolve_identifier_binding(value)
+        {
+            let names = tuple.names.clone();
+            return build_tuple_literal(names.into_iter().map(GoExpression::name).collect());
         }
         let bound_go_name = self
             .scope

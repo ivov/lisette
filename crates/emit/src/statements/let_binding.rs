@@ -16,7 +16,7 @@ use crate::plan::placement::{
     rebind_trailing_temp, requires_temp_var,
 };
 use crate::plan::values::GoExpression;
-use crate::state::bindings::{ComponentBinding, ComponentKind};
+use crate::state::bindings::{ComponentBinding, ComponentKind, TupleBinding};
 use std::mem;
 use syntax::ast::{Binding, Expression, LetMode, Pattern};
 use syntax::program::NativeTypeKind;
@@ -137,6 +137,9 @@ impl Planner<'_> {
             {
                 return statements;
             }
+            if let Some(statements) = self.lower_let_as_tuple_components(identifier, value) {
+                return statements;
+            }
         }
         if needs_temp {
             if self.shadows_declaration(&go_identifier)
@@ -167,7 +170,8 @@ impl Planner<'_> {
         } else {
             return None;
         };
-        let (needs_value, needs_whole_value) = *self.component_lets.get(&value.get_span())?;
+        let demand = self.component_lets.get(&value.get_span())?;
+        let (needs_value, needs_whole_value) = (demand.needs_value, demand.needs_whole_value);
         // Only an Option can be rebuilt from components in one expression.
         if needs_whole_value && kind == ComponentKind::Result {
             return None;
@@ -208,6 +212,51 @@ impl Planner<'_> {
                 kind,
             },
         );
+        Some(statements)
+    }
+
+    fn lower_let_as_tuple_components(
+        &mut self,
+        identifier: &str,
+        value: &Expression,
+    ) -> Option<Vec<LoweredStatement>> {
+        let ty = self.facts.peel_alias(&value.get_type());
+        let elements = tuple_element_types(&ty);
+        if elements.len() < 2 || !matches!(ty, Type::Tuple(_)) {
+            return None;
+        }
+        let demand = self.component_lets.get(&value.get_span())?;
+        let read_indices = demand.read_indices.clone();
+        let needs_whole_value = demand.needs_whole_value;
+        let plan = self.plan_call(value)?;
+        if !matches!(
+            plan.resolved.abi.result,
+            CallableReturnAbi::Tuple { arity } if arity == elements.len()
+        ) {
+            return None;
+        }
+        // Go rejects a name that no later line reads, so an unread element gets `_`.
+        let is_read = |index: usize| needs_whole_value || read_indices.contains(&index);
+        if !(0..elements.len()).any(is_read) {
+            return None;
+        }
+        let names: Vec<String> = (0..elements.len())
+            .map(|index| {
+                if !is_read(index) {
+                    return "_".to_string();
+                }
+                let name = self.fresh_var(Some(&format!("{identifier}{index}")));
+                self.declare(&name);
+                name
+            })
+            .collect();
+        let (setup, call) = self
+            .lower_call(value, None, ExpressionContext::value())
+            .into_parts();
+        let mut statements = setup;
+        statements.push(define_many(names.clone(), call));
+        self.scope
+            .set_tuple_binding(identifier, TupleBinding { names });
         Some(statements)
     }
 

@@ -262,7 +262,7 @@ impl Planner<'_> {
     }
 }
 
-pub(super) fn build_tuple_literal(values: Vec<GoExpression>) -> GoExpression {
+pub(crate) fn build_tuple_literal(values: Vec<GoExpression>) -> GoExpression {
     GoExpression::call(
         GoExpression::generated(
             GeneratedPackage::Prelude,

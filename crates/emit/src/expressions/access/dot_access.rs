@@ -1,3 +1,4 @@
+use crate::state::bindings::BindingValue;
 use syntax::ast::{Expression, StructFields};
 use syntax::parse;
 use syntax::program::{
@@ -46,6 +47,10 @@ impl Planner<'_> {
             self.try_emit_pre_receiver_dot(expression, member, result_ty, dot_access_kind, ctx)
         {
             return ValuePlan::computed(Vec::new(), expression, EvaluationEffect::Pure);
+        }
+
+        if let Some(component) = self.tuple_component_read(expression, member) {
+            return ValuePlan::captured(Vec::new(), component);
         }
 
         let expression_ty = expression.get_type();
@@ -144,6 +149,19 @@ impl Planner<'_> {
             }
             _ => None,
         }
+    }
+
+    fn tuple_component_read(&self, expression: &Expression, member: &str) -> Option<String> {
+        let Expression::Identifier { value, .. } = expression.unwrap_parens() else {
+            return None;
+        };
+        let Some(BindingValue::TupleComponents(tuple)) =
+            self.scope.resolve_identifier_binding(value)
+        else {
+            return None;
+        };
+        let index = member.parse::<usize>().ok()?;
+        tuple.names.get(index).cloned()
     }
 
     /// Tuple-shape members: plain tuple slots emit as `.F{index}` (or the

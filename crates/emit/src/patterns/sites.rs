@@ -157,7 +157,7 @@ impl Planner<'_> {
             && !value.contains('.')
             && !matches!(
                 self.scope.resolve_identifier_binding(value),
-                Some(BindingValue::InlineExpr(_))
+                Some(BindingValue::InlineExpr(_) | BindingValue::TupleComponents(_))
             )
     }
 

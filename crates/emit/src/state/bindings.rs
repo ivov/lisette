@@ -21,6 +21,12 @@ pub(crate) enum BindingValue {
     GoConst(String),
     InlineExpr(InlineExpr),
     Components(ComponentBinding),
+    TupleComponents(TupleBinding),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct TupleBinding {
+    pub(crate) names: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -41,7 +47,9 @@ impl BindingValue {
     pub(crate) fn as_go_name(&self) -> Option<&str> {
         match self {
             BindingValue::GoName(name) | BindingValue::GoConst(name) => Some(name.as_str()),
-            BindingValue::InlineExpr(_) | BindingValue::Components(_) => None,
+            BindingValue::InlineExpr(_)
+            | BindingValue::Components(_)
+            | BindingValue::TupleComponents(_) => None,
         }
     }
 
