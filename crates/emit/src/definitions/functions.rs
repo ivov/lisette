@@ -13,6 +13,7 @@ use crate::plan::cleanup::clean_up;
 use crate::plan::go_expression::{FunctionLiteralLayout, GoExpressionNode, GoParameter};
 use crate::plan::values::GoExpression;
 use crate::state::package_state::FunctionEmissionContext;
+use crate::statements::testing::test_context_call;
 use crate::types::native::NativeGoType;
 use crate::utils::{fresh_receiver_name, group_params};
 use rustc_hash::FxHashSet as HashSet;
@@ -132,19 +133,13 @@ impl Planner<'_> {
             let recover = handle.as_ref().map(|name| {
                 this.require_testkit();
                 let span = body.get_span();
-                let literal = |value: u32| GoExpression::literal(value.to_string());
                 LoweredStatement::Async {
                     keyword: "defer".to_string(),
-                    call: GoExpression::call(
-                        GoExpression::selector(
-                            GoExpression::name(name.clone()),
-                            "Recover".to_string(),
-                        ),
-                        vec![
-                            literal(span.file_id),
-                            literal(span.byte_offset),
-                            literal(span.byte_offset + span.byte_length),
-                        ],
+                    call: test_context_call(
+                        GoExpression::name(name.clone()),
+                        "Recover",
+                        span,
+                        Vec::new(),
                     ),
                 }
             });
