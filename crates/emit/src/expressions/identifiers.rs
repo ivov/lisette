@@ -30,6 +30,12 @@ impl Planner<'_> {
         if let Some(BindingValue::InlineExpr(expr)) = self.scope.resolve_identifier_binding(value) {
             return expr.expression().clone();
         }
+        if let Some(BindingValue::Components(components)) =
+            self.scope.resolve_identifier_binding(value)
+        {
+            let components = components.clone();
+            return self.option_from_components(&components);
+        }
         let bound_go_name = self
             .scope
             .resolve_binding_go_name(value)

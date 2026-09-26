@@ -20,13 +20,21 @@ pub(crate) enum BindingValue {
     GoName(String),
     GoConst(String),
     InlineExpr(InlineExpr),
+    Components(ComponentBinding),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ComponentBinding {
+    pub(crate) value: String,
+    pub(crate) status: String,
+    pub(crate) payload_go_type: String,
 }
 
 impl BindingValue {
     pub(crate) fn as_go_name(&self) -> Option<&str> {
         match self {
             BindingValue::GoName(name) | BindingValue::GoConst(name) => Some(name.as_str()),
-            BindingValue::InlineExpr(_) => None,
+            BindingValue::InlineExpr(_) | BindingValue::Components(_) => None,
         }
     }
 

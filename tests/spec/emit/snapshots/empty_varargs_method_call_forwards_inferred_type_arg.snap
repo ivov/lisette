@@ -18,8 +18,6 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 type Box struct{}
 
 func Box_first[T any](_ Box, _ ...T) (T, bool) {
@@ -28,8 +26,11 @@ func Box_first[T any](_ Box, _ ...T) (T, bool) {
 
 func test() {
 	b := Box{}
-	r := lisette.OptionFromCommaOk[int](Box_first[int](b))
-	if r.UnwrapOr(7) != 7 {
+	r, ok := Box_first[int](b)
+	if !ok {
+		r = 7
+	}
+	if r != 7 {
 		panic("expected 7")
 	}
 }

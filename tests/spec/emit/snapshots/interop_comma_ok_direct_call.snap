@@ -14,14 +14,12 @@ description: |
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"os"
-)
+import "os"
 
 func main() {
-	r := lisette.OptionFromCommaOk[string](os.LookupEnv("HOME"))
-	if r.Tag == lisette.OptionSome {
-		_ = r.SomeVal
+	r, ok := os.LookupEnv("HOME")
+	v := r
+	if ok {
+		_ = v
 	}
 }

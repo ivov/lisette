@@ -19,10 +19,7 @@ description: |
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"os"
-)
+import "os"
 
 func makeLookup() func(string) (string, bool) {
 	return os.LookupEnv
@@ -30,8 +27,9 @@ func makeLookup() func(string) (string, bool) {
 
 func main() {
 	f := makeLookup()
-	r := lisette.OptionFromCommaOk[string](f("HOME"))
-	if r.Tag == lisette.OptionSome {
-		_ = r.SomeVal
+	r, ok := f("HOME")
+	v := r
+	if ok {
+		_ = v
 	}
 }

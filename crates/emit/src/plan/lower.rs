@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::abi::transition::try_emit_lowered_tail_return;
+use crate::analyze::component_uses::component_demand;
 use crate::calls::comma_ok::PairCondition;
 use crate::calls::predicates::strip_negations;
 use crate::context::expression::ExpressionContext;
@@ -18,6 +19,7 @@ use crate::plan::placement::{
     ElidableTail, collapse_declared_temp, requires_temp_var, try_elide_tail_let,
 };
 use crate::plan::values::{GoExpression, OperandForm, ValuePlan};
+use std::iter;
 use std::slice;
 use syntax::ast::{
     BinaryOperator, Expression, IdentifierResolution, IfLetAlternative, Literal, MatchArm, Pattern,
@@ -119,6 +121,7 @@ impl Planner<'_> {
         rest: &[Expression],
         last: &Expression,
     ) -> (Vec<LoweredStatement>, bool) {
+        self.mark_component_lets(rest, last);
         let mut statements: Vec<LoweredStatement> = Vec::with_capacity(rest.len() + 1);
         for item in rest {
             let statement = self.lower_statement(item);
@@ -184,6 +187,31 @@ impl Planner<'_> {
     }
 
     /// Lower a single statement in the enclosing return context.
+    fn mark_component_lets(&mut self, rest: &[Expression], last: &Expression) {
+        for (index, item) in rest.iter().enumerate() {
+            let Expression::Let {
+                binding,
+                value,
+                mode,
+                ..
+            } = item
+            else {
+                continue;
+            };
+            if mode.else_block().is_some() || binding.is_mutable() {
+                continue;
+            }
+            let Pattern::Identifier { identifier, .. } = &binding.pattern else {
+                continue;
+            };
+            let region = rest[index + 1..].iter().chain(iter::once(last));
+            if let Some(demand) = component_demand(region, identifier.as_str()) {
+                self.component_lets
+                    .insert(value.get_span(), demand.needs_value);
+            }
+        }
+    }
+
     pub(crate) fn lower_statement(&mut self, expression: &Expression) -> LoweredStatement {
         match expression {
             Expression::If {
@@ -816,6 +844,9 @@ impl Planner<'_> {
         } else {
             slice::from_ref(expression)
         };
+        if let Some((last, rest)) = items.split_last() {
+            self.mark_component_lets(rest, last);
+        }
         let statements = items
             .iter()
             .map(|item| self.lower_statement(item))

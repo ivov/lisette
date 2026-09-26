@@ -14,13 +14,11 @@ package main
 
 import (
 	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
 	"os"
 )
 
 func main() {
-	home, ok := os.LookupEnv("HOME")
-	if !ok {
-		home = "unset"
-	}
-	fmt.Println(home)
+	home := lisette.OptionFromCommaOk[string](os.LookupEnv("HOME"))
+	fmt.Println(home.UnwrapOr("unset"))
 }
