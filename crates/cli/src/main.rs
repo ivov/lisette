@@ -19,7 +19,20 @@ use std::process;
 fn main() {
     panic::add_handler();
 
-    let args: Vec<String> = env::args().collect();
+    let mut args = Vec::new();
+    for arg in env::args_os() {
+        match arg.into_string() {
+            Ok(arg) => args.push(arg),
+            Err(arg) => {
+                cli_error!(
+                    "Invalid argument",
+                    format!("`{}` is not valid text", arg.to_string_lossy()),
+                    "Run `lis help` for usage"
+                );
+                process::exit(1);
+            }
+        }
+    }
 
     let command = match Command::parse(args, |path| Path::new(path).is_file()) {
         Ok(command) => command,

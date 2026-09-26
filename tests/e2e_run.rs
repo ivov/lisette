@@ -586,6 +586,49 @@ fn main() {}
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn invalid_text_argument_is_a_usage_error() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+
+    let manifest = repo().join("Cargo.toml");
+    let smoke_project = repo().join("tests/e2e_smoke_project");
+    let bad = OsStr::from_bytes(b"main\xff.lis");
+
+    let invocations: [&[&OsStr]; 3] = [
+        &[bad],
+        &[OsStr::new("check"), smoke_project.as_os_str(), bad],
+        &[OsStr::new("--version"), bad],
+    ];
+
+    for extra in invocations {
+        let output = Command::new("cargo")
+            .args(["run", "--quiet", "--manifest-path"])
+            .arg(&manifest)
+            .args(["-p", "lisette", "--"])
+            .args(extra)
+            .env("NO_COLOR", "1")
+            .output()
+            .expect("failed to invoke lisette");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "{extra:?}: an argument that is not valid text must exit 1:\nstderr: {stderr}"
+        );
+        assert!(
+            !stderr.contains("INTERNAL COMPILER ERROR"),
+            "{extra:?}: an argument that is not valid text must not report a compiler bug:\nstderr: {stderr}"
+        );
+        assert!(
+            stderr.contains("`main\u{FFFD}.lis` is not valid text"),
+            "{extra:?}: the error must name the argument:\nstderr: {stderr}"
+        );
+    }
+}
+
 #[test]
 fn test_wrapper_for_function_named_t_builds_and_runs() {
     if !go_available() {
