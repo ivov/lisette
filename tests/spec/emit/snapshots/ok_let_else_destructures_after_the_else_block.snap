@@ -1,0 +1,56 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:errors"
+  
+  fn pair(a: string) -> Result<(int, int), error> {
+    if a == "" { Err(errors.New("empty")) } else { Ok((1, 2)) }
+  }
+  
+  fn total(a: string) -> int {
+    let x = 50
+    let Ok((x, y)) = pair(a) else {
+      return x
+    }
+    x + y
+  }
+  
+  fn test() {
+    if total("a") != 3 { panic("a pair should add up") }
+    if total("") != 50 { panic("the else block should read the outer name") }
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func pair(a string) (lisette.Tuple2[int, int], error) {
+	if a == "" {
+		return lisette.Tuple2[int, int]{}, errors.New("empty")
+	}
+	return lisette.MakeTuple2[int, int](1, 2), nil
+}
+
+func total(a string) int {
+	x := 50
+	ret, err := pair(a)
+	if err != nil {
+		return x
+	}
+	x_1 := ret.First
+	y := ret.Second
+	return x_1 + y
+}
+
+func test() {
+	if total("a") != 3 {
+		panic("a pair should add up")
+	}
+	if total("") != 50 {
+		panic("the else block should read the outer name")
+	}
+}
