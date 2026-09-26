@@ -1,0 +1,95 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn split(s: string) -> Option<(string, int)> {
+    if s == "" { None } else { Some((s, s.length())) }
+  }
+  
+  fn size(s: string) -> int {
+    match split(s) {
+      Some((_, n)) => n,
+      None => -1,
+    }
+  }
+  
+  fn name(s: string) -> Option<string> {
+    let (word, _) = split(s)?
+    Some(word)
+  }
+  
+  fn fallback(s: string) -> int {
+    let pair = split(s).unwrap_or(("none", 0))
+    pair.1
+  }
+  
+  fn test() {
+    if size("abc") != 3 { panic("a word should report its size") }
+    if size("") != -1 { panic("an empty word should report minus one") }
+    if name("abc").unwrap_or("") != "abc" { panic("a word should keep its name") }
+    if name("").is_some() { panic("an empty word should have no name") }
+    if fallback("") != 0 { panic("a missing pair should use the default") }
+    if fallback("ab") != 2 { panic("a present pair should keep its size") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func split(s string) (lisette.Tuple2[string, int], bool) {
+	if s == "" {
+		return lisette.Tuple2[string, int]{}, false
+	}
+	return lisette.MakeTuple2[string, int](s, len(s)), true
+}
+
+func size(s string) int {
+	ret, ok := split(s)
+	if ok {
+		return ret.Second
+	}
+	return -1
+}
+
+func name(s string) (string, bool) {
+	ret, ok := split(s)
+	if !ok {
+		return "", false
+	}
+	word := ret.First
+	return word, true
+}
+
+func fallback(s string) int {
+	pair, ok := split(s)
+	default_1 := lisette.MakeTuple2[string, int]("none", 0)
+	if !ok {
+		pair = default_1
+	}
+	return pair.Second
+}
+
+func test() {
+	if size("abc") != 3 {
+		panic("a word should report its size")
+	}
+	if size("") != -1 {
+		panic("an empty word should report minus one")
+	}
+	ret, ok := name("abc")
+	if !ok {
+		ret = ""
+	}
+	if ret != "abc" {
+		panic("a word should keep its name")
+	}
+	if _, ok := name(""); ok {
+		panic("an empty word should have no name")
+	}
+	if fallback("") != 0 {
+		panic("a missing pair should use the default")
+	}
+	if fallback("ab") != 2 {
+		panic("a present pair should keep its size")
+	}
+}
