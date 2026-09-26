@@ -143,10 +143,16 @@ impl Planner<'_> {
         components: ComponentBinding,
         slot: CommaOkValueSlot,
     ) -> LoweredPair {
+        let is_arm = matches!(slot, CommaOkValueSlot::Arm(_));
         let (statements, value) = match slot {
             CommaOkValueSlot::Named(name) | CommaOkValueSlot::Arm(name)
                 if name != components.value =>
             {
+                let name = if is_arm && self.scope.current_block_declares(&name) {
+                    self.fresh_var(Some(&name))
+                } else {
+                    name
+                };
                 self.declare(&name);
                 let copy = define(name.clone(), GoExpression::name(components.value));
                 (vec![copy], name)

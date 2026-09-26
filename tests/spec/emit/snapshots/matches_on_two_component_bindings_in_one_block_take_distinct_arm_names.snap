@@ -1,0 +1,77 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn sum(s: string, t: string) -> int {
+    let r = strconv.Atoi(s)
+    let q = strconv.Atoi(t)
+    let a = match q { Ok(n) => n, Err(_) => 0 }
+    let b = match r { Ok(n) => n, Err(_) => 0 }
+    a + b
+  }
+  
+  fn first(m: Map<string, int>) -> int {
+    let v = m.get("a")
+    let mut seen = 0
+    if let Some(n) = v {
+      seen = n
+    }
+    match v {
+      Some(n) => seen + n,
+      None => seen,
+    }
+  }
+  
+  fn test() {
+    if sum("1", "2") != 3 { panic("both parsed numbers should add up") }
+    if first(Map.from([("a", 1)])) != 2 { panic("both reads should see the stored value") }
+  }
+---
+package main
+
+import "strconv"
+
+func sum(s, t string) int {
+	r, err := strconv.Atoi(s)
+	q, err_1 := strconv.Atoi(t)
+	var a int
+	n := q
+	if err_1 == nil {
+		a = n
+	} else {
+		a = 0
+	}
+	var b int
+	n_1 := r
+	if err == nil {
+		b = n_1
+	} else {
+		b = 0
+	}
+	return a + b
+}
+
+func first(m map[string]int) int {
+	v, ok := m["a"]
+	seen := 0
+	n := v
+	if ok {
+		seen = n
+	}
+	n_1 := v
+	if ok {
+		return seen + n_1
+	}
+	return seen
+}
+
+func test() {
+	if sum("1", "2") != 3 {
+		panic("both parsed numbers should add up")
+	}
+	if first(map[string]int{"a": 1}) != 2 {
+		panic("both reads should see the stored value")
+	}
+}

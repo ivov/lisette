@@ -5709,3 +5709,33 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn unread_bindings_that_can_panic_keep_their_reads() {
+    let input = r#"
+fn index_past_end(xs: Slice<int>, i: int) -> int {
+  let x = xs[i]
+  let _ = x
+  xs.length() + i
+}
+
+fn divide_by_zero(a: int, b: int) -> int {
+  let q = a / b
+  let _ = q
+  a + b
+}
+
+fn slice_past_end(xs: Slice<int>) -> int {
+  let s = xs[1..5]
+  let _ = s
+  xs.length()
+}
+
+fn test() {
+  if recover { index_past_end([1, 2], 5) }.is_ok() { panic("an index past the end should panic") }
+  if recover { divide_by_zero(7, 0) }.is_ok() { panic("a division by zero should panic") }
+  if recover { slice_past_end([1, 2]) }.is_ok() { panic("a slice past the end should panic") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

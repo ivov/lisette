@@ -4421,3 +4421,104 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn a_propagated_status_in_a_nested_block_keeps_a_live_component_status() {
+    let input = r#"
+import "go:strconv"
+
+fn add(s: string, t: string) -> Result<int, error> {
+  let r = strconv.Atoi(s)
+  if t != "" {
+    let y = strconv.Atoi(t)?
+    match r {
+      Ok(v) => return Ok(v + y),
+      Err(e) => return Err(e),
+    }
+  }
+  match r {
+    Ok(v) => Ok(v),
+    Err(e) => Err(e),
+  }
+}
+
+fn test() {
+  if add("x", "2").is_ok() { panic("a failed first parse should return its error") }
+  if add("1", "2").unwrap_or(0) != 3 { panic("two parsed numbers should add up") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn matches_on_two_component_bindings_in_one_block_take_distinct_arm_names() {
+    let input = r#"
+import "go:strconv"
+
+fn sum(s: string, t: string) -> int {
+  let r = strconv.Atoi(s)
+  let q = strconv.Atoi(t)
+  let a = match q { Ok(n) => n, Err(_) => 0 }
+  let b = match r { Ok(n) => n, Err(_) => 0 }
+  a + b
+}
+
+fn first(m: Map<string, int>) -> int {
+  let v = m.get("a")
+  let mut seen = 0
+  if let Some(n) = v {
+    seen = n
+  }
+  match v {
+    Some(n) => seen + n,
+    None => seen,
+  }
+}
+
+fn test() {
+  if sum("1", "2") != 3 { panic("both parsed numbers should add up") }
+  if first(Map.from([("a", 1)])) != 2 { panic("both reads should see the stored value") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_map_body_binding_named_like_the_result_takes_a_fresh_name() {
+    let input = r#"
+fn doubled(xs: Slice<int>) -> Slice<int> {
+  let n = xs.map(|y| {
+    let n = y * 2
+    n + 1
+  })
+  n
+}
+
+fn test() {
+  let out = doubled([1, 2])
+  if out[0] != 3 || out[1] != 5 { panic("each element should be doubled plus one") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unwrap_or_on_a_component_binding_keeps_the_let_name() {
+    let input = r#"
+fn get_optional(flag: bool) -> Option<int> {
+  if flag { Some(42) } else { None }
+}
+
+fn pick(flag: bool) -> int {
+  let opt = get_optional(flag)
+  let result = opt.unwrap_or(-1)
+  result
+}
+
+fn test() {
+  if pick(true) != 42 { panic("a present value should be returned") }
+  if pick(false) != -1 { panic("a missing value should use the default") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

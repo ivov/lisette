@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn get_optional(flag: bool) -> Option<int> {
+    if flag { Some(42) } else { None }
+  }
+  
+  fn pick(flag: bool) -> int {
+    let opt = get_optional(flag)
+    let result = opt.unwrap_or(-1)
+    result
+  }
+  
+  fn test() {
+    if pick(true) != 42 { panic("a present value should be returned") }
+    if pick(false) != -1 { panic("a missing value should use the default") }
+  }
+---
+package main
+
+func getOptional(flag bool) (int, bool) {
+	if flag {
+		return 42, true
+	}
+	return 0, false
+}
+
+func pick(flag bool) int {
+	opt, ok := getOptional(flag)
+	result := opt
+	if !ok {
+		result = -1
+	}
+	return result
+}
+
+func test() {
+	if pick(true) != 42 {
+		panic("a present value should be returned")
+	}
+	if pick(false) != -1 {
+		panic("a missing value should use the default")
+	}
+}

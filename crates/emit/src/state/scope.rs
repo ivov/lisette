@@ -130,8 +130,10 @@ impl ScopeState {
     pub(crate) fn has_binding_for_go_name(&self, go_name: &str) -> bool {
         self.frames.iter().any(|frame| {
             frame.bindings.iter().any(|(source_name, value)| {
-                value.as_go_name() == Some(go_name)
-                    && self.resolve_binding_go_name(source_name) == Some(go_name)
+                value.mentions(go_name)
+                    && self
+                        .resolve_identifier_binding(source_name)
+                        .is_some_and(|visible| visible.mentions(go_name))
             })
         })
     }

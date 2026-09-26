@@ -170,6 +170,30 @@ impl GoExpressionNode {
         }
     }
 
+    pub(crate) fn may_panic(&self) -> bool {
+        let mut found = false;
+        self.visit(&mut |node| {
+            if matches!(node, Self::Index { .. } | Self::Slice { .. })
+                || matches!(node, Self::Binary { operator, .. } if operator == "/" || operator == "%")
+            {
+                found = true;
+            }
+        });
+        found
+    }
+
+    pub(crate) fn mentions(&self, name: &str) -> bool {
+        let mut found = false;
+        self.visit(&mut |inner| {
+            if let Self::Identifier(read) = inner
+                && read == name
+            {
+                found = true;
+            }
+        });
+        found
+    }
+
     pub(crate) fn visit(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
         visit(self);
         if let Self::FunctionLiteral { body, .. } = self {
