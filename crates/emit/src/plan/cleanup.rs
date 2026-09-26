@@ -11,11 +11,13 @@ use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{GoExpression, ValuePlan};
 
 pub(crate) fn clean_up(statements: &mut Vec<LoweredStatement>) {
+    // Later deletions can expose earlier rules, so another sweep changes emitted Go.
     inline_name_aliases(statements);
     inline_return_aliases(statements);
     drop_unread_temps(statements);
     fold_compound_assignments(statements);
     return_found_elements_directly(statements);
+    // Declaration removal and return rewriting can make an else safe to inline.
     unwrap_terminal_else(statements);
 }
 
@@ -754,5 +756,231 @@ fn discarded_name(statement: &LoweredStatement) -> Option<&str> {
             _ => None,
         },
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plan::bodies::{IfPlan, LoopKind, LoopPlan, assign, define, discard};
+
+    fn name(text: &str) -> GoExpression {
+        GoExpression::name(text.to_string())
+    }
+
+    fn literal(text: &str) -> GoExpression {
+        GoExpression::literal(text.to_string())
+    }
+
+    fn returned(value: GoExpression) -> LoweredStatement {
+        LoweredStatement::Return(vec![value])
+    }
+
+    fn returning_if(
+        initializer: Option<Definition>,
+        else_body: Vec<LoweredStatement>,
+    ) -> LoweredStatement {
+        LoweredStatement::If(IfPlan {
+            condition_setup: Vec::new(),
+            initializer,
+            condition: name("ok"),
+            then_body: LoweredBlock {
+                statements: vec![returned(literal("0"))],
+            },
+            else_arm: ElseArm::Else {
+                body: LoweredBlock {
+                    statements: else_body,
+                },
+                inline: false,
+            },
+        })
+    }
+
+    #[test]
+    fn terminal_else_keeps_initializer_bindings_in_scope() {
+        let mut statements = vec![returning_if(
+            Some(Definition::single("value".to_string(), name("source"))),
+            vec![returned(name("value"))],
+        )];
+        let original = statements.clone();
+        clean_up(&mut statements);
+        clean_up(&mut statements);
+        assert_eq!(statements, original);
+    }
+
+    #[test]
+    fn return_alias_removal_exposes_a_terminal_else() {
+        let mut statements = vec![returning_if(
+            None,
+            vec![
+                define("value".to_string(), literal("1")),
+                returned(name("value")),
+            ],
+        )];
+        clean_up(&mut statements);
+        let LoweredStatement::If(plan) = &statements[0] else {
+            panic!("expected if");
+        };
+        assert_eq!(
+            plan.else_arm,
+            ElseArm::Else {
+                body: LoweredBlock {
+                    statements: vec![returned(literal("1"))]
+                },
+                inline: true,
+            }
+        );
+        let once = statements.clone();
+        clean_up(&mut statements);
+        assert_eq!(statements, once);
+    }
+
+    #[test]
+    fn name_alias_pass_finishes_an_adjacent_chain() {
+        let mut statements = vec![
+            define("first".to_string(), name("source")),
+            define("second".to_string(), name("first")),
+            returned(name("second")),
+        ];
+        inline_name_aliases(&mut statements);
+        assert_eq!(statements, vec![returned(name("source"))]);
+        inline_name_aliases(&mut statements);
+        assert_eq!(statements, vec![returned(name("source"))]);
+    }
+
+    #[test]
+    fn unread_temp_pass_preserves_the_sources_last_read() {
+        let mut statements = vec![
+            define("first".to_string(), literal("1")),
+            define("second".to_string(), name("first")),
+            discard(name("second")),
+        ];
+        let original = statements.clone();
+        drop_unread_temps(&mut statements);
+        assert_eq!(statements, original);
+
+        statements.push(returned(name("first")));
+        drop_unread_temps(&mut statements);
+        let expected = vec![
+            define("first".to_string(), literal("1")),
+            returned(name("first")),
+        ];
+        assert_eq!(statements, expected);
+        drop_unread_temps(&mut statements);
+        assert_eq!(statements, expected);
+    }
+
+    #[test]
+    fn return_alias_pass_is_not_idempotent() {
+        let mut statements = vec![
+            define("first".to_string(), literal("1")),
+            define("second".to_string(), name("first")),
+            returned(name("second")),
+        ];
+        inline_return_aliases(&mut statements);
+        assert_eq!(
+            statements,
+            vec![
+                define("first".to_string(), literal("1")),
+                returned(name("first"))
+            ]
+        );
+        inline_return_aliases(&mut statements);
+        assert_eq!(statements, vec![returned(literal("1"))]);
+    }
+
+    #[test]
+    fn cleanup_is_one_sweep_rather_than_a_fixed_point() {
+        let mut statements = vec![
+            define("first".to_string(), name("source")),
+            define("second".to_string(), name("first")),
+            discard(name("second")),
+            returned(name("first")),
+        ];
+        clean_up(&mut statements);
+        assert_eq!(
+            statements,
+            vec![
+                define("first".to_string(), name("source")),
+                returned(name("first"))
+            ]
+        );
+        clean_up(&mut statements);
+        assert_eq!(statements, vec![returned(name("source"))]);
+    }
+
+    #[test]
+    fn compound_folding_keeps_its_result_on_a_second_pass() {
+        let mut statements = vec![assign(
+            name("total"),
+            GoExpression::binary(name("total"), "+", literal("1")),
+        )];
+        fold_compound_assignments(&mut statements);
+        assert_eq!(
+            statements,
+            vec![LoweredStatement::Assign(AssignForm::Compound {
+                target_capture: Vec::new(),
+                target: name("total"),
+                kind: CompoundKind::Increment,
+            })]
+        );
+        let once = statements.clone();
+        fold_compound_assignments(&mut statements);
+        assert_eq!(statements, once);
+    }
+
+    #[test]
+    fn found_loop_return_keeps_its_result_on_a_second_pass() {
+        let hit = LoweredStatement::If(IfPlan::plain(
+            GoExpression::binary(name("element"), ">", literal("0")),
+            LoweredBlock {
+                statements: vec![
+                    assign(name("value"), name("element")),
+                    assign(name("found"), literal("true")),
+                    LoweredStatement::Break(LoopTransfer::Unlabeled),
+                ],
+            },
+            ElseArm::None,
+        ));
+        let mut statements = vec![
+            LoweredStatement::VarDecl {
+                name: "value".to_string(),
+                go_type: "int".to_string(),
+                value: None,
+            },
+            define("found".to_string(), literal("false")),
+            LoweredStatement::Loop(LoopPlan {
+                prologue: Vec::new(),
+                kind: LoopKind::Generated { label: None },
+                header: LoopHeader::Range {
+                    key: None,
+                    value: Some("element".to_string()),
+                    iterable: name("items"),
+                },
+                body: LoweredBlock {
+                    statements: vec![hit],
+                },
+            }),
+            LoweredStatement::If(IfPlan::plain(
+                GoExpression::unary("!", name("found")),
+                LoweredBlock {
+                    statements: vec![returned(literal("0"))],
+                },
+                ElseArm::None,
+            )),
+            returned(name("value")),
+        ];
+        return_found_elements_directly(&mut statements);
+        let [LoweredStatement::Loop(plan), failure] = statements.as_slice() else {
+            panic!("expected loop and failure return");
+        };
+        assert_eq!(*failure, returned(literal("0")));
+        let [LoweredStatement::If(hit)] = plan.body.statements.as_slice() else {
+            panic!("expected hit test");
+        };
+        assert_eq!(hit.then_body.statements, vec![returned(name("element"))]);
+        let once = statements.clone();
+        return_found_elements_directly(&mut statements);
+        assert_eq!(statements, once);
     }
 }
