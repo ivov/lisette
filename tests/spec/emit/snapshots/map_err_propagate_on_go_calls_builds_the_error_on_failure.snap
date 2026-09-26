@@ -1,0 +1,79 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  import "go:strconv"
+  
+  fn parse(s: string) -> Result<int, error> {
+    let n = strconv.Atoi(s).map_err(|e| fmt.Errorf("parse %s: %w", s, e))?
+    Ok(n + 1)
+  }
+  
+  fn remove(path: string) -> Result<(), error> {
+    os.Remove(path).map_err(|e| fmt.Errorf("remove: %w", e))?
+    Ok(())
+  }
+  
+  fn tail(s: string) -> Result<int, error> {
+    strconv.Atoi(s).map_err(|e| fmt.Errorf("tail: %w", e))
+  }
+  
+  fn test() {
+    if parse("1").unwrap_or(0) != 2 { panic("a number should parse") }
+    if parse("x").is_ok() { panic("a word should fail") }
+    if remove("/nonexistent/lisette").is_ok() { panic("a missing file should fail") }
+    if tail("x").is_ok() { panic("a tail map_err should fail") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func parse(s string) (int, error) {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("parse %s: %w", s, err)
+	}
+	return n + 1, nil
+}
+
+func remove(path string) error {
+	err := os.Remove(path)
+	if err != nil {
+		return fmt.Errorf("remove: %w", err)
+	}
+	return nil
+}
+
+func tail(s string) (int, error) {
+	ret, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("tail: %w", err)
+	}
+	return ret, nil
+}
+
+func test() {
+	ret, err := parse("1")
+	if err != nil {
+		ret = 0
+	}
+	if ret != 2 {
+		panic("a number should parse")
+	}
+	if _, err := parse("x"); err == nil {
+		panic("a word should fail")
+	}
+	if err := remove("/nonexistent/lisette"); err == nil {
+		panic("a missing file should fail")
+	}
+	if _, err := tail("x"); err == nil {
+		panic("a tail map_err should fail")
+	}
+}

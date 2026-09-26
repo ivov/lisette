@@ -9,7 +9,7 @@ pub(crate) mod predicates;
 mod regular;
 pub(crate) mod slice_loop;
 mod ufcs;
-mod unwrap_or;
+pub(crate) mod unwrap_or;
 pub(crate) mod wrap_err;
 
 use crate::Planner;

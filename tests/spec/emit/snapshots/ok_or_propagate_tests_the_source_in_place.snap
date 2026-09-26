@@ -1,0 +1,71 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:errors"
+  
+  fn lookup(db: Map<int, string>, id: int) -> Result<string, error> {
+    let name = db.get(id).ok_or(errors.New("not found"))?
+    Ok(name)
+  }
+  
+  fn first(xs: Slice<int>) -> Result<int, error> {
+    let x = xs.get(0).ok_or_else(|| errors.New(f"empty after {xs.length()}"))?
+    Ok(x)
+  }
+  
+  fn test() {
+    let db = Map.from([(1, "ann")])
+    if lookup(db, 1).unwrap_or("") != "ann" { panic("a present key should be found") }
+    if lookup(db, 2).is_ok() { panic("a missing key should fail") }
+    if first([7]).unwrap_or(0) != 7 { panic("a first element should be found") }
+    if first([]).is_ok() { panic("an empty slice should fail") }
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+func lookup(db map[int]string, id int) (string, error) {
+	name, ok := db[id]
+	failure := errors.New("not found")
+	if !ok {
+		return "", failure
+	}
+	return name, nil
+}
+
+func first(xs []int) (int, error) {
+	if len(xs) == 0 {
+		return 0, fmt.Errorf("empty after %d", len(xs))
+	}
+	x := xs[0]
+	return x, nil
+}
+
+func test() {
+	db := map[int]string{1: "ann"}
+	ret, err := lookup(db, 1)
+	if err != nil {
+		ret = ""
+	}
+	if ret != "ann" {
+		panic("a present key should be found")
+	}
+	if _, err := lookup(db, 2); err == nil {
+		panic("a missing key should fail")
+	}
+	ret_1, err_1 := first([]int{7})
+	if err_1 != nil {
+		ret_1 = 0
+	}
+	if ret_1 != 7 {
+		panic("a first element should be found")
+	}
+	if _, err := first([]int{}); err == nil {
+		panic("an empty slice should fail")
+	}
+}

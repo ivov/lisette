@@ -2,13 +2,16 @@ use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::transition;
 use crate::calls::comma_ok::CommaOkValueSlot;
-use crate::calls::go_interop::{LoweredCall, non_nil, unexpected_nil_error};
+use crate::calls::go_interop::{LoweredCall, is_nil, non_nil, unexpected_nil_error};
+use crate::calls::unwrap_or::{MapLambda, map_lambda};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible};
 use crate::definitions::functions::is_go_never;
 use crate::names::go_name::GeneratedPackage;
-use crate::patterns::matching::OptionFusePlan;
-use crate::plan::bodies::{Definition, LoweredBlock, LoweredStatement, PlacePlan, assign, define};
+use crate::patterns::matching::{OptionFusePlan, ResultFusePlan};
+use crate::plan::bodies::{
+    Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, assign, define,
+};
 use crate::plan::values::GoExpression;
 use crate::state::scope::PairStatusKind;
 use syntax::ast::Expression;
@@ -50,6 +53,11 @@ impl Planner<'_> {
         }
 
         if let Some(fused) = self.try_lower_fused_propagate(expression, &fallible, result_var_name)
+        {
+            return fused;
+        }
+        if let Some(fused) =
+            self.try_lower_mapped_error_propagate(expression, &fallible, result_var_name)
         {
             return fused;
         }
@@ -365,6 +373,162 @@ impl Planner<'_> {
         Some((statements, value))
     }
 
+    /// Fuse `call.map_err(|e| ..)?`, `source.ok_or(error)?` and
+    /// `source.ok_or_else(|| ..)?` into the source's Go test.
+    fn try_lower_mapped_error_propagate(
+        &mut self,
+        expression: &Expression,
+        fallible: &Fallible,
+        result_var_name: Option<&str>,
+    ) -> Option<(Vec<LoweredStatement>, GoExpression)> {
+        if !fallible.is_result() || !self.returns_fallible() {
+            return None;
+        }
+        enum Mapped<'a> {
+            MapErr(ResultFusePlan<'a>, MapLambda<'a>),
+            OkOr(OptionFusePlan<'a>, &'a Expression),
+            OkOrElse(OptionFusePlan<'a>, MapLambda<'a>),
+        }
+        let mapped = if let Some((fuse, map)) = self.map_err_call(expression) {
+            if !fuse.carries_payload() && result_var_name != Some("_") {
+                return None;
+            }
+            Mapped::MapErr(fuse, map)
+        } else if let Some((receiver, [error])) = self.prelude_method_call(expression, "ok_or") {
+            Mapped::OkOr(self.option_fuse_plan(receiver)?, error)
+        } else if let Some((receiver, [function])) =
+            self.prelude_method_call(expression, "ok_or_else")
+        {
+            let map = map_lambda(function)?;
+            Mapped::OkOrElse(self.option_fuse_plan(receiver)?, map)
+        } else {
+            return None;
+        };
+
+        let named = result_var_name.filter(|name| *name != "_" && !self.is_declared(name));
+        if let Some(name) = named {
+            self.declare(name);
+        }
+        let slot = match (named, result_var_name) {
+            (Some(name), _) => CommaOkValueSlot::Named(name.to_string()),
+            (None, Some("_")) => CommaOkValueSlot::Discarded,
+            (None, _) => CommaOkValueSlot::Temp,
+        };
+
+        let (mut statements, failure, payload, late_binding, mut failure_setup, error) =
+            match mapped {
+                Mapped::MapErr(fuse, map) => {
+                    let has_nil_guard = fuse.has_nil_guard();
+                    let pair = fuse.bind(self, slot, None);
+                    let failure = self.pair_failure_condition(&pair);
+                    let status = pair.status().to_string();
+                    let mut failure_setup = Vec::new();
+                    if has_nil_guard && map.param.is_some() {
+                        failure_setup.push(LoweredStatement::If(IfPlan::plain(
+                            is_nil(GoExpression::name(status.clone())),
+                            LoweredBlock {
+                                statements: vec![assign(
+                                    GoExpression::name(status.clone()),
+                                    unexpected_nil_error(),
+                                )],
+                            },
+                            ElseArm::None,
+                        )));
+                    }
+                    let (body_setup, error) = self.with_binding_frame(|this| {
+                        if let Some(param) = map.param {
+                            this.scope.bind(param, &status);
+                        }
+                        this.lower_composite_value(map.body, ExpressionContext::value())
+                            .into_parts()
+                    });
+                    failure_setup.extend(body_setup);
+                    let payload = pair
+                        .value()
+                        .map(|name| GoExpression::name(name.to_string()));
+                    (
+                        pair.statements,
+                        failure,
+                        payload,
+                        None,
+                        failure_setup,
+                        error,
+                    )
+                }
+                Mapped::OkOr(fuse, error) => {
+                    let bound = fuse.bind(self, slot);
+                    let failure = bound.none_condition(self);
+                    let late_binding = bound.late_binding();
+                    let payload = bound.value();
+                    let mut statements = bound.statements;
+                    let value = self.lower_composite_value(error, ExpressionContext::value());
+                    let (error_setup, error) =
+                        self.eager_operand(error, value, "failure").into_parts();
+                    statements.extend(error_setup);
+                    (
+                        statements,
+                        failure,
+                        payload,
+                        late_binding,
+                        Vec::new(),
+                        error,
+                    )
+                }
+                Mapped::OkOrElse(fuse, map) => {
+                    let bound = fuse.bind(self, slot);
+                    let failure = bound.none_condition(self);
+                    let late_binding = bound.late_binding();
+                    let payload = bound.value();
+                    let (failure_setup, error) = self
+                        .with_binding_frame(|this| {
+                            this.lower_composite_value(map.body, ExpressionContext::value())
+                        })
+                        .into_parts();
+                    (
+                        bound.statements,
+                        failure,
+                        payload,
+                        late_binding,
+                        failure_setup,
+                        error,
+                    )
+                }
+            };
+        let (values_setup, failure_values) = self.propagate_failure_values(fallible, error);
+        failure_setup.extend(values_setup);
+        statements.push(transition::tag_check_with_initializer(
+            failure.initializer,
+            failure.condition,
+            failure_setup,
+            failure_values,
+        ));
+        statements.extend(late_binding);
+        let value = match result_var_name {
+            None => payload.expect("a propagated source carries its payload"),
+            Some("_") => GoExpression::name("_".to_string()),
+            Some(name) => {
+                if named.is_none() {
+                    let payload = payload.expect("a propagated source carries its payload");
+                    statements.push(self.bind_propagate_ok(name, payload));
+                }
+                GoExpression::name(name.to_string())
+            }
+        };
+        Some((statements, value))
+    }
+
+    /// `call.map_err(|e| ..)` on a call whose Go result can be tested in place.
+    fn map_err_call<'a>(
+        &self,
+        expression: &'a Expression,
+    ) -> Option<(ResultFusePlan<'a>, MapLambda<'a>)> {
+        let (receiver, [function]) = self.prelude_method_call(expression, "map_err")? else {
+            return None;
+        };
+        let map = map_lambda(function)?;
+        Some((self.result_fuse_plan(receiver)?, map))
+    }
+
     fn returns_fallible(&self) -> bool {
         let return_ctx = self.return_ctx();
         return_ctx.lowered_shape().is_some()
@@ -677,9 +841,12 @@ impl Planner<'_> {
                 shape,
                 CallableReturnAbi::Result { .. } | CallableReturnAbi::BareError
             )
-            && self
+            && (self
                 .result_fuse_plan(expression)
                 .is_some_and(|plan| plan.wraps_error())
+                || self
+                    .map_err_call(expression)
+                    .is_some_and(|(plan, _)| plan.carries_payload()))
         {
             let (setup, value) = self.lower_propagate(expression, None);
             statements.extend(setup);

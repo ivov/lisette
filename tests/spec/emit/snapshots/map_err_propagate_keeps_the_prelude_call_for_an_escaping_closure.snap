@@ -1,0 +1,59 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn parse(s: string) -> Result<int, error> {
+    let n = strconv.Atoi(s).map_err(|e| {
+      if s == "" {
+        return e
+      }
+      fmt.Errorf("parse %s: %w", s, e)
+    })?
+    Ok(n)
+  }
+  
+  fn test() {
+    if parse("2").unwrap_or(0) != 2 { panic("a number should parse") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func parse(s string) (int, error) {
+	ret, ret_1 := strconv.Atoi(s)
+	var result lisette.Result[int, error]
+	if ret_1 != nil {
+		result = lisette.MakeResultErr[int, error](ret_1)
+	} else {
+		result = lisette.MakeResultOk[int, error](ret)
+	}
+	check := lisette.ResultMapErr(result, func(e error) error {
+		if s == "" {
+			return e
+		}
+		return fmt.Errorf("parse %s: %w", s, e)
+	})
+	if check.Tag != lisette.ResultOk {
+		return 0, check.ErrVal
+	}
+	n := check.OkVal
+	return n, nil
+}
+
+func test() {
+	ret, err := parse("2")
+	if err != nil {
+		ret = 0
+	}
+	if ret != 2 {
+		panic("a number should parse")
+	}
+}
