@@ -22,8 +22,10 @@ func main() {
 	count := 0
 	s_1 := s
 	for i := 0; i < len(s_1); i++ {
+		b := s_1[i]
 		count++
 		s = ""
+		_ = b
 	}
 	if count != 2 {
 		panic("expected count 2 — bytes loop must iterate over the original string")

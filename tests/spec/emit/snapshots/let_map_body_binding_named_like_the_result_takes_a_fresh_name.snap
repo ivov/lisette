@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn doubled(xs: Slice<int>) -> Slice<int> {
+    let n = xs.map(|y| {
+      let n = y * 2
+      n + 1
+    })
+    n
+  }
+  
+  fn test() {
+    let out = doubled([1, 2])
+    if out[0] != 3 || out[1] != 5 { panic("each element should be doubled plus one") }
+  }
+---
+package main
+
+func doubled(xs []int) []int {
+	n := make([]int, len(xs))
+	for i, y := range xs {
+		n_1 := y * 2
+		n[i] = n_1 + 1
+	}
+	return n
+}
+
+func test() {
+	out := doubled([]int{1, 2})
+	if out[0] != 3 || out[1] != 5 {
+		panic("each element should be doubled plus one")
+	}
+}

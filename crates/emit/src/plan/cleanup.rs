@@ -642,10 +642,10 @@ fn analyze(node: &GoExpressionNode, temp: &str) -> Analysis {
     }
     let identity_read = match node {
         GoExpressionNode::AddressOf(operand) | GoExpressionNode::Slice { base: operand, .. } => {
-            mentions(operand, temp)
+            operand.mentions(temp)
         }
         GoExpressionNode::Call { callee, .. } => {
-            matches!(callee.as_ref(), GoExpressionNode::Selector { base, .. } if mentions(base, temp))
+            matches!(callee.as_ref(), GoExpressionNode::Selector { base, .. } if base.mentions(temp))
         }
         _ => false,
     };
@@ -665,18 +665,6 @@ fn analyze(node: &GoExpressionNode, temp: &str) -> Analysis {
         works: node.does_work() || children.iter().any(|child| child.works),
         ordered,
     }
-}
-
-fn mentions(node: &GoExpressionNode, name: &str) -> bool {
-    let mut found = false;
-    node.visit(&mut |inner| {
-        if let GoExpressionNode::Identifier(read) = inner
-            && read == name
-        {
-            found = true;
-        }
-    });
-    found
 }
 
 fn drop_unread_temps(statements: &mut Vec<LoweredStatement>) {
@@ -748,7 +736,7 @@ fn pure_define(statement: &LoweredStatement) -> Option<(&str, &GoExpression)> {
     match statement {
         LoweredStatement::Directed { inner, .. } => pure_define(inner),
         LoweredStatement::Define(Definition { names, value }) => match names.as_slice() {
-            [name] if !value.does_work() => Some((name, value)),
+            [name] if !value.does_work() && !value.node().may_panic() => Some((name, value)),
             _ => None,
         },
         _ => None,

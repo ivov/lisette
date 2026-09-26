@@ -147,6 +147,11 @@ impl Planner<'_> {
             CommaOkValueSlot::Named(name) | CommaOkValueSlot::Arm(name)
                 if name != components.value =>
             {
+                let name = if self.scope.current_block_declares(&name) {
+                    self.fresh_var(Some(&name))
+                } else {
+                    name
+                };
                 self.declare(&name);
                 let copy = define(name.clone(), GoExpression::name(components.value));
                 (vec![copy], name)

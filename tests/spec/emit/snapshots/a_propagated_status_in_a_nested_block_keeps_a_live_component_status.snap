@@ -1,0 +1,62 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn add(s: string, t: string) -> Result<int, error> {
+    let r = strconv.Atoi(s)
+    if t != "" {
+      let y = strconv.Atoi(t)?
+      match r {
+        Ok(v) => return Ok(v + y),
+        Err(e) => return Err(e),
+      }
+    }
+    match r {
+      Ok(v) => Ok(v),
+      Err(e) => Err(e),
+    }
+  }
+  
+  fn test() {
+    if add("x", "2").is_ok() { panic("a failed first parse should return its error") }
+    if add("1", "2").unwrap_or(0) != 3 { panic("two parsed numbers should add up") }
+  }
+---
+package main
+
+import "strconv"
+
+func add(s, t string) (int, error) {
+	r, err := strconv.Atoi(s)
+	if t != "" {
+		y, err_1 := strconv.Atoi(t)
+		if err_1 != nil {
+			return 0, err_1
+		}
+		v := r
+		if err == nil {
+			return v + y, nil
+		}
+		return 0, err
+	}
+	v := r
+	if err == nil {
+		return v, nil
+	}
+	return 0, err
+}
+
+func test() {
+	if _, err := add("x", "2"); err == nil {
+		panic("a failed first parse should return its error")
+	}
+	ret, err := add("1", "2")
+	if err != nil {
+		ret = 0
+	}
+	if ret != 3 {
+		panic("two parsed numbers should add up")
+	}
+}

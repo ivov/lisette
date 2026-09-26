@@ -53,6 +53,17 @@ impl BindingValue {
         }
     }
 
+    pub(crate) fn mentions(&self, go_name: &str) -> bool {
+        match self {
+            BindingValue::GoName(name) | BindingValue::GoConst(name) => name == go_name,
+            BindingValue::InlineExpr(inline) => inline.expression().node().mentions(go_name),
+            BindingValue::Components(components) => {
+                components.value == go_name || components.status == go_name
+            }
+            BindingValue::TupleComponents(tuple) => tuple.names.iter().any(|name| name == go_name),
+        }
+    }
+
     pub(crate) fn is_discard(&self) -> bool {
         self.as_go_name() == Some("_")
     }

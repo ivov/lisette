@@ -304,22 +304,26 @@ impl Planner<'_> {
             index
         });
 
-        let (element_name, body_statements) = self.with_scope(|this| {
-            if expects_accumulator {
-                this.bind_loop_callback_param(patterns[0], Some(result.clone()));
-            }
-            let element_name = this.element_loop_name(kind, patterns[patterns.len() - 1]);
-            let statements = this.lower_slice_loop_body(&SliceLoopBody {
-                kind,
-                body,
-                result_ty: &result_ty,
-                element_ty: &element_ty,
-                result: &result,
-                element_name: &element_name,
-                index: index.as_deref(),
-                found,
-            });
-            (element_name, statements)
+        // The body writes `result`.
+        let target = GoExpression::name(result.clone());
+        let (element_name, body_statements) = self.with_assign_target(&target, |planner| {
+            planner.with_scope(|this| {
+                if expects_accumulator {
+                    this.bind_loop_callback_param(patterns[0], Some(result.clone()));
+                }
+                let element_name = this.element_loop_name(kind, patterns[patterns.len() - 1]);
+                let statements = this.lower_slice_loop_body(&SliceLoopBody {
+                    kind,
+                    body,
+                    result_ty: &result_ty,
+                    element_ty: &element_ty,
+                    result: &result,
+                    element_name: &element_name,
+                    index: index.as_deref(),
+                    found,
+                });
+                (element_name, statements)
+            })
         });
 
         // Go rejects a range variable nothing reads.

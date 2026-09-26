@@ -1,0 +1,70 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn index_past_end(xs: Slice<int>, i: int) -> int {
+    let x = xs[i]
+    let _ = x
+    xs.length() + i
+  }
+  
+  fn divide_by_zero(a: int, b: int) -> int {
+    let q = a / b
+    let _ = q
+    a + b
+  }
+  
+  fn slice_past_end(xs: Slice<int>) -> int {
+    let s = xs[1..5]
+    let _ = s
+    xs.length()
+  }
+  
+  fn test() {
+    if recover { index_past_end([1, 2], 5) }.is_ok() { panic("an index past the end should panic") }
+    if recover { divide_by_zero(7, 0) }.is_ok() { panic("a division by zero should panic") }
+    if recover { slice_past_end([1, 2]) }.is_ok() { panic("a slice past the end should panic") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func indexPastEnd(xs []int, i int) int {
+	x := xs[i]
+	_ = x
+	return len(xs) + i
+}
+
+func divideByZero(a, b int) int {
+	q := a / b
+	_ = q
+	return a + b
+}
+
+func slicePastEnd(xs []int) int {
+	s := xs[1:5:5]
+	_ = s
+	return len(xs)
+}
+
+func test() {
+	recoverResult := lisette.RecoverBlock(func() int {
+		return indexPastEnd([]int{1, 2}, 5)
+	})
+	if recoverResult.IsOk() {
+		panic("an index past the end should panic")
+	}
+	recoverResult_1 := lisette.RecoverBlock(func() int {
+		return divideByZero(7, 0)
+	})
+	if recoverResult_1.IsOk() {
+		panic("a division by zero should panic")
+	}
+	recoverResult_2 := lisette.RecoverBlock(func() int {
+		return slicePastEnd([]int{1, 2})
+	})
+	if recoverResult_2.IsOk() {
+		panic("a slice past the end should panic")
+	}
+}
