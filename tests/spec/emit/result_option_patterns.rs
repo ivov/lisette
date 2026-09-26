@@ -4356,3 +4356,34 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn a_result_call_bound_to_a_local_keeps_its_components() {
+    let input = r#"
+import "go:strconv"
+
+fn parse(text: string) -> int {
+  let parsed = strconv.Atoi(text)
+  match parsed { Ok(value) => value, Err(_) => -1 }
+}
+
+fn parse_or_default(text: string) -> int {
+  let parsed = strconv.Atoi(text)
+  parsed.unwrap_or(7)
+}
+
+fn failed(text: string) -> bool {
+  let parsed = strconv.Atoi(text)
+  parsed.is_err()
+}
+
+fn test() {
+  if parse("41") != 41 { panic("a parsed number should come back") }
+  if parse("x") != -1 { panic("a failed parse should return minus one") }
+  if parse_or_default("x") != 7 { panic("a failed parse should take the default") }
+  if !failed("x") { panic("a failed parse should report failure") }
+  if failed("2") { panic("a parsed number should not report failure") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

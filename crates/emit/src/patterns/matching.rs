@@ -1,4 +1,5 @@
 use crate::Planner;
+use crate::abi::callable::PayloadLayout;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
 use crate::calls::NativeMethodCall;
 use crate::calls::bounds::BoundsCheckedIndex;
@@ -19,7 +20,7 @@ use crate::plan::bodies::{
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
-use crate::state::bindings::ComponentBinding;
+use crate::state::bindings::{ComponentBinding, ComponentKind};
 use crate::state::scope::PairStatusKind;
 use crate::types::native::NativeGoType;
 use std::mem;
@@ -32,6 +33,7 @@ pub(crate) struct ResultFusePlan<'a> {
     shape: CallableReturnAbi,
     nil_guard: Option<NilGuard>,
     wraps: Vec<&'a Expression>,
+    bound: Option<ComponentBinding>,
 }
 
 impl ResultFusePlan<'_> {
@@ -196,6 +198,7 @@ impl OptionFusePlan<'_> {
                     source: BoundSource::Pair(LoweredPair::from_components(
                         value,
                         components.status,
+                        PairStatusKind::Ok,
                     )),
                 }
             }
@@ -271,7 +274,7 @@ impl OptionFusePlan<'_> {
 }
 
 impl ResultFusePlan<'_> {
-    pub(super) fn has_nil_guard(&self) -> bool {
+    pub(crate) fn has_nil_guard(&self) -> bool {
         self.nil_guard.is_some()
     }
 
@@ -299,6 +302,23 @@ impl ResultFusePlan<'_> {
         error_name: Option<&str>,
         read_error: bool,
     ) -> (LoweredPair, Vec<WrapMessage>) {
+        if let Some(components) = self.bound {
+            let (statements, value) = match slot {
+                CommaOkValueSlot::Named(name) | CommaOkValueSlot::Arm(name)
+                    if name != components.value =>
+                {
+                    planner.declare(&name);
+                    let copy = define(name.clone(), GoExpression::name(components.value));
+                    (vec![copy], name)
+                }
+                _ => (Vec::new(), components.value),
+            };
+            let mut pair =
+                LoweredPair::from_components(value, components.status, PairStatusKind::Error);
+            pair.statements = statements;
+            return (pair, Vec::new());
+        }
+
         let carries_value = self.carries_payload();
         let (setup, call) = planner
             .lower_call(self.subject, None, ExpressionContext::value())
@@ -616,6 +636,17 @@ impl Planner<'_> {
         &self,
         subject: &'a Expression,
     ) -> Option<ResultFusePlan<'a>> {
+        if let Some(components) = self.component_binding(subject) {
+            return (components.kind == ComponentKind::Result).then(|| ResultFusePlan {
+                subject,
+                shape: CallableReturnAbi::Result {
+                    payload: PayloadLayout::Packed,
+                },
+                nil_guard: None,
+                wraps: Vec::new(),
+                bound: Some(components),
+            });
+        }
         let lowered = self.lowered_call(subject)?;
         if !lowered.is_result() {
             return None;
@@ -634,6 +665,7 @@ impl Planner<'_> {
             shape: lowered.shape,
             nil_guard,
             wraps: lowered.wraps,
+            bound: None,
         })
     }
 
@@ -656,7 +688,8 @@ impl Planner<'_> {
         subject: &'a Expression,
     ) -> Option<OptionFusePlan<'a>> {
         if let Some(components) = self.component_binding(subject) {
-            return Some(OptionFusePlan::Bound(components));
+            return (components.kind == ComponentKind::Option)
+                .then_some(OptionFusePlan::Bound(components));
         }
         if let Some(source) = self.comma_ok_source(subject) {
             return Some(OptionFusePlan::CommaOk { subject, source });

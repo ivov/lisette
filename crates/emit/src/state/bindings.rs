@@ -28,6 +28,13 @@ pub(crate) struct ComponentBinding {
     pub(crate) value: String,
     pub(crate) status: String,
     pub(crate) payload_go_type: String,
+    pub(crate) kind: ComponentKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ComponentKind {
+    Option,
+    Result,
 }
 
 impl BindingValue {

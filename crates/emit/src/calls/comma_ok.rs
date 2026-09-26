@@ -8,7 +8,7 @@ use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{Definition, LoweredStatement, define_many};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::values::GoExpression;
-use crate::state::bindings::{BindingValue, ComponentBinding};
+use crate::state::bindings::{BindingValue, ComponentBinding, ComponentKind};
 use crate::state::scope::PairStatusKind;
 use crate::types::native::NativeGoType;
 use syntax::ast::Expression;
@@ -87,7 +87,11 @@ pub(crate) struct PairCondition {
 }
 
 impl LoweredPair {
-    pub(crate) fn from_components(value: String, status: String) -> Self {
+    pub(crate) fn from_components(
+        value: String,
+        status: String,
+        status_kind: PairStatusKind,
+    ) -> Self {
         Self {
             statements: Vec::new(),
             value: PairValue::Named {
@@ -95,7 +99,7 @@ impl LoweredPair {
                 nil_guard: None,
             },
             status,
-            status_kind: PairStatusKind::Ok,
+            status_kind,
             initializer_call: None,
         }
     }
@@ -149,7 +153,14 @@ impl Planner<'_> {
         }
     }
 
+    /// A `Result` local is only bound to components when no use needs one
+    /// value, so there is no prelude call to rebuild it here.
     pub(crate) fn option_from_components(&self, components: &ComponentBinding) -> GoExpression {
+        assert_eq!(
+            components.kind,
+            ComponentKind::Option,
+            "a Result local read as one value is not bound to components"
+        );
         GoExpression::call(
             GoExpression::generated(
                 GeneratedPackage::Prelude,

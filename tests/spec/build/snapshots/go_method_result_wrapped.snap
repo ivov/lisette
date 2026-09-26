@@ -7,21 +7,15 @@ package main
 import (
 	"bufio"
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"strings"
 )
 
 func main() {
 	reader := bufio.NewReader(strings.NewReader("hello\nworld"))
-	ret, ret_1 := reader.ReadByte()
-	var b lisette.Result[byte, error]
-	if ret_1 != nil {
-		b = lisette.MakeResultErr[byte, error](ret_1)
-	} else {
-		b = lisette.MakeResultOk[byte, error](ret)
-	}
-	if b.Tag == lisette.ResultOk {
-		fmt.Print(b.OkVal)
+	b, err := reader.ReadByte()
+	c := b
+	if err == nil {
+		fmt.Print(c)
 	} else {
 		fmt.Print("error")
 	}
