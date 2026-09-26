@@ -243,6 +243,7 @@ pub struct Planner<'a> {
     scope: ScopeState,
     adapter_registry: AdapterRegistry,
     namespace: FileNamespace,
+    component_lets: HashMap<Span, bool>,
 }
 
 impl Planner<'_> {
@@ -464,6 +465,7 @@ impl<'a> Planner<'a> {
             scope: ScopeState::new(),
             adapter_registry: AdapterRegistry::default(),
             namespace,
+            component_lets: HashMap::default(),
         }
     }
 

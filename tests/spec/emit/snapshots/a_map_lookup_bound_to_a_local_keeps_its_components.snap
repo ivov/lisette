@@ -1,0 +1,72 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn pick(m: Map<string, int>, key: string) -> int {
+    let found = m.get(key)
+    match found { Some(value) => value, None => -1 }
+  }
+  
+  fn defaulted(m: Map<string, int>, key: string) -> int {
+    let found = m.get(key)
+    found.unwrap_or(-1)
+  }
+  
+  fn snapshot(m: mut Map<string, int>) -> int {
+    let found = m.get("x")
+    m["x"] = 9
+    match found { Some(value) => value, None => 0 }
+  }
+  
+  fn test() {
+    let mut m = Map.new<string, int>()
+    m["x"] = 1
+    if pick(m, "x") != 1 { panic("a present key should return its value") }
+    if pick(m, "y") != -1 { panic("a missing key should return minus one") }
+    if defaulted(m, "y") != -1 { panic("a missing key should take the default") }
+    if snapshot(m) != 1 { panic("the lookup must not see the later write") }
+  }
+---
+package main
+
+func pick(m map[string]int, key string) int {
+	found, ok := m[key]
+	if ok {
+		return found
+	}
+	return -1
+}
+
+func defaulted(m map[string]int, key string) int {
+	found, ok := m[key]
+	if !ok {
+		found = -1
+	}
+	return found
+}
+
+func snapshot(m map[string]int) int {
+	found, ok := m["x"]
+	m["x"] = 9
+	if ok {
+		return found
+	}
+	return 0
+}
+
+func test() {
+	m := make(map[string]int)
+	m["x"] = 1
+	if pick(m, "x") != 1 {
+		panic("a present key should return its value")
+	}
+	if pick(m, "y") != -1 {
+		panic("a missing key should return minus one")
+	}
+	if defaulted(m, "y") != -1 {
+		panic("a missing key should take the default")
+	}
+	if snapshot(m) != 1 {
+		panic("the lookup must not see the later write")
+	}
+}

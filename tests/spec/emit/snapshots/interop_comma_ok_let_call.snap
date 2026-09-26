@@ -15,15 +15,13 @@ description: |
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"os"
-)
+import "os"
 
 func main() {
 	f := os.LookupEnv
-	r := lisette.OptionFromCommaOk[string](f("HOME"))
-	if r.Tag == lisette.OptionSome {
-		_ = r.SomeVal
+	r, ok := f("HOME")
+	v := r
+	if ok {
+		_ = v
 	}
 }

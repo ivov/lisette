@@ -19,6 +19,7 @@ use crate::plan::bodies::{
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::state::bindings::ComponentBinding;
 use crate::state::scope::PairStatusKind;
 use crate::types::native::NativeGoType;
 use std::mem;
@@ -40,6 +41,7 @@ impl ResultFusePlan<'_> {
 }
 
 pub(crate) enum OptionFusePlan<'a> {
+    Bound(ComponentBinding),
     CommaOk {
         subject: &'a Expression,
         source: CommaOkSource,
@@ -49,7 +51,9 @@ pub(crate) enum OptionFusePlan<'a> {
         nil_guard: NilGuard,
     },
     /// `xs.get(i)` on a slice or array: a bounds test guards a direct index.
-    Index { call: NativeMethodCall<'a> },
+    Index {
+        call: NativeMethodCall<'a>,
+    },
     Found {
         subject: &'a Expression,
         call: NativeMethodCall<'a>,
@@ -175,6 +179,26 @@ impl BoundOption {
 impl OptionFusePlan<'_> {
     pub(crate) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundOption {
         match self {
+            Self::Bound(components) => {
+                // Writing through the binding's own slot would clobber it.
+                let (statements, value) = match slot {
+                    CommaOkValueSlot::Named(name) | CommaOkValueSlot::Arm(name)
+                        if name != components.value =>
+                    {
+                        planner.declare(&name);
+                        let copy = define(name.clone(), GoExpression::name(components.value));
+                        (vec![copy], name)
+                    }
+                    _ => (Vec::new(), components.value),
+                };
+                BoundOption {
+                    statements,
+                    source: BoundSource::Pair(LoweredPair::from_components(
+                        value,
+                        components.status,
+                    )),
+                }
+            }
             Self::CommaOk { subject, source } => {
                 let mut pair = planner.bind_comma_ok_pair(subject, source, slot);
                 BoundOption {
@@ -631,6 +655,9 @@ impl Planner<'_> {
         &self,
         subject: &'a Expression,
     ) -> Option<OptionFusePlan<'a>> {
+        if let Some(components) = self.component_binding(subject) {
+            return Some(OptionFusePlan::Bound(components));
+        }
         if let Some(source) = self.comma_ok_source(subject) {
             return Some(OptionFusePlan::CommaOk { subject, source });
         }

@@ -13,15 +13,16 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func g[T any](_ int, _ ...T) (T, bool) {
 	return *new(T), false
 }
 
 func test() {
-	r := lisette.OptionFromCommaOk[int](g[int](5))
-	if r.UnwrapOr(9) != 9 {
+	r, ok := g[int](5)
+	if !ok {
+		r = 9
+	}
+	if r != 9 {
 		panic("expected 9")
 	}
 }

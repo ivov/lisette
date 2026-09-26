@@ -1,0 +1,58 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn stored(m: Map<string, int>, key: string) -> Option<int> {
+    let found = m.get(key)
+    found
+  }
+  
+  fn shown(m: Map<string, int>, key: string) -> string {
+    let found = m.get(key)
+    f"{found.is_some()} {found}"
+  }
+  
+  fn test() {
+    let mut m = Map.new<string, int>()
+    m["x"] = 1
+    match stored(m, "x") {
+      Some(v) => { if v != 1 { panic("a returned option should carry its value") } },
+      None => { panic("expected a value") },
+    }
+    if shown(m, "y") == "" { panic("a debugged option should render") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func stored(m map[string]int, key string) (int, bool) {
+	found := lisette.MapGet(m, key)
+	if found.Tag == lisette.OptionSome {
+		return found.SomeVal, true
+	}
+	return 0, false
+}
+
+func shown(m map[string]int, key string) string {
+	found := lisette.MapGet(m, key)
+	return fmt.Sprintf("%t %v", found.IsSome(), found)
+}
+
+func test() {
+	m := make(map[string]int)
+	m["x"] = 1
+	if v, ok := stored(m, "x"); ok {
+		if v != 1 {
+			panic("a returned option should carry its value")
+		}
+	} else {
+		panic("expected a value")
+	}
+	if shown(m, "y") == "" {
+		panic("a debugged option should render")
+	}
+}

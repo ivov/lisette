@@ -2,6 +2,7 @@ use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableReturnAbi};
 use crate::abi::layout::SlotOrigin;
 use crate::abi::tuple_element_types;
+use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::calls::go_interop::WrapperTarget;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::Fallible;
@@ -15,6 +16,8 @@ use crate::plan::placement::{
     rebind_trailing_temp, requires_temp_var,
 };
 use crate::plan::values::GoExpression;
+use crate::state::bindings::ComponentBinding;
+use std::mem;
 use syntax::ast::{Binding, Expression, LetMode, Pattern};
 use syntax::program::NativeTypeKind;
 use syntax::types::Type;
@@ -129,6 +132,11 @@ impl Planner<'_> {
                 self.scope.bind(identifier, raw_go_name);
                 return statements;
             }
+            if let Some(statements) =
+                self.lower_let_as_components(identifier, value, &go_identifier)
+            {
+                return statements;
+            }
         }
         if needs_temp {
             if self.shadows_declaration(&go_identifier)
@@ -143,6 +151,44 @@ impl Planner<'_> {
             return self.lower_let_temp(&go_identifier, value, binding_ty);
         }
         self.lower_let_direct(let_spec, raw_go_name)
+    }
+
+    fn lower_let_as_components(
+        &mut self,
+        identifier: &str,
+        value: &Expression,
+        go_identifier: &str,
+    ) -> Option<Vec<LoweredStatement>> {
+        let ty = self.facts.peel_alias(&value.get_type());
+        if !ty.is_option() {
+            return None;
+        }
+        let needs_value = *self.component_lets.get(&value.get_span())?;
+        let source = self.comma_ok_source(value)?;
+        // With a nil guard, `ok` alone is not the success condition.
+        if source.has_nil_guard() {
+            return None;
+        }
+        let payload_go_type = self.use_go_type(&ty.ok_type());
+        let slot = if needs_value {
+            self.declare(go_identifier);
+            CommaOkValueSlot::Named(go_identifier.to_string())
+        } else {
+            CommaOkValueSlot::Discarded
+        };
+        let mut pair = self.bind_comma_ok_pair(value, source, slot);
+        let statements = mem::take(&mut pair.statements);
+        let payload = pair.value().unwrap_or("_").to_string();
+        let status = pair.status().to_string();
+        self.scope.set_component_binding(
+            identifier,
+            ComponentBinding {
+                value: payload,
+                status,
+                payload_go_type,
+            },
+        );
+        Some(statements)
     }
 
     /// `let x = expr?`. Adds a leading `var x T` when the binding widens to

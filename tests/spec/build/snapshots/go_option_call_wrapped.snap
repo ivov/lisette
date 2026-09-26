@@ -6,11 +6,10 @@ package main
 
 import (
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"go/doc/comment"
 )
 
 func main() {
-	result := lisette.OptionFromCommaOk[string](comment.DefaultLookupPackage("math"))
-	fmt.Print(result.IsSome())
+	_, ok := comment.DefaultLookupPackage("math")
+	fmt.Print(ok)
 }

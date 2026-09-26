@@ -4,9 +4,11 @@ use crate::calls::dispatch::extract_native_method_name;
 use crate::calls::go_interop::{NilGuard, is_nil, non_nil};
 use crate::context::expression::ExpressionContext;
 use crate::escape_reserved;
+use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{Definition, LoweredStatement, define_many};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::values::GoExpression;
+use crate::state::bindings::{BindingValue, ComponentBinding};
 use crate::state::scope::PairStatusKind;
 use crate::types::native::NativeGoType;
 use syntax::ast::Expression;
@@ -85,6 +87,19 @@ pub(crate) struct PairCondition {
 }
 
 impl LoweredPair {
+    pub(crate) fn from_components(value: String, status: String) -> Self {
+        Self {
+            statements: Vec::new(),
+            value: PairValue::Named {
+                name: value,
+                nil_guard: None,
+            },
+            status,
+            status_kind: PairStatusKind::Ok,
+            initializer_call: None,
+        }
+    }
+
     pub(crate) fn status(&self) -> &str {
         &self.status
     }
@@ -124,6 +139,29 @@ impl LoweredPair {
 
 impl Planner<'_> {
     /// Recognize a call whose Option value comes from a comma-ok pair.
+    pub(crate) fn component_binding(&self, expression: &Expression) -> Option<ComponentBinding> {
+        let Expression::Identifier { value, .. } = expression.unwrap_parens() else {
+            return None;
+        };
+        match self.scope.resolve_identifier_binding(value) {
+            Some(BindingValue::Components(components)) => Some(components.clone()),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn option_from_components(&self, components: &ComponentBinding) -> GoExpression {
+        GoExpression::call(
+            GoExpression::generated(
+                GeneratedPackage::Prelude,
+                format!("OptionFromCommaOk[{}]", components.payload_go_type),
+            ),
+            vec![
+                GoExpression::name(components.value.clone()),
+                GoExpression::name(components.status.clone()),
+            ],
+        )
+    }
+
     pub(crate) fn comma_ok_source(&self, expression: &Expression) -> Option<CommaOkSource> {
         let plan = self.plan_call(expression)?;
         let Expression::Call {

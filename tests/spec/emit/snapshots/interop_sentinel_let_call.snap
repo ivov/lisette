@@ -15,19 +15,17 @@ description: |
 ---
 package main
 
-import (
-	"example.com/idx"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/idx"
 
 func main() {
 	f := func(arg0, arg1 string) (int, bool) {
 		ret := idx.Find(arg0, arg1)
 		return ret, ret != -1
 	}
-	r := lisette.OptionFromCommaOk[int](f("hello", "ll"))
-	if r.Tag == lisette.OptionSome {
-		_ = r.SomeVal
+	r, ok := f("hello", "ll")
+	v := r
+	if ok {
+		_ = v
 	} else {
 		_ = -2
 	}

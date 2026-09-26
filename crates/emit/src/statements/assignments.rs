@@ -200,7 +200,7 @@ impl Planner<'_> {
         };
         match self.scope.resolve_identifier_binding(value) {
             Some(BindingValue::GoName(go_name) | BindingValue::GoConst(go_name)) => go_name == "_",
-            Some(BindingValue::InlineExpr(_)) => false,
+            Some(BindingValue::InlineExpr(_) | BindingValue::Components(_)) => false,
             None => value == "_",
         }
     }
