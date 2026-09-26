@@ -21,7 +21,7 @@ import (
 )
 
 func main() {
-	f := func(arg0 string, arg1 string) (int, bool) {
+	f := func(arg0, arg1 string) (int, bool) {
 		ret := idx.Find(arg0, arg1)
 		return ret, ret != -1
 	}

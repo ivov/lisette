@@ -8,8 +8,8 @@ use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement};
 use crate::plan::calls::plan_variadic_spread;
-use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::go_expression::{FunctionLiteralLayout, GoParameter};
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::statements::assignments::lvalues_match;
 use crate::types::native::NativeGoType;
@@ -1158,7 +1158,13 @@ impl Planner<'_> {
             ty,
             generics,
         );
-        predicate_literal(format!("{a} {go_ty}, {b} {go_ty}"), body)
+        predicate_literal(
+            vec![
+                GoParameter::new(a.clone(), go_ty.clone()),
+                GoParameter::new(b.clone(), go_ty.clone()),
+            ],
+            body,
+        )
     }
 
     fn contains_predicate(
@@ -1171,7 +1177,7 @@ impl Planner<'_> {
         let element = self.fresh_var(Some("e"));
         let body =
             self.equality_expression(GoExpression::name(element.clone()), target, ty, generics);
-        predicate_literal(format!("{element} {go_ty}"), body)
+        predicate_literal(vec![GoParameter::new(element.clone(), go_ty.clone())], body)
     }
 
     fn needs_custom_equality(&self, ty: &Type, generics: &[Generic]) -> bool {
@@ -1184,7 +1190,7 @@ impl Planner<'_> {
     }
 }
 
-fn predicate_literal(parameters: String, body: GoExpression) -> GoExpression {
+fn predicate_literal(parameters: Vec<GoParameter>, body: GoExpression) -> GoExpression {
     GoExpression::function_literal(
         parameters,
         "bool".to_string(),

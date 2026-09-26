@@ -5,7 +5,7 @@ use crate::Planner;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement, assign};
-use crate::plan::go_expression::FunctionLiteralLayout;
+use crate::plan::go_expression::{FunctionLiteralLayout, GoParameter};
 use crate::plan::values::GoExpression;
 
 impl Planner<'_> {
@@ -46,14 +46,14 @@ impl Planner<'_> {
         let peeled = self.facts.peel_alias(ty);
         let go_ty = self.use_go_type(ty);
         let var = self.fresh_var(Some("e"));
-        let parameters = format!("{var} {go_ty}");
+        let parameters = vec![GoParameter::new(var.clone(), go_ty.clone())];
         let element = GoExpression::name(var);
         match &peeled {
             Type::Tuple(elems) => {
                 let mut statements = self.tuple_clone_statements(&element, elems);
                 statements.push(plain_return(element));
                 Some(GoExpression::function_literal(
-                    parameters,
+                    parameters.clone(),
                     go_ty,
                     LoweredBlock { statements },
                     FunctionLiteralLayout::MultiLine,
@@ -62,7 +62,7 @@ impl Planner<'_> {
             _ => {
                 let body = self.clone_expression(element, ty);
                 Some(GoExpression::function_literal(
-                    parameters,
+                    parameters.clone(),
                     go_ty,
                     LoweredBlock {
                         statements: vec![plain_return(body)],

@@ -17,7 +17,7 @@ use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, define,
 };
 use crate::plan::calls::{CallPlan, CallableOrigin};
-use crate::plan::go_expression::{CompositeLayout, FunctionLiteralLayout};
+use crate::plan::go_expression::{CompositeLayout, FunctionLiteralLayout, GoParameter};
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, Stability, ValuePlan};
 use crate::types::native::NativeGoType;
 use syntax::EcoString;
@@ -342,7 +342,7 @@ impl<'a> Planner<'a> {
         let literal = |text: String| GoExpression::literal(text);
         let value = GoExpression::call(
             GoExpression::function_literal(
-                format!("s []{element_go}"),
+                vec![GoParameter::new("s", format!("[]{element_go}"))],
                 format!("({array_go}, bool)"),
                 LoweredBlock {
                     statements: vec![

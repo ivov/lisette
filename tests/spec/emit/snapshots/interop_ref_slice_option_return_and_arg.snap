@@ -37,6 +37,6 @@ func main() {
 			unwrapped[i_1] = nil
 		}
 	}
-	ref_1 := &unwrapped
-	aws.Use(ref_1)
+	ref := &unwrapped
+	aws.Use(ref)
 }

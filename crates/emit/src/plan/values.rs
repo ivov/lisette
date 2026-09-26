@@ -5,7 +5,7 @@ use crate::names::go_name::GeneratedPackage;
 use crate::names::packages::PackageUse;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement};
 use crate::plan::go_expression::{
-    CompositeElement, CompositeLayout, FunctionLiteralLayout, GoExpressionNode,
+    CompositeElement, CompositeLayout, FunctionLiteralLayout, GoExpressionNode, GoParameter,
 };
 use std::fmt::{self, Display, Formatter};
 use syntax::ast::Expression;
@@ -221,7 +221,7 @@ impl GoExpression {
     }
 
     pub(crate) fn function_literal(
-        parameters: String,
+        parameters: Vec<GoParameter>,
         result: String,
         body: LoweredBlock,
         layout: FunctionLiteralLayout,
@@ -240,7 +240,7 @@ impl GoExpression {
         layout: FunctionLiteralLayout,
     ) -> Self {
         Self::call(
-            Self::function_literal(String::new(), result, body, layout),
+            Self::function_literal(Vec::new(), result, body, layout),
             Vec::new(),
         )
     }
@@ -327,6 +327,10 @@ impl GoExpression {
 
     pub(crate) fn node(&self) -> &GoExpressionNode {
         &self.node
+    }
+
+    pub(crate) fn node_mut(&mut self) -> &mut GoExpressionNode {
+        &mut self.node
     }
 
     pub(crate) fn rendered(&self) -> String {
@@ -514,6 +518,13 @@ pub(crate) struct SequencedValues {
 }
 
 impl ValuePlan {
+    pub(crate) fn visit_expressions_mut(&mut self, visit: &mut impl FnMut(&mut GoExpressionNode)) {
+        for statement in &mut self.setup {
+            statement.visit_expressions_mut(visit);
+        }
+        self.expression.node_mut().visit_mut(visit);
+    }
+
     pub(crate) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
         for statement in &self.setup {
             statement.visit_expressions(visit);

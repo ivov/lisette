@@ -34,9 +34,9 @@ func main() {
 		result = lisette.MakeResultErr[[]lisette.Option[string], error](ret_1)
 	} else {
 		wrapped := make([]lisette.Option[string], len(ret))
-		for i, v_1 := range ret {
-			if v_1 != nil {
-				wrapped[i] = lisette.MakeOptionSome[string](*v_1)
+		for i, v := range ret {
+			if v != nil {
+				wrapped[i] = lisette.MakeOptionSome[string](*v)
 			} else {
 				wrapped[i] = lisette.MakeOptionNone[string]()
 			}

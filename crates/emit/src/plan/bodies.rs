@@ -406,6 +406,94 @@ pub(crate) fn for_each_statement(
     }
 }
 
+pub(crate) fn rename_generated_names(
+    statements: &mut Vec<LoweredStatement>,
+    rename: &impl Fn(&str) -> Option<String>,
+) {
+    let apply = |name: &mut String| {
+        if let Some(final_name) = rename(name.as_str()) {
+            *name = final_name;
+        }
+    };
+    for statement in statements.iter_mut() {
+        statement.visit_expressions_mut(&mut |node| {
+            if let GoExpressionNode::Identifier(name) = node {
+                apply(name);
+            }
+            if let GoExpressionNode::FunctionLiteral { parameters, .. } = node {
+                for parameter in parameters.iter_mut() {
+                    apply(&mut parameter.name);
+                }
+            }
+        });
+    }
+    for_each_statements_mut(statements, &mut |list| {
+        for statement in list.iter_mut() {
+            rename_statement_slots(statement, &apply);
+        }
+    });
+    for statement in statements.iter_mut() {
+        statement.visit_expressions_mut(&mut |node| {
+            if let GoExpressionNode::FunctionLiteral { body, .. } = node {
+                rename_generated_names(&mut body.statements, rename);
+            }
+        });
+    }
+}
+
+fn rename_statement_slots(statement: &mut LoweredStatement, apply: &impl Fn(&mut String)) {
+    match statement {
+        LoweredStatement::Define(definition) => {
+            for name in &mut definition.names {
+                apply(name);
+            }
+        }
+        LoweredStatement::VarDecl { name, .. } => apply(name),
+        LoweredStatement::Const(plan) => apply(&mut plan.name),
+        LoweredStatement::Loop(plan) => match &mut plan.header {
+            LoopHeader::Range { key, value, .. } => {
+                for name in key.iter_mut().chain(value.iter_mut()) {
+                    apply(name);
+                }
+            }
+            LoopHeader::Counted { variable, .. } => apply(variable),
+            LoopHeader::Infinite | LoopHeader::While(_) => {}
+        },
+        LoweredStatement::Switch(plan) => {
+            if let SwitchKind::Type {
+                binding: Some(name),
+                ..
+            } = &mut plan.kind
+            {
+                apply(name);
+            }
+        }
+        LoweredStatement::Select(plan) => {
+            for arm in &mut plan.arms {
+                if let SelectArmPlan::Receive { receive_vars, .. } = arm {
+                    for name in receive_vars {
+                        apply(name);
+                    }
+                }
+            }
+        }
+        LoweredStatement::If(plan) => rename_if_slots(plan, apply),
+        LoweredStatement::Directed { inner, .. } => rename_statement_slots(inner, apply),
+        _ => {}
+    }
+}
+
+fn rename_if_slots(plan: &mut IfPlan, apply: &impl Fn(&mut String)) {
+    if let Some(initializer) = &mut plan.initializer {
+        for name in &mut initializer.names {
+            apply(name);
+        }
+    }
+    if let ElseArm::ElseIf(inner) = &mut plan.else_arm {
+        rename_if_slots(inner, apply);
+    }
+}
+
 pub(crate) fn for_each_statements_mut(
     statements: &mut Vec<LoweredStatement>,
     f: &mut impl FnMut(&mut Vec<LoweredStatement>),
@@ -458,6 +546,12 @@ impl LoweredBlock {
         visit_statements(&self.statements, visit);
     }
 
+    pub(crate) fn visit_expressions_mut(&mut self, visit: &mut impl FnMut(&mut GoExpressionNode)) {
+        for statement in &mut self.statements {
+            statement.visit_expressions_mut(visit);
+        }
+    }
+
     /// Whether the block's last rendered line is `break`, `continue`,
     /// `return`, or `panic(...)`.
     pub(crate) fn ends_with_diverge(&self) -> bool {
@@ -479,6 +573,136 @@ impl LoweredBlock {
 }
 
 impl LoweredStatement {
+    pub(crate) fn visit_expressions_mut(&mut self, visit: &mut impl FnMut(&mut GoExpressionNode)) {
+        match self {
+            LoweredStatement::If(plan) => plan.visit_expressions_mut(visit),
+            LoweredStatement::Loop(plan) => {
+                for statement in &mut plan.prologue {
+                    statement.visit_expressions_mut(visit);
+                }
+                match &mut plan.header {
+                    LoopHeader::Infinite => {}
+                    LoopHeader::While(condition) => condition.node_mut().visit_mut(visit),
+                    LoopHeader::Range { iterable, .. } => iterable.node_mut().visit_mut(visit),
+                    LoopHeader::Counted {
+                        start, condition, ..
+                    } => {
+                        start.node_mut().visit_mut(visit);
+                        if let Some(condition) = condition {
+                            condition.node_mut().visit_mut(visit);
+                        }
+                    }
+                }
+                plan.body.visit_expressions_mut(visit);
+            }
+            LoweredStatement::Block(body)
+            | LoweredStatement::Body(body)
+            | LoweredStatement::WhileLet(body) => body.visit_expressions_mut(visit),
+            LoweredStatement::Break(_)
+            | LoweredStatement::Continue(_)
+            | LoweredStatement::UnreachablePanic => {}
+            LoweredStatement::Const(plan) => plan.value.node_mut().visit_mut(visit),
+            LoweredStatement::Return(values) => {
+                for value in values {
+                    value.node_mut().visit_mut(visit);
+                }
+            }
+            LoweredStatement::Assign(form) => match form {
+                AssignForm::Compound {
+                    target_capture,
+                    target,
+                    kind,
+                } => {
+                    for statement in target_capture {
+                        statement.visit_expressions_mut(visit);
+                    }
+                    target.node_mut().visit_mut(visit);
+                    if let CompoundKind::OpAssign {
+                        rhs, pinned_left, ..
+                    } = kind
+                    {
+                        rhs.visit_expressions_mut(visit);
+                        if let Some(left) = pinned_left {
+                            left.node_mut().visit_mut(visit);
+                        }
+                    }
+                }
+                AssignForm::Simple {
+                    target_capture,
+                    target,
+                    value,
+                } => {
+                    for statement in target_capture {
+                        statement.visit_expressions_mut(visit);
+                    }
+                    target.node_mut().visit_mut(visit);
+                    value.visit_expressions_mut(visit);
+                }
+            },
+            LoweredStatement::Async { call, .. } => call.node_mut().visit_mut(visit),
+            LoweredStatement::Select(plan) => {
+                for statement in &mut plan.setup {
+                    statement.visit_expressions_mut(visit);
+                }
+                for arm in &mut plan.arms {
+                    match arm {
+                        SelectArmPlan::Receive { channel, body, .. } => {
+                            channel.node_mut().visit_mut(visit);
+                            body.visit_expressions_mut(visit);
+                        }
+                        SelectArmPlan::Send {
+                            channel,
+                            value,
+                            body,
+                        } => {
+                            channel.node_mut().visit_mut(visit);
+                            value.node_mut().visit_mut(visit);
+                            body.visit_expressions_mut(visit);
+                        }
+                        SelectArmPlan::Default { body } => body.visit_expressions_mut(visit),
+                    }
+                }
+                for statement in &mut plan.postlude {
+                    statement.visit_expressions_mut(visit);
+                }
+            }
+            LoweredStatement::Switch(plan) => {
+                match &mut plan.kind {
+                    SwitchKind::Conditional => {}
+                    SwitchKind::Value { subject } | SwitchKind::Type { subject, .. } => {
+                        subject.node_mut().visit_mut(visit)
+                    }
+                }
+                for case in &mut plan.cases {
+                    case.visit_expressions_mut(visit);
+                }
+                if let Some(default) = &mut plan.default {
+                    default.visit_expressions_mut(visit);
+                }
+                for statement in &mut plan.postlude {
+                    statement.visit_expressions_mut(visit);
+                }
+            }
+            LoweredStatement::Define(definition) => definition.value.node_mut().visit_mut(visit),
+            LoweredStatement::AssignMany { targets, value } => {
+                for target in targets {
+                    target.node_mut().visit_mut(visit);
+                }
+                value.node_mut().visit_mut(visit);
+            }
+            LoweredStatement::VarDecl { value, .. } => {
+                if let Some(value) = value {
+                    value.node_mut().visit_mut(visit);
+                }
+            }
+            LoweredStatement::Discard(expression)
+            | LoweredStatement::ExpressionStatement { expression, .. } => {
+                expression.node_mut().visit_mut(visit)
+            }
+            LoweredStatement::Directed { inner, .. } => inner.visit_expressions_mut(visit),
+        }
+    }
+
     pub(crate) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
         match self {
             LoweredStatement::If(plan) => plan.visit_expressions(visit),
@@ -832,6 +1056,13 @@ impl LoweredStatement {
 }
 
 impl SwitchCasePlan {
+    fn visit_expressions_mut(&mut self, visit: &mut impl FnMut(&mut GoExpressionNode)) {
+        for label in &mut self.labels {
+            label.node_mut().visit_mut(visit);
+        }
+        self.body.visit_expressions_mut(visit);
+    }
+
     fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
         for label in &self.labels {
             label.node().visit(visit);
@@ -858,6 +1089,22 @@ impl IfPlan {
             ElseArm::None => {}
             ElseArm::ElseIf(plan) => plan.for_each_statements_mut(f),
             ElseArm::Else { body, .. } => for_each_statements_mut(&mut body.statements, f),
+        }
+    }
+
+    fn visit_expressions_mut(&mut self, visit: &mut impl FnMut(&mut GoExpressionNode)) {
+        for statement in &mut self.condition_setup {
+            statement.visit_expressions_mut(visit);
+        }
+        if let Some(initializer) = &mut self.initializer {
+            initializer.value.node_mut().visit_mut(visit);
+        }
+        self.condition.node_mut().visit_mut(visit);
+        self.then_body.visit_expressions_mut(visit);
+        match &mut self.else_arm {
+            ElseArm::None => {}
+            ElseArm::ElseIf(plan) => plan.visit_expressions_mut(visit),
+            ElseArm::Else { body, .. } => body.visit_expressions_mut(visit),
         }
     }
 

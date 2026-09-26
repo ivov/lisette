@@ -11,12 +11,19 @@ use crate::state::bindings::{BindingValue, InlineExpr};
 
 pub(crate) struct ScopeState {
     issued: HashSet<String>,
+    reserved: HashSet<String>,
+    generated: Vec<GeneratedLocal>,
     next_loop_id: u32,
     frames: Vec<ScopeFrame>,
     loop_stack: Vec<LoopContext>,
     return_ctx_stack: Vec<ReturnContext>,
     test_handle_stack: Vec<String>,
     assign_targets: HashSet<String>,
+}
+
+struct GeneratedLocal {
+    current: String,
+    base: String,
 }
 
 struct ScopeFrame {
@@ -53,6 +60,8 @@ impl ScopeState {
     pub(crate) fn new() -> Self {
         Self {
             issued: HashSet::default(),
+            reserved: HashSet::default(),
+            generated: Vec::new(),
             next_loop_id: 0,
             frames: vec![ScopeFrame {
                 bindings: HashMap::default(),
@@ -227,19 +236,84 @@ impl ScopeState {
     }
 
     pub(crate) fn fresh_go_name(&mut self, hint: Option<&str>) -> String {
-        let base = hint.unwrap_or("tmp");
+        let base = hint.unwrap_or("tmp").to_string();
+        let candidate = self.free_name_from(&base, |name| self.is_go_name_taken(name));
+        self.issued.insert(candidate.clone());
+        self.generated.push(GeneratedLocal {
+            current: candidate.clone(),
+            base,
+        });
+        candidate
+    }
+
+    pub(crate) fn fresh_binding_go_name(&mut self, hint: &str) -> String {
+        let candidate = self.free_name_from(hint, |name| self.is_go_name_taken(name));
+        self.issued.insert(candidate.clone());
+        self.reserved.insert(candidate.clone());
+        candidate
+    }
+
+    fn declares_type_parameter(&self, go_name: &str) -> bool {
+        self.frames.iter().any(|frame| match &frame.declarations {
+            DeclarationScope::Transparent => false,
+            DeclarationScope::Block(names) | DeclarationScope::Function(names) => {
+                names.get(go_name) == Some(&DeclarationKind::TypeParameter)
+            }
+        })
+    }
+
+    fn free_name_from(&self, base: &str, taken: impl Fn(&str) -> bool) -> String {
         let mut candidate = base.to_string();
         let mut suffix = 0;
-        while self.is_go_name_taken(&candidate) {
+        while taken(&candidate) {
             suffix += 1;
             candidate = format!("{base}_{suffix}");
         }
-        self.issued.insert(candidate.clone());
         candidate
     }
 
     pub(crate) fn reserve_go_name(&mut self, go_name: &str) {
         self.issued.insert(go_name.to_string());
+        self.reserved.insert(go_name.to_string());
+    }
+
+    pub(crate) fn settle_generated_names(
+        &self,
+        present: &HashSet<String>,
+    ) -> HashMap<String, String> {
+        let generated: HashSet<&str> = self
+            .generated
+            .iter()
+            .map(|local| local.current.as_str())
+            .collect();
+        // A source binding that never reached the body frees its name.
+        let mut taken: HashSet<String> = HashSet::default();
+        taken.extend(
+            present
+                .iter()
+                .filter(|name| !generated.contains(name.as_str()))
+                .cloned(),
+        );
+        let mut settled: HashMap<String, String> = HashMap::default();
+        for local in &self.generated {
+            if !present.contains(&local.current) {
+                continue;
+            }
+            let name = self.free_name_from(&local.base, |candidate| {
+                taken.contains(candidate)
+                    || is_go_reserved_word(candidate)
+                    || self.has_binding_for_go_name(candidate)
+                    || self.declares_type_parameter(candidate)
+            });
+            // Raising a suffix would renumber a name for no reader's benefit.
+            if name != local.base || name == local.current {
+                taken.insert(local.current.clone());
+                continue;
+            }
+            taken.insert(name.clone());
+            settled.insert(local.current.clone(), name);
+        }
+        settled
     }
 
     fn is_go_name_taken(&self, go_name: &str) -> bool {

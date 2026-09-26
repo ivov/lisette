@@ -29,7 +29,7 @@ func apply(f func(string, string) (int, bool), s string) int {
 }
 
 func main() {
-	r := apply(func(arg0 string, arg1 string) (int, bool) {
+	r := apply(func(arg0, arg1 string) (int, bool) {
 		ret := idx.Find(arg0, arg1)
 		return ret, ret != -1
 	}, "hello")

@@ -4,6 +4,7 @@ use crate::names::packages::PackageUse;
 use crate::plan::bodies::LoweredBlock;
 use crate::render::Renderer;
 use crate::types::go_type::render_conversion;
+use crate::utils::group_params;
 use std::slice;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,7 +69,7 @@ pub(crate) enum GoExpressionNode {
     /// A variadic argument, `values...`.
     Spread(Box<GoExpressionNode>),
     FunctionLiteral {
-        parameters: String,
+        parameters: Vec<GoParameter>,
         result: String,
         body: LoweredBlock,
         layout: FunctionLiteralLayout,
@@ -76,6 +77,25 @@ pub(crate) enum GoExpressionNode {
     Empty,
     /// Go source the program supplied through `@rawgo`.
     Verbatim(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GoParameter {
+    pub(crate) name: String,
+    pub(crate) go_type: String,
+}
+
+impl GoParameter {
+    pub(crate) fn new(name: impl Into<String>, go_type: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            go_type: go_type.into(),
+        }
+    }
+
+    fn pair(&self) -> (String, String) {
+        (self.name.clone(), self.go_type.clone())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -156,6 +176,15 @@ impl GoExpressionNode {
             body.visit_expressions(visit);
         } else {
             self.visit_children(&mut |child| child.visit(visit));
+        }
+    }
+
+    pub(crate) fn visit_mut(&mut self, visit: &mut impl FnMut(&mut GoExpressionNode)) {
+        visit(self);
+        if let Self::FunctionLiteral { body, .. } = self {
+            body.visit_expressions_mut(visit);
+        } else {
+            self.visit_children_mut(&mut |child| child.visit_mut(visit));
         }
     }
 
@@ -496,7 +525,9 @@ impl GoExpressionNode {
                 layout,
             } => {
                 output.push_str("func(");
-                output.push_str(parameters);
+                let pairs: Vec<(String, String)> =
+                    parameters.iter().map(GoParameter::pair).collect();
+                output.push_str(&group_params(&pairs));
                 output.push(')');
                 if !result.is_empty() {
                     output.push(' ');
