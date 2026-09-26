@@ -2,6 +2,7 @@ use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableReturnAbi};
 use crate::abi::layout::SlotOrigin;
 use crate::abi::tuple_element_types;
+use crate::analyze::component_uses::ComponentDemand;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::calls::go_interop::WrapperTarget;
 use crate::context::expression::ExpressionContext;
@@ -137,9 +138,6 @@ impl Planner<'_> {
             {
                 return statements;
             }
-            if let Some(statements) = self.lower_let_as_tuple_components(identifier, value) {
-                return statements;
-            }
         }
         if needs_temp {
             if self.shadows_declaration(&go_identifier)
@@ -163,6 +161,22 @@ impl Planner<'_> {
         go_identifier: &str,
     ) -> Option<Vec<LoweredStatement>> {
         let ty = self.facts.peel_alias(&value.get_type());
+        let demand = self.component_lets.get(&value.get_span())?.clone();
+        if matches!(ty, Type::Tuple(_)) {
+            self.lower_tuple_components(identifier, value, &ty, demand)
+        } else {
+            self.lower_fallible_components(identifier, value, go_identifier, &ty, demand)
+        }
+    }
+
+    fn lower_fallible_components(
+        &mut self,
+        identifier: &str,
+        value: &Expression,
+        go_identifier: &str,
+        ty: &Type,
+        demand: ComponentDemand,
+    ) -> Option<Vec<LoweredStatement>> {
         let kind = if ty.is_option() {
             ComponentKind::Option
         } else if ty.is_result() {
@@ -170,7 +184,6 @@ impl Planner<'_> {
         } else {
             return None;
         };
-        let demand = self.component_lets.get(&value.get_span())?;
         let (needs_value, needs_whole_value) = (demand.needs_value, demand.needs_whole_value);
         // Only an Option can be rebuilt from components in one expression.
         if needs_whole_value && kind == ComponentKind::Result {
@@ -215,18 +228,18 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    fn lower_let_as_tuple_components(
+    fn lower_tuple_components(
         &mut self,
         identifier: &str,
         value: &Expression,
+        ty: &Type,
+        demand: ComponentDemand,
     ) -> Option<Vec<LoweredStatement>> {
-        let ty = self.facts.peel_alias(&value.get_type());
-        let elements = tuple_element_types(&ty);
-        if elements.len() < 2 || !matches!(ty, Type::Tuple(_)) {
+        let elements = tuple_element_types(ty);
+        if elements.len() < 2 {
             return None;
         }
-        let demand = self.component_lets.get(&value.get_span())?;
-        let read_indices = demand.read_indices.clone();
+        let read_indices = demand.read_indices;
         let needs_whole_value = demand.needs_whole_value;
         let plan = self.plan_call(value)?;
         if !matches!(

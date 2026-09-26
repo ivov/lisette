@@ -4,6 +4,7 @@ use syntax::ast::{Expression, collect_pattern_bindings};
 const STATUS_METHODS: &[&str] = &["is_some", "is_none", "is_ok", "is_err"];
 const PAYLOAD_METHODS: &[&str] = &["unwrap_or", "map_or"];
 
+#[derive(Clone)]
 pub(crate) struct ComponentDemand {
     pub(crate) needs_value: bool,
     pub(crate) needs_whole_value: bool,

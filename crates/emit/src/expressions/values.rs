@@ -19,7 +19,6 @@ use crate::plan::placement::is_unit_call;
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, OperandForm, ValuePlan,
 };
-use crate::state::bindings::BindingValue;
 use syntax::ast::Expression;
 use syntax::program::CallKind;
 use syntax::types::Type;
@@ -687,12 +686,7 @@ impl Planner<'_> {
 
     fn identifier_is_unaddressable(&self, value: &str, ty: &Type) -> bool {
         match self.scope.resolve_identifier_binding(value) {
-            Some(BindingValue::GoName(_) | BindingValue::GoConst(_)) => false,
-            Some(
-                BindingValue::InlineExpr(_)
-                | BindingValue::Components(_)
-                | BindingValue::TupleComponents(_),
-            ) => true,
+            Some(binding) => binding.requires_materialization(),
             None => self.ty_is_enum(ty),
         }
     }

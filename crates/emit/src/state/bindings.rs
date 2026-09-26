@@ -53,6 +53,24 @@ impl BindingValue {
         }
     }
 
+    pub(crate) fn is_discard(&self) -> bool {
+        self.as_go_name() == Some("_")
+    }
+
+    pub(crate) fn requires_materialization(&self) -> bool {
+        match self {
+            Self::GoName(_) | Self::GoConst(_) => false,
+            Self::InlineExpr(_) | Self::Components(_) | Self::TupleComponents(_) => true,
+        }
+    }
+
+    pub(crate) fn can_reuse_pattern_subject(&self) -> bool {
+        match self {
+            Self::GoName(_) | Self::GoConst(_) | Self::Components(_) => true,
+            Self::InlineExpr(_) | Self::TupleComponents(_) => false,
+        }
+    }
+
     pub(crate) fn is_go_const(&self) -> bool {
         matches!(self, BindingValue::GoConst(_))
     }

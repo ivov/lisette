@@ -28,25 +28,24 @@ impl Planner<'_> {
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
-        if let Some(BindingValue::InlineExpr(expr)) = self.scope.resolve_identifier_binding(value) {
-            return expr.expression().clone();
-        }
-        if let Some(BindingValue::Components(components)) =
-            self.scope.resolve_identifier_binding(value)
-        {
-            let components = components.clone();
-            return self.option_from_components(&components);
-        }
-        if let Some(BindingValue::TupleComponents(tuple)) =
-            self.scope.resolve_identifier_binding(value)
-        {
-            let names = tuple.names.clone();
-            return build_tuple_literal(names.into_iter().map(GoExpression::name).collect());
-        }
-        let bound_go_name = self
-            .scope
-            .resolve_binding_go_name(value)
-            .map(str::to_string);
+        let bound_go_name = match self.scope.resolve_identifier_binding(value) {
+            Some(BindingValue::InlineExpr(expr)) => return expr.expression().clone(),
+            Some(BindingValue::Components(components)) => {
+                return self.option_from_components(components);
+            }
+            Some(BindingValue::TupleComponents(tuple)) => {
+                return build_tuple_literal(
+                    tuple
+                        .names
+                        .iter()
+                        .cloned()
+                        .map(GoExpression::name)
+                        .collect(),
+                );
+            }
+            Some(BindingValue::GoName(name) | BindingValue::GoConst(name)) => Some(name.clone()),
+            None => None,
+        };
         match self.classify_identifier(value, ty, ctx) {
             IdentifierKind::UnitValue => GoExpression::empty_composite("struct{}".to_string()),
             IdentifierKind::PublicFunction { capitalized } => {

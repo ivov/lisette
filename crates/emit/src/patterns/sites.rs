@@ -155,10 +155,10 @@ impl Planner<'_> {
     pub(crate) fn can_reuse_subject_identifier(&self, value: &str, binds_name: bool) -> bool {
         !binds_name
             && !value.contains('.')
-            && !matches!(
-                self.scope.resolve_identifier_binding(value),
-                Some(BindingValue::InlineExpr(_) | BindingValue::TupleComponents(_))
-            )
+            && self
+                .scope
+                .resolve_identifier_binding(value)
+                .is_none_or(BindingValue::can_reuse_pattern_subject)
     }
 
     /// A field path such as `t.status` is read where it sits when nothing rebinds its root.
