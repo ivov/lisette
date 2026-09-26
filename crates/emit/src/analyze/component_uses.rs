@@ -1,3 +1,4 @@
+use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, collect_pattern_bindings};
 
 const STATUS_METHODS: &[&str] = &["is_some", "is_none", "is_ok", "is_err"];
@@ -6,6 +7,7 @@ const PAYLOAD_METHODS: &[&str] = &["unwrap_or", "map_or"];
 pub(crate) struct ComponentDemand {
     pub(crate) needs_value: bool,
     pub(crate) needs_whole_value: bool,
+    pub(crate) read_indices: HashSet<usize>,
 }
 
 pub(crate) fn component_demand<'a, I>(region: I, lisette_name: &str) -> Option<ComponentDemand>
@@ -18,6 +20,7 @@ where
         blocked: false,
         needs_value: false,
         needs_whole_value: false,
+        read_indices: HashSet::default(),
     };
     for tree in region {
         walker.walk(tree);
@@ -25,6 +28,7 @@ where
     (walker.supported > 0 && !walker.blocked).then_some(ComponentDemand {
         needs_value: walker.needs_value || walker.needs_whole_value,
         needs_whole_value: walker.needs_whole_value,
+        read_indices: walker.read_indices,
     })
 }
 
@@ -34,6 +38,7 @@ struct Walker<'a> {
     blocked: bool,
     needs_value: bool,
     needs_whole_value: bool,
+    read_indices: HashSet<usize>,
 }
 
 impl Walker<'_> {
@@ -96,6 +101,18 @@ impl Walker<'_> {
             Expression::Propagate { expression, .. } if self.names_the_local(expression) => {
                 self.supported += 1;
                 self.needs_value = true;
+                return;
+            }
+            Expression::DotAccess {
+                expression: receiver,
+                member,
+                ..
+            } if self.names_the_local(receiver) && member.parse::<usize>().is_ok() => {
+                self.supported += 1;
+                self.needs_value = true;
+                if let Ok(index) = member.parse::<usize>() {
+                    self.read_indices.insert(index);
+                }
                 return;
             }
             Expression::Call {

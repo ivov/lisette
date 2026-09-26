@@ -2874,6 +2874,114 @@ fn main() {
 }
 
 #[test]
+fn tuple_local_read_by_index_destructures_the_multi_return() {
+    let input = r#"
+import "go:fmt"
+
+fn pair(n: int) -> (int, int) {
+  (n, n + 1)
+}
+
+fn main() {
+  let p = pair(3)
+  fmt.Println(p.0 + p.1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_local_with_one_index_read_discards_the_rest() {
+    let input = r#"
+import "go:fmt"
+
+fn trio(n: int) -> (int, string, bool) {
+  (n, "a", true)
+}
+
+fn main() {
+  let t = trio(3)
+  fmt.Println(t.1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_local_read_both_by_index_and_whole_keeps_every_element() {
+    let input = r#"
+import "go:fmt"
+
+fn pair(n: int) -> (int, int) {
+  (n, n + 1)
+}
+
+fn total(p: (int, int)) -> int {
+  p.0 + p.1
+}
+
+fn main() {
+  let p = pair(3)
+  fmt.Println(p.0 + total(p))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_local_read_by_index_avoids_a_later_binding_name() {
+    let input = r#"
+import "go:fmt"
+
+fn pair(n: int) -> (int, int) {
+  (n, n + 1)
+}
+
+fn main() {
+  let p = pair(3)
+  let p0 = 99
+  fmt.Println(p.0 + p0)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_local_from_a_nested_tuple_reads_the_inner_element() {
+    let input = r#"
+import "go:fmt"
+
+fn nested(n: int) -> ((int, int), int) {
+  ((n, n), n)
+}
+
+fn main() {
+  let p = nested(3)
+  fmt.Println(p.0.0 + p.1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn mutable_tuple_local_keeps_the_whole_value() {
+    let input = r#"
+import "go:fmt"
+
+fn pair(n: int) -> (int, int) {
+  (n, n + 1)
+}
+
+fn main() {
+  let mut p = pair(3)
+  p = pair(4)
+  fmt.Println(p.0)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn pointer_receiver_method_with_call_arguments_is_not_pinned() {
     let input = r#"
 struct Counter { n: int }

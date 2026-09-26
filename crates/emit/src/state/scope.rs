@@ -7,7 +7,7 @@ use crate::context::lowering::LoopContext;
 use crate::plan::bodies::LoopId;
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::GoExpression;
-use crate::state::bindings::{BindingValue, ComponentBinding, InlineExpr};
+use crate::state::bindings::{BindingValue, ComponentBinding, InlineExpr, TupleBinding};
 
 pub(crate) struct ScopeState {
     issued: HashSet<String>,
@@ -100,6 +100,14 @@ impl ScopeState {
         components: ComponentBinding,
     ) {
         self.set_binding(lisette_name.into(), BindingValue::Components(components));
+    }
+
+    pub(crate) fn set_tuple_binding(
+        &mut self,
+        lisette_name: impl Into<String>,
+        tuple: TupleBinding,
+    ) {
+        self.set_binding(lisette_name.into(), BindingValue::TupleComponents(tuple));
     }
 
     pub(crate) fn bind_inline_expr(&mut self, lisette_name: impl Into<String>, expr: InlineExpr) {

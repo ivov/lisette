@@ -688,7 +688,11 @@ impl Planner<'_> {
     fn identifier_is_unaddressable(&self, value: &str, ty: &Type) -> bool {
         match self.scope.resolve_identifier_binding(value) {
             Some(BindingValue::GoName(_) | BindingValue::GoConst(_)) => false,
-            Some(BindingValue::InlineExpr(_) | BindingValue::Components(_)) => true,
+            Some(
+                BindingValue::InlineExpr(_)
+                | BindingValue::Components(_)
+                | BindingValue::TupleComponents(_),
+            ) => true,
             None => self.ty_is_enum(ty),
         }
     }

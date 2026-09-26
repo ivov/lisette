@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn pair(n: int) -> (int, int) {
+    (n, n + 1)
+  }
+  
+  fn total(p: (int, int)) -> int {
+    p.0 + p.1
+  }
+  
+  fn main() {
+    let p = pair(3)
+    fmt.Println(p.0 + total(p))
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func pair(n int) (int, int) {
+	return n, n + 1
+}
+
+func total(p lisette.Tuple2[int, int]) int {
+	return p.First + p.Second
+}
+
+func main() {
+	p0, p1 := pair(3)
+	fmt.Println(p0 + total(lisette.MakeTuple2(p0, p1)))
+}

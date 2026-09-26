@@ -206,10 +206,7 @@ impl Planner<'_> {
             };
             let region = rest[index + 1..].iter().chain(iter::once(last));
             if let Some(demand) = component_demand(region, identifier.as_str()) {
-                self.component_lets.insert(
-                    value.get_span(),
-                    (demand.needs_value, demand.needs_whole_value),
-                );
+                self.component_lets.insert(value.get_span(), demand);
             }
         }
     }
