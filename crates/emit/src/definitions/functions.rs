@@ -88,7 +88,7 @@ impl Planner<'_> {
         }
     }
 
-    fn settle_generated_names(&mut self, statements: &mut Vec<LoweredStatement>) {
+    fn settle_generated_names(&mut self, statements: &mut [LoweredStatement]) {
         let mut present: HashSet<String> = HashSet::default();
         for statement in statements.iter() {
             statement.visit_expressions(&mut |node| {

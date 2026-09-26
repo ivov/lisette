@@ -518,13 +518,6 @@ pub(crate) struct SequencedValues {
 }
 
 impl ValuePlan {
-    pub(crate) fn visit_expressions_mut(&mut self, visit: &mut impl FnMut(&mut GoExpressionNode)) {
-        for statement in &mut self.setup {
-            statement.visit_expressions_mut(visit);
-        }
-        self.expression.node_mut().visit_mut(visit);
-    }
-
     pub(crate) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
         for statement in &self.setup {
             statement.visit_expressions(visit);

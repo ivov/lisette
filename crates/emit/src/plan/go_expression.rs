@@ -179,15 +179,6 @@ impl GoExpressionNode {
         }
     }
 
-    pub(crate) fn visit_mut(&mut self, visit: &mut impl FnMut(&mut GoExpressionNode)) {
-        visit(self);
-        if let Self::FunctionLiteral { body, .. } = self {
-            body.visit_expressions_mut(visit);
-        } else {
-            self.visit_children_mut(&mut |child| child.visit_mut(visit));
-        }
-    }
-
     pub(crate) fn rename_identifier(&mut self, from: &str, to: &str) {
         match self {
             Self::Identifier(name) if name == from => *name = to.to_string(),
@@ -248,7 +239,7 @@ impl GoExpressionNode {
         }
     }
 
-    fn visit_children_mut(&mut self, visit: &mut impl FnMut(&mut GoExpressionNode)) {
+    pub(super) fn visit_children_mut(&mut self, visit: &mut impl FnMut(&mut GoExpressionNode)) {
         match self {
             Self::Identifier(_)
             | Self::Qualified { .. }
