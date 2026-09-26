@@ -2,6 +2,49 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.12.3](https://github.com/ivov/lisette/compare/lisette-v0.12.2...lisette-v0.12.3) - 2026-09-26
+
+### Features
+
+- feat: idiomatic Go for a tuple-returning call bound to a local [#1479](https://github.com/ivov/lisette/pull/1479) [`934f9b1`](https://github.com/ivov/lisette/commit/934f9b181c570991fd8af1d704df1316438e7d4c)
+- feat: idiomatic Go for a local read natively and as one value [#1478](https://github.com/ivov/lisette/pull/1478) [`e20aa00`](https://github.com/ivov/lisette/commit/e20aa0013a09f5e3a66d0ee81712264f3736a754)
+- feat: idiomatic Go for a fallible call bound to a local [#1477](https://github.com/ivov/lisette/pull/1477) [`0175f2b`](https://github.com/ivov/lisette/commit/0175f2b51a4d0ae47f31ef65cc2b026ae6276bbc)
+- feat: idiomatic Go for a map lookup bound to a local [#1476](https://github.com/ivov/lisette/pull/1476) [`28a7666`](https://github.com/ivov/lisette/commit/28a7666e71d86769550bee84a5e2b51ba6485efc)
+- feat: idiomatic Go for locals that need no numeric suffix [#1475](https://github.com/ivov/lisette/pull/1475) [`57b9b71`](https://github.com/ivov/lisette/commit/57b9b71f4bbcf16da2772e2a5ecbc01e2a4b2345)
+- feat: idiomatic Go for generated local names [#1474](https://github.com/ivov/lisette/pull/1474) [`72d0183`](https://github.com/ivov/lisette/commit/72d0183712924fdc42d35960d1a11389f206c62c)
+- feat: idiomatic Go for a `try` block bound then returned [#1473](https://github.com/ivov/lisette/pull/1473) [`cebceec`](https://github.com/ivov/lisette/commit/cebceecff53a6ce610f81ab9d524f02077f9e4ed)
+- feat: idiomatic Go for a `find` that returns inside its loop [#1472](https://github.com/ivov/lisette/pull/1472) [`0f934b4`](https://github.com/ivov/lisette/commit/0f934b43f6442f045fedd7b7ce9816c539ce54f8)
+- feat: idiomatic Go for returning branches and their aliases [#1471](https://github.com/ivov/lisette/pull/1471) [`0dab2f6`](https://github.com/ivov/lisette/commit/0dab2f601c4bb7f96eb444d7815ac55776464d93)
+- feat: idiomatic Go for accumulator assignments [#1470](https://github.com/ivov/lisette/pull/1470) [`8a9a262`](https://github.com/ivov/lisette/commit/8a9a2624f80bd4f8ce6640ade907877c3e52a97d)
+- feat: idiomatic Go for discarded call results [#1469](https://github.com/ivov/lisette/pull/1469) [`b650510`](https://github.com/ivov/lisette/commit/b6505107038a8386e82b7e6a272ddcf9b7074ddc)
+- feat: idiomatic Go for casts between an alias and its target [#1468](https://github.com/ivov/lisette/pull/1468) [`f0b39f1`](https://github.com/ivov/lisette/commit/f0b39f15e5cee544288df23a4a0e7c3e5c74d05e)
+- feat: idiomatic Go for `for` loops over a channel [#1466](https://github.com/ivov/lisette/pull/1466) [`db52b51`](https://github.com/ivov/lisette/commit/db52b51ab20e1a52b48c1a9087dadfc0cb971d17)
+- feat: idiomatic Go for `find` returned from a function [#1465](https://github.com/ivov/lisette/pull/1465) [`a94365f`](https://github.com/ivov/lisette/commit/a94365f328f97154eaec4e9e8afdb0d4766e1a4e)
+- feat: idiomatic Go for nested patterns in `Some` arms [#1464](https://github.com/ivov/lisette/pull/1464) [`ca4a802`](https://github.com/ivov/lisette/commit/ca4a8021de417f71be194cf73d72f3bd3e256dd5)
+- feat: idiomatic Go for `None` fields in new structs [#1463](https://github.com/ivov/lisette/pull/1463) [`43b8a2b`](https://github.com/ivov/lisette/commit/43b8a2bafc1c1188b6289980f3b0dce78cf06278)
+- feat: idiomatic Go for tuples from `Channel.split` [#1462](https://github.com/ivov/lisette/pull/1462) [`a55c786`](https://github.com/ivov/lisette/commit/a55c7862efbddd2797a5169184486a7264afa674)
+- feat: idiomatic Go for `try` blocks in tail position [#1461](https://github.com/ivov/lisette/pull/1461) [`f016b56`](https://github.com/ivov/lisette/commit/f016b569d9d72e1784f23e31a67000874bb725d2)
+- feat: idiomatic Go for pointer-receiver calls with call arguments [#1460](https://github.com/ivov/lisette/pull/1460) [`a3016cd`](https://github.com/ivov/lisette/commit/a3016cd74beecd32c549aea036514d5f1e181340)
+- feat: idiomatic Go for `get` and `find` under `?` [#1459](https://github.com/ivov/lisette/pull/1459) [`538c056`](https://github.com/ivov/lisette/commit/538c056bc98efb73d0462361fc04a9df2f34ece7)
+- feat: idiomatic Go for values already bound to a name [#1458](https://github.com/ivov/lisette/pull/1458) [`d938f29`](https://github.com/ivov/lisette/commit/d938f298164697f4b24723aa9f33c6970f5bf83c)
+- feat: idiomatic Go for `?` on a value of the return type [#1457](https://github.com/ivov/lisette/pull/1457) [`6917e4d`](https://github.com/ivov/lisette/commit/6917e4dca40c4dc65f55e5de75a4903aa6315017)
+- feat: idiomatic Go for `let` tuples from Lisette tuple returns [#1456](https://github.com/ivov/lisette/pull/1456) [`c163a0e`](https://github.com/ivov/lisette/commit/c163a0edd67b4335a92cde59bbe9f8a999e33e1a)
+
+### Fixes
+
+- fix: shadowed and dropped locals in emitted Go [#1484](https://github.com/ivov/lisette/pull/1484) [`77faff0`](https://github.com/ivov/lisette/commit/77faff0bc0c0d87a6527a211fc9bb83d972d01ae)
+- fix: keep `else` blocks in `else if` chains in emitted Go [#1483](https://github.com/ivov/lisette/pull/1483) [`2056f62`](https://github.com/ivov/lisette/commit/2056f625b912c0264891c1a6715c1e7020858348)
+- fix: report a non-UTF-8 CLI argument instead of crashing [#1482](https://github.com/ivov/lisette/pull/1482) [`048170f`](https://github.com/ivov/lisette/commit/048170f6fe4daea78eece27b768bd2ecd5cd41a5)
+- fix: stop parser looping on excessively nested source [#1453](https://github.com/ivov/lisette/pull/1453) [`fda50f1`](https://github.com/ivov/lisette/commit/fda50f1e19dc10d07ae08ffc3e14fb7e3ec544d1)
+
+### Internals
+
+- chore: rebuild playground [#1481](https://github.com/ivov/lisette/pull/1481) [`f04ab98`](https://github.com/ivov/lisette/commit/f04ab98f8a51945d556d41bdd03bf5ad58767a13)
+- refactor: unify bindings and argument lowering [#1480](https://github.com/ivov/lisette/pull/1480) [`c17f8a8`](https://github.com/ivov/lisette/commit/c17f8a82665144d9343a382248114d8b26c96e2c)
+- docs: style `zero()` cross-references as reference lines [#1467](https://github.com/ivov/lisette/pull/1467) [`aa3d276`](https://github.com/ivov/lisette/commit/aa3d2768b39baacdc3781a4d5ee1662a3f2af0ee)
+- ci: build Windows binaries on Linux runners [#1449](https://github.com/ivov/lisette/pull/1449) [`d86a3cd`](https://github.com/ivov/lisette/commit/d86a3cde3bad94405682e44a1e4f47a8b65ad941)
+
+
 ## [0.12.2](https://github.com/ivov/lisette/compare/lisette-v0.12.1...lisette-v0.12.2) - 2026-09-18
 
 ### Features
