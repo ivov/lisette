@@ -23,10 +23,7 @@ description: |
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"strconv"
-)
+import "strconv"
 
 type Box struct{}
 
@@ -36,14 +33,9 @@ func (b Box) apply(f func(string) (int, error)) (int, error) {
 
 func main() {
 	b := Box{}
-	ret, ret_1 := b.apply(strconv.Atoi)
-	var r lisette.Result[int, error]
-	if ret_1 != nil {
-		r = lisette.MakeResultErr[int, error](ret_1)
-	} else {
-		r = lisette.MakeResultOk[int, error](ret)
-	}
-	if r.Tag == lisette.ResultOk {
-		_ = r.OkVal
+	r, err := b.apply(strconv.Atoi)
+	v := r
+	if err == nil {
+		_ = v
 	}
 }

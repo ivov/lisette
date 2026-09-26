@@ -21,10 +21,7 @@ description: |
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"strconv"
-)
+import "strconv"
 
 func make_() func(string) (int, error) {
 	var tmp func(string) (int, error)
@@ -37,14 +34,9 @@ func make_() func(string) (int, error) {
 
 func main() {
 	f := make_()
-	ret, ret_1 := f("1")
-	var r lisette.Result[int, error]
-	if ret_1 != nil {
-		r = lisette.MakeResultErr[int, error](ret_1)
-	} else {
-		r = lisette.MakeResultOk[int, error](ret)
-	}
-	if r.Tag == lisette.ResultOk {
-		_ = r.OkVal
+	r, err := f("1")
+	v := r
+	if err == nil {
+		_ = v
 	}
 }

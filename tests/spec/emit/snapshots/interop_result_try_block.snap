@@ -41,23 +41,13 @@ func make_() (func(string) (int, error), error) {
 }
 
 func main() {
-	ret, ret_1 := make_()
-	var r lisette.Result[func(string) (int, error), error]
-	if ret_1 != nil {
-		r = lisette.MakeResultErr[func(string) (int, error), error](ret_1)
-	} else {
-		r = lisette.MakeResultOk[func(string) (int, error), error](ret)
-	}
-	if r.Tag == lisette.ResultOk {
-		ret_2, ret_3 := r.OkVal("1")
-		var r2 lisette.Result[int, error]
-		if ret_3 != nil {
-			r2 = lisette.MakeResultErr[int, error](ret_3)
-		} else {
-			r2 = lisette.MakeResultOk[int, error](ret_2)
-		}
-		if r2.Tag == lisette.ResultOk {
-			_ = r2.OkVal
+	r, err := make_()
+	f := r
+	if err == nil {
+		r2, err_1 := f("1")
+		v := r2
+		if err_1 == nil {
+			_ = v
 		}
 	}
 }

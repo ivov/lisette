@@ -22,14 +22,9 @@ import (
 
 func main() {
 	t := lisette.MakeTuple2[func(string) (int, error), int](strconv.Atoi, 1)
-	ret, ret_1 := t.First("1")
-	var r lisette.Result[int, error]
-	if ret_1 != nil {
-		r = lisette.MakeResultErr[int, error](ret_1)
-	} else {
-		r = lisette.MakeResultOk[int, error](ret)
-	}
-	if r.Tag == lisette.ResultOk {
-		_ = r.OkVal
+	r, err := t.First("1")
+	v := r
+	if err == nil {
+		_ = v
 	}
 }

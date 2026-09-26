@@ -43,15 +43,10 @@ func main() {
 		}
 		return wrapped, ret_1
 	}
-	ret_2, ret_3 := f()
-	var r lisette.Result[[]lisette.Option[string], error]
-	if ret_3 != nil {
-		r = lisette.MakeResultErr[[]lisette.Option[string], error](ret_3)
-	} else {
-		r = lisette.MakeResultOk[[]lisette.Option[string], error](ret_2)
-	}
-	if r.Tag == lisette.ResultOk {
-		for _, x := range r.OkVal {
+	r, err := f()
+	xs := r
+	if err == nil {
+		for _, x := range xs {
 			if x.Tag == lisette.OptionSome {
 				fmt.Println(x.SomeVal)
 			} else {
@@ -59,6 +54,6 @@ func main() {
 			}
 		}
 	} else {
-		_ = r.ErrVal
+		_ = err
 	}
 }

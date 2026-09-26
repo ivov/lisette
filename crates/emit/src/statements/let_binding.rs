@@ -16,7 +16,7 @@ use crate::plan::placement::{
     rebind_trailing_temp, requires_temp_var,
 };
 use crate::plan::values::GoExpression;
-use crate::state::bindings::ComponentBinding;
+use crate::state::bindings::{ComponentBinding, ComponentKind};
 use std::mem;
 use syntax::ast::{Binding, Expression, LetMode, Pattern};
 use syntax::program::NativeTypeKind;
@@ -160,15 +160,14 @@ impl Planner<'_> {
         go_identifier: &str,
     ) -> Option<Vec<LoweredStatement>> {
         let ty = self.facts.peel_alias(&value.get_type());
-        if !ty.is_option() {
+        let kind = if ty.is_option() {
+            ComponentKind::Option
+        } else if ty.is_result() {
+            ComponentKind::Result
+        } else {
             return None;
-        }
+        };
         let needs_value = *self.component_lets.get(&value.get_span())?;
-        let source = self.comma_ok_source(value)?;
-        // With a nil guard, `ok` alone is not the success condition.
-        if source.has_nil_guard() {
-            return None;
-        }
         let payload_go_type = self.use_go_type(&ty.ok_type());
         let slot = if needs_value {
             self.declare(go_identifier);
@@ -176,7 +175,23 @@ impl Planner<'_> {
         } else {
             CommaOkValueSlot::Discarded
         };
-        let mut pair = self.bind_comma_ok_pair(value, source, slot);
+        let mut pair = match kind {
+            ComponentKind::Option => {
+                let source = self.comma_ok_source(value)?;
+                // With a nil guard, `ok` alone is not the success condition.
+                if source.has_nil_guard() {
+                    return None;
+                }
+                self.bind_comma_ok_pair(value, source, slot)
+            }
+            ComponentKind::Result => {
+                let fuse = self.result_fuse_plan(value)?;
+                if fuse.has_nil_guard() || fuse.wraps_error() || !fuse.carries_payload() {
+                    return None;
+                }
+                fuse.bind(self, slot, None)
+            }
+        };
         let statements = mem::take(&mut pair.statements);
         let payload = pair.value().unwrap_or("_").to_string();
         let status = pair.status().to_string();
@@ -186,6 +201,7 @@ impl Planner<'_> {
                 value: payload,
                 status,
                 payload_go_type,
+                kind,
             },
         );
         Some(statements)

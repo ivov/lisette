@@ -15,21 +15,13 @@ description: |
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"strconv"
-)
+import "strconv"
 
 func parse(s string) (int, error) {
-	ret, ret_1 := strconv.Atoi(s)
-	var result lisette.Result[int, error]
-	if ret_1 != nil {
-		result = lisette.MakeResultErr[int, error](ret_1)
-	} else {
-		result = lisette.MakeResultOk[int, error](ret)
+	result, err := strconv.Atoi(s)
+	n := result
+	if err == nil {
+		return n, nil
 	}
-	if result.Tag == lisette.ResultOk {
-		return result.OkVal, nil
-	}
-	return 0, result.ErrVal
+	return 0, err
 }

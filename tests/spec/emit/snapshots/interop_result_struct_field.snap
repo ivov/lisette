@@ -17,10 +17,7 @@ description: |
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"strconv"
-)
+import "strconv"
 
 type Parser struct {
 	parse func(string) (int, error)
@@ -28,14 +25,9 @@ type Parser struct {
 
 func main() {
 	p := Parser{parse: strconv.Atoi}
-	ret, ret_1 := p.parse("42")
-	var r lisette.Result[int, error]
-	if ret_1 != nil {
-		r = lisette.MakeResultErr[int, error](ret_1)
-	} else {
-		r = lisette.MakeResultOk[int, error](ret)
-	}
-	if r.Tag == lisette.ResultOk {
-		_ = r.OkVal
+	r, err := p.parse("42")
+	v := r
+	if err == nil {
+		_ = v
 	}
 }
