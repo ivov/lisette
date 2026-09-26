@@ -758,7 +758,7 @@ impl Planner<'_> {
                     self.with_scope(|this| this.lower_block_to_place(consequence, place));
                 let inner = self.lower_else_chain(
                     next_alternative.as_deref(),
-                    then_body.ends_with_diverge(),
+                    preceding_diverges && then_body.ends_with_diverge(),
                     place,
                 );
                 ElseArm::ElseIf(Box::new(IfPlan {

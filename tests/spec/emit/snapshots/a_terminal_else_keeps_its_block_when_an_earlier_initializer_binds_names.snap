@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:io"
+  import "go:strings"
+  
+  fn read_all(r: io.Reader) -> Result<string, error> {
+    match io.ReadAll(r) {
+      Partial.Ok(data) => Ok(data as string),
+      Partial.Err(e) => Err(e),
+      Partial.Both(_, e) => Err(e),
+    }
+  }
+  
+  fn test() {
+    match read_all(strings.NewReader("hi")) {
+      Ok(text) => if text != "hi" { panic("a reader should return its text") },
+      Err(_) => panic("a reader should not fail"),
+    }
+  }
+---
+package main
+
+import (
+	"io"
+	"strings"
+)
+
+func readAll(r io.Reader) (string, error) {
+	if data, e := io.ReadAll(r); e == nil {
+		return string(data), nil
+	} else if data == nil {
+		return "", e
+	} else {
+		return "", e
+	}
+}
+
+func test() {
+	if text, err := readAll(strings.NewReader("hi")); err == nil {
+		if text != "hi" {
+			panic("a reader should return its text")
+		}
+	} else {
+		panic("a reader should not fail")
+	}
+}

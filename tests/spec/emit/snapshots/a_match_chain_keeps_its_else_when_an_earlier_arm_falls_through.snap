@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn pick(a: bool, b: bool) -> int {
+    let mut x = 0
+    match (a, b) {
+      (true, _) => { x = 1 },
+      (_, true) => { return 2 },
+      _ => { x = 3 },
+    }
+    x
+  }
+  
+  fn test() {
+    if pick(true, true) != 1 { panic("the first arm should return one") }
+    if pick(false, true) != 2 { panic("the second arm should return two") }
+    if pick(false, false) != 3 { panic("the fallback should return three") }
+  }
+---
+package main
+
+func pick(a, b bool) int {
+	x := 0
+	if a {
+		x = 1
+	} else if b {
+		return 2
+	} else {
+		x = 3
+	}
+	return x
+}
+
+func test() {
+	if pick(true, true) != 1 {
+		panic("the first arm should return one")
+	}
+	if pick(false, true) != 2 {
+		panic("the second arm should return two")
+	}
+	if pick(false, false) != 3 {
+		panic("the fallback should return three")
+	}
+}

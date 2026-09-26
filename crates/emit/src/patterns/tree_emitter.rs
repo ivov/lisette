@@ -331,10 +331,10 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let guard_ctx = WalkCtx::switch_case(place);
         let chain_ctx = WalkCtx::chain_test(place);
 
-        // Lower each branch body in its own scope, recording the last branch's
-        // divergence so the trailing else decides else/flat structurally.
+        // Lower each branch body in its own scope, recording whether every
+        // branch diverges so the trailing else decides else/flat structurally.
         let mut branches: Vec<ChainBranch> = Vec::with_capacity(regular_len);
-        let mut last_diverges = false;
+        let mut all_diverge = regular_len > 0;
         for (test, condition) in tests[..regular_len].iter().zip(&conditions) {
             let condition = condition
                 .clone()
@@ -350,17 +350,17 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 body
             });
             let body = LoweredBlock { statements: body };
-            last_diverges = body.ends_with_diverge();
+            all_diverge &= body.ends_with_diverge();
             branches.push(ChainBranch { condition, body });
         }
 
         let trailing = if last_is_catchall {
             let last_test = tests.last().unwrap();
-            self.lower_else_or_flat(&last_test.decision, &chain_ctx, last_diverges)
+            self.lower_else_or_flat(&last_test.decision, &chain_ctx, all_diverge)
         } else if matches!(fallback, Decision::Unreachable) {
             ElseArm::None
         } else {
-            self.lower_else_or_flat(fallback, &chain_ctx, last_diverges)
+            self.lower_else_or_flat(fallback, &chain_ctx, all_diverge)
         };
 
         if branches.is_empty() {
