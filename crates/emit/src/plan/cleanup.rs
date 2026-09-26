@@ -207,12 +207,19 @@ fn unwrap_terminal_else_of(statement: &mut LoweredStatement) {
         LoweredStatement::If(plan) => plan,
         _ => return,
     };
+    let mut then_diverges = true;
+    // An initializer binds its names for the whole statement, which an inlined body leaves.
+    let mut keeps_scope = true;
     loop {
-        let then_diverges = plan.then_body.ends_with_diverge();
-        // An initializer binds its names for the whole statement, which an inlined body leaves.
-        let keeps_scope = plan.initializer.is_none();
+        then_diverges &= plan.then_body.ends_with_diverge();
+        keeps_scope &= plan.initializer.is_none();
         match &mut plan.else_arm {
-            ElseArm::ElseIf(inner) => plan = inner,
+            ElseArm::ElseIf(inner) => {
+                if !inner.condition_setup.is_empty() {
+                    then_diverges = true;
+                }
+                plan = inner;
+            }
             ElseArm::Else { body, inline } => {
                 if then_diverges && keeps_scope && declares_no_names(body) {
                     *inline = true;

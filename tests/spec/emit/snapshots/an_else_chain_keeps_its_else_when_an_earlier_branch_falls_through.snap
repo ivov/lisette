@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn pick(a: bool, b: bool) -> int {
+    let mut x = 0
+    if a {
+      x = 1
+    } else if b {
+      return 2
+    } else {
+      x = 3
+    }
+    x
+  }
+  
+  fn test() {
+    if pick(true, false) != 1 { panic("the first branch should return one") }
+    if pick(false, true) != 2 { panic("the second branch should return two") }
+    if pick(false, false) != 3 { panic("the else should return three") }
+  }
+---
+package main
+
+func pick(a, b bool) int {
+	x := 0
+	if a {
+		x = 1
+	} else if b {
+		return 2
+	} else {
+		x = 3
+	}
+	return x
+}
+
+func test() {
+	if pick(true, false) != 1 {
+		panic("the first branch should return one")
+	}
+	if pick(false, true) != 2 {
+		panic("the second branch should return two")
+	}
+	if pick(false, false) != 3 {
+		panic("the else should return three")
+	}
+}

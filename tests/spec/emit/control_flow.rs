@@ -4108,3 +4108,73 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn a_terminal_else_keeps_its_block_when_an_earlier_initializer_binds_names() {
+    let input = r#"
+import "go:io"
+import "go:strings"
+
+fn read_all(r: io.Reader) -> Result<string, error> {
+  match io.ReadAll(r) {
+    Partial.Ok(data) => Ok(data as string),
+    Partial.Err(e) => Err(e),
+    Partial.Both(_, e) => Err(e),
+  }
+}
+
+fn test() {
+  match read_all(strings.NewReader("hi")) {
+    Ok(text) => if text != "hi" { panic("a reader should return its text") },
+    Err(_) => panic("a reader should not fail"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn an_else_chain_keeps_its_else_when_an_earlier_branch_falls_through() {
+    let input = r#"
+fn pick(a: bool, b: bool) -> int {
+  let mut x = 0
+  if a {
+    x = 1
+  } else if b {
+    return 2
+  } else {
+    x = 3
+  }
+  x
+}
+
+fn test() {
+  if pick(true, false) != 1 { panic("the first branch should return one") }
+  if pick(false, true) != 2 { panic("the second branch should return two") }
+  if pick(false, false) != 3 { panic("the else should return three") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn a_match_chain_keeps_its_else_when_an_earlier_arm_falls_through() {
+    let input = r#"
+fn pick(a: bool, b: bool) -> int {
+  let mut x = 0
+  match (a, b) {
+    (true, _) => { x = 1 },
+    (_, true) => { return 2 },
+    _ => { x = 3 },
+  }
+  x
+}
+
+fn test() {
+  if pick(true, true) != 1 { panic("the first arm should return one") }
+  if pick(false, true) != 2 { panic("the second arm should return two") }
+  if pick(false, false) != 3 { panic("the fallback should return three") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
