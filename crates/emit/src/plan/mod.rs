@@ -5,6 +5,7 @@ pub(crate) mod go_expression;
 pub(crate) mod lower;
 pub(crate) mod placement;
 pub(crate) mod values;
+pub(crate) mod visit;
 
 use crate::Planner;
 use crate::names::go_name;

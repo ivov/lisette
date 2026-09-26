@@ -11,7 +11,7 @@ use std::io;
 use syntax::program::TestIndex;
 
 const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
-const GO_MODULE: &str = "lisette/e2e_suite_tests";
+pub const GO_MODULE: &str = "lisette/e2e_suite_tests";
 
 pub struct EmittedTest {
     pub go_code: String,
@@ -187,7 +187,7 @@ pub fn harvest_snapshots(snapshots_dir: &Path) -> Vec<HarvestedTest> {
 
 // Limitation: assumes the snap body itself does not contain a `---` separator.
 // Insta-emitted snaps for Go code do not, so this is safe for our use.
-fn parse_snap_body(snap: &str) -> Option<String> {
+pub fn parse_snap_body(snap: &str) -> Option<String> {
     let mut parts = snap.splitn(3, "---");
     parts.next()?;
     parts.next()?;
@@ -347,8 +347,11 @@ pub fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
-pub fn snapshots_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("spec/emit/snapshots")
+pub fn snapshots_dir(kind: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("spec")
+        .join(kind)
+        .join("snapshots")
 }
 
 pub fn prelude_dir() -> PathBuf {

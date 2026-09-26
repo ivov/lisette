@@ -8,7 +8,6 @@ use crate::names::go_name;
 use crate::plan::bodies::{AssignForm, CompoundKind, LoweredBlock, LoweredStatement, define};
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
-use crate::state::bindings::BindingValue;
 use syntax::ast::Literal;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
 use syntax::parse::TUPLE_FIELDS;
@@ -199,12 +198,7 @@ impl Planner<'_> {
             return false;
         };
         match self.scope.resolve_identifier_binding(value) {
-            Some(BindingValue::GoName(go_name) | BindingValue::GoConst(go_name)) => go_name == "_",
-            Some(
-                BindingValue::InlineExpr(_)
-                | BindingValue::Components(_)
-                | BindingValue::TupleComponents(_),
-            ) => false,
+            Some(binding) => binding.is_discard(),
             None => value == "_",
         }
     }

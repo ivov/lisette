@@ -25,6 +25,7 @@ use crate::plan::bodies::{
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
+use crate::statements::testing::test_context_call;
 use rustc_hash::FxHashSet as HashSet;
 
 #[derive(Clone, Copy)]
@@ -155,10 +156,10 @@ impl Planner<'_> {
     pub(crate) fn can_reuse_subject_identifier(&self, value: &str, binds_name: bool) -> bool {
         !binds_name
             && !value.contains('.')
-            && !matches!(
-                self.scope.resolve_identifier_binding(value),
-                Some(BindingValue::InlineExpr(_) | BindingValue::TupleComponents(_))
-            )
+            && self
+                .scope
+                .resolve_identifier_binding(value)
+                .is_none_or(BindingValue::can_reuse_pattern_subject)
     }
 
     /// A field path such as `t.status` is read where it sits when nothing rebinds its root.
@@ -562,12 +563,11 @@ impl Planner<'_> {
                     )],
                     CompositeLayout::Inline { padded: false },
                 );
-                let call = GoExpression::call(
-                    GoExpression::selector(GoExpression::name(handle), "FailAssert".to_string()),
+                let call = test_context_call(
+                    GoExpression::name(handle),
+                    "FailAssert",
+                    span,
                     vec![
-                        literal(span.file_id.to_string()),
-                        literal(span.byte_offset.to_string()),
-                        literal((span.byte_offset + span.byte_length).to_string()),
                         literal("\"let_assert\"".to_string()),
                         literal("\"pattern did not match\"".to_string()),
                         operand,

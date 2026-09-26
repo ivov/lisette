@@ -5,7 +5,7 @@ use crate::calls::go_interop::{NilGuard, is_nil, non_nil};
 use crate::context::expression::ExpressionContext;
 use crate::escape_reserved;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{Definition, LoweredStatement, define_many};
+use crate::plan::bodies::{Definition, LoweredStatement, define, define_many};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::{BindingValue, ComponentBinding, ComponentKind};
@@ -87,11 +87,7 @@ pub(crate) struct PairCondition {
 }
 
 impl LoweredPair {
-    pub(crate) fn from_components(
-        value: String,
-        status: String,
-        status_kind: PairStatusKind,
-    ) -> Self {
+    fn from_components(value: String, status: String, status_kind: PairStatusKind) -> Self {
         Self {
             statements: Vec::new(),
             value: PairValue::Named {
@@ -142,7 +138,30 @@ impl LoweredPair {
 }
 
 impl Planner<'_> {
-    /// Recognize a call whose Option value comes from a comma-ok pair.
+    pub(crate) fn bind_component_pair(
+        &mut self,
+        components: ComponentBinding,
+        slot: CommaOkValueSlot,
+    ) -> LoweredPair {
+        let (statements, value) = match slot {
+            CommaOkValueSlot::Named(name) | CommaOkValueSlot::Arm(name)
+                if name != components.value =>
+            {
+                self.declare(&name);
+                let copy = define(name.clone(), GoExpression::name(components.value));
+                (vec![copy], name)
+            }
+            _ => (Vec::new(), components.value),
+        };
+        let status_kind = match components.kind {
+            ComponentKind::Option => PairStatusKind::Ok,
+            ComponentKind::Result => PairStatusKind::Error,
+        };
+        let mut pair = LoweredPair::from_components(value, components.status, status_kind);
+        pair.statements = statements;
+        pair
+    }
+
     pub(crate) fn component_binding(&self, expression: &Expression) -> Option<ComponentBinding> {
         let Expression::Identifier { value, .. } = expression.unwrap_parens() else {
             return None;

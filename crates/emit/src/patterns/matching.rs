@@ -85,6 +85,13 @@ enum BoundSource {
 }
 
 impl BoundOption {
+    fn from_pair(mut pair: LoweredPair) -> Self {
+        Self {
+            statements: mem::take(&mut pair.statements),
+            source: BoundSource::Pair(pair),
+        }
+    }
+
     /// The payload expression, valid once the some-condition holds.
     pub(crate) fn value(&self) -> Option<GoExpression> {
         match &self.source {
@@ -182,32 +189,10 @@ impl OptionFusePlan<'_> {
     pub(crate) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundOption {
         match self {
             Self::Bound(components) => {
-                // Writing through the binding's own slot would clobber it.
-                let (statements, value) = match slot {
-                    CommaOkValueSlot::Named(name) | CommaOkValueSlot::Arm(name)
-                        if name != components.value =>
-                    {
-                        planner.declare(&name);
-                        let copy = define(name.clone(), GoExpression::name(components.value));
-                        (vec![copy], name)
-                    }
-                    _ => (Vec::new(), components.value),
-                };
-                BoundOption {
-                    statements,
-                    source: BoundSource::Pair(LoweredPair::from_components(
-                        value,
-                        components.status,
-                        PairStatusKind::Ok,
-                    )),
-                }
+                BoundOption::from_pair(planner.bind_component_pair(components, slot))
             }
             Self::CommaOk { subject, source } => {
-                let mut pair = planner.bind_comma_ok_pair(subject, source, slot);
-                BoundOption {
-                    statements: mem::take(&mut pair.statements),
-                    source: BoundSource::Pair(pair),
-                }
+                BoundOption::from_pair(planner.bind_comma_ok_pair(subject, source, slot))
             }
             Self::Nullable { subject, nil_guard } => {
                 let (mut statements, call) = planner
@@ -303,20 +288,7 @@ impl ResultFusePlan<'_> {
         read_error: bool,
     ) -> (LoweredPair, Vec<WrapMessage>) {
         if let Some(components) = self.bound {
-            let (statements, value) = match slot {
-                CommaOkValueSlot::Named(name) | CommaOkValueSlot::Arm(name)
-                    if name != components.value =>
-                {
-                    planner.declare(&name);
-                    let copy = define(name.clone(), GoExpression::name(components.value));
-                    (vec![copy], name)
-                }
-                _ => (Vec::new(), components.value),
-            };
-            let mut pair =
-                LoweredPair::from_components(value, components.status, PairStatusKind::Error);
-            pair.statements = statements;
-            return (pair, Vec::new());
+            return (planner.bind_component_pair(components, slot), Vec::new());
         }
 
         let carries_value = self.carries_payload();

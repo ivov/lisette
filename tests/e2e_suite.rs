@@ -1,5 +1,7 @@
 #[allow(dead_code, unused_imports)]
 mod _harness;
+#[path = "e2e_suite/build_snapshots.rs"]
+mod build_snapshots;
 #[path = "e2e_suite/harness.rs"]
 mod harness;
 
@@ -21,7 +23,7 @@ fn e2e_suite() {
         return;
     }
 
-    let snapshots = snapshots_dir();
+    let snapshots = snapshots_dir("emit");
     let target = target_dir();
     let prelude = prelude_dir();
 
