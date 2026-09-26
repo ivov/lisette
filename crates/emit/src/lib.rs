@@ -243,7 +243,7 @@ pub struct Planner<'a> {
     scope: ScopeState,
     adapter_registry: AdapterRegistry,
     namespace: FileNamespace,
-    component_lets: HashMap<Span, bool>,
+    component_lets: HashMap<Span, (bool, bool)>,
 }
 
 impl Planner<'_> {
