@@ -24,9 +24,9 @@ func main() {
 	b := aws.Bucket{}
 	raw := b.Slots
 	var wrapped [2]lisette.Option[*aws.Node]
-	for i, v_1 := range raw {
-		if v_1 != nil {
-			wrapped[i] = lisette.MakeOptionSome[*aws.Node](v_1)
+	for i, v := range raw {
+		if v != nil {
+			wrapped[i] = lisette.MakeOptionSome[*aws.Node](v)
 		} else {
 			wrapped[i] = lisette.MakeOptionNone[*aws.Node]()
 		}

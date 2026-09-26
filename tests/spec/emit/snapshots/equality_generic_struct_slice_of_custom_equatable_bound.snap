@@ -22,5 +22,5 @@ type Box[T Equatable[T]] struct {
 }
 
 func (b Box[T]) equals(other Box[T]) bool {
-	return slices.EqualFunc(b.values, other.values, func(a T, b T) bool { return a.equals(b) })
+	return slices.EqualFunc(b.values, other.values, func(a, b T) bool { return a.equals(b) })
 }

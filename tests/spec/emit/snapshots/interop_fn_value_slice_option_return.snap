@@ -28,9 +28,9 @@ func main() {
 	f := func() []lisette.Option[string] {
 		src := cb()
 		wrapped := make([]lisette.Option[string], len(src))
-		for i, v_1 := range src {
-			if v_1 != nil {
-				wrapped[i] = lisette.MakeOptionSome[string](*v_1)
+		for i, v := range src {
+			if v != nil {
+				wrapped[i] = lisette.MakeOptionSome[string](*v)
 			} else {
 				wrapped[i] = lisette.MakeOptionNone[string]()
 			}

@@ -27,5 +27,5 @@ func (p Point) equals(other Point) bool {
 }
 
 func test(a, b map[string]Point) bool {
-	return maps.EqualFunc(a, b, func(a_1 Point, b_1 Point) bool { return a_1.equals(b_1) })
+	return maps.EqualFunc(a, b, func(a_1, b_1 Point) bool { return a_1.equals(b_1) })
 }

@@ -25,9 +25,9 @@ func main() {
 	b := aws.Bucket{}
 	raw := b.Tags
 	wrapped := make([]lisette.Option[string], len(raw))
-	for i, v_1 := range raw {
-		if v_1 != nil {
-			wrapped[i] = lisette.MakeOptionSome[string](*v_1)
+	for i, v := range raw {
+		if v != nil {
+			wrapped[i] = lisette.MakeOptionSome[string](*v)
 		} else {
 			wrapped[i] = lisette.MakeOptionNone[string]()
 		}

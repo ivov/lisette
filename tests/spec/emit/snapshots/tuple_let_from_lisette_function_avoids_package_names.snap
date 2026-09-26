@@ -28,6 +28,6 @@ func low() int {
 }
 
 func main() {
-	low_1, high := bounds()
-	fmt.Println(low_1, high)
+	low, high := bounds()
+	fmt.Println(low, high)
 }

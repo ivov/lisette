@@ -201,7 +201,7 @@ impl Planner<'_> {
             GoExpression::call(
                 GoExpression::generated(GeneratedPackage::Prelude, "RecoverBlock"),
                 vec![GoExpression::function_literal(
-                    String::new(),
+                    Vec::new(),
                     inner_ty_str,
                     body,
                     FunctionLiteralLayout::MultiLine,

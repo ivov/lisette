@@ -547,7 +547,7 @@ impl<'a> Planner<'a> {
     ) -> String {
         let go_name = self.scope.bind(lisette_name, preferred);
         let go_name = if self.shadows_declaration(&go_name) {
-            let fresh = self.fresh_var(Some(lisette_name));
+            let fresh = self.scope.fresh_binding_go_name(lisette_name);
             self.scope.bind(lisette_name, fresh)
         } else {
             go_name

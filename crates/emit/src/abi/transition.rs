@@ -525,7 +525,7 @@ pub(crate) fn emit_lisette_callback_wrapper(
     let return_type = f.return_type.as_ref();
 
     let (param_strs, arguments) = planner.build_wrapper_params(params);
-    let params_str = param_strs.join(", ");
+    let params_str = param_strs;
 
     let cb_var = planner.hoist_tmp_value_statement(setup, "cb", fn_value.clone());
 
@@ -594,7 +594,7 @@ pub(crate) fn emit_fn_arg_shape_adapter(
     };
 
     Some(GoExpression::function_literal(
-        param_strs.join(", "),
+        param_strs,
         outer_ret,
         LoweredBlock { statements: body },
         FunctionLiteralLayout::MultiLine,
@@ -631,7 +631,7 @@ pub(crate) fn lower_arg_to_tagged(
     prelude.push(define(
         tagged_var.clone(),
         GoExpression::function_literal(
-            inner_param_strs.join(", "),
+            inner_param_strs,
             tagged_ret,
             LoweredBlock { statements: body },
             FunctionLiteralLayout::MultiLine,

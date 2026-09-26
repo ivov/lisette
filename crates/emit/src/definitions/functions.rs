@@ -5,13 +5,17 @@ use crate::abi::callable::CallableReturnAbi;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::sites::PatternSubject;
-use crate::plan::bodies::{LoweredBlock, LoweredStatement};
+use crate::plan::bodies::{
+    LoopHeader, LoweredBlock, LoweredStatement, SelectArmPlan, SwitchKind, for_each_statement,
+    rename_generated_names,
+};
 use crate::plan::cleanup::clean_up;
-use crate::plan::go_expression::FunctionLiteralLayout;
+use crate::plan::go_expression::{FunctionLiteralLayout, GoExpressionNode, GoParameter};
 use crate::plan::values::GoExpression;
 use crate::state::package_state::FunctionEmissionContext;
 use crate::types::native::NativeGoType;
 use crate::utils::{fresh_receiver_name, group_params};
+use rustc_hash::FxHashSet as HashSet;
 use syntax::EcoString;
 use syntax::ast::{
     Annotation, Binding, Expression, FunctionDefinitionView, Generic, Pattern, Span,
@@ -71,6 +75,7 @@ impl Planner<'_> {
         self.reserve_source_binder_names(body);
         let mut lowered = self.lower_function_body(body, should_return);
         clean_up(&mut lowered.statements);
+        self.settle_generated_names(&mut lowered.statements);
         self.collect_imports(&lowered.statements);
         Renderer.render_lowered_block(output, &lowered);
     }
@@ -81,6 +86,23 @@ impl Planner<'_> {
         for name in names {
             self.scope.reserve_go_name(&name);
         }
+    }
+
+    fn settle_generated_names(&mut self, statements: &mut Vec<LoweredStatement>) {
+        let mut present: HashSet<String> = HashSet::default();
+        for statement in statements.iter() {
+            statement.visit_expressions(&mut |node| {
+                if let GoExpressionNode::Identifier(name) = node {
+                    present.insert(name.clone());
+                }
+            });
+        }
+        collect_declared_names(statements, &mut present);
+        let settled = self.scope.settle_generated_names(&present);
+        if settled.is_empty() {
+            return;
+        }
+        rename_generated_names(statements, &|name| settled.get(name).cloned());
     }
 
     pub(crate) fn emit_lambda(
@@ -141,7 +163,10 @@ impl Planner<'_> {
             }
 
             GoExpression::function_literal(
-                group_params(&param_pairs),
+                param_pairs
+                    .iter()
+                    .map(|(name, go_type)| GoParameter::new(name.clone(), go_type.clone()))
+                    .collect(),
                 return_info.signature().trim_start().to_string(),
                 LoweredBlock { statements },
                 FunctionLiteralLayout::MultiLine,
@@ -655,4 +680,58 @@ fn push_binder_names(pattern: &Pattern, out: &mut Vec<String>) {
             .into_iter()
             .map(|(name, _)| name),
     );
+}
+
+fn collect_declared_names(statements: &[LoweredStatement], out: &mut HashSet<String>) {
+    for_each_statement(statements, &mut |statement| match statement {
+        LoweredStatement::Define(definition) => out.extend(definition.names.iter().cloned()),
+        LoweredStatement::VarDecl { name, .. } => {
+            out.insert(name.clone());
+        }
+        LoweredStatement::Const(plan) => {
+            out.insert(plan.name.clone());
+        }
+        LoweredStatement::Loop(plan) => match &plan.header {
+            LoopHeader::Range { key, value, .. } => {
+                out.extend(key.iter().chain(value.iter()).cloned());
+            }
+            LoopHeader::Counted { variable, .. } => {
+                out.insert(variable.clone());
+            }
+            LoopHeader::Infinite | LoopHeader::While(_) => {}
+        },
+        LoweredStatement::Switch(plan) => {
+            if let SwitchKind::Type {
+                binding: Some(name),
+                ..
+            } = &plan.kind
+            {
+                out.insert(name.clone());
+            }
+        }
+        LoweredStatement::Select(plan) => {
+            for arm in &plan.arms {
+                if let SelectArmPlan::Receive { receive_vars, .. } = arm {
+                    out.extend(receive_vars.iter().cloned());
+                }
+            }
+        }
+        LoweredStatement::If(plan) => {
+            if let Some(initializer) = &plan.initializer {
+                out.extend(initializer.names.iter().cloned());
+            }
+        }
+        _ => {}
+    });
+    for statement in statements {
+        statement.visit_expressions(&mut |node| {
+            if let GoExpressionNode::FunctionLiteral {
+                parameters, body, ..
+            } = node
+            {
+                out.extend(parameters.iter().map(|parameter| parameter.name.clone()));
+                collect_declared_names(&body.statements, out);
+            }
+        });
+    }
 }

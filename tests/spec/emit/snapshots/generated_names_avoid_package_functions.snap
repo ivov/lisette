@@ -74,7 +74,7 @@ func armAfterMessage() {
 }
 
 func armInOtherArm() {
-	if n_1, err_1 := strconv.Atoi("bad"); err_1 == nil {
+	if n_1, err := strconv.Atoi("bad"); err == nil {
 		fmt.Println(n_1)
 	} else {
 		fmt.Println(n())

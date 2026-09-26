@@ -14,7 +14,7 @@ use crate::plan::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, assign, define, define_many,
     expression_statement,
 };
-use crate::plan::go_expression::FunctionLiteralLayout;
+use crate::plan::go_expression::{FunctionLiteralLayout, GoParameter};
 use crate::plan::values::GoExpression;
 use crate::types::go_type::GoType;
 use syntax::ast::Expression;
@@ -129,7 +129,7 @@ impl Planner<'_> {
             let name = format!("arg{index}");
             let target_type = target.go_type(self);
             let target_type = self.use_rendered_go_type(target_type);
-            parameters.push(format!("{name} {target_type}"));
+            parameters.push(GoParameter::new(name.clone(), target_type));
             let bridge = resolve_layout_bridge(self, target, source);
             let argument = self.plan_layout_bridge(&mut body, GoExpression::name(name), &bridge);
             if source.logical_type().get_name() == Some("VarArgs") {
@@ -146,7 +146,7 @@ impl Planner<'_> {
             .map(|result| self.use_rendered_go_type(result))
             .unwrap_or_default();
         GoExpression::function_literal(
-            parameters.join(", "),
+            parameters,
             result,
             LoweredBlock { statements: body },
             FunctionLiteralLayout::MultiLine,
@@ -697,14 +697,14 @@ impl Planner<'_> {
     pub(crate) fn build_wrapper_params(
         &mut self,
         params: &[FunctionParameter],
-    ) -> (Vec<String>, Vec<GoExpression>) {
+    ) -> (Vec<GoParameter>, Vec<GoExpression>) {
         let mut param_strs = Vec::new();
         let mut arguments = Vec::new();
         let last_index = params.len().saturating_sub(1);
         for (i, param) in params.iter().enumerate() {
             let name = format!("arg{}", i);
             let ty_str = self.use_go_type(&param.ty);
-            param_strs.push(format!("{} {}", name, ty_str));
+            param_strs.push(GoParameter::new(name.clone(), ty_str));
             let argument = GoExpression::name(name);
             if i == last_index && param.ty.get_name() == Some("VarArgs") {
                 arguments.push(GoExpression::spread(argument));
@@ -721,7 +721,7 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
-    ) -> Option<(Type, Vec<String>, GoExpression)> {
+    ) -> Option<(Type, Vec<GoParameter>, GoExpression)> {
         let fn_type = expression.get_type();
         let f = fn_type.as_function_type()?;
         let (params, return_type) = (f.params.clone(), (*f.return_type).clone());
@@ -772,7 +772,7 @@ impl Planner<'_> {
         }
 
         GoExpression::function_literal(
-            param_strs.join(", "),
+            param_strs,
             ret_ty_str,
             LoweredBlock { statements },
             FunctionLiteralLayout::MultiLine,
@@ -808,7 +808,7 @@ impl Planner<'_> {
         ]));
 
         GoExpression::function_literal(
-            param_strs.join(", "),
+            param_strs,
             ret_ty_str,
             LoweredBlock { statements },
             FunctionLiteralLayout::MultiLine,
@@ -839,7 +839,7 @@ impl Planner<'_> {
         ];
 
         GoExpression::function_literal(
-            param_strs.join(", "),
+            param_strs,
             format!("({}, bool)", inner_ty_str),
             LoweredBlock { statements },
             FunctionLiteralLayout::MultiLine,
