@@ -4501,3 +4501,24 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn unwrap_or_on_a_component_binding_keeps_the_let_name() {
+    let input = r#"
+fn get_optional(flag: bool) -> Option<int> {
+  if flag { Some(42) } else { None }
+}
+
+fn pick(flag: bool) -> int {
+  let opt = get_optional(flag)
+  let result = opt.unwrap_or(-1)
+  result
+}
+
+fn test() {
+  if pick(true) != 42 { panic("a present value should be returned") }
+  if pick(false) != -1 { panic("a missing value should use the default") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

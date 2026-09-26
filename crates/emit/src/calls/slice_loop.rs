@@ -304,9 +304,7 @@ impl Planner<'_> {
             index
         });
 
-        // The body writes `result`.
-        let target = GoExpression::name(result.clone());
-        let (element_name, body_statements) = self.with_assign_target(&target, |planner| {
+        let lower_body = |planner: &mut Self| {
             planner.with_scope(|this| {
                 if expects_accumulator {
                     this.bind_loop_callback_param(patterns[0], Some(result.clone()));
@@ -324,7 +322,12 @@ impl Planner<'_> {
                 });
                 (element_name, statements)
             })
-        });
+        };
+        let (element_name, body_statements) = if result.is_empty() {
+            lower_body(self)
+        } else {
+            self.with_assign_target(&GoExpression::name(result.clone()), lower_body)
+        };
 
         // Go rejects a range variable nothing reads.
         let header = LoopHeader::Range {
