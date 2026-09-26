@@ -167,7 +167,11 @@ impl Planner<'_> {
         } else {
             return None;
         };
-        let needs_value = *self.component_lets.get(&value.get_span())?;
+        let (needs_value, needs_whole_value) = *self.component_lets.get(&value.get_span())?;
+        // Only an Option can be rebuilt from components in one expression.
+        if needs_whole_value && kind == ComponentKind::Result {
+            return None;
+        }
         let payload_go_type = self.use_go_type(&ty.ok_type());
         let slot = if needs_value {
             self.declare(go_identifier);

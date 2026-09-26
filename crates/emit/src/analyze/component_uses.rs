@@ -5,6 +5,7 @@ const PAYLOAD_METHODS: &[&str] = &["unwrap_or", "map_or"];
 
 pub(crate) struct ComponentDemand {
     pub(crate) needs_value: bool,
+    pub(crate) needs_whole_value: bool,
 }
 
 pub(crate) fn component_demand<'a, I>(region: I, lisette_name: &str) -> Option<ComponentDemand>
@@ -16,12 +17,14 @@ where
         supported: 0,
         blocked: false,
         needs_value: false,
+        needs_whole_value: false,
     };
     for tree in region {
         walker.walk(tree);
     }
     (walker.supported > 0 && !walker.blocked).then_some(ComponentDemand {
-        needs_value: walker.needs_value,
+        needs_value: walker.needs_value || walker.needs_whole_value,
+        needs_whole_value: walker.needs_whole_value,
     })
 }
 
@@ -30,6 +33,7 @@ struct Walker<'a> {
     supported: usize,
     blocked: bool,
     needs_value: bool,
+    needs_whole_value: bool,
 }
 
 impl Walker<'_> {
@@ -46,6 +50,18 @@ impl Walker<'_> {
         }
         match expression {
             Expression::Identifier { value, .. } if value == self.name => {
+                self.needs_whole_value = true;
+                return;
+            }
+            Expression::Assignment { target, value, .. } => {
+                if self.names_the_local(target) {
+                    self.blocked = true;
+                    return;
+                }
+                self.walk(value);
+                return;
+            }
+            Expression::Reference { expression, .. } if self.names_the_local(expression) => {
                 self.blocked = true;
                 return;
             }

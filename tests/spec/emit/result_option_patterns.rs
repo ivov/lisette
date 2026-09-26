@@ -4387,3 +4387,37 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn a_local_with_native_and_whole_value_uses_keeps_both() {
+    let input = r#"
+import "go:fmt"
+
+fn takes(o: Option<int>) -> int {
+  o.unwrap_or(0)
+}
+
+fn mixed(m: Map<string, int>, key: string) -> int {
+  let found = m.get(key)
+  if found.is_some() {
+    fmt.Println("present")
+  }
+  takes(found)
+}
+
+fn reassigned(m: Map<string, int>, key: string) -> int {
+  let mut found = m.get(key)
+  found = Some(5)
+  found.unwrap_or(0)
+}
+
+fn test() {
+  let mut m = Map.new<string, int>()
+  m["a"] = 1
+  if mixed(m, "a") != 1 { panic("a present key should reach the wrapper") }
+  if mixed(m, "b") != 0 { panic("a missing key should reach the default") }
+  if reassigned(m, "b") != 5 { panic("a reassigned local should keep its wrapper") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
