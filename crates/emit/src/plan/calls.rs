@@ -1,7 +1,8 @@
 use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableAbi, CallableParamAbi, CallableReturnAbi};
+use crate::abi::coercion::LayoutBridge;
 use crate::abi::is_prelude_container_constructor;
-use crate::abi::layout::SlotOrigin;
+use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::expressions::staging::VariadicCombine;
 use crate::types::native::NativeGoType;
 use syntax::ast::{Expression, IdentifierResolution};
@@ -95,7 +96,8 @@ pub(crate) enum CallableOrigin {
     Zero,
 }
 
-/// Per-argument adaptation; first applicable wins.
+/// Per-argument adaptation; first applicable wins. Keep the selected ABI or
+/// layout with the decision so lowering does not have to select a strategy again.
 #[derive(Debug, Clone)]
 pub(crate) enum ArgumentPlan {
     /// No special adaptation beyond the final type coercion.
@@ -107,11 +109,32 @@ pub(crate) enum ArgumentPlan {
         transition: AbiTransition,
     },
     /// Adapt a lowered-return fn-value arg to the callee's expected shape.
-    LoweredFnShapeAdapter,
+    LoweredFnShapeAdapter(Box<FunctionArgumentAdapter>),
     /// Bridge the Lisette value layout to the parameter slot's physical layout.
-    GoSlotBridge,
+    GoSlotBridge(Box<ArgumentSlotBridge>),
     /// Lower a tagged Go-function value (prelude-dispatch arg).
     TaggedGoLowering,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct FunctionArgumentAdapter {
+    pub(crate) source_function: Type,
+    pub(crate) source_abi: CallableReturnAbi,
+    pub(crate) target_abi: CallableReturnAbi,
+    pub(crate) target_origin: SlotOrigin,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ArgumentValueSource {
+    Lisette,
+    GoPhysical,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ArgumentSlotBridge {
+    pub(crate) target: ValueLayout,
+    pub(crate) bridge: LayoutBridge,
+    pub(crate) source: ArgumentValueSource,
 }
 
 /// Variadic spread combine: a trailing spread argument must be combined
