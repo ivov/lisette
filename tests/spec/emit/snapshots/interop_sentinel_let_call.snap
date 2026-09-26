@@ -23,9 +23,8 @@ func main() {
 		return ret, ret != -1
 	}
 	r, ok := f("hello", "ll")
-	v := r
 	if ok {
-		_ = v
+		_ = r
 	} else {
 		_ = -2
 	}

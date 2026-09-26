@@ -33,8 +33,7 @@ func main() {
 		F1: 1,
 	}
 	r, err := p.F0("1")
-	v := r
 	if err == nil {
-		_ = v
+		_ = r
 	}
 }

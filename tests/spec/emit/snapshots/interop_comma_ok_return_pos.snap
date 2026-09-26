@@ -28,8 +28,7 @@ func makeLookup() func(string) (string, bool) {
 func main() {
 	f := makeLookup()
 	r, ok := f("HOME")
-	v := r
 	if ok {
-		_ = v
+		_ = r
 	}
 }

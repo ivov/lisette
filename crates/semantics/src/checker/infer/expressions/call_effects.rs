@@ -323,7 +323,12 @@ impl InferCtx<'_> {
                     .get_var_name()
                     .and_then(|name| self.scopes.lookup_binding_id(&name))
             {
-                self.facts.mark_alias_mutated(binding_id);
+                // The callee gets a copy of a named argument and cannot rebind the name.
+                if matches!(arg.unwrap_parens(), Expression::Identifier { .. }) {
+                    self.facts.mark_mutated(binding_id);
+                } else {
+                    self.facts.mark_alias_mutated(binding_id);
+                }
             }
             let aliases_receiver = writable_receiver.as_deref() == Some(place);
             let aliases_argument = writable_position

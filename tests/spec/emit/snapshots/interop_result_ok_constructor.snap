@@ -32,12 +32,10 @@ func make_() (func(string) (int, error), error) {
 
 func main() {
 	r, err := make_()
-	f := r
 	if err == nil {
-		r2, err_1 := f("1")
-		v := r2
+		r2, err_1 := r("1")
 		if err_1 == nil {
-			_ = v
+			_ = r2
 		}
 	}
 }

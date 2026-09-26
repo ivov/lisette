@@ -34,8 +34,7 @@ func (b Box) apply(f func(string) (int, error)) (int, error) {
 func main() {
 	b := Box{}
 	r, err := b.apply(strconv.Atoi)
-	v := r
 	if err == nil {
-		_ = v
+		_ = r
 	}
 }

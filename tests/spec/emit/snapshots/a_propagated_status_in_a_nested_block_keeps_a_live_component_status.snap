@@ -35,15 +35,13 @@ func add(s, t string) (int, error) {
 		if err_1 != nil {
 			return 0, err_1
 		}
-		v := r
 		if err == nil {
-			return v + y, nil
+			return r + y, nil
 		}
 		return 0, err
 	}
-	v := r
 	if err == nil {
-		return v, nil
+		return r, nil
 	}
 	return 0, err
 }

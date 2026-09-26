@@ -64,8 +64,8 @@ impl Planner<'_> {
         let index_staged = self.lower_composite_value(index, ExpressionContext::value());
         if base_staged.setup.is_empty()
             && is_order_sensitive(base)
-            && (base_staged.evaluation.effect.has_call()
-                || index_staged.evaluation.effect.has_call())
+            && (base_staged.evaluation.effect.has_effectful_call()
+                || index_staged.evaluation.effect.has_effectful_call())
         {
             self.pin_staged(&mut base_staged, prefix);
         }
@@ -138,7 +138,7 @@ impl Planner<'_> {
 
         if end_value.as_ref().is_none_or(GoExpression::does_work) {
             let base_expr = expression.deref_inner().unwrap_or(expression);
-            if is_order_sensitive(base_expr) {
+            if base.does_work() || (is_order_sensitive(base_expr) && effect.has_effectful_call()) {
                 base = GoExpression::name(self.hoist_tmp_value_statement(&mut setup, "base", base));
             }
             let Some(end_expression) = end_value else {

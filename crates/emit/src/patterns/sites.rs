@@ -17,9 +17,7 @@ use crate::patterns::binding_emit::{
 use crate::patterns::decision_tree::{
     self, PatternBinding, PatternInfo, SubjectRoot, render_condition,
 };
-use crate::patterns::matching::{
-    ArmBinding, ResultFusePlan, field_binding, ok_pattern_field, some_pattern_field,
-};
+use crate::patterns::matching::{ArmBinding, ResultFusePlan, ok_pattern_field, some_pattern_field};
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan, define,
     discard, expression_statement,
@@ -553,16 +551,15 @@ impl Planner<'_> {
     ) -> Option<LoweredBlock> {
         let fuse = self.option_fuse_plan(scrutinee)?;
         let field = some_pattern_field(pattern)?;
-        let binding = field_binding(field).filter(|b| *b != "_");
+        let binding = self.declare_fused_binding(field);
 
-        let slot = if binding.is_some() {
-            CommaOkValueSlot::Temp
-        } else {
-            CommaOkValueSlot::Unused
+        let slot = match &binding {
+            Some((_, go_name)) => CommaOkValueSlot::Named(go_name.clone()),
+            None => CommaOkValueSlot::Unused,
         };
         let bound = fuse.bind(self, slot);
         let none_condition = bound.none_condition(self);
-        let value = bound.value();
+        let late_binding = bound.late_binding();
 
         let mut loop_body = bound.statements;
         loop_body.push(LoweredStatement::If(IfPlan {
@@ -574,8 +571,11 @@ impl Planner<'_> {
             },
             else_arm: ElseArm::None,
         }));
+        loop_body.extend(late_binding);
         let (body_block, _) = self.lower_fused_arm(
-            &[ArmBinding::copy(binding, value.as_ref())],
+            &[binding
+                .as_ref()
+                .and_then(|(name, go_name)| ArmBinding::alias(Some(name), Some(go_name)))],
             body,
             &PlacePlan::Statement,
         );

@@ -13,9 +13,8 @@ import (
 func main() {
 	reader := bufio.NewReader(strings.NewReader("hello\nworld"))
 	b, err := reader.ReadByte()
-	c := b
 	if err == nil {
-		fmt.Print(c)
+		fmt.Print(b)
 	} else {
 		fmt.Print("error")
 	}

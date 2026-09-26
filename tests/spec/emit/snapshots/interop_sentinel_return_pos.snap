@@ -31,9 +31,8 @@ func makeFinder() func(string, string) (int, bool) {
 func main() {
 	f := makeFinder()
 	r, ok := f("hello", "ll")
-	v := r
 	if ok {
-		_ = v
+		_ = r
 	} else {
 		_ = -2
 	}

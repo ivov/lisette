@@ -768,6 +768,7 @@ impl LoweredStatement {
             LoweredStatement::Define(Definition { names, .. }) => {
                 names.iter().any(|name| name == go_name)
             }
+            LoweredStatement::VarDecl { name, .. } => name == go_name,
             _ => self.bound_name() == Some(go_name),
         }
     }

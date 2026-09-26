@@ -35,8 +35,7 @@ func make_() func(string) (int, error) {
 func main() {
 	f := make_()
 	r, err := f("1")
-	v := r
 	if err == nil {
-		_ = v
+		_ = r
 	}
 }
