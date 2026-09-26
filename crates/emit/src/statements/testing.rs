@@ -10,7 +10,6 @@ use crate::plan::go_expression::CompositeLayout;
 use crate::plan::values::{GoExpression, OperandForm, ValuePlan};
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Span, UnaryOperator};
 
-// Keep location arguments consistent across assertion, log, and recovery calls.
 pub(crate) fn test_context_call(
     handle: GoExpression,
     method: &str,
@@ -156,8 +155,6 @@ impl Planner<'_> {
         (statements, call)
     }
 
-    /// `assert a <op> b`: compare the operands via the normal binary lowering,
-    /// reporting both as `left`/`right`.
     fn lower_relation_assert(
         &mut self,
         operator: &BinaryOperator,
@@ -189,7 +186,6 @@ impl Planner<'_> {
         }
     }
 
-    /// `assert recv.equals(arg)`: compare via the canonical equals lowering, reporting `left`/`right`.
     fn lower_labeled_assert(
         &mut self,
         recv: &Expression,
@@ -208,7 +204,6 @@ impl Planner<'_> {
         }
     }
 
-    /// `assert <expr>`: any other boolean, tested through its negation.
     fn lower_bare_assert(
         &mut self,
         operand: &Expression,
@@ -241,7 +236,6 @@ impl Planner<'_> {
         }
     }
 
-    /// A name reads the same twice unless the other operand calls something.
     fn stage_assert_operands(
         &mut self,
         left: &Expression,
@@ -251,6 +245,7 @@ impl Planner<'_> {
     ) -> (AssertOperand, AssertOperand) {
         let left_plan = self.lower_value(left, ExpressionContext::value());
         let right_plan = self.lower_value(right, ExpressionContext::value());
+        // Calls may change a local before the failure report reads it again.
         let names_inline = left_plan.setup.is_empty()
             && right_plan.setup.is_empty()
             && !left_plan.evaluation.effect.has_call()
@@ -263,8 +258,6 @@ impl Planner<'_> {
         (lhs, rhs)
     }
 
-    /// The Go type to declare an operand's temp with, or `None` to render the
-    /// operand twice instead.
     fn assert_operand_temp_type(
         &mut self,
         expression: &Expression,
@@ -309,10 +302,9 @@ impl Planner<'_> {
         };
         let name = self.fresh_var(Some(hint));
         self.declare(&name);
-        // Bind the temp to itself so the relation shape's synthetic identifier resolves.
+        // The rebuilt comparison must resolve this temporary's name.
         self.scope.bind(name.clone(), name.clone());
-        // Under `:=` a Go constant may take its own default type, so a large
-        // `uint64` literal would come back as an overflowing `int`.
+        // An untyped integer can overflow if `:=` infers `int`.
         let constant_needs_type = self
             .constant_needs_go_type(constant, &expression.get_type())
             .is_some();
@@ -333,9 +325,6 @@ impl Planner<'_> {
         }
     }
 
-    /// A `recv.equals(arg)` whose receiver has an `equals` the compiler can lower
-    /// (a slice, a map, or any type with a usable `equals` method), so the failure
-    /// can show both operands. Anything else falls back to the bare shape.
     fn as_equals_decomposition<'a>(
         &self,
         operand: &'a Expression,
@@ -365,8 +354,6 @@ impl Planner<'_> {
     }
 }
 
-/// The lowered pieces of an `assert`: the condition under which it fails, the
-/// record kind, and any `Operand{...}` arguments appended to the failure call.
 struct AssertShape {
     failure_condition: GoExpression,
     kind: &'static str,
@@ -374,15 +361,12 @@ struct AssertShape {
     operands: Vec<GoExpression>,
 }
 
-/// An `assert` operand: the expression the test reads, and the Go value the
-/// failure call reports.
 struct AssertOperand {
     expression: Expression,
     rendered: GoExpression,
 }
 
-/// The equals lowering can read its left operand as a method receiver, where a
-/// bare literal is not valid Go.
+// Bare literals are not valid Go method receivers.
 #[derive(Clone, Copy)]
 enum LiteralInlining {
     Allowed,
@@ -413,7 +397,6 @@ fn paired_operands(lhs: &GoExpression, rhs: &GoExpression) -> Vec<GoExpression> 
     vec![operand("left", lhs), operand("right", rhs)]
 }
 
-/// A typed identifier for an already-bound temp, so the rebuilt comparison casts as usual.
 fn temp_identifier(name: &str, original: &Expression) -> Expression {
     Expression::Identifier {
         value: name.into(),

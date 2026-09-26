@@ -42,8 +42,6 @@ fn builtin_constant(builtin: &str, values: &[GoExpression]) -> Option<ConstantKi
     }
 }
 
-/// The single Go type inside a rendered `[T]` list, which becomes a conversion
-/// around a builtin call. `None` for an empty or multi-parameter list.
 fn go_builtin_conversion(type_args: &str) -> Option<String> {
     let inner = type_args.strip_prefix('[')?.strip_suffix(']')?;
     (!inner.is_empty() && !inner.contains(',')).then(|| inner.to_string())

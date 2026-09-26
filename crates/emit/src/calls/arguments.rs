@@ -37,9 +37,6 @@ pub(super) struct CallArgsContext<'plan, 'facts> {
 }
 
 impl Planner<'_> {
-    /// Stage and sequence the call arguments, returning the structured setup
-    /// (per-arg setup plus eval-order temp captures) and the rendered arg
-    /// values. The caller flushes the setup before the call expression.
     pub(super) fn emit_call_args(
         &mut self,
         args: &[Expression],
@@ -81,10 +78,6 @@ impl Planner<'_> {
         )
     }
 
-    /// Classify and lower a single call argument: dispatch is plan-driven and
-    /// returns typed setup. The plain `Direct` / `TaggedGoLowering` paths produce
-    /// `Define` setup; adapter and slot-bridge paths retain their own
-    /// structured setup until sequencing.
     fn lower_call_arg(
         &mut self,
         arg: &Expression,
@@ -130,9 +123,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Pre-plan adaptations for a single argument. Mirrors the prior
-    /// `try_emit_*` chain in order; the first hit wins. Returns `Direct` for
-    /// the fallback path (which still handles tagged-Go suppression inline).
     pub(crate) fn plan_argument(
         &self,
         arg: &Expression,
@@ -280,7 +270,6 @@ impl Planner<'_> {
         })
     }
 
-    /// Context for a `Direct` or `TaggedGoLowering` argument.
     fn direct_arg_emit_ctx<'b>(
         &self,
         param: Option<&CallableParamAbi>,
@@ -299,8 +288,6 @@ impl Planner<'_> {
             .with_unknown_argument_target(flows_to_unknown)
     }
 
-    /// Adapt a lowered-return fn arg when its shape disagrees with the
-    /// callee's generic-param shape.
     pub(crate) fn try_adapt_lowered_fn_arg_shape(
         &mut self,
         arg: &Expression,
@@ -373,8 +360,6 @@ impl Planner<'_> {
         })
     }
 
-    /// Adapt `slice...` spread into a generic `VarArgs<fn(...)>` when the
-    /// slice's element fn-shape disagrees with the variadic's element.
     pub(crate) fn try_emit_variadic_spread_adapter(
         &mut self,
         spread: &Expression,
@@ -474,13 +459,12 @@ impl Planner<'_> {
         }))
     }
 
-    /// Resolve the source and target callback contracts at a Go call boundary.
-    /// A closure literal compiles to the slot's shape and needs no adapter.
     fn detect_callback_wrapper(
         &self,
         arg: &Expression,
         param: Option<&CallableParamAbi>,
     ) -> Option<(CallableReturnAbi, CallableReturnAbi, AbiTransition)> {
+        // Closures already return values in the form expected by the parameter.
         if is_closure_literal(arg) {
             return None;
         }
@@ -593,7 +577,7 @@ impl Planner<'_> {
                 Some(ValueLayout::Function { layout: source, .. }),
                 ValueLayout::Function { layout: target, .. },
             ) => {
-                // `lower_value` re-encodes a Go function value's return itself.
+                // `lower_value` already converts the function's return values.
                 if source.return_abi != target.return_abi {
                     return None;
                 }

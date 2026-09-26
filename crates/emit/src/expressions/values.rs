@@ -686,7 +686,7 @@ impl Planner<'_> {
 
     fn identifier_is_unaddressable(&self, value: &str, ty: &Type) -> bool {
         match self.scope.resolve_identifier_binding(value) {
-            Some(binding) => binding.requires_materialization(),
+            Some(binding) => binding.as_go_name().is_none(),
             None => self.ty_is_enum(ty),
         }
     }

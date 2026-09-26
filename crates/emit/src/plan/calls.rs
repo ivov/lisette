@@ -21,7 +21,6 @@ pub(crate) struct CallPlan<'a> {
     variadic: Option<VariadicSpreadPlan>,
 }
 
-/// Canonical identity, signatures, and physical ABI for one callable.
 #[derive(Debug)]
 pub(crate) struct ResolvedCallee<'a> {
     pub(crate) origin: CallableOrigin,
@@ -96,23 +95,16 @@ pub(crate) enum CallableOrigin {
     Zero,
 }
 
-/// Per-argument adaptation; first applicable wins. Keep the selected ABI or
-/// layout with the decision so lowering does not have to select a strategy again.
 #[derive(Debug, Clone)]
 pub(crate) enum ArgumentPlan {
-    /// No special adaptation beyond the final type coercion.
     Direct,
-    /// Wrap a function value in a Go callback adapter (Go calls only).
     GoCallbackAdapter {
         source: CallableReturnAbi,
         target: CallableReturnAbi,
         transition: AbiTransition,
     },
-    /// Adapt a lowered-return fn-value arg to the callee's expected shape.
     LoweredFnShapeAdapter(Box<FunctionArgumentAdapter>),
-    /// Bridge the Lisette value layout to the parameter slot's physical layout.
     GoSlotBridge(Box<ArgumentSlotBridge>),
-    /// Lower a tagged Go-function value (prelude-dispatch arg).
     TaggedGoLowering,
 }
 

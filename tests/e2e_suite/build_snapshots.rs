@@ -13,8 +13,7 @@ enum Check {
     Vet,
 }
 
-// These output changes need their own reviewed snapshot diffs. An unexpected
-// diagnostic or a newly passing check fails this suite so the list cannot rot.
+// Fixing these diagnostics requires separately reviewed snapshot changes.
 const KNOWN_FAILURES: &[(&str, Check, &str)] = &[
     (
         "go_method_option_comma_ok_wrapped",
@@ -63,7 +62,6 @@ fn build_snapshots_compile() {
         let files = parse_files(&body);
         assert!(!files.is_empty(), "no Go files in {}", path.display());
 
-        // Keep known diagnostics under test without excluding new failures.
         let known = KNOWN_FAILURES
             .iter()
             .find(|(snapshot, ..)| *snapshot == name);
@@ -84,7 +82,7 @@ fn build_snapshots_compile() {
             fs::write(destination, code).unwrap();
         }
         if name == "assert_type_emits_concrete_type_arg" {
-            // Its source supplies only store.d.lis, so Go needs the mock implementation.
+            // The fixture declares store.d.lis without a Go implementation.
             fs::create_dir_all(directory.join("store")).unwrap();
             fs::write(
                 directory.join("store/store.go"),
