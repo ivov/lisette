@@ -30,14 +30,32 @@ struct TupleStructTarget {
     field_tys: Vec<Type>,
 }
 
-fn is_checked_literal_key(key: &Expression) -> bool {
-    matches!(
-        key.unwrap_parens(),
-        Expression::Literal {
-            literal: Literal::Boolean(_) | Literal::String { .. },
-            ..
-        }
-    )
+/// The duplicate-key check compares integers and runes as separate kinds, so a
+/// Go literal is safe only when numeric keys share one kind and an integer type.
+fn keys_checked_as_go_constants(keys: &[&Expression], key_ty: &Type) -> bool {
+    let Some(literals) = keys
+        .iter()
+        .map(|key| match key.unwrap_parens() {
+            Expression::Literal { literal, .. } => Some(literal),
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()
+    else {
+        return false;
+    };
+    let integer_key = key_ty
+        .as_simple()
+        .is_some_and(|kind| kind.is_signed_int() || kind.is_unsigned_int());
+    literals
+        .iter()
+        .all(|literal| matches!(literal, Literal::Boolean(_) | Literal::String { .. }))
+        || integer_key
+            && (literals
+                .iter()
+                .all(|literal| matches!(literal, Literal::Integer { .. }))
+                || literals
+                    .iter()
+                    .all(|literal| matches!(literal, Literal::Char(_))))
 }
 
 /// The shape of a call's value arguments, used to decide which type parameters
@@ -406,12 +424,12 @@ impl<'a> Planner<'a> {
             })
             .collect::<Option<Vec<_>>>()?;
 
-        if !pairs.iter().all(|(key, _)| is_checked_literal_key(key)) {
-            return None;
-        }
-
         let (key_ty, value_ty) =
             self.resolve_map_lisette_types(ctx.function, ctx.resolved_type_args, ctx.call_ty);
+        let keys: Vec<_> = pairs.iter().map(|(key, _)| *key).collect();
+        if !keys_checked_as_go_constants(&keys, &key_ty) {
+            return None;
+        }
         let key_go_ty = self.use_go_type(&key_ty);
         let value_go_ty = self.use_go_type(&value_ty);
         let map_ty = format!("map[{}]{}", key_go_ty, value_go_ty);
