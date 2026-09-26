@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790442145546,
+  "lastUpdate": 1790448977084,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -39696,6 +39696,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 36982,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28431,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19344,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15262,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9004,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2944,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "77faff0bc0c0d87a6527a211fc9bb83d972d01ae",
+          "message": "fix: shadowed and dropped locals in emitted Go (#1484)",
+          "timestamp": "2026-09-26T20:55:54+02:00",
+          "tree_id": "091aa5322084aea652a7d2d5a27b4de2719f05c9",
+          "url": "https://github.com/ivov/lisette/commit/77faff0bc0c0d87a6527a211fc9bb83d972d01ae"
+        },
+        "date": 1790448974760,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 145502,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 37017,
             "unit": "lines"
           },
           {
