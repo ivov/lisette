@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790518985382,
+  "lastUpdate": 1790536783494,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -40754,6 +40754,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/f5a810dc2272aa460c047e9174052e67c46b7dd2"
         },
         "date": 1790518982995,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 146173,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 37678,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28435,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19344,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15262,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9004,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2944,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d66a214ee92fa4d58ddae777d457c992e87fd7cf",
+          "message": "ci: restore default runners for Windows release builds (#1495)",
+          "timestamp": "2026-09-27T21:19:06+02:00",
+          "tree_id": "e38b7deb84e793c06d8cdfe9c3b5159a4c61ea36",
+          "url": "https://github.com/ivov/lisette/commit/d66a214ee92fa4d58ddae777d457c992e87fd7cf"
+        },
+        "date": 1790536780945,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
