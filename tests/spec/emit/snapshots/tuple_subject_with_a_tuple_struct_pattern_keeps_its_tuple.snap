@@ -30,8 +30,7 @@ func makePair() Pair {
 }
 
 func test(b bool) string {
-	subject := lisette.MakeTuple2[Pair, bool](makePair(), b)
-	if subject.Second == true {
+	if lisette.MakeTuple2[Pair, bool](makePair(), b).Second == true {
 		return "yes"
 	}
 	return "no"

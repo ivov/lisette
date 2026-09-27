@@ -14,8 +14,8 @@ use crate::patterns::decision_tree;
 use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
 use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
-    Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, assign, define,
-    discard, expression_statement,
+    Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, SwitchKind, assign,
+    define, discard, expression_statement,
 };
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::go_expression::GoExpressionNode;
@@ -436,7 +436,16 @@ impl Planner<'_> {
         let (subject_var, declaration) =
             self.lower_match_subject_var(&mut statements, subject, arms);
 
-        let block = self.lower_match_tree(arms, MatchSubject::Var(subject_var), subject_ty, place);
+        let mut block =
+            self.lower_match_tree(arms, MatchSubject::Var(subject_var), subject_ty, place);
+        let declaration = match declaration {
+            SubjectDeclaration::Deferred { var, expression }
+                if inline_subject_into_header(&mut block.statements, &var, &expression) =>
+            {
+                SubjectDeclaration::None
+            }
+            declaration => declaration,
+        };
         let used = GoUses::of(&block.statements);
 
         match declaration {
@@ -1256,6 +1265,68 @@ impl Planner<'_> {
         };
         (GoExpression::name(var), declaration)
     }
+}
+
+/// Move a subject temp into the first header when that header is its only read.
+fn inline_subject_into_header(
+    statements: &mut [LoweredStatement],
+    var: &str,
+    expression: &GoExpression,
+) -> bool {
+    let Some(header) = statements.first_mut().and_then(header_mut) else {
+        return false;
+    };
+    let original = header.clone();
+    let Some(read) = leading_subject_read(header.node_mut(), var) else {
+        return false;
+    };
+    *read = expression.node().clone();
+    if !GoUses::of(statements).contains(var) {
+        return true;
+    }
+    *statements
+        .first_mut()
+        .and_then(header_mut)
+        .expect("header was found above") = original;
+    false
+}
+
+fn header_mut(statement: &mut LoweredStatement) -> Option<&mut GoExpression> {
+    match statement {
+        LoweredStatement::Switch(plan) => match &mut plan.kind {
+            SwitchKind::Value { subject } | SwitchKind::Type { subject, .. } => Some(subject),
+            SwitchKind::Conditional => None,
+        },
+        LoweredStatement::If(plan)
+            if plan.condition_setup.is_empty() && plan.initializer.is_none() =>
+        {
+            Some(&mut plan.condition)
+        }
+        _ => None,
+    }
+}
+
+fn leading_subject_read<'n>(
+    node: &'n mut GoExpressionNode,
+    var: &str,
+) -> Option<&'n mut GoExpressionNode> {
+    let compares_to_name = matches!(
+        node,
+        GoExpressionNode::Binary { right, .. } if matches!(
+            right.as_ref(),
+            GoExpressionNode::Literal(_)
+                | GoExpressionNode::Identifier(_)
+                | GoExpressionNode::Qualified { .. }
+        )
+    );
+    let mut node = node;
+    if compares_to_name && let GoExpressionNode::Binary { left, .. } = node {
+        node = left.as_mut();
+    }
+    if let GoExpressionNode::Selector { base, .. } = node {
+        node = base.as_mut();
+    }
+    matches!(node, GoExpressionNode::Identifier(name) if name == var).then_some(node)
 }
 
 fn pair_if(test: PairCondition, then_body: LoweredBlock, else_arm: ElseArm) -> IfPlan {
