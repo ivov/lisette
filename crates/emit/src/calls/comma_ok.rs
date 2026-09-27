@@ -241,7 +241,6 @@ impl Planner<'_> {
                         payload: PayloadLayout::Packed,
                     })
                 ) || lowered.ok_ty.is_unit()
-                    || lowered.has_tuple_payload(self)
                     || lowered.payload_bridge.is_some()
                 {
                     return None;

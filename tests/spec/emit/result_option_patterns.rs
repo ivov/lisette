@@ -4674,3 +4674,39 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn some_tuple_payloads_from_lisette_functions_test_the_call_once() {
+    let input = r#"
+fn split(s: string) -> Option<(string, int)> {
+  if s == "" { None } else { Some((s, s.length())) }
+}
+
+fn size(s: string) -> int {
+  match split(s) {
+    Some((_, n)) => n,
+    None => -1,
+  }
+}
+
+fn name(s: string) -> Option<string> {
+  let (word, _) = split(s)?
+  Some(word)
+}
+
+fn fallback(s: string) -> int {
+  let pair = split(s).unwrap_or(("none", 0))
+  pair.1
+}
+
+fn test() {
+  if size("abc") != 3 { panic("a word should report its size") }
+  if size("") != -1 { panic("an empty word should report minus one") }
+  if name("abc").unwrap_or("") != "abc" { panic("a word should keep its name") }
+  if name("").is_some() { panic("an empty word should have no name") }
+  if fallback("") != 0 { panic("a missing pair should use the default") }
+  if fallback("ab") != 2 { panic("a present pair should keep its size") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
