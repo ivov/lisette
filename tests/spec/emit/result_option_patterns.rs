@@ -4509,6 +4509,35 @@ fn test() {
 }
 
 #[test]
+fn a_local_read_in_an_assignment_target_keeps_its_value() {
+    let input = r#"
+fn pair(n: int) -> (int, string) {
+  (n, f"p{n}")
+}
+
+fn place(m: Map<string, int>) -> Slice<int> {
+  let found = m.get("a")
+  let mut xs = [0, 0, 0]
+  xs[found.unwrap_or(0)] = 9
+  xs
+}
+
+fn bump() -> Slice<int> {
+  let p = pair(1)
+  let mut xs = [0, 0, 0]
+  xs[p.0] += 4
+  xs
+}
+
+fn test() {
+  if place(Map.from([("a", 2)]))[2] != 9 { panic("the found index should be written") }
+  if bump()[1] != 4 { panic("the tuple index should be bumped") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn a_closure_name_does_not_hide_an_arm_payload() {
     let input = r#"
 fn add(m: Map<string, int>) -> int {
