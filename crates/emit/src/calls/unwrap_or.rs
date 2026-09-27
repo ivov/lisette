@@ -20,9 +20,9 @@ enum FusedCall<'a> {
     Option(OptionFusePlan<'a>),
 }
 
-struct MapLambda<'a> {
-    param: Option<&'a str>,
-    body: &'a Expression,
+pub(crate) struct MapLambda<'a> {
+    pub(crate) param: Option<&'a str>,
+    pub(crate) body: &'a Expression,
 }
 
 /// A statement that would leave the lambda if its body ran inline.
@@ -52,12 +52,14 @@ fn is_literal_default(default: &Expression) -> bool {
     }
 }
 
-fn map_lambda(function: &Expression) -> Option<MapLambda<'_>> {
+pub(crate) fn map_lambda(function: &Expression) -> Option<MapLambda<'_>> {
     let Expression::Lambda { params, body, .. } = function.unwrap_parens() else {
         return None;
     };
-    let [param] = params.as_slice() else {
-        return None;
+    let param = match params.as_slice() {
+        [] => return (!escapes_lambda(body)).then_some(MapLambda { param: None, body }),
+        [param] => param,
+        _ => return None,
     };
     let param = match &param.pattern {
         Pattern::Identifier { identifier, .. } => Some(identifier.as_str()),
@@ -68,7 +70,7 @@ fn map_lambda(function: &Expression) -> Option<MapLambda<'_>> {
 }
 
 impl Planner<'_> {
-    fn prelude_method_call<'a>(
+    pub(crate) fn prelude_method_call<'a>(
         &self,
         expression: &'a Expression,
         method: &str,

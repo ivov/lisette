@@ -4522,3 +4522,83 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn map_err_propagate_on_go_calls_builds_the_error_on_failure() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+import "go:strconv"
+
+fn parse(s: string) -> Result<int, error> {
+  let n = strconv.Atoi(s).map_err(|e| fmt.Errorf("parse %s: %w", s, e))?
+  Ok(n + 1)
+}
+
+fn remove(path: string) -> Result<(), error> {
+  os.Remove(path).map_err(|e| fmt.Errorf("remove: %w", e))?
+  Ok(())
+}
+
+fn tail(s: string) -> Result<int, error> {
+  strconv.Atoi(s).map_err(|e| fmt.Errorf("tail: %w", e))
+}
+
+fn test() {
+  if parse("1").unwrap_or(0) != 2 { panic("a number should parse") }
+  if parse("x").is_ok() { panic("a word should fail") }
+  if remove("/nonexistent/lisette").is_ok() { panic("a missing file should fail") }
+  if tail("x").is_ok() { panic("a tail map_err should fail") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_err_propagate_keeps_the_prelude_call_for_an_escaping_closure() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn parse(s: string) -> Result<int, error> {
+  let n = strconv.Atoi(s).map_err(|e| {
+    if s == "" {
+      return e
+    }
+    fmt.Errorf("parse %s: %w", s, e)
+  })?
+  Ok(n)
+}
+
+fn test() {
+  if parse("2").unwrap_or(0) != 2 { panic("a number should parse") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn ok_or_propagate_tests_the_source_in_place() {
+    let input = r#"
+import "go:errors"
+
+fn lookup(db: Map<int, string>, id: int) -> Result<string, error> {
+  let name = db.get(id).ok_or(errors.New("not found"))?
+  Ok(name)
+}
+
+fn first(xs: Slice<int>) -> Result<int, error> {
+  let x = xs.get(0).ok_or_else(|| errors.New(f"empty after {xs.length()}"))?
+  Ok(x)
+}
+
+fn test() {
+  let db = Map.from([(1, "ann")])
+  if lookup(db, 1).unwrap_or("") != "ann" { panic("a present key should be found") }
+  if lookup(db, 2).is_ok() { panic("a missing key should fail") }
+  if first([7]).unwrap_or(0) != 7 { panic("a first element should be found") }
+  if first([]).is_ok() { panic("an empty slice should fail") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
