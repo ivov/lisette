@@ -1,0 +1,121 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:os"
+  import "go:strconv"
+  
+  struct CodeError { code: int }
+  
+  impl CodeError {
+    fn Error(self: Ref<CodeError>) -> string { f"code {self.code}" }
+  }
+  
+  fn coded(n: int) -> Result<int, Ref<CodeError>> {
+    if n < 0 { return Err(&CodeError { code: n }) }
+    Ok(n)
+  }
+  
+  fn describe(r: Result<int, error>) -> string {
+    match r {
+      Ok(n) => f"number {n}",
+      Err(_) => "bad",
+    }
+  }
+  
+  fn failed<T, E>(r: Result<T, E>) -> bool {
+    r.is_err()
+  }
+  
+  fn both(a: string, b: string) -> bool {
+    match (strconv.Atoi(a), strconv.Atoi(b)) {
+      (Ok(_), Ok(_)) => true,
+      _ => false,
+    }
+  }
+  
+  fn test() {
+    if describe(strconv.Atoi("4")) != "number 4" { panic("a parsed number should describe as a number") }
+    if !both("1", "2") || both("1", "x") { panic("both texts should parse") }
+    if !failed(coded(-1)) { panic("a negative code should fail") }
+    if !failed(os.Open("/nonexistent")) { panic("a missing file should not open") }
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"os"
+	"strconv"
+)
+
+type CodeError struct {
+	code int
+}
+
+func (c *CodeError) Error() string {
+	return fmt.Sprintf("code %d", c.code)
+}
+
+func coded(n int) (int, *CodeError) {
+	if n < 0 {
+		return 0, &CodeError{code: n}
+	}
+	return n, nil
+}
+
+func describe(r lisette.Result[int, error]) string {
+	if r.Tag == lisette.ResultOk {
+		return fmt.Sprintf("number %d", r.OkVal)
+	}
+	return "bad"
+}
+
+func failed[T any, E any](r lisette.Result[T, E]) bool {
+	return r.IsErr()
+}
+
+func both(a, b string) bool {
+	arg := lisette.ResultFromPair[int](strconv.Atoi(a))
+	arg_1 := lisette.ResultFromPair[int](strconv.Atoi(b))
+	if arg.Tag == lisette.ResultOk {
+		if arg_1.Tag == lisette.ResultOk {
+			return true
+		}
+		return false
+	}
+	return false
+}
+
+func test() {
+	if describe(lisette.ResultFromPair[int](strconv.Atoi("4"))) != "number 4" {
+		panic("a parsed number should describe as a number")
+	}
+	if !both("1", "2") || both("1", "x") {
+		panic("both texts should parse")
+	}
+	ret, ret_1 := coded(-1)
+	var result lisette.Result[int, *CodeError]
+	if ret_1 != nil {
+		result = lisette.MakeResultErr[int, *CodeError](ret_1)
+	} else {
+		result = lisette.MakeResultOk[int, *CodeError](ret)
+	}
+	if !failed(result) {
+		panic("a negative code should fail")
+	}
+	ret_2, ret_3 := os.Open("/nonexistent")
+	var result_1 lisette.Result[*os.File, error]
+	if ret_3 != nil {
+		result_1 = lisette.MakeResultErr[*os.File, error](ret_3)
+	} else if ret_2 == nil {
+		result_1 = lisette.MakeResultErr[*os.File, error](errors.New("unexpected nil"))
+	} else {
+		result_1 = lisette.MakeResultOk[*os.File, error](ret_2)
+	}
+	if !failed(result_1) {
+		panic("a missing file should not open")
+	}
+}

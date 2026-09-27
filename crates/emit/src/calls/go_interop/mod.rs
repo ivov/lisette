@@ -50,7 +50,8 @@ impl Planner<'_> {
 
         let payload_bridge = self.go_return_payload_bridge(abi, result_ty);
         let call_plan = self.lower_call(call_expression, None, ExpressionContext::value());
-        call_plan.map_observable_expression(|setup, call| {
+        let mut wrapped_in_place = false;
+        let mut plan = call_plan.map_expression(|setup, call| {
             let (wrap, value) = if payload_bridge.is_some() {
                 let (wrap, outcome) = self.lower_abi_wrapping_with_payload_bridge(
                     call,
@@ -63,12 +64,22 @@ impl Planner<'_> {
                     wrap,
                     GoExpression::name(outcome.expect("wrapper produced no slot")),
                 )
+            } else if let CallableReturnAbi::Result { payload } = abi.result {
+                match self.result_from_pair(call, result_ty, payload, None) {
+                    Ok(value) => (Vec::new(), value),
+                    Err(call) => self.lower_abi_to_tagged(call, &abi.result, result_ty),
+                }
             } else {
                 self.lower_abi_to_tagged(call, &abi.result, result_ty)
             };
+            wrapped_in_place = wrap.is_empty();
             setup.extend(wrap);
             value
-        })
+        });
+        if !wrapped_in_place {
+            plan.make_observable();
+        }
+        plan
     }
 
     pub(crate) fn go_result_layout_bridge(

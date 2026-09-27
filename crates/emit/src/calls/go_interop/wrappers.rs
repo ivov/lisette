@@ -531,6 +531,38 @@ impl Planner<'_> {
         })
     }
 
+    pub(crate) fn result_from_pair(
+        &mut self,
+        call: GoExpression,
+        result_ty: &Type,
+        layout: PayloadLayout,
+        payload_bridge: Option<&LayoutBridge>,
+    ) -> Result<GoExpression, GoExpression> {
+        let Some(fallible) = Fallible::from_type(result_ty) else {
+            return Err(call);
+        };
+        let ok_ty = fallible.ok_ty();
+        let err_is_error = fallible.err_ty().is_some_and(|err_ty| {
+            matches!(
+                self.facts.peel_alias(err_ty),
+                Type::Nominal { id, .. } if id.as_str() == go_name::PRELUDE_ERROR_ID
+            )
+        });
+        if !err_is_error
+            || payload_bridge.is_some()
+            || (layout.is_flattened() && ok_ty.is_tuple())
+            || self.go_result_needs_nil_guard(ok_ty)
+        {
+            return Err(call);
+        }
+        let ok_ty_str = self.use_go_type(ok_ty);
+        Ok(prelude_call(
+            "ResultFromPair",
+            format!("[{}]", ok_ty_str),
+            vec![call],
+        ))
+    }
+
     /// Lower a `(T, error)` Go return into a tagged `Result`.
     pub(crate) fn lower_result_wrapping(
         &mut self,
@@ -544,6 +576,14 @@ impl Planner<'_> {
         debug_assert!(!fallible.ok_ty().is_unit());
 
         let mut statements = Vec::new();
+        let call = match self.result_from_pair(call, result_ty, layout, payload_bridge) {
+            Ok(value) => {
+                let outcome =
+                    self.push_simple_wrapper_value(&mut statements, target, "result", value);
+                return (statements, outcome);
+            }
+            Err(call) => call,
+        };
         let ok_ty = fallible.ok_ty();
         let (err_var, ok_value) = self.push_go_returns(&mut statements, call, ok_ty, layout);
         let err = || GoExpression::name(err_var.clone());

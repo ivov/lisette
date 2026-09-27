@@ -121,3 +121,11 @@ func ResultOrElse[T any, E any, F any](res Result[T, E], f func(E) Result[T, F])
 	}
 	return Result[T, F]{Tag: ResultOk, OkVal: res.OkVal}
 }
+
+// ResultFromPair wraps a Go `(value, err)` pair into a `Result[T, error]`.
+func ResultFromPair[T any](val T, err error) Result[T, error] {
+	if err != nil {
+		return Result[T, error]{Tag: ResultErr, ErrVal: err}
+	}
+	return Result[T, error]{Tag: ResultOk, OkVal: val}
+}

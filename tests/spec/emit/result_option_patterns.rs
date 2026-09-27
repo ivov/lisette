@@ -4435,6 +4435,51 @@ fn test() {
 }
 
 #[test]
+fn a_result_call_used_as_a_value_wraps_its_go_results_in_one_call() {
+    let input = r#"
+import "go:os"
+import "go:strconv"
+
+struct CodeError { code: int }
+
+impl CodeError {
+  fn Error(self: Ref<CodeError>) -> string { f"code {self.code}" }
+}
+
+fn coded(n: int) -> Result<int, Ref<CodeError>> {
+  if n < 0 { return Err(&CodeError { code: n }) }
+  Ok(n)
+}
+
+fn describe(r: Result<int, error>) -> string {
+  match r {
+    Ok(n) => f"number {n}",
+    Err(_) => "bad",
+  }
+}
+
+fn failed<T, E>(r: Result<T, E>) -> bool {
+  r.is_err()
+}
+
+fn both(a: string, b: string) -> bool {
+  match (strconv.Atoi(a), strconv.Atoi(b)) {
+    (Ok(_), Ok(_)) => true,
+    _ => false,
+  }
+}
+
+fn test() {
+  if describe(strconv.Atoi("4")) != "number 4" { panic("a parsed number should describe as a number") }
+  if !both("1", "2") || both("1", "x") { panic("both texts should parse") }
+  if !failed(coded(-1)) { panic("a negative code should fail") }
+  if !failed(os.Open("/nonexistent")) { panic("a missing file should not open") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn a_local_with_native_and_whole_value_uses_keeps_both() {
     let input = r#"
 import "go:fmt"

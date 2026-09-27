@@ -21,13 +21,7 @@ import (
 )
 
 func main() {
-	ret, ret_2 := strconv.Atoi("42")
-	var n lisette.Result[int, error]
-	if ret_2 != nil {
-		n = lisette.MakeResultErr[int, error](ret_2)
-	} else {
-		n = lisette.MakeResultOk[int, error](ret)
-	}
+	n := lisette.ResultFromPair[int](strconv.Atoi("42"))
 	ret_1 := 7
 	fmt.Println(n)
 	fmt.Println(ret_1)

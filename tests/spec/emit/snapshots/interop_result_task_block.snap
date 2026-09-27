@@ -22,13 +22,7 @@ import (
 func main() {
 	f := strconv.Atoi
 	go func() {
-		ret, ret_1 := f("42")
-		var r lisette.Result[int, error]
-		if ret_1 != nil {
-			r = lisette.MakeResultErr[int, error](ret_1)
-		} else {
-			r = lisette.MakeResultOk[int, error](ret)
-		}
+		r := lisette.ResultFromPair[int](f("42"))
 		_ = r
 	}()
 }
