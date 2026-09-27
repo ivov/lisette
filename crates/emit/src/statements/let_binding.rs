@@ -79,7 +79,12 @@ impl Planner<'_> {
         force_fresh: bool,
     ) -> String {
         let escaped = escape_reserved(raw_go_name);
-        if force_fresh || self.shadows_declaration(&escaped) {
+        if force_fresh
+            || self.shadows_declaration(&escaped)
+            || self
+                .scope
+                .has_other_binding_for_go_name(&escaped, identifier)
+        {
             self.fresh_var(Some(identifier))
         } else {
             escaped.into_owned()
@@ -700,7 +705,15 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
     }
 
     fn lower_simple_identifier(&mut self, identifier: &str) -> LoweredBlock {
-        let raw_go_name = self.planner.go_name_for_binding(&self.binding.pattern);
+        let mut raw_go_name = self.planner.go_name_for_binding(&self.binding.pattern);
+        if let Some(raw) = &raw_go_name
+            && self
+                .planner
+                .scope
+                .has_other_binding_for_go_name(&escape_reserved(raw), identifier)
+        {
+            raw_go_name = Some(self.planner.fresh_var(Some(identifier)));
+        }
         if matches!(self.value, Expression::Propagate { .. }) {
             let statements = self.planner.lower_let_propagate(
                 identifier,
@@ -741,7 +754,12 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 }
                 let go_name = self.planner.go_name_for_binding(pattern)?;
                 let escaped = escape_reserved(&go_name).into_owned();
-                let name = if self.planner.shadows_declaration(&escaped) {
+                let name = if self.planner.shadows_declaration(&escaped)
+                    || self
+                        .planner
+                        .scope
+                        .has_other_binding_for_go_name(&escaped, identifier)
+                {
                     self.planner.fresh_var(Some(identifier))
                 } else {
                     escaped
