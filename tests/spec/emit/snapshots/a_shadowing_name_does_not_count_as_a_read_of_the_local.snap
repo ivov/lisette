@@ -1,0 +1,75 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn pair() -> (int, string) {
+    (1, "a")
+  }
+  
+  fn inner_block() -> string {
+    let s = pair()
+    {
+      let s = (9, "z")
+      if s.0 != 9 { panic("the inner tuple should be read") }
+    }
+    s.1
+  }
+  
+  fn inner_closure(text: string) -> bool {
+    let parsed = strconv.Atoi(text)
+    let describe = |parsed: Result<int, error>| match parsed { Ok(v) => v, Err(_) => 0 }
+    if describe(Ok(4)) != 4 { panic("the closure parameter should be read") }
+    parsed.is_ok()
+  }
+  
+  fn test() {
+    if inner_block() != "a" { panic("the outer tuple should be read") }
+    if !inner_closure("1") { panic("the outer parse should succeed") }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func pair() (int, string) {
+	return 1, "a"
+}
+
+func innerBlock() string {
+	_, s1 := pair()
+	{
+		s := lisette.MakeTuple2[int, string](9, "z")
+		if s.First != 9 {
+			panic("the inner tuple should be read")
+		}
+	}
+	return s1
+}
+
+func innerClosure(text string) bool {
+	_, err := strconv.Atoi(text)
+	describe := func(parsed lisette.Result[int, error]) int {
+		if parsed.Tag == lisette.ResultOk {
+			return parsed.OkVal
+		}
+		return 0
+	}
+	if describe(lisette.MakeResultOk[int, error](4)) != 4 {
+		panic("the closure parameter should be read")
+	}
+	return err == nil
+}
+
+func test() {
+	if innerBlock() != "a" {
+		panic("the outer tuple should be read")
+	}
+	if !innerClosure("1") {
+		panic("the outer parse should succeed")
+	}
+}

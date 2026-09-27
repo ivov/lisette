@@ -1,5 +1,7 @@
 use rustc_hash::FxHashSet as HashSet;
-use syntax::ast::{Expression, Pattern, collect_pattern_bindings};
+use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, collect_pattern_bindings};
+
+use crate::patterns::binding_decls::pattern_binds_name;
 
 const STATUS_METHODS: &[&str] = &["is_some", "is_none", "is_ok", "is_err"];
 const PAYLOAD_METHODS: &[&str] = &["unwrap_or", "map_or"];
@@ -23,9 +25,7 @@ where
         needs_whole_value: false,
         read_indices: HashSet::default(),
     };
-    for tree in region {
-        walker.walk(tree);
-    }
+    walker.walk_items(region);
     (walker.supported > 0 && !walker.blocked).then_some(ComponentDemand {
         needs_value: walker.needs_value || walker.needs_whole_value,
         needs_whole_value: walker.needs_whole_value,
@@ -71,16 +71,19 @@ impl Walker<'_> {
                 self.blocked = true;
                 return;
             }
-            Expression::Match { subject, arms, .. } if self.names_the_local(subject) => {
-                self.supported += 1;
-                self.needs_value |= arms.iter().any(|arm| binds_payload(&arm.pattern));
-                self.needs_whole_value |= arms.iter().any(|arm| arm.has_guard());
-                for arm in arms {
-                    if let Some(guard) = &arm.guard {
-                        self.walk(guard);
+            Expression::Match { subject, arms, .. } => {
+                if self.names_the_local(subject) {
+                    if !arms.iter().all(|arm| is_component_arm(&arm.pattern)) {
+                        self.blocked = true;
+                        return;
                     }
-                    self.walk(&arm.expression);
+                    self.supported += 1;
+                    self.needs_value |= arms.iter().any(|arm| binds_payload(&arm.pattern));
+                    self.needs_whole_value |= arms.iter().any(|arm| arm.has_guard());
+                } else {
+                    self.walk(subject);
                 }
+                self.walk_arms(arms);
                 return;
             }
             Expression::IfLet {
@@ -89,10 +92,20 @@ impl Walker<'_> {
                 consequence,
                 alternative,
                 ..
-            } if self.names_the_local(scrutinee) => {
-                self.supported += 1;
-                self.needs_value |= binds_payload(pattern);
-                self.walk(consequence);
+            } => {
+                if self.names_the_local(scrutinee) {
+                    if !is_component_arm(pattern) {
+                        self.blocked = true;
+                        return;
+                    }
+                    self.supported += 1;
+                    self.needs_value |= binds_payload(pattern);
+                } else {
+                    self.walk(scrutinee);
+                }
+                if !pattern_binds_name(pattern, self.name) {
+                    self.walk(consequence);
+                }
                 if let Some(alternative) = alternative.expression() {
                     self.walk(alternative);
                 }
@@ -100,8 +113,63 @@ impl Walker<'_> {
             }
             Expression::Propagate { expression, .. } if self.names_the_local(expression) => {
                 self.supported += 1;
-                self.needs_value = true;
+                self.needs_whole_value = true;
                 return;
+            }
+            Expression::Block { items, .. }
+            | Expression::TryBlock { items, .. }
+            | Expression::RecoverBlock { items, .. } => {
+                self.walk_items(items);
+                return;
+            }
+            Expression::WhileLet {
+                pattern,
+                scrutinee,
+                body,
+                ..
+            } => {
+                self.walk(scrutinee);
+                if !pattern_binds_name(pattern, self.name) {
+                    self.walk(body);
+                }
+                return;
+            }
+            Expression::For {
+                binding,
+                iterable,
+                body,
+                ..
+            } => {
+                self.walk(iterable);
+                if !pattern_binds_name(&binding.pattern, self.name) {
+                    self.walk(body);
+                }
+                return;
+            }
+            Expression::Lambda { params, body, .. } => {
+                if !params
+                    .iter()
+                    .any(|p| pattern_binds_name(&p.pattern, self.name))
+                {
+                    self.walk(body);
+                }
+                return;
+            }
+            Expression::Function { params, body, .. } => {
+                if !params
+                    .iter()
+                    .any(|p| pattern_binds_name(&p.pattern, self.name))
+                    && let Some(body) = body.definition()
+                {
+                    self.walk(body);
+                }
+                return;
+            }
+            Expression::Select { arms, .. } => {
+                if arms.iter().any(|arm| self.select_arm_binds_name(arm)) {
+                    self.blocked = true;
+                    return;
+                }
             }
             Expression::DotAccess {
                 expression: receiver,
@@ -142,6 +210,68 @@ impl Walker<'_> {
         for child in expression.children() {
             self.walk(child);
         }
+    }
+
+    fn walk_items<'e>(&mut self, items: impl IntoIterator<Item = &'e Expression>) {
+        let items: Vec<&Expression> = items.into_iter().collect();
+        let block_shadows = items.iter().any(|item| match item {
+            Expression::Const { identifier, .. } => identifier.as_str() == self.name,
+            Expression::Function { name, .. } => name.as_str() == self.name,
+            _ => false,
+        });
+        if block_shadows {
+            return;
+        }
+        for item in items {
+            self.walk(item);
+            if let Expression::Let { binding, .. } = item
+                && pattern_binds_name(&binding.pattern, self.name)
+            {
+                return;
+            }
+        }
+    }
+
+    fn walk_arms(&mut self, arms: &[MatchArm]) {
+        for arm in arms {
+            if pattern_binds_name(&arm.pattern, self.name) {
+                continue;
+            }
+            if let Some(guard) = &arm.guard {
+                self.walk(guard);
+            }
+            self.walk(&arm.expression);
+        }
+    }
+
+    fn select_arm_binds_name(&self, arm: &SelectArm) -> bool {
+        match arm {
+            SelectArm::Receive { binding, .. } => pattern_binds_name(binding, self.name),
+            SelectArm::MatchReceive { arms, .. } => arms
+                .iter()
+                .any(|arm| pattern_binds_name(&arm.pattern, self.name)),
+            SelectArm::Send { .. } | SelectArm::WildCard { .. } => false,
+        }
+    }
+}
+
+fn is_component_arm(pattern: &Pattern) -> bool {
+    match pattern {
+        Pattern::WildCard { .. } => true,
+        Pattern::EnumVariant {
+            identifier,
+            fields,
+            rest: false,
+            ..
+        } => {
+            let variant = identifier.rsplit('.').next().unwrap_or(identifier);
+            matches!(variant, "Some" | "None" | "Ok" | "Err")
+                && fields.len() <= 1
+                && fields.iter().all(|field| {
+                    matches!(field, Pattern::WildCard { .. } | Pattern::Identifier { .. })
+                })
+        }
+        _ => false,
     }
 }
 

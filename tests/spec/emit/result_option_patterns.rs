@@ -4412,6 +4412,139 @@ fn test() {
 }
 
 #[test]
+fn a_local_matched_against_a_literal_payload_stays_one_value() {
+    let input = r#"
+import "go:strconv"
+
+fn lookup(m: Map<string, int>, key: string) -> string {
+  let found = m.get(key)
+  match found {
+    Some(1) => "one",
+    Some(_) => "other",
+    None => "none",
+  }
+}
+
+fn parse(text: string) -> string {
+  let parsed = strconv.Atoi(text)
+  if let Ok(1) = parsed { "one" } else { "other" }
+}
+
+fn pair(text: string) -> Option<(int, string)> {
+  if text == "a" { Some((1, text)) } else { None }
+}
+
+fn nested(text: string) -> int {
+  let found = pair(text)
+  match found {
+    Some((n, "a")) => n,
+    Some(_) => -1,
+    None => 0,
+  }
+}
+
+fn test() {
+  let mut m = Map.new<string, int>()
+  m["a"] = 1
+  if lookup(m, "a") != "one" { panic("a one should match") }
+  if parse("1") != "one" || parse("2") != "other" { panic("a parsed one should match") }
+  if nested("a") != 1 || nested("b") != 0 { panic("a nested payload should match") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagating_a_result_local_keeps_one_value() {
+    let input = r#"
+import "go:strconv"
+
+fn parse(text: string) -> Result<int, error> {
+  let parsed = strconv.Atoi(text)
+  let n = parsed?
+  Ok(n + 1)
+}
+
+fn test() {
+  match parse("41") {
+    Ok(n) => { if n != 42 { panic("a parsed number should gain one") } },
+    Err(_) => panic("expected a parsed number"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn a_shadowing_name_does_not_count_as_a_read_of_the_local() {
+    let input = r#"
+import "go:strconv"
+
+fn pair() -> (int, string) {
+  (1, "a")
+}
+
+fn inner_block() -> string {
+  let s = pair()
+  {
+    let s = (9, "z")
+    if s.0 != 9 { panic("the inner tuple should be read") }
+  }
+  s.1
+}
+
+fn inner_closure(text: string) -> bool {
+  let parsed = strconv.Atoi(text)
+  let describe = |parsed: Result<int, error>| match parsed { Ok(v) => v, Err(_) => 0 }
+  if describe(Ok(4)) != 4 { panic("the closure parameter should be read") }
+  parsed.is_ok()
+}
+
+fn test() {
+  if inner_block() != "a" { panic("the outer tuple should be read") }
+  if !inner_closure("1") { panic("the outer parse should succeed") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn a_closure_name_does_not_hide_an_arm_payload() {
+    let input = r#"
+fn add(m: Map<string, int>) -> int {
+  let opt = m.get("a")
+  if let Some(v) = opt {
+    let f = |opt: int| v + opt
+    f(100)
+  } else {
+    0
+  }
+}
+
+fn local(m: Map<string, int>) -> int {
+  let opt = m.get("a")
+  match opt {
+    Some(v) => {
+      let f = || {
+        let opt = 100
+        v + opt
+      }
+      f()
+    },
+    None => 0,
+  }
+}
+
+fn test() {
+  let m = Map.from([("a", 1)])
+  if add(m) != 101 { panic("the closure parameter should not hide the payload") }
+  if local(m) != 101 { panic("the closure local should not hide the payload") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn a_result_local_matched_with_a_guard_stays_one_value() {
     let input = r#"
 import "go:strconv"

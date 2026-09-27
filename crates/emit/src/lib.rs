@@ -549,7 +549,11 @@ impl<'a> Planner<'a> {
         preferred: impl Into<String>,
     ) -> String {
         let go_name = self.scope.bind(lisette_name, preferred);
-        let go_name = if self.shadows_declaration(&go_name) {
+        let go_name = if self.shadows_declaration(&go_name)
+            || self
+                .scope
+                .has_other_binding_for_go_name(&go_name, lisette_name)
+        {
             let fresh = self.scope.fresh_binding_go_name(lisette_name);
             self.scope.bind(lisette_name, fresh)
         } else {

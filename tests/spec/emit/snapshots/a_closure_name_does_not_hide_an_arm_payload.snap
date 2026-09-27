@@ -1,0 +1,68 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn add(m: Map<string, int>) -> int {
+    let opt = m.get("a")
+    if let Some(v) = opt {
+      let f = |opt: int| v + opt
+      f(100)
+    } else {
+      0
+    }
+  }
+  
+  fn local(m: Map<string, int>) -> int {
+    let opt = m.get("a")
+    match opt {
+      Some(v) => {
+        let f = || {
+          let opt = 100
+          v + opt
+        }
+        f()
+      },
+      None => 0,
+    }
+  }
+  
+  fn test() {
+    let m = Map.from([("a", 1)])
+    if add(m) != 101 { panic("the closure parameter should not hide the payload") }
+    if local(m) != 101 { panic("the closure local should not hide the payload") }
+  }
+---
+package main
+
+func add(m map[string]int) int {
+	opt, ok := m["a"]
+	if ok {
+		f := func(opt_1 int) int {
+			return opt + opt_1
+		}
+		return f(100)
+	}
+	return 0
+}
+
+func local(m map[string]int) int {
+	opt, ok := m["a"]
+	if ok {
+		f := func() int {
+			opt_1 := 100
+			return opt + opt_1
+		}
+		return f()
+	}
+	return 0
+}
+
+func test() {
+	m := map[string]int{"a": 1}
+	if add(m) != 101 {
+		panic("the closure parameter should not hide the payload")
+	}
+	if local(m) != 101 {
+		panic("the closure local should not hide the payload")
+	}
+}

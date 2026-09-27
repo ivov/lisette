@@ -1,0 +1,101 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn lookup(m: Map<string, int>, key: string) -> string {
+    let found = m.get(key)
+    match found {
+      Some(1) => "one",
+      Some(_) => "other",
+      None => "none",
+    }
+  }
+  
+  fn parse(text: string) -> string {
+    let parsed = strconv.Atoi(text)
+    if let Ok(1) = parsed { "one" } else { "other" }
+  }
+  
+  fn pair(text: string) -> Option<(int, string)> {
+    if text == "a" { Some((1, text)) } else { None }
+  }
+  
+  fn nested(text: string) -> int {
+    let found = pair(text)
+    match found {
+      Some((n, "a")) => n,
+      Some(_) => -1,
+      None => 0,
+    }
+  }
+  
+  fn test() {
+    let mut m = Map.new<string, int>()
+    m["a"] = 1
+    if lookup(m, "a") != "one" { panic("a one should match") }
+    if parse("1") != "one" || parse("2") != "other" { panic("a parsed one should match") }
+    if nested("a") != 1 || nested("b") != 0 { panic("a nested payload should match") }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func lookup(m map[string]int, key string) string {
+	found := lisette.MapGet(m, key)
+	if found.Tag == lisette.OptionSome {
+		if found.SomeVal == 1 {
+			return "one"
+		}
+		return "other"
+	}
+	return "none"
+}
+
+func parse(text string) string {
+	parsed := lisette.ResultFromPair[int](strconv.Atoi(text))
+	if parsed.Tag == lisette.ResultOk {
+		if parsed.OkVal == 1 {
+			return "one"
+		}
+		return "other"
+	}
+	return "other"
+}
+
+func pair(text string) (lisette.Tuple2[int, string], bool) {
+	if text == "a" {
+		return lisette.MakeTuple2[int, string](1, text), true
+	}
+	return lisette.Tuple2[int, string]{}, false
+}
+
+func nested(text string) int {
+	found := lisette.OptionFromCommaOk[lisette.Tuple2[int, string]](pair(text))
+	if found.Tag == lisette.OptionSome {
+		if found.SomeVal.Second == "a" {
+			return found.SomeVal.First
+		}
+		return -1
+	}
+	return 0
+}
+
+func test() {
+	m := make(map[string]int)
+	m["a"] = 1
+	if lookup(m, "a") != "one" {
+		panic("a one should match")
+	}
+	if parse("1") != "one" || parse("2") != "other" {
+		panic("a parsed one should match")
+	}
+	if nested("a") != 1 || nested("b") != 0 {
+		panic("a nested payload should match")
+	}
+}

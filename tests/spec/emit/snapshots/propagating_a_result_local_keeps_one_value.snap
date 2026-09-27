@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn parse(text: string) -> Result<int, error> {
+    let parsed = strconv.Atoi(text)
+    let n = parsed?
+    Ok(n + 1)
+  }
+  
+  fn test() {
+    match parse("41") {
+      Ok(n) => { if n != 42 { panic("a parsed number should gain one") } },
+      Err(_) => panic("expected a parsed number"),
+    }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func parse(text string) (int, error) {
+	parsed := lisette.ResultFromPair[int](strconv.Atoi(text))
+	if parsed.Tag != lisette.ResultOk {
+		return 0, parsed.ErrVal
+	}
+	n := parsed.OkVal
+	return n + 1, nil
+}
+
+func test() {
+	if n, err := parse("41"); err == nil {
+		if n != 42 {
+			panic("a parsed number should gain one")
+		}
+	} else {
+		panic("expected a parsed number")
+	}
+}
