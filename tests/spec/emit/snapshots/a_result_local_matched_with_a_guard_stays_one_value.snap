@@ -1,0 +1,56 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn describe(text: string) -> string {
+    let parsed = strconv.Atoi(text)
+    match parsed {
+      Err(_) if text == "" => "empty",
+      Err(_) => "bad",
+      Ok(_) => "number",
+    }
+  }
+  
+  fn test() {
+    if describe("") != "empty" { panic("an empty text should describe as empty") }
+    if describe("x") != "bad" { panic("a bad text should describe as bad") }
+    if describe("4") != "number" { panic("a parsed number should describe as a number") }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func describe(text string) string {
+	ret, ret_1 := strconv.Atoi(text)
+	var parsed lisette.Result[int, error]
+	if ret_1 != nil {
+		parsed = lisette.MakeResultErr[int, error](ret_1)
+	} else {
+		parsed = lisette.MakeResultOk[int, error](ret)
+	}
+	if parsed.Tag == lisette.ResultErr {
+		if text == "" {
+			return "empty"
+		}
+		return "bad"
+	}
+	return "number"
+}
+
+func test() {
+	if describe("") != "empty" {
+		panic("an empty text should describe as empty")
+	}
+	if describe("x") != "bad" {
+		panic("a bad text should describe as bad")
+	}
+	if describe("4") != "number" {
+		panic("a parsed number should describe as a number")
+	}
+}

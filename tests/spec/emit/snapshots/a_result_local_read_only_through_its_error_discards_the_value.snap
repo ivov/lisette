@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn describe(text: string) -> string {
+    let parsed = strconv.Atoi(text)
+    match parsed { Ok(_) => "number", Err(e) => e.Error() }
+  }
+  
+  fn failure(text: string) -> string {
+    let parsed = strconv.Atoi(text)
+    if let Err(e) = parsed { e.Error() } else { "" }
+  }
+  
+  fn test() {
+    if describe("4") != "number" { panic("a parsed number should describe as a number") }
+    if failure("4") != "" { panic("a parsed number should have no failure") }
+  }
+---
+package main
+
+import "strconv"
+
+func describe(text string) string {
+	_, err := strconv.Atoi(text)
+	if err == nil {
+		return "number"
+	}
+	return err.Error()
+}
+
+func failure(text string) string {
+	_, err := strconv.Atoi(text)
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+func test() {
+	if describe("4") != "number" {
+		panic("a parsed number should describe as a number")
+	}
+	if failure("4") != "" {
+		panic("a parsed number should have no failure")
+	}
+}

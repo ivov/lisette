@@ -1,5 +1,5 @@
 use rustc_hash::FxHashSet as HashSet;
-use syntax::ast::{Expression, collect_pattern_bindings};
+use syntax::ast::{Expression, Pattern, collect_pattern_bindings};
 
 const STATUS_METHODS: &[&str] = &["is_some", "is_none", "is_ok", "is_err"];
 const PAYLOAD_METHODS: &[&str] = &["unwrap_or", "map_or"];
@@ -73,9 +73,8 @@ impl Walker<'_> {
             }
             Expression::Match { subject, arms, .. } if self.names_the_local(subject) => {
                 self.supported += 1;
-                self.needs_value |= arms
-                    .iter()
-                    .any(|arm| !collect_pattern_bindings(&arm.pattern).is_empty());
+                self.needs_value |= arms.iter().any(|arm| binds_payload(&arm.pattern));
+                self.needs_whole_value |= arms.iter().any(|arm| arm.has_guard());
                 for arm in arms {
                     if let Some(guard) = &arm.guard {
                         self.walk(guard);
@@ -92,7 +91,7 @@ impl Walker<'_> {
                 ..
             } if self.names_the_local(scrutinee) => {
                 self.supported += 1;
-                self.needs_value |= !collect_pattern_bindings(pattern).is_empty();
+                self.needs_value |= binds_payload(pattern);
                 self.walk(consequence);
                 if let Some(alternative) = alternative.expression() {
                     self.walk(alternative);
@@ -144,4 +143,12 @@ impl Walker<'_> {
             self.walk(child);
         }
     }
+}
+
+fn binds_payload(pattern: &Pattern) -> bool {
+    let is_err = matches!(
+        pattern,
+        Pattern::EnumVariant { identifier, .. } if matches!(identifier.as_str(), "Err" | "Result.Err")
+    );
+    !is_err && !collect_pattern_bindings(pattern).is_empty()
 }

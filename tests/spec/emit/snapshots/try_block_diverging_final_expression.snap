@@ -21,8 +21,7 @@ func risky() lisette.Result[int, string] {
 }
 
 func test() {
-	var result lisette.Result[struct{}, string]
-	tryResult := func() lisette.Result[struct{}, string] {
+	result := func() lisette.Result[struct{}, string] {
 		check := risky()
 		if check.Tag != lisette.ResultOk {
 			return lisette.MakeResultErr[struct{}, string](check.ErrVal)
@@ -31,6 +30,5 @@ func test() {
 			panic("unreachable")
 		}
 	}()
-	result = tryResult
 	_ = result
 }

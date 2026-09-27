@@ -18,8 +18,7 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func test() lisette.Result[struct{}, string] {
 	x := 0
-	var r lisette.Result[struct{}, string]
-	tryResult := func() lisette.Result[struct{}, string] {
+	r := func() lisette.Result[struct{}, string] {
 		check := lisette.MakeResultOk[int, string](1)
 		if check.Tag != lisette.ResultOk {
 			return lisette.MakeResultErr[struct{}, string](check.ErrVal)
@@ -27,7 +26,6 @@ func test() lisette.Result[struct{}, string] {
 		x = 1
 		return lisette.MakeResultOk[struct{}, string](struct{}{})
 	}()
-	r = tryResult
 	_ = x
 	return r
 }

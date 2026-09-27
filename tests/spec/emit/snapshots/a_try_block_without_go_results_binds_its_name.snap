@@ -1,0 +1,103 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  struct CodeError { code: int }
+  
+  impl CodeError {
+    fn Error(self) -> string { f"code {self.code}" }
+  }
+  
+  fn coded(n: int) -> Result<int, CodeError> {
+    if n < 0 { return Err(CodeError { code: n }) }
+    Ok(n)
+  }
+  
+  fn custom(n: int) -> int {
+    let r = try {
+      let v = coded(n)?
+      v + 1
+    }
+    match r {
+      Ok(v) => v,
+      Err(e) => e.code,
+    }
+  }
+  
+  fn whole(text: string) -> string {
+    let r = try {
+      let n = strconv.Atoi(text)?
+      n * 2
+    }
+    fmt.Sprint(r)
+  }
+  
+  fn test() {
+    if custom(2) != 3 { panic("a coded value should be incremented") }
+    if custom(-4) != -4 { panic("a coded error should give its code") }
+    if whole("3") != "Ok(6)" { panic("a whole try result should print") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+type CodeError struct {
+	code int
+}
+
+func (c CodeError) Error() string {
+	return fmt.Sprintf("code %d", c.code)
+}
+
+func coded(n int) lisette.Result[int, CodeError] {
+	if n < 0 {
+		return lisette.MakeResultErr[int, CodeError](CodeError{code: n})
+	}
+	return lisette.MakeResultOk[int, CodeError](n)
+}
+
+func custom(n int) int {
+	r := func() lisette.Result[int, CodeError] {
+		check := coded(n)
+		if check.Tag != lisette.ResultOk {
+			return check
+		}
+		v := check.OkVal
+		return lisette.MakeResultOk[int, CodeError](v + 1)
+	}()
+	if r.Tag == lisette.ResultOk {
+		return r.OkVal
+	}
+	return r.ErrVal.code
+}
+
+func whole(text string) string {
+	r := func() lisette.Result[int, error] {
+		n, err := strconv.Atoi(text)
+		if err != nil {
+			return lisette.MakeResultErr[int, error](err)
+		}
+		return lisette.MakeResultOk[int, error](n * 2)
+	}()
+	return fmt.Sprint(r)
+}
+
+func test() {
+	if custom(2) != 3 {
+		panic("a coded value should be incremented")
+	}
+	if custom(-4) != -4 {
+		panic("a coded error should give its code")
+	}
+	if whole("3") != "Ok(6)" {
+		panic("a whole try result should print")
+	}
+}

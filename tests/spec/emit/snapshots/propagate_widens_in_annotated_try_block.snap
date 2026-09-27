@@ -69,25 +69,24 @@ func doB(ok bool) lisette.Result[int, BError] {
 }
 
 func test() {
-	var r lisette.Result[int, error]
-	tryResult := func() lisette.Result[int, error] {
+	_, err := func() (int, error) {
 		check := doA(true)
 		if check.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[int, error](check.ErrVal)
+			return 0, check.ErrVal
 		}
 		a := check.OkVal
 		check_1 := doB(false)
 		if check_1.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[int, error](check_1.ErrVal)
+			return 0, check_1.ErrVal
 		}
 		b := check_1.OkVal
-		return lisette.MakeResultOk[int, error](a + b)
+		return a + b, nil
 	}()
-	r = tryResult
-	if r.Tag == lisette.ResultOk {
+	if err == nil {
 		panic("expected error")
-	}
-	if r.ErrVal.Error() != "b failed" {
-		panic("wrong try block error")
+	} else {
+		if err.Error() != "b failed" {
+			panic("wrong try block error")
+		}
 	}
 }

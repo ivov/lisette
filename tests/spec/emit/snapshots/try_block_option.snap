@@ -19,24 +19,20 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func maybeGet() (int, bool) {
 	return 42, true
 }
 
 func test() int {
-	var opt lisette.Option[int]
-	tryResult := func() lisette.Option[int] {
+	opt, ok := func() (int, bool) {
 		x, ok := maybeGet()
 		if !ok {
-			return lisette.MakeOptionNone[int]()
+			return 0, false
 		}
-		return lisette.MakeOptionSome[int](x + 1)
+		return x + 1, true
 	}()
-	opt = tryResult
-	if opt.Tag == lisette.OptionSome {
-		return opt.SomeVal
+	if ok {
+		return opt
 	}
 	return 0
 }

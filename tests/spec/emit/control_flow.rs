@@ -2099,6 +2099,91 @@ fn test() -> int {
 }
 
 #[test]
+fn a_try_block_bound_and_matched_returns_go_results() {
+    let input = r#"
+import "go:strconv"
+
+fn total(texts: Slice<string>) -> int {
+  let mut sum = 0
+  for text in texts {
+    let parsed = try {
+      let n = strconv.Atoi(text)?
+      n * 10
+    }
+    match parsed {
+      Ok(v) => { sum += v },
+      Err(_) => {},
+    }
+  }
+  sum
+}
+
+fn offset(text: string) -> Result<int, error> {
+  let err = strconv.Atoi("1")?
+  let got = try {
+    let n = strconv.Atoi(text)?
+    n + err
+  }
+  match got {
+    Ok(v) => Ok(v),
+    Err(_) => Ok(err),
+  }
+}
+
+fn test() {
+  if total(["1", "x", "2"]) != 30 { panic("the total should skip a bad text") }
+  if offset("x").unwrap_or(0) != 1 { panic("a bad text should fall back to the offset") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn a_try_block_without_go_results_binds_its_name() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+struct CodeError { code: int }
+
+impl CodeError {
+  fn Error(self) -> string { f"code {self.code}" }
+}
+
+fn coded(n: int) -> Result<int, CodeError> {
+  if n < 0 { return Err(CodeError { code: n }) }
+  Ok(n)
+}
+
+fn custom(n: int) -> int {
+  let r = try {
+    let v = coded(n)?
+    v + 1
+  }
+  match r {
+    Ok(v) => v,
+    Err(e) => e.code,
+  }
+}
+
+fn whole(text: string) -> string {
+  let r = try {
+    let n = strconv.Atoi(text)?
+    n * 2
+  }
+  fmt.Sprint(r)
+}
+
+fn test() {
+  if custom(2) != 3 { panic("a coded value should be incremented") }
+  if custom(-4) != -4 { panic("a coded error should give its code") }
+  if whole("3") != "Ok(6)" { panic("a whole try result should print") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn try_block_early_exit_with_err() {
     let input = r#"
 fn test(bad: bool) -> int {

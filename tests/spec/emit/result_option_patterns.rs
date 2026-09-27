@@ -4389,6 +4389,52 @@ fn test() {
 }
 
 #[test]
+fn a_result_local_read_only_through_its_error_discards_the_value() {
+    let input = r#"
+import "go:strconv"
+
+fn describe(text: string) -> string {
+  let parsed = strconv.Atoi(text)
+  match parsed { Ok(_) => "number", Err(e) => e.Error() }
+}
+
+fn failure(text: string) -> string {
+  let parsed = strconv.Atoi(text)
+  if let Err(e) = parsed { e.Error() } else { "" }
+}
+
+fn test() {
+  if describe("4") != "number" { panic("a parsed number should describe as a number") }
+  if failure("4") != "" { panic("a parsed number should have no failure") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn a_result_local_matched_with_a_guard_stays_one_value() {
+    let input = r#"
+import "go:strconv"
+
+fn describe(text: string) -> string {
+  let parsed = strconv.Atoi(text)
+  match parsed {
+    Err(_) if text == "" => "empty",
+    Err(_) => "bad",
+    Ok(_) => "number",
+  }
+}
+
+fn test() {
+  if describe("") != "empty" { panic("an empty text should describe as empty") }
+  if describe("x") != "bad" { panic("a bad text should describe as bad") }
+  if describe("4") != "number" { panic("a parsed number should describe as a number") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn a_local_with_native_and_whole_value_uses_keeps_both() {
     let input = r#"
 import "go:fmt"

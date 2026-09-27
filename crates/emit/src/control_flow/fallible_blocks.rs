@@ -1,7 +1,8 @@
 use super::propagation::plain_return;
 use crate::Planner;
 use crate::ReturnContext;
-use crate::abi::callable::CallableReturnAbi;
+use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::calls::comma_ok::{CommaOkValueSlot, LoweredPair, PairKind};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
@@ -16,13 +17,64 @@ use syntax::types::Type;
 impl Planner<'_> {
     /// `try { ... }` → `result := func() T { ... }()`; value is the bound result var.
     pub(crate) fn lower_try_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
+        let result_var = self.fresh_var(Some("tryResult"));
+        self.lower_try_block_as(items, ty, result_var)
+    }
+
+    pub(crate) fn lower_try_block_into(
+        &mut self,
+        items: &[Expression],
+        ty: &Type,
+        name: &str,
+    ) -> Vec<LoweredStatement> {
+        self.lower_try_block_as(items, ty, name.to_string())
+            .into_parts()
+            .0
+    }
+
+    pub(crate) fn bind_try_block_pair(
+        &mut self,
+        items: &[Expression],
+        ty: &Type,
+        slot: CommaOkValueSlot,
+    ) -> Option<LoweredPair> {
+        let return_ctx = self.return_ctx();
+        let ty = self.facts.peel_alias(ty);
+        let effective_ty = resolve_fallible_block_type(items, &ty, Some(&return_ctx));
+        let fallible = Fallible::from_type(&effective_ty)?;
+        let body_ctx = self.return_context_for_type(effective_ty.clone());
+        let shape = body_ctx.lowered_shape()?;
+        let kind = match shape {
+            CallableReturnAbi::Result {
+                payload: PayloadLayout::Packed,
+            } => PairKind::Result { nil_guard: None },
+            CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
+                payload: PayloadLayout::Packed,
+            }) => PairKind::CommaOk { nil_guard: None },
+            _ => return None,
+        };
+        let go_return = self.render_lowered_return_ty(&shape, &effective_ty);
+        let body = self.with_return_context(body_ctx, |planner| {
+            planner.with_isolated_function(|planner| LoweredBlock {
+                statements: planner.lower_try_items(items, &fallible, Some(&shape)),
+            })
+        });
+        let call = GoExpression::immediate_call(go_return, body, FunctionLiteralLayout::MultiLine);
+        Some(self.bind_pair(Vec::new(), call, slot, kind, None))
+    }
+
+    fn lower_try_block_as(
+        &mut self,
+        items: &[Expression],
+        ty: &Type,
+        result_var: String,
+    ) -> ValuePlan {
         let return_ctx = self.return_ctx();
         let ty = self.facts.peel_alias(ty);
         let effective_ty = resolve_fallible_block_type(items, &ty, Some(&return_ctx));
         let fallible = Fallible::from_type(&effective_ty)
             .expect("`try` block must have Result or Option type");
 
-        let result_var = self.fresh_var(Some("tryResult"));
         self.declare(&result_var);
         let full_ty = {
             let mut fe = FalliblePlanner::new(self, &fallible);
