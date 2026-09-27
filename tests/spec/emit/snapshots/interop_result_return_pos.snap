@@ -28,8 +28,7 @@ func makeParser() func(string) (int, error) {
 func main() {
 	f := makeParser()
 	r, err := f("42")
-	v := r
 	if err == nil {
-		_ = v
+		_ = r
 	}
 }

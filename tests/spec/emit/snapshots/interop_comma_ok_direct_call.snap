@@ -18,8 +18,7 @@ import "os"
 
 func main() {
 	r, ok := os.LookupEnv("HOME")
-	v := r
 	if ok {
-		_ = v
+		_ = r
 	}
 }

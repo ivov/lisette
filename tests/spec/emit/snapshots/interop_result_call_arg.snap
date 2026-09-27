@@ -26,8 +26,7 @@ func apply(f func(string) (int, error), s string) (int, error) {
 
 func main() {
 	r, err := apply(strconv.Atoi, "42")
-	v := r
 	if err == nil {
-		_ = v
+		_ = r
 	}
 }

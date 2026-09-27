@@ -1,0 +1,132 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  import "go:sort"
+  
+  fn g() -> int { 1 }
+  
+  fn sorted_text() -> string {
+    let mut xs = [3, 1]
+    sort.Ints(xs)
+    fmt.Sprint(xs, g())
+  }
+  
+  fn rebound_text() -> string {
+    let mut xs = [3, 1]
+    sort.Ints(xs)
+    let mut reset = || { xs = [9] }
+    let bump = || -> int {
+      reset()
+      1
+    }
+    fmt.Sprint(xs, bump())
+  }
+  
+  fn evens_times_ten(xs: Slice<int>) -> Slice<int> {
+    xs.filter(|x| x % 2 == 0).map(|x| x * 10)
+  }
+  
+  struct Stack { items: Slice<int> }
+  
+  impl Stack {
+    fn pop(self: mut Ref<Self>) -> Option<int> {
+      if self.items.length() == 0 {
+        return None
+      }
+      let last = self.items[self.items.length() - 1]
+      self.items = self.items[..self.items.length() - 1]
+      Some(last)
+    }
+  }
+  
+  fn test() {
+    if sorted_text() != "[1 3] 1" { panic("a sorted slice should print in order") }
+    if rebound_text() != "[1 3] 1" { panic("a later rebinding must not change an earlier argument") }
+    let out = evens_times_ten([1, 2, 3, 4])
+    if out.length() != 2 || out[1] != 40 { panic("even elements should be scaled") }
+    let mut st = Stack { items: [1, 2] }
+    if st.pop().unwrap_or(0) != 2 || st.items.length() != 1 { panic("pop should take the last element") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"sort"
+)
+
+func g() int {
+	return 1
+}
+
+func sortedText() string {
+	xs := []int{3, 1}
+	sort.Ints(xs)
+	return fmt.Sprint(xs, g())
+}
+
+func reboundText() string {
+	xs := []int{3, 1}
+	sort.Ints(xs)
+	reset := func() {
+		xs = []int{9}
+	}
+	bump := func() int {
+		reset()
+		return 1
+	}
+	arg := xs
+	return fmt.Sprint(arg, bump())
+}
+
+func evensTimesTen(xs []int) []int {
+	var result []int
+	for _, x := range xs {
+		if x%2 == 0 {
+			result = append(result, x)
+		}
+	}
+	result_1 := make([]int, len(result))
+	for i, x := range result {
+		result_1[i] = x * 10
+	}
+	return result_1
+}
+
+type Stack struct {
+	items []int
+}
+
+func (s *Stack) pop() (int, bool) {
+	if len(s.items) == 0 {
+		return 0, false
+	}
+	last := s.items[len(s.items)-1]
+	ref := s
+	end := len(s.items) - 1
+	ref.items = s.items[:end:end]
+	return last, true
+}
+
+func test() {
+	if sortedText() != "[1 3] 1" {
+		panic("a sorted slice should print in order")
+	}
+	if reboundText() != "[1 3] 1" {
+		panic("a later rebinding must not change an earlier argument")
+	}
+	out := evensTimesTen([]int{1, 2, 3, 4})
+	if len(out) != 2 || out[1] != 40 {
+		panic("even elements should be scaled")
+	}
+	st := Stack{items: []int{1, 2}}
+	ret, ok := st.pop()
+	if !ok {
+		ret = 0
+	}
+	if ret != 2 || len(st.items) != 1 {
+		panic("pop should take the last element")
+	}
+}

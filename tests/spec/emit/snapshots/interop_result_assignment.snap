@@ -28,8 +28,7 @@ func main() {
 	f := fallback
 	f = strconv.Atoi
 	r, err := f("42")
-	v := r
 	if err == nil {
-		_ = v
+		_ = r
 	}
 }

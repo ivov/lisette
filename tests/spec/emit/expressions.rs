@@ -5739,3 +5739,57 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn writable_arguments_and_pure_calls_need_no_copy() {
+    let input = r#"
+import "go:fmt"
+import "go:sort"
+
+fn g() -> int { 1 }
+
+fn sorted_text() -> string {
+  let mut xs = [3, 1]
+  sort.Ints(xs)
+  fmt.Sprint(xs, g())
+}
+
+fn rebound_text() -> string {
+  let mut xs = [3, 1]
+  sort.Ints(xs)
+  let mut reset = || { xs = [9] }
+  let bump = || -> int {
+    reset()
+    1
+  }
+  fmt.Sprint(xs, bump())
+}
+
+fn evens_times_ten(xs: Slice<int>) -> Slice<int> {
+  xs.filter(|x| x % 2 == 0).map(|x| x * 10)
+}
+
+struct Stack { items: Slice<int> }
+
+impl Stack {
+  fn pop(self: mut Ref<Self>) -> Option<int> {
+    if self.items.length() == 0 {
+      return None
+    }
+    let last = self.items[self.items.length() - 1]
+    self.items = self.items[..self.items.length() - 1]
+    Some(last)
+  }
+}
+
+fn test() {
+  if sorted_text() != "[1 3] 1" { panic("a sorted slice should print in order") }
+  if rebound_text() != "[1 3] 1" { panic("a later rebinding must not change an earlier argument") }
+  let out = evens_times_ten([1, 2, 3, 4])
+  if out.length() != 2 || out[1] != 40 { panic("even elements should be scaled") }
+  let mut st = Stack { items: [1, 2] }
+  if st.pop().unwrap_or(0) != 2 || st.items.length() != 1 { panic("pop should take the last element") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

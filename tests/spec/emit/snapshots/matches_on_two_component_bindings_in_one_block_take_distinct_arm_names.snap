@@ -37,16 +37,14 @@ func sum(s, t string) int {
 	r, err := strconv.Atoi(s)
 	q, err_1 := strconv.Atoi(t)
 	var a int
-	n := q
 	if err_1 == nil {
-		a = n
+		a = q
 	} else {
 		a = 0
 	}
 	var b int
-	n_1 := r
 	if err == nil {
-		b = n_1
+		b = r
 	} else {
 		b = 0
 	}
@@ -56,13 +54,11 @@ func sum(s, t string) int {
 func first(m map[string]int) int {
 	v, ok := m["a"]
 	seen := 0
-	n := v
 	if ok {
-		seen = n
+		seen = v
 	}
-	n_1 := v
 	if ok {
-		return seen + n_1
+		return seen + v
 	}
 	return seen
 }

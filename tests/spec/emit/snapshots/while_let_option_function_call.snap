@@ -30,11 +30,10 @@ func nextItem(counter int) (int, bool) {
 func test() {
 	i := 0
 	for {
-		ret, ok := nextItem(i)
+		x, ok := nextItem(i)
 		if !ok {
 			break
 		}
-		x := ret
 		fmt.Printf("Got: %d\n", x)
 		i++
 	}

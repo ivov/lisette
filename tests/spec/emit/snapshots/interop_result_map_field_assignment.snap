@@ -44,8 +44,7 @@ func main() {
 		return
 	}
 	r, err := h.f("1")
-	v := r
 	if err == nil {
-		_ = v
+		_ = r
 	}
 }
