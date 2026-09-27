@@ -1208,6 +1208,30 @@ fn test() -> Map<int, int> {
 }
 
 #[test]
+fn map_from_integer_or_rune_keys_uses_a_map_literal() {
+    let input = r#"
+fn ids() -> Map<int, string> {
+  Map.from([(1, "ann"), (0x10, "bo"), (1_000, "cy")])
+}
+
+fn letters() -> Map<rune, int> {
+  Map.from([('a', 1), ('b', 2)])
+}
+
+fn weights() -> Map<float64, int> {
+  Map.from([(1, 1), (2, 2)])
+}
+
+fn test() {
+  if ids()[16] != "bo" { panic("a hex key should find its entry") }
+  if letters()['b'] != 2 { panic("a rune key should find its entry") }
+  if weights()[2.0] != 2 { panic("a float key should find its entry") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn map_with_void_function_value() {
     let input = r#"
 fn test() -> Map<string, fn()> {
