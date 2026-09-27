@@ -13,7 +13,7 @@ doctest = false
 test = false
 
 [dependencies]
-syntax = { package = "lisette-syntax", version = "=0.12.2", path = "../syntax" }
+syntax = { package = "lisette-syntax", version = "=0.12.3", path = "../syntax" }
 unicode-width = "0.2"
 
 [lints]
