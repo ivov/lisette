@@ -161,3 +161,15 @@ func TestResultOrElse(t *testing.T) {
 		t.Fatal("expected 99")
 	}
 }
+
+func TestResultFromPair(t *testing.T) {
+	ok := ResultFromPair(42, nil)
+	if !ok.IsOk() || ok.OkVal != 42 {
+		t.Fatal("expected Ok(42)")
+	}
+	failure := errors.New("fail")
+	err := ResultFromPair(0, failure)
+	if !err.IsErr() || err.ErrVal != failure {
+		t.Fatal("expected Err(fail)")
+	}
+}

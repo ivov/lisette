@@ -24,12 +24,6 @@ func source() (int, error) {
 }
 
 func main() {
-	ret, ret_1 := source()
-	var a lisette.Result[int, error]
-	if ret_1 != nil {
-		a = lisette.MakeResultErr[int, error](ret_1)
-	} else {
-		a = lisette.MakeResultOk[int, error](ret)
-	}
+	a := lisette.ResultFromPair[int](source())
 	_ = a
 }

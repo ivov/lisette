@@ -27,13 +27,7 @@ import (
 )
 
 func describe(text string) string {
-	ret, ret_1 := strconv.Atoi(text)
-	var parsed lisette.Result[int, error]
-	if ret_1 != nil {
-		parsed = lisette.MakeResultErr[int, error](ret_1)
-	} else {
-		parsed = lisette.MakeResultOk[int, error](ret)
-	}
+	parsed := lisette.ResultFromPair[int](strconv.Atoi(text))
 	if parsed.Tag == lisette.ResultErr {
 		if text == "" {
 			return "empty"

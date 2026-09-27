@@ -19,12 +19,6 @@ import (
 )
 
 func main() {
-	ret, ret_1 := strconv.Atoi("42")
-	var r lisette.Result[int, error]
-	if ret_1 != nil {
-		r = lisette.MakeResultErr[int, error](ret_1)
-	} else {
-		r = lisette.MakeResultOk[int, error](ret)
-	}
+	r := lisette.ResultFromPair[int](strconv.Atoi("42"))
 	fmt.Println(r)
 }

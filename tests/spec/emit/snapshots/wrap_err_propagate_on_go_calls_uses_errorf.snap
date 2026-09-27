@@ -43,12 +43,5 @@ func load() ([]int, error) {
 }
 
 func main() {
-	ret, ret_1 := load()
-	var result lisette.Result[[]int, error]
-	if ret_1 != nil {
-		result = lisette.MakeResultErr[[]int, error](ret_1)
-	} else {
-		result = lisette.MakeResultOk[[]int, error](ret)
-	}
-	fmt.Println(result)
+	fmt.Println(lisette.ResultFromPair[[]int](load()))
 }

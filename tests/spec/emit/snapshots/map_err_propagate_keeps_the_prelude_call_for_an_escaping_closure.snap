@@ -28,14 +28,7 @@ import (
 )
 
 func parse(s string) (int, error) {
-	ret, ret_1 := strconv.Atoi(s)
-	var result lisette.Result[int, error]
-	if ret_1 != nil {
-		result = lisette.MakeResultErr[int, error](ret_1)
-	} else {
-		result = lisette.MakeResultOk[int, error](ret)
-	}
-	check := lisette.ResultMapErr(result, func(e error) error {
+	check := lisette.ResultMapErr(lisette.ResultFromPair[int](strconv.Atoi(s)), func(e error) error {
 		if s == "" {
 			return e
 		}
