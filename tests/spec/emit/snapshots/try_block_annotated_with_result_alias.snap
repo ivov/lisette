@@ -27,14 +27,12 @@ func source() (int, error) {
 }
 
 func main() {
-	var r lisette.Result[int, error]
-	tryResult := func() lisette.Result[int, error] {
+	r := func() lisette.Result[int, error] {
 		n, err := source()
 		if err != nil {
 			return lisette.MakeResultErr[int, error](err)
 		}
 		return lisette.MakeResultOk[int, error](n + 1)
 	}()
-	r = tryResult
 	_ = r
 }

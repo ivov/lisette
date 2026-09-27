@@ -25,8 +25,7 @@ func risky() lisette.Result[int, string] {
 func doSomething() {}
 
 func test() {
-	var r lisette.Result[int, string]
-	tryResult := func() lisette.Result[int, string] {
+	r := func() lisette.Result[int, string] {
 		check := risky()
 		if check.Tag != lisette.ResultOk {
 			return check
@@ -37,6 +36,5 @@ func test() {
 		}()
 		return lisette.MakeResultOk[int, string](x)
 	}()
-	r = tryResult
 	_ = r
 }

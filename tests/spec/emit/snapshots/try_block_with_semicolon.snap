@@ -20,14 +20,12 @@ func doThing() lisette.Result[int, string] {
 }
 
 func test() {
-	var result lisette.Result[int, string]
-	tryResult := func() lisette.Result[int, string] {
+	result := func() lisette.Result[int, string] {
 		check := doThing()
 		if check.Tag != lisette.ResultOk {
 			return check
 		}
 		return lisette.MakeResultOk[int, string](check.OkVal)
 	}()
-	result = tryResult
 	_ = result
 }

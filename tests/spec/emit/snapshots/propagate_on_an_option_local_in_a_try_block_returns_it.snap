@@ -17,14 +17,12 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
 	opt := lisette.MakeOptionSome(4)
-	var doubled lisette.Option[int]
-	tryResult := func() lisette.Option[int] {
+	doubled := func() lisette.Option[int] {
 		if opt.Tag != lisette.OptionSome {
 			return opt
 		}
 		v := opt.SomeVal
 		return lisette.MakeOptionSome[int](v * 2)
 	}()
-	doubled = tryResult
 	_ = doubled
 }

@@ -29,10 +29,7 @@ description: |
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"strconv"
-)
+import "strconv"
 
 func parse(text string) (int, error) {
 	ret, err := strconv.Atoi(text)
@@ -43,16 +40,17 @@ func parse(text string) (int, error) {
 }
 
 func parseThenDefault(text string) int {
-	var parsed lisette.Result[int, error]
-	tryResult := func() lisette.Result[int, error] {
+	parsed, err := func() (int, error) {
 		ret, err := strconv.Atoi(text)
 		if err != nil {
-			return lisette.MakeResultErr[int, error](err)
+			return 0, err
 		}
-		return lisette.MakeResultOk[int, error](ret + 1)
+		return ret + 1, nil
 	}()
-	parsed = tryResult
-	return parsed.UnwrapOr(0)
+	if err != nil {
+		parsed = 0
+	}
+	return parsed
 }
 
 func test() {

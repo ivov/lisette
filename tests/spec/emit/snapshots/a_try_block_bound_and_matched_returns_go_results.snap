@@ -1,0 +1,89 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn total(texts: Slice<string>) -> int {
+    let mut sum = 0
+    for text in texts {
+      let parsed = try {
+        let n = strconv.Atoi(text)?
+        n * 10
+      }
+      match parsed {
+        Ok(v) => { sum += v },
+        Err(_) => {},
+      }
+    }
+    sum
+  }
+  
+  fn offset(text: string) -> Result<int, error> {
+    let err = strconv.Atoi("1")?
+    let got = try {
+      let n = strconv.Atoi(text)?
+      n + err
+    }
+    match got {
+      Ok(v) => Ok(v),
+      Err(_) => Ok(err),
+    }
+  }
+  
+  fn test() {
+    if total(["1", "x", "2"]) != 30 { panic("the total should skip a bad text") }
+    if offset("x").unwrap_or(0) != 1 { panic("a bad text should fall back to the offset") }
+  }
+---
+package main
+
+import "strconv"
+
+func total(texts []string) int {
+	sum := 0
+	for _, text := range texts {
+		parsed, err := func() (int, error) {
+			n, err := strconv.Atoi(text)
+			if err != nil {
+				return 0, err
+			}
+			return n * 10, nil
+		}()
+		if err == nil {
+			sum += parsed
+		}
+	}
+	return sum
+}
+
+func offset(text string) (int, error) {
+	err, err_1 := strconv.Atoi("1")
+	if err_1 != nil {
+		return 0, err_1
+	}
+	got, err_3 := func() (int, error) {
+		n, err_2 := strconv.Atoi(text)
+		if err_2 != nil {
+			return 0, err_2
+		}
+		return n + err, nil
+	}()
+	if err_3 == nil {
+		return got, nil
+	}
+	return err, nil
+}
+
+func test() {
+	if total([]string{"1", "x", "2"}) != 30 {
+		panic("the total should skip a bad text")
+	}
+	ret, err := offset("x")
+	if err != nil {
+		ret = 0
+	}
+	if ret != 1 {
+		panic("a bad text should fall back to the offset")
+	}
+}

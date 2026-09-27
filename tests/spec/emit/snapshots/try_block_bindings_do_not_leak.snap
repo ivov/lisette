@@ -44,8 +44,7 @@ func main() {
 	x := 100
 	fmt.Println(x)
 	x_1 := 200
-	var result lisette.Result[int, string]
-	tryResult := func() lisette.Result[int, string] {
+	result := func() lisette.Result[int, string] {
 		check := parse("42")
 		if check.Tag != lisette.ResultOk {
 			return check
@@ -53,7 +52,6 @@ func main() {
 		x := check.OkVal
 		return lisette.MakeResultOk[int, string](x + 1)
 	}()
-	result = tryResult
 	if result.Tag == lisette.ResultOk {
 		fmt.Println(result.OkVal)
 	} else {

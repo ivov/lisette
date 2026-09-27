@@ -196,8 +196,11 @@ impl Planner<'_> {
         } else {
             CommaOkValueSlot::Discarded
         };
-        let mut pair = match kind {
-            ComponentKind::Option => {
+        let mut pair = match (value.unwrap_parens(), kind) {
+            (Expression::TryBlock { items, ty, .. }, _) => {
+                self.bind_try_block_pair(items, ty, slot)?
+            }
+            (_, ComponentKind::Option) => {
                 let source = self.comma_ok_source(value)?;
                 // With a nil guard, `ok` alone is not the success condition.
                 if source.has_nil_guard() {
@@ -205,7 +208,7 @@ impl Planner<'_> {
                 }
                 self.bind_comma_ok_pair(value, source, slot)
             }
-            ComponentKind::Result => {
+            (_, ComponentKind::Result) => {
                 let fuse = self.result_fuse_plan(value)?;
                 if fuse.has_nil_guard() || fuse.wraps_error() || !fuse.carries_payload() {
                     return None;
@@ -459,6 +462,12 @@ impl Planner<'_> {
         value: &Expression,
         binding_ty: &Type,
     ) -> Vec<LoweredStatement> {
+        if let Expression::TryBlock { items, ty, .. } = value
+            && name != "_"
+            && !self.is_declared(name)
+        {
+            return self.lower_try_block_into(items, ty, name);
+        }
         let mut statements = Vec::new();
         if !self.is_declared(name) {
             if let Some(declaration) = self.let_temp_var_declaration(name, value, binding_ty) {

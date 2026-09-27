@@ -17,14 +17,12 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
 	xs := []int{1, 2}
-	var r lisette.Option[int]
-	tryResult := func() lisette.Option[int] {
+	r := func() lisette.Option[int] {
 		if len(xs) == 0 {
 			return lisette.MakeOptionNone[int]()
 		}
 		x := xs[0]
 		return lisette.MakeOptionSome[int](x + 1)
 	}()
-	r = tryResult
 	_ = r
 }
