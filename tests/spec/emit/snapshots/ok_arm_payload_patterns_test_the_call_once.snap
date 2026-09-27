@@ -1,0 +1,116 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:errors"
+  import "go:strconv"
+  
+  fn pair(a: string) -> Result<(int, int), error> {
+    if a == "" { return Err(errors.New("empty")) }
+    let x = strconv.Atoi(a)?
+    Ok((x, x))
+  }
+  
+  fn sum(a: string) -> int {
+    match pair(a) {
+      Ok((x, y)) => x + y,
+      Err(_) => -1,
+    }
+  }
+  
+  fn describe(s: string) -> string {
+    match strconv.Atoi(s) {
+      Ok(1) => "one",
+      Ok(n) => if n > 1 { "many" } else { "few" },
+      Err(e) => e.Error(),
+    }
+  }
+  
+  fn first_or_zero(a: string) -> int {
+    if let Ok((x, _)) = pair(a) {
+      return x
+    }
+    0
+  }
+  
+  fn test() {
+    if sum("2") != 4 { panic("a pair should add up") }
+    if sum("") != -1 { panic("a failed pair should return minus one") }
+    if describe("1") != "one" { panic("one should match its literal arm") }
+    if describe("5") != "many" { panic("five should match the binding arm") }
+    if describe("x") == "one" { panic("a word should take the error arm") }
+    if first_or_zero("3") != 3 { panic("if let should bind the first element") }
+    if first_or_zero("") != 0 { panic("if let should skip a failure") }
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func pair(a string) (lisette.Tuple2[int, int], error) {
+	if a == "" {
+		return lisette.Tuple2[int, int]{}, errors.New("empty")
+	}
+	x, err := strconv.Atoi(a)
+	if err != nil {
+		return lisette.Tuple2[int, int]{}, err
+	}
+	return lisette.MakeTuple2[int, int](x, x), nil
+}
+
+func sum(a string) int {
+	if ret, err := pair(a); err == nil {
+		return ret.First + ret.Second
+	} else {
+		return -1
+	}
+}
+
+func describe(s string) string {
+	if ret, e := strconv.Atoi(s); e == nil {
+		if ret == 1 {
+			return "one"
+		}
+		if ret > 1 {
+			return "many"
+		}
+		return "few"
+	} else {
+		return e.Error()
+	}
+}
+
+func firstOrZero(a string) int {
+	if ret, err := pair(a); err == nil {
+		return ret.First
+	}
+	return 0
+}
+
+func test() {
+	if sum("2") != 4 {
+		panic("a pair should add up")
+	}
+	if sum("") != -1 {
+		panic("a failed pair should return minus one")
+	}
+	if describe("1") != "one" {
+		panic("one should match its literal arm")
+	}
+	if describe("5") != "many" {
+		panic("five should match the binding arm")
+	}
+	if describe("x") == "one" {
+		panic("a word should take the error arm")
+	}
+	if firstOrZero("3") != 3 {
+		panic("if let should bind the first element")
+	}
+	if firstOrZero("") != 0 {
+		panic("if let should skip a failure")
+	}
+}

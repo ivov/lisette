@@ -4602,3 +4602,75 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn ok_arm_payload_patterns_test_the_call_once() {
+    let input = r#"
+import "go:errors"
+import "go:strconv"
+
+fn pair(a: string) -> Result<(int, int), error> {
+  if a == "" { return Err(errors.New("empty")) }
+  let x = strconv.Atoi(a)?
+  Ok((x, x))
+}
+
+fn sum(a: string) -> int {
+  match pair(a) {
+    Ok((x, y)) => x + y,
+    Err(_) => -1,
+  }
+}
+
+fn describe(s: string) -> string {
+  match strconv.Atoi(s) {
+    Ok(1) => "one",
+    Ok(n) => if n > 1 { "many" } else { "few" },
+    Err(e) => e.Error(),
+  }
+}
+
+fn first_or_zero(a: string) -> int {
+  if let Ok((x, _)) = pair(a) {
+    return x
+  }
+  0
+}
+
+fn test() {
+  if sum("2") != 4 { panic("a pair should add up") }
+  if sum("") != -1 { panic("a failed pair should return minus one") }
+  if describe("1") != "one" { panic("one should match its literal arm") }
+  if describe("5") != "many" { panic("five should match the binding arm") }
+  if describe("x") == "one" { panic("a word should take the error arm") }
+  if first_or_zero("3") != 3 { panic("if let should bind the first element") }
+  if first_or_zero("") != 0 { panic("if let should skip a failure") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn ok_let_else_destructures_after_the_else_block() {
+    let input = r#"
+import "go:errors"
+
+fn pair(a: string) -> Result<(int, int), error> {
+  if a == "" { Err(errors.New("empty")) } else { Ok((1, 2)) }
+}
+
+fn total(a: string) -> int {
+  let x = 50
+  let Ok((x, y)) = pair(a) else {
+    return x
+  }
+  x + y
+}
+
+fn test() {
+  if total("a") != 3 { panic("a pair should add up") }
+  if total("") != 50 { panic("the else block should read the outer name") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

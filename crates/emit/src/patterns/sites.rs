@@ -17,7 +17,9 @@ use crate::patterns::binding_emit::{
 use crate::patterns::decision_tree::{
     self, PatternBinding, PatternInfo, SubjectRoot, render_condition,
 };
-use crate::patterns::matching::{ArmBinding, field_binding, ok_pattern_field, some_pattern_field};
+use crate::patterns::matching::{
+    ArmBinding, ResultFusePlan, field_binding, ok_pattern_field, some_pattern_field,
+};
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan, define,
     discard, expression_statement,
@@ -303,11 +305,14 @@ impl Planner<'_> {
         scrutinee: &Expression,
         else_block: &Expression,
     ) -> Option<Vec<LoweredStatement>> {
-        let field = ok_pattern_field(pattern)?;
         let fuse = self.result_fuse_plan(scrutinee)?;
         if !fuse.carries_payload() {
             return None;
         }
+        let Some(field) = ok_pattern_field(pattern) else {
+            return self
+                .lower_fused_result_let_else_destructure(fuse, pattern, scrutinee, else_block);
+        };
 
         let binding = self.declare_fused_binding(field);
         let slot = match &binding {
@@ -317,6 +322,56 @@ impl Planner<'_> {
         let bound = fuse.bind(self, slot, None);
         let fail_condition = self.pair_failure_condition(&bound);
         Some(self.finish_fused_let_else(bound.statements, fail_condition, binding, else_block))
+    }
+
+    /// `let Ok(<irrefutable pattern>) = f() else { ... }`
+    fn lower_fused_result_let_else_destructure(
+        &mut self,
+        fuse: ResultFusePlan<'_>,
+        pattern: &Pattern,
+        scrutinee: &Expression,
+        else_block: &Expression,
+    ) -> Option<Vec<LoweredStatement>> {
+        let Pattern::EnumVariant {
+            identifier,
+            fields,
+            rest: false,
+            ..
+        } = pattern
+        else {
+            return None;
+        };
+        let ("Ok" | "Result.Ok", [payload]) = (identifier.as_str(), fields.as_slice()) else {
+            return None;
+        };
+        let payload_ty = self.facts.peel_alias(&scrutinee.get_type()).ok_type();
+        let info = decision_tree::collect_pattern_info(self, payload, &payload_ty);
+        if !info.checks.is_empty() || info.root_assertion.is_some() {
+            return None;
+        }
+        let binds = info
+            .bindings
+            .iter()
+            .any(|binding| binding.go_name.is_some());
+        let slot = if binds {
+            CommaOkValueSlot::Temp
+        } else {
+            CommaOkValueSlot::Discarded
+        };
+        let bound = fuse.bind(self, slot, None);
+        let value = bound.value().map(str::to_string);
+        let fail_condition = self.pair_failure_condition(&bound);
+        // The else block lowers before the pattern binds its names.
+        let mut statements =
+            self.finish_fused_let_else(bound.statements, fail_condition, None, else_block);
+        if let Some(value) = value.filter(|_| binds) {
+            statements.extend(self.lower_irrefutable_pattern_site(
+                PatternSubject::for_value(value),
+                payload,
+                &payload_ty,
+            ));
+        }
+        Some(statements)
     }
 
     /// Fuse `let Some(x) = <lowered Option source> else { ... }` into a direct

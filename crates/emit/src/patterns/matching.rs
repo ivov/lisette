@@ -427,6 +427,11 @@ impl Planner<'_> {
             return LoweredBlock { statements };
         }
 
+        if let Some(fused) = self.lower_nested_result_pair_match(subject, arms, place) {
+            statements.extend(fused);
+            return LoweredBlock { statements };
+        }
+
         if let Some(elementwise) = self.lower_tuple_subject_match(subject, arms, place) {
             statements.extend(elementwise);
             return LoweredBlock { statements };
@@ -852,27 +857,8 @@ impl Planner<'_> {
         let (mut else_body, err_used) =
             self.lower_fused_arm(&[err_binding], &err.arm.expression, arm_place);
 
-        let err_read = err_used.first().copied().unwrap_or(false) || !wraps.is_empty();
-        if has_nil_guard && err_read {
-            else_body.statements.insert(
-                0,
-                LoweredStatement::If(IfPlan::plain(
-                    is_nil(error()),
-                    LoweredBlock {
-                        statements: vec![assign(error(), unexpected_nil_error())],
-                    },
-                    ElseArm::None,
-                )),
-            );
-        }
-        if !wraps.is_empty() {
-            let wrapped = self.wrap_error(&wraps, error());
-            let prologue = vec![assign(error(), wrapped)];
-            let after_nil_guard = usize::from(has_nil_guard);
-            else_body
-                .statements
-                .splice(after_nil_guard..after_nil_guard, prologue);
-        }
+        let err_read = err_used.first().copied().unwrap_or(false);
+        self.prepend_error_prologue(&mut else_body, error(), has_nil_guard, err_read, &wraps);
         if matches!(then_body, Some((_, false))) {
             bound.discard_value();
         }
@@ -900,6 +886,141 @@ impl Planner<'_> {
             )
         };
         statements.push(LoweredStatement::If(plan));
+        Some(statements)
+    }
+
+    /// Restore a nil-guarded error and apply `wrap_err` messages.
+    fn prepend_error_prologue(
+        &mut self,
+        else_body: &mut LoweredBlock,
+        error: GoExpression,
+        has_nil_guard: bool,
+        err_read: bool,
+        wraps: &[WrapMessage],
+    ) {
+        let err_read = err_read || !wraps.is_empty();
+        if has_nil_guard && err_read {
+            else_body.statements.insert(
+                0,
+                LoweredStatement::If(IfPlan::plain(
+                    is_nil(error.clone()),
+                    LoweredBlock {
+                        statements: vec![assign(error.clone(), unexpected_nil_error())],
+                    },
+                    ElseArm::None,
+                )),
+            );
+        }
+        if !wraps.is_empty() {
+            let wrapped = self.wrap_error(wraps, error.clone());
+            let prologue = vec![assign(error, wrapped)];
+            let after_nil_guard = usize::from(has_nil_guard);
+            else_body
+                .statements
+                .splice(after_nil_guard..after_nil_guard, prologue);
+        }
+    }
+
+    /// Test a fallible call once, then match the `Ok` payload patterns.
+    fn lower_nested_result_pair_match(
+        &mut self,
+        subject: &Expression,
+        arms: &[MatchArm],
+        place: &PlacePlan,
+    ) -> Option<Vec<LoweredStatement>> {
+        if arms.iter().any(MatchArm::has_guard) {
+            return None;
+        }
+        let fuse = self.result_fuse_plan(subject)?;
+        if !fuse.carries_payload() {
+            return None;
+        }
+        let payload_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
+        let mut ok_arms = Vec::new();
+        let mut err_arm: Option<(&MatchArm, Option<&Pattern>)> = None;
+        for arm in arms {
+            match &arm.pattern {
+                Pattern::EnumVariant {
+                    identifier,
+                    fields,
+                    rest: false,
+                    ..
+                } => match (identifier.as_str(), fields.as_slice()) {
+                    ("Ok" | "Result.Ok", [payload]) => {
+                        let mut inner_arm = arm.clone();
+                        inner_arm.pattern = payload.clone();
+                        ok_arms.push(inner_arm);
+                    }
+                    ("Err" | "Result.Err", [payload])
+                        if err_arm.is_none() && field_binding(payload).is_some() =>
+                    {
+                        err_arm = Some((arm, Some(payload)));
+                    }
+                    _ => return None,
+                },
+                // A catch-all takes the error only after an irrefutable `Ok` arm.
+                Pattern::WildCard { .. }
+                    if err_arm.is_none()
+                        && ok_arms.iter().any(|ok_arm| {
+                            let info = decision_tree::collect_pattern_info(
+                                self,
+                                &ok_arm.pattern,
+                                &payload_ty,
+                            );
+                            info.checks.is_empty() && info.root_assertion.is_none()
+                        }) =>
+                {
+                    err_arm = Some((arm, None));
+                }
+                _ => return None,
+            }
+        }
+        let (err_arm, err_payload) = err_arm?;
+        if ok_arms.is_empty() {
+            return None;
+        }
+        let err_name = err_payload
+            .filter(|payload| !self.facts.is_unused_binding(payload))
+            .and_then(field_binding)
+            .filter(|name| *name != "_");
+
+        let has_nil_guard = fuse.has_nil_guard();
+        let (mut bound, wraps) = {
+            let value_name = self.fresh_var(Some("ret"));
+            fuse.bind_wrapped(
+                self,
+                CommaOkValueSlot::Arm(value_name),
+                err_name,
+                err_name.is_some(),
+            )
+        };
+        let value = GoExpression::name(bound.value()?.to_string());
+        let then_body =
+            self.lower_match_tree(&ok_arms, MatchSubject::Var(value), payload_ty, place);
+        let then_body = match then_body.statements.as_slice() {
+            [LoweredStatement::Block(inner)] => inner.clone(),
+            _ => then_body,
+        };
+        if let Some(name) = bound.value()
+            && !GoUses::of(&then_body.statements).contains(name)
+        {
+            bound.discard_value();
+        }
+        let err_binding = ArmBinding::alias(err_name, Some(bound.status()));
+        let (mut else_body, err_used) =
+            self.lower_fused_arm(&[err_binding], &err_arm.expression, place);
+        let err_read = err_used.first().copied().unwrap_or(false);
+        let error = GoExpression::name(bound.status().to_string());
+        self.prepend_error_prologue(&mut else_body, error, has_nil_guard, err_read, &wraps);
+
+        let ok_condition = self.pair_success_condition(&bound);
+        let else_arm = ElseArm::from_body(else_body, false);
+        let mut statements = bound.statements;
+        statements.push(LoweredStatement::If(pair_if(
+            ok_condition,
+            then_body,
+            else_arm,
+        )));
         Some(statements)
     }
 
