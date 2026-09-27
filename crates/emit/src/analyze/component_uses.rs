@@ -60,10 +60,11 @@ impl Walker<'_> {
                 return;
             }
             Expression::Assignment { target, value, .. } => {
-                if self.names_the_local(target) {
+                if target.unwrap_parens().root_identifier() == Some(self.name) {
                     self.blocked = true;
                     return;
                 }
+                self.walk(target);
                 self.walk(value);
                 return;
             }
