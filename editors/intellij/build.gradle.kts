@@ -1,10 +1,10 @@
 plugins {
-    kotlin("jvm") version "1.9.25"
+    kotlin("jvm") version "2.0.21"
     id("org.jetbrains.intellij.platform") version "2.14.0"
 }
 
 group = "run.lisette"
-version = "0.1.1"
+version = "0.1.2"
 
 repositories {
     mavenCentral()
