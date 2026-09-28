@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790536783494,
+  "lastUpdate": 1790626799616,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -40843,6 +40843,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/d66a214ee92fa4d58ddae777d457c992e87fd7cf"
         },
         "date": 1790536780945,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 146173,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 37678,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28435,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19344,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15262,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9004,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2944,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9259b1fc5cfd5f59e74660189ba4b598f67f5e93",
+          "message": "chore: bump IntelliJ plugin to 0.1.2 (#1496)",
+          "timestamp": "2026-09-28T22:19:32+02:00",
+          "tree_id": "276e27f543ac3fa0644001685d7ad01d89469b1d",
+          "url": "https://github.com/ivov/lisette/commit/9259b1fc5cfd5f59e74660189ba4b598f67f5e93"
+        },
+        "date": 1790626797217,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
