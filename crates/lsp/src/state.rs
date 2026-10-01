@@ -10,6 +10,7 @@ use deps::BindgenSetup;
 use crate::imports::PackageIndex;
 use crate::position::LineIndex;
 use crate::router::ProjectRouter;
+use crate::scheduler::Scheduler;
 use crate::snapshot::AnalysisSnapshot;
 use std::ops::Deref;
 
@@ -21,6 +22,7 @@ pub struct SharedState {
     pub(crate) packages: Arc<PackageIndex>,
     pub(crate) insert_replace_support: AtomicBool,
     pub(crate) watch_registration_supported: AtomicBool,
+    pub(crate) scheduler: Arc<Scheduler>,
 }
 
 impl SharedState {
@@ -44,6 +46,7 @@ pub(crate) struct Workspace {
     pub(crate) documents: HashMap<Url, DocumentState>,
     analyses: HashMap<AnalysisKey, SharedAnalysis>,
     generation: u64,
+    prepare_dependencies: bool,
 }
 
 /// What an analysis is determined by, and so what it can be shared across.
@@ -70,6 +73,22 @@ struct SharedAnalysis {
 impl Workspace {
     pub(crate) fn generation(&self) -> u64 {
         self.generation
+    }
+
+    pub(crate) fn prepare_dependencies(&self) -> bool {
+        self.prepare_dependencies
+    }
+
+    pub(crate) fn allow_dependency_preparation(&mut self) {
+        self.prepare_dependencies = true;
+    }
+
+    pub(crate) fn cancel_diagnostics(&mut self) {
+        for analysis in self.analyses.values_mut() {
+            if let Some(token) = analysis.pending_diagnostics.take() {
+                token.cancel();
+            }
+        }
     }
 
     pub(crate) fn keys(&self) -> Vec<AnalysisKey> {
@@ -106,6 +125,7 @@ impl Workspace {
 
     pub(crate) fn invalidate_all(&mut self) {
         self.generation += 1;
+        self.prepare_dependencies = false;
         for analysis in self.analyses.values_mut() {
             analysis.current = None;
         }
@@ -262,6 +282,7 @@ impl Backend {
                 packages: Arc::default(),
                 insert_replace_support: AtomicBool::new(false),
                 watch_registration_supported: AtomicBool::new(false),
+                scheduler: Arc::default(),
             }),
         }
     }

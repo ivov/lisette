@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::thread;
 
 use crate::heap;
 use crate::protocol::Url;
@@ -24,6 +23,7 @@ impl SharedState {
         if let Some(key) = key {
             workspace.ensure(&key);
         }
+        workspace.allow_dependency_preparation();
         drop(workspace);
 
         self.reschedule_all();
@@ -76,7 +76,10 @@ impl SharedState {
         self.reschedule_all();
     }
 
-    pub(crate) fn publish_diagnostics(&self, uri: Url) {
+    pub(crate) fn publish_diagnostics(&self, uri: Url, token: &CancellationToken) {
+        if token.is_cancelled() {
+            return;
+        }
         if uri
             .to_file_path()
             .is_ok_and(|p| deps::is_generated_typedef_path(&p))
@@ -98,7 +101,10 @@ impl SharedState {
         };
 
         let workspace = self.workspace();
-        if workspace.generation() != generation || !workspace.documents.contains_key(&uri) {
+        if token.is_cancelled()
+            || workspace.generation() != generation
+            || !workspace.documents.contains_key(&uri)
+        {
             return;
         }
         self.client
@@ -113,30 +119,22 @@ impl SharedState {
     }
 
     fn schedule_diagnostics(self: &Arc<Self>, key: AnalysisKey) {
-        let state = Arc::clone(self);
         let token = CancellationToken::new();
-        let run_token = token.clone();
-        let run_key = key.clone();
         let delay = {
             let mut workspace = self.workspace_mut();
-            workspace.set_pending_diagnostics(&key, token);
+            workspace.set_pending_diagnostics(&key, token.clone());
             workspace.diagnostics_delay(&key)
         };
-        thread::spawn(move || {
-            thread::sleep(delay);
-            if run_token.is_cancelled() {
+        self.scheduler.diagnostics(key, token, delay);
+    }
+
+    pub(crate) fn run_diagnostics(&self, key: &AnalysisKey, token: &CancellationToken) {
+        for uri in self.documents_for(key) {
+            if token.is_cancelled() {
                 return;
             }
-            for uri in state.documents_for(&run_key) {
-                if run_token.is_cancelled() {
-                    return;
-                }
-                state.publish_diagnostics(uri);
-            }
-            state
-                .workspace_mut()
-                .finish_diagnostics(&run_key, &run_token);
-        });
+            self.publish_diagnostics(uri, token);
+        }
     }
 
     fn documents_for(&self, key: &AnalysisKey) -> Vec<Url> {
