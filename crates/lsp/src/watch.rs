@@ -74,6 +74,7 @@ impl SharedState {
         }
         // As with a document edit, reject older builds and retain last_usable.
         workspace.invalidate_all();
+        workspace.allow_dependency_preparation();
         drop(workspace);
         self.reschedule_all();
     }

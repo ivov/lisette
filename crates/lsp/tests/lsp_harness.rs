@@ -1,5 +1,6 @@
 use std::io::{BufReader, PipeWriter};
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -43,12 +44,16 @@ fn init_test_typedef_home() {
 impl TestClient {
     /// Spawn a new LSP server and return a connected client.
     pub fn new() -> Self {
+        Self::with_bindgen_setup(None)
+    }
+
+    pub fn with_bindgen_setup(setup: Option<Arc<dyn deps::BindgenSetup>>) -> Self {
         init_test_typedef_home();
 
         let (server_read, client_write) = io::pipe().expect("create client-to-server pipe");
         let (client_read, server_write) = io::pipe().expect("create server-to-client pipe");
 
-        let exit_code = thread::spawn(move || serve(server_read, server_write, None));
+        let exit_code = thread::spawn(move || serve(server_read, server_write, setup));
 
         let (sender, incoming) = mpsc::channel();
         thread::spawn(move || {
@@ -114,6 +119,45 @@ impl TestClient {
             &json!({"jsonrpc": "2.0", "method": method, "params": params}),
         )
         .unwrap();
+    }
+
+    pub fn send_request(&mut self, id: Value, method: &str, params: Value) {
+        write_message(
+            &mut self.writer,
+            &json!({
+                "jsonrpc": "2.0", "id": id, "method": method, "params": params
+            }),
+        )
+        .unwrap();
+    }
+
+    pub fn receive_response(&mut self, id: &Value) -> Value {
+        if let Some(message) = self.take_response(id) {
+            return message;
+        }
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let message = self
+                .incoming
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .expect("server did not respond");
+            if message.get("id") == Some(id) && message.get("method").is_none() {
+                return message;
+            }
+            self.buffered.push(message);
+        }
+    }
+
+    pub fn cancel(&mut self, id: Value) {
+        self.notify("$/cancelRequest", json!({ "id": id }));
+    }
+
+    pub fn has_diagnostics_for_version(&self, uri: &str, version: i32) -> bool {
+        self.buffered.iter().any(|message| {
+            as_publish_diagnostics(message).is_some_and(|diagnostics| {
+                diagnostics.uri.as_str() == uri && diagnostics.version == Some(version)
+            })
+        })
     }
 
     pub fn take_server_request(&mut self, method: &str) -> Option<Value> {
@@ -185,13 +229,21 @@ impl TestClient {
     }
 
     pub fn await_diagnostics_for(&mut self, uri: &str) -> Option<Vec<Diagnostic>> {
+        self.await_versioned_diagnostics_for(uri)
+            .map(|diagnostics| diagnostics.diagnostics)
+    }
+
+    pub fn await_versioned_diagnostics_for(
+        &mut self,
+        uri: &str,
+    ) -> Option<PublishDiagnosticsParams> {
         let matches = |msg: &Value| {
             as_publish_diagnostics(msg).is_some_and(|result| result.uri.as_str() == uri)
         };
 
         if let Some(pos) = self.buffered.iter().position(matches) {
             let msg = self.buffered.remove(pos);
-            return as_publish_diagnostics(&msg).map(|result| result.diagnostics);
+            return as_publish_diagnostics(&msg);
         }
 
         let deadline = Instant::now() + Duration::from_secs(5);
@@ -201,7 +253,7 @@ impl TestClient {
                 Ok(msg) => {
                     if let Some(result) = as_publish_diagnostics(&msg) {
                         if result.uri.as_str() == uri {
-                            return Some(result.diagnostics);
+                            return Some(result);
                         }
                         self.buffered.push(msg);
                     }
@@ -578,5 +630,61 @@ pub fn symbol_names(response: &DocumentSymbolResponse) -> Vec<String> {
     match response {
         DocumentSymbolResponse::Flat(s) => s.iter().map(|s| s.name.clone()).collect(),
         DocumentSymbolResponse::Nested(s) => s.iter().map(|s| s.name.clone()).collect(),
+    }
+}
+
+pub struct BuildGate {
+    pub builds: AtomicUsize,
+    entered: mpsc::Sender<()>,
+    release: Mutex<mpsc::Receiver<()>>,
+}
+
+impl BuildGate {
+    pub fn new() -> (Arc<Self>, mpsc::Receiver<()>, mpsc::Sender<()>) {
+        let (entered, waiting) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        (
+            Arc::new(Self {
+                builds: AtomicUsize::new(0),
+                entered,
+                release: Mutex::new(released),
+            }),
+            waiting,
+            release,
+        )
+    }
+}
+
+#[derive(Debug)]
+struct UnusedBindgen;
+
+impl deps::Bindgen for UnusedBindgen {
+    fn run(&self, _: &deps::GoPackage) -> Result<(), deps::BindgenFailure> {
+        panic!("these fixtures have no third-party Go imports")
+    }
+}
+
+impl deps::BindgenSetup for BuildGate {
+    fn for_project(&self, _: &Path, _: deps::Target) -> Result<deps::BindgenSession, String> {
+        if self.builds.fetch_add(1, Ordering::SeqCst) == 0 {
+            self.entered.send(()).unwrap();
+            self.release
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap();
+        }
+        Ok(deps::BindgenSession::new(
+            Arc::new(UnusedBindgen),
+            Box::new(tempfile::tempfile().unwrap()),
+        ))
+    }
+
+    fn for_script(
+        &self,
+        _: &str,
+        _: &Path,
+    ) -> Result<(deps::TypedefLocator, Option<deps::ScriptSession>), String> {
+        Ok((deps::TypedefLocator::default(), None))
     }
 }

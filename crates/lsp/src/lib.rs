@@ -13,6 +13,7 @@ mod position;
 mod project;
 pub mod protocol;
 mod router;
+mod scheduler;
 mod scope;
 mod signature_help;
 mod snapshot;

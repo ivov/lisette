@@ -15053,3 +15053,202 @@ fn symbol_boundaries_distinguish_receivers_members_and_unicode_names() {
     }
     client.shutdown();
 }
+
+#[test]
+fn cancellation_accepts_number_and_string_ids_while_a_build_is_running() {
+    use serde_json::json;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (source, line, character) = cursor("fn main() { let value = 1; let _ = ~value }");
+    project_with(root, &[("src/main.lis", &source)]);
+    let uri = uri_of(root, "src/main.lis");
+    let (gate, entered, release) = lsp_harness::BuildGate::new();
+    let mut client = TestClient::with_bindgen_setup(Some(gate.clone()));
+    client.initialize_with_root(root);
+    client.open(&uri, &source);
+    let params =
+        json!({"textDocument": {"uri": uri}, "position": {"line": line, "character": character}});
+    let number = json!(700);
+    let string = json!("700");
+    client.send_request(number.clone(), "textDocument/hover", params.clone());
+    entered.recv_timeout(Duration::from_secs(5)).unwrap();
+    client.send_request(string.clone(), "textDocument/hover", params.clone());
+    client.cancel(number.clone());
+    assert_eq!(client.receive_response(&number)["error"]["code"], -32800);
+    // Repeated and unknown cancellation are harmless, and strings stay distinct.
+    client.cancel(number.clone());
+    client.cancel(json!("unknown"));
+    client.send_request(json!("cheap"), "test/unknown", json!({}));
+    assert_eq!(
+        client.receive_response(&json!("cheap"))["error"]["code"],
+        -32601
+    );
+    assert!(client.take_response(&string).is_none());
+    client.cancel(string.clone());
+    assert_eq!(client.receive_response(&string)["error"]["code"], -32800);
+
+    // Reuse an ID before the cancelled worker finishes. Its late result must
+    // neither answer this request nor remove it from cancellation bookkeeping.
+    client.send_request(number.clone(), "textDocument/hover", params);
+    release.send(()).unwrap();
+    assert!(!client.receive_response(&number)["result"].is_null());
+    assert!(client.hover(&uri, line, character).is_some());
+    assert!(client.take_response(&number).is_none());
+    assert!(client.take_response(&string).is_none());
+    assert_eq!(gate.builds.load(Ordering::SeqCst), 1);
+    client.shutdown();
+}
+
+#[test]
+fn edits_during_a_build_reject_older_results_and_keep_the_latest_text() {
+    use serde_json::json;
+    use std::time::Duration;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (source, line, character) = cursor("fn main() { let value = 1; let _ = ~value }");
+    project_with(root, &[("src/main.lis", &source)]);
+    let uri = uri_of(root, "src/main.lis");
+    let (gate, entered, release) = lsp_harness::BuildGate::new();
+    let mut client = TestClient::with_bindgen_setup(Some(gate));
+    client.initialize_with_root(root);
+    client.open(&uri, &source);
+    client.send_request(
+        json!("old"),
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
+        }),
+    );
+    entered.recv_timeout(Duration::from_secs(5)).unwrap();
+    client.change(&uri, "fn main() { let value = false; let _ = value }", 2);
+    let (latest, line, character) = cursor("fn main() { let value = \"latest\"; let _ = ~value }");
+    client.change(&uri, &latest, 3);
+    client.send_request(json!("barrier"), "test/unknown", json!({}));
+    client.receive_response(&json!("barrier"));
+    release.send(()).unwrap();
+    assert_eq!(
+        client.receive_response(&json!("old"))["error"]["code"],
+        -32801
+    );
+    let hover = client.hover(&uri, line, character).unwrap();
+    assert!(hover_content(&hover).contains("string"), "{hover:?}");
+    let diagnostics = client.await_versioned_diagnostics_for(&uri).unwrap();
+    assert_eq!(diagnostics.version, Some(3));
+    assert!(diagnostics.diagnostics.is_empty());
+    assert!(!client.has_diagnostics_for_version(&uri, 1));
+    assert!(!client.has_diagnostics_for_version(&uri, 2));
+    client.shutdown();
+}
+
+#[test]
+fn concurrent_sibling_requests_share_one_package_build() {
+    use serde_json::json;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (source, line, character) = cursor("fn main() { let _ = ~helper() }");
+    let helper = "fn helper() -> int { 1 }";
+    project_with(
+        root,
+        &[("src/main.lis", &source), ("src/helper.lis", helper)],
+    );
+    let uri = uri_of(root, "src/main.lis");
+    let helper_uri = uri_of(root, "src/helper.lis");
+    let (gate, entered, release) = lsp_harness::BuildGate::new();
+    let mut client = TestClient::with_bindgen_setup(Some(gate.clone()));
+    client.initialize_with_root(root);
+    client.open(&uri, &source);
+    client.open(&helper_uri, helper);
+    client.send_request(
+        json!("caller"),
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": uri}, "position": {"line": line, "character": character}
+        }),
+    );
+    entered.recv_timeout(Duration::from_secs(5)).unwrap();
+    client.send_request(
+        json!("helper"),
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": helper_uri}, "position": {"line": 0, "character": 4}
+        }),
+    );
+    release.send(()).unwrap();
+    assert!(!client.receive_response(&json!("caller"))["result"].is_null());
+    assert!(!client.receive_response(&json!("helper"))["result"].is_null());
+    assert_eq!(gate.builds.load(Ordering::SeqCst), 1);
+    client.shutdown();
+}
+
+#[test]
+fn shutdown_cancels_requests_and_joins_running_workers() {
+    use serde_json::json;
+    use std::time::Duration;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let source = "fn main() { let value = 1; let _ = value }";
+    project_with(root, &[("src/main.lis", source)]);
+    let uri = uri_of(root, "src/main.lis");
+    let (gate, entered, release) = lsp_harness::BuildGate::new();
+    let mut client = TestClient::with_bindgen_setup(Some(gate));
+    client.initialize_with_root(root);
+    client.open(&uri, source);
+    client.send_request(
+        json!("active"),
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": uri}, "position": {"line": 0, "character": 16}
+        }),
+    );
+    entered.recv_timeout(Duration::from_secs(5)).unwrap();
+    client.send_request(json!("stop"), "shutdown", json!(null));
+    assert_eq!(
+        client.receive_response(&json!("active"))["error"]["code"],
+        -32800
+    );
+    assert!(client.receive_response(&json!("stop"))["result"].is_null());
+    client.exit();
+    release.send(()).unwrap();
+    assert_eq!(client.await_exit_code(), 0);
+}
+
+#[test]
+fn references_inside_extracted_typedefs_cover_only_the_member_name() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(concat!(
+        "import \"go:io\"\nimport \"go:strings\"\n",
+        "fn take(writer: io.~Writer) { let _ = strings.NewReader(\"\") }\n"
+    ));
+    client.open(TEST_URI, &source);
+    let constructor = source.lines().nth(2).unwrap().find("NewReader").unwrap() as u32;
+    let target = client.goto_definition(TEST_URI, 2, constructor).unwrap();
+    let location = definition_location(&target).unwrap();
+    let typedef_source = fs::read_to_string(location.uri.to_file_path().unwrap()).unwrap();
+    client.open(location.uri.as_str(), &typedef_source);
+    let references = client.references(TEST_URI, line, character, false).unwrap();
+    let in_typedef: Vec<_> = references
+        .iter()
+        .filter(|location| location.uri.path().ends_with("/strings.d.lis"))
+        .collect();
+    assert!(
+        !in_typedef.is_empty(),
+        "expected usages of io.Writer in the extracted strings typedef"
+    );
+    for location in in_typedef {
+        let length = location.range.end.character - location.range.start.character;
+        assert_eq!(
+            definition_target_text(location).get(..length as usize),
+            Some("Writer")
+        );
+    }
+    client.shutdown();
+}

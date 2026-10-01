@@ -35,6 +35,7 @@ struct BuildInput {
     project: ProjectAnalysis,
     entry: Option<(String, String)>,
     uri: Option<Url>,
+    prepare_dependencies: bool,
 }
 
 fn dotted_directory_reaches_package_graph(uri: &Url, filename: &str, root: &Path) -> bool {
@@ -200,6 +201,7 @@ impl SharedState {
             project,
             entry,
             uri,
+            prepare_dependencies: workspace.prepare_dependencies(),
         })
     }
 
@@ -212,6 +214,7 @@ impl SharedState {
             project,
             entry,
             uri,
+            prepare_dependencies,
         } = input;
         let config = project.config;
         let loader = project.loader;
@@ -251,7 +254,11 @@ impl SharedState {
         } else if let Some(setup) = self.bindgen_setup.as_ref() {
             match setup.for_project(config.root(), locator.target()) {
                 Ok(session) => {
-                    let with_runner = locator.clone().with_bindgen(session.bindgen.clone());
+                    let with_runner = if prepare_dependencies {
+                        locator.clone().with_bindgen(session.bindgen.clone())
+                    } else {
+                        locator.clone()
+                    };
                     (with_runner, Some(session), None)
                 }
                 Err(msg) => (locator, None, Some(msg)),

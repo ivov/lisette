@@ -12,6 +12,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
+use crate::scheduler::RequestId;
 use crate::state::Backend;
 
 pub use types::*;
@@ -29,6 +30,30 @@ pub(crate) struct Error {
 
 impl Error {
     const INVALID_PARAMS: i32 = -32602;
+
+    pub(crate) fn cancelled() -> Self {
+        Self {
+            code: -32800,
+            message: "Request cancelled".into(),
+            data: None,
+        }
+    }
+
+    pub(crate) fn content_modified() -> Self {
+        Self {
+            code: -32801,
+            message: "Content changed during the request".into(),
+            data: None,
+        }
+    }
+
+    pub(crate) fn internal(message: &'static str) -> Self {
+        Self {
+            code: -32603,
+            message: message.into(),
+            data: None,
+        }
+    }
 
     pub(crate) fn invalid_params(message: impl Into<Cow<'static, str>>) -> Self {
         Self {
@@ -61,6 +86,16 @@ pub(crate) struct Client {
 }
 
 impl Client {
+    pub(crate) fn respond(&self, id: RequestId, response: RpcResult<Value>) {
+        match response {
+            Ok(result) => {
+                let _ = self
+                    .sender
+                    .send(json!({ "jsonrpc": "2.0", "id": id, "result": result }));
+            }
+            Err(error) => send_error(&self.sender, json!(id), error),
+        }
+    }
     pub(crate) fn register_file_watchers(&self) {
         let _ = self.sender.send(json!({
             "jsonrpc": "2.0",
@@ -143,6 +178,7 @@ where
         sender: sender.clone(),
     };
     let backend = Backend::new(client, bindgen_setup);
+    let workers = backend.scheduler.start(&backend);
 
     let writer_thread = thread::spawn(move || -> io::Result<()> {
         let mut writer = writer;
@@ -178,9 +214,41 @@ where
             break if shutdown_received { 0 } else { 1 };
         }
 
+        if method == "$/cancelRequest" {
+            if let Some(id) = params.get("id")
+                && let Ok(id) = serde_json::from_value(id.clone())
+            {
+                backend.scheduler.cancel(&backend, id);
+            }
+            continue;
+        }
+
+        if shutdown_received {
+            if let Some(id) = id {
+                send_error(&sender, id, Error::invalid_request("Server has shut down"));
+            }
+            continue;
+        }
+
+        if is_semantic_request(method) {
+            if let Some(id) = id {
+                match serde_json::from_value::<RequestId>(id.clone()) {
+                    Ok(id) => backend.scheduler.request(
+                        id,
+                        method.to_owned(),
+                        params,
+                        backend.workspace().generation(),
+                    ),
+                    Err(_) => send_error(&sender, id, Error::invalid_request("Invalid request ID")),
+                }
+            }
+            continue;
+        }
+
         let response = dispatch(&backend, method, params);
         if method == "shutdown" && response.is_ok() {
             shutdown_received = true;
+            backend.scheduler.stop(&backend);
         }
 
         if let Some(id) = id {
@@ -197,6 +265,10 @@ where
         }
     };
 
+    backend.scheduler.stop(&backend);
+    for worker in workers {
+        let _ = worker.join();
+    }
     drop(backend);
     drop(sender);
     let _ = writer_thread.join();
@@ -218,7 +290,24 @@ fn send_error(sender: &mpsc::Sender<Value>, id: Value, error: Error) {
     }));
 }
 
-fn dispatch(backend: &Backend, method: &str, params: Value) -> RpcResult<Value> {
+fn is_semantic_request(method: &str) -> bool {
+    matches!(
+        method,
+        "textDocument/formatting"
+            | "textDocument/hover"
+            | "textDocument/inlayHint"
+            | "textDocument/definition"
+            | "textDocument/documentSymbol"
+            | "textDocument/references"
+            | "textDocument/prepareRename"
+            | "textDocument/rename"
+            | "textDocument/codeAction"
+            | "textDocument/completion"
+            | "textDocument/signatureHelp"
+    )
+}
+
+pub(crate) fn dispatch(backend: &Backend, method: &str, params: Value) -> RpcResult<Value> {
     macro_rules! request {
         ($handler:ident, $params:ty) => {{
             let params = parse_params::<$params>(params)?;
@@ -258,7 +347,6 @@ fn dispatch(backend: &Backend, method: &str, params: Value) -> RpcResult<Value> 
         "textDocument/completion" => request!(completion, CompletionParams),
         "textDocument/signatureHelp" => request!(signature_help, SignatureHelpParams),
         "shutdown" => to_value(backend.shutdown()?),
-        "$/cancelRequest" => Ok(Value::Null),
         _ => Err(Error::method_not_found(method)),
     }
 }
