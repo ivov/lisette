@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790890019245,
+  "lastUpdate": 1790890409758,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -41150,6 +41150,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "lsp",
             "value": 6297,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2944,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "79929600e9f36e671589749040954eddc7a6e73e",
+          "message": "fix: keep LSP analysis separate across projects and scripts (#1501)",
+          "timestamp": "2026-10-01T23:33:04+02:00",
+          "tree_id": "bf955710890a8c5a7354073b45874b4e42db2bd5",
+          "url": "https://github.com/ivov/lisette/commit/79929600e9f36e671589749040954eddc7a6e73e"
+        },
+        "date": 1790890407348,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 147505,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 38987,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28435,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19349,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15299,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9004,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6364,
             "unit": "lines"
           },
           {
