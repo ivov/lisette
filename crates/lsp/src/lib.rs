@@ -12,6 +12,7 @@ mod patterns;
 mod position;
 mod project;
 pub mod protocol;
+mod router;
 mod scope;
 mod signature_help;
 mod snapshot;
@@ -35,7 +36,6 @@ use crate::completion::{
 use crate::definition::is_generated_typedef_span;
 use crate::imports::EditTarget;
 use crate::position::LineIndex;
-use crate::project::find_project_root;
 use crate::snapshot::{AnalysisSnapshot, SnapshotDocument};
 use crate::symbol::resolve_symbol;
 use crate::traversal::find_expression_at;
@@ -59,25 +59,6 @@ impl Backend {
                 .unwrap_or(false),
             Ordering::Relaxed,
         );
-
-        let workspace_root = params
-            .root_uri
-            .and_then(|uri| uri.to_file_path().ok())
-            .or_else(|| {
-                params
-                    .workspace_folders
-                    .as_ref()?
-                    .first()?
-                    .uri
-                    .to_file_path()
-                    .ok()
-            });
-
-        if let Some(root) = workspace_root
-            && let Some(config) = find_project_root(&root)
-        {
-            self.project.initialize(config);
-        }
 
         // The first run for a version writes the full stdlib.
         deps::ensure_stdlib_extracted(deps::Target::host());

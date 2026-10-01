@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::time::Duration;
@@ -7,14 +8,14 @@ use crate::protocol::{Client, Url};
 use deps::BindgenSetup;
 
 use crate::imports::PackageIndex;
-use crate::loader::ProjectState;
 use crate::position::LineIndex;
+use crate::router::ProjectRouter;
 use crate::snapshot::AnalysisSnapshot;
 use std::ops::Deref;
 
 pub struct SharedState {
     pub(crate) client: Client,
-    pub(crate) project: ProjectState,
+    pub(crate) projects: ProjectRouter,
     workspace: RwLock<Workspace>,
     pub(crate) bindgen_setup: Option<Arc<dyn BindgenSetup>>,
     pub(crate) packages: Arc<PackageIndex>,
@@ -48,6 +49,8 @@ pub(crate) struct Workspace {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub(crate) enum AnalysisKey {
     Package {
+        /// Package names are only unique within a project.
+        project_root: PathBuf,
         external_test: bool,
         package_id: String,
     },
@@ -252,7 +255,7 @@ impl Backend {
         Self {
             shared_state: Arc::new(SharedState {
                 client,
-                project: ProjectState::new(),
+                projects: ProjectRouter::default(),
                 workspace: RwLock::default(),
                 bindgen_setup,
                 packages: Arc::default(),
@@ -270,6 +273,7 @@ mod tests {
 
     fn key() -> AnalysisKey {
         AnalysisKey::Package {
+            project_root: PathBuf::from("/project"),
             external_test: false,
             package_id: "_entry_".to_string(),
         }
@@ -332,6 +336,7 @@ mod tests {
     #[test]
     fn opening_a_file_drops_only_the_snapshots_that_never_analyzed_it() {
         let other_key = AnalysisKey::Package {
+            project_root: PathBuf::from("/project"),
             external_test: false,
             package_id: "other".to_string(),
         };

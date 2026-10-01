@@ -145,7 +145,7 @@ pub(crate) fn find_package_by_alias(
 
 impl SharedState {
     pub(crate) fn key_for(&self, uri: &Url) -> Option<AnalysisKey> {
-        let config = self.project.config_for(uri)?;
+        let config = self.projects.config_for(uri)?;
         let (package_id, filename, external_test) = uri_to_package_file(&config, uri)?;
         let filtered_from_package =
             !external_test && (filename.ends_with("_test.lis") || filename.ends_with(".d.lis"));
@@ -153,13 +153,14 @@ impl SharedState {
             return Some(AnalysisKey::Document { uri: uri.clone() });
         }
         Some(AnalysisKey::Package {
+            project_root: config.root().to_path_buf(),
             external_test,
             package_id,
         })
     }
 
     pub(crate) fn validate(&self, uri: &Url) -> Option<LisetteDiagnostic> {
-        let config = self.project.config_for(uri)?;
+        let config = self.projects.config_for(uri)?;
         let (package_id, filename, external_test) = uri_to_package_file(&config, uri)?;
 
         if let Some(dotted) = package_id
@@ -185,10 +186,10 @@ impl SharedState {
     }
 
     fn capture_build_input(&self, key: &AnalysisKey, workspace: &Workspace) -> Option<BuildInput> {
-        let project = self.project.for_key(key)?;
+        let project = self.projects.for_key(key)?;
         let (entry, uri) = match key {
             AnalysisKey::Document { uri } => {
-                let config = self.project.config_for(uri)?;
+                let config = self.projects.config_for(uri)?;
                 let (_, filename, _) = uri_to_package_file(&config, uri)?;
                 let source = workspace.documents.get(uri)?.content().to_string();
                 (Some((source, filename)), Some(uri.clone()))
@@ -484,6 +485,7 @@ fn recover_target(key: &AnalysisKey) -> RecoverTarget {
         AnalysisKey::Package {
             external_test: true,
             package_id,
+            ..
         } => RecoverTarget::Package(package_id.clone()),
         AnalysisKey::Package {
             external_test: false,
