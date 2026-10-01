@@ -12892,6 +12892,276 @@ fn external_test_inlay_hint_does_not_leak_entry() {
 }
 
 #[test]
+fn file_watching_registration_respects_capabilities_and_accepts_replies() {
+    for supported in [false, true] {
+        for rejected in [false, true] {
+            let mut client = TestClient::new();
+            let result = client.initialize_with_capabilities(serde_json::json!({
+                "workspace": { "didChangeWatchedFiles": { "dynamicRegistration": supported } }
+            }));
+            assert_eq!(
+                serde_json::to_value(result.capabilities.text_document_sync).unwrap(),
+                serde_json::json!({
+                    "openClose": true, "change": 1, "save": true
+                })
+            );
+            client.open(TEST_URI, "fn main() { let value = 1; value }");
+            assert!(client.hover(TEST_URI, 0, 16).is_some());
+            let request = client.take_server_request("client/registerCapability");
+            assert_eq!(request.is_some(), supported);
+            if let Some(request) = request {
+                let registration = &request["params"]["registrations"][0];
+                assert_eq!(registration["method"], "workspace/didChangeWatchedFiles");
+                assert_eq!(
+                    registration["registerOptions"]["watchers"],
+                    serde_json::json!([
+                        {"globPattern": "**/*.lis", "kind": 7},
+                        {"globPattern": "**/lisette.toml", "kind": 7}
+                    ])
+                );
+                let id = request["id"].clone();
+                client.reply_to_server_request(
+                    id.clone(),
+                    rejected.then(|| serde_json::json!({"code": -32601, "message": "unsupported"})),
+                );
+                assert!(client.hover(TEST_URI, 0, 16).is_some());
+                assert!(
+                    client.take_response(&id).is_none(),
+                    "a response must not receive another response"
+                );
+            }
+            client.shutdown();
+        }
+    }
+}
+
+#[test]
+fn watched_file_creation_and_deletion_refresh_missing_package_diagnostics() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let caller = "import \"helper\"\nfn main() { helper.value() }";
+    project_with(root, &[("src/main.lis", caller)]);
+    let caller_uri = uri_of(root, "src/main.lis");
+    let helper_path = root.join("src/helper/helper.lis");
+    let helper_uri = Url::from_file_path(&helper_path).unwrap();
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&caller_uri, caller);
+    let diagnostics = client.await_diagnostics_for(&caller_uri).unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == Some(DiagnosticSeverity::ERROR)),
+        "{diagnostics:?}"
+    );
+    fs::create_dir_all(helper_path.parent().unwrap()).unwrap();
+    fs::write(&helper_path, "pub fn value() {}").unwrap();
+    client.change_watched_files(&[
+        (helper_uri.clone(), FileChangeType::CREATED),
+        (helper_uri.clone(), FileChangeType::CHANGED),
+    ]);
+    let diagnostics = client.await_diagnostics_for(&caller_uri).unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.severity != Some(DiagnosticSeverity::ERROR)),
+        "{diagnostics:?}"
+    );
+    fs::remove_file(helper_path).unwrap();
+    client.change_watched_files(&[(helper_uri, FileChangeType::DELETED)]);
+    let diagnostics = client.await_diagnostics_for(&caller_uri).unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == Some(DiagnosticSeverity::ERROR)),
+        "{diagnostics:?}"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn watched_disk_changes_preserve_unsaved_overlays() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (caller, line, character) =
+        cursor("import \"helper\"\nfn main() { let _ = helper.~value() }");
+    project_with(
+        root,
+        &[
+            ("src/main.lis", &caller),
+            ("src/helper/helper.lis", "pub fn value() -> int { 1 }"),
+        ],
+    );
+    let caller_uri = uri_of(root, "src/main.lis");
+    let helper_uri = Url::parse(&uri_of(root, "src/helper/helper.lis")).unwrap();
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&caller_uri, &caller);
+    client.open(
+        helper_uri.as_str(),
+        "pub fn value() -> string { \"unsaved\" }",
+    );
+    assert!(
+        hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> string")
+    );
+    fs::write(
+        root.join("src/helper/helper.lis"),
+        "pub fn value() -> bool { true }",
+    )
+    .unwrap();
+    client.change_watched_files(&[(helper_uri.clone(), FileChangeType::CHANGED)]);
+    assert!(
+        hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> string")
+    );
+    client.close(helper_uri.as_str());
+    assert!(
+        hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> bool")
+    );
+    client.shutdown();
+}
+
+#[test]
+fn save_and_configuration_notifications_refresh_closed_dependencies() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (caller, line, character) =
+        cursor("import \"helper\"\nfn main() { let _ = helper.~value() }");
+    project_with(
+        root,
+        &[
+            ("src/main.lis", &caller),
+            ("src/helper/helper.lis", "pub fn value() -> int { 1 }"),
+        ],
+    );
+    let caller_uri = uri_of(root, "src/main.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&caller_uri, &caller);
+    assert!(hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> int"));
+    fs::write(
+        root.join("src/helper/helper.lis"),
+        "pub fn value() -> string { \"saved\" }",
+    )
+    .unwrap();
+    client.save(&caller_uri);
+    assert!(
+        hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> string")
+    );
+    fs::write(
+        root.join("src/helper/helper.lis"),
+        "pub fn value() -> bool { true }",
+    )
+    .unwrap();
+    client.change_configuration();
+    assert!(
+        hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> bool")
+    );
+    client.shutdown();
+}
+
+#[test]
+fn watched_manifest_changes_reroute_documents_and_preserve_unsaved_text() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(root.join("src/main.lis"), "fn main() {}").unwrap();
+    let (source, line, character) = cursor("fn main() { let value = \"unsaved\"; let _ = ~value }");
+    let uri = uri_of(root, "src/main.lis");
+    let manifest_path = root.join("lisette.toml");
+    let manifest_uri = Url::from_file_path(&manifest_path).unwrap();
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&uri, &source);
+    let diagnostics = client.await_diagnostics_for(&uri).unwrap();
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    assert!(hover_content(&client.hover(&uri, line, character).unwrap()).contains("string"));
+
+    for (content, kind, expect_error) in [
+        (Some("[invalid]\nfoo = 1\n"), FileChangeType::CREATED, true),
+        (
+            Some("[project]\nname = \"example.com/you/app\"\nversion = \"0.1.0\"\n"),
+            FileChangeType::CHANGED,
+            false,
+        ),
+        (None, FileChangeType::DELETED, false),
+    ] {
+        if let Some(content) = content {
+            fs::write(&manifest_path, content).unwrap();
+        } else {
+            fs::remove_file(&manifest_path).unwrap();
+        }
+        client.change_watched_files(&[(manifest_uri.clone(), kind)]);
+        let diagnostics = client.await_diagnostics_for(&uri).unwrap();
+        assert_eq!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == Some(NumberOrString::String("resolve.manifest_error".into()))
+            }),
+            expect_error,
+            "{diagnostics:?}"
+        );
+        assert!(hover_content(&client.hover(&uri, line, character).unwrap()).contains("string"));
+    }
+    client.shutdown();
+}
+
+#[test]
+fn watched_dependency_changes_refresh_hover_and_open_file_diagnostics() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (caller, line, character) =
+        cursor("import \"helper\"\nfn main() { let _: int = helper.~value() }");
+    project_with(
+        root,
+        &[
+            ("src/main.lis", &caller),
+            ("src/helper/helper.lis", "pub fn value() -> int { 1 }"),
+        ],
+    );
+    let caller_uri = uri_of(root, "src/main.lis");
+    let helper_uri = Url::parse(&uri_of(root, "src/helper/helper.lis")).unwrap();
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&caller_uri, &caller);
+    let diagnostics = client.await_diagnostics_for(&caller_uri).unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.severity != Some(DiagnosticSeverity::ERROR)),
+        "{diagnostics:?}"
+    );
+    assert!(hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> int"));
+
+    fs::write(
+        root.join("src/helper/helper.lis"),
+        "pub fn value() -> string { \"changed\" }",
+    )
+    .unwrap();
+    assert!(hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> int"));
+    client.change_watched_files(&[
+        (
+            Url::from_file_path(root.join("target/.lisette/typedefs/api.d.lis")).unwrap(),
+            FileChangeType::CREATED,
+        ),
+        (
+            Url::from_file_path(root.join("README.md")).unwrap(),
+            FileChangeType::CHANGED,
+        ),
+    ]);
+    assert!(hover_content(&client.hover(&caller_uri, line, character).unwrap()).contains("-> int"));
+    client.change_watched_files(&[(helper_uri, FileChangeType::CHANGED)]);
+    let hover = client.hover(&caller_uri, line, character).unwrap();
+    assert!(hover_content(&hover).contains("-> string"), "{hover:?}");
+    let diagnostics = client.await_diagnostics_for(&caller_uri).unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == Some(DiagnosticSeverity::ERROR)),
+        "{diagnostics:?}"
+    );
+    client.shutdown();
+}
+
+#[test]
 fn scripts_in_different_directories_work_in_both_opening_orders() {
     let directory = tempfile::tempdir().unwrap();
     let fixtures = [

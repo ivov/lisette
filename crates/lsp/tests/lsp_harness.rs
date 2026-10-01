@@ -116,6 +116,30 @@ impl TestClient {
         .unwrap();
     }
 
+    pub fn take_server_request(&mut self, method: &str) -> Option<Value> {
+        let index = self.buffered.iter().position(|message| {
+            message.get("method").and_then(Value::as_str) == Some(method)
+                && message.get("id").is_some()
+        })?;
+        Some(self.buffered.remove(index))
+    }
+
+    pub fn reply_to_server_request(&mut self, id: Value, error: Option<Value>) {
+        let message = match error {
+            Some(error) => json!({"jsonrpc": "2.0", "id": id, "error": error}),
+            None => json!({"jsonrpc": "2.0", "id": id, "result": null}),
+        };
+        write_message(&mut self.writer, &message).unwrap();
+    }
+
+    pub fn take_response(&mut self, id: &Value) -> Option<Value> {
+        let index = self
+            .buffered
+            .iter()
+            .position(|message| message.get("id") == Some(id) && message.get("method").is_none())?;
+        Some(self.buffered.remove(index))
+    }
+
     pub fn initialize(&mut self) -> InitializeResult {
         self.initialize_with_capabilities(json!({}))
     }
@@ -211,6 +235,21 @@ impl TestClient {
             "textDocument/didSave",
             json!({"textDocument": {"uri": uri}}),
         );
+    }
+
+    pub fn change_watched_files(&mut self, changes: &[(Url, FileChangeType)]) {
+        let changes: Vec<_> = changes
+            .iter()
+            .map(|(uri, kind)| json!({"uri": uri, "type": kind}))
+            .collect();
+        self.notify(
+            "workspace/didChangeWatchedFiles",
+            json!({"changes": changes}),
+        );
+    }
+
+    pub fn change_configuration(&mut self) {
+        self.notify("workspace/didChangeConfiguration", json!({"settings": {}}));
     }
 
     pub fn close(&mut self, uri: &str) {

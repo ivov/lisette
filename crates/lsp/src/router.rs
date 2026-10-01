@@ -20,6 +20,10 @@ struct Routes {
 }
 
 impl ProjectRouter {
+    pub(crate) fn clear(&self) {
+        *self.routes.write().unwrap_or_else(PoisonError::into_inner) = Routes::default();
+    }
+
     fn project_for(&self, uri: &Url) -> Option<Arc<ProjectState>> {
         {
             let routes = self.routes.read().unwrap_or_else(PoisonError::into_inner);

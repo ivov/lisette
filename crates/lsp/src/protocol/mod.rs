@@ -18,6 +18,8 @@ pub use types::*;
 
 pub(crate) type RpcResult<T> = Result<T, Error>;
 
+const FILE_WATCH_REGISTRATION_ID: &str = "lisette/file-watchers";
+
 #[derive(Debug)]
 pub(crate) struct Error {
     pub(crate) code: i32,
@@ -59,6 +61,33 @@ pub(crate) struct Client {
 }
 
 impl Client {
+    pub(crate) fn register_file_watchers(&self) {
+        let _ = self.sender.send(json!({
+            "jsonrpc": "2.0",
+            "id": FILE_WATCH_REGISTRATION_ID,
+            "method": "client/registerCapability",
+            "params": { "registrations": [{
+                "id": FILE_WATCH_REGISTRATION_ID,
+                "method": "workspace/didChangeWatchedFiles",
+                "registerOptions": { "watchers": [
+                    { "globPattern": "**/*.lis", "kind": 7 },
+                    { "globPattern": "**/lisette.toml", "kind": 7 }
+                ] }
+            }] }
+        }));
+    }
+
+    fn handle_response(&self, message: &Value) {
+        if message.get("id").and_then(Value::as_str) == Some(FILE_WATCH_REGISTRATION_ID)
+            && let Some(error) = message.get("error")
+        {
+            self.log_message(
+                MessageType::WARNING,
+                format!("Could not register file watchers: {error}"),
+            );
+        }
+    }
+
     pub(crate) fn publish_diagnostics(
         &self,
         uri: Url,
@@ -133,6 +162,10 @@ where
         };
 
         let Some(method) = message.get("method").and_then(Value::as_str) else {
+            if message.get("result").is_some() || message.get("error").is_some() {
+                backend.client.handle_response(&message);
+                continue;
+            }
             if let Some(id) = message.get("id").cloned() {
                 send_error(&sender, id, Error::invalid_request("Request has no method"));
             }
@@ -207,6 +240,12 @@ fn dispatch(backend: &Backend, method: &str, params: Value) -> RpcResult<Value> 
         "textDocument/didChange" => notification!(did_change, DidChangeTextDocumentParams),
         "textDocument/didSave" => notification!(did_save, DidSaveTextDocumentParams),
         "textDocument/didClose" => notification!(did_close, DidCloseTextDocumentParams),
+        "workspace/didChangeWatchedFiles" => {
+            notification!(did_change_watched_files, DidChangeWatchedFilesParams)
+        }
+        "workspace/didChangeConfiguration" => {
+            notification!(did_change_configuration, DidChangeConfigurationParams)
+        }
         "textDocument/formatting" => request!(formatting, DocumentFormattingParams),
         "textDocument/hover" => request!(hover, HoverParams),
         "textDocument/inlayHint" => request!(inlay_hint, InlayHintParams),

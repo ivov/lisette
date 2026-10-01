@@ -20,6 +20,7 @@ pub struct SharedState {
     pub(crate) bindgen_setup: Option<Arc<dyn BindgenSetup>>,
     pub(crate) packages: Arc<PackageIndex>,
     pub(crate) insert_replace_support: AtomicBool,
+    pub(crate) watch_registration_supported: AtomicBool,
 }
 
 impl SharedState {
@@ -260,6 +261,7 @@ impl Backend {
                 bindgen_setup,
                 packages: Arc::default(),
                 insert_replace_support: AtomicBool::new(false),
+                watch_registration_supported: AtomicBool::new(false),
             }),
         }
     }
