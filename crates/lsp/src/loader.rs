@@ -87,6 +87,7 @@ impl ProjectState {
             AnalysisKey::Package {
                 external_test: true,
                 package_id,
+                ..
             } => (
                 source_package_dir(&project.config, ENTRY_PACKAGE_ID),
                 Some(package_id.clone()),
@@ -95,6 +96,7 @@ impl ProjectState {
             AnalysisKey::Package {
                 external_test: false,
                 package_id,
+                ..
             } => (source_package_dir(&project.config, package_id), None, false),
             AnalysisKey::Document { uri } => {
                 let dir = uri

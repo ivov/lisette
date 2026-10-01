@@ -12892,6 +12892,254 @@ fn external_test_inlay_hint_does_not_leak_entry() {
 }
 
 #[test]
+fn scripts_in_different_directories_work_in_both_opening_orders() {
+    let directory = tempfile::tempdir().unwrap();
+    let fixtures = [
+        (
+            "first/main.lis",
+            "fn main() { let value = 1; ~value }",
+            "int",
+        ),
+        (
+            "second/main.lis",
+            "fn main() { let value = \"two\"; ~value }",
+            "string",
+        ),
+    ];
+    let scripts: Vec<_> = fixtures
+        .into_iter()
+        .map(|(relative, fixture, expected_type)| {
+            let path = directory.path().join(relative);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "fn main() {}\n").unwrap();
+            let (source, line, character) = cursor(fixture);
+            (
+                uri_of(directory.path(), relative),
+                source,
+                line,
+                character,
+                expected_type,
+            )
+        })
+        .collect();
+
+    for order in [[0, 1], [1, 0]] {
+        let mut client = TestClient::new();
+        client.initialize();
+        for index in order {
+            let (uri, source, ..) = &scripts[index];
+            client.open(uri, source);
+        }
+        for (uri, _, line, character, expected_type) in &scripts {
+            let hover = client
+                .hover(uri, *line, *character)
+                .expect("each script should resolve its own overlay");
+            assert!(
+                hover_content(&hover).contains(expected_type),
+                "{uri}: {hover:?}"
+            );
+            let definition = client.goto_definition(uri, *line, *character).unwrap();
+            assert_eq!(definition_location(&definition).unwrap().uri.as_str(), uri);
+            let completion = client.completion(uri, *line, *character).unwrap();
+            let value = completion_items(&completion)
+                .iter()
+                .find(|item| item.label == "value")
+                .unwrap();
+            assert_eq!(value.detail.as_deref(), Some(*expected_type));
+            let edits = client
+                .rename(uri, *line, *character, "renamed")
+                .unwrap()
+                .changes
+                .unwrap();
+            assert_eq!(edits.len(), 1);
+            assert_eq!(edits[&Url::parse(uri).unwrap()].len(), 2);
+        }
+        for (uri, source, line, character, expected_type) in &scripts {
+            client.change(uri, &format!("{source}\n\"unclosed"), 2);
+            let hover = client.hover(uri, *line, *character).unwrap();
+            assert!(
+                hover_content(&hover).contains(expected_type),
+                "fallback for {uri}: {hover:?}"
+            );
+        }
+        client.shutdown();
+    }
+}
+
+#[test]
+fn a_project_and_a_script_at_its_root_keep_separate_contexts() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (project, project_line, project_character) =
+        cursor("import \"helpers\"\nfn main() { let result = helpers.~value(); result }");
+    let (script, script_line, script_character) =
+        cursor("fn main() { let result = \"script\"; ~result }");
+    project_with(
+        root,
+        &[
+            ("src/main.lis", &project),
+            ("src/helpers/helpers.lis", "pub fn value() -> int { 1 }"),
+            ("main.lis", &script),
+        ],
+    );
+    let documents = [
+        (
+            uri_of(root, "src/main.lis"),
+            project,
+            project_line,
+            project_character,
+            "-> int",
+        ),
+        (
+            uri_of(root, "main.lis"),
+            script,
+            script_line,
+            script_character,
+            "string",
+        ),
+    ];
+    for order in [[0, 1], [1, 0]] {
+        let mut client = TestClient::new();
+        client.initialize_with_root(root);
+        for index in order {
+            let (uri, source, ..) = &documents[index];
+            client.open(uri, source);
+        }
+        for (uri, _, line, character, expected_type) in &documents {
+            let hover = client.hover(uri, *line, *character).unwrap();
+            assert!(
+                hover_content(&hover).contains(expected_type),
+                "{uri}: {hover:?}"
+            );
+        }
+        client.close(&documents[0].0);
+        let (uri, _, line, character, _) = &documents[1];
+        assert!(client.goto_definition(uri, *line, *character).is_some());
+        client.open(&documents[0].0, &documents[0].1);
+        let (uri, _, line, character, _) = &documents[0];
+        assert!(hover_content(&client.hover(uri, *line, *character).unwrap()).contains("-> int"));
+        client.shutdown();
+    }
+}
+
+#[test]
+fn projects_with_identical_package_names_keep_separate_overlays() {
+    let directory = tempfile::tempdir().unwrap();
+    let roots = [
+        directory.path().join("first"),
+        directory.path().join("second"),
+    ];
+    assert_separate_project_overlays(&roots);
+}
+
+#[test]
+fn nested_projects_use_their_nearest_manifest() {
+    let directory = tempfile::tempdir().unwrap();
+    let outer = directory.path().join("outer");
+    let inner = outer.join("src/nested");
+    assert_separate_project_overlays(&[outer, inner]);
+}
+
+#[cfg(unix)]
+#[test]
+fn symlinked_project_paths_preserve_document_uris() {
+    use std::os::unix::fs::symlink;
+
+    let directory = tempfile::tempdir().unwrap();
+    let project = directory.path().join("project");
+    let alias = directory.path().join("alias");
+    fs::create_dir_all(&project).unwrap();
+    symlink(&project, &alias).unwrap();
+    assert_separate_project_overlays(&[project, alias]);
+}
+
+fn assert_separate_project_overlays(roots: &[PathBuf; 2]) {
+    let (caller, line, character) =
+        cursor("import \"helpers\"\nfn main() { let result = helpers.~value(); result }\n");
+    let helpers = [
+        "pub fn value() -> int { 1 }",
+        "pub fn value() -> string { \"two\" }",
+    ];
+    for root in roots {
+        fs::create_dir_all(root).unwrap();
+        project_with(
+            root,
+            &[
+                ("src/main.lis", &caller),
+                ("src/helpers/helpers.lis", "pub fn value() -> bool { true }"),
+            ],
+        );
+    }
+    for order in [[0, 1], [1, 0]] {
+        let mut client = TestClient::new();
+        client.initialize_with_root(&roots[0]);
+        for index in order {
+            client.open(
+                &uri_of(&roots[index], "src/helpers/helpers.lis"),
+                helpers[index],
+            );
+            client.open(&uri_of(&roots[index], "src/main.lis"), &caller);
+        }
+        for (index, expected_type) in ["int", "string"].into_iter().enumerate() {
+            let caller_uri = uri_of(&roots[index], "src/main.lis");
+            let helper_uri = uri_of(&roots[index], "src/helpers/helpers.lis");
+            let hover = client.hover(&caller_uri, line, character).unwrap();
+            assert!(
+                hover_content(&hover).contains(&format!("-> {expected_type}")),
+                "{caller_uri}: {hover:?}"
+            );
+            let definition = client
+                .goto_definition(&caller_uri, line, character)
+                .unwrap();
+            assert_eq!(
+                definition_location(&definition).unwrap().uri.as_str(),
+                helper_uri
+            );
+            let references = client
+                .references(&caller_uri, line, character, true)
+                .unwrap();
+            assert_eq!(references.len(), 2);
+            assert!(
+                references
+                    .iter()
+                    .all(|reference| reference.uri.as_str() == caller_uri
+                        || reference.uri.as_str() == helper_uri)
+            );
+            let edits = client
+                .rename(&caller_uri, line, character, "renamed")
+                .unwrap()
+                .changes
+                .unwrap();
+            assert_eq!(edits.len(), 2);
+            assert_eq!(edits[&Url::parse(&helper_uri).unwrap()].len(), 1);
+            assert_eq!(edits[&Url::parse(&caller_uri).unwrap()].len(), 1);
+        }
+        let first_caller = uri_of(&roots[0], "src/main.lis");
+        let first_helper = uri_of(&roots[0], "src/helpers/helpers.lis");
+        let second_caller = uri_of(&roots[1], "src/main.lis");
+        client.change(&first_helper, "pub fn value() -> float64 { 1.5 }", 2);
+        assert!(
+            hover_content(&client.hover(&first_caller, line, character).unwrap())
+                .contains("-> float64")
+        );
+        assert!(
+            hover_content(&client.hover(&second_caller, line, character).unwrap())
+                .contains("-> string")
+        );
+        client.close(&first_helper);
+        assert!(
+            hover_content(&client.hover(&first_caller, line, character).unwrap())
+                .contains("-> bool")
+        );
+        assert!(
+            hover_content(&client.hover(&second_caller, line, character).unwrap())
+                .contains("-> string")
+        );
+        client.shutdown();
+    }
+}
+
+#[test]
 fn a_file_opened_without_a_workspace_root_resolves_its_own_project() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("proj");

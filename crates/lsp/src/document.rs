@@ -9,7 +9,7 @@ use crate::state::{AnalysisKey, CancellationToken, DocumentState, SharedState};
 impl SharedState {
     pub(crate) fn open_document(self: &Arc<Self>, uri: Url, content: String, version: i32) {
         let mut workspace = self.workspace_mut();
-        self.project.update_overlay(&uri, content.clone());
+        self.projects.update_overlay(&uri, content.clone());
         let key = self.key_for(&uri);
         workspace.invalidate_unseen(&uri, &content);
         let mut document = DocumentState::new(content, version);
@@ -31,7 +31,7 @@ impl SharedState {
 
     pub(crate) fn change_document(self: &Arc<Self>, uri: Url, content: String, version: i32) {
         let mut workspace = self.workspace_mut();
-        self.project.update_overlay(&uri, content.clone());
+        self.projects.update_overlay(&uri, content.clone());
         let key = self.key_for(&uri);
         match workspace.documents.get_mut(&uri) {
             Some(document) => document.update(content, version),
@@ -53,7 +53,7 @@ impl SharedState {
     pub(crate) fn close_document(self: &Arc<Self>, uri: &Url) {
         let mut workspace = self.workspace_mut();
         let key = self.key_for(uri);
-        self.project.remove_overlay(uri);
+        self.projects.remove_overlay(uri);
         workspace.documents.remove(uri);
         let evicted = key.is_some_and(|key| {
             let still_open = workspace
