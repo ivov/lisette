@@ -105,7 +105,7 @@ impl SharedState {
             .publish_diagnostics(uri, diagnostics, Some(version));
     }
 
-    fn reschedule_all(self: &Arc<Self>) {
+    pub(crate) fn reschedule_all(self: &Arc<Self>) {
         let keys = self.workspace().keys();
         for key in keys {
             self.schedule_diagnostics(key);

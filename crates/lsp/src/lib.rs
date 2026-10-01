@@ -20,6 +20,7 @@ mod state;
 mod symbol;
 mod traversal;
 mod validation;
+mod watch;
 
 use std::sync::atomic::Ordering;
 
@@ -51,6 +52,14 @@ pub use crate::state::{Backend, SharedState};
 
 impl Backend {
     fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+        self.watch_registration_supported.store(
+            params
+                .capabilities
+                .pointer("/workspace/didChangeWatchedFiles/dynamicRegistration")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
+            Ordering::Relaxed,
+        );
         self.insert_replace_support.store(
             params
                 .capabilities
@@ -66,9 +75,11 @@ impl Backend {
 
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
-                text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                    TextDocumentSyncKind::FULL,
-                )),
+                text_document_sync: Some(TextDocumentSyncCapability::Options(serde_json::json!({
+                    "openClose": true,
+                    "change": TextDocumentSyncKind::FULL,
+                    "save": true,
+                }))),
                 document_formatting_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 inlay_hint_provider: Some(OneOf::Left(true)),
@@ -100,6 +111,12 @@ impl Backend {
     }
 
     fn initialized(&self, _: InitializedParams) {
+        if self
+            .watch_registration_supported
+            .swap(false, Ordering::Relaxed)
+        {
+            self.client.register_file_watchers();
+        }
         self.client
             .log_message(MessageType::INFO, "Lisette LSP initialized");
     }
@@ -121,7 +138,15 @@ impl Backend {
     }
 
     fn did_save(&self, params: DidSaveTextDocumentParams) {
-        self.publish_diagnostics(params.text_document.uri);
+        self.shared_state.save_document(&params.text_document.uri);
+    }
+
+    fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
+        self.shared_state.watched_files_changed(params.changes);
+    }
+
+    fn did_change_configuration(&self, _: DidChangeConfigurationParams) {
+        self.shared_state.refresh_from_disk(true);
     }
 
     fn did_close(&self, params: DidCloseTextDocumentParams) {

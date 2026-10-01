@@ -110,6 +110,12 @@ integer_kind!(TextDocumentSyncKind {
     FULL = 1,
 });
 
+integer_kind!(FileChangeType {
+    CREATED = 1,
+    CHANGED = 2,
+    DELETED = 3,
+});
+
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Diagnostic {
@@ -205,6 +211,23 @@ pub struct DidSaveTextDocumentParams {
     pub text_document: TextDocumentIdentifier,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FileEvent {
+    pub uri: Url,
+    #[serde(rename = "type")]
+    pub kind: FileChangeType,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DidChangeWatchedFilesParams {
+    pub changes: Vec<FileEvent>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct DidChangeConfigurationParams {
+    pub settings: Value,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
