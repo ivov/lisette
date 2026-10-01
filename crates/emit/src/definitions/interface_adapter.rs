@@ -6,7 +6,11 @@ use crate::names::go_name;
 use crate::names::go_name::GO_IMPORT_PREFIX;
 use crate::plan::bodies::{LoweredStatement, define, expression_statement};
 use crate::plan::cleanup::clean_up;
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
+#[cfg(debug_assertions)]
+use crate::plan::verify::verify_local_scopes;
+use crate::plan::visit::identify_body_locals;
 use crate::write_line;
 use ecow::EcoString;
 use rustc_hash::FxHashSet as HashSet;
@@ -332,7 +336,7 @@ impl Planner<'_> {
                 this.declare(&go_name);
             }
             let receiver_name = this.declare_adapter_method_binding("a".to_string());
-            let param_names: Vec<String> = (0..method.param_types.len())
+            let param_names: Vec<GoIdentifier> = (0..method.param_types.len())
                 .map(|i| this.declare_adapter_method_binding(format!("arg{}", i)))
                 .collect();
 
@@ -347,21 +351,24 @@ impl Planner<'_> {
             let inner_call = GoExpression::call(
                 GoExpression::selector(
                     GoExpression::selector(
-                        GoExpression::name(receiver_name.clone()),
+                        GoExpression::identifier(receiver_name.clone()),
                         "inner".to_string(),
                     ),
                     go_method_name.clone(),
                 ),
                 param_names
                     .iter()
-                    .map(|name| GoExpression::name(name.clone()))
+                    .map(|name| GoExpression::identifier(name.clone()))
                     .collect(),
             );
 
-            let (go_ret, body) = this.build_adapter_body(method, inner_call);
+            let mut bindings = Vec::with_capacity(param_names.len() + 1);
+            bindings.push(receiver_name.clone());
+            bindings.extend(param_names);
+            let (go_ret, body) = this.build_adapter_body(method, inner_call, &bindings);
             write_method_header(
                 declaration,
-                &receiver_name,
+                receiver_name.spelling(),
                 adapter_name,
                 &go_method_name,
                 &params_str,
@@ -372,13 +379,13 @@ impl Planner<'_> {
         });
     }
 
-    fn declare_adapter_method_binding(&mut self, preferred: String) -> String {
+    fn declare_adapter_method_binding(&mut self, preferred: String) -> GoIdentifier {
         if self.try_declare(&preferred) {
-            return preferred;
+            return GoIdentifier::local(preferred, self.scope.new_local_id());
         }
         let name = self.fresh_var(Some(&preferred));
         self.declare(&name);
-        name
+        self.scope.generated_identifier(&name)
     }
 
     fn adapter_needs_conversion(&self, method: &AdapterMethod) -> bool {
@@ -404,9 +411,14 @@ impl Planner<'_> {
         &mut self,
         method: &AdapterMethod,
         inner_call: GoExpression,
+        parameters: &[GoIdentifier],
     ) -> (String, String) {
         let (go_ret, mut statements) = self.plan_adapter_body(method, inner_call);
-        clean_up(&mut statements);
+        let shadowing = identify_body_locals(&mut statements, parameters, &mut self.scope);
+        clean_up(&mut statements, &shadowing);
+        #[cfg(debug_assertions)]
+        verify_local_scopes(&mut statements, &parameters.iter().collect::<Vec<_>>())
+            .unwrap_or_else(|error| panic!("{error}"));
         self.collect_imports(&statements);
         (go_ret, crate::Renderer.render_setup(&statements))
     }

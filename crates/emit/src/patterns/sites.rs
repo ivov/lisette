@@ -2,7 +2,7 @@ use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::plan::bodies::GoUses;
 use crate::plan::go_expression::GoExpressionNode;
 
-use syntax::ast::{Expression, MatchArm, Pattern, Span};
+use syntax::ast::{BindingId, Expression, MatchArm, Pattern, Span};
 use syntax::types::Type;
 
 use crate::Planner;
@@ -17,16 +17,19 @@ use crate::patterns::binding_emit::{
 use crate::patterns::decision_tree::{
     self, PatternBinding, PatternInfo, SubjectRoot, render_condition,
 };
-use crate::patterns::matching::{ArmBinding, ResultFusePlan, ok_pattern_field, some_pattern_field};
+use crate::patterns::matching::{
+    ArmBinding, ResultFusePlan, arm_binding_span, ok_pattern_field, some_pattern_field,
+};
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan, define,
     discard, expression_statement,
 };
 use crate::plan::go_expression::CompositeLayout;
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
 use crate::statements::testing::test_context_call;
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 #[derive(Clone, Copy)]
 pub(crate) struct AnnotatedPattern<'a> {
@@ -64,6 +67,12 @@ impl<'a> PatternSubject<'a> {
         }
     }
 
+    pub(crate) fn for_identifier(var: GoIdentifier) -> Self {
+        Self::Existing {
+            var: GoExpression::identifier(var),
+        }
+    }
+
     pub(crate) fn expression(
         scrutinee: &'a Expression,
         pattern: &'a Pattern,
@@ -85,7 +94,7 @@ struct ResolvedSubject {
 }
 
 struct PendingSubject {
-    name: String,
+    name: GoIdentifier,
     expression: GoExpression,
 }
 
@@ -103,7 +112,7 @@ impl ResolvedSubject {
 
     fn push_declaration(self, statements: &mut Vec<LoweredStatement>, body: &[LoweredStatement]) {
         if let Some(PendingSubject { name, expression }) = self.pending {
-            if GoUses::of(body).contains(&name) {
+            if GoUses::of(body).contains_identifier(&name) {
                 statements.push(define(name, expression));
             } else {
                 statements.push(discard(expression));
@@ -191,7 +200,9 @@ impl Planner<'_> {
                     && self.can_reuse_subject_identifier(value, pattern_binds_name(pattern, value))
                 {
                     let var = self.reference_go_name(value);
-                    return ResolvedSubject::existing(GoExpression::name(var));
+                    return ResolvedSubject::existing(GoExpression::identifier(
+                        self.scope.identifier_for_go_name(var),
+                    ));
                 }
                 let plan = self.lower_value(scrutinee, ExpressionContext::value());
                 let rests_in_stable_name = self.plan_rests_in_stable_name(&plan);
@@ -206,9 +217,13 @@ impl Planner<'_> {
                 }
                 let name = self.fresh_var(temp_hint);
                 self.declare(&name);
+                let identifier = self.scope.generated_identifier(&name);
                 ResolvedSubject {
-                    subject: GoExpression::name(name.clone()),
-                    pending: Some(PendingSubject { name, expression }),
+                    subject: GoExpression::identifier(identifier.clone()),
+                    pending: Some(PendingSubject {
+                        name: identifier,
+                        expression,
+                    }),
                 }
             }
         }
@@ -442,8 +457,9 @@ impl Planner<'_> {
         if let Expression::Identifier { value, .. } = scrutinee {
             let has_collision = pattern_binds_name(pattern, value);
             if self.can_reuse_subject_identifier(value, has_collision) {
+                let var = self.reference_go_name(value);
                 return (
-                    GoExpression::name(self.reference_go_name(value)),
+                    GoExpression::identifier(self.scope.identifier_for_go_name(var)),
                     Vec::new(),
                 );
             }
@@ -573,9 +589,13 @@ impl Planner<'_> {
         }));
         loop_body.extend(late_binding);
         let (body_block, _) = self.lower_fused_arm(
-            &[binding
-                .as_ref()
-                .and_then(|(name, go_name)| ArmBinding::alias(Some(name), Some(go_name)))],
+            &[binding.as_ref().and_then(|(name, go_name)| {
+                ArmBinding::alias_at(
+                    Some(name),
+                    Some(go_name),
+                    arm_binding_span(pattern, Some(name)),
+                )
+            })],
             body,
             &PlacePlan::Statement,
         );
@@ -771,15 +791,23 @@ impl Planner<'_> {
         for binding in bindings {
             let Some(go_name) = &binding.go_name else {
                 self.scope.bind(&binding.lisette_name, "_");
+                for id in &binding.binding_ids {
+                    self.scope.register_binding_id(*id, &binding.lisette_name);
+                }
                 continue;
             };
             let Some(ty) = &binding.ty else {
                 continue;
             };
             let go_name = self.claim_declared_binding(&binding.lisette_name, go_name.clone());
+            for id in &binding.binding_ids {
+                self.scope.register_binding_id(*id, &binding.lisette_name);
+            }
             let go_type = self.use_go_type(ty);
             statements.push(LoweredStatement::VarDecl {
-                name: go_name,
+                name: self
+                    .scope
+                    .identifier_for_binding(&binding.lisette_name, go_name),
                 go_type,
                 value: None,
             });
@@ -1001,19 +1029,36 @@ impl Planner<'_> {
     /// Map a `Some(pattern)` payload to a case-variable name and whether the
     /// payload needs decision-tree destructuring inside the arm body (rather
     /// than being bound directly by the `case v := <-ch:` header).
-    pub(crate) fn classify_receive_var_pattern(&mut self, pattern: &Pattern) -> (String, bool) {
+    pub(crate) fn classify_receive_var_pattern(
+        &mut self,
+        pattern: &Pattern,
+    ) -> (GoIdentifier, bool) {
         match pattern {
-            Pattern::WildCard { .. } => ("_".to_string(), false),
-            Pattern::Identifier { identifier, .. } => {
+            Pattern::WildCard { .. } => (GoIdentifier::name("_".to_string()), false),
+            Pattern::Identifier { identifier, span } => {
                 let Some(go_name) = self.go_name_for_binding(pattern) else {
-                    return ("_".to_string(), false);
+                    return (GoIdentifier::name("_".to_string()), false);
                 };
                 if self.scope.resolve_identifier_binding(identifier).is_some() {
-                    return (self.fresh_var(Some("recv")), true);
+                    let name = self.fresh_var(Some("recv"));
+                    return (self.scope.generated_identifier(&name), true);
                 }
-                (self.scope.bind(identifier, go_name), false)
+                self.scope.bind(identifier, go_name);
+                if let Some(id) = self.facts.binding_id_at(*span) {
+                    self.scope.register_binding_id(id, identifier);
+                }
+                (
+                    self.scope
+                        .bound_go_identifier(identifier)
+                        .expect("receive variable was just bound")
+                        .clone(),
+                    false,
+                )
             }
-            _ => (self.fresh_var(Some("recv")), true),
+            _ => {
+                let name = self.fresh_var(Some("recv"));
+                (self.scope.generated_identifier(&name), true)
+            }
         }
     }
 }
@@ -1025,11 +1070,26 @@ fn share_unused_alternative_bindings(infos: &mut [PatternInfo]) {
         .filter(|binding| binding.go_name.is_none())
         .map(|binding| binding.lisette_name.clone())
         .collect();
+    let mut ids_by_name: HashMap<String, Vec<BindingId>> = HashMap::default();
+    for info in infos.iter() {
+        for binding in &info.bindings {
+            let ids = ids_by_name.entry(binding.lisette_name.clone()).or_default();
+            for id in &binding.binding_ids {
+                if !ids.contains(id) {
+                    ids.push(*id);
+                }
+            }
+        }
+    }
     for info in infos.iter_mut() {
         for binding in info.bindings.iter_mut() {
             if unused_names.contains(&binding.lisette_name) {
                 binding.go_name = None;
             }
+            binding.binding_ids = ids_by_name
+                .get(&binding.lisette_name)
+                .cloned()
+                .unwrap_or_default();
         }
     }
 }

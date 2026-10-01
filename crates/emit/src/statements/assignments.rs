@@ -250,7 +250,11 @@ impl Planner<'_> {
                 setup.extend(call_setup);
                 GoExpression::name(self.hoist_tmp_value_statement(setup, "ref", call))
             }
-            _ => GoExpression::name("_".to_string()),
+            _ => unreachable!(
+                "assignment target has no Go place at {:?}: {:?}",
+                expression.get_span(),
+                expression
+            ),
         }
     }
 
@@ -369,7 +373,14 @@ impl Planner<'_> {
                 return access;
             }
             let field = TUPLE_FIELDS.get(index).expect("oversize tuple arity");
-            return GoExpression::selector(base, field.to_string());
+            return if self.facts.is_nilable_go_type(expression_ty)
+                || expression_ty.is_variable()
+                || expression_ty.is_placeholder()
+            {
+                GoExpression::selector(base, field.to_string())
+            } else {
+                GoExpression::value_field(base, field.to_string())
+            };
         }
         let field = if resolution_exports_field(resolution)
             || self.struct_field_is_exported(expression_ty, member)
@@ -380,7 +391,14 @@ impl Planner<'_> {
         } else {
             go_name::unexported_method_go_name(member)
         };
-        GoExpression::selector(base, field)
+        if self.facts.is_nilable_go_type(expression_ty)
+            || expression_ty.is_variable()
+            || expression_ty.is_placeholder()
+        {
+            GoExpression::selector(base, field)
+        } else {
+            GoExpression::value_field(base, field)
+        }
     }
 }
 

@@ -57,7 +57,7 @@ impl Planner<'_> {
     pub(crate) fn operand_temp_declaration(&mut self, ty: &Type) -> (String, LoweredStatement) {
         let result_var = self.fresh_var(None);
         let declaration = LoweredStatement::VarDecl {
-            name: result_var.clone(),
+            name: result_var.clone().into(),
             go_type: self.use_go_type(ty),
             value: None,
         };
@@ -195,11 +195,15 @@ impl Planner<'_> {
             if mode.else_block().is_some() || binding.is_mutable() {
                 continue;
             }
-            let Pattern::Identifier { identifier, .. } = &binding.pattern else {
+            let Pattern::Identifier { span, .. } = &binding.pattern else {
                 continue;
             };
             let region = rest[index + 1..].iter().chain(iter::once(last));
-            if let Some(demand) = component_demand(region, identifier.as_str()) {
+            if let Some(demand) = self
+                .facts
+                .binding_id_at(*span)
+                .and_then(|id| component_demand(region, id))
+            {
                 self.component_lets.insert(value.get_span(), demand);
             }
         }
@@ -307,8 +311,8 @@ impl Planner<'_> {
                 self.directed_at(expression, LoweredStatement::Body(body))
             }
             Expression::Select { arms, .. } => {
-                let plan = self.lower_select(arms, &PlacePlan::Statement);
-                self.directed_at(expression, LoweredStatement::Select(plan))
+                let statement = self.lower_select(arms, &PlacePlan::Statement);
+                self.directed_at(expression, statement)
             }
             Expression::WhileLet { .. } => self.lower_while_let_statement(expression),
             Expression::Assert { .. } => self.lower_assert_statement(expression),
@@ -539,7 +543,7 @@ impl Planner<'_> {
                 self.lower_match_to_block(subject, arms, place)
             }
             Expression::Select { arms, .. } => LoweredBlock {
-                statements: vec![LoweredStatement::Select(self.lower_select(arms, place))],
+                statements: vec![self.lower_select(arms, place)],
             },
             _ => unreachable!("lower_branching_to_block: expected if/if-let/match/select"),
         }

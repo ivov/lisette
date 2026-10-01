@@ -31,30 +31,12 @@ impl Renderer {
         }
     }
 
-    /// Render a `select` statement: optional retry-loop framing around the
-    /// `select { ... }`, its arms, and any trailing postlude.
     fn render_select(&self, output: &mut String, plan: &SelectStatementPlan) {
-        for statement in &plan.setup {
-            self.render_statement(output, statement);
-        }
-        if plan.retry_loop {
-            output.push_str("for {\n");
-        }
         output.push_str("select {\n");
         for arm in &plan.arms {
             self.render_select_arm(output, arm);
         }
         output.push_str("}\n");
-        if plan.retry_loop {
-            if plan.all_arms_diverge() {
-                output.push_str("}\n");
-            } else {
-                output.push_str("break\n}\n");
-            }
-        }
-        for statement in &plan.postlude {
-            self.render_statement(output, statement);
-        }
     }
 
     /// Render a `switch` statement: the value/type-switch header, each
@@ -103,7 +85,16 @@ impl Renderer {
                 if receive_vars.is_empty() {
                     write_line!(output, "case <-{}:", channel);
                 } else {
-                    write_line!(output, "case {} := <-{}:", receive_vars.join(", "), channel);
+                    write_line!(
+                        output,
+                        "case {} := <-{}:",
+                        receive_vars
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        channel
+                    );
                 }
                 self.render_lowered_block(output, body);
             }
@@ -123,7 +114,14 @@ impl Renderer {
     }
 
     fn render_definition(&self, output: &mut String, definition: &Definition) {
-        output.push_str(&definition.names.join(", "));
+        output.push_str(
+            &definition
+                .names
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
         output.push_str(" := ");
         output.push_str(&definition.value.rendered());
     }
@@ -327,7 +325,14 @@ impl Renderer {
         debug_assert!(!plan.condition.is_empty(), "if condition must not be empty");
         output.push_str("if ");
         if let Some(initializer) = &plan.initializer {
-            output.push_str(&initializer.names.join(", "));
+            output.push_str(
+                &initializer
+                    .names
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
             output.push_str(" := ");
             output.push_str(&initializer.value.print_header());
             output.push_str("; ");
@@ -347,19 +352,14 @@ impl Renderer {
         match arm {
             ElseArm::None => output.push_str("}\n"),
             ElseArm::ElseIf(plan) => {
-                if !plan.condition_setup.is_empty() {
-                    output.push_str("} else {\n");
-                    output.push_str(&self.render_setup(&plan.condition_setup));
-                    self.render_if_header(output, plan);
-                    self.render_lowered_block(output, &plan.then_body);
-                    self.render_else_arm(output, &plan.else_arm);
-                    output.push_str("}\n");
-                } else {
-                    output.push_str("} else ");
-                    self.render_if_header(output, plan);
-                    self.render_lowered_block(output, &plan.then_body);
-                    self.render_else_arm(output, &plan.else_arm);
-                }
+                debug_assert!(
+                    plan.condition_setup.is_empty(),
+                    "else-if setup must be legalized"
+                );
+                output.push_str("} else ");
+                self.render_if_header(output, plan);
+                self.render_lowered_block(output, &plan.then_body);
+                self.render_else_arm(output, &plan.else_arm);
             }
             ElseArm::Else { body, inline } => {
                 debug_assert!(!body.renders_empty(), "else body must render output");

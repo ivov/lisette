@@ -1,9 +1,10 @@
 use crate::Planner;
-use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate};
+use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::patterns::decision_tree::{
     Check, PatternBinding, PatternInfo, SubjectRoot, render_condition,
 };
-use crate::plan::bodies::{LoweredStatement, assign, define, define_many};
+use crate::plan::bodies::{Definition, LoweredStatement, assign, define_many};
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::InlineExpr;
 use syntax::ast::Expression;
@@ -49,22 +50,23 @@ pub(crate) fn apply_refutable_root_assertion(
             let asserted_lhs = if needs_asserted {
                 let v = planner.fresh_var(Some("asserted"));
                 planner.declare(&v);
-                v
+                planner.scope.generated_identifier(&v)
             } else {
-                "_".to_string()
+                GoIdentifier::name("_".to_string())
             };
             let ok = planner.fresh_var(Some("ok"));
             planner.declare(&ok);
+            let ok = planner.scope.generated_identifier(&ok);
             statements.push(define_many(
                 vec![asserted_lhs.clone(), ok.clone()],
                 assertion_of(go_type),
             ));
             let effective = if needs_asserted {
-                GoExpression::name(asserted_lhs)
+                GoExpression::identifier(asserted_lhs)
             } else {
                 subject.clone()
             };
-            (effective, Some(GoExpression::name(ok)))
+            (effective, Some(GoExpression::identifier(ok)))
         }
         multiple => {
             // No-binding interface or-pattern (`A | B`): no single asserted
@@ -74,11 +76,12 @@ pub(crate) fn apply_refutable_root_assertion(
                 .map(|t| {
                     let ok = planner.fresh_var(Some("ok"));
                     planner.declare(&ok);
+                    let ok = planner.scope.generated_identifier(&ok);
                     statements.push(define_many(
-                        vec!["_".to_string(), ok.clone()],
+                        vec![GoIdentifier::name("_".to_string()), ok.clone()],
                         assertion_of(t),
                     ));
-                    GoExpression::name(ok)
+                    GoExpression::identifier(ok)
                 })
                 .reduce(|left, right| GoExpression::binary(left, "||", right))
                 .expect("a multi-type assertion names at least one type");
@@ -113,16 +116,26 @@ pub(crate) fn tree_binding_statements(
     for binding in bindings {
         let Some(ref go_name) = binding.go_name else {
             planner.scope.bind(&binding.lisette_name, "");
+            for id in &binding.binding_ids {
+                planner
+                    .scope
+                    .register_binding_id(*id, &binding.lisette_name);
+            }
             continue;
         };
 
         let access_expression = binding.path.render(SubjectRoot::Var(subject));
 
-        if analyze_inline_candidate(&binding.lisette_name, consumers) == InlineDecision::Inline {
+        if analyze_inline_candidate_ids(&binding.binding_ids, consumers) == InlineDecision::Inline {
             let composable = binding.path.render(SubjectRoot::Var(subject));
             planner
                 .scope
                 .bind_inline_expr(&binding.lisette_name, InlineExpr::new(composable));
+            for id in &binding.binding_ids {
+                planner
+                    .scope
+                    .register_binding_id(*id, &binding.lisette_name);
+            }
             continue;
         }
         let name = if planner.scope.has_binding_for_go_name(go_name) {
@@ -141,7 +154,16 @@ pub(crate) fn tree_binding_statements(
                 fresh
             }
         };
-        statements.push(define(name, access_expression));
+        let mut definition = Definition::single(name.clone(), access_expression);
+        definition.names[0] = planner
+            .scope
+            .identifier_for_binding(&binding.lisette_name, name);
+        statements.push(LoweredStatement::Define(definition));
+        for id in &binding.binding_ids {
+            planner
+                .scope
+                .register_binding_id(*id, &binding.lisette_name);
+        }
     }
 }
 

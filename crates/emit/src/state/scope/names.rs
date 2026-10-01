@@ -2,11 +2,13 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::go_names::is_go_reserved_word;
 
 use super::{DeclarationKind, DeclarationScope, ScopeState};
+use crate::plan::local::{GoIdentifier, LocalId};
 
 #[derive(Default)]
 pub(super) struct LocalNames {
     issued: HashSet<String>,
     generated: Vec<GeneratedLocal>,
+    generated_ids: HashMap<String, LocalId>,
 }
 
 struct GeneratedLocal {
@@ -19,11 +21,25 @@ impl ScopeState {
         let base = hint.unwrap_or("tmp").to_string();
         let candidate = self.free_name_from(&base, |name| self.is_go_name_taken(name));
         self.names.issued.insert(candidate.clone());
+        let id = self.new_local_id();
+        self.names.generated_ids.insert(candidate.clone(), id);
         self.names.generated.push(GeneratedLocal {
             current: candidate.clone(),
             base,
         });
         candidate
+    }
+
+    pub(crate) fn generated_local_id(&self, name: &str) -> Option<LocalId> {
+        self.names.generated_ids.get(name).copied()
+    }
+
+    pub(crate) fn generated_identifier(&self, name: &str) -> GoIdentifier {
+        GoIdentifier::local(
+            name.to_string(),
+            self.generated_local_id(name)
+                .expect("generated name has a local ID"),
+        )
     }
 
     pub(crate) fn fresh_binding_go_name(&mut self, hint: &str) -> String {
@@ -58,6 +74,7 @@ impl ScopeState {
     pub(crate) fn settle_generated_names(
         &self,
         present: &HashSet<String>,
+        pinned: &HashSet<String>,
     ) -> HashMap<String, String> {
         let generated: HashSet<&str> = self
             .names
@@ -75,7 +92,7 @@ impl ScopeState {
         );
         let mut settled: HashMap<String, String> = HashMap::default();
         for local in &self.names.generated {
-            if !present.contains(&local.current) {
+            if !present.contains(&local.current) || pinned.contains(&local.current) {
                 continue;
             }
             let name = self.free_name_from(&local.base, |candidate| {
@@ -130,5 +147,16 @@ mod tests {
 
         assert_eq!(scope.fresh_go_name(Some("range")), "range_1");
         assert_eq!(scope.fresh_go_name(Some("len")), "len_1");
+    }
+
+    #[test]
+    fn opaque_reference_keeps_a_generated_spelling() {
+        let mut scope = ScopeState::new();
+        scope.reserve_go_name("value");
+        let generated = scope.fresh_go_name(Some("value"));
+        assert_eq!(generated, "value_1");
+        let present = HashSet::from_iter([generated.clone()]);
+        let pinned = HashSet::from_iter([generated]);
+        assert!(scope.settle_generated_names(&present, &pinned).is_empty());
     }
 }

@@ -1,7 +1,7 @@
 use rustc_hash::FxHashSet as HashSet;
-use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, collect_pattern_bindings};
-
-use crate::patterns::binding_decls::pattern_binds_name;
+use syntax::ast::{
+    BindingId, Expression, IdentifierResolution, MatchArm, Pattern, collect_pattern_bindings,
+};
 
 const STATUS_METHODS: &[&str] = &["is_some", "is_none", "is_ok", "is_err"];
 const PAYLOAD_METHODS: &[&str] = &["unwrap_or", "map_or"];
@@ -13,12 +13,12 @@ pub(crate) struct ComponentDemand {
     pub(crate) read_indices: HashSet<usize>,
 }
 
-pub(crate) fn component_demand<'a, I>(region: I, lisette_name: &str) -> Option<ComponentDemand>
+pub(crate) fn component_demand<'a, I>(region: I, binding_id: BindingId) -> Option<ComponentDemand>
 where
     I: IntoIterator<Item = &'a Expression>,
 {
     let mut walker = Walker {
-        name: lisette_name,
+        binding_id,
         supported: 0,
         blocked: false,
         needs_value: false,
@@ -33,8 +33,8 @@ where
     })
 }
 
-struct Walker<'a> {
-    name: &'a str,
+struct Walker {
+    binding_id: BindingId,
     supported: usize,
     blocked: bool,
     needs_value: bool,
@@ -42,12 +42,19 @@ struct Walker<'a> {
     read_indices: HashSet<usize>,
 }
 
-impl Walker<'_> {
+impl Walker {
     fn names_the_local(&self, expression: &Expression) -> bool {
-        matches!(
-            expression.unwrap_parens(),
-            Expression::Identifier { value, .. } if value == self.name
-        )
+        match expression.unwrap_parens() {
+            Expression::Identifier {
+                resolution: IdentifierResolution::Binding(id),
+                ..
+            } => self.binding_id == *id,
+            _ => false,
+        }
+    }
+
+    fn targets_local(&self, target: &Expression) -> bool {
+        target.root_binding_id() == Some(self.binding_id)
     }
 
     fn walk(&mut self, expression: &Expression) {
@@ -55,12 +62,12 @@ impl Walker<'_> {
             return;
         }
         match expression {
-            Expression::Identifier { value, .. } if value == self.name => {
+            Expression::Identifier { .. } if self.names_the_local(expression) => {
                 self.needs_whole_value = true;
                 return;
             }
             Expression::Assignment { target, value, .. } => {
-                if target.unwrap_parens().root_identifier() == Some(self.name) {
+                if self.targets_local(target) {
                     self.blocked = true;
                     return;
                 }
@@ -78,7 +85,7 @@ impl Walker<'_> {
                         self.blocked = true;
                         return;
                     }
-                    self.supported += 1;
+                    self.supported += usize::from(!arms.iter().any(MatchArm::has_guard));
                     self.needs_value |= arms.iter().any(|arm| binds_payload(&arm.pattern));
                     self.needs_whole_value |= arms.iter().any(|arm| arm.has_guard());
                 } else {
@@ -104,16 +111,13 @@ impl Walker<'_> {
                 } else {
                     self.walk(scrutinee);
                 }
-                if !pattern_binds_name(pattern, self.name) {
-                    self.walk(consequence);
-                }
+                self.walk(consequence);
                 if let Some(alternative) = alternative.expression() {
                     self.walk(alternative);
                 }
                 return;
             }
             Expression::Propagate { expression, .. } if self.names_the_local(expression) => {
-                self.supported += 1;
                 self.needs_whole_value = true;
                 return;
             }
@@ -124,53 +128,26 @@ impl Walker<'_> {
                 return;
             }
             Expression::WhileLet {
-                pattern,
-                scrutinee,
-                body,
-                ..
+                scrutinee, body, ..
             } => {
                 self.walk(scrutinee);
-                if !pattern_binds_name(pattern, self.name) {
-                    self.walk(body);
-                }
+                self.walk(body);
                 return;
             }
-            Expression::For {
-                binding,
-                iterable,
-                body,
-                ..
-            } => {
+            Expression::For { iterable, body, .. } => {
                 self.walk(iterable);
-                if !pattern_binds_name(&binding.pattern, self.name) {
+                self.walk(body);
+                return;
+            }
+            Expression::Lambda { body, .. } => {
+                self.walk(body);
+                return;
+            }
+            Expression::Function { body, .. } => {
+                if let Some(body) = body.definition() {
                     self.walk(body);
                 }
                 return;
-            }
-            Expression::Lambda { params, body, .. } => {
-                if !params
-                    .iter()
-                    .any(|p| pattern_binds_name(&p.pattern, self.name))
-                {
-                    self.walk(body);
-                }
-                return;
-            }
-            Expression::Function { params, body, .. } => {
-                if !params
-                    .iter()
-                    .any(|p| pattern_binds_name(&p.pattern, self.name))
-                    && let Some(body) = body.definition()
-                {
-                    self.walk(body);
-                }
-                return;
-            }
-            Expression::Select { arms, .. } => {
-                if arms.iter().any(|arm| self.select_arm_binds_name(arm)) {
-                    self.blocked = true;
-                    return;
-                }
             }
             Expression::DotAccess {
                 expression: receiver,
@@ -215,43 +192,17 @@ impl Walker<'_> {
 
     fn walk_items<'e>(&mut self, items: impl IntoIterator<Item = &'e Expression>) {
         let items: Vec<&Expression> = items.into_iter().collect();
-        let block_shadows = items.iter().any(|item| match item {
-            Expression::Const { identifier, .. } => identifier.as_str() == self.name,
-            Expression::Function { name, .. } => name.as_str() == self.name,
-            _ => false,
-        });
-        if block_shadows {
-            return;
-        }
         for item in items {
             self.walk(item);
-            if let Expression::Let { binding, .. } = item
-                && pattern_binds_name(&binding.pattern, self.name)
-            {
-                return;
-            }
         }
     }
 
     fn walk_arms(&mut self, arms: &[MatchArm]) {
         for arm in arms {
-            if pattern_binds_name(&arm.pattern, self.name) {
-                continue;
-            }
             if let Some(guard) = &arm.guard {
                 self.walk(guard);
             }
             self.walk(&arm.expression);
-        }
-    }
-
-    fn select_arm_binds_name(&self, arm: &SelectArm) -> bool {
-        match arm {
-            SelectArm::Receive { binding, .. } => pattern_binds_name(binding, self.name),
-            SelectArm::MatchReceive { arms, .. } => arms
-                .iter()
-                .any(|arm| pattern_binds_name(&arm.pattern, self.name)),
-            SelectArm::Send { .. } | SelectArm::WildCard { .. } => false,
         }
     }
 }

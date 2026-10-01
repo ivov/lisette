@@ -449,8 +449,8 @@ impl Planner<'_> {
                 prologue: Vec::new(),
                 kind: LoopKind::Generated { label: None },
                 header: LoopHeader::Range {
-                    key: Some("i".to_string()),
-                    value: Some(loop_cb),
+                    key: Some("i".to_string().into()),
+                    value: Some(loop_cb.into()),
                     iterable: source_variable,
                 },
                 body: LoweredBlock { statements: body },

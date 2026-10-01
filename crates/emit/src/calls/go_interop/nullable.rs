@@ -83,7 +83,7 @@ impl Planner<'_> {
             let copy = self.fresh_var(Some("ptr"));
             self.declare(&copy);
             setup.push(LoweredStatement::VarDecl {
-                name: copy.clone(),
+                name: copy.clone().into(),
                 go_type,
                 value: Some(value),
             });
@@ -260,7 +260,7 @@ impl Planner<'_> {
         let slot = self.fresh_var(Some(if address { "ptr" } else { "unwrap" }));
         self.declare(&slot);
         statements.push(LoweredStatement::VarDecl {
-            name: slot.clone(),
+            name: slot.clone().into(),
             go_type: slot_ty.to_string(),
             value: None,
         });
@@ -461,7 +461,7 @@ impl Planner<'_> {
         let option = self.fresh_var(Some("option"));
         self.declare(&option);
         statements.push(LoweredStatement::VarDecl {
-            name: option.clone(),
+            name: option.clone().into(),
             go_type: option_type_string,
             value: None,
         });
@@ -509,7 +509,7 @@ impl Planner<'_> {
             let output = self.fresh_var(Some(output_hint));
             self.declare(&output);
             statements.push(LoweredStatement::VarDecl {
-                name: output.clone(),
+                name: output.clone().into(),
                 go_type: target_type,
                 value: None,
             });
@@ -551,8 +551,8 @@ impl Planner<'_> {
             prologue: Vec::new(),
             kind: LoopKind::Generated { label: None },
             header: LoopHeader::Range {
-                key: Some(index),
-                value: Some(element),
+                key: Some(index.into()),
+                value: Some(element.into()),
                 iterable: source,
             },
             body,

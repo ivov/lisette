@@ -52,6 +52,7 @@ fn emit_inner(
         go_module: "myproject",
         unused: &result.unused,
         mutations: &result.mutations,
+        binder_ids: &result.binder_ids,
         equality_index: &result.equality_index,
         test_index: &test_index,
         go_package_names: &result.go_package_names,

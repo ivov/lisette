@@ -19,12 +19,13 @@ use crate::plan::bodies::{
 };
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::state::bindings::{ComponentBinding, ComponentKind};
 use crate::state::scope::PairStatusKind;
 use crate::types::native::NativeGoType;
 use std::mem;
-use syntax::ast::{Expression, Literal, MatchArm, Pattern};
+use syntax::ast::{Expression, Literal, MatchArm, Pattern, Span, collect_pattern_bindings};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
 
@@ -169,7 +170,7 @@ impl BoundOption {
                 };
                 PairCondition {
                     initializer: initializer_call.as_ref().map(|call| Definition {
-                        names: vec![value.clone()],
+                        names: vec![value.clone().into()],
                         value: call.clone(),
                     }),
                     condition: test,
@@ -331,23 +332,43 @@ pub(super) enum ArmBinding<'a> {
     Alias {
         name: &'a str,
         go_name: &'a str,
+        span: Option<Span>,
     },
     Copy {
         name: &'a str,
         value: &'a GoExpression,
+        span: Option<Span>,
     },
 }
 
 impl<'a> ArmBinding<'a> {
-    pub(super) fn alias(name: Option<&'a str>, go_name: Option<&'a str>) -> Option<Self> {
-        name.zip(go_name)
-            .map(|(name, go_name)| Self::Alias { name, go_name })
+    pub(super) fn alias_at(
+        name: Option<&'a str>,
+        go_name: Option<&'a str>,
+        span: Option<Span>,
+    ) -> Option<Self> {
+        name.zip(go_name).map(|(name, go_name)| Self::Alias {
+            name,
+            go_name,
+            span,
+        })
     }
 
-    pub(super) fn copy(name: Option<&'a str>, value: Option<&'a GoExpression>) -> Option<Self> {
+    pub(super) fn copy_at(
+        name: Option<&'a str>,
+        value: Option<&'a GoExpression>,
+        span: Option<Span>,
+    ) -> Option<Self> {
         name.zip(value)
-            .map(|(name, value)| Self::Copy { name, value })
+            .map(|(name, value)| Self::Copy { name, value, span })
     }
+}
+
+pub(super) fn arm_binding_span(pattern: &Pattern, name: Option<&str>) -> Option<Span> {
+    let name = name?;
+    collect_pattern_bindings(pattern)
+        .into_iter()
+        .find_map(|(binding, span)| (binding == name).then_some(span))
 }
 
 fn unit_value() -> GoExpression {
@@ -841,9 +862,17 @@ impl Planner<'_> {
         let then_body = destination.is_none().then(|| {
             // A call returning only `error` has no value, so `Ok(x)` takes unit.
             let ok_binding = if carries_payload {
-                ArmBinding::alias(ok_name, bound.value())
+                ArmBinding::alias_at(
+                    ok_name,
+                    bound.value(),
+                    arm_binding_span(&ok.arm.pattern, ok_name),
+                )
             } else {
-                ArmBinding::copy(ok_name, Some(&unit))
+                ArmBinding::copy_at(
+                    ok_name,
+                    Some(&unit),
+                    arm_binding_span(&ok.arm.pattern, ok_name),
+                )
             };
             let (body, uses) = self.lower_fused_arm(&[ok_binding], &ok.arm.expression, place);
             (body, uses.first().copied().unwrap_or(false))
@@ -853,7 +882,11 @@ impl Planner<'_> {
         } else {
             place
         };
-        let err_binding = ArmBinding::alias(err_name, Some(bound.status()));
+        let err_binding = ArmBinding::alias_at(
+            err_name,
+            Some(bound.status()),
+            arm_binding_span(&err.arm.pattern, err_name),
+        );
         let (mut else_body, err_used) =
             self.lower_fused_arm(&[err_binding], &err.arm.expression, arm_place);
 
@@ -1006,7 +1039,11 @@ impl Planner<'_> {
         {
             bound.discard_value();
         }
-        let err_binding = ArmBinding::alias(err_name, Some(bound.status()));
+        let err_binding = ArmBinding::alias_at(
+            err_name,
+            Some(bound.status()),
+            arm_binding_span(&err_arm.pattern, err_name),
+        );
         let (mut else_body, err_used) =
             self.lower_fused_arm(&[err_binding], &err_arm.expression, place);
         let err_read = err_used.first().copied().unwrap_or(false);
@@ -1076,14 +1113,26 @@ impl Planner<'_> {
         let err = || GoExpression::name(err_var.clone());
 
         let (ok_body, ok_uses) = self.lower_fused_arm(
-            &[ArmBinding::alias(ok_name, val_var.as_deref())],
+            &[ArmBinding::alias_at(
+                ok_name,
+                val_var.as_deref(),
+                arm_binding_span(&ok_arm.pattern, ok_name),
+            )],
             &ok_arm.expression,
             place,
         );
         let (both_body, both_uses) = self.lower_fused_arm(
             &[
-                ArmBinding::alias(both_val, val_var.as_deref()),
-                ArmBinding::alias(both_err, Some(&err_var)),
+                ArmBinding::alias_at(
+                    both_val,
+                    val_var.as_deref(),
+                    arm_binding_span(&both_arm.pattern, both_val),
+                ),
+                ArmBinding::alias_at(
+                    both_err,
+                    Some(&err_var),
+                    arm_binding_span(&both_arm.pattern, both_err),
+                ),
             ],
             &both_arm.expression,
             place,
@@ -1094,7 +1143,7 @@ impl Planner<'_> {
             None => "_".to_string(),
         };
         let initializer = Definition {
-            names: vec![bound_value, err_var.clone()],
+            names: vec![bound_value.into(), err_var.clone().into()],
             value: call,
         };
 
@@ -1105,7 +1154,11 @@ impl Planner<'_> {
         let else_arm = match nil_check {
             Some(check) => {
                 let (err_body, _) = self.lower_fused_arm(
-                    &[ArmBinding::alias(err_name, Some(&err_var))],
+                    &[ArmBinding::alias_at(
+                        err_name,
+                        Some(&err_var),
+                        arm_binding_span(&err_arm.pattern, err_name),
+                    )],
                     &err_arm.expression,
                     place,
                 );
@@ -1179,8 +1232,16 @@ impl Planner<'_> {
         }
         let (selected, binding_uses) = self.lower_fused_arm(
             &[
-                ArmBinding::alias(value_binding, value.as_deref()),
-                ArmBinding::alias(error_binding, Some(&error)),
+                ArmBinding::alias_at(
+                    value_binding,
+                    value.as_deref(),
+                    arm_binding_span(&arms.selected.pattern, value_binding),
+                ),
+                ArmBinding::alias_at(
+                    error_binding,
+                    Some(&error),
+                    arm_binding_span(&arms.selected.pattern, error_binding),
+                ),
             ],
             &arms.selected.expression,
             place,
@@ -1221,7 +1282,7 @@ impl Planner<'_> {
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
             initializer: Some(Definition {
-                names: vec![bound_value, error.clone()],
+                names: vec![bound_value.into(), error.clone().into()],
                 value: call,
             }),
             condition,
@@ -1258,9 +1319,13 @@ impl Planner<'_> {
 
         let element = bound.value();
         let some_binding = if bound.binds_value() {
-            ArmBinding::alias(arms.some_binding, bound.value_name())
+            ArmBinding::alias_at(
+                arms.some_binding,
+                bound.value_name(),
+                arms.some_binding_span,
+            )
         } else {
-            ArmBinding::copy(arms.some_binding, element.as_ref())
+            ArmBinding::copy_at(arms.some_binding, element.as_ref(), arms.some_binding_span)
         };
         let (then_body, some_uses) = self.lower_fused_arm(&[some_binding], arms.some_body, place);
         let (else_body, _) = self.lower_fused_arm(&[], arms.none_body, place);
@@ -1291,17 +1356,40 @@ impl Planner<'_> {
         place: &PlacePlan,
     ) -> (LoweredBlock, Vec<bool>) {
         self.with_binding_frame(|this| {
-            let bound: Vec<Option<(String, Option<GoExpression>)>> = bindings
+            let bound: Vec<Option<(GoIdentifier, Option<GoExpression>)>> = bindings
                 .iter()
                 .map(|binding| {
                     binding.map(|binding| match binding {
-                        ArmBinding::Alias { name, go_name } => {
-                            (this.scope.bind(name, go_name), None)
+                        ArmBinding::Alias {
+                            name,
+                            go_name,
+                            span,
+                        } => {
+                            this.scope.bind(name, go_name);
+                            if let Some(id) = span.and_then(|span| this.facts.binding_id_at(span)) {
+                                this.scope.register_binding_id(id, name);
+                            }
+                            (
+                                this.scope
+                                    .bound_go_identifier(name)
+                                    .expect("alias was bound")
+                                    .clone(),
+                                None,
+                            )
                         }
-                        ArmBinding::Copy { name, value } => {
+                        ArmBinding::Copy { name, value, span } => {
                             let go_name = this.scope.bind(name, name);
+                            if let Some(id) = span.and_then(|span| this.facts.binding_id_at(span)) {
+                                this.scope.register_binding_id(id, name);
+                            }
                             this.declare(&go_name);
-                            (go_name, Some(value.clone()))
+                            (
+                                this.scope
+                                    .bound_go_identifier(name)
+                                    .expect("copy was bound")
+                                    .clone(),
+                                Some(value.clone()),
+                            )
                         }
                     })
                 })
@@ -1314,7 +1402,7 @@ impl Planner<'_> {
                 .map(|binding| {
                     binding
                         .as_ref()
-                        .is_some_and(|(go_name, _)| used.contains(go_name))
+                        .is_some_and(|(go_name, _)| used.contains_identifier(go_name))
                 })
                 .collect::<Vec<_>>();
             for (binding, is_used) in bound.iter().zip(&binding_uses) {
@@ -1376,7 +1464,12 @@ impl Planner<'_> {
             && let GoExpressionNode::Identifier(var) = value.node()
         {
             let var = var.clone();
-            return (value, SubjectDeclaration::PlainDiscard { var });
+            return (
+                value,
+                SubjectDeclaration::PlainDiscard {
+                    var: var.to_string(),
+                },
+            );
         }
         let var = self.fresh_var(Some("subject"));
         self.declare(&var);
@@ -1590,6 +1683,7 @@ fn classify_selective_partial_arms(arms: &[MatchArm]) -> Option<SelectivePartial
 pub(crate) struct OptionArms<'a> {
     /// `None` when the Some arm binds no payload.
     pub(crate) some_binding: Option<&'a str>,
+    pub(crate) some_binding_span: Option<Span>,
     pub(crate) some_body: &'a Expression,
     pub(crate) none_body: &'a Expression,
 }
@@ -1631,16 +1725,19 @@ fn classify_option_arms(arms: &[MatchArm]) -> Option<OptionArms<'_>> {
     match (option_arm_kind(&arms[0])?, option_arm_kind(&arms[1])?) {
         (ArmKind::Some(binding), ArmKind::None | ArmKind::WildCard) => Some(OptionArms {
             some_binding: binding,
+            some_binding_span: arm_binding_span(&arms[0].pattern, binding),
             some_body: &arms[0].expression,
             none_body: &arms[1].expression,
         }),
         (ArmKind::None, ArmKind::Some(binding)) => Some(OptionArms {
             some_binding: binding,
+            some_binding_span: arm_binding_span(&arms[1].pattern, binding),
             some_body: &arms[1].expression,
             none_body: &arms[0].expression,
         }),
         (ArmKind::None, ArmKind::WildCard) => Some(OptionArms {
             some_binding: None,
+            some_binding_span: None,
             some_body: &arms[1].expression,
             none_body: &arms[0].expression,
         }),

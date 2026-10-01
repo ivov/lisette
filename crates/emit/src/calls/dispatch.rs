@@ -294,7 +294,7 @@ impl<'a> Planner<'a> {
                                     prologue: Vec::new(),
                                     kind: LoopKind::Generated { label: None },
                                     header: LoopHeader::Range {
-                                        key: Some("i".to_string()),
+                                        key: Some("i".to_string().into()),
                                         value: None,
                                         iterable: slice(),
                                     },

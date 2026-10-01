@@ -2,16 +2,24 @@
 //! consumes.
 
 use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
 use rustc_hash::FxHashSet as HashSet;
+use std::mem::{replace, take};
 use syntax::types::Type;
 
-pub(crate) fn define(name: String, value: GoExpression) -> LoweredStatement {
+pub(crate) fn define(name: impl Into<GoIdentifier>, value: GoExpression) -> LoweredStatement {
     LoweredStatement::Define(Definition::single(name, value))
 }
 
-pub(crate) fn define_many(names: Vec<String>, value: GoExpression) -> LoweredStatement {
-    LoweredStatement::Define(Definition { names, value })
+pub(crate) fn define_many<T: Into<GoIdentifier>>(
+    names: Vec<T>,
+    value: GoExpression,
+) -> LoweredStatement {
+    LoweredStatement::Define(Definition {
+        names: names.into_iter().map(Into::into).collect(),
+        value,
+    })
 }
 
 pub(crate) fn discard(value: GoExpression) -> LoweredStatement {
@@ -97,14 +105,14 @@ pub(crate) fn directed_first(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Definition {
-    pub(crate) names: Vec<String>,
+    pub(crate) names: Vec<GoIdentifier>,
     pub(crate) value: GoExpression,
 }
 
 impl Definition {
-    pub(crate) fn single(name: String, value: GoExpression) -> Self {
+    pub(crate) fn single(name: impl Into<GoIdentifier>, value: GoExpression) -> Self {
         Self {
-            names: vec![name],
+            names: vec![name.into()],
             value,
         }
     }
@@ -136,7 +144,7 @@ pub(crate) enum LoweredStatement {
     },
     /// `var name go_type` (with `= value` when `value` is set).
     VarDecl {
-        name: String,
+        name: GoIdentifier,
         go_type: String,
         value: Option<GoExpression>,
     },
@@ -159,7 +167,7 @@ pub(crate) enum LoweredStatement {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ConstPlan {
     pub(crate) is_const: bool,
-    pub(crate) name: String,
+    pub(crate) name: GoIdentifier,
     pub(crate) ty_str: String,
     pub(crate) value: GoExpression,
 }
@@ -216,7 +224,7 @@ pub(crate) enum SwitchKind {
     /// otherwise `switch <subject>.(type) {`.
     Type {
         subject: GoExpression,
-        binding: Option<String>,
+        binding: Option<GoIdentifier>,
     },
 }
 
@@ -235,19 +243,9 @@ impl SwitchStatementPlan {
     }
 }
 
-/// A `select` statement: optional retry-loop wrapper around the `select`, an
-/// ordered set of arms, plus hoisted setup and a trailing postlude (e.g. an
-/// unreachable panic). The renderer owns the `for`/`select`/`case`/`default:`
-/// syntax.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SelectStatementPlan {
-    /// Side-effecting setup hoisted before the `select` (channel/value temps).
-    pub(crate) setup: Vec<LoweredStatement>,
-    /// When set, the `select` is wrapped in `for { ... break }` for retry.
-    pub(crate) retry_loop: bool,
     pub(crate) arms: Vec<SelectArmPlan>,
-    /// Statements after the `select`/retry loop, such as an unreachable panic.
-    pub(crate) postlude: Vec<LoweredStatement>,
 }
 
 /// A single `select` arm: a `case`/`default:` header plus its body block.
@@ -256,7 +254,7 @@ pub(crate) enum SelectArmPlan {
     /// `case <receive_vars> := <-<channel>:`, or `case <-<channel>:` when
     /// `receive_vars` is empty.
     Receive {
-        receive_vars: Vec<String>,
+        receive_vars: Vec<GoIdentifier>,
         channel: GoExpression,
         body: LoweredBlock,
     },
@@ -272,13 +270,6 @@ pub(crate) enum SelectArmPlan {
 
 impl SelectStatementPlan {
     fn ends_with_diverge(&self) -> bool {
-        self.postlude
-            .last()
-            .is_some_and(LoweredStatement::ends_with_diverge)
-            || self.all_arms_diverge()
-    }
-
-    pub(crate) fn all_arms_diverge(&self) -> bool {
         !self.arms.is_empty() && self.arms.iter().all(|arm| arm.body().ends_with_diverge())
     }
 }
@@ -317,12 +308,12 @@ pub(crate) enum LoopHeader {
     Infinite,
     While(GoExpression),
     Range {
-        key: Option<String>,
-        value: Option<String>,
+        key: Option<GoIdentifier>,
+        value: Option<GoIdentifier>,
         iterable: GoExpression,
     },
     Counted {
-        variable: String,
+        variable: GoIdentifier,
         start: GoExpression,
         condition: Option<GoExpression>,
     },
@@ -406,27 +397,31 @@ pub(crate) fn for_each_statement(
     }
 }
 
-pub(crate) fn rename_generated_names(
+pub(crate) fn rename_generated_locals(
     statements: &mut [LoweredStatement],
-    rename: &impl Fn(&str) -> Option<String>,
+    by_id: &rustc_hash::FxHashMap<LocalId, String>,
 ) {
-    struct Rename<'a, F>(&'a F);
+    struct Rename<'a>(&'a rustc_hash::FxHashMap<LocalId, String>);
 
-    impl<F: Fn(&str) -> Option<String>> super::visit::VisitorMut for Rename<'_, F> {
+    impl super::visit::VisitorMut for Rename<'_> {
         fn expression(&mut self, node: &mut GoExpressionNode) {
-            if let GoExpressionNode::Identifier(name) = node {
-                self.binding(name);
+            if let GoExpressionNode::Identifier(name) = node
+                && let Some(final_name) = name.id().and_then(|id| self.0.get(&id))
+            {
+                *name.spelling_mut() = final_name.clone();
             }
         }
 
-        fn binding(&mut self, name: &mut String) {
-            if let Some(final_name) = self.0(name) {
-                *name = final_name;
+        fn binding(&mut self, _name: &mut String) {}
+
+        fn local_binding(&mut self, name: &mut GoIdentifier) {
+            if let Some(final_name) = name.id().and_then(|id| self.0.get(&id)) {
+                *name.spelling_mut() = final_name.clone();
             }
         }
     }
 
-    super::visit::visit_statements_mut(statements, &mut Rename(rename));
+    super::visit::visit_statements_mut(statements, &mut Rename(by_id));
 }
 
 pub(crate) fn for_each_statements_mut(
@@ -439,9 +434,21 @@ pub(crate) fn for_each_statements_mut(
     }
 }
 
+pub(crate) fn legalize_else_if_scopes(statements: &mut Vec<LoweredStatement>) {
+    for_each_statements_mut(statements, &mut |statements| {
+        for statement in statements {
+            if let LoweredStatement::If(plan) = statement {
+                plan.legalize_else_if_scope();
+            }
+        }
+    });
+}
+
 #[derive(Default)]
 pub(crate) struct GoUses {
-    names: HashSet<String>,
+    locals: HashSet<LocalId>,
+    unidentified: HashSet<String>,
+    spellings: HashSet<String>,
 }
 
 impl GoUses {
@@ -465,13 +472,28 @@ impl GoUses {
         plan.visit_expressions(&mut |node| self.record(node));
     }
 
+    pub(crate) fn contains_identifier(&self, name: &GoIdentifier) -> bool {
+        let id = name.id().expect("local-use queries need a local ID");
+        assert!(
+            !self.unidentified.contains(name.spelling()),
+            "unidentified reference to queried local {}",
+            name.spelling()
+        );
+        self.locals.contains(&id)
+    }
+
     pub(crate) fn contains(&self, name: &str) -> bool {
-        self.names.contains(name)
+        self.spellings.contains(name)
     }
 
     fn record(&mut self, node: &GoExpressionNode) {
         if let GoExpressionNode::Identifier(name) = node {
-            self.names.insert(name.clone());
+            self.spellings.insert(name.spelling().to_string());
+            if let Some(id) = name.id() {
+                self.locals.insert(id);
+            } else if name.is_pending() {
+                self.unidentified.insert(name.spelling().to_string());
+            }
         }
     }
 }
@@ -564,7 +586,6 @@ impl LoweredStatement {
             },
             LoweredStatement::Async { call, .. } => call.node().visit(visit),
             LoweredStatement::Select(plan) => {
-                visit_statements(&plan.setup, visit);
                 for arm in &plan.arms {
                     match arm {
                         SelectArmPlan::Receive { channel, body, .. } => {
@@ -583,7 +604,6 @@ impl LoweredStatement {
                         SelectArmPlan::Default { body } => body.visit_expressions(visit),
                     }
                 }
-                visit_statements(&plan.postlude, visit);
             }
             LoweredStatement::Switch(plan) => {
                 match &plan.kind {
@@ -651,11 +671,9 @@ impl LoweredStatement {
                 }
             },
             LoweredStatement::Select(plan) => {
-                for_each_statement(&plan.setup, f);
                 for arm in &plan.arms {
                     for_each_statement(&arm.body().statements, f);
                 }
-                for_each_statement(&plan.postlude, f);
             }
             LoweredStatement::Switch(plan) => {
                 for case in &plan.cases {
@@ -715,11 +733,9 @@ impl LoweredStatement {
                 }
             },
             LoweredStatement::Select(plan) => {
-                for_each_statements_mut(&mut plan.setup, f);
                 for arm in &mut plan.arms {
                     for_each_statements_mut(&mut arm.body_mut().statements, f);
                 }
-                for_each_statements_mut(&mut plan.postlude, f);
             }
             LoweredStatement::Switch(plan) => {
                 for case in &mut plan.cases {
@@ -788,7 +804,7 @@ impl LoweredStatement {
             } => name,
             _ => return false,
         };
-        *bound = go_name.to_string();
+        *bound = go_name.to_string().into();
         true
     }
 
@@ -824,9 +840,15 @@ impl LoweredStatement {
     fn ends_with_diverge(&self) -> bool {
         match self {
             LoweredStatement::If(plan) => plan.ends_with_diverge(),
-            LoweredStatement::Loop(_) | LoweredStatement::Block(_) | LoweredStatement::Const(_) => {
-                false
+            LoweredStatement::Loop(plan) => {
+                matches!(plan.kind, LoopKind::Generated { .. })
+                    && !matches!(
+                        plan.body.statements.last(),
+                        Some(LoweredStatement::Break(_))
+                    )
+                    && plan.body.ends_with_diverge()
             }
+            LoweredStatement::Block(_) | LoweredStatement::Const(_) => false,
             LoweredStatement::Body(body) => body.ends_with_diverge(),
             LoweredStatement::Break(_) | LoweredStatement::Continue(_) => true,
             LoweredStatement::Return(_) => true,
@@ -856,7 +878,7 @@ impl LoweredStatement {
 }
 
 impl SwitchCasePlan {
-    fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
+    pub(super) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
         for label in &self.labels {
             label.node().visit(visit);
         }
@@ -865,6 +887,23 @@ impl SwitchCasePlan {
 }
 
 impl IfPlan {
+    fn legalize_else_if_scope(&mut self) {
+        if let ElseArm::ElseIf(inner) = &mut self.else_arm {
+            inner.legalize_else_if_scope();
+            if !inner.condition_setup.is_empty() {
+                let ElseArm::ElseIf(mut inner) = replace(&mut self.else_arm, ElseArm::None) else {
+                    unreachable!("else-if was checked before replacement");
+                };
+                let mut statements = take(&mut inner.condition_setup);
+                statements.push(LoweredStatement::If(*inner));
+                self.else_arm = ElseArm::Else {
+                    body: LoweredBlock { statements },
+                    inline: false,
+                };
+            }
+        }
+    }
+
     fn for_each_statement(&self, f: &mut impl FnMut(&LoweredStatement)) {
         for_each_statement(&self.condition_setup, f);
         for_each_statement(&self.then_body.statements, f);
@@ -885,7 +924,7 @@ impl IfPlan {
         }
     }
 
-    fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
+    pub(super) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
         visit_statements(&self.condition_setup, visit);
         if let Some(initializer) = &self.initializer {
             initializer.value.node().visit(visit);
@@ -909,5 +948,45 @@ impl IfPlan {
             ElseArm::ElseIf(_) => false,
             ElseArm::Else { body, .. } => body.ends_with_diverge(),
         }
+    }
+}
+
+#[cfg(test)]
+mod go_uses_tests {
+    use super::*;
+    use crate::plan::visit::identify_body_locals;
+    use crate::state::scope::ScopeState;
+    use std::slice::from_ref;
+
+    #[test]
+    fn inner_binding_does_not_count_as_a_read_of_the_outer_local() {
+        let mut scope = ScopeState::new();
+        let outer = GoIdentifier::local("value".to_string(), scope.new_local_id());
+        let mut statements = vec![LoweredStatement::Block(LoweredBlock {
+            statements: vec![
+                define("value".to_string(), GoExpression::literal("1".to_string())),
+                LoweredStatement::Return(vec![GoExpression::name("value".to_string())]),
+            ],
+        })];
+        identify_body_locals(&mut statements, from_ref(&outer), &mut scope);
+
+        let uses = GoUses::of(&statements);
+        assert!(!uses.contains_identifier(&outer));
+        let LoweredStatement::Block(body) = &statements[0] else {
+            panic!("expected block");
+        };
+        let LoweredStatement::Define(inner) = &body.statements[0] else {
+            panic!("expected definition");
+        };
+        assert!(uses.contains_identifier(&inner.names[0]));
+    }
+
+    #[test]
+    fn external_name_does_not_count_as_a_local_use() {
+        let local = GoIdentifier::local("value".to_string(), LocalId(1));
+        let statements = vec![LoweredStatement::Return(vec![GoExpression::external_name(
+            "value".to_string(),
+        )])];
+        assert!(!GoUses::of(&statements).contains_identifier(&local));
     }
 }

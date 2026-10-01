@@ -311,7 +311,7 @@ impl Planner<'_> {
         statements.push(
             if constant_needs_type || self.is_go_constant_expression(expression) {
                 LoweredStatement::VarDecl {
-                    name: name.clone(),
+                    name: name.clone().into(),
                     go_type,
                     value: Some(value),
                 }

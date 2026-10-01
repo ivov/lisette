@@ -4,8 +4,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::LazyLock;
 use syntax::ast::{BindingId, Pattern, RestPattern, Span};
 use syntax::program::{
-    AliasKind, Definition, DefinitionBody, EqualityIndex, Method, MutationInfo, PackageId,
-    TestIndex, UnusedInfo,
+    AliasKind, BinderIds, Definition, DefinitionBody, EqualityIndex, Method, MutationInfo,
+    PackageId, TestIndex, UnusedInfo,
 };
 use syntax::types;
 use syntax::types::SimpleKind;
@@ -22,6 +22,7 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) definitions: &'a HashMap<Symbol, Definition>,
     pub(crate) unused: &'a UnusedInfo,
     pub(crate) mutations: &'a MutationInfo,
+    pub(crate) binder_ids: &'a BinderIds,
     pub(crate) equality_index: &'a EqualityIndex,
     pub(crate) test_index: &'a TestIndex,
     pub(crate) go_package_names: &'a HashMap<String, String>,
@@ -39,6 +40,7 @@ pub(crate) struct EmitFacts<'a> {
     definitions: &'a HashMap<Symbol, Definition>,
     unused: &'a UnusedInfo,
     mutations: &'a MutationInfo,
+    binder_ids: &'a BinderIds,
     equality_index: &'a EqualityIndex,
     test_index: &'a TestIndex,
     go_package_names: &'a HashMap<String, String>,
@@ -58,6 +60,7 @@ impl<'a> EmitFacts<'a> {
             definitions: config.definitions,
             unused: config.unused,
             mutations: config.mutations,
+            binder_ids: config.binder_ids,
             equality_index: config.equality_index,
             test_index: config.test_index,
             go_package_names: config.go_package_names,
@@ -70,6 +73,10 @@ impl<'a> EmitFacts<'a> {
             globals: config.globals,
             current_package: config.current_package,
         }
+    }
+
+    pub(crate) fn binding_id_at(&self, span: Span) -> Option<BindingId> {
+        self.binder_ids.at(span)
     }
 
     pub(crate) fn package_for_qualified_name<'b>(&self, id: &'b str) -> Option<&'b str>

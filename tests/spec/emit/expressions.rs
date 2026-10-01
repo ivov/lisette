@@ -5731,10 +5731,17 @@ fn slice_past_end(xs: Slice<int>) -> int {
   xs.length()
 }
 
+fn shift_by_negative_count(a: int, count: int) -> int {
+  let shifted = a << count
+  let _ = shifted
+  a + count
+}
+
 fn test() {
   if recover { index_past_end([1, 2], 5) }.is_ok() { panic("an index past the end should panic") }
   if recover { divide_by_zero(7, 0) }.is_ok() { panic("a division by zero should panic") }
   if recover { slice_past_end([1, 2]) }.is_ok() { panic("a slice past the end should panic") }
+  if recover { shift_by_negative_count(1, -1) }.is_ok() { panic("a negative shift count should panic") }
 }
 "#;
     assert_emit_snapshot!(input);

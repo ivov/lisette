@@ -22,12 +22,11 @@ func main() {
 	} else {
 		result = lisette.MakeResultOk[fs.FileInfo, error](ret)
 	}
-	result_2 := result
-	if result_2.Tag == lisette.ResultOk {
-		size := result_2.OkVal.Size()
+	if result.Tag == lisette.ResultOk {
+		size := result.OkVal.Size()
 		fmt.Printf("size: %d\n", size)
 	} else {
-		msg := result_2.ErrVal.Error()
+		msg := result.ErrVal.Error()
 		fmt.Printf("error: %s\n", msg)
 	}
 }

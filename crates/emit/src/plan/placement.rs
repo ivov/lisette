@@ -290,7 +290,9 @@ pub(crate) fn try_elide_tail_let(
     }
     let last = items.last()?;
     let Expression::Identifier {
-        value: tail_name, ..
+        value: tail_name,
+        resolution,
+        ..
     } = last
     else {
         return None;
@@ -318,7 +320,7 @@ pub(crate) fn try_elide_tail_let(
         return None;
     }
     let rest = &items[..items.len() - 2];
-    if region_blocks_inline(rest.iter(), tail_name.as_str()) {
+    if region_blocks_inline(rest.iter(), resolution.binding_id()) {
         return None;
     }
     Some((value.as_ref(), rest))

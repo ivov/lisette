@@ -63,6 +63,27 @@ impl Planner<'_> {
         Some(self.bind_pair(Vec::new(), call, slot, kind, None))
     }
 
+    /// Checks the shape without reserving names or adding dependencies.
+    pub(crate) fn can_bind_try_block_pair(&self, items: &[Expression], ty: &Type) -> bool {
+        let return_ctx = self.return_ctx();
+        let ty = self.facts.peel_alias(ty);
+        let effective_ty = resolve_fallible_block_type(items, &ty, Some(&return_ctx));
+        if Fallible::from_type(&effective_ty).is_none() {
+            return false;
+        }
+        let Some(shape) = self.return_context_for_type(effective_ty).lowered_shape() else {
+            return false;
+        };
+        matches!(
+            shape,
+            CallableReturnAbi::Result {
+                payload: PayloadLayout::Packed
+            } | CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
+                payload: PayloadLayout::Packed
+            })
+        )
+    }
+
     fn lower_try_block_as(
         &mut self,
         items: &[Expression],

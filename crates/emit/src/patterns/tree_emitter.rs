@@ -3,7 +3,7 @@ use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, UnaryOperator};
 use syntax::types::Type;
 
 use crate::Planner;
-use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate};
+use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::context::expression::ExpressionContext;
 use crate::patterns::binding_decls::{is_catchall_pattern, is_unconditional_catchall};
 use crate::patterns::binding_emit::tree_binding_statements;
@@ -17,6 +17,7 @@ use crate::plan::bodies::{
     PlacePlan, SwitchCasePlan, SwitchKind, SwitchStatementPlan,
 };
 use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::local::GoIdentifier;
 use crate::plan::placement::unreachable_panic_if_needed;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::InlineExpr;
@@ -629,6 +630,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             self.planner
                 .scope
                 .bind_inline_expr(&binding.lisette_name, InlineExpr::new(composable));
+            for id in &binding.binding_ids {
+                self.planner
+                    .scope
+                    .register_binding_id(*id, &binding.lisette_name);
+            }
         }
     }
 
@@ -645,7 +651,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 .bindings
                 .iter()
                 .filter(|binding| {
-                    analyze_inline_candidate(&binding.lisette_name, &[arm_body])
+                    analyze_inline_candidate_ids(&binding.binding_ids, &[arm_body])
                         != InlineDecision::Unused
                 })
                 .cloned()
@@ -941,17 +947,19 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let arms = self.arms;
         let subject_ty = self.subject_ty.clone();
         let binding_name = match subject.node() {
-            GoExpressionNode::Identifier(name) => name.clone(),
+            GoExpressionNode::Identifier(name) => {
+                GoIdentifier::local(name.to_string(), self.planner.scope.new_local_id())
+            }
             _ => {
                 let name = self.planner.fresh_var(Some("subject"));
                 self.planner.declare(&name);
-                name
+                self.planner.scope.generated_identifier(&name)
             }
         };
         let mut nested = TreePlanner::new(
             self.planner,
             arms,
-            MatchSubject::Var(GoExpression::name(binding_name.clone())),
+            MatchSubject::Var(GoExpression::identifier(binding_name.clone())),
             subject_ty,
         );
         let case_plans = nested.lower_switch_cases(regular, place, None);
@@ -964,7 +972,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         if let Some(block) = &default_block {
             used.extend(&block.statements);
         }
-        let binding = used.contains(&binding_name).then_some(binding_name);
+        let binding = used
+            .contains_identifier(&binding_name)
+            .then_some(binding_name);
 
         SwitchStatementPlan {
             kind: SwitchKind::Type { subject, binding },
@@ -1122,6 +1132,10 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             .iter()
             .find(|&&index| !decision_top_bindings(&tests[index].decision).is_empty())
         {
+            let mut bindings = decision_top_bindings(&tests[ref_index].decision).to_vec();
+            for &index in indices {
+                merge_binding_ids(&mut bindings, decision_top_bindings(&tests[index].decision));
+            }
             let mut consumers: Vec<&Expression> = Vec::new();
             for &index in indices {
                 let decision = &tests[index].decision;
@@ -1139,14 +1153,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     consumers.push(&arm.expression);
                 }
             }
-            self.with_bindings(
-                statements,
-                decision_top_bindings(&tests[ref_index].decision),
-                &consumers,
-                |this, statements| {
-                    this.emit_chain_group_bodies(statements, indices, tests, ctx);
-                },
-            );
+            self.with_bindings(statements, &bindings, &consumers, |this, statements| {
+                this.emit_chain_group_bodies(statements, indices, tests, ctx);
+            });
         } else {
             self.emit_chain_group_bodies(statements, indices, tests, ctx);
         }
@@ -1340,6 +1349,22 @@ fn decision_top_bindings(decision: &Decision) -> &[PatternBinding] {
     match decision {
         Decision::Guard { bindings, .. } | Decision::Success { bindings, .. } => bindings,
         _ => &[],
+    }
+}
+
+fn merge_binding_ids(bindings: &mut [PatternBinding], alternatives: &[PatternBinding]) {
+    for alternative in alternatives {
+        let Some(binding) = bindings
+            .iter_mut()
+            .find(|binding| binding.lisette_name == alternative.lisette_name)
+        else {
+            continue;
+        };
+        for id in &alternative.binding_ids {
+            if !binding.binding_ids.contains(id) {
+                binding.binding_ids.push(*id);
+            }
+        }
     }
 }
 

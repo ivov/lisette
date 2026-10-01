@@ -5,7 +5,7 @@ use crate::patterns::matching::{OptionArms, OptionFusePlan, ResultFusePlan};
 use crate::plan::bodies::{AssignForm, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
 use crate::plan::placement::collapse_declared_temp;
 use crate::plan::values::{GoExpression, ValuePlan};
-use syntax::ast::{Expression, Literal, Pattern};
+use syntax::ast::{Expression, Literal, Pattern, Span};
 use syntax::types::Type;
 
 /// `call.unwrap_or(default)`, `call.map_or(default, |v| ..)`, or `call.map(|v| ..).unwrap_or(default)`.
@@ -22,6 +22,7 @@ enum FusedCall<'a> {
 
 pub(crate) struct MapLambda<'a> {
     pub(crate) param: Option<&'a str>,
+    pub(crate) param_span: Option<Span>,
     pub(crate) body: &'a Expression,
 }
 
@@ -57,16 +58,26 @@ pub(crate) fn map_lambda(function: &Expression) -> Option<MapLambda<'_>> {
         return None;
     };
     let param = match params.as_slice() {
-        [] => return (!escapes_lambda(body)).then_some(MapLambda { param: None, body }),
+        [] => {
+            return (!escapes_lambda(body)).then_some(MapLambda {
+                param: None,
+                param_span: None,
+                body,
+            });
+        }
         [param] => param,
         _ => return None,
     };
-    let param = match &param.pattern {
-        Pattern::Identifier { identifier, .. } => Some(identifier.as_str()),
-        Pattern::WildCard { .. } => None,
+    let (param, param_span) = match &param.pattern {
+        Pattern::Identifier { identifier, span } => (Some(identifier.as_str()), Some(*span)),
+        Pattern::WildCard { .. } => (None, None),
         _ => return None,
     };
-    (!escapes_lambda(body)).then_some(MapLambda { param, body })
+    (!escapes_lambda(body)).then_some(MapLambda {
+        param,
+        param_span,
+        body,
+    })
 }
 
 impl Planner<'_> {
@@ -205,6 +216,7 @@ impl Planner<'_> {
     ) -> Vec<LoweredStatement> {
         let arms = OptionArms {
             some_binding: map.param,
+            some_binding_span: map.param_span,
             some_body: map.body,
             none_body: default,
         };
@@ -239,7 +251,7 @@ impl Planner<'_> {
         };
         let ty = value.get_type();
         let mut statements = vec![LoweredStatement::VarDecl {
-            name: go_name.to_string(),
+            name: go_name.to_string().into(),
             go_type: self.use_go_type(&ty),
             value: None,
         }];

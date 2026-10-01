@@ -20,10 +20,17 @@ description: |
     xs.length()
   }
   
+  fn shift_by_negative_count(a: int, count: int) -> int {
+    let shifted = a << count
+    let _ = shifted
+    a + count
+  }
+
   fn test() {
     if recover { index_past_end([1, 2], 5) }.is_ok() { panic("an index past the end should panic") }
     if recover { divide_by_zero(7, 0) }.is_ok() { panic("a division by zero should panic") }
     if recover { slice_past_end([1, 2]) }.is_ok() { panic("a slice past the end should panic") }
+    if recover { shift_by_negative_count(1, -1) }.is_ok() { panic("a negative shift count should panic") }
   }
 ---
 package main
@@ -48,6 +55,12 @@ func slicePastEnd(xs []int) int {
 	return len(xs)
 }
 
+func shiftByNegativeCount(a, count int) int {
+	shifted := a << count
+	_ = shifted
+	return a + count
+}
+
 func test() {
 	recoverResult := lisette.RecoverBlock(func() int {
 		return indexPastEnd([]int{1, 2}, 5)
@@ -66,5 +79,11 @@ func test() {
 	})
 	if recoverResult_2.IsOk() {
 		panic("a slice past the end should panic")
+	}
+	recoverResult_3 := lisette.RecoverBlock(func() int {
+		return shiftByNegativeCount(1, -1)
+	})
+	if recoverResult_3.IsOk() {
+		panic("a negative shift count should panic")
 	}
 }

@@ -2,9 +2,11 @@ pub(crate) mod bodies;
 pub(crate) mod calls;
 pub(crate) mod cleanup;
 pub(crate) mod go_expression;
+pub(crate) mod local;
 pub(crate) mod lower;
 pub(crate) mod placement;
 pub(crate) mod values;
+pub(crate) mod verify;
 pub(crate) mod visit;
 
 use crate::Planner;
