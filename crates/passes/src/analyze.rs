@@ -5,7 +5,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use diagnostics::LisetteDiagnostic;
 use syntax::FileParseStatus;
 use syntax::ast::BindingId;
-use syntax::program::{EmitInput, MutationInfo, UnusedInfo, is_internal_package_id};
+use syntax::program::{BinderIds, EmitInput, MutationInfo, UnusedInfo, is_internal_package_id};
 
 use semantics::AnalyzeInput;
 use semantics::cache::{EmitStamp, save_package_cache};
@@ -136,6 +136,10 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         }
     }
     let bindings = facts.bindings;
+    let mut binder_ids = BinderIds::default();
+    for (&id, binding) in &bindings {
+        binder_ids.record(binding.span, id);
+    }
     let usages = facts.usages;
 
     // Canonicalize diagnostic order so the output is stable regardless of
@@ -247,6 +251,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
             entry_package_id: ENTRY_PACKAGE_ID.to_string(),
             unused,
             mutations,
+            binder_ids,
             cached_packages,
             equality_index: store.equality_index,
             test_index: store.test_index,

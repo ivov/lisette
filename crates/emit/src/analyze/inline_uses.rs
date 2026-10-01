@@ -1,6 +1,6 @@
-use syntax::ast::{Expression, FormatStringPart, Literal, SelectArm};
-
-use crate::patterns::binding_decls::pattern_binds_name;
+use syntax::ast::{
+    BindingId, Expression, FormatStringPart, IdentifierResolution, Literal, SelectArm,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InlineDecision {
@@ -10,81 +10,76 @@ pub(crate) enum InlineDecision {
 }
 
 pub(crate) fn analyze_inline_candidate(
-    lisette_name: &str,
+    binding_id: BindingId,
     consumers: &[&Expression],
 ) -> InlineDecision {
-    let mut walker = Walker::new(lisette_name);
+    let mut walker = Walker::new(binding_id);
     for consumer in consumers {
-        walker.walk(consumer, WalkContext::default());
+        walker.walk(consumer, AccessRole::Read);
     }
     walker.decide()
 }
 
-pub(crate) fn region_blocks_inline<'a, I>(trees: I, lisette_name: &str) -> bool
+pub(crate) fn analyze_inline_candidate_ids(
+    binding_ids: &[BindingId],
+    consumers: &[&Expression],
+) -> InlineDecision {
+    if binding_ids.is_empty() {
+        return InlineDecision::Keep;
+    }
+    if binding_ids.len() <= 1 {
+        return analyze_inline_candidate(binding_ids[0], consumers);
+    }
+    let mut walker = Walker::new(binding_ids[0]);
+    walker.alternative_ids.extend_from_slice(&binding_ids[1..]);
+    for consumer in consumers {
+        walker.walk(consumer, AccessRole::Read);
+    }
+    walker.decide()
+}
+
+pub(crate) fn region_blocks_inline<'a, I>(trees: I, binding_id: Option<BindingId>) -> bool
 where
     I: IntoIterator<Item = &'a Expression>,
 {
-    let mut walker = Walker::new(lisette_name);
+    let Some(binding_id) = binding_id else {
+        return true;
+    };
+    let mut walker = Walker::new(binding_id);
     for tree in trees {
-        walker.walk(tree, WalkContext::default());
+        walker.walk(tree, AccessRole::Read);
     }
     walker.any_use_or_opacity()
 }
 
-struct Walker<'a> {
-    name: &'a str,
+struct Walker {
+    binding_id: BindingId,
+    alternative_ids: Vec<BindingId>,
     crossed_barrier: bool,
-    uses: Vec<InlineEligibility>,
+    uses: Vec<Access>,
     opaque_raw_go_in_region: bool,
 }
 
-#[derive(Clone, Copy, Default)]
-struct WalkContext {
-    eligibility: InlineEligibility,
-    shadowed: bool,
+#[derive(Clone, Copy)]
+struct Access {
+    role: AccessRole,
+    after_barrier: bool,
 }
 
-#[derive(Clone, Copy, Default)]
-enum InlineEligibility {
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum AccessRole {
     #[default]
-    Eligible,
-    Blocked,
+    Read,
+    Write,
+    Address,
+    Capture,
 }
 
-impl WalkContext {
-    fn reference_operand(self) -> Self {
+impl Walker {
+    fn new(binding_id: BindingId) -> Self {
         Self {
-            eligibility: InlineEligibility::Blocked,
-            ..self
-        }
-    }
-
-    fn assignment_target(self) -> Self {
-        Self {
-            eligibility: InlineEligibility::Blocked,
-            ..self
-        }
-    }
-
-    fn enclosure(self) -> Self {
-        Self {
-            eligibility: InlineEligibility::Blocked,
-            ..self
-        }
-    }
-
-    fn shadowed_if(self, shadowed: bool) -> Self {
-        Self {
-            shadowed: self.shadowed || shadowed,
-            ..self
-        }
-    }
-}
-
-impl<'a> Walker<'a> {
-    fn new(name: &'a str) -> Self {
-        Self {
-            name,
+            binding_id,
+            alternative_ids: Vec::new(),
             crossed_barrier: false,
             uses: Vec::new(),
             opaque_raw_go_in_region: false,
@@ -98,34 +93,42 @@ impl<'a> Walker<'a> {
     fn decide(self) -> InlineDecision {
         match (self.opaque_raw_go_in_region, self.uses.as_slice()) {
             (false, []) => InlineDecision::Unused,
-            (false, [InlineEligibility::Eligible]) => InlineDecision::Inline,
+            (
+                false,
+                [
+                    Access {
+                        role: AccessRole::Read,
+                        after_barrier: false,
+                    },
+                ],
+            ) => InlineDecision::Inline,
             _ => InlineDecision::Keep,
         }
     }
 
-    fn record_use(&mut self, ctx: WalkContext) {
-        self.uses.push(if self.crossed_barrier {
-            InlineEligibility::Blocked
-        } else {
-            ctx.eligibility
+    fn record_use(&mut self, role: AccessRole) {
+        self.uses.push(Access {
+            role,
+            after_barrier: self.crossed_barrier,
         });
     }
 
-    fn walk(&mut self, expression: &Expression, ctx: WalkContext) {
-        if ctx.shadowed {
-            return;
-        }
+    fn walk(&mut self, expression: &Expression, role: AccessRole) {
         match expression {
-            Expression::Identifier { value, .. } => {
-                if value.as_str() == self.name {
-                    self.record_use(ctx);
+            Expression::Identifier { resolution, .. } => {
+                let names_local = *resolution == IdentifierResolution::Binding(self.binding_id)
+                    || resolution
+                        .binding_id()
+                        .is_some_and(|id| self.alternative_ids.contains(&id));
+                if names_local {
+                    self.record_use(role);
                 }
             }
             Expression::Literal { literal, .. } => {
                 if let Literal::FormatString(parts) = literal {
                     for part in parts {
                         if let FormatStringPart::Expression(expression) = part {
-                            self.walk(expression, ctx);
+                            self.walk(expression, role);
                         }
                     }
                     self.crossed_barrier = true;
@@ -134,46 +137,41 @@ impl<'a> Walker<'a> {
 
             Expression::Call { .. } | Expression::Propagate { .. } => {
                 for child in expression.children() {
-                    self.walk(child, ctx);
+                    self.walk(child, role);
                 }
                 self.crossed_barrier = true;
             }
             Expression::Assignment { target, value, .. } => {
-                self.walk(target, ctx.assignment_target());
-                self.walk(value, ctx);
+                self.walk(target, AccessRole::Write);
+                self.walk(value, role);
                 self.crossed_barrier = true;
             }
             Expression::Reference { expression, .. } => {
-                self.walk(expression, ctx.reference_operand());
+                self.walk(expression, AccessRole::Address);
             }
 
             Expression::Block { items, .. } => {
-                self.walk_block(items, ctx);
+                self.walk_block(items, role);
             }
             Expression::IfLet {
-                pattern,
                 scrutinee,
                 consequence,
                 alternative,
                 ..
             } => {
-                self.walk(scrutinee, ctx);
-                self.walk(
-                    consequence,
-                    ctx.shadowed_if(pattern_binds_name(pattern, self.name)),
-                );
+                self.walk(scrutinee, role);
+                self.walk(consequence, role);
                 if let Some(alternative) = alternative.expression() {
-                    self.walk(alternative, ctx);
+                    self.walk(alternative, role);
                 }
             }
             Expression::Match { subject, arms, .. } => {
-                self.walk(subject, ctx);
+                self.walk(subject, role);
                 for arm in arms {
-                    let arm_ctx = ctx.shadowed_if(pattern_binds_name(&arm.pattern, self.name));
                     if let Some(guard) = arm.guard.as_ref() {
-                        self.walk(guard, arm_ctx);
+                        self.walk(guard, role);
                     }
-                    self.walk(&arm.expression, arm_ctx);
+                    self.walk(&arm.expression, role);
                 }
             }
 
@@ -181,61 +179,38 @@ impl<'a> Walker<'a> {
                 field_assignments, ..
             } => {
                 for fa in field_assignments {
-                    self.walk(&fa.value, ctx);
+                    self.walk(&fa.value, role);
                 }
             }
 
-            Expression::Loop { body, .. } => self.walk(body, ctx.enclosure()),
+            Expression::Loop { body, .. } => self.walk(body, AccessRole::Capture),
             Expression::While {
                 condition, body, ..
             } => {
-                let ctx = ctx.enclosure();
-                self.walk(condition, ctx);
-                self.walk(body, ctx);
+                let role = AccessRole::Capture;
+                self.walk(condition, role);
+                self.walk(body, role);
             }
             Expression::WhileLet {
-                pattern,
-                scrutinee,
-                body,
-                ..
+                scrutinee, body, ..
             } => {
-                let ctx = ctx.enclosure();
-                self.walk(scrutinee, ctx);
-                self.walk(
-                    body,
-                    ctx.shadowed_if(pattern_binds_name(pattern, self.name)),
-                );
+                let role = AccessRole::Capture;
+                self.walk(scrutinee, role);
+                self.walk(body, role);
             }
-            Expression::For {
-                binding,
-                iterable,
-                body,
-                ..
-            } => {
-                self.walk(iterable, ctx);
-                self.walk(
-                    body,
-                    ctx.enclosure()
-                        .shadowed_if(pattern_binds_name(&binding.pattern, self.name)),
-                );
+            Expression::For { iterable, body, .. } => {
+                self.walk(iterable, role);
+                self.walk(body, AccessRole::Capture);
             }
 
-            Expression::Lambda { params, body, .. } => {
-                let shadowed = params
-                    .iter()
-                    .any(|p| pattern_binds_name(&p.pattern, self.name));
-                self.walk(body, ctx.enclosure().shadowed_if(shadowed));
-            }
-            Expression::Function { params, body, .. } => {
-                let shadowed = params
-                    .iter()
-                    .any(|p| pattern_binds_name(&p.pattern, self.name));
+            Expression::Lambda { body, .. } => self.walk(body, AccessRole::Capture),
+            Expression::Function { body, .. } => {
                 if let Some(body) = body.definition() {
-                    self.walk(body, ctx.enclosure().shadowed_if(shadowed));
+                    self.walk(body, AccessRole::Capture);
                 }
             }
             Expression::Task { expression, .. } | Expression::Defer { expression, .. } => {
-                self.walk(expression, ctx.enclosure());
+                self.walk(expression, AccessRole::Capture);
                 self.crossed_barrier = true;
             }
 
@@ -244,11 +219,11 @@ impl<'a> Walker<'a> {
                 // see the select wait as preceding.
                 self.crossed_barrier = true;
                 for arm in arms {
-                    self.walk_select_arm(arm, ctx);
+                    self.walk_select_arm(arm, role);
                 }
             }
             Expression::TryBlock { items, .. } | Expression::RecoverBlock { items, .. } => {
-                self.walk_block(items, ctx);
+                self.walk_block(items, role);
                 self.crossed_barrier = true;
             }
             Expression::RawGo { .. } => {
@@ -259,65 +234,50 @@ impl<'a> Walker<'a> {
             Expression::Interface { .. } => {}
             _ => {
                 for child in expression.children() {
-                    self.walk(child, ctx);
+                    self.walk(child, role);
                 }
             }
         }
     }
 
-    fn walk_block(&mut self, items: &[Expression], ctx: WalkContext) {
-        let block_shadows = items.iter().any(|item| match item {
-            Expression::Const { identifier, .. } => identifier.as_str() == self.name,
-            Expression::Function { name, .. } => name.as_str() == self.name,
-            _ => false,
-        });
-        let mut item_ctx = ctx.shadowed_if(block_shadows);
+    fn walk_block(&mut self, items: &[Expression], role: AccessRole) {
         for item in items {
-            self.walk(item, item_ctx);
-            if let Expression::Let { binding, .. } = item {
-                item_ctx = item_ctx.shadowed_if(pattern_binds_name(&binding.pattern, self.name));
-            }
+            self.walk(item, role);
         }
     }
 
-    fn walk_select_arm(&mut self, pattern: &SelectArm, ctx: WalkContext) {
+    fn walk_select_arm(&mut self, pattern: &SelectArm, role: AccessRole) {
         match pattern {
             SelectArm::Receive {
-                binding,
                 receive_expression,
                 body,
                 ..
             } => {
-                self.walk(receive_expression, ctx);
-                self.walk(
-                    body,
-                    ctx.enclosure()
-                        .shadowed_if(pattern_binds_name(binding, self.name)),
-                );
+                self.walk(receive_expression, role);
+                self.walk(body, AccessRole::Capture);
             }
             SelectArm::Send {
                 send_expression,
                 body,
             } => {
-                self.walk(send_expression, ctx);
-                self.walk(body, ctx.enclosure());
+                self.walk(send_expression, role);
+                self.walk(body, AccessRole::Capture);
             }
             SelectArm::MatchReceive {
                 receive_expression,
                 arms,
             } => {
-                self.walk(receive_expression, ctx);
-                let ctx = ctx.enclosure();
+                self.walk(receive_expression, role);
+                let role = AccessRole::Capture;
                 for arm in arms {
-                    let arm_ctx = ctx.shadowed_if(pattern_binds_name(&arm.pattern, self.name));
                     if let Some(guard) = arm.guard.as_ref() {
-                        self.walk(guard, arm_ctx);
+                        self.walk(guard, role);
                     }
-                    self.walk(&arm.expression, arm_ctx);
+                    self.walk(&arm.expression, role);
                 }
             }
             SelectArm::WildCard { body } => {
-                self.walk(body, ctx.enclosure());
+                self.walk(body, AccessRole::Capture);
             }
         }
     }
@@ -327,19 +287,81 @@ impl<'a> Walker<'a> {
 mod tests {
     use super::*;
 
-    fn inline_decision(source: &str) -> InlineDecision {
-        let parsed = syntax::build_ast(&format!("fn test() {{ {source} }}"), 0);
+    fn mark_uses(expression: &mut Expression, selected: &[usize], seen: &mut usize) {
+        match expression {
+            Expression::Identifier {
+                value, resolution, ..
+            } if value == "value" => {
+                if selected.contains(seen) {
+                    *resolution = IdentifierResolution::Binding(BindingId::new(1));
+                }
+                *seen += 1;
+            }
+            Expression::Block { items, .. }
+            | Expression::Tuple {
+                elements: items, ..
+            } => {
+                for item in items {
+                    mark_uses(item, selected, seen);
+                }
+            }
+            Expression::Let { value, .. } => mark_uses(value, selected, seen),
+            Expression::Call {
+                expression,
+                args,
+                spread,
+                ..
+            } => {
+                mark_uses(expression, selected, seen);
+                for arg in args {
+                    mark_uses(arg, selected, seen);
+                }
+                if let Some(spread) = spread {
+                    mark_uses(spread, selected, seen);
+                }
+            }
+            Expression::Literal {
+                literal: Literal::FormatString(parts),
+                ..
+            } => {
+                for part in parts {
+                    if let FormatStringPart::Expression(expression) = part {
+                        mark_uses(expression, selected, seen);
+                    }
+                }
+            }
+            Expression::Literal {
+                literal: Literal::Slice(items),
+                ..
+            } => {
+                for item in items {
+                    mark_uses(item, selected, seen);
+                }
+            }
+            Expression::Paren { expression, .. } => mark_uses(expression, selected, seen),
+            Expression::Const { .. }
+            | Expression::StructCall { .. }
+            | Expression::Identifier { .. }
+            | Expression::Literal { .. } => {}
+            other => panic!("test helper does not handle {other:?}"),
+        }
+    }
+
+    fn inline_decision(source: &str, selected: &[usize]) -> InlineDecision {
+        let mut parsed = syntax::build_ast(&format!("fn test() {{ {source} }}"), 0);
         assert!(!parsed.has_errors(), "{:?}", parsed.errors);
-        let Expression::Function { body, .. } = &parsed.ast[0] else {
+        let Expression::Function { body, .. } = &mut parsed.ast[0] else {
             panic!("expected a function");
         };
-        analyze_inline_candidate("value", &[body.definition().unwrap()])
+        let body = body.definition_mut().unwrap();
+        mark_uses(body, selected, &mut 0);
+        analyze_inline_candidate(BindingId::new(1), &[body])
     }
 
     #[test]
     fn call_argument_can_inline_before_a_later_spread_call() {
         assert_eq!(
-            inline_decision("consume(value, later()...)"),
+            inline_decision("consume(value, later()...)", &[0]),
             InlineDecision::Inline,
         );
     }
@@ -347,25 +369,31 @@ mod tests {
     #[test]
     fn spread_use_stays_bound_after_an_earlier_argument_call() {
         assert_eq!(
-            inline_decision("consume(earlier(), value...)"),
+            inline_decision("consume(earlier(), value...)", &[0]),
             InlineDecision::Keep,
         );
     }
 
     #[test]
     fn tuple_use_stays_bound_after_an_earlier_element_call() {
-        assert_eq!(inline_decision("(earlier(), value)"), InlineDecision::Keep,);
+        assert_eq!(
+            inline_decision("(earlier(), value)", &[0]),
+            InlineDecision::Keep,
+        );
     }
 
     #[test]
     fn format_string_blocks_a_later_use() {
-        assert_eq!(inline_decision("f\"{other}\"\nvalue"), InlineDecision::Keep,);
+        assert_eq!(
+            inline_decision("f\"{other}\"\nvalue", &[0]),
+            InlineDecision::Keep,
+        );
     }
 
     #[test]
     fn shadowing_starts_after_the_let_initializer() {
         assert_eq!(
-            inline_decision("let value = value\nvalue"),
+            inline_decision("let value = value\nvalue", &[0]),
             InlineDecision::Inline,
         );
     }
@@ -373,20 +401,20 @@ mod tests {
     #[test]
     fn block_constant_shadows_even_a_preceding_use() {
         assert_eq!(
-            inline_decision("value\nconst value = 1"),
+            inline_decision("value\nconst value = 1", &[]),
             InlineDecision::Unused,
         );
     }
 
     #[test]
     fn slice_literal_contents_do_not_count_as_inline_uses() {
-        assert_eq!(inline_decision("[value]"), InlineDecision::Unused);
+        assert_eq!(inline_decision("[value]", &[0]), InlineDecision::Unused);
     }
 
     #[test]
     fn struct_spread_does_not_count_as_an_inline_use() {
         assert_eq!(
-            inline_decision("Record { field: other, ..value }"),
+            inline_decision("Record { field: other, ..value }", &[]),
             InlineDecision::Unused,
         );
     }

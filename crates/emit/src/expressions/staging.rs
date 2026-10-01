@@ -6,6 +6,7 @@ use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::CallableOrigin;
 use crate::plan::go_expression::CompositeLayout;
+use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, SequencedValues, Stability, ValuePlan,
 };
@@ -34,6 +35,7 @@ pub(crate) struct LaterStages {
     has_setup: bool,
     has_effectful_call: bool,
     has_pin: bool,
+    has_ordered_work: bool,
 }
 
 impl LaterStages {
@@ -42,6 +44,7 @@ impl LaterStages {
             has_setup: !setup.is_empty(),
             has_effectful_call: effect.has_effectful_call(),
             has_pin: false,
+            has_ordered_work: effect.has_call(),
         }
     }
 
@@ -54,14 +57,19 @@ impl LaterStages {
     pub(crate) fn prepend(&mut self, stage: &ValuePlan) -> bool {
         let stage_has_setup = !stage.setup.is_empty();
         let value_pin = !stage_has_setup && self.can_change(stage.evaluation.stability);
-        let ordering_pin = stage.evaluation.effect.has_call()
+        let call_needs_pin = stage.evaluation.effect.has_call()
             && stage.expression.does_work()
             && (self.has_setup || self.has_pin);
+        let noncall_needs_pin = stage.expression.requires_ordering_without_call()
+            && !matches!(stage.expression.node(), GoExpressionNode::Call { .. })
+            && (self.has_setup || self.has_pin || self.has_ordered_work);
+        let ordering_pin = call_needs_pin || noncall_needs_pin;
         let pinned = value_pin || ordering_pin;
 
         self.has_setup |= stage_has_setup;
         self.has_effectful_call |= stage.evaluation.effect.has_effectful_call();
         self.has_pin |= pinned;
+        self.has_ordered_work |= stage.evaluation.effect.has_call() || stage.expression.does_work();
         pinned
     }
 }
@@ -371,7 +379,9 @@ impl Planner<'_> {
         let eager = boundary.requires_value_capture(Stability::Observable);
         if !eager
             && stages.iter().all(|stage| {
-                stage.setup.is_empty() && !stage.evaluation.effect.has_effectful_call()
+                stage.setup.is_empty()
+                    && !stage.evaluation.effect.has_effectful_call()
+                    && !stage.expression.requires_ordering_without_call()
             })
         {
             return SequencedValues {

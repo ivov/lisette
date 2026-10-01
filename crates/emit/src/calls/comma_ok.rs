@@ -8,7 +8,9 @@ use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{Definition, LoweredStatement, define, define_many};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::values::GoExpression;
-use crate::state::bindings::{BindingValue, ComponentBinding, ComponentKind};
+use crate::state::bindings::{
+    BindingValue, ComponentBinding, ComponentKind, WholeValueConstructor,
+};
 use crate::state::scope::PairStatusKind;
 use crate::types::native::NativeGoType;
 use syntax::ast::Expression;
@@ -131,7 +133,7 @@ impl LoweredPair {
     fn initializer(&self) -> Option<Definition> {
         let call = self.initializer_call.as_ref()?;
         Some(Definition {
-            names: self.binding(),
+            names: self.binding().into_iter().map(Into::into).collect(),
             value: call.clone(),
         })
     }
@@ -145,18 +147,19 @@ impl Planner<'_> {
     ) -> LoweredPair {
         // Component lets are never written, so an arm reads the payload in place.
         let (statements, value) = match slot {
-            CommaOkValueSlot::Named(name) if name != components.value => {
+            CommaOkValueSlot::Named(name) if name != components.value.spelling() => {
                 self.declare(&name);
-                let copy = define(name.clone(), GoExpression::name(components.value));
+                let copy = define(name.clone(), GoExpression::identifier(components.value));
                 (vec![copy], name)
             }
-            _ => (Vec::new(), components.value),
+            _ => (Vec::new(), components.value.to_string()),
         };
         let status_kind = match components.kind {
             ComponentKind::Option => PairStatusKind::Ok,
             ComponentKind::Result => PairStatusKind::Error,
         };
-        let mut pair = LoweredPair::from_components(value, components.status, status_kind);
+        let mut pair =
+            LoweredPair::from_components(value, components.status.to_string(), status_kind);
         pair.statements = statements;
         pair
     }
@@ -171,22 +174,22 @@ impl Planner<'_> {
         }
     }
 
-    /// A `Result` local is only bound to components when no use needs one
-    /// value, so there is no prelude call to rebuild it here.
-    pub(crate) fn option_from_components(&self, components: &ComponentBinding) -> GoExpression {
-        assert_eq!(
-            components.kind,
-            ComponentKind::Option,
-            "a Result local read as one value is not bound to components"
-        );
+    pub(crate) fn rebuild_from_components(&self, components: &ComponentBinding) -> GoExpression {
+        let constructor = match components
+            .whole_value_constructor
+            .expect("component binding has no whole-value constructor")
+        {
+            WholeValueConstructor::OptionFromCommaOk => "OptionFromCommaOk",
+            WholeValueConstructor::ResultFromPair => "ResultFromPair",
+        };
         GoExpression::call(
             GoExpression::generated(
                 GeneratedPackage::Prelude,
-                format!("OptionFromCommaOk[{}]", components.payload_go_type),
+                format!("{constructor}[{}]", components.payload_go_type),
             ),
             vec![
-                GoExpression::name(components.value.clone()),
-                GoExpression::name(components.status.clone()),
+                GoExpression::identifier(components.value.clone()),
+                GoExpression::identifier(components.status.clone()),
             ],
         )
     }

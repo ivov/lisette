@@ -336,7 +336,7 @@ impl Planner<'_> {
                 let var = self.fresh_var(Some(name_hint));
                 self.declare(&var);
                 statements.push(LoweredStatement::VarDecl {
-                    name: var.clone(),
+                    name: var.clone().into(),
                     go_type: type_str.to_string(),
                     value: None,
                 });
@@ -344,7 +344,7 @@ impl Planner<'_> {
             }
             WrapperTarget::Slot(name) => {
                 statements.push(LoweredStatement::VarDecl {
-                    name: name.to_string(),
+                    name: name.to_string().into(),
                     go_type: type_str.to_string(),
                     value: None,
                 });

@@ -1,0 +1,50 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn consume(result: Result<int, error>) -> int {
+    match result { Ok(value) => value, Err(_) => -1 }
+  }
+  
+  fn inspect(text: string) -> int {
+    let result = strconv.Atoi(text)
+    if result.is_ok() { consume(result) } else { consume(result) }
+  }
+  
+  fn test() {
+    if inspect("41") != 41 { panic("the successful result changed") }
+    if inspect("x") != -1 { panic("the failed result changed") }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func consume(result lisette.Result[int, error]) int {
+	if result.Tag == lisette.ResultOk {
+		return result.OkVal
+	}
+	return -1
+}
+
+func inspect(text string) int {
+	result, err := strconv.Atoi(text)
+	if err == nil {
+		return consume(lisette.ResultFromPair[int](result, err))
+	}
+	return consume(lisette.ResultFromPair[int](result, err))
+}
+
+func test() {
+	if inspect("41") != 41 {
+		panic("the successful result changed")
+	}
+	if inspect("x") != -1 {
+		panic("the failed result changed")
+	}
+}

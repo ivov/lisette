@@ -71,7 +71,7 @@ impl Planner<'_> {
         statements.extend(check_setup);
         statements.push(self.build_propagate_failure_check(&check, &fallible, &expression_ty));
 
-        let ok_access = GoExpression::selector(check, fallible.ok_field().to_string());
+        let ok_access = GoExpression::value_field(check, fallible.ok_field().to_string());
         let value = match result_var_name {
             None => ok_access,
             Some("_") => GoExpression::name("_".to_string()),
@@ -103,7 +103,7 @@ impl Planner<'_> {
             // Declared so the dead-path binding stays in scope for later references.
             let go_ty = self.use_go_type(inner_ty);
             statements.push(LoweredStatement::VarDecl {
-                name: var_name.to_string(),
+                name: var_name.to_string().into(),
                 go_type: go_ty,
                 value: Some(zero),
             });
@@ -138,7 +138,7 @@ impl Planner<'_> {
             (Vec::new(), vec![check.clone()])
         } else {
             let err_expr = if fallible.is_result() {
-                GoExpression::selector(check.clone(), "ErrVal".to_string())
+                GoExpression::value_field(check.clone(), "ErrVal".to_string())
             } else {
                 check.clone()
             };
@@ -146,7 +146,7 @@ impl Planner<'_> {
         };
         transition::tag_check(
             GoExpression::binary(
-                GoExpression::selector(check.clone(), "Tag".to_string()),
+                GoExpression::value_field(check.clone(), "Tag".to_string()),
                 "!=",
                 GoExpression::generated(GeneratedPackage::Prelude, fallible.success_tag()),
             ),
@@ -239,9 +239,9 @@ impl Planner<'_> {
         let outcome = || GoExpression::name(outcome_var.clone());
         let binding = Definition {
             names: match &value_var {
-                Some(value) => vec![value.clone(), outcome_var.clone()],
-                None if has_value_slot => vec!["_".to_string(), outcome_var.clone()],
-                None => vec![outcome_var.clone()],
+                Some(value) => vec![value.clone().into(), outcome_var.clone().into()],
+                None if has_value_slot => vec!["_".to_string().into(), outcome_var.clone().into()],
+                None => vec![outcome_var.clone().into()],
             },
             value: call,
         };
@@ -438,6 +438,12 @@ impl Planner<'_> {
                     let (body_setup, error) = self.with_binding_frame(|this| {
                         if let Some(param) = map.param {
                             this.scope.bind(param, &status);
+                            if let Some(id) = map
+                                .param_span
+                                .and_then(|span| this.facts.binding_id_at(span))
+                            {
+                                this.scope.register_binding_id(id, param);
+                            }
                         }
                         this.lower_composite_value(map.body, ExpressionContext::value())
                             .into_parts()

@@ -254,7 +254,7 @@ impl Planner<'_> {
                 resolution,
                 ..
             } => {
-                let go_expression = self.emit_identifier(value, resolution.definition(), ty, ctx);
+                let go_expression = self.emit_identifier(value, resolution, ty, ctx);
                 let stability = self.identifier_read_stability(expression);
                 let plan = ValuePlan::from_identifier_expression(go_expression, stability);
                 let mut adapter_setup = Vec::new();

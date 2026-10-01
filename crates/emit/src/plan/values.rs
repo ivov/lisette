@@ -3,10 +3,11 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
 use crate::names::packages::PackageUse;
-use crate::plan::bodies::{LoweredBlock, LoweredStatement};
+use crate::plan::bodies::{LoweredBlock, LoweredStatement, legalize_else_if_scopes};
 use crate::plan::go_expression::{
     CompositeElement, CompositeLayout, FunctionLiteralLayout, GoExpressionNode, GoParameter,
 };
+use crate::plan::local::{GoIdentifier, LocalId};
 use std::fmt::{self, Display, Formatter};
 use syntax::ast::Expression;
 use syntax::types::SimpleKind;
@@ -108,7 +109,15 @@ impl GoExpression {
             go_name::is_plain_identifier(&value),
             "an identifier node holds one Go name, got `{value}`"
         );
+        Self::new(GoExpressionNode::Identifier(GoIdentifier::name(value)))
+    }
+
+    pub(crate) fn identifier(value: GoIdentifier) -> Self {
         Self::new(GoExpressionNode::Identifier(value))
+    }
+
+    pub(crate) fn external_name(value: String) -> Self {
+        Self::new(GoExpressionNode::Identifier(GoIdentifier::external(value)))
     }
 
     pub(crate) fn qualified(package: PackageUse, name: impl Into<String>) -> Self {
@@ -223,9 +232,10 @@ impl GoExpression {
     pub(crate) fn function_literal(
         parameters: Vec<GoParameter>,
         result: String,
-        body: LoweredBlock,
+        mut body: LoweredBlock,
         layout: FunctionLiteralLayout,
     ) -> Self {
+        legalize_else_if_scopes(&mut body.statements);
         Self::new(GoExpressionNode::FunctionLiteral {
             parameters,
             result,
@@ -275,6 +285,16 @@ impl GoExpression {
         let node = GoExpressionNode::Selector {
             base: Box::new(base.node),
             field,
+            may_panic: true,
+        };
+        Self::new(node)
+    }
+
+    pub(crate) fn value_field(base: GoExpression, field: String) -> Self {
+        let node = GoExpressionNode::Selector {
+            base: Box::new(base.node),
+            field,
+            may_panic: false,
         };
         Self::new(node)
     }
@@ -341,8 +361,17 @@ impl GoExpression {
         self.node.print_header()
     }
 
-    pub(crate) fn rename_identifier(&mut self, from: &str, to: &str) {
-        self.node.rename_identifier(from, to);
+    pub(crate) fn identify_names(&mut self, resolve: &impl Fn(&str) -> Option<LocalId>) {
+        fn visit(node: &mut GoExpressionNode, resolve: &impl Fn(&str) -> Option<LocalId>) {
+            if let GoExpressionNode::Identifier(name) = node
+                && name.is_pending()
+                && let Some(id) = resolve(name.spelling())
+            {
+                name.identify(id);
+            }
+            node.visit_children_mut(&mut |child| visit(child, resolve));
+        }
+        visit(&mut self.node, resolve);
     }
 
     pub(crate) fn as_identifier(&self) -> Option<&str> {
@@ -391,6 +420,14 @@ impl GoExpression {
 
     pub(crate) fn does_work(&self) -> bool {
         self.node.does_work()
+    }
+
+    pub(crate) fn can_erase(&self) -> bool {
+        self.node.can_erase()
+    }
+
+    pub(crate) fn requires_ordering_without_call(&self) -> bool {
+        self.node.requires_ordering_without_call()
     }
 }
 

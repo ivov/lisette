@@ -580,7 +580,7 @@ impl Planner<'_> {
             LoweredBlock {
                 statements: vec![
                     LoweredStatement::VarDecl {
-                        name: "arr".to_string(),
+                        name: "arr".to_string().into(),
                         go_type: array_type,
                         value: None,
                     },
@@ -588,7 +588,7 @@ impl Planner<'_> {
                         prologue: Vec::new(),
                         kind: LoopKind::Generated { label: None },
                         header: LoopHeader::Range {
-                            key: Some("i".to_string()),
+                            key: Some("i".to_string().into()),
                             value: None,
                             iterable: arr(),
                         },

@@ -1,3 +1,4 @@
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 
 #[derive(Clone, Debug)]
@@ -17,8 +18,8 @@ impl InlineExpr {
 
 #[derive(Clone, Debug)]
 pub(crate) enum BindingValue {
-    GoName(String),
-    GoConst(String),
+    GoName(GoIdentifier),
+    GoConst(GoIdentifier),
     InlineExpr(InlineExpr),
     Components(ComponentBinding),
     TupleComponents(TupleBinding),
@@ -26,15 +27,16 @@ pub(crate) enum BindingValue {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TupleBinding {
-    pub(crate) names: Vec<String>,
+    pub(crate) names: Vec<GoIdentifier>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ComponentBinding {
-    pub(crate) value: String,
-    pub(crate) status: String,
+    pub(crate) value: GoIdentifier,
+    pub(crate) status: GoIdentifier,
     pub(crate) payload_go_type: String,
     pub(crate) kind: ComponentKind,
+    pub(crate) whole_value_constructor: Option<WholeValueConstructor>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,10 +45,32 @@ pub(crate) enum ComponentKind {
     Result,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum WholeValueConstructor {
+    OptionFromCommaOk,
+    ResultFromPair,
+}
+
 impl BindingValue {
+    pub(crate) fn local_named(&self, go_name: &str) -> Option<&GoIdentifier> {
+        match self {
+            Self::GoName(name) | Self::GoConst(name) if name.spelling() == go_name => Some(name),
+            Self::Components(components) if components.value.spelling() == go_name => {
+                Some(&components.value)
+            }
+            Self::Components(components) if components.status.spelling() == go_name => {
+                Some(&components.status)
+            }
+            Self::TupleComponents(tuple) => {
+                tuple.names.iter().find(|name| name.spelling() == go_name)
+            }
+            _ => None,
+        }
+    }
+
     pub(crate) fn as_go_name(&self) -> Option<&str> {
         match self {
-            BindingValue::GoName(name) | BindingValue::GoConst(name) => Some(name.as_str()),
+            BindingValue::GoName(name) | BindingValue::GoConst(name) => Some(name.spelling()),
             BindingValue::InlineExpr(_)
             | BindingValue::Components(_)
             | BindingValue::TupleComponents(_) => None,

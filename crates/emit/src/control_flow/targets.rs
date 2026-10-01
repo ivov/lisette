@@ -118,16 +118,9 @@ impl Legalizer {
                 }
             },
             LoweredStatement::Select(plan) => {
-                self.walk_statements(&mut plan.setup, interception);
-                let arm_interception = if plan.retry_loop {
-                    Interception::All
-                } else {
-                    interception.with_break()
-                };
                 for arm in &mut plan.arms {
-                    self.walk_block(arm.body_mut(), arm_interception);
+                    self.walk_block(arm.body_mut(), interception.with_break());
                 }
-                self.walk_statements(&mut plan.postlude, interception);
             }
             LoweredStatement::Switch(plan) => {
                 let case_interception = interception.with_break();

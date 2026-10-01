@@ -10,7 +10,7 @@ use syntax::{
     ast::{Expression, FunctionBody},
     lex::Lexer,
     parse::Parser,
-    program::{Definition, EqualityIndex, File, MutationInfo, UnusedInfo},
+    program::{BinderIds, Definition, EqualityIndex, File, MutationInfo, UnusedInfo},
     types::Symbol,
 };
 
@@ -156,6 +156,7 @@ impl CompiledTest {
             definitions,
             unused,
             mutations,
+            binder_ids,
             equality_index,
             go_package_names,
             go_package_ids,
@@ -203,7 +204,9 @@ impl CompiledTest {
 
             let mut unused = UnusedInfo::default();
             let mut mutations = MutationInfo::default();
+            let mut binder_ids = BinderIds::default();
             for (&binding_id, b) in checker.facts.bindings.iter() {
+                binder_ids.record(b.span, binding_id);
                 if !b.used {
                     unused.mark_binding_unused(b.span);
                 }
@@ -229,6 +232,7 @@ impl CompiledTest {
                 definitions,
                 unused,
                 mutations,
+                binder_ids,
                 equality_index,
                 go_package_names,
                 go_package_ids,
@@ -242,6 +246,7 @@ impl CompiledTest {
             package_id: TEST_PACKAGE_ID.to_string(),
             unused,
             mutations,
+            binder_ids,
             equality_index,
             go_package_names,
             go_package_ids,
@@ -256,6 +261,7 @@ pub struct InferenceResult {
     pub package_id: String,
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,
+    pub binder_ids: BinderIds,
     pub equality_index: EqualityIndex,
     pub go_package_names: HashMap<String, String>,
     pub go_package_ids: HashSet<String>,

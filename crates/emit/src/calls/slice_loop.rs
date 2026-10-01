@@ -276,7 +276,7 @@ impl Planner<'_> {
                 if let Some(value) = sink.value {
                     let go_type = self.use_go_type(&element_ty);
                     setup.push(LoweredStatement::VarDecl {
-                        name: value.to_string(),
+                        name: value.to_string().into(),
                         go_type,
                         value: None,
                     });
@@ -332,11 +332,11 @@ impl Planner<'_> {
         // Go rejects a range variable nothing reads.
         let header = LoopHeader::Range {
             key: match (&index, element_name.as_str()) {
-                (Some(index), _) => Some(index.clone()),
+                (Some(index), _) => Some(index.clone().into()),
                 (None, "_") => None,
-                (None, _) => Some("_".to_string()),
+                (None, _) => Some("_".to_string().into()),
             },
-            value: (element_name != "_").then_some(element_name),
+            value: (element_name != "_").then_some(element_name.into()),
             iterable: source,
         };
         setup.push(LoweredStatement::Loop(LoopPlan {
@@ -382,10 +382,10 @@ impl Planner<'_> {
     }
 
     fn bind_loop_callback_param(&mut self, pattern: &Pattern, existing: Option<String>) -> String {
-        let Pattern::Identifier { identifier, .. } = pattern else {
+        let Pattern::Identifier { identifier, span } = pattern else {
             unreachable!("callback parameters are checked for identifier patterns");
         };
-        match existing {
+        let result = match existing {
             Some(name) => {
                 self.declare(&name);
                 self.scope.bind(identifier.as_str(), name.clone());
@@ -395,7 +395,11 @@ impl Planner<'_> {
                 Some(name) => self.claim_declared_binding(identifier, name),
                 None => "_".to_string(),
             },
+        };
+        if let Some(id) = self.facts.binding_id_at(*span) {
+            self.scope.register_binding_id(id, identifier);
         }
+        result
     }
 
     fn slice_loop_declaration(
@@ -421,7 +425,7 @@ impl Planner<'_> {
                 )
             }
             SliceLoop::Filter => LoweredStatement::VarDecl {
-                name: result.to_string(),
+                name: result.to_string().into(),
                 go_type: format!("[]{}", self.first_type_argument_go_string(result_ty)),
                 value: None,
             },

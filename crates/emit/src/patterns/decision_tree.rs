@@ -2,8 +2,8 @@ use crate::patterns::binding_decls::pattern_has_bindings;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{
-    ConstructorPatternResolution, EnumFieldDefinition, MatchArm, Pattern, RecordPatternResolution,
-    RestPattern, SequencePatternResolution, StructFieldPattern,
+    BindingId, ConstructorPatternResolution, EnumFieldDefinition, MatchArm, Pattern,
+    RecordPatternResolution, RestPattern, SequencePatternResolution, StructFieldPattern,
 };
 use syntax::parse::TUPLE_FIELDS;
 use syntax::program::DefinitionBody;
@@ -22,6 +22,7 @@ use crate::plan::values::GoExpression;
 pub(crate) enum PathSegment {
     /// `.FieldName` (Go name, already resolved).
     Field(String),
+    ValueField(String),
     Index(usize),
     /// `[offset:]`.
     SliceFrom(usize),
@@ -39,7 +40,11 @@ pub(crate) enum PathSegment {
 }
 
 fn element_index(segments: &[PathSegment]) -> usize {
-    let [PathSegment::Field(field), ..] = segments else {
+    let [
+        PathSegment::Field(field) | PathSegment::ValueField(field),
+        ..,
+    ] = segments
+    else {
         unreachable!("a tuple-element subject only resolves field paths")
     };
     TUPLE_FIELDS
@@ -49,7 +54,8 @@ fn element_index(segments: &[PathSegment]) -> usize {
 }
 
 fn checked_tuple_element(path: &AccessPath, arity: usize) -> Option<usize> {
-    let PathSegment::Field(field) = path.segments.first()? else {
+    let Some(PathSegment::Field(field) | PathSegment::ValueField(field)) = path.segments.first()
+    else {
         return None;
     };
     TUPLE_FIELDS
@@ -99,6 +105,7 @@ impl AccessPath {
         for seg in segments {
             result = match seg {
                 PathSegment::Field(name) => GoExpression::selector(result, name.clone()),
+                PathSegment::ValueField(name) => GoExpression::value_field(result, name.clone()),
                 PathSegment::Index(index) => {
                     GoExpression::index(result, GoExpression::literal(index.to_string()))
                 }
@@ -137,6 +144,16 @@ impl AccessPath {
                     | PathSegment::AssertedAs(_)
             )
         })
+    }
+}
+
+fn field_segment(planner: &Planner<'_>, receiver_ty: Option<&Type>, name: String) -> PathSegment {
+    if receiver_ty.is_some_and(|ty| {
+        !planner.facts.is_nilable_go_type(ty) && !ty.is_variable() && !ty.is_placeholder()
+    }) {
+        PathSegment::ValueField(name)
+    } else {
+        PathSegment::Field(name)
     }
 }
 
@@ -193,7 +210,7 @@ impl Check {
         let negative = matches!(polarity, CheckPolarity::Negative);
         let length_of = |path: &AccessPath| {
             GoExpression::call(
-                GoExpression::name("len".to_string()),
+                GoExpression::external_name("len".to_string()),
                 vec![path.render(subject)],
             )
         };
@@ -311,6 +328,7 @@ pub(crate) fn tested_tuple_elements(checks: &[Check], arity: usize) -> Option<Ve
 #[derive(Clone, Debug)]
 pub(crate) struct PatternBinding {
     pub lisette_name: String,
+    pub binding_ids: Vec<BindingId>,
     /// `None` when the binding is unused.
     pub go_name: Option<String>,
     pub path: AccessPath,
@@ -817,10 +835,11 @@ fn collect_checks_and_bindings(
     match pattern {
         Pattern::WildCard { .. } | Pattern::Unit { .. } => {}
 
-        Pattern::Identifier { identifier, .. } => {
+        Pattern::Identifier { identifier, span } => {
             let go_name = planner.go_name_for_binding(pattern);
             collector.bindings.push(PatternBinding {
                 lisette_name: identifier.to_string(),
+                binding_ids: planner.facts.binding_id_at(*span).into_iter().collect(),
                 go_name,
                 path: path.clone(),
                 ty: path_ty.cloned(),
@@ -867,12 +886,18 @@ fn collect_checks_and_bindings(
         p @ Pattern::AsBinding {
             pattern: inner,
             name,
+            name_span,
             ..
         } => {
             collect_checks_and_bindings(planner, path, inner, path_ty, collector);
             let go_name = planner.go_name_for_binding(p);
             collector.bindings.push(PatternBinding {
                 lisette_name: name.to_string(),
+                binding_ids: planner
+                    .facts
+                    .binding_id_at(*name_span)
+                    .into_iter()
+                    .collect(),
                 go_name,
                 path: path.clone(),
                 ty: path_ty.cloned(),
@@ -896,7 +921,7 @@ fn collect_tuple_checks(
 
     for (i, element) in elements.iter().enumerate() {
         let field_name = TUPLE_FIELDS.get(i).expect("oversize tuple arity");
-        let field_path = path.push(PathSegment::Field(field_name.to_string()));
+        let field_path = path.push(field_segment(planner, path_ty, field_name.to_string()));
         collect_checks_and_bindings(
             planner,
             &field_path,
@@ -956,7 +981,7 @@ fn collect_slice_checks(
         collect_checks_and_bindings(planner, &element_path, element, element_type, collector);
     }
 
-    if let RestPattern::Bind { name, .. } = rest {
+    if let RestPattern::Bind { name, span } = rest {
         let go_name = planner.go_name_for_rest_binding(rest);
         let (segment, rest_ty) = match &array_info {
             Some((length, element_type)) => {
@@ -979,6 +1004,7 @@ fn collect_slice_checks(
         };
         collector.bindings.push(PatternBinding {
             lisette_name: name.to_string(),
+            binding_ids: planner.facts.binding_id_at(*span).into_iter().collect(),
             go_name,
             path: path.push(segment),
             ty: rest_ty,
@@ -1052,11 +1078,11 @@ fn compute_struct_field_path(
         && planner.is_enum_field_recursive(ty, variant_name, field_index)
     {
         return parent_path
-            .push(PathSegment::Field(go_field_name))
+            .push(field_segment(planner, Some(ty), go_field_name))
             .push(PathSegment::Deref);
     }
 
-    parent_path.push(PathSegment::Field(go_field_name))
+    parent_path.push(field_segment(planner, Some(ty), go_field_name))
 }
 
 /// When a concrete pattern targets a Go-interface scrutinee, push a TypeAssert
@@ -1323,16 +1349,17 @@ fn collect_tagged_enum_checks(
         let is_unit = planner.is_enum_field_unit(variant.ty, variant_name, i);
 
         let field_path = if planner.is_enum_field_recursive(variant.ty, variant_name, i) {
-            path.push(PathSegment::Field(field_name))
+            path.push(field_segment(planner, Some(variant.ty), field_name))
                 .push(PathSegment::Deref)
         } else {
-            path.push(PathSegment::Field(field_name))
+            path.push(field_segment(planner, Some(variant.ty), field_name))
         };
 
         if is_unit {
-            if let Pattern::Identifier { identifier, .. } = field {
+            if let Pattern::Identifier { identifier, span } = field {
                 collector.bindings.push(PatternBinding {
                     lisette_name: identifier.to_string(),
+                    binding_ids: planner.facts.binding_id_at(*span).into_iter().collect(),
                     go_name: None,
                     path: field_path,
                     ty: None,
@@ -1618,6 +1645,28 @@ pub(super) fn compile_expanded_arms<'a>(
         .windows(2)
         .any(|w| w[0].arm_index == w[1].arm_index);
     if has_or_patterns {
+        let mut ids_by_arm: HashMap<(usize, String), Vec<BindingId>> = HashMap::default();
+        for info in &arm_infos {
+            for binding in &info.bindings {
+                let ids = ids_by_arm
+                    .entry((info.arm_index, binding.lisette_name.clone()))
+                    .or_default();
+                for id in &binding.binding_ids {
+                    if !ids.contains(id) {
+                        ids.push(*id);
+                    }
+                }
+            }
+        }
+        for info in &mut arm_infos {
+            for binding in &mut info.bindings {
+                binding.binding_ids = ids_by_arm
+                    .get(&(info.arm_index, binding.lisette_name.clone()))
+                    .cloned()
+                    .unwrap_or_default();
+            }
+        }
+
         let mut unused_by_arm: HashMap<usize, HashSet<String>> = HashMap::default();
         for info in &arm_infos {
             for binding in &info.bindings {

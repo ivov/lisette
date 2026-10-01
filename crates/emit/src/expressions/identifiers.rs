@@ -2,8 +2,10 @@ use crate::Planner;
 use crate::calls::go_interop::build_tuple_literal;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
+use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
+use syntax::ast::IdentifierResolution;
 use syntax::types::FunctionParameter;
 use syntax::types::{Type, unqualified_name};
 
@@ -24,14 +26,19 @@ impl Planner<'_> {
     pub(crate) fn emit_identifier(
         &mut self,
         value: &str,
-        qualified: Option<&str>,
+        resolution: &IdentifierResolution,
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
-        let bound_go_name = match self.scope.resolve_identifier_binding(value) {
+        let binding = self
+            .scope
+            .resolve_identifier_with_resolution(value, resolution);
+        let source_binding = resolution.binding_id().is_some();
+        let bound_go_name = match binding {
             Some(BindingValue::InlineExpr(expr)) => return expr.expression().clone(),
             Some(BindingValue::Components(components)) => {
-                return self.option_from_components(components);
+                let components = components.clone();
+                return self.rebuild_from_components(&components);
             }
             Some(BindingValue::TupleComponents(tuple)) => {
                 return build_tuple_literal(
@@ -39,17 +46,17 @@ impl Planner<'_> {
                         .names
                         .iter()
                         .cloned()
-                        .map(GoExpression::name)
+                        .map(GoExpression::identifier)
                         .collect(),
                 );
             }
             Some(BindingValue::GoName(name) | BindingValue::GoConst(name)) => Some(name.clone()),
             None => None,
         };
-        match self.classify_identifier(value, ty, ctx) {
+        match self.classify_identifier(value, bound_go_name.as_deref(), source_binding, ty, ctx) {
             IdentifierKind::UnitValue => GoExpression::empty_composite("struct{}".to_string()),
             IdentifierKind::PublicFunction { capitalized } => {
-                let function = GoExpression::name(capitalized);
+                let function = GoExpression::external_name(capitalized);
                 if !ctx.is_callee()
                     && let Some(type_args) = self.format_generic_value_type_args(value, ty)
                 {
@@ -70,10 +77,22 @@ impl Planner<'_> {
                     return expression;
                 }
                 let resolved = self.capitalize_static_method_if_public(&name);
-                let go_name = self.resolve_go_name(&resolved, qualified, bound_go_name.is_some());
+                let mut go_name = self.resolve_go_name(
+                    &resolved,
+                    resolution.definition(),
+                    source_binding || bound_go_name.is_some(),
+                );
+                if let Some(local) = &bound_go_name
+                    && let Some(id) = local.id()
+                    && let GoExpressionNode::Identifier(identifier) = go_name.node_mut()
+                    && identifier.spelling() == local.spelling()
+                {
+                    identifier.identify(id);
+                }
                 // A local binding has no generic recipe, even when it shadows a definition.
                 if !ctx.is_callee()
                     && bound_go_name.is_none()
+                    && !source_binding
                     && let Some(type_args) = self.format_generic_value_type_args(&name, ty)
                 {
                     return GoExpression::instantiation(go_name, type_args);
@@ -86,6 +105,8 @@ impl Planner<'_> {
     fn classify_identifier(
         &mut self,
         value: &str,
+        bound_go_name: Option<&str>,
+        source_binding: bool,
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> IdentifierKind {
@@ -93,9 +114,14 @@ impl Planner<'_> {
             return IdentifierKind::UnitValue;
         }
 
-        let name = self
-            .scope
-            .resolve_binding_go_name(value)
+        let name = bound_go_name
+            .or_else(|| {
+                if source_binding {
+                    None
+                } else {
+                    self.scope.resolve_binding_go_name(value)
+                }
+            })
             .unwrap_or(value)
             .to_string();
 

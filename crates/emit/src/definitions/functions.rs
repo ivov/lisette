@@ -7,16 +7,21 @@ use crate::names::go_name;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::{
     LoopHeader, LoweredBlock, LoweredStatement, SelectArmPlan, SwitchKind, for_each_statement,
-    rename_generated_names,
+    rename_generated_locals,
 };
 use crate::plan::cleanup::clean_up;
 use crate::plan::go_expression::{FunctionLiteralLayout, GoExpressionNode, GoParameter};
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
+#[cfg(debug_assertions)]
+use crate::plan::verify::verify_local_scopes;
+use crate::plan::visit::identify_body_locals;
 use crate::state::package_state::FunctionEmissionContext;
 use crate::statements::testing::test_context_call;
 use crate::types::native::NativeGoType;
 use crate::utils::{fresh_receiver_name, group_params};
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::mem;
 use syntax::EcoString;
 use syntax::ast::{
     Annotation, Binding, Expression, FunctionDefinitionView, Generic, Pattern, Span,
@@ -55,28 +60,27 @@ impl LambdaReturnInfo {
 }
 
 impl Planner<'_> {
-    fn emit_function_body(
-        &mut self,
-        output: &mut String,
-        body: &Expression,
-        should_return: bool,
-        return_ctx: &ReturnContext,
-    ) {
-        self.with_return_context(return_ctx.clone(), |this| {
-            this.emit_function_body_inner(output, body, should_return);
-        });
-    }
-
     fn emit_function_body_inner(
         &mut self,
         output: &mut String,
         body: &Expression,
         should_return: bool,
+        prefix: &mut Vec<LoweredStatement>,
+        parameters: &[GoIdentifier],
     ) {
         self.reserve_source_binder_names(body);
         let mut lowered = self.lower_function_body(body, should_return);
-        clean_up(&mut lowered.statements);
+        prefix.append(&mut lowered.statements);
+        lowered.statements = mem::take(prefix);
+        let shadowing = identify_body_locals(&mut lowered.statements, parameters, &mut self.scope);
+        clean_up(&mut lowered.statements, &shadowing);
         self.settle_generated_names(&mut lowered.statements);
+        #[cfg(debug_assertions)]
+        verify_local_scopes(
+            &mut lowered.statements,
+            &parameters.iter().collect::<Vec<_>>(),
+        )
+        .unwrap_or_else(|error| panic!("{error}"));
         self.collect_imports(&lowered.statements);
         Renderer.render_lowered_block(output, &lowered);
     }
@@ -91,19 +95,31 @@ impl Planner<'_> {
 
     fn settle_generated_names(&mut self, statements: &mut [LoweredStatement]) {
         let mut present: HashSet<String> = HashSet::default();
+        let mut pinned: HashSet<String> = HashSet::default();
         for statement in statements.iter() {
             statement.visit_expressions(&mut |node| {
                 if let GoExpressionNode::Identifier(name) = node {
-                    present.insert(name.clone());
+                    present.insert(name.to_string());
+                } else if let GoExpressionNode::Verbatim(source) = node {
+                    pinned.extend(
+                        source
+                            .split(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
+                            .filter(|token| !token.is_empty())
+                            .map(str::to_string),
+                    );
                 }
             });
         }
         collect_declared_names(statements, &mut present);
-        let settled = self.scope.settle_generated_names(&present);
-        if settled.is_empty() {
+        let settled = self.scope.settle_generated_names(&present, &pinned);
+        let by_id: HashMap<_, _> = settled
+            .into_iter()
+            .filter_map(|(old, new)| self.scope.generated_local_id(&old).map(|id| (id, new)))
+            .collect();
+        if by_id.is_empty() {
             return;
         }
-        rename_generated_names(statements, &|name| settled.get(name).cloned());
+        rename_generated_locals(statements, &by_id);
     }
 
     pub(crate) fn emit_lambda(
@@ -192,6 +208,11 @@ impl Planner<'_> {
                     destructure_bindings.push((temp_name.clone(), &p.pattern, &p.ty));
                     temp_name
                 };
+                if let Pattern::Identifier { identifier, span } = &p.pattern
+                    && let Some(id) = self.facts.binding_id_at(*span)
+                {
+                    self.scope.register_binding_id(id, identifier);
+                }
                 (name, self.use_go_type(&p.ty))
             })
             .collect();
@@ -333,6 +354,15 @@ impl Planner<'_> {
 
         let (_, receiver_part) =
             self.emit_receiver_part(params_to_process, &receiver, receiver_override.as_ref());
+        if receiver_part.is_some()
+            && let Some(Binding {
+                pattern: Pattern::Identifier { identifier, span },
+                ..
+            }) = function_definition.params.first()
+            && let Some(id) = self.facts.binding_id_at(*span)
+        {
+            self.scope.register_binding_id(id, identifier);
+        }
         if let Some(part) = receiver_part {
             parts.push(part);
         }
@@ -349,16 +379,21 @@ impl Planner<'_> {
 
         let mut body = String::new();
         let signature = self.with_function_state(&generic_context, |this| {
-            let (params_string, return_ty, deferred_patterns) = this.build_signature_tail(
-                function_definition,
-                params_to_process,
-                return_shape.as_ref(),
-            );
+            let (params_string, return_ty, deferred_patterns, mut parameters) = this
+                .build_signature_tail(
+                    function_definition,
+                    params_to_process,
+                    return_shape.as_ref(),
+                );
             parts.push(params_string);
             if !return_ty.is_empty() {
                 parts.push(return_ty);
             }
             let signature = parts.join(" ");
+
+            if let Some(receiver) = this.scope.bound_go_identifier("self") {
+                parameters.push(receiver.clone());
+            }
 
             let test_handle = function_definition.params.iter().find_map(|param| {
                 is_test_context_ty(&param.ty)
@@ -371,6 +406,7 @@ impl Planner<'_> {
                     function_definition,
                     deferred_patterns,
                     &return_ctx,
+                    &parameters,
                 );
             });
             signature
@@ -402,8 +438,14 @@ impl Planner<'_> {
         function_definition: FunctionDefinitionView<'_>,
         params_to_process: &[Binding],
         return_shape: Option<&CallableReturnAbi>,
-    ) -> (String, String, Vec<DeferredParamDestructure>) {
-        let (params_string, deferred_patterns) = self.emit_function_params(params_to_process);
+    ) -> (
+        String,
+        String,
+        Vec<DeferredParamDestructure>,
+        Vec<GoIdentifier>,
+    ) {
+        let (params_string, deferred_patterns, parameters) =
+            self.emit_function_params(params_to_process);
 
         let return_ty = if function_definition.return_type.is_unit() {
             String::new()
@@ -413,7 +455,7 @@ impl Planner<'_> {
             self.use_go_type(function_definition.return_type)
         };
 
-        (params_string, return_ty, deferred_patterns)
+        (params_string, return_ty, deferred_patterns, parameters)
     }
 
     fn emit_function_body_with_deferred_patterns(
@@ -422,25 +464,29 @@ impl Planner<'_> {
         function_definition: FunctionDefinitionView<'_>,
         deferred_patterns: Vec<DeferredParamDestructure>,
         return_ctx: &ReturnContext,
+        parameters: &[GoIdentifier],
     ) {
         let should_return = !function_definition.return_type.is_unit();
+        let mut prefix = Vec::new();
         for (var_name, pattern, param_ty) in deferred_patterns {
             let statements = self.lower_irrefutable_pattern_site(
                 PatternSubject::for_value(var_name),
                 &pattern,
                 &param_ty,
             );
-            self.collect_imports(&statements);
-            Renderer.render_lowered_block(body, &LoweredBlock { statements });
+            prefix.extend(statements);
         }
-        self.emit_function_body(
-            body,
-            function_definition
-                .body
-                .expect("declarations return before function body emission"),
-            should_return,
-            return_ctx,
-        );
+        self.with_return_context(return_ctx.clone(), |this| {
+            this.emit_function_body_inner(
+                body,
+                function_definition
+                    .body
+                    .expect("declarations return before function body emission"),
+                should_return,
+                &mut prefix,
+                parameters,
+            );
+        });
     }
 
     fn emit_receiver_part(
@@ -548,14 +594,22 @@ impl Planner<'_> {
     fn emit_function_params(
         &mut self,
         params_to_process: &[Binding],
-    ) -> (String, Vec<DeferredParamDestructure>) {
+    ) -> (String, Vec<DeferredParamDestructure>, Vec<GoIdentifier>) {
         let mut deferred_patterns = Vec::new();
         let mut params = Vec::new();
+        let mut parameter_ids = Vec::new();
         for param in params_to_process {
             let name = match &param.pattern {
-                Pattern::Identifier { identifier, .. } => {
+                Pattern::Identifier { identifier, span } => {
                     if let Some(go_name) = self.go_name_for_binding(&param.pattern) {
-                        self.declare_param(identifier, go_name)
+                        let name = self.declare_param(identifier, go_name);
+                        if let Some(id) = self.facts.binding_id_at(*span) {
+                            self.scope.register_binding_id(id, identifier);
+                        }
+                        if let Some(local) = self.scope.bound_go_identifier(identifier) {
+                            parameter_ids.push(local.clone());
+                        }
+                        name
                     } else {
                         self.scope.bind(identifier.as_str(), "_")
                     }
@@ -564,6 +618,7 @@ impl Planner<'_> {
                 _ => {
                     let var = self.fresh_var(Some("arg"));
                     self.declare(&var);
+                    parameter_ids.push(self.scope.generated_identifier(&var));
                     deferred_patterns.push((var.clone(), param.pattern.clone(), param.ty.clone()));
                     var
                 }
@@ -571,7 +626,11 @@ impl Planner<'_> {
 
             params.push((name, self.use_go_type(&param.ty)));
         }
-        (format!("({})", group_params(&params)), deferred_patterns)
+        (
+            format!("({})", group_params(&params)),
+            deferred_patterns,
+            parameter_ids,
+        )
     }
 
     fn extract_receiver<'a>(
@@ -679,19 +738,21 @@ fn push_binder_names(pattern: &Pattern, out: &mut Vec<String>) {
 
 fn collect_declared_names(statements: &[LoweredStatement], out: &mut HashSet<String>) {
     for_each_statement(statements, &mut |statement| match statement {
-        LoweredStatement::Define(definition) => out.extend(definition.names.iter().cloned()),
+        LoweredStatement::Define(definition) => {
+            out.extend(definition.names.iter().map(ToString::to_string))
+        }
         LoweredStatement::VarDecl { name, .. } => {
-            out.insert(name.clone());
+            out.insert(name.to_string());
         }
         LoweredStatement::Const(plan) => {
-            out.insert(plan.name.clone());
+            out.insert(plan.name.to_string());
         }
         LoweredStatement::Loop(plan) => match &plan.header {
             LoopHeader::Range { key, value, .. } => {
-                out.extend(key.iter().chain(value.iter()).cloned());
+                out.extend(key.iter().chain(value.iter()).map(ToString::to_string));
             }
             LoopHeader::Counted { variable, .. } => {
-                out.insert(variable.clone());
+                out.insert(variable.to_string());
             }
             LoopHeader::Infinite | LoopHeader::While(_) => {}
         },
@@ -701,19 +762,19 @@ fn collect_declared_names(statements: &[LoweredStatement], out: &mut HashSet<Str
                 ..
             } = &plan.kind
             {
-                out.insert(name.clone());
+                out.insert(name.to_string());
             }
         }
         LoweredStatement::Select(plan) => {
             for arm in &plan.arms {
                 if let SelectArmPlan::Receive { receive_vars, .. } = arm {
-                    out.extend(receive_vars.iter().cloned());
+                    out.extend(receive_vars.iter().map(ToString::to_string));
                 }
             }
         }
         LoweredStatement::If(plan) => {
             if let Some(initializer) = &plan.initializer {
-                out.extend(initializer.names.iter().cloned());
+                out.extend(initializer.names.iter().map(ToString::to_string));
             }
         }
         _ => {}
@@ -724,7 +785,11 @@ fn collect_declared_names(statements: &[LoweredStatement], out: &mut HashSet<Str
                 parameters, body, ..
             } = node
             {
-                out.extend(parameters.iter().map(|parameter| parameter.name.clone()));
+                out.extend(
+                    parameters
+                        .iter()
+                        .map(|parameter| parameter.name.to_string()),
+                );
                 collect_declared_names(&body.statements, out);
             }
         });

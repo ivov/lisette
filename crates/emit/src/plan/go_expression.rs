@@ -2,6 +2,7 @@
 
 use crate::names::packages::PackageUse;
 use crate::plan::bodies::LoweredBlock;
+use crate::plan::local::GoIdentifier;
 use crate::render::Renderer;
 use crate::types::go_type::render_conversion;
 use crate::utils::group_params;
@@ -9,7 +10,7 @@ use std::slice;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GoExpressionNode {
-    Identifier(String),
+    Identifier(GoIdentifier),
     Qualified {
         package: PackageUse,
         name: String,
@@ -36,6 +37,7 @@ pub(crate) enum GoExpressionNode {
     Selector {
         base: Box<GoExpressionNode>,
         field: String,
+        may_panic: bool,
     },
     Index {
         base: Box<GoExpressionNode>,
@@ -81,20 +83,20 @@ pub(crate) enum GoExpressionNode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GoParameter {
-    pub(crate) name: String,
+    pub(crate) name: GoIdentifier,
     pub(crate) go_type: String,
 }
 
 impl GoParameter {
     pub(crate) fn new(name: impl Into<String>, go_type: impl Into<String>) -> Self {
         Self {
-            name: name.into(),
+            name: GoIdentifier::name(name.into()),
             go_type: go_type.into(),
         }
     }
 
     fn pair(&self) -> (String, String) {
-        (self.name.clone(), self.go_type.clone())
+        (self.name.to_string(), self.go_type.clone())
     }
 }
 
@@ -121,6 +123,27 @@ pub(crate) enum CompositeLayout {
     MultiLine { indented: bool },
 }
 
+#[derive(Default)]
+struct EvaluationObligations {
+    observable: bool,
+    may_panic_without_call: bool,
+    may_block_without_call: bool,
+    staging_work: bool,
+}
+
+impl EvaluationObligations {
+    fn combine(&mut self, other: Self) {
+        self.observable |= other.observable;
+        self.may_panic_without_call |= other.may_panic_without_call;
+        self.may_block_without_call |= other.may_block_without_call;
+        self.staging_work |= other.staging_work;
+    }
+
+    fn must_evaluate(&self) -> bool {
+        self.observable || self.may_panic_without_call
+    }
+}
+
 impl CompositeLayout {
     /// One element per line once several wide elements would crowd one line.
     pub(crate) fn for_elements(count: usize, widest: usize) -> Self {
@@ -133,53 +156,125 @@ impl CompositeLayout {
 }
 
 impl GoExpressionNode {
-    /// The node holds a call or a type assertion. A function literal only defines code.
-    pub(crate) fn does_work(&self) -> bool {
+    /// A function literal does not run its body when evaluated.
+    fn evaluation_obligations(&self) -> EvaluationObligations {
+        let mut obligations = EvaluationObligations::default();
+        self.visit_children(&mut |child| {
+            obligations.combine(child.evaluation_obligations());
+        });
         match self {
+            Self::Call { .. } | Self::Verbatim(_) => {
+                obligations.observable = true;
+                obligations.staging_work = true;
+            }
+            Self::Index { .. } | Self::Slice { .. } | Self::Dereference(_) => {
+                obligations.may_panic_without_call = true
+            }
+            Self::Selector { may_panic, .. } => {
+                obligations.may_panic_without_call |= *may_panic;
+            }
+            Self::TypeAssertion { .. } => {
+                obligations.may_panic_without_call = true;
+                obligations.staging_work = true;
+            }
+            Self::Unary { operator, .. } if operator == "<-" => {
+                obligations.observable = true;
+                obligations.may_block_without_call = true;
+                obligations.staging_work = true;
+            }
+            Self::Binary { operator, .. }
+                if matches!(operator.as_str(), "/" | "%" | "<<" | ">>") =>
+            {
+                obligations.may_panic_without_call = true;
+            }
+            Self::Binary {
+                operator,
+                left,
+                right,
+            } if matches!(operator.as_str(), "==" | "!=")
+                && !matches!(left.as_ref(), Self::Literal(_))
+                && !matches!(right.as_ref(), Self::Literal(_))
+                && !(left.is_unit_struct_literal() && right.is_unit_struct_literal()) =>
+            {
+                obligations.may_panic_without_call = true;
+            }
+            Self::Conversion { go_type, .. }
+                if go_type.starts_with("*[") || go_type.starts_with('[') =>
+            {
+                obligations.may_panic_without_call = true;
+            }
+            Self::CompositeLiteral { go_type, .. }
+                if go_type.as_deref().is_some_and(|ty| ty.starts_with("map[")) =>
+            {
+                obligations.may_panic_without_call = true;
+            }
             Self::Identifier(_)
             | Self::Qualified { .. }
             | Self::Literal(_)
             | Self::Type(_)
+            | Self::Instantiation { .. }
+            | Self::AddressOf(_)
+            | Self::Spread(_)
+            | Self::FunctionLiteral { .. }
             | Self::Empty
-            | Self::Verbatim(_)
-            | Self::FunctionLiteral { .. } => false,
-            Self::Call { .. } | Self::TypeAssertion { .. } => true,
-            Self::CompositeLiteral { elements, .. } => {
-                elements.iter().any(|element| element.value.does_work())
+            | Self::Conversion { .. }
+            | Self::CompositeLiteral { .. } => {}
+            Self::Unary { operator, .. } => {
+                if !matches!(operator.as_str(), "+" | "-" | "!" | "^" | "&") {
+                    obligations.observable = true;
+                    obligations.may_panic_without_call = true;
+                    obligations.staging_work = true;
+                }
             }
-            Self::Instantiation { base, .. } | Self::Selector { base, .. } => base.does_work(),
-            Self::Index { base, index } => base.does_work() || index.does_work(),
-            Self::Slice {
-                base,
-                low,
-                high,
-                max,
-            } => {
-                base.does_work()
-                    || [low, high, max]
-                        .into_iter()
-                        .flatten()
-                        .any(|bound| bound.does_work())
+            Self::Binary { operator, .. } => {
+                if !matches!(
+                    operator.as_str(),
+                    "+" | "-"
+                        | "*"
+                        | "&"
+                        | "|"
+                        | "^"
+                        | "&^"
+                        | "&&"
+                        | "||"
+                        | "=="
+                        | "!="
+                        | "<"
+                        | "<="
+                        | ">"
+                        | ">="
+                ) {
+                    obligations.observable = true;
+                    obligations.may_panic_without_call = true;
+                    obligations.staging_work = true;
+                }
             }
-            Self::Unary { operand, .. }
-            | Self::Conversion { operand, .. }
-            | Self::AddressOf(operand)
-            | Self::Dereference(operand)
-            | Self::Spread(operand) => operand.does_work(),
-            Self::Binary { left, right, .. } => left.does_work() || right.does_work(),
         }
+        obligations
     }
 
-    pub(crate) fn may_panic(&self) -> bool {
-        let mut found = false;
-        self.visit(&mut |node| {
-            if matches!(node, Self::Index { .. } | Self::Slice { .. })
-                || matches!(node, Self::Binary { operator, .. } if operator == "/" || operator == "%")
-            {
-                found = true;
-            }
-        });
-        found
+    pub(crate) fn does_work(&self) -> bool {
+        self.evaluation_obligations().staging_work
+    }
+
+    fn is_unit_struct_literal(&self) -> bool {
+        matches!(
+            self,
+            Self::CompositeLiteral {
+                go_type: Some(go_type),
+                elements,
+                ..
+            } if go_type == "struct{}" && elements.is_empty()
+        )
+    }
+
+    pub(crate) fn can_erase(&self) -> bool {
+        !self.evaluation_obligations().must_evaluate()
+    }
+
+    pub(crate) fn requires_ordering_without_call(&self) -> bool {
+        let obligations = self.evaluation_obligations();
+        obligations.may_panic_without_call || obligations.may_block_without_call
     }
 
     pub(crate) fn mentions(&self, name: &str) -> bool {
@@ -200,13 +295,6 @@ impl GoExpressionNode {
             body.visit_expressions(visit);
         } else {
             self.visit_children(&mut |child| child.visit(visit));
-        }
-    }
-
-    pub(crate) fn rename_identifier(&mut self, from: &str, to: &str) {
-        match self {
-            Self::Identifier(name) if name == from => *name = to.to_string(),
-            _ => self.visit_children_mut(&mut |child| child.rename_identifier(from, to)),
         }
     }
 
@@ -399,10 +487,8 @@ impl GoExpressionNode {
 
     fn write(&self, output: &mut String, slot: Slot) {
         match self {
-            Self::Identifier(text)
-            | Self::Literal(text)
-            | Self::Type(text)
-            | Self::Verbatim(text) => output.push_str(text),
+            Self::Identifier(text) => output.push_str(text.spelling()),
+            Self::Literal(text) | Self::Type(text) | Self::Verbatim(text) => output.push_str(text),
             Self::Qualified { package, name } => {
                 output.push_str(package.qualifier());
                 output.push('.');
@@ -463,7 +549,7 @@ impl GoExpressionNode {
                 Self::write_child(base, slot.with(SlotKind::Postfix), output);
                 output.push_str(type_arguments);
             }
-            Self::Selector { base, field } => {
+            Self::Selector { base, field, .. } => {
                 Self::write_child(base, slot.with(SlotKind::Postfix), output);
                 output.push('.');
                 output.push_str(field);
@@ -648,7 +734,7 @@ mod tests {
     use super::*;
 
     fn name(text: &str) -> GoExpressionNode {
-        GoExpressionNode::Identifier(text.to_string())
+        GoExpressionNode::Identifier(text.to_string().into())
     }
 
     fn binary(left: GoExpressionNode, operator: &str, right: GoExpressionNode) -> GoExpressionNode {
@@ -706,6 +792,7 @@ mod tests {
         let field = GoExpressionNode::Selector {
             base: Box::new(GoExpressionNode::Dereference(Box::new(name("node")))),
             field: "Child".to_string(),
+            may_panic: false,
         };
         assert_eq!(field.print(), "(*node).Child");
         let call = GoExpressionNode::Call {

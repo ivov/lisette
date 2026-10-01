@@ -4389,6 +4389,28 @@ fn test() {
 }
 
 #[test]
+fn a_result_local_reuses_pair_after_status_inspection() {
+    let input = r#"
+import "go:strconv"
+
+fn consume(result: Result<int, error>) -> int {
+  match result { Ok(value) => value, Err(_) => -1 }
+}
+
+fn inspect(text: string) -> int {
+  let result = strconv.Atoi(text)
+  if result.is_ok() { consume(result) } else { consume(result) }
+}
+
+fn test() {
+  if inspect("41") != 41 { panic("the successful result changed") }
+  if inspect("x") != -1 { panic("the failed result changed") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn a_result_local_read_only_through_its_error_discards_the_value() {
     let input = r#"
 import "go:strconv"

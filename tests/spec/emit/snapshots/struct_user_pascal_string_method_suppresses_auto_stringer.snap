@@ -25,7 +25,4 @@ func (a A) String() string {
 	return a.a + "asdf"
 }
 
-func main() {
-	a := A{a: "text"}
-	_ = a
-}
+func main() {}

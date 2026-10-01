@@ -105,8 +105,19 @@ impl Planner<'_> {
             return ValuePlan::computed(setup, wrapped, effect);
         }
 
+        let value_field = matches!(
+            dot_access_kind,
+            Some(
+                SemanticDotKind::StructField { .. }
+                    | SemanticDotKind::TupleElement
+                    | SemanticDotKind::TupleStructField { .. }
+            )
+        ) && !self.facts.is_nilable_go_type(&expression_ty)
+            && !expression_ty.is_variable()
+            && !expression_ty.is_placeholder();
         let selector = match package {
             Some(package) => GoExpression::qualified(package, field),
+            None if value_field => GoExpression::value_field(base, field),
             None => GoExpression::selector(base, field),
         };
         let expression =
@@ -161,7 +172,7 @@ impl Planner<'_> {
             return None;
         };
         let index = member.parse::<usize>().ok()?;
-        tuple.names.get(index).cloned()
+        tuple.names.get(index).map(ToString::to_string)
     }
 
     /// Tuple-shape members: plain tuple slots emit as `.F{index}` (or the
@@ -182,13 +193,29 @@ impl Planner<'_> {
                 let field = parse::TUPLE_FIELDS
                     .get(index)
                     .expect("oversize tuple arity");
-                Some(GoExpression::selector(base.clone(), field.to_string()))
+                let selector = if !self.facts.is_nilable_go_type(expression_ty)
+                    && !expression_ty.is_variable()
+                    && !expression_ty.is_placeholder()
+                {
+                    GoExpression::value_field(base.clone(), field.to_string())
+                } else {
+                    GoExpression::selector(base.clone(), field.to_string())
+                };
+                Some(selector)
             }
             Some(SemanticDotKind::TupleStructField { is_newtype }) => {
                 if is_newtype && let Some(cast) = self.try_emit_newtype_cast(expression_ty, base) {
                     return Some(cast);
                 }
-                Some(GoExpression::selector(base.clone(), format!("F{}", index)))
+                let selector = if !self.facts.is_nilable_go_type(expression_ty)
+                    && !expression_ty.is_variable()
+                    && !expression_ty.is_placeholder()
+                {
+                    GoExpression::value_field(base.clone(), format!("F{}", index))
+                } else {
+                    GoExpression::selector(base.clone(), format!("F{}", index))
+                };
+                Some(selector)
             }
             _ => None,
         }

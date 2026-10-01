@@ -3,11 +3,13 @@ use crate::abi::callable::{AbiTransition, CallableReturnAbi};
 use crate::abi::layout::SlotOrigin;
 use crate::abi::tuple_element_types;
 use crate::analyze::component_uses::ComponentDemand;
-use crate::calls::comma_ok::CommaOkValueSlot;
+use crate::calls::comma_ok::{CommaOkSource, CommaOkValueSlot};
 use crate::calls::go_interop::WrapperTarget;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::Fallible;
 use crate::escape_reserved;
+use crate::names::go_name;
+use crate::patterns::matching::ResultFusePlan;
 use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
 use crate::plan::bodies::{
     LoweredBlock, LoweredStatement, define, define_many, expression_statement,
@@ -17,9 +19,11 @@ use crate::plan::placement::{
     rebind_trailing_temp, requires_temp_var,
 };
 use crate::plan::values::GoExpression;
-use crate::state::bindings::{ComponentBinding, ComponentKind, TupleBinding};
+use crate::state::bindings::{
+    ComponentBinding, ComponentKind, TupleBinding, WholeValueConstructor,
+};
 use std::mem;
-use syntax::ast::{Binding, Expression, LetMode, Pattern};
+use syntax::ast::{Binding, Expression, LetMode, Pattern, collect_pattern_bindings};
 use syntax::program::NativeTypeKind;
 use syntax::types::Type;
 
@@ -29,6 +33,15 @@ pub(crate) struct LetSpec<'a> {
     value: &'a Expression,
     binding_ty: &'a Type,
     mutable: bool,
+}
+
+enum FallibleComponentSource<'a> {
+    TryBlock {
+        items: &'a [Expression],
+        ty: &'a Type,
+    },
+    CommaOk(CommaOkSource),
+    Result(ResultFusePlan<'a>),
 }
 
 fn needs_explicit_type_declaration(
@@ -190,10 +203,42 @@ impl Planner<'_> {
             return None;
         };
         let (needs_value, needs_whole_value) = (demand.needs_value, demand.needs_whole_value);
-        // Only an Option can be rebuilt from components in one expression.
-        if needs_whole_value && kind == ComponentKind::Result {
+        let whole_value_constructor = match kind {
+            ComponentKind::Option => Some(WholeValueConstructor::OptionFromCommaOk),
+            ComponentKind::Result
+                if matches!(
+                    self.facts.peel_alias(&ty.err_type()),
+                    Type::Nominal { id, .. } if id.as_str() == go_name::PRELUDE_ERROR_ID
+                ) =>
+            {
+                Some(WholeValueConstructor::ResultFromPair)
+            }
+            ComponentKind::Result => None,
+        };
+        if needs_whole_value && whole_value_constructor.is_none() {
             return None;
         }
+        let source = match (value.unwrap_parens(), kind) {
+            (Expression::TryBlock { items, ty, .. }, _)
+                if self.can_bind_try_block_pair(items, ty) =>
+            {
+                FallibleComponentSource::TryBlock { items, ty }
+            }
+            (_, ComponentKind::Option) => {
+                let source = self.comma_ok_source(value)?;
+                if source.has_nil_guard() {
+                    return None;
+                }
+                FallibleComponentSource::CommaOk(source)
+            }
+            (_, ComponentKind::Result) => {
+                let fuse = self.result_fuse_plan(value)?;
+                if fuse.has_nil_guard() || fuse.wraps_error() || !fuse.carries_payload() {
+                    return None;
+                }
+                FallibleComponentSource::Result(fuse)
+            }
+        };
         let payload_go_type = self.use_go_type(&ty.ok_type());
         let slot = if needs_value {
             self.declare(go_identifier);
@@ -201,25 +246,14 @@ impl Planner<'_> {
         } else {
             CommaOkValueSlot::Discarded
         };
-        let mut pair = match (value.unwrap_parens(), kind) {
-            (Expression::TryBlock { items, ty, .. }, _) => {
-                self.bind_try_block_pair(items, ty, slot)?
-            }
-            (_, ComponentKind::Option) => {
-                let source = self.comma_ok_source(value)?;
-                // With a nil guard, `ok` alone is not the success condition.
-                if source.has_nil_guard() {
-                    return None;
-                }
+        let mut pair = match source {
+            FallibleComponentSource::TryBlock { items, ty } => self
+                .bind_try_block_pair(items, ty, slot)
+                .expect("recognized try block pair must bind"),
+            FallibleComponentSource::CommaOk(source) => {
                 self.bind_comma_ok_pair(value, source, slot)
             }
-            (_, ComponentKind::Result) => {
-                let fuse = self.result_fuse_plan(value)?;
-                if fuse.has_nil_guard() || fuse.wraps_error() || !fuse.carries_payload() {
-                    return None;
-                }
-                fuse.bind(self, slot, None)
-            }
+            FallibleComponentSource::Result(fuse) => fuse.bind(self, slot, None),
         };
         let statements = mem::take(&mut pair.statements);
         let payload = pair.value().unwrap_or("_").to_string();
@@ -227,10 +261,11 @@ impl Planner<'_> {
         self.scope.set_component_binding(
             identifier,
             ComponentBinding {
-                value: payload,
-                status,
+                value: payload.into(),
+                status: status.into(),
                 payload_go_type,
                 kind,
+                whole_value_constructor,
             },
         );
         Some(statements)
@@ -276,8 +311,12 @@ impl Planner<'_> {
             .into_parts();
         let mut statements = setup;
         statements.push(define_many(names.clone(), call));
-        self.scope
-            .set_tuple_binding(identifier, TupleBinding { names });
+        self.scope.set_tuple_binding(
+            identifier,
+            TupleBinding {
+                names: names.into_iter().map(Into::into).collect(),
+            },
+        );
         Some(statements)
     }
 
@@ -307,7 +346,7 @@ impl Planner<'_> {
         if widens_to_interface {
             let var_ty = self.use_go_type(binding_ty);
             statements.push(LoweredStatement::VarDecl {
-                name: go_identifier.clone(),
+                name: go_identifier.clone().into(),
                 go_type: var_ty,
                 value: None,
             });
@@ -396,7 +435,7 @@ impl Planner<'_> {
         {
             let var_ty = self.use_go_type(binding_ty);
             statements.push(LoweredStatement::VarDecl {
-                name: go_identifier,
+                name: go_identifier.into(),
                 go_type: var_ty,
                 value: None,
             });
@@ -406,7 +445,7 @@ impl Planner<'_> {
         if constant_needs_type || needs_explicit_type_declaration(self, value, binding_ty) {
             let var_ty = self.use_go_type(binding_ty);
             statements.push(LoweredStatement::VarDecl {
-                name: go_identifier,
+                name: go_identifier.into(),
                 go_type: var_ty,
                 value: Some(value_expression),
             });
@@ -529,7 +568,7 @@ impl Planner<'_> {
             self.use_go_type(&resolved_ty)
         };
         Some(LoweredStatement::VarDecl {
-            name: name.to_string(),
+            name: name.to_string().into(),
             go_type: var_ty,
             value: None,
         })
@@ -555,7 +594,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 self.planner.try_declare(&go_identifier);
                 let var_ty = self.planner.use_go_type(&self.binding.ty);
                 statements.push(LoweredStatement::VarDecl {
-                    name: go_identifier,
+                    name: go_identifier.into(),
                     go_type: var_ty,
                     value: None,
                 });
@@ -802,12 +841,18 @@ impl Planner<'_> {
         value: &Expression,
         mode: &LetMode,
     ) -> LoweredBlock {
-        LetPlanner {
+        let block = LetPlanner {
             planner: self,
             binding,
             value,
             mode,
         }
-        .build()
+        .build();
+        for (name, span) in collect_pattern_bindings(&binding.pattern) {
+            if let Some(id) = self.facts.binding_id_at(span) {
+                self.scope.register_binding_id(id, &name);
+            }
+        }
+        block
     }
 }

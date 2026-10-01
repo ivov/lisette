@@ -5,10 +5,11 @@ use crate::patterns::sites::{
 };
 use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan, SelectArmPlan,
-    SelectStatementPlan, assign, discard,
+    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
+    PlacePlan, SelectArmPlan, SelectStatementPlan, assign, discard,
 };
 use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::local::GoIdentifier;
 use crate::plan::placement::unreachable_panic_if_needed;
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm};
@@ -51,12 +52,11 @@ enum PreparedSelectArm<'a> {
 }
 
 impl Planner<'_> {
-    /// Lower a `select` expression to a structured `SelectStatementPlan`.
     pub(crate) fn lower_select(
         &mut self,
         arms: &[SelectArm],
         place: &PlacePlan,
-    ) -> SelectStatementPlan {
+    ) -> LoweredStatement {
         let needs_retry_loop = arms.iter().any(
             |arm| matches!(arm, SelectArm::Receive { binding, .. } if binding.is_some_pattern()),
         );
@@ -78,11 +78,26 @@ impl Planner<'_> {
             postlude.push(panic);
         }
 
-        SelectStatementPlan {
-            setup,
-            retry_loop: needs_retry_loop,
-            arms: arm_plans,
-            postlude,
+        let select = LoweredStatement::Select(SelectStatementPlan { arms: arm_plans });
+        if needs_retry_loop {
+            let mut body = vec![select];
+            if !all_arms_diverge {
+                body.push(LoweredStatement::Break(LoopTransfer::Unlabeled));
+            }
+            let loop_plan = LoopPlan {
+                prologue: setup,
+                kind: LoopKind::Generated { label: None },
+                header: LoopHeader::Infinite,
+                body: LoweredBlock { statements: body },
+            };
+            let mut statements = vec![LoweredStatement::Loop(loop_plan)];
+            statements.extend(postlude);
+            LoweredStatement::Body(LoweredBlock { statements })
+        } else {
+            let mut statements = setup;
+            statements.push(select);
+            statements.extend(postlude);
+            LoweredStatement::Body(LoweredBlock { statements })
         }
     }
 
@@ -213,17 +228,18 @@ impl Planner<'_> {
         self.lower_value(receive_expression, ExpressionContext::value())
     }
 
-    fn fresh_ok_var(&mut self) -> String {
+    fn fresh_ok_var(&mut self) -> GoIdentifier {
         if self.scope.has_binding_for_go_name("ok") || self.shadows_declaration("ok") {
-            self.fresh_var(Some("ok"))
+            let name = self.fresh_var(Some("ok"));
+            self.scope.generated_identifier(&name)
         } else {
-            "ok".to_string()
+            GoIdentifier::local("ok".to_string(), self.scope.new_local_id())
         }
     }
 
     fn lower_ok_check(
         &mut self,
-        ok_var: &str,
+        ok_var: &GoIdentifier,
         ctx: &SelectReceiveContext,
     ) -> Vec<LoweredStatement> {
         // Decide scaffolding on rendered emptiness, not `is_empty`: some lowered
@@ -238,7 +254,7 @@ impl Planner<'_> {
             return Vec::new();
         }
 
-        let ok = GoExpression::name(ok_var.to_string());
+        let ok = GoExpression::identifier(ok_var.clone());
         let plan = if body_empty {
             IfPlan::plain(
                 GoExpression::unary("!", ok),
@@ -279,13 +295,13 @@ impl Planner<'_> {
         ctx: &SelectReceiveContext,
     ) -> SelectArmPlan
     where
-        F: FnOnce(&mut Self) -> String,
+        F: FnOnce(&mut Self) -> GoIdentifier,
     {
         let (receiver_var, ok_var, then_statements) = self.with_binding_frame(|this| {
             let receiver_var = prepare_receiver(this);
             let ok_var = this.fresh_ok_var();
             let body_statements = if let Some(pattern) = inner_pattern {
-                let receiver_subject = GoExpression::name(receiver_var.clone());
+                let receiver_subject = GoExpression::identifier(receiver_var.clone());
                 this.lower_select_receive_pattern_site(
                     TypedSubject {
                         var: &receiver_subject,
@@ -300,8 +316,8 @@ impl Planner<'_> {
                 this.lower_block_to_place(ctx.body, ctx.place).statements
             };
             let mut then_statements: Vec<LoweredStatement> = Vec::new();
-            if !GoUses::of(&body_statements).contains(&receiver_var) {
-                then_statements.push(discard(GoExpression::name(receiver_var.clone())));
+            if !GoUses::of(&body_statements).contains_identifier(&receiver_var) {
+                then_statements.push(discard(GoExpression::identifier(receiver_var.clone())));
             }
             then_statements.extend(body_statements);
             (receiver_var, ok_var, then_statements)
@@ -313,7 +329,7 @@ impl Planner<'_> {
         };
         let receive_vars = vec![receiver_var, ok_var.clone()];
         let if_plan = IfPlan::plain(
-            GoExpression::name(ok_var),
+            GoExpression::identifier(ok_var),
             LoweredBlock {
                 statements: then_statements,
             },
@@ -348,10 +364,23 @@ impl Planner<'_> {
         effective_pattern: &Pattern,
         ctx: &SelectReceiveContext,
     ) -> SelectArmPlan {
-        if let Pattern::Identifier { identifier, .. } = effective_pattern
+        if let Pattern::Identifier { identifier, span } = effective_pattern
             && let Some(go_name) = self.go_name_for_binding(effective_pattern)
         {
-            return self.lower_ok_guard(|this| this.scope.bind(identifier, go_name), None, ctx);
+            return self.lower_ok_guard(
+                |this| {
+                    this.scope.bind(identifier, go_name);
+                    if let Some(id) = this.facts.binding_id_at(*span) {
+                        this.scope.register_binding_id(id, identifier);
+                    }
+                    this.scope
+                        .bound_go_identifier(identifier)
+                        .expect("receive variable was just bound")
+                        .clone()
+                },
+                None,
+                ctx,
+            );
         }
         if matches!(
             effective_pattern,
@@ -363,12 +392,13 @@ impl Planner<'_> {
                 (ok_var, body)
             });
             return SelectArmPlan::Receive {
-                receive_vars: vec!["_".to_string(), ok_var],
+                receive_vars: vec![GoIdentifier::name("_".to_string()), ok_var],
                 channel: ctx.channel.clone(),
                 body: LoweredBlock { statements: body },
             };
         }
         let receiver_var = self.fresh_var(Some("recv"));
+        let receiver_var = self.scope.generated_identifier(&receiver_var);
         self.lower_ok_guard(|_| receiver_var, Some(effective_pattern), ctx)
     }
 
@@ -380,10 +410,14 @@ impl Planner<'_> {
     ) -> SelectArmPlan {
         self.with_binding_frame(|this| {
             let mut body_statements: Vec<LoweredStatement> = Vec::new();
-            let receive_vars = if let Pattern::Identifier { identifier, .. } = effective_pattern
+            let receive_vars = if let Pattern::Identifier { identifier, span } = effective_pattern
                 && let Some(go_name) = this.go_name_for_binding(effective_pattern)
             {
-                vec![this.scope.bind(identifier, go_name)]
+                let go_name = this.scope.bind(identifier, go_name);
+                if let Some(id) = this.facts.binding_id_at(*span) {
+                    this.scope.register_binding_id(id, identifier);
+                }
+                vec![go_name]
             } else if matches!(
                 effective_pattern,
                 Pattern::Identifier { .. } | Pattern::WildCard { .. }
@@ -401,7 +435,7 @@ impl Planner<'_> {
             let block = this.lower_block_to_place(ctx.body, ctx.place);
             body_statements.extend(block.statements);
             SelectArmPlan::Receive {
-                receive_vars,
+                receive_vars: receive_vars.into_iter().map(Into::into).collect(),
                 channel: ctx.channel.clone(),
                 body: LoweredBlock {
                     statements: body_statements,
@@ -498,7 +532,7 @@ impl Planner<'_> {
                 this.classify_receive_var_pattern(receiver_var_pattern);
             let ok_var = this.fresh_ok_var();
 
-            let case_subject = GoExpression::name(case_var.clone());
+            let case_subject = GoExpression::identifier(case_var.clone());
             let some_block = this.lower_receive_some_arm(
                 some_arm,
                 match_arms,
@@ -520,11 +554,11 @@ impl Planner<'_> {
             // Per-var discards (emitted when the body does not reference the var)
             // precede the structured body inside the `case x, ok := <-ch:` arm.
             let mut body_statements: Vec<LoweredStatement> = Vec::new();
-            if !used.contains(&ok_var) {
-                body_statements.push(discard(GoExpression::name(ok_var.clone())));
+            if !used.contains_identifier(&ok_var) {
+                body_statements.push(discard(GoExpression::identifier(ok_var.clone())));
             }
-            if case_var != "_" && !used.contains(&case_var) {
-                body_statements.push(discard(GoExpression::name(case_var.clone())));
+            if case_var != "_" && !used.contains_identifier(&case_var) {
+                body_statements.push(discard(GoExpression::identifier(case_var.clone())));
             }
             if let Some(plan) = arms_plan {
                 body_statements.push(LoweredStatement::If(plan));
@@ -586,11 +620,11 @@ fn cancel_deref_of_address(channel: GoExpression) -> GoExpression {
 /// `if ok { Some } else { None }`, collapsing to `if ok`/`if !ok`/`None`
 /// when one or both arms are empty.
 fn build_receive_arms_plan(
-    ok_var: &str,
+    ok_var: &GoIdentifier,
     some: Option<LoweredBlock>,
     none: Option<LoweredBlock>,
 ) -> Option<IfPlan> {
-    let ok = || GoExpression::name(ok_var.to_string());
+    let ok = || GoExpression::identifier(ok_var.clone());
     match (some, none) {
         (Some(some), Some(none)) => {
             Some(IfPlan::plain(ok(), some, ElseArm::from_body(none, false)))

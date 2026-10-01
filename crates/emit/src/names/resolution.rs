@@ -3,6 +3,8 @@ use syntax::types::unqualified_name;
 use crate::Planner;
 use crate::names::go_name;
 use crate::names::packages::PackageUse;
+use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use syntax::program;
 
@@ -19,7 +21,7 @@ impl Planner<'_> {
             && !name.contains('.')
             && let Some(remapped) = self.package.escape_remap(name)
         {
-            return GoExpression::name(remapped.to_string());
+            return GoExpression::external_name(remapped.to_string());
         }
 
         if let Some(go_call) = self.try_resolve_cross_package_static_method(qualified) {
@@ -48,7 +50,15 @@ impl Planner<'_> {
             name
         };
 
-        go_name::resolve(&name).into_expression()
+        let mut expression = go_name::resolve(&name).into_expression();
+        if let GoExpressionNode::Identifier(identifier) = expression.node_mut() {
+            *identifier = if locally_bound {
+                GoIdentifier::name(identifier.spelling().to_string())
+            } else {
+                GoIdentifier::external(identifier.spelling().to_string())
+            };
+        }
+        expression
     }
 
     pub(crate) fn resolve_alias_type_name(&self, type_part: &str) -> Option<String> {

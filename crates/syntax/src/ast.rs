@@ -2163,6 +2163,18 @@ impl Expression {
         }
     }
 
+    pub fn root_binding_id(&self) -> Option<BindingId> {
+        match self.unwrap_parens() {
+            Expression::Identifier {
+                resolution: IdentifierResolution::Binding(id),
+                ..
+            } => Some(*id),
+            Expression::DotAccess { expression, .. }
+            | Expression::IndexedAccess { expression, .. } => expression.root_binding_id(),
+            _ => None,
+        }
+    }
+
     pub fn is_empty_collection(&self) -> bool {
         matches!(
             self,

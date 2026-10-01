@@ -90,7 +90,7 @@ impl Planner<'_> {
         }
         ConstPlan {
             is_const,
-            name: go_identifier,
+            name: go_identifier.into(),
             ty_str,
             value,
         }

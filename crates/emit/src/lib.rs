@@ -53,7 +53,7 @@ use state::scope::ScopeState;
 use syntax::ast::{Expression, Span};
 use syntax::program;
 use syntax::program::{
-    Definition, DefinitionBody, EmitInput, EqualityIndex, File, MutationInfo, TestIndex,
+    BinderIds, Definition, DefinitionBody, EmitInput, EqualityIndex, File, MutationInfo, TestIndex,
     UnusedInfo, interface_requirements,
 };
 use syntax::types::{Symbol, Type, peel_alias};
@@ -231,6 +231,7 @@ pub struct TestEmitConfig<'a> {
     pub go_module: &'a str,
     pub unused: &'a UnusedInfo,
     pub mutations: &'a MutationInfo,
+    pub binder_ids: &'a BinderIds,
     pub equality_index: &'a EqualityIndex,
     pub test_index: &'a TestIndex,
     pub go_package_names: &'a HashMap<String, String>,
@@ -437,6 +438,7 @@ impl<'a> Planner<'a> {
             definitions: config.definitions,
             unused: config.unused,
             mutations: config.mutations,
+            binder_ids: config.binder_ids,
             equality_index: config.equality_index,
             test_index: config.test_index,
             go_package_names: config.go_package_names,
@@ -773,6 +775,7 @@ fn emit_package<'a>(
         definitions: &analysis.definitions,
         unused: &analysis.unused,
         mutations: &analysis.mutations,
+        binder_ids: &analysis.binder_ids,
         equality_index: &analysis.equality_index,
         test_index: &analysis.test_index,
         go_package_names: &analysis.go_package_names,

@@ -16,6 +16,5 @@ type Point struct {
 }
 
 func getX(arg Point) int {
-	x := arg.X
-	return x
+	return arg.X
 }

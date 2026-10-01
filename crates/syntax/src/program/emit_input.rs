@@ -63,6 +63,34 @@ impl UnusedInfo {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct BinderIds {
+    by_span: HashMap<Span, AstBindingId>,
+    ambiguous: HashSet<Span>,
+}
+
+impl BinderIds {
+    pub fn record(&mut self, span: Span, id: AstBindingId) {
+        if self.ambiguous.contains(&span) {
+            return;
+        }
+        if self
+            .by_span
+            .get(&span)
+            .is_some_and(|existing| *existing != id)
+        {
+            self.by_span.remove(&span);
+            self.ambiguous.insert(span);
+        } else {
+            self.by_span.insert(span, id);
+        }
+    }
+
+    pub fn at(&self, span: Span) -> Option<AstBindingId> {
+        self.by_span.get(&span).copied()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TestFunction {
     qualified_name: Symbol,
@@ -258,6 +286,7 @@ pub struct EmitInput {
     pub entry_package_id: String,
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,
+    pub binder_ids: BinderIds,
     pub cached_packages: HashSet<String>,
     pub equality_index: EqualityIndex,
     pub test_index: TestIndex,

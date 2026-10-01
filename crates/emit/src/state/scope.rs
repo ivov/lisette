@@ -7,11 +7,14 @@ use crate::ReturnContext;
 use crate::context::lowering::LoopContext;
 use crate::plan::bodies::LoopId;
 use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::values::GoExpression;
 use crate::state::bindings::{BindingValue, ComponentBinding, InlineExpr, TupleBinding};
+use syntax::ast::{BindingId, IdentifierResolution};
 
 pub(crate) struct ScopeState {
     names: LocalNames,
+    next_local_id: u32,
     next_loop_id: u32,
     frames: Vec<ScopeFrame>,
     loop_stack: Vec<LoopContext>,
@@ -21,7 +24,9 @@ pub(crate) struct ScopeState {
 }
 
 struct ScopeFrame {
-    bindings: HashMap<String, BindingValue>,
+    bindings: HashMap<String, usize>,
+    binding_ids: HashMap<BindingId, usize>,
+    binding_values: Vec<BindingValue>,
     declarations: DeclarationScope,
     /// Conditions the branch being lowered has already tested in this scope.
     established: Vec<GoExpression>,
@@ -54,9 +59,12 @@ impl ScopeState {
     pub(crate) fn new() -> Self {
         Self {
             names: LocalNames::default(),
+            next_local_id: 0,
             next_loop_id: 0,
             frames: vec![ScopeFrame {
                 bindings: HashMap::default(),
+                binding_ids: HashMap::default(),
+                binding_values: Vec::new(),
                 declarations: DeclarationScope::Block(HashMap::default()),
                 established: Vec::new(),
             }],
@@ -82,24 +90,51 @@ impl ScopeState {
         go_name: impl Into<String>,
     ) -> String {
         let go_name = crate::escape_reserved(&go_name.into()).into_owned();
-        self.set_binding(lisette_name.into(), BindingValue::GoName(go_name.clone()));
+        let id = self
+            .generated_local_id(&go_name)
+            .unwrap_or_else(|| self.new_local_id());
+        self.set_binding(
+            lisette_name.into(),
+            BindingValue::GoName(GoIdentifier::local(go_name.clone(), id)),
+        );
         go_name
+    }
+
+    pub(crate) fn new_local_id(&mut self) -> LocalId {
+        let id = LocalId(self.next_local_id);
+        self.next_local_id += 1;
+        id
     }
 
     pub(crate) fn set_component_binding(
         &mut self,
         lisette_name: impl Into<String>,
-        components: ComponentBinding,
+        mut components: ComponentBinding,
     ) {
+        self.identify_binding_name(&mut components.value);
+        self.identify_binding_name(&mut components.status);
         self.set_binding(lisette_name.into(), BindingValue::Components(components));
     }
 
     pub(crate) fn set_tuple_binding(
         &mut self,
         lisette_name: impl Into<String>,
-        tuple: TupleBinding,
+        mut tuple: TupleBinding,
     ) {
+        for name in &mut tuple.names {
+            self.identify_binding_name(name);
+        }
         self.set_binding(lisette_name.into(), BindingValue::TupleComponents(tuple));
+    }
+
+    fn identify_binding_name(&mut self, name: &mut GoIdentifier) {
+        if name.spelling() == "_" {
+            return;
+        }
+        let id = self
+            .generated_local_id(name.spelling())
+            .unwrap_or_else(|| self.new_local_id());
+        name.identify(id);
     }
 
     pub(crate) fn bind_inline_expr(&mut self, lisette_name: impl Into<String>, expr: InlineExpr) {
@@ -112,14 +147,54 @@ impl ScopeState {
         else {
             return;
         };
-        self.set_binding(lisette_name.to_string(), BindingValue::GoConst(name));
+        if let Some(slot) = self.current_frame().bindings.get(lisette_name).copied() {
+            self.current_frame_mut().binding_values[slot] = BindingValue::GoConst(name);
+        } else {
+            self.set_binding(lisette_name.to_string(), BindingValue::GoConst(name));
+        }
     }
 
     pub(crate) fn resolve_identifier_binding(&self, lisette_name: &str) -> Option<&BindingValue> {
-        self.frames
-            .iter()
-            .rev()
-            .find_map(|frame| frame.bindings.get(lisette_name))
+        self.frames.iter().rev().find_map(|frame| {
+            frame
+                .bindings
+                .get(lisette_name)
+                .and_then(|slot| frame.binding_values.get(*slot))
+        })
+    }
+
+    pub(crate) fn bound_go_identifier(&self, lisette_name: &str) -> Option<&GoIdentifier> {
+        match self.resolve_identifier_binding(lisette_name) {
+            Some(BindingValue::GoName(name) | BindingValue::GoConst(name)) => Some(name),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn register_binding_id(&mut self, id: BindingId, lisette_name: &str) {
+        if let Some(slot) = self.current_frame().bindings.get(lisette_name).copied() {
+            self.current_frame_mut().binding_ids.insert(id, slot);
+        }
+    }
+
+    pub(crate) fn resolve_binding_id(&self, id: BindingId) -> Option<&BindingValue> {
+        self.frames.iter().rev().find_map(|frame| {
+            frame
+                .binding_ids
+                .get(&id)
+                .and_then(|slot| frame.binding_values.get(*slot))
+        })
+    }
+
+    pub(crate) fn resolve_identifier_with_resolution(
+        &self,
+        value: &str,
+        resolution: &IdentifierResolution,
+    ) -> Option<&BindingValue> {
+        match resolution {
+            IdentifierResolution::Binding(id) => self.resolve_binding_id(*id),
+            IdentifierResolution::Definition(_) => None,
+            IdentifierResolution::Unresolved => self.resolve_identifier_binding(value),
+        }
     }
 
     pub(crate) fn resolve_binding_go_name(&self, lisette_name: &str) -> Option<&str> {
@@ -127,9 +202,54 @@ impl ScopeState {
             .and_then(BindingValue::as_go_name)
     }
 
+    pub(crate) fn identifier_for_binding(
+        &self,
+        lisette_name: &str,
+        go_name: String,
+    ) -> GoIdentifier {
+        match self.resolve_identifier_binding(lisette_name) {
+            Some(BindingValue::GoName(name) | BindingValue::GoConst(name))
+                if name.spelling() == go_name =>
+            {
+                name.clone()
+            }
+            _ => GoIdentifier::name(go_name),
+        }
+    }
+
+    pub(crate) fn identifier_for_go_name(&self, go_name: String) -> GoIdentifier {
+        if let Some(id) = self.generated_local_id(&go_name) {
+            return GoIdentifier::local(go_name, id);
+        }
+        for frame in self.frames.iter().rev() {
+            let mut found: Option<GoIdentifier> = None;
+            for value in frame
+                .bindings
+                .values()
+                .filter_map(|slot| frame.binding_values.get(*slot))
+            {
+                let Some(name) = value.local_named(&go_name) else {
+                    continue;
+                };
+                if found
+                    .as_ref()
+                    .is_some_and(|previous| !previous.refers_to_same(name))
+                {
+                    return GoIdentifier::name(go_name);
+                }
+                found = Some(name.clone());
+            }
+            if let Some(name) = found {
+                return name;
+            }
+        }
+        GoIdentifier::name(go_name)
+    }
+
     pub(crate) fn has_binding_for_go_name(&self, go_name: &str) -> bool {
         self.frames.iter().any(|frame| {
-            frame.bindings.iter().any(|(source_name, value)| {
+            frame.bindings.iter().any(|(source_name, slot)| {
+                let value = &frame.binding_values[*slot];
                 value.mentions(go_name)
                     && self
                         .resolve_identifier_binding(source_name)
@@ -140,7 +260,8 @@ impl ScopeState {
 
     pub(crate) fn has_other_binding_for_go_name(&self, go_name: &str, lisette_name: &str) -> bool {
         self.frames.iter().any(|frame| {
-            frame.bindings.iter().any(|(source_name, value)| {
+            frame.bindings.iter().any(|(source_name, slot)| {
+                let value = &frame.binding_values[*slot];
                 source_name != lisette_name
                     && value.mentions(go_name)
                     && self
@@ -216,7 +337,8 @@ impl ScopeState {
     }
 
     /// Record that the block being lowered runs only when `condition` holds.
-    pub(crate) fn establish_condition(&mut self, condition: GoExpression) {
+    pub(crate) fn establish_condition(&mut self, mut condition: GoExpression) {
+        condition.identify_names(&|name| self.identifier_for_go_name(name.to_string()).id());
         self.frames
             .iter_mut()
             .rev()
@@ -227,6 +349,8 @@ impl ScopeState {
     }
 
     pub(crate) fn is_condition_established(&self, condition: &GoExpression) -> bool {
+        let mut condition = condition.clone();
+        condition.identify_names(&|name| self.identifier_for_go_name(name.to_string()).id());
         for frame in self.frames.iter().rev() {
             if frame
                 .established
@@ -308,14 +432,14 @@ impl ScopeState {
 
     pub(crate) fn activate_assign_target(&mut self, target: &GoExpression) -> bool {
         match target.node() {
-            GoExpressionNode::Identifier(name) => self.assign_targets.insert(name.clone()),
+            GoExpressionNode::Identifier(name) => self.assign_targets.insert(name.to_string()),
             _ => false,
         }
     }
 
     pub(crate) fn deactivate_assign_target(&mut self, target: &GoExpression) {
         if let GoExpressionNode::Identifier(name) = target.node() {
-            self.assign_targets.remove(name);
+            self.assign_targets.remove(name.spelling());
         }
     }
 
@@ -326,6 +450,8 @@ impl ScopeState {
     fn push_frame(&mut self, declarations: DeclarationScope) {
         self.frames.push(ScopeFrame {
             bindings: HashMap::default(),
+            binding_ids: HashMap::default(),
+            binding_values: Vec::new(),
             declarations,
             established: Vec::new(),
         });
@@ -349,7 +475,10 @@ impl ScopeState {
     }
 
     fn set_binding(&mut self, name: String, value: BindingValue) {
-        self.current_frame_mut().bindings.insert(name, value);
+        let frame = self.current_frame_mut();
+        let slot = frame.binding_values.len();
+        frame.binding_values.push(value);
+        frame.bindings.insert(name, slot);
     }
 
     fn current_declarations(&self) -> &Declarations {
@@ -413,6 +542,129 @@ mod tests {
         scope.exit_block();
 
         assert_eq!(scope.resolve_binding_go_name("value"), Some("outer"));
+    }
+
+    #[test]
+    fn binding_ids_keep_outer_and_inner_values_distinct() {
+        let mut scope = ScopeState::new();
+        let outer = BindingId::new(1);
+        let inner = BindingId::new(2);
+        scope.bind("value", "outer");
+        scope.register_binding_id(outer, "value");
+        scope.enter_block();
+        scope.bind("value", "inner");
+        scope.register_binding_id(inner, "value");
+
+        assert_eq!(
+            scope
+                .resolve_binding_id(outer)
+                .and_then(BindingValue::as_go_name),
+            Some("outer")
+        );
+        assert_eq!(
+            scope
+                .resolve_binding_id(inner)
+                .and_then(BindingValue::as_go_name),
+            Some("inner")
+        );
+        scope.exit_block();
+        assert!(scope.resolve_binding_id(inner).is_none());
+        assert_eq!(
+            scope
+                .resolve_binding_id(outer)
+                .and_then(BindingValue::as_go_name),
+            Some("outer")
+        );
+    }
+
+    #[test]
+    fn binding_ids_keep_same_frame_rebindings_distinct() {
+        let mut scope = ScopeState::new();
+        let old_id = BindingId::new(3);
+        let new_id = BindingId::new(4);
+        scope.bind("value", "original");
+        scope.register_binding_id(old_id, "value");
+        scope.bind("value", "replacement");
+        scope.register_binding_id(new_id, "value");
+
+        assert_eq!(
+            scope
+                .resolve_binding_id(old_id)
+                .and_then(BindingValue::as_go_name),
+            Some("original")
+        );
+        scope.mark_go_const("value");
+        assert!(
+            !scope
+                .resolve_binding_id(old_id)
+                .is_some_and(BindingValue::is_go_const)
+        );
+        assert!(
+            scope
+                .resolve_binding_id(new_id)
+                .is_some_and(BindingValue::is_go_const)
+        );
+    }
+
+    #[test]
+    fn resolved_identifier_never_uses_a_same_spelled_binding() {
+        let mut scope = ScopeState::new();
+        scope.bind("value", "other");
+        let missing = IdentifierResolution::Binding(BindingId::new(7));
+        assert!(
+            scope
+                .resolve_identifier_with_resolution("value", &missing)
+                .is_none()
+        );
+        let definition = IdentifierResolution::Definition("package.value".into());
+        assert!(
+            scope
+                .resolve_identifier_with_resolution("value", &definition)
+                .is_none()
+        );
+        assert!(
+            scope
+                .resolve_identifier_with_resolution("value", &IdentifierResolution::Unresolved)
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn go_name_reference_uses_the_visible_local_id() {
+        let mut scope = ScopeState::new();
+        scope.bind("outer", "value");
+        let outer = scope.identifier_for_go_name("value".to_string());
+        scope.enter_block();
+        scope.bind("inner", "value");
+        let inner = scope.identifier_for_go_name("value".to_string());
+        assert_ne!(outer.id(), inner.id());
+        scope.exit_block();
+        assert_eq!(
+            scope.identifier_for_go_name("value".to_string()).id(),
+            outer.id()
+        );
+    }
+
+    #[test]
+    fn established_conditions_keep_the_binding_seen_when_recorded() {
+        let mut scope = ScopeState::new();
+        scope.bind("value", "value");
+        let condition = || {
+            GoExpression::binary(
+                GoExpression::name("value".to_string()),
+                "==",
+                GoExpression::literal("1".to_string()),
+            )
+        };
+        scope.establish_condition(condition());
+        assert!(scope.is_condition_established(&condition()));
+
+        scope.enter_block();
+        scope.bind("value", "value");
+        assert!(!scope.is_condition_established(&condition()));
+        scope.exit_block();
+
+        assert!(scope.is_condition_established(&condition()));
     }
 
     #[test]

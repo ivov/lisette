@@ -14,8 +14,10 @@ use syntax::types::Type;
 
 fn range_header(key: &str, value: Option<&str>, iterable: GoExpression) -> LoopHeader {
     LoopHeader::Range {
-        key: (key != "_").then(|| key.to_string()),
-        value: value.filter(|value| *value != "_").map(str::to_string),
+        key: (key != "_").then(|| key.to_string().into()),
+        value: value
+            .filter(|value| *value != "_")
+            .map(|value| value.to_string().into()),
         iterable,
     }
 }
@@ -144,7 +146,7 @@ impl Planner<'_> {
                 }
             };
             let header = LoopHeader::Counted {
-                variable: loop_var,
+                variable: loop_var.into(),
                 start: bound("Start"),
                 condition,
             };
@@ -192,13 +194,13 @@ impl Planner<'_> {
             let index_var = this.fresh_var(Some("i"));
             let loop_var = this.bind_loop_pattern(&binding.pattern, None);
             let header = LoopHeader::Counted {
-                variable: index_var.clone(),
+                variable: index_var.clone().into(),
                 start: GoExpression::literal("0".to_string()),
                 condition: Some(GoExpression::binary(
                     GoExpression::name(index_var.clone()),
                     "<",
                     GoExpression::call(
-                        GoExpression::name("len".to_string()),
+                        GoExpression::external_name("len".to_string()),
                         vec![receiver_var.clone()],
                     ),
                 )),
@@ -347,35 +349,37 @@ impl Planner<'_> {
 
         let key_var = self.fresh_var(Some("key"));
         let value_var = self.fresh_var(Some("value"));
+        let key_identifier = self.scope.generated_identifier(&key_var);
+        let value_identifier = self.scope.generated_identifier(&value_var);
         let header = LoopHeader::Range {
-            key: Some(key_var.clone()),
-            value: Some(value_var.clone()),
+            key: Some(key_identifier.clone()),
+            value: Some(value_identifier.clone()),
             iterable: iter_expression,
         };
 
         let mut bindings = self.lower_irrefutable_pattern_site(
-            PatternSubject::for_value(key_var.clone()),
+            PatternSubject::for_identifier(key_identifier.clone()),
             first,
             first_ty,
         );
         bindings.extend(self.lower_irrefutable_pattern_site(
-            PatternSubject::for_value(value_var.clone()),
+            PatternSubject::for_identifier(value_identifier.clone()),
             second,
             second_ty,
         ));
         bindings.extend(self.lower_block_as_body(body).statements);
 
         let used = GoUses::of(&bindings);
-        let references_value = used.contains(&value_var);
-        let references_key = used.contains(&key_var);
+        let references_value = used.contains_identifier(&value_identifier);
+        let references_key = used.contains_identifier(&key_identifier);
 
         // Discard guards: value first, then key (insertion order matters).
         let mut statements = Vec::new();
         if !references_value {
-            statements.push(discard(GoExpression::name(value_var)));
+            statements.push(discard(GoExpression::identifier(value_identifier)));
         }
         if !references_key {
-            statements.push(discard(GoExpression::name(key_var)));
+            statements.push(discard(GoExpression::identifier(key_identifier)));
         }
         statements.extend(bindings);
         (header, LoweredBlock { statements })
@@ -398,23 +402,24 @@ impl Planner<'_> {
                 (header, this.lower_block_as_body(body))
             } else {
                 let item_var = this.fresh_var(Some("item"));
+                let item_identifier = this.scope.generated_identifier(&item_var);
                 let header = if single_var {
                     range_header(&item_var, None, iter_expression)
                 } else {
                     range_header("_", Some(&item_var), iter_expression)
                 };
                 let mut bindings = this.lower_irrefutable_pattern_site(
-                    PatternSubject::for_value(item_var.clone()),
+                    PatternSubject::for_identifier(item_identifier.clone()),
                     &binding.pattern,
                     &binding.ty,
                 );
                 bindings.extend(this.lower_block_as_body(body).statements);
 
-                let references_item = GoUses::of(&bindings).contains(&item_var);
+                let references_item = GoUses::of(&bindings).contains_identifier(&item_identifier);
 
                 let mut statements = Vec::new();
                 if !references_item {
-                    statements.push(discard(GoExpression::name(item_var)));
+                    statements.push(discard(GoExpression::identifier(item_identifier)));
                 }
                 statements.extend(bindings);
                 (header, LoweredBlock { statements })
@@ -484,7 +489,7 @@ impl Planner<'_> {
                     let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
                     let operator = if *inclusive { "<=" } else { "<" };
                     LoopHeader::Counted {
-                        variable: loop_var.clone(),
+                        variable: loop_var.clone().into(),
                         start: start_expression,
                         condition: Some(GoExpression::binary(
                             GoExpression::name(loop_var),
@@ -496,7 +501,7 @@ impl Planner<'_> {
                 None => {
                     let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
                     LoopHeader::Counted {
-                        variable: loop_var,
+                        variable: loop_var.into(),
                         start: start_expression,
                         condition: None,
                     }
@@ -547,7 +552,7 @@ impl Planner<'_> {
     /// - `Some(hint)`: generate a fresh var (needed for C-style loops where `_` is invalid)
     /// - `None`: use `"_"` (valid in `for range` syntax)
     fn bind_loop_pattern(&mut self, pattern: &Pattern, fallback: Option<&str>) -> String {
-        if let Pattern::Identifier { identifier, .. } = pattern
+        if let Pattern::Identifier { identifier, span } = pattern
             && let Some(mut go_name) = self.go_name_for_binding(pattern)
         {
             if self.scope.has_binding_for_go_name(&go_name)
@@ -555,7 +560,11 @@ impl Planner<'_> {
             {
                 go_name = self.fresh_var(Some(&go_name));
             }
-            return self.scope.bind(identifier, go_name);
+            let go_name = self.scope.bind(identifier, go_name);
+            if let Some(id) = self.facts.binding_id_at(*span) {
+                self.scope.register_binding_id(id, identifier);
+            }
+            return go_name;
         }
         match fallback {
             Some(hint) => self.fresh_var(Some(hint)),

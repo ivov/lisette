@@ -189,7 +189,7 @@ impl Planner<'_> {
         let output = self.fresh_var(Some("boxed"));
         self.declare(&output);
         statements.push(LoweredStatement::VarDecl {
-            name: output.clone(),
+            name: output.clone().into(),
             go_type,
             value: None,
         });
@@ -209,7 +209,7 @@ impl Planner<'_> {
             prologue: Vec::new(),
             kind: LoopKind::Generated { label: None },
             header: LoopHeader::Range {
-                key: Some(index),
+                key: Some(index.into()),
                 value: None,
                 iterable: source,
             },
