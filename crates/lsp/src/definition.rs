@@ -1,18 +1,15 @@
 use rustc_hash::FxHashMap;
-use syntax::ast::StructFieldAssignment;
 use syntax::ast::{
-    Annotation, ConstructorPatternResolution, Expression, IdentifierResolution, MatchArm, Pattern,
+    ConstructorPatternResolution, Expression, IdentifierResolution, MatchArm, Pattern,
     RecordPatternResolution, Span, StructFieldPattern,
 };
 use syntax::program::DefinitionBody;
 use syntax::program::File;
-use syntax::types::Type;
 use syntax::types::unqualified_name;
 
 use crate::analysis::find_package_by_alias;
 use crate::offset_in_span;
 use crate::snapshot::AnalysisSnapshot;
-use crate::traversal::find_expression_at;
 use crate::type_name;
 
 pub(crate) fn get_root_expression(e: &Expression) -> &Expression {
@@ -42,33 +39,6 @@ pub(crate) fn find_struct_field_span(
     } else {
         None
     }
-}
-
-pub(crate) fn resolve_struct_call_field(
-    field_assignments: &[StructFieldAssignment],
-    name: &str,
-    ty: &Type,
-    offset: u32,
-    file: &File,
-    snapshot: &AnalysisSnapshot,
-) -> Option<Span> {
-    let type_id = type_name(ty, snapshot);
-
-    field_assignments
-        .iter()
-        .find(|fa| offset_in_span(offset, &fa.name_span))
-        .and_then(|fa| {
-            type_id
-                .as_deref()
-                .and_then(|tid| find_struct_field_span(tid, &fa.name, snapshot))
-        })
-        .or_else(|| {
-            lookup_definition_span(name, file, snapshot).or_else(|| {
-                type_id
-                    .as_deref()
-                    .and_then(|tid| snapshot.definitions().get(tid).and_then(|d| d.name_span))
-            })
-        })
 }
 
 pub(crate) fn resolve_dot_access_definition(
@@ -207,72 +177,6 @@ pub(crate) fn resolve_import_span(
     })
 }
 
-/// Goto-def target for a cursor inside a type annotation tree.
-pub(crate) fn resolve_annotation_definition(
-    annotation: &Annotation,
-    offset: u32,
-    file: &File,
-    snapshot: &AnalysisSnapshot,
-) -> Option<Span> {
-    if !offset_in_span(offset, &annotation.get_span()) {
-        return None;
-    }
-
-    let recurse = |child| resolve_annotation_definition(child, offset, file, snapshot);
-
-    match annotation {
-        Annotation::Constructor {
-            name, span, params, ..
-        } => params
-            .iter()
-            .find_map(recurse)
-            .or_else(|| resolve_constructor_name(name, *span, offset, file, snapshot)),
-        Annotation::Function {
-            params,
-            return_type,
-            ..
-        } => params
-            .iter()
-            .find_map(recurse)
-            .or_else(|| recurse(return_type.as_ref())),
-        Annotation::Tuple { elements, .. } => elements.iter().find_map(recurse),
-        Annotation::Unknown | Annotation::Opaque { .. } | Annotation::Constant { .. } => None,
-    }
-}
-
-/// Resolve a `Constructor` name's goto target. Routes the simple side through
-/// the qualifier's package so a same-named local can't shadow it.
-fn resolve_constructor_name(
-    name: &str,
-    span: Span,
-    offset: u32,
-    file: &File,
-    snapshot: &AnalysisSnapshot,
-) -> Option<Span> {
-    let cursor_in_name = (offset - span.byte_offset) as usize;
-    let dot_pos = name.find('.').unwrap_or(name.len());
-
-    if cursor_in_name <= dot_pos {
-        let first = &name[..dot_pos];
-        return resolve_import_span(first, file, &snapshot.analysis.emit_input.go_package_names)
-            .or_else(|| lookup_definition_span(first, file, snapshot));
-    }
-
-    let (qualifier, simple) = name.split_once('.')?;
-    let package_name = find_package_by_alias(
-        file,
-        qualifier,
-        &snapshot.analysis.emit_input.go_package_names,
-    )?;
-
-    let qualified = format!("{}.{}", package_name, simple);
-
-    snapshot
-        .definitions()
-        .get(qualified.as_str())
-        .and_then(|d| d.name_span)
-}
-
 pub(crate) fn lookup_definition_span(
     name: &str,
     file: &File,
@@ -311,47 +215,6 @@ pub(crate) fn lookup_definition_span(
     }
 
     None
-}
-
-/// Extract the PascalCase word at the given byte offset, returning its text and byte range.
-pub(crate) fn word_at_offset(source: &str, offset: u32) -> Option<(&str, usize, usize)> {
-    let offset = offset as usize;
-    if offset >= source.len() {
-        return None;
-    }
-
-    let bytes = source.as_bytes();
-
-    let mut start = offset;
-    while start > 0 && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_') {
-        start -= 1;
-    }
-    let mut end = offset;
-    while end < bytes.len() && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_') {
-        end += 1;
-    }
-
-    if start == end {
-        return None;
-    }
-
-    let word = &source[start..end];
-
-    if !word.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
-        return None;
-    }
-
-    Some((word, start, end))
-}
-
-pub(crate) fn resolve_word_at_offset(
-    source: &str,
-    offset: u32,
-    file: &File,
-    snapshot: &AnalysisSnapshot,
-) -> Option<Span> {
-    let (word, _, _) = word_at_offset(source, offset)?;
-    lookup_definition_span(word, file, snapshot)
 }
 
 /// Resolve an enum variant in a match arm pattern to its definition.
@@ -480,7 +343,7 @@ pub(crate) fn resolve_enum_in_pattern(
     }
 }
 
-fn record_pattern_field_span(
+pub(crate) fn record_pattern_field_span(
     snapshot: &AnalysisSnapshot,
     resolution: &RecordPatternResolution,
     field_name: &str,
@@ -518,108 +381,6 @@ fn record_pattern_field_span(
     }
 }
 
-/// Resolve the definition span at the given cursor offset.
-///
-/// Checks binding definitions first, then falls back to expression-based resolution.
-pub(crate) fn resolve_symbol_definition_span(
-    snapshot: &AnalysisSnapshot,
-    file: &File,
-    file_id: u32,
-    offset: u32,
-) -> Option<Span> {
-    snapshot
-        .binding_at(file_id, offset)
-        .map(|binding| binding.span)
-        .or_else(|| {
-            let expression = find_expression_at(&file.items, offset)?;
-            match expression {
-                Expression::Identifier {
-                    resolution: IdentifierResolution::Binding(id),
-                    ..
-                } => snapshot.bindings().get(id).map(|b| b.span),
-
-                Expression::Identifier {
-                    resolution: IdentifierResolution::Definition(qname),
-                    ..
-                } => snapshot
-                    .definitions()
-                    .get(qname.as_str())
-                    .and_then(|definition| definition.name_span),
-
-                Expression::Function { name_span, .. }
-                | Expression::Interface { name_span, .. }
-                | Expression::TypeAlias { name_span, .. } => {
-                    offset_in_span(offset, name_span).then_some(*name_span)
-                }
-
-                Expression::Struct {
-                    name,
-                    name_span,
-                    fields,
-                    ..
-                } => fields
-                    .iter()
-                    .find(|f| offset_in_span(offset, &f.name_span))
-                    .and_then(|f| {
-                        let qualified = format!("{}.{}", file.package_id, name);
-                        find_struct_field_span(&qualified, &f.name, snapshot)
-                    })
-                    .or_else(|| offset_in_span(offset, name_span).then_some(*name_span)),
-
-                Expression::Enum {
-                    name,
-                    name_span,
-                    variants,
-                    ..
-                } => variants
-                    .iter()
-                    .find(|v| offset_in_span(offset, &v.name_span))
-                    .and_then(|v| {
-                        let qualified = format!("{}.{}.{}", file.package_id, name, v.name);
-                        snapshot
-                            .definitions()
-                            .get(qualified.as_str())
-                            .and_then(|d| d.name_span)
-                    })
-                    .or_else(|| offset_in_span(offset, name_span).then_some(*name_span)),
-
-                Expression::Const {
-                    identifier_span, ..
-                } => offset_in_span(offset, identifier_span).then_some(*identifier_span),
-
-                Expression::VariableDeclaration { name_span, .. } => {
-                    offset_in_span(offset, name_span).then_some(*name_span)
-                }
-
-                Expression::StructCall {
-                    name,
-                    field_assignments,
-                    ty,
-                    ..
-                } => resolve_struct_call_field(field_assignments, name, ty, offset, file, snapshot),
-
-                Expression::DotAccess {
-                    expression,
-                    member,
-                    span,
-                    ..
-                } => resolve_dot_access_definition(expression, member, *span, file, snapshot),
-
-                Expression::Match { arms, .. } => {
-                    resolve_match_pattern_definition(arms, offset, file, snapshot)
-                        .or_else(|| resolve_word_at_offset(&file.source, offset, file, snapshot))
-                }
-
-                Expression::IfLet { pattern, .. } | Expression::WhileLet { pattern, .. } => {
-                    resolve_enum_in_pattern(pattern, offset, file, snapshot)
-                        .or_else(|| resolve_word_at_offset(&file.source, offset, file, snapshot))
-                }
-
-                _ => resolve_word_at_offset(&file.source, offset, file, snapshot),
-            }
-        })
-}
-
 /// True iff `offset` lies on the variant name token of an enum-struct-variant
 /// pattern head. Excludes the qualifier, dots, and surrounding whitespace.
 fn offset_in_variant_token_span(span: Span, offset: u32, snapshot: &AnalysisSnapshot) -> bool {
@@ -643,7 +404,7 @@ fn offset_in_variant_token_span(span: Span, offset: u32, snapshot: &AnalysisSnap
 /// True iff `field` is written as shorthand (`{ x }`) rather than explicit
 /// (`{ x: ... }`). Detected by scanning source preceding the value span: a `:`
 /// before any structural delimiter (`,` or `{`) means explicit.
-fn is_shorthand_field(
+pub(crate) fn is_shorthand_field(
     field: &StructFieldPattern,
     pattern_span: Span,
     snapshot: &AnalysisSnapshot,

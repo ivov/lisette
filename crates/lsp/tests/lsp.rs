@@ -8411,7 +8411,12 @@ fn main() {
     let comp = client.completion(TEST_URI, 0, 0);
     assert!(comp.is_some(), "completion should work via fallback");
 
-    let _ = client.goto_definition(TEST_URI, 4, 2);
+    let definition = client.goto_definition(TEST_URI, 4, 2).unwrap();
+    assert_eq!(
+        definition_location(&definition).unwrap().range.start,
+        Position::new(1, 3),
+        "definition should use the last usable snapshot during a lex error"
+    );
     let _ = client.references(TEST_URI, 1, 3, true);
     let _ = client.signature_help(TEST_URI, 4, 11);
 
@@ -14154,6 +14159,290 @@ fn completion_respects_pattern_and_closure_scopes() {
             "case {index}: {fixture}"
         );
         client.close(TEST_URI);
+    }
+    client.shutdown();
+}
+
+#[test]
+fn symbol_requests_ignore_names_in_strings_and_comments() {
+    let fixtures = [
+        "struct Thing {}\nfn main() { let text = \"Th~ing\" }",
+        "struct Thing {}\nfn main() { let text = `Th~ing` }",
+        "struct Thing {}\nfn main() { // Th~ing\n }",
+        "struct Thing {}\nfn main() { /* Th~ing */ }",
+        "struct Thing {}\n// Th~ing\nfn main() {}",
+        "struct Thing {\n // Th~ing\n value: int\n}",
+        "struct Thing {}\nfn main() { let value = Thing { /* Th~ing */ } }",
+        "struct Thing {}\nfn read(value: Slice</* Th~ing */ Thing>) {}",
+        "struct Thing {}\nfn main() { match \"\" { \"Th~ing\" => 1, _ => 0 } }",
+        "struct Thing {}\nfn main() { let text = f\"Th~ing {1}\" }",
+    ];
+    let mut client = TestClient::new();
+    client.initialize();
+    for fixture in fixtures {
+        let (source, line, character) = cursor(fixture);
+        client.open(TEST_URI, &source);
+        assert!(
+            client.goto_definition(TEST_URI, 0, 8).is_some(),
+            "missing declaration: {fixture}"
+        );
+        assert!(
+            client.goto_definition(TEST_URI, line, character).is_none(),
+            "definition resolved nonsemantic text: {fixture}"
+        );
+        assert!(
+            client.references(TEST_URI, line, character, true).is_none(),
+            "references resolved nonsemantic text: {fixture}"
+        );
+        assert!(
+            client.prepare_rename(TEST_URI, line, character).is_none(),
+            "prepare rename resolved nonsemantic text: {fixture}"
+        );
+        assert!(
+            client
+                .rename(TEST_URI, line, character, "Renamed")
+                .is_none(),
+            "rename edited a declaration from nonsemantic text: {fixture}"
+        );
+        client.close(TEST_URI);
+    }
+    client.shutdown();
+}
+
+#[test]
+fn symbol_requests_ignore_unresolved_struct_fields() {
+    let (source, line, character) =
+        cursor("struct Thing {}\nfn main() { let value = Thing { Th~ing: 1 } }");
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    assert!(client.goto_definition(TEST_URI, 0, 8).is_some());
+    assert!(client.goto_definition(TEST_URI, line, character).is_none());
+    assert!(client.references(TEST_URI, line, character, true).is_none());
+    assert!(client.prepare_rename(TEST_URI, line, character).is_none());
+    assert!(
+        client
+            .rename(TEST_URI, line, character, "Renamed")
+            .is_none()
+    );
+    client.shutdown();
+}
+
+#[test]
+fn symbol_requests_preserve_qualified_targets_and_member_ranges() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let source_directory = root.join("src");
+    let shapes_directory = source_directory.join("shapes");
+    fs::create_dir_all(&shapes_directory).unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+    let shapes_source = "pub struct Point {}";
+    let shapes_path = shapes_directory.join("shapes.lis");
+    fs::write(&shapes_path, shapes_source).unwrap();
+    let (source, positions) = cursors(
+        "import \"shapes\"\nstruct Point {}\ntype Alias = ~shapes.~Point\nfn main() { let value = shapes.~Point {} }",
+    );
+    let main_path = source_directory.join("main.lis");
+    fs::write(&main_path, &source).unwrap();
+    let main_uri = Url::from_file_path(&main_path).unwrap();
+    let shapes_uri = Url::from_file_path(&shapes_path).unwrap();
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(shapes_uri.as_str(), shapes_source);
+    client.open(main_uri.as_str(), &source);
+
+    let (line, character) = positions[0];
+    let qualifier = client
+        .goto_definition(main_uri.as_str(), line, character)
+        .unwrap();
+    let qualifier = definition_location(&qualifier).unwrap();
+    assert_eq!(qualifier.uri, main_uri);
+    assert_eq!(qualifier.range.start.line, 0);
+    assert!(
+        client
+            .prepare_rename(main_uri.as_str(), line, character)
+            .is_none()
+    );
+    assert!(
+        client
+            .rename(main_uri.as_str(), line, character, "Renamed")
+            .is_none()
+    );
+
+    for &(line, character) in &positions[1..] {
+        let definition = client
+            .goto_definition(main_uri.as_str(), line, character)
+            .unwrap();
+        let definition = definition_location(&definition).unwrap();
+        assert_eq!(definition.uri, shapes_uri);
+        assert_eq!(definition.range.start, Position::new(0, 11));
+        let range = Range {
+            start: Position::new(line, character),
+            end: Position::new(line, character + 5),
+        };
+        assert_eq!(
+            client.prepare_rename(main_uri.as_str(), line, character),
+            Some(PrepareRenameResponse::RangeWithPlaceholder {
+                range,
+                placeholder: "Point".to_string(),
+            })
+        );
+        let references = client
+            .references(main_uri.as_str(), line, character, true)
+            .unwrap();
+        assert_eq!(references.len(), 3);
+        let edits = client
+            .rename(main_uri.as_str(), line, character, "Renamed")
+            .unwrap()
+            .changes
+            .unwrap();
+        assert_eq!(edits[&shapes_uri].len(), 1);
+        assert_eq!(edits[&shapes_uri][0].range, definition.range);
+        assert_eq!(edits[&main_uri].len(), 2);
+        for &(line, character) in &positions[1..] {
+            let range = Range {
+                start: Position::new(line, character),
+                end: Position::new(line, character + 5),
+            };
+            assert!(
+                references
+                    .iter()
+                    .any(|reference| reference.uri == main_uri && reference.range == range)
+            );
+            assert!(edits[&main_uri].iter().any(|edit| edit.range == range));
+        }
+    }
+    client.shutdown();
+}
+
+#[test]
+fn symbol_requests_agree_on_annotation_and_pattern_targets() {
+    let fixtures = [
+        ("Thing", "struct ~Thing {}\nfn read(value: ~Thing) {}"),
+        ("Thing", "struct ~Thing {}\ntype Alias = Slice<~Thing>"),
+        (
+            "Thing",
+            "struct ~Thing {}\ntype Callback = fn(~Thing) -> ~Thing",
+        ),
+        (
+            "Thing",
+            "struct ~Thing {}\nstruct Container { value: ~Thing }",
+        ),
+        (
+            "Thing",
+            "struct ~Thing {}\nenum Container { Value(~Thing) }",
+        ),
+        (
+            "Thing",
+            "struct ~Thing {}\nfn main() { let value: ~Thing = Thing {} }",
+        ),
+        (
+            "SIZE",
+            "const ~SIZE = 3\nfn read(value: Array<int, ~SIZE>) {}",
+        ),
+        (
+            "Red",
+            "enum Color { ~Red }\nfn read(value: Color) { match value { Color.~Red => 1 } }",
+        ),
+        (
+            "Red",
+            "enum Color { ~Red }\nfn read(value: Color) { if let Color.~Red = value {} }",
+        ),
+        (
+            "Red",
+            "enum Color { ~Red }\nfn read(channel: Channel<Color>) { select { match channel.receive() { Some(Color.~Red) => {}, _ => {} } } }",
+        ),
+        (
+            "Red",
+            "enum Color { ~Red }\nfn read(channel: Channel<Color>) { select { let Some(Color.~Red) = channel.receive() => {}, _ => {} } }",
+        ),
+        (
+            "café",
+            "fn read(~café: int) -> string { f\"value {~café}\" }",
+        ),
+    ];
+    let mut client = TestClient::new();
+    client.initialize();
+    for (name, fixture) in fixtures {
+        let (source, positions) = cursors(fixture);
+        client.open(TEST_URI, &source);
+        let (line, character) = positions[0];
+        let expected_definition =
+            definition_location(&client.goto_definition(TEST_URI, line, character).unwrap())
+                .unwrap();
+        let expected_references = client.references(TEST_URI, line, character, true).unwrap();
+        for &(line, character) in &positions[1..] {
+            let definition = client.goto_definition(TEST_URI, line, character).unwrap();
+            assert_eq!(
+                definition_location(&definition).unwrap(),
+                expected_definition,
+                "{fixture}"
+            );
+            assert_eq!(
+                client.prepare_rename(TEST_URI, line, character),
+                Some(PrepareRenameResponse::RangeWithPlaceholder {
+                    range: Range {
+                        start: Position::new(line, character),
+                        end: Position::new(line, character + name.encode_utf16().count() as u32),
+                    },
+                    placeholder: name.to_string(),
+                }),
+                "{fixture}"
+            );
+            assert_eq!(
+                client.references(TEST_URI, line, character, true).unwrap(),
+                expected_references,
+                "{fixture}"
+            );
+            let edits = client
+                .rename(TEST_URI, line, character, "Renamed")
+                .unwrap()
+                .changes
+                .unwrap();
+            let edits = edits.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+            assert_eq!(edits.len(), expected_references.len(), "{fixture}");
+            for reference in &expected_references {
+                assert!(
+                    edits.iter().any(|edit| edit.range == reference.range),
+                    "{fixture}"
+                );
+            }
+        }
+        client.close(TEST_URI);
+    }
+    client.shutdown();
+}
+
+#[test]
+fn shorthand_pattern_keeps_field_navigation_and_binding_rename() {
+    let (source, positions) = cursors(
+        "struct Record { field: int }\nfn read(value: Record) -> int {\n  match value { Record { ~field } => ~field }\n}",
+    );
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    let (line, character) = positions[0];
+    let definition = client.goto_definition(TEST_URI, line, character).unwrap();
+    assert_eq!(
+        definition_location(&definition).unwrap().range.start,
+        Position::new(0, 16)
+    );
+    let references = client.references(TEST_URI, line, character, true).unwrap();
+    let edits = client
+        .rename(TEST_URI, line, character, "renamed")
+        .unwrap()
+        .changes
+        .unwrap();
+    let edits = edits.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+    assert_eq!(references.len(), 2);
+    assert_eq!(edits.len(), 2);
+    for (line, character) in positions {
+        let range = Range {
+            start: Position::new(line, character),
+            end: Position::new(line, character + 5),
+        };
+        assert!(references.iter().any(|reference| reference.range == range));
+        assert!(edits.iter().any(|edit| edit.range == range));
     }
     client.shutdown();
 }

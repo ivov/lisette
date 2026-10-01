@@ -16,6 +16,7 @@ mod scope;
 mod signature_help;
 mod snapshot;
 mod state;
+mod symbol;
 mod traversal;
 mod validation;
 
@@ -31,16 +32,12 @@ use crate::completion::{
     detect_struct_literal_field_context, get_instance_completions, get_package_prefix,
     get_struct_literal_completions, get_type_completions, id_is_in_package, resolve_variable_type,
 };
-use crate::definition::{
-    find_struct_field_span, is_generated_typedef_span, lookup_definition_span,
-    resolve_annotation_definition, resolve_dot_access_definition, resolve_enum_in_pattern,
-    resolve_import_span, resolve_match_pattern_definition, resolve_struct_call_field,
-    resolve_symbol_definition_span, resolve_word_at_offset, word_at_offset,
-};
+use crate::definition::is_generated_typedef_span;
 use crate::imports::EditTarget;
 use crate::position::LineIndex;
 use crate::project::find_project_root;
 use crate::snapshot::{AnalysisSnapshot, SnapshotDocument};
+use crate::symbol::resolve_symbol;
 use crate::traversal::find_expression_at;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -48,7 +45,6 @@ use syntax::ast::Expression;
 use syntax::ast::Span;
 use syntax::doc::to_markdown;
 use syntax::program::File;
-use syntax::types;
 use syntax::types::SELF_TYPE_NAME;
 
 pub use crate::state::{Backend, SharedState};
@@ -277,164 +273,8 @@ impl Backend {
         let Some(cursor) = snapshot.position(uri, position) else {
             return Ok(None);
         };
-        let file_id = cursor.document.file_id;
-        let file = cursor.document.file;
-        let Some(offset) = cursor_offset(&file.source, cursor.offset) else {
-            return Ok(None);
-        };
-
-        let Some(expression) = find_expression_at(&file.items, offset) else {
-            return Ok(None);
-        };
-
-        let find_binding = || {
-            snapshot
-                .binding_at(file_id, offset)
-                .map(|binding| binding.span)
-        };
-        let binding_or_word_fallback = |resolved: Option<Span>| {
-            resolved
-                .or_else(&find_binding)
-                .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
-        };
-
-        let definition_span = match expression {
-            Expression::Identifier {
-                resolution: IdentifierResolution::Binding(id),
-                ..
-            } => snapshot.bindings().get(id).map(|b| b.span),
-
-            Expression::Identifier {
-                value,
-                resolution: IdentifierResolution::Definition(qname),
-                span: id_span,
-                ..
-            } => {
-                if value.contains('.') {
-                    let cursor_in_value = offset.saturating_sub(id_span.byte_offset) as usize;
-                    let prefix = &value.as_str()[..cursor_in_value.min(value.len())];
-                    if !prefix.contains('.') {
-                        let first = value.split('.').next().unwrap_or(value);
-                        if let Some(span) =
-                            lookup_definition_span(first, file, &snapshot).or_else(|| {
-                                resolve_import_span(
-                                    first,
-                                    file,
-                                    &snapshot.analysis.emit_input.go_package_names,
-                                )
-                            })
-                            && let Some(source) = snapshot.source(span.file_id)
-                        {
-                            return Ok(Some(GotoDefinitionResponse::Scalar(Location {
-                                uri: source.uri.clone(),
-                                range: source.line_index.span_to_range(span),
-                            })));
-                        }
-                    }
-                }
-                snapshot
-                    .definitions()
-                    .get(qname.as_str())
-                    .and_then(|d| d.name_span)
-            }
-
-            Expression::DotAccess {
-                expression,
-                member,
-                span,
-                ..
-            } => resolve_dot_access_definition(expression, member, *span, file, &snapshot),
-
-            Expression::StructCall {
-                name,
-                field_assignments,
-                ty,
-                ..
-            } => resolve_struct_call_field(field_assignments, name, ty, offset, file, &snapshot),
-
-            Expression::Function { name_span, .. } if offset_in_span(offset, name_span) => {
-                Some(*name_span)
-            }
-
-            Expression::Interface { name_span, .. } if offset_in_span(offset, name_span) => {
-                Some(*name_span)
-            }
-
-            Expression::TypeAlias {
-                name_span,
-                annotation,
-                ..
-            } => {
-                if offset_in_span(offset, name_span) {
-                    Some(*name_span)
-                } else {
-                    resolve_annotation_definition(annotation, offset, file, &snapshot)
-                }
-            }
-
-            Expression::Struct {
-                name,
-                name_span,
-                fields,
-                ..
-            } => fields
-                .iter()
-                .find(|f| offset_in_span(offset, &f.name_span))
-                .and_then(|f| {
-                    let qualified = format!("{}.{}", file.package_id, name);
-                    find_struct_field_span(&qualified, &f.name, &snapshot)
-                })
-                .or_else(|| offset_in_span(offset, name_span).then_some(*name_span))
-                .or_else(|| {
-                    fields.iter().find_map(|f| {
-                        resolve_annotation_definition(&f.annotation, offset, file, &snapshot)
-                    })
-                }),
-
-            Expression::Enum {
-                name,
-                name_span,
-                variants,
-                ..
-            } => variants
-                .iter()
-                .find(|v| offset_in_span(offset, &v.name_span))
-                .and_then(|v| {
-                    let qualified = format!("{}.{}.{}", file.package_id, name, v.name);
-                    snapshot
-                        .definitions()
-                        .get(qualified.as_str())
-                        .and_then(|d| d.name_span)
-                })
-                .or_else(|| offset_in_span(offset, name_span).then_some(*name_span)),
-
-            Expression::Identifier { value, .. } => {
-                lookup_definition_span(value, file, &snapshot)
-                    .or_else(|| {
-                        resolve_import_span(
-                            value,
-                            file,
-                            &snapshot.analysis.emit_input.go_package_names,
-                        )
-                    })
-                    // A dotted callee like `Array.new` doesn't resolve whole, so
-                    // fall back to the type word at the cursor (`Array` -> its decl).
-                    .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
-            }
-
-            Expression::Match { arms, .. } => binding_or_word_fallback(
-                resolve_match_pattern_definition(arms, offset, file, &snapshot),
-            ),
-
-            Expression::IfLet { pattern, .. } | Expression::WhileLet { pattern, .. } => {
-                binding_or_word_fallback(resolve_enum_in_pattern(pattern, offset, file, &snapshot))
-            }
-
-            _ => binding_or_word_fallback(None),
-        };
-
-        Ok(definition_span
-            .and_then(|span| location_for(span, &snapshot))
+        Ok(resolve_symbol(&snapshot, &cursor)
+            .and_then(|symbol| location_for(symbol.definition_span, &snapshot))
             .map(GotoDefinitionResponse::Scalar))
     }
 
@@ -559,17 +399,10 @@ impl Backend {
         let Some(cursor) = snapshot.position(uri, position) else {
             return Ok(None);
         };
-        let file_id = cursor.document.file_id;
-        let file = cursor.document.file;
-        let Some(offset) = cursor_offset(&file.source, cursor.offset) else {
+        let Some(symbol) = resolve_symbol(&snapshot, &cursor) else {
             return Ok(None);
         };
-
-        let definition_span = resolve_symbol_definition_span(&snapshot, file, file_id, offset);
-
-        let Some(definition_span) = definition_span else {
-            return Ok(None);
-        };
+        let definition_span = symbol.reference_definition_span();
 
         let Some(definition_source) = snapshot.source(definition_span.file_id) else {
             return Ok(None);
@@ -620,190 +453,33 @@ impl Backend {
         let Some(cursor) = snapshot.position(uri, position) else {
             return Ok(None);
         };
-        let file_id = cursor.document.file_id;
+        let Some(symbol) = resolve_symbol(&snapshot, &cursor) else {
+            return Ok(None);
+        };
         let file = cursor.document.file;
-        let line_index = cursor.document.line_index;
-        let Some(offset) = cursor_offset(&file.source, cursor.offset) else {
-            return Ok(None);
-        };
-
-        let rename_response =
-            |span: Span, placeholder: &str| -> Result<Option<PrepareRenameResponse>> {
-                Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                    range: line_index.span_to_range(span),
-                    placeholder: placeholder.to_string(),
-                }))
-            };
-        let rename_word_if_resolved =
-            |resolved: Option<Span>| -> Result<Option<PrepareRenameResponse>> {
-                if let Some(definition_span) = resolved
-                    && !is_generated_typedef_span(&snapshot, &definition_span)
-                    && let Some((word, start, end)) = word_at_offset(&file.source, offset)
-                {
-                    let span = Span::new(file_id, start as u32, (end - start) as u32);
-                    return rename_response(span, word);
-                }
-                Ok(None)
-            };
-
-        if let Some(binding) = snapshot.binding_at(file_id, offset) {
-            return rename_response(binding.span, &binding.name);
-        }
-
-        let Some(expression) = find_expression_at(&file.items, offset) else {
-            return Ok(None);
-        };
-
-        if let Expression::StructCall {
-            field_assignments,
-            ty,
+        if let Some(Expression::Identifier {
+            resolution: IdentifierResolution::Definition(name),
             ..
-        } = expression
-            && let Some(fa) = field_assignments
-                .iter()
-                .find(|fa| offset_in_span(offset, &fa.name_span))
-            && type_name(ty, &snapshot)
-                .and_then(|type_id| find_struct_field_span(&type_id, &fa.name, &snapshot))
-                .is_some()
+        }) = find_expression_at(&file.items, symbol.occurrence_span.byte_offset)
         {
-            return rename_response(fa.name_span, &fa.name);
+            validation::check_rename_guards(name.as_str())?;
         }
-
-        match expression {
-            Expression::Identifier {
-                value,
-                resolution: IdentifierResolution::Binding(id),
-                span,
-                ..
-            } => {
-                if let Some(binding) = snapshot.bindings().get(id)
-                    && binding.span.file_id == file_id
-                {
-                    rename_response(*span, value)
-                } else {
-                    Ok(None)
-                }
-            }
-
-            Expression::Identifier {
-                value,
-                resolution: IdentifierResolution::Definition(qname),
-                span,
-                ..
-            } => {
-                validation::check_rename_guards(qname.as_str())?;
-                if snapshot.definitions().contains_key(qname.as_str()) {
-                    rename_response(*span, types::unqualified_name(value))
-                } else {
-                    Ok(None)
-                }
-            }
-
-            Expression::Function {
-                name, name_span, ..
-            }
-            | Expression::Interface {
-                name, name_span, ..
-            }
-            | Expression::TypeAlias {
-                name, name_span, ..
-            } if offset_in_span(offset, name_span) => {
-                let qname = format!("{}.{}", file.package_id, name);
-                validation::check_rename_guards(&qname)?;
-                rename_response(*name_span, name)
-            }
-
-            Expression::Struct {
-                name,
-                name_span,
-                fields,
-                ..
-            } => {
-                let qname = format!("{}.{}", file.package_id, name);
-                if let Some(field) = fields.iter().find(|f| offset_in_span(offset, &f.name_span))
-                    && find_struct_field_span(&qname, &field.name, &snapshot).is_some()
-                {
-                    validation::check_rename_guards(&qname)?;
-                    return rename_response(field.name_span, &field.name);
-                }
-                if !offset_in_span(offset, name_span) {
-                    return Ok(None);
-                }
-                validation::check_rename_guards(&qname)?;
-                rename_response(*name_span, name)
-            }
-
-            Expression::Enum {
-                name,
-                name_span,
-                variants,
-                ..
-            } => {
-                if let Some(variant) = variants
-                    .iter()
-                    .find(|v| offset_in_span(offset, &v.name_span))
-                {
-                    let qname = format!("{}.{}.{}", file.package_id, name, variant.name);
-                    validation::check_rename_guards(&qname)?;
-                    return rename_response(variant.name_span, &variant.name);
-                }
-                if !offset_in_span(offset, name_span) {
-                    return Ok(None);
-                }
-                let qualified_name = format!("{}.{}", file.package_id, name);
-                validation::check_rename_guards(&qualified_name)?;
-                rename_response(*name_span, name)
-            }
-
-            Expression::VariableDeclaration {
-                name, name_span, ..
-            } if offset_in_span(offset, name_span) => rename_response(*name_span, name),
-
-            Expression::Const {
-                identifier,
-                identifier_span,
-                ..
-            } if offset_in_span(offset, identifier_span) => {
-                let qname = format!("{}.{}", file.package_id, identifier);
-                validation::check_rename_guards(&qname)?;
-                rename_response(*identifier_span, identifier)
-            }
-
-            Expression::DotAccess {
-                expression,
-                member,
-                span,
-                ..
-            } if !member.is_empty() => {
-                let resolved =
-                    resolve_dot_access_definition(expression, member, *span, file, &snapshot);
-                if let Some(definition_span) = resolved
-                    && !is_generated_typedef_span(&snapshot, &definition_span)
-                {
-                    let member_span = Span::new(
-                        span.file_id,
-                        span.byte_offset + span.byte_length - member.len() as u32,
-                        member.len() as u32,
-                    );
-                    rename_response(member_span, member)
-                } else {
-                    Ok(None)
-                }
-            }
-
-            Expression::Match { arms, .. } => rename_word_if_resolved(
-                resolve_match_pattern_definition(arms, offset, file, &snapshot),
-            ),
-
-            Expression::IfLet { pattern, .. } | Expression::WhileLet { pattern, .. } => {
-                rename_word_if_resolved(resolve_enum_in_pattern(pattern, offset, file, &snapshot))
-            }
-
-            _ => rename_word_if_resolved(
-                word_at_offset(&file.source, offset)
-                    .and_then(|(word, _, _)| lookup_definition_span(word, file, &snapshot)),
-            ),
+        if symbol.is_import()
+            || is_generated_typedef_span(&snapshot, &symbol.reference_definition_span())
+        {
+            return Ok(None);
         }
+        let span = symbol.occurrence_span;
+        let Some(placeholder) = file
+            .source
+            .get(span.byte_offset as usize..(span.byte_offset + span.byte_length) as usize)
+        else {
+            return Ok(None);
+        };
+        Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
+            range: cursor.document.line_index.span_to_range(span),
+            placeholder: placeholder.to_string(),
+        }))
     }
 
     fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
@@ -819,32 +495,14 @@ impl Backend {
         let Some(cursor) = snapshot.position(uri, position) else {
             return Ok(None);
         };
-        let file_id = cursor.document.file_id;
-        let file = cursor.document.file;
-        let Some(offset) = cursor_offset(&file.source, cursor.offset) else {
+        let Some(symbol) = resolve_symbol(&snapshot, &cursor) else {
             return Ok(None);
         };
-
+        let definition_span = symbol.reference_definition_span();
+        if symbol.is_import() || is_generated_typedef_span(&snapshot, &definition_span) {
+            return Ok(None);
+        }
         let mut edits: HashMap<Url, Vec<TextEdit>> = HashMap::new();
-
-        if let Some(Expression::Identifier {
-            resolution: IdentifierResolution::Definition(qname),
-            ..
-        }) = find_expression_at(&file.items, offset)
-            && validation::check_rename_guards(qname.as_str()).is_err()
-        {
-            return Ok(None);
-        }
-
-        let definition_span = resolve_symbol_definition_span(&snapshot, file, file_id, offset);
-
-        let Some(definition_span) = definition_span else {
-            return Ok(None);
-        };
-
-        if is_generated_typedef_span(&snapshot, &definition_span) {
-            return Ok(None);
-        }
 
         if new_name == SELF_TYPE_NAME && names_a_type(&snapshot, definition_span) {
             return Err(validation::rename_error(format!(
