@@ -17,11 +17,11 @@ impl Planner<'_> {
         call: &NativeMethodCall<'_>,
     ) -> (Vec<LoweredStatement>, BoundsCheckedIndex) {
         let mut receiver = self.plan_operand(call.receiver, ExpressionContext::value());
-        if receiver.evaluation.effect.has_call() {
+        if !receiver.effects().can_duplicate() {
             self.pin_staged(&mut receiver, "recv");
         }
         let mut index = self.plan_operand(&call.arguments[0], ExpressionContext::value());
-        if index.evaluation.effect.has_call() {
+        if !index.effects().can_duplicate() {
             self.pin_staged(&mut index, "idx");
         }
         let sequenced = self.sequence_values(

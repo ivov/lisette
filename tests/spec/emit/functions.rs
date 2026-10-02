@@ -3105,3 +3105,33 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn an_operand_read_after_its_own_setup_stays_before_a_later_call() {
+    let input = r#"
+fn add(a: int, b: int) -> int {
+  a * 100 + b
+}
+
+fn parse(n: int) -> Result<int, string> {
+  if n > 0 { Ok(n) } else { Err("negative") }
+}
+
+fn sum_before_bump(n: int) -> Result<int, string> {
+  let mut x = 1
+  let bump = || {
+    x = 10
+    0
+  }
+  Ok(add(parse(n)? + x, bump()))
+}
+
+fn test() {
+  match sum_before_bump(1) {
+    Ok(value) => { if value != 200 { panic(f"the operand read a later write: {value}") } },
+    Err(_) => panic("parsing failed"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

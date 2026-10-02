@@ -1,6 +1,7 @@
 pub(crate) mod bodies;
 pub(crate) mod calls;
 pub(crate) mod cleanup;
+pub(crate) mod evaluation;
 pub(crate) mod go_expression;
 pub(crate) mod local;
 pub(crate) mod lower;

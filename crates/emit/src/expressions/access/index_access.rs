@@ -34,7 +34,7 @@ impl Planner<'_> {
             .and_then(|ty| ty.get_name().map(str::to_owned))
         {
             let needs_cap = self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
-            if base_staged.evaluation.effect.has_call() {
+            if !base_staged.effects().can_duplicate() {
                 self.pin_staged(&mut base_staged, "base");
             }
             let index_staged = self.stage_or_capture(index, "range");
@@ -62,10 +62,10 @@ impl Planner<'_> {
         prefix: &str,
     ) -> ValuePlan {
         let index_staged = self.lower_composite_value(index, ExpressionContext::value());
-        if base_staged.setup.is_empty()
+        if base_staged.setup().is_empty()
             && is_order_sensitive(base)
-            && (base_staged.evaluation.effect.has_effectful_call()
-                || index_staged.evaluation.effect.has_effectful_call())
+            && (base_staged.facts().effect.has_effectful_call()
+                || index_staged.facts().effect.has_effectful_call())
         {
             self.pin_staged(&mut base_staged, prefix);
         }
@@ -136,9 +136,14 @@ impl Planner<'_> {
             );
         }
 
-        if end_value.as_ref().is_none_or(GoExpression::does_work) {
+        if end_value
+            .as_ref()
+            .is_none_or(|end| !end.effects().can_duplicate())
+        {
             let base_expr = expression.deref_inner().unwrap_or(expression);
-            if base.does_work() || (is_order_sensitive(base_expr) && effect.has_effectful_call()) {
+            if !base.effects().can_duplicate()
+                || (is_order_sensitive(base_expr) && effect.has_effectful_call())
+            {
                 base = GoExpression::name(self.hoist_tmp_value_statement(&mut setup, "base", base));
             }
             let Some(end_expression) = end_value else {

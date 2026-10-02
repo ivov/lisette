@@ -9,7 +9,6 @@ description: |
 package main
 
 func rest(items *[]int) []int {
-	base := *items
-	len_1 := len(base)
-	return base[1:len_1:len_1]
+	len_1 := len(*items)
+	return (*items)[1:len_1:len_1]
 }

@@ -117,7 +117,7 @@ impl Planner<'_> {
     ) -> (Vec<LoweredStatement>, GoExpression) {
         let plan = self.plan_operand(expression, ExpressionContext::value());
         let requires_capture =
-            !matches!(expression, Expression::Identifier { .. }) || plan.expression.does_work();
+            !matches!(expression, Expression::Identifier { .. }) || !plan.effects().can_duplicate();
         let (mut setup, value) = plan.into_parts();
         if requires_capture {
             let check = self.hoist_tmp_value_statement(&mut setup, "check", value);

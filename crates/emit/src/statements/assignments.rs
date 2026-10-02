@@ -45,15 +45,12 @@ impl<'a> PlaceOrdering<'a> {
     fn later(self) -> LaterStages {
         self.right_hand_side
             .map_or_else(LaterStages::default, |value| {
-                LaterStages::sequenced(&value.setup, value.evaluation.effect)
+                LaterStages::sequenced(value.setup(), value.facts().effect)
             })
     }
 
     fn pins(self, plan: &ValuePlan) -> bool {
-        let mut later = self.later();
-        later.can_change(plan.evaluation.stability)
-            || later.prepend(plan)
-            || (self.read_twice && plan.expression.does_work())
+        self.later().prepend(plan) || (self.read_twice && !plan.effects().can_duplicate())
     }
 }
 
@@ -274,7 +271,7 @@ impl Planner<'_> {
         };
         let index_plan = self.lower_composite_value(index, ExpressionContext::value());
         let pin_index = ordering.pins(&index_plan);
-        let base_effect = if base_expression.does_work() {
+        let base_effect = if base_expression.effects().runs_code() {
             EvaluationEffect::EffectfulCall
         } else {
             EvaluationEffect::Pure
@@ -286,17 +283,20 @@ impl Planner<'_> {
         let pin_base = ordering.pins(&base_plan)
             || later.prepend(&base_plan)
             || (is_order_sensitive(base)
-                && (base_plan.expression.does_work() || index_plan.evaluation.effect.has_call()));
+                && (base_plan.expression().effects().runs_code()
+                    || index_plan.facts().effect.has_call()));
+        let base_expression = base_plan.into_parts().1;
         let base_expression = if pin_base {
-            self.pin_place_base(setup, base, base_plan.expression)
+            self.pin_place_base(setup, base, base_expression)
         } else {
-            base_plan.expression
+            base_expression
         };
-        setup.extend(index_plan.setup);
+        let (index_setup, index_expression) = index_plan.into_parts();
+        setup.extend(index_setup);
         let index_expression = if pin_index {
-            GoExpression::name(self.hoist_tmp_value_statement(setup, "idx", index_plan.expression))
+            GoExpression::name(self.hoist_tmp_value_statement(setup, "idx", index_expression))
         } else {
-            index_plan.expression
+            index_expression
         };
         GoExpression::index(base_expression, index_expression)
     }

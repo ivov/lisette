@@ -83,7 +83,7 @@ impl Planner<'_> {
         let value = if raw_value.is_empty() {
             GoExpression::empty_composite("struct{}".to_string())
         } else {
-            raw_value.expression
+            raw_value.into_parts().1
         };
         if is_const && matches!(scope, ConstScope::Local) {
             self.scope.mark_go_const(identifier);

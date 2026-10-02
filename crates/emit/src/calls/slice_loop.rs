@@ -196,7 +196,8 @@ impl Planner<'_> {
         self.slice_loop_shape(&ctx, call.receiver, call.arguments)?;
         Some(
             self.lower_native_call(&ctx, &CallableOrigin::NativeMethod(call.kind))
-                .setup,
+                .into_parts()
+                .0,
         )
     }
 

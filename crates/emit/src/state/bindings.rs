@@ -1,18 +1,27 @@
 use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
+use crate::plan::values::{GoExpression, Stability};
 
 #[derive(Clone, Debug)]
 pub(crate) struct InlineExpr {
     expression: GoExpression,
+    /// The binding may be immutable while its subject is not.
+    stability: Stability,
 }
 
 impl InlineExpr {
-    pub(crate) fn new(expression: GoExpression) -> Self {
-        Self { expression }
+    pub(crate) fn new(expression: GoExpression, stability: Stability) -> Self {
+        Self {
+            expression,
+            stability,
+        }
     }
 
     pub(crate) fn expression(&self) -> &GoExpression {
         &self.expression
+    }
+
+    pub(crate) fn stability(&self) -> Stability {
+        self.stability
     }
 }
 

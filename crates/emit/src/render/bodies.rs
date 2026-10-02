@@ -205,7 +205,7 @@ impl Renderer {
                         rhs,
                         pinned_left,
                     } => {
-                        for statement in &rhs.setup {
+                        for statement in rhs.setup() {
                             self.render_statement(output, statement);
                         }
                         match pinned_left {
@@ -213,12 +213,12 @@ impl Renderer {
                                 let value = GoExpression::binary(
                                     left.clone(),
                                     op_text.as_str(),
-                                    rhs.expression.clone(),
+                                    rhs.expression().clone(),
                                 );
                                 write_line!(output, "{} = {}", target, value)
                             }
                             None => {
-                                write_line!(output, "{} {}= {}", target, op_text, rhs.expression)
+                                write_line!(output, "{} {}= {}", target, op_text, rhs.expression())
                             }
                         }
                     }
@@ -378,9 +378,9 @@ impl Renderer {
     /// Render a value plan: emit its setup statements (if any), then return the
     /// value text.
     fn render_value(&self, output: &mut String, plan: &ValuePlan) -> String {
-        for statement in &plan.setup {
+        for statement in plan.setup() {
             self.render_statement(output, statement);
         }
-        plan.expression.rendered()
+        plan.expression().rendered()
     }
 }

@@ -933,7 +933,7 @@ impl Planner<'_> {
             let receiver = stages.remove(0).unary("*");
             stages.insert(0, receiver);
         }
-        if growth_clip_applies(ctx, receiver) && !is_clip_safe_path(&stages[0].expression) {
+        if growth_clip_applies(ctx, receiver) && !is_clip_safe_path(stages[0].expression()) {
             self.pin_staged(&mut stages[0], "recv");
         }
         stages.extend(spread_stage);

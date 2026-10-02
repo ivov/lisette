@@ -185,6 +185,27 @@ impl ScopeState {
         })
     }
 
+    /// `None` when the innermost local with this name is generated.
+    pub(crate) fn source_binding_for_go_name(&self, go_name: &str) -> Option<BindingId> {
+        for frame in self.frames.iter().rev() {
+            for (id, slot) in &frame.binding_ids {
+                if let Some(BindingValue::GoName(name)) = frame.binding_values.get(*slot)
+                    && name.spelling() == go_name
+                {
+                    return Some(*id);
+                }
+            }
+            if frame
+                .binding_values
+                .iter()
+                .any(|value| value.local_named(go_name).is_some())
+            {
+                return None;
+            }
+        }
+        None
+    }
+
     pub(crate) fn resolve_identifier_with_resolution(
         &self,
         value: &str,
@@ -526,7 +547,7 @@ fn pop_keep_base<T>(stack: &mut Vec<T>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plan::values::GoExpression;
+    use crate::plan::values::{GoExpression, Stability};
 
     fn pair_first() -> GoExpression {
         GoExpression::selector(GoExpression::name("pair".to_string()), "F0".to_string())
@@ -673,7 +694,7 @@ mod tests {
         scope.bind("value", "outer");
         scope.mark_go_const("value");
         scope.push_binding_frame();
-        scope.bind_inline_expr("value", InlineExpr::new(pair_first()));
+        scope.bind_inline_expr("value", InlineExpr::new(pair_first(), Stability::Fixed));
         scope.enter_block();
         scope.bind("value", "inner");
         scope.bind("value", "rebound");
@@ -713,7 +734,7 @@ mod tests {
         scope.enter_block();
         scope.bind("first", "inner");
         assert!(scope.has_binding_for_go_name("shared"));
-        scope.bind_inline_expr("second", InlineExpr::new(pair_first()));
+        scope.bind_inline_expr("second", InlineExpr::new(pair_first(), Stability::Fixed));
         assert!(!scope.has_binding_for_go_name("shared"));
         scope.exit_block();
         assert!(scope.has_binding_for_go_name("shared"));

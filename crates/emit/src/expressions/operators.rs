@@ -144,17 +144,17 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         let left_staged = self.lower_composite_value(left_expression, ctx);
-        let left_effect = left_staged.evaluation.effect;
+        let left_effect = left_staged.facts().effect;
 
         // Wrap RHS setup in an IIFE so it runs only when control reaches the
         // RHS. Hoisting it before the operator would defeat short-circuit.
         let right_staged = self.lower_composite_value(right_expression, ctx);
-        let right_effect = right_staged.evaluation.effect;
-        let right_value = if right_staged.setup.is_empty() {
-            right_staged.expression
+        let right_effect = right_staged.facts().effect;
+        let (mut statements, right_value) = right_staged.into_parts();
+        let right_value = if statements.is_empty() {
+            right_value
         } else {
-            let mut statements = right_staged.setup;
-            statements.push(plain_return(right_staged.expression));
+            statements.push(plain_return(right_value));
             GoExpression::immediate_call(
                 "bool".to_string(),
                 LoweredBlock { statements },
@@ -162,9 +162,10 @@ impl Planner<'_> {
             )
         };
 
+        let (left_setup, left_value) = left_staged.into_parts();
         ValuePlan::computed(
-            left_staged.setup,
-            GoExpression::binary(left_staged.expression, operator.to_string(), right_value),
+            left_setup,
+            GoExpression::binary(left_value, operator.to_string(), right_value),
             left_effect.combine(right_effect),
         )
     }

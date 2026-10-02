@@ -57,8 +57,9 @@ fn visit_definition(definition: &mut Definition, visitor: &mut impl VisitorMut) 
 }
 
 fn visit_value(value: &mut ValuePlan, visitor: &mut impl VisitorMut) {
-    visit_statements_mut(&mut value.setup, visitor);
-    visit_expression(value.expression.node_mut(), visitor);
+    let (setup, expression) = value.parts_mut();
+    visit_statements_mut(setup, visitor);
+    visit_expression(expression.node_mut(), visitor);
 }
 
 fn visit_if(plan: &mut IfPlan, visitor: &mut impl VisitorMut) {

@@ -280,12 +280,8 @@ impl<'a> Planner<'a> {
         }
 
         let callee_staged = self.plan_operand(function, expression_ctx.callee());
-        let callee_effect = callee_staged.evaluation.effect;
-        let ValuePlan {
-            mut setup,
-            expression: mut callee,
-            ..
-        } = callee_staged;
+        let callee_effect = callee_staged.facts().effect;
+        let (mut setup, mut callee) = callee_staged.into_parts();
 
         let mut type_args_string = self.resolve_call_type_args(CallTypeArgsRequest {
             function,

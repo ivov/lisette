@@ -58,7 +58,7 @@ impl Legalizer {
     }
 
     fn walk_value(&mut self, value: &mut ValuePlan, interception: Interception) {
-        self.walk_statements(&mut value.setup, interception);
+        self.walk_statements(value.parts_mut().0, interception);
     }
 
     fn resolve_transfer(&mut self, transfer: &mut LoopTransfer, intercepted: bool) {

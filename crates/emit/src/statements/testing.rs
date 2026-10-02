@@ -137,19 +137,23 @@ impl Planner<'_> {
             unreachable!("lower_test_log_call requires a method receiver");
         };
         let mut statements = Vec::new();
-        let handle = self.lower_value(receiver, ExpressionContext::value());
-        statements.extend(handle.setup);
-        let value = self.lower_value(&args[0], ExpressionContext::value());
-        statements.extend(value.setup);
+        let (handle_setup, handle) = self
+            .lower_value(receiver, ExpressionContext::value())
+            .into_parts();
+        statements.extend(handle_setup);
+        let (value_setup, value) = self
+            .lower_value(&args[0], ExpressionContext::value())
+            .into_parts();
+        statements.extend(value_setup);
 
         let span = args[0].get_span();
         let call = test_context_call(
-            handle.expression,
+            handle,
             "Log",
             span,
             vec![GoExpression::call(
                 GoExpression::generated(GeneratedPackage::Prelude, "Debug"),
-                vec![value.expression],
+                vec![value],
             )],
         );
         (statements, call)
@@ -245,11 +249,11 @@ impl Planner<'_> {
     ) -> (AssertOperand, AssertOperand) {
         let left_plan = self.lower_value(left, ExpressionContext::value());
         let right_plan = self.lower_value(right, ExpressionContext::value());
-        // Calls may change a local before the failure report reads it again.
-        let names_inline = left_plan.setup.is_empty()
-            && right_plan.setup.is_empty()
-            && !left_plan.evaluation.effect.has_call()
-            && !right_plan.evaluation.effect.has_call();
+        // The failure report reads both operands again.
+        let names_inline = left_plan.setup().is_empty()
+            && right_plan.setup().is_empty()
+            && left_plan.effects().can_duplicate()
+            && right_plan.effects().can_duplicate();
         let left_temp = self.assert_operand_temp_type(left, &left_plan, literals, names_inline);
         let right_temp = self.assert_operand_temp_type(right, &right_plan, literals, names_inline);
         let lhs = self.bind_assert_operand(left, left_plan, "assertLeft", left_temp, statements);
@@ -267,12 +271,12 @@ impl Planner<'_> {
     ) -> Option<String> {
         let expression_ty = expression.get_type();
         let go_type = self.use_go_type(&expression_ty);
-        let inlines = plan.setup.is_empty()
-            && match plan.expression.syntax_form() {
-                OperandForm::Name => names_inline && plan.expression.as_identifier().is_some(),
+        let inlines = plan.setup().is_empty()
+            && match plan.expression().syntax_form() {
+                OperandForm::Name => names_inline && plan.expression().as_identifier().is_some(),
                 OperandForm::Call => false,
                 _ => {
-                    let constant = plan.expression.constant_kind();
+                    let constant = plan.expression().constant_kind();
                     matches!(literals, LiteralInlining::Allowed)
                         && constant.is_some()
                         && self
@@ -291,7 +295,7 @@ impl Planner<'_> {
         temp_type: Option<String>,
         statements: &mut Vec<LoweredStatement>,
     ) -> AssertOperand {
-        let constant = plan.expression.constant_kind();
+        let constant = plan.expression().constant_kind();
         let (setup, value) = plan.into_parts();
         statements.extend(setup);
         let Some(go_type) = temp_type else {

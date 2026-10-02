@@ -627,9 +627,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 continue;
             }
             let composable = binding.path.render(self.subject.root());
-            self.planner
-                .scope
-                .bind_inline_expr(&binding.lisette_name, InlineExpr::new(composable));
+            let stability = self.planner.path_read_stability(&composable);
+            self.planner.scope.bind_inline_expr(
+                &binding.lisette_name,
+                InlineExpr::new(composable, stability),
+            );
             for id in &binding.binding_ids {
                 self.planner
                     .scope

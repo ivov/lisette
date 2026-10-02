@@ -130,15 +130,15 @@ pub(crate) fn collapse_declared_temp(
             target,
             value,
         }) => {
-            if !infers_declared_type(go_type, &value.expression, value_has_declared_type)
+            if !infers_declared_type(go_type, value.expression(), value_has_declared_type)
                 || target.as_identifier() != Some(name)
                 || !target_capture.is_empty()
-                || !value.setup.is_empty()
-                || value.expression.does_work()
+                || !value.setup().is_empty()
+                || value.expression().effects().runs_code()
             {
                 return;
             }
-            value.expression.clone()
+            value.expression().clone()
         }
         LoweredStatement::If(plan) => {
             if go_type != "bool" || !plan.condition_setup.is_empty() || plan.initializer.is_some() {
@@ -219,9 +219,9 @@ fn single_simple_assign_value(body: &LoweredBlock, name: &str) -> Option<GoExpre
     };
     (target.as_identifier() == Some(name)
         && target_capture.is_empty()
-        && value.setup.is_empty()
-        && !value.expression.does_work())
-    .then(|| value.expression.clone())
+        && value.setup().is_empty()
+        && !value.expression().effects().runs_code())
+    .then(|| value.expression().clone())
 }
 
 fn join_boolean_branches(
@@ -547,11 +547,11 @@ impl Planner<'_> {
                         let argument = fe
                             .planner
                             .lower_composite_value(constructor_arg, ExpressionContext::value());
-                        let argument_effect = argument.evaluation.effect;
+                        let (argument_setup, argument, facts) = argument.into_parts_with_facts();
                         (
-                            argument.setup,
-                            fe.format_constructor_call(constructor_name, Some(argument.expression)),
-                            argument_effect,
+                            argument_setup,
+                            fe.format_constructor_call(constructor_name, Some(argument)),
+                            facts.effect,
                         )
                     };
                     let value = ValuePlan::plain_call(
@@ -716,7 +716,7 @@ impl Planner<'_> {
                 self.lower_place(&mut capture, unwrapped, PlaceOrdering::before(&ordering));
             let grows = !arguments.is_empty();
             let receiver = if grows && receiver_lv.node() != target.node() {
-                let clippable = if is_clip_safe_path(&receiver_lv) && ordering.setup.is_empty() {
+                let clippable = if is_clip_safe_path(&receiver_lv) && ordering.setup().is_empty() {
                     receiver_lv
                 } else {
                     GoExpression::name(self.hoist_tmp_value_statement(
@@ -729,7 +729,7 @@ impl Planner<'_> {
             } else {
                 receiver_lv
             };
-            capture.extend(ordering.setup);
+            capture.extend(ordering.into_parts().0);
             let value = if method == "reserve" {
                 let mut all = vec![receiver];
                 all.extend(arguments);
@@ -746,8 +746,10 @@ impl Planner<'_> {
             };
             (value, capture)
         } else {
-            let plan = self.lower_value(last, ExpressionContext::value());
-            (plan.expression, plan.setup)
+            let (setup, value) = self
+                .lower_value(last, ExpressionContext::value())
+                .into_parts();
+            (value, setup)
         };
 
         statements.push(simple_assign(
@@ -808,7 +810,7 @@ impl Planner<'_> {
         } else {
             self.lower_value(last, ExpressionContext::value())
         };
-        (plan.setup, plan.expression)
+        plan.into_parts()
     }
 
     pub(crate) fn lower_to_operand_temp(

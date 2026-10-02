@@ -1,0 +1,56 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn counted(calls: mut Ref<int>, xs: Slice<int>) -> Slice<int> {
+    calls.* += 1
+    xs
+  }
+  
+  fn position(calls: mut Ref<int>, i: int) -> int {
+    calls.* += 1
+    i
+  }
+  
+  fn test() {
+    let mut base_calls = 0
+    let mut index_calls = 0
+    let Some(v) = counted(&base_calls, [1, 2]).get(position(&index_calls, 1)) else {
+      panic("the element was missing")
+    }
+    if v != 2 || base_calls != 1 || index_calls != 1 { panic("get evaluated an operand twice") }
+    let tail = counted(&base_calls, [1, 2, 3])[1..]
+    if tail.length() != 2 || base_calls != 2 { panic("slicing evaluated its base twice") }
+  }
+---
+package main
+
+func counted(calls *int, xs []int) []int {
+	*calls++
+	return xs
+}
+
+func position(calls *int, i int) int {
+	*calls++
+	return i
+}
+
+func test() {
+	base_calls := 0
+	index_calls := 0
+	recv := counted(&base_calls, []int{1, 2})
+	idx := position(&index_calls, 1)
+	if idx < 0 || idx >= len(recv) {
+		panic("the element was missing")
+	}
+	v := recv[idx]
+	if v != 2 || base_calls != 1 || index_calls != 1 {
+		panic("get evaluated an operand twice")
+	}
+	base := counted(&base_calls, []int{1, 2, 3})
+	len_1 := len(base)
+	tail := base[1:len_1:len_1]
+	if len(tail) != 2 || base_calls != 2 {
+		panic("slicing evaluated its base twice")
+	}
+}

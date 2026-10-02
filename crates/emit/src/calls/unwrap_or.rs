@@ -184,12 +184,13 @@ impl Planner<'_> {
         };
         let literal_default = is_literal_default(default);
         let value_plan = self.lower_value(default, ExpressionContext::value());
-        let mut default = if literal_default {
+        let default = if literal_default {
             value_plan
         } else {
             self.eager_operand(default, value_plan, "default")
         };
-        statements.append(&mut default.setup);
+        let (default_setup, default) = default.split_setup();
+        statements.extend(default_setup);
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
             initializer: failure.initializer,
