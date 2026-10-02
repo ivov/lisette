@@ -1,10 +1,14 @@
 use rustc_hash::FxHashMap as HashMap;
+use std::cmp::Ordering;
 use std::fs::{read_dir, read_to_string};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, PoisonError, RwLock, RwLockWriteGuard};
 
 use crate::protocol::Url;
-use semantics::loader::{DiscoveredPackages, FileContent, Files, Loader};
+use semantics::loader::{
+    DiscoveredPackages, FileContent, Files, Loader, is_production_package_file,
+};
 
 use crate::paths::{ENTRY_PACKAGE_ID, package_id_to_dir, source_package_dir, uri_to_package_file};
 use crate::project::{ProjectConfig, find_project_root, resolve_script_root};
@@ -191,18 +195,154 @@ impl OverlayLoader {
             overlays: self.overlays.clone(),
             entry_package_path,
             external_test_root,
+            captured: None,
         }
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct AnalysisLoader {
     config: ProjectConfig,
     overlays: Arc<Overlays>,
     entry_package_path: PathBuf,
     external_test_root: Option<String>,
+    captured: Option<Arc<HashMap<PathBuf, Files>>>,
 }
 
 impl AnalysisLoader {
+    pub(crate) fn capture_project(&self) -> io::Result<Self> {
+        let mut captured: HashMap<PathBuf, Files> = HashMap::default();
+        for external in [false, true] {
+            for (package, files) in self.overlays.packages(external) {
+                let directory = if external {
+                    self.config.root().join(package)
+                } else {
+                    source_package_dir(&self.config, package)
+                };
+                let destination = captured.entry(directory).or_default();
+                for (name, source) in files {
+                    destination
+                        .insert(name.clone(), FileContent::new(source.clone(), name.clone()));
+                }
+            }
+        }
+        for root in [self.config.source_root(), self.config.root().join("tests")] {
+            match root.try_exists() {
+                Ok(false) => {}
+                Ok(true) => capture_directory(&root, &mut captured, &mut Vec::new())?,
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(Self {
+            entry_package_path: self.config.source_root(),
+            external_test_root: None,
+            captured: Some(Arc::new(captured)),
+            ..self.clone()
+        })
+    }
+
+    pub(crate) fn project_keys(&self) -> io::Result<Vec<AnalysisKey>> {
+        let mut keys = Vec::new();
+        if let Some(captured) = &self.captured {
+            for (directory, files) in captured.iter() {
+                let Some(name) = files.keys().next() else {
+                    continue;
+                };
+                let uri = Url::from_file_path(directory.join(name))
+                    .map_err(|_| io::Error::other("Cannot identify a project source file"))?;
+                let (package_id, _, external_test) = uri_to_package_file(&self.config, &uri)
+                    .ok_or_else(|| io::Error::other("Cannot identify a project package"))?;
+                let has_tests = files.keys().any(|name| name.ends_with(".test.lis"));
+                let included = if external_test {
+                    has_tests
+                } else {
+                    files.keys().any(|name| is_production_package_file(name))
+                        || (has_tests && files.keys().any(|name| !name.ends_with(".test.lis")))
+                };
+                if included {
+                    keys.push(AnalysisKey::Package {
+                        project_root: self.config.root().to_path_buf(),
+                        external_test,
+                        package_id,
+                    });
+                }
+            }
+        }
+        keys.sort_by(|left, right| match (left, right) {
+            (
+                AnalysisKey::Package {
+                    package_id: left, ..
+                },
+                AnalysisKey::Package {
+                    package_id: right, ..
+                },
+            ) => left.cmp(right),
+            _ => Ordering::Equal,
+        });
+        Ok(keys)
+    }
+
+    pub(crate) fn focus(&self, key: &AnalysisKey) -> Option<ProjectAnalysis> {
+        let AnalysisKey::Package {
+            package_id,
+            external_test,
+            ..
+        } = key
+        else {
+            return None;
+        };
+        let entry_dir = source_package_dir(
+            &self.config,
+            if *external_test {
+                ENTRY_PACKAGE_ID
+            } else {
+                package_id
+            },
+        );
+        Some(ProjectAnalysis {
+            config: self.config.clone(),
+            entry_dir: entry_dir.clone(),
+            external_test: *external_test,
+            loader: Self {
+                entry_package_path: entry_dir,
+                external_test_root: external_test.then(|| package_id.clone()),
+                ..self.clone()
+            },
+        })
+    }
+
+    pub(crate) fn captured_files(&self) -> impl Iterator<Item = (&PathBuf, &Files)> {
+        self.captured.iter().flat_map(|captured| captured.iter())
+    }
+
+    pub(crate) fn captured_source(&self, path: &Path) -> Option<&str> {
+        self.captured
+            .as_ref()?
+            .get(path.parent()?)?
+            .get(path.file_name()?.to_str()?)
+            .map(|file| file.source.as_str())
+    }
+
+    pub(crate) fn unchanged(&self) -> io::Result<bool> {
+        let current = self.capture_project()?;
+        Ok(
+            self.captured_files().count() == current.captured_files().count()
+                && self.captured_files().all(|(directory, files)| {
+                    current
+                        .captured
+                        .as_ref()
+                        .and_then(|captured| captured.get(directory))
+                        .is_some_and(|now| {
+                            files.len() == now.len()
+                                && files.iter().all(|(name, file)| {
+                                    now.get(name)
+                                        .is_some_and(|current| current.source == file.source)
+                                })
+                        })
+                }),
+        )
+    }
+
     fn package_path(&self, package_id: &str) -> PathBuf {
         if package_id == ENTRY_PACKAGE_ID {
             self.entry_package_path.clone()
@@ -227,6 +367,9 @@ impl AnalysisLoader {
 impl Loader for AnalysisLoader {
     fn scan_folder(&self, package_id: &str) -> Files {
         let folder_path = self.package_path(package_id);
+        if let Some(captured) = &self.captured {
+            return captured.get(&folder_path).cloned().unwrap_or_default();
+        }
         let mut files = HashMap::default();
 
         if let Ok(entries) = read_dir(&folder_path) {
@@ -277,6 +420,47 @@ impl Loader for AnalysisLoader {
         }
         discovered
     }
+}
+
+fn capture_directory(
+    directory: &Path,
+    captured: &mut HashMap<PathBuf, Files>,
+    ancestors: &mut Vec<PathBuf>,
+) -> io::Result<()> {
+    let canonical = directory.canonicalize()?;
+    if ancestors.contains(&canonical) {
+        return Err(io::Error::other(
+            "Source directories contain a symlink cycle",
+        ));
+    }
+    ancestors.push(canonical);
+    for entry in read_dir(directory)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            if !path.join("lisette.toml").is_file() {
+                capture_directory(&path, captured, ancestors)?;
+            }
+        } else if path.extension().is_some_and(|extension| extension == "lis") {
+            let name = entry
+                .file_name()
+                .into_string()
+                .map_err(|_| io::Error::other("Source filename is not valid UTF-8"))?;
+            if captured
+                .get(directory)
+                .is_some_and(|files| files.contains_key(&name))
+            {
+                continue;
+            }
+            let source = read_to_string(&path)?;
+            captured
+                .entry(directory.to_path_buf())
+                .or_default()
+                .insert(name.clone(), FileContent::new(source, name));
+        }
+    }
+    ancestors.pop();
+    Ok(())
 }
 
 #[cfg(test)]

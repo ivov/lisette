@@ -1,4 +1,5 @@
 use std::io::{BufReader, PipeWriter};
+use std::mem;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
@@ -158,6 +159,18 @@ impl TestClient {
                 diagnostics.uri.as_str() == uri && diagnostics.version == Some(version)
             })
         })
+    }
+
+    pub fn collect_messages(&mut self, duration: Duration) -> Vec<Value> {
+        let mut messages = mem::take(&mut self.buffered);
+        let deadline = Instant::now() + duration;
+        while let Ok(message) = self
+            .incoming
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+        {
+            messages.push(message);
+        }
+        messages
     }
 
     pub fn take_server_request(&mut self, method: &str) -> Option<Value> {
