@@ -14,7 +14,7 @@ use crate::plan::go_expression::{FunctionLiteralLayout, GoExpressionNode, GoPara
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 #[cfg(debug_assertions)]
-use crate::plan::verify::verify_local_scopes;
+use crate::plan::verify::{verify_final_function_body, verify_local_scopes};
 use crate::plan::visit::identify_body_locals;
 use crate::state::package_state::FunctionEmissionContext;
 use crate::statements::testing::test_context_call;
@@ -74,13 +74,20 @@ impl Planner<'_> {
         lowered.statements = mem::take(prefix);
         let shadowing = identify_body_locals(&mut lowered.statements, parameters, &mut self.scope);
         clean_up(&mut lowered.statements, &shadowing);
+        if should_return {
+            lowered.ensure_go_termination();
+        }
         self.settle_generated_names(&mut lowered.statements);
         #[cfg(debug_assertions)]
-        verify_local_scopes(
-            &mut lowered.statements,
-            &parameters.iter().collect::<Vec<_>>(),
-        )
-        .unwrap_or_else(|error| panic!("{error}"));
+        {
+            verify_final_function_body(&lowered, should_return)
+                .unwrap_or_else(|error| panic!("{error}"));
+            verify_local_scopes(
+                &mut lowered.statements,
+                &parameters.iter().collect::<Vec<_>>(),
+            )
+            .unwrap_or_else(|error| panic!("{error}"));
+        }
         self.collect_imports(&lowered.statements);
         Renderer.render_lowered_block(output, &lowered);
     }
@@ -666,10 +673,6 @@ pub(crate) fn is_go_never(expression: &Expression) -> bool {
         }
         _ => false,
     }
-}
-
-pub(crate) fn is_breakless_loop(expression: &Expression) -> bool {
-    matches!(expression, Expression::Loop { body, .. } if !body.contains_break())
 }
 
 /// Renamed definition parts for methods on native Go receiver types; the

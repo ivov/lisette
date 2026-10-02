@@ -5,7 +5,6 @@ use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::calls::comma_ok::{CommaOkValueSlot, LoweredPair, PairKind};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
-use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement, define};
 use crate::plan::go_expression::FunctionLiteralLayout;
@@ -155,9 +154,6 @@ impl Planner<'_> {
         statements
     }
 
-    /// Tail of a `try` block: never tail (statement + unreachable panic),
-    /// statement-only/unit-call tail (statement + success unit return), or a
-    /// value tail (success-wrapped return; unit return when the value is empty).
     fn lower_try_tail(
         &mut self,
         last: &Expression,
@@ -165,11 +161,7 @@ impl Planner<'_> {
         lowered: Option<&CallableReturnAbi>,
     ) -> Vec<LoweredStatement> {
         if last.diverges().is_some() || last.get_type().is_never() {
-            let mut statements = vec![self.lower_statement(last)];
-            if !is_go_never(last) && !is_breakless_loop(last) {
-                statements.push(LoweredStatement::UnreachablePanic);
-            }
-            return statements;
+            return vec![self.lower_statement(last)];
         }
 
         let is_statement_only = matches!(
@@ -300,9 +292,6 @@ impl Planner<'_> {
         LoweredBlock { statements }
     }
 
-    /// Tail of a `recover` block: never tail (statement + unreachable panic),
-    /// unit/type-variable tail (statement + zero-value return), or a value tail
-    /// (plain return of the value).
     fn lower_recover_tail(
         &mut self,
         last: &Expression,
@@ -310,11 +299,7 @@ impl Planner<'_> {
     ) -> Vec<LoweredStatement> {
         let item_ty = last.get_type();
         if item_ty.is_never() {
-            let mut statements = vec![self.lower_statement(last)];
-            if !is_go_never(last) && !is_breakless_loop(last) {
-                statements.push(LoweredStatement::UnreachablePanic);
-            }
-            return statements;
+            return vec![self.lower_statement(last)];
         }
         if item_ty.is_unit() || item_ty.is_ignored() || item_ty.is_variable() {
             return vec![

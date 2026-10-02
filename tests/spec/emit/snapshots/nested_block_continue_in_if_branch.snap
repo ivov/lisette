@@ -18,11 +18,11 @@ func test() {
 			{
 				continue
 			}
-			panic("unreachable")
+		} else {
+			var tmp_1 int
+			tmp_1 = 1
+			tmp = tmp_1
 		}
-		var tmp_1 int
-		tmp_1 = 1
-		tmp = tmp_1
 		_ = tmp
 		break
 	}

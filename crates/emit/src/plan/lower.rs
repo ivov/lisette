@@ -7,7 +7,6 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::control_flow::targets::legalize_source_loop;
 use crate::definitions::ConstScope;
-use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, directed, directed_first,
@@ -669,11 +668,7 @@ impl Planner<'_> {
         return_span: &Span,
     ) -> Vec<LoweredStatement> {
         let directive = self.maybe_line_directive(return_span);
-        let mut statements = vec![self.lower_statement(last)];
-        if !is_go_never(last) && !is_breakless_loop(last) {
-            statements.push(LoweredStatement::UnreachablePanic);
-        }
-        directed_first(directive, statements)
+        directed_first(directive, vec![self.lower_statement(last)])
     }
 
     fn lower_plain_return_tail(&mut self, last: &Expression) -> Vec<LoweredStatement> {

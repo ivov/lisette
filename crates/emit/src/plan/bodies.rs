@@ -74,6 +74,97 @@ pub(crate) enum LoopTransfer {
     Labeled(String),
 }
 
+#[derive(Clone, PartialEq, Eq)]
+enum FlowExit {
+    Break(LoopTransfer),
+    Continue(LoopTransfer),
+}
+
+#[derive(Clone)]
+struct FlowSummary {
+    falls_through: bool,
+    go_falls_through: bool,
+    source_exits: Vec<FlowExit>,
+    go_exits: Vec<FlowExit>,
+}
+
+impl FlowSummary {
+    fn next() -> Self {
+        Self {
+            falls_through: true,
+            go_falls_through: true,
+            source_exits: Vec::new(),
+            go_exits: Vec::new(),
+        }
+    }
+
+    fn exit(exit: FlowExit) -> Self {
+        Self {
+            falls_through: false,
+            go_falls_through: false,
+            source_exits: vec![exit.clone()],
+            go_exits: vec![exit],
+        }
+    }
+
+    fn terminal() -> Self {
+        Self {
+            falls_through: false,
+            go_falls_through: false,
+            source_exits: Vec::new(),
+            go_exits: Vec::new(),
+        }
+    }
+
+    fn source_never() -> Self {
+        Self {
+            go_falls_through: true,
+            ..Self::terminal()
+        }
+    }
+
+    fn sequence(mut self, next: Self) -> Self {
+        let source_reaches_next = self.falls_through;
+        let go_reaches_next = self.go_falls_through;
+        self.falls_through &= next.falls_through;
+        self.go_falls_through &= next.go_falls_through;
+        if source_reaches_next {
+            self.source_exits.extend(next.source_exits);
+        }
+        if go_reaches_next {
+            self.go_exits.extend(next.go_exits);
+        }
+        self
+    }
+
+    fn branch(mut self, other: Self) -> Self {
+        self.falls_through |= other.falls_through;
+        self.go_falls_through |= other.go_falls_through;
+        self.source_exits.extend(other.source_exits);
+        self.go_exits.extend(other.go_exits);
+        self
+    }
+
+    fn statements(statements: &[LoweredStatement]) -> Self {
+        statements.iter().fold(Self::next(), |flow, statement| {
+            flow.sequence(statement.flow())
+        })
+    }
+
+    fn consume_unlabeled_breaks(&mut self) {
+        self.falls_through |= remove_unlabeled_breaks(&mut self.source_exits);
+        self.go_falls_through |= remove_unlabeled_breaks(&mut self.go_exits);
+    }
+}
+
+fn remove_unlabeled_breaks(exits: &mut Vec<FlowExit>) -> bool {
+    let had_break = exits
+        .iter()
+        .any(|exit| matches!(exit, FlowExit::Break(LoopTransfer::Unlabeled)));
+    exits.retain(|exit| !matches!(exit, FlowExit::Break(LoopTransfer::Unlabeled)));
+    had_break
+}
+
 pub(crate) fn directed(directive: String, stmt: LoweredStatement) -> LoweredStatement {
     if directive.is_empty() {
         stmt
@@ -158,8 +249,7 @@ pub(crate) enum LoweredStatement {
         directive: String,
         inner: Box<LoweredStatement>,
     },
-    /// `panic("unreachable")` tail after a non-exhaustive branch in return
-    /// position: a structured diverging leaf.
+    /// `panic("unreachable")` generated to complete a Go return path.
     UnreachablePanic,
 }
 
@@ -236,10 +326,27 @@ pub(crate) struct SwitchCasePlan {
 }
 
 impl SwitchStatementPlan {
-    fn ends_with_diverge(&self) -> bool {
-        self.postlude
-            .last()
-            .is_some_and(LoweredStatement::ends_with_diverge)
+    fn flow(&self) -> FlowSummary {
+        let mut branches = self
+            .cases
+            .iter()
+            .map(|case| FlowSummary::statements(&case.body.statements));
+        let first = branches.next().or_else(|| {
+            self.default
+                .as_ref()
+                .map(|body| FlowSummary::statements(&body.statements))
+        });
+        let mut cases = branches.fold(first.unwrap_or_else(FlowSummary::next), FlowSummary::branch);
+        if let Some(default) = &self.default {
+            if !self.cases.is_empty() {
+                cases = cases.branch(FlowSummary::statements(&default.statements));
+            }
+        } else {
+            cases.falls_through = true;
+            cases.go_falls_through = true;
+        }
+        cases.consume_unlabeled_breaks();
+        cases.sequence(FlowSummary::statements(&self.postlude))
     }
 }
 
@@ -269,8 +376,17 @@ pub(crate) enum SelectArmPlan {
 }
 
 impl SelectStatementPlan {
-    fn ends_with_diverge(&self) -> bool {
-        !self.arms.is_empty() && self.arms.iter().all(|arm| arm.body().ends_with_diverge())
+    fn flow(&self) -> FlowSummary {
+        let mut arms = self
+            .arms
+            .iter()
+            .map(|arm| FlowSummary::statements(&arm.body().statements));
+        let Some(first) = arms.next() else {
+            return FlowSummary::terminal();
+        };
+        let mut flow = arms.fold(first, FlowSummary::branch);
+        flow.consume_unlabeled_breaks();
+        flow
     }
 }
 
@@ -301,6 +417,37 @@ pub(crate) struct LoopPlan {
     pub(crate) kind: LoopKind,
     pub(crate) header: LoopHeader,
     pub(crate) body: LoweredBlock,
+}
+
+impl LoopPlan {
+    fn flow(&self) -> FlowSummary {
+        let mut body = FlowSummary::statements(&self.body.statements);
+        let label = self.kind.label();
+        let source_breaks = consume_loop_exits(&mut body.source_exits, label);
+        let go_breaks = consume_loop_exits(&mut body.go_exits, label);
+        body.falls_through = source_breaks || !matches!(self.header, LoopHeader::Infinite);
+        body.go_falls_through = go_breaks || !matches!(self.header, LoopHeader::Infinite);
+        FlowSummary::statements(&self.prologue).sequence(body)
+    }
+}
+
+fn consume_loop_exits(exits: &mut Vec<FlowExit>, label: Option<&str>) -> bool {
+    let mut breaks_here = false;
+    exits.retain(|exit| {
+        let targets_loop = match exit {
+            FlowExit::Break(LoopTransfer::Unlabeled)
+            | FlowExit::Continue(LoopTransfer::Unlabeled) => true,
+            FlowExit::Break(LoopTransfer::Labeled(target))
+            | FlowExit::Continue(LoopTransfer::Labeled(target)) => label == Some(target.as_str()),
+            FlowExit::Break(LoopTransfer::Source(_))
+            | FlowExit::Continue(LoopTransfer::Source(_)) => false,
+        };
+        if targets_loop && matches!(exit, FlowExit::Break(_)) {
+            breaks_here = true;
+        }
+        !targets_loop
+    });
+    breaks_here
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -503,12 +650,16 @@ impl LoweredBlock {
         visit_statements(&self.statements, visit);
     }
 
-    /// Whether the block's last rendered line is `break`, `continue`,
-    /// `return`, or `panic(...)`.
     pub(crate) fn ends_with_diverge(&self) -> bool {
-        self.statements
-            .last()
-            .is_some_and(LoweredStatement::ends_with_diverge)
+        !FlowSummary::statements(&self.statements).falls_through
+    }
+
+    pub(crate) fn ensure_go_termination(&mut self) {
+        terminate_go_path(&mut self.statements);
+    }
+
+    pub(crate) fn go_terminates(&self) -> bool {
+        !FlowSummary::statements(&self.statements).go_falls_through
     }
 
     /// Whether the block has no statements.
@@ -523,7 +674,31 @@ impl LoweredBlock {
     }
 }
 
+fn terminate_go_path(statements: &mut Vec<LoweredStatement>) {
+    if !FlowSummary::statements(statements).go_falls_through {
+        return;
+    }
+    if let Some(last) = statements.last_mut()
+        && !last.flow().falls_through
+    {
+        last.terminate_go_tail();
+        if !FlowSummary::statements(statements).go_falls_through {
+            return;
+        }
+    }
+    statements.push(LoweredStatement::UnreachablePanic);
+}
+
 impl LoweredStatement {
+    fn terminate_go_tail(&mut self) {
+        match self {
+            Self::If(plan) => plan.terminate_go_tail(),
+            Self::Body(body) => terminate_go_path(&mut body.statements),
+            Self::Directed { inner, .. } => inner.terminate_go_tail(),
+            _ => {}
+        }
+    }
+
     pub(crate) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
         match self {
             LoweredStatement::If(plan) => plan.visit_expressions(visit),
@@ -837,35 +1012,46 @@ impl LoweredStatement {
         }
     }
 
-    fn ends_with_diverge(&self) -> bool {
+    fn flow(&self) -> FlowSummary {
         match self {
-            LoweredStatement::If(plan) => plan.ends_with_diverge(),
-            LoweredStatement::Loop(plan) => {
-                matches!(plan.kind, LoopKind::Generated { .. })
-                    && !matches!(
-                        plan.body.statements.last(),
-                        Some(LoweredStatement::Break(_))
-                    )
-                    && plan.body.ends_with_diverge()
-            }
-            LoweredStatement::Block(_) | LoweredStatement::Const(_) => false,
-            LoweredStatement::Body(body) => body.ends_with_diverge(),
-            LoweredStatement::Break(_) | LoweredStatement::Continue(_) => true,
-            LoweredStatement::Return(_) => true,
-            LoweredStatement::Assign(plan) => match plan {
-                AssignForm::Compound { .. } | AssignForm::Simple { .. } => false,
+            LoweredStatement::If(plan) => plan.flow(),
+            LoweredStatement::Loop(plan) => plan.flow(),
+            LoweredStatement::Block(body) => FlowSummary {
+                falls_through: true,
+                ..FlowSummary::statements(&body.statements)
             },
-            LoweredStatement::Async { .. } => false,
-            LoweredStatement::Select(plan) => plan.ends_with_diverge(),
-            LoweredStatement::Switch(plan) => plan.ends_with_diverge(),
-            LoweredStatement::WhileLet(body) => body.ends_with_diverge(),
-            LoweredStatement::Define(_)
+            LoweredStatement::Body(body) | LoweredStatement::WhileLet(body) => {
+                FlowSummary::statements(&body.statements)
+            }
+            LoweredStatement::Break(target) => FlowSummary::exit(FlowExit::Break(target.clone())),
+            LoweredStatement::Continue(target) => {
+                FlowSummary::exit(FlowExit::Continue(target.clone()))
+            }
+            LoweredStatement::Return(_) => FlowSummary::terminal(),
+            LoweredStatement::Select(plan) => plan.flow(),
+            LoweredStatement::Switch(plan) => plan.flow(),
+            LoweredStatement::ExpressionStatement {
+                expression,
+                diverges: true,
+            } => {
+                let go_panic = matches!(expression.node(), GoExpressionNode::Call { callee, .. }
+                    if matches!(callee.as_ref(), GoExpressionNode::Identifier(name) if name == "panic"));
+                if go_panic {
+                    FlowSummary::terminal()
+                } else {
+                    FlowSummary::source_never()
+                }
+            }
+            LoweredStatement::Directed { inner, .. } => inner.flow(),
+            LoweredStatement::UnreachablePanic => FlowSummary::terminal(),
+            LoweredStatement::Assign(_)
+            | LoweredStatement::Async { .. }
+            | LoweredStatement::Const(_)
+            | LoweredStatement::Define(_)
             | LoweredStatement::VarDecl { .. }
             | LoweredStatement::Discard(_)
-            | LoweredStatement::AssignMany { .. } => false,
-            LoweredStatement::ExpressionStatement { diverges, .. } => *diverges,
-            LoweredStatement::Directed { inner, .. } => inner.ends_with_diverge(),
-            LoweredStatement::UnreachablePanic => true,
+            | LoweredStatement::AssignMany { .. }
+            | LoweredStatement::ExpressionStatement { .. } => FlowSummary::next(),
         }
     }
 
@@ -873,7 +1059,7 @@ impl LoweredStatement {
         if let LoweredStatement::Directed { inner, .. } = self {
             return inner.blocks_fallthrough();
         }
-        !matches!(self, LoweredStatement::WhileLet(_)) && self.ends_with_diverge()
+        !matches!(self, LoweredStatement::WhileLet(_)) && !self.flow().falls_through
     }
 }
 
@@ -938,16 +1124,178 @@ impl IfPlan {
         }
     }
 
-    fn ends_with_diverge(&self) -> bool {
-        if !self.then_body.ends_with_diverge() {
-            return false;
+    fn terminate_go_tail(&mut self) {
+        terminate_go_path(&mut self.then_body.statements);
+        match &mut self.else_arm {
+            ElseArm::None => {}
+            ElseArm::ElseIf(inner) => inner.terminate_go_tail(),
+            ElseArm::Else { body, .. } => terminate_go_path(&mut body.statements),
         }
-        match &self.else_arm {
-            ElseArm::None => false,
-            ElseArm::ElseIf(inner) if inner.condition_setup.is_empty() => inner.ends_with_diverge(),
-            ElseArm::ElseIf(_) => false,
-            ElseArm::Else { body, .. } => body.ends_with_diverge(),
+    }
+
+    fn flow(&self) -> FlowSummary {
+        let then_flow = FlowSummary::statements(&self.then_body.statements);
+        let else_flow = match &self.else_arm {
+            ElseArm::None => FlowSummary::next(),
+            ElseArm::ElseIf(inner) => inner.flow(),
+            ElseArm::Else { body, .. } => FlowSummary::statements(&body.statements),
+        };
+        let mut branches = then_flow.clone().branch(else_flow.clone());
+        if matches!(self.else_arm, ElseArm::Else { inline: true, .. }) {
+            let go = then_flow.branch(FlowSummary::next()).sequence(else_flow);
+            branches.go_falls_through = go.go_falls_through;
+            branches.go_exits = go.go_exits;
         }
+        FlowSummary::statements(&self.condition_setup).sequence(branches)
+    }
+}
+
+#[cfg(test)]
+mod flow_tests {
+    use super::*;
+
+    fn block(statements: Vec<LoweredStatement>) -> LoweredBlock {
+        LoweredBlock { statements }
+    }
+
+    fn never_call() -> LoweredStatement {
+        LoweredStatement::ExpressionStatement {
+            expression: GoExpression::call(GoExpression::name("fail".into()), Vec::new()),
+            diverges: true,
+        }
+    }
+
+    fn infinite(statements: Vec<LoweredStatement>) -> LoweredStatement {
+        LoweredStatement::Loop(LoopPlan {
+            prologue: Vec::new(),
+            kind: LoopKind::Source { label: None },
+            header: LoopHeader::Infinite,
+            body: block(statements),
+        })
+    }
+
+    #[test]
+    fn never_call_does_not_hide_a_go_reachable_break() {
+        let mut body = block(vec![infinite(vec![
+            never_call(),
+            LoweredStatement::Break(LoopTransfer::Unlabeled),
+        ])]);
+        assert!(!FlowSummary::statements(&body.statements).falls_through);
+        assert!(!body.go_terminates());
+        body.ensure_go_termination();
+        assert!(matches!(
+            body.statements.last(),
+            Some(LoweredStatement::UnreachablePanic)
+        ));
+    }
+
+    #[test]
+    fn never_call_followed_by_return_needs_no_fallback() {
+        let mut body = block(vec![
+            never_call(),
+            LoweredStatement::Return(vec![GoExpression::literal("1".into())]),
+        ]);
+        assert!(body.go_terminates());
+        body.ensure_go_termination();
+        assert_eq!(body.statements.len(), 2);
+    }
+
+    #[test]
+    fn never_branch_gets_one_local_fallback() {
+        let then_body = block(vec![LoweredStatement::Body(block(vec![never_call()]))]);
+        let mut body = block(vec![LoweredStatement::If(IfPlan::plain(
+            GoExpression::literal("true".into()),
+            then_body,
+            ElseArm::Else {
+                body: block(vec![LoweredStatement::Return(vec![])]),
+                inline: false,
+            },
+        ))]);
+        body.ensure_go_termination();
+        body.ensure_go_termination();
+        let [LoweredStatement::If(plan)] = body.statements.as_slice() else {
+            panic!("expected if without a trailing panic");
+        };
+        let [LoweredStatement::Body(nested)] = plan.then_body.statements.as_slice() else {
+            panic!("expected nested body");
+        };
+        assert_eq!(nested.statements.len(), 2);
+        assert!(matches!(
+            nested.statements[1],
+            LoweredStatement::UnreachablePanic
+        ));
+    }
+
+    #[test]
+    fn never_call_before_later_return_gets_no_fallback() {
+        let mut body = block(vec![
+            LoweredStatement::If(IfPlan::plain(
+                GoExpression::literal("true".into()),
+                block(vec![never_call()]),
+                ElseArm::None,
+            )),
+            LoweredStatement::Return(vec![GoExpression::literal("1".into())]),
+        ]);
+        body.ensure_go_termination();
+        let LoweredStatement::If(plan) = &body.statements[0] else {
+            panic!("expected if");
+        };
+        assert_eq!(plan.then_body.statements.len(), 1);
+        assert_eq!(body.statements.len(), 2);
+    }
+
+    #[test]
+    fn inline_else_is_sequential_for_go_flow() {
+        let body = block(vec![LoweredStatement::If(IfPlan::plain(
+            GoExpression::literal("true".into()),
+            block(vec![never_call()]),
+            ElseArm::Else {
+                body: block(vec![LoweredStatement::Return(vec![])]),
+                inline: true,
+            },
+        ))]);
+        assert!(body.go_terminates());
+    }
+
+    #[test]
+    fn switch_break_stays_inside_the_switch() {
+        let switch = LoweredStatement::Switch(SwitchStatementPlan {
+            kind: SwitchKind::Conditional,
+            cases: vec![SwitchCasePlan {
+                labels: vec![GoExpression::literal("true".into())],
+                body: block(vec![LoweredStatement::Break(LoopTransfer::Unlabeled)]),
+            }],
+            default: Some(block(vec![LoweredStatement::Return(vec![])])),
+            postlude: Vec::new(),
+        });
+        let body = block(vec![infinite(vec![switch])]);
+        assert!(body.go_terminates());
+    }
+
+    #[test]
+    fn labeled_break_escapes_the_switch_and_loop() {
+        let switch = LoweredStatement::Switch(SwitchStatementPlan {
+            kind: SwitchKind::Conditional,
+            cases: vec![SwitchCasePlan {
+                labels: vec![GoExpression::literal("true".into())],
+                body: block(vec![LoweredStatement::Break(LoopTransfer::Labeled(
+                    "outer".into(),
+                ))]),
+            }],
+            default: Some(block(vec![LoweredStatement::Continue(
+                LoopTransfer::Labeled("outer".into()),
+            )])),
+            postlude: Vec::new(),
+        });
+        let body = block(vec![LoweredStatement::Loop(LoopPlan {
+            prologue: Vec::new(),
+            kind: LoopKind::Source {
+                label: Some("outer".into()),
+            },
+            header: LoopHeader::Infinite,
+            body: block(vec![switch]),
+        })]);
+        assert!(!body.go_terminates());
     }
 }
 
