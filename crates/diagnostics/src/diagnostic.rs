@@ -9,6 +9,7 @@ use syntax::ParseError;
 use syntax::ast::Span;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum Severity {
     Error,
     Warning,
@@ -75,6 +76,7 @@ fn combine_help_and_note(help: Option<&str>, note: Option<&str>, has_code: bool)
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct Label {
     span: Span,
     text: String,
@@ -149,6 +151,7 @@ where
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[must_use]
 pub struct LisetteDiagnostic {
     message: String,
@@ -190,6 +193,17 @@ fn style_code(code: &str, prefix: &str, use_color: bool) -> String {
 }
 
 impl LisetteDiagnostic {
+    pub fn try_map_spans(&self, mut map: impl FnMut(Span) -> Option<Span>) -> Option<Self> {
+        let mut diagnostic = self.clone();
+        for label in &mut diagnostic.labels {
+            label.span = map(label.span)?;
+        }
+        if let Some(fix) = &mut diagnostic.fix {
+            fix.try_map_spans(&mut map)?;
+        }
+        Some(diagnostic)
+    }
+
     pub fn plain_message(&self) -> &str {
         &self.message
     }

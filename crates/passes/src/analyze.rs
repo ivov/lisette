@@ -8,7 +8,7 @@ use syntax::ast::BindingId;
 use syntax::program::{BinderIds, EmitInput, MutationInfo, UnusedInfo, is_internal_package_id};
 
 use semantics::AnalyzeInput;
-use semantics::cache::{EmitStamp, save_package_cache};
+use semantics::cache::{EmitStamp, diagnostic_dependencies_tracked, save_package_cache};
 use semantics::facts::{BindingFact, Usage};
 use semantics::package_graph::DependencyGraph;
 use semantics::store::{ENTRY_FILE_ID, ENTRY_PACKAGE_ID};
@@ -117,6 +117,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         has_pre_check_errors,
         compiled_packages,
         cached_packages,
+        cached_diagnostics,
         cache_root,
         unreachable_packages,
         entry_parse_errors,
@@ -152,6 +153,9 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     // Canonicalize diagnostic order so the output is stable regardless of
     // phase ordering, FxHashMap iteration, or parallel inference scheduling.
     let mut all_diagnostics = sink.into_diagnostics();
+    if !has_pre_check_errors && lint_mode == passes::LintMode::Run {
+        all_diagnostics.extend(cached_diagnostics);
+    }
     all_diagnostics.sort_by(LisetteDiagnostic::sort_key);
     // A bound re-checked at several stages reports the same thing each time.
     let mut seen = HashSet::default();
@@ -188,21 +192,32 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
             .iter()
             .any(|diagnostic| diagnostic.is_error());
         if !has_errors {
+            let dependencies_tracked = diagnostic_dependencies_tracked(&store);
             let save = |compiled: &CompiledPackage| {
-                let file_ids: HashSet<u32> = store
-                    .get_package(&compiled.package_id)
-                    .map(|m| m.file_ids().collect())
-                    .unwrap_or_default();
+                let Some(package) = store.get_package(&compiled.package_id) else {
+                    return;
+                };
+                let file_ids: HashSet<u32> = package.file_ids().collect();
 
-                let has_package_lints = all_diagnostics.iter().any(|diagnostic| {
-                    !diagnostic.is_error()
-                        && diagnostic
-                            .file_id()
-                            .map(|fid| file_ids.contains(&fid))
-                            .unwrap_or(true)
+                let package_lints: Vec<_> = all_diagnostics
+                    .iter()
+                    .filter(|diagnostic| {
+                        !diagnostic.is_error()
+                            && diagnostic.file_id().is_none_or(|id| file_ids.contains(&id))
+                    })
+                    .collect();
+                // Importers can change a method's warnings by using it to satisfy an interface.
+                let has_methods = package.definitions.values().any(|definition| {
+                    definition
+                        .methods()
+                        .is_some_and(|methods| !methods.is_empty())
                 });
-                if !has_package_lints
-                    && let Err(e) = save_package_cache(compiled, &store, project_root, target)
+                if (package_lints.is_empty() || (dependencies_tracked && !has_methods))
+                    && package_lints
+                        .iter()
+                        .all(|diagnostic| cacheable_lint(diagnostic))
+                    && let Err(e) =
+                        save_package_cache(compiled, &store, project_root, target, &package_lints)
                 {
                     eprintln!(
                         "warning: failed to write cache for {}: {e}",
@@ -273,6 +288,35 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         errors,
         lints,
     }
+}
+
+fn cacheable_lint(diagnostic: &LisetteDiagnostic) -> bool {
+    diagnostic.file_location().is_none()
+        && diagnostic.file_id().is_some()
+        && matches!(
+            diagnostic.code_str(),
+            Some(
+                "lint.unused_variable"
+                    | "lint.unused_param"
+                    | "lint.unnecessary_mut"
+                    | "lint.assigned_but_never_read"
+                    | "lint.shadowed_capture"
+                    | "lint.unnecessary_reference"
+                    | "lint.redundant_operation"
+                    | "lint.self_comparison"
+                    | "lint.self_assignment"
+                    | "lint.double_bool_negation"
+                    | "lint.double_int_negation"
+                    | "lint.excess_parens_on_condition"
+                    | "lint.let_and_return"
+                    | "lint.redundant_rebinding"
+                    | "lint.discarded_unit_binding"
+                    | "lint.uninterpolated_fstring"
+                    | "lint.unprefixed_fstring"
+                    | "lint.expression_only_fstring"
+                    | "lint.unnecessary_raw_string"
+            )
+        )
 }
 
 fn classify_diagnostics(

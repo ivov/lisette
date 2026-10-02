@@ -11,7 +11,11 @@ repository.workspace = true
 [lib]
 doctest = false
 
+[features]
+serde = ["dep:serde", "syntax/serde"]
+
 [dependencies]
+serde = { workspace = true, optional = true }
 syntax = { package = "lisette-syntax", version = "=0.12.3", path = "../syntax" }
 owo-colors.workspace = true
 rustc-hash.workspace = true

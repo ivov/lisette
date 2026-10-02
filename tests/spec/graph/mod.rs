@@ -1,3 +1,5 @@
+mod diagnostic_cache;
+
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::LocalSink;

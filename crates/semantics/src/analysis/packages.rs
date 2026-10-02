@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use super::*;
+use crate::cache::{DiagnosticMode, diagnostic_dependencies_tracked};
 use crate::checker::InferredFile;
 use crate::loader;
 use crate::path::DisplayPathBase;
@@ -112,6 +113,7 @@ pub(super) struct PackageInferenceOutput {
     pub(super) dependencies: DependencyGraph,
     pub(super) facts: Facts,
     pub(super) cached_packages: HashSet<String>,
+    pub(super) cached_diagnostics: Vec<LisetteDiagnostic>,
     pub(super) compiled_packages: Vec<CompiledPackage>,
     pub(super) sink: LocalSink,
     pub(super) has_parse_errors: bool,
@@ -206,6 +208,7 @@ pub(super) fn infer_all_packages(
             artifact_hash: compute_emit_artifact_hash(production_hash, input.go_module),
             full_hash,
             dep_hashes,
+            diagnostic_mode: DiagnosticMode::new(input.compile_phase, input.project_kind),
         });
 
         let cache_root = input
@@ -310,6 +313,7 @@ pub(super) fn infer_all_packages(
         dependencies: input.dependencies,
         facts: checker.facts,
         cached_packages,
+        cached_diagnostics: cache_load.diagnostics,
         compiled_packages,
         sink: checker.sink,
         has_parse_errors,
@@ -439,6 +443,7 @@ fn register_go_package(
 #[derive(Default)]
 struct CacheLoad {
     cached: HashSet<String>,
+    diagnostics: Vec<LisetteDiagnostic>,
     missed: Vec<UnparsedPackage>,
 }
 
@@ -451,17 +456,13 @@ fn load_cache_candidates(
     compile_phase: CompilePhase,
     target: stdlib::Target,
 ) -> CacheLoad {
+    // Third-party typedefs can appear after a package saved its diagnostics.
+    let can_replay_diagnostics = diagnostic_dependencies_tracked(store);
     let load = |c: &CacheCandidate| {
         let compiled = &c.pending.package;
         let expected_artifact_hash = compile_phase.emits().then_some(compiled.artifact_hash);
-        try_load_cache(
-            &compiled.package_id,
-            compiled.full_hash,
-            &compiled.dep_hashes,
-            expected_artifact_hash,
-            project_root,
-            target,
-        )
+        try_load_cache(compiled, expected_artifact_hash, project_root, target)
+            .filter(|interface| can_replay_diagnostics || !interface.has_diagnostics())
     };
     let loaded: Vec<Option<PackageInterface>> = if candidates.len() < PARALLEL_THRESHOLD {
         candidates.iter().map(load).collect()
@@ -472,7 +473,7 @@ fn load_cache_candidates(
     let mut result = CacheLoad::default();
     let mut build_jobs: Vec<CacheBuildJob> = Vec::new();
     for (candidate, interface) in candidates.into_iter().zip(loaded) {
-        let Some(interface) = interface else {
+        let Some(mut interface) = interface else {
             result.missed.push(UnparsedPackage {
                 files: candidate.files,
                 rewrite_root_import: candidate.rewrite_root_import,
@@ -481,6 +482,9 @@ fn load_cache_candidates(
             continue;
         };
         let file_id_base = store.reserve_file_ids(interface.files.len() as u32);
+        result
+            .diagnostics
+            .extend(interface.take_diagnostics(file_id_base));
         build_jobs.push(CacheBuildJob {
             package_id: candidate.pending.package.package_id,
             interface,
