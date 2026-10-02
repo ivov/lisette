@@ -4,12 +4,12 @@ use crate::abi::transition::emit_lowered_result_return;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
 use crate::names::go_name::GO_IMPORT_PREFIX;
-use crate::plan::bodies::{LoweredStatement, define, expression_statement};
+use crate::plan::bodies::{LoweredBlock, LoweredStatement, define, expression_statement};
 use crate::plan::cleanup::clean_up;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 #[cfg(debug_assertions)]
-use crate::plan::verify::verify_local_scopes;
+use crate::plan::verify::{verify_final_function_body, verify_local_scopes};
 use crate::plan::visit::identify_body_locals;
 use crate::write_line;
 use ecow::EcoString;
@@ -416,11 +416,19 @@ impl Planner<'_> {
         let (go_ret, mut statements) = self.plan_adapter_body(method, inner_call);
         let shadowing = identify_body_locals(&mut statements, parameters, &mut self.scope);
         clean_up(&mut statements, &shadowing);
+        let mut body = LoweredBlock { statements };
+        if !go_ret.is_empty() {
+            body.ensure_go_termination();
+        }
         #[cfg(debug_assertions)]
-        verify_local_scopes(&mut statements, &parameters.iter().collect::<Vec<_>>())
-            .unwrap_or_else(|error| panic!("{error}"));
-        self.collect_imports(&statements);
-        (go_ret, crate::Renderer.render_setup(&statements))
+        {
+            verify_final_function_body(&body, !go_ret.is_empty())
+                .unwrap_or_else(|error| panic!("{error}"));
+            verify_local_scopes(&mut body.statements, &parameters.iter().collect::<Vec<_>>())
+                .unwrap_or_else(|error| panic!("{error}"));
+        }
+        self.collect_imports(&body.statements);
+        (go_ret, crate::Renderer.render_setup(&body.statements))
     }
 
     fn plan_adapter_body(

@@ -8,6 +8,8 @@ use crate::plan::go_expression::{
     CompositeElement, CompositeLayout, FunctionLiteralLayout, GoExpressionNode, GoParameter,
 };
 use crate::plan::local::{GoIdentifier, LocalId};
+#[cfg(debug_assertions)]
+use crate::plan::verify::verify_final_function_body;
 use std::fmt::{self, Display, Formatter};
 use syntax::ast::Expression;
 use syntax::types::SimpleKind;
@@ -236,6 +238,12 @@ impl GoExpression {
         layout: FunctionLiteralLayout,
     ) -> Self {
         legalize_else_if_scopes(&mut body.statements);
+        if !result.is_empty() {
+            body.ensure_go_termination();
+        }
+        #[cfg(debug_assertions)]
+        verify_final_function_body(&body, !result.is_empty())
+            .unwrap_or_else(|error| panic!("{error}"));
         Self::new(GoExpressionNode::FunctionLiteral {
             parameters,
             result,

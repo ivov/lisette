@@ -20,7 +20,6 @@ func die() struct{} {
 func test(x int) int {
 	if x == 0 {
 		die()
-		panic("unreachable")
 	}
 	return x + 1
 }

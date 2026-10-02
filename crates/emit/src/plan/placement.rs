@@ -3,7 +3,6 @@ use crate::analyze::inline_uses::region_blocks_inline;
 use crate::calls::native::{clip_shared_capacity, is_clip_safe_path};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
-use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::expressions::staging::SpreadSequenceOptions;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::binding_decls::pattern_binds_name;
@@ -661,11 +660,7 @@ impl Planner<'_> {
             return vec![self.lower_statement(last)];
         }
         if last.get_type().is_never() {
-            let mut statements = vec![self.lower_statement(last)];
-            if !is_go_never(last) && !is_breakless_loop(last) {
-                statements.push(LoweredStatement::UnreachablePanic);
-            }
-            return statements;
+            return vec![self.lower_statement(last)];
         }
         if is_unit_call(last) {
             return self.lower_unit_call_into_var(last, target);

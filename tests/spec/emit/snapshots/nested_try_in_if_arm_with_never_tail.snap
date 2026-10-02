@@ -30,7 +30,6 @@ func test(flag bool) lisette.Result[int, string] {
 			return check
 		}
 		die()
-		panic("unreachable")
 	}
 	return lisette.MakeResultOk[int, string](42)
 }

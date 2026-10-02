@@ -17,7 +17,6 @@ func die() struct{} {
 func test() int {
 	if true {
 		die()
-		panic("unreachable")
 	}
 	return 1
 }
