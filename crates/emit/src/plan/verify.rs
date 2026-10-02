@@ -3,6 +3,7 @@ use crate::plan::bodies::{
 };
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::local::{GoIdentifier, LocalId};
+use crate::plan::values::GoExpression;
 use crate::plan::visit::{VisitorMut, visit_statements_mut};
 use rustc_hash::FxHashMap as HashMap;
 use std::fmt::{self, Display, Formatter};
@@ -17,6 +18,7 @@ pub(crate) enum BodyErrorKind {
     ShadowedLocalReference,
     UnboundLocalReference,
     UnidentifiedLocal,
+    UnorderedOperand,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,6 +54,22 @@ pub(crate) fn verify_control_structure(statements: &[LoweredStatement]) -> Resul
         error = kind.or(error);
     });
     error.map_or(Ok(()), |kind| Err(BodyError { kind }))
+}
+
+/// Go does not order a panic outside a call against a later call.
+pub(crate) fn verify_operand_order(values: &[GoExpression]) -> Result<(), BodyError> {
+    for (index, value) in values.iter().enumerate() {
+        if value.effects().panics_or_blocks()
+            && values[index + 1..]
+                .iter()
+                .any(|later| later.effects().runs_code())
+        {
+            return Err(BodyError {
+                kind: BodyErrorKind::UnorderedOperand,
+            });
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn verify_final_function_body(
@@ -222,5 +240,26 @@ mod control_tests {
             verify_final_function_body(&body, true).unwrap_err().kind,
             BodyErrorKind::MissingGoTermination
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_panic_cannot_stay_inline_before_a_later_call() {
+        let index = GoExpression::index(
+            GoExpression::name("xs".to_string()),
+            GoExpression::name("i".to_string()),
+        );
+        let call = GoExpression::call(GoExpression::name("bump".to_string()), Vec::new());
+        assert_eq!(
+            verify_operand_order(&[index.clone(), call.clone()])
+                .unwrap_err()
+                .kind,
+            BodyErrorKind::UnorderedOperand
+        );
+        assert!(verify_operand_order(&[call, index]).is_ok());
     }
 }

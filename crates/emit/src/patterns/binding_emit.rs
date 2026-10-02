@@ -128,9 +128,11 @@ pub(crate) fn tree_binding_statements(
 
         if analyze_inline_candidate_ids(&binding.binding_ids, consumers) == InlineDecision::Inline {
             let composable = binding.path.render(SubjectRoot::Var(subject));
-            planner
-                .scope
-                .bind_inline_expr(&binding.lisette_name, InlineExpr::new(composable));
+            let stability = planner.path_read_stability(&composable);
+            planner.scope.bind_inline_expr(
+                &binding.lisette_name,
+                InlineExpr::new(composable, stability),
+            );
             for id in &binding.binding_ids {
                 planner
                     .scope

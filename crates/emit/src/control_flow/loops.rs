@@ -449,7 +449,7 @@ impl Planner<'_> {
         let (mut start_expression, start_is_observable) = match start {
             Some(start) => {
                 let plan = self.plan_operand(start, ExpressionContext::value());
-                let is_observable = plan.evaluation.stability.is_observable();
+                let is_observable = plan.facts().stability.is_observable();
                 let (setup, value) = plan.into_parts();
                 prologue.extend(setup);
                 (value, is_observable)

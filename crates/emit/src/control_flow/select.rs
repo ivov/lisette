@@ -173,15 +173,18 @@ impl Planner<'_> {
                     ..
                 } => {
                     let channel = self.lower_channel_operand(receive_expression);
-                    let channel_has_call = channel.evaluation.effect.has_call();
-                    let (channel_setup, ch) = channel.into_parts();
+                    let repeats = channel.effects().can_duplicate();
+                    let (channel_setup, channel_value) = channel.into_parts();
                     setup.extend(channel_setup);
-                    let channel =
-                        if binding.is_some_pattern() || (needs_retry_loop && channel_has_call) {
-                            GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", ch))
-                        } else {
-                            ch
-                        };
+                    let channel = if binding.is_some_pattern() || (needs_retry_loop && !repeats) {
+                        GoExpression::name(self.hoist_tmp_value_statement(
+                            setup,
+                            "ch",
+                            channel_value,
+                        ))
+                    } else {
+                        channel_value
+                    };
                     PreparedSelectArm::Receive {
                         binding,
                         body,
@@ -194,17 +197,21 @@ impl Planner<'_> {
                     arms,
                 } => {
                     let channel = self.lower_channel_operand(receive_expression);
-                    let channel_has_call = channel.evaluation.effect.has_call();
-                    let (channel_setup, ch) = channel.into_parts();
+                    let repeats = channel.effects().can_duplicate();
+                    let (channel_setup, channel_value) = channel.into_parts();
                     setup.extend(channel_setup);
-                    let ch = if needs_retry_loop && channel_has_call {
-                        GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", ch))
+                    let channel = if needs_retry_loop && !repeats {
+                        GoExpression::name(self.hoist_tmp_value_statement(
+                            setup,
+                            "ch",
+                            channel_value,
+                        ))
                     } else {
-                        ch
+                        channel_value
                     };
                     PreparedSelectArm::MatchReceive {
                         arms,
-                        channel: ch,
+                        channel,
                         element_ty: receive_expression.get_type().ok_type(),
                     }
                 }
@@ -454,42 +461,46 @@ impl Planner<'_> {
         if let Some(operation) = channel_operation(unwrapped) {
             let channel = operation.channel();
             let channel_plan = self.lower_value(channel, ExpressionContext::value());
-            let ch_has_call = needs_hoist && channel_plan.evaluation.effect.has_call();
-            setup.extend(channel_plan.setup);
-            let mut ch = channel_plan.expression;
+            let pin_channel = needs_hoist && !channel_plan.effects().can_duplicate();
+            let (channel_setup, mut channel_value) = channel_plan.into_parts();
+            setup.extend(channel_setup);
             if channel.get_type().is_ref() {
-                ch = cancel_deref_of_address(ch);
+                channel_value = cancel_deref_of_address(channel_value);
             }
-            if ch_has_call {
-                ch = GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", ch));
+            if pin_channel {
+                channel_value =
+                    GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", channel_value));
             }
             match operation {
                 ChannelOperation::Send { value, .. } => {
                     let value_plan = self.lower_composite_value(value, ExpressionContext::value());
-                    let val_has_call = needs_hoist && value_plan.evaluation.effect.has_call();
-                    setup.extend(value_plan.setup);
-                    let mut val = value_plan.expression;
-                    if val_has_call {
-                        val = GoExpression::name(
-                            self.hoist_tmp_value_statement(setup, "send_val", val),
+                    let pin_value = needs_hoist && !value_plan.effects().can_duplicate();
+                    let (value_setup, mut sent) = value_plan.into_parts();
+                    setup.extend(value_setup);
+                    if pin_value {
+                        sent = GoExpression::name(
+                            self.hoist_tmp_value_statement(setup, "send_val", sent),
                         );
                     }
-                    PreparedChannelOperation::Send(ch, val)
+                    PreparedChannelOperation::Send(channel_value, sent)
                 }
-                ChannelOperation::Receive { .. } => PreparedChannelOperation::Receive(ch),
+                ChannelOperation::Receive { .. } => {
+                    PreparedChannelOperation::Receive(channel_value)
+                }
             }
         } else {
             let expression_plan = self.lower_value(send_expression, ExpressionContext::value());
-            let expression_has_call = needs_hoist && expression_plan.evaluation.effect.has_call();
-            setup.extend(expression_plan.setup);
-            let mut ch = expression_plan.expression;
+            let pin_channel = needs_hoist && !expression_plan.effects().can_duplicate();
+            let (expression_setup, mut channel_value) = expression_plan.into_parts();
+            setup.extend(expression_setup);
             if send_expression.get_type().is_ref() {
-                ch = cancel_deref_of_address(ch);
+                channel_value = cancel_deref_of_address(channel_value);
             }
-            if expression_has_call {
-                ch = GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", ch));
+            if pin_channel {
+                channel_value =
+                    GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", channel_value));
             }
-            PreparedChannelOperation::Receive(ch)
+            PreparedChannelOperation::Receive(channel_value)
         }
     }
 

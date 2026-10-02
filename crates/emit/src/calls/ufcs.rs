@@ -11,7 +11,6 @@ use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::types::native::NativeGoType;
-use std::mem;
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::program::ReceiverCoercion;
@@ -271,25 +270,27 @@ impl Planner<'_> {
     fn coerce_receiver_address_stage(
         &mut self,
         receiver: &Expression,
-        mut stage: ValuePlan,
+        stage: ValuePlan,
     ) -> ValuePlan {
-        let value = mem::replace(&mut stage.expression, GoExpression::empty());
-        if matches!(receiver.unwrap_parens(), Expression::Call { .. }) {
-            let tmp = self.hoist_tmp_value_statement(&mut stage.setup, "ref", value);
-            stage.expression = GoExpression::address_of(GoExpression::name(tmp));
-            return stage.into_addressed_location();
-        }
-        let addressed = GoExpression::address_of(value);
-        if matches!(receiver.unwrap_parens(), Expression::Identifier { .. }) {
-            stage.expression = addressed;
-            stage.into_addressed_location()
-        } else if stage.setup.is_empty() {
-            stage.expression = addressed;
-            stage.make_observable();
-            stage
-        } else {
-            let tmp = self.hoist_tmp_value_statement(&mut stage.setup, "ref", addressed);
-            ValuePlan::captured(stage.setup, tmp)
+        match receiver.unwrap_parens() {
+            Expression::Call { .. } => stage
+                .map_expression(|setup, value| {
+                    let temp = self.hoist_tmp_value_statement(setup, "ref", value);
+                    GoExpression::address_of(GoExpression::name(temp))
+                })
+                .into_addressed_location(),
+            Expression::Identifier { .. } => stage
+                .map_expression(|_, value| GoExpression::address_of(value))
+                .into_addressed_location(),
+            _ if stage.setup().is_empty() => {
+                stage.map_observable_expression(|_, value| GoExpression::address_of(value))
+            }
+            _ => {
+                let (mut setup, value) = stage.into_parts();
+                let addressed = GoExpression::address_of(value);
+                let temp = self.hoist_tmp_value_statement(&mut setup, "ref", addressed);
+                ValuePlan::captured(setup, temp)
+            }
         }
     }
 

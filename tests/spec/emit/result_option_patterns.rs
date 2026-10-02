@@ -4985,3 +4985,30 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn operands_read_twice_are_evaluated_once() {
+    let input = r#"
+fn counted(calls: mut Ref<int>, xs: Slice<int>) -> Slice<int> {
+  calls.* += 1
+  xs
+}
+
+fn position(calls: mut Ref<int>, i: int) -> int {
+  calls.* += 1
+  i
+}
+
+fn test() {
+  let mut base_calls = 0
+  let mut index_calls = 0
+  let Some(v) = counted(&base_calls, [1, 2]).get(position(&index_calls, 1)) else {
+    panic("the element was missing")
+  }
+  if v != 2 || base_calls != 1 || index_calls != 1 { panic("get evaluated an operand twice") }
+  let tail = counted(&base_calls, [1, 2, 3])[1..]
+  if tail.length() != 2 || base_calls != 2 { panic("slicing evaluated its base twice") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

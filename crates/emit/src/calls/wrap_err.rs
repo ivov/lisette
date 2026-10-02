@@ -3,7 +3,7 @@ use crate::context::expression::ExpressionContext;
 use crate::expressions::literals::convert_escape_sequences;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::LoweredStatement;
-use crate::plan::values::{GoExpression, ValuePlan};
+use crate::plan::values::GoExpression;
 use syntax::ast::{Expression, FormatStringPart, Literal};
 
 pub(crate) struct WrapMessage {
@@ -94,11 +94,8 @@ impl Planner<'_> {
                         if let FormatStringPart::Expression(expression) = part {
                             let value =
                                 self.lower_composite_value(expression, ExpressionContext::value());
-                            let ValuePlan {
-                                setup: part_setup,
-                                expression: value,
-                                ..
-                            } = self.eager_operand(expression, value, "fmtarg");
+                            let (part_setup, value) =
+                                self.eager_operand(expression, value, "fmtarg").into_parts();
                             setup.extend(part_setup);
                             values.push(value);
                         }

@@ -172,7 +172,7 @@ impl Planner<'_> {
             bound.extend(mapping.into_keys());
         }
         for (stage, slot) in stages.iter().zip(slots) {
-            if stage.expression.constant_kind().is_some() {
+            if stage.expression().constant_kind().is_some() {
                 continue;
             }
             if let Some((declared, instantiated)) = slot {
@@ -189,7 +189,7 @@ impl Planner<'_> {
                 let Some((declared, instantiated)) = slot else {
                     return stage;
                 };
-                let constant = stage.expression.constant_kind();
+                let constant = stage.expression().constant_kind();
                 if !convertible || constant.is_none() {
                     return stage;
                 }
@@ -396,7 +396,7 @@ impl Planner<'_> {
             .map_expression(|setup, source_value| {
                 GoExpression::name(self.hoist_tmp_value_statement(setup, "src", source_value))
             });
-        let source_variable = source.expression.clone();
+        let source_variable = source.expression().clone();
 
         let target_element_ret = self.render_lowered_return_ty(&param_abi, arg_ret);
         let arg_fn_params = arg_fn.get_function_params().unwrap_or(&[]);

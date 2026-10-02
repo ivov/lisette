@@ -62,22 +62,18 @@ impl Planner<'_> {
             Some(package) => ValuePlan::captured(Vec::new(), package.qualifier().to_string()),
             None => self.plan_coerced_expression(expression, receiver_coercion, ctx),
         };
-        let effect = base_plan.evaluation.effect;
+        let effect = base_plan.facts().effect;
         let stability = if reads_value_member(
             dot_access_kind,
             receiver_coercion,
             expression,
             &expression_ty,
         ) {
-            base_plan.evaluation.stability
+            base_plan.facts().stability
         } else {
             Stability::Observable
         };
-        let ValuePlan {
-            mut setup,
-            expression: base,
-            ..
-        } = base_plan;
+        let (mut setup, base) = base_plan.into_parts();
         if let Some(member_access) =
             self.try_emit_tuple_member_dot(&base, &expression_ty, member, dot_access_kind)
         {

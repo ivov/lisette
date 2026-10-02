@@ -347,7 +347,7 @@ impl Planner<'_> {
         ) {
             let value = self.plan_operand(unwrapped, ExpressionContext::value());
             LoweredStatement::Body(LoweredBlock {
-                statements: value.setup,
+                statements: value.into_parts().0,
             })
         } else if let Expression::Propagate {
             expression: inner, ..

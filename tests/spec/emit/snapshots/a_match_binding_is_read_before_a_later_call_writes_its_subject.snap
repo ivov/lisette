@@ -1,0 +1,75 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  struct Point {
+    x: int,
+  }
+  
+  fn read_then_mutate() -> int {
+    let mut s = Point { x: 1 }
+    let bump = || {
+      s = Point { x: 10 }
+      0
+    }
+    match s {
+      Point { x } => x + bump(),
+    }
+  }
+  
+  fn tuple_then_mutate() -> int {
+    let mut t = (1, 2)
+    let bump = || {
+      t = (10, 20)
+      0
+    }
+    match t {
+      (a, _) => a + bump(),
+    }
+  }
+  
+  fn test() {
+    if read_then_mutate() != 1 { panic("a struct pattern binding read a later write") }
+    if tuple_then_mutate() != 1 { panic("a tuple pattern binding read a later write") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Point struct {
+	x int
+}
+
+func readThenMutate() int {
+	s := Point{x: 1}
+	bump := func() int {
+		s = Point{x: 10}
+		return 0
+	}
+	{
+		left := s.x
+		return left + bump()
+	}
+}
+
+func tupleThenMutate() int {
+	t := lisette.MakeTuple2[int, int](1, 2)
+	bump := func() int {
+		t = lisette.MakeTuple2[int, int](10, 20)
+		return 0
+	}
+	{
+		left := t.First
+		return left + bump()
+	}
+}
+
+func test() {
+	if readThenMutate() != 1 {
+		panic("a struct pattern binding read a later write")
+	}
+	if tupleThenMutate() != 1 {
+		panic("a tuple pattern binding read a later write")
+	}
+}

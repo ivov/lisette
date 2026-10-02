@@ -123,27 +123,6 @@ pub(crate) enum CompositeLayout {
     MultiLine { indented: bool },
 }
 
-#[derive(Default)]
-struct EvaluationObligations {
-    observable: bool,
-    may_panic_without_call: bool,
-    may_block_without_call: bool,
-    staging_work: bool,
-}
-
-impl EvaluationObligations {
-    fn combine(&mut self, other: Self) {
-        self.observable |= other.observable;
-        self.may_panic_without_call |= other.may_panic_without_call;
-        self.may_block_without_call |= other.may_block_without_call;
-        self.staging_work |= other.staging_work;
-    }
-
-    fn must_evaluate(&self) -> bool {
-        self.observable || self.may_panic_without_call
-    }
-}
-
 impl CompositeLayout {
     /// One element per line once several wide elements would crowd one line.
     pub(crate) fn for_elements(count: usize, widest: usize) -> Self {
@@ -156,108 +135,7 @@ impl CompositeLayout {
 }
 
 impl GoExpressionNode {
-    /// A function literal does not run its body when evaluated.
-    fn evaluation_obligations(&self) -> EvaluationObligations {
-        let mut obligations = EvaluationObligations::default();
-        self.visit_children(&mut |child| {
-            obligations.combine(child.evaluation_obligations());
-        });
-        match self {
-            Self::Call { .. } | Self::Verbatim(_) => {
-                obligations.observable = true;
-                obligations.staging_work = true;
-            }
-            Self::Index { .. } | Self::Slice { .. } | Self::Dereference(_) => {
-                obligations.may_panic_without_call = true
-            }
-            Self::Selector { may_panic, .. } => {
-                obligations.may_panic_without_call |= *may_panic;
-            }
-            Self::TypeAssertion { .. } => {
-                obligations.may_panic_without_call = true;
-                obligations.staging_work = true;
-            }
-            Self::Unary { operator, .. } if operator == "<-" => {
-                obligations.observable = true;
-                obligations.may_block_without_call = true;
-                obligations.staging_work = true;
-            }
-            Self::Binary { operator, .. }
-                if matches!(operator.as_str(), "/" | "%" | "<<" | ">>") =>
-            {
-                obligations.may_panic_without_call = true;
-            }
-            Self::Binary {
-                operator,
-                left,
-                right,
-            } if matches!(operator.as_str(), "==" | "!=")
-                && !matches!(left.as_ref(), Self::Literal(_))
-                && !matches!(right.as_ref(), Self::Literal(_))
-                && !(left.is_unit_struct_literal() && right.is_unit_struct_literal()) =>
-            {
-                obligations.may_panic_without_call = true;
-            }
-            Self::Conversion { go_type, .. }
-                if go_type.starts_with("*[") || go_type.starts_with('[') =>
-            {
-                obligations.may_panic_without_call = true;
-            }
-            Self::CompositeLiteral { go_type, .. }
-                if go_type.as_deref().is_some_and(|ty| ty.starts_with("map[")) =>
-            {
-                obligations.may_panic_without_call = true;
-            }
-            Self::Identifier(_)
-            | Self::Qualified { .. }
-            | Self::Literal(_)
-            | Self::Type(_)
-            | Self::Instantiation { .. }
-            | Self::AddressOf(_)
-            | Self::Spread(_)
-            | Self::FunctionLiteral { .. }
-            | Self::Empty
-            | Self::Conversion { .. }
-            | Self::CompositeLiteral { .. } => {}
-            Self::Unary { operator, .. } => {
-                if !matches!(operator.as_str(), "+" | "-" | "!" | "^" | "&") {
-                    obligations.observable = true;
-                    obligations.may_panic_without_call = true;
-                    obligations.staging_work = true;
-                }
-            }
-            Self::Binary { operator, .. } => {
-                if !matches!(
-                    operator.as_str(),
-                    "+" | "-"
-                        | "*"
-                        | "&"
-                        | "|"
-                        | "^"
-                        | "&^"
-                        | "&&"
-                        | "||"
-                        | "=="
-                        | "!="
-                        | "<"
-                        | "<="
-                        | ">"
-                        | ">="
-                ) {
-                    obligations.observable = true;
-                    obligations.may_panic_without_call = true;
-                    obligations.staging_work = true;
-                }
-            }
-        }
-        obligations
-    }
-
-    pub(crate) fn does_work(&self) -> bool {
-        self.evaluation_obligations().staging_work
-    }
-
-    fn is_unit_struct_literal(&self) -> bool {
+    pub(super) fn is_unit_struct_literal(&self) -> bool {
         matches!(
             self,
             Self::CompositeLiteral {
@@ -266,15 +144,6 @@ impl GoExpressionNode {
                 ..
             } if go_type == "struct{}" && elements.is_empty()
         )
-    }
-
-    pub(crate) fn can_erase(&self) -> bool {
-        !self.evaluation_obligations().must_evaluate()
-    }
-
-    pub(crate) fn requires_ordering_without_call(&self) -> bool {
-        let obligations = self.evaluation_obligations();
-        obligations.may_panic_without_call || obligations.may_block_without_call
     }
 
     pub(crate) fn mentions(&self, name: &str) -> bool {

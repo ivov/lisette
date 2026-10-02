@@ -4,6 +4,7 @@ use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
 use crate::names::packages::PackageUse;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement, legalize_else_if_scopes};
+use crate::plan::evaluation::{Effects, Reads};
 use crate::plan::go_expression::{
     CompositeElement, CompositeLayout, FunctionLiteralLayout, GoExpressionNode, GoParameter,
 };
@@ -11,6 +12,7 @@ use crate::plan::local::{GoIdentifier, LocalId};
 #[cfg(debug_assertions)]
 use crate::plan::verify::verify_final_function_body;
 use std::fmt::{self, Display, Formatter};
+use std::mem;
 use syntax::ast::Expression;
 use syntax::types::SimpleKind;
 
@@ -426,16 +428,8 @@ impl GoExpression {
         }
     }
 
-    pub(crate) fn does_work(&self) -> bool {
-        self.node.does_work()
-    }
-
-    pub(crate) fn can_erase(&self) -> bool {
-        self.node.can_erase()
-    }
-
-    pub(crate) fn requires_ordering_without_call(&self) -> bool {
-        self.node.requires_ordering_without_call()
+    pub(crate) fn effects(&self) -> Effects {
+        self.node.effects()
     }
 }
 
@@ -550,9 +544,9 @@ impl EvaluationFacts {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ValuePlan {
-    pub setup: Vec<LoweredStatement>,
-    pub expression: GoExpression,
-    pub evaluation: EvaluationFacts,
+    setup: Vec<LoweredStatement>,
+    expression: GoExpression,
+    evaluation: EvaluationFacts,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -563,6 +557,38 @@ pub(crate) struct SequencedValues {
 }
 
 impl ValuePlan {
+    pub(crate) fn setup(&self) -> &[LoweredStatement] {
+        &self.setup
+    }
+
+    pub(crate) fn expression(&self) -> &GoExpression {
+        &self.expression
+    }
+
+    pub(crate) fn facts(&self) -> EvaluationFacts {
+        self.evaluation
+    }
+
+    pub(crate) fn into_parts_with_facts(
+        self,
+    ) -> (Vec<LoweredStatement>, GoExpression, EvaluationFacts) {
+        (self.setup, self.expression, self.evaluation)
+    }
+
+    pub(crate) fn split_setup(self) -> (Vec<LoweredStatement>, Self) {
+        let Self {
+            setup,
+            expression,
+            evaluation,
+        } = self;
+        (setup, Self::from_facts(Vec::new(), expression, evaluation))
+    }
+
+    /// For passes that keep evaluation unchanged.
+    pub(crate) fn parts_mut(&mut self) -> (&mut Vec<LoweredStatement>, &mut GoExpression) {
+        (&mut self.setup, &mut self.expression)
+    }
+
     pub(crate) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
         for statement in &self.setup {
             statement.visit_expressions(visit);
@@ -677,13 +703,15 @@ impl ValuePlan {
     }
 
     pub(crate) fn verbatim(source: String) -> Self {
-        Self::computed(
+        Self::observable_call(
             Vec::new(),
             GoExpression::verbatim(source),
-            EvaluationEffect::Pure,
+            EvaluationEffect::EffectfulCall,
         )
     }
 
+    /// Represent the same value differently. The transform must not add an
+    /// effect, so the facts carry over.
     pub(crate) fn map_expression(
         self,
         transform: impl FnOnce(&mut Vec<LoweredStatement>, GoExpression) -> GoExpression,
@@ -722,7 +750,12 @@ impl ValuePlan {
         self
     }
 
-    pub(crate) fn replace_with_pinned_name(&mut self, name: String) {
+    pub(crate) fn pin(
+        &mut self,
+        bind: impl FnOnce(&mut Vec<LoweredStatement>, GoExpression) -> String,
+    ) {
+        let value = mem::replace(&mut self.expression, GoExpression::empty());
+        let name = bind(&mut self.setup, value);
         self.expression = GoExpression::name(name);
         self.evaluation.effect = EvaluationEffect::Pure;
     }
@@ -754,6 +787,33 @@ impl ValuePlan {
                 .setup
                 .iter()
                 .any(|statement| statement.binds_name(rendered))
+    }
+
+    pub(crate) fn effects(&self) -> Effects {
+        let reads = if self.reads_only_own_setup() {
+            Reads::Nothing
+        } else {
+            Reads::of(self.evaluation.stability)
+        };
+        self.expression
+            .effects()
+            .with_facts(reads, self.evaluation.effect)
+    }
+
+    fn reads_only_own_setup(&self) -> bool {
+        if self.setup.is_empty() || self.expression.effects().reads() == Reads::Shared {
+            return false;
+        }
+        let mut own = true;
+        self.expression.node().visit(&mut |node| {
+            if let GoExpressionNode::Identifier(name) = node {
+                own &= self
+                    .setup
+                    .iter()
+                    .any(|statement| statement.binds_name(name.spelling()));
+            }
+        });
+        own
     }
 
     pub(crate) fn rests_in_fixed_name(&self) -> bool {

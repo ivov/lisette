@@ -5,14 +5,16 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::CallableOrigin;
+use crate::plan::evaluation::{Effects, Reads};
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, SequencedValues, Stability, ValuePlan,
 };
+#[cfg(debug_assertions)]
+use crate::plan::verify::verify_operand_order;
 use crate::utils::reads_value_member;
-use std::mem;
-use syntax::ast::{Expression, IdentifierResolution, UnaryOperator};
+use syntax::ast::{BindingId, Expression, IdentifierResolution, UnaryOperator};
 use syntax::program::DotAccessKind;
 use syntax::types::{FunctionParameter, Type};
 
@@ -30,46 +32,46 @@ pub(crate) struct SpreadSequenceOptions {
     pub(crate) boundary: CaptureBoundary,
 }
 
+/// What later operands run before an operand's expression is read.
 #[derive(Default)]
 pub(crate) struct LaterStages {
-    has_setup: bool,
-    has_effectful_call: bool,
-    has_pin: bool,
-    has_ordered_work: bool,
+    before: Effects,
+    inline: Effects,
 }
 
 impl LaterStages {
     pub(crate) fn sequenced(setup: &[LoweredStatement], effect: EvaluationEffect) -> Self {
         Self {
-            has_setup: !setup.is_empty(),
-            has_effectful_call: effect.has_effectful_call(),
-            has_pin: false,
-            has_ordered_work: effect.has_call(),
+            before: if setup.is_empty() {
+                Effects::default()
+            } else {
+                Effects::anything()
+            },
+            inline: Effects::calls_of(effect),
         }
     }
 
-    /// Setup can rebind any name, a call only a name mutated through an alias.
     pub(crate) fn can_change(&self, stability: Stability) -> bool {
-        stability.is_observable()
-            && (self.has_setup || (self.has_effectful_call && !stability.is_stable_across_calls()))
+        !self.can_follow(Effects::read_of(stability))
     }
 
-    pub(crate) fn prepend(&mut self, stage: &ValuePlan) -> bool {
-        let stage_has_setup = !stage.setup.is_empty();
-        let value_pin = !stage_has_setup && self.can_change(stage.evaluation.stability);
-        let call_needs_pin = stage.evaluation.effect.has_call()
-            && stage.expression.does_work()
-            && (self.has_setup || self.has_pin);
-        let noncall_needs_pin = stage.expression.requires_ordering_without_call()
-            && !matches!(stage.expression.node(), GoExpressionNode::Call { .. })
-            && (self.has_setup || self.has_pin || self.has_ordered_work);
-        let ordering_pin = call_needs_pin || noncall_needs_pin;
-        let pinned = value_pin || ordering_pin;
+    fn can_follow(&self, effects: Effects) -> bool {
+        effects.can_move_across(self.before)
+            && effects.without_go_order().can_move_across(self.inline)
+    }
 
-        self.has_setup |= stage_has_setup;
-        self.has_effectful_call |= stage.evaluation.effect.has_effectful_call();
-        self.has_pin |= pinned;
-        self.has_ordered_work |= stage.evaluation.effect.has_call() || stage.expression.does_work();
+    /// Returns whether `stage` must be pinned.
+    pub(crate) fn prepend(&mut self, stage: &ValuePlan) -> bool {
+        let effects = stage.effects();
+        let pinned = !self.can_follow(effects);
+        if !stage.setup().is_empty() {
+            self.before = self.before.union(Effects::anything());
+        }
+        if pinned {
+            self.before = self.before.union(effects);
+        } else {
+            self.inline = self.inline.union(effects);
+        }
         pinned
     }
 }
@@ -92,9 +94,7 @@ impl Planner<'_> {
     /// Pin a staged operand's value into a temp so it evaluates before any
     /// later sibling.
     pub(crate) fn pin_staged(&mut self, staged: &mut ValuePlan, prefix: &str) {
-        let value = mem::replace(&mut staged.expression, GoExpression::empty());
-        let tmp = self.hoist_tmp_value_statement(&mut staged.setup, prefix, value);
-        staged.replace_with_pinned_name(tmp);
+        staged.pin(|setup, value| self.hoist_tmp_value_statement(setup, prefix, value));
     }
 
     pub(crate) fn eager_operand(
@@ -103,8 +103,8 @@ impl Planner<'_> {
         mut value: ValuePlan,
         prefix: &str,
     ) -> ValuePlan {
-        if !value.evaluation.stability.is_fixed()
-            && value.expression.constant_kind().is_none()
+        if !value.facts().stability.is_fixed()
+            && value.expression().constant_kind().is_none()
             && !self.plan_rests_in_stable_name(&value)
         {
             // Keep the source type when Go would default an untyped shift to int.
@@ -124,7 +124,7 @@ impl Planner<'_> {
         boundary: CaptureBoundary,
     ) -> GoExpression {
         let plan = self.lower_composite_value(expression, ExpressionContext::value());
-        let requires_capture = boundary.requires_value_capture(plan.evaluation.stability);
+        let requires_capture = boundary.requires_value_capture(plan.facts().stability);
         let (value_setup, value) = plan.into_parts();
         setup.extend(value_setup);
         if requires_capture {
@@ -194,6 +194,32 @@ impl Planner<'_> {
         } else {
             Stability::Observable
         }
+    }
+
+    fn binding_read_stability(&self, id: BindingId) -> Stability {
+        if !self.facts.is_mutated(id) {
+            Stability::Fixed
+        } else if !self.facts.is_alias_mutated(id) {
+            Stability::StableAcrossCalls
+        } else {
+            Stability::Observable
+        }
+    }
+
+    pub(crate) fn path_read_stability(&self, path: &GoExpression) -> Stability {
+        if path.effects().reads() == Reads::Shared {
+            return Stability::Observable;
+        }
+        let mut stability = Stability::Literal;
+        path.node().visit(&mut |node| {
+            if let GoExpressionNode::Identifier(name) = node {
+                stability = match self.scope.source_binding_for_go_name(name.spelling()) {
+                    Some(id) => self.binding_read_stability(id),
+                    None => Stability::StableAcrossCalls,
+                };
+            }
+        });
+        stability
     }
 
     /// Only a binding mutated through an alias can be rebound by a call, so
@@ -365,8 +391,6 @@ impl Planner<'_> {
     }
 
     /// Sequence value plans while preserving left-to-right evaluation order.
-    /// A later sibling with setup or an effectful call forces an earlier
-    /// observable value into a temporary.
     pub(crate) fn sequence_values(
         &mut self,
         stages: Vec<ValuePlan>,
@@ -374,27 +398,9 @@ impl Planner<'_> {
         prefix: &str,
     ) -> SequencedValues {
         let effect = stages.iter().fold(EvaluationEffect::Pure, |effect, stage| {
-            effect.combine(stage.evaluation.effect)
+            effect.combine(stage.facts().effect)
         });
         let eager = boundary.requires_value_capture(Stability::Observable);
-        if !eager
-            && stages.iter().all(|stage| {
-                stage.setup.is_empty()
-                    && !stage.evaluation.effect.has_effectful_call()
-                    && !stage.expression.requires_ordering_without_call()
-            })
-        {
-            return SequencedValues {
-                setup: Vec::new(),
-                values: stages.into_iter().map(|stage| stage.expression).collect(),
-                effect,
-            };
-        }
-
-        // Pinning hoists evaluation into setup, so a call left inline must
-        // also pin when a later sibling pins or carries setup. A value
-        // already reduced to a temp by its own setup evaluates nothing
-        // inline and needs no ordering pin.
         let mut later = LaterStages::default();
         let stages: Vec<_> = stages
             .into_iter()
@@ -408,11 +414,7 @@ impl Planner<'_> {
         let mut setup = Vec::new();
         let mut results = Vec::with_capacity(stages.len());
         for (stage, pin) in stages.into_iter().rev() {
-            let ValuePlan {
-                setup: stage_setup,
-                expression,
-                evaluation,
-            } = stage;
+            let (stage_setup, expression, evaluation) = stage.into_parts_with_facts();
             setup.extend(stage_setup);
             if pin || (eager && !evaluation.stability.is_fixed()) {
                 let tmp = self.hoist_tmp_value_statement(&mut setup, prefix, expression);
@@ -421,6 +423,8 @@ impl Planner<'_> {
                 results.push(expression);
             }
         }
+        #[cfg(debug_assertions)]
+        verify_operand_order(&results).unwrap_or_else(|error| panic!("{error}"));
         SequencedValues {
             setup,
             values: results,

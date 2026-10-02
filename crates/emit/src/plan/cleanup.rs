@@ -8,6 +8,7 @@ use crate::plan::bodies::{
     LoweredStatement, SelectArmPlan, SwitchKind, for_each_statement, for_each_statements_mut,
     legalize_else_if_scopes,
 };
+use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::values::{GoExpression, ValuePlan};
@@ -148,13 +149,13 @@ fn assigned_name(statement: &LoweredStatement, target: &GoIdentifier) -> Option<
     else {
         return None;
     };
-    if !target_capture.is_empty() || !value.setup.is_empty() {
+    if !target_capture.is_empty() || !value.setup().is_empty() {
         return None;
     }
     if !matches!(place.node(), GoExpressionNode::Identifier(name) if name.refers_to_same(target)) {
         return None;
     }
-    match value.expression.node() {
+    match value.expression().node() {
         GoExpressionNode::Identifier(element) => Some(element.clone()),
         _ => None,
     }
@@ -170,9 +171,9 @@ fn assigns_true(statement: &LoweredStatement, target: &GoIdentifier) -> bool {
         return false;
     };
     target_capture.is_empty()
-        && value.setup.is_empty()
+        && value.setup().is_empty()
         && matches!(place.node(), GoExpressionNode::Identifier(name) if name.refers_to_same(target))
-        && matches!(value.expression.node(), GoExpressionNode::Literal(text) if text == "true")
+        && matches!(value.expression().node(), GoExpressionNode::Literal(text) if text == "true")
 }
 
 fn flag_guarded_return(
@@ -288,7 +289,7 @@ fn returned_alias(definition: &LoweredStatement, next: &LoweredStatement) -> Opt
     let [name] = names.as_slice() else {
         return None;
     };
-    if value.does_work() {
+    if value.effects().runs_code() {
         return None;
     }
     let LoweredStatement::Return(values) = next else {
@@ -320,7 +321,7 @@ fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredSta
     else {
         return None;
     };
-    if !target_capture.is_empty() || !value.setup.is_empty() {
+    if !target_capture.is_empty() || !value.setup().is_empty() {
         return None;
     }
     let GoExpressionNode::Identifier(name) = target.node() else {
@@ -331,7 +332,7 @@ fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredSta
         left,
         right,
         ..
-    } = value.expression.node()
+    } = value.expression().node()
     else {
         return None;
     };
@@ -349,7 +350,7 @@ fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredSta
             rhs: Box::new(ValuePlan::computed(
                 Vec::new(),
                 GoExpression::from_node(right.as_ref().clone()),
-                value.evaluation.effect,
+                value.facts().effect,
             )),
             pinned_left: None,
         },
@@ -579,8 +580,8 @@ fn replace_only_read(
             target_capture,
             target,
             value,
-        }) if target_capture.is_empty() && value.setup.is_empty() => rename_in(
-            vec![target.node_mut(), value.expression.node_mut()],
+        }) if target_capture.is_empty() && value.setup().is_empty() => rename_in(
+            vec![target.node_mut(), value.parts_mut().1.node_mut()],
             Some(0),
             temp,
             source,
@@ -591,8 +592,8 @@ fn replace_only_read(
             kind: CompoundKind::OpAssign {
                 rhs, pinned_left, ..
             },
-        }) if target_capture.is_empty() && rhs.setup.is_empty() => {
-            let mut siblings = vec![target.node_mut(), rhs.expression.node_mut()];
+        }) if target_capture.is_empty() && rhs.setup().is_empty() => {
+            let mut siblings = vec![target.node_mut(), rhs.parts_mut().1.node_mut()];
             siblings.extend(pinned_left.as_mut().map(GoExpression::node_mut));
             rename_in(siblings, Some(0), temp, source)
         }
@@ -738,9 +739,7 @@ fn analyze(node: &GoExpressionNode, temp: &GoIdentifier) -> Analysis {
         && !identity_read;
     Analysis {
         reads,
-        works: node.does_work()
-            || node.requires_ordering_without_call()
-            || children.iter().any(|child| child.works),
+        works: !Effects::local_read().can_move_across(node.effects()),
         ordered,
     }
 }
@@ -834,7 +833,7 @@ fn pure_define(statement: &LoweredStatement) -> Option<(&GoIdentifier, &GoExpres
     match statement {
         LoweredStatement::Directed { inner, .. } => pure_define(inner),
         LoweredStatement::Define(Definition { names, value }) => match names.as_slice() {
-            [name] if value.can_erase() => Some((name, value)),
+            [name] if value.effects().can_erase() => Some((name, value)),
             _ => None,
         },
         _ => None,
@@ -973,6 +972,29 @@ mod tests {
             other,
             GoExpressionNode::Identifier(GoIdentifier::local("temp".to_string(), LocalId(5)))
         );
+    }
+
+    #[test]
+    fn alias_replacement_moves_a_read_past_a_panic_but_not_past_a_call() {
+        let index = GoExpression::index(name("xs"), name("i"));
+        let mut statements = vec![
+            define("temp".to_string(), name("source")),
+            returned(GoExpression::binary(name("temp"), "+", index.clone())),
+        ];
+        inline_name_aliases(&mut statements);
+        assert_eq!(
+            statements,
+            vec![returned(GoExpression::binary(name("source"), "+", index))]
+        );
+
+        let call = GoExpression::call(name("bump"), Vec::new());
+        let mut statements = vec![
+            define("temp".to_string(), name("source")),
+            returned(GoExpression::binary(name("temp"), "+", call)),
+        ];
+        let original = statements.clone();
+        inline_name_aliases(&mut statements);
+        assert_eq!(statements, original);
     }
 
     #[test]

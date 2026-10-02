@@ -833,7 +833,7 @@ impl LoweredStatement {
                 } => {
                     for_each_statement(target_capture, f);
                     if let CompoundKind::OpAssign { rhs, .. } = kind {
-                        for_each_statement(&rhs.setup, f);
+                        for_each_statement(rhs.setup(), f);
                     }
                 }
                 AssignForm::Simple {
@@ -842,7 +842,7 @@ impl LoweredStatement {
                     ..
                 } => {
                     for_each_statement(target_capture, f);
-                    for_each_statement(&value.setup, f);
+                    for_each_statement(value.setup(), f);
                 }
             },
             LoweredStatement::Select(plan) => {
@@ -895,7 +895,7 @@ impl LoweredStatement {
                 } => {
                     for_each_statements_mut(target_capture, f);
                     if let CompoundKind::OpAssign { rhs, .. } = kind {
-                        for_each_statements_mut(&mut rhs.setup, f);
+                        for_each_statements_mut(rhs.parts_mut().0, f);
                     }
                 }
                 AssignForm::Simple {
@@ -904,7 +904,7 @@ impl LoweredStatement {
                     ..
                 } => {
                     for_each_statements_mut(target_capture, f);
-                    for_each_statements_mut(&mut value.setup, f);
+                    for_each_statements_mut(value.parts_mut().0, f);
                 }
             },
             LoweredStatement::Select(plan) => {

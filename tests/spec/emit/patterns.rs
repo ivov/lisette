@@ -1929,3 +1929,40 @@ fn describe(h: Ref<Holder>) -> int {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn a_match_binding_is_read_before_a_later_call_writes_its_subject() {
+    let input = r#"
+struct Point {
+  x: int,
+}
+
+fn read_then_mutate() -> int {
+  let mut s = Point { x: 1 }
+  let bump = || {
+    s = Point { x: 10 }
+    0
+  }
+  match s {
+    Point { x } => x + bump(),
+  }
+}
+
+fn tuple_then_mutate() -> int {
+  let mut t = (1, 2)
+  let bump = || {
+    t = (10, 20)
+    0
+  }
+  match t {
+    (a, _) => a + bump(),
+  }
+}
+
+fn test() {
+  if read_then_mutate() != 1 { panic("a struct pattern binding read a later write") }
+  if tuple_then_mutate() != 1 { panic("a tuple pattern binding read a later write") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

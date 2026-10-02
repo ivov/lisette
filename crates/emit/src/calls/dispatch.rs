@@ -199,7 +199,8 @@ impl<'a> Planner<'a> {
         match ctx.args.first() {
             Some(a) => {
                 let staged = self.plan_operand(a, ExpressionContext::value());
-                (staged.setup, staged.expression, staged.evaluation.effect)
+                let (setup, expression, facts) = staged.into_parts_with_facts();
+                (setup, expression, facts.effect)
             }
             None => (
                 Vec::new(),
@@ -353,7 +354,7 @@ impl<'a> Planner<'a> {
         let array_go = format!("[{length}]{element_go}");
 
         let staged = self.plan_operand(argument, ExpressionContext::value());
-        let argument_effect = staged.evaluation.effect;
+        let argument_effect = staged.facts().effect;
         let (setup, source) = staged.into_parts();
 
         let slice = || GoExpression::name("s".to_string());
@@ -692,15 +693,16 @@ impl<'a> Planner<'a> {
         };
         let plain_call = !matches!(origin, CallableOrigin::NativeConstructor(_))
             && native_method_lowers_to_plain_call(ctx.native_type, ctx.method, receiver_arity);
-        let mut plan = if plain_call {
+        let plan = if plain_call {
             ValuePlan::plain_call(result.setup, result.value, effect)
         } else {
             ValuePlan::computed(result.setup, result.value, effect)
         };
         if reads_fixed_length {
-            plan.evaluation.stability = Stability::Fixed;
+            plan.with_stability(Stability::Fixed)
+        } else {
+            plan
         }
-        plan
     }
 
     pub(super) fn infer_return_only_type_args(
@@ -854,8 +856,10 @@ impl<'a> Planner<'a> {
         };
         let (setup, arguments) = match args.first() {
             Some(a) => {
-                let staged = self.lower_composite_value(a, ExpressionContext::value());
-                (staged.setup, vec![staged.expression])
+                let (setup, value) = self
+                    .lower_composite_value(a, ExpressionContext::value())
+                    .into_parts();
+                (setup, vec![value])
             }
             None => (Vec::new(), Vec::new()),
         };

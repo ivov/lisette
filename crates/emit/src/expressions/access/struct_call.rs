@@ -111,7 +111,7 @@ impl Planner<'_> {
             .collect();
         let field_evaluations: Vec<bool> = stages
             .iter()
-            .map(|value| value.evaluation.stability.is_observable())
+            .map(|value| value.facts().stability.is_observable())
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "field");
         let mut effect = sequenced.effect;
@@ -173,7 +173,7 @@ impl Planner<'_> {
                     GoExpression::empty_composite(ctx.go_type.clone())
                 } else {
                     let base_staged = self.plan_operand(base, ExpressionContext::value());
-                    effect = effect.combine(base_staged.evaluation.effect);
+                    effect = effect.combine(base_staged.facts().effect);
                     let field_pairs = self.hoist_observable_fields(&mut setup, fields);
                     let (spread_setup, value) = if ctx.enum_ctx.is_some() {
                         self.lower_enum_variant_spread(
@@ -805,7 +805,7 @@ impl Planner<'_> {
     ) -> (Vec<LoweredStatement>, GoExpression) {
         // A spread that assigns nothing is its base, whatever shape that has.
         if fields.is_empty() {
-            return (base_staged.setup, base_staged.expression);
+            return base_staged.into_parts();
         }
 
         let (mut statements, base_value) = base_staged.into_parts();
@@ -837,11 +837,7 @@ impl Planner<'_> {
             .lookup_unspecified_fields(ctx.ty, ctx.name, ctx.enum_ctx.as_ref(), &assigned)
             .unwrap_or_default();
 
-        let ValuePlan {
-            setup: mut statements,
-            expression: base_value,
-            ..
-        } = base_staged;
+        let (mut statements, base_value) = base_staged.into_parts();
 
         if carried.is_empty() {
             statements.push(discard(base_value));

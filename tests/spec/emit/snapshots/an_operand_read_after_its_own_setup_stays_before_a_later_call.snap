@@ -1,0 +1,71 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn add(a: int, b: int) -> int {
+    a * 100 + b
+  }
+  
+  fn parse(n: int) -> Result<int, string> {
+    if n > 0 { Ok(n) } else { Err("negative") }
+  }
+  
+  fn sum_before_bump(n: int) -> Result<int, string> {
+    let mut x = 1
+    let bump = || {
+      x = 10
+      0
+    }
+    Ok(add(parse(n)? + x, bump()))
+  }
+  
+  fn test() {
+    match sum_before_bump(1) {
+      Ok(value) => { if value != 200 { panic(f"the operand read a later write: {value}") } },
+      Err(_) => panic("parsing failed"),
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func add(a, b int) int {
+	return a*100 + b
+}
+
+func parse(n int) lisette.Result[int, string] {
+	if n > 0 {
+		return lisette.MakeResultOk[int, string](n)
+	}
+	return lisette.MakeResultErr[int, string]("negative")
+}
+
+func sumBeforeBump(n int) lisette.Result[int, string] {
+	x := 1
+	bump := func() int {
+		x = 10
+		return 0
+	}
+	check := parse(n)
+	if check.Tag != lisette.ResultOk {
+		return check
+	}
+	arg := check.OkVal + x
+	return lisette.MakeResultOk[int, string](add(arg, bump()))
+}
+
+func test() {
+	subject := sumBeforeBump(1)
+	if subject.Tag == lisette.ResultOk {
+		value := subject.OkVal
+		if value != 200 {
+			panic(fmt.Sprintf("the operand read a later write: %d", value))
+		}
+	} else {
+		panic("parsing failed")
+	}
+}

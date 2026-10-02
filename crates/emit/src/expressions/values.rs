@@ -19,6 +19,7 @@ use crate::plan::placement::is_unit_call;
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, OperandForm, ValuePlan,
 };
+use crate::state::bindings::BindingValue;
 use syntax::ast::Expression;
 use syntax::program::CallKind;
 use syntax::types::Type;
@@ -255,14 +256,20 @@ impl Planner<'_> {
                 ..
             } => {
                 let go_expression = self.emit_identifier(value, resolution, ty, ctx);
-                let stability = self.identifier_read_stability(expression);
+                let stability = match self
+                    .scope
+                    .resolve_identifier_with_resolution(value, resolution)
+                {
+                    Some(BindingValue::InlineExpr(inline)) => inline.stability(),
+                    _ => self.identifier_read_stability(expression),
+                };
                 let plan = ValuePlan::from_identifier_expression(go_expression, stability);
                 let mut adapter_setup = Vec::new();
                 let value = self.maybe_lower_tagged_fn_ref(
                     &mut adapter_setup,
                     expression,
                     ty,
-                    plan.expression.clone(),
+                    plan.expression().clone(),
                     ctx,
                 );
                 if adapter_setup.is_empty() {
@@ -436,7 +443,7 @@ impl Planner<'_> {
                 setup.extend(coercion_setup);
                 coerced
             });
-            if !converted.evaluation.stability.is_stable_across_calls() {
+            if !converted.facts().stability.is_stable_across_calls() {
                 converted.make_observable();
             }
             return converted;
@@ -474,7 +481,7 @@ impl Planner<'_> {
         inner: &ValuePlan,
         ty: &Type,
     ) -> bool {
-        if inner.expression.constant_kind().is_some() {
+        if inner.expression().constant_kind().is_some() {
             return false;
         }
         let source_ty = expression.get_type();
@@ -634,7 +641,7 @@ impl Planner<'_> {
             expression,
             ExpressionContext::value().with_capture_boundary(CaptureBoundary::DirectDelayedCall),
         );
-        if needs_iife_for_async(expression, &plan.expression) {
+        if needs_iife_for_async(expression, plan.expression()) {
             let capture_boundary = if keyword == "defer" {
                 CaptureBoundary::DeferSite
             } else {

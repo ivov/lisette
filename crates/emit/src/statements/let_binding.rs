@@ -407,13 +407,13 @@ impl Planner<'_> {
             value,
             ExpressionContext::value().with_function_slot_origin(origin),
         );
-        let constant = plan.expression.constant_kind();
-        let mut statements = plan.setup;
+        let constant = plan.expression().constant_kind();
+        let (mut statements, plan_value) = plan.into_parts();
         let coercion = self.value_slot_coercion(value, binding_ty);
         let coercion_is_identity = coercion.is_identity();
         let constant_needs_type =
             coercion_is_identity && self.constant_needs_go_type(constant, binding_ty).is_some();
-        let (coercion_setup, value_expression) = coercion.lower(self, plan.expression);
+        let (coercion_setup, value_expression) = coercion.lower(self, plan_value);
         statements.extend(coercion_setup);
 
         let bound = self.scope.bind(identifier, raw_go_name);
