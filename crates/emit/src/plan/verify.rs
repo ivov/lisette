@@ -67,65 +67,6 @@ pub(crate) fn verify_final_function_body(
     Ok(())
 }
 
-#[cfg(test)]
-mod control_tests {
-    use super::*;
-    use crate::plan::bodies::{IfPlan, LoopId};
-    use crate::plan::values::GoExpression;
-
-    fn block(statements: Vec<LoweredStatement>) -> LoweredBlock {
-        LoweredBlock { statements }
-    }
-
-    #[test]
-    fn source_transfer_must_be_resolved_even_when_nested() {
-        let body = block(vec![LoweredStatement::If(IfPlan::plain(
-            GoExpression::literal("true".into()),
-            block(vec![LoweredStatement::Break(LoopTransfer::Source(LoopId(
-                0,
-            )))]),
-            ElseArm::None,
-        ))]);
-        assert_eq!(
-            verify_final_function_body(&body, false).unwrap_err().kind,
-            BodyErrorKind::UnresolvedLoopTarget
-        );
-    }
-
-    #[test]
-    fn else_if_setup_must_be_nested_before_rendering() {
-        let mut inner = IfPlan::plain(
-            GoExpression::literal("true".into()),
-            block(vec![]),
-            ElseArm::None,
-        );
-        inner
-            .condition_setup
-            .push(LoweredStatement::UnreachablePanic);
-        let body = block(vec![LoweredStatement::If(IfPlan::plain(
-            GoExpression::literal("false".into()),
-            block(vec![]),
-            ElseArm::ElseIf(Box::new(inner)),
-        ))]);
-        assert_eq!(
-            verify_final_function_body(&body, false).unwrap_err().kind,
-            BodyErrorKind::ElseIfHasSetup
-        );
-    }
-
-    #[test]
-    fn result_body_requires_go_termination() {
-        let body = block(vec![LoweredStatement::ExpressionStatement {
-            expression: GoExpression::call(GoExpression::name("fail".into()), vec![]),
-            diverges: true,
-        }]);
-        assert_eq!(
-            verify_final_function_body(&body, true).unwrap_err().kind,
-            BodyErrorKind::MissingGoTermination
-        );
-    }
-}
-
 pub(crate) fn verify_local_scopes(
     statements: &mut [LoweredStatement],
     bindings: &[&GoIdentifier],
@@ -223,4 +164,63 @@ pub(crate) fn verify_local_scopes(
     }
     visit_statements_mut(statements, &mut check);
     check.error.map_or(Ok(()), |kind| Err(BodyError { kind }))
+}
+
+#[cfg(test)]
+mod control_tests {
+    use super::*;
+    use crate::plan::bodies::{IfPlan, LoopId};
+    use crate::plan::values::GoExpression;
+
+    fn block(statements: Vec<LoweredStatement>) -> LoweredBlock {
+        LoweredBlock { statements }
+    }
+
+    #[test]
+    fn source_transfer_must_be_resolved_even_when_nested() {
+        let body = block(vec![LoweredStatement::If(IfPlan::plain(
+            GoExpression::literal("true".into()),
+            block(vec![LoweredStatement::Break(LoopTransfer::Source(LoopId(
+                0,
+            )))]),
+            ElseArm::None,
+        ))]);
+        assert_eq!(
+            verify_final_function_body(&body, false).unwrap_err().kind,
+            BodyErrorKind::UnresolvedLoopTarget
+        );
+    }
+
+    #[test]
+    fn else_if_setup_must_be_nested_before_rendering() {
+        let mut inner = IfPlan::plain(
+            GoExpression::literal("true".into()),
+            block(vec![]),
+            ElseArm::None,
+        );
+        inner
+            .condition_setup
+            .push(LoweredStatement::UnreachablePanic);
+        let body = block(vec![LoweredStatement::If(IfPlan::plain(
+            GoExpression::literal("false".into()),
+            block(vec![]),
+            ElseArm::ElseIf(Box::new(inner)),
+        ))]);
+        assert_eq!(
+            verify_final_function_body(&body, false).unwrap_err().kind,
+            BodyErrorKind::ElseIfHasSetup
+        );
+    }
+
+    #[test]
+    fn result_body_requires_go_termination() {
+        let body = block(vec![LoweredStatement::ExpressionStatement {
+            expression: GoExpression::call(GoExpression::name("fail".into()), vec![]),
+            diverges: true,
+        }]);
+        assert_eq!(
+            verify_final_function_body(&body, true).unwrap_err().kind,
+            BodyErrorKind::MissingGoTermination
+        );
+    }
 }
