@@ -31,6 +31,14 @@ pub(crate) struct Error {
 impl Error {
     const INVALID_PARAMS: i32 = -32602;
 
+    pub(crate) fn request_failed(message: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            code: -32803,
+            message: message.into(),
+            data: None,
+        }
+    }
+
     pub(crate) fn cancelled() -> Self {
         Self {
             code: -32800,

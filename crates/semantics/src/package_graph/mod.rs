@@ -80,6 +80,28 @@ pub struct DependencyGraph {
 }
 
 impl DependencyGraph {
+    pub fn reverse_dependency_closure(&self, package_id: &str) -> HashSet<PackageId> {
+        let mut importers: HashMap<&str, Vec<&str>> = HashMap::default();
+        for (package, dependencies) in &self.edges {
+            for dependency in dependencies.keys() {
+                importers
+                    .entry(dependency.as_str())
+                    .or_default()
+                    .push(package.as_str());
+            }
+        }
+        let mut result = HashSet::default();
+        let mut pending = vec![package_id];
+        while let Some(package) = pending.pop() {
+            if result.insert(PackageId::from(package))
+                && let Some(dependents) = importers.get(package)
+            {
+                pending.extend(dependents);
+            }
+        }
+        result
+    }
+
     pub fn contains_package(&self, package_id: &str) -> bool {
         self.edges.contains_key(package_id)
     }
@@ -903,6 +925,19 @@ mod tests {
 
     const DIRECTORY_SCOPE: AnalysisScope = AnalysisScope::Directory;
     const PROJECT_SCOPE: AnalysisScope = AnalysisScope::Project(PathBuf::new());
+
+    #[test]
+    fn reverse_dependency_closure_follows_importers_and_stops_at_cycles() {
+        let graph = DependencyGraph::from(HashMap::from_iter([
+            ("base", HashSet::from_iter(["support", "middle"])),
+            ("middle", HashSet::from_iter(["base"])),
+            ("main", HashSet::from_iter(["middle"])),
+            ("unrelated", HashSet::from_iter(["support"])),
+        ]));
+        let closure = graph.reverse_dependency_closure("base");
+        let names: HashSet<_> = closure.iter().map(PackageId::as_str).collect();
+        assert_eq!(names, HashSet::from_iter(["base", "middle", "main"]));
+    }
 
     fn go_import(is_blank: bool, offset: u32) -> FileImport {
         let span = Span::new(0, offset, 1);

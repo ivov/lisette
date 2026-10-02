@@ -15409,3 +15409,399 @@ fn editing_a_library_root_refreshes_external_test_diagnostics() {
         .expect("external tests must refresh after a library-root edit");
     client.shutdown();
 }
+
+#[test]
+fn references_and_rename_include_closed_dependent_packages() {
+    use std::time::Duration;
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let helper = "pub fn helper() -> int { 42 }";
+    let caller = "import \"utils\"\nfn main() { let _ = utils.helper() }";
+    project_with(
+        root,
+        &[("src/utils/utils.lis", helper), ("src/main.lis", caller)],
+    );
+    let helper_uri = uri_of(root, "src/utils/utils.lis");
+    let caller_uri = uri_of(root, "src/main.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&helper_uri, helper);
+
+    let closed_references = client.references(&helper_uri, 0, 8, true).unwrap();
+    assert_eq!(closed_references.len(), 2);
+    assert!(
+        closed_references
+            .iter()
+            .any(|location| location.uri.as_str() == caller_uri)
+    );
+    let closed_rename = client.rename(&helper_uri, 0, 8, "renamed").unwrap();
+    assert_eq!(closed_rename.changes.as_ref().unwrap().len(), 2);
+    let notifications = client.collect_messages(Duration::from_millis(100));
+    assert!(
+        notifications
+            .iter()
+            .all(|message| message["params"]["uri"] != caller_uri)
+    );
+
+    client.open(&caller_uri, caller);
+    let open_references = client.references(&helper_uri, 0, 8, true).unwrap();
+    let open_rename = client.rename(&helper_uri, 0, 8, "renamed").unwrap();
+    assert_eq!(
+        serde_json::to_value(&closed_references).unwrap(),
+        serde_json::to_value(open_references).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(&closed_rename).unwrap(),
+        serde_json::to_value(open_rename).unwrap()
+    );
+    client.close(&caller_uri);
+    assert_eq!(
+        serde_json::to_value(closed_references).unwrap(),
+        serde_json::to_value(client.references(&helper_uri, 0, 8, true).unwrap()).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(closed_rename).unwrap(),
+        serde_json::to_value(client.rename(&helper_uri, 0, 8, "renamed").unwrap()).unwrap()
+    );
+    client.shutdown();
+}
+
+#[test]
+fn reference_search_follows_indirect_dependents_without_analyzing_unrelated_packages() {
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let (model, line, character) = cursor("pub struct Task { pub ~id: int }");
+    project_with(
+        root,
+        &[
+            ("src/models/model.lis", &model),
+            (
+                "src/middle/middle.lis",
+                "import \"models\"\npub fn make() -> models.Task { let value = models.Task { id: 1 }; let _ = value.id; value }",
+            ),
+            (
+                "src/main.lis",
+                "import \"middle\"\nfn main() { let value = middle.make(); let _ = value.id }",
+            ),
+            (
+                "src/unrelated/other.lis",
+                "pub fn broken() -> int { unknown }",
+            ),
+        ],
+    );
+    let counter = Arc::new(lsp_harness::BuildCounter::default());
+    let mut client = TestClient::with_bindgen_setup(Some(counter.clone()));
+    client.initialize_with_root(root);
+    let uri = uri_of(root, "src/models/model.lis");
+    client.open(&uri, &model);
+    assert!(client.hover(&uri, line, character).is_some());
+    let before = counter.0.load(Ordering::SeqCst);
+    let references = client.references(&uri, line, character, true).unwrap();
+    assert_eq!(references.len(), 3);
+    assert_eq!(counter.0.load(Ordering::SeqCst) - before, 2);
+    let changes = client
+        .rename(&uri, line, character, "identifier")
+        .unwrap()
+        .changes
+        .unwrap();
+    assert_eq!(changes.len(), 3);
+    assert!(changes.contains_key(&Url::parse(&uri_of(root, "src/main.lis")).unwrap()));
+    client.shutdown();
+}
+
+#[test]
+fn reference_search_includes_unsaved_packages_and_restores_disk_after_close() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let helper = "pub fn helper() -> int { 42 }";
+    let caller = "import \"utils\"\npub fn call() -> int { utils.helper() }";
+    project_with(
+        root,
+        &[
+            ("src/utils/utils.lis", helper),
+            ("src/consumer/use.lis", caller),
+        ],
+    );
+    let helper_uri = uri_of(root, "src/utils/utils.lis");
+    let caller_uri = uri_of(root, "src/consumer/use.lis");
+    let unsaved_uri = uri_of(root, "src/unsaved/new.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&helper_uri, helper);
+    client.open(&caller_uri, "pub fn call() -> int { 0 }");
+    client.open(
+        &unsaved_uri,
+        "import \"utils\"\npub fn call() -> int { utils.helper() + utils.helper() }",
+    );
+    let references = client.references(&helper_uri, 0, 8, true).unwrap();
+    assert_eq!(references.len(), 3);
+    assert!(
+        references
+            .iter()
+            .all(|location| location.uri.as_str() != caller_uri)
+    );
+    assert_eq!(
+        references
+            .iter()
+            .filter(|location| location.uri.as_str() == unsaved_uri)
+            .count(),
+        2
+    );
+    client.close(&caller_uri);
+    client.close(&unsaved_uri);
+    let references = client.references(&helper_uri, 0, 8, true).unwrap();
+    assert_eq!(references.len(), 2);
+    assert!(
+        references
+            .iter()
+            .any(|location| location.uri.as_str() == caller_uri)
+    );
+    client.shutdown();
+}
+
+#[test]
+fn reference_search_includes_closed_internal_and_external_tests() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let library = "pub fn value() -> int { 1 }";
+    project_with(
+        root,
+        &[
+            ("src/lib.lis", library),
+            (
+                "src/lib.test.lis",
+                "#[test]\nfn internal() { let _ = value() }",
+            ),
+            (
+                "tests/integration/api.test.lis",
+                "import \"root\"\n#[test]\nfn external() { let _ = root.value() }",
+            ),
+        ],
+    );
+    let uri = uri_of(root, "src/lib.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&uri, library);
+    assert_eq!(client.references(&uri, 0, 8, true).unwrap().len(), 3);
+    let changes = client
+        .rename(&uri, 0, 8, "renamed")
+        .unwrap()
+        .changes
+        .unwrap();
+    assert_eq!(changes.len(), 3);
+    assert!(changes.values().all(|edits| edits.len() == 1));
+    client.shutdown();
+}
+
+#[test]
+fn rename_refuses_an_incomplete_closed_dependent_analysis() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let helper = "pub fn helper() -> int { 42 }";
+    project_with(
+        root,
+        &[
+            ("src/utils/utils.lis", helper),
+            ("src/main.lis", "fn main() {}"),
+        ],
+    );
+    let uri = uri_of(root, "src/utils/utils.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&uri, helper);
+    for broken in [
+        "import \"utils\"\nfn main() { let _ = utils.helper() @ }",
+        "import \"utils\"\nfn main() { let _: string = utils.helper() }",
+        "import \"utils\"\nimport \"missing\"\nfn main() { let _ = utils.helper() }",
+    ] {
+        fs::write(root.join("src/main.lis"), broken).unwrap();
+        let error = client.try_rename(&uri, 0, 8, "renamed").unwrap_err();
+        assert!(
+            error.contains("Cannot complete the reference search"),
+            "{error}"
+        );
+    }
+    fs::write(
+        root.join("src/main.lis"),
+        "import \"utils\"\nfn main() { let _ = utils.helper() }",
+    )
+    .unwrap();
+    assert_eq!(
+        client
+            .rename(&uri, 0, 8, "renamed")
+            .unwrap()
+            .changes
+            .unwrap()
+            .len(),
+        2
+    );
+    client.shutdown();
+}
+
+#[test]
+fn rename_rejects_sources_changed_during_a_closed_package_search() {
+    use serde_json::json;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    for change in ["disk", "buffer", "manifest"] {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        let helper = "pub fn helper() -> int { 42 }";
+        project_with(
+            root,
+            &[
+                ("src/utils/utils.lis", helper),
+                (
+                    "src/main.lis",
+                    "import \"utils\"\nfn main() { let _ = utils.helper() }",
+                ),
+            ],
+        );
+        let (gate, entered, release) = lsp_harness::BuildGate::new();
+        release.send(()).unwrap();
+        let mut client = TestClient::with_bindgen_setup(Some(gate.clone()));
+        client.initialize_with_root(root);
+        let uri = uri_of(root, "src/utils/utils.lis");
+        client.open(&uri, helper);
+        assert!(client.hover(&uri, 0, 8).is_some());
+        entered.recv_timeout(Duration::from_secs(5)).unwrap();
+        gate.builds.store(0, Ordering::SeqCst);
+        client.send_request(json!(90), "textDocument/rename", json!({
+            "textDocument": {"uri": uri}, "position": {"line": 0, "character": 8}, "newName": "renamed"
+        }));
+        entered.recv_timeout(Duration::from_secs(5)).unwrap();
+        if change == "buffer" {
+            client.change(&uri, &format!("\n{helper}"), 2);
+            client.send_request(json!(91), "textDocument/formatting", json!({"textDocument": {"uri": uri}, "options": {"tabSize": 2, "insertSpaces": true}}));
+            client.receive_response(&json!(91));
+        } else if change == "manifest" {
+            let manifest = fs::read_to_string(root.join("lisette.toml")).unwrap();
+            fs::write(root.join("lisette.toml"), format!("{manifest}\n")).unwrap();
+        } else {
+            fs::write(
+                root.join("src/main.lis"),
+                "\nimport \"utils\"\nfn main() { let _ = utils.helper() }",
+            )
+            .unwrap();
+        }
+        release.send(()).unwrap();
+        let response = client.receive_response(&json!(90));
+        assert_eq!(response["error"]["code"], -32801, "{response}");
+        assert!(response.get("result").is_none());
+        client.shutdown();
+    }
+}
+
+#[test]
+fn references_from_extracted_typedefs_include_closed_project_callers() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let library = "pub fn value() -> int { 1 }";
+    let (caller, line, character) =
+        cursor("import \"go:strings\"\npub fn clean() -> string { strings.~TrimSpace(\" hi \") }");
+    project_with(
+        root,
+        &[("src/lib.lis", library), ("src/consumer/use.lis", &caller)],
+    );
+    let library_uri = uri_of(root, "src/lib.lis");
+    let caller_uri = uri_of(root, "src/consumer/use.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&library_uri, library);
+    client.open(&caller_uri, &caller);
+    let definition = definition_location(
+        &client
+            .goto_definition(&caller_uri, line, character)
+            .unwrap(),
+    )
+    .unwrap();
+    client.close(&caller_uri);
+    let source = fs::read_to_string(definition.uri.to_file_path().unwrap()).unwrap();
+    client.open(definition.uri.as_str(), &source);
+    let references = client
+        .references(
+            definition.uri.as_str(),
+            definition.range.start.line,
+            definition.range.start.character,
+            false,
+        )
+        .unwrap();
+    assert!(
+        references
+            .iter()
+            .any(|location| location.uri.as_str() == caller_uri)
+    );
+    client.shutdown();
+}
+
+#[test]
+fn rename_refuses_to_skip_unreadable_closed_sources() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let helper = "pub fn helper() -> int { 42 }";
+    project_with(
+        root,
+        &[
+            ("src/utils/utils.lis", helper),
+            ("src/main.lis", "fn main() {}"),
+        ],
+    );
+    fs::write(root.join("src/main.lis"), [0xff, 0xfe]).unwrap();
+    let uri = uri_of(root, "src/utils/utils.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&uri, helper);
+    let error = client.try_rename(&uri, 0, 8, "renamed").unwrap_err();
+    assert!(error.contains("Cannot read all project files"), "{error}");
+    client.open(
+        &uri_of(root, "src/main.lis"),
+        "import \"utils\"\nfn main() { let _ = utils.helper() }",
+    );
+    assert_eq!(
+        client
+            .rename(&uri, 0, 8, "renamed")
+            .unwrap()
+            .changes
+            .unwrap()
+            .len(),
+        2
+    );
+    client.shutdown();
+}
+
+#[test]
+fn reference_search_includes_internal_test_roots_with_only_typedef_sources() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let helper = "pub fn helper() -> int { 42 }";
+    project_with(
+        root,
+        &[
+            ("src/utils/utils.lis", helper),
+            ("src/checks/types.d.lis", "pub struct Marker {}"),
+            (
+                "src/checks/api.test.lis",
+                "import \"utils\"\n#[test]\nfn t() { let _ = utils.helper() }",
+            ),
+        ],
+    );
+    let uri = uri_of(root, "src/utils/utils.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&uri, helper);
+    assert_eq!(client.references(&uri, 0, 8, true).unwrap().len(), 2);
+    assert_eq!(
+        client
+            .rename(&uri, 0, 8, "renamed")
+            .unwrap()
+            .changes
+            .unwrap()
+            .len(),
+        2
+    );
+    client.shutdown();
+}

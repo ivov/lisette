@@ -15,6 +15,7 @@ pub mod protocol;
 mod router;
 mod scheduler;
 mod scope;
+mod search;
 mod signature_help;
 mod snapshot;
 mod state;
@@ -425,11 +426,7 @@ impl Backend {
             });
         }
 
-        locations.extend(usage_locations(
-            self.open_document_snapshots(),
-            &definition_uri,
-            definition_span,
-        ));
+        locations.extend(self.reference_locations(uri, &snapshot, definition_span, false)?);
 
         locations.sort_by(|a, b| {
             a.uri
@@ -530,11 +527,7 @@ impl Backend {
                 new_text: new_name.clone(),
             });
 
-        for location in usage_locations(
-            self.open_document_snapshots(),
-            &definition_uri,
-            definition_span,
-        ) {
+        for location in self.reference_locations(uri, &snapshot, definition_span, true)? {
             edits.entry(location.uri).or_default().push(TextEdit {
                 range: location.range,
                 new_text: new_name.clone(),
@@ -543,6 +536,18 @@ impl Backend {
 
         if edits.is_empty() {
             return Ok(None);
+        }
+
+        for file_edits in edits.values_mut() {
+            file_edits.sort_by_key(|edit| {
+                (
+                    edit.range.start.line,
+                    edit.range.start.character,
+                    edit.range.end.line,
+                    edit.range.end.character,
+                )
+            });
+            file_edits.dedup_by(|left, right| left.range == right.range);
         }
 
         Ok(Some(WorkspaceEdit {

@@ -145,6 +145,24 @@ pub(crate) fn find_package_by_alias(
 }
 
 impl SharedState {
+    pub(crate) fn analyze_search_package(
+        &self,
+        key: &AnalysisKey,
+        project: ProjectAnalysis,
+    ) -> Result<Arc<AnalysisSnapshot>, AnalysisError> {
+        self.run_analysis(
+            key,
+            BuildInput {
+                project,
+                entry: None,
+                uri: None,
+                prepare_dependencies: false,
+            },
+        )
+        .map(Arc::new)
+        .map_err(AnalysisError::Diagnostics)
+    }
+
     pub(crate) fn key_for(&self, uri: &Url) -> Option<AnalysisKey> {
         let config = self.projects.config_for(uri)?;
         let (package_id, filename, external_test) = uri_to_package_file(&config, uri)?;
