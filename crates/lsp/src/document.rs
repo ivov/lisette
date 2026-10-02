@@ -10,7 +10,7 @@ impl SharedState {
         let mut workspace = self.workspace_mut();
         self.projects.update_overlay(&uri, content.clone());
         let key = self.key_for(&uri);
-        workspace.invalidate_unseen(&uri, &content);
+        workspace.invalidate_unseen(&uri, &content, key.as_ref());
         let mut document = DocumentState::new(content, version);
         if let Some(key) = &key
             && let Some(snapshot) = workspace.snapshot(key)
@@ -20,13 +20,19 @@ impl SharedState {
             document.set_last_usable(snapshot);
         }
         workspace.documents.insert(uri, document);
-        if let Some(key) = key {
-            workspace.ensure(&key);
+        if let Some(key) = &key {
+            workspace.ensure(key);
         }
         workspace.allow_dependency_preparation();
+        let mut keys = workspace.keys_needing_diagnostics();
+        if let Some(key) = key
+            && !keys.contains(&key)
+        {
+            keys.push(key);
+        }
         drop(workspace);
 
-        self.reschedule_all();
+        self.reschedule(keys);
     }
 
     pub(crate) fn change_document(self: &Arc<Self>, uri: Url, content: String, version: i32) {
@@ -41,13 +47,14 @@ impl SharedState {
                     .insert(uri.clone(), DocumentState::new(content, version));
             }
         }
-        if let Some(key) = key {
-            workspace.ensure(&key);
+        if let Some(key) = &key {
+            workspace.ensure(key);
         }
-        workspace.invalidate_all();
+        workspace.invalidate_package(key.as_ref());
+        let keys = workspace.keys_needing_diagnostics();
         drop(workspace);
 
-        self.reschedule_all();
+        self.reschedule(keys);
     }
 
     pub(crate) fn close_document(self: &Arc<Self>, uri: &Url) {
@@ -55,25 +62,26 @@ impl SharedState {
         let key = self.key_for(uri);
         self.projects.remove_overlay(uri);
         workspace.documents.remove(uri);
-        let evicted = key.is_some_and(|key| {
+        let evicted = key.as_ref().is_some_and(|key| {
             let still_open = workspace
                 .documents
                 .keys()
-                .any(|open| self.key_for(open).as_ref() == Some(&key));
+                .any(|open| self.key_for(open).as_ref() == Some(key));
             if still_open {
                 return false;
             }
-            workspace.evict(&key);
+            workspace.evict(key);
             true
         });
-        workspace.invalidate_all();
+        workspace.invalidate_package(key.as_ref());
+        let keys = workspace.keys_needing_diagnostics();
         drop(workspace);
 
         if evicted {
             heap::release_freed_pages();
         }
         self.client.publish_diagnostics(uri.clone(), vec![], None);
-        self.reschedule_all();
+        self.reschedule(keys);
     }
 
     pub(crate) fn publish_diagnostics(&self, uri: Url, token: &CancellationToken) {
@@ -113,6 +121,10 @@ impl SharedState {
 
     pub(crate) fn reschedule_all(self: &Arc<Self>) {
         let keys = self.workspace().keys();
+        self.reschedule(keys);
+    }
+
+    fn reschedule(self: &Arc<Self>, keys: Vec<AnalysisKey>) {
         for key in keys {
             self.schedule_diagnostics(key);
         }

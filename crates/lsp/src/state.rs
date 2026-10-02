@@ -95,6 +95,16 @@ impl Workspace {
         self.analyses.keys().cloned().collect()
     }
 
+    pub(crate) fn keys_needing_diagnostics(&self) -> Vec<AnalysisKey> {
+        self.analyses
+            .iter()
+            .filter(|(_, analysis)| {
+                analysis.current.is_none() || analysis.pending_diagnostics.is_some()
+            })
+            .map(|(key, _)| key.clone())
+            .collect()
+    }
+
     pub(crate) fn snapshot(&self, key: &AnalysisKey) -> Option<Arc<AnalysisSnapshot>> {
         self.analyses.get(key)?.current.clone()
     }
@@ -131,23 +141,46 @@ impl Workspace {
         }
     }
 
-    /// Drops every snapshot that did not analyze `uri` with exactly this text.
-    pub(crate) fn invalidate_unseen(&mut self, uri: &Url, content: &str) {
+    pub(crate) fn invalidate_package(&mut self, changed: Option<&AnalysisKey>) {
+        // Reject older builds even when unrelated snapshots survive.
+        self.generation += 1;
+        self.prepare_dependencies = false;
+        self.invalidate_affected(changed, None);
+    }
+
+    pub(crate) fn invalidate_unseen(
+        &mut self,
+        uri: &Url,
+        content: &str,
+        changed: Option<&AnalysisKey>,
+    ) {
+        if self.invalidate_affected(changed, Some((uri, content))) {
+            self.generation += 1;
+        }
+    }
+
+    fn invalidate_affected(
+        &mut self,
+        changed: Option<&AnalysisKey>,
+        opened: Option<(&Url, &str)>,
+    ) -> bool {
+        let changed = changed.filter(|key| matches!(key, AnalysisKey::Package { .. }));
         let mut dropped = false;
-        for analysis in self.analyses.values_mut() {
-            let seen = analysis.current.as_ref().is_some_and(|snapshot| {
-                snapshot
-                    .document(uri)
-                    .is_some_and(|document| document.file.source == content)
+        for (key, analysis) in &mut self.analyses {
+            let keep = analysis.current.as_ref().is_some_and(|snapshot| {
+                changed.is_some_and(|changed| !snapshot.depends_on(key, changed))
+                    || opened.is_some_and(|(uri, content)| {
+                        snapshot
+                            .document(uri)
+                            .is_some_and(|document| document.file.source == content)
+                    })
             });
-            if !seen {
+            if !keep {
                 analysis.current = None;
                 dropped = true;
             }
         }
-        if dropped {
-            self.generation += 1;
-        }
+        dropped
     }
 
     pub(crate) fn set_pending_diagnostics(&mut self, key: &AnalysisKey, token: CancellationToken) {
@@ -330,7 +363,7 @@ mod tests {
         );
         let generation = workspace.generation();
 
-        workspace.invalidate_unseen(&uri("util.lis"), UTIL);
+        workspace.invalidate_unseen(&uri("util.lis"), UTIL, Some(&key()));
 
         assert!(
             workspace
@@ -350,14 +383,18 @@ mod tests {
         );
         let generation = workspace.generation();
 
-        workspace.invalidate_unseen(&uri("util.lis"), "pub fn util() -> int { 2 }\n");
+        workspace.invalidate_unseen(
+            &uri("util.lis"),
+            "pub fn util() -> int { 2 }\n",
+            Some(&key()),
+        );
 
         assert!(workspace.snapshot(&key()).is_none());
         assert_ne!(workspace.generation(), generation);
     }
 
     #[test]
-    fn opening_a_file_drops_only_the_snapshots_that_never_analyzed_it() {
+    fn opening_an_analyzed_file_also_keeps_unrelated_snapshots() {
         let other_key = AnalysisKey::Package {
             project_root: PathBuf::from("/project"),
             external_test: false,
@@ -372,18 +409,18 @@ mod tests {
         installed(&mut workspace, &other_key, &[("main.lis", MAIN)]);
         let generation = workspace.generation();
 
-        workspace.invalidate_unseen(&uri("util.lis"), UTIL);
+        workspace.invalidate_unseen(&uri("util.lis"), UTIL, Some(&key()));
 
         assert!(
             workspace
                 .snapshot(&key())
                 .is_some_and(|current| Arc::ptr_eq(&current, &seen))
         );
-        assert!(workspace.snapshot(&other_key).is_none());
-        assert_ne!(
+        assert!(workspace.snapshot(&other_key).is_some());
+        assert_eq!(
             workspace.generation(),
             generation,
-            "a build in flight for the dropped key must not install"
+            "opening known text does not invalidate any package"
         );
     }
 
@@ -454,6 +491,26 @@ mod tests {
         workspace.invalidate_all();
 
         assert_ne!(workspace.generation(), generation);
+    }
+
+    #[test]
+    fn selective_invalidation_keeps_unrelated_snapshots_but_rejects_older_builds() {
+        let other = AnalysisKey::Package {
+            project_root: PathBuf::from("/project"),
+            external_test: false,
+            package_id: "other".to_string(),
+        };
+        let mut workspace = Workspace::default();
+        let snapshot = installed(&mut workspace, &key(), &[("main.lis", MAIN)]);
+        installed(&mut workspace, &other, &[("main.lis", MAIN)]);
+        let generation = workspace.generation();
+
+        workspace.invalidate_package(Some(&other));
+
+        assert!(workspace.snapshot(&other).is_none());
+        assert!(!workspace.install(&key(), generation, Arc::clone(&snapshot)));
+        assert!(Arc::ptr_eq(&workspace.snapshot(&key()).unwrap(), &snapshot));
+        assert_eq!(workspace.keys_needing_diagnostics(), vec![other]);
     }
 
     #[test]

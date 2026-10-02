@@ -237,13 +237,25 @@ impl TestClient {
         &mut self,
         uri: &str,
     ) -> Option<PublishDiagnosticsParams> {
+        self.await_diagnostics_matching(uri, |_| true)
+    }
+
+    pub fn await_diagnostics_matching(
+        &mut self,
+        uri: &str,
+        predicate: impl Fn(&[Diagnostic]) -> bool,
+    ) -> Option<PublishDiagnosticsParams> {
         let matches = |msg: &Value| {
             as_publish_diagnostics(msg).is_some_and(|result| result.uri.as_str() == uri)
         };
 
-        if let Some(pos) = self.buffered.iter().position(matches) {
+        while let Some(pos) = self.buffered.iter().position(matches) {
             let msg = self.buffered.remove(pos);
-            return as_publish_diagnostics(&msg);
+            if let Some(result) = as_publish_diagnostics(&msg)
+                && predicate(&result.diagnostics)
+            {
+                return Some(result);
+            }
         }
 
         let deadline = Instant::now() + Duration::from_secs(5);
@@ -251,11 +263,15 @@ impl TestClient {
             let remaining = deadline.saturating_duration_since(Instant::now());
             match self.incoming.recv_timeout(remaining) {
                 Ok(msg) => {
-                    if let Some(result) = as_publish_diagnostics(&msg) {
-                        if result.uri.as_str() == uri {
-                            return Some(result);
-                        }
+                    let Some(result) = as_publish_diagnostics(&msg) else {
+                        continue;
+                    };
+                    if result.uri.as_str() != uri {
                         self.buffered.push(msg);
+                        continue;
+                    }
+                    if predicate(&result.diagnostics) {
+                        return Some(result);
                     }
                 }
                 Err(_) => return None,
@@ -674,6 +690,27 @@ impl deps::BindgenSetup for BuildGate {
                 .recv_timeout(Duration::from_secs(5))
                 .unwrap();
         }
+        Ok(deps::BindgenSession::new(
+            Arc::new(UnusedBindgen),
+            Box::new(tempfile::tempfile().unwrap()),
+        ))
+    }
+
+    fn for_script(
+        &self,
+        _: &str,
+        _: &Path,
+    ) -> Result<(deps::TypedefLocator, Option<deps::ScriptSession>), String> {
+        Ok((deps::TypedefLocator::default(), None))
+    }
+}
+
+#[derive(Default)]
+pub struct BuildCounter(pub AtomicUsize);
+
+impl deps::BindgenSetup for BuildCounter {
+    fn for_project(&self, _: &Path, _: deps::Target) -> Result<deps::BindgenSession, String> {
+        self.0.fetch_add(1, Ordering::SeqCst);
         Ok(deps::BindgenSession::new(
             Arc::new(UnusedBindgen),
             Box::new(tempfile::tempfile().unwrap()),
