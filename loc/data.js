@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790954142935,
+  "lastUpdate": 1790956965577,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -41506,6 +41506,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "lsp",
             "value": 6902,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2944,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "22c3b37821757ffe305aed3c615ec57109459977",
+          "message": "fix: include closed packages in LSP references and rename (#1505)",
+          "timestamp": "2026-10-02T18:02:13+02:00",
+          "tree_id": "660d059c5e03602f50d47fd5b6e4e2711f35e97b",
+          "url": "https://github.com/ivov/lisette/commit/22c3b37821757ffe305aed3c615ec57109459977"
+        },
+        "date": 1790956964237,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 148535,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 38987,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28463,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19356,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15299,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9004,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7359,
             "unit": "lines"
           },
           {
