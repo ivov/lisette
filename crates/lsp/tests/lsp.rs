@@ -15805,3 +15805,60 @@ fn reference_search_includes_internal_test_roots_with_only_typedef_sources() {
     );
     client.shutdown();
 }
+
+#[test]
+fn cached_dependency_keeps_diagnostics_fixes_and_local_hover_when_opened() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    fs::create_dir_all(root.join("src/dependency")).unwrap();
+    fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"example.com/cached-lints\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let main = "import \"dependency\"\nfn main() { let _ = dependency.value(2) }\n";
+    let source = "pub fn value(input: int) -> int {\n  let mut value = input\n  value + 0\n}\n";
+    fs::write(root.join("src/main.lis"), main).unwrap();
+    fs::write(root.join("src/dependency/value.lis"), source).unwrap();
+    let main_uri = Url::from_file_path(root.join("src/main.lis"))
+        .unwrap()
+        .to_string();
+    let uri = Url::from_file_path(root.join("src/dependency/value.lis"))
+        .unwrap()
+        .to_string();
+    let mut cold = TestClient::new();
+    cold.initialize_with_root(root);
+    cold.open(&uri, source);
+    let expected = cold.await_diagnostics_for(&uri).unwrap();
+    let expected_fixes = cold.code_action(&uri, (0, 0), (4, 0)).unwrap();
+    assert!(!expected_fixes.is_empty());
+    cold.shutdown();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&main_uri, main);
+    client.await_diagnostics_for(&main_uri);
+    let cache = root
+        .join("target/.lisette/cache")
+        .join(stdlib::Target::host().cache_segment())
+        .join("dependency.cache");
+    assert!(
+        cache.exists(),
+        "dependency warnings should no longer block caching"
+    );
+    client.open(&uri, source);
+    assert_eq!(client.await_diagnostics_for(&uri).unwrap(), expected);
+    assert_eq!(
+        client.code_action(&uri, (0, 0), (4, 0)).unwrap(),
+        expected_fixes
+    );
+    assert!(hover_content(&client.hover(&uri, 2, 4).unwrap()).contains("int"));
+    client.change(&uri, &format!("{source}\n// edit\n"), 2);
+    assert_eq!(client.await_diagnostics_for(&uri).unwrap(), expected);
+    assert_eq!(
+        client.code_action(&uri, (0, 0), (4, 0)).unwrap(),
+        expected_fixes
+    );
+    assert!(hover_content(&client.hover(&uri, 2, 4).unwrap()).contains("int"));
+    client.shutdown();
+}

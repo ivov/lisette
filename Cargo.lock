@@ -198,6 +198,7 @@ dependencies = [
  "lisette-syntax",
  "owo-colors",
  "rustc-hash",
+ "serde",
  "unicode-width",
 ]
 

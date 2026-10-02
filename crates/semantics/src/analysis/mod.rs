@@ -10,7 +10,7 @@ use packages::{PackageInferenceInput, infer_all_packages};
 
 use std::path::{Path, PathBuf};
 
-use diagnostics::LocalSink;
+use diagnostics::{LisetteDiagnostic, LocalSink};
 use syntax::FileParseStatus;
 use syntax::program::{File, Package};
 
@@ -212,6 +212,7 @@ pub struct InferenceOutput {
     pub has_pre_check_errors: bool,
     pub compiled_packages: Vec<CompiledPackage>,
     pub cached_packages: HashSet<String>,
+    pub cached_diagnostics: Vec<LisetteDiagnostic>,
     pub cache_root: Option<PathBuf>,
     pub unreachable_packages: Vec<String>,
     pub entry_parse_errors: Vec<syntax::ParseError>,
@@ -320,6 +321,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             has_pre_check_errors: true,
             compiled_packages: Vec::new(),
             cached_packages: HashSet::default(),
+            cached_diagnostics: Vec::new(),
             cache_root: None,
             unreachable_packages: Vec::new(),
             entry_parse_errors: entry.into_errors(),
@@ -427,6 +429,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         has_pre_check_errors: has_graph_errors || package_output.has_parse_errors,
         compiled_packages: package_output.compiled_packages,
         cached_packages: package_output.cached_packages,
+        cached_diagnostics: package_output.cached_diagnostics,
         cache_root,
         unreachable_packages,
         entry_parse_errors,

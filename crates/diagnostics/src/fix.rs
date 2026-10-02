@@ -2,6 +2,7 @@ use std::iter;
 use syntax::ast::Span;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Edit {
     span: Span,
     content: Box<str>,
@@ -34,6 +35,7 @@ impl Edit {
 /// An applicable fix for one diagnostic, carrying one or more edits that are
 /// applied together as a unit.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Fix {
     message: String,
     first: Edit,
@@ -41,6 +43,17 @@ pub struct Fix {
 }
 
 impl Fix {
+    pub(crate) fn try_map_spans(
+        &mut self,
+        map: &mut impl FnMut(Span) -> Option<Span>,
+    ) -> Option<()> {
+        self.first.span = map(self.first.span)?;
+        for edit in &mut self.rest {
+            edit.span = map(edit.span)?;
+        }
+        Some(())
+    }
+
     pub fn new(message: impl Into<String>, edit: Edit) -> Self {
         Self {
             message: message.into(),

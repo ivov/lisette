@@ -4,11 +4,15 @@ pub mod prelude;
 pub mod types;
 
 use crate::path::DisplayPathBase;
+use crate::{CompilePhase, ProjectKind};
+use diagnostics::LisetteDiagnostic;
 use rustc_hash::FxHashMap as HashMap;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io;
+use std::mem;
 use std::path::{Path, PathBuf};
+use syntax::ast::Span;
 
 use serde::{Deserialize, Serialize};
 use stdlib::Target;
@@ -89,6 +93,9 @@ pub struct PackageInterface {
     /// Package hash of each direct dependency.
     dependency_hashes: HashMap<String, u64>,
 
+    diagnostic_mode: DiagnosticMode,
+    diagnostics: Vec<LisetteDiagnostic>,
+
     pub(crate) files: Vec<CachedFile>,
 
     definitions: HashMap<String, CachedDefinition>,
@@ -100,16 +107,59 @@ pub struct PackageInterface {
     emit_stamp: Option<u64>,
 }
 
+impl PackageInterface {
+    pub(crate) fn has_diagnostics(&self) -> bool {
+        !self.diagnostics.is_empty()
+    }
+
+    pub(crate) fn take_diagnostics(&mut self, file_id_base: u32) -> Vec<LisetteDiagnostic> {
+        mem::take(&mut self.diagnostics)
+            .into_iter()
+            .filter_map(|diagnostic| {
+                diagnostic.try_map_spans(|span| {
+                    Some(Span {
+                        file_id: file_id_base.checked_add(span.file_id)?,
+                        ..span
+                    })
+                })
+            })
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedFile {
     name: String,
     source: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiagnosticMode {
+    include_tests: bool,
+    library: bool,
+}
+
+impl DiagnosticMode {
+    pub fn new(phase: CompilePhase, kind: ProjectKind) -> Self {
+        Self {
+            include_tests: phase.includes_tests(),
+            library: kind == ProjectKind::Library,
+        }
+    }
+}
+
+#[cfg(test)]
+impl Default for DiagnosticMode {
+    fn default() -> Self {
+        Self::new(CompilePhase::Check, ProjectKind::Binary)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CompiledPackage {
     pub package_id: String,
     pub artifact_hash: u64,
+    pub(crate) diagnostic_mode: DiagnosticMode,
     pub(crate) full_hash: u64,
     pub(crate) dep_hashes: HashMap<String, u64>,
 }
@@ -231,18 +281,20 @@ pub fn cache_file_name(package_id: &str) -> String {
 }
 
 pub(crate) fn try_load_cache(
-    package_id: &str,
-    expected_full_hash: u64,
-    expected_dep_hashes: &HashMap<String, u64>,
+    compiled: &CompiledPackage,
     expected_artifact_hash: Option<u64>,
     project_root: &Path,
     target: Target,
 ) -> Option<PackageInterface> {
-    let path = cache_path(project_root, package_id, target);
+    let path = cache_path(project_root, &compiled.package_id, target);
     let interface: PackageInterface = disk::read(&path).ok()?;
 
-    if !is_cache_valid(&interface, expected_full_hash, expected_dep_hashes) {
+    if !is_cache_valid(&interface, compiled.full_hash, &compiled.dep_hashes) {
         let _ = fs::remove_file(&path);
+        return None;
+    }
+
+    if interface.diagnostic_mode != compiled.diagnostic_mode {
         return None;
     }
 
@@ -250,7 +302,7 @@ pub(crate) fn try_load_cache(
         if interface.emit_stamp != Some(expected_artifact_hash) {
             return None;
         }
-        if !all_go_outputs_exist(package_id, &interface.files, project_root) {
+        if !all_go_outputs_exist(&compiled.package_id, &interface.files, project_root) {
             return None;
         }
     }
@@ -284,11 +336,20 @@ fn all_go_outputs_exist(
     true
 }
 
+pub fn diagnostic_dependencies_tracked(store: &Store) -> bool {
+    // Third-party typedef contents are not part of package cache hashes.
+    store
+        .packages
+        .keys()
+        .all(|id| id.strip_prefix("go:").is_none_or(deps::is_stdlib))
+}
+
 pub fn save_package_cache(
     compiled: &CompiledPackage,
     store: &Store,
     project_root: &Path,
     target: Target,
+    diagnostics: &[&LisetteDiagnostic],
 ) -> io::Result<()> {
     let Some(package) = store.get_package(&compiled.package_id) else {
         return Err(io::Error::other("package not found in store"));
@@ -303,7 +364,24 @@ pub fn save_package_cache(
         .map(|(idx, f)| (f.id, idx as u32))
         .collect();
 
+    let Some(diagnostics) = diagnostics
+        .iter()
+        .map(|diagnostic| {
+            diagnostic.try_map_spans(|span| {
+                Some(Span {
+                    file_id: *file_id_to_index.get(&span.file_id)?,
+                    ..span
+                })
+            })
+        })
+        .collect::<Option<Vec<_>>>()
+    else {
+        return Ok(());
+    };
+
     let interface = PackageInterface {
+        diagnostic_mode: compiled.diagnostic_mode,
+        diagnostics,
         version: CACHE_FORMAT_VERSION,
         compiler_version: COMPILER_VERSION_HASH,
         stdlib_hash: STDLIB_HASH,
@@ -476,6 +554,28 @@ mod tests {
     use syntax::program::{Attributes, ConstantValue, Definition, DefinitionBody, Visibility};
     use syntax::types::{FunctionParameter, Symbol, Type};
 
+    fn load_test_cache(
+        package_id: &str,
+        full_hash: u64,
+        dep_hashes: &HashMap<String, u64>,
+        artifact_hash: Option<u64>,
+        root: &Path,
+        target: Target,
+    ) -> Option<PackageInterface> {
+        try_load_cache(
+            &CompiledPackage {
+                package_id: package_id.into(),
+                full_hash,
+                dep_hashes: dep_hashes.clone(),
+                artifact_hash: artifact_hash.unwrap_or_default(),
+                diagnostic_mode: DiagnosticMode::default(),
+            },
+            artifact_hash,
+            root,
+            target,
+        )
+    }
+
     fn generic_struct_definition(visibility: Visibility, file_id: u32) -> Definition {
         let bound_span = Span::new(file_id, 12, 5);
         Definition {
@@ -589,6 +689,8 @@ mod tests {
     #[test]
     fn test_cache_validity_checks_version() {
         let cache = PackageInterface {
+            diagnostic_mode: DiagnosticMode::default(),
+            diagnostics: Vec::new(),
             version: CACHE_FORMAT_VERSION + 1, // Wrong version
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
@@ -605,6 +707,8 @@ mod tests {
     #[test]
     fn test_cache_validity_checks_compiler_version() {
         let cache = PackageInterface {
+            diagnostic_mode: DiagnosticMode::default(),
+            diagnostics: Vec::new(),
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH + 1, // Wrong compiler
             stdlib_hash: STDLIB_HASH,
@@ -621,6 +725,8 @@ mod tests {
     #[test]
     fn test_cache_validity_checks_full_hash() {
         let cache = PackageInterface {
+            diagnostic_mode: DiagnosticMode::default(),
+            diagnostics: Vec::new(),
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
@@ -681,6 +787,8 @@ mod tests {
         );
 
         let interface = PackageInterface {
+            diagnostic_mode: DiagnosticMode::default(),
+            diagnostics: Vec::new(),
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
@@ -801,6 +909,8 @@ mod tests {
         cached_deps.insert("dep".to_string(), 111u64);
 
         let cache = PackageInterface {
+            diagnostic_mode: DiagnosticMode::default(),
+            diagnostics: Vec::new(),
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
@@ -948,6 +1058,8 @@ mod tests {
         let target = Target::host();
 
         let interface = PackageInterface {
+            diagnostic_mode: DiagnosticMode::default(),
+            diagnostics: Vec::new(),
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
@@ -1011,6 +1123,8 @@ mod tests {
 
         let stamped = |target| {
             let interface = PackageInterface {
+                diagnostic_mode: DiagnosticMode::default(),
+                diagnostics: Vec::new(),
                 version: CACHE_FORMAT_VERSION,
                 compiler_version: COMPILER_VERSION_HASH,
                 stdlib_hash: STDLIB_HASH,
@@ -1049,6 +1163,8 @@ mod tests {
         fs::write(root.join("target").join("greet").join("greet.go"), "").unwrap();
 
         let interface = PackageInterface {
+            diagnostic_mode: DiagnosticMode::default(),
+            diagnostics: Vec::new(),
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
@@ -1065,10 +1181,10 @@ mod tests {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
 
-        let loaded = try_load_cache("greet", 100, &HashMap::default(), None, root, target);
+        let loaded = load_test_cache("greet", 100, &HashMap::default(), None, root, target);
         assert!(loaded.is_some(), "Check phase must accept unstamped cache");
 
-        let loaded = try_load_cache(
+        let loaded = load_test_cache(
             "greet",
             100,
             &HashMap::default(),
@@ -1093,6 +1209,8 @@ mod tests {
         let artifact_hash = compute_emit_artifact_hash(100, "github.com/test/x");
 
         let interface = PackageInterface {
+            diagnostic_mode: DiagnosticMode::default(),
+            diagnostics: Vec::new(),
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
@@ -1110,7 +1228,7 @@ mod tests {
         fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
 
         assert!(
-            try_load_cache(
+            load_test_cache(
                 "greet",
                 100,
                 &HashMap::default(),
@@ -1128,7 +1246,7 @@ mod tests {
         apply_emit_stamps(root, &[(stamp, None)], target).unwrap();
 
         assert!(
-            try_load_cache(
+            load_test_cache(
                 "greet",
                 100,
                 &HashMap::default(),
@@ -1138,5 +1256,95 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn diagnostic_cache_remaps_all_labels_and_fix_edits() {
+        use diagnostics::{Edit, Fix};
+
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::new();
+        store.store_package(
+            "example",
+            vec![
+                File::new_cached("example", "z.lis", "z.lis", "héllo", 91),
+                File::new_cached("example", "a.lis", "a.lis", "second", 37),
+            ],
+        );
+        let diagnostic = diagnostics::lint::unused_mut(&Span::new(91, 1, 2))
+            .with_span_primary_label(&Span::new(37, 0, 2), "related declaration")
+            .with_note("additional note")
+            .with_fix(Fix::multi(
+                "fix both places",
+                Edit::deletion(Span::new(91, 0, 1)),
+                vec![Edit::replacement(Span::new(91, 3, 3), "new")],
+            ));
+        let compiled = CompiledPackage {
+            package_id: "example".into(),
+            artifact_hash: 1,
+            full_hash: 2,
+            dep_hashes: HashMap::default(),
+            diagnostic_mode: DiagnosticMode::default(),
+        };
+        save_package_cache(
+            &compiled,
+            &store,
+            root.path(),
+            Target::host(),
+            &[&diagnostic],
+        )
+        .unwrap();
+        let mut cache = load_test_cache(
+            "example",
+            2,
+            &HashMap::default(),
+            None,
+            root.path(),
+            Target::host(),
+        )
+        .unwrap();
+        let replayed = cache.take_diagnostics(200);
+        let expected = diagnostic
+            .try_map_spans(|span| {
+                Some(Span {
+                    file_id: if span.file_id == 37 { 200 } else { 201 },
+                    ..span
+                })
+            })
+            .unwrap();
+        assert_eq!(
+            bincode::serialize(&replayed).unwrap(),
+            bincode::serialize(&vec![expected]).unwrap()
+        );
+    }
+
+    #[test]
+    fn diagnostic_cache_rejects_foreign_files() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::new();
+        store.store_package(
+            "example",
+            vec![File::new_cached("example", "a.lis", "a.lis", "hello", 37)],
+        );
+        let compiled = CompiledPackage {
+            package_id: "example".into(),
+            artifact_hash: 1,
+            full_hash: 2,
+            dep_hashes: HashMap::default(),
+            diagnostic_mode: DiagnosticMode::default(),
+        };
+        let foreign = diagnostics::lint::unused_mut(&Span::new(37, 0, 1))
+            .with_span_label(&Span::new(90, 0, 1), "outside package");
+        save_package_cache(&compiled, &store, root.path(), Target::host(), &[&foreign]).unwrap();
+        assert!(!cache_path(root.path(), "example", Target::host()).exists());
+    }
+
+    #[test]
+    fn diagnostic_dependencies_exclude_third_party_typedefs() {
+        let mut store = Store::new();
+        store.add_package("go:strings");
+        assert!(diagnostic_dependencies_tracked(&store));
+        store.add_package("go:example.com/lib");
+        assert!(!diagnostic_dependencies_tracked(&store));
     }
 }
