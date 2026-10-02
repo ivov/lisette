@@ -109,6 +109,7 @@ pub(super) struct PackageInferenceInput<'a> {
 }
 
 pub(super) struct PackageInferenceOutput {
+    pub(super) dependencies: DependencyGraph,
     pub(super) facts: Facts,
     pub(super) cached_packages: HashSet<String>,
     pub(super) compiled_packages: Vec<CompiledPackage>,
@@ -306,6 +307,7 @@ pub(super) fn infer_all_packages(
     }
 
     PackageInferenceOutput {
+        dependencies: input.dependencies,
         facts: checker.facts,
         cached_packages,
         compiled_packages,

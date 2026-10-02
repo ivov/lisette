@@ -1126,6 +1126,7 @@ import "go:github.com/gorilla/mux"
 fn main() {
     let _ = mux.VERSION
 }
+
 "#;
 
     let no_loader = MemoryLoader::new();
@@ -1175,4 +1176,63 @@ fn main() {
         "second run must not fail from stale stdlib cache: {:?}",
         result2.errors(),
     );
+}
+
+#[test]
+fn analysis_retains_transitive_dependencies_on_package_cache_hits() {
+    use passes::analyze;
+    use semantics::loader::MemoryLoader;
+    use semantics::{AnalyzeInput, CompilePhase, EntryFile, ProjectKind, RecoverTarget};
+
+    let root = tempfile::tempdir().unwrap();
+    let locator = deps::TypedefLocator::default();
+    let mut loader = MemoryLoader::new();
+    loader.add_file("base", "base.lis", "pub fn value() -> int { 1 }\n");
+    loader.add_file(
+        "middle",
+        "middle.lis",
+        "import \"base\"\npub fn value() -> int { base.value() }\n",
+    );
+    let analyze_source = |source: &str| {
+        analyze(AnalyzeInput {
+            load_siblings: false,
+            scope: AnalysisScope::Project(root.path().to_path_buf()),
+            loader: &loader,
+            entry: Some(EntryFile::new(
+                source.into(),
+                "main.lis".into(),
+                "main.lis".into(),
+            )),
+            compile_phase: CompilePhase::Check,
+            project_kind: ProjectKind::Binary,
+            locator: &locator,
+            go_module: "",
+            disable_cache: false,
+            recover_target: RecoverTarget::Package("_entry_".into()),
+        })
+    };
+    let source = "import \"middle\"\nfn main() { let _ = middle.value() }\n";
+    let first = analyze_source(source);
+    assert!(first.errors().is_empty(), "{:?}", first.errors());
+    assert!(!first.emit_input.cached_packages.contains("middle"));
+    let second = analyze_source(source);
+    assert!(second.errors().is_empty(), "{:?}", second.errors());
+    assert!(second.emit_input.cached_packages.contains("middle"));
+    assert!(second.emit_input.cached_packages.contains("base"));
+    let dependencies = second.dependencies().unwrap();
+    assert!(dependencies.contains_dependency("_entry_", "middle"));
+    assert!(dependencies.contains_dependency("middle", "base"));
+
+    let type_error =
+        analyze_source("import \"middle\"\nfn main() { let _: string = middle.value() }\n");
+    assert!(!type_error.errors().is_empty());
+    assert!(type_error.dependencies().is_some());
+    for broken in [
+        "import \"missing\"\nfn main() {}\n",
+        "import \"middle\"\nfn main() { let _ = middle.value() @ }\n",
+    ] {
+        let analysis = analyze_source(broken);
+        assert!(!analysis.errors().is_empty());
+        assert!(analysis.dependencies().is_none());
+    }
 }

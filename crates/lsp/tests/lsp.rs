@@ -15252,3 +15252,160 @@ fn references_inside_extracted_typedefs_cover_only_the_member_name() {
     }
     client.shutdown();
 }
+
+#[test]
+fn editing_an_unrelated_package_keeps_other_packages_analyzed() {
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let files = [
+        (
+            "src/main.lis",
+            "import \"middle\"\nfn main() { let _ = middle.value() }",
+        ),
+        (
+            "src/middle/middle.lis",
+            "import \"base\"\npub fn value() -> int { base.value() }",
+        ),
+        ("src/base/base.lis", "pub fn value() -> int { 1 }"),
+        ("src/other/other.lis", "pub fn value() -> int { 2 }"),
+    ];
+    project_with(root, &files);
+    let counter = Arc::new(lsp_harness::BuildCounter::default());
+    let mut client = TestClient::with_bindgen_setup(Some(counter.clone()));
+    client.initialize_with_root(root);
+    for (file, source) in files {
+        client.open(&uri_of(root, file), source);
+    }
+    for (file, source) in files {
+        let line = u32::from(source.starts_with("import"));
+        assert!(
+            client
+                .hover(
+                    &uri_of(root, file),
+                    line,
+                    if line == 1 && file.ends_with("main.lis") {
+                        3
+                    } else {
+                        7
+                    }
+                )
+                .is_some()
+        );
+    }
+    let before = counter.0.load(Ordering::SeqCst);
+    let other = uri_of(root, "src/other/other.lis");
+    client.change(&other, "pub fn value() -> string { \"changed\" }", 2);
+    assert!(client.hover(&uri_of(root, "src/main.lis"), 1, 3).is_some());
+    let hover = client.hover(&other, 0, 7).unwrap();
+    assert!(hover_content(&hover).contains("-> string"));
+    assert_eq!(
+        counter.0.load(Ordering::SeqCst) - before,
+        1,
+        "only the edited package should rebuild"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn package_edits_and_unsaved_closes_refresh_transitive_dependents() {
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let files = [
+        (
+            "src/main.lis",
+            "import \"middle\"\nfn main() { let _ = middle.value() }",
+        ),
+        (
+            "src/middle/middle.lis",
+            "import \"base\"\npub fn value() -> int { base.value() }",
+        ),
+        ("src/base/base.lis", "pub fn value() -> int { 1 }"),
+        ("src/other/other.lis", "pub fn value() -> int { 2 }"),
+    ];
+    project_with(root, &files);
+    let counter = Arc::new(lsp_harness::BuildCounter::default());
+    let mut client = TestClient::with_bindgen_setup(Some(counter.clone()));
+    client.initialize_with_root(root);
+    for (file, source) in files {
+        client.open(&uri_of(root, file), source);
+    }
+    let main = uri_of(root, files[0].0);
+    let middle = uri_of(root, files[1].0);
+    let base = uri_of(root, files[2].0);
+    let other = uri_of(root, files[3].0);
+    for (uri, line, character) in [
+        (&main, 1, 3),
+        (&middle, 1, 7),
+        (&base, 0, 7),
+        (&other, 0, 7),
+    ] {
+        assert!(client.hover(uri, line, character).is_some());
+    }
+    let before = counter.0.load(Ordering::SeqCst);
+    client.change(&base, "pub fn value() -> string { \"unsaved\" }", 2);
+    let diagnostics = client
+        .await_diagnostics_matching(&middle, |diagnostics| {
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.severity == Some(DiagnosticSeverity::ERROR))
+        })
+        .expect("the dependent package must report its type mismatch");
+    assert!(!diagnostics.diagnostics.is_empty());
+    for (uri, line, character) in [
+        (&main, 1, 3),
+        (&middle, 1, 7),
+        (&base, 0, 7),
+        (&other, 0, 7),
+    ] {
+        assert!(client.hover(uri, line, character).is_some());
+    }
+    assert_eq!(counter.0.load(Ordering::SeqCst) - before, 3);
+    let before_close = counter.0.load(Ordering::SeqCst);
+    client.close(&base);
+    assert!(client.hover(&main, 1, 3).is_some());
+    assert!(client.hover(&middle, 1, 7).is_some());
+    assert!(client.hover(&other, 0, 7).is_some());
+    assert_eq!(counter.0.load(Ordering::SeqCst) - before_close, 2);
+    client
+        .await_diagnostics_matching(&middle, |diagnostics| {
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.severity != Some(DiagnosticSeverity::ERROR))
+        })
+        .expect("closing an unsaved dependency must clear dependent errors");
+    client.shutdown();
+}
+
+#[test]
+fn editing_a_library_root_refreshes_external_test_diagnostics() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let library = "pub fn value() -> int { 1 }";
+    let test = "import \"root\"\n#[test]\nfn t() { let _: int = root.value() }";
+    project_with(
+        root,
+        &[("src/lib.lis", library), ("tests/api.test.lis", test)],
+    );
+    let library_uri = uri_of(root, "src/lib.lis");
+    let test_uri = uri_of(root, "tests/api.test.lis");
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    client.open(&library_uri, library);
+    client.open(&test_uri, test);
+    assert!(client.hover(&test_uri, 2, 27).is_some());
+    client.change(&library_uri, "pub fn value() -> string { \"changed\" }", 2);
+    client
+        .await_diagnostics_matching(&test_uri, |diagnostics| {
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.severity == Some(DiagnosticSeverity::ERROR))
+        })
+        .expect("external tests must refresh after a library-root edit");
+    client.shutdown();
+}

@@ -15,6 +15,8 @@ use crate::imports::{Importable, PackageResolver};
 use crate::paths::{ENTRY_PACKAGE_ID, package_file_to_path};
 use crate::position::LineIndex;
 use crate::project::ProjectConfig;
+use crate::state::AnalysisKey;
+use semantics::loader::is_external_test_package;
 use std::path::Path;
 
 pub(crate) struct AnalysisSnapshot {
@@ -42,6 +44,38 @@ pub(crate) struct SnapshotPosition<'a> {
 }
 
 impl AnalysisSnapshot {
+    pub(crate) fn depends_on(&self, analyzed: &AnalysisKey, changed: &AnalysisKey) -> bool {
+        let (
+            AnalysisKey::Package {
+                project_root,
+                external_test,
+                ..
+            },
+            AnalysisKey::Package {
+                project_root: changed_root,
+                external_test: changed_external_test,
+                package_id,
+            },
+        ) = (analyzed, changed)
+        else {
+            return true;
+        };
+        if project_root != changed_root {
+            return false;
+        }
+        if analyzed == changed {
+            return true;
+        }
+        let Some(dependencies) = self.analysis.dependencies() else {
+            return true;
+        };
+        if package_id == ENTRY_PACKAGE_ID {
+            return *external_test && dependencies.contains_package(ENTRY_PACKAGE_ID);
+        }
+        *changed_external_test == is_external_test_package(package_id)
+            && dependencies.contains_package(package_id)
+    }
+
     pub(crate) fn new(
         analysis: Analysis,
         config: &ProjectConfig,

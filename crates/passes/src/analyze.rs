@@ -10,6 +10,7 @@ use syntax::program::{BinderIds, EmitInput, MutationInfo, UnusedInfo, is_interna
 use semantics::AnalyzeInput;
 use semantics::cache::{EmitStamp, save_package_cache};
 use semantics::facts::{BindingFact, Usage};
+use semantics::package_graph::DependencyGraph;
 use semantics::store::{ENTRY_FILE_ID, ENTRY_PACKAGE_ID};
 use semantics::{InferenceOutput, PARALLEL_THRESHOLD, run_inference};
 
@@ -22,6 +23,7 @@ pub struct Analysis {
     pub emit_input: EmitInput,
     pub emit_stamps: Vec<EmitStamp>,
     pub unreachable_packages: Vec<String>,
+    dependencies: Option<DependencyGraph>,
     bindings: HashMap<BindingId, BindingFact>,
     usages: HashSet<Usage>,
     errors: Vec<LisetteDiagnostic>,
@@ -41,6 +43,10 @@ impl<'a> Diagnostics<'a> {
 }
 
 impl Analysis {
+    pub fn dependencies(&self) -> Option<&DependencyGraph> {
+        self.dependencies.as_ref()
+    }
+
     pub fn diagnostics(&self) -> Diagnostics<'_> {
         Diagnostics {
             errors: &self.errors,
@@ -104,6 +110,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         passes::UnusedItemReporting::Suppress
     };
     let InferenceOutput {
+        dependencies,
         store,
         facts,
         sink,
@@ -245,6 +252,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
 
     let (errors, lints) = classify_diagnostics(all_diagnostics);
     Analysis {
+        dependencies,
         emit_input: EmitInput {
             files,
             definitions,

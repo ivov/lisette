@@ -205,6 +205,7 @@ impl LazyGoStdlibCache {
 }
 
 pub struct InferenceOutput {
+    pub dependencies: Option<DependencyGraph>,
     pub store: Store,
     pub facts: Facts,
     pub sink: LocalSink,
@@ -312,6 +313,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     {
         let checker = TaskState::with_sink(sink, input.project_kind, input.scope.script_unit());
         return InferenceOutput {
+            dependencies: None,
             store,
             facts: checker.facts,
             sink: checker.sink,
@@ -414,7 +416,11 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         },
     );
 
+    let entry_parse_errors = entry.into_errors();
+    let dependencies_complete =
+        !has_graph_errors && !package_output.has_parse_errors && entry_parse_errors.is_empty();
     InferenceOutput {
+        dependencies: dependencies_complete.then_some(package_output.dependencies),
         store,
         facts: package_output.facts,
         sink: package_output.sink,
@@ -423,6 +429,6 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         cached_packages: package_output.cached_packages,
         cache_root,
         unreachable_packages,
-        entry_parse_errors: entry.into_errors(),
+        entry_parse_errors,
     }
 }
