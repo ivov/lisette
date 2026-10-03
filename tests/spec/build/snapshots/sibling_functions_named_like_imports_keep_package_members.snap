@@ -1,0 +1,63 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === alpha/alpha.go ===
+package alpha
+
+const Limit int = 10
+
+func Twice(x int) int {
+	return x * 2
+}
+
+type Item struct {
+	N int
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/other"
+)
+
+func main() {
+	fmt.Println(other.Run(), other.Wait(), other.Helper())
+}
+
+
+// === other/a.go ===
+package other
+
+import (
+	alpha_pkg "github.com/user/myproject/alpha"
+	time_pkg "time"
+)
+
+func Run() int {
+	return alpha_pkg.Limit + alpha_pkg.Twice(1) + alpha_pkg.Item{N: 1}.N
+}
+
+func Wait() time_pkg.Duration {
+	return time_pkg.Second
+}
+
+
+// === other/b.go ===
+package other
+
+import "fmt"
+
+func Helper() string {
+	return fmt.Sprintf("%d%s", alpha(), time())
+}
+
+func alpha() int {
+	return 1
+}
+
+func time() string {
+	return "t"
+}
