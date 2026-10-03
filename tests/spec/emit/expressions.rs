@@ -5800,3 +5800,25 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn a_diverging_assignment_still_evaluates_its_target() {
+    let input = r#"
+fn die() -> Never {
+  panic("boom")
+}
+
+fn test() {
+  let mut count = 0
+  let next = || -> int {
+    count += 1
+    0
+  }
+  let mut xs = [0, 0]
+  let r = recover { xs[next()] = die() }
+  if r.is_ok() { panic("die did not panic") }
+  if count != 1 { panic(f"the index ran {count} times") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

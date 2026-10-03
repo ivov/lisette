@@ -8,7 +8,7 @@ use crate::abi::callable::{AbiTransition, CallableParamAbi, CallableReturnAbi};
 use crate::abi::coercion::{CoercionPlan, resolve_layout_bridge};
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
-use crate::context::expression::ExpressionContext;
+use crate::context::expression::{ExpressionContext, result_is_type_parameter};
 use crate::expressions::staging::{SpreadSequenceOptions, VariadicCombine};
 use crate::names::generics::extract_type_mapping;
 use crate::plan::bodies::{
@@ -282,10 +282,14 @@ impl Planner<'_> {
             self.facts
                 .resolves_to_unknown(param.instantiated.unwrap_forall())
         });
+        let generic_result = param
+            .and_then(|param| param.declared.as_ref())
+            .is_some_and(result_is_type_parameter);
         ExpressionContext::value()
             .with_function_slot_origin(origin)
             .with_forced_tagged_go_function(suppress)
             .with_unknown_argument_target(flows_to_unknown)
+            .with_generic_result_target(generic_result)
     }
 
     pub(crate) fn try_adapt_lowered_fn_arg_shape(

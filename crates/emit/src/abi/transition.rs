@@ -13,6 +13,7 @@ use crate::control_flow::propagation::plain_return;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, define, define_many,
+    expression_statement,
 };
 use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
@@ -599,6 +600,31 @@ pub(crate) fn emit_fn_arg_shape_adapter(
         LoweredBlock { statements: body },
         FunctionLiteralLayout::MultiLine,
     ))
+}
+
+pub(crate) fn emit_unit_result_adapter(
+    planner: &mut Planner,
+    setup: &mut Vec<LoweredStatement>,
+    fn_value: GoExpression,
+    fn_type: &Type,
+) -> GoExpression {
+    let Some(params) = fn_type.get_function_params() else {
+        return fn_value;
+    };
+    let cb_var = planner.hoist_tmp_value_statement(setup, "cb", fn_value);
+    let (param_strs, arguments) = planner.build_wrapper_params(params);
+    let call = GoExpression::call(GoExpression::name(cb_var), arguments);
+    GoExpression::function_literal(
+        param_strs,
+        "struct{}".to_string(),
+        LoweredBlock {
+            statements: vec![
+                expression_statement(call),
+                plain_return(GoExpression::empty_composite("struct{}".to_string())),
+            ],
+        },
+        FunctionLiteralLayout::MultiLine,
+    )
 }
 
 /// Convert a fn-typed wrapper arg from lowered Go ABI back to tagged for

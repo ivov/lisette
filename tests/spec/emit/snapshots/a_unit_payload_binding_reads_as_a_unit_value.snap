@@ -1,0 +1,78 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  enum Event {
+    Tick(()),
+    Count(int),
+  }
+  
+  fn describe(e: Event) -> string {
+    match e {
+      Event.Tick(u) => fmt.Sprintf("%v", u),
+      Event.Count(n) => fmt.Sprintf("%d", n),
+    }
+  }
+  
+  fn test() {
+    let s = describe(Event.Tick(()))
+    if s != "{}" { panic(f"the unit payload printed {s}") }
+    let pair = match Some(()) {
+      Some(u) => (u, 1),
+      None => ((), 0),
+    }
+    if pair.1 != 1 { panic("the unit payload lost its arm") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func MakeEventTick(arg0 struct{}) Event {
+	return Event{Tag: EventTick, Tick: arg0}
+}
+
+func MakeEventCount(arg0 int) Event {
+	return Event{Tag: EventCount, Count: arg0}
+}
+
+type EventTag uint8
+
+const (
+	EventTick EventTag = iota
+	EventCount
+)
+
+type Event struct {
+	Tag   EventTag
+	Tick  struct{}
+	Count int
+}
+
+func describe(e Event) string {
+	if e.Tag == EventTick {
+		return fmt.Sprintf("%v", struct{}{})
+	}
+	return fmt.Sprintf("%d", e.Count)
+}
+
+func test() {
+	s := describe(MakeEventTick(struct{}{}))
+	if s != "{}" {
+		panic("the unit payload printed " + s)
+	}
+	var pair lisette.Tuple2[struct{}, int]
+	if lisette.MakeOptionSome(struct{}{}).Tag == lisette.OptionSome {
+		pair = lisette.MakeTuple2[struct{}, int](struct{}{}, 1)
+	} else {
+		pair = lisette.MakeTuple2[struct{}, int](struct{}{}, 0)
+	}
+	if pair.Second != 1 {
+		panic("the unit payload lost its arm")
+	}
+}

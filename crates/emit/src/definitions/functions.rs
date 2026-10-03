@@ -3,6 +3,7 @@ use crate::Renderer;
 use crate::ReturnContext;
 use crate::abi::callable::CallableReturnAbi;
 use crate::context::expression::ExpressionContext;
+use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::{
@@ -179,6 +180,15 @@ impl Planner<'_> {
             if let Some(recover) = recover {
                 statements.insert(0, recover);
             }
+            let mut body = LoweredBlock { statements };
+            let unit_result =
+                return_info.should_return() && ty.get_function_ret().is_some_and(Type::is_unit);
+            if unit_result && !body.go_terminates() {
+                body.statements
+                    .push(plain_return(GoExpression::empty_composite(
+                        "struct{}".to_string(),
+                    )));
+            }
 
             GoExpression::function_literal(
                 param_pairs
@@ -186,7 +196,7 @@ impl Planner<'_> {
                     .map(|(name, go_type)| GoParameter::new(name.clone(), go_type.clone()))
                     .collect(),
                 return_info.signature().trim_start().to_string(),
-                LoweredBlock { statements },
+                body,
                 FunctionLiteralLayout::MultiLine,
             )
         })
@@ -240,10 +250,8 @@ impl Planner<'_> {
 
         let return_ty = function.return_type.as_ref();
         let has_return = match return_ty {
-            Type::Simple(SimpleKind::Unit)
-            | Type::Var { .. }
-            | Type::Uninferred
-            | Type::Ignored => false,
+            Type::Simple(SimpleKind::Unit) => ctx.result_fills_type_parameter(),
+            Type::Var { .. } | Type::Uninferred | Type::Ignored => false,
             Type::Never => !argument_flows_to_unknown,
             _ => true,
         };

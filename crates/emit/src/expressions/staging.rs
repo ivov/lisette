@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::abi::is_tagged_shape_fn_value;
 use crate::abi::transition::lower_arg_to_tagged;
-use crate::context::expression::ExpressionContext;
+use crate::context::expression::{ExpressionContext, result_is_type_parameter};
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::CallableOrigin;
@@ -276,7 +276,9 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let suppress =
             declared_param.is_some_and(|p| matches!(p.unwrap_forall(), Type::Function(_)));
-        let arg_ctx = ExpressionContext::value().with_forced_tagged_go_function(suppress);
+        let arg_ctx = ExpressionContext::value()
+            .with_forced_tagged_go_function(suppress)
+            .with_generic_result_target(declared_param.is_some_and(result_is_type_parameter));
         let staged = self.lower_composite_value(expression, arg_ctx);
 
         if suppress

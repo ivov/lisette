@@ -9,7 +9,9 @@ use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
-use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
+use crate::abi::transition::{
+    emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper, emit_unit_result_adapter,
+};
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement, discard, expression_statement};
@@ -118,6 +120,18 @@ impl Planner<'_> {
                     }
                     GoExpression::empty_composite("struct{}".to_string())
                 });
+        }
+        let ty = expression.get_type();
+        if ctx.result_fills_type_parameter()
+            && !matches!(
+                expression.unwrap_parens(),
+                Expression::Lambda { .. } | Expression::Function { .. }
+            )
+            && ty.get_function_ret().is_some_and(Type::is_unit)
+        {
+            return self
+                .lower_value(expression, ctx)
+                .map_expression(|setup, value| emit_unit_result_adapter(self, setup, value, &ty));
         }
         self.lower_value(expression, ctx)
     }

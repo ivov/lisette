@@ -8,7 +8,7 @@ use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
-use crate::context::expression::ExpressionContext;
+use crate::context::expression::{ExpressionContext, result_is_type_parameter};
 use crate::control_flow::propagation::plain_return;
 use crate::definitions::enum_layout;
 use crate::go_name;
@@ -106,7 +106,12 @@ impl Planner<'_> {
                     *literal_slot = true;
                     return literal;
                 }
-                self.lower_composite_value(&f.value, ExpressionContext::value())
+                let generic_result = self
+                    .declared_struct_field_ty(ty, &f.name)
+                    .is_some_and(|(declared, _)| result_is_type_parameter(&declared));
+                let field_ctx =
+                    ExpressionContext::value().with_generic_result_target(generic_result);
+                self.lower_composite_value(&f.value, field_ctx)
             })
             .collect();
         let field_evaluations: Vec<bool> = stages

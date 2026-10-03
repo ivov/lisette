@@ -64,7 +64,9 @@ impl Planner<'_> {
         let raw_body = |statements: Vec<LoweredStatement>| LoweredBlock { statements };
 
         if value.get_type().is_never() {
-            return LoweredStatement::Body(raw_body(vec![self.lower_statement(value)]));
+            let mut statements = self.lower_target_operands(target);
+            statements.push(self.lower_statement(value));
+            return LoweredStatement::Body(raw_body(statements));
         }
 
         if let Some((op, rhs)) = detect_compound_assignment(target, value, compound_operator) {
@@ -126,6 +128,26 @@ impl Planner<'_> {
             target: target_place,
             value,
         })
+    }
+
+    fn lower_target_operands(&mut self, target: &Expression) -> Vec<LoweredStatement> {
+        match target.unwrap_parens() {
+            Expression::Identifier { .. } | Expression::Literal { .. } => Vec::new(),
+            Expression::DotAccess { expression, .. }
+            | Expression::Unary {
+                operator: UnaryOperator::Deref,
+                expression,
+                ..
+            } => self.lower_target_operands(expression),
+            Expression::IndexedAccess {
+                expression, index, ..
+            } => {
+                let mut statements = self.lower_target_operands(expression);
+                statements.extend(self.lower_target_operands(index));
+                statements
+            }
+            operand => self.lower_discard_value(operand),
+        }
     }
 
     /// Build a compound assignment plan (`+=`, `-=`, `++`, etc.), staging the

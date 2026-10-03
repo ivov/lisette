@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn die() -> Never {
+    panic("boom")
+  }
+  
+  fn test() {
+    let mut count = 0
+    let next = || -> int {
+      count += 1
+      0
+    }
+    let mut xs = [0, 0]
+    let r = recover { xs[next()] = die() }
+    if r.is_ok() { panic("die did not panic") }
+    if count != 1 { panic(f"the index ran {count} times") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func die() struct{} {
+	panic("boom")
+}
+
+func test() {
+	count := 0
+	next := func() int {
+		count++
+		return 0
+	}
+	r := lisette.RecoverBlock(func() struct{} {
+		next()
+		die()
+		return struct{}{}
+	})
+	if r.IsOk() {
+		panic("die did not panic")
+	}
+	if count != 1 {
+		panic(fmt.Sprintf("the index ran %d times", count))
+	}
+}

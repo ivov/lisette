@@ -24,11 +24,19 @@ impl Default for FunctionValueAbiTarget {
     }
 }
 
+pub(crate) fn result_is_type_parameter(declared: &Type) -> bool {
+    declared
+        .unwrap_forall()
+        .as_function_type()
+        .is_some_and(|function| matches!(function.return_type.as_ref(), Type::Parameter(_)))
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum ArgumentTarget {
     #[default]
     Typed,
     Unknown,
+    GenericResult,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -88,6 +96,17 @@ impl<'a> ExpressionContext<'a> {
         }
     }
 
+    pub(crate) fn with_generic_result_target(self, generic: bool) -> Self {
+        if generic && self.argument_target == ArgumentTarget::Typed {
+            Self {
+                argument_target: ArgumentTarget::GenericResult,
+                ..self
+            }
+        } else {
+            self
+        }
+    }
+
     pub(crate) fn with_capture_boundary(mut self, boundary: CaptureBoundary) -> Self {
         self.capture_boundary = boundary;
         self
@@ -117,6 +136,10 @@ impl<'a> ExpressionContext<'a> {
 
     pub(crate) fn argument_flows_to_unknown(self) -> bool {
         matches!(self.argument_target, ArgumentTarget::Unknown)
+    }
+
+    pub(crate) fn result_fills_type_parameter(self) -> bool {
+        matches!(self.argument_target, ArgumentTarget::GenericResult)
     }
 
     pub(crate) fn capture_boundary(self) -> CaptureBoundary {

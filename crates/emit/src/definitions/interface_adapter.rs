@@ -44,6 +44,18 @@ impl Planner<'_> {
         struct_ty: &Type,
         field_name: &str,
     ) -> Option<Type> {
+        let (field_ty, subst_map) = self.declared_struct_field_ty(struct_ty, field_name)?;
+        Some(match subst_map {
+            Some(subst_map) => substitute(&field_ty, &subst_map),
+            None => field_ty,
+        })
+    }
+
+    pub(crate) fn declared_struct_field_ty(
+        &self,
+        struct_ty: &Type,
+        field_name: &str,
+    ) -> Option<(Type, Option<SubstitutionMap>)> {
         let stripped = struct_ty.strip_refs();
         let Type::Nominal { id, params, .. } = &stripped else {
             return None;
@@ -58,11 +70,8 @@ impl Planner<'_> {
             return None;
         };
         let field_ty = fields.iter().find(|f| f.name == field_name)?.ty.clone();
-        if generics.is_empty() {
-            return Some(field_ty);
-        }
-        let subst_map = build_substitution_map(generics, params);
-        Some(substitute(&field_ty, &subst_map))
+        let subst_map = (!generics.is_empty()).then(|| build_substitution_map(generics, params));
+        Some((field_ty, subst_map))
     }
 
     pub(crate) fn is_function_alias(&self, ty: &Type) -> bool {
