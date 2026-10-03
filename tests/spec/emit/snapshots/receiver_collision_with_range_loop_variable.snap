@@ -37,8 +37,7 @@ type IntList struct {
 
 func (i IntList) display() string {
 	s := "["
-	bound := len(i.items)
-	for i_1 := range bound {
+	for i_1 := range len(i.items) {
 		if i_1 > 0 {
 			s += ", "
 		}

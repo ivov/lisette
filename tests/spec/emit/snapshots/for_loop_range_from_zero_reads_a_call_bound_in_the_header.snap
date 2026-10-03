@@ -1,0 +1,69 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  struct Node { children: Slice<int> }
+  
+  impl Node {
+    fn child_count(self) -> int { self.children.length() }
+  }
+  
+  fn from_zero(node: Node) -> int {
+    let mut sum = 0
+    for i in 0..node.child_count() {
+      sum += i
+    }
+    sum
+  }
+  
+  fn from_one(node: Node) -> int {
+    let mut sum = 0
+    for i in 1..node.child_count() {
+      sum += i
+    }
+    sum
+  }
+  
+  fn inclusive(node: Node) -> int {
+    let mut sum = 0
+    for i in 0..=node.child_count() {
+      sum += i
+    }
+    sum
+  }
+---
+package main
+
+type Node struct {
+	children []int
+}
+
+func (n Node) childCount() int {
+	return len(n.children)
+}
+
+func fromZero(node Node) int {
+	sum := 0
+	for i := range node.childCount() {
+		sum += i
+	}
+	return sum
+}
+
+func fromOne(node Node) int {
+	sum := 0
+	bound := node.childCount()
+	for i := 1; i < bound; i++ {
+		sum += i
+	}
+	return sum
+}
+
+func inclusive(node Node) int {
+	sum := 0
+	bound := node.childCount()
+	for i := 0; i <= bound; i++ {
+		sum += i
+	}
+	return sum
+}
