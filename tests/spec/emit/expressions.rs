@@ -5822,3 +5822,37 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn package_constants_and_functions_need_no_copy_before_a_call() {
+    let input = r#"
+import "go:flag"
+import "go:math"
+import "go:strings"
+
+fn bump() -> int {
+  flag.Usage = || {}
+  1
+}
+
+fn run(f: fn(string) -> string, n: int) -> string {
+  f(f"{n}")
+}
+
+fn call(f: fn(), n: int) -> int {
+  f()
+  n
+}
+
+fn test() {
+  let a = math.MaxInt8 + bump()
+  let s = run(strings.ToUpper, bump())
+  let mut seen = ""
+  flag.Usage = || { seen = "original" }
+  let n = call(flag.Usage, bump())
+  if a != 128 || s != "1" || n != 1 { panic(f"a={a} s={s} n={n}") }
+  if seen != "original" { panic("the reassigned flag.Usage ran") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

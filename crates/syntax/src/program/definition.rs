@@ -74,6 +74,7 @@ impl Attributes {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ValueKind {
     Runtime,
+    Variable,
     ConstantDeclaration,
     Constant(ConstantValue),
 }
@@ -352,6 +353,16 @@ impl Definition {
             self.body,
             DefinitionBody::Value {
                 kind: ValueKind::ConstantDeclaration | ValueKind::Constant(_),
+                ..
+            }
+        )
+    }
+
+    pub fn is_variable(&self) -> bool {
+        matches!(
+            self.body,
+            DefinitionBody::Value {
+                kind: ValueKind::Variable,
                 ..
             }
         )

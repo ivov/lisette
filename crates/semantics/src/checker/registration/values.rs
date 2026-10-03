@@ -296,7 +296,7 @@ impl TaskState {
                 name_span: Some(*name_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Value {
-                    kind: ValueKind::Runtime,
+                    kind: ValueKind::Variable,
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
