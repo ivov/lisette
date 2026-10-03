@@ -1,0 +1,54 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  struct Label { name: string }
+  struct Card { labels: Slice<Label> }
+  
+  fn names(card: Card) -> Slice<string> {
+    card.labels.map(|l| l.name)
+  }
+  
+  fn names_through_ref(card: Ref<Card>) -> Slice<string> {
+    card.labels.map(|l| l.name)
+  }
+  
+  fn shadowed(card: Card) -> Slice<string> {
+    let card = card.labels.map(|l| l.name + "!")
+    card
+  }
+---
+package main
+
+type Label struct {
+	name string
+}
+
+type Card struct {
+	labels []Label
+}
+
+func names(card Card) []string {
+	result := make([]string, len(card.labels))
+	for i, l := range card.labels {
+		result[i] = l.name
+	}
+	return result
+}
+
+func namesThroughRef(card *Card) []string {
+	result := make([]string, len(card.labels))
+	for i, l := range card.labels {
+		result[i] = l.name
+	}
+	return result
+}
+
+func shadowed(card Card) []string {
+	result := make([]string, len(card.labels))
+	for i, l := range card.labels {
+		result[i] = l.name + "!"
+	}
+	card_1 := result
+	return card_1
+}

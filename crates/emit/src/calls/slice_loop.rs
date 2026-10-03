@@ -253,7 +253,7 @@ impl Planner<'_> {
 
         let mut source_staged = self.plan_operand(receiver, ExpressionContext::value());
         // `map` reads the source twice, for its length and for the range.
-        if kind == SliceLoop::Map && !self.plan_rests_in_stable_name(&source_staged) {
+        if kind == SliceLoop::Map && !source_staged.effects().can_duplicate() {
             self.pin_staged(&mut source_staged, "src");
         }
         let mut stages = vec![source_staged];
