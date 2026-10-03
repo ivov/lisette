@@ -1,0 +1,86 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  
+  struct CodeError { code: int }
+  
+  impl CodeError {
+    fn Error(self) -> string { f"code {self.code}" }
+  }
+  
+  fn write(path: string, data: string) -> Result<(), error> {
+    os.WriteFile(path, data.bytes(), 0o644)?
+    Ok(())
+  }
+  
+  fn write_twice(path: string) -> Result<(), error> {
+    write(path, "a")?
+    write(path, "b")?
+    Ok(())
+  }
+  
+  fn check(code: int) -> Result<(), Ref<CodeError>> {
+    if code != 0 { return Err(&CodeError { code }) }
+    Ok(())
+  }
+  
+  fn checked(code: int) -> Result<(), error> {
+    check(code)?
+    Ok(())
+  }
+  
+  fn mapped(path: string) -> Result<(), error> {
+    write(path, "c").map_err(|e| fmt.Errorf("writing: %w", e))?
+    Ok(())
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+type CodeError struct {
+	code int
+}
+
+func (c CodeError) Error() string {
+	return fmt.Sprintf("code %d", c.code)
+}
+
+func write(path, data string) error {
+	return os.WriteFile(path, []byte(data), 0o644)
+}
+
+func writeTwice(path string) error {
+	if err := write(path, "a"); err != nil {
+		return err
+	}
+	return write(path, "b")
+}
+
+func check(code int) *CodeError {
+	if code != 0 {
+		return &CodeError{code: code}
+	}
+	return nil
+}
+
+func checked(code int) error {
+	if err := check(code); err != nil {
+		return err
+	}
+	return nil
+}
+
+func mapped(path string) error {
+	err := write(path, "c")
+	if err != nil {
+		return fmt.Errorf("writing: %w", err)
+	}
+	return nil
+}

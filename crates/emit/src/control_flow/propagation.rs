@@ -7,7 +7,7 @@ use crate::calls::unwrap_or::{MapLambda, map_lambda};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible};
 use crate::definitions::functions::is_go_never;
-use crate::names::go_name::GeneratedPackage;
+use crate::names::go_name::{GeneratedPackage, PRELUDE_ERROR_ID};
 use crate::patterns::matching::{OptionFusePlan, ResultFusePlan};
 use crate::plan::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, assign, define,
@@ -499,6 +499,55 @@ impl Planner<'_> {
         };
         let map = map_lambda(function)?;
         Some((self.result_fuse_plan(receiver)?, map))
+    }
+
+    /// `call()?; Ok(())` returns the call, unless a concrete error type would turn nil into non-nil.
+    pub(crate) fn forwarded_error_call<'a>(
+        &self,
+        check: &'a Expression,
+        last: &Expression,
+    ) -> Option<&'a Expression> {
+        let Expression::Propagate {
+            expression: inner, ..
+        } = check.unwrap_parens()
+        else {
+            return None;
+        };
+        let Expression::Call {
+            expression: callee,
+            args,
+            ..
+        } = last.unwrap_parens()
+        else {
+            return None;
+        };
+        if callee.as_result_constructor() != Some(Ok(()))
+            || !matches!(args.as_slice(), [Expression::Unit { .. }])
+        {
+            return None;
+        }
+        let return_ctx = self.return_ctx();
+        if return_ctx.lowered_shape() != Some(CallableReturnAbi::BareError)
+            || !self.is_error_interface(&return_ctx.ty()?.err_type())
+        {
+            return None;
+        }
+        let lowered = self.lowered_call(inner)?;
+        if lowered.shape != CallableReturnAbi::BareError
+            || !lowered.wraps.is_empty()
+            || lowered.is_bridged()
+            || !self.is_error_interface(&lowered.call.get_type().err_type())
+        {
+            return None;
+        }
+        Some(lowered.call)
+    }
+
+    fn is_error_interface(&self, ty: &Type) -> bool {
+        matches!(
+            self.facts.peel_alias(ty),
+            Type::Nominal { id, .. } if id.as_str() == PRELUDE_ERROR_ID
+        )
     }
 
     fn returns_fallible(&self) -> bool {

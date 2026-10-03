@@ -503,6 +503,47 @@ fn test() {
 }
 
 #[test]
+fn propagate_error_call_then_ok_unit_returns_the_call() {
+    let input = r#"
+import "go:fmt"
+import "go:os"
+
+struct CodeError { code: int }
+
+impl CodeError {
+  fn Error(self) -> string { f"code {self.code}" }
+}
+
+fn write(path: string, data: string) -> Result<(), error> {
+  os.WriteFile(path, data.bytes(), 0o644)?
+  Ok(())
+}
+
+fn write_twice(path: string) -> Result<(), error> {
+  write(path, "a")?
+  write(path, "b")?
+  Ok(())
+}
+
+fn check(code: int) -> Result<(), Ref<CodeError>> {
+  if code != 0 { return Err(&CodeError { code }) }
+  Ok(())
+}
+
+fn checked(code: int) -> Result<(), error> {
+  check(code)?
+  Ok(())
+}
+
+fn mapped(path: string) -> Result<(), error> {
+  write(path, "c").map_err(|e| fmt.Errorf("writing: %w", e))?
+  Ok(())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn propagate_on_variable() {
     let input = r#"
 fn test() -> Option<int> {
