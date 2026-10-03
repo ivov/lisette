@@ -103,7 +103,7 @@ fn zero_call_type(
 }
 
 impl Planner<'_> {
-    fn is_plain_struct(&self, ty: &Type) -> bool {
+    pub(crate) fn is_plain_struct(&self, ty: &Type) -> bool {
         let Type::Nominal { id, .. } = ty else {
             return false;
         };

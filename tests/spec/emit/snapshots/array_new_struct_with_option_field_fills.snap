@@ -24,10 +24,7 @@ func herd() [2]Horse {
 	return func() [2]Horse {
 		var arr [2]Horse
 		for i := range arr {
-			arr[i] = Horse{
-				speed: 0,
-				fast:  lisette.MakeOptionNone[int](),
-			}
+			arr[i] = Horse{}
 		}
 		return arr
 	}()

@@ -1,0 +1,72 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  enum Mode {
+    #[default]
+    Clean,
+    Dirty,
+  }
+  
+  struct Member { id: string, name: string, admin: bool }
+  struct Tagged { name: string, tags: Map<string, int> }
+  struct Moded { name: string, mode: Mode }
+  
+  struct Response {
+    token: string,
+    member: Member,
+    tagged: Tagged,
+    moded: Moded,
+  }
+  
+  fn test() -> Response {
+    Response { .. }
+  }
+---
+package main
+
+func MakeModeClean() Mode {
+	return Mode{Tag: ModeClean}
+}
+
+func MakeModeDirty() Mode {
+	return Mode{Tag: ModeDirty}
+}
+
+type ModeTag uint8
+
+const (
+	ModeClean ModeTag = iota
+	ModeDirty
+)
+
+type Mode struct {
+	Tag ModeTag
+}
+
+type Member struct {
+	id    string
+	name  string
+	admin bool
+}
+
+type Tagged struct {
+	name string
+	tags map[string]int
+}
+
+type Moded struct {
+	name string
+	mode Mode
+}
+
+type Response struct {
+	token  string
+	member Member
+	tagged Tagged
+	moded  Moded
+}
+
+func test() Response {
+	return Response{tagged: Tagged{tags: map[string]int{}}}
+}

@@ -23,5 +23,5 @@ type Outer struct {
 }
 
 func test() Outer {
-	return Outer{inner: Inner{opt: lisette.MakeOptionNone[int]()}}
+	return Outer{}
 }

@@ -43,7 +43,7 @@ type Command struct {
 func register() Command {
 	return Command{
 		Gamemode: GameModeParam(""),
-		Wrapper:  Wrapper(Inner{X: 0}),
+		Wrapper:  Wrapper(Inner{}),
 		Double:   DoubleName(Name("")),
 	}
 }

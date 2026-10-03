@@ -16,7 +16,7 @@ use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, discard,
 };
-use crate::plan::go_expression::{CompositeLayout, FunctionLiteralLayout};
+use crate::plan::go_expression::{CompositeLayout, FunctionLiteralLayout, GoExpressionNode};
 use crate::plan::values::{
     CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
 };
@@ -276,7 +276,7 @@ impl Planner<'_> {
                     continue;
                 }
                 let zero = self.lisette_zero(&field_ty);
-                if is_go_zero_literal(&zero.rendered()) {
+                if self.is_go_zero_value(&field_ty, &zero) {
                     continue;
                 }
                 zero
@@ -301,6 +301,24 @@ impl Planner<'_> {
             && matches!(spread, StructSpread::None | StructSpread::Autofill { .. })
             && field.value.unwrap_parens().is_none_literal()
             && field_ty.is_some_and(|ty| self.facts.peel_alias(ty).is_option())
+    }
+
+    fn is_go_zero_value(&self, ty: &Type, zero: &GoExpression) -> bool {
+        if is_go_zero_literal(&zero.rendered()) {
+            return true;
+        }
+        let is_empty_composite = matches!(
+            zero.node(),
+            GoExpressionNode::CompositeLiteral { elements, .. } if elements.is_empty()
+        );
+        let ty = self.facts.peel_alias(ty);
+        let is_lisette_enum = matches!(&ty, Type::Nominal { id, .. }
+        if !go_name::is_go_import(id.as_str())
+            && matches!(
+                self.facts.definition(id.as_str()).map(|d| &d.body),
+                Some(DefinitionBody::Enum { .. })
+            ));
+        is_empty_composite && (self.is_plain_struct(&ty) || is_lisette_enum)
     }
 
     /// Empty-map literal in the field's Go type, sound as empty needs no coercion.
@@ -549,7 +567,11 @@ impl Planner<'_> {
                 .into_iter()
                 .enumerate()
                 .filter(|(_, (_, field_ty))| !field_ty.is_slice())
-                .map(|(index, (name, field_ty))| {
+                .filter_map(|(index, (name, field_ty))| {
+                    let zero = self.lisette_zero(&field_ty);
+                    if !is_tuple && self.is_go_zero_value(&field_ty, &zero) {
+                        return None;
+                    }
                     let go_name = if is_tuple {
                         format!("F{}", index)
                     } else if self.struct_field_is_exported(ty, &name) {
@@ -559,7 +581,7 @@ impl Planner<'_> {
                     } else {
                         go_name::unexported_method_go_name(&name)
                     };
-                    (go_name, self.lisette_zero(&field_ty))
+                    Some((go_name, zero))
                 })
                 .collect();
             return emit_struct_literal(&go_ty, pairs);

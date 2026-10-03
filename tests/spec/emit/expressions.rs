@@ -348,6 +348,33 @@ fn test() -> Outer {
 }
 
 #[test]
+fn struct_autofill_omits_nested_structs_that_hold_go_zeros() {
+    let input = r#"
+enum Mode {
+  #[default]
+  Clean,
+  Dirty,
+}
+
+struct Member { id: string, name: string, admin: bool }
+struct Tagged { name: string, tags: Map<string, int> }
+struct Moded { name: string, mode: Mode }
+
+struct Response {
+  token: string,
+  member: Member,
+  tagged: Tagged,
+  moded: Moded,
+}
+
+fn test() -> Response {
+  Response { .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn struct_autofill_lisette_slice_omitted_map_non_nil() {
     let input = r#"
 struct Conf { items: Slice<int>, lookup: Map<string, int> }
