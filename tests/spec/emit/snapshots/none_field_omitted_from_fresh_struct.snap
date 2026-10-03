@@ -51,9 +51,8 @@ func fresh(name string) Person {
 }
 
 func clear_(person Person) Person {
-	field := lisette.MakeOptionNone[string]()
 	copy_1 := person
-	copy_1.email = field
+	copy_1.email = lisette.MakeOptionNone[string]()
 	return copy_1
 }
 

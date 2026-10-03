@@ -16,7 +16,7 @@ use crate::plan::bodies::{
 };
 use crate::plan::placement::{
     collapse_declared_temp, expression_contains_binding, is_unit_call, is_zero_call,
-    rebind_trailing_temp, requires_temp_var,
+    rebind_trailing_temp, rebind_updated_temp, requires_temp_var,
 };
 use crate::plan::values::GoExpression;
 use crate::state::bindings::{
@@ -455,7 +455,8 @@ impl Planner<'_> {
         // A temp no source binding answers to has no other reader to break.
         if let Some(name) = value_expression.as_identifier()
             && !self.scope.has_binding_for_go_name(name)
-            && rebind_trailing_temp(&mut statements, &go_identifier, name)
+            && (rebind_trailing_temp(&mut statements, &go_identifier, name)
+                || rebind_updated_temp(&mut statements, &go_identifier, name))
         {
             return statements;
         }

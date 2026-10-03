@@ -104,6 +104,52 @@ pub(crate) fn rebind_trailing_temp(
         .is_some_and(|statement| statement.binds_name(temp) && statement.rename_bound_name(name))
 }
 
+/// Name a struct update's copy `name` when only field writes that do not read `name` follow it.
+pub(crate) fn rebind_updated_temp(
+    statements: &mut [LoweredStatement],
+    name: &str,
+    temp: &str,
+) -> bool {
+    let Some(start) = statements.iter().rposition(|s| s.binds_name(temp)) else {
+        return false;
+    };
+    let (copy, writes) = statements[start..]
+        .split_first_mut()
+        .expect("rposition found a statement");
+    let writes_field_of_temp = |statement: &LoweredStatement| {
+        let LoweredStatement::Assign(AssignForm::Simple {
+            target_capture,
+            target,
+            value,
+        }) = statement
+        else {
+            return false;
+        };
+        matches!(
+            target.node(),
+            GoExpressionNode::Selector { base, .. }
+                if matches!(base.as_ref(), GoExpressionNode::Identifier(read) if read == temp)
+        ) && target_capture.is_empty()
+            && value.setup().is_empty()
+            && !value.expression().node().mentions(name)
+            && !value.expression().node().mentions(temp)
+    };
+    if writes.is_empty() || !writes.iter().all(writes_field_of_temp) {
+        return false;
+    }
+    if !copy.rename_bound_name(name) {
+        return false;
+    }
+    for write in writes {
+        if let LoweredStatement::Assign(AssignForm::Simple { target, .. }) = write
+            && let GoExpressionNode::Selector { base, .. } = target.node_mut()
+        {
+            **base = GoExpressionNode::Identifier(name.to_string().into());
+        }
+    }
+    true
+}
+
 /// Collapse `var x T` plus the one statement that fills it into `x := value`.
 pub(crate) fn collapse_declared_temp(
     statements: &mut Vec<LoweredStatement>,

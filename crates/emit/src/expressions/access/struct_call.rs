@@ -178,8 +178,8 @@ impl Planner<'_> {
                 } else {
                     let base_staged = self.plan_operand(base, ExpressionContext::value());
                     effect = effect.combine(base_staged.facts().effect);
-                    let field_pairs = self.hoist_observable_fields(&mut setup, fields);
                     let (spread_setup, value) = if ctx.enum_ctx.is_some() {
+                        let field_pairs = self.hoist_observable_fields(&mut setup, fields);
                         self.lower_enum_variant_spread(
                             SpreadInput {
                                 base,
@@ -190,6 +190,12 @@ impl Planner<'_> {
                             field_assignments,
                         )
                     } else {
+                        let field_pairs =
+                            if base_staged.setup().is_empty() && base_staged.can_delay() {
+                                fields.into_iter().map(StructCallField::into_pair).collect()
+                            } else {
+                                self.hoist_observable_fields(&mut setup, fields)
+                            };
                         self.lower_struct_update(base_staged, &field_pairs)
                     };
                     setup.extend(spread_setup);
