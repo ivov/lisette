@@ -721,6 +721,17 @@ fn emit_lowered_tuple_tail(
         return statements;
     }
 
+    if let Some(plan) = planner.plan_call(expression)
+        && plan.resolved.abi.result == (CallableReturnAbi::Tuple { arity })
+        && planner.facts.peel_alias(&expression.get_type()) == planner.facts.peel_alias(&return_ty)
+    {
+        let (mut statements, call) = planner
+            .lower_call(expression, None, ExpressionContext::value())
+            .into_parts();
+        statements.push(plain_return(call));
+        return statements;
+    }
+
     lowered_tail_fallback(
         planner,
         expression,

@@ -25,10 +25,7 @@ import (
 )
 
 func apply(f func() (lisette.Option[[]lisette.Option[string]], int)) (lisette.Option[[]lisette.Option[string]], int) {
-	ret, ret_1 := f()
-	tup := lisette.MakeTuple2(ret, ret_1)
-	tup_1 := tup
-	return tup_1.First, tup_1.Second
+	return f()
 }
 
 func main() {

@@ -1,0 +1,91 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  interface Named {
+    fn name() -> string
+  }
+  
+  struct Dog {}
+  
+  impl Dog {
+    fn name(self) -> string { "dog" }
+  }
+  
+  struct Lowering { offset: int }
+  
+  impl Lowering {
+    fn pair(self, x: int) -> (int, string) { (x + self.offset, "p") }
+  
+    fn statement(self, x: int) -> (int, string) {
+      if x > 10 { return self.pair(x) }
+      if x > 5 {
+        self.pair(x + 1)
+      } else {
+        (0, "none")
+      }
+    }
+  }
+  
+  fn dup<T>(value: T) -> (T, T) { (value, value) }
+  
+  fn twice(n: int) -> (int, int) {
+    dup(n)
+  }
+  
+  fn dog_pair() -> (Dog, int) { (Dog {}, 1) }
+  
+  fn named_pair() -> (Named, int) {
+    dog_pair()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Named interface {
+	name() string
+}
+
+type Dog struct{}
+
+func (d Dog) name() string {
+	return "dog"
+}
+
+type Lowering struct {
+	offset int
+}
+
+func (l Lowering) pair(x int) (int, string) {
+	return x + l.offset, "p"
+}
+
+func (l Lowering) statement(x int) (int, string) {
+	if x > 10 {
+		return l.pair(x)
+	}
+	if x > 5 {
+		return l.pair(x + 1)
+	}
+	return 0, "none"
+}
+
+func dup[T any](value T) (T, T) {
+	return value, value
+}
+
+func twice(n int) (int, int) {
+	return dup(n)
+}
+
+func dogPair() (Dog, int) {
+	return Dog{}, 1
+}
+
+func namedPair() (Named, int) {
+	ret, ret_1 := dogPair()
+	tup := lisette.MakeTuple2(ret, ret_1)
+	tup_1 := tup
+	return tup_1.First, tup_1.Second
+}

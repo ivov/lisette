@@ -2699,6 +2699,49 @@ fn main() {
 }
 
 #[test]
+fn tuple_call_in_return_position_returns_the_call() {
+    let input = r#"
+interface Named {
+  fn name() -> string
+}
+
+struct Dog {}
+
+impl Dog {
+  fn name(self) -> string { "dog" }
+}
+
+struct Lowering { offset: int }
+
+impl Lowering {
+  fn pair(self, x: int) -> (int, string) { (x + self.offset, "p") }
+
+  fn statement(self, x: int) -> (int, string) {
+    if x > 10 { return self.pair(x) }
+    if x > 5 {
+      self.pair(x + 1)
+    } else {
+      (0, "none")
+    }
+  }
+}
+
+fn dup<T>(value: T) -> (T, T) { (value, value) }
+
+fn twice(n: int) -> (int, int) {
+  dup(n)
+}
+
+fn dog_pair() -> (Dog, int) { (Dog {}, 1) }
+
+fn named_pair() -> (Named, int) {
+  dog_pair()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn tuple_let_from_generic_function_destructures_the_multi_return() {
     let input = r#"
 import "go:fmt"
