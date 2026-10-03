@@ -1,0 +1,28 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/mid"
+	time_pkg "time"
+)
+
+func main() {
+	time := 3
+	d := mid.Get()
+	ds := []time_pkg.Duration{d, d}
+	fmt.Println(time, len(ds))
+}
+
+
+// === mid/m.go ===
+package mid
+
+import "time"
+
+func Get() time.Duration {
+	return time.Second
+}

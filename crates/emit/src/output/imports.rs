@@ -148,10 +148,14 @@ impl<'a> ImportBuilder<'a> {
             .filter(|import| {
                 matches!(import.disposition, ImportDisposition::Emit)
                     && (import.go_alias == "_"
-                        || self
-                            .requirements
-                            .iter()
-                            .any(|used| used.package().path() == import.path))
+                        || self.requirements.iter().any(|used| {
+                            used.package().path() == import.path
+                                && effective_qualifier(
+                                    &import.path,
+                                    &import.go_alias,
+                                    self.go_package_ids,
+                                ) == used.qualifier()
+                        }))
             })
             .map(|import| OutputImport {
                 path: import.path.clone(),

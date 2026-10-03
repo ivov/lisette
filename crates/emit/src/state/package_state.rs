@@ -9,6 +9,7 @@ pub(crate) struct PackageState {
     generic_renames: HashMap<String, String>,
     go_const_bindings: HashSet<String>,
     package_block_names: HashSet<String>,
+    declared_names: HashSet<String>,
 }
 
 impl PackageState {
@@ -38,8 +39,17 @@ impl PackageState {
         self.generic_renames.get(source_name).map(String::as_str)
     }
 
-    pub(crate) fn record_package_block_names(&mut self, names: HashSet<String>) {
+    pub(crate) fn record_package_block_names(
+        &mut self,
+        names: HashSet<String>,
+        declared_names: HashSet<String>,
+    ) {
         self.package_block_names = names;
+        self.declared_names = declared_names;
+    }
+
+    pub(crate) fn declares_name(&self, go_name: &str) -> bool {
+        self.declared_names.contains(go_name)
     }
 
     pub(crate) fn package_block_names(&self) -> &HashSet<String> {

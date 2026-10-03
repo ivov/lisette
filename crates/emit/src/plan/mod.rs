@@ -26,7 +26,9 @@ impl Planner<'_> {
         self.collect_escape_remap(files);
         let collected = self.collect_names(files);
         let package_block_names = self.package_block_names(files, &collected);
-        self.package.record_package_block_names(package_block_names);
+        let declared_names = collected.declared_names();
+        self.package
+            .record_package_block_names(package_block_names, declared_names);
         self.derive_package_go_consts(files);
         self.collect_generic_renames(files);
         let collision_diagnostics = self.name_collision_diagnostics(files, collected);

@@ -142,6 +142,14 @@ impl Planner<'_> {
         } else {
             qualifier
         };
+        let qualifier = if self.scope.has_binding_for_go_name(&qualifier)
+            || self.scope.is_go_name_declared(&qualifier)
+            || self.package.declares_name(&qualifier)
+        {
+            format!("{qualifier}_pkg")
+        } else {
+            qualifier
+        };
         PackageUse::new(path, qualifier)
     }
 

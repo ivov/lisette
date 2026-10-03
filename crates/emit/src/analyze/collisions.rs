@@ -35,6 +35,12 @@ pub(crate) struct CollectedNames {
     diagnostics: Vec<LisetteDiagnostic>,
 }
 
+impl CollectedNames {
+    pub(crate) fn declared_names(&self) -> HashSet<String> {
+        self.package_block.keys().cloned().collect()
+    }
+}
+
 impl Planner<'_> {
     pub(crate) fn name_collision_diagnostics(
         &self,

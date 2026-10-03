@@ -104,6 +104,9 @@ impl InferCtx<'_> {
     ) -> Option<Expression> {
         let store = self.store;
         let root = expression.root_identifier()?;
+        if self.imports.namespace(root).is_some() {
+            return None;
+        }
         let qualified_root = self.lookup_qualified_name(store, root)?;
         let base = expression.as_dotted_path()?;
 
