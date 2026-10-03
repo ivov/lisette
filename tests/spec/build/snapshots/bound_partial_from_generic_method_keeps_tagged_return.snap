@@ -22,9 +22,8 @@ func Holder_Resolve[T any, R any, E any](self Holder[T], f func(T) lisette.Parti
 }
 
 func main() {
-	arg := Holder[int]{Val: 4}
 	cb := Fallible
-	rez := Holder_Resolve(arg, func(arg0 int) lisette.Partial[int, Face] {
+	rez := Holder_Resolve(Holder[int]{Val: 4}, func(arg0 int) lisette.Partial[int, Face] {
 		ret, ret_1 := cb(arg0)
 		if ret_1 != nil {
 			return lisette.MakePartialBoth[int, Face](ret, ret_1)

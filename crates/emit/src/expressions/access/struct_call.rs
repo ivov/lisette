@@ -114,11 +114,9 @@ impl Planner<'_> {
                 self.lower_composite_value(&f.value, field_ctx)
             })
             .collect();
-        let field_evaluations: Vec<bool> = stages
-            .iter()
-            .map(|value| value.facts().stability.is_observable())
-            .collect();
+        let field_evaluations: Vec<bool> = stages.iter().map(|value| !value.can_delay()).collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "field");
+        let fields_stability = sequenced.stability;
         let mut effect = sequenced.effect;
         let mut setup = sequenced.setup;
         let emitted_values = sequenced.values;
@@ -166,6 +164,7 @@ impl Planner<'_> {
             );
         }
 
+        let built_from_fields = !matches!(spread, StructSpread::From(_));
         let value = match spread {
             StructSpread::From(base) => {
                 // Never-typed spread base diverges, emit as statement and
@@ -213,6 +212,9 @@ impl Planner<'_> {
             }
         };
 
+        if built_from_fields {
+            return ValuePlan::built_from(setup, value, effect, fields_stability);
+        }
         ValuePlan::computed(setup, value, effect)
     }
 

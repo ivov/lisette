@@ -22,9 +22,8 @@ func Holder_Resolve[R any, E any](self Holder, f func(int) lisette.Result[R, E])
 }
 
 func main() {
-	arg := Holder{N: 4}
 	cb := Resultant
-	rez := Holder_Resolve(arg, func(arg0 int) lisette.Result[int, Face] {
+	rez := Holder_Resolve(Holder{N: 4}, func(arg0 int) lisette.Result[int, Face] {
 		ret, ret_1 := cb(arg0)
 		if ret_1 != nil {
 			return lisette.MakeResultErr[int, Face](ret_1)

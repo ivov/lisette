@@ -22,9 +22,8 @@ func Holder_Resolve[R any](self Holder, f func(int) (R, bool)) (R, bool) {
 }
 
 func main() {
-	arg := Holder{N: 4}
 	cb := Lookup
-	ret, ret_1 := Holder_Resolve(arg, func(arg0 int) (Face, bool) {
+	ret, ret_1 := Holder_Resolve(Holder{N: 4}, func(arg0 int) (Face, bool) {
 		raw := cb(arg0)
 		option := lisette.OptionFromNilable[Face](raw, lisette.IsNilInterface(raw))
 		if option.Tag == lisette.OptionSome {

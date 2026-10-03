@@ -26,6 +26,5 @@ func run() int {
 		lisette.MakeOptionSome(left + bump()),
 		lisette.MakeOptionSome(x),
 	}
-	left_1 := elems[0].UnwrapOr(-1) + elems[1].UnwrapOr(-1)
-	return left_1 + elems[2].UnwrapOr(-1)
+	return elems[0].UnwrapOr(-1) + elems[1].UnwrapOr(-1) + elems[2].UnwrapOr(-1)
 }
