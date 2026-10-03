@@ -259,6 +259,43 @@ pub fn Find(s: string, substr: string) -> Option<int>
 }
 
 #[test]
+fn interop_sentinel_call_tests_the_sentinel_in_place() {
+    let input = r#"
+import "go:example.com/idx"
+
+fn if_let(s: string) -> int {
+  if let Some(i) = idx.Find(s, "=") {
+    return i
+  }
+  -1
+}
+
+fn let_else(s: string) -> int {
+  let Some(i) = idx.Find(s, ":") else { return 0 }
+  i + 1
+}
+
+fn propagate(s: string) -> Option<int> {
+  let i = idx.Find(s, "/")?
+  Some(i * 2)
+}
+
+fn defaulted(s: string) -> int {
+  idx.Find(s, "x").unwrap_or(0)
+}
+
+fn found(s: string) -> bool {
+  idx.Find(s, "b").is_some()
+}
+"#;
+    let typedef = r#"
+#[go(sentinel_minus_one)]
+pub fn Find(s: string, substr: string) -> Option<int>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/idx", typedef)]);
+}
+
+#[test]
 fn interop_sentinel_call_arg() {
     let input = r#"
 import "go:example.com/idx"

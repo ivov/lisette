@@ -577,14 +577,16 @@ impl Planner<'_> {
         }
 
         let lowered = self.lowered_call(subject)?;
-        if !matches!(
-            lowered.shape,
-            CallableReturnAbi::Option(OptionReturnAbi::Nullable)
-        ) || lowered.is_bridged()
-        {
+        if lowered.is_bridged() {
             return None;
         }
-        let nil_guard = lowered.nil_guard?;
+        let nil_guard = match lowered.shape {
+            CallableReturnAbi::Option(OptionReturnAbi::Nullable) => lowered.nil_guard?,
+            CallableReturnAbi::Option(OptionReturnAbi::Sentinel(value)) => {
+                NilGuard::Sentinel(value)
+            }
+            _ => return None,
+        };
         Some(OptionFusePlan::Nullable { subject, nil_guard })
     }
 

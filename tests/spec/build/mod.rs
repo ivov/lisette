@@ -6753,7 +6753,7 @@ fn main() {
 }
 
 #[test]
-fn strings_index_lowers_sentinel_to_option() {
+fn strings_index_tests_the_sentinel_in_place() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
