@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791025100736,
+  "lastUpdate": 1791031550518,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -41921,6 +41921,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 39430,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28531,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19398,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15299,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9029,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7359,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2944,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "dca136edd9f2158df4a6007e6bcd5d92357e5107",
+          "message": "fix: keep unit values and assignment targets in emitted Go (#1510)",
+          "timestamp": "2026-10-03T14:43:04+02:00",
+          "tree_id": "df97d1f737e56783a2550397b807bef9bf4127d8",
+          "url": "https://github.com/ivov/lisette/commit/dca136edd9f2158df4a6007e6bcd5d92357e5107"
+        },
+        "date": 1791031548402,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 149255,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39572,
             "unit": "lines"
           },
           {
