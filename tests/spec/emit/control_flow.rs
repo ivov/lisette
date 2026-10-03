@@ -196,6 +196,40 @@ fn test(color: Color) -> int {
 }
 
 #[test]
+fn match_statement_drops_an_empty_wildcard_default() {
+    let input = r#"
+import "go:fmt"
+
+enum Color { Red, Green, Blue }
+
+fn describe(color: Color) {
+  match color {
+    Red => fmt.Println("red"),
+    Green => fmt.Println("green"),
+    _ => (),
+  }
+}
+
+fn command(name: string) {
+  match name {
+    "up" => fmt.Println("starting"),
+    "down" => fmt.Println("stopping"),
+    _ => {},
+  }
+}
+
+fn fallback(name: string) {
+  match name {
+    "up" => fmt.Println("starting"),
+    "down" => fmt.Println("stopping"),
+    _ => fmt.Println("unknown"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn match_with_enum_data() {
     let input = r#"
 fn test(opt: Option<int>) -> int {

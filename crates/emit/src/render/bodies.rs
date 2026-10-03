@@ -66,8 +66,12 @@ impl Renderer {
             self.render_lowered_block(output, &case.body);
         }
         if let Some(default_body) = &plan.default {
-            output.push_str("default:\n");
-            self.render_lowered_block(output, default_body);
+            let mut body = String::new();
+            self.render_lowered_block(&mut body, default_body);
+            if !body.is_empty() {
+                output.push_str("default:\n");
+                output.push_str(&body);
+            }
         }
         output.push_str("}\n");
         for statement in &plan.postlude {
