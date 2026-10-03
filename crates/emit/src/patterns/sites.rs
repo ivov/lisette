@@ -143,15 +143,18 @@ fn field_path_root(expression: &Expression) -> Option<&str> {
     }
 }
 
-fn is_field_path(expression: &GoExpression) -> bool {
+fn field_path_go_root(expression: &GoExpression) -> Option<&str> {
     let GoExpressionNode::Selector { base, .. } = expression.node() else {
-        return false;
+        return None;
     };
     let mut base = base.as_ref();
     while let GoExpressionNode::Selector { base: inner, .. } = base {
         base = inner;
     }
-    matches!(base, GoExpressionNode::Identifier(_))
+    match base {
+        GoExpressionNode::Identifier(name) => Some(name.spelling()),
+        _ => None,
+    }
 }
 
 fn loop_break(planner: &Planner) -> LoweredStatement {
@@ -182,7 +185,8 @@ impl Planner<'_> {
         let Some(root) = field_path_root(subject) else {
             return false;
         };
-        is_field_path(expression) && self.can_reuse_subject_identifier(root, binds_root(root))
+        field_path_go_root(expression).is_some()
+            && self.can_reuse_subject_identifier(root, binds_root(root))
     }
 
     fn resolve_pattern_subject(
@@ -206,7 +210,14 @@ impl Planner<'_> {
                     ));
                 }
                 let plan = self.lower_value(scrutinee, ExpressionContext::value());
-                let rests_in_stable_name = self.plan_rests_in_stable_name(&plan);
+                let rests_in_own_temp_path =
+                    field_path_go_root(plan.expression()).is_some_and(|root| {
+                        plan.rests_in_own_temp(root)
+                            && !self.scope.has_binding_for_go_name(root)
+                            && !pattern_binds_name(pattern, root)
+                    });
+                let rests_in_stable_name =
+                    rests_in_own_temp_path || self.plan_rests_in_stable_name(&plan);
                 let (op_setup, expression) = plan.into_parts();
                 setup.extend(op_setup);
                 if rests_in_stable_name

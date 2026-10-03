@@ -60,9 +60,8 @@ func main() {
 		if check.Tag != lisette.ResultOk {
 			return 0, nil, check.ErrVal
 		}
-		tmp := check.OkVal
-		advance := tmp.First
-		token := tmp.Second
+		advance := check.OkVal.First
+		token := check.OkVal.Second
 		return advance, token, nil
 	})
 	words := 0
