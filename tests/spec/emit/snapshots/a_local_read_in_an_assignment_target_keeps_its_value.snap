@@ -52,12 +52,10 @@ func bump() []int {
 }
 
 func test() {
-	base := place(map[string]int{"a": 2})
-	if base[2] != 9 {
+	if place(map[string]int{"a": 2})[2] != 9 {
 		panic("the found index should be written")
 	}
-	base_1 := bump()
-	if base_1[1] != 4 {
+	if bump()[1] != 4 {
 		panic("the tuple index should be bumped")
 	}
 }

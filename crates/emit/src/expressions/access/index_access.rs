@@ -62,10 +62,12 @@ impl Planner<'_> {
         prefix: &str,
     ) -> ValuePlan {
         let index_staged = self.lower_composite_value(index, ExpressionContext::value());
+        let index_facts = index_staged.facts();
+        let index_is_fixed = index_staged.can_delay() && !index_facts.effect.has_call();
         if base_staged.setup().is_empty()
             && is_order_sensitive(base)
-            && (base_staged.facts().effect.has_effectful_call()
-                || index_staged.facts().effect.has_effectful_call())
+            && ((base_staged.facts().effect.has_effectful_call() && !index_is_fixed)
+                || index_facts.effect.has_effectful_call())
         {
             self.pin_staged(&mut base_staged, prefix);
         }

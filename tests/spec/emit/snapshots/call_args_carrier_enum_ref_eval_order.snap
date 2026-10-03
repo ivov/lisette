@@ -60,7 +60,6 @@ func main() {
 		P:   &i,
 	}
 	arg := m[i][0]
-	base := []int{bump(c)}
-	x := first(arg, base[0])
+	x := first(arg, []int{bump(c)}[0])
 	_ = x
 }

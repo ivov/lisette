@@ -17,14 +17,13 @@ func getItems() []int {
 
 func main() {
 	items := []int{0, 0, 0}
-	base_1 := items
-	base := getItems()
-	idx := base[0]
+	base := items
+	idx := getItems()[0]
 	var tmp int
 	if true {
 		tmp = 42
 	} else {
 		tmp = 0
 	}
-	base_1[idx] = tmp
+	base[idx] = tmp
 }

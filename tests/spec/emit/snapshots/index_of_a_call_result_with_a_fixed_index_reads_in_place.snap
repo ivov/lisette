@@ -1,0 +1,62 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:strings"
+  
+  fn parts(s: string) -> Slice<string> { strings.Split(s, ",") }
+  
+  fn first(topic: string) -> string {
+    strings.SplitN(topic, "?", 2)[0]
+  }
+  
+  fn at(s: string, i: int) -> string {
+    parts(s)[i]
+  }
+  
+  fn moving(s: string) -> string {
+    let mut i = 0
+    let mut bump = || -> int {
+      i += 1
+      i
+    }
+    let x = parts(s)[i]
+    x + parts(s)[bump()]
+  }
+  
+  fn split_at(s: string, a: int, b: int) -> string {
+    parts(s)[a / b]
+  }
+---
+package main
+
+import "strings"
+
+func parts(s string) []string {
+	return strings.Split(s, ",")
+}
+
+func first(topic string) string {
+	return strings.SplitN(topic, "?", 2)[0]
+}
+
+func at(s string, i int) string {
+	return parts(s)[i]
+}
+
+func moving(s string) string {
+	i := 0
+	bump := func() int {
+		i++
+		return i
+	}
+	base := parts(s)
+	x := base[i]
+	base_1 := parts(s)
+	return x + base_1[bump()]
+}
+
+func splitAt(s string, a, b int) string {
+	base := parts(s)
+	return base[a/b]
+}
