@@ -3,7 +3,6 @@ use crate::analyze::inline_uses::region_blocks_inline;
 use crate::calls::native::{clip_shared_capacity, is_clip_safe_path};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
-use crate::expressions::staging::SpreadSequenceOptions;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::plan::bodies::{
@@ -782,21 +781,16 @@ impl Planner<'_> {
         args: &[Expression],
         spread: Option<&Expression>,
     ) -> (Vec<GoExpression>, ValuePlan) {
-        let stages: Vec<ValuePlan> = args
+        let mut stages: Vec<ValuePlan> = args
             .iter()
             .map(|a| self.lower_composite_value(a, ExpressionContext::value()))
             .collect();
+        stages.extend(spread.map(|spread| self.plan_copied_spread(spread)));
         let combine = plan_variadic_spread(&self.facts, function, spread).map(|p| p.combine(0));
-        let sequenced = self.sequence_with_spread_values(
-            stages,
-            spread,
-            None,
-            SpreadSequenceOptions {
-                wrap_to_any: false,
-                combine,
-                boundary: CaptureBoundary::SiblingSequence,
-            },
-        );
+        let mut sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "arg");
+        if spread.is_some() {
+            self.finalize_spread_stage(&mut sequenced.values, false, combine);
+        }
         let ordering =
             ValuePlan::computed(sequenced.setup, GoExpression::empty(), sequenced.effect);
         (sequenced.values, ordering)

@@ -22,7 +22,13 @@ impl Planner<'_> {
             ..
         } = index
         {
-            return self.plan_range_slice(expression, start.as_deref(), end.as_deref(), *inclusive);
+            return self.plan_range_slice(
+                expression,
+                start.as_deref(),
+                end.as_deref(),
+                *inclusive,
+                true,
+            );
         }
 
         let mut base_staged = self.stage_base_with_deref(expression);
@@ -84,6 +90,29 @@ impl Planner<'_> {
         ValuePlan::computed(setup, GoExpression::index(base, index), effect)
     }
 
+    /// Builtin `append` copies the spread elements, so their capacity needs no cap.
+    pub(crate) fn plan_copied_spread(&mut self, spread: &Expression) -> ValuePlan {
+        if let Expression::IndexedAccess {
+            expression, index, ..
+        } = spread.unwrap_parens()
+            && let Expression::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } = index.as_ref()
+        {
+            return self.plan_range_slice(
+                expression,
+                start.as_deref(),
+                end.as_deref(),
+                *inclusive,
+                false,
+            );
+        }
+        self.plan_operand(spread, ExpressionContext::value())
+    }
+
     pub(crate) fn stage_base_with_deref(&mut self, expression: &Expression) -> ValuePlan {
         let Some(inner) = expression.deref_inner() else {
             return self.plan_operand(expression, ExpressionContext::value());
@@ -96,16 +125,17 @@ impl Planner<'_> {
     }
 
     /// Plan `base[start:end]` (or the three-index form for slices to prevent
-    /// append-through-alias corruption). Strings use two-index slicing because
-    /// immutability makes the backing array safe to share.
+    /// append-through-alias corruption when `cap` is set). Strings use two-index
+    /// slicing because immutability makes the backing array safe to share.
     fn plan_range_slice(
         &mut self,
         expression: &Expression,
         start: Option<&Expression>,
         end: Option<&Expression>,
         inclusive: bool,
+        cap: bool,
     ) -> ValuePlan {
-        let needs_cap = self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
+        let needs_cap = cap && self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
         let base_staged = self.stage_base_with_deref(expression);
 
         let mut all_stages = vec![base_staged];

@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn total(xs: VarArgs<int>) -> int {
+    xs.fold(0, |acc, x| acc + x)
+  }
+  
+  fn insert_at(out: Slice<int>, pos: int, x: int) -> Slice<int> {
+    let mut next: Slice<int> = []
+    next = next.append(out[..pos]...)
+    next = next.append(x)
+    next.append(out[pos..]...)
+  }
+  
+  fn middle(xs: Slice<int>, ys: Slice<int>) -> Slice<int> {
+    xs.append(ys[1..=2]...)
+  }
+  
+  fn sum_tail(ys: Slice<int>) -> int {
+    total(ys[1..]...)
+  }
+---
+package main
+
+func total(xs ...int) int {
+	acc := 0
+	for _, x := range xs {
+		acc += x
+	}
+	return acc
+}
+
+func insertAt(out []int, pos, x int) []int {
+	next := []int{}
+	next = append(next, out[:pos]...)
+	next = append(next, x)
+	return append(next[:len(next):len(next)], out[pos:]...)
+}
+
+func middle(xs, ys []int) []int {
+	return append(xs[:len(xs):len(xs)], ys[1:2+1]...)
+}
+
+func sumTail(ys []int) int {
+	len_1 := len(ys)
+	return total(ys[1:len_1:len_1]...)
+}
