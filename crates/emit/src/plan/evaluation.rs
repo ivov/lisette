@@ -36,6 +36,7 @@ pub(crate) enum Writes {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct Effects {
     runs_code: bool,
+    runs_effectful_code: bool,
     /// Outside a call, whose own panics are part of the call.
     may_panic: bool,
     may_block: bool,
@@ -48,6 +49,7 @@ impl Effects {
     pub(crate) fn union(self, other: Self) -> Self {
         Self {
             runs_code: self.runs_code || other.runs_code,
+            runs_effectful_code: self.runs_effectful_code || other.runs_effectful_code,
             may_panic: self.may_panic || other.may_panic,
             may_block: self.may_block || other.may_block,
             reads: self.reads.max(other.reads),
@@ -59,6 +61,7 @@ impl Effects {
     pub(crate) fn anything() -> Self {
         Self {
             runs_code: true,
+            runs_effectful_code: true,
             may_panic: true,
             may_block: true,
             reads: Reads::Shared,
@@ -84,6 +87,7 @@ impl Effects {
     pub(crate) fn calls_of(effect: EvaluationEffect) -> Self {
         Self {
             runs_code: effect.has_call(),
+            runs_effectful_code: effect.has_call(),
             writes: if effect.has_effectful_call() {
                 Writes::Shared
             } else {
@@ -97,6 +101,7 @@ impl Effects {
         let calls = Self::calls_of(effect);
         Self {
             runs_code: self.runs_code && calls.runs_code,
+            runs_effectful_code: self.runs_effectful_code && calls.runs_code,
             reads,
             writes: self.writes.min(calls.writes),
             ..self
@@ -108,6 +113,7 @@ impl Effects {
     pub(crate) fn without_go_order(self) -> Self {
         Self {
             runs_code: false,
+            runs_effectful_code: false,
             writes: Writes::Nothing,
             ..self
         }
@@ -115,6 +121,10 @@ impl Effects {
 
     pub(crate) fn runs_code(self) -> bool {
         self.runs_code
+    }
+
+    pub(crate) fn runs_effectful_code(self) -> bool {
+        self.runs_effectful_code
     }
 
     pub(crate) fn panics_or_blocks(self) -> bool {
@@ -140,7 +150,7 @@ impl Effects {
     /// The order of two panics is not kept.
     pub(crate) fn can_move_across(self, between: Self) -> bool {
         let orders = |first: Self, second: Self| {
-            first.runs_code && (second.runs_code || second.panics_or_blocks())
+            first.runs_effectful_code && (second.runs_code || second.panics_or_blocks())
         };
         !orders(self, between)
             && !orders(between, self)
@@ -184,8 +194,13 @@ impl GoExpressionNode {
             | Self::FunctionLiteral { .. } => Effects::default(),
             Self::Identifier(_) => Effects::local_read(),
             Self::Qualified { .. } => reference_read(false),
+            Self::Call { pure: true, .. } => Effects {
+                runs_code: true,
+                ..Effects::default()
+            },
             Self::Call { .. } | Self::Verbatim(_) => Effects {
                 runs_code: true,
+                runs_effectful_code: true,
                 reads: Reads::Shared,
                 writes: Writes::Any,
                 ..Effects::default()
@@ -281,6 +296,7 @@ mod tests {
         GoExpressionNode::Call {
             callee: Box::new(name(callee)),
             arguments,
+            pure: false,
         }
     }
 
@@ -324,6 +340,20 @@ mod tests {
         let call = call("next", Vec::new()).effects();
         assert!(!index().effects().without_go_order().can_move_across(call));
         assert!(!name("x").effects().can_move_across(call));
+    }
+
+    #[test]
+    fn a_constructor_does_not_order_a_panicking_read() {
+        let constructor = GoExpressionNode::Call {
+            callee: Box::new(name("MakeModeClean")),
+            arguments: Vec::new(),
+            pure: true,
+        }
+        .effects();
+        let read = index().effects().without_go_order();
+        assert!(read.can_move_across(constructor));
+        assert!(!read.can_move_across(call("next", Vec::new()).effects()));
+        assert!(!constructor.can_erase() && !constructor.can_duplicate());
     }
 
     #[test]

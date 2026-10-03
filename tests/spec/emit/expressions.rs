@@ -5323,6 +5323,38 @@ fn quotient(a: int, b: int) -> int {
 }
 
 #[test]
+fn pointer_field_read_stays_inline_before_a_constructor() {
+    let input = r#"
+enum Mode {
+  Clean,
+  Run(int),
+}
+
+struct Config { mode: Mode, n: int }
+struct Ctx { config: Config }
+
+fn next() -> int { 3 }
+
+fn is_clean(ctx: Ref<Ctx>) -> bool {
+  ctx.config.mode == Mode.Clean
+}
+
+fn is_first_run(ctx: Ref<Ctx>) -> bool {
+  ctx.config.mode == Mode.Run(1)
+}
+
+fn is_next_run(ctx: Ref<Ctx>) -> bool {
+  ctx.config.mode == Mode.Run(next())
+}
+
+fn is_next(ctx: Ref<Ctx>) -> bool {
+  ctx.config.n == next()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn pure_constructor_with_mutable_read_pins_when_later_operand_pins() {
     let input = r#"
 fn run() -> int {
