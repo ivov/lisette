@@ -63,7 +63,11 @@ impl Planner<'_> {
             None => self.plan_coerced_expression(expression, receiver_coercion, ctx),
         };
         let effect = base_plan.facts().effect;
-        let stability = if reads_value_member(
+        let stability = if let Some(package) = expression_ty.as_import_namespace()
+            && self.package_member_is_fixed(package, member)
+        {
+            Stability::Fixed
+        } else if reads_value_member(
             dot_access_kind,
             receiver_coercion,
             expression,
@@ -383,6 +387,15 @@ impl Planner<'_> {
         };
 
         Some(GoExpression::selector(base, format!("F{index}")))
+    }
+
+    fn package_member_is_fixed(&self, package: &str, member: &str) -> bool {
+        let qualified_name = format!("{}.{}", package, member);
+        self.facts
+            .definition(qualified_name.as_str())
+            .is_some_and(|definition| {
+                matches!(definition.body, DefinitionBody::Value { .. }) && !definition.is_variable()
+            })
     }
 
     fn try_resolve_cross_package_const(

@@ -770,7 +770,7 @@ mod tests {
             text: None,
         }));
         let declaration_def = make_value(ValueKind::ConstantDeclaration);
-        let var_def = make_value(ValueKind::Runtime);
+        let var_def = make_value(ValueKind::Variable);
 
         let mut definitions = HashMap::default();
         definitions.insert(

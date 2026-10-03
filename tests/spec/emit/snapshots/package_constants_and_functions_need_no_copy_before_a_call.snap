@@ -1,0 +1,72 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:flag"
+  import "go:math"
+  import "go:strings"
+  
+  fn bump() -> int {
+    flag.Usage = || {}
+    1
+  }
+  
+  fn run(f: fn(string) -> string, n: int) -> string {
+    f(f"{n}")
+  }
+  
+  fn call(f: fn(), n: int) -> int {
+    f()
+    n
+  }
+  
+  fn test() {
+    let a = math.MaxInt8 + bump()
+    let s = run(strings.ToUpper, bump())
+    let mut seen = ""
+    flag.Usage = || { seen = "original" }
+    let n = call(flag.Usage, bump())
+    if a != 128 || s != "1" || n != 1 { panic(f"a={a} s={s} n={n}") }
+    if seen != "original" { panic("the reassigned flag.Usage ran") }
+  }
+---
+package main
+
+import (
+	"flag"
+	"fmt"
+	"math"
+	"strings"
+)
+
+func bump() int {
+	flag.Usage = func() {
+	}
+	return 1
+}
+
+func run(f func(string) string, n int) string {
+	return f(fmt.Sprint(n))
+}
+
+func call(f func(), n int) int {
+	f()
+	return n
+}
+
+func test() {
+	a := math.MaxInt8 + bump()
+	s := run(strings.ToUpper, bump())
+	seen := ""
+	flag.Usage = func() {
+		seen = "original"
+	}
+	arg := flag.Usage
+	n := call(arg, bump())
+	if a != 128 || s != "1" || n != 1 {
+		panic(fmt.Sprintf("a=%d s=%s n=%d", a, s, n))
+	}
+	if seen != "original" {
+		panic("the reassigned flag.Usage ran")
+	}
+}
