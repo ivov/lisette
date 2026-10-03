@@ -294,6 +294,37 @@ fn test() -> string {
 }
 
 #[test]
+fn go_nullable_field_reads_test_nil_in_place() {
+    let input = r#"
+import "go:net/http"
+import "go:net/url"
+
+fn has_user(u: url.URL) -> bool {
+  u.User.is_some()
+}
+
+fn path_of(r: Ref<http.Request>) -> string {
+  let Some(u) = r.URL else { return "" }
+  u.Path
+}
+
+fn set_auth(req: mut Ref<http.Request>, auth: string) {
+  if let Some(h) = req.Header {
+    let mut h = h
+    h.Set("Authorization", auth)
+  }
+}
+
+fn close_body(resp: Ref<http.Response>) {
+  if let Some(body) = resp.Body {
+    let _ = body.Close()
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn go_struct_autofill_writes_omitted_named_map_field() {
     let input = r#"
 import "go:net/url"

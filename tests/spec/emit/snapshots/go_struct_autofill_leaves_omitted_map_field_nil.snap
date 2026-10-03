@@ -14,17 +14,13 @@ description: |
 ---
 package main
 
-import (
-	"encoding/pem"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "encoding/pem"
 
 func test() string {
 	b := pem.Block{Type: "X"}
-	raw := b.Headers
-	option := lisette.OptionFromNilable[map[string]string](raw, raw == nil)
-	if option.Tag == lisette.OptionSome {
-		return option.SomeVal["key"]
+	if headers := b.Headers; headers != nil {
+		return headers["key"]
+	} else {
+		return ""
 	}
-	return ""
 }
