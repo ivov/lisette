@@ -9890,3 +9890,80 @@ fn distinct_errors_sharing_a_span_both_survive() {
         .count();
     assert_eq!(count, 2);
 }
+
+#[test]
+fn sibling_functions_named_like_imports_keep_package_members() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "alpha",
+        "alpha.lis",
+        r#"
+pub const LIMIT = 10
+pub fn twice(x: int) -> int { x * 2 }
+pub struct Item { pub n: int }
+"#,
+    );
+    fs.add_file(
+        "other",
+        "a.lis",
+        r#"
+import "go:time"
+import "alpha"
+
+pub fn run() -> int { alpha.LIMIT + alpha.twice(1) + alpha.Item { n: 1 }.n }
+pub fn wait() -> time.Duration { time.Second }
+"#,
+    );
+    fs.add_file(
+        "other",
+        "b.lis",
+        r#"
+pub fn helper() -> string { f"{alpha()}{time()}" }
+fn alpha() -> int { 1 }
+fn time() -> string { "t" }
+"#,
+    );
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "other"
+
+fn main() {
+  fmt.Println(other.run(), other.wait(), other.helper())
+}
+"#,
+    );
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn local_named_like_an_inferred_package_keeps_the_package_type() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "mid",
+        "m.lis",
+        r#"
+import "go:time"
+
+pub fn get() -> time.Duration { time.Second }
+"#,
+    );
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "mid"
+
+fn main() {
+  let time = 3
+  let d = mid.get()
+  let ds = [d, d]
+  fmt.Println(time, ds.length())
+}
+"#,
+    );
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
