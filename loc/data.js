@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790965965806,
+  "lastUpdate": 1791025100736,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -41832,6 +41832,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 39440,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28531,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19398,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15299,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9029,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7359,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2944,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d7732e2f9b727e896dd12f4fdc291008eaf222d4",
+          "message": "refactor: unify bound `Option` and `Result` values in emit (#1509)",
+          "timestamp": "2026-10-03T12:57:57+02:00",
+          "tree_id": "229eaffd3799c6ca2974122bd7f4466b5752a52a",
+          "url": "https://github.com/ivov/lisette/commit/d7732e2f9b727e896dd12f4fdc291008eaf222d4"
+        },
+        "date": 1791025097900,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 149113,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39430,
             "unit": "lines"
           },
           {
