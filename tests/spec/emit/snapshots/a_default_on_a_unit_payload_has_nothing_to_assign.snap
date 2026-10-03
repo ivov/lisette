@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test() {
+    let mut seen = Map.new<string, ()>()
+    seen["a"] = ()
+    let marker = seen.get("q").unwrap_or(())
+    fmt.Println(marker)
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test() {
+	seen := make(map[string]struct{})
+	seen["a"] = struct{}{}
+	lisette.MapGet(seen, "q").UnwrapOr(struct{}{})
+	marker := struct{}{}
+	fmt.Println(marker)
+}

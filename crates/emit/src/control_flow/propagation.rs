@@ -177,7 +177,7 @@ impl Planner<'_> {
     }
 
     /// Fuse `call()?` on a lowered-ABI callee into a direct failure check
-    /// (`if err != nil` / `if !ok`), skipping the tagged round trip.
+    /// (`if err != nil`), skipping the tagged round trip.
     fn try_lower_fused_propagate(
         &mut self,
         expression: &Expression,
@@ -193,21 +193,13 @@ impl Planner<'_> {
             payload_bridge,
             ..
         } = self.lowered_call(expression)?;
-        let comma_ok = match shape {
+        match shape {
             CallableReturnAbi::Result {
                 payload: PayloadLayout::Packed,
-            } => {
-                if ok_ty.is_unit() {
-                    return None;
-                }
-                false
-            }
-            CallableReturnAbi::BareError => false,
-            CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
-                payload: PayloadLayout::Packed,
-            }) => true,
+            } if !ok_ty.is_unit() => {}
+            CallableReturnAbi::BareError => {}
             _ => return None,
-        };
+        }
         let has_value_slot = !matches!(shape, CallableReturnAbi::BareError);
         if !self.returns_fallible() {
             return None;
@@ -228,14 +220,9 @@ impl Planner<'_> {
                 }
                 None => self.fresh_pair_value(),
             });
-        let status_kind = if comma_ok {
-            PairStatusKind::Ok
-        } else {
-            PairStatusKind::Error
-        };
         let (message_setup, wraps) = self.prepare_wrap_messages(&wraps, true);
         let opens_if = value_var.is_none() && message_setup.is_empty();
-        let outcome_var = self.pair_status(None, status_kind, opens_if);
+        let outcome_var = self.pair_status(None, PairStatusKind::Error, opens_if);
         let outcome = || GoExpression::name(outcome_var.clone());
         let binding = Definition {
             names: match &value_var {
@@ -255,41 +242,22 @@ impl Planner<'_> {
         let guarded_value =
             || GoExpression::name(value_var.clone().expect("nil guard requires the value var"));
 
-        if comma_ok {
-            let failure_condition = match nil_guard {
-                Some(guard) => GoExpression::binary(
-                    GoExpression::unary("!", outcome()),
-                    "||",
-                    guard.is_nil(guarded_value()),
-                ),
-                None => GoExpression::unary("!", outcome()),
-            };
-            let (failure_setup, failure_values) =
-                self.propagate_failure_values(fallible, outcome());
-            statements.push(transition::tag_check_with_initializer(
-                initializer,
-                failure_condition,
-                failure_setup,
-                failure_values,
+        let error = self.wrap_error(&wraps, outcome());
+        let (failure_setup, failure_values) = self.propagate_failure_values(fallible, error);
+        statements.push(transition::tag_check_with_initializer(
+            initializer,
+            non_nil(outcome()),
+            failure_setup,
+            failure_values,
+        ));
+        if let Some(guard) = nil_guard {
+            let error = self.wrap_error(&wraps, unexpected_nil_error());
+            let (nil_setup, nil_failure) = self.propagate_failure_values(fallible, error);
+            statements.push(transition::tag_check(
+                guard.is_nil(guarded_value()),
+                nil_setup,
+                nil_failure,
             ));
-        } else {
-            let error = self.wrap_error(&wraps, outcome());
-            let (failure_setup, failure_values) = self.propagate_failure_values(fallible, error);
-            statements.push(transition::tag_check_with_initializer(
-                initializer,
-                non_nil(outcome()),
-                failure_setup,
-                failure_values,
-            ));
-            if let Some(guard) = nil_guard {
-                let error = self.wrap_error(&wraps, unexpected_nil_error());
-                let (nil_setup, nil_failure) = self.propagate_failure_values(fallible, error);
-                statements.push(transition::tag_check(
-                    guard.is_nil(guarded_value()),
-                    nil_setup,
-                    nil_failure,
-                ));
-            }
         }
 
         let ok_value = value_var.map(|val| {
@@ -331,13 +299,13 @@ impl Planner<'_> {
         }
         let slot = match (named, result_var_name) {
             (Some(name), _) => CommaOkValueSlot::Named(name.to_string()),
-            (None, Some("_")) => CommaOkValueSlot::Discarded,
+            (None, Some("_")) => CommaOkValueSlot::Unused,
             (None, _) => CommaOkValueSlot::Temp,
         };
         let bound = fuse.bind(self, slot);
-        let failure = bound.none_condition(self);
+        let failure = bound.failure_condition();
         let late_binding = bound.late_binding();
-        let payload = bound.value();
+        let payload = bound.payload();
         let reads_element = !bound.binds_value();
         let mut statements = bound.statements;
         let failure_values = self.failure_return_values(fallible, None);
@@ -420,7 +388,7 @@ impl Planner<'_> {
                 Mapped::MapErr(fuse, map) => {
                     let has_nil_guard = fuse.has_nil_guard();
                     let pair = fuse.bind(self, slot, None);
-                    let failure = self.pair_failure_condition(&pair);
+                    let failure = pair.failure_condition();
                     let status = pair.status().to_string();
                     let mut failure_setup = Vec::new();
                     if has_nil_guard && map.param.is_some() {
@@ -449,9 +417,7 @@ impl Planner<'_> {
                             .into_parts()
                     });
                     failure_setup.extend(body_setup);
-                    let payload = pair
-                        .value()
-                        .map(|name| GoExpression::name(name.to_string()));
+                    let payload = pair.payload();
                     (
                         pair.statements,
                         failure,
@@ -463,9 +429,9 @@ impl Planner<'_> {
                 }
                 Mapped::OkOr(fuse, error) => {
                     let bound = fuse.bind(self, slot);
-                    let failure = bound.none_condition(self);
+                    let failure = bound.failure_condition();
                     let late_binding = bound.late_binding();
-                    let payload = bound.value();
+                    let payload = bound.payload();
                     let mut statements = bound.statements;
                     let value = self.lower_composite_value(error, ExpressionContext::value());
                     let (error_setup, error) =
@@ -482,9 +448,9 @@ impl Planner<'_> {
                 }
                 Mapped::OkOrElse(fuse, map) => {
                     let bound = fuse.bind(self, slot);
-                    let failure = bound.none_condition(self);
+                    let failure = bound.failure_condition();
                     let late_binding = bound.late_binding();
-                    let payload = bound.value();
+                    let payload = bound.payload();
                     let (failure_setup, error) = self
                         .with_binding_frame(|this| {
                             this.lower_composite_value(map.body, ExpressionContext::value())
@@ -880,7 +846,7 @@ impl Planner<'_> {
             let pair = self.bind_comma_ok_pair(expression, source, CommaOkValueSlot::Temp);
             let ok = GoExpression::name(pair.status().to_string());
             let value = GoExpression::name(
-                pair.value()
+                pair.payload_name()
                     .expect("Temp slot always captures the value")
                     .to_string(),
             );

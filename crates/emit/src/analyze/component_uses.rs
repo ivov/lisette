@@ -11,6 +11,7 @@ pub(crate) struct ComponentDemand {
     pub(crate) needs_value: bool,
     pub(crate) needs_whole_value: bool,
     pub(crate) read_indices: HashSet<usize>,
+    pub(crate) defaults: usize,
 }
 
 pub(crate) fn component_demand<'a, I>(region: I, binding_id: BindingId) -> Option<ComponentDemand>
@@ -24,12 +25,14 @@ where
         needs_value: false,
         needs_whole_value: false,
         read_indices: HashSet::default(),
+        defaults: 0,
     };
     walker.walk_items(region);
     (walker.supported > 0 && !walker.blocked).then_some(ComponentDemand {
         needs_value: walker.needs_value || walker.needs_whole_value,
         needs_whole_value: walker.needs_whole_value,
         read_indices: walker.read_indices,
+        defaults: walker.defaults,
     })
 }
 
@@ -40,6 +43,7 @@ struct Walker {
     needs_value: bool,
     needs_whole_value: bool,
     read_indices: HashSet<usize>,
+    defaults: usize,
 }
 
 impl Walker {
@@ -177,6 +181,7 @@ impl Walker {
                 {
                     self.supported += 1;
                     self.needs_value |= PAYLOAD_METHODS.contains(&member.as_str());
+                    self.defaults += usize::from(member == "unwrap_or");
                     for argument in args {
                         self.walk(argument);
                     }

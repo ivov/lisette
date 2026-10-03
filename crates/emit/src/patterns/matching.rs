@@ -2,9 +2,9 @@ use crate::Planner;
 use crate::abi::callable::PayloadLayout;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
 use crate::calls::NativeMethodCall;
-use crate::calls::bounds::BoundsCheckedIndex;
+use crate::calls::bound_value::{BoundValue, PairCondition};
 use crate::calls::comma_ok::CommaOkSource;
-use crate::calls::comma_ok::{CommaOkValueSlot, LoweredPair, PairCondition, PairKind};
+use crate::calls::comma_ok::{CommaOkValueSlot, PairKind};
 use crate::calls::go_interop::{NilGuard, is_nil, non_nil, unexpected_nil_error};
 use crate::calls::slice_loop::FoundSink;
 use crate::calls::wrap_err::WrapMessage;
@@ -24,7 +24,6 @@ use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::state::bindings::{ComponentBinding, ComponentKind};
 use crate::state::scope::PairStatusKind;
 use crate::types::native::NativeGoType;
-use std::mem;
 use syntax::ast::{Expression, Literal, MatchArm, Pattern, Span, collect_pattern_bindings};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
@@ -63,138 +62,11 @@ pub(crate) enum OptionFusePlan<'a> {
     },
 }
 
-pub(crate) struct BoundOption {
-    pub(crate) statements: Vec<LoweredStatement>,
-    source: BoundSource,
-}
-
-enum BoundSource {
-    Pair(LoweredPair),
-    Nullable {
-        value: String,
-        nil_guard: NilGuard,
-        initializer_call: Option<GoExpression>,
-    },
-    Index {
-        index: BoundsCheckedIndex,
-        target: Option<String>,
-    },
-    Found {
-        value: Option<String>,
-        flag: String,
-    },
-}
-
-impl BoundOption {
-    fn from_pair(mut pair: LoweredPair) -> Self {
-        Self {
-            statements: mem::take(&mut pair.statements),
-            source: BoundSource::Pair(pair),
-        }
-    }
-
-    /// The payload expression, valid once the some-condition holds.
-    pub(crate) fn value(&self) -> Option<GoExpression> {
-        match &self.source {
-            BoundSource::Index { index, .. } => Some(index.element.clone()),
-            _ => self
-                .value_name()
-                .map(|name| GoExpression::name(name.to_string())),
-        }
-    }
-
-    pub(crate) fn value_name(&self) -> Option<&str> {
-        match &self.source {
-            BoundSource::Pair(pair) => pair.value(),
-            BoundSource::Nullable { value, .. } => Some(value),
-            BoundSource::Index { .. } => None,
-            BoundSource::Found { value, .. } => value.as_deref(),
-        }
-    }
-
-    pub(crate) fn binds_value(&self) -> bool {
-        !matches!(self.source, BoundSource::Index { .. })
-    }
-
-    /// The statement that reads a late payload into its requested name.
-    pub(crate) fn late_binding(&self) -> Option<LoweredStatement> {
-        let BoundSource::Index {
-            index,
-            target: Some(target),
-        } = &self.source
-        else {
-            return None;
-        };
-        Some(define(target.clone(), index.element.clone()))
-    }
-
-    pub(super) fn discard_value(&mut self) {
-        match &mut self.source {
-            BoundSource::Pair(pair) => pair.discard_value(),
-            BoundSource::Found {
-                value: Some(value), ..
-            } => {
-                self.statements
-                    .push(discard(GoExpression::name(value.clone())));
-            }
-            _ => {}
-        }
-    }
-
-    pub(crate) fn some_condition(&self, planner: &mut Planner<'_>) -> PairCondition {
-        self.condition(planner, true)
-    }
-
-    pub(crate) fn none_condition(&self, planner: &mut Planner<'_>) -> PairCondition {
-        self.condition(planner, false)
-    }
-
-    fn condition(&self, planner: &mut Planner<'_>, success: bool) -> PairCondition {
-        let plain = |condition: GoExpression| PairCondition {
-            initializer: None,
-            condition,
-        };
-        match &self.source {
-            BoundSource::Pair(pair) if success => planner.pair_success_condition(pair),
-            BoundSource::Pair(pair) => planner.pair_failure_condition(pair),
-            BoundSource::Nullable {
-                value,
-                nil_guard,
-                initializer_call,
-            } => {
-                let tested = GoExpression::name(value.clone());
-                let test = if success {
-                    nil_guard.non_nil(tested)
-                } else {
-                    nil_guard.is_nil(tested)
-                };
-                PairCondition {
-                    initializer: initializer_call.as_ref().map(|call| Definition {
-                        names: vec![value.clone().into()],
-                        value: call.clone(),
-                    }),
-                    condition: test,
-                }
-            }
-            BoundSource::Index { index, .. } if success => plain(index.in_bounds.clone()),
-            BoundSource::Index { index, .. } => plain(index.out_of_bounds.clone()),
-            BoundSource::Found { flag, .. } if success => plain(GoExpression::name(flag.clone())),
-            BoundSource::Found { flag, .. } => {
-                plain(GoExpression::unary("!", GoExpression::name(flag.clone())))
-            }
-        }
-    }
-}
-
 impl OptionFusePlan<'_> {
-    pub(crate) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundOption {
+    pub(crate) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundValue {
         match self {
-            Self::Bound(components) => {
-                BoundOption::from_pair(planner.bind_component_pair(components, slot))
-            }
-            Self::CommaOk { subject, source } => {
-                BoundOption::from_pair(planner.bind_comma_ok_pair(subject, source, slot))
-            }
+            Self::Bound(components) => planner.bind_component_pair(components, slot),
+            Self::CommaOk { subject, source } => planner.bind_comma_ok_pair(subject, source, slot),
             Self::Nullable { subject, nil_guard } => {
                 let (mut statements, call) = planner
                     .lower_call(subject, None, ExpressionContext::value())
@@ -213,14 +85,7 @@ impl OptionFusePlan<'_> {
                     statements.push(define(value.clone(), call));
                     None
                 };
-                BoundOption {
-                    statements,
-                    source: BoundSource::Nullable {
-                        value,
-                        nil_guard,
-                        initializer_call,
-                    },
-                }
+                BoundValue::nullable(statements, value, nil_guard, initializer_call)
             }
             Self::Index { call } => {
                 let (statements, index) = planner.lower_bounds_checked_index(&call);
@@ -228,10 +93,7 @@ impl OptionFusePlan<'_> {
                     CommaOkValueSlot::Named(name) => Some(name),
                     _ => None,
                 };
-                BoundOption {
-                    statements,
-                    source: BoundSource::Index { index, target },
-                }
+                BoundValue::index(statements, index, target)
             }
             Self::Found { subject, call } => {
                 let value = match slot {
@@ -250,10 +112,7 @@ impl OptionFusePlan<'_> {
                         flag: &flag,
                     },
                 );
-                BoundOption {
-                    statements,
-                    source: BoundSource::Found { value, flag },
-                }
+                BoundValue::found(statements, value, flag)
             }
         }
     }
@@ -277,7 +136,7 @@ impl ResultFusePlan<'_> {
         planner: &mut Planner<'_>,
         slot: CommaOkValueSlot,
         error_name: Option<&str>,
-    ) -> LoweredPair {
+    ) -> BoundValue {
         self.bind_wrapped(planner, slot, error_name, false).0
     }
 
@@ -287,7 +146,7 @@ impl ResultFusePlan<'_> {
         slot: CommaOkValueSlot,
         error_name: Option<&str>,
         read_error: bool,
-    ) -> (LoweredPair, Vec<WrapMessage>) {
+    ) -> (BoundValue, Vec<WrapMessage>) {
         if let Some(components) = self.bound {
             return (planner.bind_component_pair(components, slot), Vec::new());
         }
@@ -539,8 +398,8 @@ impl Planner<'_> {
         let none_body = none_body?;
         let payload_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
         let mut bound = fuse.bind(self, CommaOkValueSlot::Temp);
-        let value = bound.value()?;
-        let condition = bound.some_condition(self);
+        let value = bound.payload()?;
+        let condition = bound.success_condition();
         let then_body = self.lower_match_tree(
             &some_arms,
             MatchSubject::Var(value.clone()),
@@ -551,7 +410,7 @@ impl Planner<'_> {
             [LoweredStatement::Block(inner)] => inner.clone(),
             _ => then_body,
         };
-        if let Some(name) = bound.value_name()
+        if let Some(name) = bound.payload_name()
             && !GoUses::of(&then_body.statements).contains(name)
         {
             bound.discard_value();
@@ -763,7 +622,7 @@ impl Planner<'_> {
 
         self.declare(go_name);
         let bound = fuse.bind(self, CommaOkValueSlot::Named(go_name.to_string()));
-        let none_condition = bound.none_condition(self);
+        let none_condition = bound.failure_condition();
         let fail_body = self.lower_block_as_body(arms.none_body);
         let late_binding = bound.late_binding();
         let mut statements = bound.statements;
@@ -864,7 +723,7 @@ impl Planner<'_> {
             let ok_binding = if carries_payload {
                 ArmBinding::alias_at(
                     ok_name,
-                    bound.value(),
+                    bound.payload_name(),
                     arm_binding_span(&ok.arm.pattern, ok_name),
                 )
             } else {
@@ -896,8 +755,8 @@ impl Planner<'_> {
             bound.discard_value();
         }
         let then_body = then_body.map(|(body, _)| body);
-        let ok_condition = self.pair_success_condition(&bound);
-        let err_condition = self.pair_failure_condition(&bound);
+        let ok_condition = bound.success_condition();
+        let err_condition = bound.failure_condition();
         let mut statements = bound.statements;
 
         let Some(then_body) = then_body else {
@@ -1027,14 +886,14 @@ impl Planner<'_> {
                 err_name.is_some(),
             )
         };
-        let value = GoExpression::name(bound.value()?.to_string());
+        let value = GoExpression::name(bound.payload_name()?.to_string());
         let then_body =
             self.lower_match_tree(&ok_arms, MatchSubject::Var(value), payload_ty, place);
         let then_body = match then_body.statements.as_slice() {
             [LoweredStatement::Block(inner)] => inner.clone(),
             _ => then_body,
         };
-        if let Some(name) = bound.value()
+        if let Some(name) = bound.payload_name()
             && !GoUses::of(&then_body.statements).contains(name)
         {
             bound.discard_value();
@@ -1050,7 +909,7 @@ impl Planner<'_> {
         let error = GoExpression::name(bound.status().to_string());
         self.prepend_error_prologue(&mut else_body, error, has_nil_guard, err_read, &wraps);
 
-        let ok_condition = self.pair_success_condition(&bound);
+        let ok_condition = bound.success_condition();
         let else_arm = ElseArm::from_body(else_body, false);
         let mut statements = bound.statements;
         statements.push(LoweredStatement::If(pair_if(
@@ -1317,11 +1176,11 @@ impl Planner<'_> {
         };
         let mut bound = fuse.bind(self, slot);
 
-        let element = bound.value();
+        let element = bound.payload();
         let some_binding = if bound.binds_value() {
             ArmBinding::alias_at(
                 arms.some_binding,
-                bound.value_name(),
+                bound.payload_name(),
                 arms.some_binding_span,
             )
         } else {
@@ -1335,9 +1194,9 @@ impl Planner<'_> {
 
         let invert = then_body.renders_empty() && !else_body.renders_empty();
         let condition = if invert {
-            bound.none_condition(self)
+            bound.failure_condition()
         } else {
-            bound.some_condition(self)
+            bound.success_condition()
         };
         let plan = if invert {
             pair_if(condition, else_body, ElseArm::None)

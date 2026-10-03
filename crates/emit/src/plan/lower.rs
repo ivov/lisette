@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::abi::transition::try_emit_lowered_tail_return;
 use crate::analyze::component_uses::component_demand;
-use crate::calls::comma_ok::PairCondition;
+use crate::calls::bound_value::PairCondition;
 use crate::calls::predicates::strip_negations;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;

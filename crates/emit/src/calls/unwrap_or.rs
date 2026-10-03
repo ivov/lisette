@@ -137,6 +137,9 @@ impl Planner<'_> {
             return None;
         }
         let receiver_ty = self.facts.peel_alias(&receiver.get_type());
+        if (receiver_ty.is_option() || receiver_ty.is_result()) && receiver_ty.ok_type().is_unit() {
+            return None;
+        }
         let fuse = if receiver_ty.is_option() {
             let fuse = self.option_fuse_plan(receiver)?;
             if matches!(fuse, OptionFusePlan::Index { .. }) {
@@ -162,26 +165,13 @@ impl Planner<'_> {
         default: &Expression,
         slot: CommaOkValueSlot,
     ) -> (Vec<LoweredStatement>, String) {
-        let (mut statements, failure, value) = match fuse {
-            FusedCall::Result(fuse) => {
-                let pair = fuse.bind(self, slot, None);
-                let failure = self.pair_failure_condition(&pair);
-                let value = pair
-                    .value()
-                    .expect("a payload slot was requested")
-                    .to_string();
-                (pair.statements, failure, value)
-            }
-            FusedCall::Option(fuse) => {
-                let bound = fuse.bind(self, slot);
-                let failure = bound.none_condition(self);
-                let value = bound
-                    .value_name()
-                    .expect("a payload slot was requested")
-                    .to_string();
-                (bound.statements, failure, value)
-            }
+        let mut bound = match fuse {
+            FusedCall::Result(fuse) => fuse.bind(self, slot, None),
+            FusedCall::Option(fuse) => fuse.bind(self, slot),
         };
+        let value = bound.writable_payload(self);
+        let failure = bound.failure_condition();
+        let mut statements = bound.statements;
         let literal_default = is_literal_default(default);
         let value_plan = self.lower_value(default, ExpressionContext::value());
         let default = if literal_default {

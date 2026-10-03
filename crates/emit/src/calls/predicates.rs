@@ -1,5 +1,6 @@
 use crate::Planner;
-use crate::calls::comma_ok::{CommaOkValueSlot, PairCondition};
+use crate::calls::bound_value::PairCondition;
+use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::patterns::matching::{OptionFusePlan, ResultFusePlan};
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::{EvaluationEffect, ValuePlan};
@@ -76,26 +77,16 @@ impl Planner<'_> {
         negated: bool,
         slot: CommaOkValueSlot,
     ) -> (Vec<LoweredStatement>, PairCondition) {
-        match predicate {
-            FusedPredicate::Result { fuse, succeeds } => {
-                let pair = fuse.bind(self, slot, None);
-                let condition = if succeeds != negated {
-                    self.pair_success_condition(&pair)
-                } else {
-                    self.pair_failure_condition(&pair)
-                };
-                (pair.statements, condition)
-            }
-            FusedPredicate::Option { fuse, succeeds } => {
-                let bound = fuse.bind(self, slot);
-                let condition = if succeeds != negated {
-                    bound.some_condition(self)
-                } else {
-                    bound.none_condition(self)
-                };
-                (bound.statements, condition)
-            }
-        }
+        let (bound, succeeds) = match predicate {
+            FusedPredicate::Result { fuse, succeeds } => (fuse.bind(self, slot, None), succeeds),
+            FusedPredicate::Option { fuse, succeeds } => (fuse.bind(self, slot), succeeds),
+        };
+        let condition = if succeeds != negated {
+            bound.success_condition()
+        } else {
+            bound.failure_condition()
+        };
+        (bound.statements, condition)
     }
 
     pub(crate) fn lower_fused_predicate_condition(
