@@ -2,9 +2,11 @@ use crate::Planner;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::context::expression::ExpressionContext;
 use crate::patterns::matching::{OptionArms, OptionFusePlan, ResultFusePlan};
-use crate::plan::bodies::{AssignForm, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
+use crate::plan::bodies::{
+    AssignForm, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, define,
+};
 use crate::plan::placement::collapse_declared_temp;
-use crate::plan::values::{GoExpression, ValuePlan};
+use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
 use syntax::ast::{Expression, Literal, Pattern, Span};
 use syntax::types::Type;
 
@@ -50,6 +52,19 @@ fn is_literal_default(default: &Expression) -> bool {
         | Literal::Char(_) => true,
         Literal::Slice(items) => items.iter().all(is_literal_default),
         Literal::Imaginary(_) | Literal::FormatString(_) => false,
+    }
+}
+
+fn is_go_zero_literal(default: &Expression, ty: &Type) -> bool {
+    let Expression::Literal { literal, .. } = default.unwrap_parens() else {
+        return false;
+    };
+    match literal {
+        Literal::Integer { value, .. } => *value == 0 && ty.is_numeric(),
+        Literal::Float { value, .. } => *value == 0.0 && value.is_sign_positive() && ty.is_float(),
+        Literal::Boolean(value) => !value && ty.is_boolean(),
+        Literal::String { value, .. } => value.is_empty() && ty.is_string(),
+        _ => false,
     }
 }
 
@@ -158,6 +173,23 @@ impl Planner<'_> {
         Some(DefaultedCall { fuse, map, default })
     }
 
+    fn zero_defaulted_map_read(
+        &mut self,
+        call: &DefaultedCall<'_>,
+        ty: &Type,
+    ) -> Option<(Vec<LoweredStatement>, GoExpression)> {
+        let FusedCall::Option(OptionFusePlan::CommaOk { subject, source }) = &call.fuse else {
+            return None;
+        };
+        if call.map.is_some()
+            || !source.is_map_index()
+            || !is_go_zero_literal(call.default, &self.facts.peel_alias(ty))
+        {
+            return None;
+        }
+        Some(self.lower_map_index_pair(subject))
+    }
+
     /// `x, ok := call` then `if !ok { x = default }`, with `x` as `slot` names it.
     fn lower_default_into_slot(
         &mut self,
@@ -229,6 +261,12 @@ impl Planner<'_> {
         go_name: &str,
     ) -> Option<Vec<LoweredStatement>> {
         let call = self.defaulted_call(value)?;
+        if let Some((mut statements, read)) = self.zero_defaulted_map_read(&call, &value.get_type())
+        {
+            self.declare(go_name);
+            statements.push(define(go_name.to_string(), read));
+            return Some(statements);
+        }
         self.declare(go_name);
         let Some(map) = call.map else {
             let slot = CommaOkValueSlot::Named(go_name.to_string());
@@ -255,6 +293,9 @@ impl Planner<'_> {
         expression: &Expression,
     ) -> Option<ValuePlan> {
         let call = self.defaulted_call(expression)?;
+        if let Some((setup, read)) = self.zero_defaulted_map_read(&call, &expression.get_type()) {
+            return Some(ValuePlan::computed(setup, read, EvaluationEffect::Pure));
+        }
         let Some(map) = call.map else {
             let (statements, value) =
                 self.lower_default_into_slot(call.fuse, call.default, CommaOkValueSlot::Temp);

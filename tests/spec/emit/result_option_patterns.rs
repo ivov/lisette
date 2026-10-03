@@ -2877,6 +2877,41 @@ fn main() {
 }
 
 #[test]
+fn unwrap_or_zero_on_map_get_reads_the_map() {
+    let input = r#"
+fn count(words: Slice<string>) -> Map<string, int> {
+  let mut df = Map.new<string, int>()
+  for w in words {
+    df[w] = df.get(w).unwrap_or(0) + 1
+  }
+  df
+}
+
+fn label(names: Map<int, string>, id: int) -> string {
+  names.get(id).unwrap_or("")
+}
+
+fn enabled(flags: Map<string, bool>, key: string) -> bool {
+  let on = flags.get(key).unwrap_or(false)
+  on
+}
+
+fn weight(weights: Map<string, float64>, key: string) -> float64 {
+  weights.get(key).unwrap_or(0.0)
+}
+
+fn nonzero(counts: Map<string, int>, key: string) -> int {
+  counts.get(key).unwrap_or(1)
+}
+
+fn tags(index: Map<string, Slice<string>>, key: string) -> Slice<string> {
+  index.get(key).unwrap_or([])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn map_then_unwrap_or_on_comma_ok_go_call_branches_on_the_header() {
     let input = r#"
 import "go:fmt"

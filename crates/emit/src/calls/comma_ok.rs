@@ -36,6 +36,10 @@ impl CommaOkSource {
     pub(crate) fn has_nil_guard(&self) -> bool {
         self.nil_guard.is_some()
     }
+
+    pub(crate) fn is_map_index(&self) -> bool {
+        matches!(self.pair, CommaOkPair::MapIndex)
+    }
 }
 
 /// What the caller needs from the pair's value slot.
