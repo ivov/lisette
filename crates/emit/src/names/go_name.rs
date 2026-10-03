@@ -166,7 +166,6 @@ impl ResolvedName {
     pub(crate) fn into_expression(self) -> GoExpression {
         match self.package {
             Some(package) => GoExpression::qualified(package, self.name),
-            None if self.name.is_empty() => GoExpression::empty(),
             None => GoExpression::name(self.name),
         }
     }

@@ -11,6 +11,7 @@ use crate::plan::bodies::{
     assign, define, discard, expression_statement,
 };
 use crate::plan::calls::plan_variadic_spread;
+use crate::plan::evaluation::Reads;
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{
     CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
@@ -398,7 +399,9 @@ impl Planner<'_> {
         {
             let staged = self.plan_operand(value, ExpressionContext::value());
             let (mut statements, staged_value) = staged.into_parts();
-            if !staged_value.is_empty() {
+            let effects = staged_value.effects();
+            let reads_or_acts = !effects.can_erase() || effects.reads() != Reads::Nothing;
+            if !staged_value.is_empty() && reads_or_acts {
                 if matches!(unwrapped, Expression::Call { .. }) {
                     // A never-typed call (e.g. `panic(...)`) diverges.
                     statements.push(LoweredStatement::ExpressionStatement {

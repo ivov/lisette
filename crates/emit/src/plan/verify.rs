@@ -1,5 +1,5 @@
 use crate::plan::bodies::{
-    ElseArm, LoopTransfer, LoweredBlock, LoweredStatement, for_each_statement,
+    AssignForm, ElseArm, LoopTransfer, LoweredBlock, LoweredStatement, for_each_statement,
 };
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::local::{GoIdentifier, LocalId};
@@ -19,6 +19,7 @@ pub(crate) enum BodyErrorKind {
     UnboundLocalReference,
     UnidentifiedLocal,
     UnorderedOperand,
+    MissingValue,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,9 +78,39 @@ pub(crate) fn verify_final_function_body(
     has_result: bool,
 ) -> Result<(), BodyError> {
     verify_control_structure(&body.statements)?;
+    verify_values(&body.statements)?;
     if has_result && !body.go_terminates() {
         return Err(BodyError {
             kind: BodyErrorKind::MissingGoTermination,
+        });
+    }
+    Ok(())
+}
+
+fn verify_values(statements: &[LoweredStatement]) -> Result<(), BodyError> {
+    let mut missing = false;
+    for statement in statements {
+        statement.visit_expressions(&mut |node| {
+            node.visit_children(&mut |child| {
+                missing |= matches!(child, GoExpressionNode::Empty);
+            });
+        });
+    }
+    for_each_statement(statements, &mut |statement| {
+        let values: Vec<&GoExpression> = match statement {
+            LoweredStatement::Define(definition) => vec![&definition.value],
+            LoweredStatement::Discard(value) => vec![value],
+            LoweredStatement::Return(values) => values.iter().collect(),
+            LoweredStatement::Assign(AssignForm::Simple { value, .. }) => vec![value.expression()],
+            _ => Vec::new(),
+        };
+        missing |= values
+            .iter()
+            .any(|value| matches!(value.node(), GoExpressionNode::Empty));
+    });
+    if missing {
+        return Err(BodyError {
+            kind: BodyErrorKind::MissingValue,
         });
     }
     Ok(())
@@ -246,6 +277,7 @@ mod control_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plan::bodies::{define, expression_statement};
 
     #[test]
     fn a_panic_cannot_stay_inline_before_a_later_call() {
@@ -261,5 +293,33 @@ mod tests {
             BodyErrorKind::UnorderedOperand
         );
         assert!(verify_operand_order(&[call, index]).is_ok());
+    }
+
+    #[test]
+    fn an_empty_expression_cannot_stand_for_a_value() {
+        let call = GoExpression::call(
+            GoExpression::name("show".to_string()),
+            vec![GoExpression::empty()],
+        );
+        let body = LoweredBlock {
+            statements: vec![expression_statement(call)],
+        };
+        assert_eq!(
+            verify_final_function_body(&body, false).unwrap_err().kind,
+            BodyErrorKind::MissingValue
+        );
+
+        let body = LoweredBlock {
+            statements: vec![define("x".to_string(), GoExpression::empty())],
+        };
+        assert_eq!(
+            verify_final_function_body(&body, false).unwrap_err().kind,
+            BodyErrorKind::MissingValue
+        );
+
+        let body = LoweredBlock {
+            statements: vec![expression_statement(GoExpression::empty())],
+        };
+        assert!(verify_final_function_body(&body, false).is_ok());
     }
 }

@@ -3135,3 +3135,33 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn unit_functions_fill_a_generic_result() {
+    let input = r#"
+struct Holder<U> {
+  f: fn(int) -> U,
+}
+
+fn apply<T, U>(value: T, f: fn(T) -> U) -> U {
+  f(value)
+}
+
+fn record(total: mut Ref<int>, n: int) {
+  total.* += n
+}
+
+fn test() {
+  let mut calls = 0
+  apply(1, |n: int| -> () { calls += n })
+  let _ = Some(2).map(|n: int| { calls += n; () })
+  let mut total = 0
+  let add = |n: int| record(&total, n)
+  apply(3, add)
+  let holder = Holder { f: add }
+  holder.f(4)
+  if calls != 3 || total != 7 { panic(f"calls={calls} total={total}") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

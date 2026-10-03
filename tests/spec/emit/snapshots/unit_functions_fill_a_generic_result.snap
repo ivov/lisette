@@ -1,0 +1,76 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Holder<U> {
+    f: fn(int) -> U,
+  }
+  
+  fn apply<T, U>(value: T, f: fn(T) -> U) -> U {
+    f(value)
+  }
+  
+  fn record(total: mut Ref<int>, n: int) {
+    total.* += n
+  }
+  
+  fn test() {
+    let mut calls = 0
+    apply(1, |n: int| -> () { calls += n })
+    let _ = Some(2).map(|n: int| { calls += n; () })
+    let mut total = 0
+    let add = |n: int| record(&total, n)
+    apply(3, add)
+    let holder = Holder { f: add }
+    holder.f(4)
+    if calls != 3 || total != 7 { panic(f"calls={calls} total={total}") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Holder[U any] struct {
+	f func(int) U
+}
+
+func apply[T any, U any](value T, f func(T) U) U {
+	return f(value)
+}
+
+func record(total *int, n int) {
+	*total += n
+}
+
+func test() {
+	calls := 0
+	apply(1, func(n int) struct{} {
+		calls += n
+		return struct{}{}
+	})
+	lisette.OptionMap(lisette.MakeOptionSome(2), func(n int) struct{} {
+		calls += n
+		return struct{}{}
+	})
+	total := 0
+	add := func(n int) {
+		record(&total, n)
+	}
+	cb := add
+	apply(3, func(arg0 int) struct{} {
+		cb(arg0)
+		return struct{}{}
+	})
+	cb_1 := add
+	holder := Holder[struct{}]{f: func(arg0 int) struct{} {
+		cb_1(arg0)
+		return struct{}{}
+	}}
+	holder.f(4)
+	if calls != 3 || total != 7 {
+		panic(fmt.Sprintf("calls=%d total=%d", calls, total))
+	}
+}

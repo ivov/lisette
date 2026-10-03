@@ -1966,3 +1966,33 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn a_unit_payload_binding_reads_as_a_unit_value() {
+    let input = r#"
+import "go:fmt"
+
+enum Event {
+  Tick(()),
+  Count(int),
+}
+
+fn describe(e: Event) -> string {
+  match e {
+    Event.Tick(u) => fmt.Sprintf("%v", u),
+    Event.Count(n) => fmt.Sprintf("%d", n),
+  }
+}
+
+fn test() {
+  let s = describe(Event.Tick(()))
+  if s != "{}" { panic(f"the unit payload printed {s}") }
+  let pair = match Some(()) {
+    Some(u) => (u, 1),
+    None => ((), 0),
+  }
+  if pair.1 != 1 { panic("the unit payload lost its arm") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

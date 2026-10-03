@@ -5,7 +5,7 @@ use crate::patterns::decision_tree::{
 };
 use crate::plan::bodies::{Definition, LoweredStatement, assign, define_many};
 use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
+use crate::plan::values::{GoExpression, Stability};
 use crate::state::bindings::InlineExpr;
 use syntax::ast::Expression;
 
@@ -115,7 +115,11 @@ pub(crate) fn tree_binding_statements(
 ) {
     for binding in bindings {
         let Some(ref go_name) = binding.go_name else {
-            planner.scope.bind(&binding.lisette_name, "");
+            let unit = GoExpression::empty_composite("struct{}".to_string());
+            planner.scope.bind_inline_expr(
+                &binding.lisette_name,
+                InlineExpr::new(unit, Stability::Literal),
+            );
             for id in &binding.binding_ids {
                 planner
                     .scope
