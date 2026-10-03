@@ -1,11 +1,12 @@
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::calls::bound_value::{BoundValue, LoweredPair, PairValue};
 use crate::calls::dispatch::extract_native_method_name;
-use crate::calls::go_interop::{NilGuard, is_nil, non_nil};
+use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::escape_reserved;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{Definition, LoweredStatement, define, define_many};
+use crate::plan::bodies::{LoweredStatement, define, define_many};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::{
@@ -56,112 +57,39 @@ pub(crate) enum PairKind {
     BareError,
 }
 
-/// A bound two-result expression and the rule that distinguishes success.
-pub(crate) struct LoweredPair {
-    pub(crate) statements: Vec<LoweredStatement>,
-    value: PairValue,
-    status: String,
-    status_kind: PairStatusKind,
-    initializer_call: Option<GoExpression>,
-}
-
-enum PairValue {
-    Absent,
-    Discarded,
-    Named {
-        name: String,
-        nil_guard: Option<NilGuard>,
-    },
-}
-
-impl PairValue {
-    fn name(&self) -> Option<&str> {
-        match self {
-            Self::Named { name, .. } => Some(name),
-            Self::Absent | Self::Discarded => None,
-        }
-    }
-}
-
-pub(crate) struct PairCondition {
-    pub(crate) initializer: Option<Definition>,
-    pub(crate) condition: GoExpression,
-}
-
-impl LoweredPair {
-    fn from_components(value: String, status: String, status_kind: PairStatusKind) -> Self {
-        Self {
-            statements: Vec::new(),
-            value: PairValue::Named {
-                name: value,
-                nil_guard: None,
-            },
-            status,
-            status_kind,
-            initializer_call: None,
-        }
-    }
-
-    pub(crate) fn status(&self) -> &str {
-        &self.status
-    }
-
-    pub(crate) fn value(&self) -> Option<&str> {
-        self.value.name()
-    }
-
-    pub(crate) fn discard_value(&mut self) {
-        if matches!(
-            self.value,
-            PairValue::Named {
-                nil_guard: None,
-                ..
-            }
-        ) {
-            self.value = PairValue::Discarded;
-        }
-    }
-
-    fn binding(&self) -> Vec<String> {
-        match &self.value {
-            PairValue::Named { name, .. } => vec![name.clone(), self.status.clone()],
-            PairValue::Discarded => vec!["_".to_string(), self.status.clone()],
-            PairValue::Absent => vec![self.status.clone()],
-        }
-    }
-
-    fn initializer(&self) -> Option<Definition> {
-        let call = self.initializer_call.as_ref()?;
-        Some(Definition {
-            names: self.binding().into_iter().map(Into::into).collect(),
-            value: call.clone(),
-        })
-    }
-}
-
 impl Planner<'_> {
     pub(crate) fn bind_component_pair(
         &mut self,
         components: ComponentBinding,
         slot: CommaOkValueSlot,
-    ) -> LoweredPair {
-        // Component lets are never written, so an arm reads the payload in place.
-        let (statements, value) = match slot {
+    ) -> BoundValue {
+        let (statements, value, borrowed) = match slot {
             CommaOkValueSlot::Named(name) if name != components.value.spelling() => {
                 self.declare(&name);
                 let copy = define(name.clone(), GoExpression::identifier(components.value));
-                (vec![copy], name)
+                (vec![copy], name, false)
             }
-            _ => (Vec::new(), components.value.to_string()),
+            _ => (
+                Vec::new(),
+                components.value.to_string(),
+                components.shared_payload,
+            ),
         };
         let status_kind = match components.kind {
             ComponentKind::Option => PairStatusKind::Ok,
             ComponentKind::Result => PairStatusKind::Error,
         };
-        let mut pair =
-            LoweredPair::from_components(value, components.status.to_string(), status_kind);
-        pair.statements = statements;
-        pair
+        let pair = LoweredPair {
+            value: PairValue::Named {
+                name: value,
+                nil_guard: None,
+            },
+            status: components.status.to_string(),
+            status_kind,
+            initializer_call: None,
+            borrowed,
+        };
+        BoundValue::pair(statements, pair)
     }
 
     pub(crate) fn component_binding(&self, expression: &Expression) -> Option<ComponentBinding> {
@@ -255,7 +183,7 @@ impl Planner<'_> {
         expression: &Expression,
         source: CommaOkSource,
         slot: CommaOkValueSlot,
-    ) -> LoweredPair {
+    ) -> BoundValue {
         let (statements, pair) = self.lower_comma_ok_pair(expression, &source.pair);
         self.bind_pair(
             statements,
@@ -275,7 +203,7 @@ impl Planner<'_> {
         slot: CommaOkValueSlot,
         kind: PairKind,
         status_hint: Option<&str>,
-    ) -> LoweredPair {
+    ) -> BoundValue {
         let status_kind = match kind {
             PairKind::CommaOk { .. } => PairStatusKind::Ok,
             PairKind::Result { .. } | PairKind::BareError => PairStatusKind::Error,
@@ -302,20 +230,20 @@ impl Planner<'_> {
             self.scope.reserve_go_name(&status);
             status = self.fresh_var(Some(&status));
         }
+        let mut statements = statements;
         let mut pair = LoweredPair {
-            statements,
             value,
             status,
             status_kind,
             initializer_call: None,
+            borrowed: false,
         };
         if opens_if {
             pair.initializer_call = Some(expression);
         } else {
-            pair.statements
-                .push(define_many(pair.binding(), expression));
+            statements.push(define_many(pair.binding(), expression));
         }
-        pair
+        BoundValue::pair(statements, pair)
     }
 
     pub(crate) fn fresh_pair_value(&mut self) -> String {
@@ -369,44 +297,6 @@ impl Planner<'_> {
             self.declare(&name);
         }
         name
-    }
-
-    pub(crate) fn pair_success_condition(&mut self, pair: &LoweredPair) -> PairCondition {
-        self.pair_condition(pair, true)
-    }
-
-    pub(crate) fn pair_failure_condition(&mut self, pair: &LoweredPair) -> PairCondition {
-        self.pair_condition(pair, false)
-    }
-
-    fn pair_condition(&mut self, pair: &LoweredPair, success: bool) -> PairCondition {
-        let status = GoExpression::name(pair.status.clone());
-        let status = match (pair.status_kind, success) {
-            (PairStatusKind::Ok, true) => status,
-            (PairStatusKind::Ok, false) => GoExpression::unary("!", status),
-            (PairStatusKind::Error, true) => is_nil(status),
-            (PairStatusKind::Error, false) => non_nil(status),
-        };
-        let condition = match &pair.value {
-            PairValue::Named {
-                name,
-                nil_guard: Some(guard),
-            } => {
-                let value = GoExpression::name(name.clone());
-                let nil_condition = if success {
-                    guard.non_nil(value)
-                } else {
-                    guard.is_nil(value)
-                };
-                let operator = if success { "&&" } else { "||" };
-                GoExpression::binary(status, operator, nil_condition)
-            }
-            _ => status,
-        };
-        PairCondition {
-            initializer: pair.initializer(),
-            condition,
-        }
     }
 
     /// Lower the pair-producing Go expression.

@@ -2,7 +2,8 @@ use super::propagation::plain_return;
 use crate::Planner;
 use crate::ReturnContext;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
-use crate::calls::comma_ok::{CommaOkValueSlot, LoweredPair, PairKind};
+use crate::calls::bound_value::BoundValue;
+use crate::calls::comma_ok::{CommaOkValueSlot, PairKind};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::names::go_name::GeneratedPackage;
@@ -36,7 +37,7 @@ impl Planner<'_> {
         items: &[Expression],
         ty: &Type,
         slot: CommaOkValueSlot,
-    ) -> Option<LoweredPair> {
+    ) -> Option<BoundValue> {
         let return_ctx = self.return_ctx();
         let ty = self.facts.peel_alias(ty);
         let effective_ty = resolve_fallible_block_type(items, &ty, Some(&return_ctx));

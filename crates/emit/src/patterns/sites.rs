@@ -6,7 +6,8 @@ use syntax::ast::{BindingId, Expression, MatchArm, Pattern, Span};
 use syntax::types::Type;
 
 use crate::Planner;
-use crate::calls::comma_ok::{CommaOkValueSlot, PairCondition};
+use crate::calls::bound_value::PairCondition;
+use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::{self, GeneratedPackage, testkit_qualifier};
 use crate::patterns::binding_decls::pattern_binds_name;
@@ -333,7 +334,7 @@ impl Planner<'_> {
             None => CommaOkValueSlot::Unused,
         };
         let bound = fuse.bind(self, slot, None);
-        let fail_condition = self.pair_failure_condition(&bound);
+        let fail_condition = bound.failure_condition();
         Some(self.finish_fused_let_else(bound.statements, fail_condition, binding, else_block))
     }
 
@@ -372,8 +373,8 @@ impl Planner<'_> {
             CommaOkValueSlot::Discarded
         };
         let bound = fuse.bind(self, slot, None);
-        let value = bound.value().map(str::to_string);
-        let fail_condition = self.pair_failure_condition(&bound);
+        let value = bound.payload_name().map(str::to_string);
+        let fail_condition = bound.failure_condition();
         // The else block lowers before the pattern binds its names.
         let mut statements =
             self.finish_fused_let_else(bound.statements, fail_condition, None, else_block);
@@ -404,7 +405,7 @@ impl Planner<'_> {
             None => CommaOkValueSlot::Unused,
         };
         let bound = fuse.bind(self, slot);
-        let none_condition = bound.none_condition(self);
+        let none_condition = bound.failure_condition();
         let late_binding = bound.late_binding();
         let mut statements =
             self.finish_fused_let_else(bound.statements, none_condition, binding, else_block);
@@ -574,7 +575,7 @@ impl Planner<'_> {
             None => CommaOkValueSlot::Unused,
         };
         let bound = fuse.bind(self, slot);
-        let none_condition = bound.none_condition(self);
+        let none_condition = bound.failure_condition();
         let late_binding = bound.late_binding();
 
         let mut loop_body = bound.statements;

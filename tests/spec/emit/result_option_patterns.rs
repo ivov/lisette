@@ -5012,3 +5012,37 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn two_defaults_on_one_local_read_their_own_values() {
+    let input = r#"
+import "go:strconv"
+
+fn test() {
+  let mut m = Map.new<string, int>()
+  m["a"] = 1
+  let v = m.get("zz")
+  let total = v.unwrap_or(1) + v.unwrap_or(2)
+  if total != 3 { panic(f"two defaults on a lookup gave {total}") }
+  let r = strconv.Atoi("bad")
+  let pair = (r.unwrap_or(7), r.unwrap_or(8))
+  if pair.0 != 7 || pair.1 != 8 { panic("two defaults on a result read one payload") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn a_default_on_a_unit_payload_has_nothing_to_assign() {
+    let input = r#"
+import "go:fmt"
+
+fn test() {
+  let mut seen = Map.new<string, ()>()
+  seen["a"] = ()
+  let marker = seen.get("q").unwrap_or(())
+  fmt.Println(marker)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

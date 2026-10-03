@@ -46,6 +46,7 @@ pub(crate) struct ComponentBinding {
     pub(crate) payload_go_type: String,
     pub(crate) kind: ComponentKind,
     pub(crate) whole_value_constructor: Option<WholeValueConstructor>,
+    pub(crate) shared_payload: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

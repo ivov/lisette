@@ -256,7 +256,7 @@ impl Planner<'_> {
             FallibleComponentSource::Result(fuse) => fuse.bind(self, slot, None),
         };
         let statements = mem::take(&mut pair.statements);
-        let payload = pair.value().unwrap_or("_").to_string();
+        let payload = pair.payload_name().unwrap_or("_").to_string();
         let status = pair.status().to_string();
         self.scope.set_component_binding(
             identifier,
@@ -266,6 +266,7 @@ impl Planner<'_> {
                 payload_go_type,
                 kind,
                 whole_value_constructor,
+                shared_payload: demand.defaults > 1,
             },
         );
         Some(statements)
