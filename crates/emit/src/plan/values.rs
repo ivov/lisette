@@ -904,7 +904,12 @@ impl Planner<'_> {
             Expression::RecoverBlock { items, ty, .. } => self.lower_recover_block(items, ty),
             Expression::Propagate { expression, .. } => {
                 let (setup, value) = self.lower_propagate(expression, None);
-                ValuePlan::computed(setup, value, EvaluationEffect::Pure)
+                let stability = self.path_read_stability(&value);
+                ValuePlan::from_facts(
+                    setup,
+                    value,
+                    EvaluationFacts::new(stability, EvaluationEffect::Pure),
+                )
             }
             Expression::If { ty, .. } => self.plan_branching_as_operand_temp(expression, ty),
             Expression::Loop { ty, .. } => self.plan_loop_as_operand_temp(expression, ty),

@@ -1,0 +1,63 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Pair {
+    a: int,
+    b: int,
+  }
+  
+  fn from_params(x: Result<int, string>, y: Result<int, string>) -> Result<Pair, string> {
+    Ok(Pair { a: x?, b: y? })
+  }
+  
+  fn from_rebound_local() -> Result<Pair, string> {
+    let mut r: Result<int, string> = Ok(1)
+    let mut next = || -> Result<int, string> {
+      r = Ok(2)
+      Ok(3)
+    }
+    Ok(Pair { a: r?, b: next()? })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Pair struct {
+	a int
+	b int
+}
+
+func fromParams(x, y lisette.Result[int, string]) lisette.Result[Pair, string] {
+	if x.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[Pair, string](x.ErrVal)
+	}
+	if y.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[Pair, string](y.ErrVal)
+	}
+	return lisette.MakeResultOk[Pair, string](Pair{
+		a: x.OkVal,
+		b: y.OkVal,
+	})
+}
+
+func fromReboundLocal() lisette.Result[Pair, string] {
+	r := lisette.MakeResultOk[int, string](1)
+	next := func() lisette.Result[int, string] {
+		r = lisette.MakeResultOk[int, string](2)
+		return lisette.MakeResultOk[int, string](3)
+	}
+	if r.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[Pair, string](r.ErrVal)
+	}
+	field := r.OkVal
+	check := next()
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[Pair, string](check.ErrVal)
+	}
+	return lisette.MakeResultOk[Pair, string](Pair{
+		a: field,
+		b: check.OkVal,
+	})
+}
