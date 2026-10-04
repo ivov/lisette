@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791129182526,
+  "lastUpdate": 1791129610099,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -42623,6 +42623,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/1b814c73c684e34856fa5026cdd9175e92e8919b"
         },
         "date": 1791129180662,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 149400,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39682,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28534,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19398,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15309,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9029,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7381,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2944,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "117df4659a52766c0387cd07ca362cf53051b42e",
+          "message": "chore: upgrade `ecow` to 0.3 to replace yanked 0.2.7 (#1518)",
+          "timestamp": "2026-10-04T17:59:46+02:00",
+          "tree_id": "eeeaab77e1f3493fb3780c65d10db32fc2c9d84c",
+          "url": "https://github.com/ivov/lisette/commit/117df4659a52766c0387cd07ca362cf53051b42e"
+        },
+        "date": 1791129607578,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
