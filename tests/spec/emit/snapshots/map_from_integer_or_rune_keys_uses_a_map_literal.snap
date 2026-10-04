@@ -40,16 +40,13 @@ func weights() map[float64]int {
 }
 
 func test() {
-	base := ids()
-	if base[16] != "bo" {
+	if ids()[16] != "bo" {
 		panic("a hex key should find its entry")
 	}
-	base_1 := letters()
-	if base_1['b'] != 2 {
+	if letters()['b'] != 2 {
 		panic("a rune key should find its entry")
 	}
-	base_2 := weights()
-	if base_2[2.0] != 2 {
+	if weights()[2.0] != 2 {
 		panic("a float key should find its entry")
 	}
 }

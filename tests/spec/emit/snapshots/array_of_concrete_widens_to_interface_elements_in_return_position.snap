@@ -39,8 +39,7 @@ func widen() [2]error {
 }
 
 func test() {
-	base := widen()
-	if base[1].Error() != "boom" {
+	if widen()[1].Error() != "boom" {
 		panic("returned array lost its interface elements")
 	}
 }

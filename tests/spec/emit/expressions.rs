@@ -478,6 +478,38 @@ fn test() -> int {
 }
 
 #[test]
+fn index_of_a_call_result_with_a_fixed_index_reads_in_place() {
+    let input = r#"
+import "go:strings"
+
+fn parts(s: string) -> Slice<string> { strings.Split(s, ",") }
+
+fn first(topic: string) -> string {
+  strings.SplitN(topic, "?", 2)[0]
+}
+
+fn at(s: string, i: int) -> string {
+  parts(s)[i]
+}
+
+fn moving(s: string) -> string {
+  let mut i = 0
+  let mut bump = || -> int {
+    i += 1
+    i
+  }
+  let x = parts(s)[i]
+  x + parts(s)[bump()]
+}
+
+fn split_at(s: string, a: int, b: int) -> string {
+  parts(s)[a / b]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn propagate_simple() {
     let input = r#"
 fn might_fail() -> Result<int, string> {
