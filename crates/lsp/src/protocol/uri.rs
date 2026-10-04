@@ -2,7 +2,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::error::Error;
 
 /// URI used by the Lisette language server.
@@ -10,9 +10,15 @@ use std::error::Error;
 /// LSP document identifiers are opaque strings except where Lisette needs to
 /// translate a `file` URI to or from a local path. Keeping that narrow contract
 /// avoids pulling a web-oriented URL parser and its IDNA tables into the CLI.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
 pub struct Url(String);
+
+impl<'de> Deserialize<'de> for Url {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(|value| Self(normalize(value)))
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct InvalidUri;
@@ -38,7 +44,7 @@ impl Url {
         {
             return Err(InvalidUri);
         }
-        Ok(Self(value.to_string()))
+        Ok(Self(normalize(value.to_string())))
     }
 
     pub fn as_str(&self) -> &str {
@@ -87,7 +93,7 @@ impl Url {
         #[cfg(not(windows))]
         let raw = format!("file://{}", percent_encode_path(&path.to_string_lossy()));
 
-        Ok(Self(raw))
+        Ok(Self(normalize(raw)))
     }
 
     pub fn to_file_path(&self) -> Result<PathBuf, InvalidUri> {
@@ -131,6 +137,29 @@ impl FromStr for Url {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::parse(value)
     }
+}
+
+/// Normalizes a `file` URI so that client URIs such as VS Code's
+/// `file:///c%3A/main.lis` match URIs built from paths.
+fn normalize(uri: String) -> String {
+    let Some(decoded) = uri.strip_prefix("file:").and_then(percent_decode) else {
+        return uri;
+    };
+    let normal = format!("file:{}", percent_encode_path(&decoded));
+
+    #[cfg(windows)]
+    let normal = {
+        let mut normal = normal;
+        if let Some(path) = normal.strip_prefix("file:///")
+            && path.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
+            && path.as_bytes().get(1) == Some(&b':')
+        {
+            normal["file:///".len()..][..1].make_ascii_uppercase();
+        }
+        normal
+    };
+
+    normal
 }
 
 fn percent_encode_path(path: &str) -> String {
@@ -184,6 +213,37 @@ mod tests {
         let uri = Url::from_file_path(&path).expect("absolute path");
 
         assert_eq!(uri.to_file_path(), Ok(path));
+    }
+
+    #[test]
+    fn decodes_percent_encoded_drive_colon() {
+        let uri: Url = serde_json::from_str(r#""file:///C%3A/src/main.lis""#).unwrap();
+
+        assert_eq!(uri.as_str(), "file:///C:/src/main.lis");
+    }
+
+    #[test]
+    fn normalizes_percent_encoding() {
+        let uri = Url::parse("file:///src/l%69sette%20uri%e2%98%83.lis").unwrap();
+
+        assert_eq!(uri.as_str(), "file:///src/lisette%20uri%E2%98%83.lis");
+    }
+
+    #[test]
+    fn keeps_non_file_uri() {
+        let uri = Url::parse("untitled:Untitled-1%3A").unwrap();
+
+        assert_eq!(uri.as_str(), "untitled:Untitled-1%3A");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn client_uri_for_windows_drive_equals_path_uri() {
+        let client: Url = serde_json::from_str(r#""file:///c%3A/src/main.lis""#).unwrap();
+        let built = Url::from_file_path(r"c:\src\main.lis").unwrap();
+
+        assert_eq!(client, built);
+        assert_eq!(built.as_str(), "file:///C:/src/main.lis");
     }
 
     #[test]
