@@ -1042,6 +1042,31 @@ fn hover_on_alias_target_qualified() {
 }
 
 #[test]
+fn hover_with_percent_encoded_client_uri() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("lisette.toml"), "").unwrap();
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+    let (main_content, line, character) = cursor("fn main() {\n  let x~ = 1\n}\n");
+    fs::write(src.join("main.lis"), &main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string()
+        .replace("main.lis", "main%2Elis");
+    client.open(&main_uri, &main_content);
+
+    let hover = client.hover(&main_uri, line, character);
+    let content = hover_content(&hover.expect("hover on x"));
+    assert!(content.contains("int"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
 fn hover_on_alias_target_in_function_type() {
     let mut client = TestClient::new();
     client.initialize();
