@@ -266,12 +266,21 @@ impl GoExpression {
     }
 
     pub(crate) fn call(callee: GoExpression, arguments: Vec<GoExpression>) -> Self {
+        Self::call_node(callee, arguments, false)
+    }
+
+    pub(crate) fn pure_call(callee: GoExpression, arguments: Vec<GoExpression>) -> Self {
+        Self::call_node(callee, arguments, true)
+    }
+
+    fn call_node(callee: GoExpression, arguments: Vec<GoExpression>, pure: bool) -> Self {
         let node = GoExpressionNode::Call {
             callee: Box::new(callee.node),
             arguments: arguments
                 .into_iter()
                 .map(|argument| argument.node)
                 .collect(),
+            pure,
         };
         Self::new(node)
     }

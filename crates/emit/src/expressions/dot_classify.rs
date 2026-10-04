@@ -128,7 +128,7 @@ impl Planner<'_> {
         } else {
             GoExpression::name(make_fn.to_string())
         };
-        Some(GoExpression::call(
+        Some(GoExpression::pure_call(
             GoExpression::instantiation(callee, type_args),
             Vec::new(),
         ))

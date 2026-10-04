@@ -1,0 +1,83 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  enum Mode {
+    Clean,
+    Run(int),
+  }
+  
+  struct Config { mode: Mode, n: int }
+  struct Ctx { config: Config }
+  
+  fn next() -> int { 3 }
+  
+  fn is_clean(ctx: Ref<Ctx>) -> bool {
+    ctx.config.mode == Mode.Clean
+  }
+  
+  fn is_first_run(ctx: Ref<Ctx>) -> bool {
+    ctx.config.mode == Mode.Run(1)
+  }
+  
+  fn is_next_run(ctx: Ref<Ctx>) -> bool {
+    ctx.config.mode == Mode.Run(next())
+  }
+  
+  fn is_next(ctx: Ref<Ctx>) -> bool {
+    ctx.config.n == next()
+  }
+---
+package main
+
+func MakeModeClean() Mode {
+	return Mode{Tag: ModeClean}
+}
+
+func MakeModeRun(arg0 int) Mode {
+	return Mode{Tag: ModeRun, Run: arg0}
+}
+
+type ModeTag uint8
+
+const (
+	ModeClean ModeTag = iota
+	ModeRun
+)
+
+type Mode struct {
+	Tag ModeTag
+	Run int
+}
+
+type Config struct {
+	mode Mode
+	n    int
+}
+
+type Ctx struct {
+	config Config
+}
+
+func next() int {
+	return 3
+}
+
+func isClean(ctx *Ctx) bool {
+	return ctx.config.mode == MakeModeClean()
+}
+
+func isFirstRun(ctx *Ctx) bool {
+	left := ctx.config.mode
+	return left == MakeModeRun(1)
+}
+
+func isNextRun(ctx *Ctx) bool {
+	left := ctx.config.mode
+	return left == MakeModeRun(next())
+}
+
+func isNext(ctx *Ctx) bool {
+	left := ctx.config.n
+	return left == next()
+}

@@ -65,7 +65,7 @@ impl Planner<'_> {
                     function
                 }
             }
-            IdentifierKind::UnitConstructor { name, type_args } => GoExpression::call(
+            IdentifierKind::UnitConstructor { name, type_args } => GoExpression::pure_call(
                 GoExpression::instantiation(self.resolve_go_name(&name, None, false), type_args),
                 Vec::new(),
             ),

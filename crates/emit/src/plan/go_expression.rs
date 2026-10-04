@@ -27,6 +27,8 @@ pub(crate) enum GoExpressionNode {
     Call {
         callee: Box<GoExpressionNode>,
         arguments: Vec<GoExpressionNode>,
+        /// A constructor runs no code of its own.
+        pure: bool,
     },
     /// A generic function or type with its type arguments, `f[T, U]`.
     Instantiation {
@@ -184,7 +186,9 @@ impl GoExpressionNode {
                     visit(&element.value);
                 }
             }
-            Self::Call { callee, arguments } => {
+            Self::Call {
+                callee, arguments, ..
+            } => {
                 visit(callee);
                 for argument in arguments {
                     visit(argument);
@@ -237,7 +241,9 @@ impl GoExpressionNode {
                     visit(&mut element.value);
                 }
             }
-            Self::Call { callee, arguments } => {
+            Self::Call {
+                callee, arguments, ..
+            } => {
                 visit(callee);
                 for argument in arguments {
                     visit(argument);
@@ -400,7 +406,9 @@ impl GoExpressionNode {
                     }
                 }
             }
-            Self::Call { callee, arguments } => {
+            Self::Call {
+                callee, arguments, ..
+            } => {
                 Self::write_child(callee, slot.with(SlotKind::Callee), output);
                 output.push('(');
                 for (index, argument) in arguments.iter().enumerate() {
@@ -667,6 +675,7 @@ mod tests {
         let call = GoExpressionNode::Call {
             callee: Box::new(GoExpressionNode::Dereference(Box::new(name("f")))),
             arguments: vec![name("x")],
+            pure: false,
         };
         assert_eq!(call.print(), "(*f)(x)");
     }
@@ -679,6 +688,7 @@ mod tests {
         let called = GoExpressionNode::Call {
             callee: Box::new(name("f")),
             arguments: vec![literal_struct("Point")],
+            pure: false,
         };
         assert_eq!(called.print_header(), "f(Point{})");
     }

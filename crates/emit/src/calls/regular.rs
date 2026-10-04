@@ -172,6 +172,7 @@ fn call_arguments_of<'n>(
     let GoExpressionNode::Call {
         callee: called,
         arguments,
+        ..
     } = expression
     else {
         return None;
@@ -271,7 +272,12 @@ impl<'a> Planner<'a> {
                 },
             );
             let effect = self.regular_call_effect(function, sequenced.effect);
-            let expression = GoExpression::call(GoExpression::name(go_name), sequenced.values);
+            let callee = GoExpression::name(go_name);
+            let expression = if self.is_pure_constructor_callee(function) {
+                GoExpression::pure_call(callee, sequenced.values)
+            } else {
+                GoExpression::call(callee, sequenced.values)
+            };
             return if self.callee_lowers_to_type_construction(function) {
                 ValuePlan::observable_call(sequenced.setup, expression, effect)
             } else {
@@ -341,6 +347,10 @@ impl<'a> Planner<'a> {
 
         let call = match collapse_fmt_print(self, &callee, args, &arguments) {
             Some(collapsed) => collapsed,
+            None if self.is_pure_constructor_callee(function) => GoExpression::pure_call(
+                GoExpression::instantiation(callee, type_args_string),
+                arguments,
+            ),
             None => GoExpression::call(
                 GoExpression::instantiation(callee, type_args_string),
                 arguments,

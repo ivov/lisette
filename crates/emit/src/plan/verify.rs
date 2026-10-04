@@ -63,7 +63,7 @@ pub(crate) fn verify_operand_order(values: &[GoExpression]) -> Result<(), BodyEr
         if value.effects().panics_or_blocks()
             && values[index + 1..]
                 .iter()
-                .any(|later| later.effects().runs_code())
+                .any(|later| later.effects().runs_effectful_code())
         {
             return Err(BodyError {
                 kind: BodyErrorKind::UnorderedOperand,
