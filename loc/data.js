@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791139980566,
+  "lastUpdate": 1791140413829,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -43157,6 +43157,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/d974cc0b7e99e4512cad116714ee964f87fc94b4"
         },
         "date": 1791139978293,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 149494,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39776,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28534,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19398,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15309,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9029,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7381,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2944,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "24dc4c1eb6535d7ea629716998b1e5051ab9a895",
+          "message": "feat: idiomatic Go for map loops over field paths (#1524)",
+          "timestamp": "2026-10-04T20:59:53+02:00",
+          "tree_id": "ad5aaa3528fdf373dd8fbf90880226a509917d33",
+          "url": "https://github.com/ivov/lisette/commit/24dc4c1eb6535d7ea629716998b1e5051ab9a895"
+        },
+        "date": 1791140412424,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
