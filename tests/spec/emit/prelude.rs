@@ -649,6 +649,28 @@ fn test() -> Slice<int> {
 }
 
 #[test]
+fn slice_map_on_a_field_path_reads_it_in_place() {
+    let input = r#"
+struct Label { name: string }
+struct Card { labels: Slice<Label> }
+
+fn names(card: Card) -> Slice<string> {
+  card.labels.map(|l| l.name)
+}
+
+fn names_through_ref(card: Ref<Card>) -> Slice<string> {
+  card.labels.map(|l| l.name)
+}
+
+fn shadowed(card: Card) -> Slice<string> {
+  let card = card.labels.map(|l| l.name + "!")
+  card
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_filter_with_an_unused_parameter_names_the_element() {
     let input = r#"
 fn test(s: Slice<int>) -> Slice<int> {
