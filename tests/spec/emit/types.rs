@@ -1885,6 +1885,43 @@ fn main() {
 }
 
 #[test]
+fn struct_update_copies_the_base_once() {
+    let input = r#"
+struct Config { debug: bool, port: int, tags: Slice<string> }
+
+fn next() -> int { 8080 }
+
+fn tweak(c: Config) -> Config {
+  let out = Config { debug: true, port: next(), ..c }
+  out
+}
+
+fn with_tags(c: Config) -> Config {
+  Config { tags: c.tags.clone(), ..c }
+}
+
+fn rebound(start: Config) -> Config {
+  let mut c = start
+  let mut reset = || -> int {
+    c = Config { debug: false, port: 0, tags: [] }
+    1
+  }
+  let out = Config { port: reset(), ..c }
+  out
+}
+
+fn shadowed(base: Config) -> int {
+  let out = base
+  {
+    let out = Config { port: out.port + 1, ..base }
+    out.port
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn enum_variant_spread_builds_fresh_literal() {
     let input = r#"
 enum Cursor {

@@ -1,0 +1,89 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Config { debug: bool, port: int, tags: Slice<string> }
+  
+  fn next() -> int { 8080 }
+  
+  fn tweak(c: Config) -> Config {
+    let out = Config { debug: true, port: next(), ..c }
+    out
+  }
+  
+  fn with_tags(c: Config) -> Config {
+    Config { tags: c.tags.clone(), ..c }
+  }
+  
+  fn rebound(start: Config) -> Config {
+    let mut c = start
+    let mut reset = || -> int {
+      c = Config { debug: false, port: 0, tags: [] }
+      1
+    }
+    let out = Config { port: reset(), ..c }
+    out
+  }
+  
+  fn shadowed(base: Config) -> int {
+    let out = base
+    {
+      let out = Config { port: out.port + 1, ..base }
+      out.port
+    }
+  }
+---
+package main
+
+import "slices"
+
+type Config struct {
+	debug bool
+	port  int
+	tags  []string
+}
+
+func next() int {
+	return 8080
+}
+
+func tweak(c Config) Config {
+	out := c
+	out.debug = true
+	out.port = next()
+	return out
+}
+
+func withTags(c Config) Config {
+	copy_1 := c
+	copy_1.tags = slices.Clone(c.tags)
+	return copy_1
+}
+
+func rebound(start Config) Config {
+	c := start
+	reset := func() int {
+		c = Config{
+			debug: false,
+			port:  0,
+			tags:  []string{},
+		}
+		return 1
+	}
+	field := reset()
+	out := c
+	out.port = field
+	return out
+}
+
+func shadowed(base Config) int {
+	out := base
+	var tmp int
+	{
+		copy_1 := base
+		copy_1.port = out.port + 1
+		out := copy_1
+		tmp = out.port
+	}
+	return tmp
+}
