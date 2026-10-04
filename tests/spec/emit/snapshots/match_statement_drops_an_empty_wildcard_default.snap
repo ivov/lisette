@@ -1,0 +1,88 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:fmt"
+  
+  enum Color { Red, Green, Blue }
+  
+  fn describe(color: Color) {
+    match color {
+      Red => fmt.Println("red"),
+      Green => fmt.Println("green"),
+      _ => (),
+    }
+  }
+  
+  fn command(name: string) {
+    match name {
+      "up" => fmt.Println("starting"),
+      "down" => fmt.Println("stopping"),
+      _ => {},
+    }
+  }
+  
+  fn fallback(name: string) {
+    match name {
+      "up" => fmt.Println("starting"),
+      "down" => fmt.Println("stopping"),
+      _ => fmt.Println("unknown"),
+    }
+  }
+---
+package main
+
+import "fmt"
+
+func MakeColorRed() Color {
+	return Color{Tag: ColorRed}
+}
+
+func MakeColorGreen() Color {
+	return Color{Tag: ColorGreen}
+}
+
+func MakeColorBlue() Color {
+	return Color{Tag: ColorBlue}
+}
+
+type ColorTag uint8
+
+const (
+	ColorRed ColorTag = iota
+	ColorGreen
+	ColorBlue
+)
+
+type Color struct {
+	Tag ColorTag
+}
+
+func describe(color Color) {
+	switch color.Tag {
+	case ColorRed:
+		fmt.Println("red")
+	case ColorGreen:
+		fmt.Println("green")
+	}
+}
+
+func command(name string) {
+	switch name {
+	case "up":
+		fmt.Println("starting")
+	case "down":
+		fmt.Println("stopping")
+	}
+}
+
+func fallback(name string) {
+	switch name {
+	case "up":
+		fmt.Println("starting")
+	case "down":
+		fmt.Println("stopping")
+	default:
+		fmt.Println("unknown")
+	}
+}
