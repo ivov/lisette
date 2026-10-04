@@ -18,7 +18,7 @@ stdlib = { package = "lisette-stdlib", version = "=0.12.3", path = "../stdlib" }
 deps = { package = "lisette-deps", version = "=0.12.3", path = "../deps" }
 serde = { version = "1", features = ["derive"] }
 bincode = "1"
-ecow = "0.2"
+ecow.workspace = true
 rustc-hash.workspace = true
 rayon.workspace = true
 
