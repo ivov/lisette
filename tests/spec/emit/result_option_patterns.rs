@@ -3126,7 +3126,7 @@ fn main() {
 }
 
 #[test]
-fn range_bound_over_a_mutated_slice_keeps_the_bound_temp() {
+fn range_bound_over_a_mutated_slice_is_read_once() {
     let input = r#"
 import "go:fmt"
 

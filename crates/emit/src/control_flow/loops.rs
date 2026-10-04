@@ -457,12 +457,18 @@ impl Planner<'_> {
             None => (GoExpression::literal("0".to_string()), false),
         };
         let checkpoint = prologue.len();
+        let counts_from_zero = !*inclusive && start_expression.as_literal() == Some("0");
         let end_expression = end.as_ref().map(|end| {
             self.capture_value_at_boundary(
                 &mut prologue,
                 end,
                 "bound",
-                CaptureBoundary::LoopLifetime,
+                // `for i := range n` reads `n` once.
+                if counts_from_zero {
+                    CaptureBoundary::SiblingSequence
+                } else {
+                    CaptureBoundary::LoopLifetime
+                },
             )
         });
         if prologue.len() > checkpoint
@@ -478,7 +484,6 @@ impl Planner<'_> {
             start_expression = GoExpression::name(var);
         }
 
-        let counts_from_zero = !*inclusive && start_expression.as_literal() == Some("0");
         let (header, lowered_body) = self.with_scope(|this| {
             let header = match end_expression {
                 Some(end_expression) if counts_from_zero => {

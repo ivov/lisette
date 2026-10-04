@@ -768,6 +768,42 @@ fn test() -> int {
 }
 
 #[test]
+fn for_loop_range_from_zero_reads_a_call_bound_in_the_header() {
+    let input = r#"
+struct Node { children: Slice<int> }
+
+impl Node {
+  fn child_count(self) -> int { self.children.length() }
+}
+
+fn from_zero(node: Node) -> int {
+  let mut sum = 0
+  for i in 0..node.child_count() {
+    sum += i
+  }
+  sum
+}
+
+fn from_one(node: Node) -> int {
+  let mut sum = 0
+  for i in 1..node.child_count() {
+    sum += i
+  }
+  sum
+}
+
+fn inclusive(node: Node) -> int {
+  let mut sum = 0
+  for i in 0..=node.child_count() {
+    sum += i
+  }
+  sum
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn for_loop_range_start_frozen_before_call_bound() {
     let input = r#"
 fn test() -> int {
@@ -910,7 +946,7 @@ fn main() {
 }
 
 #[test]
-fn for_loop_inline_range_end_mutation_captured() {
+fn for_loop_inline_range_end_mutation_is_read_once() {
     let input = r#"
 fn main() {
   let mut n = 3

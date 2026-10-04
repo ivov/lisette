@@ -18,8 +18,7 @@ package main
 func main() {
 	n := 3
 	iters := 0
-	bound := n
-	for i := range bound {
+	for i := range n {
 		iters++
 		n = 0
 		_ = i
