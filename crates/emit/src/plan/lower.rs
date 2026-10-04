@@ -116,6 +116,10 @@ impl Planner<'_> {
     ) -> (Vec<LoweredStatement>, bool) {
         self.mark_component_lets(rest, last);
         let mut statements: Vec<LoweredStatement> = Vec::with_capacity(rest.len() + 1);
+        let forwarded = rest
+            .split_last()
+            .and_then(|(check, rest)| Some((check, rest, self.forwarded_error_call(check, last)?)));
+        let rest = forwarded.map_or(rest, |(_, rest, _)| rest);
         for item in rest {
             let statement = self.lower_statement(item);
             let diverged = statement.blocks_fallthrough();
@@ -123,6 +127,17 @@ impl Planner<'_> {
             if diverged {
                 return (statements, true);
             }
+        }
+        if let Some((check, _, call)) = forwarded {
+            let (mut body, call) = self
+                .lower_call(call, None, ExpressionContext::value())
+                .into_parts();
+            body.push(plain_return(call));
+            statements.push(self.directed_at(
+                check,
+                LoweredStatement::Body(LoweredBlock { statements: body }),
+            ));
+            return (statements, true);
         }
         statements.extend(self.lower_return_tail(last));
         (statements, false)
