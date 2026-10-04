@@ -1,0 +1,81 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  struct Config { url: string }
+  
+  fn load() -> Result<(Config, string), string> {
+    Ok((Config { url: "u" }, "default"))
+  }
+  
+  fn find(name: string) -> Result<Option<int>, string> {
+    if name == "" { return Err("empty") }
+    Ok(Some(name.length()))
+  }
+  
+  fn source() -> Result<string, string> {
+    let (cfg, src) = load()?
+    Ok(cfg.url + src)
+  }
+  
+  fn found(name: string) -> Result<int, string> {
+    let Some(n) = find(name)? else { return Ok(0) }
+    Ok(n + 1)
+  }
+  
+  fn shadowed() -> Result<string, string> {
+    let check = "outer"
+    let (cfg, _) = load()?
+    Ok(cfg.url + check)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Config struct {
+	url string
+}
+
+func load() lisette.Result[lisette.Tuple2[Config, string], string] {
+	return lisette.MakeResultOk[lisette.Tuple2[Config, string], string](lisette.MakeTuple2[Config, string](Config{url: "u"}, "default"))
+}
+
+func find(name string) lisette.Result[lisette.Option[int], string] {
+	if name == "" {
+		return lisette.MakeResultErr[lisette.Option[int], string]("empty")
+	}
+	return lisette.MakeResultOk[lisette.Option[int], string](lisette.MakeOptionSome(len(name)))
+}
+
+func source() lisette.Result[string, string] {
+	check := load()
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[string, string](check.ErrVal)
+	}
+	cfg := check.OkVal.First
+	src := check.OkVal.Second
+	return lisette.MakeResultOk[string, string](cfg.url + src)
+}
+
+func found(name string) lisette.Result[int, string] {
+	check := find(name)
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check.ErrVal)
+	}
+	if check.OkVal.Tag != lisette.OptionSome {
+		return lisette.MakeResultOk[int, string](0)
+	}
+	n := check.OkVal.SomeVal
+	return lisette.MakeResultOk[int, string](n + 1)
+}
+
+func shadowed() lisette.Result[string, string] {
+	check := "outer"
+	check_1 := load()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[string, string](check_1.ErrVal)
+	}
+	cfg := check_1.OkVal.First
+	return lisette.MakeResultOk[string, string](cfg.url + check)
+}

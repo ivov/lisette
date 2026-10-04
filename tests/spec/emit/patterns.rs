@@ -2,6 +2,39 @@ use crate::assert_emit_snapshot;
 use crate::assert_emit_snapshot_with_go_typedefs;
 
 #[test]
+fn patterns_on_a_propagated_payload_read_it_in_place() {
+    let input = r#"
+struct Config { url: string }
+
+fn load() -> Result<(Config, string), string> {
+  Ok((Config { url: "u" }, "default"))
+}
+
+fn find(name: string) -> Result<Option<int>, string> {
+  if name == "" { return Err("empty") }
+  Ok(Some(name.length()))
+}
+
+fn source() -> Result<string, string> {
+  let (cfg, src) = load()?
+  Ok(cfg.url + src)
+}
+
+fn found(name: string) -> Result<int, string> {
+  let Some(n) = find(name)? else { return Ok(0) }
+  Ok(n + 1)
+}
+
+fn shadowed() -> Result<string, string> {
+  let check = "outer"
+  let (cfg, _) = load()?
+  Ok(cfg.url + check)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn or_pattern_let_else_failure_sees_outer_binding() {
     let input = r#"
 enum E { A(int), B(int), C }
