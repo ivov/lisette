@@ -522,6 +522,30 @@ fn make_user() -> Result<User, string> {
 }
 
 #[test]
+fn propagate_on_values_in_struct_literal_fields_reads_payloads_in_place() {
+    let input = r#"
+struct Pair {
+  a: int,
+  b: int,
+}
+
+fn from_params(x: Result<int, string>, y: Result<int, string>) -> Result<Pair, string> {
+  Ok(Pair { a: x?, b: y? })
+}
+
+fn from_rebound_local() -> Result<Pair, string> {
+  let mut r: Result<int, string> = Ok(1)
+  let mut next = || -> Result<int, string> {
+    r = Ok(2)
+    Ok(3)
+  }
+  Ok(Pair { a: r?, b: next()? })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn propagate_in_struct_literal_spread_base() {
     let input = r#"
 struct User {
