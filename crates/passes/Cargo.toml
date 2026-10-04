@@ -15,7 +15,7 @@ doctest = false
 semantics = { package = "lisette-semantics", version = "=0.12.3", path = "../semantics" }
 syntax = { package = "lisette-syntax", version = "=0.12.3", path = "../syntax" }
 diagnostics = { package = "lisette-diagnostics", version = "=0.12.3", path = "../diagnostics" }
-ecow = "0.2"
+ecow.workspace = true
 rustc-hash.workspace = true
 rayon.workspace = true
 
