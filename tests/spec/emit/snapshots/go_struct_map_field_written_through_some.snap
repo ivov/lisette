@@ -16,10 +16,7 @@ description: |
 ---
 package main
 
-import (
-	"encoding/pem"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "encoding/pem"
 
 func test() string {
 	headers := make(map[string]string)
@@ -28,10 +25,9 @@ func test() string {
 		Type:    "X",
 		Headers: headers,
 	}
-	raw := b.Headers
-	option := lisette.OptionFromNilable[map[string]string](raw, raw == nil)
-	if option.Tag == lisette.OptionSome {
-		return option.SomeVal["key"]
+	if h := b.Headers; h != nil {
+		return h["key"]
+	} else {
+		return ""
 	}
-	return ""
 }

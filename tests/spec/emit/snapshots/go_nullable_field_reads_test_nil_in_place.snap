@@ -1,0 +1,62 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:net/http"
+  import "go:net/url"
+  
+  fn has_user(u: url.URL) -> bool {
+    u.User.is_some()
+  }
+  
+  fn path_of(r: Ref<http.Request>) -> string {
+    let Some(u) = r.URL else { return "" }
+    u.Path
+  }
+  
+  fn set_auth(req: mut Ref<http.Request>, auth: string) {
+    if let Some(h) = req.Header {
+      let mut h = h
+      h.Set("Authorization", auth)
+    }
+  }
+  
+  fn close_body(resp: Ref<http.Response>) {
+    if let Some(body) = resp.Body {
+      let _ = body.Close()
+    }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"net/http"
+	"net/url"
+)
+
+func hasUser(u url.URL) bool {
+	ret := u.User
+	return ret != nil
+}
+
+func pathOf(r *http.Request) string {
+	u := r.URL
+	if u == nil {
+		return ""
+	}
+	return u.Path
+}
+
+func setAuth(req *http.Request, auth string) {
+	if h := req.Header; h != nil {
+		h := h
+		h.Set("Authorization", auth)
+	}
+}
+
+func closeBody(resp *http.Response) {
+	if body := resp.Body; !lisette.IsNilInterface(body) {
+		body.Close()
+	}
+}

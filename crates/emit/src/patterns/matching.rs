@@ -68,9 +68,12 @@ impl OptionFusePlan<'_> {
             Self::Bound(components) => planner.bind_component_pair(components, slot),
             Self::CommaOk { subject, source } => planner.bind_comma_ok_pair(subject, source, slot),
             Self::Nullable { subject, nil_guard } => {
-                let (mut statements, call) = planner
-                    .lower_call(subject, None, ExpressionContext::value())
-                    .into_parts();
+                let value = if matches!(subject.unwrap_parens(), Expression::DotAccess { .. }) {
+                    planner.plan_raw_nullable_field(subject)
+                } else {
+                    planner.lower_call(subject, None, ExpressionContext::value())
+                };
+                let (mut statements, call) = value.into_parts();
                 let (value, opens_if) = match slot {
                     CommaOkValueSlot::Named(name) => (name, false),
                     CommaOkValueSlot::Arm(name) => (name, true),
@@ -574,6 +577,10 @@ impl Planner<'_> {
             if self.find_loop_fuses(subject, &call) {
                 return Some(OptionFusePlan::Found { subject, call });
             }
+        }
+
+        if let Some(nil_guard) = self.nullable_field_guard(subject) {
+            return Some(OptionFusePlan::Nullable { subject, nil_guard });
         }
 
         let lowered = self.lowered_call(subject)?;

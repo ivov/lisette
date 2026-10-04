@@ -7,8 +7,9 @@ use syntax::program::{
 use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::Planner;
-use crate::abi::coercion::CoercionPlan;
+use crate::abi::coercion::{CoercionPlan, LayoutBridge};
 use crate::abi::layout::SlotOrigin;
+use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::go_name;
 use crate::plan::bodies::LoweredStatement;
@@ -29,6 +30,20 @@ impl Planner<'_> {
         &mut self,
         dot_access: &Expression,
         ctx: ExpressionContext<'_>,
+    ) -> ValuePlan {
+        self.plan_dot_access_with(dot_access, ctx, true)
+    }
+
+    /// Read a nullable Go field as its raw Go value, without the `Option` wrap.
+    pub(crate) fn plan_raw_nullable_field(&mut self, dot_access: &Expression) -> ValuePlan {
+        self.plan_dot_access_with(dot_access, ExpressionContext::value(), false)
+    }
+
+    fn plan_dot_access_with(
+        &mut self,
+        dot_access: &Expression,
+        ctx: ExpressionContext<'_>,
+        wrap_nullable: bool,
     ) -> ValuePlan {
         let Expression::DotAccess {
             expression,
@@ -91,17 +106,19 @@ impl Planner<'_> {
             .try_resolve_cross_package_const(&expression_ty, member)
             .unwrap_or_else(|| go_field_name(&expression_ty, member, is_exported, is_embedded));
 
-        if let Some(wrapped) = self.plan_nullable_field_access(
-            &mut setup,
-            NullableFieldAccess {
-                base: &base,
-                member,
-                field: &field,
-                expression_ty: &expression_ty,
-                declaring_type: resolution.declaring_type(),
-                result_ty,
-            },
-        ) {
+        if wrap_nullable
+            && let Some(wrapped) = self.plan_nullable_field_access(
+                &mut setup,
+                NullableFieldAccess {
+                    base: &base,
+                    member,
+                    field: &field,
+                    expression_ty: &expression_ty,
+                    declaring_type: resolution.declaring_type(),
+                    result_ty,
+                },
+            )
+        {
             return ValuePlan::computed(setup, wrapped, effect);
         }
 
@@ -246,6 +263,43 @@ impl Planner<'_> {
                 !self.has_field(expression_ty, member) && self.method_needs_export(member)
             }
         }
+    }
+
+    pub(crate) fn nullable_field_guard(&self, subject: &Expression) -> Option<NilGuard> {
+        let Expression::DotAccess {
+            expression,
+            member,
+            ty: result_ty,
+            resolution,
+            ..
+        } = subject.unwrap_parens()
+        else {
+            return None;
+        };
+        let expression_ty = expression.get_type();
+        if expression_ty.as_import_namespace().is_some() {
+            return None;
+        }
+        let source_layout = self.field_slot_layout(
+            &expression_ty,
+            resolution.declaring_type(),
+            member,
+            result_ty,
+        )?;
+        let target_layout = self.value_layout(result_ty, SlotOrigin::Lisette);
+        let CoercionPlan::Layout(LayoutBridge::WrapNullableOption { payload, .. }) =
+            CoercionPlan::bridge(self, &source_layout, &target_layout)
+        else {
+            return None;
+        };
+        if !payload.is_identity() {
+            return None;
+        }
+        Some(if self.is_interface_option(result_ty) {
+            NilGuard::Interface
+        } else {
+            NilGuard::Pointer
+        })
     }
 
     /// Accessing a nullable field on a Go-imported type: capture the raw
