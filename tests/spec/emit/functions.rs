@@ -2093,6 +2093,31 @@ fn test(s: Slice<int>, more: Slice<int>) -> Slice<int> {
 }
 
 #[test]
+fn spread_range_slice_into_native_append_needs_no_capacity_cap() {
+    let input = r#"
+fn total(xs: VarArgs<int>) -> int {
+  xs.fold(0, |acc, x| acc + x)
+}
+
+fn insert_at(out: Slice<int>, pos: int, x: int) -> Slice<int> {
+  let mut next: Slice<int> = []
+  next = next.append(out[..pos]...)
+  next = next.append(x)
+  next.append(out[pos..]...)
+}
+
+fn middle(xs: Slice<int>, ys: Slice<int>) -> Slice<int> {
+  xs.append(ys[1..=2]...)
+}
+
+fn sum_tail(ys: Slice<int>) -> int {
+  total(ys[1..]...)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn spread_arg_into_native_slice_append_assignment() {
     let input = r#"
 fn test(s: Slice<int>, more: Slice<int>) -> Slice<int> {

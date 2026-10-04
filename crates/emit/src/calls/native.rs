@@ -926,9 +926,13 @@ impl Planner<'_> {
             }
             (NativeMethodForm::Dot, _) => unreachable!("dot form requires dot access"),
         };
-        let spread_stage = ctx
-            .spread
-            .map(|spread| self.plan_operand(spread, ExpressionContext::value()));
+        let spread_stage = ctx.spread.map(|spread| {
+            if matches!(ctx.native_type, NativeGoType::Slice) && ctx.method == "append" {
+                self.plan_copied_spread(spread)
+            } else {
+                self.plan_operand(spread, ExpressionContext::value())
+            }
+        });
         if matches!(form, NativeMethodForm::Dot) && receiver.get_type().is_ref() {
             let receiver = stages.remove(0).unary("*");
             stages.insert(0, receiver);
