@@ -67,8 +67,7 @@ func parameter(getItems_1 int) int {
 	tmp := lisette.MakeTuple2[int, int](getItems_1, 2)
 	first := tmp.First
 	rest := tmp.Second
-	left := first + rest
-	return left + len(getItems())
+	return first + rest + len(getItems())
 }
 
 func armInOtherArm() {

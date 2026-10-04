@@ -463,7 +463,7 @@ impl Planner<'_> {
             .collect();
         for ((stage, tested), element) in stages.iter_mut().zip(&tested).zip(elements) {
             let rereadable = is_inert_value(element, stage.expression())
-                || stage.facts().stability.is_fixed()
+                || stage.rests_in_fixed_name()
                 || self.plan_rests_in_stable_name(stage);
             if *tested && !rereadable {
                 self.pin_staged(stage, "arg");

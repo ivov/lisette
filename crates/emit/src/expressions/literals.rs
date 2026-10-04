@@ -110,6 +110,7 @@ impl Planner<'_> {
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "v");
         let effect = sequenced.effect;
+        let stability = sequenced.stability;
         let mut setup = sequenced.setup;
 
         let mut wrapped = Vec::with_capacity(sequenced.values.len());
@@ -131,10 +132,11 @@ impl Planner<'_> {
         }
 
         let layout = CompositeLayout::for_elements(wrapped.len(), widest);
-        ValuePlan::computed(
+        ValuePlan::built_from(
             setup,
             GoExpression::composite(Some(go_type), wrapped, layout),
             effect,
+            stability,
         )
     }
 
@@ -159,6 +161,7 @@ impl Planner<'_> {
         }
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "fmtarg");
         let effect = sequenced.effect;
+        let stability = sequenced.stability;
         let setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
 
@@ -187,7 +190,7 @@ impl Planner<'_> {
             let first = pieces.next().expect("an interpolated f-string has a piece");
             let concatenation =
                 pieces.fold(first, |left, right| GoExpression::binary(left, "+", right));
-            return ValuePlan::computed(setup, concatenation, effect);
+            return ValuePlan::built_from(setup, concatenation, effect, stability);
         }
 
         let (format_string, args) = self.sprintf_pieces(parts, values, has_interpolation);

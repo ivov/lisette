@@ -121,9 +121,10 @@ impl Planner<'_> {
         ];
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "left");
         let effect = sequenced.effect;
+        let stability = sequenced.stability;
         let setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
-        ValuePlan::computed(
+        ValuePlan::built_from(
             setup,
             GoExpression::binary(
                 values.next().expect("binary expression has a left operand"),
@@ -133,6 +134,7 @@ impl Planner<'_> {
                     .expect("binary expression has a right operand"),
             ),
             effect,
+            stability,
         )
     }
 

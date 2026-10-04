@@ -472,6 +472,20 @@ impl Stability {
     pub(crate) fn is_stable_across_calls(self) -> bool {
         matches!(self, Stability::StableAcrossCalls)
     }
+
+    pub(crate) fn weaker(self, other: Self) -> Self {
+        let rank = |stability: Self| match stability {
+            Stability::Literal => 0,
+            Stability::Fixed => 1,
+            Stability::StableAcrossCalls => 2,
+            Stability::Observable => 3,
+        };
+        if rank(other) > rank(self) {
+            other
+        } else {
+            self
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -506,11 +520,11 @@ pub(crate) enum CaptureBoundary {
 }
 
 impl CaptureBoundary {
-    pub(crate) fn requires_value_capture(self, stability: Stability) -> bool {
+    pub(crate) fn delays_reads(self) -> bool {
         !matches!(
             self,
             CaptureBoundary::SiblingSequence | CaptureBoundary::DirectDelayedCall
-        ) && stability.is_observable()
+        )
     }
 }
 
@@ -554,6 +568,7 @@ pub(crate) struct SequencedValues {
     pub setup: Vec<LoweredStatement>,
     pub values: Vec<GoExpression>,
     pub effect: EvaluationEffect,
+    pub stability: Stability,
 }
 
 impl ValuePlan {
@@ -690,6 +705,15 @@ impl ValuePlan {
         Self::from_facts(setup, expression, EvaluationFacts::call(effect))
     }
 
+    pub(crate) fn built_from(
+        setup: Vec<LoweredStatement>,
+        expression: GoExpression,
+        effect: EvaluationEffect,
+        stability: Stability,
+    ) -> Self {
+        Self::from_facts(setup, expression, EvaluationFacts::new(stability, effect))
+    }
+
     pub(crate) fn observable_call(
         setup: Vec<LoweredStatement>,
         expression: GoExpression,
@@ -814,6 +838,11 @@ impl ValuePlan {
             }
         });
         own
+    }
+
+    /// Fixed and unable to panic, so it may run later.
+    pub(crate) fn can_delay(&self) -> bool {
+        self.evaluation.stability.is_fixed() && !self.effects().panics_or_blocks()
     }
 
     pub(crate) fn rests_in_fixed_name(&self) -> bool {

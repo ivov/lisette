@@ -103,7 +103,7 @@ impl Planner<'_> {
         mut value: ValuePlan,
         prefix: &str,
     ) -> ValuePlan {
-        if !value.facts().stability.is_fixed()
+        if !value.can_delay()
             && value.expression().constant_kind().is_none()
             && !self.plan_rests_in_stable_name(&value)
         {
@@ -124,7 +124,7 @@ impl Planner<'_> {
         boundary: CaptureBoundary,
     ) -> GoExpression {
         let plan = self.lower_composite_value(expression, ExpressionContext::value());
-        let requires_capture = boundary.requires_value_capture(plan.facts().stability);
+        let requires_capture = boundary.delays_reads() && !plan.can_delay();
         let (value_setup, value) = plan.into_parts();
         setup.extend(value_setup);
         if requires_capture {
@@ -402,7 +402,7 @@ impl Planner<'_> {
         let effect = stages.iter().fold(EvaluationEffect::Pure, |effect, stage| {
             effect.combine(stage.facts().effect)
         });
-        let eager = boundary.requires_value_capture(Stability::Observable);
+        let eager = boundary.delays_reads();
         let mut later = LaterStages::default();
         let stages: Vec<_> = stages
             .into_iter()
@@ -415,13 +415,17 @@ impl Planner<'_> {
 
         let mut setup = Vec::new();
         let mut results = Vec::with_capacity(stages.len());
+        let mut stability = Stability::Literal;
         for (stage, pin) in stages.into_iter().rev() {
+            let can_delay = stage.can_delay();
             let (stage_setup, expression, evaluation) = stage.into_parts_with_facts();
             setup.extend(stage_setup);
-            if pin || (eager && !evaluation.stability.is_fixed()) {
+            if pin || (eager && !can_delay) {
                 let tmp = self.hoist_tmp_value_statement(&mut setup, prefix, expression);
+                stability = stability.weaker(Stability::Fixed);
                 results.push(GoExpression::name(tmp));
             } else {
+                stability = stability.weaker(evaluation.stability);
                 results.push(expression);
             }
         }
@@ -431,6 +435,7 @@ impl Planner<'_> {
             setup,
             values: results,
             effect,
+            stability,
         }
     }
 

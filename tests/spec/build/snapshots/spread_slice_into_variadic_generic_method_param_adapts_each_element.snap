@@ -21,7 +21,6 @@ func Holder_Resolve[R any, E any](_ Holder, default_ R, _ ...func(int) lisette.R
 
 func main() {
 	fns := []func(int) (int, Face){Resultant}
-	arg := Holder{}
 	src := fns
 	adapted := make([]func(int) lisette.Result[int, Face], len(src))
 	for i, cb := range src {
@@ -35,6 +34,6 @@ func main() {
 			}
 		}
 	}
-	rez := Holder_Resolve[int, Face](arg, 0, adapted...)
+	rez := Holder_Resolve[int, Face](Holder{}, 0, adapted...)
 	_ = rez
 }

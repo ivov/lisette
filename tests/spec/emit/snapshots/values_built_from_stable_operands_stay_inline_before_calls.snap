@@ -1,0 +1,114 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:strconv"
+  
+  struct Command {
+    name: string,
+    spec: Slice<int>,
+    run: fn(int) -> int,
+  }
+  
+  fn hex(n: int) -> string { strconv.FormatInt(n as int64, 16) }
+  fn with_team(xs: Slice<int>) -> Slice<int> { xs }
+  fn run_a(n: int) -> int { n }
+  fn section(s: string) -> string { s + "!" }
+  
+  fn color(r: int, g: int, b: int) -> string {
+    "#" + hex(r) + hex(g) + hex(b)
+  }
+  
+  fn page(usage: string) -> string {
+    f"Usage: {usage} end" + section(usage)
+  }
+  
+  fn commands() -> Slice<Command> {
+    [
+      Command { name: "a", spec: with_team([]), run: run_a },
+      Command { name: "b", spec: with_team([1]), run: run_a },
+    ]
+  }
+  
+  fn rebound(start: int) -> int {
+    let mut x = start
+    let mut bump = || -> int {
+      x = 10
+      1
+    }
+    x + 1 + bump()
+  }
+  
+  fn quotient(a: int, b: int) -> int {
+    let mut total = 0
+    defer { total = a / b + run_a(1) }
+    total
+  }
+---
+package main
+
+import "strconv"
+
+type Command struct {
+	name string
+	spec []int
+	run  func(int) int
+}
+
+func hex(n int) string {
+	return strconv.FormatInt(int64(n), 16)
+}
+
+func withTeam(xs []int) []int {
+	return xs
+}
+
+func runA(n int) int {
+	return n
+}
+
+func section(s string) string {
+	return s + "!"
+}
+
+func color(r, g, b int) string {
+	return "#" + hex(r) + hex(g) + hex(b)
+}
+
+func page(usage string) string {
+	return "Usage: " + usage + " end" + section(usage)
+}
+
+func commands() []Command {
+	return []Command{
+		{
+			name: "a",
+			spec: withTeam([]int{}),
+			run:  runA,
+		},
+		{
+			name: "b",
+			spec: withTeam([]int{1}),
+			run:  runA,
+		},
+	}
+}
+
+func rebound(start int) int {
+	x := start
+	bump := func() int {
+		x = 10
+		return 1
+	}
+	left := x + 1
+	return left + bump()
+}
+
+func quotient(a, b int) int {
+	total := 0
+	defer func() {
+		left := a / b
+		total = left + runA(1)
+	}()
+	return total
+}

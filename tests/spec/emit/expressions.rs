@@ -5247,6 +5247,55 @@ fn run() -> int {
 }
 
 #[test]
+fn values_built_from_stable_operands_stay_inline_before_calls() {
+    let input = r##"
+import "go:strconv"
+
+struct Command {
+  name: string,
+  spec: Slice<int>,
+  run: fn(int) -> int,
+}
+
+fn hex(n: int) -> string { strconv.FormatInt(n as int64, 16) }
+fn with_team(xs: Slice<int>) -> Slice<int> { xs }
+fn run_a(n: int) -> int { n }
+fn section(s: string) -> string { s + "!" }
+
+fn color(r: int, g: int, b: int) -> string {
+  "#" + hex(r) + hex(g) + hex(b)
+}
+
+fn page(usage: string) -> string {
+  f"Usage: {usage} end" + section(usage)
+}
+
+fn commands() -> Slice<Command> {
+  [
+    Command { name: "a", spec: with_team([]), run: run_a },
+    Command { name: "b", spec: with_team([1]), run: run_a },
+  ]
+}
+
+fn rebound(start: int) -> int {
+  let mut x = start
+  let mut bump = || -> int {
+    x = 10
+    1
+  }
+  x + 1 + bump()
+}
+
+fn quotient(a: int, b: int) -> int {
+  let mut total = 0
+  defer { total = a / b + run_a(1) }
+  total
+}
+"##;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn pure_constructor_with_mutable_read_pins_when_later_operand_pins() {
     let input = r#"
 fn run() -> int {
