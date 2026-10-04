@@ -1,0 +1,19 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "strings"
+
+func find(haystack, needle string) int {
+	if i := strings.Index(haystack, needle); i != -1 {
+		return i
+	} else {
+		return -2
+	}
+}
+
+func main() {
+	find("hello", "lo")
+}

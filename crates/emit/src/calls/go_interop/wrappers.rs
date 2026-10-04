@@ -42,6 +42,8 @@ pub(crate) enum NilGuard {
     Pointer,
     /// Non-error interface ok-type: `lisette.IsNilInterface(v)`.
     Interface,
+    /// Sentinel-valued Go result, such as `strings.Index`: `v == -1`.
+    Sentinel(i64),
 }
 
 impl NilGuard {
@@ -49,6 +51,9 @@ impl NilGuard {
         match self {
             NilGuard::Pointer => is_nil(value),
             NilGuard::Interface => is_nil_interface(value),
+            NilGuard::Sentinel(sentinel) => {
+                GoExpression::binary(value, "==", GoExpression::literal(sentinel.to_string()))
+            }
         }
     }
 
@@ -56,6 +61,9 @@ impl NilGuard {
         match self {
             NilGuard::Pointer => non_nil(value),
             NilGuard::Interface => GoExpression::unary("!", is_nil_interface(value)),
+            NilGuard::Sentinel(sentinel) => {
+                GoExpression::binary(value, "!=", GoExpression::literal(sentinel.to_string()))
+            }
         }
     }
 }
