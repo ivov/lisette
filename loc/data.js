@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791140413829,
+  "lastUpdate": 1791140973482,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -43256,6 +43256,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 39776,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28534,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19398,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15309,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9029,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7381,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2944,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6e12ff6473bcc4ffb4a22bfb21937bb5e1cfe35e",
+          "message": "feat: idiomatic Go for empty wildcard arms in a switch (#1525)",
+          "timestamp": "2026-10-04T21:09:06+02:00",
+          "tree_id": "ea6a134d9cac280e56436e145080cd7f5a84bba0",
+          "url": "https://github.com/ivov/lisette/commit/6e12ff6473bcc4ffb4a22bfb21937bb5e1cfe35e"
+        },
+        "date": 1791140971409,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 149498,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39780,
             "unit": "lines"
           },
           {
