@@ -44,8 +44,5 @@ type Paint struct {
 }
 
 func blank() Paint {
-	return Paint{
-		name:  "a",
-		shade: Colour{},
-	}
+	return Paint{name: "a"}
 }
