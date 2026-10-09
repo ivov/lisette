@@ -1,191 +1,68 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::identifiers::method_expression;
-use crate::names::generics::type_argument_mapping;
 use crate::names::go_name;
 use crate::plan::values::GoExpression;
 use crate::types::go_type::GoType;
 use syntax::ast::Expression;
-use syntax::program::DefinitionBody;
-use syntax::types::{Type, unqualified_name};
+use syntax::program::DotAccessResolution;
+use syntax::types::Type;
 
 impl Planner<'_> {
-    /// ADT enum variant dot access (constructor or unit variant).
+    /// Constructor reference or unit variant call, e.g. `shapes.ShapeKind.CircleKind`.
     pub(crate) fn emit_enum_variant_dot(
         &mut self,
-        member: &str,
+        definition: &str,
         result_ty: &Type,
     ) -> Option<GoExpression> {
-        if let Some(s) = self.emit_enum_variant_constructor(member, result_ty) {
-            return Some(s);
+        let make_fn_name = self.facts.variant_make_function(definition)?;
+        let enum_package = self.facts.package_for_qualified_name(definition)?;
+        let make_fn = if make_fn_name.starts_with(go_name::PRELUDE_PREFIX) {
+            go_name::resolve(&make_fn_name).into_expression()
+        } else if self.facts.is_current_package(enum_package) {
+            GoExpression::name(make_fn_name)
+        } else {
+            GoExpression::qualified(self.package_use_for_package(enum_package), make_fn_name)
+        };
+
+        match result_ty {
+            Type::Function(f) => {
+                let Type::Nominal {
+                    params: ret_params, ..
+                } = f.return_type.as_ref()
+                else {
+                    return None;
+                };
+                let type_args = if ret_params.len() > f.params.len() {
+                    self.format_type_args(ret_params)
+                } else {
+                    String::new()
+                };
+                Some(GoExpression::instantiation(make_fn, type_args))
+            }
+            Type::Nominal { params, .. } => {
+                let type_args = self.format_type_args(params);
+                Some(GoExpression::pure_call(
+                    GoExpression::instantiation(make_fn, type_args),
+                    Vec::new(),
+                ))
+            }
+            _ => None,
         }
-        self.emit_unit_variant_constructor(member, result_ty)
     }
 
-    /// Static method dot access (cross-package, alias, or instance-as-value).
     pub(crate) fn emit_static_method_dot(
         &mut self,
-        expression: &Expression,
-        member: &str,
-        result_ty: &Type,
+        definition: &str,
+        resolution: &DotAccessResolution,
         ctx: ExpressionContext<'_>,
-    ) -> Option<GoExpression> {
-        if let Some(s) = self.emit_cross_package_static_method(expression, member, result_ty, ctx) {
-            return Some(s);
+    ) -> GoExpression {
+        let function = self.definition_reference(definition);
+        if ctx.is_callee() {
+            return function;
         }
-        if let Some(s) = self.emit_alias_static_method(expression, member, result_ty, ctx) {
-            return Some(s);
-        }
-        None
-    }
-
-    /// Enum variant constructor reference (e.g.
-    /// `shapes.ShapeKind.CircleKind` → `shapes.makeShapeKindCircleKind`).
-    fn emit_enum_variant_constructor(
-        &mut self,
-        variant_name: &str,
-        result_ty: &Type,
-    ) -> Option<GoExpression> {
-        let Type::Function(f) = result_ty else {
-            return None;
-        };
-        let fn_params = &f.params;
-
-        let Type::Nominal {
-            id: enum_id,
-            params: ret_params,
-            ..
-        } = f.return_type.as_ref()
-        else {
-            return None;
-        };
-
-        let make_fn_name = self.facts.make_function_name(enum_id, variant_name)?;
-
-        let enum_package = self.facts.package_for_qualified_name(enum_id)?;
-        let needs_qualifier = !self.facts.is_current_package(enum_package);
-
-        let needs_type_args = ret_params.len() > fn_params.len();
-        let type_args = if needs_type_args {
-            self.format_type_args(ret_params)
-        } else {
-            String::new()
-        };
-
-        let make_fn = if needs_qualifier {
-            if make_fn_name.starts_with(go_name::PRELUDE_PREFIX) {
-                go_name::resolve(&make_fn_name).into_expression()
-            } else {
-                GoExpression::qualified(
-                    self.package_use_for_package(enum_package),
-                    make_fn_name.to_string(),
-                )
-            }
-        } else {
-            GoExpression::name(make_fn_name.to_string())
-        };
-        Some(GoExpression::instantiation(make_fn, type_args))
-    }
-
-    fn emit_unit_variant_constructor(
-        &mut self,
-        variant_name: &str,
-        result_ty: &Type,
-    ) -> Option<GoExpression> {
-        let Type::Nominal {
-            id: enum_id,
-            params,
-            ..
-        } = result_ty
-        else {
-            return None;
-        };
-
-        let enum_package = self.facts.package_for_qualified_name(enum_id)?;
-        let is_prelude = enum_package == go_name::PRELUDE_PACKAGE;
-        let is_cross_package = !self.facts.is_current_package(enum_package) && !is_prelude;
-
-        let definition = self.facts.definition(enum_id.as_str())?;
-        let DefinitionBody::Enum { variants, .. } = &definition.body else {
-            return None;
-        };
-
-        let variant = variants.iter().find(|v| v.name == variant_name)?;
-        if !variant.fields.is_empty() {
-            return None;
-        }
-
-        let make_fn = self.facts.make_function_name(enum_id, variant_name)?;
-        let type_args = self.format_type_args(params);
-
-        let callee = if is_prelude {
-            go_name::resolve(&make_fn).into_expression()
-        } else if is_cross_package {
-            GoExpression::qualified(
-                self.package_use_for_package(enum_package),
-                make_fn.to_string(),
-            )
-        } else {
-            GoExpression::name(make_fn.to_string())
-        };
-        Some(GoExpression::pure_call(
-            GoExpression::instantiation(callee, type_args),
-            Vec::new(),
-        ))
-    }
-
-    /// Handles `Alias.new(1)` where `type Alias = Box` → emit as `Box_new(1)`.
-    /// The DotAccess is on a type alias identifier whose underlying type has the method.
-    fn emit_alias_static_method(
-        &mut self,
-        expression: &Expression,
-        member: &str,
-        result_ty: &Type,
-        ctx: ExpressionContext<'_>,
-    ) -> Option<GoExpression> {
-        let func_ty = result_ty.unwrap_forall();
-        if !matches!(func_ty, Type::Function(_)) {
-            return None;
-        }
-
-        let Expression::Identifier { value, .. } = expression else {
-            return None;
-        };
-
-        let real_type = self.resolve_alias_type_name(value)?;
-
-        let resolved_name = format!("{}.{}", real_type, member);
-
-        let capitalized = self.capitalize_static_method_if_public(&resolved_name);
-        let function = self.resolve_go_name(&capitalized, None, false);
-        let type_args = if !ctx.is_callee() {
-            self.format_alias_static_method_type_args(&expression.get_type(), member, result_ty)
-                .unwrap_or_default()
-        } else {
-            String::new()
-        };
-        Some(GoExpression::instantiation(function, type_args))
-    }
-
-    fn format_alias_static_method_type_args(
-        &mut self,
-        owner_ty: &Type,
-        member: &str,
-        result_ty: &Type,
-    ) -> Option<String> {
-        let Type::Nominal { id, params, .. } = self.facts.peel_alias(owner_ty) else {
-            return None;
-        };
-        let qualified_method = format!("{}.{}", id, member);
-        let definition_ty = &self.facts.definition(&qualified_method)?.ty;
-        let Type::Forall { vars, .. } = definition_ty else {
-            return None;
-        };
-        let mut mapping = type_argument_mapping(definition_ty, result_ty, None, None)?;
-        for (var, argument) in vars.iter().zip(params) {
-            mapping.entry(var.to_string()).or_insert(argument);
-        }
-        self.format_generic_instantiation(definition_ty, &mapping)
+        let type_args = self.format_value_type_args(Some(definition), resolution.instantiation());
+        GoExpression::instantiation(function, type_args.unwrap_or_default())
     }
 
     /// Instance method used as a value (e.g. `lib.Point.area` callback →
@@ -268,85 +145,5 @@ impl Planner<'_> {
         } else {
             self.format_type_args(&receiver_params)
         }
-    }
-
-    /// Cross-package static method access (`shapes.Point.new` →
-    /// `shapes.Point_new`).
-    fn emit_cross_package_static_method(
-        &mut self,
-        expression: &Expression,
-        member: &str,
-        result_ty: &Type,
-        ctx: ExpressionContext<'_>,
-    ) -> Option<GoExpression> {
-        if !matches!(result_ty.unwrap_forall(), Type::Function(_)) {
-            return None;
-        }
-
-        let Expression::DotAccess {
-            expression: inner_expression,
-            member: type_name,
-            ..
-        } = expression
-        else {
-            return None;
-        };
-
-        let inner_ty = inner_expression.get_type();
-
-        let package_name = if let Some(synthetic_package) = inner_ty.as_import_namespace() {
-            synthetic_package.to_string()
-        } else if matches!(inner_ty, Type::Nominal { .. }) {
-            if let Expression::Identifier { value, .. } = inner_expression.as_ref() {
-                value.to_string()
-            } else {
-                return None;
-            }
-        } else {
-            return None;
-        };
-        let package_name = package_name.as_str();
-
-        let qualified_type = format!("{}.{}", package_name, type_name);
-        let definition = self.facts.definition(qualified_type.as_str())?;
-
-        let is_go_type = go_name::is_go_import(package_name);
-        if !is_go_type
-            && !matches!(
-                definition.body,
-                DefinitionBody::Struct { .. }
-                    | DefinitionBody::Enum { .. }
-                    | DefinitionBody::TypeAlias { .. }
-            )
-        {
-            return None;
-        }
-
-        let (qualified_type, _type_name) =
-            if matches!(definition.body, DefinitionBody::TypeAlias { .. }) {
-                let id = self.peel_alias_id(&qualified_type);
-                let resolved_name = unqualified_name(&id).to_string();
-                (id, resolved_name)
-            } else {
-                (qualified_type, type_name.to_string())
-            };
-
-        let qualified_method = format!("{}.{}", qualified_type, member);
-
-        let is_public = self
-            .facts
-            .method(&qualified_type, member)
-            .is_some_and(|method| method.visibility.is_public())
-            || self.method_needs_export(member);
-        let qualified_name = self.qualify_method_call(&qualified_type, member, is_public);
-
-        let type_args = if !ctx.is_callee() {
-            self.format_cross_package_type_args(&qualified_method, result_ty)
-                .unwrap_or_default()
-        } else {
-            String::new()
-        };
-
-        Some(GoExpression::instantiation(qualified_name, type_args))
     }
 }

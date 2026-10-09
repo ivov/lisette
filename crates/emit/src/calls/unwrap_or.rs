@@ -1,13 +1,15 @@
 use crate::Planner;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::context::expression::ExpressionContext;
-use crate::patterns::matching::{OptionArms, OptionFusePlan, ResultFusePlan};
+use crate::patterns::matching::{
+    FusedName, OptionArms, OptionFusePlan, ResultFusePlan, field_binding,
+};
 use crate::plan::bodies::{
-    AssignForm, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, define,
+    AssignForm, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, define,
 };
 use crate::plan::placement::collapse_declared_temp;
 use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
-use syntax::ast::{Expression, Literal, Pattern, Span};
+use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
 
 /// `call.unwrap_or(default)`, `call.map_or(default, |v| ..)`, or `call.map(|v| ..).unwrap_or(default)`.
@@ -23,8 +25,7 @@ enum FusedCall<'a> {
 }
 
 pub(crate) struct MapLambda<'a> {
-    pub(crate) param: Option<&'a str>,
-    pub(crate) param_span: Option<Span>,
+    pub(crate) param: Option<FusedName<'a>>,
     pub(crate) body: &'a Expression,
 }
 
@@ -74,25 +75,13 @@ pub(crate) fn map_lambda(function: &Expression) -> Option<MapLambda<'_>> {
     };
     let param = match params.as_slice() {
         [] => {
-            return (!escapes_lambda(body)).then_some(MapLambda {
-                param: None,
-                param_span: None,
-                body,
-            });
+            return (!escapes_lambda(body)).then_some(MapLambda { param: None, body });
         }
         [param] => param,
         _ => return None,
     };
-    let (param, param_span) = match &param.pattern {
-        Pattern::Identifier { identifier, span } => (Some(identifier.as_str()), Some(*span)),
-        Pattern::WildCard { .. } => (None, None),
-        _ => return None,
-    };
-    (!escapes_lambda(body)).then_some(MapLambda {
-        param,
-        param_span,
-        body,
-    })
+    let param = field_binding(&param.pattern)?;
+    (!escapes_lambda(body)).then_some(MapLambda { param, body })
 }
 
 impl Planner<'_> {
@@ -177,7 +166,7 @@ impl Planner<'_> {
         &mut self,
         call: &DefaultedCall<'_>,
         ty: &Type,
-    ) -> Option<(Vec<LoweredStatement>, GoExpression)> {
+    ) -> Option<(Vec<Statement>, GoExpression)> {
         let FusedCall::Option(OptionFusePlan::CommaOk { subject, source }) = &call.fuse else {
             return None;
         };
@@ -196,7 +185,7 @@ impl Planner<'_> {
         fuse: FusedCall<'_>,
         default: &Expression,
         slot: CommaOkValueSlot,
-    ) -> (Vec<LoweredStatement>, String) {
+    ) -> (Vec<Statement>, String) {
         let mut bound = match fuse {
             FusedCall::Result(fuse) => fuse.bind(self, slot, None),
             FusedCall::Option(fuse) => fuse.bind(self, slot),
@@ -213,19 +202,25 @@ impl Planner<'_> {
         };
         let (default_setup, default) = default.split_setup();
         statements.extend(default_setup);
-        statements.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
-            initializer: failure.initializer,
-            condition: failure.condition,
-            then_body: LoweredBlock {
-                statements: vec![LoweredStatement::Assign(AssignForm::Simple {
-                    target_capture: Vec::new(),
-                    target: GoExpression::name(value.clone()),
-                    value: default,
-                })],
-            },
-            else_arm: ElseArm::None,
-        }));
+        statements.push(
+            LoweredStatement::If(IfPlan {
+                condition_setup: Vec::new(),
+                initializer: failure.initializer,
+                condition: failure.condition,
+                then_body: LoweredBlock {
+                    statements: vec![
+                        LoweredStatement::Assign(AssignForm::Simple {
+                            target_capture: Vec::new(),
+                            target: GoExpression::name(value.clone()),
+                            value: default,
+                        })
+                        .into(),
+                    ],
+                },
+                else_arm: ElseArm::None,
+            })
+            .into(),
+        );
         (statements, value)
     }
 
@@ -236,10 +231,9 @@ impl Planner<'_> {
         default: &Expression,
         target: &str,
         target_ty: &Type,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
         let arms = OptionArms {
             some_binding: map.param,
-            some_binding_span: map.param_span,
             some_body: map.body,
             none_body: default,
         };
@@ -259,7 +253,7 @@ impl Planner<'_> {
         &mut self,
         value: &Expression,
         go_name: &str,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
         let call = self.defaulted_call(value)?;
         if let Some((mut statements, read)) = self.zero_defaulted_map_read(&call, &value.get_type())
         {
@@ -279,11 +273,14 @@ impl Planner<'_> {
             unreachable!("a mapped chain is recognized on Option receivers only");
         };
         let ty = value.get_type();
-        let mut statements = vec![LoweredStatement::VarDecl {
-            name: go_name.to_string().into(),
-            go_type: self.use_go_type(&ty),
-            value: None,
-        }];
+        let mut statements = vec![
+            LoweredStatement::VarDecl {
+                name: go_name.to_string().into(),
+                go_type: self.use_go_type(&ty),
+                value: None,
+            }
+            .into(),
+        ];
         statements.extend(self.lower_mapped_default_into(fuse, map, call.default, go_name, &ty));
         Some(statements)
     }

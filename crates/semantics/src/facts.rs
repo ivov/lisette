@@ -249,12 +249,6 @@ impl Facts {
         }
     }
 
-    pub fn binding_id_at(&self, span: Span) -> Option<BindingId> {
-        self.bindings
-            .iter()
-            .find_map(|(&id, binding)| (binding.span == span).then_some(id))
-    }
-
     pub(crate) fn mark_mutated(&mut self, id: BindingId) {
         if let Some(fact) = self.bindings.get_mut(&id) {
             fact.mutation = Some(fact.mutation.map_or(BindingMutation::Direct, |mutation| {

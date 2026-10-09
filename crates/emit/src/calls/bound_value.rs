@@ -1,12 +1,13 @@
 use crate::Planner;
 use crate::calls::bounds::BoundsCheckedIndex;
 use crate::calls::go_interop::{NilGuard, is_nil, non_nil};
-use crate::plan::bodies::{Definition, LoweredStatement, define, discard};
+use crate::plan::bodies::{Definition, Statement, define, discard};
+use crate::plan::go_expression::{BinaryOp, UnaryOp};
 use crate::plan::values::GoExpression;
 use crate::state::scope::PairStatusKind;
 
 pub(crate) struct BoundValue {
-    pub(crate) statements: Vec<LoweredStatement>,
+    pub(crate) statements: Vec<Statement>,
     source: BoundSource,
 }
 
@@ -75,7 +76,7 @@ impl LoweredPair {
         let status = GoExpression::name(self.status.clone());
         let status = match (self.status_kind, success) {
             (PairStatusKind::Ok, true) => status,
-            (PairStatusKind::Ok, false) => GoExpression::unary("!", status),
+            (PairStatusKind::Ok, false) => GoExpression::unary(UnaryOp::Not, status),
             (PairStatusKind::Error, true) => is_nil(status),
             (PairStatusKind::Error, false) => non_nil(status),
         };
@@ -90,7 +91,7 @@ impl LoweredPair {
                 } else {
                     guard.is_nil(value)
                 };
-                let operator = if success { "&&" } else { "||" };
+                let operator = if success { BinaryOp::And } else { BinaryOp::Or };
                 GoExpression::binary(status, operator, nil_condition)
             }
             _ => status,
@@ -108,7 +109,7 @@ pub(crate) struct PairCondition {
 }
 
 impl BoundValue {
-    pub(super) fn pair(statements: Vec<LoweredStatement>, pair: LoweredPair) -> Self {
+    pub(super) fn pair(statements: Vec<Statement>, pair: LoweredPair) -> Self {
         Self {
             statements,
             source: BoundSource::Pair(pair),
@@ -116,7 +117,7 @@ impl BoundValue {
     }
 
     pub(crate) fn nullable(
-        statements: Vec<LoweredStatement>,
+        statements: Vec<Statement>,
         value: String,
         nil_guard: NilGuard,
         initializer_call: Option<GoExpression>,
@@ -132,7 +133,7 @@ impl BoundValue {
     }
 
     pub(crate) fn index(
-        statements: Vec<LoweredStatement>,
+        statements: Vec<Statement>,
         index: BoundsCheckedIndex,
         target: Option<String>,
     ) -> Self {
@@ -142,11 +143,7 @@ impl BoundValue {
         }
     }
 
-    pub(crate) fn found(
-        statements: Vec<LoweredStatement>,
-        value: Option<String>,
-        flag: String,
-    ) -> Self {
+    pub(crate) fn found(statements: Vec<Statement>, value: Option<String>, flag: String) -> Self {
         Self {
             statements,
             source: BoundSource::Found { value, flag },
@@ -204,7 +201,7 @@ impl BoundValue {
     }
 
     /// The statement that reads a late payload into its requested name.
-    pub(crate) fn late_binding(&self) -> Option<LoweredStatement> {
+    pub(crate) fn late_binding(&self) -> Option<Statement> {
         let BoundSource::Index {
             index,
             target: Some(target),
@@ -275,9 +272,10 @@ impl BoundValue {
             BoundSource::Index { index, .. } if success => plain(index.in_bounds.clone()),
             BoundSource::Index { index, .. } => plain(index.out_of_bounds.clone()),
             BoundSource::Found { flag, .. } if success => plain(GoExpression::name(flag.clone())),
-            BoundSource::Found { flag, .. } => {
-                plain(GoExpression::unary("!", GoExpression::name(flag.clone())))
-            }
+            BoundSource::Found { flag, .. } => plain(GoExpression::unary(
+                UnaryOp::Not,
+                GoExpression::name(flag.clone()),
+            )),
         }
     }
 }

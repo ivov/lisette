@@ -1,0 +1,59 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  enum G<T> { A(()), B(T), C }
+  
+  fn show(g: G<()>) {
+    let G.A(x) | G.B(x) = g else { return }
+    fmt.Println(x)
+  }
+  
+  fn main() {
+    show(G.B(()))
+  }
+---
+package main
+
+import "fmt"
+
+func MakeGA[T any](arg0 struct{}) G[T] {
+	return G[T]{Tag: GA, A: arg0}
+}
+
+func MakeGB[T any](arg0 T) G[T] {
+	return G[T]{Tag: GB, B: arg0}
+}
+
+func MakeGC[T any]() G[T] {
+	return G[T]{Tag: GC}
+}
+
+type GTag uint8
+
+const (
+	GA GTag = iota
+	GB
+	GC
+)
+
+type G[T any] struct {
+	Tag GTag
+	A   struct{}
+	B   T
+}
+
+func show(g G[struct{}]) {
+	if g.Tag == GA {
+	} else if g.Tag == GB {
+	} else {
+		return
+	}
+	fmt.Println(struct{}{})
+}
+
+func main() {
+	show(MakeGB(struct{}{}))
+}

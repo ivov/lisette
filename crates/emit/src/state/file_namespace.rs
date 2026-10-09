@@ -1,39 +1,24 @@
-use rustc_hash::FxHashMap as HashMap;
-use std::cell::RefCell;
-use std::rc::Rc;
-
-use crate::EnumLayout;
-
 use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::output::OutputImport;
-use crate::output::imports::{ImportBuilder, ImportPlan};
+use crate::output::imports::ImportPlan;
 use diagnostics::LisetteDiagnostic;
-use ecow::EcoString;
-use syntax::program::File;
 
+#[derive(Default)]
 pub(crate) struct FileNamespace {
     imports: ImportPlan,
     requirements: PackageRequirements,
-    /// Keep this memo. Recomputing a layout per field access was 5.8x slower.
-    pub(crate) enum_layouts: RefCell<HashMap<String, Rc<EnumLayout>>>,
 }
 
 impl FileNamespace {
-    pub(crate) fn build(
-        file: &File,
-        go_module: &str,
-        unused_imports: &rustc_hash::FxHashSet<EcoString>,
-        go_package_names: &HashMap<String, String>,
-    ) -> Self {
+    pub(crate) fn new(imports: ImportPlan) -> Self {
         Self {
-            imports: ImportPlan::build(file, go_module, unused_imports, go_package_names),
+            imports,
             requirements: PackageRequirements::default(),
-            enum_layouts: RefCell::default(),
         }
     }
 
-    pub(crate) fn package_alias(&self, package: &str) -> Option<&str> {
-        self.imports.package_alias(package)
+    pub(crate) fn import_qualifier(&self, package: &str) -> Option<&str> {
+        self.imports.import_qualifier(package)
     }
 
     pub(crate) fn package_for_alias(&self, alias: &str) -> Option<&str> {
@@ -48,13 +33,7 @@ impl FileNamespace {
         self.requirements.extend(requirements);
     }
 
-    pub(crate) fn finish(
-        self,
-        go_package_names: &HashMap<String, String>,
-        go_package_ids: &rustc_hash::FxHashSet<String>,
-    ) -> (Vec<OutputImport>, Vec<LisetteDiagnostic>) {
-        let mut builder = ImportBuilder::from_plan(self.imports, go_package_names, go_package_ids);
-        builder.extend_with_package_uses(&self.requirements);
-        builder.build()
+    pub(crate) fn finish(self) -> (Vec<OutputImport>, Vec<LisetteDiagnostic>) {
+        self.imports.finish(&self.requirements)
     }
 }

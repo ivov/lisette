@@ -53,6 +53,7 @@ impl<'source> Parser<'source> {
                         name,
                         name_span,
                         span: parser.span_from_offset(start.byte_offset),
+                        binding: None,
                     };
                 }
             }
@@ -107,6 +108,7 @@ impl<'source> Parser<'source> {
             return Pattern::Identifier {
                 identifier: keyword.into(),
                 span,
+                binding: None,
             };
         }
 
@@ -468,6 +470,7 @@ impl<'source> Parser<'source> {
                     Pattern::Identifier {
                         identifier: full_name.into(),
                         span,
+                        binding: None,
                     }
                 }
             }
@@ -529,6 +532,7 @@ impl<'source> Parser<'source> {
                     Pattern::Identifier {
                         identifier: field_name.clone(),
                         span,
+                        binding: None,
                     }
                 }
             };
@@ -633,6 +637,7 @@ impl<'source> Parser<'source> {
                 pattern: Pattern::Identifier {
                     identifier: name.into(),
                     span,
+                    binding: None,
                 },
                 annotation: self.parse_optional_type_annotation(),
                 ty: Type::uninferred(),
@@ -789,6 +794,7 @@ impl<'source> Parser<'source> {
                 return Some(RestPattern::Bind {
                     name,
                     span: self.span_from_token(name_token),
+                    binding: None,
                 });
             }
             return Some(RestPattern::Discard(
@@ -808,6 +814,7 @@ impl<'source> Parser<'source> {
                 return Some(RestPattern::Bind {
                     name: EcoString::from(binding),
                     span: name_span,
+                    binding: None,
                 });
             }
         }

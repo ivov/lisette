@@ -3,10 +3,11 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
 use crate::names::packages::PackageUse;
-use crate::plan::bodies::{LoweredBlock, LoweredStatement, legalize_else_if_scopes};
+use crate::plan::bodies::{LoweredBlock, Statement, legalize_else_if_scopes};
 use crate::plan::evaluation::{Effects, Reads};
 use crate::plan::go_expression::{
-    CompositeElement, CompositeLayout, FunctionLiteralLayout, GoExpressionNode, GoParameter,
+    BinaryOp, CompositeElement, CompositeLayout, FunctionLiteralLayout, GoExpressionNode,
+    GoParameter, UnaryOp,
 };
 use crate::plan::local::{GoIdentifier, LocalId};
 #[cfg(debug_assertions)]
@@ -57,27 +58,40 @@ impl ConstantKind {
 
 fn binary_constant(
     left: Option<ConstantKind>,
-    operator: &str,
+    operator: BinaryOp,
     right: Option<ConstantKind>,
 ) -> Option<ConstantKind> {
     let (left, right) = (left?, right?);
     match operator {
-        "==" | "!=" | "<" | "<=" | ">" | ">=" | "&&" | "||" => Some(ConstantKind::Bool),
-        "<<" | ">>" => left.is_numeric().then_some(left),
-        "+" if left == ConstantKind::String && right == ConstantKind::String => {
+        BinaryOp::Eq
+        | BinaryOp::Ne
+        | BinaryOp::Lt
+        | BinaryOp::Le
+        | BinaryOp::Gt
+        | BinaryOp::Ge
+        | BinaryOp::And
+        | BinaryOp::Or => Some(ConstantKind::Bool),
+        BinaryOp::Shl | BinaryOp::Shr => left.is_numeric().then_some(left),
+        BinaryOp::Add if left == ConstantKind::String && right == ConstantKind::String => {
             Some(ConstantKind::String)
         }
-        "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "&^" => left.join(right),
-        _ => None,
+        BinaryOp::Add
+        | BinaryOp::Sub
+        | BinaryOp::Mul
+        | BinaryOp::Div
+        | BinaryOp::Rem
+        | BinaryOp::BitAnd
+        | BinaryOp::BitOr
+        | BinaryOp::BitXor
+        | BinaryOp::BitAndNot => left.join(right),
     }
 }
 
-fn unary_constant(operator: &str, value: Option<ConstantKind>) -> Option<ConstantKind> {
+fn unary_constant(operator: UnaryOp, value: Option<ConstantKind>) -> Option<ConstantKind> {
     let value = value?;
     match operator {
-        "-" | "+" | "^" => value.is_numeric().then_some(value),
-        "!" => (value == ConstantKind::Bool).then_some(value),
-        _ => None,
+        UnaryOp::Negate | UnaryOp::Complement => value.is_numeric().then_some(value),
+        UnaryOp::Not => (value == ConstantKind::Bool).then_some(value),
     }
 }
 
@@ -285,13 +299,8 @@ impl GoExpression {
         Self::new(node)
     }
 
-    pub(crate) fn binary(
-        left: GoExpression,
-        operator: impl Into<String>,
-        right: GoExpression,
-    ) -> Self {
-        let operator = operator.into();
-        let constant = binary_constant(left.constant, &operator, right.constant);
+    pub(crate) fn binary(left: GoExpression, operator: BinaryOp, right: GoExpression) -> Self {
+        let constant = binary_constant(left.constant, operator, right.constant);
         let node = GoExpressionNode::Binary {
             operator,
             left: Box::new(left.node),
@@ -334,10 +343,10 @@ impl GoExpression {
         Self::new(node)
     }
 
-    pub(crate) fn unary(operator: &str, value: GoExpression) -> Self {
+    pub(crate) fn unary(operator: UnaryOp, value: GoExpression) -> Self {
         let constant = unary_constant(operator, value.constant);
         let node = GoExpressionNode::Unary {
-            operator: operator.to_string(),
+            operator,
             operand: Box::new(value.node),
         };
         Self::new(node).with_constant(constant)
@@ -567,21 +576,21 @@ impl EvaluationFacts {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ValuePlan {
-    setup: Vec<LoweredStatement>,
+    setup: Vec<Statement>,
     expression: GoExpression,
     evaluation: EvaluationFacts,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SequencedValues {
-    pub setup: Vec<LoweredStatement>,
+    pub setup: Vec<Statement>,
     pub values: Vec<GoExpression>,
     pub effect: EvaluationEffect,
     pub stability: Stability,
 }
 
 impl ValuePlan {
-    pub(crate) fn setup(&self) -> &[LoweredStatement] {
+    pub(crate) fn setup(&self) -> &[Statement] {
         &self.setup
     }
 
@@ -593,13 +602,11 @@ impl ValuePlan {
         self.evaluation
     }
 
-    pub(crate) fn into_parts_with_facts(
-        self,
-    ) -> (Vec<LoweredStatement>, GoExpression, EvaluationFacts) {
+    pub(crate) fn into_parts_with_facts(self) -> (Vec<Statement>, GoExpression, EvaluationFacts) {
         (self.setup, self.expression, self.evaluation)
     }
 
-    pub(crate) fn split_setup(self) -> (Vec<LoweredStatement>, Self) {
+    pub(crate) fn split_setup(self) -> (Vec<Statement>, Self) {
         let Self {
             setup,
             expression,
@@ -609,19 +616,19 @@ impl ValuePlan {
     }
 
     /// For passes that keep evaluation unchanged.
-    pub(crate) fn parts_mut(&mut self) -> (&mut Vec<LoweredStatement>, &mut GoExpression) {
+    pub(crate) fn parts_mut(&mut self) -> (&mut Vec<Statement>, &mut GoExpression) {
         (&mut self.setup, &mut self.expression)
     }
 
     pub(crate) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
         for statement in &self.setup {
-            statement.visit_expressions(visit);
+            statement.kind.visit_expressions(visit);
         }
         self.expression.node().visit(visit);
     }
 
     fn from_facts(
-        setup: Vec<LoweredStatement>,
+        setup: Vec<Statement>,
         expression: GoExpression,
         evaluation: EvaluationFacts,
     ) -> Self {
@@ -649,7 +656,7 @@ impl ValuePlan {
     }
 
     pub(crate) fn evaluated_literal(
-        setup: Vec<LoweredStatement>,
+        setup: Vec<Statement>,
         rendered: String,
         effect: EvaluationEffect,
     ) -> Self {
@@ -661,12 +668,12 @@ impl ValuePlan {
     }
 
     /// A name the setup just bound, or which nothing can rebind.
-    pub(crate) fn captured(setup: Vec<LoweredStatement>, name: String) -> Self {
+    pub(crate) fn captured(setup: Vec<Statement>, name: String) -> Self {
         Self::captured_with_effect(setup, name, EvaluationEffect::Pure)
     }
 
     pub(crate) fn captured_with_effect(
-        setup: Vec<LoweredStatement>,
+        setup: Vec<Statement>,
         name: String,
         effect: EvaluationEffect,
     ) -> Self {
@@ -678,7 +685,7 @@ impl ValuePlan {
     }
 
     pub(crate) fn computed(
-        setup: Vec<LoweredStatement>,
+        setup: Vec<Statement>,
         expression: GoExpression,
         effect: EvaluationEffect,
     ) -> Self {
@@ -707,7 +714,7 @@ impl ValuePlan {
     }
 
     pub(crate) fn plain_call(
-        setup: Vec<LoweredStatement>,
+        setup: Vec<Statement>,
         expression: GoExpression,
         effect: EvaluationEffect,
     ) -> Self {
@@ -715,7 +722,7 @@ impl ValuePlan {
     }
 
     pub(crate) fn built_from(
-        setup: Vec<LoweredStatement>,
+        setup: Vec<Statement>,
         expression: GoExpression,
         effect: EvaluationEffect,
         stability: Stability,
@@ -724,7 +731,7 @@ impl ValuePlan {
     }
 
     pub(crate) fn observable_call(
-        setup: Vec<LoweredStatement>,
+        setup: Vec<Statement>,
         expression: GoExpression,
         effect: EvaluationEffect,
     ) -> Self {
@@ -747,7 +754,7 @@ impl ValuePlan {
     /// effect, so the facts carry over.
     pub(crate) fn map_expression(
         self,
-        transform: impl FnOnce(&mut Vec<LoweredStatement>, GoExpression) -> GoExpression,
+        transform: impl FnOnce(&mut Vec<Statement>, GoExpression) -> GoExpression,
     ) -> Self {
         let Self {
             mut setup,
@@ -760,7 +767,7 @@ impl ValuePlan {
 
     pub(crate) fn map_observable_expression(
         self,
-        transform: impl FnOnce(&mut Vec<LoweredStatement>, GoExpression) -> GoExpression,
+        transform: impl FnOnce(&mut Vec<Statement>, GoExpression) -> GoExpression,
     ) -> Self {
         let mut plan = self.map_expression(transform);
         plan.make_observable();
@@ -783,10 +790,7 @@ impl ValuePlan {
         self
     }
 
-    pub(crate) fn pin(
-        &mut self,
-        bind: impl FnOnce(&mut Vec<LoweredStatement>, GoExpression) -> String,
-    ) {
+    pub(crate) fn pin(&mut self, bind: impl FnOnce(&mut Vec<Statement>, GoExpression) -> String) {
         let value = mem::replace(&mut self.expression, GoExpression::empty());
         let name = bind(&mut self.setup, value);
         self.expression = GoExpression::name(name);
@@ -819,7 +823,7 @@ impl ValuePlan {
             && self
                 .setup
                 .iter()
-                .any(|statement| statement.binds_name(rendered))
+                .any(|statement| statement.kind.binds_name(rendered))
     }
 
     pub(crate) fn effects(&self) -> Effects {
@@ -843,7 +847,7 @@ impl ValuePlan {
                 own &= self
                     .setup
                     .iter()
-                    .any(|statement| statement.binds_name(name.spelling()));
+                    .any(|statement| statement.kind.binds_name(name.spelling()));
             }
         });
         own
@@ -863,7 +867,7 @@ impl ValuePlan {
         self.expression.is_empty()
     }
 
-    pub(crate) fn into_parts(self) -> (Vec<LoweredStatement>, GoExpression) {
+    pub(crate) fn into_parts(self) -> (Vec<Statement>, GoExpression) {
         (self.setup, self.expression)
     }
 
@@ -875,8 +879,14 @@ impl ValuePlan {
         self
     }
 
-    pub(crate) fn unary(mut self, operator: &'static str) -> Self {
+    pub(crate) fn unary(mut self, operator: UnaryOp) -> Self {
         self.expression = GoExpression::unary(operator, self.expression);
+        self.evaluation.stability = Stability::Observable;
+        self
+    }
+
+    pub(crate) fn dereference(mut self) -> Self {
+        self.expression = GoExpression::dereference(self.expression);
         self.evaluation.stability = Stability::Observable;
         self
     }
@@ -941,7 +951,7 @@ impl Planner<'_> {
             Expression::TryBlock { items, ty, .. } => self.lower_try_block(items, ty),
             Expression::RecoverBlock { items, ty, .. } => self.lower_recover_block(items, ty),
             Expression::Propagate { expression, .. } => {
-                let (setup, value) = self.lower_propagate(expression, None);
+                let (setup, value) = self.lower_propagate(expression);
                 let stability = self.path_read_stability(&value);
                 ValuePlan::from_facts(
                     setup,

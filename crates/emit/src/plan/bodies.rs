@@ -1,44 +1,44 @@
 //! Lowered body IR: the typed vocabulary `plan::lower` produces and `render/`
 //! consumes.
 
-use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
 use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
 use rustc_hash::FxHashSet as HashSet;
 use std::mem::{replace, take};
 use syntax::types::Type;
 
-pub(crate) fn define(name: impl Into<GoIdentifier>, value: GoExpression) -> LoweredStatement {
-    LoweredStatement::Define(Definition::single(name, value))
+pub(crate) fn define(name: impl Into<GoIdentifier>, value: GoExpression) -> Statement {
+    LoweredStatement::Define(Definition::single(name, value)).into()
 }
 
-pub(crate) fn define_many<T: Into<GoIdentifier>>(
-    names: Vec<T>,
-    value: GoExpression,
-) -> LoweredStatement {
+pub(crate) fn define_many<T: Into<GoIdentifier>>(names: Vec<T>, value: GoExpression) -> Statement {
     LoweredStatement::Define(Definition {
         names: names.into_iter().map(Into::into).collect(),
         value,
     })
+    .into()
 }
 
-pub(crate) fn discard(value: GoExpression) -> LoweredStatement {
-    LoweredStatement::Discard(value)
+pub(crate) fn discard(value: GoExpression) -> Statement {
+    LoweredStatement::Discard(value).into()
 }
 
-pub(crate) fn expression_statement(expression: GoExpression) -> LoweredStatement {
+pub(crate) fn expression_statement(expression: GoExpression) -> Statement {
     LoweredStatement::ExpressionStatement {
         expression,
         diverges: false,
     }
+    .into()
 }
 
-pub(crate) fn assign(target: GoExpression, value: GoExpression) -> LoweredStatement {
+pub(crate) fn assign(target: GoExpression, value: GoExpression) -> Statement {
     LoweredStatement::Assign(AssignForm::Simple {
         target_capture: Vec::new(),
         target,
         value: ValuePlan::computed(Vec::new(), value, EvaluationEffect::Pure),
     })
+    .into()
 }
 
 /// Destination for a lowered block's tail. The enclosing function's return
@@ -61,7 +61,7 @@ impl PlacePlan<'_> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LoweredBlock {
-    pub(crate) statements: Vec<LoweredStatement>,
+    pub(crate) statements: Vec<Statement>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -145,9 +145,9 @@ impl FlowSummary {
         self
     }
 
-    fn statements(statements: &[LoweredStatement]) -> Self {
+    fn statements(statements: &[Statement]) -> Self {
         statements.iter().fold(Self::next(), |flow, statement| {
-            flow.sequence(statement.flow())
+            flow.sequence(statement.kind.flow())
         })
     }
 
@@ -165,33 +165,17 @@ fn remove_unlabeled_breaks(exits: &mut Vec<FlowExit>) -> bool {
     had_break
 }
 
-pub(crate) fn directed(directive: String, stmt: LoweredStatement) -> LoweredStatement {
-    if directive.is_empty() {
-        stmt
-    } else {
-        LoweredStatement::Directed {
-            directive,
-            inner: Box::new(stmt),
-        }
-    }
-}
-
+/// Put `line` on the first statement unless it has a more specific directive.
 pub(crate) fn directed_first(
-    directive: String,
-    statements: Vec<LoweredStatement>,
-) -> Vec<LoweredStatement> {
-    if directive.is_empty() {
-        return statements;
+    line: Option<String>,
+    mut statements: Vec<Statement>,
+) -> Vec<Statement> {
+    if let Some(first) = statements.first_mut()
+        && first.line.is_none()
+    {
+        first.line = line;
     }
-    let mut statements = statements.into_iter();
-    let first = statements.next().unwrap_or_else(|| {
-        LoweredStatement::Body(LoweredBlock {
-            statements: Vec::new(),
-        })
-    });
-    let mut directed_statements = vec![directed(directive, first)];
-    directed_statements.extend(statements);
-    directed_statements
+    statements
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -206,6 +190,19 @@ impl Definition {
             names: vec![name.into()],
             value,
         }
+    }
+}
+
+/// A lowered statement entry with its optional sourcemap `line` directive.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Statement {
+    pub(crate) line: Option<String>,
+    pub(crate) kind: LoweredStatement,
+}
+
+impl From<LoweredStatement> for Statement {
+    fn from(kind: LoweredStatement) -> Self {
+        Self { line: None, kind }
     }
 }
 
@@ -227,7 +224,6 @@ pub(crate) enum LoweredStatement {
     },
     Select(SelectStatementPlan),
     Switch(SwitchStatementPlan),
-    WhileLet(LoweredBlock),
     Define(Definition),
     AssignMany {
         targets: Vec<GoExpression>,
@@ -243,11 +239,6 @@ pub(crate) enum LoweredStatement {
     ExpressionStatement {
         expression: GoExpression,
         diverges: bool,
-    },
-    /// A statement preceded by a sourcemap `//line` directive.
-    Directed {
-        directive: String,
-        inner: Box<LoweredStatement>,
     },
     /// `panic("unreachable")` generated to complete a Go return path.
     UnreachablePanic,
@@ -267,13 +258,13 @@ pub(crate) struct ConstPlan {
 pub(crate) enum AssignForm {
     /// `target++`, `target--`, or `target op= rhs`.
     Compound {
-        target_capture: Vec<LoweredStatement>,
+        target_capture: Vec<Statement>,
         target: GoExpression,
         kind: CompoundKind,
     },
     /// `target = value`.
     Simple {
-        target_capture: Vec<LoweredStatement>,
+        target_capture: Vec<Statement>,
         target: GoExpression,
         value: ValuePlan,
     },
@@ -286,7 +277,7 @@ pub(crate) enum CompoundKind {
     /// `target op= rhs`. An effectful RHS forces the target's prior value
     /// into `pinned_left`, rendered as `target = pinned_left op rhs`.
     OpAssign {
-        op_text: String,
+        operator: BinaryOp,
         rhs: Box<ValuePlan>,
         pinned_left: Option<GoExpression>,
     },
@@ -300,7 +291,7 @@ pub(crate) struct SwitchStatementPlan {
     pub(crate) cases: Vec<SwitchCasePlan>,
     pub(crate) default: Option<LoweredBlock>,
     /// Statements after the switch, such as an unreachable panic.
-    pub(crate) postlude: Vec<LoweredStatement>,
+    pub(crate) postlude: Vec<Statement>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -413,7 +404,7 @@ impl SelectArmPlan {
 /// an enclosing source loop.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LoopPlan {
-    pub(crate) prologue: Vec<LoweredStatement>,
+    pub(crate) prologue: Vec<Statement>,
     pub(crate) kind: LoopKind,
     pub(crate) header: LoopHeader,
     pub(crate) body: LoweredBlock,
@@ -484,7 +475,7 @@ impl LoopKind {
 pub(crate) struct IfPlan {
     /// Side-effecting setup hoisted before the `if` condition (temps from a
     /// condition that lowered to statements).
-    pub(crate) condition_setup: Vec<LoweredStatement>,
+    pub(crate) condition_setup: Vec<Statement>,
     pub(crate) initializer: Option<Definition>,
     pub(crate) condition: GoExpression,
     pub(crate) then_body: LoweredBlock,
@@ -528,24 +519,21 @@ impl ElseArm {
     }
 }
 
-fn visit_statements(statements: &[LoweredStatement], visit: &mut impl FnMut(&GoExpressionNode)) {
+fn visit_statements(statements: &[Statement], visit: &mut impl FnMut(&GoExpressionNode)) {
     for statement in statements {
-        statement.visit_expressions(visit);
+        statement.kind.visit_expressions(visit);
     }
 }
 
-pub(crate) fn for_each_statement(
-    statements: &[LoweredStatement],
-    f: &mut impl FnMut(&LoweredStatement),
-) {
+pub(crate) fn for_each_statement(statements: &[Statement], f: &mut impl FnMut(&LoweredStatement)) {
     for statement in statements {
-        f(statement);
-        statement.for_each_nested_statement(f);
+        f(&statement.kind);
+        statement.kind.for_each_nested_statement(f);
     }
 }
 
 pub(crate) fn rename_generated_locals(
-    statements: &mut [LoweredStatement],
+    statements: &mut [Statement],
     by_id: &rustc_hash::FxHashMap<LocalId, String>,
 ) {
     struct Rename<'a>(&'a rustc_hash::FxHashMap<LocalId, String>);
@@ -559,8 +547,6 @@ pub(crate) fn rename_generated_locals(
             }
         }
 
-        fn binding(&mut self, _name: &mut String) {}
-
         fn local_binding(&mut self, name: &mut GoIdentifier) {
             if let Some(final_name) = name.id().and_then(|id| self.0.get(&id)) {
                 *name.spelling_mut() = final_name.clone();
@@ -572,19 +558,19 @@ pub(crate) fn rename_generated_locals(
 }
 
 pub(crate) fn for_each_statements_mut(
-    statements: &mut Vec<LoweredStatement>,
-    f: &mut impl FnMut(&mut Vec<LoweredStatement>),
+    statements: &mut Vec<Statement>,
+    f: &mut impl FnMut(&mut Vec<Statement>),
 ) {
     f(statements);
     for statement in statements {
-        statement.for_each_nested_statements_mut(f);
+        statement.kind.for_each_nested_statements_mut(f);
     }
 }
 
-pub(crate) fn legalize_else_if_scopes(statements: &mut Vec<LoweredStatement>) {
+pub(crate) fn legalize_else_if_scopes(statements: &mut Vec<Statement>) {
     for_each_statements_mut(statements, &mut |statements| {
         for statement in statements {
-            if let LoweredStatement::If(plan) = statement {
+            if let LoweredStatement::If(plan) = &mut statement.kind {
                 plan.legalize_else_if_scope();
             }
         }
@@ -599,13 +585,13 @@ pub(crate) struct GoUses {
 }
 
 impl GoUses {
-    pub(crate) fn of(statements: &[LoweredStatement]) -> Self {
+    pub(crate) fn of(statements: &[Statement]) -> Self {
         let mut uses = Self::default();
         uses.extend(statements);
         uses
     }
 
-    pub(crate) fn extend(&mut self, statements: &[LoweredStatement]) {
+    pub(crate) fn extend(&mut self, statements: &[Statement]) {
         visit_statements(statements, &mut |node| self.record(node));
     }
 
@@ -670,23 +656,23 @@ impl LoweredBlock {
     pub(crate) fn renders_empty(&self) -> bool {
         self.statements
             .iter()
-            .all(|statement| !statement.emits_output())
+            .all(|statement| !statement.kind.emits_output())
     }
 }
 
-fn terminate_go_path(statements: &mut Vec<LoweredStatement>) {
+fn terminate_go_path(statements: &mut Vec<Statement>) {
     if !FlowSummary::statements(statements).go_falls_through {
         return;
     }
     if let Some(last) = statements.last_mut()
-        && !last.flow().falls_through
+        && !last.kind.flow().falls_through
     {
-        last.terminate_go_tail();
+        last.kind.terminate_go_tail();
         if !FlowSummary::statements(statements).go_falls_through {
             return;
         }
     }
-    statements.push(LoweredStatement::UnreachablePanic);
+    statements.push(LoweredStatement::UnreachablePanic.into());
 }
 
 impl LoweredStatement {
@@ -694,7 +680,6 @@ impl LoweredStatement {
         match self {
             Self::If(plan) => plan.terminate_go_tail(),
             Self::Body(body) => terminate_go_path(&mut body.statements),
-            Self::Directed { inner, .. } => inner.terminate_go_tail(),
             _ => {}
         }
     }
@@ -719,9 +704,9 @@ impl LoweredStatement {
                 }
                 plan.body.visit_expressions(visit);
             }
-            LoweredStatement::Block(body)
-            | LoweredStatement::Body(body)
-            | LoweredStatement::WhileLet(body) => body.visit_expressions(visit),
+            LoweredStatement::Block(body) | LoweredStatement::Body(body) => {
+                body.visit_expressions(visit)
+            }
             LoweredStatement::Break(_)
             | LoweredStatement::Continue(_)
             | LoweredStatement::UnreachablePanic => {}
@@ -811,7 +796,6 @@ impl LoweredStatement {
             | LoweredStatement::ExpressionStatement { expression, .. } => {
                 expression.node().visit(visit)
             }
-            LoweredStatement::Directed { inner, .. } => inner.visit_expressions(visit),
         }
     }
 
@@ -822,9 +806,9 @@ impl LoweredStatement {
                 for_each_statement(&plan.prologue, f);
                 for_each_statement(&plan.body.statements, f);
             }
-            LoweredStatement::Block(body)
-            | LoweredStatement::Body(body)
-            | LoweredStatement::WhileLet(body) => for_each_statement(&body.statements, f),
+            LoweredStatement::Block(body) | LoweredStatement::Body(body) => {
+                for_each_statement(&body.statements, f)
+            }
             LoweredStatement::Assign(form) => match form {
                 AssignForm::Compound {
                     target_capture,
@@ -859,10 +843,6 @@ impl LoweredStatement {
                 }
                 for_each_statement(&plan.postlude, f);
             }
-            LoweredStatement::Directed { inner, .. } => {
-                f(inner);
-                inner.for_each_nested_statement(f);
-            }
             LoweredStatement::Break(_)
             | LoweredStatement::Continue(_)
             | LoweredStatement::Return(_)
@@ -877,16 +857,16 @@ impl LoweredStatement {
         }
     }
 
-    fn for_each_nested_statements_mut(&mut self, f: &mut impl FnMut(&mut Vec<LoweredStatement>)) {
+    fn for_each_nested_statements_mut(&mut self, f: &mut impl FnMut(&mut Vec<Statement>)) {
         match self {
             LoweredStatement::If(plan) => plan.for_each_statements_mut(f),
             LoweredStatement::Loop(plan) => {
                 for_each_statements_mut(&mut plan.prologue, f);
                 for_each_statements_mut(&mut plan.body.statements, f);
             }
-            LoweredStatement::Block(body)
-            | LoweredStatement::Body(body)
-            | LoweredStatement::WhileLet(body) => for_each_statements_mut(&mut body.statements, f),
+            LoweredStatement::Block(body) | LoweredStatement::Body(body) => {
+                for_each_statements_mut(&mut body.statements, f)
+            }
             LoweredStatement::Assign(form) => match form {
                 AssignForm::Compound {
                     target_capture,
@@ -921,7 +901,6 @@ impl LoweredStatement {
                 }
                 for_each_statements_mut(&mut plan.postlude, f);
             }
-            LoweredStatement::Directed { inner, .. } => inner.for_each_nested_statements_mut(f),
             LoweredStatement::Break(_)
             | LoweredStatement::Continue(_)
             | LoweredStatement::Return(_)
@@ -936,38 +915,19 @@ impl LoweredStatement {
         }
     }
 
-    /// The Go name this statement binds, seeing through a sourcemap directive.
-    pub(crate) fn bound_name(&self) -> Option<&str> {
-        match self {
-            LoweredStatement::Directed { inner, .. } => inner.bound_name(),
-            LoweredStatement::Define(Definition { names, .. }) => match names.as_slice() {
-                [name] => Some(name),
-                _ => None,
-            },
-            LoweredStatement::VarDecl {
-                name,
-                value: Some(_),
-                ..
-            } => Some(name),
-            _ => None,
-        }
-    }
-
     pub(crate) fn binds_name(&self, go_name: &str) -> bool {
         match self {
-            LoweredStatement::Directed { inner, .. } => inner.binds_name(go_name),
             LoweredStatement::Define(Definition { names, .. }) => {
                 names.iter().any(|name| name == go_name)
             }
             LoweredStatement::VarDecl { name, .. } => name == go_name,
-            _ => self.bound_name() == Some(go_name),
+            _ => false,
         }
     }
 
     /// `false` when the statement binds nothing.
     pub(crate) fn rename_bound_name(&mut self, go_name: &str) -> bool {
         let bound = match self {
-            LoweredStatement::Directed { inner, .. } => return inner.rename_bound_name(go_name),
             LoweredStatement::Define(Definition { names, .. }) => match names.as_mut_slice() {
                 [name] => name,
                 _ => return false,
@@ -1004,11 +964,7 @@ impl LoweredStatement {
             LoweredStatement::Assign(plan) => match plan {
                 AssignForm::Compound { .. } | AssignForm::Simple { .. } => true,
             },
-            LoweredStatement::WhileLet(body) => !body.renders_empty(),
             LoweredStatement::ExpressionStatement { expression, .. } => !expression.is_empty(),
-            LoweredStatement::Directed { directive, inner } => {
-                !directive.is_empty() || inner.emits_output()
-            }
         }
     }
 
@@ -1020,9 +976,7 @@ impl LoweredStatement {
                 falls_through: true,
                 ..FlowSummary::statements(&body.statements)
             },
-            LoweredStatement::Body(body) | LoweredStatement::WhileLet(body) => {
-                FlowSummary::statements(&body.statements)
-            }
+            LoweredStatement::Body(body) => FlowSummary::statements(&body.statements),
             LoweredStatement::Break(target) => FlowSummary::exit(FlowExit::Break(target.clone())),
             LoweredStatement::Continue(target) => {
                 FlowSummary::exit(FlowExit::Continue(target.clone()))
@@ -1042,7 +996,6 @@ impl LoweredStatement {
                     FlowSummary::source_never()
                 }
             }
-            LoweredStatement::Directed { inner, .. } => inner.flow(),
             LoweredStatement::UnreachablePanic => FlowSummary::terminal(),
             LoweredStatement::Assign(_)
             | LoweredStatement::Async { .. }
@@ -1056,10 +1009,7 @@ impl LoweredStatement {
     }
 
     pub(crate) fn blocks_fallthrough(&self) -> bool {
-        if let LoweredStatement::Directed { inner, .. } = self {
-            return inner.blocks_fallthrough();
-        }
-        !matches!(self, LoweredStatement::WhileLet(_)) && !self.flow().falls_through
+        !self.flow().falls_through
     }
 }
 
@@ -1081,7 +1031,7 @@ impl IfPlan {
                     unreachable!("else-if was checked before replacement");
                 };
                 let mut statements = take(&mut inner.condition_setup);
-                statements.push(LoweredStatement::If(*inner));
+                statements.push(LoweredStatement::If(*inner).into());
                 self.else_arm = ElseArm::Else {
                     body: LoweredBlock { statements },
                     inline: false,
@@ -1100,7 +1050,7 @@ impl IfPlan {
         }
     }
 
-    fn for_each_statements_mut(&mut self, f: &mut impl FnMut(&mut Vec<LoweredStatement>)) {
+    fn for_each_statements_mut(&mut self, f: &mut impl FnMut(&mut Vec<Statement>)) {
         for_each_statements_mut(&mut self.condition_setup, f);
         for_each_statements_mut(&mut self.then_body.statements, f);
         match &mut self.else_arm {
@@ -1154,7 +1104,7 @@ impl IfPlan {
 mod flow_tests {
     use super::*;
 
-    fn block(statements: Vec<LoweredStatement>) -> LoweredBlock {
+    fn block(statements: Vec<Statement>) -> LoweredBlock {
         LoweredBlock { statements }
     }
 
@@ -1165,7 +1115,7 @@ mod flow_tests {
         }
     }
 
-    fn infinite(statements: Vec<LoweredStatement>) -> LoweredStatement {
+    fn infinite(statements: Vec<Statement>) -> LoweredStatement {
         LoweredStatement::Loop(LoopPlan {
             prologue: Vec::new(),
             kind: LoopKind::Source { label: None },
@@ -1176,15 +1126,18 @@ mod flow_tests {
 
     #[test]
     fn never_call_does_not_hide_a_go_reachable_break() {
-        let mut body = block(vec![infinite(vec![
-            never_call(),
-            LoweredStatement::Break(LoopTransfer::Unlabeled),
-        ])]);
+        let mut body = block(vec![
+            infinite(vec![
+                never_call().into(),
+                LoweredStatement::Break(LoopTransfer::Unlabeled).into(),
+            ])
+            .into(),
+        ]);
         assert!(!FlowSummary::statements(&body.statements).falls_through);
         assert!(!body.go_terminates());
         body.ensure_go_termination();
         assert!(matches!(
-            body.statements.last(),
+            body.statements.last().map(|last| &last.kind),
             Some(LoweredStatement::UnreachablePanic)
         ));
     }
@@ -1192,8 +1145,8 @@ mod flow_tests {
     #[test]
     fn never_call_followed_by_return_needs_no_fallback() {
         let mut body = block(vec![
-            never_call(),
-            LoweredStatement::Return(vec![GoExpression::literal("1".into())]),
+            never_call().into(),
+            LoweredStatement::Return(vec![GoExpression::literal("1".into())]).into(),
         ]);
         assert!(body.go_terminates());
         body.ensure_go_termination();
@@ -1202,26 +1155,37 @@ mod flow_tests {
 
     #[test]
     fn never_branch_gets_one_local_fallback() {
-        let then_body = block(vec![LoweredStatement::Body(block(vec![never_call()]))]);
-        let mut body = block(vec![LoweredStatement::If(IfPlan::plain(
-            GoExpression::literal("true".into()),
-            then_body,
-            ElseArm::Else {
-                body: block(vec![LoweredStatement::Return(vec![])]),
-                inline: false,
-            },
-        ))]);
+        let then_body = block(vec![
+            LoweredStatement::Body(block(vec![never_call().into()])).into(),
+        ]);
+        let mut body = block(vec![
+            LoweredStatement::If(IfPlan::plain(
+                GoExpression::literal("true".into()),
+                then_body,
+                ElseArm::Else {
+                    body: block(vec![LoweredStatement::Return(vec![]).into()]),
+                    inline: false,
+                },
+            ))
+            .into(),
+        ]);
         body.ensure_go_termination();
         body.ensure_go_termination();
-        let [LoweredStatement::If(plan)] = body.statements.as_slice() else {
+        let [statement] = body.statements.as_slice() else {
             panic!("expected if without a trailing panic");
         };
-        let [LoweredStatement::Body(nested)] = plan.then_body.statements.as_slice() else {
+        let LoweredStatement::If(plan) = &statement.kind else {
+            panic!("expected if");
+        };
+        let [nested] = plan.then_body.statements.as_slice() else {
+            panic!("expected one nested statement");
+        };
+        let LoweredStatement::Body(nested) = &nested.kind else {
             panic!("expected nested body");
         };
         assert_eq!(nested.statements.len(), 2);
         assert!(matches!(
-            nested.statements[1],
+            nested.statements[1].kind,
             LoweredStatement::UnreachablePanic
         ));
     }
@@ -1231,13 +1195,14 @@ mod flow_tests {
         let mut body = block(vec![
             LoweredStatement::If(IfPlan::plain(
                 GoExpression::literal("true".into()),
-                block(vec![never_call()]),
+                block(vec![never_call().into()]),
                 ElseArm::None,
-            )),
-            LoweredStatement::Return(vec![GoExpression::literal("1".into())]),
+            ))
+            .into(),
+            LoweredStatement::Return(vec![GoExpression::literal("1".into())]).into(),
         ]);
         body.ensure_go_termination();
-        let LoweredStatement::If(plan) = &body.statements[0] else {
+        let LoweredStatement::If(plan) = &body.statements[0].kind else {
             panic!("expected if");
         };
         assert_eq!(plan.then_body.statements.len(), 1);
@@ -1245,15 +1210,43 @@ mod flow_tests {
     }
 
     #[test]
+    fn while_let_shaped_loop_falls_through_only_with_its_break() {
+        let while_let = |else_arm: ElseArm| {
+            LoweredStatement::Body(block(vec![
+                infinite(vec![
+                    LoweredStatement::If(IfPlan::plain(
+                        GoExpression::literal("ok".into()),
+                        block(vec![]),
+                        else_arm,
+                    ))
+                    .into(),
+                ])
+                .into(),
+            ]))
+        };
+        let with_break = while_let(ElseArm::Else {
+            body: block(vec![
+                LoweredStatement::Break(LoopTransfer::Unlabeled).into(),
+            ]),
+            inline: false,
+        });
+        assert!(!with_break.blocks_fallthrough());
+        assert!(while_let(ElseArm::None).blocks_fallthrough());
+    }
+
+    #[test]
     fn inline_else_is_sequential_for_go_flow() {
-        let body = block(vec![LoweredStatement::If(IfPlan::plain(
-            GoExpression::literal("true".into()),
-            block(vec![never_call()]),
-            ElseArm::Else {
-                body: block(vec![LoweredStatement::Return(vec![])]),
-                inline: true,
-            },
-        ))]);
+        let body = block(vec![
+            LoweredStatement::If(IfPlan::plain(
+                GoExpression::literal("true".into()),
+                block(vec![never_call().into()]),
+                ElseArm::Else {
+                    body: block(vec![LoweredStatement::Return(vec![]).into()]),
+                    inline: true,
+                },
+            ))
+            .into(),
+        ]);
         assert!(body.go_terminates());
     }
 
@@ -1263,12 +1256,14 @@ mod flow_tests {
             kind: SwitchKind::Conditional,
             cases: vec![SwitchCasePlan {
                 labels: vec![GoExpression::literal("true".into())],
-                body: block(vec![LoweredStatement::Break(LoopTransfer::Unlabeled)]),
+                body: block(vec![
+                    LoweredStatement::Break(LoopTransfer::Unlabeled).into(),
+                ]),
             }],
-            default: Some(block(vec![LoweredStatement::Return(vec![])])),
+            default: Some(block(vec![LoweredStatement::Return(vec![]).into()])),
             postlude: Vec::new(),
         });
-        let body = block(vec![infinite(vec![switch])]);
+        let body = block(vec![infinite(vec![switch.into()]).into()]);
         assert!(body.go_terminates());
     }
 
@@ -1278,23 +1273,26 @@ mod flow_tests {
             kind: SwitchKind::Conditional,
             cases: vec![SwitchCasePlan {
                 labels: vec![GoExpression::literal("true".into())],
-                body: block(vec![LoweredStatement::Break(LoopTransfer::Labeled(
-                    "outer".into(),
-                ))]),
+                body: block(vec![
+                    LoweredStatement::Break(LoopTransfer::Labeled("outer".into())).into(),
+                ]),
             }],
-            default: Some(block(vec![LoweredStatement::Continue(
-                LoopTransfer::Labeled("outer".into()),
-            )])),
+            default: Some(block(vec![
+                LoweredStatement::Continue(LoopTransfer::Labeled("outer".into())).into(),
+            ])),
             postlude: Vec::new(),
         });
-        let body = block(vec![LoweredStatement::Loop(LoopPlan {
-            prologue: Vec::new(),
-            kind: LoopKind::Source {
-                label: Some("outer".into()),
-            },
-            header: LoopHeader::Infinite,
-            body: block(vec![switch]),
-        })]);
+        let body = block(vec![
+            LoweredStatement::Loop(LoopPlan {
+                prologue: Vec::new(),
+                kind: LoopKind::Source {
+                    label: Some("outer".into()),
+                },
+                header: LoopHeader::Infinite,
+                body: block(vec![switch.into()]),
+            })
+            .into(),
+        ]);
         assert!(!body.go_terminates());
     }
 }
@@ -1310,20 +1308,23 @@ mod go_uses_tests {
     fn inner_binding_does_not_count_as_a_read_of_the_outer_local() {
         let mut scope = ScopeState::new();
         let outer = GoIdentifier::local("value".to_string(), scope.new_local_id());
-        let mut statements = vec![LoweredStatement::Block(LoweredBlock {
-            statements: vec![
-                define("value".to_string(), GoExpression::literal("1".to_string())),
-                LoweredStatement::Return(vec![GoExpression::name("value".to_string())]),
-            ],
-        })];
+        let mut statements = vec![
+            LoweredStatement::Block(LoweredBlock {
+                statements: vec![
+                    define("value".to_string(), GoExpression::literal("1".to_string())),
+                    LoweredStatement::Return(vec![GoExpression::name("value".to_string())]).into(),
+                ],
+            })
+            .into(),
+        ];
         identify_body_locals(&mut statements, from_ref(&outer), &mut scope);
 
         let uses = GoUses::of(&statements);
         assert!(!uses.contains_identifier(&outer));
-        let LoweredStatement::Block(body) = &statements[0] else {
+        let LoweredStatement::Block(body) = &statements[0].kind else {
             panic!("expected block");
         };
-        let LoweredStatement::Define(inner) = &body.statements[0] else {
+        let LoweredStatement::Define(inner) = &body.statements[0].kind else {
             panic!("expected definition");
         };
         assert!(uses.contains_identifier(&inner.names[0]));
@@ -1332,9 +1333,9 @@ mod go_uses_tests {
     #[test]
     fn external_name_does_not_count_as_a_local_use() {
         let local = GoIdentifier::local("value".to_string(), LocalId(1));
-        let statements = vec![LoweredStatement::Return(vec![GoExpression::external_name(
-            "value".to_string(),
-        )])];
+        let statements = vec![
+            LoweredStatement::Return(vec![GoExpression::external_name("value".to_string())]).into(),
+        ];
         assert!(!GoUses::of(&statements).contains_identifier(&local));
     }
 }

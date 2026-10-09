@@ -1959,6 +1959,62 @@ pub fn MaybeValues() -> Option<Slice<Option<int>>>
 }
 
 #[test]
+fn interop_go_result_bridges_follow_return_abi() {
+    let input = r#"
+import "go:example.com/nested"
+
+fn tuple_value() -> (Slice<Option<int>>, int) {
+  let (values, count) = nested.Pair()
+  (values, count)
+}
+
+fn tuple_return() -> (Slice<Option<int>>, int) {
+  nested.Pair()
+}
+
+fn maybe_value() -> Option<Slice<Option<int>>> {
+  let values = nested.MaybeValues()?
+  if let Some(again) = nested.MaybeValues() {
+    let _ = again
+  }
+  Some(values)
+}
+
+fn maybe_return() -> Option<Slice<Option<int>>> {
+  nested.MaybeValues()
+}
+
+fn loaded() -> Result<Slice<Option<int>>, error> {
+  let values = nested.Load()?
+  match nested.Load() {
+    Ok(again) => { let _ = again },
+    Err(_) => {},
+  }
+  Ok(values)
+}
+
+fn load_return() -> Result<Slice<Option<int>>, error> {
+  nested.Load()
+}
+
+fn main() {
+  let _ = tuple_value()
+  let _ = tuple_return()
+  let _ = maybe_value()
+  let _ = maybe_return()
+  let _ = loaded()
+  let _ = load_return()
+}
+"#;
+    let typedef = r#"
+pub fn Pair() -> (Slice<Option<int>>, int)
+pub fn MaybeValues() -> Option<Slice<Option<int>>>
+pub fn Load() -> Result<Slice<Option<int>>, error>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/nested", typedef)]);
+}
+
+#[test]
 fn interop_some_stores_result_fn_in_lowered_abi() {
     let input = r#"
 import ext "go:example.com/ext"
@@ -2624,6 +2680,24 @@ pub fn Use(f: fn() -> Slice<Option<string>>)
 }
 
 #[test]
+fn interop_lisette_fn_into_go_variadic_callback_param() {
+    let input = r#"
+import "go:example.com/aws"
+
+fn main() {
+  aws.UseOne(Ok)
+  aws.UseMany(Ok, Ok)
+}
+"#;
+    let typedef = r#"
+pub fn UseOne(f: fn(int) -> Result<int, error>)
+
+pub fn UseMany(fs: VarArgs<fn(int) -> Result<int, error>>)
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
 fn interop_go_fn_into_lisette_fn_param() {
     let input = r#"
 import "go:example.com/aws"
@@ -3229,6 +3303,56 @@ fn main() {
   let _ = pick()
   let _ = assigned
   let _ = holder
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_go_fn_into_tuple_slot_with_nullable_option() {
+    let input = r#"
+import "go:encoding/pem"
+
+fn apply(f: fn(Slice<byte>) -> (Option<Ref<pem.Block>>, Slice<byte>), data: Slice<byte>) -> bool {
+  let (block, _) = f(data)
+  block.is_some()
+}
+
+fn main() {
+  let _ = apply(pem.Decode, [])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_go_fn_value_wrapper_with_nullable_tuple_slots() {
+    let input = r#"
+import "go:iter"
+import "go:slices"
+
+fn main() {
+  let s: Option<iter.Seq<int>> = Some(slices.Values([1, 2, 3]))
+  let _ = s.map(iter.Pull)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_go_fn_into_alias_tuple_slot_with_nullable_option() {
+    let input = r#"
+import "go:encoding/pem"
+
+type Decoded = (Option<Ref<pem.Block>>, Slice<byte>)
+
+fn apply(f: fn(Slice<byte>) -> Decoded, data: Slice<byte>) -> bool {
+  let (block, _) = f(data)
+  block.is_some()
+}
+
+fn main() {
+  let _ = apply(pem.Decode, [])
 }
 "#;
     assert_emit_snapshot!(input);

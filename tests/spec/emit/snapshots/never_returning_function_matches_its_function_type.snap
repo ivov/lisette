@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn die() -> Never { panic("x") }
+  
+  fn call(f: fn() -> Never) { f() }
+  
+  fn named() { call(die) }
+  
+  fn lambda() { call(|| { die() }) }
+  
+  fn typed_lambda() {
+    let g: fn() -> Never = || { panic("z") }
+    call(g)
+  }
+---
+package main
+
+func die() {
+	panic("x")
+}
+
+func call(f func()) {
+	f()
+}
+
+func named() {
+	call(die)
+}
+
+func lambda() {
+	call(func() {
+		die()
+	})
+}
+
+func typedLambda() {
+	g := func() {
+		panic("z")
+	}
+	call(g)
+}

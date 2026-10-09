@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::names::go_name;
 use syntax::ast::{Annotation, Expression, Generic, ParentInterface};
+use syntax::program::Definition;
 use syntax::types::unqualified_name;
 
 impl Planner<'_> {
@@ -61,9 +62,18 @@ impl Planner<'_> {
             .expect("interface method must have return type")
             .clone();
         let qualified_id = self.facts.qualified_current(interface_name);
-        let hints = self.go_interface_method_hints(&qualified_id, func.name);
-        let return_abi =
-            self.interface_method_return_abi(&qualified_id, func.name, &raw_return_ty, &hints);
+        // Looked up by source name: a sealed method is keyed differently.
+        let method = self
+            .facts
+            .definition(&qualified_id)
+            .and_then(Definition::methods)
+            .and_then(|methods| {
+                methods
+                    .values()
+                    .find(|method| method.source_name == *func.name)
+            })
+            .expect("interface method must be registered");
+        let return_abi = self.interface_method_return_abi(func.name, method);
         let return_type = if return_abi.is_lowered() {
             self.render_lowered_return_ty(&return_abi, &raw_return_ty)
         } else {
@@ -72,7 +82,7 @@ impl Planner<'_> {
 
         let method_name = self.method_go_name(func.name, is_public);
 
-        if return_type == "struct{}" {
+        if self.interface_method_returns_void(&return_abi, &raw_return_ty) {
             format!("{}({})", method_name, args.join(", "))
         } else {
             format!("{}({}) {}", method_name, args.join(", "), return_type)

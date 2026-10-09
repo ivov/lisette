@@ -29,6 +29,7 @@ description: |
                         byte_offset: 9,
                         byte_length: 5,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Constructor {
@@ -141,6 +142,7 @@ description: |
                                                 byte_offset: 77,
                                                 byte_length: 5,
                                             },
+                                            binding: None,
                                         },
                                     ],
                                     rest: Bind {
@@ -150,6 +152,7 @@ description: |
                                             byte_offset: 86,
                                             byte_length: 4,
                                         },
+                                        binding: None,
                                     },
                                     resolution: Unresolved,
                                     span: Span {

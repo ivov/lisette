@@ -1,8 +1,10 @@
+use std::slice;
+
 use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::plan::bodies::GoUses;
-use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
 
-use syntax::ast::{BindingId, Expression, MatchArm, Pattern, Span};
+use syntax::ast::{Expression, MatchArm, Pattern, Span};
 use syntax::types::Type;
 
 use crate::Planner;
@@ -12,25 +14,25 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name::{self, GeneratedPackage, testkit_qualifier};
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::binding_emit::{
-    apply_refutable_root_assertion, apply_root_assertion, compose_refutable_condition,
+    self, AssertedPattern, apply_refutable_root_assertion, apply_root_assertion,
     tree_assignment_statements, tree_binding_statements, with_tree_bindings,
 };
 use crate::patterns::decision_tree::{
-    self, PatternBinding, PatternInfo, SubjectRoot, render_condition,
+    self, BindingTarget, PatternBinding, PatternInfo, SubjectRoot, render_condition,
 };
 use crate::patterns::matching::{
-    ArmBinding, ResultFusePlan, arm_binding_span, ok_pattern_field, some_pattern_field,
+    ArmBinding, FusedName, PreludeVariant, ResultFusePlan, field_binding, ok_pattern_field,
+    prelude_variant, some_pattern_field,
 };
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan, define,
-    discard, expression_statement,
+    ElseArm, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
+    Statement, define, discard, expression_statement,
 };
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
 use crate::statements::testing::test_context_call;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 #[derive(Clone, Copy)]
 pub(crate) struct AnnotatedPattern<'a> {
@@ -111,7 +113,7 @@ impl ResolvedSubject {
         &self.subject
     }
 
-    fn push_declaration(self, statements: &mut Vec<LoweredStatement>, body: &[LoweredStatement]) {
+    fn push_declaration(self, statements: &mut Vec<Statement>, body: &[Statement]) {
         if let Some(PendingSubject { name, expression }) = self.pending {
             if GoUses::of(body).contains_identifier(&name) {
                 statements.push(define(name, expression));
@@ -120,12 +122,6 @@ impl ResolvedSubject {
             }
         }
     }
-}
-
-struct RefutableAlternative {
-    info: PatternInfo,
-    subject: GoExpression,
-    ok_test: Option<GoExpression>,
 }
 
 /// The identifier under a chain of field accesses.
@@ -191,7 +187,7 @@ impl Planner<'_> {
 
     fn resolve_pattern_subject(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         subject: PatternSubject<'_>,
     ) -> ResolvedSubject {
         match subject {
@@ -201,10 +197,12 @@ impl Planner<'_> {
                 pattern,
                 temp_hint,
             } => {
-                if let Expression::Identifier { value, .. } = scrutinee
+                if let Expression::Identifier {
+                    value, resolution, ..
+                } = scrutinee
                     && self.can_reuse_subject_identifier(value, pattern_binds_name(pattern, value))
                 {
-                    let var = self.reference_go_name(value);
+                    let var = self.reference_go_name(value, resolution);
                     return ResolvedSubject::existing(GoExpression::identifier(
                         self.scope.identifier_for_go_name(var),
                     ));
@@ -248,15 +246,14 @@ impl Planner<'_> {
         subject: PatternSubject<'_>,
         pattern: &Pattern,
         subject_ty: &Type,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
         let mut statements = Vec::new();
         let resolved = self.resolve_pattern_subject(&mut statements, subject);
         let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
-        self.require_packages(&info.packages);
 
         let mut body = Vec::new();
-        let effective = apply_root_assertion(self, &mut body, &info, resolved.var());
-        tree_binding_statements(self, &mut body, &info.bindings, &effective, &[]);
+        let asserted = apply_root_assertion(self, &mut body, info, resolved.var());
+        tree_binding_statements(self, &mut body, &asserted.bindings, &asserted.subject, &[]);
 
         resolved.push_declaration(&mut statements, &body);
         statements.extend(body);
@@ -268,7 +265,7 @@ impl Planner<'_> {
         ap: AnnotatedPattern,
         scrutinee: &Expression,
         else_block: &Expression,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
         self.lower_refutable_let_site(ap, scrutinee, RefutableFail::ElseBlock(else_block))
     }
 
@@ -277,7 +274,7 @@ impl Planner<'_> {
         ap: AnnotatedPattern,
         scrutinee: &Expression,
         pattern_span: Span,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
         self.lower_refutable_let_site(ap, scrutinee, RefutableFail::AssertFail(pattern_span))
     }
 
@@ -286,7 +283,7 @@ impl Planner<'_> {
         ap: AnnotatedPattern,
         scrutinee: &Expression,
         fail: RefutableFail,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
         if let RefutableFail::ElseBlock(else_block) = fail {
             if let Some(statements) =
                 self.lower_fused_option_let_else(ap.pattern, scrutinee, else_block)
@@ -329,7 +326,7 @@ impl Planner<'_> {
         pattern: &Pattern,
         scrutinee: &Expression,
         else_block: &Expression,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
         let fuse = self.result_fuse_plan(scrutinee)?;
         if !fuse.carries_payload() {
             return None;
@@ -356,28 +353,19 @@ impl Planner<'_> {
         pattern: &Pattern,
         scrutinee: &Expression,
         else_block: &Expression,
-    ) -> Option<Vec<LoweredStatement>> {
-        let Pattern::EnumVariant {
-            identifier,
-            fields,
-            rest: false,
-            ..
-        } = pattern
-        else {
-            return None;
-        };
-        let ("Ok" | "Result.Ok", [payload]) = (identifier.as_str(), fields.as_slice()) else {
+    ) -> Option<Vec<Statement>> {
+        let (PreludeVariant::Ok, [payload]) = prelude_variant(pattern)? else {
             return None;
         };
         let payload_ty = self.facts.peel_alias(&scrutinee.get_type()).ok_type();
         let info = decision_tree::collect_pattern_info(self, payload, &payload_ty);
-        if !info.checks.is_empty() || info.root_assertion.is_some() {
+        if !info.is_irrefutable() {
             return None;
         }
         let binds = info
             .bindings
             .iter()
-            .any(|binding| binding.go_name.is_some());
+            .any(|binding| binding.target.is_named());
         let slot = if binds {
             CommaOkValueSlot::Temp
         } else {
@@ -406,7 +394,7 @@ impl Planner<'_> {
         pattern: &Pattern,
         scrutinee: &Expression,
         else_block: &Expression,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
         let fuse = self.option_fuse_plan(scrutinee)?;
         let field = some_pattern_field(pattern)?;
 
@@ -426,37 +414,42 @@ impl Planner<'_> {
 
     fn finish_fused_let_else(
         &mut self,
-        mut statements: Vec<LoweredStatement>,
+        mut statements: Vec<Statement>,
         fail_condition: PairCondition,
-        binding: Option<(String, String)>,
+        binding: Option<(FusedName<'_>, String)>,
         else_block: &Expression,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
         // The else block sees the enclosing scope, so it lowers before the binding installs.
         let fail_body = self.lower_block_as_body(else_block);
-        statements.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
-            initializer: fail_condition.initializer,
-            condition: fail_condition.condition,
-            then_body: fail_body,
-            else_arm: ElseArm::None,
-        }));
+        statements.push(
+            LoweredStatement::If(IfPlan {
+                condition_setup: Vec::new(),
+                initializer: fail_condition.initializer,
+                condition: fail_condition.condition,
+                then_body: fail_body,
+                else_arm: ElseArm::None,
+            })
+            .into(),
+        );
         if let Some((name, go_name)) = binding {
-            self.scope.bind(name, go_name);
+            self.scope
+                .bind_source(name.name, name.binding.as_slice(), go_name);
         }
         statements
     }
 
-    fn declare_fused_binding(&mut self, pattern: &Pattern) -> Option<(String, String)> {
-        self.go_name_for_binding(pattern).map(|name| {
-            let escaped = go_name::escape_reserved(&name).into_owned();
-            let go_name = if self.shadows_declaration(&escaped) {
-                self.fresh_var(Some(&name))
-            } else {
-                escaped
-            };
-            self.declare(&go_name);
-            (name, go_name)
-        })
+    fn declare_fused_binding<'p>(&mut self, field: &'p Pattern) -> Option<(FusedName<'p>, String)> {
+        let name = field_binding(field)
+            .flatten()
+            .filter(|_| !self.facts.is_unused_binding(field))?;
+        let escaped = go_name::escape_reserved(name.name).into_owned();
+        let go_name = if self.shadows_declaration(&escaped) {
+            self.fresh_var(Some(name.name))
+        } else {
+            escaped
+        };
+        self.declare(&go_name);
+        Some((name, go_name))
     }
 
     /// Resolve a while-let scrutinee to its loop-subject var, returning any
@@ -465,11 +458,14 @@ impl Planner<'_> {
         &mut self,
         pattern: &Pattern,
         scrutinee: &Expression,
-    ) -> (GoExpression, Vec<LoweredStatement>) {
-        if let Expression::Identifier { value, .. } = scrutinee {
+    ) -> (GoExpression, Vec<Statement>) {
+        if let Expression::Identifier {
+            value, resolution, ..
+        } = scrutinee
+        {
             let has_collision = pattern_binds_name(pattern, value);
             if self.can_reuse_subject_identifier(value, has_collision) {
-                let var = self.reference_go_name(value);
+                let var = self.reference_go_name(value, resolution);
                 return (
                     GoExpression::identifier(self.scope.identifier_for_go_name(var)),
                     Vec::new(),
@@ -501,62 +497,21 @@ impl Planner<'_> {
         let scrutinee_ty = scrutinee.get_type();
         let (subject_var, subject_setup) = self.while_let_subject(pattern, scrutinee);
 
-        // Or-patterns with bindings lower to an `if/else if` chain whose
-        // terminal `else` breaks the loop.
-        if let Pattern::Or { patterns, .. } = pattern
-            && pattern_has_bindings(pattern)
-        {
-            let mut loop_body = subject_setup;
-            self.lower_while_let_or_pattern(
-                &mut loop_body,
-                patterns,
-                TypedSubject {
-                    var: &subject_var,
-                    ty: &scrutinee_ty,
-                },
-                body,
-            );
-            let plan = self.build_source_loop(
-                Vec::new(),
-                LoopHeader::Infinite,
-                LoweredBlock {
-                    statements: loop_body,
-                },
-            );
-            return LoweredBlock {
-                statements: vec![LoweredStatement::Loop(plan)],
-            };
-        }
-
-        let info = decision_tree::collect_pattern_info(self, pattern, &scrutinee_ty);
-        self.require_packages(&info.packages);
+        // Only a binding or-pattern tests each alternative in turn.
+        let alternatives = match pattern {
+            Pattern::Or { patterns, .. } if pattern_has_bindings(pattern) => patterns.as_slice(),
+            _ => slice::from_ref(pattern),
+        };
         let mut loop_body = subject_setup;
-        let (effective, ok_test) =
-            apply_refutable_root_assertion(self, &mut loop_body, &info, &subject_var);
-        let condition = compose_refutable_condition(ok_test.as_ref(), &info.checks, &effective);
-
-        let then_body = self.with_scope(|this| {
-            let mut then_body: Vec<LoweredStatement> = Vec::new();
-            if !matches!(pattern, Pattern::Or { .. }) {
-                tree_binding_statements(this, &mut then_body, &info.bindings, &effective, &[body]);
-            }
-            then_body.extend(this.lower_block_as_body(body).statements);
-            then_body
-        });
-
-        loop_body.push(LoweredStatement::If(IfPlan::plain(
-            condition,
-            LoweredBlock {
-                statements: then_body,
+        self.lower_while_let_alternatives(
+            &mut loop_body,
+            alternatives,
+            TypedSubject {
+                var: &subject_var,
+                ty: &scrutinee_ty,
             },
-            ElseArm::from_body(
-                LoweredBlock {
-                    statements: vec![loop_break(self)],
-                },
-                false,
-            ),
-        )));
-
+            body,
+        );
         let plan = self.build_source_loop(
             Vec::new(),
             LoopHeader::Infinite,
@@ -565,7 +520,7 @@ impl Planner<'_> {
             },
         );
         LoweredBlock {
-            statements: vec![LoweredStatement::Loop(plan)],
+            statements: vec![LoweredStatement::Loop(plan).into()],
         }
     }
 
@@ -590,24 +545,23 @@ impl Planner<'_> {
         let late_binding = bound.late_binding();
 
         let mut loop_body = bound.statements;
-        loop_body.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
-            initializer: none_condition.initializer,
-            condition: none_condition.condition,
-            then_body: LoweredBlock {
-                statements: vec![loop_break(self)],
-            },
-            else_arm: ElseArm::None,
-        }));
+        loop_body.push(
+            LoweredStatement::If(IfPlan {
+                condition_setup: Vec::new(),
+                initializer: none_condition.initializer,
+                condition: none_condition.condition,
+                then_body: LoweredBlock {
+                    statements: vec![loop_break(self).into()],
+                },
+                else_arm: ElseArm::None,
+            })
+            .into(),
+        );
         loop_body.extend(late_binding);
         let (body_block, _) = self.lower_fused_arm(
-            &[binding.as_ref().and_then(|(name, go_name)| {
-                ArmBinding::alias_at(
-                    Some(name),
-                    Some(go_name),
-                    arm_binding_span(pattern, Some(name)),
-                )
-            })],
+            &[binding
+                .as_ref()
+                .and_then(|(name, go_name)| ArmBinding::alias_at(Some(*name), Some(go_name)))],
             body,
             &PlacePlan::Statement,
         );
@@ -621,7 +575,7 @@ impl Planner<'_> {
             },
         );
         Some(LoweredBlock {
-            statements: vec![LoweredStatement::Loop(plan)],
+            statements: vec![LoweredStatement::Loop(plan).into()],
         })
     }
 
@@ -634,8 +588,10 @@ impl Planner<'_> {
             RefutableFail::ElseBlock(else_block) => self.lower_block_as_body(else_block),
             RefutableFail::AssertFail(span) => {
                 let handle = self
+                    .scope
                     .current_test_handle()
-                    .expect("let assert without a test handle should be rejected by semantics");
+                    .expect("let assert without a test handle should be rejected by semantics")
+                    .clone();
                 self.require_testkit();
                 let testkit = testkit_qualifier();
                 let literal = |text: String| GoExpression::literal(text);
@@ -651,7 +607,7 @@ impl Planner<'_> {
                     CompositeLayout::Inline { padded: false },
                 );
                 let call = test_context_call(
-                    GoExpression::name(handle),
+                    GoExpression::identifier(handle),
                     "FailAssert",
                     span,
                     vec![
@@ -673,68 +629,63 @@ impl Planner<'_> {
         subject: TypedSubject,
         fail: RefutableFail,
         subject_is_fixed: bool,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
         let AnnotatedPattern { pattern } = ap;
         let TypedSubject {
             var: subject_var,
             ty: subject_ty,
         } = subject;
-        let mut info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
-        self.require_packages(&info.packages);
+        let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
 
         let mut statements = Vec::new();
-        let (effective_subject, assert_ok) =
-            apply_refutable_root_assertion(self, &mut statements, &info, subject_var);
+        let mut asserted = apply_refutable_root_assertion(self, &mut statements, info, subject_var);
 
         if subject_is_fixed {
-            info.checks.retain(|check| {
-                !self.is_condition_established(&check.render(SubjectRoot::Var(&effective_subject)))
+            asserted.checks.retain(|check| {
+                !self.is_condition_established(&check.render(SubjectRoot::Var(&asserted.subject)))
             });
         }
 
-        if info.checks.is_empty() && assert_ok.is_none() {
+        if asserted.is_irrefutable() {
             tree_binding_statements(
                 self,
                 &mut statements,
-                &info.bindings,
-                &effective_subject,
+                &asserted.bindings,
+                &asserted.subject,
                 &[],
             );
             return statements;
         }
 
+        let AssertedPattern {
+            subject: effective_subject,
+            ok_test,
+            checks,
+            bindings,
+        } = asserted;
         let mut guard_parts: Vec<GoExpression> = Vec::new();
-        if let Some(ok) = assert_ok {
-            guard_parts.push(GoExpression::unary("!", ok));
+        if let Some(ok) = ok_test {
+            guard_parts.push(GoExpression::unary(UnaryOp::Not, ok));
         }
-        if !info.checks.is_empty() {
-            let negated = match info.checks.as_slice() {
+        if !checks.is_empty() {
+            let negated = match checks.as_slice() {
                 [check] => check.render_negated(SubjectRoot::Var(&effective_subject)),
                 _ => GoExpression::unary(
-                    "!",
-                    render_condition(&info.checks, SubjectRoot::Var(&effective_subject)),
+                    UnaryOp::Not,
+                    render_condition(&checks, SubjectRoot::Var(&effective_subject)),
                 ),
             };
             guard_parts.push(negated);
         }
         let guard = guard_parts
             .into_iter()
-            .reduce(|left, right| GoExpression::binary(left, "||", right))
+            .reduce(|left, right| GoExpression::binary(left, BinaryOp::Or, right))
             .expect("a refutable pattern has a check or a type assertion");
         let fail_body = self.lower_refutable_fail(fail, subject_var);
-        statements.push(LoweredStatement::If(IfPlan::plain(
-            guard,
-            fail_body,
-            ElseArm::None,
-        )));
+        statements
+            .push(LoweredStatement::If(IfPlan::plain(guard, fail_body, ElseArm::None)).into());
 
-        tree_binding_statements(
-            self,
-            &mut statements,
-            &info.bindings,
-            &effective_subject,
-            &[],
-        );
+        tree_binding_statements(self, &mut statements, &bindings, &effective_subject, &[]);
         statements
     }
 
@@ -743,7 +694,7 @@ impl Planner<'_> {
         ap: AnnotatedPattern,
         subject: TypedSubject,
         fail: RefutableFail,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
         let AnnotatedPattern { pattern } = ap;
         let TypedSubject {
             var: subject_var,
@@ -756,10 +707,11 @@ impl Planner<'_> {
             .iter()
             .map(|alt| decision_tree::collect_pattern_info(self, alt, subject_ty))
             .collect();
-        share_unused_alternative_bindings(&mut infos);
+        let mut bindings: Vec<_> = infos.iter_mut().map(|i| &mut i.bindings).collect();
+        decision_tree::share_alternative_bindings(&mut bindings);
         let failure = infos
             .iter()
-            .all(|info| !info.checks.is_empty() || info.root_assertion.is_some())
+            .all(|info| !info.is_irrefutable())
             .then(|| self.lower_refutable_fail(fail, subject_var));
 
         let mut statements = Vec::new();
@@ -767,92 +719,84 @@ impl Planner<'_> {
         let alternatives = self.prepare_refutable_alternatives(&mut statements, infos, subject_var);
         let mut pieces = Vec::new();
         for alternative in alternatives {
-            let RefutableAlternative {
-                info,
-                subject,
-                ok_test,
-            } = alternative;
             let mut assigns = Vec::new();
-            tree_assignment_statements(self, &mut assigns, &info.bindings, &subject);
+            tree_assignment_statements(
+                self,
+                &mut assigns,
+                &alternative.bindings,
+                &alternative.subject,
+            );
             let body = LoweredBlock {
                 statements: assigns,
             };
-            if info.checks.is_empty() && ok_test.is_none() {
+            if alternative.is_irrefutable() {
                 if pieces.is_empty() {
                     statements.extend(body.statements);
                 } else {
-                    statements.push(assemble_if_else_chain(pieces, body));
+                    statements.push(assemble_if_else_chain(pieces, body).into());
                 }
                 return statements;
             }
-            let condition = compose_refutable_condition(ok_test.as_ref(), &info.checks, &subject);
-            pieces.push((condition, body));
+            pieces.push((alternative.condition(), body));
         }
-        statements.push(assemble_if_else_chain(
-            pieces,
-            failure.expect("all alternatives are refutable"),
-        ));
+        statements.push(
+            assemble_if_else_chain(pieces, failure.expect("all alternatives are refutable")).into(),
+        );
         statements
     }
 
     fn declare_alternative_bindings(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         bindings: &[PatternBinding],
     ) {
         for binding in bindings {
-            let Some(go_name) = &binding.go_name else {
-                self.scope.bind(&binding.lisette_name, "_");
-                for id in &binding.binding_ids {
-                    self.scope.register_binding_id(*id, &binding.lisette_name);
+            let (go_name, ty) = match &binding.target {
+                BindingTarget::Unused => {
+                    self.scope
+                        .bind_source(&binding.lisette_name, &binding.binding_ids, "_");
+                    continue;
                 }
-                continue;
+                BindingTarget::Unit => {
+                    binding_emit::bind_inline_unit(self, binding);
+                    continue;
+                }
+                BindingTarget::Named { go_name, ty } => (go_name, ty),
             };
-            let Some(ty) = &binding.ty else {
-                continue;
-            };
-            let go_name = self.claim_declared_binding(&binding.lisette_name, go_name.clone());
-            for id in &binding.binding_ids {
-                self.scope.register_binding_id(*id, &binding.lisette_name);
-            }
+            let go_name = self.claim_declared_binding(
+                &binding.lisette_name,
+                &binding.binding_ids,
+                go_name.clone(),
+            );
             let go_type = self.use_go_type(ty);
-            statements.push(LoweredStatement::VarDecl {
-                name: self
-                    .scope
-                    .identifier_for_binding(&binding.lisette_name, go_name),
-                go_type,
-                value: None,
-            });
+            statements.push(
+                LoweredStatement::VarDecl {
+                    name: self
+                        .scope
+                        .identifier_for_binding(&binding.lisette_name, go_name),
+                    go_type,
+                    value: None,
+                }
+                .into(),
+            );
         }
     }
 
     fn prepare_refutable_alternatives(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         infos: Vec<PatternInfo>,
         subject: &GoExpression,
-    ) -> Vec<RefutableAlternative> {
+    ) -> Vec<AssertedPattern> {
         infos
             .into_iter()
-            .map(|info| {
-                self.require_packages(&info.packages);
-                let (subject, ok_test) =
-                    apply_refutable_root_assertion(self, statements, &info, subject);
-                RefutableAlternative {
-                    info,
-                    subject,
-                    ok_test,
-                }
-            })
+            .map(|info| apply_refutable_root_assertion(self, statements, info, subject))
             .collect()
     }
 
-    /// Lower a binding or-pattern while-let body into `statements`: per-
-    /// alternative root assertions, then an `if/else if` chain whose terminal
-    /// `else` breaks the loop.
-    fn lower_while_let_or_pattern(
+    fn lower_while_let_alternatives(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         patterns: &[Pattern],
         subject: TypedSubject,
         body: &Expression,
@@ -865,26 +809,20 @@ impl Planner<'_> {
             .iter()
             .map(|alt| decision_tree::collect_pattern_info(self, alt, subject_ty))
             .collect();
-        share_unused_alternative_bindings(&mut alternatives);
+        let mut bindings: Vec<_> = alternatives.iter_mut().map(|i| &mut i.bindings).collect();
+        decision_tree::share_alternative_bindings(&mut bindings);
 
         let alternatives =
             self.prepare_refutable_alternatives(statements, alternatives, subject_var);
         let mut pieces = Vec::with_capacity(alternatives.len());
         for alternative in alternatives {
-            let RefutableAlternative {
-                info,
-                subject: effective,
-                ok_test,
-            } = alternative;
-            let condition = compose_refutable_condition(ok_test.as_ref(), &info.checks, &effective);
-
             let branch = self.with_scope(|this| {
                 let mut branch = Vec::new();
                 with_tree_bindings(
                     this,
                     &mut branch,
-                    &info.bindings,
-                    &effective,
+                    &alternative.bindings,
+                    &alternative.subject,
                     body,
                     |this, branch| {
                         branch.extend(this.lower_block_as_body(body).statements);
@@ -893,13 +831,13 @@ impl Planner<'_> {
                 branch
             });
 
-            pieces.push((condition, LoweredBlock { statements: branch }));
+            pieces.push((alternative.condition(), LoweredBlock { statements: branch }));
         }
 
         let terminal = LoweredBlock {
-            statements: vec![loop_break(self)],
+            statements: vec![loop_break(self).into()],
         };
-        statements.push(assemble_if_else_chain(pieces, terminal));
+        statements.push(assemble_if_else_chain(pieces, terminal).into());
     }
 
     pub(crate) fn lower_select_receive_pattern_site(
@@ -909,7 +847,7 @@ impl Planner<'_> {
         body: &Expression,
         default_body: Option<&Expression>,
         place: &PlacePlan,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
         self.lower_refutable_arm(subject, ap, body, place, |this| {
             default_body.map(|default| this.lower_block_to_place(default, place))
         })
@@ -922,7 +860,7 @@ impl Planner<'_> {
         some_body: &Expression,
         match_arms: &[MatchArm],
         place: &PlacePlan,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
         self.lower_refutable_arm(subject, ap, some_body, place, |this| {
             Some(lower_none_arm_body(this, match_arms, place))
         })
@@ -938,24 +876,22 @@ impl Planner<'_> {
         body: &Expression,
         place: &PlacePlan,
         failure: impl FnOnce(&mut Planner) -> Option<LoweredBlock>,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
         let AnnotatedPattern { pattern } = ap;
         let TypedSubject {
             var: subject_var,
             ty: subject_ty,
         } = subject;
         let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
-        self.require_packages(&info.packages);
         let mut statements = Vec::new();
-        let (effective, ok_test) =
-            apply_refutable_root_assertion(self, &mut statements, &info, subject_var);
+        let asserted = apply_refutable_root_assertion(self, &mut statements, info, subject_var);
 
-        if info.checks.is_empty() && ok_test.is_none() {
+        if asserted.is_irrefutable() {
             with_tree_bindings(
                 self,
                 &mut statements,
-                &info.bindings,
-                &effective,
+                &asserted.bindings,
+                &asserted.subject,
                 body,
                 |this, statements| {
                     let block = this.lower_block_to_place(body, place);
@@ -964,13 +900,13 @@ impl Planner<'_> {
             );
             return statements;
         }
-        let condition = compose_refutable_condition(ok_test.as_ref(), &info.checks, &effective);
+        let condition = asserted.condition();
         let mut then_body = Vec::new();
         with_tree_bindings(
             self,
             &mut then_body,
-            &info.bindings,
-            &effective,
+            &asserted.bindings,
+            &asserted.subject,
             body,
             |this, then_body| {
                 let block = this.lower_block_to_place(body, place);
@@ -981,13 +917,16 @@ impl Planner<'_> {
             Some(body) => ElseArm::from_body(body, false),
             None => ElseArm::None,
         };
-        statements.push(LoweredStatement::If(IfPlan::plain(
-            condition,
-            LoweredBlock {
-                statements: then_body,
-            },
-            else_arm,
-        )));
+        statements.push(
+            LoweredStatement::If(IfPlan::plain(
+                condition,
+                LoweredBlock {
+                    statements: then_body,
+                },
+                else_arm,
+            ))
+            .into(),
+        );
         statements
     }
 }
@@ -1047,7 +986,11 @@ impl Planner<'_> {
     ) -> (GoIdentifier, bool) {
         match pattern {
             Pattern::WildCard { .. } => (GoIdentifier::name("_".to_string()), false),
-            Pattern::Identifier { identifier, span } => {
+            Pattern::Identifier {
+                identifier,
+                binding,
+                ..
+            } => {
                 let Some(go_name) = self.go_name_for_binding(pattern) else {
                     return (GoIdentifier::name("_".to_string()), false);
                 };
@@ -1055,10 +998,8 @@ impl Planner<'_> {
                     let name = self.fresh_var(Some("recv"));
                     return (self.scope.generated_identifier(&name), true);
                 }
-                self.scope.bind(identifier, go_name);
-                if let Some(id) = self.facts.binding_id_at(*span) {
-                    self.scope.register_binding_id(id, identifier);
-                }
+                self.scope
+                    .bind_source(identifier, binding.as_slice(), go_name);
                 (
                     self.scope
                         .bound_go_identifier(identifier)
@@ -1071,37 +1012,6 @@ impl Planner<'_> {
                 let name = self.fresh_var(Some("recv"));
                 (self.scope.generated_identifier(&name), true)
             }
-        }
-    }
-}
-
-fn share_unused_alternative_bindings(infos: &mut [PatternInfo]) {
-    let unused_names: HashSet<String> = infos
-        .iter()
-        .flat_map(|info| info.bindings.iter())
-        .filter(|binding| binding.go_name.is_none())
-        .map(|binding| binding.lisette_name.clone())
-        .collect();
-    let mut ids_by_name: HashMap<String, Vec<BindingId>> = HashMap::default();
-    for info in infos.iter() {
-        for binding in &info.bindings {
-            let ids = ids_by_name.entry(binding.lisette_name.clone()).or_default();
-            for id in &binding.binding_ids {
-                if !ids.contains(id) {
-                    ids.push(*id);
-                }
-            }
-        }
-    }
-    for info in infos.iter_mut() {
-        for binding in info.bindings.iter_mut() {
-            if unused_names.contains(&binding.lisette_name) {
-                binding.go_name = None;
-            }
-            binding.binding_ids = ids_by_name
-                .get(&binding.lisette_name)
-                .cloned()
-                .unwrap_or_default();
         }
     }
 }

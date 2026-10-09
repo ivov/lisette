@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn fail(msg: string) -> Never { panic(msg) }
+  
+  fn test(n: int) {
+    let x = n + 1
+    let _ = x
+    let x: int = fail("boom")
+    let _ = x
+  }
+---
+package main
+
+func fail(msg string) {
+	panic(msg)
+}
+
+func test(n int) {
+	x := n + 1
+	_ = x
+	var x_1 int
+	fail("boom")
+	_ = x_1
+}

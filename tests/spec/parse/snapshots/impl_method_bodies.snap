@@ -95,6 +95,7 @@ description: |
                                 byte_offset: 69,
                                 byte_length: 4,
                             },
+                            binding: None,
                         },
                         annotation: Some(
                             Constructor {
@@ -137,6 +138,7 @@ description: |
                                             byte_offset: 101,
                                             byte_length: 1,
                                         },
+                                        binding: None,
                                     },
                                     annotation: None,
                                     ty: Var {
@@ -211,6 +213,7 @@ description: |
                                             byte_offset: 129,
                                             byte_length: 1,
                                         },
+                                        binding: None,
                                     },
                                     annotation: None,
                                     ty: Var {

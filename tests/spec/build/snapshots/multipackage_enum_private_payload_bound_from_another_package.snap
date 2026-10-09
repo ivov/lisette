@@ -1,0 +1,54 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/shapes"
+)
+
+func main() {
+	subject := shapes.Make()
+	if subject.Tag == shapes.EFoo {
+		fmt.Println(subject.X)
+	} else {
+		fmt.Println("bar")
+	}
+}
+
+
+// === shapes/lib.go ===
+package shapes
+
+func MakeEFoo(arg0 Inner) E {
+	return E{Tag: EFoo, X: arg0}
+}
+
+func MakeEBar() E {
+	return E{Tag: EBar}
+}
+
+type Inner struct {
+	v int
+}
+
+type ETag uint8
+
+const (
+	EFoo ETag = iota
+	EBar
+)
+
+type E struct {
+	Tag ETag
+	X   Inner
+}
+
+func Make() E {
+	return E{
+		Tag: EFoo,
+		X:   Inner{v: 3},
+	}
+}

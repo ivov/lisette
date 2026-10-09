@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import documentation "go:strings"
+  
+  fn test() -> string {
+    documentation.ToUpper("a")
+  }
+---
+package main
+
+import documentation "strings"
+
+func test() string {
+	return documentation.ToUpper("a")
+}

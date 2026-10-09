@@ -32,6 +32,7 @@ pub fn check_redundant_rebinding(expression: &Expression, ctx: &NodeCtx) {
     let Pattern::Identifier {
         identifier,
         span: new_span,
+        ..
     } = &binding.pattern
     else {
         return;

@@ -1,6 +1,6 @@
 //! What evaluating a Go expression can do besides producing its value.
 
-use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
 use crate::plan::values::{EvaluationEffect, Stability};
 
 /// What can change a value that an evaluation reads.
@@ -234,32 +234,32 @@ impl GoExpressionNode {
                 }
             }
             Self::Conversion { .. } => Effects::default(),
-            Self::Unary { operator, .. } => match operator.as_str() {
-                "+" | "-" | "!" | "^" | "&" => Effects::default(),
-                "*" => reference_read(true),
-                "<-" => Effects {
-                    runs_code: true,
-                    may_block: true,
-                    reads: Reads::Shared,
-                    writes: Writes::Any,
-                    ..Effects::default()
-                },
-                _ => Effects::anything(),
-            },
+            Self::Unary { .. } => Effects::default(),
             Self::Binary {
                 operator,
                 left,
                 right,
-            } => match operator.as_str() {
-                "+" | "-" | "*" | "&" | "|" | "^" | "&^" | "&&" | "||" | "<" | "<=" | ">"
-                | ">=" => Effects::default(),
+            } => match operator {
+                BinaryOp::Add
+                | BinaryOp::Sub
+                | BinaryOp::Mul
+                | BinaryOp::BitAnd
+                | BinaryOp::BitOr
+                | BinaryOp::BitXor
+                | BinaryOp::BitAndNot
+                | BinaryOp::And
+                | BinaryOp::Or
+                | BinaryOp::Lt
+                | BinaryOp::Le
+                | BinaryOp::Gt
+                | BinaryOp::Ge => Effects::default(),
                 // Division by zero, a negative shift, and comparing
                 // uncomparable interface values panic.
-                "/" | "%" | "<<" | ">>" => Effects {
+                BinaryOp::Div | BinaryOp::Rem | BinaryOp::Shl | BinaryOp::Shr => Effects {
                     may_panic: true,
                     ..Effects::default()
                 },
-                "==" | "!="
+                BinaryOp::Eq | BinaryOp::Ne
                     if !matches!(left.as_ref(), Self::Literal(_))
                         && !matches!(right.as_ref(), Self::Literal(_))
                         && !(left.is_unit_struct_literal() && right.is_unit_struct_literal()) =>
@@ -269,8 +269,7 @@ impl GoExpressionNode {
                         ..Effects::default()
                     }
                 }
-                "==" | "!=" => Effects::default(),
-                _ => Effects::anything(),
+                BinaryOp::Eq | BinaryOp::Ne => Effects::default(),
             },
         }
     }
@@ -307,9 +306,13 @@ mod tests {
         }
     }
 
-    fn binary(left: GoExpressionNode, operator: &str, right: GoExpressionNode) -> GoExpressionNode {
+    fn binary(
+        left: GoExpressionNode,
+        operator: BinaryOp,
+        right: GoExpressionNode,
+    ) -> GoExpressionNode {
         GoExpressionNode::Binary {
-            operator: operator.to_string(),
+            operator,
             left: Box::new(left),
             right: Box::new(right),
         }
@@ -362,7 +365,7 @@ mod tests {
         assert!(!wrapped.panics_or_blocks());
         assert!(!wrapped.can_erase());
         assert!(
-            binary(call("f", vec![index()]), "+", index())
+            binary(call("f", vec![index()]), BinaryOp::Add, index())
                 .effects()
                 .panics_or_blocks()
         );
@@ -381,34 +384,24 @@ mod tests {
 
     #[test]
     fn panicking_operators_cannot_be_erased() {
-        for operator in ["/", "%", "<<", ">>"] {
+        for operator in [BinaryOp::Div, BinaryOp::Rem, BinaryOp::Shl, BinaryOp::Shr] {
             assert!(!binary(name("a"), operator, name("b")).effects().can_erase());
         }
-        assert!(binary(name("a"), "+", name("b")).effects().can_erase());
-        assert!(binary(name("a"), "==", literal("1")).effects().can_erase());
-        assert!(!binary(name("a"), "==", name("b")).effects().can_erase());
-    }
-
-    #[test]
-    fn unknown_operators_can_do_anything() {
-        let unknown = GoExpressionNode::Unary {
-            operator: "~".to_string(),
-            operand: Box::new(name("x")),
-        };
-        assert!(!unknown.effects().can_erase());
-        assert!(!unknown.effects().can_duplicate());
-        assert!(!binary(name("a"), "??", name("b")).effects().can_erase());
-    }
-
-    #[test]
-    fn a_receive_blocks_and_cannot_repeat() {
-        let receive = GoExpressionNode::Unary {
-            operator: "<-".to_string(),
-            operand: Box::new(name("ch")),
-        }
-        .effects();
-        assert!(!receive.can_erase() && !receive.can_duplicate());
-        assert!(!receive.can_move_across(name("x").effects()));
+        assert!(
+            binary(name("a"), BinaryOp::Add, name("b"))
+                .effects()
+                .can_erase()
+        );
+        assert!(
+            binary(name("a"), BinaryOp::Eq, literal("1"))
+                .effects()
+                .can_erase()
+        );
+        assert!(
+            !binary(name("a"), BinaryOp::Eq, name("b"))
+                .effects()
+                .can_erase()
+        );
     }
 
     #[test]

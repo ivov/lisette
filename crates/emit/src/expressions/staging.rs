@@ -1,9 +1,11 @@
 use crate::Planner;
+use crate::abi::callable::CallableAbi;
 use crate::abi::is_tagged_shape_fn_value;
 use crate::abi::transition::lower_arg_to_tagged;
-use crate::context::expression::{ExpressionContext, result_is_type_parameter};
+use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::LoweredStatement;
+use crate::patterns::matching::prelude_constructor;
+use crate::plan::bodies::Statement;
 use crate::plan::calls::CallableOrigin;
 use crate::plan::evaluation::{Effects, Reads};
 use crate::plan::go_expression::CompositeLayout;
@@ -15,8 +17,7 @@ use crate::plan::values::{
 use crate::plan::verify::verify_operand_order;
 use crate::utils::reads_value_member;
 use syntax::ast::{BindingId, Expression, IdentifierResolution, UnaryOperator};
-use syntax::program::DotAccessKind;
-use syntax::types::{FunctionParameter, Type};
+use syntax::types::Type;
 
 /// Folds `f(leading, spread...)` into `f(append([]T{leading}, spread...)...)`: Go rejects the former.
 #[derive(Clone)]
@@ -40,7 +41,7 @@ pub(crate) struct LaterStages {
 }
 
 impl LaterStages {
-    pub(crate) fn sequenced(setup: &[LoweredStatement], effect: EvaluationEffect) -> Self {
+    pub(crate) fn sequenced(setup: &[Statement], effect: EvaluationEffect) -> Self {
         Self {
             before: if setup.is_empty() {
                 Effects::default()
@@ -118,7 +119,7 @@ impl Planner<'_> {
 
     pub(crate) fn capture_value_at_boundary(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         expression: &Expression,
         prefix: &str,
         boundary: CaptureBoundary,
@@ -134,29 +135,14 @@ impl Planner<'_> {
         }
     }
 
-    /// `Some`/`Ok`/`Err` lower to prelude constructor calls (their non-call
-    /// nilable-slot form already fails the syntactic check).
     pub(crate) fn callee_lowers_to_type_construction(&self, callee: &Expression) -> bool {
-        let name = match callee.unwrap_parens() {
-            Expression::Identifier { value, .. } => Some(value.as_str()),
-            Expression::DotAccess { member, .. } => Some(member.as_str()),
-            _ => None,
-        };
-        if matches!(name, Some("Some" | "Ok" | "Err" | "None")) {
-            return false;
-        }
         self.resolve_callee_definition(callee)
             .1
             .is_some_and(|definition| definition.is_type_definition())
     }
 
     pub(crate) fn is_pure_constructor_callee(&self, callee: &Expression) -> bool {
-        let name = match callee.unwrap_parens() {
-            Expression::Identifier { value, .. } => Some(value.as_str()),
-            Expression::DotAccess { member, .. } => Some(member.as_str()),
-            _ => None,
-        };
-        if matches!(name, Some("Some" | "Ok" | "Err" | "None")) {
+        if prelude_constructor(callee).is_some() {
             return true;
         }
         self.resolve_callee_definition(callee)
@@ -243,22 +229,12 @@ impl Planner<'_> {
                 expression,
                 resolution,
                 ..
-            } => match resolution.kind() {
-                Some(
-                    DotAccessKind::StructField { .. }
-                    | DotAccessKind::TupleStructField { .. }
-                    | DotAccessKind::TupleElement,
-                ) if !reads_value_member(
-                    resolution.kind(),
-                    resolution.receiver_coercion(),
-                    expression,
-                    &expression.get_type(),
-                ) =>
-                {
-                    Stability::Observable
-                }
-                _ => self.place_read_stability(expression),
-            },
+            } if resolution.is_field_read()
+                && !reads_value_member(resolution, expression, &expression.get_type()) =>
+            {
+                Stability::Observable
+            }
+            Expression::DotAccess { expression, .. } => self.place_read_stability(expression),
             Expression::IndexedAccess { .. } => Stability::Observable,
             Expression::Unary {
                 operator: UnaryOperator::Deref,
@@ -278,7 +254,7 @@ impl Planner<'_> {
             declared_param.is_some_and(|p| matches!(p.unwrap_forall(), Type::Function(_)));
         let arg_ctx = ExpressionContext::value()
             .with_forced_tagged_go_function(suppress)
-            .with_generic_result_target(declared_param.is_some_and(result_is_type_parameter));
+            .with_generic_result_slot(declared_param, param_ty);
         let staged = self.lower_composite_value(expression, arg_ctx);
 
         if suppress
@@ -324,7 +300,7 @@ impl Planner<'_> {
 
     pub(crate) fn emit_lower_arg_to_tagged(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         value: GoExpression,
         param_ty: &Type,
     ) -> GoExpression {
@@ -334,20 +310,15 @@ impl Planner<'_> {
 
     pub(crate) fn stage_native_method_args_from(
         &mut self,
-        function: &Expression,
+        abi: &CallableAbi,
         args: &[Expression],
         start_index: usize,
     ) -> Vec<ValuePlan> {
-        let params = self.resolve_callable_params(function, args.len());
         args.iter()
             .enumerate()
             .skip(start_index)
             .map(|(i, arg)| {
-                let param = params.get(i).or_else(|| {
-                    params
-                        .last()
-                        .filter(|param| param.instantiated.get_name() == Some("VarArgs"))
-                });
+                let param = abi.param(i);
                 self.stage_prelude_arg(
                     arg,
                     param.and_then(|param| param.declared.as_ref()),
@@ -359,7 +330,7 @@ impl Planner<'_> {
 
     /// Post-staging fix-up for the spread slot: optional `any`-wrap, then
     /// either `append([]T{leading...}, spread...)...` or plain `value...`.
-    pub(crate) fn finalize_spread_stage(
+    fn finalize_spread_stage(
         &mut self,
         values: &mut Vec<GoExpression>,
         wrap_to_any: bool,
@@ -442,18 +413,13 @@ impl Planner<'_> {
     pub(crate) fn sequence_with_spread_values(
         &mut self,
         mut stages: Vec<ValuePlan>,
-        spread: Option<&Expression>,
-        adapter_params: Option<&[FunctionParameter]>,
+        spread_stage: Option<ValuePlan>,
         options: SpreadSequenceOptions,
     ) -> SequencedValues {
-        if let Some(spread) = spread {
-            let stage = self
-                .try_emit_variadic_spread_adapter(spread, adapter_params)
-                .unwrap_or_else(|| self.plan_operand(spread, ExpressionContext::value()));
-            stages.push(stage);
-        }
+        let has_spread = spread_stage.is_some();
+        stages.extend(spread_stage);
         let mut sequenced = self.sequence_values(stages, options.boundary, "arg");
-        if spread.is_some() {
+        if has_spread {
             self.finalize_spread_stage(&mut sequenced.values, options.wrap_to_any, options.combine);
         }
         sequenced

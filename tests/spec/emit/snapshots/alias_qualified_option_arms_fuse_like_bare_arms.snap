@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  type Opt = Option<int>
+  
+  fn matched(m: Map<string, int>) -> int {
+    match m.get("a") {
+      Opt.Some(n) => n + 1,
+      Opt.None => 0,
+    }
+  }
+  
+  fn let_else(m: Map<string, int>) -> int {
+    let Opt.Some(n) = m.get("a") else { return 0 }
+    n
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Opt = lisette.Option[int]
+
+func matched(m map[string]int) int {
+	if n, ok := m["a"]; ok {
+		return n + 1
+	} else {
+		return 0
+	}
+}
+
+func letElse(m map[string]int) int {
+	n, ok := m["a"]
+	if !ok {
+		return 0
+	}
+	return n
+}

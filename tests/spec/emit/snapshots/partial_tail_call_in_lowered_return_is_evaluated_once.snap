@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/partial.rs
+description: |
+  
+  fn ident<T>(x: T) -> T {
+    x
+  }
+  
+  pub fn tail(b: bool, p: Partial<int, error>) -> Partial<int, error> {
+    if b {
+      ident(p)
+    } else {
+      p
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func ident[T any](x T) T {
+	return x
+}
+
+func Tail(b bool, p lisette.Partial[int, error]) (int, error) {
+	if b {
+		v := ident(p)
+		if v.Tag == lisette.PartialOk {
+			return v.OkVal, nil
+		}
+		if v.Tag == lisette.PartialErr {
+			return 0, v.ErrVal
+		}
+		return v.OkVal, v.ErrVal
+	}
+	if p.Tag == lisette.PartialOk {
+		return p.OkVal, nil
+	}
+	if p.Tag == lisette.PartialErr {
+		return 0, p.ErrVal
+	}
+	return p.OkVal, p.ErrVal
+}

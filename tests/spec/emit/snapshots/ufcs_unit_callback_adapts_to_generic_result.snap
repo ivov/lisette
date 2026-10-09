@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Holder {}
+  
+  impl Holder {
+    fn run<U>(self, f: fn() -> U) -> U {
+      f()
+    }
+  }
+  
+  fn noop() {}
+  
+  fn main() {
+    let h = Holder {}
+    h.run(noop)
+  }
+---
+package main
+
+type Holder struct{}
+
+func Holder_Run[U any](_ Holder, f func() U) U {
+	return f()
+}
+
+func noop() {}
+
+func main() {
+	h := Holder{}
+	cb := noop
+	Holder_Run(h, func() struct{} {
+		cb()
+		return struct{}{}
+	})
+}

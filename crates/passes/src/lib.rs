@@ -2,4 +2,4 @@ mod analyze;
 mod passes;
 
 pub use analyze::{Analysis, analyze};
-pub use passes::{Lint, LintMode, UnusedItemReporting, run};
+pub use passes::{Lint, LintMode, UnusedItemReporting, emit_bindings, run};

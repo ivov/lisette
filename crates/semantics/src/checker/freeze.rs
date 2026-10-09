@@ -9,11 +9,13 @@
 use crate::facts::Facts;
 use crate::facts::GenericBoundOrigin;
 use syntax::ast::{
-    Binding, EnumFieldDefinition, Expression, FormatStringPart, Literal, Pattern, SelectArm,
-    SequencePatternResolution, StructFieldDefinition, StructSpread, VariantFields,
+    Binding, EnumFieldDefinition, Expression, FormatStringPart, IdentifierResolution, Literal,
+    Pattern, SelectArm, SequencePatternResolution, StructFieldDefinition, StructSpread,
+    VariantFields,
 };
+use syntax::program::DotAccessResolution;
 use syntax::types::Bound;
-use syntax::types::Type;
+use syntax::types::{SubstitutionMap, Type};
 
 use crate::checker::type_env::TypeEnv;
 use crate::store::Store;
@@ -402,6 +404,12 @@ impl<'a> FreezeFolder<'a> {
         *ty = self.normalize_ref_aliases(ty);
     }
 
+    fn freeze_instantiation(&self, instantiation: &mut SubstitutionMap) {
+        for ty in instantiation.types_mut() {
+            self.freeze_expr_ty(ty);
+        }
+    }
+
     fn freeze_binding(&self, binding: &mut Binding) {
         self.freeze_ty(&mut binding.ty);
         self.freeze_pattern(&mut binding.pattern);
@@ -475,14 +483,31 @@ impl<'a> FreezeFolder<'a> {
     /// methods) that `recurse_children` does not walk.
     fn freeze_outer(&mut self, expression: &mut Expression) {
         match expression {
+            Expression::Identifier { ty, resolution, .. } => {
+                self.freeze_expr_ty(ty);
+                if let IdentifierResolution::Definition { instantiation, .. } = resolution {
+                    self.freeze_instantiation(instantiation);
+                }
+            }
+
+            Expression::DotAccess { ty, resolution, .. } => {
+                self.freeze_expr_ty(ty);
+                if let DotAccessResolution::PackageMember { instantiation, .. }
+                | DotAccessResolution::EnumVariant { instantiation, .. }
+                | DotAccessResolution::InstanceMethod { instantiation, .. }
+                | DotAccessResolution::InstanceMethodValue { instantiation, .. }
+                | DotAccessResolution::StaticMethod { instantiation, .. } = resolution
+                {
+                    self.freeze_instantiation(instantiation);
+                }
+            }
+
             Expression::Literal { ty, .. }
-            | Expression::Identifier { ty, .. }
             | Expression::Call { ty, .. }
             | Expression::If { ty, .. }
             | Expression::Match { ty, .. }
             | Expression::Tuple { ty, .. }
             | Expression::StructCall { ty, .. }
-            | Expression::DotAccess { ty, .. }
             | Expression::Return { ty, .. }
             | Expression::Propagate { ty, .. }
             | Expression::TryBlock { ty, .. }

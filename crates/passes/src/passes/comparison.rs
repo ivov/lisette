@@ -328,7 +328,9 @@ pub(crate) fn prelude_min_max(expression: &Expression) -> Option<MinMaxCall<'_>>
         return None;
     }
     let Expression::Identifier {
-        resolution: IdentifierResolution::Definition(qualified),
+        resolution: IdentifierResolution::Definition {
+            name: qualified, ..
+        },
         ..
     } = callee.unwrap_parens()
     else {

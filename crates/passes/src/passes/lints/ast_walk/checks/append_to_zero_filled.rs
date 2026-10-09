@@ -86,7 +86,10 @@ fn zero_filled_make_binding(item: &Expression, ctx: &NodeCtx) -> Option<(Binding
     let Expression::Let { binding, value, .. } = item else {
         return None;
     };
-    let Pattern::Identifier { identifier, span } = &binding.pattern else {
+    let Pattern::Identifier {
+        identifier, span, ..
+    } = &binding.pattern
+    else {
         return None;
     };
     let make = zero_filled_make_call(value.unwrap_parens())?;

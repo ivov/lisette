@@ -16,7 +16,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func fail(msg string) struct{} {
+func fail(msg string) {
 	panic(msg)
 }
 

@@ -464,6 +464,7 @@ impl TaskState {
                         go_name: None,
                         go_type_param_recipe: None,
                         superseded_by: extract_go_superseded_by(fn_attrs),
+                        impl_receiver: Some(receiver.receiver_ty.clone()),
                     },
                 },
             );
@@ -536,9 +537,9 @@ impl TaskState {
                     };
 
                     let self_receiver_span = method_params.first().and_then(|p| match &p.pattern {
-                        Pattern::Identifier { identifier, span } if identifier == "self" => {
-                            Some(*span)
-                        }
+                        Pattern::Identifier {
+                            identifier, span, ..
+                        } if identifier == "self" => Some(*span),
                         _ => None,
                     });
                     if let Some(self_span) = self_receiver_span {

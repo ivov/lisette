@@ -2,7 +2,7 @@ use crate::Planner;
 use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::patterns::matching::{OptionFusePlan, ResultFusePlan};
-use crate::plan::bodies::LoweredStatement;
+use crate::plan::bodies::Statement;
 use crate::plan::values::{EvaluationEffect, ValuePlan};
 use syntax::ast::{Expression, UnaryOperator};
 use syntax::program::CallKind;
@@ -76,7 +76,7 @@ impl Planner<'_> {
         predicate: FusedPredicate<'_>,
         negated: bool,
         slot: CommaOkValueSlot,
-    ) -> (Vec<LoweredStatement>, PairCondition) {
+    ) -> (Vec<Statement>, PairCondition) {
         let (bound, succeeds) = match predicate {
             FusedPredicate::Result { fuse, succeeds } => (fuse.bind(self, slot, None), succeeds),
             FusedPredicate::Option { fuse, succeeds } => (fuse.bind(self, slot), succeeds),
@@ -92,7 +92,7 @@ impl Planner<'_> {
     pub(crate) fn lower_fused_predicate_condition(
         &mut self,
         condition: &Expression,
-    ) -> Option<(Vec<LoweredStatement>, PairCondition)> {
+    ) -> Option<(Vec<Statement>, PairCondition)> {
         let (target, negated) = strip_negations(condition);
         let predicate = self.fused_predicate(target)?;
         Some(self.bind_fused_predicate(predicate, negated, CommaOkValueSlot::Unused))

@@ -5,7 +5,9 @@ use syntax::types::Type;
 use crate::Planner;
 use crate::definitions::interface_adapter::AdapterPlan;
 use crate::names::go_name;
-use crate::plan::bodies::{LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign};
+use crate::plan::bodies::{
+    LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign,
+};
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::values::GoExpression;
 
@@ -130,7 +132,7 @@ impl CoercionPlan {
         self,
         planner: &mut Planner<'_>,
         value: GoExpression,
-    ) -> (Vec<LoweredStatement>, GoExpression) {
+    ) -> (Vec<Statement>, GoExpression) {
         let mut statements = Vec::new();
         let value = match self {
             Self::Identity => value,
@@ -163,7 +165,7 @@ impl CoercionPlan {
 impl Planner<'_> {
     pub(crate) fn apply_type_coercion(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         target_ty: Option<&Type>,
         expression: &Expression,
         emitted: GoExpression,
@@ -179,7 +181,7 @@ impl Planner<'_> {
 
     fn plan_array_rebuild(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         value: GoExpression,
         array_type: &Type,
         element: CoercionPlan,
@@ -188,11 +190,14 @@ impl Planner<'_> {
         let go_type = self.use_go_type(array_type);
         let output = self.fresh_var(Some("boxed"));
         self.declare(&output);
-        statements.push(LoweredStatement::VarDecl {
-            name: output.clone().into(),
-            go_type,
-            value: None,
-        });
+        statements.push(
+            LoweredStatement::VarDecl {
+                name: output.clone().into(),
+                go_type,
+                value: None,
+            }
+            .into(),
+        );
 
         let index = self.fresh_var(Some("i"));
         self.declare(&index);
@@ -205,22 +210,25 @@ impl Planner<'_> {
             ),
             coerced,
         ));
-        statements.push(LoweredStatement::Loop(LoopPlan {
-            prologue: Vec::new(),
-            kind: LoopKind::Generated { label: None },
-            header: LoopHeader::Range {
-                key: Some(index.into()),
-                value: None,
-                iterable: source,
-            },
-            body: LoweredBlock { statements: body },
-        }));
+        statements.push(
+            LoweredStatement::Loop(LoopPlan {
+                prologue: Vec::new(),
+                kind: LoopKind::Generated { label: None },
+                header: LoopHeader::Range {
+                    key: Some(index.into()),
+                    value: None,
+                    iterable: source,
+                },
+                body: LoweredBlock { statements: body },
+            })
+            .into(),
+        );
         GoExpression::name(output)
     }
 
     fn plan_tuple_rebuild(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         value: GoExpression,
         slot_types: &[Type],
         elements: Vec<CoercionPlan>,
@@ -433,12 +441,11 @@ fn function_bridge_direction(
     source: &FunctionLayout,
     target: &FunctionLayout,
 ) -> BridgeDirection {
-    let result = resolve_layout_bridge(planner, &source.result, &target.result).direction();
-    let payload = source
-        .payload
-        .as_deref()
-        .zip(target.payload.as_deref())
-        .and_then(|(source, target)| resolve_layout_bridge(planner, source, target).direction());
+    let result = source
+        .results
+        .iter()
+        .zip(&target.results)
+        .find_map(|(source, target)| resolve_layout_bridge(planner, source, target).direction());
     let parameter = target
         .parameters
         .iter()
@@ -446,7 +453,6 @@ fn function_bridge_direction(
         .find_map(|(target, source)| resolve_layout_bridge(planner, target, source).direction())
         .map(invert_direction);
     result
-        .or(payload)
         .or(parameter)
         .or_else(
             || match source.return_abi.transition_to(&target.return_abi) {

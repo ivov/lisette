@@ -12,12 +12,11 @@ pub use definition::{
     methods_for_type, type_has_any_method,
 };
 pub use emit_input::{
-    BinderIds, BindingMutation, EmitInput, EqualityIndex, MutationInfo, TestFunction, TestIndex,
-    UnusedInfo,
+    BindingMutation, EmitBindings, EmitInput, EqualityIndex, TestFunction, TestIndex, UnusedInfo,
 };
 pub use file::{File, FileImport, go_import_default_name, is_test_file, unaliased_binding_name};
 pub use package::{Package, PackageId, UninferredExports, is_internal_package_id};
 pub use resolution::{
-    CallKind, ChannelOperation, DotAccessKind, DotAccessResolution, NativeTypeKind,
-    ReceiverCoercion, channel_operation, resolved_definition,
+    CallKind, ChannelOperation, DotAccessResolution, NativeTypeKind, ReceiverCoercion,
+    channel_operation, resolved_definition, resolved_instantiation,
 };

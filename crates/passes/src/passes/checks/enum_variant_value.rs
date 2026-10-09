@@ -8,7 +8,10 @@ use semantics::store::Store;
 pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     match expression {
         Expression::Identifier {
-            resolution: IdentifierResolution::Definition(qualified),
+            resolution:
+                IdentifierResolution::Definition {
+                    name: qualified, ..
+                },
             value,
             span,
             ..

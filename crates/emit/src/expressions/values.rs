@@ -1,20 +1,22 @@
 use crate::abi::is_tagged_shape_fn_value;
 use crate::calls::dispatch::extract_native_method_name;
 use crate::calls::native::native_method_lowers_to_plain_call;
+use crate::calls::split_native_receiver;
 use crate::expressions::access::struct_call::emit_struct_literal;
-use crate::types::native::NativeGoType;
 use syntax::program::DefinitionBody;
 
-use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::{
     emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper, emit_unit_result_adapter,
 };
+use crate::calls::go_interop::GoResultBridge;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{LoweredBlock, LoweredStatement, discard, expression_statement};
+use crate::plan::bodies::{
+    LoweredBlock, LoweredStatement, Statement, discard, expression_statement,
+};
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::placement::is_unit_call;
@@ -22,7 +24,9 @@ use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, OperandForm, ValuePlan,
 };
 use crate::state::bindings::BindingValue;
-use syntax::ast::Expression;
+use crate::types::go_type::returns_go_void;
+use crate::{Planner, ReturnContext};
+use syntax::ast::{Expression, IdentifierResolution};
 use syntax::program::CallKind;
 use syntax::types::Type;
 
@@ -48,7 +52,7 @@ impl Planner<'_> {
             if !ctx.is_callee() && same_abi {
                 let source_layout = ValueLayout::Function {
                     function_type: expression.get_type(),
-                    layout: callee.abi.function_layout(),
+                    layout: callee.abi.function_layout(self),
                 };
                 let layout_coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
                 if !layout_coercion.is_identity() {
@@ -122,16 +126,29 @@ impl Planner<'_> {
                 });
         }
         let ty = expression.get_type();
-        if ctx.result_fills_type_parameter()
+        if let Some(slot) = ctx.generic_result_slot()
             && !matches!(
                 expression.unwrap_parens(),
                 Expression::Lambda { .. } | Expression::Function { .. }
             )
-            && ty.get_function_ret().is_some_and(Type::is_unit)
+            && ty.get_function_ret().is_some_and(returns_go_void)
         {
+            // A Never value can fill a slot with a concrete result type.
+            let slot_result = slot
+                .get_function_ret()
+                .is_some_and(|ret| !returns_go_void(ret))
+                .then(|| {
+                    self.lambda_return_info(slot, ctx)
+                        .signature()
+                        .trim_start()
+                        .to_string()
+                })
+                .filter(|result| !result.is_empty());
             return self
                 .lower_value(expression, ctx)
-                .map_expression(|setup, value| emit_unit_result_adapter(self, setup, value, &ty));
+                .map_expression(|setup, value| {
+                    emit_unit_result_adapter(self, setup, value, &ty, slot_result)
+                });
         }
         self.lower_value(expression, ctx)
     }
@@ -182,14 +199,17 @@ impl Planner<'_> {
         if !matches!(plan.resolved.origin, CallableOrigin::GoInterop) {
             return None;
         }
-        self.go_result_layout_bridge(&plan.resolved.abi, result_type)
+        match self.go_result_bridge(&plan.resolved.abi, result_type)? {
+            GoResultBridge::Whole(bridge) => Some(bridge),
+            GoResultBridge::Tuple(_) | GoResultBridge::Payload(_) => None,
+        }
     }
 
     /// Wrap a captured tagged-shape prelude fn ref into a lowered-ABI closure
     /// so its Go type matches what the rest of the pipeline expects.
     fn maybe_lower_tagged_fn_ref(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         expression: &Expression,
         ty: &Type,
         raw: GoExpression,
@@ -205,10 +225,10 @@ impl Planner<'_> {
         let Type::Function(f) = fn_ty else {
             return raw;
         };
-        if self.classify_direct_emission(&f.return_type).is_none() {
+        let Some(target) = self.classify_direct_emission(&f.return_type) else {
             return raw;
-        }
-        emit_lisette_callback_wrapper(self, setup, raw, fn_ty)
+        };
+        emit_lisette_callback_wrapper(self, setup, raw, fn_ty, &target)
     }
 
     /// Result ABI the slot expects from a Go function value, or `None` when
@@ -342,8 +362,10 @@ impl Planner<'_> {
                 compound_operator,
                 ..
             } => {
-                let setup =
-                    vec![self.build_assignment_plan(target, value, compound_operator.as_ref())];
+                let setup = vec![
+                    self.build_assignment_plan(target, value, compound_operator.as_ref())
+                        .into(),
+                ];
                 ValuePlan::computed(
                     setup,
                     GoExpression::empty_composite("struct{}".to_string()),
@@ -351,7 +373,7 @@ impl Planner<'_> {
                 )
             }
             Expression::Assert { .. } => ValuePlan::computed(
-                vec![self.lower_assert_statement(expression)],
+                vec![self.lower_assert_statement(expression).into()],
                 GoExpression::empty_composite("struct{}".to_string()),
                 EvaluationEffect::Pure,
             ),
@@ -364,7 +386,7 @@ impl Planner<'_> {
 
     pub(crate) fn coerce_elements_to_slots(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         elements: &[Expression],
         values: Vec<GoExpression>,
         slot_types: &[Type],
@@ -632,7 +654,7 @@ impl Planner<'_> {
             keyword: keyword.to_string(),
             call,
         };
-        let statement_plan = |setup: Vec<LoweredStatement>| {
+        let statement_plan = |setup: Vec<Statement>| {
             ValuePlan::computed(setup, GoExpression::empty(), EvaluationEffect::Pure)
         };
         let immediate_call = |body: LoweredBlock| {
@@ -640,14 +662,17 @@ impl Planner<'_> {
         };
 
         if let Expression::Block { .. } = expression {
-            let body =
-                self.with_isolated_function(|planner| planner.lower_block_as_body(expression));
-            return statement_plan(vec![async_statement(immediate_call(body))]);
+            // The block runs as its own Go function, so `return` leaves it.
+            let body = self
+                .with_isolated_function(ReturnContext::Tagged(Type::unit()), |planner| {
+                    planner.lower_block_as_body(expression)
+                });
+            return statement_plan(vec![async_statement(immediate_call(body)).into()]);
         }
 
-        let mut setup: Vec<LoweredStatement> = Vec::new();
+        let mut setup: Vec<Statement> = Vec::new();
         if let Some(call) = self.emit_go_call_discarded(&mut setup, expression) {
-            setup.push(async_statement(call));
+            setup.push(async_statement(call).into());
             return statement_plan(setup);
         }
 
@@ -678,11 +703,11 @@ impl Planner<'_> {
             let body = LoweredBlock {
                 statements: body_statements,
             };
-            setup.push(async_statement(immediate_call(body)));
+            setup.push(async_statement(immediate_call(body)).into());
             return statement_plan(setup);
         }
         let (mut setup, inner) = plan.into_parts();
-        setup.push(async_statement(inner));
+        setup.push(async_statement(inner).into());
         statement_plan(setup)
     }
 }
@@ -691,10 +716,13 @@ impl Planner<'_> {
     fn is_go_unaddressable(&self, expression: &Expression) -> bool {
         match expression.unwrap_parens() {
             Expression::Call { .. } => true,
-            Expression::Identifier { value, ty, .. }
-                if !matches!(ty.unwrap_forall(), Type::Function(_)) =>
-            {
-                self.identifier_is_unaddressable(value, ty)
+            Expression::Identifier {
+                value,
+                ty,
+                resolution,
+                ..
+            } if !matches!(ty.unwrap_forall(), Type::Function(_)) => {
+                self.identifier_is_unaddressable(value, resolution, ty)
             }
             Expression::DotAccess { expression, ty, .. }
                 if !matches!(ty.unwrap_forall(), Type::Function(_)) =>
@@ -705,8 +733,16 @@ impl Planner<'_> {
         }
     }
 
-    fn identifier_is_unaddressable(&self, value: &str, ty: &Type) -> bool {
-        match self.scope.resolve_identifier_binding(value) {
+    fn identifier_is_unaddressable(
+        &self,
+        value: &str,
+        resolution: &IdentifierResolution,
+        ty: &Type,
+    ) -> bool {
+        match self
+            .scope
+            .resolve_identifier_with_resolution(value, resolution)
+        {
             Some(binding) => binding.as_go_name().is_none(),
             None => self.ty_is_enum(ty),
         }
@@ -758,16 +794,12 @@ fn needs_iife_for_async(expression: &Expression, value: &GoExpression) -> bool {
     else {
         return false;
     };
-    let (kind, arity) = match call_kind {
-        CallKind::NativeMethod(kind) => (*kind, args.len()),
-        CallKind::NativeMethodIdentifier(kind) => (*kind, args.len().saturating_sub(1)),
-        _ => return false,
+    let (CallKind::NativeMethod(kind) | CallKind::NativeMethodIdentifier(kind)) = call_kind else {
+        return false;
     };
+    let function = callee.unwrap_parens();
+    let arity = split_native_receiver(function, args).map_or(0, |(_, arguments)| arguments.len());
     // Capture len/append operands at the async site despite their call syntax.
     !matches!(value.syntax_form(), OperandForm::Call)
-        || !native_method_lowers_to_plain_call(
-            &NativeGoType::from_kind(kind),
-            extract_native_method_name(callee.unwrap_parens()),
-            arity,
-        )
+        || !native_method_lowers_to_plain_call(kind, extract_native_method_name(function), arity)
 }

@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use std::sync::Arc;
-use syntax::ast::BindingKind;
+use syntax::ast::{BindingId, BindingKind};
 use syntax::ast::{
     ConstructorPatternResolution, EnumFieldDefinition, Expression, Literal, Pattern,
     RecordPatternResolution, RestPattern, SequencePatternResolution, Span, StructFieldPattern,
@@ -34,9 +34,11 @@ impl InferCtx<'_> {
     ) -> Pattern {
         let store = self.store;
         match pattern {
-            Pattern::Identifier { identifier, span } => {
+            Pattern::Identifier {
+                identifier, span, ..
+            } => {
                 let is_d_lis = self.is_d_lis(store);
-                self.bind_name_in_scope(
+                let binding = self.bind_name_in_scope(
                     identifier.to_string(),
                     span,
                     expected_ty,
@@ -46,7 +48,11 @@ impl InferCtx<'_> {
                         shorthand_field: is_struct_field,
                     },
                 );
-                Pattern::Identifier { identifier, span }
+                Pattern::Identifier {
+                    identifier,
+                    span,
+                    binding: Some(binding),
+                }
             }
 
             Pattern::Literal { literal, ty, span } => {
@@ -129,6 +135,7 @@ impl InferCtx<'_> {
                 name,
                 name_span,
                 span,
+                ..
             } => {
                 if name.chars().next().is_some_and(|c| c.is_uppercase()) {
                     self.sink
@@ -165,7 +172,7 @@ impl InferCtx<'_> {
                     is_struct_field,
                 );
                 let alias_ty = inner.get_type().unwrap_or_else(|| expected_ty.clone());
-                self.bind_name_in_scope(
+                let binding = self.bind_name_in_scope(
                     name.to_string(),
                     name_span,
                     alias_ty,
@@ -179,6 +186,7 @@ impl InferCtx<'_> {
                     name,
                     name_span,
                     span,
+                    binding: Some(binding),
                 }
             }
         }
@@ -191,7 +199,7 @@ impl InferCtx<'_> {
         ty: Type,
         kind: BindingKind,
         origin: BindingOrigin,
-    ) {
+    ) -> BindingId {
         self.check_binding_shadows_import(&name, span, origin.is_typedef());
 
         let shadows = self.shadowed_capture_span(&name);
@@ -200,6 +208,7 @@ impl InferCtx<'_> {
             .add_binding(name.clone(), span, kind, origin, shadows);
         let scope = self.scopes.current_mut();
         scope.insert_binding(name, ty, binding_id, kind.is_mutable());
+        binding_id
     }
 
     fn shadowed_capture_span(&self, name: &str) -> Option<Span> {
@@ -245,7 +254,7 @@ impl InferCtx<'_> {
                 ));
         }
 
-        if let RestPattern::Bind { ref name, ref span } = rest {
+        let rest = if let RestPattern::Bind { name, span, .. } = rest {
             let remaining = length.saturating_sub(inferred_prefix.len() as u64);
             let rest_ty = if element_ty.shallow_resolve_in(&self.env).is_error() {
                 Type::Error
@@ -253,9 +262,9 @@ impl InferCtx<'_> {
                 self.type_array(remaining, element_ty.clone())
             };
             let is_typedef = self.is_d_lis(store);
-            self.bind_name_in_scope(
+            let binding = self.bind_name_in_scope(
                 name.to_string(),
-                *span,
+                span,
                 rest_ty,
                 kind,
                 BindingOrigin::Name {
@@ -263,7 +272,14 @@ impl InferCtx<'_> {
                     shorthand_field: false,
                 },
             );
-        }
+            RestPattern::Bind {
+                name,
+                span,
+                binding: Some(binding),
+            }
+        } else {
+            rest
+        };
 
         Pattern::Slice {
             prefix: inferred_prefix,
@@ -305,16 +321,16 @@ impl InferCtx<'_> {
             .map(|p| self.infer_pattern_inner(p, element_ty.clone(), kind, false))
             .collect();
 
-        if let RestPattern::Bind { ref name, ref span } = rest {
+        let rest = if let RestPattern::Bind { name, span, .. } = rest {
             let rest_ty = if element_ty.shallow_resolve_in(&self.env).is_error() {
                 Type::Error
             } else {
                 self.type_slice(element_ty.clone())
             };
             let is_typedef = self.is_d_lis(store);
-            self.bind_name_in_scope(
+            let binding = self.bind_name_in_scope(
                 name.to_string(),
-                *span,
+                span,
                 rest_ty,
                 kind,
                 BindingOrigin::Name {
@@ -322,7 +338,14 @@ impl InferCtx<'_> {
                     shorthand_field: false,
                 },
             );
-        }
+            RestPattern::Bind {
+                name,
+                span,
+                binding: Some(binding),
+            }
+        } else {
+            rest
+        };
 
         Pattern::Slice {
             prefix: inferred_prefix,
@@ -894,6 +917,8 @@ impl InferCtx<'_> {
                     alt
                 })
             });
+            let mut alt = alt;
+            clear_bindings(&mut alt);
             inferred.push(alt);
         }
 
@@ -1158,6 +1183,34 @@ impl InferCtx<'_> {
             ty: pattern_ty,
             span: *span,
         })
+    }
+}
+
+/// Resets binder ids of a pattern whose bindings the checker dropped.
+pub(super) fn clear_bindings(pattern: &mut Pattern) {
+    match pattern {
+        Pattern::Identifier { binding, .. } => *binding = None,
+        Pattern::AsBinding {
+            pattern, binding, ..
+        } => {
+            *binding = None;
+            clear_bindings(pattern);
+        }
+        Pattern::Slice { prefix, rest, .. } => {
+            prefix.iter_mut().for_each(clear_bindings);
+            if let RestPattern::Bind { binding, .. } = rest {
+                *binding = None;
+            }
+        }
+        Pattern::Tuple { elements, .. } => elements.iter_mut().for_each(clear_bindings),
+        Pattern::EnumVariant { fields, .. } => fields.iter_mut().for_each(clear_bindings),
+        Pattern::Struct { fields, .. } => {
+            for field in fields {
+                clear_bindings(&mut field.value);
+            }
+        }
+        Pattern::Or { patterns, .. } => patterns.iter_mut().for_each(clear_bindings),
+        Pattern::Literal { .. } | Pattern::Unit { .. } | Pattern::WildCard { .. } => {}
     }
 }
 

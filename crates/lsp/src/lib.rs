@@ -462,7 +462,7 @@ impl Backend {
         };
         let file = cursor.document.file;
         if let Some(Expression::Identifier {
-            resolution: IdentifierResolution::Definition(name),
+            resolution: IdentifierResolution::Definition { name, .. },
             ..
         }) = find_expression_at(&file.items, symbol.occurrence_span.byte_offset)
         {

@@ -1,0 +1,61 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:bufio"
+  import "go:errors"
+  import "go:net"
+  import "go:net/http"
+  
+  struct Conn {}
+  
+  impl Conn {
+    fn Hijack(self) -> Result<(net.Conn, mut Ref<mut bufio.ReadWriter>), error> {
+      Err(errors.New("no"))
+    }
+  }
+  
+  fn take(h: http.Hijacker) {
+    let _ = h.Hijack()
+  }
+  
+  fn main() {
+    take(Conn {})
+  }
+---
+package main
+
+import (
+	"bufio"
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+	"net"
+	"net/http"
+)
+
+type Conn struct{}
+
+func (c Conn) Hijack() (lisette.Tuple2[net.Conn, *bufio.ReadWriter], error) {
+	return lisette.Tuple2[net.Conn, *bufio.ReadWriter]{}, errors.New("no")
+}
+
+func take(h http.Hijacker) {
+	h.Hijack()
+}
+
+func main() {
+	take(_lisAdapter_Conn_Hijacker_0{inner: Conn{}})
+}
+
+type _lisAdapter_Conn_Hijacker_0 struct {
+	inner Conn
+}
+
+func (a _lisAdapter_Conn_Hijacker_0) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	result := lisette.ResultFromPair[lisette.Tuple2[net.Conn, *bufio.ReadWriter]](a.inner.Hijack())
+	if result.Tag == lisette.ResultOk {
+		tup := result.OkVal
+		return tup.First, tup.Second, nil
+	}
+	return nil, nil, result.ErrVal
+}

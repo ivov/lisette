@@ -2,7 +2,8 @@ use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
 use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
 use crate::expressions::top_items::emit_doc;
-use crate::names::go_name::{self, prelude_qualifier};
+use crate::names::go_name::{self, GeneratedPackage, prelude_qualifier};
+use crate::names::packages::PackageRequirements;
 use crate::plan::values::GoExpression;
 use crate::types::go_type::render_conversion;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
@@ -57,7 +58,7 @@ impl Planner<'_> {
 
         let mut result = if let Some(stringer_name) = self.stringer_method_name(name, struct_attrs)
         {
-            let string_method = emit_struct_format_method(
+            let (string_method, requirements) = emit_struct_format_method(
                 name,
                 &receiver_generics,
                 &stringer_fields,
@@ -66,15 +67,13 @@ impl Planner<'_> {
                     qualified: false,
                 },
             );
-            if !stringer_fields.is_empty() {
-                self.require_fmt();
-            }
+            self.require_packages(&requirements);
             format!("{definition}\n\n{string_method}")
         } else {
             definition
         };
         self.append_struct_debug_method(&mut result, name, &receiver_generics, &stringer_fields);
-        self.append_to_string_method(&mut result, name, &receiver_generics, struct_attrs);
+        self.append_to_string_method(&mut result, name, &receiver_generics);
         self.append_equals_method(&mut result, name, generics, fields, struct_attrs);
         self.append_embedded_stringer_shadow(
             &mut result,
@@ -95,13 +94,11 @@ impl Planner<'_> {
         if !self.synthesizes_embedded_stringer_shadow(name) {
             return;
         }
-        self.require_fmt();
+        let (method, requirements) =
+            emit_struct_shadow_stringer_method(name, receiver_generics, stringer_fields);
+        self.require_packages(&requirements);
         out.push_str("\n\n");
-        out.push_str(&emit_struct_shadow_stringer_method(
-            name,
-            receiver_generics,
-            stringer_fields,
-        ));
+        out.push_str(&method);
     }
 
     pub(crate) fn synthesizes_embedded_stringer_shadow(&self, name: &str) -> bool {
@@ -197,7 +194,7 @@ impl Planner<'_> {
         let field_is_function: Vec<bool> =
             fields.iter().map(|f| is_raw_function_type(&f.ty)).collect();
         if let Some(stringer_name) = self.stringer_method_name(name, struct_attrs) {
-            let string_method = emit_tuple_struct_format_method(
+            let (string_method, requirements) = emit_tuple_struct_format_method(
                 name,
                 &receiver_generics,
                 &field_is_function,
@@ -207,13 +204,9 @@ impl Planner<'_> {
                     qualified: false,
                 },
             );
-            if !string_method.is_empty() {
-                if string_method.contains("fmt.") {
-                    self.require_fmt();
-                }
-                result.push_str("\n\n");
-                result.push_str(&string_method);
-            }
+            self.require_packages(&requirements);
+            result.push_str("\n\n");
+            result.push_str(&string_method);
         }
         self.append_tuple_struct_debug_method(
             &mut result,
@@ -222,7 +215,7 @@ impl Planner<'_> {
             &field_is_function,
             underlying_go_type.as_deref(),
         );
-        self.append_to_string_method(&mut result, name, &receiver_generics, struct_attrs);
+        self.append_to_string_method(&mut result, name, &receiver_generics);
         result
     }
 
@@ -350,21 +343,15 @@ impl Planner<'_> {
         if !self.synthesizes_debug_string(name) {
             return;
         }
-        if !stringer_fields.is_empty() {
-            self.require_fmt();
-            if stringer_fields.iter().any(|f| !f.is_function) {
-                self.require_stdlib();
-            }
-        }
-        out.push_str("\n\n");
-        out.push_str(&emit_struct_format_method(
+        let (method, requirements) = emit_struct_format_method(
             name,
             receiver_generics,
             stringer_fields,
-            StringFormat::Debug {
-                prelude: prelude_qualifier(),
-            },
-        ));
+            StringFormat::Debug,
+        );
+        self.require_packages(&requirements);
+        out.push_str("\n\n");
+        out.push_str(&method);
     }
 
     fn append_tuple_struct_debug_method(
@@ -378,38 +365,23 @@ impl Planner<'_> {
         if !self.synthesizes_debug_string(name) {
             return;
         }
-        let uses_prelude = field_is_function.iter().any(|is_function| !is_function);
-        if !field_is_function.is_empty() {
-            self.require_fmt();
-        }
-        if uses_prelude {
-            self.require_stdlib();
-        }
-        out.push_str("\n\n");
-        out.push_str(&emit_tuple_struct_format_method(
+        let (method, requirements) = emit_tuple_struct_format_method(
             name,
             receiver_generics,
             field_is_function,
             underlying,
-            StringFormat::Debug {
-                prelude: prelude_qualifier(),
-            },
-        ));
+            StringFormat::Debug,
+        );
+        self.require_packages(&requirements);
+        out.push_str("\n\n");
+        out.push_str(&method);
     }
 
-    pub(crate) fn should_synthesize_to_string(&self, name: &str, attributes: &[Attribute]) -> bool {
-        if !attributes.iter().any(|a| a.name == "display") {
-            return false;
-        }
+    pub(crate) fn should_synthesize_to_string(&self, name: &str) -> bool {
         let qualified = self.facts.qualified_current(name);
-        let has_user_method = self
-            .facts
+        self.facts
             .method(&qualified, "to_string")
-            .is_some_and(|method| {
-                matches!(method.origin, MethodOrigin::Declared) && method.ty.is_stringer_signature()
-            })
-            && !self.facts.is_ufcs_method(&qualified, "to_string");
-        !has_user_method
+            .is_some_and(|method| method.origin == MethodOrigin::Synthesized)
     }
 
     pub(crate) fn should_synthesize_equals(&self, name: &str) -> bool {
@@ -439,9 +411,8 @@ impl Planner<'_> {
         out: &mut String,
         name: &str,
         receiver_generics: &str,
-        attributes: &[Attribute],
     ) {
-        if self.should_synthesize_to_string(name, attributes) {
+        if self.should_synthesize_to_string(name) {
             let go_method = self.to_string_method_go_name();
             out.push_str("\n\n");
             out.push_str(&emit_to_string_method(name, receiver_generics, &go_method));
@@ -539,7 +510,7 @@ pub(crate) fn is_raw_function_type(ty: &Type) -> bool {
 #[derive(Clone, Copy)]
 pub(crate) enum StringFormat<'a> {
     Display { method: &'a str, qualified: bool },
-    Debug { prelude: &'a str },
+    Debug,
 }
 
 impl<'a> StringFormat<'a> {
@@ -567,10 +538,18 @@ impl<'a> StringFormat<'a> {
         }
     }
 
-    pub(crate) fn argument(self, value: String, is_function: bool) -> String {
+    pub(crate) fn argument(
+        self,
+        value: String,
+        is_function: bool,
+        requirements: &mut PackageRequirements,
+    ) -> String {
         match (self, is_function) {
-            (StringFormat::Display { .. }, _) | (StringFormat::Debug { .. }, true) => value,
-            (StringFormat::Debug { prelude }, false) => format!("{prelude}.Debug({value})"),
+            (StringFormat::Display { .. }, _) | (StringFormat::Debug, true) => value,
+            (StringFormat::Debug, false) => {
+                requirements.require_generated(GeneratedPackage::Prelude);
+                format!("{}.Debug({value})", prelude_qualifier())
+            }
         }
     }
 }
@@ -589,29 +568,39 @@ fn emit_struct_format_method(
     receiver_generics: &str,
     fields: &[StringerField],
     format: StringFormat<'_>,
-) -> String {
+) -> (String, PackageRequirements) {
     let receiver = synthesized_receiver_name(name, receiver_generics);
     let go_type_name = go_name::escape_type_name(name);
     let receiver_type = format!("{go_type_name}{receiver_generics}");
     let method = format.method();
+    let mut requirements = PackageRequirements::default();
     if fields.is_empty() {
-        return format!(
+        let code = format!(
             "func ({receiver} {receiver_type}) {method}() string {{\nreturn \"{name}\"\n}}"
         );
+        return (code, requirements);
     }
+    requirements.require_generated(GeneratedPackage::Fmt);
     let format_parts: Vec<String> = fields
         .iter()
         .map(|f| format!("{}: {}", f.source_name, format.verb(f.is_function)))
         .collect();
     let args: Vec<String> = fields
         .iter()
-        .map(|f| format.argument(format!("{receiver}.{}", f.go_name), f.is_function))
+        .map(|f| {
+            format.argument(
+                format!("{receiver}.{}", f.go_name),
+                f.is_function,
+                &mut requirements,
+            )
+        })
         .collect();
-    format!(
+    let code = format!(
         "func ({receiver} {receiver_type}) {method}() string {{\nreturn fmt.Sprintf(\"{name} {{ {} }}\", {})\n}}",
         format_parts.join(", "),
         args.join(", ")
-    )
+    );
+    (code, requirements)
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -652,25 +641,28 @@ fn emit_struct_shadow_stringer_method(
     name: &str,
     receiver_generics: &str,
     fields: &[StringerField],
-) -> String {
+) -> (String, PackageRequirements) {
     let receiver = synthesized_receiver_name(name, receiver_generics);
     let go_type_name = go_name::escape_type_name(name);
     let receiver_type = format!("{go_type_name}{receiver_generics}");
+    let mut requirements = PackageRequirements::default();
     if fields.is_empty() {
-        return format!(
-            "func ({receiver} {receiver_type}) String() string {{\nreturn \"{{}}\"\n}}"
-        );
+        let code =
+            format!("func ({receiver} {receiver_type}) String() string {{\nreturn \"{{}}\"\n}}");
+        return (code, requirements);
     }
+    requirements.require_generated(GeneratedPackage::Fmt);
     let placeholders: Vec<&str> = fields.iter().map(|_| "%v").collect();
     let args: Vec<String> = fields
         .iter()
         .map(|f| format!("{receiver}.{}", f.go_name))
         .collect();
-    format!(
+    let code = format!(
         "func ({receiver} {receiver_type}) String() string {{\nreturn fmt.Sprintf(\"{{{}}}\", {})\n}}",
         placeholders.join(" "),
         args.join(", ")
-    )
+    );
+    (code, requirements)
 }
 
 fn emit_tuple_struct_format_method(
@@ -679,23 +671,31 @@ fn emit_tuple_struct_format_method(
     field_is_function: &[bool],
     underlying_go_type: Option<&str>,
     format: StringFormat<'_>,
-) -> String {
+) -> (String, PackageRequirements) {
     let receiver = synthesized_receiver_name(name, receiver_generics);
     let go_type_name = go_name::escape_type_name(name);
     let receiver_type = format!("{go_type_name}{receiver_generics}");
     let method = format.method();
+    let mut requirements = PackageRequirements::default();
     if field_is_function.is_empty() {
-        return format!(
+        let code = format!(
             "func ({receiver} {receiver_type}) {method}() string {{\nreturn \"{name}\"\n}}"
         );
+        return (code, requirements);
     }
+    requirements.require_generated(GeneratedPackage::Fmt);
     if let Some(underlying) = underlying_go_type {
         let is_function = field_is_function[0];
-        let value = format.argument(render_conversion(underlying, &receiver), is_function);
-        return format!(
+        let value = format.argument(
+            render_conversion(underlying, &receiver),
+            is_function,
+            &mut requirements,
+        );
+        let code = format!(
             "func ({receiver} {receiver_type}) {method}() string {{\nreturn fmt.Sprintf(\"{name}({})\", {value})\n}}",
             format.verb(is_function)
         );
+        return (code, requirements);
     }
     let placeholders: Vec<&str> = field_is_function
         .iter()
@@ -704,11 +704,14 @@ fn emit_tuple_struct_format_method(
     let args: Vec<String> = field_is_function
         .iter()
         .enumerate()
-        .map(|(i, is_function)| format.argument(format!("{receiver}.F{i}"), *is_function))
+        .map(|(i, is_function)| {
+            format.argument(format!("{receiver}.F{i}"), *is_function, &mut requirements)
+        })
         .collect();
-    format!(
+    let code = format!(
         "func ({receiver} {receiver_type}) {method}() string {{\nreturn fmt.Sprintf(\"{name}({})\", {})\n}}",
         placeholders.join(", "),
         args.join(", ")
-    )
+    );
+    (code, requirements)
 }

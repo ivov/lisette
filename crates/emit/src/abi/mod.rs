@@ -7,6 +7,7 @@ pub(crate) mod transition;
 use crate::Planner;
 use crate::names::go_name;
 use crate::names::go_name::PRELUDE_ERROR_ID;
+use crate::patterns::matching::prelude_constructor;
 use crate::types::go_type::GoType;
 use callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use coercion::CoercionPlan;
@@ -236,7 +237,7 @@ impl Planner<'_> {
     }
 }
 
-fn go_result_list(slots: &[GoType]) -> GoType {
+pub(crate) fn go_result_list(slots: &[GoType]) -> GoType {
     let code = format!(
         "({})",
         slots
@@ -260,13 +261,13 @@ pub(crate) fn tuple_element_types(ty: &Type) -> Vec<Type> {
 /// and lambdas emit with the lowered ABI (`(T, bool)`).
 pub(crate) fn is_tagged_shape_fn_value(expression: &Expression) -> bool {
     let inner = expression.unwrap_parens();
-    if is_prelude_container_constructor(inner) {
+    if prelude_constructor(inner).is_some() {
         return true;
     }
     matches!(
         inner,
         Expression::Identifier {
-            resolution: IdentifierResolution::Definition(q),
+            resolution: IdentifierResolution::Definition { name: q, .. },
             ..
         } if q.starts_with("prelude.")
     )
@@ -281,10 +282,4 @@ pub(crate) fn is_closure_literal(expression: &Expression) -> bool {
 
 pub(crate) fn is_prelude_container_type(ty: &Type) -> bool {
     ty.is_option() || ty.is_result() || ty.is_partial()
-}
-
-pub(crate) fn is_prelude_container_constructor(expression: &Expression) -> bool {
-    expression.as_option_constructor().is_some()
-        || expression.as_result_constructor().is_some()
-        || expression.as_partial_constructor().is_some()
 }

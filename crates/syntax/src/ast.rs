@@ -78,20 +78,30 @@ impl BindingId {
 pub enum IdentifierResolution {
     Unresolved,
     Binding(BindingId),
-    Definition(EcoString),
+    Definition {
+        name: EcoString,
+        instantiation: types::SubstitutionMap,
+    },
 }
 
 impl IdentifierResolution {
     pub fn binding_id(&self) -> Option<BindingId> {
         match self {
             Self::Binding(id) => Some(*id),
-            Self::Unresolved | Self::Definition(_) => None,
+            Self::Unresolved | Self::Definition { .. } => None,
         }
     }
 
     pub fn definition(&self) -> Option<&str> {
         match self {
-            Self::Definition(definition) => Some(definition),
+            Self::Definition { name, .. } => Some(name),
+            Self::Unresolved | Self::Binding(_) => None,
+        }
+    }
+
+    pub fn instantiation(&self) -> Option<&types::SubstitutionMap> {
+        match self {
+            Self::Definition { instantiation, .. } => Some(instantiation),
             Self::Unresolved | Self::Binding(_) => None,
         }
     }
@@ -316,7 +326,21 @@ pub enum SelectArm {
 pub enum RestPattern {
     Absent,
     Discard(Span),
-    Bind { name: EcoString, span: Span },
+    Bind {
+        name: EcoString,
+        span: Span,
+        /// Set by the checker. See `Pattern::Identifier::binding`.
+        binding: Option<BindingId>,
+    },
+}
+
+impl RestPattern {
+    pub fn binding_id(&self) -> Option<BindingId> {
+        match self {
+            Self::Bind { binding, .. } => *binding,
+            Self::Absent | Self::Discard(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -397,6 +421,8 @@ pub enum Pattern {
     Identifier {
         identifier: EcoString,
         span: Span,
+        /// The binding this pattern introduces, filled in by the checker.
+        binding: Option<BindingId>,
     },
     Slice {
         prefix: Vec<Self>,
@@ -413,13 +439,17 @@ pub enum Pattern {
         name: EcoString,
         name_span: Span,
         span: Span,
+        /// Set by the checker. See `Pattern::Identifier::binding`.
+        binding: Option<BindingId>,
     },
 }
 
 /// Binding names introduced by a pattern, paired with their spans, in source order.
 pub fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)> {
     match pattern {
-        Pattern::Identifier { identifier, span } => vec![(identifier.to_string(), *span)],
+        Pattern::Identifier {
+            identifier, span, ..
+        } => vec![(identifier.to_string(), *span)],
         Pattern::Tuple { elements, .. } => {
             elements.iter().flat_map(collect_pattern_bindings).collect()
         }
@@ -432,7 +462,7 @@ pub fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)> {
             .collect(),
         Pattern::Slice { prefix, rest, .. } => {
             let mut bindings: Vec<_> = prefix.iter().flat_map(collect_pattern_bindings).collect();
-            if let RestPattern::Bind { name, span } = rest {
+            if let RestPattern::Bind { name, span, .. } = rest {
                 bindings.push((name.to_string(), *span));
             }
             bindings
@@ -488,6 +518,13 @@ impl Pattern {
 
     pub fn is_identifier(&self) -> bool {
         matches!(self, Pattern::Identifier { .. } | Pattern::AsBinding { .. })
+    }
+
+    pub fn binding_id(&self) -> Option<BindingId> {
+        match self {
+            Pattern::Identifier { binding, .. } | Pattern::AsBinding { binding, .. } => *binding,
+            _ => None,
+        }
     }
 
     pub fn get_identifier(&self) -> Option<EcoString> {
@@ -1604,10 +1641,6 @@ impl Expression {
         }
     }
 
-    pub fn is_none_literal(&self) -> bool {
-        matches!(self.as_option_constructor(), Some(Err(())))
-    }
-
     pub fn as_result_constructor(&self) -> Option<Result<(), ()>> {
         let variant = match self {
             Expression::Identifier { value, .. } => Some(value.as_str()),
@@ -1617,20 +1650,6 @@ impl Expression {
         match variant {
             "Result.Ok" | "Ok" => Some(Ok(())),
             "Result.Err" | "Err" => Some(Err(())),
-            _ => None,
-        }
-    }
-
-    pub fn as_partial_constructor(&self) -> Option<&'static str> {
-        let variant = match self {
-            Expression::Identifier { value, .. } => Some(value.as_str()),
-            _ => None,
-        }?;
-
-        match variant {
-            "Partial.Ok" => Some("Ok"),
-            "Partial.Err" => Some("Err"),
-            "Partial.Both" => Some("Both"),
             _ => None,
         }
     }

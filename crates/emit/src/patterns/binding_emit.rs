@@ -1,51 +1,102 @@
 use crate::Planner;
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::patterns::decision_tree::{
-    Check, PatternBinding, PatternInfo, SubjectRoot, render_condition,
+    Check, PatternBinding, PatternInfo, SubjectRoot, lift_root_assertion, render_condition,
 };
-use crate::plan::bodies::{Definition, LoweredStatement, assign, define_many};
+use crate::plan::bodies::{Definition, LoweredStatement, Statement, assign, define_many};
+use crate::plan::go_expression::BinaryOp;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::{GoExpression, Stability};
 use crate::state::bindings::InlineExpr;
 use syntax::ast::Expression;
 
+pub(crate) struct AssertedPattern {
+    pub subject: GoExpression,
+    pub ok_test: Option<GoExpression>,
+    pub checks: Vec<Check>,
+    pub bindings: Vec<PatternBinding>,
+}
+
+impl AssertedPattern {
+    pub(crate) fn is_irrefutable(&self) -> bool {
+        self.ok_test.is_none() && self.checks.is_empty()
+    }
+
+    pub(crate) fn condition(&self) -> GoExpression {
+        let condition = render_condition(&self.checks, SubjectRoot::Var(&self.subject));
+        match &self.ok_test {
+            None => condition,
+            Some(ok) if self.checks.is_empty() => ok.clone(),
+            Some(ok) => GoExpression::binary(ok.clone(), BinaryOp::And, condition),
+        }
+    }
+}
+
+/// True when a downstream consumer will reference the asserted value.
+fn requires_asserted_subject(checks: &[Check], bindings: &[PatternBinding]) -> bool {
+    !checks.is_empty() || bindings.iter().any(|b| b.target.is_named())
+}
+
 /// Hoist a root type assertion as `asserted := subject.(T)` for irrefutable
 /// destructure paths (the pattern compiler has already verified the type).
 pub(crate) fn apply_root_assertion(
     planner: &mut Planner,
-    statements: &mut Vec<LoweredStatement>,
-    info: &PatternInfo,
+    statements: &mut Vec<Statement>,
+    info: PatternInfo,
     subject: &GoExpression,
-) -> GoExpression {
-    let Some(assertion) = info.root_assertion.as_ref() else {
-        return subject.clone();
+) -> AssertedPattern {
+    let PatternInfo {
+        mut checks,
+        mut bindings,
+        packages,
+        ..
+    } = info;
+    planner.require_packages(&packages);
+    let subject = match lift_root_assertion(&mut checks, &mut bindings) {
+        Some(go_types) if requires_asserted_subject(&checks, &bindings) => {
+            let [go_type] = go_types.as_slice() else {
+                unreachable!("multi-type root assertions only reach match destructure paths")
+            };
+            let expression = GoExpression::type_assertion(subject.clone(), go_type.clone());
+            let var = planner.hoist_tmp_value_statement(statements, "asserted", expression);
+            GoExpression::name(var)
+        }
+        _ => subject.clone(),
     };
-    if !info.requires_asserted_subject() {
-        return subject.clone();
+    AssertedPattern {
+        subject,
+        ok_test: None,
+        checks,
+        bindings,
     }
-    let [go_type] = assertion.go_types.as_slice() else {
-        unreachable!("multi-type root assertions only reach match destructure paths")
-    };
-    let expression = GoExpression::type_assertion(subject.clone(), go_type.clone());
-    let var = planner.hoist_tmp_value_statement(statements, "asserted", expression);
-    GoExpression::name(var)
 }
 
 /// Hoist a root type assertion as comma-ok for refutable contexts (while-let,
-/// select arms, or-pattern let-else). Returns `(effective_subject, ok_test)`.
 pub(crate) fn apply_refutable_root_assertion(
     planner: &mut Planner,
-    statements: &mut Vec<LoweredStatement>,
-    info: &PatternInfo,
+    statements: &mut Vec<Statement>,
+    info: PatternInfo,
     subject: &GoExpression,
-) -> (GoExpression, Option<GoExpression>) {
-    let Some(assertion) = info.root_assertion.as_ref() else {
-        return (subject.clone(), None);
+) -> AssertedPattern {
+    let PatternInfo {
+        mut checks,
+        mut bindings,
+        packages,
+        ..
+    } = info;
+    planner.require_packages(&packages);
+    let Some(go_types) = lift_root_assertion(&mut checks, &mut bindings) else {
+        return AssertedPattern {
+            subject: subject.clone(),
+            ok_test: None,
+            checks,
+            bindings,
+        };
     };
-    let needs_asserted = info.requires_asserted_subject();
+    let needs_asserted = requires_asserted_subject(&checks, &bindings);
     let assertion_of =
         |go_type: &String| GoExpression::type_assertion(subject.clone(), go_type.clone());
-    match assertion.go_types.as_slice() {
+    let (subject, ok_test) = match go_types.as_slice() {
         [go_type] => {
             let asserted_lhs = if needs_asserted {
                 let v = planner.fresh_var(Some("asserted"));
@@ -83,48 +134,30 @@ pub(crate) fn apply_refutable_root_assertion(
                     ));
                     GoExpression::identifier(ok)
                 })
-                .reduce(|left, right| GoExpression::binary(left, "||", right))
+                .reduce(|left, right| GoExpression::binary(left, BinaryOp::Or, right))
                 .expect("a multi-type assertion names at least one type");
             (subject.clone(), Some(oks))
         }
-    }
-}
-
-/// Combine an optional `ok` test with the rendered checks into a guard
-/// condition; `true` when both are absent.
-pub(crate) fn compose_refutable_condition(
-    ok_test: Option<&GoExpression>,
-    checks: &[Check],
-    effective_subject: &GoExpression,
-) -> GoExpression {
-    let condition = render_condition(checks, SubjectRoot::Var(effective_subject));
-    match ok_test {
-        None => condition,
-        Some(ok) if checks.is_empty() => ok.clone(),
-        Some(ok) => GoExpression::binary(ok.clone(), "&&", condition),
+    };
+    AssertedPattern {
+        subject,
+        ok_test,
+        checks,
+        bindings,
     }
 }
 
 /// Push one `name := subject.path` per binding. Inlined bindings produce no statement.
 pub(crate) fn tree_binding_statements(
     planner: &mut Planner,
-    statements: &mut Vec<LoweredStatement>,
+    statements: &mut Vec<Statement>,
     bindings: &[PatternBinding],
     subject: &GoExpression,
     consumers: &[&Expression],
 ) {
     for binding in bindings {
-        let Some(ref go_name) = binding.go_name else {
-            let unit = GoExpression::empty_composite("struct{}".to_string());
-            planner.scope.bind_inline_expr(
-                &binding.lisette_name,
-                InlineExpr::new(unit, Stability::Literal),
-            );
-            for id in &binding.binding_ids {
-                planner
-                    .scope
-                    .register_binding_id(*id, &binding.lisette_name);
-            }
+        let Some(go_name) = binding.target.go_name() else {
+            bind_inline_unit(planner, binding);
             continue;
         };
 
@@ -135,27 +168,30 @@ pub(crate) fn tree_binding_statements(
             let stability = planner.path_read_stability(&composable);
             planner.scope.bind_inline_expr(
                 &binding.lisette_name,
+                &binding.binding_ids,
                 InlineExpr::new(composable, stability),
             );
-            for id in &binding.binding_ids {
-                planner
-                    .scope
-                    .register_binding_id(*id, &binding.lisette_name);
-            }
             continue;
         }
+        let ids = &binding.binding_ids;
         let name = if planner.scope.has_binding_for_go_name(go_name) {
             let fresh = planner.fresh_var(Some(&binding.lisette_name));
-            planner.scope.bind(&binding.lisette_name, &fresh);
+            planner
+                .scope
+                .bind_source(&binding.lisette_name, ids, &fresh);
             planner.try_declare(&fresh);
             fresh
         } else {
-            let name = planner.scope.bind(&binding.lisette_name, go_name.clone());
+            let name = planner
+                .scope
+                .bind_source(&binding.lisette_name, ids, go_name);
             if !planner.package.is_package_block_name(&name) && planner.try_declare(&name) {
                 name
             } else {
                 let fresh = planner.fresh_var(Some(&binding.lisette_name));
-                planner.scope.bind(&binding.lisette_name, &fresh);
+                planner
+                    .scope
+                    .bind_source(&binding.lisette_name, ids, &fresh);
                 planner.try_declare(&fresh);
                 fresh
             }
@@ -164,22 +200,26 @@ pub(crate) fn tree_binding_statements(
         definition.names[0] = planner
             .scope
             .identifier_for_binding(&binding.lisette_name, name);
-        statements.push(LoweredStatement::Define(definition));
-        for id in &binding.binding_ids {
-            planner
-                .scope
-                .register_binding_id(*id, &binding.lisette_name);
-        }
+        statements.push(LoweredStatement::Define(definition).into());
     }
+}
+
+pub(crate) fn bind_inline_unit(planner: &mut Planner, binding: &PatternBinding) {
+    let unit = GoExpression::empty_composite("struct{}".to_string());
+    planner.scope.bind_inline_expr(
+        &binding.lisette_name,
+        &binding.binding_ids,
+        InlineExpr::new(unit, Stability::Literal),
+    );
 }
 
 pub(crate) fn with_tree_bindings<R>(
     planner: &mut Planner,
-    statements: &mut Vec<LoweredStatement>,
+    statements: &mut Vec<Statement>,
     bindings: &[PatternBinding],
     subject: &GoExpression,
     body: &Expression,
-    f: impl FnOnce(&mut Planner, &mut Vec<LoweredStatement>) -> R,
+    f: impl FnOnce(&mut Planner, &mut Vec<Statement>) -> R,
 ) -> R {
     planner.with_binding_frame(|planner| {
         tree_binding_statements(planner, statements, bindings, subject, &[body]);
@@ -190,12 +230,12 @@ pub(crate) fn with_tree_bindings<R>(
 /// Push `name = subject.path` leaves for or-pattern alternatives.
 pub(crate) fn tree_assignment_statements(
     planner: &mut Planner,
-    statements: &mut Vec<LoweredStatement>,
+    statements: &mut Vec<Statement>,
     bindings: &[PatternBinding],
     subject: &GoExpression,
 ) {
     for binding in bindings {
-        if binding.go_name.is_none() {
+        if !binding.target.is_named() {
             continue;
         }
 

@@ -1,6 +1,6 @@
 use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, IdentifierResolution, Pattern};
-use syntax::program::{CallKind, DotAccessKind};
+use syntax::program::{CallKind, DotAccessResolution};
 use syntax::types::Type;
 
 use super::helpers::lambda_is_annotated;
@@ -139,9 +139,9 @@ fn hoistable_callee(
         Expression::DotAccess {
             expression: base,
             member,
-            resolution,
+            resolution: DotAccessResolution::PackageMember { .. },
             ..
-        } if resolution.kind() == Some(DotAccessKind::PackageMember) => {
+        } => {
             let Expression::Identifier { value: base, .. } = base.unwrap_parens() else {
                 return None;
             };

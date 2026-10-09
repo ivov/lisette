@@ -4,15 +4,17 @@ use crate::abi::coercion::{BridgeDirection, CoercionPlan, LayoutBridge};
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::calls::go_interop::build_tuple_literal;
 use crate::calls::go_interop::wrappers::{
-    WrapperOutcome, WrapperTarget, is_nil, is_nil_interface, leaf_block, non_nil,
+    WrapperOutcome, WrapperTarget, is_nil_interface, leaf_block, non_nil,
 };
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG, prelude_call};
 use crate::names::go_name::GeneratedPackage;
+use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign,
-    define_many,
+    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement,
+    assign, define_many,
 };
+use crate::plan::go_expression::{BinaryOp, UnaryOp};
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -20,7 +22,7 @@ use syntax::types::Type;
 fn is_some(option: GoExpression) -> GoExpression {
     GoExpression::binary(
         GoExpression::selector(option, "Tag".to_string()),
-        "==",
+        BinaryOp::Eq,
         GoExpression::generated(GeneratedPackage::Prelude, OPTION_SOME_TAG),
     )
 }
@@ -50,7 +52,7 @@ impl Planner<'_> {
             _ => return None,
         };
         let expression = expression.unwrap_parens();
-        if expression.is_none_literal() {
+        if prelude_constructor(expression) == Some(PreludeVariant::None) {
             return Some(ValuePlan::literal("nil".to_string()));
         }
         let Expression::Call {
@@ -65,7 +67,7 @@ impl Planner<'_> {
         let [inner] = args.as_slice() else {
             return None;
         };
-        if spread.is_some() || callee.as_option_constructor() != Some(Ok(())) {
+        if spread.is_some() || prelude_constructor(callee) != Some(PreludeVariant::Some) {
             return None;
         }
         let inner = self.lower_composite_value(inner, ExpressionContext::value());
@@ -82,11 +84,14 @@ impl Planner<'_> {
             let go_type = self.use_rendered_go_type(go_type);
             let copy = self.fresh_var(Some("ptr"));
             self.declare(&copy);
-            setup.push(LoweredStatement::VarDecl {
-                name: copy.clone().into(),
-                go_type,
-                value: Some(value),
-            });
+            setup.push(
+                LoweredStatement::VarDecl {
+                    name: copy.clone().into(),
+                    go_type,
+                    value: Some(value),
+                }
+                .into(),
+            );
             GoExpression::address_of(GoExpression::name(copy))
         }))
     }
@@ -98,7 +103,7 @@ impl Planner<'_> {
         option_ty: &Type,
         sentinel: i64,
         target: WrapperTarget<'_>,
-    ) -> (Vec<LoweredStatement>, WrapperOutcome) {
+    ) -> (Vec<Statement>, WrapperOutcome) {
         let mut statements = Vec::new();
         let raw = self.hoist_tmp_value_statement(&mut statements, "ret", call);
         let raw = || GoExpression::name(raw.clone());
@@ -108,7 +113,11 @@ impl Planner<'_> {
             format!("[{}]", inner_ty_str),
             vec![
                 raw(),
-                GoExpression::binary(raw(), "!=", GoExpression::literal(sentinel.to_string())),
+                GoExpression::binary(
+                    raw(),
+                    BinaryOp::Ne,
+                    GoExpression::literal(sentinel.to_string()),
+                ),
             ],
         );
         let outcome = self.push_simple_wrapper_value(&mut statements, target, "option", value);
@@ -125,7 +134,7 @@ impl Planner<'_> {
         layout: PayloadLayout,
         payload_bridge: Option<&LayoutBridge>,
         target: WrapperTarget<'_>,
-    ) -> (Vec<LoweredStatement>, WrapperOutcome) {
+    ) -> (Vec<Statement>, WrapperOutcome) {
         let mut statements = Vec::new();
 
         let inner_ty = option_ty.ok_type();
@@ -188,16 +197,9 @@ impl Planner<'_> {
         };
 
         let ok = GoExpression::name(ok_var);
-        let condition = if self.is_interface_option(option_ty) {
-            GoExpression::binary(
-                ok,
-                "&&",
-                GoExpression::unary("!", is_nil_interface(first_val)),
-            )
-        } else if needs_nilable_validation {
-            GoExpression::binary(ok, "&&", non_nil(first_val))
-        } else {
-            ok
+        let condition = match self.nullable_option_nil_guard(option_ty) {
+            Some(guard) => GoExpression::binary(ok, BinaryOp::And, guard.non_nil(first_val)),
+            None => ok,
         };
 
         let (sink, outcome) =
@@ -214,13 +216,16 @@ impl Planner<'_> {
 
         let mut then_body = leaf_block(&sink, some_wrapper);
         payload_setup.append(&mut then_body.statements);
-        statements.push(LoweredStatement::If(IfPlan::plain(
-            condition,
-            LoweredBlock {
-                statements: payload_setup,
-            },
-            ElseArm::from_body(leaf_block(&sink, none_wrapper), false),
-        )));
+        statements.push(
+            LoweredStatement::If(IfPlan::plain(
+                condition,
+                LoweredBlock {
+                    statements: payload_setup,
+                },
+                ElseArm::from_body(leaf_block(&sink, none_wrapper), false),
+            ))
+            .into(),
+        );
         (statements, outcome)
     }
 
@@ -230,15 +235,11 @@ impl Planner<'_> {
         raw_value: GoExpression,
         option_ty: &Type,
         target: WrapperTarget<'_>,
-    ) -> (Vec<LoweredStatement>, WrapperOutcome) {
+    ) -> (Vec<Statement>, WrapperOutcome) {
         let mut statements = Vec::new();
         let inner_ty = option_ty.ok_type();
         let inner_ty_str = self.use_go_type(&inner_ty);
-        let is_nil_check = if self.is_interface_option(option_ty) {
-            is_nil_interface(raw_value.clone())
-        } else {
-            is_nil(raw_value.clone())
-        };
+        let is_nil_check = self.option_nil_guard(option_ty).is_nil(raw_value.clone());
         let value = prelude_call(
             "OptionFromNilable",
             format!("[{}]", inner_ty_str),
@@ -250,7 +251,7 @@ impl Planner<'_> {
 
     pub(crate) fn plan_option_projection(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         option_value: GoExpression,
         slot_ty: &str,
         payload_bridge: &LayoutBridge,
@@ -259,22 +260,22 @@ impl Planner<'_> {
         let option = self.stable_source(statements, "opt", option_value);
         let slot = self.fresh_var(Some(if address { "ptr" } else { "unwrap" }));
         self.declare(&slot);
-        statements.push(LoweredStatement::VarDecl {
-            name: slot.clone().into(),
-            go_type: slot_ty.to_string(),
-            value: None,
-        });
+        statements.push(
+            LoweredStatement::VarDecl {
+                name: slot.clone().into(),
+                go_type: slot_ty.to_string(),
+                value: None,
+            }
+            .into(),
+        );
         let body = self.project_some_into(
             GoExpression::name(slot.clone()),
             option.clone(),
             payload_bridge,
             address,
         );
-        statements.push(LoweredStatement::If(IfPlan::plain(
-            is_some(option),
-            body,
-            ElseArm::None,
-        )));
+        statements
+            .push(LoweredStatement::If(IfPlan::plain(is_some(option), body, ElseArm::None)).into());
         GoExpression::name(slot)
     }
 
@@ -323,7 +324,7 @@ impl Planner<'_> {
             planner.emit_failure(None)
         };
         let condition = if !pointer && self.is_interface_option(option_type) {
-            GoExpression::unary("!", is_nil_interface(raw))
+            GoExpression::unary(UnaryOp::Not, is_nil_interface(raw))
         } else {
             non_nil(raw)
         };
@@ -344,7 +345,7 @@ impl Planner<'_> {
     /// Wrap a Go `*T` (T value-typed) into Lisette `Option<T>`.
     fn plan_pointer_to_option_wrap(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         pointer: GoExpression,
         option_ty: &Type,
     ) -> GoExpression {
@@ -361,7 +362,7 @@ impl Planner<'_> {
     /// and returns the option var).
     pub(crate) fn plan_nil_check_option_wrap(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         raw_value: GoExpression,
         option_ty: &Type,
     ) -> GoExpression {
@@ -373,7 +374,7 @@ impl Planner<'_> {
 
     pub(crate) fn plan_layout_bridge(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         value: GoExpression,
         bridge: &LayoutBridge,
     ) -> GoExpression {
@@ -446,7 +447,7 @@ impl Planner<'_> {
 
     fn plan_option_wrap_with_bridge(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         raw_value: GoExpression,
         option_type: &Type,
         payload_bridge: &LayoutBridge,
@@ -460,24 +461,30 @@ impl Planner<'_> {
         };
         let option = self.fresh_var(Some("option"));
         self.declare(&option);
-        statements.push(LoweredStatement::VarDecl {
-            name: option.clone().into(),
-            go_type: option_type_string,
-            value: None,
-        });
-        statements.push(self.wrap_nilable_into(
-            GoExpression::name(option.clone()),
-            source,
-            option_type,
-            payload_bridge,
-            pointer,
-        ));
+        statements.push(
+            LoweredStatement::VarDecl {
+                name: option.clone().into(),
+                go_type: option_type_string,
+                value: None,
+            }
+            .into(),
+        );
+        statements.push(
+            self.wrap_nilable_into(
+                GoExpression::name(option.clone()),
+                source,
+                option_type,
+                payload_bridge,
+                pointer,
+            )
+            .into(),
+        );
         GoExpression::name(option)
     }
 
     fn plan_aggregate_layout_bridge(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         value: GoExpression,
         bridge: &LayoutBridge,
     ) -> GoExpression {
@@ -508,11 +515,14 @@ impl Planner<'_> {
         let output = if matches!(target_layout, ValueLayout::Array { .. }) {
             let output = self.fresh_var(Some(output_hint));
             self.declare(&output);
-            statements.push(LoweredStatement::VarDecl {
-                name: output.clone().into(),
-                go_type: target_type,
-                value: None,
-            });
+            statements.push(
+                LoweredStatement::VarDecl {
+                    name: output.clone().into(),
+                    go_type: target_type,
+                    value: None,
+                }
+                .into(),
+            );
             output
         } else {
             let make = GoExpression::call(
@@ -547,16 +557,19 @@ impl Planner<'_> {
             key_statements.append(&mut body.statements);
             body.statements = key_statements;
         }
-        statements.push(LoweredStatement::Loop(LoopPlan {
-            prologue: Vec::new(),
-            kind: LoopKind::Generated { label: None },
-            header: LoopHeader::Range {
-                key: Some(index.into()),
-                value: Some(element.into()),
-                iterable: source,
-            },
-            body,
-        }));
+        statements.push(
+            LoweredStatement::Loop(LoopPlan {
+                prologue: Vec::new(),
+                kind: LoopKind::Generated { label: None },
+                header: LoopHeader::Range {
+                    key: Some(index.into()),
+                    value: Some(element.into()),
+                    iterable: source,
+                },
+                body,
+            })
+            .into(),
+        );
         GoExpression::name(output)
     }
 
@@ -585,11 +598,10 @@ impl Planner<'_> {
                     ElseArm::None
                 };
                 LoweredBlock {
-                    statements: vec![LoweredStatement::If(IfPlan::plain(
-                        is_some(element),
-                        then_block,
-                        else_arm,
-                    ))],
+                    statements: vec![
+                        LoweredStatement::If(IfPlan::plain(is_some(element), then_block, else_arm))
+                            .into(),
+                    ],
                 }
             }
             LayoutBridge::WrapNullableOption {
@@ -604,13 +616,10 @@ impl Planner<'_> {
             } => {
                 let pointer = matches!(bridge, LayoutBridge::WrapPointerOption { .. });
                 LoweredBlock {
-                    statements: vec![self.wrap_nilable_into(
-                        slot,
-                        element,
-                        option_type,
-                        payload,
-                        pointer,
-                    )],
+                    statements: vec![
+                        self.wrap_nilable_into(slot, element, option_type, payload, pointer)
+                            .into(),
+                    ],
                 }
             }
             LayoutBridge::Aggregate { .. }

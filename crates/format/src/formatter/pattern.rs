@@ -121,6 +121,7 @@ impl<'a> Formatter<'a> {
                     RestPattern::Bind {
                         name,
                         span: rest_span,
+                        ..
                     } => {
                         self.push_pattern_entry(&mut entries, rest_span.byte_offset, |_| {
                             Document::str("..").append(Document::string(name.to_string()))

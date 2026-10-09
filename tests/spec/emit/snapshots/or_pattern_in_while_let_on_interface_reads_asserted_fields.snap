@@ -1,0 +1,54 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  interface Shape { fn area() -> int }
+  
+  struct Sq { side: int }
+  struct Ci { r: int }
+  
+  impl Sq { fn area(self) -> int { self.side } }
+  impl Ci { fn area(self) -> int { self.r } }
+  
+  fn test(shapes: Slice<Shape>) -> int {
+    let mut i = 0;
+    while let Sq { side: 1 } | Ci { r: 2 } = shapes[i] {
+      i = i + 1;
+    }
+    i
+  }
+---
+package main
+
+type Shape interface {
+	area() int
+}
+
+type Sq struct {
+	side int
+}
+
+type Ci struct {
+	r int
+}
+
+func (s Sq) area() int {
+	return s.side
+}
+
+func (c Ci) area() int {
+	return c.r
+}
+
+func test(shapes []Shape) int {
+	i := 0
+	for {
+		subject := shapes[i]
+		if func() bool { _, ok := subject.(Sq); return ok }() && subject.(Sq).side == 1 || func() bool { _, ok := subject.(Ci); return ok }() && subject.(Ci).r == 2 {
+			i++
+		} else {
+			break
+		}
+	}
+	return i
+}

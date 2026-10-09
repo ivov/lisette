@@ -1,7 +1,7 @@
 use crate::plan::bodies::{
     AssignForm, CompoundKind, ConstPlan, Definition, ElseArm, IfPlan, LoopHeader, LoopPlan,
-    LoopTransfer, LoweredBlock, LoweredStatement, SelectArmPlan, SelectStatementPlan, SwitchKind,
-    SwitchStatementPlan,
+    LoopTransfer, LoweredBlock, LoweredStatement, SelectArmPlan, SelectStatementPlan, Statement,
+    SwitchKind, SwitchStatementPlan,
 };
 use crate::plan::values::{GoExpression, ValuePlan};
 use crate::render::Renderer;
@@ -17,7 +17,7 @@ fn join_expressions(values: &[GoExpression]) -> String {
 
 impl Renderer {
     /// Render a slice of setup statements to a fresh `String`.
-    pub(crate) fn render_setup(&self, setup: &[LoweredStatement]) -> String {
+    pub(crate) fn render_setup(&self, setup: &[Statement]) -> String {
         let mut buffer = String::new();
         for statement in setup {
             self.render_statement(&mut buffer, statement);
@@ -65,13 +65,11 @@ impl Renderer {
             write_line!(output, "case {}:", join_expressions(&case.labels));
             self.render_lowered_block(output, &case.body);
         }
-        if let Some(default_body) = &plan.default {
-            let mut body = String::new();
-            self.render_lowered_block(&mut body, default_body);
-            if !body.is_empty() {
-                output.push_str("default:\n");
-                output.push_str(&body);
-            }
+        if let Some(default_body) = &plan.default
+            && !default_body.renders_empty()
+        {
+            output.push_str("default:\n");
+            self.render_lowered_block(output, default_body);
         }
         output.push_str("}\n");
         for statement in &plan.postlude {
@@ -130,8 +128,11 @@ impl Renderer {
         output.push_str(&definition.value.rendered());
     }
 
-    fn render_statement(&self, output: &mut String, statement: &LoweredStatement) {
-        match statement {
+    fn render_statement(&self, output: &mut String, statement: &Statement) {
+        if let Some(line) = &statement.line {
+            output.push_str(line);
+        }
+        match &statement.kind {
             LoweredStatement::If(plan) => self.render_if(output, plan),
             LoweredStatement::Loop(plan) => self.render_loop(output, plan),
             LoweredStatement::Block(body) => {
@@ -161,9 +162,6 @@ impl Renderer {
             }
             LoweredStatement::Select(plan) => self.render_select(output, plan),
             LoweredStatement::Switch(plan) => self.render_switch(output, plan),
-            LoweredStatement::WhileLet(body) => {
-                self.render_lowered_block(output, body);
-            }
             LoweredStatement::Define(definition) => {
                 self.render_definition(output, definition);
                 output.push('\n');
@@ -185,10 +183,6 @@ impl Renderer {
                     write_line!(output, "{}", expression);
                 }
             }
-            LoweredStatement::Directed { directive, inner } => {
-                output.push_str(directive);
-                self.render_statement(output, inner);
-            }
             LoweredStatement::UnreachablePanic => output.push_str("panic(\"unreachable\")\n"),
         }
     }
@@ -205,7 +199,7 @@ impl Renderer {
                     CompoundKind::Increment => write_line!(output, "{}++", target),
                     CompoundKind::Decrement => write_line!(output, "{}--", target),
                     CompoundKind::OpAssign {
-                        op_text,
+                        operator,
                         rhs,
                         pinned_left,
                     } => {
@@ -216,13 +210,19 @@ impl Renderer {
                             Some(left) => {
                                 let value = GoExpression::binary(
                                     left.clone(),
-                                    op_text.as_str(),
+                                    *operator,
                                     rhs.expression().clone(),
                                 );
                                 write_line!(output, "{} = {}", target, value)
                             }
                             None => {
-                                write_line!(output, "{} {}= {}", target, op_text, rhs.expression())
+                                write_line!(
+                                    output,
+                                    "{} {}= {}",
+                                    target,
+                                    operator.symbol(),
+                                    rhs.expression()
+                                )
                             }
                         }
                     }
@@ -241,7 +241,7 @@ impl Renderer {
     }
 
     /// Render a sequence of capture statements (order-sensitive lvalue setup).
-    fn render_capture_statements(&self, output: &mut String, statements: &[LoweredStatement]) {
+    fn render_capture_statements(&self, output: &mut String, statements: &[Statement]) {
         for statement in statements {
             self.render_statement(output, statement);
         }

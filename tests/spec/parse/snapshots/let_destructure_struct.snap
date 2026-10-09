@@ -40,6 +40,7 @@ description: |
                                                 byte_offset: 27,
                                                 byte_length: 1,
                                             },
+                                            binding: None,
                                         },
                                     },
                                     StructFieldPattern {
@@ -51,6 +52,7 @@ description: |
                                                 byte_offset: 33,
                                                 byte_length: 7,
                                             },
+                                            binding: None,
                                         },
                                     },
                                 ],

@@ -1,6 +1,6 @@
 use super::bodies::{
     AssignForm, CompoundKind, Definition, ElseArm, IfPlan, LoopHeader, LoweredStatement,
-    SelectArmPlan, SwitchCasePlan, SwitchKind,
+    SelectArmPlan, Statement, SwitchCasePlan, SwitchKind,
 };
 use super::go_expression::GoExpressionNode;
 use super::local::GoIdentifier;
@@ -12,23 +12,20 @@ use rustc_hash::FxHashSet as HashSet;
 
 pub(crate) trait VisitorMut {
     fn expression(&mut self, node: &mut GoExpressionNode);
-    fn binding(&mut self, name: &mut String);
 
     fn enter_scope(&mut self) {}
 
     fn exit_scope(&mut self) {}
 
-    fn local_binding(&mut self, name: &mut GoIdentifier) {
-        self.binding(name.spelling_mut());
-    }
+    fn local_binding(&mut self, _name: &mut GoIdentifier) {}
+
+    /// Sees each assignment target before the target is visited as an expression.
+    fn assignment_target(&mut self, _target: &GoExpressionNode) {}
 }
 
-pub(crate) fn visit_statements_mut(
-    statements: &mut [LoweredStatement],
-    visitor: &mut impl VisitorMut,
-) {
+pub(crate) fn visit_statements_mut(statements: &mut [Statement], visitor: &mut impl VisitorMut) {
     for statement in statements {
-        visit_statement(statement, visitor);
+        visit_statement(&mut statement.kind, visitor);
     }
 }
 
@@ -140,9 +137,7 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
             visit_statements_mut(&mut body.statements, visitor);
             visitor.exit_scope();
         }
-        LoweredStatement::Body(body) | LoweredStatement::WhileLet(body) => {
-            visit_statements_mut(&mut body.statements, visitor)
-        }
+        LoweredStatement::Body(body) => visit_statements_mut(&mut body.statements, visitor),
         LoweredStatement::Break(_)
         | LoweredStatement::Continue(_)
         | LoweredStatement::UnreachablePanic => {}
@@ -162,6 +157,7 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
                 kind,
             } => {
                 visit_statements_mut(target_capture, visitor);
+                visitor.assignment_target(target.node());
                 visit_expression(target.node_mut(), visitor);
                 match kind {
                     CompoundKind::OpAssign {
@@ -181,6 +177,7 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
                 value,
             } => {
                 visit_statements_mut(target_capture, visitor);
+                visitor.assignment_target(target.node());
                 visit_expression(target.node_mut(), visitor);
                 visit_value(value, visitor);
             }
@@ -249,6 +246,7 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
         LoweredStatement::Define(definition) => visit_definition(definition, visitor),
         LoweredStatement::AssignMany { targets, value } => {
             for target in targets {
+                visitor.assignment_target(target.node());
                 visit_expression(target.node_mut(), visitor);
             }
             visit_expression(value.node_mut(), visitor);
@@ -263,12 +261,11 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
         | LoweredStatement::ExpressionStatement { expression, .. } => {
             visit_expression(expression.node_mut(), visitor)
         }
-        LoweredStatement::Directed { inner, .. } => visit_statement(inner, visitor),
     }
 }
 
 pub(crate) fn identify_body_locals(
-    statements: &mut [LoweredStatement],
+    statements: &mut [Statement],
     parameters: &[GoIdentifier],
     scope: &mut ScopeState,
 ) -> HashSet<LocalId> {
@@ -340,8 +337,6 @@ pub(crate) fn identify_body_locals(
                 name.resolve_to(id);
             }
         }
-
-        fn binding(&mut self, _name: &mut String) {}
 
         fn local_binding(&mut self, name: &mut GoIdentifier) {
             if name.spelling() == "_" {
@@ -420,8 +415,6 @@ pub(crate) fn identify_body_locals(
                 }
             }
 
-            fn binding(&mut self, _name: &mut String) {}
-
             fn local_binding(&mut self, name: &mut GoIdentifier) {
                 if let Some(id) = name.id() {
                     name.resolve_to(corrected_id(id, self.0));
@@ -437,8 +430,6 @@ pub(crate) fn identify_body_locals(
                 name.finish();
             }
         }
-
-        fn binding(&mut self, _name: &mut String) {}
 
         fn local_binding(&mut self, name: &mut GoIdentifier) {
             name.finish();
@@ -462,6 +453,7 @@ mod tests {
     use crate::plan::go_expression::{FunctionLiteralLayout, GoParameter};
     use crate::plan::local::{GoIdentifier, LocalId};
     use crate::plan::values::GoExpression;
+    use crate::state::package_state::PackageState;
     use crate::state::scope::ScopeState;
 
     fn name(value: &str) -> GoExpression {
@@ -475,7 +467,7 @@ mod tests {
             LoweredBlock {
                 statements: vec![
                     define(local.to_string(), name(parameter)),
-                    LoweredStatement::Return(vec![name(local)]),
+                    LoweredStatement::Return(vec![name(local)]).into(),
                 ],
             },
             FunctionLiteralLayout::MultiLine,
@@ -496,25 +488,26 @@ mod tests {
             LoweredStatement::Block(LoweredBlock {
                 statements: vec![
                     define("value".to_string(), name("value")),
-                    LoweredStatement::Return(vec![name("value")]),
+                    LoweredStatement::Return(vec![name("value")]).into(),
                 ],
-            }),
-            LoweredStatement::Return(vec![name("value")]),
+            })
+            .into(),
+            LoweredStatement::Return(vec![name("value")]).into(),
         ];
         let shadowing = identify_body_locals(&mut statements, &[], &mut ScopeState::new());
-        let LoweredStatement::Define(outer) = &statements[0] else {
+        let LoweredStatement::Define(outer) = &statements[0].kind else {
             panic!("expected outer binding");
         };
-        let LoweredStatement::Block(inner) = &statements[1] else {
+        let LoweredStatement::Block(inner) = &statements[1].kind else {
             panic!("expected inner block");
         };
-        let LoweredStatement::Define(inner_binding) = &inner.statements[0] else {
+        let LoweredStatement::Define(inner_binding) = &inner.statements[0].kind else {
             panic!("expected inner binding");
         };
-        let LoweredStatement::Return(inner_return) = &inner.statements[1] else {
+        let LoweredStatement::Return(inner_return) = &inner.statements[1].kind else {
             panic!("expected inner return");
         };
-        let LoweredStatement::Return(outer_return) = &statements[2] else {
+        let LoweredStatement::Return(outer_return) = &statements[2].kind else {
             panic!("expected outer return");
         };
         assert_eq!(identifier_id(&inner_binding.value), outer.names[0].id());
@@ -530,14 +523,15 @@ mod tests {
             LoweredStatement::Return(vec![GoExpression::identifier(GoIdentifier::local(
                 "result".to_string(),
                 LocalId(42),
-            ))]),
+            ))])
+            .into(),
         ];
         let mut scope = ScopeState::new();
         identify_body_locals(&mut statements, &[], &mut scope);
-        let LoweredStatement::Define(binding) = &statements[0] else {
+        let LoweredStatement::Define(binding) = &statements[0].kind else {
             panic!("expected a binding");
         };
-        let LoweredStatement::Return(values) = &statements[1] else {
+        let LoweredStatement::Return(values) = &statements[1].kind else {
             panic!("expected a return");
         };
         assert_eq!(identifier_id(&values[0]), binding.names[0].id());
@@ -555,15 +549,16 @@ mod tests {
             LoweredStatement::Block(LoweredBlock {
                 statements: vec![
                     define("value".to_string(), GoExpression::literal("2".to_string())),
-                    LoweredStatement::Return(vec![GoExpression::identifier(outer.clone())]),
+                    LoweredStatement::Return(vec![GoExpression::identifier(outer.clone())]).into(),
                 ],
-            }),
+            })
+            .into(),
         ];
         identify_body_locals(&mut statements, &[], &mut scope);
-        let LoweredStatement::Block(inner) = &statements[1] else {
+        let LoweredStatement::Block(inner) = &statements[1].kind else {
             panic!("expected inner block");
         };
-        let LoweredStatement::Return(values) = &inner.statements[1] else {
+        let LoweredStatement::Return(values) = &inner.statements[1].kind else {
             panic!("expected inner read");
         };
         assert_eq!(identifier_id(&values[0]), outer.id());
@@ -576,17 +571,18 @@ mod tests {
     #[test]
     fn source_alias_uses_the_generated_go_binding_id() {
         let mut scope = ScopeState::new();
-        let generated = scope.fresh_go_name(Some("value"));
+        let generated = scope.fresh_go_name(Some("value"), &PackageState::default());
         let go_binding = scope.generated_identifier(&generated);
         let mut statements = vec![
             define(go_binding.clone(), GoExpression::literal("1".to_string())),
             LoweredStatement::Return(vec![GoExpression::identifier(GoIdentifier::local(
                 generated,
                 LocalId(42),
-            ))]),
+            ))])
+            .into(),
         ];
         identify_body_locals(&mut statements, &[], &mut scope);
-        let LoweredStatement::Return(values) = &statements[1] else {
+        let LoweredStatement::Return(values) = &statements[1].kind else {
             panic!("expected a return");
         };
         assert_eq!(identifier_id(&values[0]), go_binding.id());
@@ -597,19 +593,19 @@ mod tests {
         use crate::plan::verify::verify_local_scopes;
 
         let mut scope = ScopeState::new();
-        scope.fresh_go_name(Some("check"));
-        let mut statements = vec![LoweredStatement::Return(vec![GoExpression::external_name(
-            "check".to_string(),
-        )])];
+        scope.fresh_go_name(Some("check"), &PackageState::default());
+        let mut statements = vec![
+            LoweredStatement::Return(vec![GoExpression::external_name("check".to_string())]).into(),
+        ];
         identify_body_locals(&mut statements, &[], &mut scope);
-        let LoweredStatement::Return(values) = &statements[0] else {
+        let LoweredStatement::Return(values) = &statements[0].kind else {
             panic!("expected a return");
         };
         assert_eq!(identifier_id(&values[0]), None);
         assert!(verify_local_scopes(&mut statements, &[]).is_ok());
     }
 
-    fn rename_suffix(statements: &mut [LoweredStatement]) {
+    fn rename_suffix(statements: &mut [Statement]) {
         use rustc_hash::FxHashMap as HashMap;
 
         let mut bindings = HashMap::default();
@@ -620,8 +616,6 @@ mod tests {
         }
         impl VisitorMut for Collect<'_> {
             fn expression(&mut self, _node: &mut GoExpressionNode) {}
-
-            fn binding(&mut self, _name: &mut String) {}
 
             fn local_binding(&mut self, name: &mut GoIdentifier) {
                 if let Some(final_name) = name.spelling().strip_suffix("_1").map(str::to_string) {
@@ -648,8 +642,6 @@ mod tests {
                     name.identify(*id);
                 }
             }
-
-            fn binding(&mut self, _name: &mut String) {}
         }
         visit_statements_mut(statements, &mut Identify(&ids));
         let by_id = bindings
@@ -664,8 +656,6 @@ mod tests {
                     *name = GoIdentifier::name(name.spelling().to_string());
                 }
             }
-
-            fn binding(&mut self, _name: &mut String) {}
 
             fn local_binding(&mut self, name: &mut GoIdentifier) {
                 *name = GoIdentifier::name(name.spelling().to_string());
@@ -691,19 +681,22 @@ mod tests {
     fn generated_rename_changes_only_the_matching_reference_id() {
         use rustc_hash::FxHashMap as HashMap;
 
-        let mut statements = vec![LoweredStatement::Return(vec![
-            GoExpression::from_node(GoExpressionNode::Identifier(GoIdentifier::local(
-                "tmp_1".to_string(),
-                LocalId(1),
-            ))),
-            GoExpression::from_node(GoExpressionNode::Identifier(GoIdentifier::local(
-                "tmp_1".to_string(),
-                LocalId(2),
-            ))),
-        ])];
+        let mut statements = vec![
+            LoweredStatement::Return(vec![
+                GoExpression::from_node(GoExpressionNode::Identifier(GoIdentifier::local(
+                    "tmp_1".to_string(),
+                    LocalId(1),
+                ))),
+                GoExpression::from_node(GoExpressionNode::Identifier(GoIdentifier::local(
+                    "tmp_1".to_string(),
+                    LocalId(2),
+                ))),
+            ])
+            .into(),
+        ];
         let by_id = HashMap::from_iter([(LocalId(1), "tmp".to_string())]);
         rename_generated_locals(&mut statements, &by_id);
-        let LoweredStatement::Return(values) = &statements[0] else {
+        let LoweredStatement::Return(values) = &statements[0].kind else {
             panic!("expected return");
         };
         assert_eq!(values[0].rendered(), "tmp");
@@ -719,17 +712,18 @@ mod tests {
             define("tmp_1".to_string(), GoExpression::literal("2".to_string())),
         ];
         for (statement, id) in statements.iter_mut().zip([LocalId(1), LocalId(2)]) {
-            let LoweredStatement::Define(definition) = statement else {
+            let LoweredStatement::Define(definition) = &mut statement.kind else {
                 panic!("expected definition");
             };
             definition.names[0].identify(id);
         }
         let by_id = HashMap::from_iter([(LocalId(1), "tmp".to_string())]);
         rename_generated_locals(&mut statements, &by_id);
-        let [
-            LoweredStatement::Define(first),
-            LoweredStatement::Define(second),
-        ] = statements.as_slice()
+        let [first, second] = statements.as_slice() else {
+            panic!("expected two statements");
+        };
+        let (LoweredStatement::Define(first), LoweredStatement::Define(second)) =
+            (&first.kind, &second.kind)
         else {
             panic!("expected two definitions");
         };
@@ -750,8 +744,8 @@ mod tests {
                     self.reads.push(name.to_string());
                 }
             }
-            fn binding(&mut self, name: &mut String) {
-                self.bindings.push(name.clone());
+            fn local_binding(&mut self, name: &mut GoIdentifier) {
+                self.bindings.push(name.to_string());
             }
         }
         let mut statements = vec![define("callback".to_string(), function("arg", "local"))];
@@ -763,25 +757,28 @@ mod tests {
 
     #[test]
     fn renaming_reaches_each_else_if_initializer() {
-        let mut statements = vec![LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
-            initializer: Some(Definition::single("first_1".to_string(), name("source"))),
-            condition: name("first_1"),
-            then_body: LoweredBlock {
-                statements: Vec::new(),
-            },
-            else_arm: ElseArm::ElseIf(Box::new(IfPlan {
+        let mut statements = vec![
+            LoweredStatement::If(IfPlan {
                 condition_setup: Vec::new(),
-                initializer: Some(Definition::single("second_1".to_string(), name("source"))),
-                condition: name("second_1"),
+                initializer: Some(Definition::single("first_1".to_string(), name("source"))),
+                condition: name("first_1"),
                 then_body: LoweredBlock {
                     statements: Vec::new(),
                 },
-                else_arm: ElseArm::None,
-            })),
-        })];
+                else_arm: ElseArm::ElseIf(Box::new(IfPlan {
+                    condition_setup: Vec::new(),
+                    initializer: Some(Definition::single("second_1".to_string(), name("source"))),
+                    condition: name("second_1"),
+                    then_body: LoweredBlock {
+                        statements: Vec::new(),
+                    },
+                    else_arm: ElseArm::None,
+                })),
+            })
+            .into(),
+        ];
         rename_suffix(&mut statements);
-        let LoweredStatement::If(first) = &statements[0] else {
+        let LoweredStatement::If(first) = &statements[0].kind else {
             panic!("expected if");
         };
         assert_eq!(first.initializer.as_ref().unwrap().names, ["first"]);

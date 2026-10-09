@@ -25,13 +25,6 @@ impl PackageItemId {
         Self::EqualityMethod(type_name.into())
     }
 
-    fn import_alias(&self) -> Option<&str> {
-        match self {
-            Self::Import { alias, .. } => Some(alias),
-            Self::Definition(_) | Self::EqualityMethod(_) => None,
-        }
-    }
-
     pub fn method(method: &str, receiver: &str) -> Self {
         if method == "equals" {
             Self::equals_method(receiver)
@@ -186,24 +179,6 @@ impl<'a> ReferenceUsage<'a> {
             .iter()
             .filter(|(id, _)| !self.reachable.contains(*id))
     }
-
-    pub fn unused_import_aliases(&self) -> HashSet<String> {
-        let mut aliases = HashMap::default();
-        for (id, item) in &self.graph.items {
-            if let Some(alias) = id.import_alias() {
-                debug_assert!(matches!(item.kind, ItemKind::Import { .. }));
-                aliases
-                    .entry(alias)
-                    .and_modify(|all_unused| *all_unused &= !self.reachable.contains(id))
-                    .or_insert_with(|| !self.reachable.contains(id));
-            }
-        }
-        aliases
-            .into_iter()
-            .filter(|(_, all_unused)| *all_unused)
-            .map(|(alias, _)| alias.to_string())
-            .collect()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -260,18 +235,6 @@ mod tests {
         graph.add_reference(&root, child);
 
         assert!(graph.analyze().unreachable_items().next().is_none());
-    }
-
-    #[test]
-    fn import_alias_is_unused_only_when_unused_in_every_file() {
-        let mut graph = ReferenceGraph::new();
-        let used = PackageItemId::import(0, "dep");
-        let unused = PackageItemId::import(1, "dep");
-        graph.add_import(used.clone(), span(0), span(0));
-        graph.add_import(unused, span(1), span(1));
-        graph.mark_as_used(used);
-
-        assert!(graph.analyze().unused_import_aliases().is_empty());
     }
 
     #[test]

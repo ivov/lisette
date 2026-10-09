@@ -6,15 +6,16 @@ use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::escape_reserved;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{LoweredStatement, define, define_many};
+use crate::plan::bodies::{Statement, define, define_many};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::{
     BindingValue, ComponentBinding, ComponentKind, WholeValueConstructor,
 };
 use crate::state::scope::PairStatusKind;
-use crate::types::native::NativeGoType;
 use syntax::ast::Expression;
+use syntax::program::CallKind;
+use syntax::program::NativeTypeKind;
 
 /// How an Option-typed scrutinee produces its Go comma-ok pair.
 enum CommaOkPair {
@@ -97,10 +98,16 @@ impl Planner<'_> {
     }
 
     pub(crate) fn component_binding(&self, expression: &Expression) -> Option<ComponentBinding> {
-        let Expression::Identifier { value, .. } = expression.unwrap_parens() else {
+        let Expression::Identifier {
+            value, resolution, ..
+        } = expression.unwrap_parens()
+        else {
             return None;
         };
-        match self.scope.resolve_identifier_binding(value) {
+        match self
+            .scope
+            .resolve_identifier_with_resolution(value, resolution)
+        {
             Some(BindingValue::Components(components)) => Some(components.clone()),
             _ => None,
         }
@@ -138,7 +145,7 @@ impl Planner<'_> {
             return None;
         };
         match &plan.resolved.origin {
-            CallableOrigin::AssertType => {
+            CallableOrigin::Source(CallKind::AssertType) => {
                 let [operand] = args.as_slice() else {
                     return None;
                 };
@@ -150,8 +157,8 @@ impl Planner<'_> {
                     nil_guard: None,
                 })
             }
-            CallableOrigin::NativeMethod(kind)
-                if matches!(NativeGoType::from_kind(*kind), NativeGoType::Map)
+            CallableOrigin::Source(CallKind::NativeMethod(kind))
+                if matches!(kind, NativeTypeKind::Map)
                     && extract_native_method_name(function) == "get"
                     && args.len() == 1
                     && spread.is_none() =>
@@ -169,7 +176,7 @@ impl Planner<'_> {
                         payload: PayloadLayout::Packed,
                     })
                 ) || lowered.ok_ty.is_unit()
-                    || lowered.payload_bridge.is_some()
+                    || lowered.is_bridged()
                 {
                     return None;
                 }
@@ -202,7 +209,7 @@ impl Planner<'_> {
 
     pub(crate) fn bind_pair(
         &mut self,
-        statements: Vec<LoweredStatement>,
+        statements: Vec<Statement>,
         expression: GoExpression,
         slot: CommaOkValueSlot,
         kind: PairKind,
@@ -308,7 +315,7 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         pair: &CommaOkPair,
-    ) -> (Vec<LoweredStatement>, GoExpression) {
+    ) -> (Vec<Statement>, GoExpression) {
         match pair {
             CommaOkPair::LoweredCall => self
                 .lower_call(expression, None, ExpressionContext::value())

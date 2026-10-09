@@ -7,12 +7,32 @@ use crate::calls::comma_ok::{CommaOkValueSlot, PairKind};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{LoweredBlock, LoweredStatement, define};
+use crate::plan::bodies::{LoweredBlock, Statement, define};
 use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::placement::is_unit_call;
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
 use syntax::types::Type;
+
+pub(crate) struct TryBlockPairPlan<'e> {
+    items: &'e [Expression],
+    effective_ty: Type,
+    fallible: Fallible,
+    body_ctx: ReturnContext,
+    shape: CallableReturnAbi,
+    kind: PairKind,
+}
+
+impl TryBlockPairPlan<'_> {
+    pub(crate) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundValue {
+        let go_return = planner.render_lowered_return_ty(&self.shape, &self.effective_ty);
+        let body = planner.with_isolated_function(self.body_ctx, |planner| LoweredBlock {
+            statements: planner.lower_try_items(self.items, &self.fallible),
+        });
+        let call = GoExpression::immediate_call(go_return, body, FunctionLiteralLayout::MultiLine);
+        planner.bind_pair(Vec::new(), call, slot, self.kind, None)
+    }
+}
 
 impl Planner<'_> {
     /// `try { ... }` → `result := func() T { ... }()`; value is the bound result var.
@@ -26,18 +46,17 @@ impl Planner<'_> {
         items: &[Expression],
         ty: &Type,
         name: &str,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
         self.lower_try_block_as(items, ty, name.to_string())
             .into_parts()
             .0
     }
 
-    pub(crate) fn bind_try_block_pair(
-        &mut self,
-        items: &[Expression],
+    pub(crate) fn try_block_pair_plan<'e>(
+        &self,
+        items: &'e [Expression],
         ty: &Type,
-        slot: CommaOkValueSlot,
-    ) -> Option<BoundValue> {
+    ) -> Option<TryBlockPairPlan<'e>> {
         let return_ctx = self.return_ctx();
         let ty = self.facts.peel_alias(ty);
         let effective_ty = resolve_fallible_block_type(items, &ty, Some(&return_ctx));
@@ -53,35 +72,14 @@ impl Planner<'_> {
             }) => PairKind::CommaOk { nil_guard: None },
             _ => return None,
         };
-        let go_return = self.render_lowered_return_ty(&shape, &effective_ty);
-        let body = self.with_return_context(body_ctx, |planner| {
-            planner.with_isolated_function(|planner| LoweredBlock {
-                statements: planner.lower_try_items(items, &fallible, Some(&shape)),
-            })
-        });
-        let call = GoExpression::immediate_call(go_return, body, FunctionLiteralLayout::MultiLine);
-        Some(self.bind_pair(Vec::new(), call, slot, kind, None))
-    }
-
-    /// Checks the shape without reserving names or adding dependencies.
-    pub(crate) fn can_bind_try_block_pair(&self, items: &[Expression], ty: &Type) -> bool {
-        let return_ctx = self.return_ctx();
-        let ty = self.facts.peel_alias(ty);
-        let effective_ty = resolve_fallible_block_type(items, &ty, Some(&return_ctx));
-        if Fallible::from_type(&effective_ty).is_none() {
-            return false;
-        }
-        let Some(shape) = self.return_context_for_type(effective_ty).lowered_shape() else {
-            return false;
-        };
-        matches!(
+        Some(TryBlockPairPlan {
+            items,
+            effective_ty,
+            fallible,
+            body_ctx,
             shape,
-            CallableReturnAbi::Result {
-                payload: PayloadLayout::Packed
-            } | CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
-                payload: PayloadLayout::Packed
-            })
-        )
+            kind,
+        })
     }
 
     fn lower_try_block_as(
@@ -102,10 +100,9 @@ impl Planner<'_> {
             fe.full_type_string()
         };
 
-        let body_ctx = ReturnContext::TaggedBlock(effective_ty);
-        let body = self.with_return_context(body_ctx, |planner| {
-            planner.with_isolated_function(|planner| planner.lower_try_body(items, &fallible))
-        });
+        let body_ctx = ReturnContext::Tagged(effective_ty);
+        let body = self
+            .with_isolated_function(body_ctx, |planner| planner.lower_try_body(items, &fallible));
 
         let setup = vec![define(
             result_var.clone(),
@@ -116,7 +113,7 @@ impl Planner<'_> {
 
     fn lower_try_body(&mut self, items: &[Expression], fallible: &Fallible) -> LoweredBlock {
         LoweredBlock {
-            statements: self.lower_try_items(items, fallible, None),
+            statements: self.lower_try_items(items, fallible),
         }
     }
 
@@ -125,7 +122,7 @@ impl Planner<'_> {
         &mut self,
         items: &[Expression],
         ty: &Type,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
         let return_ctx = self.return_ctx();
         let return_ty = self.facts.peel_alias(return_ctx.ty()?);
         let effective_ty =
@@ -134,33 +131,23 @@ impl Planner<'_> {
             return None;
         }
         let fallible = Fallible::from_type(&effective_ty)?;
-        let lowered = return_ctx.lowered_shape();
-        Some(self.with_binding_frame(|planner| {
-            planner.lower_try_items(items, &fallible, lowered.as_ref())
-        }))
+        Some(self.with_binding_frame(|planner| planner.lower_try_items(items, &fallible)))
     }
 
-    fn lower_try_items(
-        &mut self,
-        items: &[Expression],
-        fallible: &Fallible,
-        lowered: Option<&CallableReturnAbi>,
-    ) -> Vec<LoweredStatement> {
+    fn lower_try_items(&mut self, items: &[Expression], fallible: &Fallible) -> Vec<Statement> {
         let Some((last, rest)) = items.split_last() else {
-            return self.lower_try_unit_return(fallible, lowered);
+            return self.lower_try_unit_return(fallible);
         };
-        let mut statements: Vec<LoweredStatement> =
-            rest.iter().map(|item| self.lower_statement(item)).collect();
-        statements.extend(self.lower_try_tail(last, fallible, lowered));
+        let mut statements: Vec<Statement> = rest
+            .iter()
+            .enumerate()
+            .map(|(index, item)| self.lower_block_item(item, &items[index + 1..]))
+            .collect();
+        statements.extend(self.lower_try_tail(last, fallible));
         statements
     }
 
-    fn lower_try_tail(
-        &mut self,
-        last: &Expression,
-        fallible: &Fallible,
-        lowered: Option<&CallableReturnAbi>,
-    ) -> Vec<LoweredStatement> {
+    fn lower_try_tail(&mut self, last: &Expression, fallible: &Fallible) -> Vec<Statement> {
         if last.diverges().is_some() || last.get_type().is_never() {
             return vec![self.lower_statement(last)];
         }
@@ -177,7 +164,7 @@ impl Planner<'_> {
         );
         if is_statement_only || is_unit_call(last) {
             let mut statements = vec![self.lower_statement(last)];
-            statements.extend(self.lower_try_unit_return(fallible, lowered));
+            statements.extend(self.lower_try_unit_return(fallible));
             return statements;
         }
 
@@ -185,20 +172,16 @@ impl Planner<'_> {
             .lower_value(last, ExpressionContext::value())
             .into_parts();
         if final_expression.is_empty() {
-            statements.extend(self.lower_try_unit_return(fallible, lowered));
+            statements.extend(self.lower_try_unit_return(fallible));
         } else {
-            statements.extend(self.success_return(fallible, final_expression, lowered));
+            statements.extend(self.success_return(fallible, final_expression));
         }
         statements
     }
 
-    fn lower_try_unit_return(
-        &mut self,
-        fallible: &Fallible,
-        lowered: Option<&CallableReturnAbi>,
-    ) -> Vec<LoweredStatement> {
+    fn lower_try_unit_return(&mut self, fallible: &Fallible) -> Vec<Statement> {
         let unit_val = self.zero_value_expression(fallible.ok_ty());
-        self.success_return(fallible, unit_val, lowered)
+        self.success_return(fallible, unit_val)
     }
 
     /// `Err(...)?` and `None?` short-circuit directly into a return. `None`
@@ -207,8 +190,8 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         fallible: &Fallible,
-    ) -> Option<Vec<LoweredStatement>> {
-        let mut statements: Vec<LoweredStatement> = Vec::new();
+    ) -> Option<Vec<Statement>> {
+        let mut statements: Vec<Statement> = Vec::new();
         let err_arg = match expression {
             Expression::Call {
                 expression: func,
@@ -256,10 +239,8 @@ impl Planner<'_> {
         let inner_ty_str = self.use_go_type(fallible.ok_ty());
 
         let body_return_ctx = self.return_context_for_type(fallible.ok_ty().clone());
-        let body = self.with_return_context(body_return_ctx, |planner| {
-            planner.with_isolated_function(|planner| {
-                planner.lower_recover_body_block(items, &fallible)
-            })
+        let body = self.with_isolated_function(body_return_ctx, |planner| {
+            planner.lower_recover_body_block(items, &fallible)
         });
 
         let setup = vec![define(
@@ -287,17 +268,16 @@ impl Planner<'_> {
                 statements: vec![self.lower_zero_return(fallible.ok_ty())],
             };
         };
-        let mut statements: Vec<LoweredStatement> =
-            rest.iter().map(|item| self.lower_statement(item)).collect();
+        let mut statements: Vec<Statement> = rest
+            .iter()
+            .enumerate()
+            .map(|(index, item)| self.lower_block_item(item, &items[index + 1..]))
+            .collect();
         statements.extend(self.lower_recover_tail(last, fallible));
         LoweredBlock { statements }
     }
 
-    fn lower_recover_tail(
-        &mut self,
-        last: &Expression,
-        fallible: &Fallible,
-    ) -> Vec<LoweredStatement> {
+    fn lower_recover_tail(&mut self, last: &Expression, fallible: &Fallible) -> Vec<Statement> {
         let item_ty = last.get_type();
         if item_ty.is_never() {
             return vec![self.lower_statement(last)];
@@ -316,7 +296,7 @@ impl Planner<'_> {
     }
 
     /// A structured zero-value return for a `recover` block's inner type.
-    fn lower_zero_return(&mut self, ty: &Type) -> LoweredStatement {
+    fn lower_zero_return(&mut self, ty: &Type) -> Statement {
         plain_return(self.zero_value_expression(ty))
     }
 }

@@ -1939,3 +1939,39 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn an_assignment_after_a_fold_writes_the_outer_binding_the_accumulator_shadowed() {
+    let input = r#"
+fn reassigned(xs: Slice<int>) -> int {
+  let mut acc = 10
+  let total = 2 * xs.fold(0, |acc, x| acc + x)
+  acc = 5
+  total + acc
+}
+
+fn test() {
+  if reassigned([1, 2]) != 11 { panic("the assignment should write the outer acc") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn native_method_identifier_form_matches_dot_form() {
+    let input = r#"
+fn grow(xs: Slice<int>) -> (Slice<int>, Slice<int>) {
+  (xs.append(1), Slice.append(xs, 1))
+}
+
+fn non_empty(xs: Slice<int>, ys: Slice<int>) -> bool {
+  !xs.is_empty() && !Slice.is_empty(ys)
+}
+
+fn doubled(xs: Slice<int>) -> Slice<int> {
+  let ys = Slice.map(xs, |x| x * 2)
+  ys
+}
+"#;
+    assert_emit_snapshot!(input);
+}

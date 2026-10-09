@@ -10,7 +10,7 @@ use syntax::{
     ast::{Expression, FunctionBody},
     lex::Lexer,
     parse::Parser,
-    program::{BinderIds, Definition, EqualityIndex, File, MutationInfo, UnusedInfo},
+    program::{Definition, EmitBindings, EqualityIndex, File, UnusedInfo},
     types::Symbol,
 };
 
@@ -154,9 +154,7 @@ impl CompiledTest {
             typed_ast,
             errors,
             definitions,
-            unused,
-            mutations,
-            binder_ids,
+            bindings,
             equality_index,
             go_package_names,
             go_package_ids,
@@ -202,18 +200,7 @@ impl CompiledTest {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
 
-            let mut unused = UnusedInfo::default();
-            let mut mutations = MutationInfo::default();
-            let mut binder_ids = BinderIds::default();
-            for (&binding_id, b) in checker.facts.bindings.iter() {
-                binder_ids.record(b.span, binding_id);
-                if !b.used {
-                    unused.mark_binding_unused(b.span);
-                }
-                if let Some(mutation) = b.mutation {
-                    mutations.record(binding_id, mutation);
-                }
-            }
+            let bindings = passes::emit_bindings(&checker.facts);
 
             let equality_index = mem::take(&mut store.equality_index);
             let go_package_names = store.go_package_names.clone();
@@ -230,9 +217,7 @@ impl CompiledTest {
                 typed_ast,
                 errors,
                 definitions,
-                unused,
-                mutations,
-                binder_ids,
+                bindings,
                 equality_index,
                 go_package_names,
                 go_package_ids,
@@ -244,9 +229,8 @@ impl CompiledTest {
             errors,
             definitions,
             package_id: TEST_PACKAGE_ID.to_string(),
-            unused,
-            mutations,
-            binder_ids,
+            unused: UnusedInfo::default(),
+            bindings,
             equality_index,
             go_package_names,
             go_package_ids,
@@ -260,8 +244,7 @@ pub struct InferenceResult {
     pub definitions: HashMap<Symbol, Definition>,
     pub package_id: String,
     pub unused: UnusedInfo,
-    pub mutations: MutationInfo,
-    pub binder_ids: BinderIds,
+    pub bindings: EmitBindings,
     pub equality_index: EqualityIndex,
     pub go_package_names: HashMap<String, String>,
     pub go_package_ids: HashSet<String>,

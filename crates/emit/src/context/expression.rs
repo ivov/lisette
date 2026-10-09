@@ -24,19 +24,11 @@ impl Default for FunctionValueAbiTarget {
     }
 }
 
-pub(crate) fn result_is_type_parameter(declared: &Type) -> bool {
+fn result_is_type_parameter(declared: &Type) -> bool {
     declared
         .unwrap_forall()
         .as_function_type()
         .is_some_and(|function| matches!(function.return_type.as_ref(), Type::Parameter(_)))
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum ArgumentTarget {
-    #[default]
-    Typed,
-    Unknown,
-    GenericResult,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -44,7 +36,7 @@ pub(crate) struct ExpressionContext<'a> {
     callee_role: CalleeRole,
     expected_slot_type: Option<&'a Type>,
     function_value_abi_target: FunctionValueAbiTarget,
-    argument_target: ArgumentTarget,
+    generic_result_slot: Option<&'a Type>,
     capture_boundary: CaptureBoundary,
     retired_receiver: Option<&'a Expression>,
 }
@@ -85,26 +77,14 @@ impl<'a> ExpressionContext<'a> {
         }
     }
 
-    pub(crate) fn with_unknown_argument_target(self, flows: bool) -> Self {
-        if flows {
-            Self {
-                argument_target: ArgumentTarget::Unknown,
-                ..self
-            }
-        } else {
-            self
-        }
-    }
-
-    pub(crate) fn with_generic_result_target(self, generic: bool) -> Self {
-        if generic && self.argument_target == ArgumentTarget::Typed {
-            Self {
-                argument_target: ArgumentTarget::GenericResult,
-                ..self
-            }
-        } else {
-            self
-        }
+    pub(crate) fn with_generic_result_slot(
+        mut self,
+        declared: Option<&Type>,
+        instantiated: Option<&'a Type>,
+    ) -> Self {
+        self.generic_result_slot =
+            instantiated.filter(|_| declared.is_some_and(result_is_type_parameter));
+        self
     }
 
     pub(crate) fn with_capture_boundary(mut self, boundary: CaptureBoundary) -> Self {
@@ -134,12 +114,12 @@ impl<'a> ExpressionContext<'a> {
         }
     }
 
-    pub(crate) fn argument_flows_to_unknown(self) -> bool {
-        matches!(self.argument_target, ArgumentTarget::Unknown)
+    pub(crate) fn generic_result_slot(self) -> Option<&'a Type> {
+        self.generic_result_slot
     }
 
     pub(crate) fn result_fills_type_parameter(self) -> bool {
-        matches!(self.argument_target, ArgumentTarget::GenericResult)
+        self.generic_result_slot.is_some()
     }
 
     pub(crate) fn capture_boundary(self) -> CaptureBoundary {

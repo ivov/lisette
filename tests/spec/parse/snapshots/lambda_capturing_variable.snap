@@ -36,6 +36,7 @@ description: |
                                     byte_offset: 19,
                                     byte_length: 9,
                                 },
+                                binding: None,
                             },
                             annotation: None,
                             ty: Var {
@@ -75,6 +76,7 @@ description: |
                                     byte_offset: 41,
                                     byte_length: 5,
                                 },
+                                binding: None,
                             },
                             annotation: None,
                             ty: Var {
@@ -91,6 +93,7 @@ description: |
                                             byte_offset: 50,
                                             byte_length: 1,
                                         },
+                                        binding: None,
                                     },
                                     annotation: None,
                                     ty: Var {

@@ -2,7 +2,7 @@ use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::literals::convert_escape_sequences;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::LoweredStatement;
+use crate::plan::bodies::Statement;
 use crate::plan::values::GoExpression;
 use syntax::ast::{Expression, FormatStringPart, Literal};
 
@@ -63,7 +63,7 @@ impl Planner<'_> {
         &mut self,
         messages: &[&Expression],
         read_error: bool,
-    ) -> (Vec<LoweredStatement>, Vec<WrapMessage>) {
+    ) -> (Vec<Statement>, Vec<WrapMessage>) {
         let mut setup = Vec::new();
         let mut prepared = Vec::new();
         for message in messages {

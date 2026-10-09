@@ -1,13 +1,13 @@
 use crate::_harness::infer;
 use syntax::ast::{
-    Annotation, BinaryOperator, BindingId, CallTypeArguments, ConstructorPatternResolution,
-    Expression, IfLetAlternative, Pattern, SelectArm, Span, StructFieldKind, StructFields,
+    Annotation, BinaryOperator, CallTypeArguments, ConstructorPatternResolution, Expression,
+    IfLetAlternative, Pattern, SelectArm, Span, StructFieldKind, StructFields,
 };
 use syntax::lex::Lexer;
 use syntax::parse::Parser;
 use syntax::program::{
-    BindingMutation, Definition, DefinitionBody, EqualityIndex, File, MutationInfo, NativeTypeKind,
-    Package, TestFunction, ValueKind, Visibility,
+    BindingMutation, Definition, DefinitionBody, EqualityIndex, File, NativeTypeKind, Package,
+    TestFunction, ValueKind, Visibility,
 };
 use syntax::types::{
     CompoundKind, FunctionParameter, SubstitutionMap, Symbol, Type, TypeVarId, substitute,
@@ -67,15 +67,14 @@ fn function_parameter_metadata_survives_type_substitution() {
 
 #[test]
 fn alias_mutation_is_not_downgraded_by_a_direct_mark() {
-    let mut mutations = MutationInfo::default();
-    mutations.record(BindingId::new(7), BindingMutation::ThroughAlias);
-    mutations.record(BindingId::new(7), BindingMutation::Direct);
-
     assert_eq!(
-        mutations.mutation(BindingId::new(7)),
-        Some(BindingMutation::ThroughAlias),
+        BindingMutation::ThroughAlias.merged_with(BindingMutation::Direct),
+        BindingMutation::ThroughAlias,
     );
-    assert_eq!(mutations.mutation(BindingId::new(8)), None);
+    assert_eq!(
+        BindingMutation::Direct.merged_with(BindingMutation::ThroughAlias),
+        BindingMutation::ThroughAlias,
+    );
 }
 
 #[test]
@@ -467,6 +466,55 @@ fn unwrap(item: Item) -> int {
 }
 
 #[test]
+fn binders_carry_the_binding_id_their_uses_resolve_to() {
+    let source = r#"
+enum Shape { Circle(int), Square(int) }
+
+interface Scaled { fn scale(factor: int) -> int }
+
+fn size(shape: Shape) -> int {
+  match shape {
+    Shape.Circle(side) | Shape.Square(side) => side,
+  }
+}
+"#;
+
+    let inferred = infer(source).assert_no_errors();
+    let mut arm = None;
+    let mut signature_param = None;
+    for item in &inferred.ast {
+        walk(item, &mut |expression| match expression {
+            Expression::Match { arms, .. } => arm = arms.first().cloned(),
+            Expression::Interface {
+                method_signatures, ..
+            } => {
+                if let Some(Expression::Function { params, .. }) = method_signatures.first() {
+                    signature_param = params.first().map(|param| param.pattern.clone());
+                }
+            }
+            _ => {}
+        });
+    }
+    let arm = arm.expect("expected a match arm");
+    let Pattern::Or { patterns, .. } = &arm.pattern else {
+        panic!("expected an or-pattern");
+    };
+    let binders: Vec<_> = patterns
+        .iter()
+        .map(|alternative| match alternative {
+            Pattern::EnumVariant { fields, .. } => fields[0].binding_id(),
+            _ => panic!("expected a constructor pattern"),
+        })
+        .collect();
+    let use_id = arm.expression.binding_id();
+
+    assert!(use_id.is_some());
+    assert_eq!(binders, vec![use_id, None]);
+    let signature_param = signature_param.expect("expected an interface parameter");
+    assert!(signature_param.binding_id().is_none());
+}
+
+#[test]
 fn inferred_signatures_retain_transparent_alias_identity() {
     let result = infer(
         r#"
@@ -509,6 +557,7 @@ fn value_definition(kind: ValueKind) -> Definition {
             go_name: None,
             go_type_param_recipe: None,
             superseded_by: None,
+            impl_receiver: None,
         },
     }
 }

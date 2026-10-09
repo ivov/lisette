@@ -1,21 +1,22 @@
 use super::arguments::CallArgsContext;
 use crate::calls::dispatch::{
     CallArgShape, all_type_params_inferrable, callee_is_go_builtin, go_builtin_name,
-    is_prelude_variant_constructor,
 };
 
 use crate::Planner;
+use crate::abi::callable::CallableAbi;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::LaterStages;
 use crate::expressions::staging::SpreadSequenceOptions;
-use crate::names::generics::extract_type_mapping;
 use crate::names::go_name::GeneratedPackage;
+use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{
     ConstantKind, EvaluationEffect, GoExpression, SequencedValues, ValuePlan,
 };
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
+use syntax::program::resolved_instantiation;
 use syntax::types::Type;
 
 struct CallTypeArgsRequest<'e, 'c> {
@@ -47,7 +48,7 @@ fn go_builtin_conversion(type_args: &str) -> Option<String> {
     (!inner.is_empty() && !inner.contains(',')).then(|| inner.to_string())
 }
 
-fn receiver_type_binding(
+pub(super) fn receiver_type_binding(
     callee_expression: &Expression,
     callee: &ResolvedCallee<'_>,
 ) -> Option<(Type, Type)> {
@@ -259,15 +260,18 @@ impl<'a> Planner<'a> {
             };
             let stages: Vec<ValuePlan> =
                 args.iter().map(|a| self.plan_operand(a, arg_ctx)).collect();
-            let wrap_to_any = spread_needs_any_wrap(&self.facts, function, spread);
-            let combine = call_plan.variadic_combine(0);
+            let spread_stage =
+                spread.map(|spread| self.plan_operand(spread, ExpressionContext::value()));
             let sequenced = self.sequence_with_spread_values(
                 stages,
-                spread,
-                None,
+                spread_stage,
                 SpreadSequenceOptions {
-                    wrap_to_any,
-                    combine,
+                    wrap_to_any: spread_needs_any_wrap(
+                        &self.facts,
+                        &call_plan.resolved.abi,
+                        spread,
+                    ),
+                    combine: call_plan.resolved.abi.variadic_combine(0),
                     boundary: expression_ctx.capture_boundary(),
                 },
             );
@@ -313,8 +317,7 @@ impl<'a> Planner<'a> {
         let args_ctx = CallArgsContext {
             plan: call_plan,
             spread,
-            wrap_spread_to_any: spread_needs_any_wrap(&self.facts, function, spread),
-            combine_variadic: call_plan.variadic_combine(0),
+            wrap_spread_to_any: spread_needs_any_wrap(&self.facts, &call_plan.resolved.abi, spread),
             capture_boundary: expression_ctx.capture_boundary(),
             retired_receiver: (args.len() == 1
                 && self.callee_lowers_to_type_construction(function))
@@ -324,7 +327,7 @@ impl<'a> Planner<'a> {
             callee_pins_type_args: !type_args_string.is_empty(),
             receiver_binding: receiver_type_binding(function, &call_plan.resolved),
         };
-        let sequenced_args = self.emit_call_args(args, &args_ctx);
+        let sequenced_args = self.emit_call_args(args, &args_ctx, None);
         let args_effect = sequenced_args.effect;
         let constant_result = go_builtin_name(function)
             .filter(|_| builtin_conversion.is_none())
@@ -461,19 +464,6 @@ impl<'a> Planner<'a> {
         all_type_params_inferrable(vars, &f.params, 0, arg_shape)
     }
 
-    fn reconstruct_collapsed_call_type_args(
-        &mut self,
-        callee: &ResolvedCallee<'_>,
-        recipe: &str,
-    ) -> Option<String> {
-        let Type::Forall { body, .. } = callee.declared_type()? else {
-            return None;
-        };
-        let mut mapping = rustc_hash::FxHashMap::default();
-        extract_type_mapping(body, &callee.instantiated, &mut mapping);
-        self.reconstruct_collapsed_type_args(recipe, &mapping)
-    }
-
     fn resolve_call_type_args(&mut self, request: CallTypeArgsRequest<'_, '_>) -> String {
         let CallTypeArgsRequest {
             function,
@@ -492,8 +482,10 @@ impl<'a> Planner<'a> {
             if has_value_args && self.collapsed_callee_fully_inferable(callee, arg_shape) {
                 return String::new();
             }
-            return self
-                .reconstruct_collapsed_call_type_args(callee, &recipe)
+            return resolved_instantiation(function)
+                .and_then(|instantiation| {
+                    self.reconstruct_collapsed_type_args(&recipe, instantiation)
+                })
                 .unwrap_or_default();
         }
 
@@ -511,7 +503,12 @@ impl<'a> Planner<'a> {
             };
         }
 
-        if type_args_string.is_empty() && is_prelude_variant_constructor(function) {
+        if type_args_string.is_empty()
+            && matches!(
+                prelude_constructor(function),
+                Some(PreludeVariant::Some | PreludeVariant::Ok | PreludeVariant::Err)
+            )
+        {
             let mut candidate = call_ty.and_then(|t| self.prelude_container_type_args(t));
             if candidate.is_none() {
                 candidate = slot_ty.and_then(|t| self.prelude_container_type_args(t));
@@ -536,26 +533,17 @@ fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {
         .is_some_and(|instantiated_fn| instantiated_fn.params.len() < declared_fn.params.len())
 }
 
-/// The element type of a `VarArgs<T>`, or the type itself when not variadic.
 fn spread_needs_any_wrap(
     facts: &crate::EmitFacts<'_>,
-    function: &Expression,
+    abi: &CallableAbi,
     spread: Option<&Expression>,
 ) -> bool {
-    let Some(spread_expr) = spread else {
+    let (Some(spread), Some(variadic)) = (spread, abi.variadic_param()) else {
         return false;
     };
-    let Some(function_ty) = facts.resolve_to_function_type(&function.get_type()) else {
-        return false;
-    };
-    let Some(variadic_element) = function_ty.is_variadic() else {
-        return false;
-    };
-    if !facts.resolves_to_unknown(&variadic_element) {
-        return false;
-    }
-    spread_expr
-        .get_type()
-        .inner()
-        .is_some_and(|ty| !facts.resolves_to_unknown(&ty))
+    facts.resolves_to_unknown(&variadic.instantiated)
+        && spread
+            .get_type()
+            .inner()
+            .is_some_and(|ty| !facts.resolves_to_unknown(&ty))
 }

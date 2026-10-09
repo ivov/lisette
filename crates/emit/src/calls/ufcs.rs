@@ -1,25 +1,24 @@
+use crate::calls::arguments::CallArgsContext;
 use crate::calls::dispatch::{CallArgShape, all_type_params_inferrable};
 use crate::calls::native::native_method_lowers_to_plain_call;
-use crate::plan::calls::plan_variadic_spread;
+use crate::calls::regular::receiver_type_binding;
 
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::SpreadSequenceOptions;
-use crate::names::generics::type_argument_mapping;
-use crate::plan::bodies::LoweredStatement;
+use crate::plan::bodies::Statement;
 use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
-use crate::types::native::NativeGoType;
-use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::program::ReceiverCoercion;
+use syntax::program::{NativeTypeKind, resolved_instantiation};
 use syntax::types::Type;
 
 #[derive(Clone, Copy)]
 struct UfcsCallSite<'e, 'c> {
     function: &'e Expression,
-    callee: &'e ResolvedCallee<'c>,
+    plan: &'e CallPlan<'c>,
 }
 
 impl Planner<'_> {
@@ -27,7 +26,6 @@ impl Planner<'_> {
         &mut self,
         function: &Expression,
         callee: &ResolvedCallee<'_>,
-        receiver_ty: &Type,
         type_args: ResolvedCallTypeArguments<'_>,
         arg_shape: CallArgShape,
     ) -> Option<String> {
@@ -47,12 +45,12 @@ impl Planner<'_> {
         {
             return None;
         }
-        let mapping = type_argument_mapping(
-            definition_ty,
-            &function.get_type(),
-            Some(type_args),
-            Some(receiver_ty),
-        )?;
+        // A method-only parameter missing from the callee type is not unified, so explicit arguments apply.
+        let mut mapping = resolved_instantiation(function)?.clone();
+        let offset = vars.len().checked_sub(type_args.len())?;
+        for (name, argument) in vars[offset..].iter().zip(type_args.iter()) {
+            mapping.insert(name.clone(), argument.clone());
+        }
         self.format_generic_instantiation(definition_ty, &mapping)
     }
 
@@ -78,11 +76,31 @@ impl Planner<'_> {
         let receiver_ty = self.facts.strip_and_peel(&receiver.get_type());
         let site = UfcsCallSite {
             function,
-            callee: &call_plan.resolved,
+            plan: call_plan,
         };
+        let type_args_string = self
+            .ufcs_type_args(
+                function,
+                &call_plan.resolved,
+                type_args,
+                CallArgShape {
+                    value_count: args.len(),
+                    has_spread: spread.is_some(),
+                },
+            )
+            .unwrap_or_default();
 
-        let (setup, receiver_arg, emitted_args) =
-            self.lower_ufcs_call_args(site, receiver, args, spread, coercion);
+        let mut receiver_stage = self.plan_operand(receiver, ExpressionContext::value());
+        if coercion == Some(ReceiverCoercion::AutoAddress) {
+            receiver_stage = self.coerce_receiver_address_stage(receiver, receiver_stage);
+        }
+        let (setup, receiver_arg, emitted_args) = self.lower_ufcs_call_args(
+            site,
+            receiver_stage,
+            args,
+            spread,
+            !type_args_string.is_empty(),
+        );
         let receiver_arg = match coercion {
             Some(ReceiverCoercion::AutoDeref) => GoExpression::dereference(receiver_arg),
             Some(ReceiverCoercion::AutoAddress) | None => receiver_arg,
@@ -91,7 +109,7 @@ impl Planner<'_> {
         if let Some(inlined) =
             try_inline_native_ufcs(receiver, member, &receiver_arg, &emitted_args)
         {
-            let native_type = NativeGoType::from_type(&receiver.get_type())
+            let native_type = NativeTypeKind::from_type(&receiver.get_type())
                 .expect("inlined UFCS receiver has a native type");
             let plain_call =
                 native_method_lowers_to_plain_call(&native_type, member, emitted_args.len());
@@ -106,14 +124,10 @@ impl Planner<'_> {
         new_args.extend(emitted_args);
 
         let callee = self.build_ufcs_qualified_call(
-            site,
+            &call_plan.resolved,
             &receiver_ty,
             member,
-            type_args,
-            CallArgShape {
-                value_count: args.len(),
-                has_spread: spread.is_some(),
-            },
+            type_args_string,
         );
         let expression = GoExpression::call(callee, new_args);
         if self.callee_lowers_to_type_construction(function) {
@@ -126,137 +140,70 @@ impl Planner<'_> {
     fn lower_ufcs_call_args(
         &mut self,
         site: UfcsCallSite<'_, '_>,
-        receiver: &Expression,
+        receiver_stage: ValuePlan,
         args: &[Expression],
         spread: Option<&Expression>,
-        coercion: Option<ReceiverCoercion>,
-    ) -> (Vec<LoweredStatement>, GoExpression, Vec<GoExpression>) {
-        let UfcsCallSite { function, callee } = site;
-        // The DotAccess function type curries `self` out, so its params line
-        // up 1:1 with the user args. Pair each so a function-typed param
-        // suppresses the Go-fn-value identity short-circuit before dispatch
-        // into prelude helpers like `lisette.OptionAndThen`.
-        let mut all_stages: Vec<ValuePlan> =
-            Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
-        let mut receiver_stage = self.plan_operand(receiver, ExpressionContext::value());
-        if coercion == Some(ReceiverCoercion::AutoAddress) {
-            receiver_stage = self.coerce_receiver_address_stage(receiver, receiver_stage);
-        }
-        all_stages.push(receiver_stage);
-        for (i, arg) in args.iter().enumerate() {
-            let param = callee.abi.param(i);
-            let declared = (!callee.is_prelude_dispatch)
-                .then(|| param.and_then(|param| param.declared.as_ref()))
-                .flatten();
-            let suppress_decl = callee
-                .is_prelude_dispatch
-                .then(|| param.and_then(|param| param.declared.as_ref()))
-                .flatten();
-            all_stages.push(self.stage_ufcs_arg(
-                arg,
-                declared,
-                suppress_decl,
-                param.map(|param| &param.instantiated),
-            ));
-        }
-        let vars: Vec<EcoString> = match callee.declared_type() {
-            Some(Type::Forall { vars, .. }) if !callee.is_prelude_dispatch => vars.clone(),
-            _ => Vec::new(),
+        pins_type_args: bool,
+    ) -> (Vec<Statement>, GoExpression, Vec<GoExpression>) {
+        let UfcsCallSite { function, plan } = site;
+        let callee = &plan.resolved;
+        let sequenced = if callee.is_prelude_dispatch {
+            // The DotAccess function type curries `self` out, so its params line
+            // up 1:1 with the user args. Pair each so a function-typed param
+            // suppresses the Go-fn-value identity short-circuit before dispatch
+            // into prelude helpers like `lisette.OptionAndThen`.
+            let mut stages = Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
+            stages.push(receiver_stage);
+            for (i, arg) in args.iter().enumerate() {
+                let param = callee.abi.param(i);
+                stages.push(self.stage_prelude_arg(
+                    arg,
+                    param.and_then(|param| param.declared.as_ref()),
+                    param.map(|param| &param.instantiated),
+                ));
+            }
+            let spread_stage =
+                spread.map(|spread| self.plan_operand(spread, ExpressionContext::value()));
+            self.sequence_with_spread_values(
+                stages,
+                spread_stage,
+                SpreadSequenceOptions {
+                    wrap_to_any: false,
+                    combine: callee.abi.variadic_combine(1),
+                    boundary: CaptureBoundary::SiblingSequence,
+                },
+            )
+        } else {
+            let args_ctx = CallArgsContext {
+                plan,
+                spread,
+                wrap_spread_to_any: false,
+                capture_boundary: CaptureBoundary::SiblingSequence,
+                retired_receiver: None,
+                callee_is_builtin: false,
+                callee_pins_type_args: pins_type_args,
+                receiver_binding: receiver_type_binding(function, callee),
+            };
+            self.emit_call_args(args, &args_ctx, Some(receiver_stage))
         };
-        let receiver_instantiated = receiver.get_type().strip_refs();
-        let receiver_declared = (!callee.is_prelude_dispatch && callee.receiver_offset == 1)
-            .then(|| {
-                callee
-                    .declared_type()
-                    .and_then(|ty| ty.unwrap_forall().get_function_params())
-                    .and_then(|params| params.first())
-                    .map(|param| &param.ty)
-            })
-            .flatten();
-        let receiver_binding = receiver_declared.map(|declared| (declared, &receiver_instantiated));
-        let mut slots: Vec<Option<(&Type, &Type)>> = vec![None];
-        let mut convertible = vec![false];
-        for index in 0..args.len() {
-            let param = callee.abi.param(index);
-            slots.push(
-                (!callee.is_prelude_dispatch)
-                    .then(|| {
-                        param.and_then(|param| {
-                            param
-                                .declared
-                                .as_ref()
-                                .map(|declared| (declared, &param.instantiated))
-                        })
-                    })
-                    .flatten(),
-            );
-            convertible.push(true);
-        }
-        let all_stages = self.convert_inferred_constants(
-            all_stages,
-            &slots,
-            &convertible,
-            &vars,
-            receiver_binding,
-        );
-        let combine = plan_variadic_spread(&self.facts, function, spread).map(|p| p.combine(1));
-
-        let sequenced = self.sequence_with_spread_values(
-            all_stages,
-            spread,
-            (!callee.is_prelude_dispatch)
-                .then(|| {
-                    callee
-                        .declared_type()
-                        .and_then(|ty| ty.unwrap_forall().get_function_params())
-                })
-                .flatten(),
-            SpreadSequenceOptions {
-                wrap_to_any: false,
-                combine,
-                boundary: CaptureBoundary::SiblingSequence,
-            },
-        );
         let mut all_values = sequenced.values;
         let receiver_arg = all_values.remove(0);
         (sequenced.setup, receiver_arg, all_values)
     }
 
-    fn stage_ufcs_arg(
-        &mut self,
-        arg: &Expression,
-        declared_param: Option<&Type>,
-        suppress_declared: Option<&Type>,
-        formal_param: Option<&Type>,
-    ) -> ValuePlan {
-        let Some(declared) = declared_param else {
-            return self.stage_prelude_arg(arg, suppress_declared, formal_param);
-        };
-        if let Some(value) = self.try_adapt_lowered_fn_arg_shape(arg, Some(declared)) {
-            return value;
-        }
-        self.lower_composite_value(arg, ExpressionContext::value())
-    }
-
     fn build_ufcs_qualified_call(
         &mut self,
-        site: UfcsCallSite<'_, '_>,
+        callee: &ResolvedCallee<'_>,
         receiver_ty: &Type,
         member: &str,
-        type_args: ResolvedCallTypeArguments<'_>,
-        arg_shape: CallArgShape,
+        type_args_string: String,
     ) -> GoExpression {
-        let UfcsCallSite { function, callee } = site;
         let Type::Nominal {
             id: qualified_name, ..
         } = receiver_ty
         else {
             unreachable!("UFCS receiver must be a constructor type");
         };
-        let type_args_string = self
-            .ufcs_type_args(function, callee, receiver_ty, type_args, arg_shape)
-            .unwrap_or_default();
-
         let is_public = callee
             .declaration
             .map(|declaration| declaration.visibility().is_public())
@@ -296,30 +243,25 @@ impl Planner<'_> {
 
     pub(super) fn lower_receiver_method_ufcs(
         &mut self,
-        function: &Expression,
         args: &[Expression],
         method: &str,
         is_public: bool,
         spread: Option<&Expression>,
+        call_plan: &CallPlan<'_>,
     ) -> ValuePlan {
         let go_method = self.method_go_name(method, is_public);
 
-        let stages: Vec<ValuePlan> = args
-            .iter()
-            .map(|a| self.lower_composite_value(a, ExpressionContext::value()))
-            .collect();
-
-        let combine = plan_variadic_spread(&self.facts, function, spread).map(|p| p.combine(0));
-        let sequenced = self.sequence_with_spread_values(
-            stages,
+        let args_ctx = CallArgsContext {
+            plan: call_plan,
             spread,
-            None,
-            SpreadSequenceOptions {
-                wrap_to_any: false,
-                combine,
-                boundary: CaptureBoundary::SiblingSequence,
-            },
-        );
+            wrap_spread_to_any: false,
+            capture_boundary: CaptureBoundary::SiblingSequence,
+            retired_receiver: None,
+            callee_is_builtin: false,
+            callee_pins_type_args: false,
+            receiver_binding: None,
+        };
+        let sequenced = self.emit_call_args(args, &args_ctx, None);
         let mut emitted_all = sequenced.values;
         let receiver = emitted_all.remove(0);
 
@@ -350,7 +292,7 @@ fn try_inline_native_ufcs(
     receiver_arg: &GoExpression,
     emitted_args: &[GoExpression],
 ) -> Option<GoExpression> {
-    let native_type = NativeGoType::from_type(&receiver.get_type())?;
+    let native_type = NativeTypeKind::from_type(&receiver.get_type())?;
     super::native::try_inline_native_method(&native_type, member, receiver_arg, emitted_args, false)
 }
 

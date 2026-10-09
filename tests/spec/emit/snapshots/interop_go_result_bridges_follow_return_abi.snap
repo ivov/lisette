@@ -1,0 +1,216 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/nested"
+  
+  fn tuple_value() -> (Slice<Option<int>>, int) {
+    let (values, count) = nested.Pair()
+    (values, count)
+  }
+  
+  fn tuple_return() -> (Slice<Option<int>>, int) {
+    nested.Pair()
+  }
+  
+  fn maybe_value() -> Option<Slice<Option<int>>> {
+    let values = nested.MaybeValues()?
+    if let Some(again) = nested.MaybeValues() {
+      let _ = again
+    }
+    Some(values)
+  }
+  
+  fn maybe_return() -> Option<Slice<Option<int>>> {
+    nested.MaybeValues()
+  }
+  
+  fn loaded() -> Result<Slice<Option<int>>, error> {
+    let values = nested.Load()?
+    match nested.Load() {
+      Ok(again) => { let _ = again },
+      Err(_) => {},
+    }
+    Ok(values)
+  }
+  
+  fn load_return() -> Result<Slice<Option<int>>, error> {
+    nested.Load()
+  }
+  
+  fn main() {
+    let _ = tuple_value()
+    let _ = tuple_return()
+    let _ = maybe_value()
+    let _ = maybe_return()
+    let _ = loaded()
+    let _ = load_return()
+  }
+---
+package main
+
+import (
+	"example.com/nested"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func tupleValue() ([]lisette.Option[int], int) {
+	ret, ret_1 := nested.Pair()
+	wrapped := make([]lisette.Option[int], len(ret))
+	for i, v := range ret {
+		if v != nil {
+			wrapped[i] = lisette.MakeOptionSome[int](*v)
+		} else {
+			wrapped[i] = lisette.MakeOptionNone[int]()
+		}
+	}
+	tup := lisette.MakeTuple2(wrapped, ret_1)
+	values := tup.First
+	count := tup.Second
+	return values, count
+}
+
+func tupleReturn() ([]lisette.Option[int], int) {
+	ret, ret_1 := nested.Pair()
+	wrapped := make([]lisette.Option[int], len(ret))
+	for i, v := range ret {
+		if v != nil {
+			wrapped[i] = lisette.MakeOptionSome[int](*v)
+		} else {
+			wrapped[i] = lisette.MakeOptionNone[int]()
+		}
+	}
+	tup := lisette.MakeTuple2(wrapped, ret_1)
+	tup_1 := tup
+	return tup_1.First, tup_1.Second
+}
+
+func maybeValue() ([]lisette.Option[int], bool) {
+	ret, ret_1 := nested.MaybeValues()
+	var option lisette.Option[[]lisette.Option[int]]
+	if ret_1 {
+		wrapped := make([]lisette.Option[int], len(ret))
+		for i, v := range ret {
+			if v != nil {
+				wrapped[i] = lisette.MakeOptionSome[int](*v)
+			} else {
+				wrapped[i] = lisette.MakeOptionNone[int]()
+			}
+		}
+		option = lisette.MakeOptionSome[[]lisette.Option[int]](wrapped)
+	} else {
+		option = lisette.MakeOptionNone[[]lisette.Option[int]]()
+	}
+	check := option
+	if check.Tag != lisette.OptionSome {
+		return nil, false
+	}
+	values := check.SomeVal
+	ret_2, ret_3 := nested.MaybeValues()
+	var option_1 lisette.Option[[]lisette.Option[int]]
+	if ret_3 {
+		wrapped_1 := make([]lisette.Option[int], len(ret_2))
+		for i_1, v_1 := range ret_2 {
+			if v_1 != nil {
+				wrapped_1[i_1] = lisette.MakeOptionSome[int](*v_1)
+			} else {
+				wrapped_1[i_1] = lisette.MakeOptionNone[int]()
+			}
+		}
+		option_1 = lisette.MakeOptionSome[[]lisette.Option[int]](wrapped_1)
+	} else {
+		option_1 = lisette.MakeOptionNone[[]lisette.Option[int]]()
+	}
+	if option_1.Tag == lisette.OptionSome {
+		_ = option_1.SomeVal
+	}
+	return values, true
+}
+
+func maybeReturn() ([]lisette.Option[int], bool) {
+	ret, ret_1 := nested.MaybeValues()
+	var option lisette.Option[[]lisette.Option[int]]
+	if ret_1 {
+		wrapped := make([]lisette.Option[int], len(ret))
+		for i, v := range ret {
+			if v != nil {
+				wrapped[i] = lisette.MakeOptionSome[int](*v)
+			} else {
+				wrapped[i] = lisette.MakeOptionNone[int]()
+			}
+		}
+		option = lisette.MakeOptionSome[[]lisette.Option[int]](wrapped)
+	} else {
+		option = lisette.MakeOptionNone[[]lisette.Option[int]]()
+	}
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal, true
+	}
+	return nil, false
+}
+
+func loaded() ([]lisette.Option[int], error) {
+	ret, err := nested.Load()
+	if err != nil {
+		return nil, err
+	}
+	wrapped := make([]lisette.Option[int], len(ret))
+	for i, v := range ret {
+		if v != nil {
+			wrapped[i] = lisette.MakeOptionSome[int](*v)
+		} else {
+			wrapped[i] = lisette.MakeOptionNone[int]()
+		}
+	}
+	values := wrapped
+	ret_1, ret_2 := nested.Load()
+	var result lisette.Result[[]lisette.Option[int], error]
+	if ret_2 != nil {
+		result = lisette.MakeResultErr[[]lisette.Option[int], error](ret_2)
+	} else {
+		wrapped_1 := make([]lisette.Option[int], len(ret_1))
+		for i_1, v_1 := range ret_1 {
+			if v_1 != nil {
+				wrapped_1[i_1] = lisette.MakeOptionSome[int](*v_1)
+			} else {
+				wrapped_1[i_1] = lisette.MakeOptionNone[int]()
+			}
+		}
+		result = lisette.MakeResultOk[[]lisette.Option[int], error](wrapped_1)
+	}
+	if result.Tag == lisette.ResultOk {
+		_ = result.OkVal
+	}
+	return values, nil
+}
+
+func loadReturn() ([]lisette.Option[int], error) {
+	ret, ret_1 := nested.Load()
+	var result lisette.Result[[]lisette.Option[int], error]
+	if ret_1 != nil {
+		result = lisette.MakeResultErr[[]lisette.Option[int], error](ret_1)
+	} else {
+		wrapped := make([]lisette.Option[int], len(ret))
+		for i, v := range ret {
+			if v != nil {
+				wrapped[i] = lisette.MakeOptionSome[int](*v)
+			} else {
+				wrapped[i] = lisette.MakeOptionNone[int]()
+			}
+		}
+		result = lisette.MakeResultOk[[]lisette.Option[int], error](wrapped)
+	}
+	if result.Tag == lisette.ResultOk {
+		return result.OkVal, nil
+	}
+	return nil, result.ErrVal
+}
+
+func main() {
+	tupleValue()
+	tupleReturn()
+	maybeValue()
+	maybeReturn()
+	loaded()
+	loadReturn()
+}

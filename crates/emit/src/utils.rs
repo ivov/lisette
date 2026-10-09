@@ -1,6 +1,6 @@
 use crate::names::go_name;
 use syntax::ast::{Expression, Literal};
-use syntax::program::{DotAccessKind, ReceiverCoercion};
+use syntax::program::DotAccessResolution;
 use syntax::types::Type;
 
 macro_rules! write_line {
@@ -111,19 +111,9 @@ pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
 }
 
 pub(crate) fn reads_value_member(
-    kind: Option<DotAccessKind>,
-    coercion: Option<ReceiverCoercion>,
+    resolution: &DotAccessResolution,
     base: &Expression,
     base_ty: &Type,
 ) -> bool {
-    matches!(
-        kind,
-        Some(
-            DotAccessKind::StructField { .. }
-                | DotAccessKind::TupleStructField { .. }
-                | DotAccessKind::TupleElement,
-        )
-    ) && coercion.is_none()
-        && base.deref_inner().is_none()
-        && !base_ty.is_ref()
+    resolution.is_field_read() && base.deref_inner().is_none() && !base_ty.is_ref()
 }

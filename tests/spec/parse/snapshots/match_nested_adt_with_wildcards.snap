@@ -160,6 +160,7 @@ description: |
                         byte_offset: 74,
                         byte_length: 5,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Constructor {
@@ -411,6 +412,7 @@ description: |
                                                 byte_offset: 274,
                                                 byte_length: 3,
                                             },
+                                            binding: None,
                                         },
                                         EnumVariant {
                                             identifier: "Some",
@@ -422,6 +424,7 @@ description: |
                                                         byte_offset: 284,
                                                         byte_length: 4,
                                                     },
+                                                    binding: None,
                                                 },
                                             ],
                                             rest: false,

@@ -9,8 +9,9 @@ use crate::control_flow::targets::legalize_source_loop;
 use crate::definitions::ConstScope;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
-    PlacePlan, directed, directed_first,
+    PlacePlan, Statement, directed_first,
 };
+use crate::plan::go_expression::UnaryOp;
 use crate::plan::placement::{
     ElidableTail, collapse_declared_temp, requires_temp_var, try_elide_tail_let,
 };
@@ -53,13 +54,14 @@ impl Planner<'_> {
     /// Allocate a fresh operand-temp result var and its `var V T` declaration
     /// as a typed setup leaf. The control-flow that assigns it follows as a
     /// typed `If`/`Loop`/`Match`/`Select` statement.
-    pub(crate) fn operand_temp_declaration(&mut self, ty: &Type) -> (String, LoweredStatement) {
+    pub(crate) fn operand_temp_declaration(&mut self, ty: &Type) -> (String, Statement) {
         let result_var = self.fresh_var(None);
         let declaration = LoweredStatement::VarDecl {
             name: result_var.clone().into(),
             go_type: self.use_go_type(ty),
             value: None,
-        };
+        }
+        .into();
         self.declare(&result_var);
         (result_var, declaration)
     }
@@ -106,23 +108,26 @@ impl Planner<'_> {
         let plan = self.with_loop(GoExpression::name(result_var.clone()), |this| {
             this.lower_loop_with_header(LoopHeader::Infinite, body)
         });
-        ValuePlan::captured(vec![declaration, LoweredStatement::Loop(plan)], result_var)
+        ValuePlan::captured(
+            vec![declaration, LoweredStatement::Loop(plan).into()],
+            result_var,
+        )
     }
 
     fn lower_body_until_diverge(
         &mut self,
         rest: &[Expression],
         last: &Expression,
-    ) -> (Vec<LoweredStatement>, bool) {
-        self.mark_component_lets(rest, last);
-        let mut statements: Vec<LoweredStatement> = Vec::with_capacity(rest.len() + 1);
+    ) -> (Vec<Statement>, bool) {
+        let mut statements: Vec<Statement> = Vec::with_capacity(rest.len() + 1);
         let forwarded = rest
             .split_last()
             .and_then(|(check, rest)| Some((check, rest, self.forwarded_error_call(check, last)?)));
-        let rest = forwarded.map_or(rest, |(_, rest, _)| rest);
-        for item in rest {
-            let statement = self.lower_statement(item);
-            let diverged = statement.blocks_fallthrough();
+        let lowered = forwarded.map_or(rest, |(_, rest, _)| rest);
+        for (index, item) in lowered.iter().enumerate() {
+            let region = rest[index + 1..].iter().chain(iter::once(last));
+            let statement = self.lower_block_item(item, region);
+            let diverged = statement.kind.blocks_fallthrough();
             statements.push(statement);
             if diverged {
                 return (statements, true);
@@ -194,36 +199,34 @@ impl Planner<'_> {
         LoweredBlock { statements }
     }
 
-    /// Lower a single statement in the enclosing return context.
-    fn mark_component_lets(&mut self, rest: &[Expression], last: &Expression) {
-        for (index, item) in rest.iter().enumerate() {
-            let Expression::Let {
-                binding,
-                value,
-                mode,
-                ..
-            } = item
-            else {
-                continue;
-            };
-            if mode.else_block().is_some() || binding.is_mutable() {
-                continue;
+    pub(crate) fn lower_block_item<'r>(
+        &mut self,
+        item: &Expression,
+        region: impl IntoIterator<Item = &'r Expression>,
+    ) -> Statement {
+        let Expression::Let {
+            binding,
+            value,
+            mode,
+            ..
+        } = item
+        else {
+            return self.lower_statement(item);
+        };
+        let demand = match &binding.pattern {
+            Pattern::Identifier {
+                binding: Some(id), ..
+            } if mode.else_block().is_none() && !binding.is_mutable() => {
+                component_demand(region, *id)
             }
-            let Pattern::Identifier { span, .. } = &binding.pattern else {
-                continue;
-            };
-            let region = rest[index + 1..].iter().chain(iter::once(last));
-            if let Some(demand) = self
-                .facts
-                .binding_id_at(*span)
-                .and_then(|id| component_demand(region, id))
-            {
-                self.component_lets.insert(value.get_span(), demand);
-            }
-        }
+            _ => None,
+        };
+        let plan = self.build_let_plan(binding, value, mode, demand);
+        self.directed_at(item, LoweredStatement::Body(plan))
     }
 
-    pub(crate) fn lower_statement(&mut self, expression: &Expression) -> LoweredStatement {
+    /// Lower a single statement in the enclosing return context.
+    pub(crate) fn lower_statement(&mut self, expression: &Expression) -> Statement {
         match expression {
             Expression::If {
                 condition,
@@ -251,7 +254,8 @@ impl Planner<'_> {
             }
             Expression::Block { .. } => LoweredStatement::Block(
                 self.with_scope(|this| this.lower_block_as_body(expression)),
-            ),
+            )
+            .into(),
             Expression::For { .. } => self.lower_for_statement(expression),
             Expression::Continue { .. } => {
                 let target = self
@@ -278,7 +282,7 @@ impl Planner<'_> {
                 ..
             } => {
                 let Some(value) = value.value() else {
-                    return LoweredStatement::Block(LoweredBlock { statements: vec![] });
+                    return LoweredStatement::Block(LoweredBlock { statements: vec![] }).into();
                 };
                 let plan = self.build_const_plan(identifier, value, ty, ConstScope::Local);
                 self.directed_at(expression, LoweredStatement::Const(plan))
@@ -295,7 +299,7 @@ impl Planner<'_> {
                 mode,
                 ..
             } => {
-                let plan = self.build_let_plan(binding, value, mode);
+                let plan = self.build_let_plan(binding, value, mode, None);
                 self.directed_at(expression, LoweredStatement::Body(plan))
             }
             Expression::Assignment {
@@ -329,7 +333,7 @@ impl Planner<'_> {
                 self.directed_at(expression, statement)
             }
             Expression::WhileLet { .. } => self.lower_while_let_statement(expression),
-            Expression::Assert { .. } => self.lower_assert_statement(expression),
+            Expression::Assert { .. } => self.lower_assert_statement(expression).into(),
             Expression::Struct { .. }
             | Expression::Enum { .. }
             | Expression::TypeAlias { .. }
@@ -338,24 +342,22 @@ impl Planner<'_> {
                 unreachable!("the parser rejects item definitions inside function bodies")
             }
             Expression::Call { .. } if self.is_test_log_call(expression) => {
-                self.lower_test_log_statement(expression)
+                self.lower_test_log_statement(expression).into()
             }
             _ => self.lower_expression_statement(expression),
         }
     }
 
-    /// Wrap a lowered statement with `expression`'s source-line directive when
-    /// sourcemaps are enabled (a no-op wrapper otherwise).
-    fn directed_at(&self, expression: &Expression, stmt: LoweredStatement) -> LoweredStatement {
-        directed(self.maybe_line_directive(&expression.get_span()), stmt)
+    fn directed_at(&self, expression: &Expression, kind: LoweredStatement) -> Statement {
+        Statement {
+            line: self.maybe_line_directive(&expression.get_span()),
+            kind,
+        }
     }
 
     /// Lower the statement-position fall-through: Task/Defer (async value),
-    /// `expr?` propagation, or an otherwise-discarded expression value. The
-    /// directive rides on the wrapper so the rendered body stays directive-free.
-    fn lower_expression_statement(&mut self, expression: &Expression) -> LoweredStatement {
+    fn lower_expression_statement(&mut self, expression: &Expression) -> Statement {
         let unwrapped = expression.unwrap_parens();
-        let directive = self.maybe_line_directive(&expression.get_span());
         let statement = if matches!(
             unwrapped,
             Expression::Task { .. } | Expression::Defer { .. }
@@ -376,12 +378,10 @@ impl Planner<'_> {
                 statements: self.lower_discard_value(unwrapped),
             })
         };
-        directed(directive, statement)
+        self.directed_at(expression, statement)
     }
 
-    /// Lower `while let P = scrutinee { body }`, wrapped as a `WhileLet`
-    /// statement.
-    fn lower_while_let_statement(&mut self, expression: &Expression) -> LoweredStatement {
+    fn lower_while_let_statement(&mut self, expression: &Expression) -> Statement {
         let Expression::WhileLet {
             pattern,
             scrutinee,
@@ -391,11 +391,10 @@ impl Planner<'_> {
         else {
             unreachable!("lower_while_let_statement requires a WhileLet expression");
         };
-        let directive = self.maybe_line_directive(&expression.get_span());
         let body = self.with_loop(GoExpression::name("_".to_string()), |this| {
             this.lower_while_let(pattern, scrutinee, body)
         });
-        directed(directive, LoweredStatement::WhileLet(body))
+        self.directed_at(expression, LoweredStatement::Body(body))
     }
 
     fn lower_infinite_loop(&mut self, body: &Expression) -> LoopPlan {
@@ -404,15 +403,12 @@ impl Planner<'_> {
         })
     }
 
-    fn lower_condition(&mut self, condition: &Expression) -> (Vec<LoweredStatement>, GoExpression) {
+    fn lower_condition(&mut self, condition: &Expression) -> (Vec<Statement>, GoExpression) {
         let plan = self.plan_operand(condition, ExpressionContext::value());
         plan.into_parts()
     }
 
-    fn lower_if_condition(
-        &mut self,
-        condition: &Expression,
-    ) -> (Vec<LoweredStatement>, PairCondition) {
+    fn lower_if_condition(&mut self, condition: &Expression) -> (Vec<Statement>, PairCondition) {
         if let Some(fused) = self.lower_fused_predicate_condition(condition) {
             return fused;
         }
@@ -435,7 +431,7 @@ impl Planner<'_> {
             }
             let (setup, rendered) = this.lower_condition(condition);
             if !setup.is_empty() {
-                let exit = GoExpression::unary("!", rendered);
+                let exit = GoExpression::unary(UnaryOp::Not, rendered);
                 return this.lower_loop_with_exit_test(setup, exit, body);
             }
             let header = if matches!(
@@ -455,18 +451,21 @@ impl Planner<'_> {
 
     fn lower_loop_with_exit_test(
         &mut self,
-        setup: Vec<LoweredStatement>,
+        setup: Vec<Statement>,
         exit: GoExpression,
         body: &Expression,
     ) -> LoopPlan {
         let mut statements = setup;
-        statements.push(LoweredStatement::If(IfPlan::plain(
-            exit,
-            LoweredBlock {
-                statements: vec![LoweredStatement::Break(LoopTransfer::Unlabeled)],
-            },
-            ElseArm::None,
-        )));
+        statements.push(
+            LoweredStatement::If(IfPlan::plain(
+                exit,
+                LoweredBlock {
+                    statements: vec![LoweredStatement::Break(LoopTransfer::Unlabeled).into()],
+                },
+                ElseArm::None,
+            ))
+            .into(),
+        );
         let lowered_body = self.with_scope(|this| this.lower_block_as_body(body));
         statements.extend(lowered_body.statements);
         self.build_source_loop(
@@ -489,7 +488,7 @@ impl Planner<'_> {
 
     pub(crate) fn build_source_loop(
         &mut self,
-        prologue: Vec<LoweredStatement>,
+        prologue: Vec<Statement>,
         header: LoopHeader,
         mut body: LoweredBlock,
     ) -> LoopPlan {
@@ -512,12 +511,10 @@ impl Planner<'_> {
         } else {
             slice::from_ref(expression)
         };
-        if let Some((last, rest)) = items.split_last() {
-            self.mark_component_lets(rest, last);
-        }
         let statements = items
             .iter()
-            .map(|item| self.lower_statement(item))
+            .enumerate()
+            .map(|(index, item)| self.lower_block_item(item, &items[index + 1..]))
             .collect();
         LoweredBlock { statements }
     }
@@ -539,7 +536,7 @@ impl Planner<'_> {
             } => {
                 let plan = self.lower_if(condition, consequence, alternative.as_deref(), place);
                 LoweredBlock {
-                    statements: vec![LoweredStatement::If(plan)],
+                    statements: vec![LoweredStatement::If(plan).into()],
                 }
             }
             Expression::IfLet {
@@ -557,7 +554,7 @@ impl Planner<'_> {
                 self.lower_match_to_block(subject, arms, place)
             }
             Expression::Select { arms, .. } => LoweredBlock {
-                statements: vec![self.lower_select(arms, place)],
+                statements: vec![self.lower_select(arms, place).into()],
             },
             _ => unreachable!("lower_branching_to_block: expected if/if-let/match/select"),
         }
@@ -623,7 +620,7 @@ impl Planner<'_> {
     /// statements. Shared by branch-arm return lowering and function-body
     /// lowering; leaf values and lowered-ABI returns become `Return` leaves,
     /// `if`/`if let`/`match`/`select` tails recurse structurally with a `Return` place.
-    fn lower_return_tail(&mut self, last: &Expression) -> Vec<LoweredStatement> {
+    fn lower_return_tail(&mut self, last: &Expression) -> Vec<Statement> {
         let mut statements = Vec::new();
         let return_span = last.get_span();
         let last = if let Expression::Return { expression, .. } = last {
@@ -643,7 +640,7 @@ impl Planner<'_> {
             return self.lower_never_return_tail(last, &return_span);
         }
 
-        let directive = self.maybe_line_directive(&return_span);
+        let line = self.maybe_line_directive(&return_span);
         match last {
             Expression::If { .. } | Expression::Select { .. } => {
                 let mut block = self.lower_branching_to_block(last, &PlacePlan::Return);
@@ -651,16 +648,16 @@ impl Planner<'_> {
                     .statements
                     .pop()
                     .expect("if and select lower to one statement");
-                statements.push(directed(directive, statement));
+                statements.extend(directed_first(line, vec![statement]));
             }
             Expression::IfLet { .. } | Expression::Match { .. } => {
                 let block = self.lower_branching_to_block(last, &PlacePlan::Return);
-                statements.extend(directed_first(directive, block.statements));
+                statements.extend(directed_first(line, block.statements));
             }
             Expression::TryBlock { items, ty, .. }
                 if let Some(inlined) = self.lower_try_tail_in_place(items, ty) =>
             {
-                statements.extend(directed_first(directive, inlined));
+                statements.extend(directed_first(line, inlined));
             }
             _ => {
                 let tail = if let Some(tail) = try_emit_lowered_tail_return(self, last) {
@@ -670,23 +667,19 @@ impl Planner<'_> {
                 } else {
                     self.lower_plain_return_tail(last)
                 };
-                statements.extend(directed_first(directive, tail));
+                statements.extend(directed_first(line, tail));
             }
         }
 
         statements
     }
 
-    fn lower_never_return_tail(
-        &mut self,
-        last: &Expression,
-        return_span: &Span,
-    ) -> Vec<LoweredStatement> {
-        let directive = self.maybe_line_directive(return_span);
-        directed_first(directive, vec![self.lower_statement(last)])
+    fn lower_never_return_tail(&mut self, last: &Expression, return_span: &Span) -> Vec<Statement> {
+        let line = self.maybe_line_directive(return_span);
+        directed_first(line, vec![self.lower_statement(last)])
     }
 
-    fn lower_plain_return_tail(&mut self, last: &Expression) -> Vec<LoweredStatement> {
+    fn lower_plain_return_tail(&mut self, last: &Expression) -> Vec<Statement> {
         if requires_temp_var(last) {
             let staged = self.plan_operand(last, ExpressionContext::value());
             let (mut statements, value) = staged.into_parts();

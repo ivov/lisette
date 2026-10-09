@@ -4875,6 +4875,67 @@ fn test() {
 }
 
 #[test]
+fn a_component_binding_in_an_assigned_block_keeps_its_components() {
+    let input = r#"
+fn pick(m: Map<string, int>, c: bool) -> int {
+  let x = if c {
+    let v = m.get("a")
+    if v.is_some() { 1 } else { v.unwrap_or(2) }
+  } else {
+    0
+  }
+  x + 1
+}
+
+fn test() {
+  if pick(Map.from([("a", 1)]), true) != 2 { panic("a present key should take the first arm") }
+  if pick(Map.from([("b", 1)]), true) != 3 { panic("a missing key should take the default") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn a_component_binding_in_a_try_block_keeps_its_components() {
+    let input = r#"
+import "go:strconv"
+
+fn add(s: string, t: string) -> Result<int, error> {
+  try {
+    let r = strconv.Atoi(s)
+    let k = strconv.Atoi(t)?
+    let n = r.unwrap_or(3)
+    n + k
+  }
+}
+
+fn test() {
+  if add("x", "1").unwrap_or(0) != 4 { panic("a failed first parse should take the default") }
+  if add("2", "x").is_ok() { panic("a failed second parse should return its error") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn a_component_binding_in_a_recover_block_keeps_its_components() {
+    let input = r#"
+fn lookup(m: Map<string, int>) -> Result<int, PanicValue> {
+  recover {
+    let v = m.get("a")
+    v.unwrap_or(4)
+  }
+}
+
+fn test() {
+  if lookup(Map.from([("a", 1)])).unwrap_or(0) != 1 { panic("a present key should be returned") }
+  if lookup(Map.from([("b", 1)])).unwrap_or(0) != 4 { panic("a missing key should take the default") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn map_err_propagate_on_go_calls_builds_the_error_on_failure() {
     let input = r#"
 import "go:fmt"
@@ -4949,6 +5010,44 @@ fn test() {
   if lookup(db, 2).is_ok() { panic("a missing key should fail") }
   if first([7]).unwrap_or(0) != 7 { panic("a first element should be found") }
   if first([]).is_ok() { panic("an empty slice should fail") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_propagate_discards_and_binds_the_ok_value() {
+    let input = r#"
+import "go:errors"
+import "go:fmt"
+import "go:strconv"
+
+fn option_targets(db: Map<int, string>) -> Option<string> {
+  db.get(1)?
+  let _ = db.get(2)?
+  let name = db.get(3)?
+  Some(name)
+}
+
+fn mapped_targets(db: Map<int, string>, s: string) -> Result<int, error> {
+  strconv.Atoi(s).map_err(|e| fmt.Errorf("first: %w", e))?
+  let _ = db.get(1).ok_or(errors.New("missing"))?
+  let n = strconv.Atoi(s).map_err(|e| fmt.Errorf("third: %w", e))?
+  Ok(n)
+}
+
+fn call_targets(s: string) -> Result<int, error> {
+  strconv.Atoi(s)?
+  let _ = strconv.Atoi(s)?
+  let n = strconv.Atoi(s)?
+  Ok(n)
+}
+
+fn test() {
+  let db = Map.from([(1, "a"), (2, "b"), (3, "c")])
+  if option_targets(db) != Some("c") { panic("every key is present") }
+  if mapped_targets(db, "4").unwrap_or(0) != 4 { panic("a number should parse") }
+  if call_targets("x").is_ok() { panic("a word should fail") }
 }
 "#;
     assert_emit_snapshot!(input);
@@ -5118,6 +5217,125 @@ fn test() {
   seen["a"] = ()
   let marker = seen.get("q").unwrap_or(())
   fmt.Println(marker)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn alias_qualified_option_arms_fuse_like_bare_arms() {
+    let input = r#"
+type Opt = Option<int>
+
+fn matched(m: Map<string, int>) -> int {
+  match m.get("a") {
+    Opt.Some(n) => n + 1,
+    Opt.None => 0,
+  }
+}
+
+fn let_else(m: Map<string, int>) -> int {
+  let Opt.Some(n) = m.get("a") else { return 0 }
+  n
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn alias_qualified_result_arms_fuse_like_bare_arms() {
+    let input = r#"
+import "go:strconv"
+
+type Res = Result<int, error>
+
+fn matched(text: string) -> int {
+  match strconv.Atoi(text) {
+    Res.Ok(n) => n + 1,
+    Res.Err(_) => 0,
+  }
+}
+
+fn let_else(text: string) -> int {
+  let Res.Ok(n) = strconv.Atoi(text) else { return 0 }
+  n
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn alias_qualified_option_constructors_lower_like_bare_constructors() {
+    let input = r#"
+type Opt = Option<int>
+
+fn early(n: int) -> Option<int> {
+  if n > 0 { return Opt.Some(n) }
+  Opt.None
+}
+
+fn tail() -> Opt { Opt.Some(1) }
+
+fn bound() -> Option<int> {
+  let a = Opt.Some(3)
+  a
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn alias_qualified_result_constructors_lower_like_bare_constructors() {
+    let input = r#"
+import "go:errors"
+
+type Res = Result<int, error>
+type Text = Result<int, string>
+
+fn lowered(n: int) -> Res {
+  if n > 0 { return Res.Ok(n) }
+  Res.Err(errors.New("negative"))
+}
+
+fn tagged(n: int) -> Text {
+  if n > 0 { return Text.Ok(n) }
+  Text.Err("negative")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn alias_qualified_partial_constructors_lower_like_qualified_constructors() {
+    let input = r#"
+type Par = Partial<int, error>
+
+fn read(n: int, e: error) -> Par {
+  if n > 0 { return Par.Ok(n) }
+  if n < -1 { return Par.Both(n, e) }
+  Par.Err(e)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn alias_qualified_err_arm_does_not_bind_the_value_component() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+type Res = Result<int, error>
+
+fn parse(text: string) -> int {
+  let r = strconv.Atoi(text)
+  match r {
+    Ok(_) => 1,
+    Res.Err(e) => {
+      fmt.Println(e)
+      0
+    },
+  }
 }
 "#;
     assert_emit_snapshot!(input);

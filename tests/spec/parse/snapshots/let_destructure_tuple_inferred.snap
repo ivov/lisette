@@ -37,6 +37,7 @@ description: |
                                             byte_offset: 20,
                                             byte_length: 1,
                                         },
+                                        binding: None,
                                     },
                                     Identifier {
                                         identifier: "b",
@@ -45,6 +46,7 @@ description: |
                                             byte_offset: 23,
                                             byte_length: 1,
                                         },
+                                        binding: None,
                                     },
                                 ],
                                 span: Span {

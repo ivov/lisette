@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  interface Shape { fn area() -> int }
+  
+  struct Sq { side: int }
+  
+  impl Sq { fn area(self) -> int { self.side * self.side } }
+  
+  type P = (Shape, int)
+  
+  fn size(p: P) -> int {
+    match p {
+      (Sq { side }, n) => side + n,
+      _ => 0,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Shape interface {
+	area() int
+}
+
+type Sq struct {
+	side int
+}
+
+func (s Sq) area() int {
+	return s.side * s.side
+}
+
+type P = lisette.Tuple2[Shape, int]
+
+func size(p P) int {
+	if func() bool { _, ok := p.First.(Sq); return ok }() {
+		return p.First.(Sq).side + p.Second
+	}
+	return 0
+}

@@ -65,6 +65,22 @@ pub(crate) fn exported_member(owner: &Type, member: &str) -> String {
     make_exported(member)
 }
 
+/// The Go spelling of a struct member at a use site.
+pub(crate) fn member_go_name(
+    owner: &Type,
+    member: &str,
+    is_exported: bool,
+    is_embedded: bool,
+) -> String {
+    if is_embedded {
+        escape_keyword(member).into_owned()
+    } else if is_exported {
+        exported_member(owner, member)
+    } else {
+        unexported_method_go_name(member)
+    }
+}
+
 pub fn go_test_function_name(fn_name: &str) -> String {
     format!("Test{}", snake_to_camel(fn_name))
 }
@@ -142,21 +158,21 @@ pub(crate) struct ResolvedName {
 }
 
 impl ResolvedName {
-    fn stdlib(name: String) -> Self {
+    pub(crate) fn stdlib(name: String) -> Self {
         Self {
             name,
             package: Some(PackageUse::generated(GeneratedPackage::Prelude)),
         }
     }
 
-    fn local(name: String) -> Self {
+    pub(crate) fn local(name: String) -> Self {
         Self {
             name,
             package: None,
         }
     }
 
-    fn foreign(name: String, package: PackageUse) -> Self {
+    pub(crate) fn foreign(name: String, package: PackageUse) -> Self {
         Self {
             name,
             package: Some(package),
@@ -184,46 +200,6 @@ pub(crate) fn resolve(name: &str) -> ResolvedName {
         ResolvedName::stdlib(go_name)
     } else {
         ResolvedName::local(escape_reserved(&name.replace('.', "_")).into_owned())
-    }
-}
-
-pub(crate) fn variant(
-    identifier: &str,
-    ty: &Type,
-    enum_package: &str,
-    current_package: &str,
-    package: Option<PackageUse>,
-) -> ResolvedName {
-    let Type::Nominal { id, .. } = ty else {
-        return ResolvedName::local(identifier.replace('.', "_"));
-    };
-
-    variant_by_id(identifier, id, enum_package, current_package, package)
-}
-
-pub(crate) fn variant_by_id(
-    identifier: &str,
-    enum_id: &str,
-    enum_package: &str,
-    current_package: &str,
-    package: Option<PackageUse>,
-) -> ResolvedName {
-    let is_prelude = enum_id.starts_with(PRELUDE_PREFIX);
-    let enum_name = unqualified_name(enum_id);
-    let variant_name = unqualified_name(identifier);
-
-    if is_prelude {
-        ResolvedName::stdlib(format!("{enum_name}{variant_name}"))
-    } else {
-        let base = enum_tag_constant(enum_name, variant_name);
-        if enum_package != current_package {
-            match package {
-                Some(package) => ResolvedName::foreign(base, package),
-                None => ResolvedName::local(format!("{}.{base}", go_package_name(enum_package))),
-            }
-        } else {
-            ResolvedName::local(base)
-        }
     }
 }
 
@@ -346,32 +322,5 @@ pub(crate) fn escape_reserved(name: &str) -> Cow<'_, str> {
         Cow::Owned(format!("{}_", name))
     } else {
         Cow::Borrowed(name)
-    }
-}
-
-pub(crate) fn qualify_method(
-    package: Option<&str>,
-    type_name: &str,
-    method: &str,
-    current_package: &str,
-    is_public: bool,
-    package_use: Option<PackageUse>,
-) -> ResolvedName {
-    let Some(package) = package else {
-        let method_name = free_method_part(method, is_public);
-        return ResolvedName::local(format!("{}_{}", type_name, method_name));
-    };
-
-    if package == PRELUDE_PACKAGE {
-        ResolvedName::stdlib(format!("{}{}", type_name, snake_to_camel(method)))
-    } else if package == current_package {
-        let method_name = free_method_part(method, is_public);
-        ResolvedName::local(format!("{}_{}", type_name, method_name))
-    } else {
-        let name = format!("{}_{}", type_name, snake_to_camel(method));
-        match package_use {
-            Some(package_use) => ResolvedName::foreign(name, package_use),
-            None => ResolvedName::local(format!("{}.{name}", go_package_name(package))),
-        }
     }
 }

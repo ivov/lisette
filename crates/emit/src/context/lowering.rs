@@ -44,16 +44,13 @@ pub(crate) enum ReturnContext {
         return_ty: Type,
         shape: CallableReturnAbi,
     },
-    TaggedBlock(Type),
 }
 
 impl ReturnContext {
     pub(crate) fn ty(&self) -> Option<&Type> {
         match self {
             ReturnContext::None => None,
-            ReturnContext::Tagged(ty)
-            | ReturnContext::Lowered { return_ty: ty, .. }
-            | ReturnContext::TaggedBlock(ty) => Some(ty),
+            ReturnContext::Tagged(ty) | ReturnContext::Lowered { return_ty: ty, .. } => Some(ty),
         }
     }
 

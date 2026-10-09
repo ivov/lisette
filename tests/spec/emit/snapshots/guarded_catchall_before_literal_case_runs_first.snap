@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  fn f(n: int) -> string {
+    match n {
+      1 => "one",
+      x if x > 1 => "big",
+      2 => "two",
+      _ => "other",
+    }
+  }
+---
+package main
+
+func f(n int) string {
+	if n == 1 {
+		return "one"
+	}
+	if n > 1 {
+		return "big"
+	}
+	if n == 2 {
+		return "two"
+	}
+	return "other"
+}

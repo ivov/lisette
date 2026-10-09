@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:iter"
+  import "go:slices"
+  
+  fn main() {
+    let s: Option<iter.Seq<int>> = Some(slices.Values([1, 2, 3]))
+    let _ = s.map(iter.Pull)
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"iter"
+	"slices"
+)
+
+func main() {
+	s := lisette.MakeOptionSome[iter.Seq[int]](slices.Values([]int{1, 2, 3}))
+	lisette.OptionMap(s, func(arg0 iter.Seq[int]) lisette.Tuple2[lisette.Option[func() (int, bool)], lisette.Option[func()]] {
+		ret, ret_1 := iter.Pull[int](arg0)
+		option := lisette.OptionFromNilable[func() (int, bool)](ret, ret == nil)
+		option_1 := lisette.OptionFromNilable[func()](ret_1, ret_1 == nil)
+		tup := lisette.MakeTuple2(option, option_1)
+		return tup
+	})
+}

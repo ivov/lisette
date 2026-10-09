@@ -1,0 +1,73 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Pair<X, Y> { x: X, y: Y }
+  
+  impl<A, B> Pair<B, A> {
+    fn names() -> string {
+      let a: Option<A> = None
+      let b: Option<B> = None
+      fmt.Sprintf("%T %T", a, b)
+    }
+  }
+  
+  struct Q<X, Y> { x: X, y: Y }
+  
+  impl<T> Q<int, T> {
+    fn name() -> string {
+      let t: Option<T> = None
+      fmt.Sprintf("%T", t)
+    }
+  }
+  
+  type P = Pair<int, string>
+  type R = Q<int, string>
+  
+  fn main() {
+    let f = P.names
+    fmt.Println(f(), P.names())
+    let g = R.name
+    fmt.Println(g(), R.name())
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Pair[X any, Y any] struct {
+	x X
+	y Y
+}
+
+func Pair_names[A any, B any]() string {
+	a := lisette.MakeOptionNone[A]()
+	b := lisette.MakeOptionNone[B]()
+	return fmt.Sprintf("%T %T", a, b)
+}
+
+type Q[X any, Y any] struct {
+	x X
+	y Y
+}
+
+func Q_name[T any]() string {
+	t := lisette.MakeOptionNone[T]()
+	return fmt.Sprintf("%T", t)
+}
+
+type P = Pair[int, string]
+
+type R = Q[int, string]
+
+func main() {
+	f := Pair_names[string, int]
+	fmt.Println(f(), Pair_names[string, int]())
+	g := Q_name[string]
+	fmt.Println(g(), Q_name[string]())
+}

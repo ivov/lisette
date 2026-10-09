@@ -100,3 +100,84 @@ fn package_file_line_directive_uses_relative_path_not_doubled() {
         "package file path must not be doubled, got:\n{go}"
     );
 }
+
+fn assert_sourcemap_only_adds_directives(input: &str) {
+    use crate::_harness::emit::emit;
+
+    let plain = emit(input).go_code();
+    let mapped = emit_with_sourcemap(input).go_code();
+    let stripped: String = mapped
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//line "))
+        .map(|line| format!("{line}\n"))
+        .collect();
+    assert_eq!(
+        stripped.trim_end(),
+        plain.trim_end(),
+        "sourcemap output differs beyond its directives:\n{mapped}"
+    );
+}
+
+#[test]
+fn sourcemap_keeps_else_if_condition_setup() {
+    assert_sourcemap_only_adds_directives(
+        r#"
+fn bump(n: int) -> int { n + 1 }
+
+fn pick(xs: Slice<int>, n: int) -> int {
+  if n > 3 {
+    1
+  } else if xs[n] > bump(n) {
+    2
+  } else {
+    3
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn sourcemap_keeps_cleanup_of_directed_statements() {
+    assert_sourcemap_only_adds_directives(
+        r#"
+fn pick(xs: Slice<int>, i: int) -> int {
+  match xs.get(i) { Some(value) => value, None => -1 }
+}
+
+fn first_positive(s: Slice<int>, seen: Channel<int>) -> Option<int> {
+  s.find(|x| {
+    seen.send(x)
+    x > 0
+  })
+}
+"#,
+    );
+}
+
+#[test]
+fn sourcemap_drops_bodies_that_hold_only_directives() {
+    assert_sourcemap_only_adds_directives(
+        r#"
+import "go:fmt"
+
+enum Color { Red, Green, Blue }
+
+fn test(x: int) {
+  if x > 10 {
+    let y = 1;
+  } else {
+    let y = 2;
+  }
+}
+
+fn describe(color: Color) {
+  match color {
+    Red => fmt.Println("red"),
+    Green => fmt.Println("green"),
+    _ => (),
+  }
+}
+"#,
+    );
+}

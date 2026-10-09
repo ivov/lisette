@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:errors"
+  
+  type Res = Result<int, error>
+  type Text = Result<int, string>
+  
+  fn lowered(n: int) -> Res {
+    if n > 0 { return Res.Ok(n) }
+    Res.Err(errors.New("negative"))
+  }
+  
+  fn tagged(n: int) -> Text {
+    if n > 0 { return Text.Ok(n) }
+    Text.Err("negative")
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Res = lisette.Result[int, error]
+
+type Text = lisette.Result[int, string]
+
+func lowered(n int) (int, error) {
+	if n > 0 {
+		return n, nil
+	}
+	return 0, errors.New("negative")
+}
+
+func tagged(n int) Text {
+	if n > 0 {
+		return lisette.MakeResultOk[int, string](n)
+	}
+	return lisette.MakeResultErr[int, string]("negative")
+}

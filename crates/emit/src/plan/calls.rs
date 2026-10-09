@@ -1,24 +1,21 @@
 use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableAbi, CallableParamAbi, CallableReturnAbi};
 use crate::abi::coercion::LayoutBridge;
-use crate::abi::is_prelude_container_constructor;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
-use crate::expressions::staging::VariadicCombine;
-use crate::types::native::NativeGoType;
+use crate::definitions::interface_adapter::with_comma_ok_hint;
+use crate::patterns::matching::prelude_constructor;
 use syntax::ast::{Expression, IdentifierResolution};
+use syntax::program::NativeTypeKind;
 use syntax::program::{
-    CallKind, Definition, DotAccessKind, Method, NativeTypeKind, Visibility, resolved_definition,
+    CallKind, Definition, DotAccessResolution, Method, Visibility, resolved_definition,
 };
-use syntax::types::{FunctionParameter, Type};
+use syntax::types::{CompoundKind, FunctionParameter, Type};
 
 #[derive(Debug)]
 pub(crate) struct CallPlan<'a> {
     pub(crate) resolved: ResolvedCallee<'a>,
     pub(crate) arguments: Vec<ArgumentPlan>,
     pub(crate) result_transition: AbiTransition,
-    /// Variadic spread combine: present when the callee accepts a variadic
-    /// parameter and the call supplies a trailing spread argument.
-    variadic: Option<VariadicSpreadPlan>,
 }
 
 #[derive(Debug)]
@@ -70,29 +67,12 @@ impl<'a> CallableDeclaration<'a> {
     }
 }
 
-/// AST-level `CallKind` plus emit-side classification.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum CallableOrigin {
-    /// Regular Lisette function or method call.
-    Regular,
     /// Go interop call; `ResolvedCallee::abi` describes its physical boundary.
     GoInterop,
-    /// UFCS method call: `receiver.method()` where `method` is a free function.
-    UfcsMethod,
-    /// Native type constructor: `Channel.new(...)`, `Map.new(...)`.
-    NativeConstructor(NativeTypeKind),
-    /// Native instance method via dot access: `slice.append(x)`.
-    NativeMethod(NativeTypeKind),
-    /// Native method via identifier: `Slice.contains(s, x)`.
-    NativeMethodIdentifier(NativeTypeKind),
-    /// Receiver method via UFCS syntax: `Type.method(receiver, args)`.
-    ReceiverMethodUfcs { is_public: bool },
-    /// Tuple struct constructor: `Point(1, 2)`.
-    TupleStructConstructor,
-    /// Type assertion: `assert_type<T>(x)`.
-    AssertType,
-    /// Zero value: `zero<T>()`.
-    Zero,
+    /// Lisette call. Local bindings and unresolved callees are `CallKind::Regular`.
+    Source(CallKind),
 }
 
 #[derive(Debug, Clone)]
@@ -129,39 +109,6 @@ pub(crate) struct ArgumentSlotBridge {
     pub(crate) source: ArgumentValueSource,
 }
 
-/// Variadic spread combine: a trailing spread argument must be combined
-/// with fixed args via the variadic boundary helper.
-#[derive(Debug, Clone)]
-pub(crate) struct VariadicSpreadPlan {
-    /// Element type of the variadic parameter.
-    element_ty: Type,
-    /// Count of fixed parameters in the callee's signature (excluding the
-    /// trailing variadic). Callers add their own `extra_leading` to derive
-    /// the per-call fixed count.
-    fixed_in_signature: usize,
-}
-
-impl VariadicSpreadPlan {
-    /// Derive a `VariadicCombine`, given the caller's `extra_leading` argument
-    /// count (UFCS adds 1 for the implicit receiver).
-    pub(crate) fn combine(&self, extra_leading: usize) -> VariadicCombine {
-        VariadicCombine {
-            element_ty: self.element_ty.clone(),
-            fixed_count: self.fixed_in_signature + extra_leading,
-        }
-    }
-}
-
-impl CallPlan<'_> {
-    /// Derive a `VariadicCombine` from this plan, given the caller's
-    /// `extra_leading` argument count (UFCS adds 1 for the implicit receiver).
-    pub(crate) fn variadic_combine(&self, extra_leading: usize) -> Option<VariadicCombine> {
-        self.variadic
-            .as_ref()
-            .map(|spread| spread.combine(extra_leading))
-    }
-}
-
 impl<'a> Planner<'a> {
     /// Build a `CallPlan` for the given expression. Returns `None` for
     /// non-Call expressions.
@@ -170,7 +117,6 @@ impl<'a> Planner<'a> {
             expression: callee,
             args,
             call_kind,
-            spread,
             ty,
             ..
         } = expression
@@ -179,38 +125,17 @@ impl<'a> Planner<'a> {
         };
 
         let function = callee.unwrap_parens();
-        let variadic = plan_variadic_spread(&self.facts, function, spread.as_deref());
-
         let go_return = self.resolve_go_call_abi(expression);
 
-        let kind = (!self.is_local_binding(function)).then_some(*call_kind);
-
-        let callee_plan = if self.is_go_callable(function) {
+        let origin = if self.is_go_callable(function) {
             CallableOrigin::GoInterop
+        } else if self.is_local_binding(function) || *call_kind == CallKind::Unresolved {
+            CallableOrigin::Source(CallKind::Regular)
         } else {
-            match kind {
-                Some(CallKind::TupleStructConstructor) => CallableOrigin::TupleStructConstructor,
-                Some(CallKind::AssertType) => CallableOrigin::AssertType,
-                Some(CallKind::Zero) => CallableOrigin::Zero,
-                Some(CallKind::UfcsMethod) => CallableOrigin::UfcsMethod,
-                Some(CallKind::NativeConstructor(kind)) => CallableOrigin::NativeConstructor(kind),
-                Some(CallKind::NativeMethod(kind)) => CallableOrigin::NativeMethod(kind),
-                Some(CallKind::NativeMethodIdentifier(kind)) => {
-                    CallableOrigin::NativeMethodIdentifier(kind)
-                }
-                Some(CallKind::ReceiverMethodUfcs { is_public }) => {
-                    CallableOrigin::ReceiverMethodUfcs { is_public }
-                }
-                None | Some(CallKind::Unresolved | CallKind::Regular) => CallableOrigin::Regular,
-            }
+            CallableOrigin::Source(*call_kind)
         };
 
-        let resolved = self.resolve_callee(
-            function,
-            callee_plan.clone(),
-            go_return.as_ref(),
-            args.len(),
-        );
+        let resolved = self.resolve_callee(function, origin, go_return.as_ref(), args.len());
         let callee_diverges = resolved
             .instantiated
             .get_function_ret()
@@ -241,7 +166,6 @@ impl<'a> Planner<'a> {
             resolved,
             arguments,
             result_transition,
-            variadic,
         })
     }
 
@@ -271,7 +195,7 @@ impl<'a> Planner<'a> {
         let result = match go_return {
             Some(result) => result.clone(),
             None => self
-                .classify_callee_abi(function, declared_type)
+                .classify_callee_abi(function, id.as_deref(), declaration)
                 .unwrap_or_else(|| {
                     instantiated
                         .get_function_ret()
@@ -304,16 +228,16 @@ impl<'a> Planner<'a> {
                 self.value_layout_with_declaration(return_type, return_origin, declaration)
             },
         );
-        let return_payload_layout =
-            self.callable_payload_layout(return_type, return_origin, return_declaration);
         let is_prelude_dispatch = id
             .as_deref()
             .is_some_and(|definition| definition.starts_with("prelude."))
             || matches!(
                 origin,
-                CallableOrigin::NativeConstructor(_)
-                    | CallableOrigin::NativeMethod(_)
-                    | CallableOrigin::NativeMethodIdentifier(_)
+                CallableOrigin::Source(
+                    CallKind::NativeConstructor(_)
+                        | CallKind::NativeMethod(_)
+                        | CallKind::NativeMethodIdentifier(_)
+                )
             );
 
         ResolvedCallee {
@@ -325,7 +249,6 @@ impl<'a> Planner<'a> {
                 params,
                 result,
                 return_layout,
-                return_payload_layout,
             },
             is_prelude_dispatch,
         }
@@ -344,7 +267,7 @@ impl<'a> Planner<'a> {
         let origin = if self.is_go_callable(expression) {
             CallableOrigin::GoInterop
         } else {
-            CallableOrigin::Regular
+            CallableOrigin::Source(CallKind::Regular)
         };
         Some(self.resolve_callee(expression, origin, go_return.as_ref(), params.len()))
     }
@@ -354,46 +277,20 @@ impl<'a> Planner<'a> {
         function: &Expression,
     ) -> (Option<String>, Option<CallableDeclaration<'a>>) {
         let id = resolved_definition(function).map(str::to_string);
-        let declaration = id.as_deref().and_then(|id| {
-            self.facts
-                .definition(id)
-                .map(CallableDeclaration::Definition)
-                .or_else(|| {
-                    let (owner, name) = id.rsplit_once('.')?;
-                    self.facts
-                        .method(owner, name)
-                        .map(CallableDeclaration::Method)
-                })
-        });
+        let declaration = id.as_deref().and_then(|id| self.callable_declaration(id));
         (id, declaration)
     }
 
-    pub(crate) fn resolve_callable_params(
-        &self,
-        function: &Expression,
-        arg_count: usize,
-    ) -> Vec<CallableParamAbi> {
-        let (id, declaration) = self.resolve_callee_definition(function);
-        let declared = declaration.map(CallableDeclaration::ty);
-        let declared_params = declared.and_then(|ty| ty.unwrap_forall().get_function_params());
-        let instantiated = self
-            .facts
-            .resolve_to_function_type(function.get_type().unwrap_forall())
-            .unwrap_or_else(|| function.get_type().unwrap_forall().clone());
-        let receiver_offset = receiver_offset(declared_params, &instantiated, arg_count);
-        let origin = if self.is_go_callable(function) {
-            CallableOrigin::GoInterop
-        } else {
-            CallableOrigin::Regular
-        };
-        build_param_abi(
-            self,
-            &instantiated,
-            declared_params,
-            receiver_offset,
-            id.as_deref(),
-            &origin,
-        )
+    pub(crate) fn callable_declaration(&self, id: &str) -> Option<CallableDeclaration<'a>> {
+        self.facts
+            .definition(id)
+            .map(CallableDeclaration::Definition)
+            .or_else(|| {
+                let (owner, name) = id.rsplit_once('.')?;
+                self.facts
+                    .method(owner, name)
+                    .map(CallableDeclaration::Method)
+            })
     }
 
     /// Lowered shape of a callee. Type-driven, so it fires regardless of
@@ -401,7 +298,8 @@ impl<'a> Planner<'a> {
     fn classify_callee_abi(
         &self,
         callee: &Expression,
-        declared_type: Option<&Type>,
+        id: Option<&str>,
+        declaration: Option<CallableDeclaration<'a>>,
     ) -> Option<CallableReturnAbi> {
         let callee_ty = callee.get_type();
         let unwrapped = callee_ty.unwrap_forall();
@@ -423,12 +321,12 @@ impl<'a> Planner<'a> {
         } = inner
         {
             let receiver_type = receiver.get_type();
-            if NativeGoType::from_type(&self.facts.strip_and_peel(&receiver_type)).is_some()
+            if NativeTypeKind::from_type(&self.facts.strip_and_peel(&receiver_type)).is_some()
                 || receiver_is_prelude_type(&receiver_type)
                 || matches!(
                     &**receiver,
                     Expression::Identifier {
-                        resolution: IdentifierResolution::Definition(definition),
+                        resolution: IdentifierResolution::Definition { name: definition, .. },
                         ..
                     }
                         if definition.starts_with("prelude.")
@@ -441,17 +339,28 @@ impl<'a> Planner<'a> {
         }
         // Tagged-type constructors compile to `lisette.MakeX(...)`,
         // not multi-return Go calls.
-        if is_prelude_container_constructor(inner) {
+        if prelude_constructor(inner).is_some() {
             return None;
         }
         if self.callee_uses_tagged_method_return(callee) {
             return None;
         }
-        let declared_return = declared_type.and_then(|ty| ty.unwrap_forall().get_function_ret());
+        let declared_return =
+            declaration.and_then(|declaration| declaration.ty().unwrap_forall().get_function_ret());
         let classify_ty = declared_return.unwrap_or(f.return_type.as_ref());
         let origin = self.function_type_origin(&callee_ty, SlotOrigin::Lisette);
+        let abi = self.classify_slot_emission(classify_ty, origin)?;
 
-        self.classify_slot_emission(classify_ty, origin)
+        // Interface methods carry `#[go(...)]` hints the call must read.
+        if let Some(CallableDeclaration::Method(method)) = declaration
+            && id
+                .and_then(|id| id.rsplit_once('.'))
+                .and_then(|(owner, _)| self.facts.definition(owner))
+                .is_some_and(Definition::is_interface)
+        {
+            return Some(with_comma_ok_hint(abi, method));
+        }
+        Some(abi)
     }
 
     pub(crate) fn callee_uses_tagged_method_return(&self, callee: &Expression) -> bool {
@@ -472,13 +381,13 @@ impl<'a> Planner<'a> {
                 resolution,
                 ..
             } if matches!(
-                resolution.kind(),
-                Some(
-                    DotAccessKind::InstanceMethod { .. }
-                        | DotAccessKind::InstanceMethodValue { .. }
-                )
-            ) && NativeGoType::from_type(&self.facts.strip_and_peel(&receiver.get_type()))
-                .is_none()
+                resolution,
+                DotAccessResolution::InstanceMethod { .. }
+                    | DotAccessResolution::InstanceMethodValue { .. }
+            ) && NativeTypeKind::from_type(
+                &self.facts.strip_and_peel(&receiver.get_type()),
+            )
+            .is_none()
                 && !receiver_is_prelude_type(&receiver.get_type()) =>
             {
                 Some(member.as_str())
@@ -622,29 +531,38 @@ fn build_param_abi(
                     })
                 })
                 .unwrap_or_else(|| planner.value_layout(&instantiated.ty, origin));
+            let element = instantiated
+                .ty
+                .is_native(CompoundKind::VarArgs)
+                .then(|| instantiated.ty.inner())
+                .flatten();
+            let Some(element) = element else {
+                return CallableParamAbi {
+                    instantiated: instantiated.ty.clone(),
+                    declared,
+                    origin,
+                    layout,
+                    variadic: None,
+                };
+            };
+            let declared_element = declared.map(|declared| {
+                if declared.is_native(CompoundKind::VarArgs) {
+                    declared.inner().unwrap_or(declared)
+                } else {
+                    declared
+                }
+            });
+            let element_layout = declared_element.as_ref().map_or_else(
+                || planner.value_layout(&element, origin),
+                |declared| planner.value_layout_with_declaration(&element, origin, declared),
+            );
             CallableParamAbi {
-                instantiated: instantiated.ty.clone(),
-                declared,
+                instantiated: element,
+                declared: declared_element,
                 origin,
-                layout,
+                layout: element_layout,
+                variadic: Some(layout),
             }
         })
         .collect()
-}
-
-/// Plan a variadic spread: present when the callee accepts a variadic
-/// parameter and the call supplies a trailing spread argument.
-pub(crate) fn plan_variadic_spread(
-    facts: &crate::EmitFacts<'_>,
-    function: &Expression,
-    spread: Option<&Expression>,
-) -> Option<VariadicSpreadPlan> {
-    spread?;
-    let function_ty = facts.resolve_to_function_type(&function.get_type())?;
-    let element_ty = function_ty.is_variadic()?;
-    let fixed_in_signature = function_ty.get_function_params()?.len().saturating_sub(1);
-    Some(VariadicSpreadPlan {
-        element_ty,
-        fixed_in_signature,
-    })
 }

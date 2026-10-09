@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  const MAX_SIZE = 1024
+  
+  fn classify() -> string {
+    match MAX_SIZE {
+      0 => "empty",
+      1024 => "full",
+      _ => "other",
+    }
+  }
+---
+package main
+
+const MaxSize int = 1024
+
+func classify() string {
+	switch MaxSize {
+	case 0:
+		return "empty"
+	case 1024:
+		return "full"
+	default:
+		return "other"
+	}
+}

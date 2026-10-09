@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn pick(m: Map<string, int>, c: bool) -> int {
+    let x = if c {
+      let v = m.get("a")
+      if v.is_some() { 1 } else { v.unwrap_or(2) }
+    } else {
+      0
+    }
+    x + 1
+  }
+  
+  fn test() {
+    if pick(Map.from([("a", 1)]), true) != 2 { panic("a present key should take the first arm") }
+    if pick(Map.from([("b", 1)]), true) != 3 { panic("a missing key should take the default") }
+  }
+---
+package main
+
+func pick(m map[string]int, c bool) int {
+	var x int
+	if c {
+		v, ok := m["a"]
+		if ok {
+			x = 1
+		} else {
+			if !ok {
+				v = 2
+			}
+			x = v
+		}
+	} else {
+		x = 0
+	}
+	return x + 1
+}
+
+func test() {
+	if pick(map[string]int{"a": 1}, true) != 2 {
+		panic("a present key should take the first arm")
+	}
+	if pick(map[string]int{"b": 1}, true) != 3 {
+		panic("a missing key should take the default")
+	}
+}

@@ -5,7 +5,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use diagnostics::LisetteDiagnostic;
 use syntax::FileParseStatus;
 use syntax::ast::BindingId;
-use syntax::program::{BinderIds, EmitInput, MutationInfo, UnusedInfo, is_internal_package_id};
+use syntax::program::{EmitInput, UnusedInfo, is_internal_package_id};
 
 use semantics::AnalyzeInput;
 use semantics::cache::{EmitStamp, diagnostic_dependencies_tracked, save_package_cache};
@@ -137,17 +137,8 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     } else {
         passes::run(&store, &facts, &sink, lint_mode, unused_item_reporting)
     };
-    let mut mutations = MutationInfo::default();
-    for (&binding_id, b) in facts.bindings.iter() {
-        if let Some(mutation) = b.mutation {
-            mutations.record(binding_id, mutation);
-        }
-    }
+    let emit_bindings = passes::emit_bindings(&facts);
     let bindings = facts.bindings;
-    let mut binder_ids = BinderIds::default();
-    for (&id, binding) in &bindings {
-        binder_ids.record(binding.span, id);
-    }
     let usages = facts.usages;
 
     // Canonicalize diagnostic order so the output is stable regardless of
@@ -273,8 +264,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
             definitions,
             entry_package_id: ENTRY_PACKAGE_ID.to_string(),
             unused,
-            mutations,
-            binder_ids,
+            bindings: emit_bindings,
             cached_packages,
             equality_index: store.equality_index,
             test_index: store.test_index,

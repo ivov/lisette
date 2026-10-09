@@ -1,0 +1,46 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Cache interface {
+	Get(string) (*int, bool)
+}
+
+type MyCache struct{}
+
+func (m MyCache) Get(_ string) *int {
+	return nil
+}
+
+func useCache(_ Cache) {}
+
+func first(raw, option int) int {
+	useCache(_lisAdapter_MyCache_Cache_0{inner: MyCache{}})
+	return raw + option
+}
+
+func second() {
+	useCache(_lisAdapter_MyCache_Cache_0{inner: MyCache{}})
+}
+
+func main() {
+	first(1, 2)
+	second()
+}
+
+type _lisAdapter_MyCache_Cache_0 struct {
+	inner MyCache
+}
+
+func (a _lisAdapter_MyCache_Cache_0) Get(arg0 string) (*int, bool) {
+	raw := a.inner.Get(arg0)
+	option := lisette.OptionFromNilable[*int](raw, raw == nil)
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal, true
+	}
+	return nil, false
+}

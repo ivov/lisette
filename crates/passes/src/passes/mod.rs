@@ -1,6 +1,6 @@
 use diagnostics::LocalSink;
 use syntax::ast::Expression;
-use syntax::program::UnusedInfo;
+use syntax::program::{EmitBindings, UnusedInfo};
 use syntax::program::{File, Package};
 
 use semantics::facts::Facts;
@@ -86,13 +86,21 @@ pub fn run(
     sink.extend(checks_diagnostics);
     deferred::run(store, facts.deferred_checks(), sink);
     if let Some((produced_facts, ast_walk_diagnostics, ref_graph_output)) = lint_outputs {
-        let mut unused = lints::from_facts::run(store, facts, pattern_lints, produced_facts, sink);
-        let (ref_graph_diagnostics, ref_graph_unused) = ref_graph_output;
+        lints::from_facts::run(store, facts, pattern_lints, produced_facts, sink);
+        let (ref_graph_diagnostics, unused) = ref_graph_output;
         sink.extend(ast_walk_diagnostics);
         sink.extend(ref_graph_diagnostics);
-        unused.merge(ref_graph_unused);
         unused
     } else {
         UnusedInfo::default()
     }
+}
+
+/// Builds the binding table emit reads, independent of lint mode.
+pub fn emit_bindings(facts: &Facts) -> EmitBindings {
+    let mut bindings = EmitBindings::default();
+    for (&id, b) in &facts.bindings {
+        bindings.record(id, !b.used, b.mutation);
+    }
+    bindings
 }

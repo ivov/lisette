@@ -6,32 +6,23 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
 use crate::patterns::sites::PatternSubject;
-use crate::plan::bodies::{
-    LoopHeader, LoweredBlock, LoweredStatement, SelectArmPlan, SwitchKind, for_each_statement,
-    rename_generated_locals,
-};
+use crate::plan::bodies::{LoweredBlock, LoweredStatement, Statement, rename_generated_locals};
 use crate::plan::cleanup::clean_up;
-use crate::plan::go_expression::{FunctionLiteralLayout, GoExpressionNode, GoParameter};
+use crate::plan::go_expression::{
+    FunctionLiteralLayout, GoExpressionNode, GoParameter, verbatim_identifiers,
+};
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 #[cfg(debug_assertions)]
 use crate::plan::verify::{verify_final_function_body, verify_local_scopes};
-use crate::plan::visit::identify_body_locals;
-use crate::state::package_state::FunctionEmissionContext;
+use crate::plan::visit::{VisitorMut, identify_body_locals, visit_statements_mut};
 use crate::statements::testing::test_context_call;
-use crate::types::native::NativeGoType;
+use crate::types::go_type::returns_go_void;
 use crate::utils::{fresh_receiver_name, group_params};
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use std::mem;
+use rustc_hash::FxHashSet as HashSet;
 use syntax::EcoString;
-use syntax::ast::{
-    Annotation, Binding, Expression, FunctionDefinitionView, Generic, Pattern, Span,
-    collect_pattern_bindings,
-};
-use syntax::types::{SimpleKind, Type, build_substitution_map, substitute};
-
-/// Owned param-destructure record: temp var, pattern, param type.
-type DeferredParamDestructure = (String, Pattern, Type);
+use syntax::ast::{Binding, Expression, FunctionDefinitionView, Pattern, collect_pattern_bindings};
+use syntax::types::{Type, build_substitution_map, substitute};
 
 pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
     let stripped = ty.strip_refs();
@@ -41,11 +32,16 @@ pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
     })
 }
 
-/// Borrowed lambda param-destructure record. Lambdas keep references to the
-/// caller's `params` slice since they cannot outlive emission scope.
-type LambdaParamDestructure<'a> = (String, &'a Pattern, &'a Type);
+type ParamDestructure<'a> = (String, &'a Pattern, &'a Type);
 
-struct LambdaReturnInfo {
+struct LoweredParams<'a> {
+    pairs: Vec<(String, String)>,
+    destructures: Vec<ParamDestructure<'a>>,
+    identifiers: Vec<GoIdentifier>,
+    test_handle: Option<GoIdentifier>,
+}
+
+pub(crate) struct LambdaReturnInfo {
     signature: Option<String>,
     ctx: ReturnContext,
 }
@@ -55,7 +51,7 @@ impl LambdaReturnInfo {
         self.signature.is_some()
     }
 
-    fn signature(&self) -> &str {
+    pub(crate) fn signature(&self) -> &str {
         self.signature.as_deref().unwrap_or_default()
     }
 }
@@ -66,13 +62,13 @@ impl Planner<'_> {
         output: &mut String,
         body: &Expression,
         should_return: bool,
-        prefix: &mut Vec<LoweredStatement>,
+        mut prefix: Vec<Statement>,
         parameters: &[GoIdentifier],
     ) {
         self.reserve_source_binder_names(body);
         let mut lowered = self.lower_function_body(body, should_return);
         prefix.append(&mut lowered.statements);
-        lowered.statements = mem::take(prefix);
+        lowered.statements = prefix;
         let shadowing = identify_body_locals(&mut lowered.statements, parameters, &mut self.scope);
         clean_up(&mut lowered.statements, &shadowing);
         if should_return {
@@ -101,29 +97,33 @@ impl Planner<'_> {
         }
     }
 
-    fn settle_generated_names(&mut self, statements: &mut [LoweredStatement]) {
-        let mut present: HashSet<String> = HashSet::default();
-        let mut pinned: HashSet<String> = HashSet::default();
-        for statement in statements.iter() {
-            statement.visit_expressions(&mut |node| {
-                if let GoExpressionNode::Identifier(name) = node {
-                    present.insert(name.to_string());
-                } else if let GoExpressionNode::Verbatim(source) = node {
-                    pinned.extend(
-                        source
-                            .split(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
-                            .filter(|token| !token.is_empty())
-                            .map(str::to_string),
-                    );
-                }
-            });
+    fn settle_generated_names(&mut self, statements: &mut [Statement]) {
+        #[derive(Default)]
+        struct Names {
+            present: HashSet<String>,
+            pinned: HashSet<String>,
         }
-        collect_declared_names(statements, &mut present);
-        let settled = self.scope.settle_generated_names(&present, &pinned);
-        let by_id: HashMap<_, _> = settled
-            .into_iter()
-            .filter_map(|(old, new)| self.scope.generated_local_id(&old).map(|id| (id, new)))
-            .collect();
+
+        impl VisitorMut for Names {
+            fn expression(&mut self, node: &mut GoExpressionNode) {
+                if let GoExpressionNode::Identifier(name) = node {
+                    self.present.insert(name.to_string());
+                } else if let GoExpressionNode::Verbatim(source) = node {
+                    self.pinned
+                        .extend(verbatim_identifiers(source).map(str::to_string));
+                }
+            }
+
+            fn local_binding(&mut self, name: &mut GoIdentifier) {
+                self.present.insert(name.to_string());
+            }
+        }
+
+        let mut names = Names::default();
+        visit_statements_mut(statements, &mut names);
+        let by_id = self
+            .scope
+            .settle_generated_names(&names.present, &names.pinned, &self.package);
         if by_id.is_empty() {
             return;
         }
@@ -137,30 +137,35 @@ impl Planner<'_> {
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
-        self.with_isolated_function(|this| {
-            let (mut param_pairs, destructure_bindings) = this.build_lambda_param_pairs(params);
+        let return_info = self.lambda_return_info(ty, ctx);
+        self.with_isolated_function(return_info.ctx.clone(), |this| {
+            let LoweredParams {
+                pairs: mut param_pairs,
+                destructures,
+                test_handle,
+                ..
+            } = this.lower_parameters(params);
 
-            let handle = params
-                .iter()
-                .position(|p| is_test_context_ty(&p.ty))
-                .map(|index| {
-                    if param_pairs[index].0 == "_" {
-                        let name = this.fresh_var(Some("lisetteSub"));
-                        this.declare(&name);
-                        param_pairs[index].0 = name.clone();
-                        name
-                    } else {
-                        param_pairs[index].0.clone()
-                    }
-                });
+            // The deferred `Recover` needs a real name.
+            let test_handle = test_handle.or_else(|| {
+                let index = params
+                    .iter()
+                    .position(|param| is_test_context_ty(&param.ty))
+                    .filter(|&index| param_pairs[index].0 == "_")?;
+                let name = this.fresh_var(Some("lisetteSub"));
+                this.declare(&name);
+                param_pairs[index].0 = name.clone();
+                Some(this.scope.generated_identifier(&name))
+            });
 
-            let recover = handle.as_ref().map(|name| {
+            let recover = test_handle.map(|handle| {
+                this.scope.set_test_handle(handle.clone());
                 this.require_testkit();
                 let span = body.get_span();
                 LoweredStatement::Async {
                     keyword: "defer".to_string(),
                     call: test_context_call(
-                        GoExpression::name(name.clone()),
+                        GoExpression::identifier(handle),
                         "Recover",
                         span,
                         Vec::new(),
@@ -168,17 +173,13 @@ impl Planner<'_> {
                 }
             });
 
-            let return_info = this.lambda_return_info(ty, ctx);
-            let mut statements = this.with_test_handle(handle, |this| {
-                this.lower_lambda_body_with_deferred(
-                    body,
-                    &destructure_bindings,
-                    &return_info.ctx,
-                    return_info.should_return(),
-                )
-            });
+            let mut statements = this.lower_lambda_body_with_deferred(
+                body,
+                &destructures,
+                return_info.should_return(),
+            );
             if let Some(recover) = recover {
-                statements.insert(0, recover);
+                statements.insert(0, recover.into());
             }
             let mut body = LoweredBlock { statements };
             let unit_result =
@@ -202,45 +203,14 @@ impl Planner<'_> {
         })
     }
 
-    fn build_lambda_param_pairs<'a>(
-        &mut self,
-        params: &'a [Binding],
-    ) -> (Vec<(String, String)>, Vec<LambdaParamDestructure<'a>>) {
-        let mut destructure_bindings: Vec<LambdaParamDestructure<'a>> = vec![];
-        let param_pairs: Vec<(String, String)> = params
-            .iter()
-            .map(|p| {
-                let name = if let Pattern::Identifier { identifier, .. } = &p.pattern {
-                    if let Some(go_name) = self.go_name_for_binding(&p.pattern) {
-                        self.declare_param(identifier, go_name)
-                    } else {
-                        self.scope.bind(identifier, "_");
-                        "_".to_string()
-                    }
-                } else if matches!(&p.pattern, Pattern::WildCard { .. }) {
-                    "_".to_string()
-                } else {
-                    let temp_name = self.fresh_var(Some("arg"));
-                    self.declare(&temp_name);
-                    destructure_bindings.push((temp_name.clone(), &p.pattern, &p.ty));
-                    temp_name
-                };
-                if let Pattern::Identifier { identifier, span } = &p.pattern
-                    && let Some(id) = self.facts.binding_id_at(*span)
-                {
-                    self.scope.register_binding_id(id, identifier);
-                }
-                (name, self.use_go_type(&p.ty))
-            })
-            .collect();
-        (param_pairs, destructure_bindings)
-    }
-
     /// Lambda Go return-type + `ReturnContext`. Go-prelude generic callbacks
     /// suppress lambda return-type lowering so signature and body agree.
-    fn lambda_return_info(&mut self, ty: &Type, ctx: ExpressionContext<'_>) -> LambdaReturnInfo {
+    pub(crate) fn lambda_return_info(
+        &mut self,
+        ty: &Type,
+        ctx: ExpressionContext<'_>,
+    ) -> LambdaReturnInfo {
         let suppress_lowering = ctx.forces_tagged_go_function();
-        let argument_flows_to_unknown = ctx.argument_flows_to_unknown();
         let Type::Function(function) = ty else {
             return LambdaReturnInfo {
                 signature: None,
@@ -250,9 +220,8 @@ impl Planner<'_> {
 
         let return_ty = function.return_type.as_ref();
         let has_return = match return_ty {
-            Type::Simple(SimpleKind::Unit) => ctx.result_fills_type_parameter(),
             Type::Var { .. } | Type::Uninferred | Type::Ignored => false,
-            Type::Never => !argument_flows_to_unknown,
+            _ if returns_go_void(return_ty) => ctx.result_fills_type_parameter(),
             _ => true,
         };
         let return_ctx = if suppress_lowering {
@@ -281,66 +250,48 @@ impl Planner<'_> {
     fn lower_lambda_body_with_deferred(
         &mut self,
         body: &Expression,
-        destructure_bindings: &[LambdaParamDestructure<'_>],
-        return_ctx: &ReturnContext,
+        destructures: &[ParamDestructure<'_>],
         should_return: bool,
-    ) -> Vec<LoweredStatement> {
-        let mut statements = Vec::new();
-        for (temp_name, pattern, param_ty) in destructure_bindings {
-            statements.extend(self.lower_irrefutable_pattern_site(
-                PatternSubject::for_value(temp_name.clone()),
-                pattern,
-                param_ty,
-            ));
-        }
-        let body = self.with_return_context(return_ctx.clone(), |this| {
-            this.lower_function_body(body, should_return)
-        });
+    ) -> Vec<Statement> {
+        let mut statements = self.lower_param_destructures(destructures);
+        let body = self.lower_function_body(body, should_return);
         statements.extend(body.statements);
         statements
-    }
-
-    fn declare_type_param_go_names(
-        &mut self,
-        generics: &[Generic],
-        receiver: Option<&(String, Type)>,
-    ) {
-        for generic in generics {
-            let go = self.generic_go_name(&generic.name).to_string();
-            self.scope.declare_type_param(&go);
-        }
-        if let Some((_, receiver_ty)) = receiver {
-            for param in receiver_ty.get_type_params().into_iter().flatten() {
-                if let Type::Parameter(name) = param {
-                    let go = self.generic_go_name(name).to_string();
-                    self.scope.declare_type_param(&go);
-                }
-            }
-        }
-    }
-
-    fn declare_param(&mut self, lisette_name: &str, raw_go_name: impl Into<String>) -> String {
-        self.claim_declared_binding(lisette_name, raw_go_name)
     }
 
     pub(crate) fn emit_function(
         &mut self,
         function_definition: FunctionDefinitionView<'_>,
-        receiver: Option<(String, Type)>,
+        receiver_ty: Option<&Type>,
         is_public: bool,
-        resolved_generic_bounds: Option<&[(EcoString, Vec<Type>)]>,
+        free_function_owner: Option<&Type>,
     ) -> String {
         if function_definition.body.is_none() {
             return String::new();
         }
 
-        let generic_context = self.function_generic_context(
-            function_definition.generics,
-            receiver.as_ref().map(|(_, ty)| ty),
-            resolved_generic_bounds,
-        );
-        let directive = self.maybe_line_directive(&function_definition.name_span);
-        let return_ctx = if receiver.is_some()
+        let mut generic_context = receiver_ty
+            .or(free_function_owner)
+            .map(|ty| self.receiver_generic_context(ty))
+            .unwrap_or_default();
+        let signature_generics_start = if receiver_ty.is_some() {
+            generic_context.len()
+        } else {
+            0
+        };
+        generic_context.extend(function_definition.generics.iter().map(|generic| {
+            let bounds = generic
+                .resolved_bounds()
+                .expect("generic bounds must be resolved before emission")
+                .cloned()
+                .collect();
+            (generic.name.clone(), bounds)
+        }));
+        let signature_generics = generic_context[signature_generics_start..].to_vec();
+        let directive = self
+            .maybe_line_directive(&function_definition.name_span)
+            .unwrap_or_default();
+        let return_ctx = if receiver_ty.is_some()
             && self
                 .facts
                 .method_uses_tagged_return(function_definition.name)
@@ -351,81 +302,65 @@ impl Planner<'_> {
         };
         let return_shape = return_ctx.lowered_shape();
 
-        let (native_override, receiver) = change_go_builtin_methods(function_definition, receiver);
-        let function_definition = match &native_override {
-            Some((name, params)) => FunctionDefinitionView {
-                name,
-                params,
-                ..function_definition
-            },
-            None => function_definition,
+        let (self_param, params_to_process) = match receiver_ty {
+            Some(_) => {
+                let (self_param, rest) = function_definition
+                    .params
+                    .split_first()
+                    .expect("method with a receiver has a self param");
+                (Some(self_param), rest)
+            }
+            None => (None, function_definition.params),
         };
-        let (params_to_process, receiver_override) =
-            self.extract_receiver(function_definition, receiver.is_some());
 
-        self.declare_type_param_go_names(function_definition.generics, receiver.as_ref());
+        for (name, _) in &generic_context {
+            let go = self.generic_go_name(name).to_string();
+            self.scope.declare_type_param(&go);
+        }
+        self.scope.set_type_params(generic_context);
+        self.scope.enter_isolated_function(return_ctx.clone());
 
         let mut parts = vec!["func".to_string()];
 
-        let (_, receiver_part) =
-            self.emit_receiver_part(params_to_process, &receiver, receiver_override.as_ref());
-        if receiver_part.is_some()
-            && let Some(Binding {
-                pattern: Pattern::Identifier { identifier, span },
-                ..
-            }) = function_definition.params.first()
-            && let Some(id) = self.facts.binding_id_at(*span)
-        {
-            self.scope.register_binding_id(id, identifier);
-        }
-        if let Some(part) = receiver_part {
-            parts.push(part);
+        if let Some(self_param) = self_param {
+            parts.push(self.emit_receiver_part(params_to_process, self_param));
         }
 
-        parts.push(self.pick_go_function_name(function_definition, receiver.is_some(), is_public));
+        parts.push(self.pick_go_function_name(
+            function_definition,
+            receiver_ty.is_some(),
+            is_public,
+        ));
 
-        let generics_str = match resolved_generic_bounds {
-            Some(generics) => self.resolved_generics_to_string(generics),
-            None => self.generics_to_string(function_definition.generics),
-        };
+        let generics_str = self.resolved_generics_to_string(&signature_generics);
         if !generics_str.is_empty() {
             parts.push(generics_str);
         }
 
         let mut body = String::new();
-        let signature = self.with_function_state(&generic_context, |this| {
-            let (params_string, return_ty, deferred_patterns, mut parameters) = this
-                .build_signature_tail(
-                    function_definition,
-                    params_to_process,
-                    return_shape.as_ref(),
-                );
-            parts.push(params_string);
-            if !return_ty.is_empty() {
-                parts.push(return_ty);
-            }
-            let signature = parts.join(" ");
+        let (params_string, return_ty, deferred_patterns, mut parameters) = self
+            .build_signature_tail(
+                function_definition,
+                params_to_process,
+                return_shape.as_ref(),
+            );
+        parts.push(params_string);
+        if !return_ty.is_empty() {
+            parts.push(return_ty);
+        }
+        let signature = parts.join(" ");
 
-            if let Some(receiver) = this.scope.bound_go_identifier("self") {
-                parameters.push(receiver.clone());
-            }
+        if let Some(receiver) = self.scope.bound_go_identifier("self") {
+            parameters.push(receiver.clone());
+        }
 
-            let test_handle = function_definition.params.iter().find_map(|param| {
-                is_test_context_ty(&param.ty)
-                    .then(|| this.go_name_for_binding(&param.pattern))
-                    .flatten()
-            });
-            this.with_test_handle(test_handle, |this| {
-                this.emit_function_body_with_deferred_patterns(
-                    &mut body,
-                    function_definition,
-                    deferred_patterns,
-                    &return_ctx,
-                    &parameters,
-                );
-            });
-            signature
-        });
+        self.emit_function_body_with_deferred_patterns(
+            &mut body,
+            function_definition,
+            &deferred_patterns,
+            &parameters,
+        );
+        self.scope.exit_isolated_function();
 
         let trimmed_body = body.trim_end();
         if trimmed_body.is_empty() {
@@ -448,21 +383,24 @@ impl Planner<'_> {
         }
     }
 
-    fn build_signature_tail(
+    fn build_signature_tail<'a>(
         &mut self,
         function_definition: FunctionDefinitionView<'_>,
-        params_to_process: &[Binding],
+        params_to_process: &'a [Binding],
         return_shape: Option<&CallableReturnAbi>,
-    ) -> (
-        String,
-        String,
-        Vec<DeferredParamDestructure>,
-        Vec<GoIdentifier>,
-    ) {
-        let (params_string, deferred_patterns, parameters) =
-            self.emit_function_params(params_to_process);
+    ) -> (String, String, Vec<ParamDestructure<'a>>, Vec<GoIdentifier>) {
+        let LoweredParams {
+            pairs,
+            destructures,
+            identifiers,
+            test_handle,
+        } = self.lower_parameters(params_to_process);
+        if let Some(handle) = test_handle {
+            self.scope.set_test_handle(handle);
+        }
+        let params_string = format!("({})", group_params(&pairs));
 
-        let return_ty = if function_definition.return_type.is_unit() {
+        let return_ty = if returns_go_void(function_definition.return_type) {
             String::new()
         } else if let Some(shape) = return_shape {
             self.render_lowered_return_ty(shape, function_definition.return_type)
@@ -470,50 +408,34 @@ impl Planner<'_> {
             self.use_go_type(function_definition.return_type)
         };
 
-        (params_string, return_ty, deferred_patterns, parameters)
+        (params_string, return_ty, destructures, identifiers)
     }
 
     fn emit_function_body_with_deferred_patterns(
         &mut self,
         body: &mut String,
         function_definition: FunctionDefinitionView<'_>,
-        deferred_patterns: Vec<DeferredParamDestructure>,
-        return_ctx: &ReturnContext,
+        deferred_patterns: &[ParamDestructure<'_>],
         parameters: &[GoIdentifier],
     ) {
-        let should_return = !function_definition.return_type.is_unit();
-        let mut prefix = Vec::new();
-        for (var_name, pattern, param_ty) in deferred_patterns {
-            let statements = self.lower_irrefutable_pattern_site(
-                PatternSubject::for_value(var_name),
-                &pattern,
-                &param_ty,
-            );
-            prefix.extend(statements);
-        }
-        self.with_return_context(return_ctx.clone(), |this| {
-            this.emit_function_body_inner(
-                body,
-                function_definition
-                    .body
-                    .expect("declarations return before function body emission"),
-                should_return,
-                &mut prefix,
-                parameters,
-            );
-        });
+        let should_return = !returns_go_void(function_definition.return_type);
+        let prefix = self.lower_param_destructures(deferred_patterns);
+        self.emit_function_body_inner(
+            body,
+            function_definition
+                .body
+                .expect("declarations return before function body emission"),
+            should_return,
+            prefix,
+            parameters,
+        );
     }
 
     fn emit_receiver_part(
         &mut self,
         params_to_process: &[Binding],
-        receiver: &Option<(String, Type)>,
-        receiver_override: Option<&Type>,
-    ) -> (Option<String>, Option<String>) {
-        let Some((_, receiver_ty)) = receiver else {
-            return (None, None);
-        };
-
+        self_param: &Binding,
+    ) -> String {
         let param_names: Vec<String> = params_to_process
             .iter()
             .filter_map(|param| {
@@ -525,42 +447,19 @@ impl Planner<'_> {
             })
             .collect();
 
-        let actual_ty = receiver_override.unwrap_or(receiver_ty);
-        let ty_string = self.use_go_type(actual_ty);
+        let ty_string = self.use_go_type(&self_param.ty);
         let receiver_var = fresh_receiver_name(&ty_string, |name| {
             param_names.iter().any(|param| param == name) || self.shadows_declaration(name)
         });
 
         let receiver_part = format!("({} {})", receiver_var, ty_string);
 
-        self.scope.bind("self", receiver_var.clone());
+        let self_id = self_param.pattern.binding_id();
+        self.scope
+            .bind_source("self", self_id.as_slice(), receiver_var.clone());
         self.declare(&receiver_var);
 
-        (Some(receiver_var), Some(receiver_part))
-    }
-
-    fn function_generic_context(
-        &self,
-        function_generics: &[Generic],
-        receiver_ty: Option<&Type>,
-        resolved_generic_bounds: Option<&[(EcoString, Vec<Type>)]>,
-    ) -> Vec<(EcoString, Vec<Type>)> {
-        let mut context = receiver_ty
-            .map(|ty| self.receiver_generic_context(ty))
-            .unwrap_or_default();
-        if let Some(resolved) = resolved_generic_bounds {
-            context.extend_from_slice(resolved);
-        } else {
-            context.extend(function_generics.iter().map(|generic| {
-                let bounds = generic
-                    .resolved_bounds()
-                    .expect("generic bounds must be resolved before emission")
-                    .cloned()
-                    .collect();
-                (generic.name.clone(), bounds)
-            }));
-        }
-        context
+        receiver_part
     }
 
     fn receiver_generic_context(&self, receiver_ty: &Type) -> Vec<(EcoString, Vec<Type>)> {
@@ -593,83 +492,66 @@ impl Planner<'_> {
             .collect()
     }
 
-    fn with_function_state<F, R>(&mut self, generic_context: &[(EcoString, Vec<Type>)], f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let context = FunctionEmissionContext::for_function(generic_context);
-        self.function_contexts.push(context);
-        let result = f(self);
-        self.function_contexts
-            .pop()
-            .expect("a function context must be pushed before it is popped");
-        result
-    }
-
-    fn emit_function_params(
-        &mut self,
-        params_to_process: &[Binding],
-    ) -> (String, Vec<DeferredParamDestructure>, Vec<GoIdentifier>) {
-        let mut deferred_patterns = Vec::new();
-        let mut params = Vec::new();
-        let mut parameter_ids = Vec::new();
-        for param in params_to_process {
+    fn lower_parameters<'a>(&mut self, params: &'a [Binding]) -> LoweredParams<'a> {
+        let mut lowered = LoweredParams {
+            pairs: Vec::with_capacity(params.len()),
+            destructures: Vec::new(),
+            identifiers: Vec::new(),
+            test_handle: None,
+        };
+        for param in params {
             let name = match &param.pattern {
-                Pattern::Identifier { identifier, span } => {
+                Pattern::Identifier {
+                    identifier,
+                    binding: id,
+                    ..
+                } => {
                     if let Some(go_name) = self.go_name_for_binding(&param.pattern) {
-                        let name = self.declare_param(identifier, go_name);
-                        if let Some(id) = self.facts.binding_id_at(*span) {
-                            self.scope.register_binding_id(id, identifier);
-                        }
+                        let name = self.claim_declared_binding(identifier, id.as_slice(), go_name);
                         if let Some(local) = self.scope.bound_go_identifier(identifier) {
-                            parameter_ids.push(local.clone());
+                            lowered.test_handle = lowered
+                                .test_handle
+                                .take()
+                                .or_else(|| is_test_context_ty(&param.ty).then(|| local.clone()));
+                            lowered.identifiers.push(local.clone());
                         }
                         name
                     } else {
-                        self.scope.bind(identifier.as_str(), "_")
+                        self.scope
+                            .bind_source(identifier.as_str(), id.as_slice(), "_")
                     }
                 }
                 Pattern::WildCard { .. } => "_".to_string(),
                 _ => {
                     let var = self.fresh_var(Some("arg"));
                     self.declare(&var);
-                    parameter_ids.push(self.scope.generated_identifier(&var));
-                    deferred_patterns.push((var.clone(), param.pattern.clone(), param.ty.clone()));
+                    lowered
+                        .identifiers
+                        .push(self.scope.generated_identifier(&var));
+                    lowered
+                        .destructures
+                        .push((var.clone(), &param.pattern, &param.ty));
                     var
                 }
             };
-
-            params.push((name, self.use_go_type(&param.ty)));
+            lowered.pairs.push((name, self.use_go_type(&param.ty)));
         }
-        (
-            format!("({})", group_params(&params)),
-            deferred_patterns,
-            parameter_ids,
-        )
+        lowered
     }
 
-    fn extract_receiver<'a>(
+    fn lower_param_destructures(
         &mut self,
-        function_definition: FunctionDefinitionView<'a>,
-        has_receiver: bool,
-    ) -> (&'a [Binding], Option<Type>) {
-        let default = (function_definition.params, None);
-
-        if !has_receiver || function_definition.params.is_empty() {
-            return default;
+        destructures: &[ParamDestructure<'_>],
+    ) -> Vec<Statement> {
+        let mut statements = Vec::new();
+        for (temp_name, pattern, param_ty) in destructures {
+            statements.extend(self.lower_irrefutable_pattern_site(
+                PatternSubject::for_value(temp_name.clone()),
+                pattern,
+                param_ty,
+            ));
         }
-
-        let Pattern::Identifier { identifier, .. } = &function_definition.params[0].pattern else {
-            return default;
-        };
-
-        if identifier != "self" {
-            return default;
-        }
-
-        let receiver_ty = &function_definition.params[0].ty;
-
-        (&function_definition.params[1..], Some(receiver_ty.clone()))
+        statements
     }
 }
 
@@ -681,40 +563,6 @@ pub(crate) fn is_go_never(expression: &Expression) -> bool {
         }
         _ => false,
     }
-}
-
-/// Renamed definition parts for methods on native Go receiver types; the
-/// caller rebinds its view to borrow these.
-type NativeMethodOverride = (EcoString, Vec<Binding>);
-
-fn change_go_builtin_methods(
-    function_definition: FunctionDefinitionView<'_>,
-    receiver: Option<(String, Type)>,
-) -> (Option<NativeMethodOverride>, Option<(String, Type)>) {
-    let Some((receiver_name, receiver_type)) = receiver else {
-        return (None, None);
-    };
-
-    let Some(native) = NativeGoType::from_type(&receiver_type) else {
-        return (None, Some((receiver_name, receiver_type)));
-    };
-
-    let name = format!("{}.{}", native.lisette_name(), function_definition.name).into();
-
-    let self_binding = Binding {
-        pattern: Pattern::Identifier {
-            identifier: receiver_name.into(),
-            span: Span::dummy(),
-        },
-        annotation: Some(Annotation::Unknown),
-        ty: receiver_type,
-        mut_span: None,
-    };
-
-    let mut params = Vec::with_capacity(function_definition.params.len() + 1);
-    params.push(self_binding);
-    params.extend(function_definition.params.iter().cloned());
-    (Some((name, params)), None)
 }
 
 fn collect_binder_names(expression: &Expression, out: &mut Vec<String>) {
@@ -745,64 +593,4 @@ fn push_binder_names(pattern: &Pattern, out: &mut Vec<String>) {
             .into_iter()
             .map(|(name, _)| name),
     );
-}
-
-fn collect_declared_names(statements: &[LoweredStatement], out: &mut HashSet<String>) {
-    for_each_statement(statements, &mut |statement| match statement {
-        LoweredStatement::Define(definition) => {
-            out.extend(definition.names.iter().map(ToString::to_string))
-        }
-        LoweredStatement::VarDecl { name, .. } => {
-            out.insert(name.to_string());
-        }
-        LoweredStatement::Const(plan) => {
-            out.insert(plan.name.to_string());
-        }
-        LoweredStatement::Loop(plan) => match &plan.header {
-            LoopHeader::Range { key, value, .. } => {
-                out.extend(key.iter().chain(value.iter()).map(ToString::to_string));
-            }
-            LoopHeader::Counted { variable, .. } => {
-                out.insert(variable.to_string());
-            }
-            LoopHeader::Infinite | LoopHeader::While(_) => {}
-        },
-        LoweredStatement::Switch(plan) => {
-            if let SwitchKind::Type {
-                binding: Some(name),
-                ..
-            } = &plan.kind
-            {
-                out.insert(name.to_string());
-            }
-        }
-        LoweredStatement::Select(plan) => {
-            for arm in &plan.arms {
-                if let SelectArmPlan::Receive { receive_vars, .. } = arm {
-                    out.extend(receive_vars.iter().map(ToString::to_string));
-                }
-            }
-        }
-        LoweredStatement::If(plan) => {
-            if let Some(initializer) = &plan.initializer {
-                out.extend(initializer.names.iter().map(ToString::to_string));
-            }
-        }
-        _ => {}
-    });
-    for statement in statements {
-        statement.visit_expressions(&mut |node| {
-            if let GoExpressionNode::FunctionLiteral {
-                parameters, body, ..
-            } = node
-            {
-                out.extend(
-                    parameters
-                        .iter()
-                        .map(|parameter| parameter.name.to_string()),
-                );
-                collect_declared_names(&body.statements, out);
-            }
-        });
-    }
 }

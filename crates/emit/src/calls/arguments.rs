@@ -1,16 +1,16 @@
 use crate::abi::{is_closure_literal, is_tagged_shape_fn_value};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::EcoString;
-use syntax::types::FunctionParameter;
 
 use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableParamAbi, CallableReturnAbi};
 use crate::abi::coercion::{CoercionPlan, resolve_layout_bridge};
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
-use crate::context::expression::{ExpressionContext, result_is_type_parameter};
-use crate::expressions::staging::{SpreadSequenceOptions, VariadicCombine};
+use crate::context::expression::ExpressionContext;
+use crate::expressions::staging::SpreadSequenceOptions;
 use crate::names::generics::extract_type_mapping;
+use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::plan::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, define,
 };
@@ -28,7 +28,6 @@ pub(super) struct CallArgsContext<'plan, 'facts> {
     pub(super) plan: &'plan CallPlan<'facts>,
     pub(super) spread: Option<&'plan Expression>,
     pub(super) wrap_spread_to_any: bool,
-    pub(super) combine_variadic: Option<VariadicCombine>,
     pub(super) capture_boundary: CaptureBoundary,
     pub(super) retired_receiver: Option<&'plan Expression>,
     pub(super) callee_is_builtin: bool,
@@ -37,42 +36,33 @@ pub(super) struct CallArgsContext<'plan, 'facts> {
 }
 
 impl Planner<'_> {
+    /// Lower and sequence a call's arguments, `leading` stage first.
     pub(super) fn emit_call_args(
         &mut self,
         args: &[Expression],
         ctx: &CallArgsContext<'_, '_>,
+        leading: Option<ValuePlan>,
     ) -> SequencedValues {
         let stages: Vec<ValuePlan> = args
             .iter()
             .enumerate()
             .map(|(i, arg)| self.lower_call_arg(arg, i, ctx))
             .collect();
-        let mut stages = self.type_constant_arguments(stages, ctx);
-
-        if let Some(spread) = ctx.spread
-            && let Some(stage) =
-                self.lower_variadic_spread_slot_bridge(spread, ctx.plan.resolved.abi.params.last())
-        {
-            stages.push(stage);
-            let mut sequenced = self.sequence_values(stages, ctx.capture_boundary, "arg");
-            self.finalize_spread_stage(
-                &mut sequenced.values,
-                ctx.wrap_spread_to_any,
-                ctx.combine_variadic.clone(),
-            );
-            return sequenced;
-        }
-
+        let stages = self.type_constant_arguments(stages, ctx);
+        let extra_leading = usize::from(leading.is_some());
+        let stages: Vec<ValuePlan> = leading.into_iter().chain(stages).collect();
+        let variadic = ctx.plan.resolved.abi.variadic_param();
+        let spread_stage = ctx.spread.map(|spread| {
+            self.lower_variadic_spread_slot_bridge(spread, variadic)
+                .or_else(|| self.try_emit_variadic_spread_adapter(spread, variadic))
+                .unwrap_or_else(|| self.plan_operand(spread, ExpressionContext::value()))
+        });
         self.sequence_with_spread_values(
             stages,
-            ctx.spread,
-            ctx.plan
-                .resolved
-                .declared_type()
-                .and_then(|ty| ty.unwrap_forall().get_function_params()),
+            spread_stage,
             SpreadSequenceOptions {
                 wrap_to_any: ctx.wrap_spread_to_any,
-                combine: ctx.combine_variadic.clone(),
+                combine: ctx.plan.resolved.abi.variadic_combine(extra_leading),
                 boundary: ctx.capture_boundary,
             },
         )
@@ -157,59 +147,6 @@ impl Planner<'_> {
         ArgumentPlan::Direct
     }
 
-    pub(super) fn convert_inferred_constants(
-        &mut self,
-        stages: Vec<ValuePlan>,
-        slots: &[Option<(&Type, &Type)>],
-        convertible: &[bool],
-        vars: &[EcoString],
-        receiver: Option<(&Type, &Type)>,
-    ) -> Vec<ValuePlan> {
-        let mut bound: HashSet<String> = HashSet::default();
-        if let Some((declared, instantiated)) = receiver {
-            let mut mapping: HashMap<String, Type> = HashMap::default();
-            extract_type_mapping(declared, instantiated, &mut mapping);
-            bound.extend(mapping.into_keys());
-        }
-        for (stage, slot) in stages.iter().zip(slots) {
-            if stage.expression().constant_kind().is_some() {
-                continue;
-            }
-            if let Some((declared, instantiated)) = slot {
-                let mut mapping: HashMap<String, Type> = HashMap::default();
-                extract_type_mapping(declared, instantiated, &mut mapping);
-                bound.extend(mapping.into_keys());
-            }
-        }
-        stages
-            .into_iter()
-            .zip(slots)
-            .zip(convertible)
-            .map(|((stage, slot), convertible)| {
-                let Some((declared, instantiated)) = slot else {
-                    return stage;
-                };
-                let constant = stage.expression().constant_kind();
-                if !convertible || constant.is_none() {
-                    return stage;
-                }
-                let mut mapping: HashMap<String, Type> = HashMap::default();
-                extract_type_mapping(declared, instantiated, &mut mapping);
-                let inferred = mapping.keys().any(|name| {
-                    (vars.is_empty() || vars.iter().any(|var| var == name)) && !bound.contains(name)
-                });
-                if !inferred {
-                    return stage;
-                }
-                let slot_ty = varargs_inner_or_self(instantiated);
-                match self.constant_needs_go_type(constant, &slot_ty) {
-                    Some(go_type) => stage.conversion(go_type),
-                    None => stage,
-                }
-            })
-            .collect()
-    }
-
     fn type_constant_arguments(
         &mut self,
         stages: Vec<ValuePlan>,
@@ -233,14 +170,49 @@ impl Planner<'_> {
                 })
             })
             .collect();
-        let convertible: Vec<bool> = (0..stages.len())
-            .map(|index| matches!(ctx.plan.arguments.get(index), Some(ArgumentPlan::Direct)))
-            .collect();
-        let receiver = ctx
-            .receiver_binding
-            .as_ref()
-            .map(|(declared, instantiated)| (declared, instantiated));
-        self.convert_inferred_constants(stages, &slots, &convertible, &vars, receiver)
+        let mut bound: HashSet<String> = HashSet::default();
+        if let Some((declared, instantiated)) = &ctx.receiver_binding {
+            let mut mapping: HashMap<String, Type> = HashMap::default();
+            extract_type_mapping(declared, instantiated, &mut mapping);
+            bound.extend(mapping.into_keys());
+        }
+        for (stage, slot) in stages.iter().zip(&slots) {
+            if stage.expression().constant_kind().is_some() {
+                continue;
+            }
+            if let Some((declared, instantiated)) = slot {
+                let mut mapping: HashMap<String, Type> = HashMap::default();
+                extract_type_mapping(declared, instantiated, &mut mapping);
+                bound.extend(mapping.into_keys());
+            }
+        }
+        stages
+            .into_iter()
+            .zip(&slots)
+            .enumerate()
+            .map(|(index, (stage, slot))| {
+                let Some((declared, instantiated)) = slot else {
+                    return stage;
+                };
+                let constant = stage.expression().constant_kind();
+                let direct = matches!(ctx.plan.arguments.get(index), Some(ArgumentPlan::Direct));
+                if !direct || constant.is_none() {
+                    return stage;
+                }
+                let mut mapping: HashMap<String, Type> = HashMap::default();
+                extract_type_mapping(declared, instantiated, &mut mapping);
+                let inferred = mapping.keys().any(|name| {
+                    (vars.is_empty() || vars.iter().any(|var| var == name)) && !bound.contains(name)
+                });
+                if !inferred {
+                    return stage;
+                }
+                match self.constant_needs_go_type(constant, instantiated) {
+                    Some(go_type) => stage.conversion(go_type),
+                    None => stage,
+                }
+            })
+            .collect()
     }
 
     fn lower_direct_arg(
@@ -272,33 +244,19 @@ impl Planner<'_> {
 
     fn direct_arg_emit_ctx<'b>(
         &self,
-        param: Option<&CallableParamAbi>,
+        param: Option<&'b CallableParamAbi>,
         suppress: bool,
     ) -> ExpressionContext<'b> {
         let origin = param.map_or(SlotOrigin::Lisette, |param| {
             self.function_type_origin(&param.instantiated, param.origin)
         });
-        let flows_to_unknown = param.is_some_and(|param| {
-            self.facts
-                .resolves_to_unknown(param.instantiated.unwrap_forall())
-        });
-        let generic_result = param
-            .and_then(|param| param.declared.as_ref())
-            .is_some_and(result_is_type_parameter);
         ExpressionContext::value()
             .with_function_slot_origin(origin)
             .with_forced_tagged_go_function(suppress)
-            .with_unknown_argument_target(flows_to_unknown)
-            .with_generic_result_target(generic_result)
-    }
-
-    pub(crate) fn try_adapt_lowered_fn_arg_shape(
-        &mut self,
-        arg: &Expression,
-        generic_param_ty: Option<&Type>,
-    ) -> Option<ValuePlan> {
-        let adapter = self.plan_function_argument_adapter(arg, generic_param_ty)?;
-        Some(self.lower_function_argument_adapter(arg, &adapter))
+            .with_generic_result_slot(
+                param.and_then(|param| param.declared.as_ref()),
+                param.map(|param| &param.instantiated),
+            )
     }
 
     fn plan_function_argument_adapter(
@@ -309,13 +267,17 @@ impl Planner<'_> {
         if is_tagged_shape_fn_value(arg) {
             return None;
         }
-        let raw_param_ty = generic_param_ty?;
-        let variadic_inner = if raw_param_ty.get_name() == Some("VarArgs") {
-            raw_param_ty.inner()
-        } else {
-            None
-        };
-        let param_ty = variadic_inner.as_ref().unwrap_or(raw_param_ty);
+        let source_follows_param = is_closure_literal(arg) || self.is_go_callable(arg);
+        self.plan_fn_shape_adapter(generic_param_ty?, &arg.get_type(), source_follows_param)
+    }
+
+    /// The adapter a function value needs to fill a slot whose lowered return shape differs.
+    fn plan_fn_shape_adapter(
+        &self,
+        param_ty: &Type,
+        source_ty: &Type,
+        source_follows_param: bool,
+    ) -> Option<FunctionArgumentAdapter> {
         let param_fn = self
             .facts
             .resolve_to_function_type(param_ty.unwrap_forall())?;
@@ -323,21 +285,20 @@ impl Planner<'_> {
         let param_origin = self.function_type_origin(param_ty, SlotOrigin::Lisette);
         let param_abi = self.slot_return_abi(param_ret, param_origin);
 
-        let arg_ty = arg.get_type();
-        let arg_fn = self
+        let source_fn = self
             .facts
-            .resolve_to_function_type(arg_ty.unwrap_forall())?;
-        let arg_ret = arg_fn.get_function_ret()?;
-        let arg_origin = if is_closure_literal(arg) || self.is_go_callable(arg) {
+            .resolve_to_function_type(source_ty.unwrap_forall())?;
+        let source_ret = source_fn.get_function_ret()?;
+        let source_origin = if source_follows_param {
             param_origin
         } else {
-            self.function_type_origin(&arg_ty, SlotOrigin::Lisette)
+            self.function_type_origin(source_ty, SlotOrigin::Lisette)
         };
-        let arg_abi = self.classify_slot_emission(arg_ret, arg_origin)?;
+        let source_abi = self.classify_slot_emission(source_ret, source_origin)?;
 
-        (param_abi != arg_abi).then_some(FunctionArgumentAdapter {
-            source_function: arg_fn,
-            source_abi: arg_abi,
+        (param_abi != source_abi).then_some(FunctionArgumentAdapter {
+            source_function: source_fn,
+            source_abi,
             target_abi: param_abi,
             target_origin: param_origin,
         })
@@ -364,36 +325,22 @@ impl Planner<'_> {
         })
     }
 
-    pub(crate) fn try_emit_variadic_spread_adapter(
+    fn try_emit_variadic_spread_adapter(
         &mut self,
         spread: &Expression,
-        generic_params: Option<&[FunctionParameter]>,
+        parameter: Option<&CallableParamAbi>,
     ) -> Option<ValuePlan> {
-        let generic_params = generic_params?;
-        let raw_variadic = generic_params.last()?;
-        if raw_variadic.ty.get_name() != Some("VarArgs") {
-            return None;
-        }
-        let variadic_inner = raw_variadic.ty.inner()?;
-        let param_fn = self
-            .facts
-            .resolve_to_function_type(variadic_inner.unwrap_forall())?;
-        let param_ret = param_fn.get_function_ret()?;
-        let param_origin = self.function_type_origin(&variadic_inner, SlotOrigin::Lisette);
-        let param_abi = self.slot_return_abi(param_ret, param_origin);
-
-        let spread_ty = spread.get_type();
-        let element_ty = spread_ty.unwrap_forall().inner()?;
-        let arg_fn = self
-            .facts
-            .resolve_to_function_type(element_ty.unwrap_forall())?;
-        let arg_ret = arg_fn.get_function_ret()?;
-        let arg_origin = self.function_type_origin(&element_ty, SlotOrigin::Lisette);
-        let arg_abi = self.classify_slot_emission(arg_ret, arg_origin)?;
-
-        if param_abi == arg_abi {
-            return None;
-        }
+        let param_ty = parameter?.declared.as_ref()?;
+        let element_ty = spread.get_type().unwrap_forall().inner()?;
+        let FunctionArgumentAdapter {
+            source_function: arg_fn,
+            source_abi: arg_abi,
+            target_abi: param_abi,
+            ..
+        } = self.plan_fn_shape_adapter(param_ty, &element_ty, false)?;
+        let arg_ret = arg_fn
+            .get_function_ret()
+            .expect("an adapted source has a function type");
 
         let source = self
             .lower_value(spread, ExpressionContext::value())
@@ -449,16 +396,19 @@ impl Planner<'_> {
                     ],
                 ),
             ));
-            setup.push(LoweredStatement::Loop(LoopPlan {
-                prologue: Vec::new(),
-                kind: LoopKind::Generated { label: None },
-                header: LoopHeader::Range {
-                    key: Some("i".to_string().into()),
-                    value: Some(loop_cb.into()),
-                    iterable: source_variable,
-                },
-                body: LoweredBlock { statements: body },
-            }));
+            setup.push(
+                LoweredStatement::Loop(LoopPlan {
+                    prologue: Vec::new(),
+                    kind: LoopKind::Generated { label: None },
+                    header: LoopHeader::Range {
+                        key: Some("i".to_string().into()),
+                        value: Some(loop_cb.into()),
+                        iterable: source_variable,
+                    },
+                    body: LoweredBlock { statements: body },
+                })
+                .into(),
+            );
             GoExpression::name(adapted)
         }))
     }
@@ -522,7 +472,7 @@ impl Planner<'_> {
                     .facts
                     .resolve_to_function_type(effective_param_ty.unwrap_forall())
                     .expect("callback target resolves to a fn type");
-                emit_lisette_callback_wrapper(self, setup, value, &param_fn_ty)
+                emit_lisette_callback_wrapper(self, setup, value, &param_fn_ty, target)
             }
             AbiTransition::WrapToTagged | AbiTransition::Reencode => {
                 let arg_fn_ty = self
@@ -536,21 +486,6 @@ impl Planner<'_> {
                 unreachable!("type-checked callback ABIs must describe the same result")
             }
         })
-    }
-
-    fn argument_slot_layout(&self, parameter: &CallableParamAbi) -> ValueLayout {
-        if parameter.instantiated.get_name() == Some("VarArgs") {
-            let slot_type = varargs_inner_or_self(&parameter.instantiated);
-            let declared_slot = parameter.declared.as_ref().map(varargs_inner_or_self);
-            declared_slot.as_ref().map_or_else(
-                || self.value_layout(&slot_type, parameter.origin),
-                |declared| {
-                    self.value_layout_with_declaration(&slot_type, parameter.origin, declared)
-                },
-            )
-        } else {
-            parameter.layout.clone()
-        }
     }
 
     fn argument_source_layout(
@@ -575,7 +510,7 @@ impl Planner<'_> {
         let source = physical_source
             .clone()
             .unwrap_or_else(|| self.argument_source_layout(argument, parameter));
-        let target = self.argument_slot_layout(parameter);
+        let target = parameter.layout.clone();
         let can_forward_physical = match (&physical_source, &target) {
             (
                 Some(ValueLayout::Function { layout: source, .. }),
@@ -607,7 +542,7 @@ impl Planner<'_> {
         argument: &Expression,
         plan: &ArgumentSlotBridge,
     ) -> ValuePlan {
-        if argument.is_none_literal() {
+        if prelude_constructor(argument) == Some(PreludeVariant::None) {
             return ValuePlan::evaluated_literal(
                 Vec::new(),
                 "nil".to_string(),
@@ -652,7 +587,7 @@ impl Planner<'_> {
         let callable = self.resolve_callable_value(expression)?;
         matches!(callable.origin, CallableOrigin::GoInterop).then(|| ValueLayout::Function {
             function_type: expression.get_type(),
-            layout: callable.abi.function_layout(),
+            layout: callable.abi.function_layout(self),
         })
     }
 
@@ -662,9 +597,7 @@ impl Planner<'_> {
         parameter: Option<&CallableParamAbi>,
     ) -> Option<ValuePlan> {
         let parameter = parameter?;
-        if parameter.instantiated.get_name() != Some("VarArgs") {
-            return None;
-        }
+        parameter.variadic.as_ref()?;
 
         let raw_source = self.go_physical_expression_layout(spread);
         let source = raw_source
@@ -672,7 +605,7 @@ impl Planner<'_> {
             .unwrap_or_else(|| self.value_layout(&spread.get_type(), SlotOrigin::Lisette));
         let target = ValueLayout::Slice {
             collection_type: spread.get_type(),
-            element: Box::new(self.argument_slot_layout(parameter)),
+            element: Box::new(parameter.layout.clone()),
         };
         let coercion = CoercionPlan::bridge(self, &source, &target);
         if coercion.is_identity() && raw_source.is_none() {
@@ -689,14 +622,6 @@ impl Planner<'_> {
             setup.extend(coercion_setup);
             coerced
         }))
-    }
-}
-
-fn varargs_inner_or_self(ty: &Type) -> Type {
-    if ty.get_name() == Some("VarArgs") {
-        ty.inner().unwrap_or_else(|| ty.clone())
-    } else {
-        ty.clone()
     }
 }
 

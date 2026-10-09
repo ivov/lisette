@@ -4,10 +4,12 @@ use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::LaterStages;
 use crate::is_order_sensitive;
-use crate::names::go_name;
-use crate::plan::bodies::{AssignForm, CompoundKind, LoweredBlock, LoweredStatement, define};
+use crate::plan::bodies::{
+    AssignForm, CompoundKind, LoweredBlock, LoweredStatement, Statement, define,
+};
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
+use crate::state::bindings::BindingValue;
 use syntax::ast::Literal;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
 use syntax::parse::TUPLE_FIELDS;
@@ -61,7 +63,7 @@ impl Planner<'_> {
         value: &Expression,
         compound_operator: Option<&BinaryOperator>,
     ) -> LoweredStatement {
-        let raw_body = |statements: Vec<LoweredStatement>| LoweredBlock { statements };
+        let raw_body = |statements: Vec<Statement>| LoweredBlock { statements };
 
         if value.get_type().is_never() {
             let mut statements = self.lower_target_operands(target);
@@ -130,7 +132,7 @@ impl Planner<'_> {
         })
     }
 
-    fn lower_target_operands(&mut self, target: &Expression) -> Vec<LoweredStatement> {
+    fn lower_target_operands(&mut self, target: &Expression) -> Vec<Statement> {
         match target.unwrap_parens() {
             Expression::Identifier { .. } | Expression::Literal { .. } => Vec::new(),
             Expression::DotAccess { expression, .. }
@@ -191,7 +193,7 @@ impl Planner<'_> {
             GoExpression::name(tmp)
         });
         let kind = CompoundKind::OpAssign {
-            op_text: format!("{}", op),
+            operator: op.into(),
             rhs: Box::new(right_hand_side),
             pinned_left,
         };
@@ -206,17 +208,23 @@ impl Planner<'_> {
         &mut self,
         target: &Expression,
         ordering: PlaceOrdering,
-    ) -> (Vec<LoweredStatement>, GoExpression) {
-        let mut target_capture: Vec<LoweredStatement> = Vec::new();
+    ) -> (Vec<Statement>, GoExpression) {
+        let mut target_capture: Vec<Statement> = Vec::new();
         let target = self.lower_place(&mut target_capture, target, ordering);
         (target_capture, target)
     }
 
     fn target_binds_to_discard(&self, target: &Expression) -> bool {
-        let Expression::Identifier { value, .. } = target.unwrap_parens() else {
+        let Expression::Identifier {
+            value, resolution, ..
+        } = target.unwrap_parens()
+        else {
             return false;
         };
-        match self.scope.resolve_identifier_binding(value) {
+        match self
+            .scope
+            .resolve_identifier_with_resolution(value, resolution)
+        {
             Some(binding) => binding.is_discard(),
             None => value == "_",
         }
@@ -224,15 +232,18 @@ impl Planner<'_> {
 
     pub(crate) fn lower_place(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         expression: &Expression,
         ordering: PlaceOrdering,
     ) -> GoExpression {
         let expression = expression.unwrap_parens();
         match expression {
-            Expression::Identifier { value, .. } => GoExpression::name(
+            Expression::Identifier {
+                value, resolution, ..
+            } => GoExpression::name(
                 self.scope
-                    .resolve_binding_go_name(value)
+                    .resolve_identifier_with_resolution(value, resolution)
+                    .and_then(BindingValue::as_go_name)
                     .unwrap_or(value)
                     .to_string(),
             ),
@@ -279,7 +290,7 @@ impl Planner<'_> {
 
     fn lower_indexed_place(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         base: &Expression,
         index: &Expression,
         ordering: PlaceOrdering,
@@ -325,7 +336,7 @@ impl Planner<'_> {
 
     fn pin_place_base(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         base: &Expression,
         expression: GoExpression,
     ) -> GoExpression {
@@ -341,7 +352,7 @@ impl Planner<'_> {
 
     fn place_operand(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         expression: &Expression,
         prefix: &str,
         ordering: PlaceOrdering,
@@ -362,7 +373,7 @@ impl Planner<'_> {
     /// RHS setup could reassign the pointer before the write executes.
     fn emit_deref_lvalue(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         pointee: &Expression,
         ordering: PlaceOrdering,
     ) -> GoExpression {
@@ -395,32 +406,17 @@ impl Planner<'_> {
                 return access;
             }
             let field = TUPLE_FIELDS.get(index).expect("oversize tuple arity");
-            return if self.facts.is_nilable_go_type(expression_ty)
-                || expression_ty.is_variable()
-                || expression_ty.is_placeholder()
-            {
-                GoExpression::selector(base, field.to_string())
-            } else {
-                GoExpression::value_field(base, field.to_string())
-            };
+            return self.field_access(base, expression_ty, field.to_string());
         }
-        let field = if resolution_exports_field(resolution)
-            || self.struct_field_is_exported(expression_ty, member)
-        {
-            go_name::exported_member(expression_ty, member)
-        } else if self.field_is_embedded(expression_ty, member) {
-            go_name::escape_keyword(member).into_owned()
-        } else {
-            go_name::unexported_method_go_name(member)
-        };
-        if self.facts.is_nilable_go_type(expression_ty)
-            || expression_ty.is_variable()
-            || expression_ty.is_placeholder()
-        {
-            GoExpression::selector(base, field)
-        } else {
-            GoExpression::value_field(base, field)
-        }
+        let semantic_exported = matches!(
+            resolution,
+            DotAccessResolution::StructField {
+                is_exported: true,
+                ..
+            }
+        );
+        let field = self.struct_field_go_name(expression_ty, member, semantic_exported);
+        self.field_access(base, expression_ty, field)
     }
 }
 
@@ -441,16 +437,6 @@ fn is_place_expression(expression: &Expression) -> bool {
 
 fn reads_through_reference(base: &Expression) -> bool {
     matches!(base.unwrap_parens(), Expression::Identifier { .. }) && base.get_type().is_ref()
-}
-
-fn resolution_exports_field(resolution: &DotAccessResolution) -> bool {
-    matches!(
-        resolution,
-        DotAccessResolution::StructField {
-            is_exported: true,
-            ..
-        }
-    )
 }
 
 /// Recognize compound assignment: either `x += y` syntax (caller supplies

@@ -23,11 +23,11 @@ pub fn check_manual_extend(expression: &Expression, ctx: &NodeCtx) {
     }
 
     for (index, item) in items.iter().enumerate() {
-        let Some(accumulator) = fresh_slice_declaration(item, ctx) else {
+        let Some(accumulator) = fresh_slice_declaration(item) else {
             continue;
         };
         for later in &items[index + 1..] {
-            if let Some((span, iterable)) = extending_loop(later, &accumulator, ctx) {
+            if let Some((span, iterable)) = extending_loop(later, &accumulator) {
                 report(span, accumulator.name, iterable, ctx);
                 break;
             }
@@ -47,14 +47,19 @@ struct Accumulator<'a> {
 
 /// A `let mut` slice whose storage is newly allocated and full, so the first
 /// append reallocates rather than writing into another slice's storage.
-fn fresh_slice_declaration<'a>(item: &'a Expression, ctx: &NodeCtx) -> Option<Accumulator<'a>> {
+fn fresh_slice_declaration<'a>(item: &'a Expression) -> Option<Accumulator<'a>> {
     let Expression::Let { binding, value, .. } = item else {
         return None;
     };
     if !binding.is_mutable() {
         return None;
     }
-    let Pattern::Identifier { identifier, span } = &binding.pattern else {
+    let Pattern::Identifier {
+        identifier,
+        binding: Some(id),
+        ..
+    } = &binding.pattern
+    else {
         return None;
     };
     let is_fresh = match value.unwrap_parens() {
@@ -75,17 +80,13 @@ fn fresh_slice_declaration<'a>(item: &'a Expression, ctx: &NodeCtx) -> Option<Ac
         return None;
     }
     Some(Accumulator {
-        id: ctx.facts.binding_id_at(*span)?,
+        id: *id,
         name: identifier.as_str(),
     })
 }
 
 /// Matches `for element in iterable { accumulator = accumulator.append(element) }`.
-fn extending_loop<'a>(
-    item: &'a Expression,
-    accumulator: &Accumulator,
-    ctx: &NodeCtx,
-) -> Option<(Span, &'a str)> {
+fn extending_loop<'a>(item: &'a Expression, accumulator: &Accumulator) -> Option<(Span, &'a str)> {
     let Expression::For {
         binding,
         iterable,
@@ -137,12 +138,13 @@ fn extending_loop<'a>(
     }
 
     let Pattern::Identifier {
-        span: element_span, ..
+        binding: Some(element_id),
+        ..
     } = &binding.pattern
     else {
         return None;
     };
-    if element.binding_id() != Some(ctx.facts.binding_id_at(*element_span)?) {
+    if element.binding_id() != Some(*element_id) {
         return None;
     }
 

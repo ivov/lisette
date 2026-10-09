@@ -4,16 +4,17 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::names::go_name;
 use crate::plan::bodies::{
-    AssignForm, CompoundKind, Definition, ElseArm, LoopHeader, LoopTransfer, LoweredBlock,
-    LoweredStatement, SelectArmPlan, SwitchKind, for_each_statement, for_each_statements_mut,
+    AssignForm, CompoundKind, Definition, ElseArm, LoopTransfer, LoweredBlock, LoweredStatement,
+    SelectArmPlan, Statement, SwitchKind, for_each_statement, for_each_statements_mut,
     legalize_else_if_scopes,
 };
 use crate::plan::evaluation::Effects;
-use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp, verbatim_identifiers};
 use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::values::{GoExpression, ValuePlan};
+use crate::plan::visit::{VisitorMut, visit_statements_mut};
 
-pub(crate) fn clean_up(statements: &mut Vec<LoweredStatement>, shadowing: &HashSet<LocalId>) {
+pub(crate) fn clean_up(statements: &mut Vec<Statement>, shadowing: &HashSet<LocalId>) {
     // Later deletions can expose earlier rules, so another sweep changes emitted Go.
     inline_name_aliases(statements);
     inline_return_aliases(statements);
@@ -25,7 +26,7 @@ pub(crate) fn clean_up(statements: &mut Vec<LoweredStatement>, shadowing: &HashS
     legalize_else_if_scopes(statements);
 }
 
-fn return_found_elements_directly(statements: &mut Vec<LoweredStatement>) {
+fn return_found_elements_directly(statements: &mut Vec<Statement>) {
     for_each_statements_mut(statements, &mut |block| {
         let Some(found) = found_loop_return(block) else {
             return;
@@ -47,18 +48,20 @@ fn return_found_elements_directly(statements: &mut Vec<LoweredStatement>) {
             }
         }
 
-        let LoweredStatement::Loop(plan) = &mut block[found.loop_at] else {
+        let LoweredStatement::Loop(plan) = &mut block[found.loop_at].kind else {
             unreachable!("found_loop_return matched a loop");
         };
-        let Some(LoweredStatement::If(hit)) = plan.body.statements.last_mut() else {
+        let Some(LoweredStatement::If(hit)) =
+            plan.body.statements.last_mut().map(|last| &mut last.kind)
+        else {
             unreachable!("found_loop_return matched a trailing if");
         };
         hit.then_body = LoweredBlock {
-            statements: vec![LoweredStatement::Return(success)],
+            statements: vec![LoweredStatement::Return(success).into()],
         };
 
         block.truncate(found.loop_at + 1);
-        block.push(LoweredStatement::Return(found.failure));
+        block.push(LoweredStatement::Return(found.failure).into());
         block.drain(found.declares_at..found.loop_at);
     });
 }
@@ -73,11 +76,11 @@ struct FoundLoopReturn {
     failure: Vec<GoExpression>,
 }
 
-fn found_loop_return(block: &[LoweredStatement]) -> Option<FoundLoopReturn> {
+fn found_loop_return(block: &[Statement]) -> Option<FoundLoopReturn> {
     let loop_at = block.len().checked_sub(3)?;
     let define_at = loop_at.checked_sub(1)?;
-    let flag = false_define(&block[define_at])?;
-    let (declares_at, value) = match define_at.checked_sub(1).map(|at| (at, &block[at])) {
+    let flag = false_define(&block[define_at].kind)?;
+    let (declares_at, value) = match define_at.checked_sub(1).map(|at| (at, &block[at].kind)) {
         Some((
             at,
             LoweredStatement::VarDecl {
@@ -86,12 +89,12 @@ fn found_loop_return(block: &[LoweredStatement]) -> Option<FoundLoopReturn> {
         )) => (at, Some(name.clone())),
         _ => (define_at, None),
     };
-    let LoweredStatement::Loop(plan) = &block[loop_at] else {
+    let LoweredStatement::Loop(plan) = &block[loop_at].kind else {
         return None;
     };
-    let element = found_hit(plan.body.statements.last()?, &flag, value.as_ref())?;
-    let failure = flag_guarded_return(&block[loop_at + 1], &flag)?;
-    let LoweredStatement::Return(success) = &block[loop_at + 2] else {
+    let element = found_hit(&plan.body.statements.last()?.kind, &flag, value.as_ref())?;
+    let failure = flag_guarded_return(&block[loop_at + 1].kind, &flag)?;
+    let LoweredStatement::Return(success) = &block[loop_at + 2].kind else {
         return None;
     };
     Some(FoundLoopReturn {
@@ -128,12 +131,15 @@ fn found_hit(
     }
     let body = plan.then_body.statements.as_slice();
     let (element, rest) = match (value, body) {
-        (Some(value), [first, rest @ ..]) => (Some(assigned_name(first, value)?), rest),
+        (Some(value), [first, rest @ ..]) => (Some(assigned_name(&first.kind, value)?), rest),
         (None, rest) => (None, rest),
         _ => return None,
     };
     match rest {
-        [raise, LoweredStatement::Break(LoopTransfer::Unlabeled)] if assigns_true(raise, flag) => {
+        [raise, exit]
+            if assigns_true(&raise.kind, flag)
+                && matches!(exit.kind, LoweredStatement::Break(LoopTransfer::Unlabeled)) =>
+        {
             Some(element)
         }
         _ => None,
@@ -189,28 +195,32 @@ fn flag_guarded_return(
     let GoExpressionNode::Unary { operator, operand } = plan.condition.node() else {
         return None;
     };
-    if operator != "!"
+    if *operator != UnaryOp::Not
         || !matches!(operand.as_ref(), GoExpressionNode::Identifier(name) if name.refers_to_same(flag))
     {
         return None;
     }
     match plan.then_body.statements.as_slice() {
-        [LoweredStatement::Return(values)] => Some(values.clone()),
+        [
+            Statement {
+                kind: LoweredStatement::Return(values),
+                ..
+            },
+        ] => Some(values.clone()),
         _ => None,
     }
 }
 
-fn unwrap_terminal_else(statements: &mut Vec<LoweredStatement>) {
+fn unwrap_terminal_else(statements: &mut Vec<Statement>) {
     for_each_statements_mut(statements, &mut |block| {
         for statement in block.iter_mut() {
-            unwrap_terminal_else_of(statement);
+            unwrap_terminal_else_of(&mut statement.kind);
         }
     });
 }
 
 fn unwrap_terminal_else_of(statement: &mut LoweredStatement) {
     let mut plan = match statement {
-        LoweredStatement::Directed { inner, .. } => return unwrap_terminal_else_of(inner),
         LoweredStatement::If(plan) => plan,
         _ => return,
     };
@@ -240,12 +250,8 @@ fn unwrap_terminal_else_of(statement: &mut LoweredStatement) {
 
 fn declares_no_names(body: &LoweredBlock) -> bool {
     body.statements.iter().all(|statement| {
-        let statement = match statement {
-            LoweredStatement::Directed { inner, .. } => inner.as_ref(),
-            other => other,
-        };
         !matches!(
-            statement,
+            statement.kind,
             LoweredStatement::Define(_)
                 | LoweredStatement::VarDecl { .. }
                 | LoweredStatement::Const(_)
@@ -257,12 +263,12 @@ fn declares_no_names(body: &LoweredBlock) -> bool {
     })
 }
 
-fn inline_return_aliases(statements: &mut Vec<LoweredStatement>) {
+fn inline_return_aliases(statements: &mut Vec<Statement>) {
     let uses = NameUses::of(statements);
     for_each_statements_mut(statements, &mut |list| {
         let mut index = 0;
         while index + 1 < list.len() {
-            let Some(name) = returned_alias(&list[index], &list[index + 1]) else {
+            let Some(name) = returned_alias(&list[index].kind, &list[index + 1].kind) else {
                 index += 1;
                 continue;
             };
@@ -270,10 +276,10 @@ fn inline_return_aliases(statements: &mut Vec<LoweredStatement>) {
                 index += 1;
                 continue;
             }
-            let LoweredStatement::Define(Definition { value, .. }) = list.remove(index) else {
+            let LoweredStatement::Define(Definition { value, .. }) = list.remove(index).kind else {
                 unreachable!("returned_alias matched a definition");
             };
-            let LoweredStatement::Return(values) = &mut list[index] else {
+            let LoweredStatement::Return(values) = &mut list[index].kind else {
                 unreachable!("returned_alias matched a return");
             };
             values[0] = value;
@@ -302,11 +308,11 @@ fn returned_alias(definition: &LoweredStatement, next: &LoweredStatement) -> Opt
         .then(|| name.clone())
 }
 
-fn fold_compound_assignments(statements: &mut Vec<LoweredStatement>) {
+fn fold_compound_assignments(statements: &mut Vec<Statement>) {
     for_each_statements_mut(statements, &mut |block| {
         for statement in block.iter_mut() {
-            if let Some(folded) = folded_compound_assignment(statement) {
-                *statement = folded;
+            if let Some(folded) = folded_compound_assignment(&statement.kind) {
+                statement.kind = folded;
             }
         }
     });
@@ -337,16 +343,16 @@ fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredSta
         return None;
     };
     if !matches!(left.as_ref(), GoExpressionNode::Identifier(read) if read.refers_to_same(name))
-        || !is_compound_operator(operator)
+        || !operator.has_compound_form()
     {
         return None;
     }
 
-    let kind = match (operator.as_str(), right.as_ref()) {
-        ("+", GoExpressionNode::Literal(one)) if one == "1" => CompoundKind::Increment,
-        ("-", GoExpressionNode::Literal(one)) if one == "1" => CompoundKind::Decrement,
+    let kind = match (operator, right.as_ref()) {
+        (BinaryOp::Add, GoExpressionNode::Literal(one)) if one == "1" => CompoundKind::Increment,
+        (BinaryOp::Sub, GoExpressionNode::Literal(one)) if one == "1" => CompoundKind::Decrement,
         _ => CompoundKind::OpAssign {
-            op_text: operator.clone(),
+            operator: *operator,
             rhs: Box::new(ValuePlan::computed(
                 Vec::new(),
                 GoExpression::from_node(right.as_ref().clone()),
@@ -360,13 +366,6 @@ fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredSta
         target: target.clone(),
         kind,
     }))
-}
-
-fn is_compound_operator(operator: &str) -> bool {
-    matches!(
-        operator,
-        "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "&^" | "<<" | ">>"
-    )
 }
 
 #[derive(Default)]
@@ -408,33 +407,10 @@ impl LocalCounts {
 }
 
 impl NameUses {
-    fn of(statements: &[LoweredStatement]) -> Self {
+    fn of(statements: &mut [Statement]) -> Self {
         let mut uses = Self::default();
-        for statement in statements {
-            statement.visit_expressions(&mut |node| match node {
-                GoExpressionNode::Identifier(name) => {
-                    uses.reads.add(name);
-                }
-                GoExpressionNode::Verbatim(text) => uses.record_opaque_reads(text),
-                _ => {}
-            });
-        }
-        for_each_statement(statements, &mut |statement| uses.record_bindings(statement));
+        visit_statements_mut(statements, &mut uses);
         uses
-    }
-
-    fn record_opaque_reads(&mut self, text: &str) {
-        for token in
-            text.split(|character: char| !(character.is_alphanumeric() || character == '_'))
-        {
-            if token
-                .chars()
-                .next()
-                .is_some_and(|first| first.is_alphabetic() || first == '_')
-            {
-                *self.opaque_reads.entry(token.to_string()).or_default() += 1;
-            }
-        }
     }
 
     fn reads(&self, name: &GoIdentifier) -> usize {
@@ -457,88 +433,47 @@ impl NameUses {
     fn is_written(&self, name: &GoIdentifier) -> bool {
         self.writes.get(name) > 0
     }
+}
 
-    fn bind(&mut self, name: &GoIdentifier) {
-        self.bindings.add(name);
-    }
-
-    fn write_through(&mut self, target: &GoExpression) {
-        if let GoExpressionNode::Identifier(name) = target.node() {
-            self.assigned.add(name);
-        }
-        target.node().visit(&mut |node| {
-            if let GoExpressionNode::Identifier(name) = node {
-                self.writes.add(name);
-            }
-        });
-    }
-
-    fn record_bindings(&mut self, statement: &LoweredStatement) {
-        match statement {
-            LoweredStatement::Define(definition) => {
-                for name in &definition.names {
-                    self.bind(name);
-                }
-            }
-            LoweredStatement::VarDecl { name, .. } => self.bind(name),
-            LoweredStatement::Const(plan) => self.bind(&plan.name),
-            LoweredStatement::If(plan) => {
-                if let Some(initializer) = &plan.initializer {
-                    for name in &initializer.names {
-                        self.bind(name);
-                    }
-                }
-            }
-            LoweredStatement::Loop(plan) => match &plan.header {
-                LoopHeader::Range { key, value, .. } => {
-                    for name in key.iter().chain(value) {
-                        self.bind(name);
-                    }
-                }
-                LoopHeader::Counted { variable, .. } => self.bind(variable),
-                LoopHeader::Infinite | LoopHeader::While(_) => {}
-            },
-            LoweredStatement::Switch(plan) => {
-                if let SwitchKind::Type {
-                    binding: Some(name),
-                    ..
-                } = &plan.kind
-                {
-                    self.bind(name);
-                }
-            }
-            LoweredStatement::Select(plan) => {
-                for arm in &plan.arms {
-                    if let SelectArmPlan::Receive { receive_vars, .. } = arm {
-                        for name in receive_vars {
-                            self.bind(name);
-                        }
-                    }
-                }
-            }
-            LoweredStatement::Assign(
-                AssignForm::Simple { target, .. } | AssignForm::Compound { target, .. },
-            ) => self.write_through(target),
-            LoweredStatement::AssignMany { targets, .. } => {
-                for target in targets {
-                    self.write_through(target);
+impl VisitorMut for NameUses {
+    fn expression(&mut self, node: &mut GoExpressionNode) {
+        match node {
+            GoExpressionNode::Identifier(name) => self.reads.add(name),
+            GoExpressionNode::Verbatim(text) => {
+                for token in verbatim_identifiers(text) {
+                    *self.opaque_reads.entry(token.to_string()).or_default() += 1;
                 }
             }
             _ => {}
         }
     }
+
+    fn local_binding(&mut self, name: &mut GoIdentifier) {
+        self.bindings.add(name);
+    }
+
+    fn assignment_target(&mut self, target: &GoExpressionNode) {
+        if let GoExpressionNode::Identifier(name) = target {
+            self.assigned.add(name);
+        }
+        target.visit(&mut |node| {
+            if let GoExpressionNode::Identifier(name) = node {
+                self.writes.add(name);
+            }
+        });
+    }
 }
 
-fn inline_name_aliases(statements: &mut Vec<LoweredStatement>) {
+fn inline_name_aliases(statements: &mut Vec<Statement>) {
     let uses = NameUses::of(statements);
     for_each_statements_mut(statements, &mut |list| {
         let mut index = 0;
         while index + 1 < list.len() {
-            if let Some((temp, source)) = alias_define(&list[index])
+            if let Some((temp, source)) = alias_define(&list[index].kind)
                 && uses.reads(&temp) == 1
                 && uses.bindings(&temp) == 1
                 && !uses.is_written(&temp)
-                && replace_only_read(&mut list[index + 1], &temp, &source)
+                && replace_only_read(&mut list[index + 1].kind, &temp, &source)
             {
                 list.remove(index);
             } else {
@@ -550,7 +485,6 @@ fn inline_name_aliases(statements: &mut Vec<LoweredStatement>) {
 
 fn alias_define(statement: &LoweredStatement) -> Option<(GoIdentifier, GoIdentifier)> {
     match statement {
-        LoweredStatement::Directed { inner, .. } => alias_define(inner),
         LoweredStatement::Define(Definition { names, value }) => {
             match (names.as_slice(), value.node()) {
                 ([temp], GoExpressionNode::Identifier(source))
@@ -571,7 +505,6 @@ fn replace_only_read(
     source: &GoIdentifier,
 ) -> bool {
     match statement {
-        LoweredStatement::Directed { inner, .. } => replace_only_read(inner, temp, source),
         LoweredStatement::Define(Definition { names, value }) => {
             !names.iter().any(|name| name == source.spelling())
                 && rename_in(vec![value.node_mut()], None, temp, source)
@@ -744,7 +677,7 @@ fn analyze(node: &GoExpressionNode, temp: &GoIdentifier) -> Analysis {
     }
 }
 
-fn drop_unread_temps(statements: &mut Vec<LoweredStatement>, shadowing: &HashSet<LocalId>) {
+fn drop_unread_temps(statements: &mut Vec<Statement>, shadowing: &HashSet<LocalId>) {
     loop {
         let uses = NameUses::of(statements);
         let mut discards: HashMap<LocalId, usize> = HashMap::default();
@@ -798,14 +731,15 @@ fn drop_unread_temps(statements: &mut Vec<LoweredStatement>, shadowing: &HashSet
         };
         for_each_statements_mut(statements, &mut |list| {
             list.retain(|statement| {
-                pure_define(statement).is_none_or(|(defined, _)| !defined.refers_to_same(&name))
-                    && discarded_name(statement)
+                pure_define(&statement.kind)
+                    .is_none_or(|(defined, _)| !defined.refers_to_same(&name))
+                    && discarded_name(&statement.kind)
                         .is_none_or(|discarded| !discarded.refers_to_same(&name))
             });
         });
         for_each_statements_mut(statements, &mut |list| {
             for statement in list {
-                drop_empty_else(statement);
+                drop_empty_else(&mut statement.kind);
             }
         });
     }
@@ -813,7 +747,6 @@ fn drop_unread_temps(statements: &mut Vec<LoweredStatement>, shadowing: &HashSet
 
 fn drop_empty_else(statement: &mut LoweredStatement) {
     let mut plan = match statement {
-        LoweredStatement::Directed { inner, .. } => return drop_empty_else(inner),
         LoweredStatement::If(plan) => plan,
         _ => return,
     };
@@ -831,7 +764,6 @@ fn drop_empty_else(statement: &mut LoweredStatement) {
 
 fn pure_define(statement: &LoweredStatement) -> Option<(&GoIdentifier, &GoExpression)> {
     match statement {
-        LoweredStatement::Directed { inner, .. } => pure_define(inner),
         LoweredStatement::Define(Definition { names, value }) => match names.as_slice() {
             [name] if value.effects().can_erase() => Some((name, value)),
             _ => None,
@@ -842,7 +774,6 @@ fn pure_define(statement: &LoweredStatement) -> Option<(&GoIdentifier, &GoExpres
 
 fn discarded_name(statement: &LoweredStatement) -> Option<&GoIdentifier> {
     match statement {
-        LoweredStatement::Directed { inner, .. } => discarded_name(inner),
         LoweredStatement::Discard(expression) => match expression.node() {
             GoExpressionNode::Identifier(name) => Some(name),
             _ => None,
@@ -854,7 +785,8 @@ fn discarded_name(statement: &LoweredStatement) -> Option<&GoIdentifier> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plan::bodies::{IfPlan, LoopKind, LoopPlan, assign, define, discard};
+    use crate::plan::bodies::{IfPlan, LoopHeader, LoopKind, LoopPlan, assign, define, discard};
+    use crate::plan::go_expression::FunctionLiteralLayout;
     use crate::plan::local::LocalId;
 
     fn name(text: &str) -> GoExpression {
@@ -865,14 +797,11 @@ mod tests {
         GoExpression::literal(text.to_string())
     }
 
-    fn returned(value: GoExpression) -> LoweredStatement {
-        LoweredStatement::Return(vec![value])
+    fn returned(value: GoExpression) -> Statement {
+        LoweredStatement::Return(vec![value]).into()
     }
 
-    fn returning_if(
-        initializer: Option<Definition>,
-        else_body: Vec<LoweredStatement>,
-    ) -> LoweredStatement {
+    fn returning_if(initializer: Option<Definition>, else_body: Vec<Statement>) -> Statement {
         LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
             initializer,
@@ -887,6 +816,7 @@ mod tests {
                 inline: false,
             },
         })
+        .into()
     }
 
     #[test]
@@ -911,7 +841,7 @@ mod tests {
             ],
         )];
         clean_up(&mut statements, &HashSet::default());
-        let LoweredStatement::If(plan) = &statements[0] else {
+        let LoweredStatement::If(plan) = &statements[0].kind else {
             panic!("expected if");
         };
         assert_eq!(
@@ -926,6 +856,28 @@ mod tests {
         let once = statements.clone();
         clean_up(&mut statements, &HashSet::default());
         assert_eq!(statements, once);
+    }
+
+    #[test]
+    fn name_uses_count_writes_inside_function_literals() {
+        let closure = GoExpression::function_literal(
+            Vec::new(),
+            String::new(),
+            LoweredBlock {
+                statements: vec![assign(name("count"), literal("1"))],
+            },
+            FunctionLiteralLayout::MultiLine,
+        );
+        let mut statements = vec![
+            define("count".to_string(), literal("0")),
+            define("bump".to_string(), closure),
+            returned(name("count")),
+        ];
+        let uses = NameUses::of(&mut statements);
+        let count = GoIdentifier::from("count".to_string());
+        assert!(uses.is_written(&count));
+        assert_eq!(uses.reads(&count), 2);
+        assert_eq!(uses.value_reads(&count), 1);
     }
 
     #[test]
@@ -952,13 +904,56 @@ mod tests {
             returned(name("temp")),
         ];
         inline_name_aliases(&mut statements);
-        let [LoweredStatement::Return(values)] = statements.as_slice() else {
+        let [statement] = statements.as_slice() else {
+            panic!("expected one statement");
+        };
+        let LoweredStatement::Return(values) = &statement.kind else {
             panic!("expected a direct return");
         };
         let GoExpressionNode::Identifier(actual) = values[0].node() else {
             panic!("expected a local reference");
         };
         assert_eq!(actual.id(), source.id());
+    }
+
+    #[test]
+    fn alias_inlining_counts_function_literal_bindings_by_their_own_local() {
+        use crate::plan::go_expression::{FunctionLiteralLayout, GoParameter};
+
+        let outer = |id| {
+            GoExpression::from_node(GoExpressionNode::Identifier(GoIdentifier::local(
+                "temp".to_string(),
+                LocalId(id),
+            )))
+        };
+        let mut parameter = GoParameter::new("temp", "int");
+        parameter.name.identify(LocalId(2));
+        let closure = GoExpression::function_literal(
+            vec![parameter],
+            "int".to_string(),
+            LoweredBlock {
+                statements: vec![returned(outer(2))],
+            },
+            FunctionLiteralLayout::MultiLine,
+        );
+        let mut alias = define("temp".to_string(), name("source"));
+        let LoweredStatement::Define(definition) = &mut alias.kind else {
+            panic!("expected definition");
+        };
+        definition.names[0].identify(LocalId(1));
+        let mut statements = vec![
+            define("callback".to_string(), closure.clone()),
+            alias,
+            returned(outer(1)),
+        ];
+        inline_name_aliases(&mut statements);
+        assert_eq!(
+            statements,
+            vec![
+                define("callback".to_string(), closure),
+                returned(name("source"))
+            ]
+        );
     }
 
     #[test]
@@ -979,18 +974,26 @@ mod tests {
         let index = GoExpression::index(name("xs"), name("i"));
         let mut statements = vec![
             define("temp".to_string(), name("source")),
-            returned(GoExpression::binary(name("temp"), "+", index.clone())),
+            returned(GoExpression::binary(
+                name("temp"),
+                BinaryOp::Add,
+                index.clone(),
+            )),
         ];
         inline_name_aliases(&mut statements);
         assert_eq!(
             statements,
-            vec![returned(GoExpression::binary(name("source"), "+", index))]
+            vec![returned(GoExpression::binary(
+                name("source"),
+                BinaryOp::Add,
+                index
+            ))]
         );
 
         let call = GoExpression::call(name("bump"), Vec::new());
         let mut statements = vec![
             define("temp".to_string(), name("source")),
-            returned(GoExpression::binary(name("temp"), "+", call)),
+            returned(GoExpression::binary(name("temp"), BinaryOp::Add, call)),
         ];
         let original = statements.clone();
         inline_name_aliases(&mut statements);
@@ -1062,16 +1065,19 @@ mod tests {
     fn compound_folding_keeps_its_result_on_a_second_pass() {
         let mut statements = vec![assign(
             name("total"),
-            GoExpression::binary(name("total"), "+", literal("1")),
+            GoExpression::binary(name("total"), BinaryOp::Add, literal("1")),
         )];
         fold_compound_assignments(&mut statements);
         assert_eq!(
             statements,
-            vec![LoweredStatement::Assign(AssignForm::Compound {
-                target_capture: Vec::new(),
-                target: name("total"),
-                kind: CompoundKind::Increment,
-            })]
+            vec![
+                LoweredStatement::Assign(AssignForm::Compound {
+                    target_capture: Vec::new(),
+                    target: name("total"),
+                    kind: CompoundKind::Increment,
+                })
+                .into()
+            ]
         );
         let once = statements.clone();
         fold_compound_assignments(&mut statements);
@@ -1081,7 +1087,7 @@ mod tests {
     #[test]
     fn found_loop_return_keeps_its_result_on_a_second_pass() {
         let hit = LoweredStatement::If(IfPlan::plain(
-            GoExpression::binary(name("element"), ">", literal("0")),
+            GoExpression::binary(name("element"), BinaryOp::Gt, literal("0")),
             LoweredBlock {
                 statements: vec![
                     assign(
@@ -1092,7 +1098,7 @@ mod tests {
                         )),
                     ),
                     assign(name("found"), literal("true")),
-                    LoweredStatement::Break(LoopTransfer::Unlabeled),
+                    LoweredStatement::Break(LoopTransfer::Unlabeled).into(),
                 ],
             },
             ElseArm::None,
@@ -1102,7 +1108,8 @@ mod tests {
                 name: "value".to_string().into(),
                 go_type: "int".to_string(),
                 value: None,
-            },
+            }
+            .into(),
             define("found".to_string(), literal("false")),
             LoweredStatement::Loop(LoopPlan {
                 prologue: Vec::new(),
@@ -1113,28 +1120,38 @@ mod tests {
                     iterable: name("items"),
                 },
                 body: LoweredBlock {
-                    statements: vec![hit],
+                    statements: vec![hit.into()],
                 },
-            }),
+            })
+            .into(),
             LoweredStatement::If(IfPlan::plain(
-                GoExpression::unary("!", name("found")),
+                GoExpression::unary(UnaryOp::Not, name("found")),
                 LoweredBlock {
                     statements: vec![returned(literal("0"))],
                 },
                 ElseArm::None,
-            )),
+            ))
+            .into(),
             returned(name("value")),
         ];
         return_found_elements_directly(&mut statements);
-        let [LoweredStatement::Loop(plan), failure] = statements.as_slice() else {
+        let [found, failure] = statements.as_slice() else {
             panic!("expected loop and failure return");
         };
         assert_eq!(*failure, returned(literal("0")));
-        let [LoweredStatement::If(hit)] = plan.body.statements.as_slice() else {
+        let LoweredStatement::Loop(plan) = &found.kind else {
+            panic!("expected loop");
+        };
+        let [hit] = plan.body.statements.as_slice() else {
+            panic!("expected one hit test");
+        };
+        let LoweredStatement::If(hit) = &hit.kind else {
             panic!("expected hit test");
         };
-        assert_eq!(hit.then_body.statements.len(), 1);
-        let [LoweredStatement::Return(values)] = hit.then_body.statements.as_slice() else {
+        let [success] = hit.then_body.statements.as_slice() else {
+            panic!("expected one return");
+        };
+        let LoweredStatement::Return(values) = &success.kind else {
             panic!("expected return");
         };
         assert!(

@@ -1,9 +1,7 @@
 use crate::state::bindings::BindingValue;
 use syntax::ast::{Expression, StructFields};
 use syntax::parse;
-use syntax::program::{
-    Definition, DefinitionBody, DotAccessKind as SemanticDotKind, ReceiverCoercion,
-};
+use syntax::program::{Definition, DefinitionBody, DotAccessResolution, ReceiverCoercion};
 use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::Planner;
@@ -12,7 +10,7 @@ use crate::abi::layout::SlotOrigin;
 use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::go_name;
-use crate::plan::bodies::LoweredStatement;
+use crate::plan::bodies::Statement;
 use crate::plan::values::{EvaluationEffect, GoExpression, Stability, ValuePlan};
 use crate::utils::reads_value_member;
 
@@ -55,11 +53,10 @@ impl Planner<'_> {
         else {
             unreachable!("plan_dot_access requires a DotAccess expression");
         };
-        let dot_access_kind = resolution.kind();
         let receiver_coercion = resolution.receiver_coercion();
 
         if let Some(expression) =
-            self.try_emit_pre_receiver_dot(expression, member, result_ty, dot_access_kind, ctx)
+            self.try_emit_pre_receiver_dot(expression, member, result_ty, resolution, ctx)
         {
             return ValuePlan::computed(Vec::new(), expression, EvaluationEffect::Pure);
         }
@@ -82,25 +79,19 @@ impl Planner<'_> {
             && self.package_member_is_fixed(package, member)
         {
             Stability::Fixed
-        } else if reads_value_member(
-            dot_access_kind,
-            receiver_coercion,
-            expression,
-            &expression_ty,
-        ) {
+        } else if reads_value_member(resolution, expression, &expression_ty) {
             base_plan.facts().stability
         } else {
             Stability::Observable
         };
         let (mut setup, base) = base_plan.into_parts();
         if let Some(member_access) =
-            self.try_emit_tuple_member_dot(&base, &expression_ty, member, dot_access_kind)
+            self.try_emit_tuple_member_dot(&base, &expression_ty, member, resolution)
         {
             return ValuePlan::computed(setup, member_access, effect).with_stability(stability);
         }
 
-        let is_exported =
-            self.resolve_is_exported(expression, &expression_ty, member, dot_access_kind);
+        let is_exported = self.resolve_is_exported(expression, &expression_ty, member, resolution);
         let is_embedded = self.field_is_embedded(&expression_ty, member);
         let field = self
             .try_resolve_cross_package_const(&expression_ty, member)
@@ -122,69 +113,58 @@ impl Planner<'_> {
             return ValuePlan::computed(setup, wrapped, effect);
         }
 
-        let value_field = matches!(
-            dot_access_kind,
-            Some(
-                SemanticDotKind::StructField { .. }
-                    | SemanticDotKind::TupleElement
-                    | SemanticDotKind::TupleStructField { .. }
-            )
-        ) && !self.facts.is_nilable_go_type(&expression_ty)
-            && !expression_ty.is_variable()
-            && !expression_ty.is_placeholder();
+        let value_field =
+            resolution.is_field_read() && self.field_read_cannot_panic(&expression_ty);
         let selector = match package {
             Some(package) => GoExpression::qualified(package, field),
             None if value_field => GoExpression::value_field(base, field),
             None => GoExpression::selector(base, field),
         };
         let expression =
-            self.append_cross_package_type_args(selector, &expression_ty, member, result_ty, ctx);
+            self.append_cross_package_type_args(selector, &expression_ty, resolution, ctx);
         ValuePlan::computed(setup, expression, effect).with_stability(stability)
     }
 
-    /// Dispatch kinds that can resolve without the receiver emitted first.
-    /// `PackageMember` and unresolved kinds may still resolve under a
-    /// cross-package/alias rename.
     fn try_emit_pre_receiver_dot(
         &mut self,
         expression: &Expression,
         member: &str,
         result_ty: &Type,
-        dot_access_kind: Option<SemanticDotKind>,
+        resolution: &DotAccessResolution,
         ctx: ExpressionContext<'_>,
     ) -> Option<GoExpression> {
-        match dot_access_kind {
-            Some(SemanticDotKind::EnumVariant) => self.emit_enum_variant_dot(member, result_ty),
-            Some(SemanticDotKind::StaticMethod { .. }) => {
-                self.emit_static_method_dot(expression, member, result_ty, ctx)
+        match resolution {
+            DotAccessResolution::EnumVariant { definition, .. } => {
+                self.emit_enum_variant_dot(definition, result_ty)
             }
-            Some(SemanticDotKind::InstanceMethodValue {
+            DotAccessResolution::StaticMethod { definition, .. } => {
+                Some(self.emit_static_method_dot(definition, resolution, ctx))
+            }
+            DotAccessResolution::InstanceMethodValue {
                 is_exported,
                 is_pointer_receiver,
-            }) => self.emit_instance_method_value_dot(
+                ..
+            } => self.emit_instance_method_value_dot(
                 expression,
                 member,
                 result_ty,
-                is_exported,
-                is_pointer_receiver,
+                *is_exported,
+                *is_pointer_receiver,
             ),
-            Some(SemanticDotKind::PackageMember) | None => {
-                if let Some(s) = self.emit_enum_variant_dot(member, result_ty) {
-                    Some(s)
-                } else {
-                    self.emit_static_method_dot(expression, member, result_ty, ctx)
-                }
-            }
             _ => None,
         }
     }
 
     fn tuple_component_read(&self, expression: &Expression, member: &str) -> Option<String> {
-        let Expression::Identifier { value, .. } = expression.unwrap_parens() else {
+        let Expression::Identifier {
+            value, resolution, ..
+        } = expression.unwrap_parens()
+        else {
             return None;
         };
-        let Some(BindingValue::TupleComponents(tuple)) =
-            self.scope.resolve_identifier_binding(value)
+        let Some(BindingValue::TupleComponents(tuple)) = self
+            .scope
+            .resolve_identifier_with_resolution(value, resolution)
         else {
             return None;
         };
@@ -200,39 +180,23 @@ impl Planner<'_> {
         base: &GoExpression,
         expression_ty: &Type,
         member: &str,
-        dot_access_kind: Option<SemanticDotKind>,
+        resolution: &DotAccessResolution,
     ) -> Option<GoExpression> {
         let Ok(index) = member.parse::<usize>() else {
             return None;
         };
-        match dot_access_kind {
-            Some(SemanticDotKind::TupleElement) => {
+        match resolution {
+            DotAccessResolution::TupleElement => {
                 let field = parse::TUPLE_FIELDS
                     .get(index)
                     .expect("oversize tuple arity");
-                let selector = if !self.facts.is_nilable_go_type(expression_ty)
-                    && !expression_ty.is_variable()
-                    && !expression_ty.is_placeholder()
-                {
-                    GoExpression::value_field(base.clone(), field.to_string())
-                } else {
-                    GoExpression::selector(base.clone(), field.to_string())
-                };
-                Some(selector)
+                Some(self.field_access(base.clone(), expression_ty, field.to_string()))
             }
-            Some(SemanticDotKind::TupleStructField { is_newtype }) => {
-                if is_newtype && let Some(cast) = self.try_emit_newtype_cast(expression_ty, base) {
+            DotAccessResolution::TupleStructField { is_newtype } => {
+                if *is_newtype && let Some(cast) = self.try_emit_newtype_cast(expression_ty, base) {
                     return Some(cast);
                 }
-                let selector = if !self.facts.is_nilable_go_type(expression_ty)
-                    && !expression_ty.is_variable()
-                    && !expression_ty.is_placeholder()
-                {
-                    GoExpression::value_field(base.clone(), format!("F{}", index))
-                } else {
-                    GoExpression::selector(base.clone(), format!("F{}", index))
-                };
-                Some(selector)
+                Some(self.field_access(base.clone(), expression_ty, format!("F{}", index)))
             }
             _ => None,
         }
@@ -245,14 +209,14 @@ impl Planner<'_> {
         expression: &Expression,
         expression_ty: &Type,
         member: &str,
-        dot_access_kind: Option<SemanticDotKind>,
+        resolution: &DotAccessResolution,
     ) -> bool {
-        match dot_access_kind {
-            Some(SemanticDotKind::StructField { is_exported }) => {
-                is_exported || self.struct_field_is_exported(expression_ty, member)
+        match resolution {
+            DotAccessResolution::StructField { is_exported, .. } => {
+                *is_exported || self.struct_field_is_exported(expression_ty, member)
             }
-            Some(SemanticDotKind::InstanceMethod { is_exported }) => {
-                is_exported || self.method_needs_export(member)
+            DotAccessResolution::InstanceMethod { is_exported, .. } => {
+                *is_exported || self.method_needs_export(member)
             }
             _ => {
                 if self.compute_is_exported_context(expression, expression_ty)
@@ -295,11 +259,7 @@ impl Planner<'_> {
         if !payload.is_identity() {
             return None;
         }
-        Some(if self.is_interface_option(result_ty) {
-            NilGuard::Interface
-        } else {
-            NilGuard::Pointer
-        })
+        Some(self.option_nil_guard(result_ty))
     }
 
     /// Accessing a nullable field on a Go-imported type: capture the raw
@@ -307,7 +267,7 @@ impl Planner<'_> {
     /// downstream. Returns `None` when no wrapping is needed.
     fn plan_nullable_field_access(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         access: NullableFieldAccess<'_>,
     ) -> Option<GoExpression> {
         let NullableFieldAccess {
@@ -333,24 +293,19 @@ impl Planner<'_> {
     }
 
     /// When accessing a cross-package generic member by value (not as a callee),
-    /// look up the instantiation's type args and append them to the expression.
+    /// append the type args of the instantiation the checker recorded.
     /// Callee-position accesses skip this because the call site re-instantiates.
     fn append_cross_package_type_args(
         &mut self,
         base_access: GoExpression,
         expression_ty: &Type,
-        member: &str,
-        result_ty: &Type,
+        resolution: &DotAccessResolution,
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
-        if ctx.is_callee() {
+        if ctx.is_callee() || expression_ty.as_import_namespace().is_none() {
             return base_access;
         }
-        let Some(package) = expression_ty.as_import_namespace() else {
-            return base_access;
-        };
-        let qualified = format!("{}.{}", package, member);
-        match self.format_cross_package_type_args(&qualified, result_ty) {
+        match self.format_value_type_args(resolution.definition(), resolution.instantiation()) {
             Some(type_args) => GoExpression::instantiation(base_access, type_args),
             None => base_access,
         }
@@ -375,7 +330,6 @@ impl Planner<'_> {
     }
 
     /// Compute whether a dot access context requires exported (capitalized) Go names.
-    /// Used as fallback when semantic DotAccessKind doesn't carry `is_exported`.
     fn compute_is_exported_context(&self, expression: &Expression, expression_ty: &Type) -> bool {
         let is_import_namespace_identifier = matches!(
             expression,
@@ -497,22 +451,7 @@ fn go_field_name(
         return member.to_string();
     }
 
-    let is_prelude_type = expression_ty
-        .strip_refs()
-        .get_qualified_id()
-        .is_some_and(|id| id.starts_with(go_name::PRELUDE_PREFIX));
-
-    if !is_exported {
-        if is_embedded {
-            return go_name::escape_keyword(member).into_owned();
-        }
-        return go_name::unexported_method_go_name(member);
-    }
-    if is_prelude_type {
-        go_name::snake_to_camel(member)
-    } else {
-        go_name::exported_member(expression_ty, member)
-    }
+    go_name::member_go_name(expression_ty, member, is_exported, is_embedded)
 }
 
 /// Whether the type resolves to a prelude-package declaration. Shared with

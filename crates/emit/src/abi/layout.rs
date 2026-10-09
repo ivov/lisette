@@ -2,8 +2,8 @@ use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
-use crate::abi::is_prelude_container_type;
-use crate::types::go_type::GoType;
+use crate::abi::{go_result_list, is_prelude_container_type};
+use crate::types::go_type::{GoType, returns_go_void};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SlotOrigin {
@@ -47,8 +47,9 @@ impl SlotOrigin {
 #[derive(Debug, Clone)]
 pub(crate) struct FunctionLayout {
     pub(crate) parameters: Vec<ValueLayout>,
-    pub(crate) result: Box<ValueLayout>,
-    pub(crate) payload: Option<Box<ValueLayout>>,
+    pub(crate) result_type: Type,
+    /// One layout per Go result ahead of the status slot.
+    pub(crate) results: Vec<ValueLayout>,
     pub(crate) return_abi: CallableReturnAbi,
 }
 
@@ -56,21 +57,7 @@ impl FunctionLayout {
     fn same_representation(&self, other: &Self) -> bool {
         self.return_abi == other.return_abi
             && layouts_match(&self.parameters, &other.parameters)
-            && self.result_same_representation(other)
-    }
-
-    fn result_same_representation(&self, other: &Self) -> bool {
-        match self.return_abi {
-            CallableReturnAbi::Result { .. }
-            | CallableReturnAbi::Partial { .. }
-            | CallableReturnAbi::Option(_) => {
-                optional_layouts_match(self.payload.as_deref(), other.payload.as_deref())
-            }
-            CallableReturnAbi::Tagged
-            | CallableReturnAbi::Direct
-            | CallableReturnAbi::BareError
-            | CallableReturnAbi::Tuple { .. } => self.result.same_representation(&other.result),
-        }
+            && layouts_match(&self.results, &other.results)
     }
 
     fn go_type(&self, planner: &Planner<'_>) -> GoType {
@@ -98,80 +85,44 @@ impl FunctionLayout {
     }
 
     pub(crate) fn result_go_type(&self, planner: &Planner<'_>) -> Option<GoType> {
-        if self.result.logical_type().is_unit() {
+        if returns_go_void(&self.result_type) {
             return None;
         }
+        let mut slots: Vec<GoType> = self
+            .results
+            .iter()
+            .map(|result| result.go_type(planner))
+            .collect();
         Some(match &self.return_abi {
-            CallableReturnAbi::Tagged | CallableReturnAbi::Direct => self.result.go_type(planner),
-            CallableReturnAbi::BareError => planner.go_type(&self.result.logical_type().err_type()),
+            CallableReturnAbi::Tagged
+            | CallableReturnAbi::Direct
+            | CallableReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) =>
+            {
+                let [slot] = <[GoType; 1]>::try_from(slots)
+                    .unwrap_or_else(|_| unreachable!("a single-result ABI has one result slot"));
+                slot
+            }
+            CallableReturnAbi::BareError => planner.go_type(&self.result_type.err_type()),
             CallableReturnAbi::Result { .. } | CallableReturnAbi::Partial { .. } => {
-                let error = planner.go_type(&self.result.logical_type().err_type());
-                self.multi_result_go_type(planner, error)
+                slots.push(planner.go_type(&self.result_type.err_type()));
+                go_result_list(&slots)
             }
             CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
-                self.multi_result_go_type(planner, GoType::new("bool"))
+                slots.push(GoType::new("bool"));
+                go_result_list(&slots)
             }
-            CallableReturnAbi::Option(OptionReturnAbi::Nullable) => self
-                .payload
-                .as_deref()
-                .expect("option callable layout has a payload")
-                .go_type(planner),
-            CallableReturnAbi::Option(OptionReturnAbi::Sentinel(_)) => self
-                .payload
-                .as_deref()
-                .expect("option callable layout has a payload")
-                .go_type(planner),
-            CallableReturnAbi::Tuple { .. } => {
-                let ValueLayout::Tuple { elements, .. } = self.result.as_ref() else {
-                    return Some(self.result.go_type(planner));
-                };
-                let elements: Vec<GoType> = elements
-                    .iter()
-                    .map(|element| element.go_type(planner))
-                    .collect();
-                let code = format!(
-                    "({})",
-                    elements
-                        .iter()
-                        .map(|element| element.code.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                );
-                GoType::with_dependencies(code, &elements)
-            }
+            CallableReturnAbi::Tuple { .. } => go_result_list(&slots),
         })
-    }
-
-    fn multi_result_go_type(&self, planner: &Planner<'_>, status: GoType) -> GoType {
-        let payload = self
-            .payload
-            .as_deref()
-            .expect("payload-carrying callable layout has a payload");
-        let mut slots: Vec<GoType> = match payload {
-            ValueLayout::Tuple { elements, .. } if self.return_abi.has_flattened_payload() => {
-                elements
-                    .iter()
-                    .map(|element| element.go_type(planner))
-                    .collect()
-            }
-            _ => vec![payload.go_type(planner)],
-        };
-        slots.push(status);
-        let code = format!(
-            "({})",
-            slots
-                .iter()
-                .map(|slot| slot.code.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-        GoType::with_dependencies(code, &slots)
     }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum ValueLayout {
     Plain(Type),
+    Fallible {
+        fallible_type: Type,
+        payload: Box<ValueLayout>,
+    },
     TaggedOption {
         option_type: Type,
         payload: Box<ValueLayout>,
@@ -217,19 +168,31 @@ pub(crate) enum ValueLayout {
 }
 
 impl ValueLayout {
-    pub(crate) fn option_payload(&self) -> Option<&Self> {
+    pub(crate) fn payload(&self) -> Option<&Self> {
         match self {
-            Self::TaggedOption { payload, .. }
+            Self::Fallible { payload, .. }
+            | Self::TaggedOption { payload, .. }
             | Self::NullableOption { payload, .. }
             | Self::PointerOption { payload, .. } => Some(payload),
-            Self::Named { underlying, .. } => underlying.option_payload(),
+            Self::Named { underlying, .. } => underlying.payload(),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn tuple_elements(&self) -> Option<&[Self]> {
+        match self {
+            Self::Tuple { elements, .. } => Some(elements),
+            Self::Named { underlying, .. } => underlying.tuple_elements(),
             _ => None,
         }
     }
 
     pub(crate) fn same_representation(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Plain(_), Self::Plain(_)) => true,
+            // A `Result` is always the tagged struct, whatever its payload layout.
+            (Self::Plain(_), Self::Plain(_)) | (Self::Fallible { .. }, Self::Fallible { .. }) => {
+                true
+            }
             (
                 Self::TaggedOption { payload: left, .. },
                 Self::TaggedOption { payload: right, .. },
@@ -295,6 +258,9 @@ impl ValueLayout {
     pub(crate) fn logical_type(&self) -> &Type {
         match self {
             Self::Plain(ty)
+            | Self::Fallible {
+                fallible_type: ty, ..
+            }
             | Self::TaggedOption {
                 option_type: ty, ..
             }
@@ -343,6 +309,9 @@ impl ValueLayout {
             } => derived_go_type(&format!("[{length}]"), element.go_type(planner)),
             Self::Function { layout, .. } => layout.go_type(planner),
             Self::Plain(ty)
+            | Self::Fallible {
+                fallible_type: ty, ..
+            }
             | Self::TaggedOption {
                 option_type: ty, ..
             }
@@ -390,15 +359,58 @@ impl Planner<'_> {
         self.value_layout_with_hint(ty, origin, Some(declaration))
     }
 
-    pub(crate) fn callable_payload_layout(
+    pub(crate) fn function_layout(
         &self,
-        result_type: &Type,
-        origin: SlotOrigin,
-        declaration: Option<&Type>,
-    ) -> Option<ValueLayout> {
-        let payload = callable_payload_type(result_type)?;
-        let declared_payload = declaration.and_then(callable_payload_type);
-        Some(self.value_layout_with_hint(&payload, origin.nested(), declared_payload.as_ref()))
+        parameters: Vec<ValueLayout>,
+        result: &ValueLayout,
+        return_abi: CallableReturnAbi,
+    ) -> FunctionLayout {
+        let payload = || {
+            result
+                .payload()
+                .expect("a payload-carrying return ABI has a payload layout")
+        };
+        let results = match &return_abi {
+            CallableReturnAbi::Tagged | CallableReturnAbi::Direct => vec![result.clone()],
+            CallableReturnAbi::BareError => Vec::new(),
+            CallableReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
+                vec![payload().clone()]
+            }
+            CallableReturnAbi::Result { .. }
+            | CallableReturnAbi::Partial { .. }
+            | CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
+                if return_abi.has_flattened_payload() {
+                    self.tuple_result_slots(payload())
+                } else {
+                    vec![payload().clone()]
+                }
+            }
+            CallableReturnAbi::Tuple { .. } => self.tuple_result_slots(result),
+        };
+        FunctionLayout {
+            parameters,
+            result_type: result.logical_type().clone(),
+            results,
+            return_abi,
+        }
+    }
+
+    fn tuple_result_slots(&self, tuple: &ValueLayout) -> Vec<ValueLayout> {
+        tuple
+            .tuple_elements()
+            .expect("a tuple-shaped return ABI has a tuple layout")
+            .iter()
+            .map(|element| match element {
+                ValueLayout::TaggedOption {
+                    option_type,
+                    payload,
+                } if self.facts.is_nullable_option(option_type) => ValueLayout::NullableOption {
+                    option_type: option_type.clone(),
+                    payload: payload.clone(),
+                },
+                element => element.clone(),
+            })
+            .collect()
     }
 
     fn value_layout_with_hint(
@@ -439,13 +451,21 @@ impl Planner<'_> {
         origin: SlotOrigin,
         declaration: Option<&Type>,
     ) -> ValueLayout {
-        if ty.is_option() {
-            let declared_payload = declaration.filter(|ty| ty.is_option()).map(Type::ok_type);
+        if is_prelude_container_type(&ty) {
+            let declared_payload = declaration
+                .filter(|ty| is_prelude_container_type(ty))
+                .map(Type::ok_type);
             let payload = Box::new(self.value_layout_with_hint(
                 &ty.ok_type(),
                 origin.nested(),
                 declared_payload.as_ref(),
             ));
+            if !ty.is_option() {
+                return ValueLayout::Fallible {
+                    fallible_type: ty,
+                    payload,
+                };
+            }
             return match origin {
                 SlotOrigin::Lisette | SlotOrigin::GoAny => ValueLayout::TaggedOption {
                     option_type: ty,
@@ -589,23 +609,12 @@ impl Planner<'_> {
                         .unwrap_or(Type::Never);
                     let declared_result =
                         declared_function.as_ref().and_then(Type::get_function_ret);
-                    let result = Box::new(self.value_layout_with_hint(
-                        &result_type,
-                        origin.nested(),
-                        declared_result,
-                    ));
-                    let payload = self
-                        .callable_payload_layout(&result_type, origin, declared_result)
-                        .map(Box::new);
+                    let result =
+                        self.value_layout_with_hint(&result_type, origin.nested(), declared_result);
                     let return_abi = self.slot_return_abi(&result_type, origin);
                     return ValueLayout::Function {
                         function_type: ty,
-                        layout: FunctionLayout {
-                            parameters,
-                            result,
-                            payload,
-                            return_abi,
-                        },
+                        layout: self.function_layout(parameters, &result, return_abi),
                     };
                 }
                 if let Some(underlying) = self.get_newtype_underlying(&ty) {
@@ -623,18 +632,6 @@ impl Planner<'_> {
                 ValueLayout::Plain(ty)
             }
         }
-    }
-}
-
-fn callable_payload_type(ty: &Type) -> Option<Type> {
-    is_prelude_container_type(ty).then(|| ty.ok_type())
-}
-
-fn optional_layouts_match(left: Option<&ValueLayout>, right: Option<&ValueLayout>) -> bool {
-    match (left, right) {
-        (Some(left), Some(right)) => left.same_representation(right),
-        (None, None) => true,
-        _ => false,
     }
 }
 

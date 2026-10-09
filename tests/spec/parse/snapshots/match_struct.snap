@@ -31,6 +31,7 @@ description: |
                         byte_offset: 9,
                         byte_length: 1,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Constructor {
@@ -175,6 +176,7 @@ description: |
                                                     byte_offset: 90,
                                                     byte_length: 1,
                                                 },
+                                                binding: None,
                                             },
                                         },
                                         StructFieldPattern {
@@ -290,6 +292,7 @@ description: |
                                                     byte_offset: 147,
                                                     byte_length: 1,
                                                 },
+                                                binding: None,
                                             },
                                         },
                                     ],
@@ -371,6 +374,7 @@ description: |
                                                     byte_offset: 192,
                                                     byte_length: 1,
                                                 },
+                                                binding: None,
                                             },
                                         },
                                         StructFieldPattern {
@@ -382,6 +386,7 @@ description: |
                                                     byte_offset: 195,
                                                     byte_length: 1,
                                                 },
+                                                binding: None,
                                             },
                                         },
                                     ],

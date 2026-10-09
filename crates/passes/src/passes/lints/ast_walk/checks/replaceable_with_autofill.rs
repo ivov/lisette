@@ -95,7 +95,7 @@ fn is_obvious_zero(value: &Expression, store: &Store) -> bool {
 }
 
 fn is_default_variant(resolution: &DotAccessResolution, store: &Store) -> bool {
-    let DotAccessResolution::EnumVariant { definition } = resolution else {
+    let DotAccessResolution::EnumVariant { definition, .. } = resolution else {
         return false;
     };
     let Some((enum_id, variant_name)) = definition.as_str().rsplit_once('.') else {

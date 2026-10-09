@@ -14,19 +14,21 @@ use crate::patterns::decision_tree;
 use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
 use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
-    Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, SwitchKind, assign,
-    define, discard, expression_statement,
+    Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, SwitchKind,
+    assign, define, discard, expression_statement,
 };
 use crate::plan::calls::{CallPlan, CallableOrigin};
-use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::state::bindings::{ComponentBinding, ComponentKind};
 use crate::state::scope::PairStatusKind;
-use crate::types::native::NativeGoType;
-use syntax::ast::{Expression, Literal, MatchArm, Pattern, Span, collect_pattern_bindings};
+use syntax::ast::{
+    BindingId, ConstructorPatternResolution, Expression, Literal, MatchArm, Pattern,
+};
 use syntax::parse::TUPLE_FIELDS;
-use syntax::types::Type;
+use syntax::program::{NativeTypeKind, resolved_definition};
+use syntax::types::{Type, unqualified_name};
 
 pub(crate) struct ResultFusePlan<'a> {
     subject: &'a Expression,
@@ -190,47 +192,36 @@ impl ResultFusePlan<'_> {
 }
 
 #[derive(Clone, Copy)]
+pub(crate) struct FusedName<'a> {
+    pub(crate) name: &'a str,
+    pub(crate) binding: Option<BindingId>,
+}
+
+#[derive(Clone, Copy)]
 pub(super) enum ArmBinding<'a> {
     Alias {
-        name: &'a str,
+        name: FusedName<'a>,
         go_name: &'a str,
-        span: Option<Span>,
     },
     Copy {
-        name: &'a str,
+        name: FusedName<'a>,
         value: &'a GoExpression,
-        span: Option<Span>,
     },
 }
 
 impl<'a> ArmBinding<'a> {
-    pub(super) fn alias_at(
-        name: Option<&'a str>,
-        go_name: Option<&'a str>,
-        span: Option<Span>,
-    ) -> Option<Self> {
-        name.zip(go_name).map(|(name, go_name)| Self::Alias {
-            name,
-            go_name,
-            span,
-        })
+    pub(super) fn alias_at(name: Option<FusedName<'a>>, go_name: Option<&'a str>) -> Option<Self> {
+        name.zip(go_name)
+            .map(|(name, go_name)| Self::Alias { name, go_name })
     }
 
     pub(super) fn copy_at(
-        name: Option<&'a str>,
+        name: Option<FusedName<'a>>,
         value: Option<&'a GoExpression>,
-        span: Option<Span>,
     ) -> Option<Self> {
         name.zip(value)
-            .map(|(name, value)| Self::Copy { name, value, span })
+            .map(|(name, value)| Self::Copy { name, value })
     }
-}
-
-pub(super) fn arm_binding_span(pattern: &Pattern, name: Option<&str>) -> Option<Span> {
-    let name = name?;
-    collect_pattern_bindings(pattern)
-        .into_iter()
-        .find_map(|(binding, span)| (binding == name).then_some(span))
 }
 
 fn unit_value() -> GoExpression {
@@ -242,19 +233,71 @@ struct ResultArm<'a> {
     is_catch_all: bool,
 }
 
-#[derive(Clone, Copy)]
-enum PartialVariant {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PartialVariant {
     Ok,
     Both,
     Err,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PreludeVariant {
+    Some,
+    None,
+    Ok,
+    Err,
+    Partial(PartialVariant),
+}
+
+impl PreludeVariant {
+    fn from_resolution(enum_name: &str, variant_name: &str) -> Option<Self> {
+        Some(match (enum_name, variant_name) {
+            ("prelude.Option", "Some") => Self::Some,
+            ("prelude.Option", "None") => Self::None,
+            ("prelude.Result", "Ok") => Self::Ok,
+            ("prelude.Result", "Err") => Self::Err,
+            ("prelude.Partial", "Ok") => Self::Partial(PartialVariant::Ok),
+            ("prelude.Partial", "Both") => Self::Partial(PartialVariant::Both),
+            ("prelude.Partial", "Err") => Self::Partial(PartialVariant::Err),
+            _ => return None,
+        })
+    }
+}
+
+pub(crate) fn prelude_variant(pattern: &Pattern) -> Option<(PreludeVariant, &[Pattern])> {
+    let Pattern::EnumVariant {
+        fields,
+        rest: false,
+        resolution:
+            ConstructorPatternResolution::EnumVariant {
+                enum_name,
+                variant_name,
+            },
+        ..
+    } = pattern
+    else {
+        return None;
+    };
+    let variant = PreludeVariant::from_resolution(enum_name, unqualified_name(variant_name))?;
+    Some((variant, fields))
+}
+
+pub(crate) fn prelude_constructor(expression: &Expression) -> Option<PreludeVariant> {
+    let (owner, variant_name) = resolved_definition(expression)?.rsplit_once('.')?;
+    let enum_name = match (owner, variant_name) {
+        ("prelude", "Some" | "None") => "prelude.Option",
+        ("prelude", "Ok" | "Err") => "prelude.Result",
+        _ => owner,
+    };
+    PreludeVariant::from_resolution(enum_name, variant_name)
 }
 
 struct SelectivePartialArms<'a> {
     variant: PartialVariant,
     selected: &'a MatchArm,
     fallback: &'a MatchArm,
-    value_binding: Option<&'a str>,
-    error_binding: Option<&'a str>,
+    value_binding: Option<FusedName<'a>>,
+    error_binding: Option<FusedName<'a>>,
 }
 
 /// How to render the subject declaration line, based on body usage.
@@ -278,7 +321,7 @@ impl Planner<'_> {
         arms: &[MatchArm],
         place: &PlacePlan,
     ) -> LoweredBlock {
-        let mut statements: Vec<LoweredStatement> = Vec::new();
+        let mut statements: Vec<Statement> = Vec::new();
 
         if subject.get_type().is_never() {
             statements.push(self.lower_statement(subject));
@@ -363,7 +406,7 @@ impl Planner<'_> {
         subject: &Expression,
         arms: &[MatchArm],
         place: &PlacePlan,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
         if arms.iter().any(MatchArm::has_guard) {
             return None;
         }
@@ -374,22 +417,13 @@ impl Planner<'_> {
         let mut some_arms = Vec::new();
         let mut none_body = None;
         for arm in arms {
-            let Pattern::EnumVariant {
-                identifier,
-                fields,
-                rest: false,
-                ..
-            } = &arm.pattern
-            else {
-                return None;
-            };
-            match (identifier.as_str(), fields.as_slice()) {
-                ("Some" | "Option.Some", [payload]) => {
+            match prelude_variant(&arm.pattern)? {
+                (PreludeVariant::Some, [payload]) => {
                     let mut inner_arm = arm.clone();
                     inner_arm.pattern = payload.clone();
                     some_arms.push(inner_arm);
                 }
-                ("None" | "Option.None", []) if none_body.is_none() => {
+                (PreludeVariant::None, []) if none_body.is_none() => {
                     none_body = Some(arm.expression.as_ref());
                 }
                 _ => return None,
@@ -410,7 +444,12 @@ impl Planner<'_> {
             place,
         );
         let then_body = match then_body.statements.as_slice() {
-            [LoweredStatement::Block(inner)] => inner.clone(),
+            [
+                Statement {
+                    kind: LoweredStatement::Block(inner),
+                    ..
+                },
+            ] => inner.clone(),
             _ => then_body,
         };
         if let Some(name) = bound.payload_name()
@@ -420,13 +459,16 @@ impl Planner<'_> {
         }
         let else_body = self.lower_block_to_place(none_body, place);
         let else_arm = ElseArm::from_body(else_body, then_body.ends_with_diverge());
-        bound.statements.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
-            initializer: condition.initializer,
-            condition: condition.condition,
-            then_body,
-            else_arm,
-        }));
+        bound.statements.push(
+            LoweredStatement::If(IfPlan {
+                condition_setup: Vec::new(),
+                initializer: condition.initializer,
+                condition: condition.condition,
+                then_body,
+                else_arm,
+            })
+            .into(),
+        );
         Some(bound.statements)
     }
 
@@ -436,7 +478,7 @@ impl Planner<'_> {
         subject: &Expression,
         arms: &[MatchArm],
         place: &PlacePlan,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
         let Expression::Tuple { elements, .. } = subject.unwrap_parens() else {
             return None;
         };
@@ -447,7 +489,7 @@ impl Planner<'_> {
         let mut tested = vec![false; elements.len()];
         for arm in arms {
             let info = decision_tree::collect_pattern_info(self, &arm.pattern, &subject_ty);
-            if info.root_assertion.is_some()
+            if info.has_root_assertion()
                 || !info.bindings.is_empty()
                 || info.requires_materialized_subject
             {
@@ -459,7 +501,7 @@ impl Planner<'_> {
             }
         }
 
-        let mut statements: Vec<LoweredStatement> = Vec::new();
+        let mut statements: Vec<Statement> = Vec::new();
         let mut stages: Vec<ValuePlan> = elements
             .iter()
             .map(|element| self.lower_composite_value(element, ExpressionContext::value()))
@@ -522,7 +564,7 @@ impl Planner<'_> {
         }
         let nil_guard = match lowered.origin {
             CallableOrigin::GoInterop => {
-                if lowered.has_tuple_payload(self) || lowered.payload_bridge.is_some() {
+                if lowered.has_tuple_payload(self) || lowered.is_bridged() {
                     return None;
                 }
                 lowered.nil_guard
@@ -564,10 +606,8 @@ impl Planner<'_> {
             return Some(OptionFusePlan::CommaOk { subject, source });
         }
         if let Some(call) = self.native_method_call(subject) {
-            let indexes = matches!(
-                NativeGoType::from_kind(call.kind),
-                NativeGoType::Slice | NativeGoType::Array
-            ) && call.method == "get"
+            let indexes = matches!(call.kind, NativeTypeKind::Slice | NativeTypeKind::Array)
+                && call.method == "get"
                 && call.arguments.len() == 1
                 && call.spread.is_none()
                 && self.index_fuses(call.receiver, &call.arguments[0]);
@@ -587,13 +627,13 @@ impl Planner<'_> {
         if lowered.is_bridged() {
             return None;
         }
-        let nil_guard = match lowered.shape {
-            CallableReturnAbi::Option(OptionReturnAbi::Nullable) => lowered.nil_guard?,
-            CallableReturnAbi::Option(OptionReturnAbi::Sentinel(value)) => {
-                NilGuard::Sentinel(value)
-            }
-            _ => return None,
-        };
+        if !matches!(
+            lowered.shape,
+            CallableReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_))
+        ) {
+            return None;
+        }
+        let nil_guard = lowered.nil_guard?;
         Some(OptionFusePlan::Nullable { subject, nil_guard })
     }
 
@@ -602,7 +642,7 @@ impl Planner<'_> {
         &mut self,
         value: &Expression,
         go_name: &str,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
         let Expression::Match { subject, arms, .. } = value.unwrap_parens() else {
             return None;
         };
@@ -615,7 +655,7 @@ impl Planner<'_> {
         &mut self,
         value: &Expression,
         go_name: &str,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
         let Expression::Match { subject, arms, .. } = value.unwrap_parens() else {
             return None;
         };
@@ -623,7 +663,7 @@ impl Planner<'_> {
         let arms = classify_option_arms(arms)?;
         let payload = arms.some_binding?;
         if !arms.none_body.get_type().is_never()
-            || arm_body_is_identifier(arms.some_body) != Some(payload)
+            || arm_body_is_identifier(arms.some_body) != Some(payload.name)
             || self.facts.peel_alias(&subject.get_type()).ok_type() != value.get_type()
         {
             return None;
@@ -635,17 +675,14 @@ impl Planner<'_> {
         let fail_body = self.lower_block_as_body(arms.none_body);
         let late_binding = bound.late_binding();
         let mut statements = bound.statements;
-        statements.push(LoweredStatement::If(pair_if(
-            none_condition,
-            fail_body,
-            ElseArm::None,
-        )));
+        statements
+            .push(LoweredStatement::If(pair_if(none_condition, fail_body, ElseArm::None)).into());
         statements.extend(late_binding);
         Some(statements)
     }
 
     /// The payload name an arm binds, or `None` when the body never reads it.
-    fn arm_payload_name<'a>(&self, arm: &'a MatchArm) -> Option<&'a str> {
+    fn arm_payload_name<'a>(&self, arm: &'a MatchArm) -> Option<FusedName<'a>> {
         let Pattern::EnumVariant { fields, .. } = &arm.pattern else {
             return None;
         };
@@ -655,7 +692,7 @@ impl Planner<'_> {
         if self.facts.is_unused_binding(field) {
             return None;
         }
-        simple_payload_binding(arm).filter(|name| *name != "_")
+        simple_payload_binding(arm).flatten()
     }
 
     /// Test a fallible call with one `if`, building no `Result`. A
@@ -667,7 +704,7 @@ impl Planner<'_> {
         arms: &[MatchArm],
         place: &PlacePlan,
         destination: Option<&str>,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
         let fuse = self.result_fuse_plan(subject)?;
         let (ok, err) = classify_result_arms(arms)?;
 
@@ -692,12 +729,12 @@ impl Planner<'_> {
         if let Some(name) = destination {
             // Safe only if the failure arm always leaves and the success arm
             // returns the payload unchanged.
-            let payload = simple_payload_binding(ok.arm).filter(|name| *name != "_")?;
+            let payload = simple_payload_binding(ok.arm).flatten()?;
             if !fuse.carries_payload()
                 || ok.is_catch_all
                 || err.is_catch_all
                 || !err.arm.expression.get_type().is_never()
-                || arm_body_is_identifier(&ok.arm.expression) != Some(payload)
+                || arm_body_is_identifier(&ok.arm.expression) != Some(payload.name)
             {
                 return None;
             }
@@ -720,27 +757,20 @@ impl Planner<'_> {
         let carries_payload = fuse.carries_payload();
         let slot = match (destination, ok_name) {
             (Some(name), _) => CommaOkValueSlot::Named(name.to_string()),
-            (None, Some(name)) => CommaOkValueSlot::Arm(self.arm_value_name(name)),
+            (None, Some(ok)) => CommaOkValueSlot::Arm(self.arm_value_name(ok.name)),
             (None, None) => CommaOkValueSlot::Unused,
         };
-        let (mut bound, wraps) = fuse.bind_wrapped(self, slot, err_name, err_name.is_some());
+        let err_hint = err_name.map(|err| err.name);
+        let (mut bound, wraps) = fuse.bind_wrapped(self, slot, err_hint, err_hint.is_some());
         let error = || GoExpression::name(bound.status().to_string());
 
         let unit = unit_value();
         let then_body = destination.is_none().then(|| {
             // A call returning only `error` has no value, so `Ok(x)` takes unit.
             let ok_binding = if carries_payload {
-                ArmBinding::alias_at(
-                    ok_name,
-                    bound.payload_name(),
-                    arm_binding_span(&ok.arm.pattern, ok_name),
-                )
+                ArmBinding::alias_at(ok_name, bound.payload_name())
             } else {
-                ArmBinding::copy_at(
-                    ok_name,
-                    Some(&unit),
-                    arm_binding_span(&ok.arm.pattern, ok_name),
-                )
+                ArmBinding::copy_at(ok_name, Some(&unit))
             };
             let (body, uses) = self.lower_fused_arm(&[ok_binding], &ok.arm.expression, place);
             (body, uses.first().copied().unwrap_or(false))
@@ -750,11 +780,7 @@ impl Planner<'_> {
         } else {
             place
         };
-        let err_binding = ArmBinding::alias_at(
-            err_name,
-            Some(bound.status()),
-            arm_binding_span(&err.arm.pattern, err_name),
-        );
+        let err_binding = ArmBinding::alias_at(err_name, Some(bound.status()));
         let (mut else_body, err_used) =
             self.lower_fused_arm(&[err_binding], &err.arm.expression, arm_place);
 
@@ -769,11 +795,9 @@ impl Planner<'_> {
         let mut statements = bound.statements;
 
         let Some(then_body) = then_body else {
-            statements.push(LoweredStatement::If(pair_if(
-                err_condition,
-                else_body,
-                ElseArm::None,
-            )));
+            statements.push(
+                LoweredStatement::If(pair_if(err_condition, else_body, ElseArm::None)).into(),
+            );
             return Some(statements);
         };
 
@@ -786,7 +810,7 @@ impl Planner<'_> {
                 ElseArm::from_body(else_body, false),
             )
         };
-        statements.push(LoweredStatement::If(plan));
+        statements.push(LoweredStatement::If(plan).into());
         Some(statements)
     }
 
@@ -809,7 +833,8 @@ impl Planner<'_> {
                         statements: vec![assign(error.clone(), unexpected_nil_error())],
                     },
                     ElseArm::None,
-                )),
+                ))
+                .into(),
             );
         }
         if !wraps.is_empty() {
@@ -828,7 +853,7 @@ impl Planner<'_> {
         subject: &Expression,
         arms: &[MatchArm],
         place: &PlacePlan,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
         if arms.iter().any(MatchArm::has_guard) {
             return None;
         }
@@ -840,27 +865,19 @@ impl Planner<'_> {
         let mut ok_arms = Vec::new();
         let mut err_arm: Option<(&MatchArm, Option<&Pattern>)> = None;
         for arm in arms {
-            match &arm.pattern {
-                Pattern::EnumVariant {
-                    identifier,
-                    fields,
-                    rest: false,
-                    ..
-                } => match (identifier.as_str(), fields.as_slice()) {
-                    ("Ok" | "Result.Ok", [payload]) => {
-                        let mut inner_arm = arm.clone();
-                        inner_arm.pattern = payload.clone();
-                        ok_arms.push(inner_arm);
-                    }
-                    ("Err" | "Result.Err", [payload])
-                        if err_arm.is_none() && field_binding(payload).is_some() =>
-                    {
-                        err_arm = Some((arm, Some(payload)));
-                    }
-                    _ => return None,
-                },
+            match (prelude_variant(&arm.pattern), &arm.pattern) {
+                (Some((PreludeVariant::Ok, [payload])), _) => {
+                    let mut inner_arm = arm.clone();
+                    inner_arm.pattern = payload.clone();
+                    ok_arms.push(inner_arm);
+                }
+                (Some((PreludeVariant::Err, [payload])), _)
+                    if err_arm.is_none() && field_binding(payload).is_some() =>
+                {
+                    err_arm = Some((arm, Some(payload)));
+                }
                 // A catch-all takes the error only after an irrefutable `Ok` arm.
-                Pattern::WildCard { .. }
+                (_, Pattern::WildCard { .. })
                     if err_arm.is_none()
                         && ok_arms.iter().any(|ok_arm| {
                             let info = decision_tree::collect_pattern_info(
@@ -868,7 +885,7 @@ impl Planner<'_> {
                                 &ok_arm.pattern,
                                 &payload_ty,
                             );
-                            info.checks.is_empty() && info.root_assertion.is_none()
+                            info.is_irrefutable()
                         }) =>
                 {
                     err_arm = Some((arm, None));
@@ -883,7 +900,8 @@ impl Planner<'_> {
         let err_name = err_payload
             .filter(|payload| !self.facts.is_unused_binding(payload))
             .and_then(field_binding)
-            .filter(|name| *name != "_");
+            .flatten();
+        let err_hint = err_name.map(|err| err.name);
 
         let has_nil_guard = fuse.has_nil_guard();
         let (mut bound, wraps) = {
@@ -891,15 +909,20 @@ impl Planner<'_> {
             fuse.bind_wrapped(
                 self,
                 CommaOkValueSlot::Arm(value_name),
-                err_name,
-                err_name.is_some(),
+                err_hint,
+                err_hint.is_some(),
             )
         };
         let value = GoExpression::name(bound.payload_name()?.to_string());
         let then_body =
             self.lower_match_tree(&ok_arms, MatchSubject::Var(value), payload_ty, place);
         let then_body = match then_body.statements.as_slice() {
-            [LoweredStatement::Block(inner)] => inner.clone(),
+            [
+                Statement {
+                    kind: LoweredStatement::Block(inner),
+                    ..
+                },
+            ] => inner.clone(),
             _ => then_body,
         };
         if let Some(name) = bound.payload_name()
@@ -907,11 +930,7 @@ impl Planner<'_> {
         {
             bound.discard_value();
         }
-        let err_binding = ArmBinding::alias_at(
-            err_name,
-            Some(bound.status()),
-            arm_binding_span(&err_arm.pattern, err_name),
-        );
+        let err_binding = ArmBinding::alias_at(err_name, Some(bound.status()));
         let (mut else_body, err_used) =
             self.lower_fused_arm(&[err_binding], &err_arm.expression, place);
         let err_read = err_used.first().copied().unwrap_or(false);
@@ -921,11 +940,7 @@ impl Planner<'_> {
         let ok_condition = bound.success_condition();
         let else_arm = ElseArm::from_body(else_body, false);
         let mut statements = bound.statements;
-        statements.push(LoweredStatement::If(pair_if(
-            ok_condition,
-            then_body,
-            else_arm,
-        )));
+        statements.push(LoweredStatement::If(pair_if(ok_condition, then_body, else_arm)).into());
         Some(statements)
     }
 
@@ -935,7 +950,7 @@ impl Planner<'_> {
             return false;
         }
         if self
-            .go_return_payload_bridge(&plan.resolved.abi, &subject.get_type())
+            .go_result_bridge(&plan.resolved.abi, &subject.get_type())
             .is_some()
         {
             return false;
@@ -949,20 +964,16 @@ impl Planner<'_> {
         subject: &Expression,
         arms: &[MatchArm],
         place: &PlacePlan,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
         let plan = self.plan_call(subject)?;
         if !self.fusable_partial(subject, &plan) {
             return None;
         }
         let (ok_arm, both_arm, err_arm) = classify_partial_arms(arms)?;
 
-        let ok_binding = simple_payload_binding(ok_arm)?;
-        let err_binding = simple_payload_binding(err_arm)?;
-        let (both_val_binding, both_err_binding) = partial_both_bindings(both_arm)?;
-        let ok_name = (ok_binding != "_").then_some(ok_binding);
-        let err_name = (err_binding != "_").then_some(err_binding);
-        let both_val = (both_val_binding != "_").then_some(both_val_binding);
-        let both_err = (both_err_binding != "_").then_some(both_err_binding);
+        let ok_name = simple_payload_binding(ok_arm)?;
+        let err_name = simple_payload_binding(err_arm)?;
+        let (both_val, both_err) = partial_both_bindings(both_arm)?;
 
         let ok_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
         let nilable = self.partial_ok_is_nilable(&ok_ty);
@@ -971,36 +982,25 @@ impl Planner<'_> {
             .lower_call(subject, None, ExpressionContext::value())
             .into_parts();
         let val_var = match ok_name.or(both_val) {
-            Some(name) => Some(self.arm_value_name(name)),
+            Some(value) => Some(self.arm_value_name(value.name)),
             None => nilable.then(|| self.fresh_var(Some("ret"))),
         };
-        let mut err_var = self.pair_status(both_err.or(err_name), PairStatusKind::Error, true);
+        let err_hint = both_err.or(err_name).map(|err| err.name);
+        let mut err_var = self.pair_status(err_hint, PairStatusKind::Error, true);
         if val_var.as_deref() == Some(err_var.as_str()) {
             err_var = self.fresh_var(Some(&err_var));
         }
         let err = || GoExpression::name(err_var.clone());
 
         let (ok_body, ok_uses) = self.lower_fused_arm(
-            &[ArmBinding::alias_at(
-                ok_name,
-                val_var.as_deref(),
-                arm_binding_span(&ok_arm.pattern, ok_name),
-            )],
+            &[ArmBinding::alias_at(ok_name, val_var.as_deref())],
             &ok_arm.expression,
             place,
         );
         let (both_body, both_uses) = self.lower_fused_arm(
             &[
-                ArmBinding::alias_at(
-                    both_val,
-                    val_var.as_deref(),
-                    arm_binding_span(&both_arm.pattern, both_val),
-                ),
-                ArmBinding::alias_at(
-                    both_err,
-                    Some(&err_var),
-                    arm_binding_span(&both_arm.pattern, both_err),
-                ),
+                ArmBinding::alias_at(both_val, val_var.as_deref()),
+                ArmBinding::alias_at(both_err, Some(&err_var)),
             ],
             &both_arm.expression,
             place,
@@ -1022,11 +1022,7 @@ impl Planner<'_> {
         let else_arm = match nil_check {
             Some(check) => {
                 let (err_body, _) = self.lower_fused_arm(
-                    &[ArmBinding::alias_at(
-                        err_name,
-                        Some(&err_var),
-                        arm_binding_span(&err_arm.pattern, err_name),
-                    )],
+                    &[ArmBinding::alias_at(err_name, Some(&err_var))],
                     &err_arm.expression,
                     place,
                 );
@@ -1039,13 +1035,16 @@ impl Planner<'_> {
             None => ElseArm::from_body(both_body, false),
         };
 
-        statements.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
-            initializer: Some(initializer),
-            condition: is_nil(err()),
-            then_body: ok_body,
-            else_arm,
-        }));
+        statements.push(
+            LoweredStatement::If(IfPlan {
+                condition_setup: Vec::new(),
+                initializer: Some(initializer),
+                condition: is_nil(err()),
+                then_body: ok_body,
+                else_arm,
+            })
+            .into(),
+        );
         Some(statements)
     }
 
@@ -1056,7 +1055,7 @@ impl Planner<'_> {
         subject: &Expression,
         arms: &[MatchArm],
         place: &PlacePlan,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
         let plan = self.plan_call(subject)?;
         // Selective fusion relies on the state mapping of a raw Go
         // `(value, error)` return. Do not infer that mapping for Lisette
@@ -1070,8 +1069,7 @@ impl Planner<'_> {
         let ok_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
         let nil_guard = self.partial_ok_nil_guard(&ok_ty);
 
-        let value_binding = arms.value_binding.filter(|name| *name != "_");
-        let error_binding = arms.error_binding.filter(|name| *name != "_");
+        let (value_binding, error_binding) = (arms.value_binding, arms.error_binding);
 
         let (mut statements, call) = self
             .lower_call(subject, None, ExpressionContext::value())
@@ -1091,25 +1089,18 @@ impl Planner<'_> {
         let condition_needs_value = nil_guard.is_some()
             && matches!(arms.variant, PartialVariant::Both | PartialVariant::Err);
         let value = match value_binding {
-            Some(name) => Some(self.arm_value_name(name)),
+            Some(value) => Some(self.arm_value_name(value.name)),
             None => condition_needs_value.then(|| self.fresh_var(Some("ret"))),
         };
-        let mut error = self.pair_status(error_binding, PairStatusKind::Error, true);
+        let error_hint = error_binding.map(|error| error.name);
+        let mut error = self.pair_status(error_hint, PairStatusKind::Error, true);
         if value.as_deref() == Some(error.as_str()) {
             error = self.fresh_var(Some(&error));
         }
         let (selected, binding_uses) = self.lower_fused_arm(
             &[
-                ArmBinding::alias_at(
-                    value_binding,
-                    value.as_deref(),
-                    arm_binding_span(&arms.selected.pattern, value_binding),
-                ),
-                ArmBinding::alias_at(
-                    error_binding,
-                    Some(&error),
-                    arm_binding_span(&arms.selected.pattern, error_binding),
-                ),
+                ArmBinding::alias_at(value_binding, value.as_deref()),
+                ArmBinding::alias_at(error_binding, Some(&error)),
             ],
             &arms.selected.expression,
             place,
@@ -1136,27 +1127,32 @@ impl Planner<'_> {
         let condition = match arms.variant {
             PartialVariant::Ok => is_nil(err()),
             PartialVariant::Both => match nil_guard {
-                Some(guard) => {
-                    GoExpression::binary(non_nil(err()), "&&", guard.non_nil(guarded_value()))
-                }
+                Some(guard) => GoExpression::binary(
+                    non_nil(err()),
+                    BinaryOp::And,
+                    guard.non_nil(guarded_value()),
+                ),
                 None => non_nil(err()),
             },
             PartialVariant::Err => {
                 let guard = nil_guard.expect("non-nilable Err returned above");
-                GoExpression::binary(non_nil(err()), "&&", guard.is_nil(guarded_value()))
+                GoExpression::binary(non_nil(err()), BinaryOp::And, guard.is_nil(guarded_value()))
             }
         };
         let selected_diverges = selected.ends_with_diverge();
-        statements.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
-            initializer: Some(Definition {
-                names: vec![bound_value.into(), error.clone().into()],
-                value: call,
-            }),
-            condition,
-            then_body: selected,
-            else_arm: ElseArm::from_body(fallback, selected_diverges),
-        }));
+        statements.push(
+            LoweredStatement::If(IfPlan {
+                condition_setup: Vec::new(),
+                initializer: Some(Definition {
+                    names: vec![bound_value.into(), error.clone().into()],
+                    value: call,
+                }),
+                condition,
+                then_body: selected,
+                else_arm: ElseArm::from_body(fallback, selected_diverges),
+            })
+            .into(),
+        );
         Some(statements)
     }
 
@@ -1167,7 +1163,7 @@ impl Planner<'_> {
         subject: &Expression,
         arms: &[MatchArm],
         place: &PlacePlan,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
         let fuse = self.option_fuse_plan(subject)?;
         let arms = classify_option_arms(arms)?;
         Some(self.lower_fused_option_arms(fuse, arms, place))
@@ -1178,22 +1174,18 @@ impl Planner<'_> {
         fuse: OptionFusePlan<'_>,
         arms: OptionArms<'_>,
         place: &PlacePlan,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
         let slot = match arms.some_binding {
-            Some(name) => CommaOkValueSlot::Arm(self.arm_value_name(name)),
+            Some(some) => CommaOkValueSlot::Arm(self.arm_value_name(some.name)),
             None => CommaOkValueSlot::Unused,
         };
         let mut bound = fuse.bind(self, slot);
 
         let element = bound.payload();
         let some_binding = if bound.binds_value() {
-            ArmBinding::alias_at(
-                arms.some_binding,
-                bound.payload_name(),
-                arms.some_binding_span,
-            )
+            ArmBinding::alias_at(arms.some_binding, bound.payload_name())
         } else {
-            ArmBinding::copy_at(arms.some_binding, element.as_ref(), arms.some_binding_span)
+            ArmBinding::copy_at(arms.some_binding, element.as_ref())
         };
         let (then_body, some_uses) = self.lower_fused_arm(&[some_binding], arms.some_body, place);
         let (else_body, _) = self.lower_fused_arm(&[], arms.none_body, place);
@@ -1213,7 +1205,7 @@ impl Planner<'_> {
             pair_if(condition, then_body, ElseArm::from_body(else_body, false))
         };
         let mut statements = bound.statements;
-        statements.push(LoweredStatement::If(plan));
+        statements.push(LoweredStatement::If(plan).into());
         statements
     }
 
@@ -1228,15 +1220,10 @@ impl Planner<'_> {
                 .iter()
                 .map(|binding| {
                     binding.map(|binding| match binding {
-                        ArmBinding::Alias {
-                            name,
-                            go_name,
-                            span,
-                        } => {
-                            this.scope.bind(name, go_name);
-                            if let Some(id) = span.and_then(|span| this.facts.binding_id_at(span)) {
-                                this.scope.register_binding_id(id, name);
-                            }
+                        ArmBinding::Alias { name, go_name } => {
+                            let id = name.binding;
+                            let name = name.name;
+                            this.scope.bind_source(name, id.as_slice(), go_name);
                             (
                                 this.scope
                                     .bound_go_identifier(name)
@@ -1245,11 +1232,10 @@ impl Planner<'_> {
                                 None,
                             )
                         }
-                        ArmBinding::Copy { name, value, span } => {
-                            let go_name = this.scope.bind(name, name);
-                            if let Some(id) = span.and_then(|span| this.facts.binding_id_at(span)) {
-                                this.scope.register_binding_id(id, name);
-                            }
+                        ArmBinding::Copy { name, value } => {
+                            let id = name.binding;
+                            let name = name.name;
+                            let go_name = this.scope.bind_source(name, id.as_slice(), name);
                             this.declare(&go_name);
                             (
                                 this.scope
@@ -1289,12 +1275,14 @@ impl Planner<'_> {
 
     fn lower_match_subject_var(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         subject: &Expression,
         arms: &[MatchArm],
     ) -> (GoExpression, SubjectDeclaration) {
         let any_guard = arms.iter().any(|arm| arm.has_guard());
-        if let Expression::Identifier { value, .. } = subject
+        if let Expression::Identifier {
+            value, resolution, ..
+        } = subject
             && !any_guard
         {
             let name = value.to_string();
@@ -1302,7 +1290,7 @@ impl Planner<'_> {
                 .iter()
                 .any(|arm| pattern_binds_name(&arm.pattern, &name));
             if self.can_reuse_subject_identifier(&name, has_collision) {
-                let var = self.reference_go_name(&name);
+                let var = self.reference_go_name(&name, resolution);
                 return (
                     GoExpression::name(var.clone()),
                     SubjectDeclaration::PlainDiscard { var },
@@ -1351,7 +1339,7 @@ impl Planner<'_> {
 
 /// Move a subject temp into the first header when that header is its only read.
 fn inline_subject_into_header(
-    statements: &mut [LoweredStatement],
+    statements: &mut [Statement],
     var: &str,
     expression: &GoExpression,
 ) -> bool {
@@ -1373,8 +1361,8 @@ fn inline_subject_into_header(
     false
 }
 
-fn header_mut(statement: &mut LoweredStatement) -> Option<&mut GoExpression> {
-    match statement {
+fn header_mut(statement: &mut Statement) -> Option<&mut GoExpression> {
+    match &mut statement.kind {
         LoweredStatement::Switch(plan) => match &mut plan.kind {
             SwitchKind::Value { subject } | SwitchKind::Type { subject, .. } => Some(subject),
             SwitchKind::Conditional => None,
@@ -1433,25 +1421,8 @@ fn classify_result_arms(arms: &[MatchArm]) -> Option<(ResultArm<'_>, ResultArm<'
     if arms.len() != 2 || arms.iter().any(|a| a.has_guard()) {
         return None;
     }
-    let kind = |arm: &MatchArm| -> Option<&'static str> {
-        if matches!(arm.pattern, Pattern::WildCard { .. }) {
-            return Some("_");
-        }
-        let Pattern::EnumVariant {
-            identifier, rest, ..
-        } = &arm.pattern
-        else {
-            return None;
-        };
-        if *rest {
-            return None;
-        }
-        match identifier.as_str() {
-            "Ok" | "Result.Ok" => Some("Ok"),
-            "Err" | "Result.Err" => Some("Err"),
-            _ => None,
-        }
-    };
+    let variant = |arm: &MatchArm| prelude_variant(&arm.pattern).map(|(variant, _)| variant);
+    let second_is_catch_all = matches!(arms[1].pattern, Pattern::WildCard { .. });
     let explicit = |arm| ResultArm {
         arm,
         is_catch_all: false,
@@ -1460,11 +1431,19 @@ fn classify_result_arms(arms: &[MatchArm]) -> Option<(ResultArm<'_>, ResultArm<'
         arm,
         is_catch_all: true,
     };
-    match (kind(&arms[0])?, kind(&arms[1])?) {
-        ("Ok", "Err") => Some((explicit(&arms[0]), explicit(&arms[1]))),
-        ("Err", "Ok") => Some((explicit(&arms[1]), explicit(&arms[0]))),
-        ("Ok", "_") => Some((explicit(&arms[0]), catch_all(&arms[1]))),
-        ("Err", "_") => Some((catch_all(&arms[1]), explicit(&arms[0]))),
+    match (variant(&arms[0])?, variant(&arms[1])) {
+        (PreludeVariant::Ok, Some(PreludeVariant::Err)) => {
+            Some((explicit(&arms[0]), explicit(&arms[1])))
+        }
+        (PreludeVariant::Err, Some(PreludeVariant::Ok)) => {
+            Some((explicit(&arms[1]), explicit(&arms[0])))
+        }
+        (PreludeVariant::Ok, None) if second_is_catch_all => {
+            Some((explicit(&arms[0]), catch_all(&arms[1])))
+        }
+        (PreludeVariant::Err, None) if second_is_catch_all => {
+            Some((catch_all(&arms[1]), explicit(&arms[0])))
+        }
         _ => None,
     }
 }
@@ -1473,29 +1452,15 @@ fn classify_partial_arms(arms: &[MatchArm]) -> Option<(&MatchArm, &MatchArm, &Ma
     if arms.len() != 3 || arms.iter().any(|a| a.has_guard()) {
         return None;
     }
-    let kind = |arm: &MatchArm| -> Option<&'static str> {
-        let Pattern::EnumVariant {
-            identifier, rest, ..
-        } = &arm.pattern
-        else {
-            return None;
-        };
-        if *rest {
-            return None;
-        }
-        match identifier.as_str() {
-            "Ok" | "Partial.Ok" => Some("Ok"),
-            "Both" | "Partial.Both" => Some("Both"),
-            "Err" | "Partial.Err" => Some("Err"),
-            _ => None,
-        }
-    };
     let (mut ok, mut both, mut err) = (None, None, None);
     for arm in arms {
-        let slot = match kind(arm)? {
-            "Ok" => &mut ok,
-            "Both" => &mut both,
-            _ => &mut err,
+        let (PreludeVariant::Partial(variant), _) = prelude_variant(&arm.pattern)? else {
+            return None;
+        };
+        let slot = match variant {
+            PartialVariant::Ok => &mut ok,
+            PartialVariant::Both => &mut both,
+            PartialVariant::Err => &mut err,
         };
         if slot.is_some() {
             return None;
@@ -1513,31 +1478,14 @@ fn classify_selective_partial_arms(arms: &[MatchArm]) -> Option<SelectivePartial
         return None;
     }
     let (selected, fallback) = (&arms[0], &arms[1]);
-    let Pattern::EnumVariant {
-        identifier,
-        fields,
-        rest,
-        ..
-    } = &selected.pattern
-    else {
+    let (PreludeVariant::Partial(variant), fields) = prelude_variant(&selected.pattern)? else {
         return None;
     };
-    if *rest {
-        return None;
-    }
-    let variant = match identifier.as_str() {
-        "Ok" | "Partial.Ok" if fields.len() == 1 => PartialVariant::Ok,
-        "Both" | "Partial.Both" if fields.len() == 2 => PartialVariant::Both,
-        "Err" | "Partial.Err" if fields.len() == 1 => PartialVariant::Err,
+    let (value_binding, error_binding) = match (variant, fields) {
+        (PartialVariant::Ok, [value]) => (field_binding(value)?, None),
+        (PartialVariant::Both, [value, error]) => (field_binding(value)?, field_binding(error)?),
+        (PartialVariant::Err, [error]) => (None, field_binding(error)?),
         _ => return None,
-    };
-    let (value_binding, error_binding) = match variant {
-        PartialVariant::Ok => (Some(simple_payload_binding(selected)?), None),
-        PartialVariant::Both => {
-            let (value, error) = partial_both_bindings(selected)?;
-            (Some(value), Some(error))
-        }
-        PartialVariant::Err => (None, Some(simple_payload_binding(selected)?)),
     };
     Some(SelectivePartialArms {
         variant,
@@ -1550,14 +1498,13 @@ fn classify_selective_partial_arms(arms: &[MatchArm]) -> Option<SelectivePartial
 
 pub(crate) struct OptionArms<'a> {
     /// `None` when the Some arm binds no payload.
-    pub(crate) some_binding: Option<&'a str>,
-    pub(crate) some_binding_span: Option<Span>,
+    pub(crate) some_binding: Option<FusedName<'a>>,
     pub(crate) some_body: &'a Expression,
     pub(crate) none_body: &'a Expression,
 }
 
 enum OptionArmKind<'a> {
-    Some(Option<&'a str>),
+    Some(Option<FusedName<'a>>),
     None,
     WildCard,
 }
@@ -1567,21 +1514,11 @@ fn option_arm_kind(arm: &MatchArm) -> Option<OptionArmKind<'_>> {
     if matches!(arm.pattern, Pattern::WildCard { .. }) {
         return Some(ArmKind::WildCard);
     }
-    if let Some(field) = some_pattern_field(&arm.pattern) {
-        let binding = field_binding(field)?;
-        return Some(ArmKind::Some((binding != "_").then_some(binding)));
+    match prelude_variant(&arm.pattern)? {
+        (PreludeVariant::Some, [field]) => Some(ArmKind::Some(field_binding(field)?)),
+        (PreludeVariant::None, []) => Some(ArmKind::None),
+        _ => None,
     }
-    let Pattern::EnumVariant {
-        identifier,
-        fields,
-        rest,
-        ..
-    } = &arm.pattern
-    else {
-        return None;
-    };
-    (!*rest && fields.is_empty() && matches!(identifier.as_str(), "None" | "Option.None"))
-        .then_some(ArmKind::None)
 }
 
 /// `[Some(<binding>), None]` in either order, plus the if-let wildcard desugars.
@@ -1593,19 +1530,16 @@ fn classify_option_arms(arms: &[MatchArm]) -> Option<OptionArms<'_>> {
     match (option_arm_kind(&arms[0])?, option_arm_kind(&arms[1])?) {
         (ArmKind::Some(binding), ArmKind::None | ArmKind::WildCard) => Some(OptionArms {
             some_binding: binding,
-            some_binding_span: arm_binding_span(&arms[0].pattern, binding),
             some_body: &arms[0].expression,
             none_body: &arms[1].expression,
         }),
         (ArmKind::None, ArmKind::Some(binding)) => Some(OptionArms {
             some_binding: binding,
-            some_binding_span: arm_binding_span(&arms[1].pattern, binding),
             some_body: &arms[1].expression,
             none_body: &arms[0].expression,
         }),
         (ArmKind::None, ArmKind::WildCard) => Some(OptionArms {
             some_binding: None,
-            some_binding_span: None,
             some_body: &arms[1].expression,
             none_body: &arms[0].expression,
         }),
@@ -1638,44 +1572,38 @@ fn arm_body_is_identifier(body: &Expression) -> Option<&str> {
 
 /// The single payload field of an `Ok(<identifier|_>)` pattern.
 pub(super) fn ok_pattern_field(pattern: &Pattern) -> Option<&Pattern> {
-    simple_variant_field(pattern, &["Ok", "Result.Ok"])
+    simple_variant_field(pattern, PreludeVariant::Ok)
 }
 
 /// The single payload field of a `Some(<identifier|_>)` pattern.
 pub(super) fn some_pattern_field(pattern: &Pattern) -> Option<&Pattern> {
-    simple_variant_field(pattern, &["Some", "Option.Some"])
+    simple_variant_field(pattern, PreludeVariant::Some)
 }
 
-fn simple_variant_field<'a>(pattern: &'a Pattern, variants: &[&str]) -> Option<&'a Pattern> {
-    let Pattern::EnumVariant {
-        identifier,
-        fields,
-        rest,
-        ..
-    } = pattern
-    else {
+fn simple_variant_field(pattern: &Pattern, expected: PreludeVariant) -> Option<&Pattern> {
+    let (variant, [field]) = prelude_variant(pattern)? else {
         return None;
     };
-    if *rest || !variants.contains(&identifier.as_str()) {
-        return None;
-    }
-    let [field] = fields.as_slice() else {
-        return None;
-    };
-    matches!(field, Pattern::Identifier { .. } | Pattern::WildCard { .. }).then_some(field)
+    (variant == expected && matches!(field, Pattern::Identifier { .. } | Pattern::WildCard { .. }))
+        .then_some(field)
 }
 
-pub(super) fn field_binding(pattern: &Pattern) -> Option<&str> {
+pub(crate) fn field_binding(pattern: &Pattern) -> Option<Option<FusedName<'_>>> {
     match pattern {
-        Pattern::Identifier { identifier, .. } => Some(identifier.as_str()),
-        Pattern::WildCard { .. } => Some("_"),
+        Pattern::Identifier {
+            identifier,
+            binding,
+            ..
+        } => Some(Some(FusedName {
+            name: identifier.as_str(),
+            binding: *binding,
+        })),
+        Pattern::WildCard { .. } => Some(None),
         _ => None,
     }
 }
 
-/// `Some(name)` for `Variant(identifier)`, `Some("_")` for `Variant(_)`, `None`
-/// for empty/unit/complex payloads.
-fn simple_payload_binding(arm: &MatchArm) -> Option<&str> {
+fn simple_payload_binding(arm: &MatchArm) -> Option<Option<FusedName<'_>>> {
     let Pattern::EnumVariant { fields, .. } = &arm.pattern else {
         return None;
     };
@@ -1685,7 +1613,7 @@ fn simple_payload_binding(arm: &MatchArm) -> Option<&str> {
     field_binding(&fields[0])
 }
 
-fn partial_both_bindings(arm: &MatchArm) -> Option<(&str, &str)> {
+fn partial_both_bindings(arm: &MatchArm) -> Option<(Option<FusedName<'_>>, Option<FusedName<'_>>)> {
     let Pattern::EnumVariant { fields, .. } = &arm.pattern else {
         return None;
     };
@@ -1716,18 +1644,34 @@ fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &CallableReturnAbi) -> bool 
 
 #[cfg(test)]
 mod tests {
-    use super::classify_selective_partial_arms;
-    use syntax::ast::{ConstructorPatternResolution, Expression, MatchArm, Pattern, Span};
+    use super::{
+        PartialVariant, PreludeVariant, classify_selective_partial_arms, prelude_constructor,
+        prelude_variant,
+    };
+    use syntax::ast::{
+        ConstructorPatternResolution, Expression, IdentifierResolution, MatchArm, Pattern, Span,
+    };
     use syntax::types::Type;
 
-    fn variant(identifier: &str, fields: Vec<Pattern>) -> Pattern {
+    fn variant(enum_name: &str, identifier: &str, fields: Vec<Pattern>) -> Pattern {
         Pattern::EnumVariant {
             identifier: identifier.into(),
             fields,
             rest: false,
-            resolution: ConstructorPatternResolution::Unresolved,
+            resolution: ConstructorPatternResolution::EnumVariant {
+                enum_name: enum_name.into(),
+                variant_name: identifier.into(),
+            },
             ty: Type::uninferred(),
             span: Span::dummy(),
+        }
+    }
+
+    fn name(identifier: &str) -> Pattern {
+        Pattern::Identifier {
+            identifier: identifier.into(),
+            span: Span::dummy(),
+            binding: None,
         }
     }
 
@@ -1742,24 +1686,65 @@ mod tests {
         }
     }
 
+    fn wildcard_arm() -> MatchArm {
+        arm(Pattern::WildCard {
+            span: Span::dummy(),
+        })
+    }
+
+    #[test]
+    fn prelude_variant_reads_the_resolved_enum_not_the_spelling() {
+        let classify = |enum_name, identifier| {
+            prelude_variant(&variant(enum_name, identifier, vec![name("n")]))
+                .map(|(variant, _)| variant)
+        };
+        assert!(classify("prelude.Option", "Some") == Some(PreludeVariant::Some));
+        assert!(classify("prelude.Option", "Opt.Some") == Some(PreludeVariant::Some));
+        assert!(classify("prelude.Result", "Res.Ok") == Some(PreludeVariant::Ok));
+        assert!(classify("main.Maybe", "Some").is_none());
+    }
+
+    #[test]
+    fn prelude_constructor_reads_the_resolved_definition_not_the_spelling() {
+        let classify = |value: &str, definition: &str| {
+            prelude_constructor(&Expression::Identifier {
+                value: value.into(),
+                ty: Type::uninferred(),
+                span: Span::dummy(),
+                resolution: IdentifierResolution::Definition {
+                    name: definition.into(),
+                    instantiation: Default::default(),
+                },
+            })
+        };
+        assert!(classify("Some", "prelude.Some") == Some(PreludeVariant::Some));
+        assert!(classify("Option.None", "prelude.Option.None") == Some(PreludeVariant::None));
+        assert!(classify("Err", "prelude.Err") == Some(PreludeVariant::Err));
+        assert!(
+            classify("Partial.Both", "prelude.Partial.Both")
+                == Some(PreludeVariant::Partial(PartialVariant::Both))
+        );
+        // Only the qualified spelling names a `Partial` variant.
+        assert!(classify("Both", "prelude.Both").is_none());
+        assert!(classify("Some", "main.Maybe.Some").is_none());
+    }
+
     #[test]
     fn selective_partial_classifier_rejects_nested_payload_pattern() {
-        let arms = [
-            arm(variant(
-                "Partial.Ok",
-                vec![variant(
-                    "Some",
-                    vec![Pattern::Identifier {
-                        identifier: "n".into(),
-                        span: Span::dummy(),
-                    }],
-                )],
-            )),
-            arm(Pattern::WildCard {
-                span: Span::dummy(),
-            }),
+        let simple = [
+            arm(variant("prelude.Partial", "Partial.Ok", vec![name("n")])),
+            wildcard_arm(),
         ];
+        assert!(classify_selective_partial_arms(&simple).is_some());
 
-        assert!(classify_selective_partial_arms(&arms).is_none());
+        let nested = [
+            arm(variant(
+                "prelude.Partial",
+                "Partial.Ok",
+                vec![variant("prelude.Option", "Some", vec![name("n")])],
+            )),
+            wildcard_arm(),
+        ];
+        assert!(classify_selective_partial_arms(&nested).is_none());
     }
 }

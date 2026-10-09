@@ -1,15 +1,15 @@
-use ecow::EcoString;
 use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
-use syntax::types::Type;
 
 #[derive(Default)]
 pub(crate) struct PackageState {
     escape_remap: HashMap<String, String>,
     generic_renames: HashMap<String, String>,
     go_const_bindings: HashSet<String>,
-    package_block_names: HashSet<String>,
+    /// Go names the package's own items declare at package scope.
     declared_names: HashSet<String>,
+    /// Qualifiers the package's imports bind in the Go package block.
+    import_qualifiers: HashSet<String>,
 }
 
 impl PackageState {
@@ -41,23 +41,28 @@ impl PackageState {
 
     pub(crate) fn record_package_block_names(
         &mut self,
-        names: HashSet<String>,
         declared_names: HashSet<String>,
+        import_qualifiers: HashSet<String>,
     ) {
-        self.package_block_names = names;
         self.declared_names = declared_names;
+        self.import_qualifiers = import_qualifiers;
     }
 
     pub(crate) fn declares_name(&self, go_name: &str) -> bool {
         self.declared_names.contains(go_name)
     }
 
-    pub(crate) fn package_block_names(&self) -> &HashSet<String> {
-        &self.package_block_names
+    /// Names declared in the Go package block, which no local may take.
+    pub(crate) fn is_package_block_name(&self, go_name: &str) -> bool {
+        self.declared_names.contains(go_name) || self.import_qualifiers.contains(go_name)
     }
 
-    pub(crate) fn is_package_block_name(&self, go_name: &str) -> bool {
-        self.package_block_names.contains(go_name)
+    pub(crate) fn is_import_qualifier(&self, go_name: &str) -> bool {
+        self.import_qualifiers.contains(go_name)
+    }
+
+    pub(crate) fn package_block_names(&self) -> impl Iterator<Item = &String> {
+        self.declared_names.iter().chain(&self.import_qualifiers)
     }
 
     pub(crate) fn extend_go_const_bindings(&mut self, names: impl IntoIterator<Item = String>) {
@@ -66,21 +71,5 @@ impl PackageState {
 
     pub(crate) fn is_go_const_binding(&self, lisette_name: &str) -> bool {
         self.go_const_bindings.contains(lisette_name)
-    }
-}
-
-pub(crate) struct FunctionEmissionContext {
-    generic_context: Vec<(EcoString, Vec<Type>)>,
-}
-
-impl FunctionEmissionContext {
-    pub(crate) fn for_function(generic_context: &[(EcoString, Vec<Type>)]) -> Self {
-        Self {
-            generic_context: generic_context.to_vec(),
-        }
-    }
-
-    pub(crate) fn generic_context(&self) -> &[(EcoString, Vec<Type>)] {
-        &self.generic_context
     }
 }

@@ -250,3 +250,21 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn partial_tail_call_in_lowered_return_is_evaluated_once() {
+    let input = r#"
+fn ident<T>(x: T) -> T {
+  x
+}
+
+pub fn tail(b: bool, p: Partial<int, error>) -> Partial<int, error> {
+  if b {
+    ident(p)
+  } else {
+    p
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

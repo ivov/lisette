@@ -4,11 +4,17 @@ use crate::definitions::structs::struct_field_go_name;
 use crate::names::go_name;
 use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::plan::values::GoExpression;
-use crate::types::native::NativeGoType;
+use crate::types::native;
 use crate::types::prelude::PreludeType;
 use syntax::ast::ResolvedCallTypeArguments;
 use syntax::program::DefinitionBody;
-use syntax::types::{CompoundKind, FunctionParameter, SimpleKind, Type};
+use syntax::program::NativeTypeKind;
+use syntax::types::{CompoundKind, FunctionParameter, SimpleKind, SubstitutionMap, Type};
+
+/// Whether `return_ty` has no Go result (Unit or Never).
+pub(crate) fn returns_go_void(return_ty: &Type) -> bool {
+    return_ty.is_unit() || return_ty.is_never()
+}
 
 pub(crate) fn render_conversion(go_type: &str, value: &str) -> String {
     let is_plain_name = go_type
@@ -121,7 +127,7 @@ impl Planner<'_> {
             return self.emit_ref_type(inner);
         }
 
-        if let Some(native) = NativeGoType::from_type(ty) {
+        if let Some(native) = NativeTypeKind::from_type(ty) {
             return self.emit_native_type(native, ty);
         }
 
@@ -169,7 +175,7 @@ impl Planner<'_> {
     pub(crate) fn reconstruct_collapsed_type_args(
         &mut self,
         recipe: &str,
-        mapping: &rustc_hash::FxHashMap<String, Type>,
+        mapping: &SubstitutionMap,
     ) -> Option<String> {
         let mut parts = Vec::new();
         for entry in split_top_level_commas(recipe) {
@@ -178,11 +184,7 @@ impl Planner<'_> {
         (!parts.is_empty()).then(|| format!("[{}]", parts.join(", ")))
     }
 
-    fn render_recipe_entry(
-        &mut self,
-        entry: &str,
-        mapping: &rustc_hash::FxHashMap<String, Type>,
-    ) -> Option<String> {
+    fn render_recipe_entry(&mut self, entry: &str, mapping: &SubstitutionMap) -> Option<String> {
         if let Some(elem) = entry
             .strip_prefix("Slice<")
             .and_then(|s| s.strip_suffix('>'))
@@ -252,7 +254,7 @@ impl Planner<'_> {
             return self.emit_ref_type(inner);
         }
 
-        if let Some(native) = NativeGoType::from_type(ty) {
+        if let Some(native) = NativeTypeKind::from_type(ty) {
             return self.emit_native_type(native, ty);
         }
 
@@ -294,9 +296,9 @@ impl Planner<'_> {
         build_param_typed(format!("{}[{}]", name, type_args), &param_types)
     }
 
-    fn emit_native_type(&self, native: NativeGoType, ty: &Type) -> GoType {
-        if !native.has_type_params() {
-            return GoType::new(native.emit_type_syntax(&[]));
+    fn emit_native_type(&self, kind: NativeTypeKind, ty: &Type) -> GoType {
+        if !native::has_type_params(kind) {
+            return GoType::new(native::emit_type_syntax(kind, &[]));
         }
 
         let stripped = ty.strip_refs();
@@ -307,7 +309,7 @@ impl Planner<'_> {
         let arg_types: Vec<GoType> = args.iter().map(|a| self.go_type(a)).collect();
         let type_args: Vec<String> = arg_types.iter().map(|t| t.code.clone()).collect();
 
-        build_param_typed(native.emit_type_syntax(&type_args), &arg_types)
+        build_param_typed(native::emit_type_syntax(kind, &type_args), &arg_types)
     }
 
     fn emit_function_type(&self, params: &[FunctionParameter], return_ty: &Type) -> GoType {
@@ -325,7 +327,7 @@ impl Planner<'_> {
             .collect::<Vec<_>>()
             .join(", ");
 
-        let is_void = lowered.is_none() && (return_ty.is_unit() || return_type.code == "struct{}");
+        let is_void = returns_go_void(return_ty);
 
         let code = if is_void {
             format!("func({})", args)
@@ -469,9 +471,9 @@ impl Planner<'_> {
                     | CompoundKind::Receiver,
                 ..
             }) => literal("nil"),
-            ValueLayout::Tuple { .. } | ValueLayout::TaggedOption { .. } => {
-                GoExpression::empty_composite(go_ty.code)
-            }
+            ValueLayout::Tuple { .. }
+            | ValueLayout::TaggedOption { .. }
+            | ValueLayout::Fallible { .. } => GoExpression::empty_composite(go_ty.code),
             ValueLayout::Plain(Type::Nominal { id, .. })
                 if self
                     .facts

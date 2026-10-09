@@ -31,7 +31,7 @@ use visibility_constraints::check_visibility_constraints;
 
 struct RefLintResult {
     diagnostics: Vec<LisetteDiagnostic>,
-    unused_import_aliases: HashSet<String>,
+    unused_import_spans: HashSet<Span>,
     unused_definition_spans: Vec<Span>,
 }
 
@@ -100,18 +100,12 @@ fn apply_ref_lints(
     sink: &LocalSink,
 ) {
     let result = run_ref_lints(package, facts, store, unused_item_reporting);
-    if !result.unused_import_aliases.is_empty() {
-        unused.imports_by_package.insert(
-            package.id.clone().into(),
-            result
-                .unused_import_aliases
-                .into_iter()
-                .map(|s| s.into())
-                .collect(),
-        );
-    }
-    for span in result.unused_definition_spans {
-        unused.mark_definition_unused(span);
+    for span in result
+        .unused_import_spans
+        .into_iter()
+        .chain(result.unused_definition_spans)
+    {
+        unused.mark_unused(span);
     }
     let mut diagnostics = result.diagnostics;
     if !diagnostics.is_empty() {
@@ -188,9 +182,6 @@ fn run_ref_lints(
         diagnostics.push(diagnostic);
     }
 
-    // Emit drops an import from every file of the package at once.
-    let unused_import_aliases = usage.unused_import_aliases();
-
     check_redundant_aliases(files, store, &unused_import_spans, &mut diagnostics);
 
     check_visibility_constraints(package, files, &mut diagnostics);
@@ -206,7 +197,7 @@ fn run_ref_lints(
 
     RefLintResult {
         diagnostics,
-        unused_import_aliases,
+        unused_import_spans,
         unused_definition_spans,
     }
 }

@@ -340,7 +340,7 @@ pub(crate) fn get_hover_doc(
 
     match expression {
         Expression::Identifier {
-            resolution: IdentifierResolution::Definition(qname),
+            resolution: IdentifierResolution::Definition { name: qname, .. },
             ..
         } => {
             let definition = snapshot.definitions().get(qname.as_str())?;

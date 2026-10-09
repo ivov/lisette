@@ -121,6 +121,7 @@ description: |
                                 byte_offset: 79,
                                 byte_length: 4,
                             },
+                            binding: None,
                         },
                         annotation: Some(
                             Constructor {

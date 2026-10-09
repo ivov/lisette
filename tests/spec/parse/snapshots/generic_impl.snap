@@ -50,6 +50,7 @@ description: |
                                 byte_offset: 27,
                                 byte_length: 5,
                             },
+                            binding: None,
                         },
                         annotation: Some(
                             Constructor {

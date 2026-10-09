@@ -243,6 +243,21 @@ impl Point {
 }
 
 #[test]
+fn public_display_with_private_user_to_string_exports_it() {
+    let input = r#"
+#[display]
+pub struct Point { x: int, y: int }
+
+impl Point {
+  fn to_string(self) -> string {
+    "p"
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn display_to_string_delegates_to_user_stringer() {
     let input = r#"
 #[display]
@@ -3140,6 +3155,63 @@ fn main() {
 }
 
 #[test]
+fn function_value_passed_to_result_alias_callback() {
+    let input = r#"
+type MyRes = Result<int, error>
+
+fn make(x: int) -> Result<int, error> {
+  Ok(x)
+}
+
+fn apply(f: fn(int) -> MyRes) -> MyRes {
+  f(1)
+}
+
+fn main() {
+  let _ = apply(make)
+  let _ = apply(Ok)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn function_value_passed_to_generic_result_alias_callback() {
+    let input = r#"
+type Res<T> = Result<T, error>
+
+fn make(x: int) -> Result<int, error> {
+  Ok(x)
+}
+
+fn apply(f: fn(int) -> Res<int>) -> Res<int> {
+  f(1)
+}
+
+fn main() {
+  let _ = apply(make)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn constructor_passed_to_option_alias_callback() {
+    let input = r#"
+type MyOpt = Option<int>
+
+fn apply(f: fn(int) -> MyOpt) -> MyOpt {
+  f(1)
+}
+
+fn main() {
+  let _ = apply(Some)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn prelude_type_shadowing_struct_and_methods() {
     let input = r#"
 struct Span {
@@ -4953,6 +5025,43 @@ fn main() {
 }
 
 #[test]
+fn type_alias_static_method_solves_impl_params_from_owner() {
+    let input = r#"
+import "go:fmt"
+
+struct Pair<X, Y> { x: X, y: Y }
+
+impl<A, B> Pair<B, A> {
+  fn names() -> string {
+    let a: Option<A> = None
+    let b: Option<B> = None
+    fmt.Sprintf("%T %T", a, b)
+  }
+}
+
+struct Q<X, Y> { x: X, y: Y }
+
+impl<T> Q<int, T> {
+  fn name() -> string {
+    let t: Option<T> = None
+    fmt.Sprintf("%T", t)
+  }
+}
+
+type P = Pair<int, string>
+type R = Q<int, string>
+
+fn main() {
+  let f = P.names
+  fmt.Println(f(), P.names())
+  let g = R.name
+  fmt.Println(g(), R.name())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn type_alias_native_ufcs_method() {
     let input = r#"
 import "go:fmt"
@@ -6562,6 +6671,56 @@ fn main() {
 }
 
 #[test]
+fn never_returning_interface_method_needs_no_adapter() {
+    let input = r#"
+interface Stopper {
+  fn stop() -> Never
+}
+
+struct S {}
+
+impl S {
+  fn stop(self) -> Never {
+    panic("stop")
+  }
+}
+
+fn halt(s: Stopper) {
+  s.stop()
+}
+
+fn test() {
+  let s: Stopper = S {}
+  let _ = s
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unit_alias_interface_method_has_no_go_result() {
+    let input = r#"
+type U = ()
+
+interface Doer {
+  fn run() -> U
+}
+
+struct A {}
+
+impl A {
+  fn run(self) {}
+}
+
+fn test() {
+  let d: Doer = A {}
+  let _ = d.run()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn bare_param_interface_wraps_nullable_option_impl() {
     let input = r#"
 struct Thing {
@@ -6704,6 +6863,106 @@ fn pass<T>(b: Bar<T>) {
 
 fn main() {
   pass(Bar { x: Some(3) })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn variadic_arguments_wrap_in_interface_adapter() {
+    let input = r#"
+struct Thing { n: int }
+
+interface Box<T> {
+  fn get() -> T
+}
+
+struct Bar {}
+
+impl Bar {
+  fn get(self) -> Option<Ref<Thing>> {
+    None
+  }
+}
+
+fn use_box(b: Box<Option<Ref<Thing>>>) {
+  let _ = b
+}
+
+fn use_boxes(bs: VarArgs<Box<Option<Ref<Thing>>>>) {
+  let _ = bs
+}
+
+fn main() {
+  use_box(Bar {})
+  use_boxes(Bar {}, Bar {})
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_method_ufcs_argument_wraps_in_interface_adapter() {
+    let input = r#"
+struct Thing { n: int }
+
+interface Box<T> {
+  fn get() -> T
+}
+
+struct Bar {}
+
+impl Bar {
+  fn get(self) -> Option<Ref<Thing>> {
+    None
+  }
+}
+
+struct Holder {}
+
+impl Holder {
+  fn take<U>(self, b: Box<Option<Ref<Thing>>>, u: U) -> U {
+    let _ = b
+    u
+  }
+}
+
+fn main() {
+  let h = Holder {}
+  let _ = h.take(Bar {}, 1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn receiver_method_ufcs_argument_wraps_in_interface_adapter() {
+    let input = r#"
+struct Thing { n: int }
+
+interface Box<T> {
+  fn get() -> T
+}
+
+struct Bar {}
+
+impl Bar {
+  fn get(self) -> Option<Ref<Thing>> {
+    None
+  }
+}
+
+struct Holder {}
+
+impl Holder {
+  fn put(self, b: Box<Option<Ref<Thing>>>) {
+    let _ = b
+  }
+}
+
+fn main() {
+  let h = Holder {}
+  Holder.put(h, Bar {})
 }
 "#;
     assert_emit_snapshot!(input);

@@ -1,9 +1,7 @@
-use std::rc::Rc;
-
 use crate::Planner;
 use crate::control_flow::fallible;
-use crate::definitions::enum_layout::EnumLayout;
 use crate::names::go_name;
+use crate::plan::values::GoExpression;
 use syntax::ast::{Generic, Pattern, RestPattern, StructFields};
 use syntax::go_names;
 use syntax::program::{Definition, DefinitionBody, interface_requirements};
@@ -99,6 +97,38 @@ impl Planner<'_> {
 
     pub(crate) fn struct_field_is_exported(&self, ty: &Type, field: &str) -> bool {
         self.field_is_public(ty, field) || self.type_uses_exported_members(ty)
+    }
+
+    /// `semantic_exported` also covers fields promoted from an embedded struct.
+    pub(crate) fn struct_field_go_name(
+        &self,
+        ty: &Type,
+        field: &str,
+        semantic_exported: bool,
+    ) -> String {
+        go_name::member_go_name(
+            ty,
+            field,
+            semantic_exported || self.struct_field_is_exported(ty, field),
+            self.field_is_embedded(ty, field),
+        )
+    }
+
+    pub(crate) fn field_read_cannot_panic(&self, ty: &Type) -> bool {
+        !self.facts.is_nilable_go_type(ty) && !ty.is_variable() && !ty.is_placeholder()
+    }
+
+    pub(crate) fn field_access(
+        &self,
+        base: GoExpression,
+        ty: &Type,
+        field: String,
+    ) -> GoExpression {
+        if self.field_read_cannot_panic(ty) {
+            GoExpression::value_field(base, field)
+        } else {
+            GoExpression::selector(base, field)
+        }
     }
 
     pub(crate) fn type_has_equals(&self, ty: &Type, generics: &[Generic]) -> bool {
@@ -226,54 +256,14 @@ impl Planner<'_> {
 }
 
 impl Planner<'_> {
-    pub(crate) fn enum_layout(&self, enum_id: &str) -> Option<Rc<EnumLayout>> {
-        if let Some(layout) = self.namespace.enum_layouts.borrow().get(enum_id) {
-            return Some(layout.clone());
-        }
-        let layout = Rc::new(self.compute_enum_layout(enum_id)?);
-        self.namespace
-            .enum_layouts
-            .borrow_mut()
-            .insert(enum_id.to_string(), layout.clone());
-        Some(layout)
-    }
-
-    fn compute_enum_layout(&self, enum_id: &str) -> Option<EnumLayout> {
-        let Definition {
-            body:
-                DefinitionBody::Enum {
-                    generics,
-                    variants,
-                    default_variant,
-                    ..
-                },
-            ..
-        } = self.facts.definition(enum_id)?
-        else {
-            return None;
-        };
-
-        let name = types::unqualified_name(enum_id);
-        if matches!(name, "Option" | "Result" | "Partial") {
-            return None;
-        }
-
-        Some(EnumLayout::new(
-            self,
-            enum_id,
-            generics,
-            variants,
-            *default_variant,
-        ))
-    }
-
     pub(crate) fn enum_struct_field_name(
         &self,
         enum_id: &str,
         variant_name: &str,
         field_name: &str,
     ) -> Option<String> {
-        self.enum_layout(enum_id)?
+        self.facts
+            .enum_layout(enum_id)?
             .struct_field_name(variant_name, field_name)
     }
 
@@ -283,7 +273,8 @@ impl Planner<'_> {
         variant_name: &str,
         field_index: usize,
     ) -> Option<String> {
-        self.enum_layout(enum_id)?
+        self.facts
+            .enum_layout(enum_id)?
             .tuple_field_name(variant_name, field_index)
     }
 
@@ -333,7 +324,7 @@ impl Planner<'_> {
 
     pub(crate) fn is_enum_field_recursive(&self, ty: &Type, variant: &str, index: usize) -> bool {
         if let Type::Nominal { id, .. } = ty
-            && let Some(layout) = self.enum_layout(id.as_ref())
+            && let Some(layout) = self.facts.enum_layout(id.as_ref())
             && let Some(variant_layout) = layout.get_variant(variant)
             && let Some(field) = variant_layout.fields.get(index)
         {

@@ -2032,6 +2032,28 @@ fn test() -> int {
 }
 
 #[test]
+fn or_pattern_in_while_let_on_interface_reads_asserted_fields() {
+    let input = r#"
+interface Shape { fn area() -> int }
+
+struct Sq { side: int }
+struct Ci { r: int }
+
+impl Sq { fn area(self) -> int { self.side } }
+impl Ci { fn area(self) -> int { self.r } }
+
+fn test(shapes: Slice<Shape>) -> int {
+  let mut i = 0;
+  while let Sq { side: 1 } | Ci { r: 2 } = shapes[i] {
+    i = i + 1;
+  }
+  i
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn match_guard_with_or_pattern_bindings() {
     let input = r#"
 enum E { A(int), B(int), C(int) }
@@ -3220,6 +3242,28 @@ fn test() -> int {
     break x
   }
   x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn loop_expression_nested_same_name_binding_writes_result() {
+    let input = r#"
+fn find(n: int) -> int {
+  let mut i = 0
+  let r = loop {
+    i += 1
+    if i > n {
+      let r = i * 10
+      break r
+    }
+  }
+  r + 1
+}
+
+fn test() -> int {
+  find(3)
 }
 "#;
     assert_emit_snapshot!(input);
