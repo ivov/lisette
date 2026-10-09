@@ -1,0 +1,41 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import p "github.com/user/myproject/palette"
+
+type C = p.Color
+
+func main() {
+	p.Color_Fallback()
+}
+
+
+// === palette/lib.go ===
+package palette
+
+func MakeColorRed() Color {
+	return Color{Tag: ColorRed}
+}
+
+func MakeColorGreen(arg0 int) Color {
+	return Color{Tag: ColorGreen, Green: arg0}
+}
+
+type ColorTag uint8
+
+const (
+	ColorRed ColorTag = iota
+	ColorGreen
+)
+
+type Color struct {
+	Tag   ColorTag
+	Green int
+}
+
+func Color_Fallback() Color {
+	return MakeColorRed()
+}

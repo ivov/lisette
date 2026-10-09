@@ -534,15 +534,6 @@ impl Pattern {
             _ => None,
         }
     }
-
-    pub fn is_some_pattern(&self) -> bool {
-        let peeled = match self {
-            Pattern::AsBinding { pattern, .. } => pattern.as_ref(),
-            p => p,
-        };
-        matches!(peeled, Pattern::EnumVariant { identifier, fields, .. }
-            if types::unqualified_name(identifier) == "Some" && fields.len() == 1)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1625,32 +1616,6 @@ impl Expression {
                 annotation: return_annotation,
             },
             _ => panic!("function_definition_view called on non-Function expression"),
-        }
-    }
-
-    pub fn as_option_constructor(&self) -> Option<Result<(), ()>> {
-        let variant = match self {
-            Expression::Identifier { value, .. } => Some(value.as_str()),
-            _ => None,
-        }?;
-
-        match variant {
-            "Option.Some" | "Some" => Some(Ok(())),
-            "Option.None" | "None" => Some(Err(())),
-            _ => None,
-        }
-    }
-
-    pub fn as_result_constructor(&self) -> Option<Result<(), ()>> {
-        let variant = match self {
-            Expression::Identifier { value, .. } => Some(value.as_str()),
-            _ => None,
-        }?;
-
-        match variant {
-            "Result.Ok" | "Ok" => Some(Ok(())),
-            "Result.Err" | "Err" => Some(Err(())),
-            _ => None,
         }
     }
 

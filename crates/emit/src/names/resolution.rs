@@ -71,19 +71,6 @@ impl Planner<'_> {
         GoExpression::qualified(self.package_use_for_package(package), member)
     }
 
-    pub(crate) fn resolve_alias_type_name(&self, type_part: &str) -> Option<String> {
-        let qualified = self.facts.qualified_current(type_part);
-        let id = self.peel_alias_id(&qualified);
-        if id == qualified {
-            return None;
-        }
-        let type_package = self.facts.package_for_qualified_name(&id).unwrap_or(&id);
-        if self.facts.is_current_package(type_package) {
-            return Some(unqualified_name(&id).to_string());
-        }
-        Some(id)
-    }
-
     pub(crate) fn reference_go_name(
         &self,
         lisette_name: &str,

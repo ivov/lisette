@@ -354,7 +354,9 @@ impl Planner<'_> {
             .resolve_identifier_with_resolution(value, resolution)
         {
             Some(binding) => binding.is_go_const(),
-            None => self.package.is_go_const_binding(value),
+            None => resolution
+                .definition()
+                .is_some_and(|symbol| self.package.is_go_const_binding(symbol)),
         }
     }
 

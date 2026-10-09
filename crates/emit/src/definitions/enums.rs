@@ -15,10 +15,6 @@ impl Planner<'_> {
         generics: &[Generic],
         attributes: &[Attribute],
     ) -> Option<String> {
-        if matches!(name, "Option" | "Result" | "Partial") {
-            return None;
-        }
-
         let enum_id = self.facts.qualified_current(name);
 
         let layout = self.facts.enum_layout(&enum_id)?;

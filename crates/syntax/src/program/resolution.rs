@@ -10,6 +10,17 @@ pub fn resolved_definition(expression: &Expression) -> Option<&str> {
     }
 }
 
+/// The prelude enum and member an expression resolves to, as `("prelude.Option", "None")`.
+pub fn prelude_constructor(expression: &Expression) -> Option<(&str, &str)> {
+    let (owner, member) = resolved_definition(expression)?.rsplit_once('.')?;
+    let owner = match (owner, member) {
+        ("prelude", "Some" | "None") => "prelude.Option",
+        ("prelude", "Ok" | "Err") => "prelude.Result",
+        _ => owner,
+    };
+    Some((owner, member))
+}
+
 pub fn resolved_instantiation(expression: &Expression) -> Option<&SubstitutionMap> {
     match expression.unwrap_parens() {
         Expression::Identifier { resolution, .. } => resolution.instantiation(),

@@ -43,6 +43,7 @@ use names::packages::{PackageRequirements, PackageUse};
 use plan::PackagePlan;
 use plan::bodies::{LoopId, LoweredBlock, Statement, define};
 use plan::go_expression::GoExpressionNode;
+use plan::local::GoIdentifier;
 use plan::values::GoExpression;
 use state::adapter_registry::AdapterRegistry;
 use state::file_namespace::FileNamespace;
@@ -108,10 +109,7 @@ impl GlobalEmitData {
         else {
             return;
         };
-        if matches!(
-            go_name::unqualified_name(key),
-            "Option" | "Result" | "Partial"
-        ) {
+        if key.starts_with(go_name::PRELUDE_PREFIX) {
             return;
         }
         let layout = EnumLayout::new(key, generics, variants, *default_variant, |id| {
@@ -485,7 +483,7 @@ impl<'a> Planner<'a> {
         lisette_name: &str,
         ids: &[BindingId],
         preferred: impl Into<String>,
-    ) -> String {
+    ) -> GoIdentifier {
         let go_name = self.claim_declared_go_name(lisette_name, preferred);
         self.scope.bind_source(lisette_name, ids, go_name)
     }

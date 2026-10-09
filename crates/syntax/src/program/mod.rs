@@ -18,5 +18,5 @@ pub use file::{File, FileImport, go_import_default_name, is_test_file, unaliased
 pub use package::{Package, PackageId, UninferredExports, is_internal_package_id};
 pub use resolution::{
     CallKind, ChannelOperation, DotAccessResolution, NativeTypeKind, ReceiverCoercion,
-    channel_operation, resolved_definition, resolved_instantiation,
+    channel_operation, prelude_constructor, resolved_definition, resolved_instantiation,
 };

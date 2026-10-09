@@ -863,6 +863,32 @@ fn test() {
 }
 
 #[test]
+fn select_receive_aliased_option_patterns() {
+    let input = r#"
+import "go:fmt"
+
+type OptInt = Option<int>
+
+fn test() {
+  let ch = Channel.buffered<int>(2)
+  ch.send(41)
+  ch.send(42)
+  select {
+    let OptInt.Some(first) = ch.receive() => fmt.Println(first),
+    _ => {},
+  }
+  select {
+    match ch.receive() {
+      OptInt.Some(val) => fmt.Println(val),
+      OptInt.None => fmt.Println("closed"),
+    },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn select_match_receive_wildcard_some() {
     let input = r#"
 fn process_close() {}

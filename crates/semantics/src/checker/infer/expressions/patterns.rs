@@ -731,6 +731,9 @@ impl InferCtx<'_> {
                 .try_infer_enum_struct_variant(&pattern, &expected_ty, kind)
                 .unwrap_or_else(|| self.unresolved_struct_pattern(identifier, fields, span, kind));
         };
+        let qualified_name = store
+            .peel_alias_name(&qualified_name)
+            .map_or(qualified_name, Into::into);
         let Some(Definition {
             ty: struct_forall_ty,
             body:

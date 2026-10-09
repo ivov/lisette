@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::patterns::sites::{
-    self, AnnotatedPattern, PatternSubject, TypedSubject, unwrap_some_pattern,
+    self, AnnotatedPattern, PatternSubject, TypedSubject, is_some_pattern, unwrap_some_pattern,
 };
 use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
@@ -58,7 +58,7 @@ impl Planner<'_> {
         place: &PlacePlan,
     ) -> LoweredStatement {
         let needs_retry_loop = arms.iter().any(
-            |arm| matches!(arm, SelectArm::Receive { binding, .. } if binding.is_some_pattern()),
+            |arm| matches!(arm, SelectArm::Receive { binding, .. } if is_some_pattern(binding)),
         );
 
         let mut setup: Vec<Statement> = Vec::new();
@@ -124,7 +124,7 @@ impl Planner<'_> {
                         channel: &channel,
                         body,
                         default_body,
-                        retry_var: binding.is_some_pattern().then_some(&channel),
+                        retry_var: is_some_pattern(binding).then_some(&channel),
                         element_ty,
                         place,
                     };
@@ -176,7 +176,7 @@ impl Planner<'_> {
                     let repeats = channel.effects().can_duplicate();
                     let (channel_setup, channel_value) = channel.into_parts();
                     setup.extend(channel_setup);
-                    let channel = if binding.is_some_pattern() || (needs_retry_loop && !repeats) {
+                    let channel = if is_some_pattern(binding) || (needs_retry_loop && !repeats) {
                         GoExpression::name(self.hoist_tmp_value_statement(
                             setup,
                             "ch",
@@ -358,7 +358,7 @@ impl Planner<'_> {
     ) -> SelectArmPlan {
         let effective_pattern = unwrap_some_pattern(binding);
 
-        if binding.is_some_pattern() {
+        if is_some_pattern(binding) {
             self.lower_receive_arm_with_ok_check(effective_pattern, ctx)
         } else {
             self.lower_receive_arm_simple(effective_pattern, ctx)
@@ -381,11 +381,7 @@ impl Planner<'_> {
             return self.lower_ok_guard(
                 |this| {
                     this.scope
-                        .bind_source(identifier, binding.as_slice(), go_name);
-                    this.scope
-                        .bound_go_identifier(identifier)
-                        .expect("receive variable was just bound")
-                        .clone()
+                        .bind_source(identifier, binding.as_slice(), go_name)
                 },
                 None,
                 ctx,
@@ -442,12 +438,12 @@ impl Planner<'_> {
                     effective_pattern,
                     &ctx.element_ty,
                 ));
-                vec![receiver_var]
+                vec![this.scope.generated_identifier(&receiver_var)]
             };
             let block = this.lower_block_to_place(ctx.body, ctx.place);
             body_statements.extend(block.statements);
             SelectArmPlan::Receive {
-                receive_vars: receive_vars.into_iter().map(Into::into).collect(),
+                receive_vars,
                 channel: ctx.channel.clone(),
                 body: LoweredBlock {
                     statements: body_statements,

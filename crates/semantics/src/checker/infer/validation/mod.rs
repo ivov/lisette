@@ -5,3 +5,5 @@ mod map_reads;
 mod numeric;
 mod references;
 mod select;
+
+pub(crate) use references::always_fails;

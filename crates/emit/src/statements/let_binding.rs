@@ -15,6 +15,7 @@ use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
 use crate::plan::bodies::{
     LoweredBlock, LoweredStatement, Statement, define, define_many, expression_statement,
 };
+use crate::plan::local::GoIdentifier;
 use crate::plan::placement::{
     collapse_declared_temp, expression_contains_binding, is_unit_call, is_zero_call,
     rebind_trailing_temp, rebind_updated_temp, requires_temp_var,
@@ -89,16 +90,16 @@ impl Planner<'_> {
         identifier: &str,
         ids: &[BindingId],
         raw_go_name: &str,
-    ) -> String {
+    ) -> GoIdentifier {
         let bound = self.scope.bind_source(identifier, ids, raw_go_name);
         let is_new = !self.package.is_package_block_name(&bound) && self.try_declare(&bound);
         if is_new && !self.scope.is_active_assign_target(&bound) {
             return bound;
         }
         let fresh = self.fresh_var(Some(identifier));
-        self.scope.bind_source(identifier, ids, &fresh);
+        let bound = self.scope.bind_source(identifier, ids, &fresh);
         self.try_declare(&fresh);
-        fresh
+        bound
     }
 
     fn choose_let_go_name(
@@ -468,7 +469,7 @@ impl Planner<'_> {
             let var_ty = self.use_go_type(binding_ty);
             statements.push(
                 LoweredStatement::VarDecl {
-                    name: go_identifier.into(),
+                    name: go_identifier,
                     go_type: var_ty,
                     value: None,
                 }
@@ -481,7 +482,7 @@ impl Planner<'_> {
             let var_ty = self.use_go_type(binding_ty);
             statements.push(
                 LoweredStatement::VarDecl {
-                    name: go_identifier.into(),
+                    name: go_identifier,
                     go_type: var_ty,
                     value: Some(value_expression),
                 }
@@ -648,7 +649,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 let var_ty = self.planner.use_go_type(&self.binding.ty);
                 statements.push(
                     LoweredStatement::VarDecl {
-                        name: go_identifier.into(),
+                        name: go_identifier,
                         go_type: var_ty,
                         value: None,
                     }

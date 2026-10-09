@@ -269,18 +269,19 @@ pub(crate) fn identify_body_locals(
     parameters: &[GoIdentifier],
     scope: &mut ScopeState,
 ) -> HashSet<LocalId> {
-    #[derive(Clone, Copy)]
-    struct Local {
-        id: LocalId,
-        provisional: bool,
-    }
-
     struct Resolve<'a> {
         scope: &'a mut ScopeState,
-        frames: Vec<HashMap<String, Local>>,
+        frames: Vec<HashMap<String, LocalId>>,
         shadowing: HashSet<LocalId>,
-        corrections: HashMap<LocalId, LocalId>,
-        declared: HashSet<LocalId>,
+    }
+
+    impl Resolve<'_> {
+        fn visible(&self, spelling: &str) -> Option<LocalId> {
+            self.frames
+                .iter()
+                .rev()
+                .find_map(|frame| frame.get(spelling).copied())
+        }
     }
 
     impl VisitorMut for Resolve<'_> {
@@ -291,55 +292,26 @@ pub(crate) fn identify_body_locals(
             if name.id().is_none() && !name.is_pending() {
                 return;
             }
-            if let Some((frame_index, local)) =
-                self.frames
-                    .iter()
-                    .enumerate()
-                    .rev()
-                    .find_map(|(index, frame)| {
-                        frame
-                            .get(name.spelling())
-                            .copied()
-                            .map(|local| (index, local))
-                    })
-            {
-                match name.id() {
-                    None => name.resolve_to(local.id),
-                    Some(id) if id != local.id && local.provisional => {
-                        let already_bound = self
-                            .frames
-                            .iter()
-                            .any(|frame| frame.values().any(|candidate| candidate.id == id));
-                        if !already_bound {
-                            self.corrections.insert(local.id, id);
-                            let active = self.frames[frame_index]
-                                .get_mut(name.spelling())
-                                .expect("the local was found above");
-                            active.id = id;
-                            active.provisional = false;
-                            self.declared.insert(id);
-                        }
-                    }
-                    Some(id) if id != local.id => {
-                        let already_bound = self
-                            .frames
-                            .iter()
-                            .any(|frame| frame.values().any(|candidate| candidate.id == id));
-                        if !already_bound {
-                            name.resolve_to(local.id);
-                        }
-                    }
-                    Some(_) => {}
+            if let Some(visible) = self.visible(name.spelling()) {
+                let in_scope = name.id().is_some_and(|id| {
+                    self.frames
+                        .iter()
+                        .any(|frame| frame.values().any(|local| *local == id))
+                });
+                if !in_scope {
+                    name.resolve_to(visible);
                 }
             } else if name.is_pending()
                 && let Some(id) = self.scope.generated_local_id(name.spelling())
             {
                 name.resolve_to(id);
             }
+            name.finish();
         }
 
         fn local_binding(&mut self, name: &mut GoIdentifier) {
             if name.spelling() == "_" {
+                name.finish();
                 return;
             }
             let current = self
@@ -348,33 +320,22 @@ pub(crate) fn identify_body_locals(
                 .expect("a local scope exists")
                 .get(name.spelling())
                 .copied();
-            let known = name
-                .id()
-                .or_else(|| self.scope.generated_local_id(name.spelling()));
-            let local = current.unwrap_or_else(|| Local {
-                id: known.unwrap_or_else(|| self.scope.new_local_id()),
-                provisional: known.is_none(),
+            let id = current.unwrap_or_else(|| {
+                name.id()
+                    .or_else(|| self.scope.generated_local_id(name.spelling()))
+                    .unwrap_or_else(|| self.scope.new_local_id())
             });
-            let id = local.id;
-            if name.id() != Some(id) {
-                name.resolve_to(id);
-            }
+            name.resolve_to(id);
             if self.frames[..self.frames.len() - 1]
                 .iter()
-                .rev()
-                .any(|frame| {
-                    frame
-                        .get(name.spelling())
-                        .is_some_and(|outer| outer.id != id)
-                })
+                .any(|frame| frame.get(name.spelling()).is_some_and(|outer| *outer != id))
             {
                 self.shadowing.insert(id);
             }
             self.frames
                 .last_mut()
                 .expect("a local scope exists")
-                .insert(name.spelling().to_string(), local);
-            self.declared.insert(id);
+                .insert(name.spelling().to_string(), id);
         }
 
         fn enter_scope(&mut self) {
@@ -390,60 +351,13 @@ pub(crate) fn identify_body_locals(
         scope,
         frames: vec![HashMap::default()],
         shadowing: HashSet::default(),
-        corrections: HashMap::default(),
-        declared: HashSet::default(),
     };
     for name in parameters {
         let mut name = name.clone();
         resolver.local_binding(&mut name);
     }
     visit_statements_mut(statements, &mut resolver);
-    let corrections = resolver.corrections;
-    let shadowing = resolver
-        .shadowing
-        .into_iter()
-        .map(|id| corrected_id(id, &corrections))
-        .collect();
-    if !corrections.is_empty() {
-        struct Correct<'a>(&'a HashMap<LocalId, LocalId>);
-        impl VisitorMut for Correct<'_> {
-            fn expression(&mut self, node: &mut GoExpressionNode) {
-                if let GoExpressionNode::Identifier(name) = node
-                    && let Some(id) = name.id()
-                {
-                    name.resolve_to(corrected_id(id, self.0));
-                }
-            }
-
-            fn local_binding(&mut self, name: &mut GoIdentifier) {
-                if let Some(id) = name.id() {
-                    name.resolve_to(corrected_id(id, self.0));
-                }
-            }
-        }
-        visit_statements_mut(statements, &mut Correct(&corrections));
-    }
-    struct Finish;
-    impl VisitorMut for Finish {
-        fn expression(&mut self, node: &mut GoExpressionNode) {
-            if let GoExpressionNode::Identifier(name) = node {
-                name.finish();
-            }
-        }
-
-        fn local_binding(&mut self, name: &mut GoIdentifier) {
-            name.finish();
-        }
-    }
-    visit_statements_mut(statements, &mut Finish);
-    shadowing
-}
-
-fn corrected_id(mut id: LocalId, corrections: &HashMap<LocalId, LocalId>) -> LocalId {
-    while let Some(corrected) = corrections.get(&id) {
-        id = *corrected;
-    }
-    id
+    resolver.shadowing
 }
 
 #[cfg(test)]
@@ -517,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn local_resolution_gives_an_unidentified_binding_its_read_id() {
+    fn local_resolution_gives_an_out_of_scope_read_the_binding_id() {
         let mut statements = vec![
             define("result".to_string(), GoExpression::literal("1".to_string())),
             LoweredStatement::Return(vec![GoExpression::identifier(GoIdentifier::local(
@@ -535,7 +449,7 @@ mod tests {
             panic!("expected a return");
         };
         assert_eq!(identifier_id(&values[0]), binding.names[0].id());
-        assert_eq!(binding.names[0].id(), Some(LocalId(42)));
+        assert_ne!(binding.names[0].id(), Some(LocalId(42)));
     }
 
     #[test]

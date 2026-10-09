@@ -681,16 +681,9 @@ fn drop_unread_temps(statements: &mut Vec<Statement>, shadowing: &HashSet<LocalI
     loop {
         let uses = NameUses::of(statements);
         let mut discards: HashMap<LocalId, usize> = HashMap::default();
-        let mut untracked_discards: HashMap<String, usize> = HashMap::default();
         for_each_statement(statements, &mut |statement| {
-            if let Some(name) = discarded_name(statement) {
-                if let Some(id) = name.id() {
-                    *discards.entry(id).or_default() += 1;
-                } else {
-                    *untracked_discards
-                        .entry(name.spelling().to_string())
-                        .or_default() += 1;
-                }
+            if let Some(id) = discarded_name(statement).and_then(GoIdentifier::id) {
+                *discards.entry(id).or_default() += 1;
             }
         });
         let mut dropped: Option<GoIdentifier> = None;
@@ -708,11 +701,7 @@ fn drop_unread_temps(statements: &mut Vec<Statement>, shadowing: &HashSet<LocalI
                 .id()
                 .and_then(|id| discards.get(&id))
                 .copied()
-                .unwrap_or_default()
-                + untracked_discards
-                    .get(name.spelling())
-                    .copied()
-                    .unwrap_or_default();
+                .unwrap_or_default();
             let unread = uses.value_reads(name) == discard_count
                 && uses.bindings(name) == 1
                 && !uses.is_written(name);
@@ -788,6 +777,8 @@ mod tests {
     use crate::plan::bodies::{IfPlan, LoopHeader, LoopKind, LoopPlan, assign, define, discard};
     use crate::plan::go_expression::FunctionLiteralLayout;
     use crate::plan::local::LocalId;
+    use crate::plan::visit::identify_body_locals;
+    use crate::state::scope::ScopeState;
 
     fn name(text: &str) -> GoExpression {
         GoExpression::name(text.to_string())
@@ -795,6 +786,11 @@ mod tests {
 
     fn literal(text: &str) -> GoExpression {
         GoExpression::literal(text.to_string())
+    }
+
+    fn identified(mut statements: Vec<Statement>) -> Vec<Statement> {
+        identify_body_locals(&mut statements, &[], &mut ScopeState::new());
+        statements
     }
 
     fn returned(value: GoExpression) -> Statement {
@@ -1002,21 +998,22 @@ mod tests {
 
     #[test]
     fn unread_temp_pass_preserves_the_sources_last_read() {
-        let mut statements = vec![
+        let unread = vec![
             define("first".to_string(), literal("1")),
             define("second".to_string(), name("first")),
             discard(name("second")),
         ];
+        let mut statements = identified(unread.clone());
         let original = statements.clone();
         drop_unread_temps(&mut statements, &HashSet::default());
         assert_eq!(statements, original);
 
-        statements.push(returned(name("first")));
+        let mut statements = identified([unread, vec![returned(name("first"))]].concat());
         drop_unread_temps(&mut statements, &HashSet::default());
-        let expected = vec![
+        let expected = identified(vec![
             define("first".to_string(), literal("1")),
             returned(name("first")),
-        ];
+        ]);
         assert_eq!(statements, expected);
         drop_unread_temps(&mut statements, &HashSet::default());
         assert_eq!(statements, expected);
@@ -1043,22 +1040,22 @@ mod tests {
 
     #[test]
     fn cleanup_is_one_sweep_rather_than_a_fixed_point() {
-        let mut statements = vec![
+        let mut statements = identified(vec![
             define("first".to_string(), name("source")),
             define("second".to_string(), name("first")),
             discard(name("second")),
             returned(name("first")),
-        ];
+        ]);
         clean_up(&mut statements, &HashSet::default());
         assert_eq!(
             statements,
-            vec![
+            identified(vec![
                 define("first".to_string(), name("source")),
                 returned(name("first"))
-            ]
+            ])
         );
         clean_up(&mut statements, &HashSet::default());
-        assert_eq!(statements, vec![returned(name("source"))]);
+        assert_eq!(statements, identified(vec![returned(name("source"))]));
     }
 
     #[test]

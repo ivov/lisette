@@ -69,7 +69,7 @@ impl PackageState {
         self.go_const_bindings.extend(names);
     }
 
-    pub(crate) fn is_go_const_binding(&self, lisette_name: &str) -> bool {
-        self.go_const_bindings.contains(lisette_name)
+    pub(crate) fn is_go_const_binding(&self, symbol: &str) -> bool {
+        self.go_const_bindings.contains(symbol)
     }
 }

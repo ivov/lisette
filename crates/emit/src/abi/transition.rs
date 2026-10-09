@@ -378,16 +378,6 @@ pub(crate) fn emit_lisette_callback_wrapper(
 
     let call = GoExpression::call(GoExpression::name(cb_var), inner_args);
 
-    // Option<fn> adaptation only fires in interface-method shims. Here
-    // a closure-valued Option means the caller owns the nil check.
-    if let Type::Nominal { id, params: ps, .. } = return_type
-        && id == "Option"
-        && let Some(inner) = ps.first()
-        && matches!(inner.unwrap_forall(), Type::Function(_))
-    {
-        return fn_value;
-    }
-
     if !target_abi.is_lowered() {
         return fn_value;
     }

@@ -108,17 +108,18 @@ impl ScopeState {
         lisette_name: impl Into<String>,
         ids: &[BindingId],
         go_name: impl Into<String>,
-    ) -> String {
+    ) -> GoIdentifier {
         let go_name = crate::escape_reserved(&go_name.into()).into_owned();
         let id = self
             .generated_local_id(&go_name)
             .unwrap_or_else(|| self.new_local_id());
+        let identifier = GoIdentifier::local(go_name, id);
         self.set_binding(
             lisette_name.into(),
             ids,
-            BindingValue::GoName(GoIdentifier::local(go_name.clone(), id)),
+            BindingValue::GoName(identifier.clone()),
         );
-        go_name
+        identifier
     }
 
     pub(crate) fn new_local_id(&mut self) -> LocalId {
@@ -253,21 +254,6 @@ impl ScopeState {
     pub(crate) fn resolve_binding_go_name(&self, lisette_name: &str) -> Option<&str> {
         self.resolve_identifier_binding(lisette_name)
             .and_then(BindingValue::as_go_name)
-    }
-
-    pub(crate) fn identifier_for_binding(
-        &self,
-        lisette_name: &str,
-        go_name: String,
-    ) -> GoIdentifier {
-        match self.resolve_identifier_binding(lisette_name) {
-            Some(BindingValue::GoName(name) | BindingValue::GoConst(name))
-                if name.spelling() == go_name =>
-            {
-                name.clone()
-            }
-            _ => GoIdentifier::name(go_name),
-        }
     }
 
     pub(crate) fn identifier_for_go_name(&self, go_name: String) -> GoIdentifier {

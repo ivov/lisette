@@ -55,8 +55,7 @@ impl Planner<'_> {
         };
         let receiver_coercion = resolution.receiver_coercion();
 
-        if let Some(expression) =
-            self.try_emit_pre_receiver_dot(expression, member, result_ty, resolution, ctx)
+        if let Some(expression) = self.try_emit_pre_receiver_dot(member, result_ty, resolution, ctx)
         {
             return ValuePlan::computed(Vec::new(), expression, EvaluationEffect::Pure);
         }
@@ -127,7 +126,6 @@ impl Planner<'_> {
 
     fn try_emit_pre_receiver_dot(
         &mut self,
-        expression: &Expression,
         member: &str,
         result_ty: &Type,
         resolution: &DotAccessResolution,
@@ -145,7 +143,6 @@ impl Planner<'_> {
                 is_pointer_receiver,
                 ..
             } => self.emit_instance_method_value_dot(
-                expression,
                 member,
                 result_ty,
                 *is_exported,

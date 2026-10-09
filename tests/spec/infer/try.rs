@@ -539,6 +539,19 @@ fn failure_propagation_none_in_unary() {
 }
 
 #[test]
+fn failure_propagation_aliased_none_in_binary() {
+    infer(
+        r#"
+    type OptInt = Option<int>
+    fn test() -> Option<int> {
+      Some(1 + OptInt.None?)
+    }
+        "#,
+    )
+    .assert_infer_code("failure_propagation_in_expression");
+}
+
+#[test]
 fn failure_propagation_allowed_in_statement() {
     infer(
         r#"

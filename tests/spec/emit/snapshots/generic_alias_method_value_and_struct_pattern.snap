@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Box<T> { value: T }
+  
+  impl<T> Box<T> {
+    fn get(self) -> T { self.value }
+  }
+  
+  type IntBox = Box<int>
+  
+  fn test(b: IntBox) -> int {
+    let get = IntBox.get
+    let IntBox { value } = b
+    get(b) + value
+  }
+---
+package main
+
+type Box[T any] struct {
+	value T
+}
+
+func (b Box[T]) get() T {
+	return b.value
+}
+
+type IntBox = Box[int]
+
+func test(b IntBox) int {
+	get := Box[int].get
+	value := b.value
+	return get(b) + value
+}

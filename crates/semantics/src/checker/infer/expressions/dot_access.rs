@@ -105,7 +105,7 @@ impl InferCtx<'_> {
         if let Some(expression) = resolved {
             if matches!(member.as_str(), "append" | "reserve")
                 && resolved_expression_ty.is_ref()
-                && args.deref_ty.has_name("Slice")
+                && args.deref_ty.is_slice()
             {
                 self.sink
                     .push(diagnostics::infer::ref_slice_growth(&member, span));
