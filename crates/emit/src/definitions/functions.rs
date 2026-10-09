@@ -508,17 +508,16 @@ impl Planner<'_> {
                 } => {
                     if let Some(go_name) = self.go_name_for_binding(&param.pattern) {
                         let name = self.claim_declared_binding(identifier, id.as_slice(), go_name);
-                        if let Some(local) = self.scope.bound_go_identifier(identifier) {
-                            lowered.test_handle = lowered
-                                .test_handle
-                                .take()
-                                .or_else(|| is_test_context_ty(&param.ty).then(|| local.clone()));
-                            lowered.identifiers.push(local.clone());
-                        }
-                        name
+                        lowered.test_handle = lowered
+                            .test_handle
+                            .take()
+                            .or_else(|| is_test_context_ty(&param.ty).then(|| name.clone()));
+                        lowered.identifiers.push(name.clone());
+                        name.to_string()
                     } else {
                         self.scope
                             .bind_source(identifier.as_str(), id.as_slice(), "_")
+                            .to_string()
                     }
                 }
                 Pattern::WildCard { .. } => "_".to_string(),

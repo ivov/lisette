@@ -1360,7 +1360,7 @@ impl Type {
     }
 
     pub fn is_unknown(&self) -> bool {
-        self.has_name("Unknown")
+        self.has_qualified_id("prelude.Unknown")
     }
 
     pub fn is_receiver(&self) -> bool {

@@ -64,9 +64,9 @@ impl Planner<'_> {
             initial_go_name
         } else {
             let fresh = self.fresh_var(Some(identifier));
-            self.scope.bind_source(identifier, &[], &fresh);
+            let go_identifier = self.scope.bind_source(identifier, &[], &fresh);
             self.try_declare(&fresh);
-            fresh
+            go_identifier
         };
         let is_const = self.is_go_constant_expression(expression);
         // An untyped string or bool constant also assigns to named types.
@@ -90,7 +90,7 @@ impl Planner<'_> {
         }
         ConstPlan {
             is_const,
-            name: go_identifier.into(),
+            name: go_identifier,
             ty_str,
             value,
         }

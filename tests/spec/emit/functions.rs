@@ -1836,6 +1836,42 @@ fn main() {
 }
 
 #[test]
+fn go_import_alias_pointer_receiver_method_expression() {
+    let input = r#"
+import "go:bytes"
+
+type Buffer = bytes.Buffer
+
+fn main() {
+  let f = Buffer.ReadString
+  let mut buf = Buffer {}
+  let _ = f(&buf, 10)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_alias_method_value_and_struct_pattern() {
+    let input = r#"
+struct Box<T> { value: T }
+
+impl<T> Box<T> {
+  fn get(self) -> T { self.value }
+}
+
+type IntBox = Box<int>
+
+fn test(b: IntBox) -> int {
+  let get = IntBox.get
+  let IntBox { value } = b
+  get(b) + value
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn go_function_ref_first_param_not_pointer_receiver() {
     let input = r#"
 import "go:flag"

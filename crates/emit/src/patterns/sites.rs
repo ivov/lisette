@@ -771,9 +771,7 @@ impl Planner<'_> {
             let go_type = self.use_go_type(ty);
             statements.push(
                 LoweredStatement::VarDecl {
-                    name: self
-                        .scope
-                        .identifier_for_binding(&binding.lisette_name, go_name),
+                    name: go_name,
                     go_type,
                     value: None,
                 }
@@ -937,11 +935,11 @@ pub(crate) fn lower_none_arm_body(
     place: &PlacePlan,
 ) -> LoweredBlock {
     for match_arm in match_arms {
-        if let Pattern::EnumVariant { identifier, .. } = &match_arm.pattern {
-            let variant_name = go_name::unqualified_name(identifier);
-            if variant_name == "None" {
-                return planner.lower_block_to_place(&match_arm.expression, place);
-            }
+        if matches!(
+            prelude_variant(&match_arm.pattern),
+            Some((PreludeVariant::None, _))
+        ) {
+            return planner.lower_block_to_place(&match_arm.expression, place);
         }
     }
     LoweredBlock {
@@ -957,16 +955,14 @@ pub(crate) fn unwrap_some_pattern(pattern: &Pattern) -> &Pattern {
 }
 
 pub(crate) fn some_payload_pattern(pattern: &Pattern) -> Option<&Pattern> {
-    let Pattern::EnumVariant {
-        identifier, fields, ..
-    } = pattern
-    else {
-        return None;
-    };
-    match (go_name::unqualified_name(identifier), fields.as_slice()) {
-        ("Some", [payload]) => Some(payload),
+    match prelude_variant(pattern)? {
+        (PreludeVariant::Some, [payload]) => Some(payload),
         _ => None,
     }
+}
+
+pub(crate) fn is_some_pattern(pattern: &Pattern) -> bool {
+    some_payload_pattern(peel_as_binding(pattern)).is_some()
 }
 
 fn peel_as_binding(pattern: &Pattern) -> &Pattern {
@@ -998,13 +994,9 @@ impl Planner<'_> {
                     let name = self.fresh_var(Some("recv"));
                     return (self.scope.generated_identifier(&name), true);
                 }
-                self.scope
-                    .bind_source(identifier, binding.as_slice(), go_name);
                 (
                     self.scope
-                        .bound_go_identifier(identifier)
-                        .expect("receive variable was just bound")
-                        .clone(),
+                        .bind_source(identifier, binding.as_slice(), go_name),
                     false,
                 )
             }

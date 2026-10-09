@@ -176,11 +176,11 @@ pub(crate) fn tree_binding_statements(
         let ids = &binding.binding_ids;
         let name = if planner.scope.has_binding_for_go_name(go_name) {
             let fresh = planner.fresh_var(Some(&binding.lisette_name));
-            planner
+            let name = planner
                 .scope
                 .bind_source(&binding.lisette_name, ids, &fresh);
             planner.try_declare(&fresh);
-            fresh
+            name
         } else {
             let name = planner
                 .scope
@@ -189,18 +189,15 @@ pub(crate) fn tree_binding_statements(
                 name
             } else {
                 let fresh = planner.fresh_var(Some(&binding.lisette_name));
-                planner
+                let name = planner
                     .scope
                     .bind_source(&binding.lisette_name, ids, &fresh);
                 planner.try_declare(&fresh);
-                fresh
+                name
             }
         };
-        let mut definition = Definition::single(name.clone(), access_expression);
-        definition.names[0] = planner
-            .scope
-            .identifier_for_binding(&binding.lisette_name, name);
-        statements.push(LoweredStatement::Define(definition).into());
+        statements
+            .push(LoweredStatement::Define(Definition::single(name, access_expression)).into());
     }
 }
 

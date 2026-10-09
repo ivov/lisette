@@ -5,6 +5,7 @@ use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::unify::UnifyError;
+use crate::checker::infer::validation::always_fails;
 
 struct TryBlockTypes {
     ok: Type,
@@ -285,23 +286,9 @@ impl InferCtx<'_> {
             span: propagate_span,
             ..
         } = last_item
+            && always_fails(expression)
         {
-            let is_always_error = match expression.as_ref() {
-                Expression::Identifier { .. } => {
-                    expression.as_result_constructor() == Some(Err(()))
-                        || expression.as_option_constructor() == Some(Err(()))
-                }
-                Expression::Call {
-                    expression: callee, ..
-                } => {
-                    callee.as_result_constructor() == Some(Err(()))
-                        || callee.as_option_constructor() == Some(Err(()))
-                }
-                _ => false,
-            };
-            if is_always_error {
-                self.facts.add_always_failing_try_block(*propagate_span);
-            }
+            self.facts.add_always_failing_try_block(*propagate_span);
         }
 
         let inner_ty = last_item.get_type();

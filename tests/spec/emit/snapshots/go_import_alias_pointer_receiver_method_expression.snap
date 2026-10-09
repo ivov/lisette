@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:bytes"
+  
+  type Buffer = bytes.Buffer
+  
+  fn main() {
+    let f = Buffer.ReadString
+    let mut buf = Buffer {}
+    let _ = f(&buf, 10)
+  }
+---
+package main
+
+import "bytes"
+
+type Buffer = bytes.Buffer
+
+func main() {
+	f := (*bytes.Buffer).ReadString
+	buf := bytes.Buffer{}
+	f(&buf, 10)
+}

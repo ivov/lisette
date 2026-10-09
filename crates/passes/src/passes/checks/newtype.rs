@@ -95,7 +95,7 @@ fn has_map_field_in_chain(expression: &Expression) -> bool {
 
 fn is_map_indexed_access(expression: &Expression) -> bool {
     match expression.unwrap_parens() {
-        Expression::IndexedAccess { expression, .. } => expression.get_type().has_name("Map"),
+        Expression::IndexedAccess { expression, .. } => expression.get_type().is_map(),
         _ => false,
     }
 }

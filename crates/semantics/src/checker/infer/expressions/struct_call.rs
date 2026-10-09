@@ -94,6 +94,7 @@ impl InferCtx<'_> {
         // Opaque types (e.g., Go's sync.WaitGroup) can be zero-value instantiated
         // with T{} even though they have no struct definition.
         if let Some(qualified_name) = self.lookup_qualified_name(store, &literal.name)
+            && let Some(qualified_name) = store.peel_alias_name(&qualified_name)
             && let Some(Definition {
                 ty: alias_ty,
                 body: DefinitionBody::TypeAlias { alias, .. },

@@ -92,14 +92,14 @@ fn check_not_comparable_impl(
         return Some("functions");
     }
 
-    if ty.has_name("Slice") {
+    if ty.is_slice() {
         return Some("slices");
     }
-    if ty.has_name("Map") {
+    if ty.is_map() {
         return Some("maps");
     }
 
-    if ty.has_name("Ref") || ty.has_name("Channel") {
+    if ty.is_ref() || ty.is_channel() {
         return None;
     }
 

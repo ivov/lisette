@@ -276,13 +276,7 @@ impl InferCtx<'_> {
         };
         let params = &f.params;
 
-        let is_cross_package_type_access = matches!(
-            args.expression,
-            Expression::DotAccess { expression: inner, .. }
-                if inner.get_type().resolve_in(&self.env).as_import_namespace().is_some()
-        );
-
-        if !is_cross_package_type_access || self.is_callee_context() {
+        if !self.is_type_level_receiver(args.expression) || self.is_callee_context() {
             return None;
         }
 
@@ -407,8 +401,8 @@ impl InferCtx<'_> {
 
     fn get_receiver_generics_count(&self, receiver_ty: &Type) -> usize {
         let store = self.store;
-        let lookup_id: Symbol = match receiver_ty {
-            Type::Nominal { id, .. } => id.clone(),
+        let lookup_id: Symbol = match store.peel_alias(receiver_ty) {
+            Type::Nominal { id, .. } => id,
             Type::Compound { kind, .. } => Symbol::from_parts("prelude", kind.leaf_name()),
             _ => return 0,
         };
@@ -436,15 +430,9 @@ impl InferCtx<'_> {
                 if !is_constructor
                     && let Some(def) = store.get_definition(id)
                     && matches!(def.body, DefinitionBody::Enum { .. })
+                    && !self.is_type_level_receiver(args.expression)
                 {
-                    let is_type_access = matches!(
-                        args.expression,
-                        Expression::DotAccess { expression, .. }
-                            if expression.get_type().resolve_in(&self.env).as_import_namespace().is_some()
-                    );
-                    if !is_type_access {
-                        return None;
-                    }
+                    return None;
                 }
                 id.clone()
             }

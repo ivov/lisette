@@ -423,7 +423,9 @@ impl Planner<'_> {
                 name
             }
             None => match self.go_name_for_binding(pattern) {
-                Some(name) => self.claim_declared_binding(identifier, ids.as_slice(), name),
+                Some(name) => self
+                    .claim_declared_binding(identifier, ids.as_slice(), name)
+                    .to_string(),
                 None => "_".to_string(),
             },
         }

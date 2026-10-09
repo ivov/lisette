@@ -215,6 +215,18 @@ fn test() -> bool {
 }
 
 #[test]
+fn go_struct_named_like_a_builtin_collection_is_comparable() {
+    let input = r#"
+import "go:go/types"
+
+fn same(a: types.Slice, b: types.Slice, c: types.Map, d: types.Map) -> bool {
+  a == b && c != d
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn negated_float_comparison_keeps_not() {
     let input = r#"
 type Score = float64

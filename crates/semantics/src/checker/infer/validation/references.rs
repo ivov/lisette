@@ -1,6 +1,7 @@
 use rustc_hash::FxHashSet as HashSet;
 
 use syntax::ast::{Expression, Span};
+use syntax::program::prelude_constructor;
 use syntax::types::{CompoundKind, Type};
 
 use crate::checker::EnvResolve;
@@ -15,22 +16,7 @@ impl InferCtx<'_> {
         inner: &Expression,
         span: Span,
     ) {
-        let is_failure = match inner {
-            Expression::Identifier { .. } => {
-                // `None?`
-                inner.as_option_constructor() == Some(Err(()))
-            }
-            Expression::Call {
-                expression: callee, ..
-            } => {
-                // `Err(x)?`
-                callee.as_result_constructor() == Some(Err(()))
-                    || callee.as_option_constructor() == Some(Err(()))
-            }
-            _ => false,
-        };
-
-        if is_failure {
+        if always_fails(inner) {
             self.sink
                 .push(diagnostics::infer::failure_propagation_in_expression(span));
         }
@@ -243,4 +229,16 @@ fn find_ref_span(expression: &Expression, var_name: &str) -> Option<Span> {
             .into_iter()
             .find_map(|child| find_ref_span(child, var_name)),
     }
+}
+
+/// Whether `?` on this inferred expression always propagates: `None` or `Err(..)`.
+pub(crate) fn always_fails(expression: &Expression) -> bool {
+    let constructor = match expression {
+        Expression::Call { expression, .. } => expression.as_ref(),
+        expression => expression,
+    };
+    matches!(
+        prelude_constructor(constructor),
+        Some(("prelude.Option", "None") | ("prelude.Result", "Err"))
+    )
 }

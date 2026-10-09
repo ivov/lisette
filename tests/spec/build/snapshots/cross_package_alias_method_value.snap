@@ -1,0 +1,30 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === geometry/lib.go ===
+package geometry
+
+type Point struct {
+	X float64
+	Y float64
+}
+
+func (p Point) Area() float64 {
+	return p.X * p.Y
+}
+
+
+// === main.go ===
+package main
+
+import "github.com/user/myproject/geometry"
+
+type P = geometry.Point
+
+func main() {
+	area := geometry.Point.Area
+	area(geometry.Point{
+		X: 2.0,
+		Y: 3.0,
+	})
+}

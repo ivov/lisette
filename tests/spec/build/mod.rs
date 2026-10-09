@@ -2225,6 +2225,83 @@ fn main() {
 }
 
 #[test]
+fn cross_package_alias_method_value() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "geometry",
+        "lib.lis",
+        r#"
+pub struct Point {
+  pub x: float64,
+  pub y: float64,
+}
+
+impl Point {
+  pub fn area(self) -> float64 {
+    self.x * self.y
+  }
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "geometry"
+
+type P = geometry.Point
+
+fn main() {
+  let area = P.area
+  let _ = area(geometry.Point { x: 2.0, y: 3.0 })
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn cross_package_enum_alias_static_method() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "palette",
+        "lib.lis",
+        r#"
+pub enum Color {
+  Red,
+  Green(int),
+}
+
+impl Color {
+  pub fn fallback() -> Color {
+    Color.Red
+  }
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import p "palette"
+
+type C = p.Color
+
+fn main() {
+  let _ = C.fallback()
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn go_function_value_result_wrapping() {
     let mut fs = MockFileSystem::new();
 

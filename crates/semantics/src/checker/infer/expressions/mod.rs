@@ -152,10 +152,11 @@ impl InferCtx<'_> {
             Expression::Propagate {
                 expression, span, ..
             } => {
-                if is_subexpression {
-                    self.check_failure_propagation_in_subexpression(&expression, span);
+                let propagate = self.infer_propagate(expression, span, expected_ty);
+                if is_subexpression && let Expression::Propagate { expression, .. } = &propagate {
+                    self.check_failure_propagation_in_subexpression(expression, span);
                 }
-                self.infer_propagate(expression, span, expected_ty)
+                propagate
             }
 
             Expression::TryBlock {

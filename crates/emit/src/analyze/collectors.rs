@@ -12,7 +12,7 @@ impl Planner<'_> {
     /// a constant's eligibility must not depend on which file or item renders
     /// first.
     pub(crate) fn derive_package_go_consts(&mut self, files: &[&File]) {
-        let candidates: Vec<(&str, &Expression)> = files
+        let candidates: Vec<(String, &Expression)> = files
             .iter()
             .flat_map(|file| &file.items)
             .filter_map(|item| {
@@ -24,7 +24,10 @@ impl Planner<'_> {
                 else {
                     return None;
                 };
-                Some((identifier.as_str(), expression.value()?))
+                Some((
+                    self.facts.qualified_current(identifier),
+                    expression.value()?,
+                ))
             })
             .collect();
 
@@ -35,7 +38,7 @@ impl Planner<'_> {
                     !self.package.is_go_const_binding(name)
                         && self.is_go_constant_expression(expression)
                 })
-                .map(|(name, _)| (*name).to_string())
+                .map(|(name, _)| name.clone())
                 .collect();
             if newly_eligible.is_empty() {
                 break;

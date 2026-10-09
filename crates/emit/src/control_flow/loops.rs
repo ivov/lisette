@@ -7,18 +7,22 @@ use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoweredBlock, LoweredStatement, Statement, define, discard,
 };
 use crate::plan::go_expression::BinaryOp;
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::{CaptureBoundary, GoExpression};
 use crate::types::shape::RangeShape;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::program::NativeTypeKind;
 use syntax::types::Type;
 
-fn range_header(key: &str, value: Option<&str>, iterable: GoExpression) -> LoopHeader {
+fn range_header(
+    key: Option<&GoIdentifier>,
+    value: Option<&GoIdentifier>,
+    iterable: GoExpression,
+) -> LoopHeader {
+    let named = |name: Option<&GoIdentifier>| name.filter(|name| *name != "_").cloned();
     LoopHeader::Range {
-        key: (key != "_").then(|| key.to_string().into()),
-        value: value
-            .filter(|value| *value != "_")
-            .map(|value| value.to_string().into()),
+        key: named(key),
+        value: named(value),
         iterable,
     }
 }
@@ -101,7 +105,11 @@ impl Planner<'_> {
             let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
             let bound = |field: &str| GoExpression::selector(range_var.clone(), field.to_string());
             let compare = |operator: BinaryOp| {
-                GoExpression::binary(GoExpression::name(loop_var.clone()), operator, bound("End"))
+                GoExpression::binary(
+                    GoExpression::identifier(loop_var.clone()),
+                    operator,
+                    bound("End"),
+                )
             };
             let condition = match range_shape {
                 RangeShape::Range => Some(compare(BinaryOp::Lt)),
@@ -112,7 +120,7 @@ impl Planner<'_> {
                 }
             };
             let header = LoopHeader::Counted {
-                variable: loop_var.into(),
+                variable: loop_var,
                 start: bound("Start"),
                 condition,
             };
@@ -132,7 +140,7 @@ impl Planner<'_> {
             let mut prologue = Vec::new();
             let receiver = this.capture_operand_into(&mut prologue, receiver);
             let loop_var = this.bind_loop_pattern(&binding.pattern, None);
-            let header = range_header("_", Some(&loop_var), receiver);
+            let header = range_header(None, Some(&loop_var), receiver);
             let lowered_body = this.lower_block_as_body(body);
             (prologue, header, lowered_body)
         })
@@ -228,9 +236,9 @@ impl Planner<'_> {
             let loop_var = this.bind_loop_pattern(&binding.pattern, None);
             let header = match yields {
                 RangeYield::Channel | RangeYield::Single => {
-                    range_header(&loop_var, None, iter_expression)
+                    range_header(Some(&loop_var), None, iter_expression)
                 }
-                RangeYield::Pair => range_header("_", Some(&loop_var), iter_expression),
+                RangeYield::Pair => range_header(None, Some(&loop_var), iter_expression),
             };
             (header, this.lower_block_as_body(body))
         });
@@ -303,14 +311,14 @@ impl Planner<'_> {
         let second_is_discard = matches!(second, Pattern::WildCard { .. })
             || self.go_name_for_binding(second).is_none();
         let header = if first_is_discard && second_is_discard {
-            range_header("_", None, iter_expression)
+            range_header(None, None, iter_expression)
         } else if second_is_discard {
             let key = self.bind_loop_pattern(first, None);
-            range_header(&key, None, iter_expression)
+            range_header(Some(&key), None, iter_expression)
         } else {
             let key = self.bind_loop_pattern(first, None);
             let value = self.bind_loop_pattern(second, None);
-            range_header(&key, Some(&value), iter_expression)
+            range_header(Some(&key), Some(&value), iter_expression)
         };
         (header, self.lower_block_as_body(body))
     }
@@ -378,16 +386,16 @@ impl Planner<'_> {
         body: &Expression,
     ) -> (LoopHeader, LoweredBlock) {
         if !pattern_has_bindings(&binding.pattern) {
-            let header = range_header("_", None, iter_expression);
+            let header = range_header(None, None, iter_expression);
             return (header, self.lower_block_as_body(body));
         }
         let item_var = self.fresh_var(Some("item"));
         let item_identifier = self.scope.generated_identifier(&item_var);
         let header = match yields {
             RangeYield::Channel | RangeYield::Single => {
-                range_header(&item_var, None, iter_expression)
+                range_header(Some(&item_identifier), None, iter_expression)
             }
-            RangeYield::Pair => range_header("_", Some(&item_var), iter_expression),
+            RangeYield::Pair => range_header(None, Some(&item_identifier), iter_expression),
         };
         let mut bindings = self.lower_irrefutable_pattern_site(
             PatternSubject::for_identifier(item_identifier.clone()),
@@ -466,7 +474,7 @@ impl Planner<'_> {
             let header = match end_expression {
                 Some(end_expression) if counts_from_zero => {
                     let loop_var = this.bind_loop_pattern(&binding.pattern, None);
-                    range_header(&loop_var, None, end_expression)
+                    range_header(Some(&loop_var), None, end_expression)
                 }
                 Some(end_expression) => {
                     let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
@@ -476,10 +484,10 @@ impl Planner<'_> {
                         BinaryOp::Lt
                     };
                     LoopHeader::Counted {
-                        variable: loop_var.clone().into(),
+                        variable: loop_var.clone(),
                         start: start_expression,
                         condition: Some(GoExpression::binary(
-                            GoExpression::name(loop_var),
+                            GoExpression::identifier(loop_var),
                             operator,
                             end_expression,
                         )),
@@ -488,7 +496,7 @@ impl Planner<'_> {
                 None => {
                     let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
                     LoopHeader::Counted {
-                        variable: loop_var.into(),
+                        variable: loop_var,
                         start: start_expression,
                         condition: None,
                     }
@@ -544,7 +552,7 @@ impl Planner<'_> {
     /// `fallback` controls what happens when the pattern is unused or non-identifier:
     /// - `Some(hint)`: generate a fresh var (needed for C-style loops where `_` is invalid)
     /// - `None`: use `"_"` (valid in `for range` syntax)
-    fn bind_loop_pattern(&mut self, pattern: &Pattern, fallback: Option<&str>) -> String {
+    fn bind_loop_pattern(&mut self, pattern: &Pattern, fallback: Option<&str>) -> GoIdentifier {
         if let Pattern::Identifier {
             identifier,
             binding,
@@ -562,8 +570,11 @@ impl Planner<'_> {
                 .bind_source(identifier, binding.as_slice(), go_name);
         }
         match fallback {
-            Some(hint) => self.fresh_var(Some(hint)),
-            None => "_".to_string(),
+            Some(hint) => {
+                let name = self.fresh_var(Some(hint));
+                self.scope.generated_identifier(&name)
+            }
+            None => GoIdentifier::name("_".to_string()),
         }
     }
 
@@ -641,7 +652,7 @@ fn recognize_string_view_loop<'a>(
         return None;
     };
 
-    if !receiver.get_type().has_name("string") {
+    if !receiver.get_type().is_string() {
         return None;
     }
 

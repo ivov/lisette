@@ -27,7 +27,7 @@ use syntax::ast::{
     BindingId, ConstructorPatternResolution, Expression, Literal, MatchArm, Pattern,
 };
 use syntax::parse::TUPLE_FIELDS;
-use syntax::program::{NativeTypeKind, resolved_definition};
+use syntax::program::{self, NativeTypeKind};
 use syntax::types::{Type, unqualified_name};
 
 pub(crate) struct ResultFusePlan<'a> {
@@ -283,12 +283,7 @@ pub(crate) fn prelude_variant(pattern: &Pattern) -> Option<(PreludeVariant, &[Pa
 }
 
 pub(crate) fn prelude_constructor(expression: &Expression) -> Option<PreludeVariant> {
-    let (owner, variant_name) = resolved_definition(expression)?.rsplit_once('.')?;
-    let enum_name = match (owner, variant_name) {
-        ("prelude", "Some" | "None") => "prelude.Option",
-        ("prelude", "Ok" | "Err") => "prelude.Result",
-        _ => owner,
-    };
+    let (enum_name, variant_name) = program::prelude_constructor(expression)?;
     PreludeVariant::from_resolution(enum_name, variant_name)
 }
 
@@ -1223,27 +1218,14 @@ impl Planner<'_> {
                         ArmBinding::Alias { name, go_name } => {
                             let id = name.binding;
                             let name = name.name;
-                            this.scope.bind_source(name, id.as_slice(), go_name);
-                            (
-                                this.scope
-                                    .bound_go_identifier(name)
-                                    .expect("alias was bound")
-                                    .clone(),
-                                None,
-                            )
+                            (this.scope.bind_source(name, id.as_slice(), go_name), None)
                         }
                         ArmBinding::Copy { name, value } => {
                             let id = name.binding;
                             let name = name.name;
                             let go_name = this.scope.bind_source(name, id.as_slice(), name);
                             this.declare(&go_name);
-                            (
-                                this.scope
-                                    .bound_go_identifier(name)
-                                    .expect("copy was bound")
-                                    .clone(),
-                                Some(value.clone()),
-                            )
+                            (go_name, Some(value.clone()))
                         }
                     })
                 })

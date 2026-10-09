@@ -1,13 +1,12 @@
 use crate::Planner;
 use crate::calls::go_interop::build_tuple_literal;
 use crate::context::expression::ExpressionContext;
-use crate::names::go_name;
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
 use syntax::ast::IdentifierResolution;
 use syntax::types::FunctionParameter;
-use syntax::types::{SubstitutionMap, Type, unqualified_name};
+use syntax::types::{SubstitutionMap, Type};
 
 impl Planner<'_> {
     pub(crate) fn emit_identifier(
@@ -145,62 +144,27 @@ impl Planner<'_> {
         }
     }
 
-    /// Go method-expression syntax for an instance method of a current-package type.
+    /// Go method-expression syntax for an instance method of a type.
     fn try_emit_method_expression(&mut self, symbol: &str, id_ty: &Type) -> Option<GoExpression> {
         let package = self.facts.package_for_qualified_name(symbol)?;
         let (owner, method) = symbol[package.len() + 1..].rsplit_once('.')?;
         let owner_id = self.peel_alias_id(&format!("{package}.{owner}"));
-        if !self
-            .facts
-            .package_for_qualified_name(&owner_id)
-            .is_some_and(|package| self.facts.is_current_package(package))
+        let first = id_ty.as_function_type()?.params.first()?;
+        let receiver = first.ty.strip_refs();
+        if !matches!(&receiver, Type::Nominal { id, .. } if id.as_str() == owner_id)
+            || self.facts.is_ufcs_method(&owner_id, method)
         {
             return None;
         }
-
-        let fn_params = match id_ty {
-            Type::Function(f) => &f.params,
-            Type::Forall { body, .. } => match body.as_ref() {
-                Type::Function(f) => &f.params,
-                _ => return None,
-            },
-            _ => return None,
-        };
-
-        let first = fn_params.first()?;
-        let stripped = first.ty.strip_refs();
-        let is_self = matches!(stripped, Type::Nominal { ref id, .. } if id.as_str() == owner_id);
-        if !is_self {
-            return None;
-        }
-
-        let is_pointer = first.ty.is_ref();
-
-        if self.facts.is_ufcs_method(&owner_id, method) {
-            return None;
-        }
-
         let is_public = self
             .facts
             .method(&owner_id, method)
-            .map(|method| method.visibility.is_public())
-            .unwrap_or(false);
+            .is_some_and(|method| method.visibility.is_public());
         let go_method = self.method_go_name(method, is_public);
-
-        let type_args = if let Type::Nominal { ref params, .. } = stripped {
-            if params.is_empty() {
-                String::new()
-            } else {
-                self.format_type_args(params)
-            }
-        } else {
-            String::new()
-        };
-
-        let type_go = go_name::escape_type_name(unqualified_name(&owner_id));
+        let receiver_type = self.use_go_type(&receiver);
         Some(method_expression(
-            format!("{}{}", type_go, type_args),
-            is_pointer,
+            receiver_type,
+            first.ty.is_ref(),
             go_method,
         ))
     }
