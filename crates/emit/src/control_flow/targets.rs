@@ -1,6 +1,6 @@
 use crate::plan::bodies::{
     AssignForm, CompoundKind, ElseArm, IfPlan, LoopId, LoopKind, LoopTransfer, LoweredBlock,
-    LoweredStatement,
+    LoweredStatement, Statement,
 };
 use crate::plan::values::ValuePlan;
 
@@ -51,9 +51,9 @@ impl Legalizer {
         self.walk_statements(&mut block.statements, interception);
     }
 
-    fn walk_statements(&mut self, statements: &mut [LoweredStatement], interception: Interception) {
+    fn walk_statements(&mut self, statements: &mut [Statement], interception: Interception) {
         for statement in statements {
-            self.walk_statement(statement, interception);
+            self.walk_statement(&mut statement.kind, interception);
         }
     }
 
@@ -132,8 +132,6 @@ impl Legalizer {
                 }
                 self.walk_statements(&mut plan.postlude, interception);
             }
-            LoweredStatement::WhileLet(body) => self.walk_block(body, interception),
-            LoweredStatement::Directed { inner, .. } => self.walk_statement(inner, interception),
             LoweredStatement::Return(_)
             | LoweredStatement::Const(_)
             | LoweredStatement::Async { .. }

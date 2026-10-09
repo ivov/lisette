@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  type Res = Result<int, error>
+  
+  fn parse(text: string) -> int {
+    let r = strconv.Atoi(text)
+    match r {
+      Ok(_) => 1,
+      Res.Err(e) => {
+        fmt.Println(e)
+        0
+      },
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+type Res = lisette.Result[int, error]
+
+func parse(text string) int {
+	_, err := strconv.Atoi(text)
+	if err == nil {
+		return 1
+	}
+	fmt.Println(err)
+	return 0
+}

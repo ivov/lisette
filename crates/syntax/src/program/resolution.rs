@@ -1,11 +1,19 @@
 use crate::ast::Expression;
 use crate::types::Symbol;
-use crate::types::{CompoundKind, SimpleKind, Type};
+use crate::types::{CompoundKind, SimpleKind, SubstitutionMap, Type};
 
 pub fn resolved_definition(expression: &Expression) -> Option<&str> {
     match expression.unwrap_parens() {
         Expression::Identifier { resolution, .. } => resolution.definition(),
         Expression::DotAccess { resolution, .. } => resolution.definition(),
+        _ => None,
+    }
+}
+
+pub fn resolved_instantiation(expression: &Expression) -> Option<&SubstitutionMap> {
+    match expression.unwrap_parens() {
+        Expression::Identifier { resolution, .. } => resolution.instantiation(),
+        Expression::DotAccess { resolution, .. } => resolution.instantiation(),
         _ => None,
     }
 }
@@ -85,94 +93,62 @@ pub enum ReceiverCoercion {
 }
 
 /// What a dot access resolved to during type checking.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DotAccessKind {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DotAccessResolution {
+    Unresolved,
     /// Named struct field access
-    StructField { is_exported: bool },
+    StructField {
+        is_exported: bool,
+        declaring_type: Option<Symbol>,
+    },
     /// Tuple struct field access (e.g., `point.0` on `struct Point(int, int)`).
     /// `is_newtype` is true when the struct has exactly 1 field and no generics,
     /// meaning access should emit a type cast rather than `.F0`.
-    TupleStructField { is_newtype: bool },
+    TupleStructField {
+        is_newtype: bool,
+    },
     /// Tuple element access (e.g., `t.0`, `t.1`)
     TupleElement,
     /// Package member access (e.g., `mod.func`)
-    PackageMember,
+    PackageMember {
+        definition: Option<Symbol>,
+        instantiation: SubstitutionMap,
+    },
     /// ADT enum variant constructor (e.g., `makeColorRed[T]()`)
-    EnumVariant,
+    EnumVariant {
+        definition: Symbol,
+        instantiation: SubstitutionMap,
+    },
     /// Instance method (has `self` receiver)
-    InstanceMethod { is_exported: bool },
+    InstanceMethod {
+        is_exported: bool,
+        receiver_coercion: Option<ReceiverCoercion>,
+        definition: Option<Symbol>,
+        instantiation: SubstitutionMap,
+    },
     /// Instance method used as a first-class value (not called).
     /// E.g., `Point.area` used as a callback. The emitter needs to know
     /// whether the receiver is a pointer to emit Go method expression syntax.
     InstanceMethodValue {
         is_exported: bool,
         is_pointer_receiver: bool,
+        definition: Option<Symbol>,
+        instantiation: SubstitutionMap,
     },
     /// Static method (no `self` receiver)
-    StaticMethod { is_exported: bool },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DotAccessResolution {
-    Unresolved,
-    StructField {
-        is_exported: bool,
-        declaring_type: Option<Symbol>,
-    },
-    TupleStructField {
-        is_newtype: bool,
-    },
-    TupleElement,
-    PackageMember {
-        definition: Option<Symbol>,
-    },
-    EnumVariant {
-        definition: Symbol,
-    },
-    InstanceMethod {
-        is_exported: bool,
-        receiver_coercion: Option<ReceiverCoercion>,
-        definition: Option<Symbol>,
-    },
-    InstanceMethodValue {
-        is_exported: bool,
-        is_pointer_receiver: bool,
-        definition: Option<Symbol>,
-    },
     StaticMethod {
         is_exported: bool,
         definition: Symbol,
+        instantiation: SubstitutionMap,
     },
 }
 
 impl DotAccessResolution {
-    pub fn kind(&self) -> Option<DotAccessKind> {
-        Some(match self {
-            Self::Unresolved => return None,
-            Self::StructField { is_exported, .. } => DotAccessKind::StructField {
-                is_exported: *is_exported,
-            },
-            Self::TupleStructField { is_newtype } => DotAccessKind::TupleStructField {
-                is_newtype: *is_newtype,
-            },
-            Self::TupleElement => DotAccessKind::TupleElement,
-            Self::PackageMember { .. } => DotAccessKind::PackageMember,
-            Self::EnumVariant { .. } => DotAccessKind::EnumVariant,
-            Self::InstanceMethod { is_exported, .. } => DotAccessKind::InstanceMethod {
-                is_exported: *is_exported,
-            },
-            Self::InstanceMethodValue {
-                is_exported,
-                is_pointer_receiver,
-                ..
-            } => DotAccessKind::InstanceMethodValue {
-                is_exported: *is_exported,
-                is_pointer_receiver: *is_pointer_receiver,
-            },
-            Self::StaticMethod { is_exported, .. } => DotAccessKind::StaticMethod {
-                is_exported: *is_exported,
-            },
-        })
+    pub fn is_field_read(&self) -> bool {
+        matches!(
+            self,
+            Self::StructField { .. } | Self::TupleStructField { .. } | Self::TupleElement
+        )
     }
 
     pub fn declaring_type(&self) -> Option<&Symbol> {
@@ -193,14 +169,28 @@ impl DotAccessResolution {
 
     pub fn definition(&self) -> Option<&str> {
         match self {
-            Self::PackageMember { definition }
+            Self::PackageMember { definition, .. }
             | Self::InstanceMethod { definition, .. }
             | Self::InstanceMethodValue { definition, .. } => {
                 definition.as_ref().map(Symbol::as_str)
             }
-            Self::EnumVariant { definition } | Self::StaticMethod { definition, .. } => {
+            Self::EnumVariant { definition, .. } | Self::StaticMethod { definition, .. } => {
                 Some(definition)
             }
+            Self::Unresolved
+            | Self::StructField { .. }
+            | Self::TupleStructField { .. }
+            | Self::TupleElement => None,
+        }
+    }
+
+    pub fn instantiation(&self) -> Option<&SubstitutionMap> {
+        match self {
+            Self::PackageMember { instantiation, .. }
+            | Self::EnumVariant { instantiation, .. }
+            | Self::InstanceMethod { instantiation, .. }
+            | Self::InstanceMethodValue { instantiation, .. }
+            | Self::StaticMethod { instantiation, .. } => Some(instantiation),
             Self::Unresolved
             | Self::StructField { .. }
             | Self::TupleStructField { .. }
@@ -211,7 +201,6 @@ impl DotAccessResolution {
 
 /// What kind of native built-in type (Slice, Map, Channel, etc.) a call targets.
 /// Defined here so semantics can classify calls without depending on
-/// emit-specific types. The emitter maps this to its internal `NativeGoType`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NativeTypeKind {
     Slice,
@@ -267,6 +256,19 @@ impl NativeTypeKind {
             "string" => Some(Self::String),
             "Array" => Some(Self::Array),
             _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Slice => "Slice",
+            Self::EnumeratedSlice => "EnumeratedSlice",
+            Self::Map => "Map",
+            Self::Channel => "Channel",
+            Self::Sender => "Sender",
+            Self::Receiver => "Receiver",
+            Self::String => "string",
+            Self::Array => "Array",
         }
     }
 }

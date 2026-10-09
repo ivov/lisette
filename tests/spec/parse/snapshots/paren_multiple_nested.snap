@@ -26,6 +26,7 @@ description: |
                         byte_offset: 9,
                         byte_length: 1,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Constructor {
@@ -50,6 +51,7 @@ description: |
                         byte_offset: 17,
                         byte_length: 1,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Constructor {
@@ -74,6 +76,7 @@ description: |
                         byte_offset: 25,
                         byte_length: 1,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Constructor {
@@ -98,6 +101,7 @@ description: |
                         byte_offset: 33,
                         byte_length: 1,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Constructor {
@@ -132,6 +136,7 @@ description: |
                                     byte_offset: 49,
                                     byte_length: 6,
                                 },
+                                binding: None,
                             },
                             annotation: None,
                             ty: Var {

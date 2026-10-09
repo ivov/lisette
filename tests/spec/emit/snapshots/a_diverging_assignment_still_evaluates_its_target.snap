@@ -25,7 +25,7 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func die() struct{} {
+func die() {
 	panic("boom")
 }
 

@@ -1,0 +1,50 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  enum E { A, B }
+  
+  fn g(_e: E) -> bool { true }
+  
+  fn f(e: E) -> string {
+    match e {
+      E.A => "a",
+      x if g(x) => "g",
+      E.B => "b",
+    }
+  }
+---
+package main
+
+func MakeEA() E {
+	return E{Tag: EA}
+}
+
+func MakeEB() E {
+	return E{Tag: EB}
+}
+
+type ETag uint8
+
+const (
+	EA ETag = iota
+	EB
+)
+
+type E struct {
+	Tag ETag
+}
+
+func g(_ E) bool {
+	return true
+}
+
+func f(e E) string {
+	if e.Tag == EA {
+		return "a"
+	}
+	if g(e) {
+		return "g"
+	}
+	return "b"
+}

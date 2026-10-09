@@ -4,12 +4,12 @@ use crate::calls::predicates::strip_negations;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
-use crate::plan::bodies::{LoweredBlock, LoweredStatement};
-use crate::plan::go_expression::FunctionLiteralLayout;
+use crate::plan::bodies::{LoweredBlock, Statement};
+use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, UnaryOp};
 use crate::plan::values::{
     CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
 };
-use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
+use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, UnaryOperator};
 use syntax::program::DefinitionBody;
 use syntax::types::Type;
 
@@ -18,9 +18,18 @@ struct NumericBinaryEmitInfo {
     cast_right_to: Option<Type>,
 }
 
-struct BinaryOperand<'a> {
-    expression: &'a Expression,
-    ty: Type,
+pub(crate) struct BinaryOperand {
+    pub(crate) ty: Type,
+    pub(crate) is_literal: bool,
+}
+
+impl BinaryOperand {
+    pub(crate) fn of(expression: &Expression) -> Self {
+        Self {
+            ty: expression.get_type(),
+            is_literal: is_literal_expression(expression),
+        }
+    }
 }
 
 impl Planner<'_> {
@@ -37,23 +46,13 @@ impl Planner<'_> {
             unreachable!("pipeline expressions are lowered during inference")
         }
 
-        let left = BinaryOperand {
-            expression: left_expression,
-            ty: left_expression.get_type(),
-        };
-        let right = BinaryOperand {
-            expression: right_expression,
-            ty: right_expression.get_type(),
-        };
+        let left = BinaryOperand::of(left_expression);
+        let right = BinaryOperand::of(right_expression);
 
-        if let Some(emit_info) = is_casting_needed(&self.facts, operator, &left, &right) {
-            return self.plan_numeric_binary_with_casts(
-                operator,
-                left_expression,
-                right_expression,
-                emit_info,
-                ctx,
-            );
+        if let Some(casts) = is_casting_needed(&self.facts, operator, &left, &right) {
+            let left_plan = self.plan_operand(left_expression, ctx);
+            let right_plan = self.plan_operand(right_expression, ctx);
+            return self.combine_binary(operator, left_plan, right_plan, Some(casts));
         }
 
         let left_ty = &left.ty;
@@ -75,7 +74,7 @@ impl Planner<'_> {
                             GoExpression::literal("0".to_string()),
                             GoExpression::binary(
                                 value,
-                                "*",
+                                BinaryOp::Mul,
                                 GoExpression::literal(imag_coef.to_string()),
                             ),
                         ],
@@ -97,7 +96,7 @@ impl Planner<'_> {
                             GoExpression::literal("0".to_string()),
                             GoExpression::binary(
                                 value,
-                                "*",
+                                BinaryOp::Mul,
                                 GoExpression::literal(imag_coef.to_string()),
                             ),
                         ],
@@ -115,26 +114,56 @@ impl Planner<'_> {
             );
         }
 
-        let stages = vec![
-            self.lower_composite_value(left_expression, ctx),
-            self.lower_composite_value(right_expression, ctx),
-        ];
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "left");
+        let left_plan = self.lower_composite_value(left_expression, ctx);
+        let right_plan = self.lower_composite_value(right_expression, ctx);
+        self.combine_binary(operator, left_plan, right_plan, None)
+    }
+
+    pub(crate) fn plan_lowered_binary(
+        &mut self,
+        operator: &BinaryOperator,
+        left: (&BinaryOperand, ValuePlan),
+        right: (&BinaryOperand, ValuePlan),
+    ) -> ValuePlan {
+        let casts = is_casting_needed(&self.facts, operator, left.0, right.0);
+        self.combine_binary(operator, left.1, right.1, casts)
+    }
+
+    fn combine_binary(
+        &mut self,
+        operator: &BinaryOperator,
+        left: ValuePlan,
+        right: ValuePlan,
+        casts: Option<NumericBinaryEmitInfo>,
+    ) -> ValuePlan {
+        let sequenced =
+            self.sequence_values(vec![left, right], CaptureBoundary::SiblingSequence, "left");
         let effect = sequenced.effect;
         let stability = sequenced.stability;
         let setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
-        ValuePlan::built_from(
+        let mut left = values.next().expect("binary expression has a left operand");
+        let mut right = values
+            .next()
+            .expect("binary expression has a right operand");
+        let Some(casts) = casts else {
+            return ValuePlan::built_from(
+                setup,
+                GoExpression::binary(left, operator.into(), right),
+                effect,
+                stability,
+            );
+        };
+        if let Some(ty) = &casts.cast_left_to {
+            left = GoExpression::conversion(self.use_go_type(ty), left);
+        }
+        if let Some(ty) = &casts.cast_right_to {
+            right = GoExpression::conversion(self.use_go_type(ty), right);
+        }
+        ValuePlan::computed(
             setup,
-            GoExpression::binary(
-                values.next().expect("binary expression has a left operand"),
-                operator.to_string(),
-                values
-                    .next()
-                    .expect("binary expression has a right operand"),
-            ),
+            GoExpression::binary(left, operator.into(), right),
             effect,
-            stability,
         )
     }
 
@@ -167,12 +196,11 @@ impl Planner<'_> {
         let (left_setup, left_value) = left_staged.into_parts();
         ValuePlan::computed(
             left_setup,
-            GoExpression::binary(left_value, operator.to_string(), right_value),
+            GoExpression::binary(left_value, operator.into(), right_value),
             left_effect.combine(right_effect),
         )
     }
 
-    /// Plan a prefix unary; `!` bridges through `emit_unary_not`.
     pub(crate) fn plan_unary(
         &mut self,
         operator: &UnaryOperator,
@@ -199,13 +227,13 @@ impl Planner<'_> {
             return self.plan_unary_not(expression, ctx);
         }
 
-        let op = match operator {
-            UnaryOperator::Negative => "-",
-            UnaryOperator::BitwiseNot => "^",
-            UnaryOperator::Deref => "*",
+        let operand = self.plan_operand(expression, ctx);
+        match operator {
+            UnaryOperator::Negative => operand.unary(UnaryOp::Negate),
+            UnaryOperator::BitwiseNot => operand.unary(UnaryOp::Complement),
+            UnaryOperator::Deref => operand.dereference(),
             UnaryOperator::Not => unreachable!("Not handled above"),
-        };
-        self.plan_operand(expression, ctx).unary(op)
+        }
     }
 
     /// Plan `!` (logical-not). Comparisons flip operator because `!` binds
@@ -232,49 +260,14 @@ impl Planner<'_> {
             return predicate;
         }
         if matches!(target, Expression::Call { .. }) {
-            let mut setup: Vec<LoweredStatement> = Vec::new();
+            let mut setup: Vec<Statement> = Vec::new();
             if let Some(negated) = self.try_emit_negated_call(&mut setup, target) {
                 return ValuePlan::computed(setup, negated, EvaluationEffect::EffectfulCall);
             }
         }
 
         let staged = self.plan_operand(expression, ctx);
-        staged.unary("!")
-    }
-
-    fn plan_numeric_binary_with_casts(
-        &mut self,
-        operator: &BinaryOperator,
-        left_expression: &Expression,
-        right_expression: &Expression,
-        info: NumericBinaryEmitInfo,
-        ctx: ExpressionContext<'_>,
-    ) -> ValuePlan {
-        let stages = vec![
-            self.plan_operand(left_expression, ctx),
-            self.plan_operand(right_expression, ctx),
-        ];
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "left");
-        let effect = sequenced.effect;
-        let setup = sequenced.setup;
-        let mut values = sequenced.values.into_iter();
-        let mut left = values
-            .next()
-            .expect("numeric binary expression has a left operand");
-        let mut right = values
-            .next()
-            .expect("numeric binary expression has a right operand");
-        if let Some(ty) = &info.cast_left_to {
-            left = GoExpression::conversion(self.use_go_type(ty), left);
-        }
-        if let Some(ty) = &info.cast_right_to {
-            right = GoExpression::conversion(self.use_go_type(ty), right);
-        }
-        ValuePlan::computed(
-            setup,
-            GoExpression::binary(left, operator.to_string(), right),
-            effect,
-        )
+        staged.unary(UnaryOp::Not)
     }
 }
 
@@ -327,7 +320,9 @@ impl Planner<'_> {
             Expression::Literal { literal, .. } => {
                 !matches!(literal, Literal::FormatString(_) | Literal::Slice(_))
             }
-            Expression::Identifier { value, .. } => self.identifier_is_const(value),
+            Expression::Identifier {
+                value, resolution, ..
+            } => self.identifier_is_const(value, resolution),
             Expression::DotAccess {
                 expression: package,
                 member,
@@ -353,8 +348,11 @@ impl Planner<'_> {
         }
     }
 
-    fn identifier_is_const(&self, value: &str) -> bool {
-        match self.scope.resolve_identifier_binding(value) {
+    fn identifier_is_const(&self, value: &str, resolution: &IdentifierResolution) -> bool {
+        match self
+            .scope
+            .resolve_identifier_with_resolution(value, resolution)
+        {
             Some(binding) => binding.is_go_const(),
             None => self.package.is_go_const_binding(value),
         }
@@ -462,8 +460,8 @@ fn cast_unless_literal(is_literal: bool, target: &Type) -> Option<Type> {
 fn is_casting_needed(
     facts: &EmitFacts<'_>,
     operator: &BinaryOperator,
-    left: &BinaryOperand<'_>,
-    right: &BinaryOperand<'_>,
+    left: &BinaryOperand,
+    right: &BinaryOperand,
 ) -> Option<NumericBinaryEmitInfo> {
     if !is_numeric_binary_op(operator) {
         return None;
@@ -478,16 +476,13 @@ fn is_casting_needed(
         return None;
     }
 
-    let left_is_literal = is_literal_expression(left.expression);
-    let right_is_literal = is_literal_expression(right.expression);
-
     match (left_is_aliased, right_is_aliased) {
         (true, false) => Some(NumericBinaryEmitInfo {
             cast_left_to: None,
-            cast_right_to: cast_unless_literal(right_is_literal, &left.ty),
+            cast_right_to: cast_unless_literal(right.is_literal, &left.ty),
         }),
         (false, true) => Some(NumericBinaryEmitInfo {
-            cast_left_to: cast_unless_literal(left_is_literal, &right.ty),
+            cast_left_to: cast_unless_literal(left.is_literal, &right.ty),
             cast_right_to: None,
         }),
         _ => None,

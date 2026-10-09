@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn lookup(m: Map<string, int>) -> Result<int, PanicValue> {
+    recover {
+      let v = m.get("a")
+      v.unwrap_or(4)
+    }
+  }
+  
+  fn test() {
+    if lookup(Map.from([("a", 1)])).unwrap_or(0) != 1 { panic("a present key should be returned") }
+    if lookup(Map.from([("b", 1)])).unwrap_or(0) != 4 { panic("a missing key should take the default") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func lookup(m map[string]int) lisette.Result[int, lisette.PanicValue] {
+	recoverResult := lisette.RecoverBlock(func() int {
+		v, ok := m["a"]
+		if !ok {
+			v = 4
+		}
+		return v
+	})
+	return recoverResult
+}
+
+func test() {
+	if lookup(map[string]int{"a": 1}).UnwrapOr(0) != 1 {
+		panic("a present key should be returned")
+	}
+	if lookup(map[string]int{"b": 1}).UnwrapOr(0) != 4 {
+		panic("a missing key should take the default")
+	}
+}

@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  enum Shade { Light, Dark }
+  
+  fn Light() -> Shade { Shade.Dark }
+  
+  fn test() -> Shade {
+    Light()
+  }
+---
+package main
+
+func MakeShadeLight() Shade {
+	return Shade{Tag: ShadeLight}
+}
+
+func MakeShadeDark() Shade {
+	return Shade{Tag: ShadeDark}
+}
+
+type ShadeTag uint8
+
+const (
+	ShadeLight ShadeTag = iota
+	ShadeDark
+)
+
+type Shade struct {
+	Tag ShadeTag
+}
+
+func Light() Shade {
+	return MakeShadeDark()
+}
+
+func test() Shade {
+	return Light()
+}

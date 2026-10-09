@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  type MyOpt = Option<int>
+  
+  fn apply(f: fn(int) -> MyOpt) -> MyOpt {
+    f(1)
+  }
+  
+  fn main() {
+    let _ = apply(Some)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type MyOpt = lisette.Option[int]
+
+func apply(f func(int) (int, bool)) (int, bool) {
+	return f(1)
+}
+
+func main() {
+	cb := lisette.MakeOptionSome[int]
+	apply(func(arg0 int) (int, bool) {
+		opt := cb(arg0)
+		if opt.Tag == lisette.OptionSome {
+			return opt.SomeVal, true
+		}
+		return 0, false
+	})
+}

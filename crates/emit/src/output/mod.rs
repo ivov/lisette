@@ -1,4 +1,4 @@
-pub mod imports;
+pub(crate) mod imports;
 
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
@@ -18,7 +18,7 @@ pub struct OutputFile {
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct OutputImport {
     pub path: String,
-    pub alias: String,
+    pub qualifier: Option<String>,
 }
 
 impl OutputFile {
@@ -47,13 +47,13 @@ impl OutputFile {
             [entry] => {
                 output.collect(format!(
                     "import {}",
-                    format_import(&entry.path, &entry.alias)
+                    format_import(&entry.path, entry.qualifier.as_deref())
                 ));
             }
             entries => {
                 output.collect("import (");
                 for entry in entries {
-                    output.collect(format_import(&entry.path, &entry.alias));
+                    output.collect(format_import(&entry.path, entry.qualifier.as_deref()));
                 }
                 output.collect(")");
             }

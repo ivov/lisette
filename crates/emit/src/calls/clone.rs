@@ -4,7 +4,7 @@ use syntax::types::{CompoundKind, Type};
 use crate::Planner;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{LoweredBlock, LoweredStatement, assign};
+use crate::plan::bodies::{LoweredBlock, Statement, assign};
 use crate::plan::go_expression::{FunctionLiteralLayout, GoParameter};
 use crate::plan::values::GoExpression;
 
@@ -73,11 +73,7 @@ impl Planner<'_> {
         }
     }
 
-    fn tuple_clone_statements(
-        &mut self,
-        place: &GoExpression,
-        elems: &[Type],
-    ) -> Vec<LoweredStatement> {
+    fn tuple_clone_statements(&mut self, place: &GoExpression, elems: &[Type]) -> Vec<Statement> {
         let mut statements = Vec::new();
         for (index, elem) in elems.iter().enumerate() {
             let Some(field) = TUPLE_FIELDS.get(index) else {

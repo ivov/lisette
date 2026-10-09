@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:example.com/idx"
+  
+  struct Finder {}
+  
+  impl Finder {
+    fn Find(self, s: string) -> Option<int> {
+      if s == "" { None } else { Some(0) }
+    }
+  }
+  
+  fn main() {
+    idx.Use(Finder {})
+  }
+---
+package main
+
+import (
+	"example.com/idx"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Finder struct{}
+
+func (f Finder) Find(s string) (int, bool) {
+	if s == "" {
+		return 0, false
+	}
+	return 0, true
+}
+
+func main() {
+	idx.Use(_lisAdapter_Finder_Indexer_0{inner: Finder{}})
+}
+
+type _lisAdapter_Finder_Indexer_0 struct {
+	inner Finder
+}
+
+func (a _lisAdapter_Finder_Indexer_0) Find(arg0 string) int {
+	option := lisette.OptionFromCommaOk[int](a.inner.Find(arg0))
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal
+	}
+	return -1
+}

@@ -94,7 +94,7 @@ impl SymbolResolver<'_> {
                         .bindings()
                         .get(identifier)
                         .map(|binding| binding.span),
-                    IdentifierResolution::Definition(name) => self
+                    IdentifierResolution::Definition { name, .. } => self
                         .snapshot
                         .definitions()
                         .get(name.as_str())

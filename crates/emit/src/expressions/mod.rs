@@ -7,4 +7,4 @@ pub(crate) mod staging;
 pub(crate) mod top_items;
 pub(crate) mod values;
 
-pub(crate) use operators::{flip_comparison, flip_preserves_nan};
+pub(crate) use operators::{BinaryOperand, flip_comparison, flip_preserves_nan};

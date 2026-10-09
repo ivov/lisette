@@ -1,4 +1,6 @@
 use crate::spec::infer::*;
+use syntax::ast::{Expression, IdentifierResolution};
+use syntax::types::SubstitutionMap;
 
 #[test]
 fn simple_function_no_params() {
@@ -2984,4 +2986,74 @@ fn main() { let _f = foo_f }
 "#,
     )
     .assert_no_errors();
+}
+
+#[test]
+fn generic_value_reference_records_its_resolved_instantiation() {
+    fn instantiations(expression: &Expression, found: &mut Vec<(String, SubstitutionMap)>) {
+        match expression {
+            Expression::Identifier {
+                value,
+                resolution: IdentifierResolution::Definition { instantiation, .. },
+                ..
+            } if !instantiation.is_empty() => {
+                found.push((value.to_string(), instantiation.clone()))
+            }
+            Expression::DotAccess {
+                member, resolution, ..
+            } => {
+                if let Some(instantiation) = resolution.instantiation()
+                    && !instantiation.is_empty()
+                {
+                    found.push((member.to_string(), instantiation.clone()));
+                }
+            }
+            _ => {}
+        }
+        for child in expression.children() {
+            instantiations(child, found);
+        }
+    }
+
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "utils",
+        "lib.lis",
+        r#"
+    pub fn identity<T>(x: T) -> T {
+      return x;
+    }
+        "#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+    import "utils"
+
+    fn pick<U>(x: U) -> U { x }
+
+    fn test() -> string {
+      let f: fn(int) -> int = pick
+      let g: fn(string) -> string = utils.identity
+      f(1)
+      g("a")
+    }
+        "#,
+    );
+
+    let result = infer_package("main", fs).assert_no_errors();
+    let mut found = Vec::new();
+    for item in &result.ast {
+        instantiations(item, &mut found);
+    }
+    let find = |name: &str| {
+        found
+            .iter()
+            .find(|(candidate, _)| candidate == name)
+            .map(|(_, instantiation)| instantiation.clone())
+            .unwrap_or_else(|| panic!("no instantiation recorded for `{name}`"))
+    };
+    assert_eq!(find("pick").get("U"), Some(&int_type()));
+    assert_eq!(find("identity").get("T"), Some(&string_type()));
 }

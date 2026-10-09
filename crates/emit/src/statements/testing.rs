@@ -1,14 +1,14 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::definitions::functions::is_test_context_ty;
-use crate::expressions::{flip_comparison, flip_preserves_nan};
+use crate::expressions::{BinaryOperand, flip_comparison, flip_preserves_nan};
 use crate::names::go_name::{GeneratedPackage, testkit_qualifier};
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoweredBlock, LoweredStatement, define, expression_statement,
+    ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define, expression_statement,
 };
-use crate::plan::go_expression::CompositeLayout;
+use crate::plan::go_expression::{CompositeLayout, UnaryOp};
 use crate::plan::values::{GoExpression, OperandForm, ValuePlan};
-use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Span, UnaryOperator};
+use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
 
 pub(crate) fn test_context_call(
     handle: GoExpression,
@@ -63,8 +63,10 @@ impl Planner<'_> {
             operands,
         } = shape;
         let handle = self
+            .scope
             .current_test_handle()
-            .expect("assert without a test handle should be rejected by semantics");
+            .expect("assert without a test handle should be rejected by semantics")
+            .clone();
         let span = operand.get_span();
         let literal = |text: String| GoExpression::literal(text);
         let mut arguments = vec![
@@ -72,7 +74,12 @@ impl Planner<'_> {
             literal(format!("\"{message}\"")),
         ];
         arguments.extend(operands);
-        let fail = test_context_call(GoExpression::name(handle), "FailAssert", span, arguments);
+        let fail = test_context_call(
+            GoExpression::identifier(handle),
+            "FailAssert",
+            span,
+            arguments,
+        );
         let test = LoweredStatement::If(IfPlan::plain(
             failure_condition,
             LoweredBlock {
@@ -84,7 +91,7 @@ impl Planner<'_> {
         if statements.is_empty() {
             return test;
         }
-        statements.push(test);
+        statements.push(test.into());
         LoweredStatement::Block(LoweredBlock { statements })
     }
 
@@ -120,7 +127,7 @@ impl Planner<'_> {
     pub(crate) fn lower_test_log_call(
         &mut self,
         expression: &Expression,
-    ) -> (Vec<LoweredStatement>, GoExpression) {
+    ) -> (Vec<Statement>, GoExpression) {
         let Expression::Call {
             expression: callee,
             args,
@@ -164,29 +171,29 @@ impl Planner<'_> {
         operator: &BinaryOperator,
         left: &Expression,
         right: &Expression,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
     ) -> AssertShape {
         let (lhs, rhs) =
             self.stage_assert_operands(left, right, LiteralInlining::Allowed, statements);
         let flipped = flip_comparison(operator)
             .filter(|_| flip_preserves_nan(&self.facts, operator, left, right));
+        let operands = paired_operands(lhs.value.expression(), rhs.value.expression());
         let (cond_setup, condition) = self
-            .plan_binary(
+            .plan_lowered_binary(
                 flipped.as_ref().unwrap_or(operator),
-                &lhs.expression,
-                &rhs.expression,
-                ExpressionContext::value(),
+                (&lhs.operand, lhs.value),
+                (&rhs.operand, rhs.value),
             )
             .into_parts();
         statements.extend(cond_setup);
         AssertShape {
             failure_condition: match flipped {
                 Some(_) => condition,
-                None => GoExpression::unary("!", condition),
+                None => GoExpression::unary(UnaryOp::Not, condition),
             },
             kind: "relation",
             message: format!("expected {operator}"),
-            operands: paired_operands(&lhs.rendered, &rhs.rendered),
+            operands,
         }
     }
 
@@ -194,24 +201,24 @@ impl Planner<'_> {
         &mut self,
         recv: &Expression,
         arg: &Expression,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
     ) -> AssertShape {
         let recv_ty = recv.get_type();
         let (lhs, rhs) = self.stage_assert_operands(recv, arg, LiteralInlining::Denied, statements);
-        let failure_condition =
-            self.inequality_expression(lhs.rendered.clone(), rhs.rendered.clone(), &recv_ty, &[]);
+        let (lhs, rhs) = (lhs.value.expression(), rhs.value.expression());
+        let failure_condition = self.inequality_expression(lhs.clone(), rhs.clone(), &recv_ty, &[]);
         AssertShape {
             failure_condition,
             kind: "labeled",
             message: "expected ==".to_string(),
-            operands: paired_operands(&lhs.rendered, &rhs.rendered),
+            operands: paired_operands(lhs, rhs),
         }
     }
 
     fn lower_bare_assert(
         &mut self,
         operand: &Expression,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
     ) -> AssertShape {
         let ctx = ExpressionContext::value();
         let failure_condition = if let Expression::Unary {
@@ -226,7 +233,7 @@ impl Planner<'_> {
         } else if matches!(operand, Expression::Binary { .. }) {
             let (setup, condition) = self.plan_operand(operand, ctx).into_parts();
             statements.extend(setup);
-            GoExpression::unary("!", condition)
+            GoExpression::unary(UnaryOp::Not, condition)
         } else {
             let (setup, condition) = self.plan_unary_not(operand, ctx).into_parts();
             statements.extend(setup);
@@ -245,7 +252,7 @@ impl Planner<'_> {
         left: &Expression,
         right: &Expression,
         literals: LiteralInlining,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
     ) -> (AssertOperand, AssertOperand) {
         let left_plan = self.lower_value(left, ExpressionContext::value());
         let right_plan = self.lower_value(right, ExpressionContext::value());
@@ -293,21 +300,20 @@ impl Planner<'_> {
         plan: ValuePlan,
         hint: &str,
         temp_type: Option<String>,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
     ) -> AssertOperand {
         let constant = plan.expression().constant_kind();
-        let (setup, value) = plan.into_parts();
+        let (setup, plan) = plan.split_setup();
         statements.extend(setup);
         let Some(go_type) = temp_type else {
             return AssertOperand {
-                expression: expression.clone(),
-                rendered: value,
+                operand: BinaryOperand::of(expression),
+                value: plan,
             };
         };
+        let (_, value) = plan.into_parts();
         let name = self.fresh_var(Some(hint));
         self.declare(&name);
-        // The rebuilt comparison must resolve this temporary's name.
-        self.scope.bind(name.clone(), name.clone());
         // An untyped integer can overflow if `:=` infers `int`.
         let constant_needs_type = self
             .constant_needs_go_type(constant, &expression.get_type())
@@ -319,13 +325,17 @@ impl Planner<'_> {
                     go_type,
                     value: Some(value),
                 }
+                .into()
             } else {
                 define(name.clone(), value)
             },
         );
         AssertOperand {
-            expression: temp_identifier(&name, expression),
-            rendered: GoExpression::name(name),
+            operand: BinaryOperand {
+                ty: expression.get_type(),
+                is_literal: false,
+            },
+            value: ValuePlan::captured(Vec::new(), name),
         }
     }
 
@@ -366,8 +376,8 @@ struct AssertShape {
 }
 
 struct AssertOperand {
-    expression: Expression,
-    rendered: GoExpression,
+    operand: BinaryOperand,
+    value: ValuePlan,
 }
 
 // Bare literals are not valid Go method receivers.
@@ -399,15 +409,6 @@ fn paired_operands(lhs: &GoExpression, rhs: &GoExpression) -> Vec<GoExpression> 
         )
     };
     vec![operand("left", lhs), operand("right", rhs)]
-}
-
-fn temp_identifier(name: &str, original: &Expression) -> Expression {
-    Expression::Identifier {
-        value: name.into(),
-        ty: original.get_type(),
-        span: original.get_span(),
-        resolution: IdentifierResolution::Unresolved,
-    }
 }
 
 fn is_assert_relation(operator: &BinaryOperator) -> bool {

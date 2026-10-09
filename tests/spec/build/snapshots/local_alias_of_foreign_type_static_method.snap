@@ -1,0 +1,27 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import s "github.com/user/myproject/shapes"
+
+type P = s.Point
+
+func main() {
+	a := s.Point_New(1)
+	f := s.Point_New
+	_ = a.X + f(2).X
+}
+
+
+// === shapes/mod.go ===
+package shapes
+
+type Point struct {
+	X int
+}
+
+func Point_New(x int) Point {
+	return Point{X: x}
+}

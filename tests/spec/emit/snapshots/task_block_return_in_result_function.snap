@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test(x: int) -> Result<int, string> {
+    task {
+      if x > 1 { return }
+      fmt.Println(x)
+    }
+    Ok(x)
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test(x int) lisette.Result[int, string] {
+	go func() {
+		if x > 1 {
+			return
+		}
+		fmt.Println(x)
+	}()
+	return lisette.MakeResultOk[int, string](x)
+}

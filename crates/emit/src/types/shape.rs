@@ -1,8 +1,7 @@
-use syntax::types::{CompoundKind, Type};
+use syntax::program::NativeTypeKind;
+use syntax::types::Type;
 
 use crate::Planner;
-use crate::types::native::NativeGoType;
-use syntax::types::SimpleKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RangeShape {
@@ -28,32 +27,14 @@ impl Planner<'_> {
         }
     }
 
-    /// Classify a type as a real native/prelude collection or string after
-    /// alias peeling. Stricter than `NativeTypeKind::from_type` because it
-    /// only accepts `Type::Compound` shapes (not nominals whose leaf name
-    /// happens to be `Slice`/`Map`/etc.) plus `SimpleKind::String`.
-    pub(crate) fn native_shape(&self, ty: &Type) -> Option<NativeGoType> {
-        let resolved = self.emit_shape_ty(ty);
-        match resolved {
-            Type::Compound { kind, .. } => {
-                let native = match kind {
-                    CompoundKind::Slice => NativeGoType::Slice,
-                    CompoundKind::EnumeratedSlice => NativeGoType::EnumeratedSlice,
-                    CompoundKind::Map => NativeGoType::Map,
-                    CompoundKind::Channel => NativeGoType::Channel,
-                    CompoundKind::Sender => NativeGoType::Sender,
-                    CompoundKind::Receiver => NativeGoType::Receiver,
-                    CompoundKind::Ref | CompoundKind::VarArgs => return None,
-                };
-                Some(native)
-            }
-            Type::Simple(SimpleKind::String) => Some(NativeGoType::String),
-            _ => None,
-        }
+    /// Unlike `NativeTypeKind::from_type`, arrays are excluded.
+    pub(crate) fn native_shape(&self, ty: &Type) -> Option<NativeTypeKind> {
+        NativeTypeKind::from_type(&self.emit_shape_ty(ty))
+            .filter(|kind| *kind != NativeTypeKind::Array)
     }
 
     /// True when `ty` resolves to the given native kind after alias peeling.
-    pub(crate) fn is_native_shape(&self, ty: &Type, kind: NativeGoType) -> bool {
+    pub(crate) fn is_native_shape(&self, ty: &Type, kind: NativeTypeKind) -> bool {
         self.native_shape(ty).is_some_and(|shape| shape == kind)
     }
 

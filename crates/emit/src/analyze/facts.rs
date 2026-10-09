@@ -1,93 +1,47 @@
-use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use std::sync::LazyLock;
 use syntax::ast::{BindingId, Pattern, RestPattern, Span};
-use syntax::program::{
-    AliasKind, BinderIds, Definition, DefinitionBody, EqualityIndex, Method, MutationInfo,
-    PackageId, TestIndex, UnusedInfo,
-};
+use syntax::program::{AliasKind, Definition, DefinitionBody, EmitInput, Method, PackageId};
 use syntax::types;
 use syntax::types::SimpleKind;
 use syntax::types::{Symbol, Type};
 
-use crate::GlobalEmitData;
+use crate::EnumLayout;
+use crate::SharedEmitContext;
 use crate::abi::callable::CallableReturnAbi;
 use crate::abi::catalog::GoSlotDescriptor;
 use crate::classify_go_return_type;
 use crate::context::lowering::LineIndex;
 use crate::names::go_name;
 
-pub(crate) struct EmitFactsConfig<'a> {
-    pub(crate) definitions: &'a HashMap<Symbol, Definition>,
-    pub(crate) unused: &'a UnusedInfo,
-    pub(crate) mutations: &'a MutationInfo,
-    pub(crate) binder_ids: &'a BinderIds,
-    pub(crate) equality_index: &'a EqualityIndex,
-    pub(crate) test_index: &'a TestIndex,
-    pub(crate) go_package_names: &'a HashMap<String, String>,
-    pub(crate) go_package_ids: &'a HashSet<String>,
-    pub(crate) entry_package: PackageId,
-    pub(crate) entry_package_name: &'a str,
-    pub(crate) go_module: String,
-    pub(crate) emit_tests: bool,
-    pub(crate) line_indexes: Option<&'a HashMap<u32, LineIndex>>,
-    pub(crate) globals: &'a GlobalEmitData,
-    pub(crate) current_package: PackageId,
-}
-
 pub(crate) struct EmitFacts<'a> {
-    definitions: &'a HashMap<Symbol, Definition>,
-    unused: &'a UnusedInfo,
-    mutations: &'a MutationInfo,
-    binder_ids: &'a BinderIds,
-    equality_index: &'a EqualityIndex,
-    test_index: &'a TestIndex,
-    go_package_names: &'a HashMap<String, String>,
-    go_package_ids: &'a HashSet<String>,
-    entry_package: PackageId,
-    entry_package_name: &'a str,
-    go_module: String,
-    emit_tests: bool,
-    line_indexes: Option<&'a HashMap<u32, LineIndex>>,
-    globals: &'a GlobalEmitData,
+    input: &'a EmitInput,
+    shared: &'a SharedEmitContext<'a>,
     current_package: PackageId,
 }
 
 impl<'a> EmitFacts<'a> {
-    pub(crate) fn new(config: EmitFactsConfig<'a>) -> Self {
+    pub(crate) fn new(
+        input: &'a EmitInput,
+        shared: &'a SharedEmitContext<'a>,
+        current_package: PackageId,
+    ) -> Self {
         Self {
-            definitions: config.definitions,
-            unused: config.unused,
-            mutations: config.mutations,
-            binder_ids: config.binder_ids,
-            equality_index: config.equality_index,
-            test_index: config.test_index,
-            go_package_names: config.go_package_names,
-            go_package_ids: config.go_package_ids,
-            entry_package: config.entry_package,
-            entry_package_name: config.entry_package_name,
-            go_module: config.go_module,
-            emit_tests: config.emit_tests,
-            line_indexes: config.line_indexes,
-            globals: config.globals,
-            current_package: config.current_package,
+            input,
+            shared,
+            current_package,
         }
-    }
-
-    pub(crate) fn binding_id_at(&self, span: Span) -> Option<BindingId> {
-        self.binder_ids.at(span)
     }
 
     pub(crate) fn package_for_qualified_name<'b>(&self, id: &'b str) -> Option<&'b str>
     where
         'a: 'b,
     {
-        types::package_for_qualified_name(id, |package| self.go_package_ids.contains(package))
+        types::package_for_qualified_name(id, |package| self.input.go_package_ids.contains(package))
     }
 
     pub(crate) fn definition(&self, id: &str) -> Option<&'a Definition> {
-        self.definitions.get(id)
+        self.input.definitions.get(id)
     }
 
     pub(crate) fn method(&self, owner: &str, name: &str) -> Option<&'a Method> {
@@ -104,11 +58,11 @@ impl<'a> EmitFacts<'a> {
         return_ty: &Type,
         go_hints: &[String],
     ) -> Option<CallableReturnAbi> {
-        classify_go_return_type(self.definitions, return_ty, go_hints)
+        classify_go_return_type(&self.input.definitions, return_ty, go_hints)
     }
 
     pub(crate) fn peel_alias(&self, ty: &Type) -> Type {
-        peel_alias(self.definitions, ty)
+        peel_alias(&self.input.definitions, ty)
     }
 
     pub(crate) fn type_parameter_alias_index(&self, id: &str) -> Option<usize> {
@@ -187,11 +141,11 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn as_interface(&self, ty: &Type) -> Option<String> {
-        as_interface(self.definitions, ty)
+        as_interface(&self.input.definitions, ty)
     }
 
     pub(crate) fn is_interface(&self, ty: &Type) -> bool {
-        as_interface(self.definitions, ty).is_some()
+        as_interface(&self.input.definitions, ty).is_some()
     }
 
     pub(crate) fn is_interface_or_unknown(&self, ty: &Type) -> bool {
@@ -199,43 +153,35 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_nilable_go_type(&self, ty: &Type) -> bool {
-        is_nilable_go_type(self.definitions, ty)
+        is_nilable_go_type(&self.input.definitions, ty)
     }
 
     pub(crate) fn is_nullable_option(&self, ty: &Type) -> bool {
-        is_nullable_option(self.definitions, ty)
+        is_nullable_option(&self.input.definitions, ty)
     }
 
     pub(crate) fn resolve_to_function_type(&self, ty: &Type) -> Option<Type> {
-        resolve_to_function_type(self.definitions, ty)
+        resolve_to_function_type(&self.input.definitions, ty)
     }
 
     pub(crate) fn is_unused_binding(&self, pattern: &Pattern) -> bool {
-        self.unused.is_unused_binding(pattern)
+        self.input.bindings.is_unused_binding(pattern)
     }
 
     pub(crate) fn is_unused_rest_binding(&self, rest: &RestPattern) -> bool {
-        self.unused.is_unused_rest_binding(rest)
+        self.input.bindings.is_unused_rest_binding(rest)
     }
 
-    pub(crate) fn is_unused_definition(&self, span: &Span) -> bool {
-        self.unused.is_unused_definition(span)
-    }
-
-    pub(crate) fn unused_imports_for_current_package(&self) -> &'a HashSet<EcoString> {
-        static EMPTY: LazyLock<HashSet<EcoString>> = LazyLock::new(HashSet::default);
-        self.unused
-            .imports_by_package
-            .get(self.current_package.as_str())
-            .unwrap_or(&EMPTY)
+    pub(crate) fn is_unused(&self, span: &Span) -> bool {
+        self.input.unused.is_unused(span)
     }
 
     pub(crate) fn is_mutated(&self, id: BindingId) -> bool {
-        self.mutations.is_mutated(id)
+        self.input.bindings.is_mutated(id)
     }
 
     pub(crate) fn is_alias_mutated(&self, id: BindingId) -> bool {
-        self.mutations.is_alias_mutated(id)
+        self.input.bindings.is_alias_mutated(id)
     }
 
     pub(crate) fn is_ufcs_method(&self, qualified_type: &str, method: &str) -> bool {
@@ -244,15 +190,17 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn usable_equals_from(&self, id: &str) -> bool {
-        self.equality_index.usable_from(id, &self.current_package)
+        self.input
+            .equality_index
+            .usable_from(id, &self.current_package)
     }
 
     pub(crate) fn synthesizes_equals(&self, id: &str) -> bool {
-        self.equality_index.is_synthesized(id)
+        self.input.equality_index.is_synthesized(id)
     }
 
     pub(crate) fn is_test(&self, qualified_name: &str) -> bool {
-        self.test_index.contains_qualified(qualified_name)
+        self.input.test_index.contains_qualified(qualified_name)
     }
 
     pub(crate) fn current_package(&self) -> &str {
@@ -268,11 +216,11 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_entry_package(&self, package: &str) -> bool {
-        package == self.entry_package.as_str()
+        package == self.input.entry_package_id
     }
 
     pub(crate) fn entry_package_name(&self) -> &str {
-        self.entry_package_name
+        self.shared.entry_package_name
     }
 
     pub(crate) fn qualified_current(&self, name: &str) -> String {
@@ -284,7 +232,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn go_module(&self) -> &str {
-        &self.go_module
+        self.shared.go_module
     }
 
     pub(crate) fn go_import_path(&self, package: &str) -> String {
@@ -292,31 +240,32 @@ impl<'a> EmitFacts<'a> {
             return go_name::TESTKIT_IMPORT_PATH.to_string();
         }
         if self.is_entry_package(package) {
-            return self.go_module.clone();
+            return self.shared.go_module.to_string();
         }
-        format!("{}/{}", self.go_module, package)
+        format!("{}/{}", self.shared.go_module, package)
     }
 
     pub(crate) fn go_package_name(&self, package: &str) -> Option<&str> {
-        self.go_package_names.get(package).map(String::as_str)
+        self.input.go_package_names.get(package).map(String::as_str)
     }
 
     pub(crate) fn go_package_names(&self) -> &'a HashMap<String, String> {
-        self.go_package_names
-    }
-
-    pub(crate) fn go_package_ids(&self) -> &'a HashSet<String> {
-        self.go_package_ids
+        &self.input.go_package_names
     }
 
     pub(crate) fn has_global_exported_method_name(&self, method: &str) -> bool {
-        self.globals.exported_method_names.contains(method)
+        self.shared.globals.exported_method_names.contains(method)
     }
 
     pub(crate) fn method_uses_tagged_return(&self, method: &str) -> bool {
-        self.globals
+        self.shared
+            .globals
             .tagged_method_names
             .contains(&go_name::snake_to_camel(method))
+    }
+
+    pub(crate) fn enum_layout(&self, enum_id: &str) -> Option<&'a EnumLayout> {
+        self.shared.globals.enum_layouts.get(enum_id)
     }
 
     pub(crate) fn make_function_name(&self, enum_id: &str, variant_name: &str) -> Option<String> {
@@ -338,8 +287,30 @@ impl<'a> EmitFacts<'a> {
             })
     }
 
+    pub(crate) fn variant_make_function(&self, symbol: &str) -> Option<String> {
+        if let Some((enum_id, variant)) = symbol.rsplit_once('.')
+            && let Some(make_function) = self.make_function_name(enum_id, variant)
+        {
+            return Some(make_function);
+        }
+        let variant = symbol.strip_prefix(go_name::PRELUDE_PREFIX)?;
+        if variant.contains('.') {
+            return None;
+        }
+        let constructor_ty = &self.definition(symbol)?.ty;
+        let enum_ty = match constructor_ty.unwrap_forall() {
+            Type::Function(function) => function.return_type.as_ref(),
+            ty => ty,
+        };
+        let Type::Nominal { id: enum_id, .. } = enum_ty else {
+            return None;
+        };
+        self.make_function_name(enum_id, variant)
+    }
+
     pub(crate) fn go_callable_return(&self, qualified_name: &str) -> Option<&CallableReturnAbi> {
-        self.globals
+        self.shared
+            .globals
             .go_abi_catalog
             .callable_return_abi(qualified_name)
     }
@@ -349,7 +320,8 @@ impl<'a> EmitFacts<'a> {
         qualified_name: &str,
         index: usize,
     ) -> Option<&GoSlotDescriptor> {
-        self.globals
+        self.shared
+            .globals
             .go_abi_catalog
             .callable_parameter(qualified_name, index)
     }
@@ -358,25 +330,29 @@ impl<'a> EmitFacts<'a> {
         &self,
         qualified_name: &str,
     ) -> Option<&GoSlotDescriptor> {
-        self.globals
+        self.shared
+            .globals
             .go_abi_catalog
             .callable_return_slot(qualified_name)
     }
 
     pub(crate) fn go_field(&self, owner: &str, field: &str) -> Option<&GoSlotDescriptor> {
-        self.globals.go_abi_catalog.field(owner, field)
+        self.shared.globals.go_abi_catalog.field(owner, field)
     }
 
     pub(crate) fn is_go_imported_type(&self, qualified_name: &str) -> bool {
-        self.globals.go_abi_catalog.is_imported_type(qualified_name)
+        self.shared
+            .globals
+            .go_abi_catalog
+            .is_imported_type(qualified_name)
     }
 
     pub(crate) fn emit_tests_enabled(&self) -> bool {
-        self.emit_tests
+        self.shared.emit_tests
     }
 
     pub(crate) fn line_index(&self, file_id: u32) -> Option<&LineIndex> {
-        self.line_indexes?.get(&file_id)
+        self.shared.line_indexes.as_ref()?.get(&file_id)
     }
 }
 

@@ -4,19 +4,22 @@ use crate::abi::transition::emit_lowered_result_return;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
 use crate::names::go_name::GO_IMPORT_PREFIX;
-use crate::plan::bodies::{LoweredBlock, LoweredStatement, define, expression_statement};
+use crate::plan::bodies::{LoweredBlock, Statement, expression_statement};
 use crate::plan::cleanup::clean_up;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 #[cfg(debug_assertions)]
 use crate::plan::verify::{verify_final_function_body, verify_local_scopes};
 use crate::plan::visit::identify_body_locals;
+use crate::types::go_type::returns_go_void;
 use crate::write_line;
 use ecow::EcoString;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::go_names;
 use syntax::go_names::ConformanceCandidate;
-use syntax::program::{Definition, DefinitionBody, InterfaceRequirement, interface_requirements};
+use syntax::program::{
+    Definition, DefinitionBody, InterfaceRequirement, Method, interface_requirements,
+};
 use syntax::types::{
     SubstitutionMap, Symbol, Type, build_substitution_map, substitute, unqualified_name,
 };
@@ -32,10 +35,29 @@ pub(crate) struct AdapterMethod {
     name: EcoString,
     param_types: Vec<Type>,
     return_type: Type,
-    user_abi: CallableReturnAbi,
-    interface_abi: CallableReturnAbi,
-    user_returns_void: bool,
-    interface_returns_void: bool,
+    ret: AdapterReturn,
+}
+
+enum AdapterReturn {
+    Discard {
+        user_returns_value: bool,
+    },
+    ZeroFill,
+    Forward(CallableReturnAbi),
+    Convert {
+        user_abi: CallableReturnAbi,
+        interface_abi: CallableReturnAbi,
+    },
+}
+
+impl AdapterReturn {
+    fn changes_signature(&self) -> bool {
+        match self {
+            Self::Discard { user_returns_value } => *user_returns_value,
+            Self::ZeroFill | Self::Convert { .. } => true,
+            Self::Forward(_) => false,
+        }
+    }
 }
 
 impl Planner<'_> {
@@ -151,9 +173,8 @@ impl Planner<'_> {
                 requirement.name.as_str(),
                 &own_candidate,
             )?;
-            let (method, adapted) =
-                self.build_adapter_method(&requirement, impl_ty, source_stripped)?;
-            any_adapted |= adapted;
+            let method = self.build_adapter_method(&requirement, impl_ty, source_stripped)?;
+            any_adapted |= method.ret.changes_signature();
             methods.push(method);
         }
         any_adapted.then_some(methods)
@@ -164,9 +185,7 @@ impl Planner<'_> {
         source_ty: &Type,
         methods: &[AdapterMethod],
     ) -> Vec<(EcoString, Vec<Type>)> {
-        let context = self
-            .current_function_context()
-            .map_or(&[][..], |context| context.generic_context());
+        let context = self.scope.type_params();
         if context
             .iter()
             .any(|(name, _)| adapter_uses_type_parameter(source_ty, methods, name))
@@ -177,13 +196,12 @@ impl Planner<'_> {
         }
     }
 
-    /// Returns the method plan and whether its physical Go signature differs.
     fn build_adapter_method(
         &self,
         requirement: &InterfaceRequirement,
         impl_ty: &Type,
         concrete_ty: &Type,
-    ) -> Option<(AdapterMethod, bool)> {
+    ) -> Option<AdapterMethod> {
         let f = impl_ty.as_function_type()?;
         let (receiver_ty, params) = f.params.split_first()?;
         let substitution = method_receiver_substitution(&receiver_ty.ty, concrete_ty)?;
@@ -199,74 +217,67 @@ impl Planner<'_> {
             self.callable_return_abi(&f.return_type)
         };
         let interface_return = &requirement.method.ty.as_function_type()?.return_type;
-        let interface_abi = self.interface_method_return_abi(
-            &requirement.declaring_interface,
-            &requirement.name,
-            interface_return,
-            &requirement.method.go_hints,
-        );
-        let interface_returns_void = self
-            .lowered_return_go_type(&interface_abi, interface_return)
-            .code
-            == "struct{}";
-        let method = AdapterMethod {
+        let interface_abi = if go_name::is_go_import(&requirement.declaring_interface) {
+            self.facts
+                .go_callable_return(&format!(
+                    "{}.{}",
+                    requirement.declaring_interface, requirement.method.source_name
+                ))
+                .cloned()
+                .unwrap_or(CallableReturnAbi::Direct)
+        } else {
+            self.interface_method_return_abi(&requirement.name, &requirement.method)
+        };
+        let user_returns_value = !returns_go_void(&f.return_type);
+        let ret = if self.interface_method_returns_void(&interface_abi, interface_return) {
+            AdapterReturn::Discard { user_returns_value }
+        } else if !user_returns_value {
+            AdapterReturn::ZeroFill
+        } else if !abi_matches_type(&interface_abi, &self.facts.peel_alias(&return_type)) {
+            AdapterReturn::Forward(user_abi)
+        } else if self.lowered_return_go_type(&user_abi, &return_type).code
+            == self
+                .lowered_return_go_type(&interface_abi, &return_type)
+                .code
+        {
+            AdapterReturn::Forward(interface_abi)
+        } else {
+            AdapterReturn::Convert {
+                user_abi,
+                interface_abi,
+            }
+        };
+
+        Some(AdapterMethod {
             name: requirement.name.clone(),
             param_types,
             return_type,
-            user_abi,
-            interface_abi,
-            user_returns_void: f.return_type.is_unit(),
-            interface_returns_void,
-        };
-        let adapted = self.adapter_needs_conversion(&method);
-
-        Some((method, adapted))
+            ret,
+        })
     }
 
-    /// `#[go(...)]` hints on an interface method (user-defined or
-    /// Go-imported), looked up by `{interface_id}.{method_name}`.
-    pub(crate) fn go_interface_method_hints(
+    pub(crate) fn interface_method_returns_void(
         &self,
-        interface_id: &str,
-        method_name: &str,
-    ) -> Vec<String> {
-        self.facts
-            .method(interface_id, method_name)
-            .map(|method| method.go_hints.clone())
-            .unwrap_or_default()
-    }
-
-    /// Classify with `#[go(...)]` hints: `comma_ok` shifts a nullable
-    /// `Option` return to comma-ok form.
-    pub(crate) fn callable_return_abi_with_go_hints(
-        &self,
+        abi: &CallableReturnAbi,
         return_ty: &Type,
-        hints: &[String],
-    ) -> CallableReturnAbi {
-        let base = self.callable_return_abi(return_ty);
-        if matches!(base, CallableReturnAbi::Option(OptionReturnAbi::Nullable))
-            && hints.iter().any(|h| h == "comma_ok")
-        {
-            return CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
-                payload: PayloadLayout::Packed,
-            });
-        }
-        base
+    ) -> bool {
+        !abi.is_lowered() && returns_go_void(&self.facts.peel_alias(return_ty))
     }
 
+    /// Go-imported interfaces take their ABI from the Go catalog instead.
     pub(crate) fn interface_method_return_abi(
         &self,
-        interface_id: &str,
         method_name: &str,
-        return_ty: &Type,
-        hints: &[String],
+        method: &Method,
     ) -> CallableReturnAbi {
-        if !go_name::is_go_import(interface_id) && self.facts.method_uses_tagged_return(method_name)
-        {
-            self.value_return_abi(return_ty)
-        } else {
-            self.callable_return_abi_with_go_hints(return_ty, hints)
+        let return_ty = method
+            .ty
+            .get_function_ret()
+            .expect("interface method must have function type");
+        if self.facts.method_uses_tagged_return(method_name) {
+            return self.value_return_abi(return_ty);
         }
+        with_comma_ok_hint(self.callable_return_abi(return_ty), method)
     }
 
     pub(crate) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> String {
@@ -339,7 +350,7 @@ impl Planner<'_> {
         generic_context: &[(EcoString, Vec<Type>)],
         method: &AdapterMethod,
     ) {
-        self.with_scope(|this| {
+        self.with_declaration_scope(|this| {
             for (name, _) in generic_context {
                 let go_name = this.generic_go_name(name).into_owned();
                 this.declare(&go_name);
@@ -397,25 +408,6 @@ impl Planner<'_> {
         self.scope.generated_identifier(&name)
     }
 
-    fn adapter_needs_conversion(&self, method: &AdapterMethod) -> bool {
-        if method.user_returns_void != method.interface_returns_void {
-            return true;
-        }
-        if method.interface_returns_void {
-            return false;
-        }
-
-        let peeled = self.facts.peel_alias(&method.return_type);
-        if !abi_matches_type(&method.interface_abi, &peeled) {
-            return false;
-        }
-        self.lowered_return_go_type(&method.user_abi, &method.return_type)
-            .code
-            != self
-                .lowered_return_go_type(&method.interface_abi, &method.return_type)
-                .code
-    }
-
     fn build_adapter_body(
         &mut self,
         method: &AdapterMethod,
@@ -444,36 +436,30 @@ impl Planner<'_> {
         &mut self,
         method: &AdapterMethod,
         inner_call: GoExpression,
-    ) -> (String, Vec<LoweredStatement>) {
-        let user_abi = &method.user_abi;
-        let interface_abi = &method.interface_abi;
+    ) -> (String, Vec<Statement>) {
         let return_type = &method.return_type;
 
-        if method.user_returns_void != method.interface_returns_void {
-            if method.interface_returns_void {
+        let (user_abi, interface_abi) = match &method.ret {
+            AdapterReturn::Discard { .. } => {
                 return (String::new(), vec![expression_statement(inner_call)]);
             }
-            let go_ret = self.use_go_type(return_type);
-            let zero = self.zero_value_expression(return_type);
-            return (
-                go_ret,
-                vec![expression_statement(inner_call), plain_return(zero)],
-            );
-        }
-
-        if !self.adapter_needs_conversion(method) {
-            if method.interface_returns_void {
-                return (String::new(), vec![expression_statement(inner_call)]);
+            AdapterReturn::ZeroFill => {
+                let go_ret = self.use_go_type(return_type);
+                let zero = self.zero_value_expression(return_type);
+                return (
+                    go_ret,
+                    vec![expression_statement(inner_call), plain_return(zero)],
+                );
             }
-            let peeled = self.facts.peel_alias(return_type);
-            let go_ret_abi = if abi_matches_type(interface_abi, &peeled) {
-                interface_abi
-            } else {
-                user_abi
-            };
-            let go_ret = self.render_lowered_return_ty(go_ret_abi, return_type);
-            return (go_ret, vec![plain_return(inner_call)]);
-        }
+            AdapterReturn::Forward(abi) => {
+                let go_ret = self.render_lowered_return_ty(abi, return_type);
+                return (go_ret, vec![plain_return(inner_call)]);
+            }
+            AdapterReturn::Convert {
+                user_abi,
+                interface_abi,
+            } => (user_abi, interface_abi),
+        };
 
         let logical_ty = self.facts.peel_alias(return_type);
         let go_ret = self.render_lowered_return_ty(interface_abi, return_type);
@@ -482,17 +468,10 @@ impl Planner<'_> {
             return (go_ret, statements);
         }
         let (mut statements, tagged) = self.lower_abi_to_tagged(inner_call, user_abi, &logical_ty);
-        let subject = if user_abi.is_passthrough() {
-            let res = self.fresh_var(Some("res"));
-            self.declare(&res);
-            statements.push(define(res.clone(), tagged));
-            GoExpression::name(res)
-        } else {
-            tagged
-        };
         statements.extend(emit_lowered_result_return(
             self,
-            &subject,
+            tagged,
+            "res",
             &logical_ty,
             interface_abi,
         ));
@@ -632,4 +611,16 @@ fn abi_matches_type(abi: &CallableReturnAbi, peeled: &Type) -> bool {
         CallableReturnAbi::Option(_) => peeled.is_option(),
         CallableReturnAbi::Tuple { .. } => peeled.tuple_arity().is_some_and(|arity| arity >= 2),
     }
+}
+
+/// `#[go(comma_ok)]` shifts a nullable `Option` return to comma-ok form.
+pub(crate) fn with_comma_ok_hint(base: CallableReturnAbi, method: &Method) -> CallableReturnAbi {
+    if matches!(base, CallableReturnAbi::Option(OptionReturnAbi::Nullable))
+        && method.go_hints.iter().any(|hint| hint == "comma_ok")
+    {
+        return CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
+            payload: PayloadLayout::Packed,
+        });
+    }
+    base
 }

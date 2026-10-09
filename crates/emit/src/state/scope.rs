@@ -2,6 +2,7 @@ mod names;
 
 use names::LocalNames;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::mem;
 
 use crate::ReturnContext;
 use crate::context::lowering::LoopContext;
@@ -10,7 +11,9 @@ use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::values::GoExpression;
 use crate::state::bindings::{BindingValue, ComponentBinding, InlineExpr, TupleBinding};
+use syntax::EcoString;
 use syntax::ast::{BindingId, IdentifierResolution};
+use syntax::types::Type;
 
 pub(crate) struct ScopeState {
     names: LocalNames,
@@ -18,9 +21,9 @@ pub(crate) struct ScopeState {
     next_loop_id: u32,
     frames: Vec<ScopeFrame>,
     loop_stack: Vec<LoopContext>,
-    return_ctx_stack: Vec<ReturnContext>,
-    test_handle_stack: Vec<String>,
     assign_targets: HashSet<String>,
+    /// Type parameters in scope with their bounds, receiver first.
+    type_params: Vec<(EcoString, Vec<Type>)>,
 }
 
 struct ScopeFrame {
@@ -37,8 +40,12 @@ enum DeclarationScope {
     /// to the nearest enclosing Go scope.
     Transparent,
     Block(Declarations),
-    /// A nested function cannot see declarations from its enclosing function.
-    Function(Declarations),
+    /// A Go function body: hides outer declarations and lowers `return` against `return_ctx`.
+    Function {
+        declarations: Declarations,
+        return_ctx: ReturnContext,
+        test_handle: Option<GoIdentifier>,
+    },
 }
 
 type Declarations = HashMap<String, DeclarationKind>;
@@ -69,14 +76,25 @@ impl ScopeState {
                 established: Vec::new(),
             }],
             loop_stack: Vec::new(),
-            return_ctx_stack: vec![ReturnContext::None],
-            test_handle_stack: Vec::new(),
             assign_targets: HashSet::default(),
+            type_params: Vec::new(),
         }
     }
 
-    pub(crate) fn reset_for_top_level(&mut self) {
-        *self = Self::new();
+    pub(crate) fn begin_declaration(&mut self) -> ScopeState {
+        mem::replace(self, Self::new())
+    }
+
+    pub(crate) fn end_declaration(&mut self, outer: ScopeState) {
+        *self = outer;
+    }
+
+    pub(crate) fn set_type_params(&mut self, type_params: Vec<(EcoString, Vec<Type>)>) {
+        self.type_params = type_params;
+    }
+
+    pub(crate) fn type_params(&self) -> &[(EcoString, Vec<Type>)] {
+        &self.type_params
     }
 
     pub(crate) fn declare_type_param(&mut self, go_name: &str) {
@@ -84,9 +102,11 @@ impl ScopeState {
             .insert(go_name.to_string(), DeclarationKind::TypeParameter);
     }
 
-    pub(crate) fn bind(
+    /// Bind `lisette_name` to `go_name`, read by identifiers resolved to any of `ids`.
+    pub(crate) fn bind_source(
         &mut self,
         lisette_name: impl Into<String>,
+        ids: &[BindingId],
         go_name: impl Into<String>,
     ) -> String {
         let go_name = crate::escape_reserved(&go_name.into()).into_owned();
@@ -95,6 +115,7 @@ impl ScopeState {
             .unwrap_or_else(|| self.new_local_id());
         self.set_binding(
             lisette_name.into(),
+            ids,
             BindingValue::GoName(GoIdentifier::local(go_name.clone(), id)),
         );
         go_name
@@ -109,22 +130,32 @@ impl ScopeState {
     pub(crate) fn set_component_binding(
         &mut self,
         lisette_name: impl Into<String>,
+        ids: &[BindingId],
         mut components: ComponentBinding,
     ) {
         self.identify_binding_name(&mut components.value);
         self.identify_binding_name(&mut components.status);
-        self.set_binding(lisette_name.into(), BindingValue::Components(components));
+        self.set_binding(
+            lisette_name.into(),
+            ids,
+            BindingValue::Components(components),
+        );
     }
 
     pub(crate) fn set_tuple_binding(
         &mut self,
         lisette_name: impl Into<String>,
+        ids: &[BindingId],
         mut tuple: TupleBinding,
     ) {
         for name in &mut tuple.names {
             self.identify_binding_name(name);
         }
-        self.set_binding(lisette_name.into(), BindingValue::TupleComponents(tuple));
+        self.set_binding(
+            lisette_name.into(),
+            ids,
+            BindingValue::TupleComponents(tuple),
+        );
     }
 
     fn identify_binding_name(&mut self, name: &mut GoIdentifier) {
@@ -137,8 +168,13 @@ impl ScopeState {
         name.identify(id);
     }
 
-    pub(crate) fn bind_inline_expr(&mut self, lisette_name: impl Into<String>, expr: InlineExpr) {
-        self.set_binding(lisette_name.into(), BindingValue::InlineExpr(expr));
+    pub(crate) fn bind_inline_expr(
+        &mut self,
+        lisette_name: impl Into<String>,
+        ids: &[BindingId],
+        expr: InlineExpr,
+    ) {
+        self.set_binding(lisette_name.into(), ids, BindingValue::InlineExpr(expr));
     }
 
     pub(crate) fn mark_go_const(&mut self, lisette_name: &str) {
@@ -150,7 +186,7 @@ impl ScopeState {
         if let Some(slot) = self.current_frame().bindings.get(lisette_name).copied() {
             self.current_frame_mut().binding_values[slot] = BindingValue::GoConst(name);
         } else {
-            self.set_binding(lisette_name.to_string(), BindingValue::GoConst(name));
+            self.set_binding(lisette_name.to_string(), &[], BindingValue::GoConst(name));
         }
     }
 
@@ -167,12 +203,6 @@ impl ScopeState {
         match self.resolve_identifier_binding(lisette_name) {
             Some(BindingValue::GoName(name) | BindingValue::GoConst(name)) => Some(name),
             _ => None,
-        }
-    }
-
-    pub(crate) fn register_binding_id(&mut self, id: BindingId, lisette_name: &str) {
-        if let Some(slot) = self.current_frame().bindings.get(lisette_name).copied() {
-            self.current_frame_mut().binding_ids.insert(id, slot);
         }
     }
 
@@ -206,6 +236,7 @@ impl ScopeState {
         None
     }
 
+    /// The slot an identifier reads: source bindings by ID, others by spelling.
     pub(crate) fn resolve_identifier_with_resolution(
         &self,
         value: &str,
@@ -213,8 +244,9 @@ impl ScopeState {
     ) -> Option<&BindingValue> {
         match resolution {
             IdentifierResolution::Binding(id) => self.resolve_binding_id(*id),
-            IdentifierResolution::Definition(_) => None,
-            IdentifierResolution::Unresolved => self.resolve_identifier_binding(value),
+            IdentifierResolution::Definition { .. } | IdentifierResolution::Unresolved => {
+                self.resolve_identifier_binding(value)
+            }
         }
     }
 
@@ -332,7 +364,9 @@ impl ScopeState {
                 DeclarationScope::Transparent => {}
                 DeclarationScope::Block(names) if names.contains_key(go_name) => return true,
                 DeclarationScope::Block(_) => {}
-                DeclarationScope::Function(names) => return names.contains_key(go_name),
+                DeclarationScope::Function { declarations, .. } => {
+                    return declarations.contains_key(go_name);
+                }
             }
         }
         false
@@ -380,22 +414,26 @@ impl ScopeState {
             {
                 return true;
             }
-            if matches!(frame.declarations, DeclarationScope::Function(_)) {
+            if matches!(frame.declarations, DeclarationScope::Function { .. }) {
                 return false;
             }
         }
         false
     }
 
-    pub(crate) fn enter_isolated_function(&mut self) {
-        self.push_frame(DeclarationScope::Function(self.visible_type_params()));
+    pub(crate) fn enter_isolated_function(&mut self, return_ctx: ReturnContext) {
+        self.push_frame(DeclarationScope::Function {
+            declarations: self.visible_type_params(),
+            return_ctx,
+            test_handle: None,
+        });
     }
 
     pub(crate) fn exit_isolated_function(&mut self) {
         assert!(
             matches!(
                 self.current_frame().declarations,
-                DeclarationScope::Function(_)
+                DeclarationScope::Function { .. }
             ),
             "an isolated function must be entered before it is exited"
         );
@@ -414,33 +452,39 @@ impl ScopeState {
             .expect("a loop context must be pushed before it is popped");
     }
 
-    pub(crate) fn push_return_ctx(&mut self, ctx: ReturnContext) {
-        self.return_ctx_stack.push(ctx);
+    pub(crate) fn set_test_handle(&mut self, handle: GoIdentifier) {
+        let slot = self
+            .frames
+            .iter_mut()
+            .rev()
+            .find_map(|frame| match &mut frame.declarations {
+                DeclarationScope::Function { test_handle, .. } => Some(test_handle),
+                _ => None,
+            })
+            .expect("a test handle is a parameter of an isolated function");
+        *slot = Some(handle);
     }
 
-    pub(crate) fn pop_return_ctx(&mut self) {
-        pop_keep_base(&mut self.return_ctx_stack);
-    }
-
-    pub(crate) fn push_test_handle(&mut self, name: String) {
-        self.test_handle_stack.push(name);
-    }
-
-    pub(crate) fn pop_test_handle(&mut self) {
-        self.test_handle_stack
-            .pop()
-            .expect("a test handle must be pushed before it is popped");
-    }
-
-    pub(crate) fn current_test_handle(&self) -> Option<&str> {
-        self.test_handle_stack.last().map(String::as_str)
+    /// The test handle of the nearest enclosing function that has one.
+    pub(crate) fn current_test_handle(&self) -> Option<&GoIdentifier> {
+        self.frames
+            .iter()
+            .rev()
+            .find_map(|frame| match &frame.declarations {
+                DeclarationScope::Function { test_handle, .. } => test_handle.as_ref(),
+                _ => None,
+            })
     }
 
     pub(crate) fn current_return_ctx(&self) -> ReturnContext {
-        self.return_ctx_stack
-            .last()
-            .expect("scope state always retains a return context")
-            .clone()
+        self.frames
+            .iter()
+            .rev()
+            .find_map(|frame| match &frame.declarations {
+                DeclarationScope::Function { return_ctx, .. } => Some(return_ctx.clone()),
+                _ => None,
+            })
+            .unwrap_or_default()
     }
 
     pub(crate) fn current_loop_result(&self) -> Option<&GoExpression> {
@@ -451,9 +495,12 @@ impl ScopeState {
         self.loop_stack.last().map(|context| context.id)
     }
 
+    /// Mark `target` as written later in the region, returning whether it became active.
     pub(crate) fn activate_assign_target(&mut self, target: &GoExpression) -> bool {
         match target.node() {
-            GoExpressionNode::Identifier(name) => self.assign_targets.insert(name.to_string()),
+            GoExpressionNode::Identifier(name) if name.spelling() != "_" => {
+                self.assign_targets.insert(name.to_string())
+            }
             _ => false,
         }
     }
@@ -495,11 +542,14 @@ impl ScopeState {
             .expect("scope state always retains a frame")
     }
 
-    fn set_binding(&mut self, name: String, value: BindingValue) {
+    fn set_binding(&mut self, name: String, ids: &[BindingId], value: BindingValue) {
         let frame = self.current_frame_mut();
         let slot = frame.binding_values.len();
         frame.binding_values.push(value);
         frame.bindings.insert(name, slot);
+        for id in ids {
+            frame.binding_ids.insert(*id, slot);
+        }
     }
 
     fn current_declarations(&self) -> &Declarations {
@@ -508,7 +558,11 @@ impl ScopeState {
             .rev()
             .find_map(|frame| match &frame.declarations {
                 DeclarationScope::Transparent => None,
-                DeclarationScope::Block(names) | DeclarationScope::Function(names) => Some(names),
+                DeclarationScope::Block(names)
+                | DeclarationScope::Function {
+                    declarations: names,
+                    ..
+                } => Some(names),
             })
             .expect("scope state always retains a declaration scope")
     }
@@ -519,7 +573,11 @@ impl ScopeState {
             .rev()
             .find_map(|frame| match &mut frame.declarations {
                 DeclarationScope::Transparent => None,
-                DeclarationScope::Block(names) | DeclarationScope::Function(names) => Some(names),
+                DeclarationScope::Block(names)
+                | DeclarationScope::Function {
+                    declarations: names,
+                    ..
+                } => Some(names),
             })
             .expect("scope state always retains a declaration scope")
     }
@@ -530,7 +588,7 @@ impl ScopeState {
             .filter_map(|frame| match &frame.declarations {
                 DeclarationScope::Transparent => None,
                 DeclarationScope::Block(declarations)
-                | DeclarationScope::Function(declarations) => Some(declarations),
+                | DeclarationScope::Function { declarations, .. } => Some(declarations),
             })
             .flat_map(|declarations| declarations.iter())
             .filter(|(_, kind)| **kind == DeclarationKind::TypeParameter)
@@ -539,15 +597,12 @@ impl ScopeState {
     }
 }
 
-fn pop_keep_base<T>(stack: &mut Vec<T>) {
-    assert!(stack.len() > 1, "cannot pop a stack's base frame");
-    let _ = stack.pop();
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plan::go_expression::BinaryOp;
     use crate::plan::values::{GoExpression, Stability};
+    use syntax::types::SubstitutionMap;
 
     fn pair_first() -> GoExpression {
         GoExpression::selector(GoExpression::name("pair".to_string()), "F0".to_string())
@@ -556,9 +611,9 @@ mod tests {
     #[test]
     fn exiting_block_restores_shadowed_binding() {
         let mut scope = ScopeState::new();
-        scope.bind("value", "outer");
+        scope.bind_source("value", &[], "outer");
         scope.enter_block();
-        scope.bind("value", "inner");
+        scope.bind_source("value", &[], "inner");
 
         scope.exit_block();
 
@@ -570,11 +625,9 @@ mod tests {
         let mut scope = ScopeState::new();
         let outer = BindingId::new(1);
         let inner = BindingId::new(2);
-        scope.bind("value", "outer");
-        scope.register_binding_id(outer, "value");
+        scope.bind_source("value", &[outer], "outer");
         scope.enter_block();
-        scope.bind("value", "inner");
-        scope.register_binding_id(inner, "value");
+        scope.bind_source("value", &[inner], "inner");
 
         assert_eq!(
             scope
@@ -599,14 +652,29 @@ mod tests {
     }
 
     #[test]
+    fn source_rebind_moves_its_ids_and_generated_bind_does_not_take_them() {
+        let mut scope = ScopeState::new();
+        let id = BindingId::new(5);
+        scope.bind_source("value", &[id], "value");
+        scope.bind_source("value", &[id], "value_2");
+        scope.bind_source("value", &[], "generated");
+
+        assert_eq!(
+            scope
+                .resolve_binding_id(id)
+                .and_then(BindingValue::as_go_name),
+            Some("value_2")
+        );
+        assert_eq!(scope.resolve_binding_go_name("value"), Some("generated"));
+    }
+
+    #[test]
     fn binding_ids_keep_same_frame_rebindings_distinct() {
         let mut scope = ScopeState::new();
         let old_id = BindingId::new(3);
         let new_id = BindingId::new(4);
-        scope.bind("value", "original");
-        scope.register_binding_id(old_id, "value");
-        scope.bind("value", "replacement");
-        scope.register_binding_id(new_id, "value");
+        scope.bind_source("value", &[old_id], "original");
+        scope.bind_source("value", &[new_id], "replacement");
 
         assert_eq!(
             scope
@@ -628,20 +696,24 @@ mod tests {
     }
 
     #[test]
-    fn resolved_identifier_never_uses_a_same_spelled_binding() {
+    fn source_identifier_never_uses_a_same_spelled_binding() {
         let mut scope = ScopeState::new();
-        scope.bind("value", "other");
+        scope.bind_source("value", &[], "other");
         let missing = IdentifierResolution::Binding(BindingId::new(7));
         assert!(
             scope
                 .resolve_identifier_with_resolution("value", &missing)
                 .is_none()
         );
-        let definition = IdentifierResolution::Definition("package.value".into());
+        // A local const binds no ID, so a definition reads it by spelling.
+        let definition = IdentifierResolution::Definition {
+            name: "package.value".into(),
+            instantiation: SubstitutionMap::default(),
+        };
         assert!(
             scope
                 .resolve_identifier_with_resolution("value", &definition)
-                .is_none()
+                .is_some()
         );
         assert!(
             scope
@@ -653,10 +725,10 @@ mod tests {
     #[test]
     fn go_name_reference_uses_the_visible_local_id() {
         let mut scope = ScopeState::new();
-        scope.bind("outer", "value");
+        scope.bind_source("outer", &[], "value");
         let outer = scope.identifier_for_go_name("value".to_string());
         scope.enter_block();
-        scope.bind("inner", "value");
+        scope.bind_source("inner", &[], "value");
         let inner = scope.identifier_for_go_name("value".to_string());
         assert_ne!(outer.id(), inner.id());
         scope.exit_block();
@@ -669,11 +741,11 @@ mod tests {
     #[test]
     fn established_conditions_keep_the_binding_seen_when_recorded() {
         let mut scope = ScopeState::new();
-        scope.bind("value", "value");
+        scope.bind_source("value", &[], "value");
         let condition = || {
             GoExpression::binary(
                 GoExpression::name("value".to_string()),
-                "==",
+                BinaryOp::Eq,
                 GoExpression::literal("1".to_string()),
             )
         };
@@ -681,7 +753,7 @@ mod tests {
         assert!(scope.is_condition_established(&condition()));
 
         scope.enter_block();
-        scope.bind("value", "value");
+        scope.bind_source("value", &[], "value");
         assert!(!scope.is_condition_established(&condition()));
         scope.exit_block();
 
@@ -691,13 +763,17 @@ mod tests {
     #[test]
     fn nested_bindings_restore_names_constants_and_inline_expressions() {
         let mut scope = ScopeState::new();
-        scope.bind("value", "outer");
+        scope.bind_source("value", &[], "outer");
         scope.mark_go_const("value");
         scope.push_binding_frame();
-        scope.bind_inline_expr("value", InlineExpr::new(pair_first(), Stability::Fixed));
+        scope.bind_inline_expr(
+            "value",
+            &[],
+            InlineExpr::new(pair_first(), Stability::Fixed),
+        );
         scope.enter_block();
-        scope.bind("value", "inner");
-        scope.bind("value", "rebound");
+        scope.bind_source("value", &[], "inner");
+        scope.bind_source("value", &[], "rebound");
         scope.exit_block();
         assert!(matches!(
             scope.resolve_identifier_binding("value"),
@@ -713,10 +789,10 @@ mod tests {
     #[test]
     fn binding_frames_restore_all_bindings_but_keep_go_declarations() {
         let mut scope = ScopeState::new();
-        scope.bind("value", "outer");
+        scope.bind_source("value", &[], "outer");
         scope.push_binding_frame();
-        scope.bind("value", "inner");
-        scope.bind("new", "local");
+        scope.bind_source("value", &[], "inner");
+        scope.bind_source("new", &[], "local");
         scope.declare_go_name("local");
         scope.pop_binding_frame();
 
@@ -729,12 +805,16 @@ mod tests {
     #[test]
     fn bound_go_names_follow_visible_bindings_including_aliases() {
         let mut scope = ScopeState::new();
-        scope.bind("first", "shared");
-        scope.bind("second", "shared");
+        scope.bind_source("first", &[], "shared");
+        scope.bind_source("second", &[], "shared");
         scope.enter_block();
-        scope.bind("first", "inner");
+        scope.bind_source("first", &[], "inner");
         assert!(scope.has_binding_for_go_name("shared"));
-        scope.bind_inline_expr("second", InlineExpr::new(pair_first(), Stability::Fixed));
+        scope.bind_inline_expr(
+            "second",
+            &[],
+            InlineExpr::new(pair_first(), Stability::Fixed),
+        );
         assert!(!scope.has_binding_for_go_name("shared"));
         scope.exit_block();
         assert!(scope.has_binding_for_go_name("shared"));

@@ -10,7 +10,7 @@ description: |
 ---
 package main
 
-func fail(msg string) struct{} {
+func fail(msg string) {
 	panic(msg)
 }
 

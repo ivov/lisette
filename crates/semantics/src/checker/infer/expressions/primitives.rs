@@ -349,7 +349,7 @@ impl InferCtx<'_> {
             }
         }
 
-        let (identifier_ty, _) = self.instantiate(&ty);
+        let (identifier_ty, instantiation) = self.instantiate(&ty);
 
         let coerced_to_unconstrained_value = !self.is_callee_context()
             && !self.is_assignment_target_context()
@@ -377,7 +377,10 @@ impl InferCtx<'_> {
 
         let resolution = match (binding_id, qualified) {
             (Some(id), None) => IdentifierResolution::Binding(id),
-            (None, Some(definition)) => IdentifierResolution::Definition(definition),
+            (None, Some(name)) => IdentifierResolution::Definition {
+                name,
+                instantiation,
+            },
             (None, None) => IdentifierResolution::Unresolved,
             (Some(_), Some(_)) => unreachable!("identifier cannot be local and global"),
         };

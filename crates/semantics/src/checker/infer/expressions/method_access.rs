@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::checker::EnvResolve;
 use syntax::ast::{Expression, Span};
 use syntax::program::{Definition, DefinitionBody, DotAccessResolution, ReceiverCoercion};
-use syntax::types::{Symbol, Type, unqualified_name};
+use syntax::types::{SubstitutionMap, Symbol, Type, substitute, unqualified_name};
 
 use super::super::addressability::check_is_non_addressable;
 use crate::checker::infer::InferCtx;
@@ -52,7 +52,7 @@ impl InferCtx<'_> {
             (method_ty.ty, is_exported, resolved_definition)
         };
 
-        let (mut method_ty, _) = self.instantiate(&method_ty);
+        let (mut method_ty, instantiation) = self.instantiate(&method_ty);
 
         if !matches!(method_ty, Type::Function(_)) {
             return None;
@@ -63,6 +63,7 @@ impl InferCtx<'_> {
             &mut method_ty,
             is_exported,
             resolved_definition.clone(),
+            &instantiation,
         ) {
             return Some(expression);
         }
@@ -98,6 +99,7 @@ impl InferCtx<'_> {
                 is_exported,
                 receiver_coercion,
                 definition: resolved_definition,
+                instantiation,
             },
         ))
     }
@@ -121,7 +123,7 @@ impl InferCtx<'_> {
             Some(resolved_definition.clone()),
         );
 
-        let (method_ty, _) = self.instantiate(method_ty);
+        let (method_ty, instantiation) = self.instantiate(method_ty);
         let Type::Function(f) = &method_ty else {
             return None;
         };
@@ -144,6 +146,7 @@ impl InferCtx<'_> {
                 is_exported,
                 is_pointer_receiver,
                 definition: Some(resolved_definition),
+                instantiation,
             },
         ))
     }
@@ -266,6 +269,7 @@ impl InferCtx<'_> {
         method_ty: &mut Type,
         is_exported: bool,
         resolved_definition: Option<Symbol>,
+        instantiation: &SubstitutionMap,
     ) -> Option<Expression> {
         let Type::Function(f) = &*method_ty else {
             return None;
@@ -298,6 +302,7 @@ impl InferCtx<'_> {
                 is_exported,
                 is_pointer_receiver,
                 definition: resolved_definition,
+                instantiation: instantiation.clone(),
             },
         ))
     }
@@ -421,34 +426,35 @@ impl InferCtx<'_> {
         args: &DotAccessResolutionArgs,
     ) -> Option<Expression> {
         let store = self.store;
-        let id = match &args.deref_ty {
-            Type::Function(f) => {
-                if let Type::Nominal { id, .. } = store.peel_alias(&f.return_type) {
-                    id
-                } else {
-                    return None;
-                }
-            }
-            ty => match store.peel_alias(ty) {
-                Type::Nominal { id, .. } => {
-                    if let Some(def) = store.get_definition(&id)
-                        && matches!(def.body, DefinitionBody::Enum { .. })
-                    {
-                        let is_type_access = matches!(
-                            args.expression,
-                            Expression::DotAccess { expression, .. }
-                                if expression.get_type().resolve_in(&self.env).as_import_namespace().is_some()
-                        );
-                        if !is_type_access {
-                            return None;
-                        }
+        let is_constructor = matches!(args.deref_ty, Type::Function(_));
+        let owner_ty = match &args.deref_ty {
+            Type::Function(f) => store.peel_alias(&f.return_type),
+            ty => store.peel_alias(ty),
+        };
+        let id = match &owner_ty {
+            Type::Nominal { id, .. } => {
+                if !is_constructor
+                    && let Some(def) = store.get_definition(id)
+                    && matches!(def.body, DefinitionBody::Enum { .. })
+                {
+                    let is_type_access = matches!(
+                        args.expression,
+                        Expression::DotAccess { expression, .. }
+                            if expression.get_type().resolve_in(&self.env).as_import_namespace().is_some()
+                    );
+                    if !is_type_access {
+                        return None;
                     }
-                    id
                 }
-                Type::Simple(kind) => Symbol::from_parts("prelude", kind.leaf_name()),
-                Type::Compound { kind, .. } => Symbol::from_parts("prelude", kind.leaf_name()),
-                _ => return None,
-            },
+                id.clone()
+            }
+            Type::Simple(kind) if !is_constructor => {
+                Symbol::from_parts("prelude", kind.leaf_name())
+            }
+            Type::Compound { kind, .. } if !is_constructor => {
+                Symbol::from_parts("prelude", kind.leaf_name())
+            }
+            _ => return None,
         };
 
         if self
@@ -465,7 +471,7 @@ impl InferCtx<'_> {
             ty: method_ty,
             name_span,
             visibility,
-            body: DefinitionBody::Value { .. },
+            body: DefinitionBody::Value { impl_receiver, .. },
             ..
         } = method_definition
         else {
@@ -473,6 +479,7 @@ impl InferCtx<'_> {
         };
 
         let method_ty = method_ty.clone();
+        let impl_receiver = impl_receiver.clone();
         let name_span = *name_span;
         let is_public = visibility.is_public();
         let type_simple_name = unqualified_name(&id);
@@ -508,7 +515,13 @@ impl InferCtx<'_> {
         let type_name_len = type_simple_name.len() as u32;
         self.track_name_usage(store, &id, args.span, type_name_len);
 
-        let (method_ty, _) = self.instantiate(&method_ty);
+        let (method_ty, instantiation) = self.instantiate(&method_ty);
+
+        // Solve impl parameters the signature omits from the owner type.
+        if let Some(impl_receiver) = impl_receiver {
+            let receiver_ty = substitute(&impl_receiver, &instantiation);
+            let _ = self.speculatively(|this| this.try_unify(&receiver_ty, &owner_ty, args.span));
+        }
 
         self.unify_member_expectation(args, &method_ty);
 
@@ -520,6 +533,7 @@ impl InferCtx<'_> {
             DotAccessResolution::StaticMethod {
                 is_exported,
                 definition: method_qualified_name,
+                instantiation,
             },
         ))
     }

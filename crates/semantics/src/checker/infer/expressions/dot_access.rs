@@ -5,7 +5,7 @@ use syntax::ast::{
 };
 use syntax::go_names;
 use syntax::program::{Definition, DefinitionBody, DotAccessResolution, NativeTypeKind};
-use syntax::types::{Symbol, Type, substitute};
+use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
 use super::calls::phantom_type_params;
 use crate::checker::infer::InferCtx;
@@ -184,7 +184,7 @@ impl InferCtx<'_> {
         let store = self.store;
         match expression {
             Expression::Identifier {
-                resolution: IdentifierResolution::Definition(qname),
+                resolution: IdentifierResolution::Definition { name: qname, .. },
                 ..
             } => store
                 .get_definition(qname)
@@ -491,7 +491,10 @@ impl InferCtx<'_> {
             }
             return Some(args.build_dot_access(
                 Type::Error,
-                DotAccessResolution::PackageMember { definition: None },
+                DotAccessResolution::PackageMember {
+                    definition: None,
+                    instantiation: SubstitutionMap::default(),
+                },
             ));
         };
         let member_type = self.resolve_definition_value_type(store, definition);
@@ -509,7 +512,7 @@ impl InferCtx<'_> {
         );
 
         let (package_ty, _) = self.instantiate(&package_ty);
-        let (member_ty, _) = self.instantiate(&member_type);
+        let (member_ty, instantiation) = self.instantiate(&member_type);
 
         let coerced_to_unconstrained_value = !self.is_callee_context()
             && !self.is_dot_access_base()
@@ -527,6 +530,7 @@ impl InferCtx<'_> {
             member_ty,
             DotAccessResolution::PackageMember {
                 definition: Some(resolved_definition),
+                instantiation,
             },
         ))
     }
@@ -669,12 +673,13 @@ impl InferCtx<'_> {
             self.facts.add_usage(*args.span, definition_span);
         }
 
-        let (variant_ty, _) = self.instantiate(&variant_ty);
+        let (variant_ty, instantiation) = self.instantiate(&variant_ty);
         self.unify(args.expected_ty, &variant_ty, args.span);
         Some(args.build_dot_access(
             variant_ty,
             DotAccessResolution::EnumVariant {
                 definition: variant_qualified_name,
+                instantiation,
             },
         ))
     }

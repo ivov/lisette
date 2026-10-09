@@ -1,6 +1,9 @@
 use syntax::types::Type;
 
+use crate::Planner;
+
 use crate::abi::layout::{FunctionLayout, SlotOrigin, ValueLayout};
+use crate::expressions::staging::VariadicCombine;
 
 /// How a logical tuple payload occupies a callable's physical Go result slots.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,12 +121,14 @@ pub(crate) enum AbiTransition {
 }
 
 /// The instantiated and declaration-level views of one callable parameter.
+///
 #[derive(Debug, Clone)]
 pub(crate) struct CallableParamAbi {
     pub(crate) instantiated: Type,
     pub(crate) declared: Option<Type>,
     pub(crate) origin: SlotOrigin,
     pub(crate) layout: ValueLayout,
+    pub(crate) variadic: Option<ValueLayout>,
 }
 
 /// Complete physical contract consumed by call lowering.
@@ -132,28 +137,33 @@ pub(crate) struct CallableAbi {
     pub(crate) params: Vec<CallableParamAbi>,
     pub(crate) result: CallableReturnAbi,
     pub(crate) return_layout: ValueLayout,
-    pub(crate) return_payload_layout: Option<ValueLayout>,
 }
 
 impl CallableAbi {
     pub(crate) fn param(&self, index: usize) -> Option<&CallableParamAbi> {
-        self.params.get(index).or_else(|| {
-            self.params
-                .last()
-                .filter(|param| param.instantiated.get_name() == Some("VarArgs"))
+        self.params.get(index).or_else(|| self.variadic_param())
+    }
+
+    pub(crate) fn variadic_param(&self) -> Option<&CallableParamAbi> {
+        self.params.last().filter(|param| param.variadic.is_some())
+    }
+
+    pub(crate) fn variadic_combine(&self, extra_leading: usize) -> Option<VariadicCombine> {
+        let variadic = self.variadic_param()?;
+        Some(VariadicCombine {
+            element_ty: variadic.instantiated.clone(),
+            fixed_count: self.params.len() - 1 + extra_leading,
         })
     }
 
-    pub(crate) fn function_layout(&self) -> FunctionLayout {
-        FunctionLayout {
-            parameters: self
-                .params
+    pub(crate) fn function_layout(&self, planner: &Planner<'_>) -> FunctionLayout {
+        planner.function_layout(
+            self.params
                 .iter()
-                .map(|param| param.layout.clone())
+                .map(|param| param.variadic.as_ref().unwrap_or(&param.layout).clone())
                 .collect(),
-            result: Box::new(self.return_layout.clone()),
-            payload: self.return_payload_layout.clone().map(Box::new),
-            return_abi: self.result.clone(),
-        }
+            &self.return_layout,
+            self.result.clone(),
+        )
     }
 }

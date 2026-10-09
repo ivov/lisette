@@ -2,13 +2,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use emit::{Planner, TestEmitConfig};
-use syntax::program::File;
+use emit::{EmitOptions, Planner};
+use rustc_hash::FxHashMap;
+use syntax::program::{EmitInput, File};
 
 use crate::_harness::pipeline::TestPipeline;
 use std::collections::HashSet;
 use std::io;
-use syntax::program::TestIndex;
 
 const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
 pub const GO_MODULE: &str = "lisette/e2e_suite_tests";
@@ -60,20 +60,22 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
         file_comment: None,
     };
 
-    let test_index = TestIndex::default();
-    let config = TestEmitConfig {
-        definitions: &result.definitions,
-        package_id: &result.package_id,
-        go_module: GO_MODULE,
-        unused: &result.unused,
-        mutations: &result.mutations,
-        binder_ids: &result.binder_ids,
-        equality_index: &result.equality_index,
-        test_index: &test_index,
-        go_package_names: &result.go_package_names,
-        go_package_ids: &result.go_package_ids,
+    let input = EmitInput {
+        files: FxHashMap::from_iter([(0, file)]),
+        definitions: result.definitions,
+        entry_package_id: result.package_id,
+        unused: result.unused,
+        bindings: result.bindings,
+        equality_index: result.equality_index,
+        go_package_names: result.go_package_names,
+        go_package_ids: result.go_package_ids,
+        ..Default::default()
     };
-    let mut emitted_files = Planner::emit_files_for_tests(&config, None, &[&file])
+    let options = EmitOptions {
+        sourcemap: false,
+        emit_tests: false,
+    };
+    let mut emitted_files = Planner::emit(&input, GO_MODULE, "main", options)
         .map_err(|diagnostics| format!("Emission failed: {diagnostics:?}"))?;
 
     if emitted_files.is_empty() {

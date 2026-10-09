@@ -1,0 +1,74 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  interface Getter<T> {
+    fn get() -> T
+  }
+  
+  struct Box {
+    n: int,
+  }
+  
+  impl Box {
+    fn get(self) -> Result<int, error> {
+      Ok(self.n)
+    }
+  }
+  
+  fn use_getter<G: Getter<Result<int, error>>>(g: G) -> Result<int, error> {
+    g.get()
+  }
+  
+  fn take(f: fn() -> Result<int, error>) -> Result<int, error> {
+    f()
+  }
+  
+  fn main() {
+    let b = Box { n: 1 }
+    let _ = use_getter(b)
+    let g = b.get
+    let _ = take(g)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Getter[T any] interface {
+	get() T
+}
+
+type Box struct {
+	n int
+}
+
+func (b Box) get() lisette.Result[int, error] {
+	return lisette.MakeResultOk[int, error](b.n)
+}
+
+func useGetter[G Getter[lisette.Result[int, error]]](g G) (int, error) {
+	v := g.get()
+	if v.Tag == lisette.ResultOk {
+		return v.OkVal, nil
+	}
+	return 0, v.ErrVal
+}
+
+func take(f func() (int, error)) (int, error) {
+	return f()
+}
+
+func main() {
+	b := Box{n: 1}
+	useGetter(b)
+	cb := b.get
+	g := func() (int, error) {
+		res := cb()
+		if res.Tag == lisette.ResultOk {
+			return res.OkVal, nil
+		}
+		return 0, res.ErrVal
+	}
+	take(g)
+}

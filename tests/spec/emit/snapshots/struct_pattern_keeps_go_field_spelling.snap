@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  import "go:example.com/net"
+  
+  fn scope(a: net.Addr) -> uint32 {
+    let net.Addr { Scope_id: id, .. } = a
+    id + a.Scope_id
+  }
+---
+package main
+
+import "example.com/net"
+
+func scope(a net.Addr) uint32 {
+	id := a.Scope_id
+	return id + a.Scope_id
+}

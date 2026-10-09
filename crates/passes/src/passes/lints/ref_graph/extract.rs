@@ -7,7 +7,7 @@ use syntax::ast::{
     StructSpread,
 };
 use syntax::program::File;
-use syntax::program::{DefinitionBody, DotAccessKind, EqualityIndex, Package};
+use syntax::program::{DefinitionBody, DotAccessResolution, EqualityIndex, Package};
 use syntax::types::{CompoundKind, Symbol, Type, unqualified_name};
 
 use super::reference_graph::{EnumVariantId, PackageItemId, ReferenceGraph, StructFieldId};
@@ -496,7 +496,7 @@ fn walk_dot_access(
     }
     mark_promoted_field_read(&receiver_ty, member, graph, alias_map);
     if let Some(from) = ctx
-        && is_method_access(resolution.kind())
+        && is_method_access(resolution)
         && credits_local_method(&receiver_ty, package, alias_map)
     {
         let to = method_node(member, &receiver_ty, alias_map);
@@ -764,14 +764,12 @@ fn mark_constructor_pattern(
     }
 }
 
-fn is_method_access(kind: Option<DotAccessKind>) -> bool {
+fn is_method_access(resolution: &DotAccessResolution) -> bool {
     matches!(
-        kind,
-        Some(
-            DotAccessKind::InstanceMethod { .. }
-                | DotAccessKind::InstanceMethodValue { .. }
-                | DotAccessKind::StaticMethod { .. }
-        )
+        resolution,
+        DotAccessResolution::InstanceMethod { .. }
+            | DotAccessResolution::InstanceMethodValue { .. }
+            | DotAccessResolution::StaticMethod { .. }
     )
 }
 

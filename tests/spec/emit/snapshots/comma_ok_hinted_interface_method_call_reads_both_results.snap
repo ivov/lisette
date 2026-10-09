@@ -1,0 +1,86 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  pub struct Entry { pub v: int }
+  
+  pub interface Cache {
+    #[go(comma_ok)]
+    fn Get(key: string) -> Option<Ref<Entry>>
+  }
+  
+  fn bound(c: Cache) -> Option<Ref<Entry>> {
+    let e = c.Get("a")
+    e
+  }
+  
+  fn tail(c: Cache) -> Option<Ref<Entry>> {
+    c.Get("a")
+  }
+  
+  fn matched(c: Cache) -> int {
+    match c.Get("a") {
+      Some(e) => e.v,
+      None => 0,
+    }
+  }
+  
+  fn main() {
+    let _ = bound
+    let _ = tail
+    let _ = matched
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Entry struct {
+	V int
+}
+
+type Cache interface {
+	Get(string) (*Entry, bool)
+}
+
+func bound(c Cache) *Entry {
+	ret, ret_1 := c.Get("a")
+	var e lisette.Option[*Entry]
+	if ret_1 && ret != nil {
+		e = lisette.MakeOptionSome[*Entry](ret)
+	} else {
+		e = lisette.MakeOptionNone[*Entry]()
+	}
+	if e.Tag == lisette.OptionSome {
+		return e.SomeVal
+	}
+	return nil
+}
+
+func tail(c Cache) *Entry {
+	ret, ret_1 := c.Get("a")
+	var option lisette.Option[*Entry]
+	if ret_1 && ret != nil {
+		option = lisette.MakeOptionSome[*Entry](ret)
+	} else {
+		option = lisette.MakeOptionNone[*Entry]()
+	}
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal
+	}
+	return nil
+}
+
+func matched(c Cache) int {
+	if e, ok := c.Get("a"); ok && e != nil {
+		return e.V
+	} else {
+		return 0
+	}
+}
+
+func main() {
+	_ = bound
+	_ = tail
+	_ = matched
+}

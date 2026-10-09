@@ -1,9 +1,7 @@
 use crate::expressions::access::struct_call::emit_struct_literal;
-use crate::names::generics::extract_type_mapping;
-use rustc_hash::FxHashMap as HashMap;
 use std::borrow::Cow;
 
-use super::NativeCallContext;
+use super::{NativeCallContext, NativeCallForm};
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::is_prelude_container_type;
@@ -14,15 +12,18 @@ use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, define,
+    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement,
+    assign, define,
 };
 use crate::plan::calls::{CallPlan, CallableOrigin};
-use crate::plan::go_expression::{CompositeLayout, FunctionLiteralLayout, GoParameter};
+use crate::plan::go_expression::{BinaryOp, CompositeLayout, FunctionLiteralLayout, GoParameter};
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, Stability, ValuePlan};
-use crate::types::native::NativeGoType;
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments, StructFields};
-use syntax::program::{CallKind, Definition, DefinitionBody, resolved_definition};
+use syntax::program::NativeTypeKind;
+use syntax::program::{
+    CallKind, Definition, DefinitionBody, resolved_definition, resolved_instantiation,
+};
 use syntax::types::{CompoundKind, FunctionParameter, Type, build_substitution_map, substitute};
 
 struct TupleStructTarget {
@@ -195,7 +196,7 @@ impl<'a> Planner<'a> {
     fn stage_size_argument(
         &mut self,
         ctx: &NativeCallContext,
-    ) -> (Vec<LoweredStatement>, GoExpression, EvaluationEffect) {
+    ) -> (Vec<Statement>, GoExpression, EvaluationEffect) {
         match ctx.args.first() {
             Some(a) => {
                 let staged = self.plan_operand(a, ExpressionContext::value());
@@ -212,7 +213,7 @@ impl<'a> Planner<'a> {
 
     fn try_lower_native_constructor(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
         match (ctx.native_type, ctx.method) {
-            (NativeGoType::Channel, "new") => {
+            (NativeTypeKind::Channel, "new") => {
                 let element =
                     self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
                 Some(ValuePlan::observable_call(
@@ -224,7 +225,7 @@ impl<'a> Planner<'a> {
                     self.native_constructor_effect(ctx, EvaluationEffect::Pure),
                 ))
             }
-            (NativeGoType::Channel, "buffered") => {
+            (NativeTypeKind::Channel, "buffered") => {
                 let element =
                     self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
                 let (setup, capacity, argument_effect) = self.stage_size_argument(ctx);
@@ -240,7 +241,7 @@ impl<'a> Planner<'a> {
                     self.native_constructor_effect(ctx, argument_effect),
                 ))
             }
-            (NativeGoType::Map, "new") => {
+            (NativeTypeKind::Map, "new") => {
                 let (key, val) =
                     self.resolve_map_types(ctx.function, ctx.resolved_type_args, ctx.call_ty);
                 Some(ValuePlan::observable_call(
@@ -252,8 +253,8 @@ impl<'a> Planner<'a> {
                     self.native_constructor_effect(ctx, EvaluationEffect::Pure),
                 ))
             }
-            (NativeGoType::Map, "from") => self.try_lower_map_from_pairs(ctx),
-            (NativeGoType::Slice, "new") => {
+            (NativeTypeKind::Map, "from") => self.try_lower_map_from_pairs(ctx),
+            (NativeTypeKind::Slice, "new") => {
                 let element =
                     self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
                 Some(ValuePlan::computed(
@@ -262,7 +263,7 @@ impl<'a> Planner<'a> {
                     self.native_constructor_effect(ctx, EvaluationEffect::Pure),
                 ))
             }
-            (NativeGoType::Slice, "make") => {
+            (NativeTypeKind::Slice, "make") => {
                 let element_ty = self.resolve_element_lisette_type(
                     ctx.function,
                     ctx.resolved_type_args,
@@ -305,7 +306,8 @@ impl<'a> Planner<'a> {
                                             zero,
                                         )],
                                     },
-                                }),
+                                })
+                                .into(),
                                 plain_return(slice()),
                             ],
                         },
@@ -318,7 +320,7 @@ impl<'a> Planner<'a> {
                     self.native_constructor_effect(ctx, argument_effect),
                 ))
             }
-            (NativeGoType::Array, "new") => {
+            (NativeTypeKind::Array, "new") => {
                 let peeled = ctx.call_ty.map(|t| self.facts.peel_alias(t));
                 if let Some(Type::Array { length, element }) = &peeled {
                     Some(ValuePlan::computed(
@@ -330,7 +332,7 @@ impl<'a> Planner<'a> {
                     None
                 }
             }
-            (NativeGoType::Array, "from") => self.try_lower_array_from(ctx),
+            (NativeTypeKind::Array, "from") => self.try_lower_array_from(ctx),
             _ => None,
         }
     }
@@ -371,7 +373,7 @@ impl<'a> Planner<'a> {
                                     GoExpression::name("len".to_string()),
                                     vec![slice()],
                                 ),
-                                "!=",
+                                BinaryOp::Ne,
                                 literal(length.to_string()),
                             ),
                             LoweredBlock {
@@ -381,7 +383,8 @@ impl<'a> Planner<'a> {
                                 ])],
                             },
                             ElseArm::None,
-                        )),
+                        ))
+                        .into(),
                         multi_value_return(vec![
                             GoExpression::conversion(array_go, slice()),
                             literal("true".to_string()),
@@ -502,7 +505,7 @@ impl<'a> Planner<'a> {
     /// `!len(s) == 0` which Go parses as `(!len(s)) == 0`).
     pub(crate) fn try_emit_negated_call(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         call_expression: &Expression,
     ) -> Option<GoExpression> {
         let Expression::Call {
@@ -527,19 +530,20 @@ impl<'a> Planner<'a> {
             CallKind::NativeMethod(kind) | CallKind::NativeMethodIdentifier(kind) => kind,
             _ => return None,
         };
-        let native_type = NativeGoType::from_kind(kind);
         let method = extract_native_method_name(function);
+        let plan = self.plan_call(call_expression)?;
         let native_ctx = NativeCallContext {
             function,
+            form: NativeCallForm::method(function),
             args,
             spread,
             resolved_type_args,
+            abi: &plan.resolved.abi,
             call_ty: None,
-            native_type: &native_type,
+            native_type: &kind,
             method,
             capture_boundary: CaptureBoundary::SiblingSequence,
             retired_receiver: None,
-            result_name: None,
         };
         self.try_emit_negated_native_method(setup, &native_ctx)
     }
@@ -589,13 +593,13 @@ impl<'a> Planner<'a> {
         }
 
         match &plan.resolved.origin {
-            CallableOrigin::TupleStructConstructor => {
+            CallableOrigin::Source(CallKind::TupleStructConstructor) => {
                 if let Some(result) = self.try_lower_tuple_struct_call(function, args, call_ty, ctx)
                 {
                     return result;
                 }
             }
-            CallableOrigin::Zero => {
+            CallableOrigin::Source(CallKind::Zero) => {
                 let ty = zero_call_type(function, resolved_type_args, call_ty);
                 let value = if self.is_plain_struct(&ty) {
                     GoExpression::empty_composite(self.use_go_type(&ty))
@@ -609,89 +613,81 @@ impl<'a> Planner<'a> {
                 };
                 return ValuePlan::computed(Vec::new(), value, EvaluationEffect::Pure);
             }
-            CallableOrigin::AssertType => {
+            CallableOrigin::Source(CallKind::AssertType) => {
                 let (setup, value) = self.lower_assert_type(function, args, resolved_type_args);
                 return ValuePlan::plain_call(setup, value, EvaluationEffect::EffectfulCall);
             }
-            CallableOrigin::UfcsMethod => {
+            CallableOrigin::Source(CallKind::UfcsMethod) => {
                 return self.lower_ufcs_call(function, args, resolved_type_args, spread, &plan);
             }
-            CallableOrigin::NativeConstructor(kind)
-            | CallableOrigin::NativeMethod(kind)
-            | CallableOrigin::NativeMethodIdentifier(kind) => {
-                let native_type = NativeGoType::from_kind(*kind);
+            CallableOrigin::Source(
+                call_kind @ (CallKind::NativeConstructor(kind)
+                | CallKind::NativeMethod(kind)
+                | CallKind::NativeMethodIdentifier(kind)),
+            ) => {
                 let method = extract_native_method_name(function);
+                let form = match call_kind {
+                    CallKind::NativeConstructor(_) => NativeCallForm::Constructor,
+                    _ => NativeCallForm::method(function),
+                };
                 let native_ctx = NativeCallContext {
                     function,
+                    form,
                     args,
                     spread,
                     resolved_type_args,
+                    abi: &plan.resolved.abi,
                     call_ty,
-                    native_type: &native_type,
+                    native_type: kind,
                     method,
                     capture_boundary: ctx.capture_boundary(),
                     retired_receiver: ctx.retired_receiver(),
-                    result_name: None,
                 };
-                return self.lower_native_call(&native_ctx, &plan.resolved.origin);
+                return self.lower_native_call(&native_ctx);
             }
-            CallableOrigin::ReceiverMethodUfcs { is_public } => {
+            CallableOrigin::Source(CallKind::ReceiverMethodUfcs { is_public }) => {
                 let method = extract_receiver_ufcs_method(function);
-                return self
-                    .lower_receiver_method_ufcs(function, args, &method, *is_public, spread);
+                return self.lower_receiver_method_ufcs(args, &method, *is_public, spread, &plan);
             }
-            CallableOrigin::GoInterop | CallableOrigin::Regular => {}
+            CallableOrigin::GoInterop
+            | CallableOrigin::Source(CallKind::Regular | CallKind::Unresolved) => {}
         }
 
         self.lower_regular_call(call_expression, &plan, call_ty, ctx)
     }
 
-    pub(super) fn lower_native_call(
-        &mut self,
-        ctx: &NativeCallContext,
-        origin: &CallableOrigin,
-    ) -> ValuePlan {
+    pub(super) fn lower_native_call(&mut self, ctx: &NativeCallContext) -> ValuePlan {
         if let Some(result) = self.try_lower_native_constructor(ctx) {
             return result;
         }
         let result = self.lower_native_method(ctx);
-        let effect = if matches!(origin, CallableOrigin::NativeConstructor(_)) {
+        let is_constructor = matches!(ctx.form, NativeCallForm::Constructor);
+        let effect = if is_constructor {
             self.native_constructor_effect(ctx, result.argument_effect)
-        } else if matches!(
-            origin,
-            CallableOrigin::NativeMethod(_) | CallableOrigin::NativeMethodIdentifier(_)
-        ) && native_method_is_pure(ctx.native_type, ctx.method)
-        {
+        } else if native_method_is_pure(ctx.native_type, ctx.method) {
             EvaluationEffect::PureCall.combine(result.argument_effect)
         } else {
             EvaluationEffect::EffectfulCall
         };
-        let receiver = match ctx.function {
-            Expression::DotAccess { expression, .. } => Some(expression.as_ref()),
-            _ => ctx.args.first(),
-        };
+        let split = ctx.receiver_and_arguments();
         // Channel length can change without rebinding the receiver.
         let reads_fixed_length = matches!(ctx.method, "length" | "capacity")
-            && !matches!(origin, CallableOrigin::NativeConstructor(_))
+            && !is_constructor
             && !matches!(
                 ctx.native_type,
-                NativeGoType::Channel | NativeGoType::Sender | NativeGoType::Receiver
+                NativeTypeKind::Channel | NativeTypeKind::Sender | NativeTypeKind::Receiver
             )
-            && receiver.is_some_and(|receiver| self.is_unmutated_identifier(receiver));
+            && split.is_some_and(|(receiver, _)| self.is_unmutated_identifier(receiver));
         if result.setup.iter().any(|statement| {
             result
                 .value
                 .as_identifier()
-                .is_some_and(|name| statement.binds_name(name))
+                .is_some_and(|name| statement.kind.binds_name(name))
         }) {
             return ValuePlan::captured_with_effect(result.setup, result.value.rendered(), effect);
         }
-        let receiver_arity = if matches!(origin, CallableOrigin::NativeMethodIdentifier(_)) {
-            ctx.args.len().saturating_sub(1)
-        } else {
-            ctx.args.len()
-        };
-        let plain_call = !matches!(origin, CallableOrigin::NativeConstructor(_))
+        let receiver_arity = split.map_or(0, |(_, arguments)| arguments.len());
+        let plain_call = !is_constructor
             && native_method_lowers_to_plain_call(ctx.native_type, ctx.method, receiver_arity);
         let plan = if plain_call {
             ValuePlan::plain_call(result.setup, result.value, effect)
@@ -720,16 +716,12 @@ impl<'a> Planner<'a> {
         let generic_params = &f.params;
         let all_inferrable = all_type_params_inferrable(vars, generic_params, 0, arg_shape);
 
-        let instantiated_ty = function.get_type();
-        let mut mapping: HashMap<String, Type> = HashMap::default();
-        extract_type_mapping(body, &instantiated_ty, &mut mapping);
+        let mapping = resolved_instantiation(function)?;
 
         if all_inferrable {
-            let any_needs_explicit = vars.iter().any(|v| {
-                mapping
-                    .get(v.as_str())
-                    .is_some_and(|t| self.is_function_alias(t))
-            });
+            let any_needs_explicit = vars
+                .iter()
+                .any(|v| mapping.get(v).is_some_and(|t| self.is_function_alias(t)));
             if !any_needs_explicit {
                 return None;
             }
@@ -737,7 +729,7 @@ impl<'a> Planner<'a> {
 
         let resolved: Vec<Type> = vars
             .iter()
-            .filter_map(|v| mapping.get(v.as_str()).cloned())
+            .filter_map(|v| mapping.get(v).cloned())
             .collect();
 
         if resolved.len() != vars.len() {
@@ -846,7 +838,7 @@ impl<'a> Planner<'a> {
         function: &Expression,
         args: &[Expression],
         type_args: ResolvedCallTypeArguments<'_>,
-    ) -> (Vec<LoweredStatement>, GoExpression) {
+    ) -> (Vec<Statement>, GoExpression) {
         let target_ty = if !type_args.is_empty() {
             self.use_go_type(&type_args[0])
         } else {
@@ -892,8 +884,13 @@ impl<'a> Planner<'a> {
     }
 
     pub(crate) fn is_local_binding(&self, function: &Expression) -> bool {
-        if let Expression::Identifier { value, .. } = function {
-            self.scope.resolve_identifier_binding(value).is_some()
+        if let Expression::Identifier {
+            value, resolution, ..
+        } = function
+        {
+            self.scope
+                .resolve_identifier_with_resolution(value, resolution)
+                .is_some()
         } else {
             false
         }
@@ -943,16 +940,4 @@ pub(super) fn go_builtin_name(callee: &Expression) -> Option<&str> {
     resolved_definition(callee)
         .filter(|qualified| go_name::is_prelude_go_builtin(qualified))
         .and_then(|qualified| qualified.strip_prefix("prelude."))
-}
-
-pub(super) fn is_prelude_variant_constructor(callee: &Expression) -> bool {
-    match callee {
-        Expression::Identifier { value, .. } => {
-            matches!(value.as_str(), "Some" | "Ok" | "Err")
-        }
-        Expression::DotAccess { member, .. } => {
-            matches!(member.as_str(), "Some" | "Ok" | "Err")
-        }
-        _ => false,
-    }
 }

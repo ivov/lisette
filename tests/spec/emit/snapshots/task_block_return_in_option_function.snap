@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test(x: int) -> Option<int> {
+    task {
+      if x > 1 { return }
+      fmt.Println(x)
+    }
+    Some(x)
+  }
+---
+package main
+
+import "fmt"
+
+func test(x int) (int, bool) {
+	go func() {
+		if x > 1 {
+			return
+		}
+		fmt.Println(x)
+	}()
+	return x, true
+}

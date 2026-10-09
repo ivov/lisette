@@ -28,6 +28,7 @@ description: |
                         byte_offset: 9,
                         byte_length: 8,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Constructor {
@@ -83,6 +84,7 @@ description: |
                                             byte_offset: 46,
                                             byte_length: 3,
                                         },
+                                        binding: None,
                                     },
                                     Identifier {
                                         identifier: "value",
@@ -91,6 +93,7 @@ description: |
                                             byte_offset: 51,
                                             byte_length: 5,
                                         },
+                                        binding: None,
                                     },
                                 ],
                                 span: Span {

@@ -1,11 +1,12 @@
 use syntax::ast::Expression;
+use syntax::program::NativeTypeKind;
 use syntax::types::peel_to_range_type;
 
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
+use crate::plan::go_expression::BinaryOp;
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
-use crate::types::native::NativeGoType;
 
 impl Planner<'_> {
     /// Plan an index/slice access. Range-literal and range-typed-variable
@@ -39,7 +40,7 @@ impl Planner<'_> {
         if let Some(range_kind) = peel_to_range_type(&index_ty, |id| self.facts.definition(id))
             .and_then(|ty| ty.get_name().map(str::to_owned))
         {
-            let needs_cap = self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
+            let needs_cap = self.is_native_shape(&expression.get_type(), NativeTypeKind::Slice);
             if !base_staged.effects().can_duplicate() {
                 self.pin_staged(&mut base_staged, "base");
             }
@@ -119,7 +120,7 @@ impl Planner<'_> {
         };
         let mut staged = self
             .plan_operand(inner, ExpressionContext::value())
-            .unary("*");
+            .dereference();
         staged.make_observable();
         staged
     }
@@ -135,7 +136,7 @@ impl Planner<'_> {
         inclusive: bool,
         cap: bool,
     ) -> ValuePlan {
-        let needs_cap = cap && self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
+        let needs_cap = cap && self.is_native_shape(&expression.get_type(), NativeTypeKind::Slice);
         let base_staged = self.stage_base_with_deref(expression);
 
         let mut all_stages = vec![base_staged];
@@ -155,7 +156,7 @@ impl Planner<'_> {
         if inclusive && let Some(end_expression) = end_value.take() {
             end_value = Some(GoExpression::binary(
                 end_expression,
-                "+",
+                BinaryOp::Add,
                 GoExpression::literal("1".to_string()),
             ));
         }
@@ -236,7 +237,8 @@ pub(crate) fn range_var_bounds(
 ) -> (Option<GoExpression>, Option<GoExpression>) {
     let start = || GoExpression::selector(range.clone(), "Start".to_string());
     let end = || GoExpression::selector(range.clone(), "End".to_string());
-    let end_inclusive = || GoExpression::binary(end(), "+", GoExpression::literal("1".to_string()));
+    let end_inclusive =
+        || GoExpression::binary(end(), BinaryOp::Add, GoExpression::literal("1".to_string()));
     match range_kind {
         "Range" => (Some(start()), Some(end())),
         "RangeInclusive" => (Some(start()), Some(end_inclusive())),

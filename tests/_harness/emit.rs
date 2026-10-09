@@ -1,8 +1,8 @@
-use emit::{OutputFile, Planner, TestEmitConfig};
-use syntax::program::File;
+use emit::{EmitOptions, OutputFile, Planner};
+use rustc_hash::FxHashMap as HashMap;
+use syntax::program::{EmitInput, File};
 
 use super::pipeline::TestPipeline;
-use syntax::program::TestIndex;
 
 pub fn emit_with_sourcemap(raw_source: &str) -> EmitResult {
     emit_inner(raw_source, Some(raw_source), &[])
@@ -45,20 +45,22 @@ fn emit_inner(
         file_comment: None,
     };
 
-    let test_index = TestIndex::default();
-    let config = TestEmitConfig {
-        definitions: &result.definitions,
-        package_id: &result.package_id,
-        go_module: "myproject",
-        unused: &result.unused,
-        mutations: &result.mutations,
-        binder_ids: &result.binder_ids,
-        equality_index: &result.equality_index,
-        test_index: &test_index,
-        go_package_names: &result.go_package_names,
-        go_package_ids: &result.go_package_ids,
+    let input = EmitInput {
+        files: HashMap::from_iter([(0, file)]),
+        definitions: result.definitions,
+        entry_package_id: result.package_id,
+        unused: result.unused,
+        bindings: result.bindings,
+        equality_index: result.equality_index,
+        go_package_names: result.go_package_names,
+        go_package_ids: result.go_package_ids,
+        ..Default::default()
     };
-    let emitted_files = Planner::emit_files_for_tests(&config, source_for_sourcemap, &[&file])
+    let options = EmitOptions {
+        sourcemap: source_for_sourcemap.is_some(),
+        emit_tests: false,
+    };
+    let emitted_files = Planner::emit(&input, "myproject", "main", options)
         .unwrap_or_else(|diagnostics| panic!("Emission failed: {diagnostics:?}"));
 
     EmitResult {

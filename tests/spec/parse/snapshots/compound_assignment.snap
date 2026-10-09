@@ -40,6 +40,7 @@ description: |
                                     byte_offset: 23,
                                     byte_length: 1,
                                 },
+                                binding: None,
                             },
                             annotation: None,
                             ty: Var {

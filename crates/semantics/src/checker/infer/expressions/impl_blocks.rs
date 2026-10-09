@@ -4,6 +4,7 @@ use syntax::program::Definition;
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
+use crate::checker::infer::expressions::patterns::clear_bindings;
 
 impl InferCtx<'_> {
     pub(super) fn infer_impl_block(
@@ -93,7 +94,7 @@ impl InferCtx<'_> {
             this.put_in_scope(&generics);
             let generics = this.ensure_generic_bounds(store, generics, &span);
 
-            let new_method_signatures = this.with_temporary_bindings(|this| {
+            let mut new_method_signatures: Vec<Expression> = this.with_temporary_bindings(|this| {
                 method_signatures
                     .into_iter()
                     .map(|method_signature| {
@@ -102,6 +103,13 @@ impl InferCtx<'_> {
                     })
                     .collect()
             });
+            for signature in &mut new_method_signatures {
+                if let Expression::Function { params, .. } = signature {
+                    for param in params {
+                        clear_bindings(&mut param.pattern);
+                    }
+                }
+            }
 
             let new_parents = parents
                 .into_iter()

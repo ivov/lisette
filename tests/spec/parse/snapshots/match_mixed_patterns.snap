@@ -185,6 +185,7 @@ description: |
                         byte_offset: 73,
                         byte_length: 4,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Constructor {
@@ -307,6 +308,7 @@ description: |
                                                 byte_offset: 154,
                                                 byte_length: 1,
                                             },
+                                            binding: None,
                                         },
                                     ],
                                     rest: false,
@@ -401,6 +403,7 @@ description: |
                                                         byte_offset: 203,
                                                         byte_length: 1,
                                                     },
+                                                    binding: None,
                                                 },
                                             ],
                                             span: Span {

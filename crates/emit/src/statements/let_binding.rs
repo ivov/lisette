@@ -7,12 +7,13 @@ use crate::calls::comma_ok::{CommaOkSource, CommaOkValueSlot};
 use crate::calls::go_interop::WrapperTarget;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::Fallible;
+use crate::control_flow::fallible_blocks::TryBlockPairPlan;
 use crate::escape_reserved;
 use crate::names::go_name;
 use crate::patterns::matching::ResultFusePlan;
 use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
 use crate::plan::bodies::{
-    LoweredBlock, LoweredStatement, define, define_many, expression_statement,
+    LoweredBlock, LoweredStatement, Statement, define, define_many, expression_statement,
 };
 use crate::plan::placement::{
     collapse_declared_temp, expression_contains_binding, is_unit_call, is_zero_call,
@@ -23,23 +24,21 @@ use crate::state::bindings::{
     ComponentBinding, ComponentKind, TupleBinding, WholeValueConstructor,
 };
 use std::mem;
-use syntax::ast::{Binding, Expression, LetMode, Pattern, collect_pattern_bindings};
+use syntax::ast::{Binding, BindingId, Expression, LetMode, Pattern};
 use syntax::program::NativeTypeKind;
 use syntax::types::Type;
 
 #[derive(Clone, Copy)]
 pub(crate) struct LetSpec<'a> {
     identifier: &'a str,
+    binding_id: Option<BindingId>,
     value: &'a Expression,
     binding_ty: &'a Type,
     mutable: bool,
 }
 
 enum FallibleComponentSource<'a> {
-    TryBlock {
-        items: &'a [Expression],
-        ty: &'a Type,
-    },
+    TryBlock(TryBlockPairPlan<'a>),
     CommaOk(CommaOkSource),
     Result(ResultFusePlan<'a>),
 }
@@ -85,6 +84,23 @@ fn resolve_let_temp_declaration_ty(
 }
 
 impl Planner<'_> {
+    fn claim_direct_let_name(
+        &mut self,
+        identifier: &str,
+        ids: &[BindingId],
+        raw_go_name: &str,
+    ) -> String {
+        let bound = self.scope.bind_source(identifier, ids, raw_go_name);
+        let is_new = !self.package.is_package_block_name(&bound) && self.try_declare(&bound);
+        if is_new && !self.scope.is_active_assign_target(&bound) {
+            return bound;
+        }
+        let fresh = self.fresh_var(Some(identifier));
+        self.scope.bind_source(identifier, ids, &fresh);
+        self.try_declare(&fresh);
+        fresh
+    }
+
     fn choose_let_go_name(
         &mut self,
         identifier: &str,
@@ -110,19 +126,22 @@ impl Planner<'_> {
         &mut self,
         let_spec: LetSpec,
         raw_go_name: Option<&str>,
-    ) -> Vec<LoweredStatement> {
+        demand: Option<ComponentDemand>,
+    ) -> Vec<Statement> {
         let LetSpec {
             identifier,
+            binding_id,
             value,
             binding_ty,
             ..
         } = let_spec;
+        let ids = binding_id.as_slice();
         if is_unit_call(value) {
-            return self.lower_let_unit_call(identifier, raw_go_name, value);
+            return self.lower_let_unit_call(let_spec, raw_go_name);
         }
         let needs_temp = requires_temp_var(value);
         let Some(raw_go_name) = raw_go_name else {
-            self.scope.bind(identifier, "_");
+            self.scope.bind_source(identifier, ids, "_");
             return if needs_temp {
                 self.lower_let_temp("_", value, binding_ty)
             } else {
@@ -136,23 +155,24 @@ impl Planner<'_> {
             && value.get_type().demoted() == binding_ty.demoted()
         {
             if let Some(statements) = self.lower_fused_result_match_into(value, &go_identifier) {
-                self.scope.bind(identifier, raw_go_name);
+                self.scope.bind_source(identifier, ids, raw_go_name);
                 return statements;
             }
             if let Some(statements) = self.lower_fused_option_match_into(value, &go_identifier) {
-                self.scope.bind(identifier, raw_go_name);
+                self.scope.bind_source(identifier, ids, raw_go_name);
                 return statements;
             }
             if let Some(statements) = self.lower_defaulted_call_into(value, &go_identifier) {
-                self.scope.bind(identifier, raw_go_name);
+                self.scope.bind_source(identifier, ids, raw_go_name);
                 return statements;
             }
             if let Some(statements) = self.lower_slice_loop_into(value, &go_identifier) {
-                self.scope.bind(identifier, raw_go_name);
+                self.scope.bind_source(identifier, ids, raw_go_name);
                 return statements;
             }
-            if let Some(statements) =
-                self.lower_let_as_components(identifier, value, &go_identifier)
+            if let Some(demand) = demand
+                && let Some(statements) =
+                    self.lower_let_as_components(let_spec, &go_identifier, demand)
             {
                 return statements;
             }
@@ -163,10 +183,10 @@ impl Planner<'_> {
             {
                 let fresh = self.fresh_var(Some(identifier));
                 let statements = self.lower_let_temp(&fresh, value, binding_ty);
-                self.scope.bind(identifier, &fresh);
+                self.scope.bind_source(identifier, ids, &fresh);
                 return statements;
             }
-            self.scope.bind(identifier, raw_go_name);
+            self.scope.bind_source(identifier, ids, raw_go_name);
             return self.lower_let_temp(&go_identifier, value, binding_ty);
         }
         self.lower_let_direct(let_spec, raw_go_name)
@@ -174,27 +194,26 @@ impl Planner<'_> {
 
     fn lower_let_as_components(
         &mut self,
-        identifier: &str,
-        value: &Expression,
+        let_spec: LetSpec,
         go_identifier: &str,
-    ) -> Option<Vec<LoweredStatement>> {
-        let ty = self.facts.peel_alias(&value.get_type());
-        let demand = self.component_lets.get(&value.get_span())?.clone();
+        demand: ComponentDemand,
+    ) -> Option<Vec<Statement>> {
+        let ty = self.facts.peel_alias(&let_spec.value.get_type());
         if matches!(ty, Type::Tuple(_)) {
-            self.lower_tuple_components(identifier, value, &ty, demand)
+            self.lower_tuple_components(let_spec, &ty, demand)
         } else {
-            self.lower_fallible_components(identifier, value, go_identifier, &ty, demand)
+            self.lower_fallible_components(let_spec, go_identifier, &ty, demand)
         }
     }
 
     fn lower_fallible_components(
         &mut self,
-        identifier: &str,
-        value: &Expression,
+        let_spec: LetSpec,
         go_identifier: &str,
         ty: &Type,
         demand: ComponentDemand,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
+        let value = let_spec.value;
         let kind = if ty.is_option() {
             ComponentKind::Option
         } else if ty.is_result() {
@@ -220,9 +239,9 @@ impl Planner<'_> {
         }
         let source = match (value.unwrap_parens(), kind) {
             (Expression::TryBlock { items, ty, .. }, _)
-                if self.can_bind_try_block_pair(items, ty) =>
+                if let Some(plan) = self.try_block_pair_plan(items, ty) =>
             {
-                FallibleComponentSource::TryBlock { items, ty }
+                FallibleComponentSource::TryBlock(plan)
             }
             (_, ComponentKind::Option) => {
                 let source = self.comma_ok_source(value)?;
@@ -247,9 +266,7 @@ impl Planner<'_> {
             CommaOkValueSlot::Discarded
         };
         let mut pair = match source {
-            FallibleComponentSource::TryBlock { items, ty } => self
-                .bind_try_block_pair(items, ty, slot)
-                .expect("recognized try block pair must bind"),
+            FallibleComponentSource::TryBlock(plan) => plan.bind(self, slot),
             FallibleComponentSource::CommaOk(source) => {
                 self.bind_comma_ok_pair(value, source, slot)
             }
@@ -259,7 +276,8 @@ impl Planner<'_> {
         let payload = pair.payload_name().unwrap_or("_").to_string();
         let status = pair.status().to_string();
         self.scope.set_component_binding(
-            identifier,
+            let_spec.identifier,
+            let_spec.binding_id.as_slice(),
             ComponentBinding {
                 value: payload.into(),
                 status: status.into(),
@@ -274,11 +292,16 @@ impl Planner<'_> {
 
     fn lower_tuple_components(
         &mut self,
-        identifier: &str,
-        value: &Expression,
+        let_spec: LetSpec,
         ty: &Type,
         demand: ComponentDemand,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
+        let LetSpec {
+            identifier,
+            binding_id,
+            value,
+            ..
+        } = let_spec;
         let elements = tuple_element_types(ty);
         if elements.len() < 2 {
             return None;
@@ -314,6 +337,7 @@ impl Planner<'_> {
         statements.push(define_many(names.clone(), call));
         self.scope.set_tuple_binding(
             identifier,
+            binding_id.as_slice(),
             TupleBinding {
                 names: names.into_iter().map(Into::into).collect(),
             },
@@ -325,11 +349,17 @@ impl Planner<'_> {
     /// an interface.
     fn lower_let_propagate(
         &mut self,
-        identifier: &str,
+        let_spec: LetSpec,
         raw_go_name: Option<&str>,
-        value: &Expression,
-        binding_ty: &Type,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
+        let LetSpec {
+            identifier,
+            binding_id,
+            value,
+            binding_ty,
+            ..
+        } = let_spec;
+        let ids = binding_id.as_slice();
         let Expression::Propagate {
             expression: inner, ..
         } = value
@@ -337,8 +367,8 @@ impl Planner<'_> {
             unreachable!("lower_let_propagate requires a Propagate value");
         };
         let Some(raw_go_name) = raw_go_name else {
-            self.scope.bind(identifier, "_");
-            return self.lower_propagate(inner, Some("_")).0;
+            self.scope.bind_source(identifier, ids, "_");
+            return self.lower_propagate_statement(inner);
         };
         let go_identifier = self.choose_let_go_name(identifier, raw_go_name, false);
         let widens_to_interface =
@@ -346,15 +376,18 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         if widens_to_interface {
             let var_ty = self.use_go_type(binding_ty);
-            statements.push(LoweredStatement::VarDecl {
-                name: go_identifier.clone().into(),
-                go_type: var_ty,
-                value: None,
-            });
+            statements.push(
+                LoweredStatement::VarDecl {
+                    name: go_identifier.clone().into(),
+                    go_type: var_ty,
+                    value: None,
+                }
+                .into(),
+            );
             self.declare(&go_identifier);
         }
-        statements.extend(self.lower_propagate(inner, Some(&go_identifier)).0);
-        self.scope.bind(identifier, &go_identifier);
+        statements.extend(self.lower_propagate_binding(inner, &go_identifier));
+        self.scope.bind_source(identifier, ids, &go_identifier);
         self.try_declare(&go_identifier);
         statements
     }
@@ -363,10 +396,16 @@ impl Planner<'_> {
     /// statement, then declare the binding as `struct{}{}`.
     fn lower_let_unit_call(
         &mut self,
-        identifier: &str,
+        let_spec: LetSpec,
         raw_go_name: Option<&str>,
-        value: &Expression,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
+        let LetSpec {
+            identifier,
+            binding_id,
+            value,
+            ..
+        } = let_spec;
+        let ids = binding_id.as_slice();
         let (mut statements, value_expression) = self
             .lower_value(value, ExpressionContext::value())
             .into_parts();
@@ -380,25 +419,26 @@ impl Planner<'_> {
             let fresh = self.fresh_var(Some(identifier));
             self.declare(&fresh);
             statements.push(define(fresh.clone(), unit()));
-            self.scope.bind(identifier, &fresh);
+            self.scope.bind_source(identifier, ids, &fresh);
         } else {
-            let go_identifier = self.scope.bind(identifier, raw_go_name);
+            let go_identifier = self.scope.bind_source(identifier, ids, raw_go_name);
             self.try_declare(&go_identifier);
             statements.push(define(go_identifier, unit()));
         }
         statements
     }
 
-    fn lower_let_direct(&mut self, let_spec: LetSpec, raw_go_name: &str) -> Vec<LoweredStatement> {
+    fn lower_let_direct(&mut self, let_spec: LetSpec, raw_go_name: &str) -> Vec<Statement> {
         let LetSpec {
             identifier,
+            binding_id,
             value,
             binding_ty,
             mutable,
         } = let_spec;
+        let ids = binding_id.as_slice();
         if !mutable
-            && let Some(statements) =
-                self.try_lower_let_into_wrapper_slot(identifier, raw_go_name, value, binding_ty)
+            && let Some(statements) = self.try_lower_let_into_wrapper_slot(let_spec, raw_go_name)
         {
             return statements;
         }
@@ -417,16 +457,7 @@ impl Planner<'_> {
         let (coercion_setup, value_expression) = coercion.lower(self, plan_value);
         statements.extend(coercion_setup);
 
-        let bound = self.scope.bind(identifier, raw_go_name);
-        let is_new = !self.package.is_package_block_name(&bound) && self.try_declare(&bound);
-        let go_identifier = if !is_new || self.scope.is_active_assign_target(&bound) {
-            let fresh = self.fresh_var(Some(identifier));
-            self.scope.bind(identifier, &fresh);
-            self.try_declare(&fresh);
-            fresh
-        } else {
-            bound
-        };
+        let go_identifier = self.claim_direct_let_name(identifier, ids, raw_go_name);
 
         // A bare `var x T` only where the slot's zero is the value.
         if is_zero_call(value)
@@ -435,21 +466,27 @@ impl Planner<'_> {
             && !needs_explicit_type_declaration(self, value, binding_ty)
         {
             let var_ty = self.use_go_type(binding_ty);
-            statements.push(LoweredStatement::VarDecl {
-                name: go_identifier.into(),
-                go_type: var_ty,
-                value: None,
-            });
+            statements.push(
+                LoweredStatement::VarDecl {
+                    name: go_identifier.into(),
+                    go_type: var_ty,
+                    value: None,
+                }
+                .into(),
+            );
             return statements;
         }
 
         if constant_needs_type || needs_explicit_type_declaration(self, value, binding_ty) {
             let var_ty = self.use_go_type(binding_ty);
-            statements.push(LoweredStatement::VarDecl {
-                name: go_identifier.into(),
-                go_type: var_ty,
-                value: Some(value_expression),
-            });
+            statements.push(
+                LoweredStatement::VarDecl {
+                    name: go_identifier.into(),
+                    go_type: var_ty,
+                    value: Some(value_expression),
+                }
+                .into(),
+            );
             return statements;
         }
         // A temp no source binding answers to has no other reader to break.
@@ -468,11 +505,16 @@ impl Planner<'_> {
     /// `name := result_N` alias.
     fn try_lower_let_into_wrapper_slot(
         &mut self,
-        identifier: &str,
+        let_spec: LetSpec,
         raw_go_name: &str,
-        value: &Expression,
-        binding_ty: &Type,
-    ) -> Option<Vec<LoweredStatement>> {
+    ) -> Option<Vec<Statement>> {
+        let LetSpec {
+            identifier,
+            binding_id,
+            value,
+            binding_ty,
+            ..
+        } = let_spec;
         let go_identifier = escape_reserved(raw_go_name);
         if self.shadows_declaration(&go_identifier)
             || self.scope.is_active_assign_target(&go_identifier)
@@ -498,7 +540,8 @@ impl Planner<'_> {
             self.lower_abi_wrapped_call_to(value, &plan.resolved.abi, binding_ty, target)?;
         // `push_wrapper_slot` / `push_simple_wrapper_value` already declared
         // `go_identifier`; only the binding from the user-name still needs setup.
-        self.scope.bind(identifier, go_identifier.as_ref());
+        self.scope
+            .bind_source(identifier, binding_id.as_slice(), go_identifier.as_ref());
         Some(statements)
     }
 
@@ -507,7 +550,7 @@ impl Planner<'_> {
         name: &str,
         value: &Expression,
         binding_ty: &Type,
-    ) -> Vec<LoweredStatement> {
+    ) -> Vec<Statement> {
         if let Expression::TryBlock { items, ty, .. } = value
             && name != "_"
             && !self.is_declared(name)
@@ -517,7 +560,7 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         if !self.is_declared(name) {
             if let Some(declaration) = self.let_temp_var_declaration(name, value, binding_ty) {
-                statements.push(declaration);
+                statements.push(declaration.into());
             }
             self.try_declare(name);
         }
@@ -582,6 +625,7 @@ struct LetPlanner<'a, 'e> {
     binding: &'a Binding,
     value: &'a Expression,
     mode: &'a LetMode,
+    demand: Option<ComponentDemand>,
 }
 
 impl<'a, 'e> LetPlanner<'a, 'e> {
@@ -589,17 +633,27 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         // Declare the binding so unreachable code still typechecks.
         if self.value.get_type().is_never() {
             let mut statements = Vec::new();
-            if let Pattern::Identifier { identifier, .. } = &self.binding.pattern
+            if let Pattern::Identifier {
+                identifier,
+                binding,
+                ..
+            } = &self.binding.pattern
                 && let Some(raw_go_name) = self.planner.go_name_for_binding(&self.binding.pattern)
             {
-                let go_identifier = self.planner.scope.bind(identifier, &raw_go_name);
-                self.planner.try_declare(&go_identifier);
+                let go_identifier = self.planner.claim_direct_let_name(
+                    identifier,
+                    binding.as_slice(),
+                    &raw_go_name,
+                );
                 let var_ty = self.planner.use_go_type(&self.binding.ty);
-                statements.push(LoweredStatement::VarDecl {
-                    name: go_identifier.into(),
-                    go_type: var_ty,
-                    value: None,
-                });
+                statements.push(
+                    LoweredStatement::VarDecl {
+                        name: go_identifier.into(),
+                        go_type: var_ty,
+                        value: None,
+                    }
+                    .into(),
+                );
             }
             statements.push(self.planner.lower_statement(self.value));
             return LoweredBlock { statements };
@@ -629,8 +683,12 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         }
 
         match &self.binding.pattern {
-            Pattern::Identifier { identifier, .. } => {
-                return self.lower_simple_identifier(identifier);
+            Pattern::Identifier {
+                identifier,
+                binding,
+                ..
+            } => {
+                return self.lower_simple_identifier(identifier, *binding);
             }
             Pattern::WildCard { .. } => return self.lower_discard(),
             Pattern::Tuple { elements, .. } => {
@@ -687,7 +745,12 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             .iter()
             .zip(slot_types)
             .filter_map(|(pattern, slot_ty)| {
-                let Pattern::Identifier { identifier, .. } = pattern else {
+                let Pattern::Identifier {
+                    identifier,
+                    binding,
+                    ..
+                } = pattern
+                else {
                     return None;
                 };
                 let raw_go_name = self.planner.go_name_for_binding(pattern)?;
@@ -696,11 +759,18 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                     &raw_go_name,
                     self.planner.scope.has_binding_for_go_name(&raw_go_name),
                 );
-                Some((identifier, go_name, self.planner.use_go_type(&slot_ty)))
+                Some((
+                    identifier,
+                    *binding,
+                    go_name,
+                    self.planner.use_go_type(&slot_ty),
+                ))
             })
             .collect();
-        for (identifier, go_name, go_type) in planned {
-            self.planner.scope.bind(identifier, &go_name);
+        for (identifier, id, go_name, go_type) in planned {
+            self.planner
+                .scope
+                .bind_source(identifier, id.as_slice(), &go_name);
             self.planner.try_declare(&go_name);
             statements.push(define(
                 go_name,
@@ -740,12 +810,16 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 matches!(plan.resolved.abi.result, CallableReturnAbi::Tuple { .. })
                     && self
                         .planner
-                        .go_tuple_result_bridges(&plan.resolved.abi, &value_ty)
+                        .go_result_bridge(&plan.resolved.abi, &value_ty)
                         .is_none()
             })
     }
 
-    fn lower_simple_identifier(&mut self, identifier: &str) -> LoweredBlock {
+    fn lower_simple_identifier(
+        &mut self,
+        identifier: &str,
+        binding_id: Option<BindingId>,
+    ) -> LoweredBlock {
         let mut raw_go_name = self.planner.go_name_for_binding(&self.binding.pattern);
         if let Some(raw) = &raw_go_name
             && self
@@ -755,24 +829,20 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         {
             raw_go_name = Some(self.planner.fresh_var(Some(identifier)));
         }
-        if matches!(self.value, Expression::Propagate { .. }) {
-            let statements = self.planner.lower_let_propagate(
-                identifier,
-                raw_go_name.as_deref(),
-                self.value,
-                &self.binding.ty,
-            );
-            return LoweredBlock { statements };
-        }
-        let statements = self.planner.lower_let_value(
-            LetSpec {
-                identifier,
-                value: self.value,
-                binding_ty: &self.binding.ty,
-                mutable: self.binding.is_mutable(),
-            },
-            raw_go_name.as_deref(),
-        );
+        let let_spec = LetSpec {
+            identifier,
+            binding_id,
+            value: self.value,
+            binding_ty: &self.binding.ty,
+            mutable: self.binding.is_mutable(),
+        };
+        let statements = if matches!(self.value, Expression::Propagate { .. }) {
+            self.planner
+                .lower_let_propagate(let_spec, raw_go_name.as_deref())
+        } else {
+            self.planner
+                .lower_let_value(let_spec, raw_go_name.as_deref(), self.demand.take())
+        };
         LoweredBlock { statements }
     }
 
@@ -784,10 +854,15 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
 
     fn lower_multi_value_call(&mut self, elements: &[Pattern]) -> LoweredBlock {
         // Bind after lowering the initializer so it sees the previous bindings.
-        let planned: Vec<Option<(&str, String)>> = elements
+        let planned: Vec<Option<(&str, Option<BindingId>, String)>> = elements
             .iter()
             .map(|pattern| {
-                let Pattern::Identifier { identifier, .. } = pattern else {
+                let Pattern::Identifier {
+                    identifier,
+                    binding,
+                    ..
+                } = pattern
+                else {
                     return None;
                 };
                 if identifier == "_" {
@@ -805,7 +880,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 } else {
                     escaped
                 };
-                Some((identifier.as_str(), name))
+                Some((identifier.as_str(), *binding, name))
             })
             .collect();
 
@@ -814,14 +889,16 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             .lower_call(self.value, None, ExpressionContext::value())
             .into_parts();
 
-        for (identifier, go_name) in planned.iter().flatten() {
-            self.planner.scope.bind(*identifier, go_name);
+        for (identifier, id, go_name) in planned.iter().flatten() {
+            self.planner
+                .scope
+                .bind_source(*identifier, id.as_slice(), go_name);
             self.planner.try_declare(go_name);
         }
 
         let go_vars = planned
             .iter()
-            .map(|binding| binding.as_ref().map_or("_", |(_, name)| name))
+            .map(|binding| binding.as_ref().map_or("_", |(_, _, name)| name))
             .map(str::to_string)
             .collect();
         statements.push(if planned.iter().any(Option::is_some) {
@@ -831,6 +908,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 targets: go_vars.into_iter().map(GoExpression::name).collect(),
                 value: call,
             }
+            .into()
         });
         LoweredBlock { statements }
     }
@@ -842,19 +920,15 @@ impl Planner<'_> {
         binding: &Binding,
         value: &Expression,
         mode: &LetMode,
+        demand: Option<ComponentDemand>,
     ) -> LoweredBlock {
-        let block = LetPlanner {
+        LetPlanner {
             planner: self,
             binding,
             value,
             mode,
+            demand,
         }
-        .build();
-        for (name, span) in collect_pattern_bindings(&binding.pattern) {
-            if let Some(id) = self.facts.binding_id_at(span) {
-                self.scope.register_binding_id(id, &name);
-            }
-        }
-        block
+        .build()
     }
 }

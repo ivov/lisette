@@ -1,11 +1,11 @@
 use crate::Planner;
-use crate::abi::callable::CallableReturnAbi;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::transition;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::LoweredStatement;
+use crate::patterns::matching::{PreludeVariant, prelude_constructor};
+use crate::plan::bodies::Statement;
 use crate::plan::values::GoExpression;
 use crate::types::go_type::GoType;
 use syntax::ast::Expression;
@@ -62,15 +62,14 @@ impl Fallible {
     }
 
     pub(crate) fn classify_constructor(&self, expression: &Expression) -> Option<ConstructorKind> {
-        let variant = if self.is_result() {
-            expression.as_result_constructor()
-        } else {
-            expression.as_option_constructor()
-        };
-        match variant {
-            Some(Ok(())) => Some(ConstructorKind::Success),
-            Some(Err(())) => Some(ConstructorKind::Failure),
-            None => None,
+        match (self.is_result(), prelude_constructor(expression)?) {
+            (true, PreludeVariant::Ok) | (false, PreludeVariant::Some) => {
+                Some(ConstructorKind::Success)
+            }
+            (true, PreludeVariant::Err) | (false, PreludeVariant::None) => {
+                Some(ConstructorKind::Failure)
+            }
+            _ => None,
         }
     }
 
@@ -175,7 +174,7 @@ impl Planner<'_> {
 
     pub(crate) fn coerce_value(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         value: GoExpression,
         from: &Type,
         to: &Type,
@@ -188,7 +187,7 @@ impl Planner<'_> {
 
     pub(crate) fn convert_error_to_return_context(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         value: GoExpression,
         fallible: &Fallible,
     ) -> GoExpression {
@@ -222,7 +221,7 @@ impl Planner<'_> {
         &mut self,
         fallible: &Fallible,
         error: Option<GoExpression>,
-    ) -> LoweredStatement {
+    ) -> Statement {
         let lowered = self.return_ctx().lowered_shape().is_some();
         let mut values = self.failure_return_values(fallible, error);
         if lowered {
@@ -236,16 +235,15 @@ impl Planner<'_> {
         &mut self,
         fallible: &Fallible,
         value: GoExpression,
-        lowered: Option<&CallableReturnAbi>,
-    ) -> Vec<LoweredStatement> {
-        let Some(shape) = lowered else {
+    ) -> Vec<Statement> {
+        let Some(shape) = self.return_ctx().lowered_shape() else {
             let success = FalliblePlanner::new(self, fallible).emit_success(value);
             return vec![plain_return(success)];
         };
         let (mut statements, payload) =
-            transition::lowered_payload_values(self, shape, fallible.ok_ty(), value);
+            transition::lowered_payload_values(self, &shape, fallible.ok_ty(), value);
         statements.push(transition::multi_value_return(
-            transition::lowered_ok_values(shape, payload),
+            transition::lowered_ok_values(&shape, payload),
         ));
         statements
     }
@@ -275,7 +273,7 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
     fn contextual_ok_type_string(&mut self) -> String {
         let return_ctx = self.planner.return_ctx();
         if let Some(ty) = return_ctx.ty() {
-            let ok_ty = ty.ok_type();
+            let ok_ty = self.planner.facts.peel_alias(ty).ok_type();
             self.planner.use_go_type(&ok_ty)
         } else {
             self.ok_type_string()

@@ -521,6 +521,32 @@ fn main() {
 }
 
 #[test]
+fn go_name_collision_function_named_like_reserved_package_alias() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import documentation "go:strings"
+
+fn documentation_() -> string {
+  documentation.ToUpper("a")
+}
+
+fn main() {
+  let _ = documentation_()
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "the import binds `documentation` in Go, so `documentation_` collides with it; got: {codes:?}"
+    );
+}
+
+#[test]
 fn embedded_display_beside_string_field_needs_no_shadow() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
@@ -1358,6 +1384,41 @@ fn main() {
   let circle = shapes.Circle { radius: 5.0 };
   let shape = shapes.ShapeKind.CircleKind(circle);
   let _ = describe(shape)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn multipackage_enum_private_payload_bound_from_another_package() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "shapes",
+        "lib.lis",
+        r#"
+struct Inner { v: int }
+
+pub enum E { Foo { x: Inner }, Bar }
+
+pub fn make() -> E { E.Foo { x: Inner { v: 3 } } }
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "shapes"
+
+fn main() {
+  match shapes.make() {
+    shapes.E.Foo { x } => fmt.Println(x),
+    shapes.E.Bar => fmt.Println("bar"),
+  }
 }
 "#,
     );
@@ -4631,6 +4692,41 @@ fn main() {
 }
 
 #[test]
+fn local_alias_of_foreign_type_static_method() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "shapes",
+        "mod.lis",
+        r#"
+pub struct Point { pub x: int }
+
+impl Point {
+  pub fn new(x: int) -> Point { Point { x } }
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import s "shapes"
+
+type P = s.Point
+
+fn main() {
+  let a = P.new(1)
+  let f = P.new
+  let _ = a.x + f(2).x
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn cross_package_type_alias_native_type_import_dropped() {
     let mut fs = MockFileSystem::new();
 
@@ -6481,6 +6577,48 @@ fn main() {
 }
 
 #[test]
+fn cached_adapter_locals_do_not_depend_on_first_caller() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+pub interface Cache {
+  #[go(comma_ok)]
+  fn get(key: string) -> Option<Ref<int>>
+}
+
+struct MyCache {}
+
+impl MyCache {
+  fn get(self, _key: string) -> Option<Ref<int>> {
+    None
+  }
+}
+
+fn use_cache(_c: Cache) {}
+
+fn first(raw: int, option: int) -> int {
+  use_cache(MyCache {} as Cache)
+  raw + option
+}
+
+fn second() {
+  use_cache(MyCache {} as Cache)
+}
+
+fn main() {
+  let _ = first(1, 2)
+  second()
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn generic_struct_adapter_substitutes_and_deduplicates_per_instantiation() {
     let mut fs = MockFileSystem::new();
 
@@ -6776,140 +6914,6 @@ fn main() {
     );
 
     assert_build_snapshot!(fs, "github.com/user/myproject");
-}
-
-#[test]
-fn go_import_collision_flags_shared_last_segment() {
-    use rustc_hash::FxHashMap as HashMap;
-
-    let go_package_names: HashMap<String, String> = HashMap::default();
-    let go_package_ids: rustc_hash::FxHashSet<String> =
-        ["go:database/sql", "go:entgo.io/ent/dialect/sql"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_package_ids);
-    builder.extend_with_packages(
-        &["database/sql", "entgo.io/ent/dialect/sql"]
-            .iter()
-            .map(|s| (*s).into())
-            .collect(),
-    );
-
-    let (_imports, diagnostics) = builder.build();
-    assert_eq!(diagnostics.len(), 1, "expected one collision diagnostic");
-    assert_eq!(diagnostics[0].code_str(), Some("emit.go_import_collision"));
-    let help = diagnostics[0].plain_help().unwrap_or_default();
-    assert!(
-        help.contains("database/sql") && help.contains("entgo.io/ent/dialect/sql"),
-        "help should name both colliding paths, got: {}",
-        help
-    );
-}
-
-#[test]
-fn go_import_collision_silent_when_aliases_differ() {
-    use rustc_hash::FxHashMap as HashMap;
-
-    let mut go_package_names: HashMap<String, String> = HashMap::default();
-    go_package_names.insert(
-        "go:entgo.io/ent/dialect/sql".to_string(),
-        "entsql".to_string(),
-    );
-    let go_package_ids: rustc_hash::FxHashSet<String> =
-        ["go:database/sql", "go:entgo.io/ent/dialect/sql"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-
-    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_package_ids);
-    builder.extend_with_packages(
-        &["database/sql", "entgo.io/ent/dialect/sql"]
-            .iter()
-            .map(|s| (*s).into())
-            .collect(),
-    );
-
-    let (_imports, diagnostics) = builder.build();
-    assert!(
-        diagnostics.is_empty(),
-        "expected no diagnostics when aliases differ, got: {:?}",
-        diagnostics.iter().map(|d| d.code_str()).collect::<Vec<_>>()
-    );
-}
-
-#[test]
-fn go_import_collision_silent_for_distinct_versioned_packages() {
-    use rustc_hash::FxHashMap as HashMap;
-
-    let go_package_names: HashMap<String, String> = HashMap::default();
-    let go_package_ids: rustc_hash::FxHashSet<String> =
-        ["go:github.com/pion/sdp/v3", "go:github.com/pion/dtls/v3"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_package_ids);
-    builder.extend_with_packages(
-        &["github.com/pion/sdp/v3", "github.com/pion/dtls/v3"]
-            .iter()
-            .map(|s| (*s).into())
-            .collect(),
-    );
-
-    let (_imports, diagnostics) = builder.build();
-    assert!(
-        diagnostics.is_empty(),
-        "distinct `/v3` packages must not collide, got: {:?}",
-        diagnostics.iter().map(|d| d.code_str()).collect::<Vec<_>>()
-    );
-}
-
-#[test]
-fn go_import_collision_flags_local_packages_sharing_last_segment() {
-    use rustc_hash::FxHashMap as HashMap;
-
-    let go_package_names: HashMap<String, String> = HashMap::default();
-    let go_package_ids: rustc_hash::FxHashSet<String> = rustc_hash::FxHashSet::default();
-    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_package_ids);
-    builder.extend_with_packages(
-        &["myproject/api/v2", "myproject/admin/v2"]
-            .iter()
-            .map(|s| (*s).into())
-            .collect(),
-    );
-
-    let (_imports, diagnostics) = builder.build();
-    assert_eq!(
-        diagnostics.len(),
-        1,
-        "local packages both packaging as `v2` must collide, got: {:?}",
-        diagnostics.iter().map(|d| d.code_str()).collect::<Vec<_>>()
-    );
-}
-
-#[test]
-fn go_import_under_project_package_resolves_by_package_not_version() {
-    use rustc_hash::FxHashMap as HashMap;
-
-    let go_package_names: HashMap<String, String> = HashMap::default();
-    let go_package_ids: rustc_hash::FxHashSet<String> = ["go:myproject/plugins/v2"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_package_ids);
-    builder.extend_with_packages(
-        &["myproject/plugins/v2", "myproject/api/v2"]
-            .iter()
-            .map(|s| (*s).into())
-            .collect(),
-    );
-
-    let (_imports, diagnostics) = builder.build();
-    assert!(
-        diagnostics.is_empty(),
-        "a go: import under the project package must resolve by package name, got: {:?}",
-        diagnostics.iter().map(|d| d.code_str()).collect::<Vec<_>>()
-    );
 }
 
 #[test]
@@ -7356,6 +7360,31 @@ fn reserved_go_prefix_rejects_import_alias() {
     assert!(
         codes.iter().any(|code| code == "emit.reserved_go_prefix"),
         "a reserved-prefix import alias is a package-scope name and must be rejected; got: {codes:?}"
+    );
+}
+
+#[test]
+fn reserved_go_prefix_skips_import_unused_in_its_own_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        "import _lisAdapter_fmt \"go:fmt\"\n\nfn main() {\n  _lisAdapter_fmt.Println(\"x\")\n}",
+    );
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "helper.lis",
+        "import _lisAdapter_fmt \"go:fmt\"\n\nfn helper() -> int {\n  1\n}",
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    let reserved = codes
+        .iter()
+        .filter(|code| *code == "emit.reserved_go_prefix")
+        .count();
+    assert_eq!(
+        reserved, 1,
+        "only the file that uses the alias declares it in Go; got: {codes:?}"
     );
 }
 
@@ -8826,6 +8855,47 @@ fn synthesized_test_handle_does_not_shadow_user_function() {
 }
 
 #[test]
+fn renamed_test_handle_param_is_the_assert_target() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b + handle() }\n\nfn handle() -> int { 0 }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn checks(handle: TestContext) {\n  assert add(1, 2) == 3\n}\n\n#[test]\nfn reserved(chan: TestContext) {\n  assert true\n  t_run(chan)\n}\n\nfn t_run(t: TestContext) {\n  let _ = t.run(\"c\", |range: TestContext| { assert true })\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+
+    assert!(
+        go.contains("func checks(handle_1 testkit.TestContext)")
+            && go.contains("handle_1.FailAssert("),
+        "a handle renamed away from a package function must be the assert target, got:\n{go}"
+    );
+    assert!(
+        go.contains("func reserved(chan_ testkit.TestContext)") && go.contains("chan_.FailAssert("),
+        "a handle escaped from a reserved word must be the assert target, got:\n{go}"
+    );
+    assert!(
+        go.contains("defer range_.Recover(") && go.contains("range_.FailAssert("),
+        "a lambda handle escaped from a reserved word must be the assert target, got:\n{go}"
+    );
+}
+
+#[test]
 fn assert_lowers_to_decomposed_failure_call() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
@@ -9289,6 +9359,42 @@ fn assert_relation_applies_numeric_alias_cast() {
     assert!(
         go.contains("Score("),
         "a numeric-alias comparison in `assert` must apply the cast, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_relation_casts_a_bound_operand_but_not_a_literal() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub type Score = int\n\npub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn cmp() {\n  let s: Score = 3\n  assert s == 3\n  assert s == add(1, 2)\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+    assert!(
+        go.contains("if s != 3 {"),
+        "a literal operand must compare without a cast, got:\n{go}"
+    );
+    assert!(
+        go.contains("assertRight := Add(1, 2)")
+            && go.contains("if assertLeft != Score(assertRight) {"),
+        "a bound operand must be cast to the alias, got:\n{go}"
     );
 }
 

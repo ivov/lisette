@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/aws"
+  
+  fn main() {
+    aws.UseOne(Ok)
+    aws.UseMany(Ok, Ok)
+  }
+---
+package main
+
+import (
+	"example.com/aws"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	cb := lisette.MakeResultOk[int, error]
+	aws.UseOne(func(arg0 int) (int, error) {
+		res := cb(arg0)
+		if res.Tag == lisette.ResultOk {
+			return res.OkVal, nil
+		}
+		return 0, res.ErrVal
+	})
+	cb_1 := lisette.MakeResultOk[int, error]
+	cb_2 := lisette.MakeResultOk[int, error]
+	aws.UseMany(func(arg0 int) (int, error) {
+		res_1 := cb_1(arg0)
+		if res_1.Tag == lisette.ResultOk {
+			return res_1.OkVal, nil
+		}
+		return 0, res_1.ErrVal
+	}, func(arg0 int) (int, error) {
+		res_2 := cb_2(arg0)
+		if res_2.Tag == lisette.ResultOk {
+			return res_2.OkVal, nil
+		}
+		return 0, res_2.ErrVal
+	})
+}

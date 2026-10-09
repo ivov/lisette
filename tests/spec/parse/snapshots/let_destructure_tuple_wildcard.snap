@@ -44,6 +44,7 @@ description: |
                                             byte_offset: 23,
                                             byte_length: 11,
                                         },
+                                        binding: None,
                                     },
                                 ],
                                 span: Span {

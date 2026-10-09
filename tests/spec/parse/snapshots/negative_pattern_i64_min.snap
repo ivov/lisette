@@ -29,6 +29,7 @@ description: |
                         byte_offset: 13,
                         byte_length: 1,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Constructor {

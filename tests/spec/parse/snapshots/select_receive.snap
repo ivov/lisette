@@ -28,6 +28,7 @@ description: |
                         byte_offset: 9,
                         byte_length: 2,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Constructor {
@@ -73,6 +74,7 @@ description: |
                                         byte_offset: 49,
                                         byte_length: 1,
                                     },
+                                    binding: None,
                                 },
                                 receive_expression: Identifier {
                                     value: "ch",

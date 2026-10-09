@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Stopper {
+    fn stop() -> Never
+  }
+  
+  struct S {}
+  
+  impl S {
+    fn stop(self) -> Never {
+      panic("stop")
+    }
+  }
+  
+  fn halt(s: Stopper) {
+    s.stop()
+  }
+  
+  fn test() {
+    let s: Stopper = S {}
+    let _ = s
+  }
+---
+package main
+
+type Stopper interface {
+	stop()
+}
+
+type S struct{}
+
+func (s S) stop() {
+	panic("stop")
+}
+
+func halt(s Stopper) {
+	s.stop()
+}
+
+func test() {
+	var s Stopper = S{}
+	_ = s
+}

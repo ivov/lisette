@@ -147,6 +147,8 @@ pub enum DefinitionBody {
         /// collapsed Lisette list cannot be projected onto Go's positionally.
         go_type_param_recipe: Option<String>,
         superseded_by: Option<String>,
+        /// The impl receiver of a static method in terms of the impl's generics.
+        impl_receiver: Option<Type>,
     },
 }
 
@@ -327,6 +329,13 @@ impl Definition {
                 go_type_param_recipe,
                 ..
             } => go_type_param_recipe.as_deref(),
+            _ => None,
+        }
+    }
+
+    pub fn impl_receiver(&self) -> Option<&Type> {
+        match &self.body {
+            DefinitionBody::Value { impl_receiver, .. } => impl_receiver.as_ref(),
             _ => None,
         }
     }

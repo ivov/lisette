@@ -29,7 +29,6 @@ pub(crate) use utils::write_line;
 pub use names::go_name::PRELUDE_IMPORT_PATH;
 pub use names::go_name::go_test_function_name;
 pub use output::OutputFile;
-pub use output::imports;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
@@ -37,25 +36,21 @@ use abi::callable::{CallableReturnAbi, OptionReturnAbi};
 use abi::catalog::GoAbiCatalog;
 use abi::go_payload_layout;
 use abi::layout::SlotOrigin;
-use analyze::component_uses::ComponentDemand;
-use analyze::facts::{EmitFactsConfig, is_nullable_option};
+use analyze::facts::is_nullable_option;
 use diagnostics::LisetteDiagnostic;
 use names::go_name::GeneratedPackage;
 use names::packages::{PackageRequirements, PackageUse};
 use plan::PackagePlan;
-use plan::bodies::{LoopId, LoweredBlock, LoweredStatement, define};
+use plan::bodies::{LoopId, LoweredBlock, Statement, define};
 use plan::go_expression::GoExpressionNode;
 use plan::values::GoExpression;
 use state::adapter_registry::AdapterRegistry;
 use state::file_namespace::FileNamespace;
-use state::package_state::{FunctionEmissionContext, PackageState};
+use state::package_state::PackageState;
 use state::scope::ScopeState;
-use syntax::ast::{Expression, Span};
+use syntax::ast::{BindingId, Expression, Span};
 use syntax::program;
-use syntax::program::{
-    BinderIds, Definition, DefinitionBody, EmitInput, EqualityIndex, File, MutationInfo, TestIndex,
-    UnusedInfo, interface_requirements,
-};
+use syntax::program::{Definition, DefinitionBody, EmitInput, File, interface_requirements};
 use syntax::types::{Symbol, Type, peel_alias};
 use types::go_type::GoType;
 
@@ -76,6 +71,8 @@ pub(crate) struct GlobalEmitData {
     exported_method_names: HashSet<String>,
     /// Method selectors whose interface bounds require a single generic result.
     tagged_method_names: HashSet<String>,
+    /// Built once: a layout depends only on the definitions.
+    enum_layouts: HashMap<Symbol, EnumLayout>,
 }
 
 impl GlobalEmitData {
@@ -84,14 +81,43 @@ impl GlobalEmitData {
             go_abi_catalog: GoAbiCatalog::from_definitions(definitions),
             exported_method_names: HashSet::default(),
             tagged_method_names: HashSet::default(),
+            enum_layouts: HashMap::default(),
         };
 
         for (key, definition) in definitions.iter() {
             globals.register_exported_methods(key, definition);
             globals.register_bound_returns(definition, definitions);
+            globals.register_enum_layout(key, definition, definitions);
         }
 
         globals
+    }
+
+    fn register_enum_layout(
+        &mut self,
+        key: &Symbol,
+        definition: &Definition,
+        definitions: &HashMap<Symbol, Definition>,
+    ) {
+        let DefinitionBody::Enum {
+            generics,
+            variants,
+            default_variant,
+            ..
+        } = &definition.body
+        else {
+            return;
+        };
+        if matches!(
+            go_name::unqualified_name(key),
+            "Option" | "Result" | "Partial"
+        ) {
+            return;
+        }
+        let layout = EnumLayout::new(key, generics, variants, *default_variant, |id| {
+            definitions.get(id)
+        });
+        self.enum_layouts.insert(key.clone(), layout);
     }
 
     fn register_bound_returns(
@@ -225,34 +251,15 @@ fn sentinel_hint(hints: &[String]) -> Option<i64> {
         .then_some(-1)
 }
 
-pub struct TestEmitConfig<'a> {
-    pub definitions: &'a HashMap<Symbol, Definition>,
-    pub package_id: &'a str,
-    pub go_module: &'a str,
-    pub unused: &'a UnusedInfo,
-    pub mutations: &'a MutationInfo,
-    pub binder_ids: &'a BinderIds,
-    pub equality_index: &'a EqualityIndex,
-    pub test_index: &'a TestIndex,
-    pub go_package_names: &'a HashMap<String, String>,
-    pub go_package_ids: &'a HashSet<String>,
-}
-
 pub struct Planner<'a> {
     facts: EmitFacts<'a>,
     package: PackageState,
-    function_contexts: Vec<FunctionEmissionContext>,
     scope: ScopeState,
     adapter_registry: AdapterRegistry,
     namespace: FileNamespace,
-    component_lets: HashMap<Span, ComponentDemand>,
 }
 
 impl Planner<'_> {
-    fn require_stdlib(&mut self) {
-        self.require_generated_package(GeneratedPackage::Prelude);
-    }
-
     fn require_fmt(&mut self) {
         self.require_generated_package(GeneratedPackage::Fmt);
     }
@@ -294,10 +301,12 @@ impl Planner<'_> {
         self.namespace.absorb(requirements);
     }
 
-    fn collect_imports(&mut self, statements: &[LoweredStatement]) {
+    fn collect_imports(&mut self, statements: &[Statement]) {
         let namespace = &mut self.namespace;
         for statement in statements {
-            statement.visit_expressions(&mut |node| require_qualified(namespace, node));
+            statement
+                .kind
+                .visit_expressions(&mut |node| require_qualified(namespace, node));
         }
     }
 
@@ -363,6 +372,8 @@ impl<'a> Planner<'a> {
         });
 
         let shared = SharedEmitContext {
+            go_module,
+            entry_package_name,
             emit_tests: options.emit_tests,
             line_indexes,
             globals: GlobalEmitData::compute(&analysis.definitions),
@@ -386,14 +397,7 @@ impl<'a> Planner<'a> {
         const PARALLEL_THRESHOLD: usize = 4;
 
         let emit_one = |(package_id, files): &(&str, Vec<&File>)| {
-            emit_package(
-                analysis,
-                go_module,
-                entry_package_name,
-                &shared,
-                package_id,
-                files,
-            )
+            emit_package(analysis, &shared, package_id, files)
         };
 
         let package_outputs: Vec<Result<Vec<OutputFile>, Vec<LisetteDiagnostic>>> =
@@ -422,59 +426,20 @@ impl<'a> Planner<'a> {
         }
     }
 
-    pub fn emit_files_for_tests(
-        config: &TestEmitConfig<'a>,
-        source: Option<&str>,
-        files: &[&File],
-    ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
-        let line_indexes = source.map(|src| {
-            HashMap::from_iter([(
-                0u32,
-                LineIndex::from_source("src/test.lis".to_string(), src),
-            )])
-        });
-        let globals = GlobalEmitData::compute(config.definitions);
-        let facts = EmitFacts::new(EmitFactsConfig {
-            definitions: config.definitions,
-            unused: config.unused,
-            mutations: config.mutations,
-            binder_ids: config.binder_ids,
-            equality_index: config.equality_index,
-            test_index: config.test_index,
-            go_package_names: config.go_package_names,
-            go_package_ids: config.go_package_ids,
-            entry_package: config.package_id.to_string().into(),
-            entry_package_name: "main",
-            go_module: config.go_module.to_string(),
-            emit_tests: false,
-            line_indexes: line_indexes.as_ref(),
-            globals: &globals,
-            current_package: config.package_id.to_string().into(),
-        });
-        Planner::emit_files_with_facts(facts, files)
-    }
-
-    fn new(facts: EmitFacts<'a>, first_file: &File) -> Self {
-        let namespace = FileNamespace::build(
-            first_file,
-            facts.go_module(),
-            facts.unused_imports_for_current_package(),
-            facts.go_package_names(),
-        );
+    fn new(facts: EmitFacts<'a>) -> Self {
         Self {
             facts,
             package: PackageState::default(),
-            function_contexts: Vec::new(),
             scope: ScopeState::new(),
             adapter_registry: AdapterRegistry::default(),
-            namespace,
-            component_lets: HashMap::default(),
+            namespace: FileNamespace::default(),
         }
     }
 
+    /// Lower a loop body whose `break value` writes `result`.
     fn with_loop<R>(&mut self, result: GoExpression, f: impl FnOnce(&mut Self) -> R) -> R {
-        self.scope.push_loop(result);
-        let result = f(self);
+        self.scope.push_loop(result.clone());
+        let result = self.with_assign_target(&result, f);
         self.scope.pop_loop();
         result
     }
@@ -487,36 +452,6 @@ impl<'a> Planner<'a> {
         self.scope.current_loop_id()
     }
 
-    /// Push the enclosing function/lambda/try/recover return context. This
-    /// scope stack is the single source of truth for return-context lowering;
-    /// all readers consult it via [`Planner::return_ctx`].
-    fn with_return_context<R>(&mut self, ctx: ReturnContext, f: impl FnOnce(&mut Self) -> R) -> R {
-        self.scope.push_return_ctx(ctx);
-        let result = f(self);
-        self.scope.pop_return_ctx();
-        result
-    }
-
-    fn with_test_handle<R>(&mut self, name: Option<String>, f: impl FnOnce(&mut Self) -> R) -> R {
-        if let Some(name) = name {
-            self.scope.push_test_handle(name);
-            let result = f(self);
-            self.scope.pop_test_handle();
-            result
-        } else {
-            f(self)
-        }
-    }
-
-    fn current_test_handle(&self) -> Option<String> {
-        self.scope.current_test_handle().map(str::to_string)
-    }
-
-    /// The enclosing function/lambda/try/recover return context, maintained on
-    /// the scope stack and shared cheaply via `Rc`. Defaults to
-    /// `ReturnContext::None` outside any function body (e.g. package-level
-    /// collection). This is the single source of truth for return-context
-    /// lowering.
     fn return_ctx(&self) -> ReturnContext {
         self.scope.current_return_ctx()
     }
@@ -548,16 +483,29 @@ impl<'a> Planner<'a> {
     fn claim_declared_binding(
         &mut self,
         lisette_name: &str,
+        ids: &[BindingId],
         preferred: impl Into<String>,
     ) -> String {
-        let go_name = self.scope.bind(lisette_name, preferred);
+        let go_name = self.claim_declared_go_name(lisette_name, preferred);
+        self.scope.bind_source(lisette_name, ids, go_name)
+    }
+
+    /// Declare `preferred` for `lisette_name`, or a fresh name if it would shadow. Binds nothing.
+    fn claim_declared_go_name(
+        &mut self,
+        lisette_name: &str,
+        preferred: impl Into<String>,
+    ) -> String {
+        let go_name = escape_reserved(&preferred.into()).into_owned();
         let go_name = if self.shadows_declaration(&go_name)
             || self
                 .scope
                 .has_other_binding_for_go_name(&go_name, lisette_name)
         {
-            let fresh = self.scope.fresh_binding_go_name(lisette_name);
-            self.scope.bind(lisette_name, fresh)
+            let fresh = self
+                .scope
+                .fresh_binding_go_name(lisette_name, &self.package);
+            escape_reserved(&fresh).into_owned()
         } else {
             go_name
         };
@@ -568,7 +516,7 @@ impl<'a> Planner<'a> {
     /// Bind `value` to a name that can be read more than once.
     fn stable_source(
         &mut self,
-        statements: &mut Vec<LoweredStatement>,
+        statements: &mut Vec<Statement>,
         hint: &str,
         value: GoExpression,
     ) -> GoExpression {
@@ -581,7 +529,7 @@ impl<'a> Planner<'a> {
     /// Allocate a fresh Go temp, register it as declared, and push `tmp := value`.
     fn hoist_tmp_value_statement(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         hint: &str,
         value: GoExpression,
     ) -> String {
@@ -616,6 +564,13 @@ impl<'a> Planner<'a> {
         result
     }
 
+    fn with_declaration_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        let outer = self.scope.begin_declaration();
+        let result = f(self);
+        self.scope.end_declaration(outer);
+        result
+    }
+
     fn with_binding_frame<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
         self.scope.push_binding_frame();
         let result = f(self);
@@ -623,8 +578,12 @@ impl<'a> Planner<'a> {
         result
     }
 
-    fn with_isolated_function<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        self.scope.enter_isolated_function();
+    fn with_isolated_function<R>(
+        &mut self,
+        return_ctx: ReturnContext,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        self.scope.enter_isolated_function(return_ctx);
         let result = f(self);
         self.scope.exit_isolated_function();
         result
@@ -644,41 +603,24 @@ impl<'a> Planner<'a> {
     }
 
     fn fresh_var(&mut self, hint: Option<&str>) -> String {
-        loop {
-            let name = self.scope.fresh_go_name(hint);
-            if !self.package.is_package_block_name(&name) {
-                return name;
-            }
-        }
+        self.scope.fresh_go_name(hint, &self.package)
     }
 
-    fn current_function_context(&self) -> Option<&FunctionEmissionContext> {
-        self.function_contexts.last()
-    }
-
-    fn maybe_line_directive(&self, span: &Span) -> String {
+    fn maybe_line_directive(&self, span: &Span) -> Option<String> {
         if span.is_dummy() {
-            return String::new();
+            return None;
         }
-
-        let Some(source) = self.facts.line_index(span.file_id) else {
-            return String::new();
-        };
-
+        let source = self.facts.line_index(span.file_id)?;
         let line = source.line_for_offset(span.byte_offset);
         let col = source.col_for_offset(span.byte_offset);
-
-        format!("//line {}:{}:{}\n", source.path, line, col)
+        Some(format!("//line {}:{}:{}\n", source.path, line, col))
     }
 
     fn emit_files_with_facts(
         facts: EmitFacts<'a>,
         files: &[&File],
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
-        let Some(first_file) = files.first() else {
-            return Ok(Vec::new());
-        };
-        Self::new(facts, first_file).emit_files(files)
+        Self::new(facts).emit_files(files)
     }
 
     fn emit_files(mut self, files: &[&File]) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
@@ -694,21 +636,15 @@ impl<'a> Planner<'a> {
         let PackagePlan {
             package_name,
             collision_diagnostics,
+            imports: import_plans,
         } = plan;
         let mut output_files = Vec::new();
         let mut all_diagnostics = collision_diagnostics;
 
-        for file in files {
-            self.namespace = FileNamespace::build(
-                file,
-                self.facts.go_module(),
-                self.facts.unused_imports_for_current_package(),
-                self.facts.go_package_names(),
-            );
+        for (file, imports) in files.iter().zip(import_plans) {
+            self.namespace = FileNamespace::new(imports);
             let source = self.render_file_source(file);
-            let (imports, mut diagnostics) = self
-                .namespace
-                .finish(self.facts.go_package_names(), self.facts.go_package_ids());
+            let (imports, mut diagnostics) = self.namespace.finish();
             all_diagnostics.append(&mut diagnostics);
             output_files.push(OutputFile {
                 name: file.go_filename(),
@@ -744,8 +680,7 @@ impl<'a> Planner<'a> {
         }
 
         for expression in &file.items {
-            self.scope.reset_for_top_level();
-            let code = self.emit_top_item(expression);
+            let code = self.with_declaration_scope(|this| this.emit_top_item(expression));
             if !code.is_empty() {
                 source.collect_with_blank(code);
             }
@@ -757,37 +692,21 @@ impl<'a> Planner<'a> {
 }
 
 /// Emit state built once in [`Planner::emit`] and shared by every package worker.
-struct SharedEmitContext {
-    emit_tests: bool,
-    line_indexes: Option<HashMap<u32, LineIndex>>,
-    globals: GlobalEmitData,
+pub(crate) struct SharedEmitContext<'a> {
+    pub(crate) go_module: &'a str,
+    pub(crate) entry_package_name: &'a str,
+    pub(crate) emit_tests: bool,
+    pub(crate) line_indexes: Option<HashMap<u32, LineIndex>>,
+    pub(crate) globals: GlobalEmitData,
 }
 
 fn emit_package<'a>(
     analysis: &'a EmitInput,
-    go_module: &str,
-    entry_package_name: &'a str,
-    shared_emit_ctx: &SharedEmitContext,
+    shared: &'a SharedEmitContext<'a>,
     package_id: &str,
     files: &[&'a File],
 ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
-    let facts = EmitFacts::new(EmitFactsConfig {
-        definitions: &analysis.definitions,
-        unused: &analysis.unused,
-        mutations: &analysis.mutations,
-        binder_ids: &analysis.binder_ids,
-        equality_index: &analysis.equality_index,
-        test_index: &analysis.test_index,
-        go_package_names: &analysis.go_package_names,
-        go_package_ids: &analysis.go_package_ids,
-        entry_package: analysis.entry_package_id.to_string().into(),
-        entry_package_name,
-        go_module: go_module.to_string(),
-        emit_tests: shared_emit_ctx.emit_tests,
-        line_indexes: shared_emit_ctx.line_indexes.as_ref(),
-        globals: &shared_emit_ctx.globals,
-        current_package: package_id.to_string().into(),
-    });
+    let facts = EmitFacts::new(analysis, shared, package_id.to_string().into());
     Planner::emit_files_with_facts(facts, files).map(|mut package_output| {
         if package_id != analysis.entry_package_id.as_str() {
             for file in &mut package_output {

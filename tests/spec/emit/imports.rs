@@ -136,6 +136,18 @@ fn test() {
 }
 
 #[test]
+fn import_alias_named_like_a_reserved_package_is_kept_as_written() {
+    let input = r#"
+import documentation "go:strings"
+
+fn test() -> string {
+  documentation.ToUpper("a")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn import_mixed_aliases() {
     let input = r#"
 import mystrings "go:strings"
@@ -187,6 +199,26 @@ enum Event {
 }
 
 fn main() {}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn renamed_param_skips_import_alias_name() {
+    let input = r#"
+import x_1 "go:fmt"
+
+fn x() -> int { 1 }
+
+fn f(x: int) -> int {
+  x_1.Println(x)
+  x
+}
+
+fn main() {
+  let _ = x()
+  x_1.Println(f(3))
+}
 "#;
     assert_emit_snapshot!(input);
 }

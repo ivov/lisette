@@ -168,6 +168,7 @@ impl TaskState {
                     go_name: extract_go_name(attributes),
                     go_type_param_recipe: extract_go_type_param_recipe(attributes),
                     superseded_by: extract_go_superseded_by(attributes),
+                    impl_receiver: None,
                 },
             },
         );
@@ -250,6 +251,7 @@ impl TaskState {
                     go_name: None,
                     go_type_param_recipe: None,
                     superseded_by: None,
+                    impl_receiver: None,
                 },
             },
         );
@@ -302,6 +304,7 @@ impl TaskState {
                     go_name: None,
                     go_type_param_recipe: None,
                     superseded_by: None,
+                    impl_receiver: None,
                 },
             },
         );

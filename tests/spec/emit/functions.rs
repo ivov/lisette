@@ -1096,6 +1096,21 @@ fn test() -> string {
 }
 
 #[test]
+fn never_typed_let_shadowing_same_block_binding_takes_fresh_name() {
+    let input = r#"
+fn fail(msg: string) -> Never { panic(msg) }
+
+fn test(n: int) {
+  let x = n + 1
+  let _ = x
+  let x: int = fail("boom")
+  let _ = x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn never_bodied_lambda_into_unknown_emits_unit_return() {
     let input = r#"
 fn take_any(x: Unknown) {}
@@ -1117,6 +1132,82 @@ fn run<T>(f: fn() -> T) -> int {
 
 fn test() -> int {
   run(|| { panic("boom") })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn never_returning_function_matches_its_function_type() {
+    let input = r#"
+fn die() -> Never { panic("x") }
+
+fn call(f: fn() -> Never) { f() }
+
+fn named() { call(die) }
+
+fn lambda() { call(|| { die() }) }
+
+fn typed_lambda() {
+  let g: fn() -> Never = || { panic("z") }
+  call(g)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn never_returning_function_value_into_generic_result_gets_struct_return() {
+    let input = r#"
+fn die() -> Never { panic("x") }
+
+fn run<T>(f: fn() -> T) -> int {
+  let _ = f
+  0
+}
+
+fn test() -> int {
+  run(die)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn never_returning_function_value_into_concrete_generic_result_gets_slot_return() {
+    let input = r#"
+fn die() -> Never { panic("x") }
+
+fn apply<T>(f: fn() -> T) -> T {
+  f()
+}
+
+struct Box { n: int }
+
+impl Box {
+  fn run<T>(self, f: fn() -> T) -> T {
+    f()
+  }
+}
+
+struct Holder<T> {
+  f: fn() -> T,
+}
+
+fn free() -> int {
+  apply(die)
+}
+
+fn ufcs(b: Box) -> int {
+  b.run(die)
+}
+
+fn enclosing<U>() -> U {
+  apply(die)
+}
+
+fn field() -> Holder<int> {
+  Holder { f: die }
 }
 "#;
     assert_emit_snapshot!(input);
@@ -3229,6 +3320,68 @@ fn test() {
   let holder = Holder { f: add }
   holder.f(4)
   if calls != 3 || total != 7 { panic(f"calls={calls} total={total}") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tagged_method_value_in_lowered_fn_slot_calls_method_once() {
+    let input = r#"
+interface Getter<T> {
+  fn get() -> T
+}
+
+struct Box {
+  n: int,
+}
+
+impl Box {
+  fn get(self) -> Result<int, error> {
+    Ok(self.n)
+  }
+}
+
+fn use_getter<G: Getter<Result<int, error>>>(g: G) -> Result<int, error> {
+  g.get()
+}
+
+fn take(f: fn() -> Result<int, error>) -> Result<int, error> {
+  f()
+}
+
+fn main() {
+  let b = Box { n: 1 }
+  let _ = use_getter(b)
+  let g = b.get
+  let _ = take(g)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generated_locals_avoid_import_qualifiers() {
+    let input = r#"
+import "go:fmt"
+import i "go:strings"
+import result "go:strconv"
+
+fn qualified_call(s: string) {
+  for b in s.bytes() {
+    fmt.Println(i.ToUpper("x"), b)
+  }
+}
+
+fn qualified_type(s: string) {
+  for b in s.bytes() {
+    let xs: Slice<i.Builder> = []
+    fmt.Println(xs, b)
+  }
+}
+
+fn mapped(xs: Slice<int>) {
+  fmt.Println(xs.map(|x| x + 1), result.Itoa(1))
 }
 "#;
     assert_emit_snapshot!(input);

@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[display]
+  pub struct Point { x: int, y: int }
+  
+  impl Point {
+    fn to_string(self) -> string {
+      "p"
+    }
+  }
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}
+
+func (p Point) ToString() string {
+	return "p"
+}

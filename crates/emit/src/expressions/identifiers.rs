@@ -7,20 +7,7 @@ use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
 use syntax::ast::IdentifierResolution;
 use syntax::types::FunctionParameter;
-use syntax::types::{Type, unqualified_name};
-
-enum IdentifierKind {
-    /// `Unit` used as expression value → `struct{}{}`
-    UnitValue,
-    /// Public function needing Go capitalization
-    PublicFunction { capitalized: String },
-    /// Enum variant unit constructor → `MakeName[Types]()`
-    UnitConstructor { name: String, type_args: String },
-    /// Enum variant constructor as function value → `MakeName[Types]`
-    ConstructorFunction { name: String, type_args: String },
-    /// Regular identifier (may need static method capitalization or cross-package resolution)
-    Regular { name: String },
-}
+use syntax::types::{SubstitutionMap, Type, unqualified_name};
 
 impl Planner<'_> {
     pub(crate) fn emit_identifier(
@@ -30,11 +17,18 @@ impl Planner<'_> {
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> GoExpression {
-        let binding = self
-            .scope
-            .resolve_identifier_with_resolution(value, resolution);
-        let source_binding = resolution.binding_id().is_some();
-        let bound_go_name = match binding {
+        let binding = match resolution {
+            IdentifierResolution::Definition {
+                name,
+                instantiation,
+            } => {
+                return self.emit_definition_identifier(name, instantiation, ty, ctx);
+            }
+            IdentifierResolution::Binding(id) => self.scope.resolve_binding_id(*id),
+            // Unresolved names such as function-local consts bind by spelling.
+            IdentifierResolution::Unresolved => self.scope.resolve_identifier_binding(value),
+        };
+        let local = match binding {
             Some(BindingValue::InlineExpr(expr)) => return expr.expression().clone(),
             Some(BindingValue::Components(components)) => {
                 let components = components.clone();
@@ -50,97 +44,27 @@ impl Planner<'_> {
                         .collect(),
                 );
             }
-            Some(BindingValue::GoName(name) | BindingValue::GoConst(name)) => Some(name.clone()),
-            None => None,
+            Some(BindingValue::GoName(name) | BindingValue::GoConst(name)) => name.clone(),
+            None => return self.resolve_go_name(value, resolution.binding_id().is_some()),
         };
-        match self.classify_identifier(value, bound_go_name.as_deref(), source_binding, ty, ctx) {
-            IdentifierKind::UnitValue => GoExpression::empty_composite("struct{}".to_string()),
-            IdentifierKind::PublicFunction { capitalized } => {
-                let function = GoExpression::external_name(capitalized);
-                if !ctx.is_callee()
-                    && let Some(type_args) = self.format_generic_value_type_args(value, ty)
-                {
-                    GoExpression::instantiation(function, type_args)
-                } else {
-                    function
-                }
-            }
-            IdentifierKind::UnitConstructor { name, type_args } => GoExpression::pure_call(
-                GoExpression::instantiation(self.resolve_go_name(&name, None, false), type_args),
-                Vec::new(),
-            ),
-            IdentifierKind::ConstructorFunction { name, type_args } => {
-                GoExpression::instantiation(self.resolve_go_name(&name, None, false), type_args)
-            }
-            IdentifierKind::Regular { name } => {
-                if let Some(expression) = self.try_emit_method_expression(&name, ty) {
-                    return expression;
-                }
-                let resolved = self.capitalize_static_method_if_public(&name);
-                let mut go_name = self.resolve_go_name(
-                    &resolved,
-                    resolution.definition(),
-                    source_binding || bound_go_name.is_some(),
-                );
-                if let Some(local) = &bound_go_name
-                    && let Some(id) = local.id()
-                    && let GoExpressionNode::Identifier(identifier) = go_name.node_mut()
-                    && identifier.spelling() == local.spelling()
-                {
-                    identifier.identify(id);
-                }
-                // A local binding has no generic recipe, even when it shadows a definition.
-                if !ctx.is_callee()
-                    && bound_go_name.is_none()
-                    && !source_binding
-                    && let Some(type_args) = self.format_generic_value_type_args(&name, ty)
-                {
-                    return GoExpression::instantiation(go_name, type_args);
-                }
-                go_name
-            }
+        let mut go_name = self.resolve_go_name(local.spelling(), true);
+        if let Some(id) = local.id()
+            && let GoExpressionNode::Identifier(identifier) = go_name.node_mut()
+            && identifier.spelling() == local.spelling()
+        {
+            identifier.identify(id);
         }
+        go_name
     }
 
-    fn classify_identifier(
+    fn emit_definition_identifier(
         &mut self,
-        value: &str,
-        bound_go_name: Option<&str>,
-        source_binding: bool,
+        symbol: &str,
+        instantiation: &SubstitutionMap,
         ty: &Type,
         ctx: ExpressionContext<'_>,
-    ) -> IdentifierKind {
-        if value == "Unit" && ty.is_unit() {
-            return IdentifierKind::UnitValue;
-        }
-
-        let name = bound_go_name
-            .or_else(|| {
-                if source_binding {
-                    None
-                } else {
-                    self.scope.resolve_binding_go_name(value)
-                }
-            })
-            .unwrap_or(value)
-            .to_string();
-
-        if let Some(capitalized) = self.try_capitalize_public_function(&name, ty) {
-            return IdentifierKind::PublicFunction { capitalized };
-        }
-
-        let enum_id = match ty {
-            Type::Function(f) => match f.return_type.as_ref() {
-                Type::Nominal { id, .. } => Some(id.as_str()),
-                _ => None,
-            },
-            Type::Nominal { id, .. } => Some(id.as_str()),
-            _ => None,
-        };
-        let make_fn =
-            enum_id.and_then(|id| self.facts.make_function_name(id, unqualified_name(value)));
-
-        if let Some(name) = make_fn {
+    ) -> GoExpression {
+        if let Some(make_function) = self.facts.variant_make_function(symbol) {
             match ty {
                 Type::Nominal { params, .. } => {
                     let type_args = match ctx.expected_slot_type() {
@@ -149,24 +73,51 @@ impl Planner<'_> {
                             .unwrap_or_else(|| self.format_type_args(params)),
                         None => self.format_type_args(params),
                     };
-                    return IdentifierKind::UnitConstructor { name, type_args };
+                    return GoExpression::pure_call(
+                        GoExpression::instantiation(
+                            self.resolve_go_name(&make_function, false),
+                            type_args,
+                        ),
+                        Vec::new(),
+                    );
                 }
-
                 Type::Function(f) => {
                     if let Type::Nominal {
                         params: ret_params, ..
                     } = f.return_type.as_ref()
                     {
                         let type_args = self.constructor_fn_type_args(&f.params, ret_params, ctx);
-                        return IdentifierKind::ConstructorFunction { name, type_args };
+                        return GoExpression::instantiation(
+                            self.resolve_go_name(&make_function, false),
+                            type_args,
+                        );
                     }
                 }
-
-                _ => unreachable!("make_fn set for unexpected type: {:?}", ty),
+                _ => {}
             }
         }
 
-        IdentifierKind::Regular { name }
+        if let Some(expression) = self.try_emit_method_expression(symbol, ty) {
+            return expression;
+        }
+        let function = self.definition_reference(symbol);
+        match self.value_type_args(symbol, instantiation, ctx) {
+            Some(type_args) => GoExpression::instantiation(function, type_args),
+            None => function,
+        }
+    }
+
+    /// Type args for a generic definition used as a value.
+    fn value_type_args(
+        &mut self,
+        symbol: &str,
+        instantiation: &SubstitutionMap,
+        ctx: ExpressionContext<'_>,
+    ) -> Option<String> {
+        if ctx.is_callee() {
+            return None;
+        }
+        self.format_value_type_args(Some(symbol), Some(instantiation))
     }
 
     /// Type args for a constructor function reference (e.g. `MakeFoo[T]` used as a value).
@@ -194,64 +145,16 @@ impl Planner<'_> {
         }
     }
 
-    /// Recover the type-arg list from the identifier's instantiated type by
-    /// matching against the definition's generic signature.
-    fn format_generic_value_type_args(
-        &mut self,
-        name: &str,
-        instantiated_ty: &Type,
-    ) -> Option<String> {
-        let qualified_name = self.facts.qualified_current(name);
-        let definition = self.facts.definition(qualified_name.as_str()).or_else(|| {
-            let prelude_name = format!("{}.{}", go_name::PRELUDE_PACKAGE, name);
-            self.facts.definition(prelude_name.as_str())
-        });
-        let (definition_ty, recipe) = if let Some(definition) = definition {
-            (
-                definition.ty.clone(),
-                definition.go_type_param_recipe().map(str::to_string),
-            )
-        } else {
-            let (owner, method) = name.rsplit_once('.')?;
-            let local_owner = self.facts.qualified_current(owner);
-            let prelude_owner = format!("{}.{}", go_name::PRELUDE_PACKAGE, owner);
-            let method = self
-                .facts
-                .method(&local_owner, method)
-                .or_else(|| self.facts.method(&prelude_owner, method))?;
-            (method.ty.clone(), None)
-        };
-
-        self.format_type_args_from_forall(&definition_ty, instantiated_ty, recipe.as_deref())
-    }
-
-    /// Like `format_generic_value_type_args` but takes a pre-qualified definition name
-    /// instead of constructing one from the current package.
-    pub(crate) fn format_cross_package_type_args(
-        &mut self,
-        qualified_name: &str,
-        instantiated_ty: &Type,
-    ) -> Option<String> {
-        let (definition_ty, recipe) =
-            if let Some(definition) = self.facts.definition(qualified_name) {
-                (
-                    definition.ty.clone(),
-                    definition.go_type_param_recipe().map(str::to_string),
-                )
-            } else {
-                let (owner, name) = qualified_name.rsplit_once('.')?;
-                (self.facts.method(owner, name)?.ty.clone(), None)
-            };
-
-        self.format_type_args_from_forall(&definition_ty, instantiated_ty, recipe.as_deref())
-    }
-
-    /// Return Go method-expression syntax for a `Type.method` referring to an
-    /// instance method (first param is `self`); `None` for static methods.
-    fn try_emit_method_expression(&mut self, name: &str, id_ty: &Type) -> Option<GoExpression> {
-        let (type_part, method_part) = name.split_once('.')?;
-
-        if method_part.contains('.') {
+    /// Go method-expression syntax for an instance method of a current-package type.
+    fn try_emit_method_expression(&mut self, symbol: &str, id_ty: &Type) -> Option<GoExpression> {
+        let package = self.facts.package_for_qualified_name(symbol)?;
+        let (owner, method) = symbol[package.len() + 1..].rsplit_once('.')?;
+        let owner_id = self.peel_alias_id(&format!("{package}.{owner}"));
+        if !self
+            .facts
+            .package_for_qualified_name(&owner_id)
+            .is_some_and(|package| self.facts.is_current_package(package))
+        {
             return None;
         }
 
@@ -264,31 +167,25 @@ impl Planner<'_> {
             _ => return None,
         };
 
-        let real_type_part = self
-            .resolve_alias_type_name(type_part)
-            .unwrap_or_else(|| type_part.to_string());
-        let qualified_name = self.facts.qualified_current(&real_type_part);
         let first = fn_params.first()?;
         let stripped = first.ty.strip_refs();
-        let is_self =
-            matches!(stripped, Type::Nominal { ref id, .. } if id.as_str() == qualified_name);
+        let is_self = matches!(stripped, Type::Nominal { ref id, .. } if id.as_str() == owner_id);
         if !is_self {
             return None;
         }
-        let type_part = &real_type_part;
 
         let is_pointer = first.ty.is_ref();
 
-        if self.facts.is_ufcs_method(&qualified_name, method_part) {
+        if self.facts.is_ufcs_method(&owner_id, method) {
             return None;
         }
 
         let is_public = self
             .facts
-            .method(&qualified_name, method_part)
+            .method(&owner_id, method)
             .map(|method| method.visibility.is_public())
             .unwrap_or(false);
-        let go_method = self.method_go_name(method_part, is_public);
+        let go_method = self.method_go_name(method, is_public);
 
         let type_args = if let Type::Nominal { ref params, .. } = stripped {
             if params.is_empty() {
@@ -300,63 +197,12 @@ impl Planner<'_> {
             String::new()
         };
 
-        let type_go = go_name::escape_type_name(type_part);
+        let type_go = go_name::escape_type_name(unqualified_name(&owner_id));
         Some(method_expression(
             format!("{}{}", type_go, type_args),
             is_pointer,
             go_method,
         ))
-    }
-
-    /// Resolve `package.Type.method` as a cross-package static method call.
-    pub(crate) fn try_resolve_cross_package_static_method(
-        &mut self,
-        qualified: Option<&str>,
-    ) -> Option<GoExpression> {
-        let id = qualified?;
-        let package_name = self.facts.package_for_qualified_name(id)?.to_string();
-        if self.facts.is_current_package(&package_name) {
-            return None;
-        }
-        let after_package = id.strip_prefix(&package_name)?.strip_prefix('.')?;
-        let (type_part, method_name) = after_package.rsplit_once('.')?;
-        let type_id = format!("{}.{}", package_name, type_part);
-
-        let is_public = self
-            .facts
-            .method(&type_id, method_name)
-            .map(|method| method.visibility.is_public())
-            .unwrap_or(true)
-            || self.method_needs_export(method_name);
-
-        Some(self.qualify_method_call(&type_id, method_name, is_public))
-    }
-
-    /// `Some(capitalized)` when the identifier names a public function in
-    /// the current package.
-    fn try_capitalize_public_function(&self, name: &str, ty: &Type) -> Option<String> {
-        let is_function = matches!(ty, Type::Function(_))
-            || matches!(ty, Type::Forall { body, .. } if matches!(body.as_ref(), Type::Function(_)));
-        if !is_function {
-            return None;
-        }
-
-        if self.scope.resolve_identifier_binding(name).is_some() {
-            return None;
-        }
-
-        if name.contains('.') {
-            return None;
-        }
-
-        let qualified_name = self.facts.qualified_current(name);
-        let definition = self.facts.definition(qualified_name.as_str())?;
-
-        if !definition.visibility.is_public() {
-            return None;
-        }
-
-        Some(go_name::snake_to_camel(name))
     }
 }
 

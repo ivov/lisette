@@ -28,7 +28,10 @@ fn check_method_receiver(method: &Expression, impl_ty: &Type, sink: &LocalSink) 
     let Some(first_param) = params.first() else {
         return;
     };
-    let Pattern::Identifier { identifier, span } = &first_param.pattern else {
+    let Pattern::Identifier {
+        identifier, span, ..
+    } = &first_param.pattern
+    else {
         return;
     };
 

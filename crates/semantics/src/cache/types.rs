@@ -121,6 +121,7 @@ fn remap_definition_spans(definition: &mut Definition, remap: &mut impl FnMut(&m
             go_name: _,
             go_type_param_recipe: _,
             superseded_by: _,
+            impl_receiver: _,
         } => {}
     }
 }
@@ -278,6 +279,7 @@ mod tests {
                 go_name: None,
                 go_type_param_recipe: None,
                 superseded_by: None,
+                impl_receiver: None,
             },
         };
 

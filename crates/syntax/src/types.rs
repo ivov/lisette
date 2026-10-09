@@ -198,7 +198,7 @@ where
 }
 
 /// Type parameter name -> concrete type.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SubstitutionMap(Vec<(EcoString, Type)>);
 
 impl SubstitutionMap {
@@ -206,7 +206,7 @@ impl SubstitutionMap {
         self.0.is_empty()
     }
 
-    pub fn get(&self, name: &EcoString) -> Option<&Type> {
+    pub fn get(&self, name: &str) -> Option<&Type> {
         self.0
             .iter()
             .find_map(|(candidate, ty)| (candidate == name).then_some(ty))
@@ -226,6 +226,10 @@ impl SubstitutionMap {
 
     fn iter(&self) -> impl Iterator<Item = (&EcoString, &Type)> {
         self.0.iter().map(|(name, ty)| (name, ty))
+    }
+
+    pub fn types_mut(&mut self) -> impl Iterator<Item = &mut Type> {
+        self.0.iter_mut().map(|(_, ty)| ty)
     }
 }
 

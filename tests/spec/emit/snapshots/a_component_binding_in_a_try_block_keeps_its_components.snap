@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn add(s: string, t: string) -> Result<int, error> {
+    try {
+      let r = strconv.Atoi(s)
+      let k = strconv.Atoi(t)?
+      let n = r.unwrap_or(3)
+      n + k
+    }
+  }
+  
+  fn test() {
+    if add("x", "1").unwrap_or(0) != 4 { panic("a failed first parse should take the default") }
+    if add("2", "x").is_ok() { panic("a failed second parse should return its error") }
+  }
+---
+package main
+
+import "strconv"
+
+func add(s, t string) (int, error) {
+	r, err := strconv.Atoi(s)
+	k, err_1 := strconv.Atoi(t)
+	if err_1 != nil {
+		return 0, err_1
+	}
+	n := r
+	if err != nil {
+		n = 3
+	}
+	return n + k, nil
+}
+
+func test() {
+	ret, err := add("x", "1")
+	if err != nil {
+		ret = 0
+	}
+	if ret != 4 {
+		panic("a failed first parse should take the default")
+	}
+	if _, err := add("2", "x"); err == nil {
+		panic("a failed second parse should return its error")
+	}
+}

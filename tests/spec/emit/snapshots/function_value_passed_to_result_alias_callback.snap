@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  type MyRes = Result<int, error>
+  
+  fn make(x: int) -> Result<int, error> {
+    Ok(x)
+  }
+  
+  fn apply(f: fn(int) -> MyRes) -> MyRes {
+    f(1)
+  }
+  
+  fn main() {
+    let _ = apply(make)
+    let _ = apply(Ok)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type MyRes = lisette.Result[int, error]
+
+func make_(x int) (int, error) {
+	return x, nil
+}
+
+func apply(f func(int) (int, error)) (int, error) {
+	return f(1)
+}
+
+func main() {
+	apply(make_)
+	cb := lisette.MakeResultOk[int, error]
+	apply(func(arg0 int) (int, error) {
+		res := cb(arg0)
+		if res.Tag == lisette.ResultOk {
+			return res.OkVal, nil
+		}
+		return 0, res.ErrVal
+	})
+}

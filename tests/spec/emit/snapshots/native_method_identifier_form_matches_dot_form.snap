@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn grow(xs: Slice<int>) -> (Slice<int>, Slice<int>) {
+    (xs.append(1), Slice.append(xs, 1))
+  }
+  
+  fn non_empty(xs: Slice<int>, ys: Slice<int>) -> bool {
+    !xs.is_empty() && !Slice.is_empty(ys)
+  }
+  
+  fn doubled(xs: Slice<int>) -> Slice<int> {
+    let ys = Slice.map(xs, |x| x * 2)
+    ys
+  }
+---
+package main
+
+func grow(xs []int) ([]int, []int) {
+	return append(xs[:len(xs):len(xs)], 1), append(xs[:len(xs):len(xs)], 1)
+}
+
+func nonEmpty(xs, ys []int) bool {
+	return len(xs) != 0 && len(ys) != 0
+}
+
+func doubled(xs []int) []int {
+	ys := make([]int, len(xs))
+	for i, x := range xs {
+		ys[i] = x * 2
+	}
+	return ys
+}

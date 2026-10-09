@@ -1,0 +1,55 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  import i "go:strings"
+  import result "go:strconv"
+  
+  fn qualified_call(s: string) {
+    for b in s.bytes() {
+      fmt.Println(i.ToUpper("x"), b)
+    }
+  }
+  
+  fn qualified_type(s: string) {
+    for b in s.bytes() {
+      let xs: Slice<i.Builder> = []
+      fmt.Println(xs, b)
+    }
+  }
+  
+  fn mapped(xs: Slice<int>) {
+    fmt.Println(xs.map(|x| x + 1), result.Itoa(1))
+  }
+---
+package main
+
+import (
+	"fmt"
+	result "strconv"
+	i "strings"
+)
+
+func qualifiedCall(s string) {
+	for i_1 := 0; i_1 < len(s); i_1++ {
+		b := s[i_1]
+		fmt.Println(i.ToUpper("x"), b)
+	}
+}
+
+func qualifiedType(s string) {
+	for i_1 := 0; i_1 < len(s); i_1++ {
+		b := s[i_1]
+		xs := []i.Builder{}
+		fmt.Println(xs, b)
+	}
+}
+
+func mapped(xs []int) {
+	result_1 := make([]int, len(xs))
+	for i_1, x := range xs {
+		result_1[i_1] = x + 1
+	}
+	fmt.Println(result_1, result.Itoa(1))
+}

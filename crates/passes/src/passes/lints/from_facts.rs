@@ -6,7 +6,6 @@ use diagnostics::{Edit, Fix};
 use semantics::facts::Facts;
 use semantics::store::Store;
 use syntax::ast::Span;
-use syntax::program::UnusedInfo;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lint {
@@ -65,16 +64,9 @@ pub(crate) fn run(
     pattern_lints: Vec<LisetteDiagnostic>,
     mut diagnostics: Vec<LisetteDiagnostic>,
     sink: &LocalSink,
-) -> UnusedInfo {
-    let mut unused = UnusedInfo::default();
+) {
     let erroring_functions = erroring_function_spans(facts, sink);
-    collect_bindings(
-        store,
-        facts,
-        &mut unused,
-        &erroring_functions,
-        &mut diagnostics,
-    );
+    collect_bindings(store, facts, &erroring_functions, &mut diagnostics);
     collect_shadowed_captures(store, facts, &mut diagnostics);
     collect_dead_code(facts, &mut diagnostics);
     diagnostics.extend(pattern_lints);
@@ -85,7 +77,6 @@ pub(crate) fn run(
 
     diagnostics.sort_by(LisetteDiagnostic::sort_key);
     sink.extend(diagnostics);
-    unused
 }
 
 fn mut_keyword_deletion(store: &Store, name: Span) -> Option<Span> {
@@ -153,7 +144,6 @@ fn within_any(function_spans: &[Span], span: Span) -> bool {
 fn collect_bindings(
     store: &Store,
     facts: &Facts,
-    unused: &mut UnusedInfo,
     erroring_functions: &[Span],
     out: &mut Vec<LisetteDiagnostic>,
 ) {
@@ -161,9 +151,8 @@ fn collect_bindings(
         let is_anon = b.name.starts_with('_');
         let written_but_not_read =
             b.kind.is_mutable() && b.mutation.is_some() && !b.used && !is_anon;
-        let is_write_only_param = written_but_not_read && b.kind.is_param();
 
-        if !b.used && !is_write_only_param {
+        if !b.used {
             if !is_anon && b.kind.is_param() && !b.origin.is_typedef() && b.name != "self" {
                 out.push(diagnostics::lint::unused_parameter(&b.span, &b.name));
             } else if !written_but_not_read
@@ -177,7 +166,6 @@ fn collect_bindings(
                     b.origin.is_struct_field(),
                 ));
             }
-            unused.mark_binding_unused(b.span);
         }
 
         if b.kind.is_mutable() && b.mutation.is_none() && !within_any(erroring_functions, b.span) {

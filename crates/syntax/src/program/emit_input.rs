@@ -1,93 +1,64 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use ecow::EcoString;
-
 use crate::ast::{BindingId as AstBindingId, Pattern, RestPattern, Span};
 use crate::types::Symbol;
 
 use super::{Definition, File};
 
+/// Name spans of unreachable functions and imports (imports keyed by path span).
 #[derive(Debug, Clone, Default)]
 pub struct UnusedInfo {
-    symbols: HashSet<Span>,
-    pub imports_by_package: HashMap<EcoString, HashSet<EcoString>>,
+    spans: HashSet<Span>,
 }
 
 impl UnusedInfo {
-    pub fn mark_binding_unused(&mut self, span: Span) {
-        self.symbols.insert(span);
+    pub fn mark_unused(&mut self, span: Span) {
+        self.spans.insert(span);
     }
 
-    pub fn is_unused_binding(&self, pattern: &Pattern) -> bool {
-        match pattern {
-            Pattern::Identifier { span, .. } => self.symbols.contains(span),
-            Pattern::AsBinding { span, name, .. } => {
-                let name_span = Span::new(
-                    span.file_id,
-                    span.byte_offset + span.byte_length - name.len() as u32,
-                    name.len() as u32,
-                );
-                self.symbols.contains(&name_span)
-            }
-            _ => false,
-        }
-    }
-
-    pub fn is_unused_rest_binding(&self, rest: &RestPattern) -> bool {
-        match rest {
-            RestPattern::Bind { span, .. } => self.symbols.contains(span),
-            _ => false,
-        }
-    }
-
-    pub fn mark_definition_unused(&mut self, span: Span) {
-        self.symbols.insert(span);
-    }
-
-    pub fn is_unused_definition(&self, span: &Span) -> bool {
-        self.symbols.contains(span)
+    pub fn is_unused(&self, span: &Span) -> bool {
+        self.spans.contains(span)
     }
 
     pub fn merge(&mut self, other: UnusedInfo) {
-        let UnusedInfo {
-            symbols,
-            imports_by_package,
-        } = other;
-        self.symbols.extend(symbols);
-        for (package, imports) in imports_by_package {
-            self.imports_by_package
-                .entry(package)
-                .or_default()
-                .extend(imports);
-        }
+        self.spans.extend(other.spans);
     }
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct BinderIds {
-    by_span: HashMap<Span, AstBindingId>,
-    ambiguous: HashSet<Span>,
+pub struct EmitBindings {
+    unused: HashSet<AstBindingId>,
+    mutations: HashMap<AstBindingId, BindingMutation>,
 }
 
-impl BinderIds {
-    pub fn record(&mut self, span: Span, id: AstBindingId) {
-        if self.ambiguous.contains(&span) {
-            return;
+impl EmitBindings {
+    pub fn record(&mut self, id: AstBindingId, unused: bool, mutation: Option<BindingMutation>) {
+        if unused {
+            self.unused.insert(id);
         }
-        if self
-            .by_span
-            .get(&span)
-            .is_some_and(|existing| *existing != id)
-        {
-            self.by_span.remove(&span);
-            self.ambiguous.insert(span);
-        } else {
-            self.by_span.insert(span, id);
+        if let Some(mutation) = mutation {
+            self.mutations.insert(id, mutation);
         }
     }
 
-    pub fn at(&self, span: Span) -> Option<AstBindingId> {
-        self.by_span.get(&span).copied()
+    fn is_unused(&self, id: Option<AstBindingId>) -> bool {
+        id.is_some_and(|id| self.unused.contains(&id))
+    }
+
+    pub fn is_unused_binding(&self, pattern: &Pattern) -> bool {
+        self.is_unused(pattern.binding_id())
+    }
+
+    pub fn is_unused_rest_binding(&self, rest: &RestPattern) -> bool {
+        self.is_unused(rest.binding_id())
+    }
+
+    pub fn is_mutated(&self, id: AstBindingId) -> bool {
+        self.mutations.contains_key(&id)
+    }
+
+    pub fn is_alias_mutated(&self, id: AstBindingId) -> bool {
+        self.mutations.get(&id) == Some(&BindingMutation::ThroughAlias)
     }
 }
 
@@ -238,11 +209,6 @@ impl EqualityIndex {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct MutationInfo {
-    bindings: HashMap<AstBindingId, BindingMutation>,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BindingMutation {
     Direct,
@@ -258,35 +224,13 @@ impl BindingMutation {
     }
 }
 
-impl MutationInfo {
-    pub fn record(&mut self, id: AstBindingId, mutation: BindingMutation) {
-        self.bindings
-            .entry(id)
-            .and_modify(|current| *current = current.merged_with(mutation))
-            .or_insert(mutation);
-    }
-
-    pub fn mutation(&self, id: AstBindingId) -> Option<BindingMutation> {
-        self.bindings.get(&id).copied()
-    }
-
-    pub fn is_mutated(&self, id: AstBindingId) -> bool {
-        self.bindings.contains_key(&id)
-    }
-
-    pub fn is_alias_mutated(&self, id: AstBindingId) -> bool {
-        self.mutation(id) == Some(BindingMutation::ThroughAlias)
-    }
-}
-
 #[derive(Default)]
 pub struct EmitInput {
     pub files: HashMap<u32, File>,
     pub definitions: HashMap<Symbol, Definition>,
     pub entry_package_id: String,
     pub unused: UnusedInfo,
-    pub mutations: MutationInfo,
-    pub binder_ids: BinderIds,
+    pub bindings: EmitBindings,
     pub cached_packages: HashSet<String>,
     pub equality_index: EqualityIndex,
     pub test_index: TestIndex,
@@ -303,25 +247,38 @@ mod tests {
     }
 
     #[test]
-    fn merge_extends_bindings_definitions_and_imports() {
+    fn merge_extends_spans() {
         let mut a = UnusedInfo::default();
-        a.mark_binding_unused(span(0));
-        a.mark_definition_unused(span(1));
-        a.imports_by_package
-            .insert("m1".into(), HashSet::from_iter(["x".into()]));
+        a.mark_unused(span(1));
 
         let mut b = UnusedInfo::default();
-        b.mark_binding_unused(span(2));
-        b.mark_definition_unused(span(3));
-        b.imports_by_package
-            .insert("m1".into(), HashSet::from_iter(["y".into()]));
-        b.imports_by_package
-            .insert("m2".into(), HashSet::from_iter(["z".into()]));
+        b.mark_unused(span(3));
 
         a.merge(b);
 
-        assert_eq!(a.symbols.len(), 4);
-        assert_eq!(a.imports_by_package["m1"].len(), 2);
-        assert_eq!(a.imports_by_package["m2"].len(), 1);
+        assert!(a.is_unused(&span(1)));
+        assert!(a.is_unused(&span(3)));
+    }
+
+    #[test]
+    fn unused_lookup_reads_the_binder_id() {
+        let pattern = Pattern::AsBinding {
+            pattern: Box::new(Pattern::WildCard { span: span(5) }),
+            name: "rest".into(),
+            span: Span::new(0, 5, 9),
+            name_span: Span::new(0, 10, 4),
+            binding: Some(AstBindingId::new(1)),
+        };
+        let unstamped = Pattern::Identifier {
+            identifier: "rest".into(),
+            span: Span::new(0, 10, 4),
+            binding: None,
+        };
+        let mut bindings = EmitBindings::default();
+        bindings.record(AstBindingId::new(1), true, None);
+        bindings.record(AstBindingId::new(2), false, None);
+
+        assert!(bindings.is_unused_binding(&pattern));
+        assert!(!bindings.is_unused_binding(&unstamped));
     }
 }

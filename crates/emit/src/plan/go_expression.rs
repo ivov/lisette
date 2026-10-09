@@ -7,6 +7,143 @@ use crate::render::Renderer;
 use crate::types::go_type::render_conversion;
 use crate::utils::group_params;
 use std::slice;
+use syntax::ast::BinaryOperator;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum UnaryOp {
+    Negate,
+    Complement,
+    Not,
+}
+
+impl UnaryOp {
+    fn sign(self) -> char {
+        match self {
+            Self::Negate => '-',
+            Self::Complement => '^',
+            Self::Not => '!',
+        }
+    }
+}
+
+/// `|>` has no variant, inference lowers it away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BinaryOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+    BitAnd,
+    BitOr,
+    BitXor,
+    BitAndNot,
+    Shl,
+    Shr,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    And,
+    Or,
+}
+
+impl BinaryOp {
+    pub(crate) fn symbol(self) -> &'static str {
+        match self {
+            Self::Add => "+",
+            Self::Sub => "-",
+            Self::Mul => "*",
+            Self::Div => "/",
+            Self::Rem => "%",
+            Self::BitAnd => "&",
+            Self::BitOr => "|",
+            Self::BitXor => "^",
+            Self::BitAndNot => "&^",
+            Self::Shl => "<<",
+            Self::Shr => ">>",
+            Self::Eq => "==",
+            Self::Ne => "!=",
+            Self::Lt => "<",
+            Self::Le => "<=",
+            Self::Gt => ">",
+            Self::Ge => ">=",
+            Self::And => "&&",
+            Self::Or => "||",
+        }
+    }
+
+    fn level(self) -> u8 {
+        match self {
+            Self::Mul
+            | Self::Div
+            | Self::Rem
+            | Self::Shl
+            | Self::Shr
+            | Self::BitAnd
+            | Self::BitAndNot => 5,
+            Self::Add | Self::Sub | Self::BitOr | Self::BitXor => 4,
+            Self::Eq | Self::Ne | Self::Lt | Self::Le | Self::Gt | Self::Ge => 3,
+            Self::And => 2,
+            Self::Or => 1,
+        }
+    }
+
+    pub(crate) fn has_compound_form(self) -> bool {
+        match self {
+            Self::Add
+            | Self::Sub
+            | Self::Mul
+            | Self::Div
+            | Self::Rem
+            | Self::BitAnd
+            | Self::BitOr
+            | Self::BitXor
+            | Self::BitAndNot
+            | Self::Shl
+            | Self::Shr => true,
+            Self::Eq
+            | Self::Ne
+            | Self::Lt
+            | Self::Le
+            | Self::Gt
+            | Self::Ge
+            | Self::And
+            | Self::Or => false,
+        }
+    }
+}
+
+impl From<&BinaryOperator> for BinaryOp {
+    fn from(operator: &BinaryOperator) -> Self {
+        match operator {
+            BinaryOperator::Addition => Self::Add,
+            BinaryOperator::Subtraction => Self::Sub,
+            BinaryOperator::Multiplication => Self::Mul,
+            BinaryOperator::Division => Self::Div,
+            BinaryOperator::Remainder => Self::Rem,
+            BinaryOperator::BitwiseAnd => Self::BitAnd,
+            BinaryOperator::BitwiseOr => Self::BitOr,
+            BinaryOperator::BitwiseXor => Self::BitXor,
+            BinaryOperator::BitwiseAndNot => Self::BitAndNot,
+            BinaryOperator::ShiftLeft => Self::Shl,
+            BinaryOperator::ShiftRight => Self::Shr,
+            BinaryOperator::Equal => Self::Eq,
+            BinaryOperator::NotEqual => Self::Ne,
+            BinaryOperator::LessThan => Self::Lt,
+            BinaryOperator::LessThanOrEqual => Self::Le,
+            BinaryOperator::GreaterThan => Self::Gt,
+            BinaryOperator::GreaterThanOrEqual => Self::Ge,
+            BinaryOperator::And => Self::And,
+            BinaryOperator::Or => Self::Or,
+            BinaryOperator::Pipeline => {
+                unreachable!("pipeline expressions are lowered during inference")
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GoExpressionNode {
@@ -56,13 +193,13 @@ pub(crate) enum GoExpressionNode {
         go_type: String,
     },
     Unary {
-        operator: String,
+        operator: UnaryOp,
         operand: Box<GoExpressionNode>,
     },
     AddressOf(Box<GoExpressionNode>),
     Dereference(Box<GoExpressionNode>),
     Binary {
-        operator: String,
+        operator: BinaryOp,
         left: Box<GoExpressionNode>,
         right: Box<GoExpressionNode>,
     },
@@ -134,6 +271,17 @@ impl CompositeLayout {
             Self::Inline { padded: true }
         }
     }
+}
+
+pub(crate) fn verbatim_identifiers(source: &str) -> impl Iterator<Item = &str> {
+    source
+        .split(|character: char| !(character.is_alphanumeric() || character == '_'))
+        .filter(|token| {
+            token
+                .chars()
+                .next()
+                .is_some_and(|first| first.is_alphabetic() || first == '_')
+        })
 }
 
 impl GoExpressionNode {
@@ -311,10 +459,10 @@ impl GoExpressionNode {
             | Self::Spread(_)
             | Self::FunctionLiteral { .. }
             | Self::Empty => Binding::Primary,
-            Self::Unary { operator, .. } => Binding::Prefix(operator.chars().next().unwrap_or(' ')),
+            Self::Unary { operator, .. } => Binding::Prefix(operator.sign()),
             Self::AddressOf(_) => Binding::Prefix('&'),
             Self::Dereference(_) => Binding::Prefix('*'),
-            Self::Binary { operator, .. } => Binding::Binary(binary_level(operator)),
+            Self::Binary { operator, .. } => Binding::Binary(operator.level()),
             Self::Verbatim(_) => Binding::Unknown,
         }
     }
@@ -465,8 +613,8 @@ impl GoExpressionNode {
                 output.push(')');
             }
             Self::Unary { operator, operand } => {
-                output.push_str(operator);
-                let sign = operator.chars().next().unwrap_or(' ');
+                let sign = operator.sign();
+                output.push(sign);
                 Self::write_child(operand, slot.with(SlotKind::Prefix(sign)), output);
             }
             Self::AddressOf(operand) => {
@@ -482,10 +630,10 @@ impl GoExpressionNode {
                 left,
                 right,
             } => {
-                let level = binary_level(operator);
+                let level = operator.level();
                 Self::write_child(left, slot.with(SlotKind::Left(level)), output);
                 output.push(' ');
-                output.push_str(operator);
+                output.push_str(operator.symbol());
                 output.push(' ');
                 Self::write_child(right, slot.with(SlotKind::Right(level)), output);
             }
@@ -585,17 +733,6 @@ enum Binding {
     Unknown,
 }
 
-fn binary_level(operator: &str) -> u8 {
-    match operator {
-        "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" => 5,
-        "+" | "-" | "|" | "^" => 4,
-        "==" | "!=" | "<" | "<=" | ">" | ">=" => 3,
-        "&&" => 2,
-        "||" => 1,
-        _ => 0,
-    }
-}
-
 impl CompositeElement {
     fn write(&self, output: &mut String) {
         if let Some(key) = &self.key {
@@ -614,9 +751,13 @@ mod tests {
         GoExpressionNode::Identifier(text.to_string().into())
     }
 
-    fn binary(left: GoExpressionNode, operator: &str, right: GoExpressionNode) -> GoExpressionNode {
+    fn binary(
+        left: GoExpressionNode,
+        operator: BinaryOp,
+        right: GoExpressionNode,
+    ) -> GoExpressionNode {
         GoExpressionNode::Binary {
-            operator: operator.to_string(),
+            operator,
             left: Box::new(left),
             right: Box::new(right),
         }
@@ -631,25 +772,74 @@ mod tests {
     }
 
     #[test]
+    fn source_operators_keep_their_symbol_and_compound_form() {
+        use BinaryOperator::*;
+        for operator in [
+            Addition,
+            Subtraction,
+            Multiplication,
+            Division,
+            Remainder,
+            BitwiseAnd,
+            BitwiseOr,
+            BitwiseXor,
+            BitwiseAndNot,
+            ShiftLeft,
+            ShiftRight,
+            Equal,
+            NotEqual,
+            LessThan,
+            LessThanOrEqual,
+            GreaterThan,
+            GreaterThanOrEqual,
+            And,
+            Or,
+        ] {
+            let lowered = BinaryOp::from(&operator);
+            assert_eq!(lowered.symbol(), operator.to_string());
+            assert_eq!(
+                lowered.has_compound_form(),
+                operator.compound_assignment_symbol().is_some()
+            );
+        }
+    }
+
+    #[test]
     fn looser_operand_takes_parentheses() {
-        let shifted = binary(binary(name("a"), "+", name("b")), "<<", name("c"));
+        let shifted = binary(
+            binary(name("a"), BinaryOp::Add, name("b")),
+            BinaryOp::Shl,
+            name("c"),
+        );
         assert_eq!(shifted.print(), "(a + b) << c");
-        let sum = binary(binary(name("a"), "*", name("b")), "+", name("c"));
+        let sum = binary(
+            binary(name("a"), BinaryOp::Mul, name("b")),
+            BinaryOp::Add,
+            name("c"),
+        );
         assert_eq!(sum.print(), "a * b + c");
     }
 
     #[test]
     fn equal_operand_on_the_right_takes_parentheses() {
-        let nested = binary(name("a"), "-", binary(name("b"), "-", name("c")));
+        let nested = binary(
+            name("a"),
+            BinaryOp::Sub,
+            binary(name("b"), BinaryOp::Sub, name("c")),
+        );
         assert_eq!(nested.print(), "a - (b - c)");
-        let flat = binary(binary(name("a"), "-", name("b")), "-", name("c"));
+        let flat = binary(
+            binary(name("a"), BinaryOp::Sub, name("b")),
+            BinaryOp::Sub,
+            name("c"),
+        );
         assert_eq!(flat.print(), "a - b - c");
     }
 
     #[test]
     fn repeated_sign_takes_parentheses() {
         let negate = |operand| GoExpressionNode::Unary {
-            operator: "-".to_string(),
+            operator: UnaryOp::Negate,
             operand: Box::new(operand),
         };
         assert_eq!(negate(negate(name("x"))).print(), "-(-x)");
@@ -658,7 +848,7 @@ mod tests {
             "-(-1)"
         );
         let not = |operand| GoExpressionNode::Unary {
-            operator: "!".to_string(),
+            operator: UnaryOp::Not,
             operand: Box::new(operand),
         };
         assert_eq!(not(not(name("x"))).print(), "!!x");
@@ -682,7 +872,7 @@ mod tests {
 
     #[test]
     fn composite_literal_takes_parentheses_in_a_header() {
-        let compared = binary(name("x"), "==", literal_struct("Point"));
+        let compared = binary(name("x"), BinaryOp::Eq, literal_struct("Point"));
         assert_eq!(compared.print(), "x == Point{}");
         assert_eq!(compared.print_header(), "x == (Point{})");
         let called = GoExpressionNode::Call {

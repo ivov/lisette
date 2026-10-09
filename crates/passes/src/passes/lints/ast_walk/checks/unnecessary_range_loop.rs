@@ -1,5 +1,5 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{BindingId, Expression, IdentifierResolution, Pattern};
+use syntax::ast::{BindingId, Expression, IdentifierResolution};
 
 pub fn check_unnecessary_range_loop(expression: &Expression, ctx: &NodeCtx) {
     let Expression::For {
@@ -11,12 +11,7 @@ pub fn check_unnecessary_range_loop(expression: &Expression, ctx: &NodeCtx) {
     else {
         return;
     };
-    let binding_span = match &binding.pattern {
-        Pattern::Identifier { span, .. } => *span,
-        Pattern::AsBinding { name_span, .. } => *name_span,
-        _ => return,
-    };
-    let Some(index_id) = ctx.facts.binding_id_at(binding_span) else {
+    let Some(index_id) = binding.pattern.binding_id() else {
         return;
     };
     let Expression::Range {

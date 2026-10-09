@@ -1,0 +1,68 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Thing { n: int }
+  
+  interface Box<T> {
+    fn get() -> T
+  }
+  
+  struct Bar {}
+  
+  impl Bar {
+    fn get(self) -> Option<Ref<Thing>> {
+      None
+    }
+  }
+  
+  struct Holder {}
+  
+  impl Holder {
+    fn put(self, b: Box<Option<Ref<Thing>>>) {
+      let _ = b
+    }
+  }
+  
+  fn main() {
+    let h = Holder {}
+    Holder.put(h, Bar {})
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Thing struct {
+	n int
+}
+
+type Box[T any] interface {
+	get() T
+}
+
+type Bar struct{}
+
+func (b Bar) get() *Thing {
+	return nil
+}
+
+type Holder struct{}
+
+func (h Holder) put(b Box[lisette.Option[*Thing]]) {
+	_ = b
+}
+
+func main() {
+	h := Holder{}
+	h.put(_lisAdapter_Bar_Box_0{inner: Bar{}})
+}
+
+type _lisAdapter_Bar_Box_0 struct {
+	inner Bar
+}
+
+func (a _lisAdapter_Bar_Box_0) get() lisette.Option[*Thing] {
+	raw := a.inner.get()
+	return lisette.OptionFromNilable[*Thing](raw, raw == nil)
+}

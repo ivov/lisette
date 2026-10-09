@@ -1868,6 +1868,35 @@ fn main() {
 }
 
 #[test]
+fn local_named_like_a_variant_of_its_enum_reads_the_local() {
+    let input = r#"
+enum Color { red, blue }
+
+fn pick(red: Color) -> Color { red }
+
+fn test() -> Color {
+  let f = |red: Color| red
+  f(pick(Color.blue))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn function_named_like_a_variant_of_its_return_enum_calls_the_function() {
+    let input = r#"
+enum Shade { Light, Dark }
+
+fn Light() -> Shade { Shade.Dark }
+
+fn test() -> Shade {
+  Light()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn tuple_index_chained_with_method_call() {
     let input = r#"
 fn test() -> Option<int> {
@@ -3141,6 +3170,27 @@ impl Service {
 fn main() {
   let s = Service {};
   let _ = Service.get_session(s);
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn ufcs_unit_callback_adapts_to_generic_result() {
+    let input = r#"
+struct Holder {}
+
+impl Holder {
+  fn run<U>(self, f: fn() -> U) -> U {
+    f()
+  }
+}
+
+fn noop() {}
+
+fn main() {
+  let h = Holder {}
+  h.run(noop)
 }
 "#;
     assert_emit_snapshot!(input);

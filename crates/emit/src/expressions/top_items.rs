@@ -14,7 +14,7 @@ impl Planner<'_> {
                 name_span,
                 ..
             } => {
-                if self.facts.is_unused_definition(name_span) {
+                if self.facts.is_unused(name_span) {
                     return String::new();
                 }
                 let is_public = matches!(visibility, Visibility::Public);
@@ -172,6 +172,7 @@ impl Planner<'_> {
             pattern: Pattern::Identifier {
                 identifier: go_name::TEST_CTX_PARAM.into(),
                 span: function.name_span,
+                binding: None,
             },
             annotation: None,
             ty: Type::Nominal {

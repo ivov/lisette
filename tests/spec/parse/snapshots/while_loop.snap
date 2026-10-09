@@ -39,6 +39,7 @@ description: |
                                     byte_offset: 23,
                                     byte_length: 5,
                                 },
+                                binding: None,
                             },
                             annotation: None,
                             ty: Var {

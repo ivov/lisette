@@ -4,7 +4,7 @@ use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::go_expression::CompositeLayout;
+use crate::plan::go_expression::{BinaryOp, CompositeLayout};
 use crate::plan::values::{
     CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
 };
@@ -188,8 +188,9 @@ impl Planner<'_> {
             }
             let mut pieces = pieces.into_iter();
             let first = pieces.next().expect("an interpolated f-string has a piece");
-            let concatenation =
-                pieces.fold(first, |left, right| GoExpression::binary(left, "+", right));
+            let concatenation = pieces.fold(first, |left, right| {
+                GoExpression::binary(left, BinaryOp::Add, right)
+            });
             return ValuePlan::built_from(setup, concatenation, effect, stability);
         }
 

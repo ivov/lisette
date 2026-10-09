@@ -6,7 +6,7 @@ use diagnostics::LocalSink;
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::ast::{Binding, Expression, IdentifierResolution, Pattern, Span};
-use syntax::program::DotAccessKind;
+use syntax::program::DotAccessResolution;
 use syntax::types::{CompoundKind, FunctionType, Symbol, Type};
 
 use semantics::store::Store;
@@ -282,7 +282,10 @@ impl<'a> EdgeCollector<'_, 'a> {
     fn process_reference(&mut self, reference: &'a Expression, span: Span) {
         match reference {
             Expression::Identifier {
-                resolution: IdentifierResolution::Definition(qualified),
+                resolution:
+                    IdentifierResolution::Definition {
+                        name: qualified, ..
+                    },
                 ty,
                 ..
             } => {
@@ -298,7 +301,7 @@ impl<'a> EdgeCollector<'_, 'a> {
                 ty,
                 resolution,
                 ..
-            } => self.process_method_reference(base, member, ty, resolution.kind(), span),
+            } => self.process_method_reference(base, member, ty, resolution, span),
             _ => {}
         }
     }
@@ -308,19 +311,22 @@ impl<'a> EdgeCollector<'_, 'a> {
         base: &'a Expression,
         member: &EcoString,
         ty: &'a Type,
-        dot_access_kind: Option<DotAccessKind>,
+        resolution: &DotAccessResolution,
         span: Span,
     ) {
-        let is_instance = match dot_access_kind {
-            Some(DotAccessKind::InstanceMethod { .. })
-            | Some(DotAccessKind::InstanceMethodValue { .. }) => true,
-            Some(DotAccessKind::StaticMethod { .. }) => false,
+        let is_instance = match resolution {
+            DotAccessResolution::InstanceMethod { .. }
+            | DotAccessResolution::InstanceMethodValue { .. } => true,
+            DotAccessResolution::StaticMethod { .. } => false,
             _ => return,
         };
         let base_ty = base.get_type();
         let receiver_id = receiver_type_id(&base_ty).or_else(|| match base {
             Expression::Identifier {
-                resolution: IdentifierResolution::Definition(qualified),
+                resolution:
+                    IdentifierResolution::Definition {
+                        name: qualified, ..
+                    },
                 ..
             } => Some(qualified.clone()),
             _ => None,

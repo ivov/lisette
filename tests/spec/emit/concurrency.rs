@@ -35,6 +35,38 @@ fn test() -> int {
 }
 
 #[test]
+fn task_block_return_in_result_function() {
+    let input = r#"
+import "go:fmt"
+
+fn test(x: int) -> Result<int, string> {
+  task {
+    if x > 1 { return }
+    fmt.Println(x)
+  }
+  Ok(x)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn task_block_return_in_option_function() {
+    let input = r#"
+import "go:fmt"
+
+fn test(x: int) -> Option<int> {
+  task {
+    if x > 1 { return }
+    fmt.Println(x)
+  }
+  Some(x)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn task_nested() {
     let input = r#"
 import "go:fmt"

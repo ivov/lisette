@@ -1,0 +1,59 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  enum E { A(()), B(()), C }
+  
+  fn show(e: E) {
+    let E.A(x) | E.B(x) = e else { return }
+    fmt.Println(x)
+  }
+  
+  fn main() {
+    show(E.A(()))
+  }
+---
+package main
+
+import "fmt"
+
+func MakeEA(arg0 struct{}) E {
+	return E{Tag: EA, A: arg0}
+}
+
+func MakeEB(arg0 struct{}) E {
+	return E{Tag: EB, B: arg0}
+}
+
+func MakeEC() E {
+	return E{Tag: EC}
+}
+
+type ETag uint8
+
+const (
+	EA ETag = iota
+	EB
+	EC
+)
+
+type E struct {
+	Tag ETag
+	A   struct{}
+	B   struct{}
+}
+
+func show(e E) {
+	if e.Tag == EA {
+	} else if e.Tag == EB {
+	} else {
+		return
+	}
+	fmt.Println(struct{}{})
+}
+
+func main() {
+	show(MakeEA(struct{}{}))
+}

@@ -47,6 +47,7 @@ description: |
                         byte_offset: 15,
                         byte_length: 1,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Constructor {
@@ -71,6 +72,7 @@ description: |
                         byte_offset: 21,
                         byte_length: 1,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Constructor {

@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn find(n: int) -> int {
+    let mut i = 0
+    let r = loop {
+      i += 1
+      if i > n {
+        let r = i * 10
+        break r
+      }
+    }
+    r + 1
+  }
+  
+  fn test() -> int {
+    find(3)
+  }
+---
+package main
+
+func find(n int) int {
+	i := 0
+	var r int
+	for {
+		i++
+		if i > n {
+			r_1 := i * 10
+			r = r_1
+			break
+		}
+	}
+	return r + 1
+}
+
+func test() int {
+	return find(3)
+}

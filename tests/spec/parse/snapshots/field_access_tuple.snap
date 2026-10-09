@@ -27,6 +27,7 @@ description: |
                         byte_offset: 9,
                         byte_length: 4,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Tuple {
@@ -79,6 +80,7 @@ description: |
                                     byte_offset: 38,
                                     byte_length: 10,
                                 },
+                                binding: None,
                             },
                             annotation: None,
                             ty: Var {
@@ -128,6 +130,7 @@ description: |
                                     byte_offset: 65,
                                     byte_length: 11,
                                 },
+                                binding: None,
                             },
                             annotation: None,
                             ty: Var {

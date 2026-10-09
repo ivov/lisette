@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import x_1 "go:fmt"
+  
+  fn x() -> int { 1 }
+  
+  fn f(x: int) -> int {
+    x_1.Println(x)
+    x
+  }
+  
+  fn main() {
+    let _ = x()
+    x_1.Println(f(3))
+  }
+---
+package main
+
+import x_1 "fmt"
+
+func x() int {
+	return 1
+}
+
+func f(x_2 int) int {
+	x_1.Println(x_2)
+	return x_2
+}
+
+func main() {
+	x()
+	x_1.Println(f(3))
+}

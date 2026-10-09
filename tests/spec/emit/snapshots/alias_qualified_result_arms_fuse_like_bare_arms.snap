@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  type Res = Result<int, error>
+  
+  fn matched(text: string) -> int {
+    match strconv.Atoi(text) {
+      Res.Ok(n) => n + 1,
+      Res.Err(_) => 0,
+    }
+  }
+  
+  fn let_else(text: string) -> int {
+    let Res.Ok(n) = strconv.Atoi(text) else { return 0 }
+    n
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+type Res = lisette.Result[int, error]
+
+func matched(text string) int {
+	if n, err := strconv.Atoi(text); err == nil {
+		return n + 1
+	} else {
+		return 0
+	}
+}
+
+func letElse(text string) int {
+	n, err := strconv.Atoi(text)
+	if err != nil {
+		return 0
+	}
+	return n
+}

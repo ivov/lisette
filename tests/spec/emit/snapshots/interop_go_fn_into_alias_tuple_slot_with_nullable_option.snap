@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:encoding/pem"
+  
+  type Decoded = (Option<Ref<pem.Block>>, Slice<byte>)
+  
+  fn apply(f: fn(Slice<byte>) -> Decoded, data: Slice<byte>) -> bool {
+    let (block, _) = f(data)
+    block.is_some()
+  }
+  
+  fn main() {
+    let _ = apply(pem.Decode, [])
+  }
+---
+package main
+
+import (
+	"encoding/pem"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Decoded = lisette.Tuple2[lisette.Option[*pem.Block], []byte]
+
+func apply(f func([]byte) (*pem.Block, []byte), data []byte) bool {
+	ret, ret_1 := f(data)
+	option := lisette.OptionFromNilable[*pem.Block](ret, ret == nil)
+	tup := lisette.MakeTuple2(option, ret_1)
+	block := tup.First
+	return block.IsSome()
+}
+
+func main() {
+	apply(pem.Decode, []byte{})
+}

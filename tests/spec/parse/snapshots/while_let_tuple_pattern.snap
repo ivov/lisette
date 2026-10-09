@@ -30,6 +30,7 @@ description: |
                         byte_offset: 9,
                         byte_length: 5,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Constructor {
@@ -102,6 +103,7 @@ description: |
                                     byte_offset: 55,
                                     byte_length: 1,
                                 },
+                                binding: None,
                             },
                             annotation: None,
                             ty: Var {
@@ -152,6 +154,7 @@ description: |
                                                 byte_offset: 80,
                                                 byte_length: 1,
                                             },
+                                            binding: None,
                                         },
                                         Identifier {
                                             identifier: "b",
@@ -160,6 +163,7 @@ description: |
                                                 byte_offset: 83,
                                                 byte_length: 1,
                                             },
+                                            binding: None,
                                         },
                                     ],
                                     span: Span {

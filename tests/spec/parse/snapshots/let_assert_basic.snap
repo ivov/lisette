@@ -38,6 +38,7 @@ description: |
                                             byte_offset: 29,
                                             byte_length: 1,
                                         },
+                                        binding: None,
                                     },
                                 ],
                                 rest: false,

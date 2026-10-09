@@ -65,6 +65,7 @@ fn register_test_builtins(store: &mut Store) {
                     go_name: None,
                     go_type_param_recipe: None,
                     superseded_by: None,
+                    impl_receiver: None,
                 },
             },
         );

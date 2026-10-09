@@ -44,23 +44,8 @@ impl Planner<'_> {
         }
     }
 
-    /// Record the emitted Go names of top-level private functions and
-    /// constants that differ from their source spelling. Colliding private
-    /// functions freshen to `name_2`, `name_3`, etc. Constants never
-    /// freshen: cross-package references derive a constant's Go name from
-    /// the source name alone, so converging constants surface as a Go name
-    /// collision instead.
+    /// Record emitted Go names of private functions that differ from their source spelling.
     pub(crate) fn collect_escape_remap(&mut self, files: &[&File]) {
-        for item in files.iter().flat_map(|f| &f.items) {
-            if let Expression::Const { identifier, .. } = item {
-                let natural = go_name::screaming_snake_to_camel(identifier);
-                if natural != identifier.as_str() {
-                    self.package
-                        .record_escape_remap(identifier.to_string(), natural);
-                }
-            }
-        }
-
         let entries: Vec<(&str, String, String)> = files
             .iter()
             .flat_map(|f| &f.items)
@@ -111,7 +96,7 @@ impl Planner<'_> {
             return;
         }
 
-        let mut taken = self.package.package_block_names().clone();
+        let mut taken: HashSet<String> = self.package.package_block_names().cloned().collect();
         let mut colliding: Vec<&EcoString> = generic_names
             .iter()
             .filter(|name| taken.contains(go_name::escape_type_name(name).as_ref()))

@@ -38,6 +38,7 @@ description: |
                                             byte_offset: 20,
                                             byte_length: 1,
                                         },
+                                        binding: None,
                                     },
                                     EnumVariant {
                                         identifier: "Some",
@@ -49,6 +50,7 @@ description: |
                                                     byte_offset: 28,
                                                     byte_length: 1,
                                                 },
+                                                binding: None,
                                             },
                                         ],
                                         rest: false,

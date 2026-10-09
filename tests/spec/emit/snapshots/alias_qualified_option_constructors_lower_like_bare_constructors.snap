@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  type Opt = Option<int>
+  
+  fn early(n: int) -> Option<int> {
+    if n > 0 { return Opt.Some(n) }
+    Opt.None
+  }
+  
+  fn tail() -> Opt { Opt.Some(1) }
+  
+  fn bound() -> Option<int> {
+    let a = Opt.Some(3)
+    a
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Opt = lisette.Option[int]
+
+func early(n int) (int, bool) {
+	if n > 0 {
+		return n, true
+	}
+	return 0, false
+}
+
+func tail() (int, bool) {
+	return 1, true
+}
+
+func bound() (int, bool) {
+	a := lisette.MakeOptionSome(3)
+	if a.Tag == lisette.OptionSome {
+		return a.SomeVal, true
+	}
+	return 0, false
+}

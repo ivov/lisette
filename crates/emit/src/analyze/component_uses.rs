@@ -1,3 +1,4 @@
+use crate::patterns::matching::{PreludeVariant, prelude_variant};
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{
     BindingId, Expression, IdentifierResolution, MatchArm, Pattern, collect_pattern_bindings,
@@ -215,27 +216,20 @@ impl Walker {
 fn is_component_arm(pattern: &Pattern) -> bool {
     match pattern {
         Pattern::WildCard { .. } => true,
-        Pattern::EnumVariant {
-            identifier,
-            fields,
-            rest: false,
-            ..
-        } => {
-            let variant = identifier.rsplit('.').next().unwrap_or(identifier);
-            matches!(variant, "Some" | "None" | "Ok" | "Err")
-                && fields.len() <= 1
+        _ => matches!(
+            prelude_variant(pattern),
+            Some((
+                PreludeVariant::Some | PreludeVariant::None | PreludeVariant::Ok | PreludeVariant::Err,
+                fields,
+            )) if fields.len() <= 1
                 && fields.iter().all(|field| {
                     matches!(field, Pattern::WildCard { .. } | Pattern::Identifier { .. })
                 })
-        }
-        _ => false,
+        ),
     }
 }
 
 fn binds_payload(pattern: &Pattern) -> bool {
-    let is_err = matches!(
-        pattern,
-        Pattern::EnumVariant { identifier, .. } if matches!(identifier.as_str(), "Err" | "Result.Err")
-    );
+    let is_err = matches!(prelude_variant(pattern), Some((PreludeVariant::Err, _)));
     !is_err && !collect_pattern_bindings(pattern).is_empty()
 }

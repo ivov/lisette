@@ -31,6 +31,7 @@ description: |
                         byte_offset: 9,
                         byte_length: 4,
                     },
+                    binding: None,
                 },
                 annotation: Some(
                     Tuple {
@@ -178,6 +179,7 @@ description: |
                                                 byte_offset: 80,
                                                 byte_length: 1,
                                             },
+                                            binding: None,
                                         },
                                         Literal {
                                             literal: Integer {
@@ -278,6 +280,7 @@ description: |
                                                 byte_offset: 120,
                                                 byte_length: 1,
                                             },
+                                            binding: None,
                                         },
                                     ],
                                     span: Span {
@@ -350,6 +353,7 @@ description: |
                                                 byte_offset: 154,
                                                 byte_length: 1,
                                             },
+                                            binding: None,
                                         },
                                         Identifier {
                                             identifier: "y",
@@ -358,6 +362,7 @@ description: |
                                                 byte_offset: 157,
                                                 byte_length: 1,
                                             },
+                                            binding: None,
                                         },
                                     ],
                                     span: Span {

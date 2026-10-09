@@ -1,0 +1,72 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  enum E { A(int), B(int), C }
+  
+  type Pair = (E, int)
+  
+  fn show(p: Pair) {
+    let (E.A(x), y) | (E.B(x), y) = p else { return }
+    fmt.Println(x, y)
+  }
+  
+  fn main() {
+    show((E.B(4), 7))
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func MakeEA(arg0 int) E {
+	return E{Tag: EA, A: arg0}
+}
+
+func MakeEB(arg0 int) E {
+	return E{Tag: EB, B: arg0}
+}
+
+func MakeEC() E {
+	return E{Tag: EC}
+}
+
+type ETag uint8
+
+const (
+	EA ETag = iota
+	EB
+	EC
+)
+
+type E struct {
+	Tag ETag
+	A   int
+	B   int
+}
+
+type Pair = lisette.Tuple2[E, int]
+
+func show(p Pair) {
+	var x int
+	var y int
+	if p.First.Tag == EA {
+		x = p.First.A
+		y = p.Second
+	} else if p.First.Tag == EB {
+		x = p.First.B
+		y = p.Second
+	} else {
+		return
+	}
+	fmt.Println(x, y)
+}
+
+func main() {
+	show(lisette.MakeTuple2[E, int](MakeEB(4), 7))
+}

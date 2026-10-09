@@ -1,0 +1,63 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  interface Shape { fn area() -> int }
+  struct Sq { side: int }
+  struct Ci { r: int }
+  impl Sq { fn area(self) -> int { self.side * self.side } }
+  impl Ci { fn area(self) -> int { self.r } }
+  
+  fn g(_s: Shape) -> bool { true }
+  
+  fn f(s: Shape) -> string {
+    match s {
+      Sq { .. } => "sq",
+      x if g(x) => "g",
+      Ci { .. } => "ci",
+      _ => "other",
+    }
+  }
+---
+package main
+
+type Shape interface {
+	area() int
+}
+
+type Sq struct {
+	side int
+}
+
+type Ci struct {
+	r int
+}
+
+func (s Sq) area() int {
+	return s.side * s.side
+}
+
+func (c Ci) area() int {
+	return c.r
+}
+
+func g(_ Shape) bool {
+	return true
+}
+
+func f(s Shape) string {
+	switch s := s.(type) {
+	case Sq:
+		return "sq"
+	default:
+		if g(s) {
+			return "g"
+		}
+		switch s.(type) {
+		case Ci:
+			return "ci"
+		default:
+			return "other"
+		}
+	}
+}

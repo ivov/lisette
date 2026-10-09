@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use diagnostics::{LisetteDiagnostic, emit as emit_diag};
 use syntax::ast::{Binding, Generic};
 use syntax::ast::{
-    EnumVariant, Expression, ImportAlias, Pattern, Span, StructFields, VariantFields, Visibility,
+    EnumVariant, Expression, Pattern, Span, StructFields, VariantFields, Visibility,
 };
 use syntax::attributes;
 use syntax::go_names;
@@ -19,13 +19,6 @@ use crate::definitions::structs::{
 use crate::names::go_name;
 
 type SpanMap = HashMap<String, Vec<Span>>;
-
-struct CollisionSinks<'a> {
-    package_block: &'a mut SpanMap,
-    selectors: &'a mut HashMap<String, SpanMap>,
-    interfaces: &'a mut HashMap<String, SpanMap>,
-    diagnostics: &'a mut Vec<LisetteDiagnostic>,
-}
 
 #[derive(Default)]
 pub(crate) struct CollectedNames {
@@ -46,6 +39,7 @@ impl Planner<'_> {
         &self,
         files: &[&File],
         collected: CollectedNames,
+        import_qualifiers: &[(String, Span)],
     ) -> Vec<LisetteDiagnostic> {
         let CollectedNames {
             mut package_block,
@@ -54,7 +48,7 @@ impl Planner<'_> {
             mut diagnostics,
         } = collected;
 
-        self.collect_import_aliases(files, &mut package_block, &mut diagnostics);
+        self.collect_import_aliases(import_qualifiers, &mut package_block, &mut diagnostics);
 
         report_collisions(package_block, &mut diagnostics);
         for (_, members) in sort_by_key(selectors) {
@@ -68,43 +62,23 @@ impl Planner<'_> {
         diagnostics
     }
 
-    pub(crate) fn package_block_names(
-        &self,
-        files: &[&File],
-        collected: &CollectedNames,
-    ) -> HashSet<String> {
-        let mut names: HashSet<String> = collected.package_block.keys().cloned().collect();
-        self.for_each_import_qualifier(files, |qualifier, _span| {
-            names.insert(qualifier.to_string());
-        });
-        names
-    }
-
     pub(crate) fn collect_names(&self, files: &[&File]) -> CollectedNames {
         let mut collected = CollectedNames::default();
         for file in files {
             for item in &file.items {
-                self.collect_item(
-                    item,
-                    &mut CollisionSinks {
-                        package_block: &mut collected.package_block,
-                        selectors: &mut collected.selectors,
-                        interfaces: &mut collected.interfaces,
-                        diagnostics: &mut collected.diagnostics,
-                    },
-                );
+                self.collect_item(item, &mut collected);
             }
         }
         collected
     }
 
-    fn collect_item(&self, item: &Expression, sinks: &mut CollisionSinks<'_>) {
-        let CollisionSinks {
+    fn collect_item(&self, item: &Expression, collected: &mut CollectedNames) {
+        let CollectedNames {
             package_block,
             selectors,
             interfaces,
             diagnostics,
-        } = sinks;
+        } = collected;
         match item {
             Expression::Function { .. } => self.collect_function(item, package_block, diagnostics),
             Expression::Const { .. } => self.collect_const(item, package_block, diagnostics),
@@ -143,7 +117,7 @@ impl Planner<'_> {
         else {
             return;
         };
-        if self.facts.is_unused_definition(name_span) {
+        if self.facts.is_unused(name_span) {
             return;
         }
         let go = self.free_function_go_name(name, matches!(visibility, Visibility::Public));
@@ -170,7 +144,7 @@ impl Planner<'_> {
         else {
             return;
         };
-        let go = self.const_go_name(identifier);
+        let go = go_name::screaming_snake_to_camel(identifier);
         self.check_reserved_prefix(identifier, identifier_span, diagnostics);
         self.check_reserved_prefix(&go, identifier_span, diagnostics);
         package_block.entry(go).or_default().push(*identifier_span);
@@ -254,7 +228,7 @@ impl Planner<'_> {
                 .or_default()
                 .push(*name_span);
         }
-        if self.should_synthesize_to_string(name, attributes) {
+        if self.should_synthesize_to_string(name) {
             members
                 .entry(self.to_string_method_go_name())
                 .or_default()
@@ -347,7 +321,7 @@ impl Planner<'_> {
                 .or_default()
                 .push(*name_span);
         }
-        if self.should_synthesize_to_string(name, attributes) {
+        if self.should_synthesize_to_string(name) {
             members
                 .entry(self.to_string_method_go_name())
                 .or_default()
@@ -483,7 +457,7 @@ impl Planner<'_> {
             else {
                 continue;
             };
-            if self.facts.is_unused_definition(name_span) {
+            if self.facts.is_unused(name_span) {
                 continue;
             }
             let is_public = matches!(visibility, Visibility::Public);
@@ -517,7 +491,7 @@ impl Planner<'_> {
                     generics,
                     ..
                 } => {
-                    if !self.facts.is_unused_definition(name_span) {
+                    if !self.facts.is_unused(name_span) {
                         self.check_reserved_qualifier_generics(generics, &mut diagnostics);
                     }
                 }
@@ -557,7 +531,7 @@ impl Planner<'_> {
                         else {
                             continue;
                         };
-                        if self.facts.is_unused_definition(name_span) {
+                        if self.facts.is_unused(name_span) {
                             continue;
                         }
                         if impl_method_is_receiver_method(self, &qualified_type, name, params) {
@@ -582,38 +556,14 @@ impl Planner<'_> {
 
     fn collect_import_aliases(
         &self,
-        files: &[&File],
+        import_qualifiers: &[(String, Span)],
         package_block: &mut SpanMap,
         diagnostics: &mut Vec<LisetteDiagnostic>,
     ) {
-        self.for_each_import_qualifier(files, |qualifier, span| {
-            self.check_reserved_prefix(qualifier, &span, diagnostics);
+        for (qualifier, span) in import_qualifiers {
+            self.check_reserved_prefix(qualifier, span, diagnostics);
             if let Some(spans) = package_block.get_mut(qualifier) {
-                spans.push(span);
-            }
-        });
-    }
-
-    fn for_each_import_qualifier(&self, files: &[&File], mut visit: impl FnMut(&str, Span)) {
-        let go_package_names = self.facts.go_package_names();
-        let unused = self.facts.unused_imports_for_current_package();
-        for file in files {
-            for import in file.imports() {
-                if matches!(import.alias, Some(ImportAlias::Blank(_))) {
-                    continue;
-                }
-                let Some(alias) = import.effective_alias(go_package_names) else {
-                    continue;
-                };
-                if unused.contains(alias.as_str()) {
-                    continue;
-                }
-                let qualifier = go_name::sanitize_package_name(&alias);
-                let span = match &import.alias {
-                    Some(ImportAlias::Named(_, span)) => *span,
-                    _ => import.name_span,
-                };
-                visit(qualifier.as_ref(), span);
+                spans.push(*span);
             }
         }
     }

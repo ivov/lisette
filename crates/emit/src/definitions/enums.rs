@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD, EnumLayout};
 use crate::definitions::structs::{StringFormat, should_synthesize_stringer};
-use crate::names::go_name::{self, prelude_qualifier};
+use crate::names::go_name;
 use crate::plan::values::GoExpression;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{Attribute, Generic};
@@ -21,8 +21,7 @@ impl Planner<'_> {
 
         let enum_id = self.facts.qualified_current(name);
 
-        let layout = self.enum_layout(&enum_id)?;
-        self.require_packages(layout.requirements());
+        let layout = self.facts.enum_layout(&enum_id)?;
 
         let generics_string = self.generics_to_string(generics);
         let receiver_generics = self.receiver_generics_string(generics);
@@ -33,27 +32,30 @@ impl Planner<'_> {
         let (has_user_string, has_user_go_string) = self.stringer_overrides(name);
         let emit_string = synthesize && !has_user_string;
         let emit_go_string = synthesize && !has_user_go_string;
-        let needs_fmt = emit_string || emit_go_string || has_json;
-        let mut result = layout.emit_definition(&generics_string);
+        let mut result = layout.emit_definition(self, &generics_string);
         if emit_string {
-            result.push_str("\n\n");
-            result.push_str(&layout.emit_format_method(
+            let (method, requirements) = layout.emit_format_method(
                 &receiver_generics,
                 StringFormat::Display {
                     method: ENUM_STRINGER_METHOD,
                     qualified: false,
                 },
-            ));
+            );
+            self.require_packages(&requirements);
+            result.push_str("\n\n");
+            result.push_str(&method);
         }
         if emit_go_string {
-            result.push_str("\n\n");
-            result.push_str(&layout.emit_format_method(
+            let (method, requirements) = layout.emit_format_method(
                 &receiver_generics,
                 StringFormat::Display {
                     method: ENUM_GO_STRINGER_METHOD,
                     qualified: true,
                 },
-            ));
+            );
+            self.require_packages(&requirements);
+            result.push_str("\n\n");
+            result.push_str(&method);
         }
         if has_json {
             result.push_str("\n\n");
@@ -68,13 +70,11 @@ impl Planner<'_> {
             result.push_str("\n\n");
             result.push_str(&layout.emit_variants_function(&fn_name));
         }
-        self.append_enum_debug_method(&mut result, name, &receiver_generics, &layout);
-        self.append_to_string_method(&mut result, name, &receiver_generics, attributes);
+        self.append_enum_debug_method(&mut result, name, &receiver_generics, layout);
+        self.append_to_string_method(&mut result, name, &receiver_generics);
         self.append_enum_equals_method(&mut result, name, &enum_id, &receiver_generics);
-        if needs_fmt {
-            self.require_fmt();
-        }
         if has_json {
+            self.require_fmt();
             self.require_errors();
             if !layout.variants.is_empty() {
                 self.require_json();
@@ -94,17 +94,11 @@ impl Planner<'_> {
         if !self.synthesizes_debug_string(name) {
             return;
         }
+        let (method, requirements) =
+            layout.emit_format_method(receiver_generics, StringFormat::Debug);
+        self.require_packages(&requirements);
         out.push_str("\n\n");
-        out.push_str(&layout.emit_format_method(
-            receiver_generics,
-            StringFormat::Debug {
-                prelude: prelude_qualifier(),
-            },
-        ));
-        self.require_fmt();
-        if layout.debug_uses_prelude() {
-            self.require_stdlib();
-        }
+        out.push_str(&method);
     }
 
     fn append_enum_equals_method(
@@ -131,7 +125,10 @@ impl Planner<'_> {
         };
         let sem_generics = sem_generics.clone();
         let sem_variants = sem_variants.clone();
-        let layout = self.enum_layout(enum_id).expect("enum layout should exist");
+        let layout = self
+            .facts
+            .enum_layout(enum_id)
+            .expect("enum layout should exist");
 
         let receiver = synthesized_receiver_name(name, receiver_generics);
         let other = synthesized_local_name("other", &receiver, receiver_generics);
@@ -209,8 +206,10 @@ impl Planner<'_> {
         enum_id: &str,
         variant_name: &str,
     ) -> String {
-        let layout = self.enum_layout(enum_id).expect("enum layout should exist");
-        self.require_packages(layout.requirements());
+        let layout = self
+            .facts
+            .enum_layout(enum_id)
+            .expect("enum layout should exist");
         let variant = layout
             .get_variant(variant_name)
             .expect("variant should exist in layout");
@@ -227,16 +226,10 @@ impl Planner<'_> {
             .enumerate()
             .map(|(index, field)| {
                 let argument = format!("arg{}", index);
-                if field.is_recursive() {
-                    let pointee = field.go_type.trim_start_matches('*');
-                    let param = format!("{} {}", argument, pointee);
-                    let field_assignment = format!("{}: &{}", field.go_name, argument);
-                    (field_assignment, param)
-                } else {
-                    let param = format!("{} {}", argument, field.go_type);
-                    let field_assignment = format!("{}: {}", field.go_name, argument);
-                    (field_assignment, param)
-                }
+                let param = format!("{} {}", argument, self.use_go_type(&field.ty));
+                let value = if field.is_recursive() { "&" } else { "" };
+                let field_assignment = format!("{}: {value}{}", field.go_name, argument);
+                (field_assignment, param)
             })
             .unzip();
         let fields = fields.join(", ");

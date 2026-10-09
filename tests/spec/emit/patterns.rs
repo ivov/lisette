@@ -807,6 +807,86 @@ fn main() {
 }
 
 #[test]
+fn or_pattern_let_else_unit_payload() {
+    let input = r#"
+import "go:fmt"
+
+enum E { A(()), B(()), C }
+
+fn show(e: E) {
+  let E.A(x) | E.B(x) = e else { return }
+  fmt.Println(x)
+}
+
+fn main() {
+  show(E.A(()))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn or_pattern_let_else_unit_and_generic_payload() {
+    let input = r#"
+import "go:fmt"
+
+enum G<T> { A(()), B(T), C }
+
+fn show(g: G<()>) {
+  let G.A(x) | G.B(x) = g else { return }
+  fmt.Println(x)
+}
+
+fn main() {
+  show(G.B(()))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn or_pattern_let_else_on_aliased_tuple_declares_every_binding() {
+    let input = r#"
+import "go:fmt"
+
+enum E { A(int), B(int), C }
+
+type Pair = (E, int)
+
+fn show(p: Pair) {
+  let (E.A(x), y) | (E.B(x), y) = p else { return }
+  fmt.Println(x, y)
+}
+
+fn main() {
+  show((E.B(4), 7))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_on_aliased_tuple_asserts_interface_element() {
+    let input = r#"
+interface Shape { fn area() -> int }
+
+struct Sq { side: int }
+
+impl Sq { fn area(self) -> int { self.side * self.side } }
+
+type P = (Shape, int)
+
+fn size(p: P) -> int {
+  match p {
+    (Sq { side }, n) => side + n,
+    _ => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn or_pattern_let_else_rest_shadow() {
     let input = r#"
 import "go:fmt"
@@ -1257,6 +1337,62 @@ pub interface Event {}
 pub struct Click { pub x: int }
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
+}
+
+#[test]
+fn guarded_catchall_before_enum_case_runs_first() {
+    let input = r#"
+enum E { A, B }
+
+fn g(_e: E) -> bool { true }
+
+fn f(e: E) -> string {
+  match e {
+    E.A => "a",
+    x if g(x) => "g",
+    E.B => "b",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn guarded_catchall_before_literal_case_runs_first() {
+    let input = r#"
+fn f(n: int) -> string {
+  match n {
+    1 => "one",
+    x if x > 1 => "big",
+    2 => "two",
+    _ => "other",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn guarded_catchall_before_type_switch_case_runs_first() {
+    let input = r#"
+interface Shape { fn area() -> int }
+struct Sq { side: int }
+struct Ci { r: int }
+impl Sq { fn area(self) -> int { self.side * self.side } }
+impl Ci { fn area(self) -> int { self.r } }
+
+fn g(_s: Shape) -> bool { true }
+
+fn f(s: Shape) -> string {
+  match s {
+    Sq { .. } => "sq",
+    x if g(x) => "g",
+    Ci { .. } => "ci",
+    _ => "other",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
 }
 
 #[test]
@@ -1917,6 +2053,22 @@ fn classify(n: int) -> string {
 }
 
 #[test]
+fn const_match_subject_uses_go_constant_name() {
+    let input = r#"
+const MAX_SIZE = 1024
+
+fn classify() -> string {
+  match MAX_SIZE {
+    0 => "empty",
+    1024 => "full",
+    _ => "other",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn match_one_arm_float_result_declares_with_short_form() {
     let input = r#"
 struct Pair(float64, float64)
@@ -2028,4 +2180,20 @@ fn test() {
 }
 "#;
     assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_pattern_keeps_go_field_spelling() {
+    let input = r#"
+import "go:example.com/net"
+
+fn scope(a: net.Addr) -> uint32 {
+  let net.Addr { Scope_id: id, .. } = a
+  id + a.Scope_id
+}
+"#;
+    let typedef = r#"
+pub struct Addr { pub Scope_id: uint32, pub Port: uint16 }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/net", typedef)]);
 }

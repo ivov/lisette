@@ -854,6 +854,41 @@ fn main() {
 }
 
 #[test]
+fn comma_ok_hinted_interface_method_call_reads_both_results() {
+    let input = r#"
+pub struct Entry { pub v: int }
+
+pub interface Cache {
+  #[go(comma_ok)]
+  fn Get(key: string) -> Option<Ref<Entry>>
+}
+
+fn bound(c: Cache) -> Option<Ref<Entry>> {
+  let e = c.Get("a")
+  e
+}
+
+fn tail(c: Cache) -> Option<Ref<Entry>> {
+  c.Get("a")
+}
+
+fn matched(c: Cache) -> int {
+  match c.Get("a") {
+    Some(e) => e.v,
+    None => 0,
+  }
+}
+
+fn main() {
+  let _ = bound
+  let _ = tail
+  let _ = matched
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[]);
+}
+
+#[test]
 fn call_returning_go_interface_widens_into_option_field() {
     let input = r#"
 import "go:example.com/srv"
@@ -1272,4 +1307,59 @@ fn main() {
 }
 "#;
     assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_interface_tuple_payload_flattens_in_adapter() {
+    let input = r#"
+import "go:bufio"
+import "go:errors"
+import "go:net"
+import "go:net/http"
+
+struct Conn {}
+
+impl Conn {
+  fn Hijack(self) -> Result<(net.Conn, mut Ref<mut bufio.ReadWriter>), error> {
+    Err(errors.New("no"))
+  }
+}
+
+fn take(h: http.Hijacker) {
+  let _ = h.Hijack()
+}
+
+fn main() {
+  take(Conn {})
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[]);
+}
+
+#[test]
+fn go_interface_sentinel_hint_returns_sentinel_in_adapter() {
+    let input = r#"
+import "go:example.com/idx"
+
+struct Finder {}
+
+impl Finder {
+  fn Find(self, s: string) -> Option<int> {
+    if s == "" { None } else { Some(0) }
+  }
+}
+
+fn main() {
+  idx.Use(Finder {})
+}
+"#;
+    let typedef = r#"
+pub interface Indexer {
+  #[go(sentinel_minus_one)]
+  fn Find(s: string) -> Option<int>
+}
+
+pub fn Use(i: Indexer)
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/idx", typedef)]);
 }

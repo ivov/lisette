@@ -144,12 +144,14 @@ pub fn check_pattern_naming(pattern: &Pattern, ctx: &NodeCtx, role: PatternRole)
         return;
     }
     let (name, span) = match pattern {
-        Pattern::Identifier { identifier, span } => (identifier, span),
+        Pattern::Identifier {
+            identifier, span, ..
+        } => (identifier, span),
         Pattern::AsBinding {
             name, name_span, ..
         } => (name, name_span),
         Pattern::Slice {
-            rest: RestPattern::Bind { name, span },
+            rest: RestPattern::Bind { name, span, .. },
             ..
         } => (name, span),
         _ => return,

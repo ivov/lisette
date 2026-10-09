@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn reassigned(xs: Slice<int>) -> int {
+    let mut acc = 10
+    let total = 2 * xs.fold(0, |acc, x| acc + x)
+    acc = 5
+    total + acc
+  }
+  
+  fn test() {
+    if reassigned([1, 2]) != 11 { panic("the assignment should write the outer acc") }
+  }
+---
+package main
+
+func reassigned(xs []int) int {
+	acc := 10
+	acc_1 := 0
+	for _, x := range xs {
+		acc_1 += x
+	}
+	total := 2 * acc_1
+	acc = 5
+	return total + acc
+}
+
+func test() {
+	if reassigned([]int{1, 2}) != 11 {
+		panic("the assignment should write the outer acc")
+	}
+}

@@ -34,11 +34,4 @@ impl Planner<'_> {
                 .unwrap_or_else(|| go_name::escape_reserved(name).into_owned())
         }
     }
-
-    pub(crate) fn const_go_name(&self, identifier: &str) -> String {
-        self.package
-            .escape_remap(identifier)
-            .map(str::to_string)
-            .unwrap_or_else(|| go_name::screaming_snake_to_camel(identifier))
-    }
 }

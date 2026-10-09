@@ -1,0 +1,91 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn die() -> Never { panic("x") }
+  
+  fn apply<T>(f: fn() -> T) -> T {
+    f()
+  }
+  
+  struct Box { n: int }
+  
+  impl Box {
+    fn run<T>(self, f: fn() -> T) -> T {
+      f()
+    }
+  }
+  
+  struct Holder<T> {
+    f: fn() -> T,
+  }
+  
+  fn free() -> int {
+    apply(die)
+  }
+  
+  fn ufcs(b: Box) -> int {
+    b.run(die)
+  }
+  
+  fn enclosing<U>() -> U {
+    apply(die)
+  }
+  
+  fn field() -> Holder<int> {
+    Holder { f: die }
+  }
+---
+package main
+
+func die() {
+	panic("x")
+}
+
+func apply[T any](f func() T) T {
+	return f()
+}
+
+type Box struct {
+	n int
+}
+
+func Box_Run[T any](_ Box, f func() T) T {
+	return f()
+}
+
+type Holder[T any] struct {
+	f func() T
+}
+
+func free() int {
+	cb := die
+	return apply(func() int {
+		cb()
+		panic("unreachable")
+	})
+}
+
+func ufcs(b Box) int {
+	cb := die
+	return Box_Run(b, func() int {
+		cb()
+		panic("unreachable")
+	})
+}
+
+func enclosing[U any]() U {
+	cb := die
+	return apply(func() U {
+		cb()
+		panic("unreachable")
+	})
+}
+
+func field() Holder[int] {
+	cb := die
+	return Holder[int]{f: func() int {
+		cb()
+		panic("unreachable")
+	}}
+}

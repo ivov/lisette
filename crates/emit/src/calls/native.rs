@@ -1,31 +1,32 @@
-use super::NativeCallContext;
+use super::{NativeCallContext, NativeCallForm, split_native_receiver};
 use crate::Planner;
 use crate::calls::dispatch::extract_native_method_name;
+use crate::calls::slice_loop::SliceLoopTarget;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::expressions::access::index_access::range_var_bounds;
+use crate::expressions::staging::SpreadSequenceOptions;
 use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{LoweredBlock, LoweredStatement};
-use crate::plan::calls::plan_variadic_spread;
+use crate::plan::bodies::{LoweredBlock, Statement};
 use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::go_expression::{FunctionLiteralLayout, GoParameter};
+use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, GoParameter, UnaryOp};
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::statements::assignments::lvalues_match;
-use crate::types::native::NativeGoType;
+use crate::types::native;
 use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
-use syntax::program::{CallKind, DotAccessKind, NativeTypeKind};
+use syntax::program::{CallKind, DotAccessResolution, NativeTypeKind};
 use syntax::types::{CompoundKind, Type, peel_to_range_type};
 
 pub(super) struct NativeCallResult {
-    pub setup: Vec<LoweredStatement>,
+    pub setup: Vec<Statement>,
     pub value: GoExpression,
     pub argument_effect: EvaluationEffect,
 }
 
 impl NativeCallResult {
     pub(super) fn new(
-        setup: Vec<LoweredStatement>,
+        setup: Vec<Statement>,
         value: GoExpression,
         argument_effect: EvaluationEffect,
     ) -> Self {
@@ -61,7 +62,7 @@ enum InlineForm {
 }
 
 struct InlineRule {
-    types: &'static [NativeGoType],
+    types: &'static [NativeTypeKind],
     method: &'static str,
     arity: RuleArity,
     form: InlineForm,
@@ -84,12 +85,12 @@ impl RuleArity {
 }
 
 impl InlineRule {
-    fn matches(&self, native_type: NativeGoType, method: &str, arity: usize) -> bool {
+    fn matches(&self, native_type: NativeTypeKind, method: &str, arity: usize) -> bool {
         self.method == method && self.types.contains(&native_type) && self.arity.accepts(arity)
     }
 }
 
-type N = NativeGoType;
+type N = NativeTypeKind;
 
 static INLINE_METHODS: &[InlineRule] = &[
     // No-arg methods
@@ -259,9 +260,9 @@ fn grows_into_capacity(method: &str, appends_anything: bool) -> bool {
 }
 
 /// Natives that write no memory a sibling operand can read and run no caller code.
-pub(super) fn native_method_is_pure(native_type: &NativeGoType, method: &str) -> bool {
+pub(super) fn native_method_is_pure(native_type: &NativeTypeKind, method: &str) -> bool {
     match native_type {
-        NativeGoType::String => matches!(
+        NativeTypeKind::String => matches!(
             method,
             "length"
                 | "is_empty"
@@ -275,8 +276,8 @@ pub(super) fn native_method_is_pure(native_type: &NativeGoType, method: &str) ->
                 | "runes"
                 | "substring"
         ),
-        NativeGoType::Array => matches!(method, "length" | "get" | "to_slice"),
-        NativeGoType::Slice => matches!(
+        NativeTypeKind::Array => matches!(method, "length" | "get" | "to_slice"),
+        NativeTypeKind::Slice => matches!(
             method,
             "length"
                 | "is_empty"
@@ -288,11 +289,11 @@ pub(super) fn native_method_is_pure(native_type: &NativeGoType, method: &str) ->
                 | "clone"
                 | "join"
         ),
-        NativeGoType::Map => matches!(method, "length" | "is_empty" | "get" | "clone"),
-        NativeGoType::Channel | NativeGoType::Sender | NativeGoType::Receiver => {
+        NativeTypeKind::Map => matches!(method, "length" | "is_empty" | "get" | "clone"),
+        NativeTypeKind::Channel | NativeTypeKind::Sender | NativeTypeKind::Receiver => {
             matches!(method, "length" | "is_empty" | "capacity")
         }
-        NativeGoType::EnumeratedSlice => method == "clone",
+        NativeTypeKind::EnumeratedSlice => method == "clone",
     }
 }
 
@@ -307,12 +308,12 @@ pub(crate) fn is_clip_safe_path(value: &GoExpression) -> bool {
     is_path(value.node())
 }
 
-fn growth_clip_applies(ctx: &NativeCallContext, receiver: &Expression) -> bool {
-    let appends_anything = if matches!(ctx.function, Expression::DotAccess { .. }) {
-        !ctx.args.is_empty() || ctx.spread.is_some()
-    } else {
-        ctx.args.len() > 1 || ctx.spread.is_some()
-    };
+fn growth_clip_applies(
+    ctx: &NativeCallContext,
+    receiver: &Expression,
+    arguments: &[Expression],
+) -> bool {
+    let appends_anything = !arguments.is_empty() || ctx.spread.is_some();
     grows_into_capacity(ctx.method, appends_anything)
         && !is_fresh_slice_value(receiver)
         && !ctx
@@ -336,11 +337,12 @@ fn is_fresh_slice_value(receiver: &Expression) -> bool {
             CallKind::NativeConstructor(NativeTypeKind::Slice) => true,
             CallKind::NativeMethod(NativeTypeKind::Slice)
             | CallKind::NativeMethodIdentifier(NativeTypeKind::Slice) => {
-                match extract_native_method_name(callee.unwrap_parens()) {
+                let function = callee.unwrap_parens();
+                match extract_native_method_name(function) {
                     "append" => {
-                        let receiver_argument_count =
-                            matches!(call_kind, CallKind::NativeMethodIdentifier(_)) as usize;
-                        args.len() > receiver_argument_count || spread.is_some()
+                        split_native_receiver(function, args)
+                            .is_some_and(|(_, arguments)| !arguments.is_empty())
+                            || spread.is_some()
                     }
                     "reserve" | "clone" | "filter" | "map" => true,
                     _ => false,
@@ -393,7 +395,7 @@ fn build_inline(
             GoExpression::call(callee, all)
         }
         InlineForm::IsEmpty => {
-            let operator = if negated { "!=" } else { "==" };
+            let operator = if negated { BinaryOp::Ne } else { BinaryOp::Eq };
             GoExpression::binary(
                 GoExpression::call(
                     GoExpression::name("len".to_string()),
@@ -421,7 +423,7 @@ fn build_inline(
 }
 
 fn lookup_inline_rule(
-    native_type: &NativeGoType,
+    native_type: &NativeTypeKind,
     method: &str,
     arity: usize,
 ) -> Option<&'static InlineRule> {
@@ -433,7 +435,7 @@ fn lookup_inline_rule(
 /// Try to inline a native-type method call. `negated` asks for the rule's
 /// negated form (`None` when the rule has none).
 pub(super) fn try_inline_native_method(
-    native_type: &NativeGoType,
+    native_type: &NativeTypeKind,
     method: &str,
     receiver: &GoExpression,
     arguments: &[GoExpression],
@@ -496,23 +498,25 @@ fn array_to_slice_receiver(expression: &Expression) -> Option<&Expression> {
     else {
         return None;
     };
-    if spread.is_some() || extract_native_method_name(callee.unwrap_parens()) != "to_slice" {
+    let function = callee.unwrap_parens();
+    if spread.is_some()
+        || extract_native_method_name(function) != "to_slice"
+        || !matches!(
+            call_kind,
+            CallKind::NativeMethod(NativeTypeKind::Array)
+                | CallKind::NativeMethodIdentifier(NativeTypeKind::Array)
+        )
+    {
         return None;
     }
-    match call_kind {
-        CallKind::NativeMethod(NativeTypeKind::Array) if args.is_empty() => {
-            match callee.unwrap_parens() {
-                Expression::DotAccess { expression, .. } => Some(expression),
-                _ => None,
-            }
-        }
-        CallKind::NativeMethodIdentifier(NativeTypeKind::Array) if args.len() == 1 => args.first(),
+    match split_native_receiver(function, args)? {
+        (receiver, []) => Some(receiver),
         _ => None,
     }
 }
 
 pub(crate) fn native_method_lowers_to_plain_call(
-    native_type: &NativeGoType,
+    native_type: &NativeTypeKind,
     method: &str,
     receiver_arity: usize,
 ) -> bool {
@@ -529,42 +533,13 @@ pub(crate) fn native_method_lowers_to_plain_call(
 }
 
 /// Whether a rule for `(type, method, arity)` has a negated form.
-fn has_inline_negation(native_type: &NativeGoType, method: &str, arity: usize) -> bool {
+fn has_inline_negation(native_type: &NativeTypeKind, method: &str, arity: usize) -> bool {
     lookup_inline_rule(native_type, method, arity)
         .is_some_and(|rule| matches!(rule.form, InlineForm::IsEmpty))
 }
 
-/// Resolve the inline rule for a dot-access form, applying the static-receiver
-/// fallback when the standard receiver shape does not match.
-fn apply_inline_lookup(
-    native_type: &NativeGoType,
-    method: &str,
-    receiver: &GoExpression,
-    emitted_args: &[GoExpression],
-    negated: bool,
-) -> Option<GoExpression> {
-    if let Some(inlined) =
-        try_inline_native_method(native_type, method, receiver, emitted_args, negated)
-    {
-        return Some(inlined);
-    }
-    if let Some((static_receiver, remaining)) = emitted_args.split_first()
-        && let Some(inlined) =
-            try_inline_native_method(native_type, method, static_receiver, remaining, negated)
-    {
-        return Some(inlined);
-    }
-    None
-}
-
-#[derive(Clone, Copy)]
-enum NativeMethodForm {
-    Dot,
-    Identifier,
-}
-
 struct StagedNativeMethod {
-    setup: Vec<LoweredStatement>,
+    setup: Vec<Statement>,
     receiver: GoExpression,
     arguments: Vec<GoExpression>,
     effect: EvaluationEffect,
@@ -578,20 +553,11 @@ impl StagedNativeMethod {
 
 impl Planner<'_> {
     pub(super) fn lower_native_method(&mut self, ctx: &NativeCallContext) -> NativeCallResult {
-        let (form, receiver_expression, arguments) = match ctx.function {
-            Expression::DotAccess { expression, .. } => {
-                (NativeMethodForm::Dot, expression.as_ref(), ctx.args)
-            }
-            _ => {
-                let (receiver, arguments) = ctx
-                    .args
-                    .split_first()
-                    .expect("native method identifier has a receiver argument");
-                (NativeMethodForm::Identifier, receiver, arguments)
-            }
-        };
+        let (receiver_expression, arguments) = ctx
+            .receiver_and_arguments()
+            .expect("native method has a receiver");
 
-        if matches!(ctx.native_type, NativeGoType::String)
+        if matches!(ctx.native_type, NativeTypeKind::String)
             && ctx.method == "substring"
             && !arguments.is_empty()
         {
@@ -603,11 +569,11 @@ impl Planner<'_> {
         }
 
         if ctx.method == "equals"
-            && matches!(ctx.native_type, NativeGoType::Slice | NativeGoType::Map)
+            && matches!(ctx.native_type, NativeTypeKind::Slice | NativeTypeKind::Map)
         {
             let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
             if receiver_ty.is_slice() || receiver_ty.is_map() {
-                let staged = self.stage_native_method(ctx, form);
+                let staged = self.stage_native_method(ctx);
                 let body = self.equality_test(
                     staged.receiver.clone(),
                     staged.arguments[0].clone(),
@@ -619,13 +585,13 @@ impl Planner<'_> {
             }
         }
 
-        if ctx.method == "contains" && matches!(ctx.native_type, NativeGoType::Slice) {
+        if ctx.method == "contains" && matches!(ctx.native_type, NativeTypeKind::Slice) {
             let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
             if receiver_ty.is_slice()
                 && let Some(element) = receiver_ty.inner()
                 && self.needs_custom_equality(&element, &[])
             {
-                let mut staged = self.stage_native_method(ctx, form);
+                let mut staged = self.stage_native_method(ctx);
                 let searched = staged.arguments[0].clone();
                 let target = self.hoist_tmp_value_statement(&mut staged.setup, "want", searched);
                 let predicate = self.contains_predicate(&element, GoExpression::name(target), &[]);
@@ -637,14 +603,14 @@ impl Planner<'_> {
             }
         }
 
-        if matches!(ctx.native_type, NativeGoType::Array)
+        if matches!(ctx.native_type, NativeTypeKind::Array)
             && is_native_array_method(ctx.method)
             && matches!(
                 self.facts.strip_and_peel(&receiver_expression.get_type()),
                 Type::Array { .. }
             )
         {
-            let mut staged = self.stage_native_method(ctx, form);
+            let mut staged = self.stage_native_method(ctx);
             let index = staged.arguments.first().cloned();
             let body = self.lower_array_method_body(
                 ctx.method,
@@ -656,9 +622,13 @@ impl Planner<'_> {
             return staged.finish(body);
         }
 
-        if matches!(ctx.native_type, NativeGoType::Slice)
-            && let Some(result) =
-                self.try_lower_slice_loop(ctx, receiver_expression, arguments, None)
+        if matches!(ctx.native_type, NativeTypeKind::Slice)
+            && let Some(result) = self.try_lower_slice_loop(
+                ctx,
+                receiver_expression,
+                arguments,
+                SliceLoopTarget::Fresh,
+            )
         {
             return result;
         }
@@ -666,34 +636,24 @@ impl Planner<'_> {
         if ctx.method == "clone" {
             let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
             if is_cloneable_container(&receiver_ty) {
-                let staged = self.stage_native_method(ctx, form);
+                let staged = self.stage_native_method(ctx);
                 let body = self.clone_expression(staged.receiver.clone(), &receiver_ty);
                 return staged.finish(body);
             }
         }
 
-        let mut staged = self.stage_native_method(ctx, form);
-        if growth_clip_applies(ctx, receiver_expression) {
+        let mut staged = self.stage_native_method(ctx);
+        if growth_clip_applies(ctx, receiver_expression, arguments) {
             staged.receiver = clip_shared_capacity(staged.receiver);
         }
 
-        let inlined = match form {
-            NativeMethodForm::Dot => apply_inline_lookup(
-                ctx.native_type,
-                ctx.method,
-                &staged.receiver,
-                &staged.arguments,
-                false,
-            ),
-            NativeMethodForm::Identifier => try_inline_native_method(
-                ctx.native_type,
-                ctx.method,
-                &staged.receiver,
-                &staged.arguments,
-                false,
-            ),
-        };
-        if let Some(inlined) = inlined {
+        if let Some(inlined) = try_inline_native_method(
+            ctx.native_type,
+            ctx.method,
+            &staged.receiver,
+            &staged.arguments,
+            false,
+        ) {
             return staged.finish(inlined);
         }
 
@@ -701,22 +661,19 @@ impl Planner<'_> {
             GeneratedPackage::Prelude,
             format!(
                 "{}{}",
-                ctx.native_type.method_prefix(),
+                native::method_prefix(*ctx.native_type),
                 go_name::snake_to_camel(ctx.method)
             ),
         );
-        let type_args = match form {
-            NativeMethodForm::Dot
+        let type_args = match ctx.form {
+            NativeCallForm::Dot { receiver }
                 if !ctx.resolved_type_args.is_empty() && ctx.call_ty.is_some() =>
             {
-                self.format_type_args_with_receiver(
-                    &receiver_expression.get_type(),
-                    ctx.resolved_type_args,
-                )
+                self.format_type_args_with_receiver(&receiver.get_type(), ctx.resolved_type_args)
             }
-            NativeMethodForm::Dot | NativeMethodForm::Identifier => {
-                self.format_resolved_type_args(ctx.resolved_type_args)
-            }
+            NativeCallForm::Dot { .. }
+            | NativeCallForm::Identifier
+            | NativeCallForm::Constructor => self.format_resolved_type_args(ctx.resolved_type_args),
         };
         let mut emitted_args = vec![staged.receiver.clone()];
         emitted_args.extend(staged.arguments.iter().cloned());
@@ -732,7 +689,7 @@ impl Planner<'_> {
         receiver_expr: &Expression,
         receiver: GoExpression,
         index: Option<GoExpression>,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
     ) -> GoExpression {
         match method {
             "to_slice" => {
@@ -757,7 +714,7 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         receiver: GoExpression,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
     ) -> GoExpression {
         let base = if self.receiver_is_addressable(expression) {
             receiver
@@ -783,8 +740,8 @@ impl Planner<'_> {
                 ..
             } => {
                 if matches!(
-                    resolution.kind(),
-                    Some(DotAccessKind::TupleStructField { is_newtype: true })
+                    resolution,
+                    DotAccessResolution::TupleStructField { is_newtype: true }
                 ) {
                     return false;
                 }
@@ -807,37 +764,21 @@ impl Planner<'_> {
     /// Returns `None` when the rule has no direct negated form, without staging.
     pub(super) fn try_emit_negated_native_method(
         &mut self,
-        setup: &mut Vec<LoweredStatement>,
+        setup: &mut Vec<Statement>,
         ctx: &NativeCallContext,
     ) -> Option<GoExpression> {
-        let (form, arity) = if matches!(ctx.function, Expression::DotAccess { .. }) {
-            (NativeMethodForm::Dot, ctx.args.len())
-        } else {
-            (
-                NativeMethodForm::Identifier,
-                ctx.args.len().saturating_sub(1),
-            )
-        };
-        if !has_inline_negation(ctx.native_type, ctx.method, arity) {
+        let (_, arguments) = ctx.receiver_and_arguments()?;
+        if !has_inline_negation(ctx.native_type, ctx.method, arguments.len()) {
             return None;
         }
-        let staged = self.stage_native_method(ctx, form);
-        let inlined = match form {
-            NativeMethodForm::Dot => apply_inline_lookup(
-                ctx.native_type,
-                ctx.method,
-                &staged.receiver,
-                &staged.arguments,
-                true,
-            )?,
-            NativeMethodForm::Identifier => try_inline_native_method(
-                ctx.native_type,
-                ctx.method,
-                &staged.receiver,
-                &staged.arguments,
-                true,
-            )?,
-        };
+        let staged = self.stage_native_method(ctx);
+        let inlined = try_inline_native_method(
+            ctx.native_type,
+            ctx.method,
+            &staged.receiver,
+            &staged.arguments,
+            true,
+        )?;
         setup.extend(staged.setup);
         Some(inlined)
     }
@@ -849,7 +790,7 @@ impl Planner<'_> {
         receiver_expression: &Expression,
         arguments: &[Expression],
     ) -> Option<ValuePlan> {
-        if !matches!(ctx.native_type, NativeGoType::Slice) {
+        if !matches!(ctx.native_type, NativeTypeKind::Slice) {
             return None;
         }
         if !matches!(ctx.capture_boundary, CaptureBoundary::SiblingSequence) {
@@ -883,7 +824,7 @@ impl Planner<'_> {
     fn stage_array_view(&mut self, array: &Expression) -> ValuePlan {
         let mut staged = self.plan_operand(array, ExpressionContext::value());
         if array.get_type().is_ref() {
-            staged = staged.unary("*");
+            staged = staged.dereference();
         }
         if !self.receiver_is_addressable(array) {
             self.pin_staged(&mut staged, "arr");
@@ -894,61 +835,45 @@ impl Planner<'_> {
         })
     }
 
-    fn stage_native_method(
-        &mut self,
-        ctx: &NativeCallContext,
-        form: NativeMethodForm,
-    ) -> StagedNativeMethod {
-        let (receiver, mut stages) = match (form, ctx.function) {
-            (NativeMethodForm::Dot, Expression::DotAccess { expression, .. }) => {
-                let receiver_stage = self
-                    .try_stage_to_slice_view(ctx, expression, ctx.args)
-                    .unwrap_or_else(|| self.plan_operand(expression, ExpressionContext::value()));
-                let mut stages = vec![receiver_stage];
-                stages.extend(self.stage_native_method_args_from(ctx.function, ctx.args, 0));
-                (expression.as_ref(), stages)
-            }
-            (NativeMethodForm::Identifier, _) => {
-                let receiver = &ctx.args[0];
-                let stages = match self.try_stage_to_slice_view(ctx, receiver, &ctx.args[1..]) {
-                    Some(view) => {
-                        let mut stages = vec![view];
-                        stages.extend(self.stage_native_method_args_from(
-                            ctx.function,
-                            ctx.args,
-                            1,
-                        ));
-                        stages
-                    }
-                    None => self.stage_native_method_args_from(ctx.function, ctx.args, 0),
-                };
-                (receiver, stages)
-            }
-            (NativeMethodForm::Dot, _) => unreachable!("dot form requires dot access"),
+    fn stage_native_method(&mut self, ctx: &NativeCallContext) -> StagedNativeMethod {
+        let (receiver, arguments) = ctx
+            .receiver_and_arguments()
+            .expect("native method has a receiver");
+        let is_dot = matches!(ctx.form, NativeCallForm::Dot { .. });
+        let view = self.try_stage_to_slice_view(ctx, receiver, arguments);
+        let mut stages = match view {
+            None if is_dot => vec![self.plan_operand(receiver, ExpressionContext::value())],
+            None => Vec::new(),
+            Some(view) => vec![view],
         };
+        let first_unstaged = if is_dot { 0 } else { stages.len() };
+        stages.extend(self.stage_native_method_args_from(ctx.abi, ctx.args, first_unstaged));
         let spread_stage = ctx.spread.map(|spread| {
-            if matches!(ctx.native_type, NativeGoType::Slice) && ctx.method == "append" {
+            if matches!(ctx.native_type, NativeTypeKind::Slice) && ctx.method == "append" {
                 self.plan_copied_spread(spread)
             } else {
                 self.plan_operand(spread, ExpressionContext::value())
             }
         });
-        if matches!(form, NativeMethodForm::Dot) && receiver.get_type().is_ref() {
-            let receiver = stages.remove(0).unary("*");
+        if is_dot && receiver.get_type().is_ref() {
+            let receiver = stages.remove(0).dereference();
             stages.insert(0, receiver);
         }
-        if growth_clip_applies(ctx, receiver) && !is_clip_safe_path(stages[0].expression()) {
+        if growth_clip_applies(ctx, receiver, arguments)
+            && !is_clip_safe_path(stages[0].expression())
+        {
             self.pin_staged(&mut stages[0], "recv");
         }
-        stages.extend(spread_stage);
 
-        let receiver_offset = matches!(form, NativeMethodForm::Dot) as usize;
-        let combine = plan_variadic_spread(&self.facts, ctx.function, ctx.spread)
-            .map(|plan| plan.combine(receiver_offset));
-        let mut sequenced = self.sequence_values(stages, ctx.capture_boundary, "arg");
-        if ctx.spread.is_some() {
-            self.finalize_spread_stage(&mut sequenced.values, false, combine);
-        }
+        let sequenced = self.sequence_with_spread_values(
+            stages,
+            spread_stage,
+            SpreadSequenceOptions {
+                wrap_to_any: false,
+                combine: ctx.abi.variadic_combine(usize::from(is_dot)),
+                boundary: ctx.capture_boundary,
+            },
+        );
         let effect = sequenced.effect;
         let mut values = sequenced.values;
         let receiver = values.remove(0);
@@ -964,7 +889,7 @@ impl Planner<'_> {
     pub(super) fn lower_map_index_pair(
         &mut self,
         expression: &Expression,
-    ) -> (Vec<LoweredStatement>, GoExpression) {
+    ) -> (Vec<Statement>, GoExpression) {
         let Expression::Call {
             expression: function,
             args,
@@ -977,20 +902,25 @@ impl Planner<'_> {
         let resolved_type_args = type_arguments
             .resolved_types()
             .expect("emission requires checked call type arguments");
-        let native_type = NativeGoType::Map;
+        let native_type = NativeTypeKind::Map;
+        let function = function.unwrap_parens();
+        let plan = self
+            .plan_call(expression)
+            .expect("plan_call yields Some for a Call expression");
         let ctx = NativeCallContext {
             function,
+            form: NativeCallForm::method(function),
             args,
             spread: None,
             resolved_type_args,
+            abi: &plan.resolved.abi,
             call_ty: None,
             native_type: &native_type,
             method: "get",
             capture_boundary: CaptureBoundary::SiblingSequence,
             retired_receiver: None,
-            result_name: None,
         };
-        let mut staged = self.stage_native_method(&ctx, NativeMethodForm::Dot);
+        let mut staged = self.stage_native_method(&ctx);
         let receiver = staged.receiver;
         let key = staged.arguments.remove(0);
         (staged.setup, GoExpression::index(receiver, key))
@@ -1036,7 +966,7 @@ impl Planner<'_> {
             let end_bound = end.is_some().then(|| {
                 let end = values.next().expect("range has an end");
                 if *inclusive {
-                    GoExpression::binary(end, "+", GoExpression::literal("1".to_string()))
+                    GoExpression::binary(end, BinaryOp::Add, GoExpression::literal("1".to_string()))
                 } else {
                     end
                 }
@@ -1097,10 +1027,10 @@ impl Planner<'_> {
         generics: &[Generic],
         negated: bool,
     ) -> GoExpression {
-        let operator = if negated { "!=" } else { "==" };
+        let operator = if negated { BinaryOp::Ne } else { BinaryOp::Eq };
         let negate = |call: GoExpression| {
             if negated {
-                GoExpression::unary("!", call)
+                GoExpression::unary(UnaryOp::Not, call)
             } else {
                 call
             }

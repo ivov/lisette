@@ -47,6 +47,7 @@ description: |
                                             byte_offset: 29,
                                             byte_length: 5,
                                         },
+                                        binding: None,
                                     },
                                 ],
                                 rest: false,

@@ -2,11 +2,13 @@ use rustc_hash::FxHashMap as HashMap;
 
 use crate::Planner;
 use crate::definitions::structs::{StringFormat, is_raw_function_type};
-use crate::names::go_name;
+use crate::names::go_name::{self, GeneratedPackage};
 use crate::names::packages::PackageRequirements;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{EnumVariant, Generic};
 use syntax::containment::enum_payload_pointer_wrapped;
+use syntax::program::Definition;
+use syntax::types::Type;
 
 use syntax::go_names;
 use syntax::go_names::EnumFieldShape;
@@ -19,7 +21,6 @@ pub(crate) struct EnumLayout {
     pub(crate) variants: Vec<VariantLayout>,
     variant_indexes: HashMap<String, usize>,
     pub(crate) generics: Vec<Generic>,
-    requirements: PackageRequirements,
     /// Index of the `#[default]` variant, which takes tag `0`.
     default_variant: Option<usize>,
 }
@@ -38,7 +39,8 @@ pub(crate) struct VariantLayout {
 pub(crate) struct FieldLayout {
     pub(crate) source_name: String,
     pub(crate) go_name: String,
-    pub(crate) go_type: String,
+    /// Declared payload type, rendered by each declaring file.
+    pub(crate) ty: Type,
     kind: FieldKind,
 }
 
@@ -60,24 +62,21 @@ impl FieldLayout {
 }
 
 impl EnumLayout {
-    pub(crate) fn new(
-        planner: &Planner,
+    pub(crate) fn new<'d>(
         enum_id: &str,
         generics: &[Generic],
         variants: &[EnumVariant],
         default_variant: Option<usize>,
+        definition: impl Fn(&str) -> Option<&'d Definition> + Copy,
     ) -> Self {
         let enum_name = go_name::unqualified_name(enum_id).to_string();
         let tag_type = format!("{}Tag", enum_name);
 
-        let mut requirements = PackageRequirements::default();
         let slots = go_names::enum_field_slots(&enum_name, variants);
         let variants: Vec<_> = variants
             .iter()
             .enumerate()
-            .map(|(vi, v)| {
-                Self::compute_variant_layout(planner, vi, v, enum_id, &slots[vi], &mut requirements)
-            })
+            .map(|(vi, v)| Self::compute_variant_layout(vi, v, enum_id, &slots[vi], definition))
             .collect();
         let mut variant_indexes = HashMap::default();
         for (index, variant) in variants.iter().enumerate() {
@@ -90,7 +89,6 @@ impl EnumLayout {
             variants,
             variant_indexes,
             generics: generics.to_vec(),
-            requirements,
             default_variant,
         }
     }
@@ -121,17 +119,12 @@ impl EnumLayout {
             .collect()
     }
 
-    pub(crate) fn requirements(&self) -> &PackageRequirements {
-        &self.requirements
-    }
-
-    fn compute_variant_layout(
-        planner: &Planner,
+    fn compute_variant_layout<'d>(
         variant_index: usize,
         variant: &EnumVariant,
         enum_id: &str,
         slots: &[String],
-        requirements: &mut PackageRequirements,
+        definition: impl Fn(&str) -> Option<&'d Definition>,
     ) -> VariantLayout {
         let enum_name = go_name::unqualified_name(enum_id);
         let tag_constant = go_name::enum_tag_constant(enum_name, &variant.name);
@@ -152,24 +145,24 @@ impl EnumLayout {
 
                 let go_name = slots[fi].clone();
 
-                let rendered = planner.go_type(&field.ty);
-                requirements.extend(rendered.requirements());
-                let recursive =
-                    enum_payload_pointer_wrapped(enum_id, variant_index, fi, &field.ty, |id| {
-                        planner.facts.definition(id)
-                    });
-                let (go_type, kind) = if recursive {
-                    (format!("*{}", rendered.code), FieldKind::Recursive)
+                let kind = if enum_payload_pointer_wrapped(
+                    enum_id,
+                    variant_index,
+                    fi,
+                    &field.ty,
+                    &definition,
+                ) {
+                    FieldKind::Recursive
                 } else if is_raw_function_type(&field.ty) {
-                    (rendered.code, FieldKind::Function)
+                    FieldKind::Function
                 } else {
-                    (rendered.code, FieldKind::Value)
+                    FieldKind::Value
                 };
 
                 FieldLayout {
                     source_name,
                     go_name,
-                    go_type,
+                    ty: field.ty.clone(),
                     kind,
                 }
             })
@@ -211,7 +204,8 @@ impl EnumLayout {
         variant.fields.get(index).map(|f| f.go_name.clone())
     }
 
-    pub(crate) fn emit_definition(&self, generics_string: &str) -> String {
+    /// Call from the declaring file, which owns the import aliases.
+    pub(crate) fn emit_definition(&self, planner: &mut Planner, generics_string: &str) -> String {
         let mut output = Vec::new();
 
         output.push(format!("type {} {}", self.tag_type, self.tag_go_type()));
@@ -253,10 +247,19 @@ impl EnumLayout {
         let mut seen_fields = rustc_hash::FxHashMap::default();
         for variant in &self.variants {
             for field in &variant.fields {
-                match seen_fields.insert(&field.go_name, &field.go_type) {
-                    None => output.push(format!("{} {}", field.go_name, field.go_type)),
+                let go_type = planner.use_go_type(&field.ty);
+                let go_type = if field.is_recursive() {
+                    format!("*{go_type}")
+                } else {
+                    go_type
+                };
+                match seen_fields.get(&field.go_name) {
+                    None => {
+                        output.push(format!("{} {}", field.go_name, go_type));
+                        seen_fields.insert(&field.go_name, go_type);
+                    }
                     Some(first) => debug_assert_eq!(
-                        first, &field.go_type,
+                        first, &go_type,
                         "enum {} shares Go field `{}` between differing types, so this emits one of them silently",
                         self.enum_name, field.go_name
                     ),
@@ -273,8 +276,10 @@ impl EnumLayout {
         &self,
         receiver_generics: &str,
         format: StringFormat<'_>,
-    ) -> String {
+    ) -> (String, PackageRequirements) {
         let receiver = synthesized_receiver_name(&self.enum_name, receiver_generics);
+        let mut requirements = PackageRequirements::default();
+        requirements.require_generated(GeneratedPackage::Fmt);
         let go_type_name = go_name::escape_type_name(&self.enum_name);
         let receiver_type = format!("{}{}", go_type_name, receiver_generics);
 
@@ -287,7 +292,12 @@ impl EnumLayout {
 
         for variant in &self.variants {
             lines.push(format!("case {}:", variant.tag_constant));
-            lines.push(self.build_variant_format_line(variant, &receiver, format));
+            lines.push(self.build_variant_format_line(
+                variant,
+                &receiver,
+                format,
+                &mut requirements,
+            ));
         }
 
         lines.push("default:".to_string());
@@ -298,7 +308,7 @@ impl EnumLayout {
         lines.push("}".to_string());
         lines.push("}".to_string());
 
-        lines.join("\n")
+        (lines.join("\n"), requirements)
     }
 
     fn build_variant_format_line(
@@ -306,6 +316,7 @@ impl EnumLayout {
         variant: &VariantLayout,
         receiver: &str,
         format: StringFormat<'_>,
+        requirements: &mut PackageRequirements,
     ) -> String {
         let prefix = format.prefix(&self.enum_name);
         if variant.fields.is_empty() {
@@ -314,7 +325,13 @@ impl EnumLayout {
         let args: Vec<String> = variant
             .fields
             .iter()
-            .map(|f| format.argument(format!("{receiver}.{}", f.go_name), f.is_function()))
+            .map(|f| {
+                format.argument(
+                    format!("{receiver}.{}", f.go_name),
+                    f.is_function(),
+                    requirements,
+                )
+            })
             .collect();
         let (open, close, placeholders) = if variant.is_struct_variant {
             let parts: Vec<String> = variant
@@ -340,13 +357,6 @@ impl EnumLayout {
             close,
             args.join(", ")
         )
-    }
-
-    pub(crate) fn debug_uses_prelude(&self) -> bool {
-        self.variants
-            .iter()
-            .flat_map(|v| v.fields.iter())
-            .any(|f| !f.is_function())
     }
 
     pub(crate) fn emit_variants_function(&self, fn_name: &str) -> String {

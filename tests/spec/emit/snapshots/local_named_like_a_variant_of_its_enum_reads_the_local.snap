@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  enum Color { red, blue }
+  
+  fn pick(red: Color) -> Color { red }
+  
+  fn test() -> Color {
+    let f = |red: Color| red
+    f(pick(Color.blue))
+  }
+---
+package main
+
+func MakeColorred() Color {
+	return Color{Tag: Colorred}
+}
+
+func MakeColorblue() Color {
+	return Color{Tag: Colorblue}
+}
+
+type ColorTag uint8
+
+const (
+	Colorred ColorTag = iota
+	Colorblue
+)
+
+type Color struct {
+	Tag ColorTag
+}
+
+func pick(red Color) Color {
+	return red
+}
+
+func test() Color {
+	f := func(red Color) Color {
+		return red
+	}
+	return f(pick(MakeColorblue()))
+}

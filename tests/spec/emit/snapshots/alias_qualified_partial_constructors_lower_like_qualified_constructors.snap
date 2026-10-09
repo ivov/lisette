@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  type Par = Partial<int, error>
+  
+  fn read(n: int, e: error) -> Par {
+    if n > 0 { return Par.Ok(n) }
+    if n < -1 { return Par.Both(n, e) }
+    Par.Err(e)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Par = lisette.Partial[int, error]
+
+func read(n int, e error) (int, error) {
+	if n > 0 {
+		return n, nil
+	}
+	if n < -1 {
+		return n, e
+	}
+	return 0, e
+}

@@ -1,8 +1,7 @@
 use crate::Planner;
 use crate::expressions::top_items::emit_doc;
-use syntax::EcoString;
 use syntax::ast::{Expression, FunctionDefinitionView, Generic, Pattern, Visibility};
-use syntax::types::{Type, build_substitution_map, substitute, type_args_match_params};
+use syntax::types::{Type, type_args_match_params};
 
 struct ImplContext<'a> {
     receiver_name: &'a str,
@@ -28,7 +27,9 @@ impl Planner<'_> {
 
         methods
             .iter()
-            .filter_map(|method| self.emit_impl_method(method, &ctx))
+            .filter_map(|method| {
+                self.with_declaration_scope(|this| this.emit_impl_method(method, &ctx))
+            })
             .collect::<Vec<_>>()
             .join("\n\n")
     }
@@ -44,12 +45,10 @@ impl Planner<'_> {
         else {
             return None;
         };
-        if self.facts.is_unused_definition(name_span) {
+        if self.facts.is_unused(name_span) {
             return None;
         }
         let function = method.function_definition_view();
-
-        self.scope.reset_for_top_level();
 
         let is_public = matches!(visibility, Visibility::Public);
 
@@ -68,20 +67,19 @@ impl Planner<'_> {
                 .into();
             let mut combined_generics = ctx.generics.to_vec();
             combined_generics.extend(function.generics.iter().cloned());
-            let generic_bounds = self.free_function_generic_bounds(ctx, function.generics);
+            let (generics, owner) = if self.impl_generics_match_receiver(ctx) {
+                (function.generics, Some(ctx.ty))
+            } else {
+                (combined_generics.as_slice(), None)
+            };
             let free_function = FunctionDefinitionView {
                 name: &free_name,
-                generics: &combined_generics,
+                generics,
                 ..function
             };
-            self.emit_function(free_function, None, false, generic_bounds.as_deref())
+            self.emit_function(free_function, None, false, owner)
         } else {
-            self.emit_function(
-                function,
-                Some((ctx.receiver_name.to_string(), ctx.ty.clone())),
-                should_export,
-                None,
-            )
+            self.emit_function(function, Some(ctx.ty), should_export, None)
         };
 
         if code.is_empty() {
@@ -91,49 +89,15 @@ impl Planner<'_> {
         Some(format!("{}{}", method_doc_comment, code))
     }
 
-    fn free_function_generic_bounds(
-        &self,
-        ctx: &ImplContext<'_>,
-        method_generics: &[Generic],
-    ) -> Option<Vec<(EcoString, Vec<Type>)>> {
-        let receiver_generics = self
-            .facts
-            .definition(&ctx.qualified_type)?
-            .body
-            .generics()?;
-        if receiver_generics.len() != ctx.generics.len()
-            || !type_args_match_params(
+    /// Whether the impl declares exactly the receiver's generics, in order.
+    fn impl_generics_match_receiver(&self, ctx: &ImplContext<'_>) -> bool {
+        self.facts
+            .definition(&ctx.qualified_type)
+            .and_then(|definition| definition.body.generics())
+            .is_some_and(|receiver_generics| receiver_generics.len() == ctx.generics.len())
+            && type_args_match_params(
                 ctx.ty.get_type_params().unwrap_or_default(),
                 ctx.generics.iter().map(|generic| &generic.name),
             )
-        {
-            return None;
-        }
-
-        let substitution = build_substitution_map(
-            receiver_generics,
-            ctx.ty.get_type_params().unwrap_or_default(),
-        );
-        let mut generic_bounds = receiver_generics
-            .iter()
-            .zip(ctx.generics)
-            .map(|(receiver_generic, impl_generic)| {
-                let bounds = receiver_generic
-                    .resolved_bounds()
-                    .expect("generic bounds must be resolved before emission")
-                    .map(|bound| substitute(bound, &substitution))
-                    .collect();
-                (impl_generic.name.clone(), bounds)
-            })
-            .collect::<Vec<_>>();
-        generic_bounds.extend(method_generics.iter().map(|generic| {
-            let bounds = generic
-                .resolved_bounds()
-                .expect("generic bounds must be resolved before emission")
-                .cloned()
-                .collect();
-            (generic.name.clone(), bounds)
-        }));
-        Some(generic_bounds)
     }
 }

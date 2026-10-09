@@ -1,7 +1,8 @@
 use super::NativeMethodCall;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
-use crate::plan::bodies::LoweredStatement;
+use crate::plan::bodies::Statement;
+use crate::plan::go_expression::BinaryOp;
 use crate::plan::values::{CaptureBoundary, GoExpression};
 
 pub(crate) struct BoundsCheckedIndex {
@@ -15,7 +16,7 @@ impl Planner<'_> {
     pub(crate) fn lower_bounds_checked_index(
         &mut self,
         call: &NativeMethodCall<'_>,
-    ) -> (Vec<LoweredStatement>, BoundsCheckedIndex) {
+    ) -> (Vec<Statement>, BoundsCheckedIndex) {
         let mut receiver = self.plan_operand(call.receiver, ExpressionContext::value());
         if !receiver.effects().can_duplicate() {
             self.pin_staged(&mut receiver, "recv");
@@ -45,28 +46,28 @@ impl Planner<'_> {
         let literal = |text: &str| GoExpression::literal(text.to_string());
         let (in_bounds, out_of_bounds) = if index.as_literal() == Some("0") {
             (
-                GoExpression::binary(length(), ">", literal("0")),
-                GoExpression::binary(length(), "==", literal("0")),
+                GoExpression::binary(length(), BinaryOp::Gt, literal("0")),
+                GoExpression::binary(length(), BinaryOp::Eq, literal("0")),
             )
         } else if index
             .as_literal()
             .is_some_and(|value| value.parse::<u64>().is_ok())
         {
             (
-                GoExpression::binary(length(), ">", index.clone()),
-                GoExpression::binary(length(), "<=", index.clone()),
+                GoExpression::binary(length(), BinaryOp::Gt, index.clone()),
+                GoExpression::binary(length(), BinaryOp::Le, index.clone()),
             )
         } else {
             (
                 GoExpression::binary(
-                    GoExpression::binary(index.clone(), ">=", literal("0")),
-                    "&&",
-                    GoExpression::binary(index.clone(), "<", length()),
+                    GoExpression::binary(index.clone(), BinaryOp::Ge, literal("0")),
+                    BinaryOp::And,
+                    GoExpression::binary(index.clone(), BinaryOp::Lt, length()),
                 ),
                 GoExpression::binary(
-                    GoExpression::binary(index.clone(), "<", literal("0")),
-                    "||",
-                    GoExpression::binary(index.clone(), ">=", length()),
+                    GoExpression::binary(index.clone(), BinaryOp::Lt, literal("0")),
+                    BinaryOp::Or,
+                    GoExpression::binary(index.clone(), BinaryOp::Ge, length()),
                 ),
             )
         };

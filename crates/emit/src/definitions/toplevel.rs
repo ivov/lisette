@@ -2,7 +2,7 @@ use crate::Planner;
 use crate::Renderer;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
-use crate::plan::bodies::{ConstPlan, LoweredStatement};
+use crate::plan::bodies::{ConstPlan, LoweredStatement, Statement};
 use crate::plan::values::GoExpression;
 use std::slice;
 use syntax::ast::{Expression, Generic};
@@ -58,13 +58,13 @@ impl Planner<'_> {
         ty: &Type,
         scope: ConstScope,
     ) -> ConstPlan {
-        let target_name = self.const_go_name(identifier);
-        let initial_go_name = self.scope.bind(identifier, target_name);
+        let target_name = go_name::screaming_snake_to_camel(identifier);
+        let initial_go_name = self.scope.bind_source(identifier, &[], target_name);
         let go_identifier = if self.try_declare(&initial_go_name) {
             initial_go_name
         } else {
             let fresh = self.fresh_var(Some(identifier));
-            self.scope.bind(identifier, &fresh);
+            self.scope.bind_source(identifier, &[], &fresh);
             self.try_declare(&fresh);
             fresh
         };
@@ -102,12 +102,13 @@ impl Planner<'_> {
         expression: &Expression,
         ty: &Type,
     ) -> String {
-        let statement = LoweredStatement::Const(self.build_const_plan(
+        let statement: Statement = LoweredStatement::Const(self.build_const_plan(
             identifier,
             expression,
             ty,
             ConstScope::Package,
-        ));
+        ))
+        .into();
         self.collect_imports(slice::from_ref(&statement));
         let out = Renderer.render_setup(slice::from_ref(&statement));
         out.trim_end_matches('\n').to_string()

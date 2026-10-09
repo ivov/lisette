@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn die() -> Never { panic("x") }
+  
+  fn run<T>(f: fn() -> T) -> int {
+    let _ = f
+    0
+  }
+  
+  fn test() -> int {
+    run(die)
+  }
+---
+package main
+
+func die() {
+	panic("x")
+}
+
+func run[T any](f func() T) int {
+	_ = f
+	return 0
+}
+
+func test() int {
+	cb := die
+	return run(func() struct{} {
+		cb()
+		return struct{}{}
+	})
+}
