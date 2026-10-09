@@ -723,7 +723,7 @@ pub fn hover(code: &str, offset: u32) -> String {
     // Add doc comment if available
     let mut full_markdown = markdown;
     if let Expression::Identifier {
-        resolution: IdentifierResolution::Definition(qname),
+        resolution: IdentifierResolution::Definition { name: qname, .. },
         ..
     } = expression
         && let Some(def) = result.analysis.emit_input.definitions.get(qname.as_str())
@@ -785,7 +785,7 @@ pub fn goto_definition(code: &str, offset: u32) -> String {
 
     if let Some(expression) = find_expression_at(&items, offset)
         && let Expression::Identifier {
-            resolution: IdentifierResolution::Definition(qname),
+            resolution: IdentifierResolution::Definition { name: qname, .. },
             ..
         } = expression
         && let Some(def) = result.analysis.emit_input.definitions.get(qname.as_str())
