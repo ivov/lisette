@@ -11,7 +11,6 @@ use crate::plan::bodies::{
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::values::GoExpression;
 
-use super::callable::AbiTransition;
 use super::layout::{FunctionLayout, ValueLayout};
 
 pub(crate) enum CoercionPlan {
@@ -62,7 +61,6 @@ pub(crate) enum LayoutBridge {
     Function {
         source: Box<FunctionLayout>,
         target: Box<FunctionLayout>,
-        direction: BridgeDirection,
     },
     Aggregate {
         source: Box<ValueLayout>,
@@ -87,7 +85,7 @@ impl LayoutBridge {
                 Some(BridgeDirection::FromGo)
             }
             Self::Reference { pointee } => pointee.direction(),
-            Self::Function { direction, .. } => Some(*direction),
+            Self::Function { .. } => None,
             Self::Aggregate { key, element, .. } => key
                 .as_deref()
                 .and_then(LayoutBridge::direction)
@@ -212,7 +210,6 @@ impl Planner<'_> {
         ));
         statements.push(
             LoweredStatement::Loop(LoopPlan {
-                prologue: Vec::new(),
                 kind: LoopKind::Generated { label: None },
                 header: LoopHeader::Range {
                     key: Some(index.into()),
@@ -348,7 +345,6 @@ pub(crate) fn resolve_layout_bridge(
             if source.return_abi.same_logical_contract(&target.return_abi) =>
         {
             LayoutBridge::Function {
-                direction: function_bridge_direction(planner, source, target),
                 source: Box::new(source.clone()),
                 target: Box::new(target.clone()),
             }
@@ -433,43 +429,6 @@ pub(crate) fn resolve_layout_bridge(
             },
         ) => resolve_layout_bridge(planner, source, target_underlying),
         _ => LayoutBridge::Identity,
-    }
-}
-
-fn function_bridge_direction(
-    planner: &Planner<'_>,
-    source: &FunctionLayout,
-    target: &FunctionLayout,
-) -> BridgeDirection {
-    let result = source
-        .results
-        .iter()
-        .zip(&target.results)
-        .find_map(|(source, target)| resolve_layout_bridge(planner, source, target).direction());
-    let parameter = target
-        .parameters
-        .iter()
-        .zip(&source.parameters)
-        .find_map(|(target, source)| resolve_layout_bridge(planner, target, source).direction())
-        .map(invert_direction);
-    result
-        .or(parameter)
-        .or_else(
-            || match source.return_abi.transition_to(&target.return_abi) {
-                AbiTransition::LowerFromTagged => Some(BridgeDirection::ToGo),
-                AbiTransition::WrapToTagged => Some(BridgeDirection::FromGo),
-                AbiTransition::Identity | AbiTransition::Reencode | AbiTransition::Incompatible => {
-                    None
-                }
-            },
-        )
-        .unwrap_or(BridgeDirection::ToGo)
-}
-
-fn invert_direction(direction: BridgeDirection) -> BridgeDirection {
-    match direction {
-        BridgeDirection::ToGo => BridgeDirection::FromGo,
-        BridgeDirection::FromGo => BridgeDirection::ToGo,
     }
 }
 

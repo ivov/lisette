@@ -5,13 +5,12 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use crate::names::go_name;
 use crate::plan::bodies::{
     AssignForm, CompoundKind, Definition, ElseArm, LoopTransfer, LoweredBlock, LoweredStatement,
-    SelectArmPlan, Statement, SwitchKind, for_each_statement, for_each_statements_mut,
-    legalize_else_if_scopes,
+    SelectArmPlan, Statement, SwitchKind, for_each_statements_mut,
 };
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp, verbatim_identifiers};
 use crate::plan::local::{GoIdentifier, LocalId};
-use crate::plan::values::{GoExpression, ValuePlan};
+use crate::plan::values::GoExpression;
 use crate::plan::visit::{VisitorMut, visit_statements_mut};
 
 pub(crate) fn clean_up(statements: &mut Vec<Statement>, shadowing: &HashSet<LocalId>) {
@@ -23,7 +22,6 @@ pub(crate) fn clean_up(statements: &mut Vec<Statement>, shadowing: &HashSet<Loca
     return_found_elements_directly(statements);
     // Declaration removal and return rewriting can make an else safe to inline.
     unwrap_terminal_else(statements);
-    legalize_else_if_scopes(statements);
 }
 
 fn return_found_elements_directly(statements: &mut Vec<Statement>) {
@@ -148,20 +146,16 @@ fn found_hit(
 
 fn assigned_name(statement: &LoweredStatement, target: &GoIdentifier) -> Option<GoIdentifier> {
     let LoweredStatement::Assign(AssignForm::Simple {
-        target_capture,
         target: place,
         value,
     }) = statement
     else {
         return None;
     };
-    if !target_capture.is_empty() || !value.setup().is_empty() {
-        return None;
-    }
     if !matches!(place.node(), GoExpressionNode::Identifier(name) if name.refers_to_same(target)) {
         return None;
     }
-    match value.expression().node() {
+    match value.node() {
         GoExpressionNode::Identifier(element) => Some(element.clone()),
         _ => None,
     }
@@ -169,17 +163,14 @@ fn assigned_name(statement: &LoweredStatement, target: &GoIdentifier) -> Option<
 
 fn assigns_true(statement: &LoweredStatement, target: &GoIdentifier) -> bool {
     let LoweredStatement::Assign(AssignForm::Simple {
-        target_capture,
         target: place,
         value,
     }) = statement
     else {
         return false;
     };
-    target_capture.is_empty()
-        && value.setup().is_empty()
-        && matches!(place.node(), GoExpressionNode::Identifier(name) if name.refers_to_same(target))
-        && matches!(value.expression().node(), GoExpressionNode::Literal(text) if text == "true")
+    matches!(place.node(), GoExpressionNode::Identifier(name) if name.refers_to_same(target))
+        && matches!(value.node(), GoExpressionNode::Literal(text) if text == "true")
 }
 
 fn flag_guarded_return(
@@ -231,12 +222,7 @@ fn unwrap_terminal_else_of(statement: &mut LoweredStatement) {
         then_diverges &= plan.then_body.ends_with_diverge();
         keeps_scope &= plan.initializer.is_none();
         match &mut plan.else_arm {
-            ElseArm::ElseIf(inner) => {
-                if !inner.condition_setup.is_empty() {
-                    then_diverges = true;
-                }
-                plan = inner;
-            }
+            ElseArm::ElseIf(inner) => plan = inner,
             ElseArm::Else { body, inline } => {
                 if then_diverges && keeps_scope && declares_no_names(body) {
                     *inline = true;
@@ -319,17 +305,9 @@ fn fold_compound_assignments(statements: &mut Vec<Statement>) {
 }
 
 fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredStatement> {
-    let LoweredStatement::Assign(AssignForm::Simple {
-        target_capture,
-        target,
-        value,
-    }) = statement
-    else {
+    let LoweredStatement::Assign(AssignForm::Simple { target, value }) = statement else {
         return None;
     };
-    if !target_capture.is_empty() || !value.setup().is_empty() {
-        return None;
-    }
     let GoExpressionNode::Identifier(name) = target.node() else {
         return None;
     };
@@ -338,7 +316,7 @@ fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredSta
         left,
         right,
         ..
-    } = value.expression().node()
+    } = value.node()
     else {
         return None;
     };
@@ -353,16 +331,11 @@ fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredSta
         (BinaryOp::Sub, GoExpressionNode::Literal(one)) if one == "1" => CompoundKind::Decrement,
         _ => CompoundKind::OpAssign {
             operator: *operator,
-            rhs: Box::new(ValuePlan::computed(
-                Vec::new(),
-                GoExpression::from_node(right.as_ref().clone()),
-                value.facts().effect,
-            )),
+            rhs: GoExpression::from_node(right.as_ref().clone()),
             pinned_left: None,
         },
     };
     Some(LoweredStatement::Assign(AssignForm::Compound {
-        target_capture: Vec::new(),
         target: target.clone(),
         kind,
     }))
@@ -407,7 +380,7 @@ impl LocalCounts {
 }
 
 impl NameUses {
-    fn of(statements: &mut [Statement]) -> Self {
+    fn of(statements: &mut Vec<Statement>) -> Self {
         let mut uses = Self::default();
         visit_statements_mut(statements, &mut uses);
         uses
@@ -509,24 +482,19 @@ fn replace_only_read(
             !names.iter().any(|name| name == source.spelling())
                 && rename_in(vec![value.node_mut()], None, temp, source)
         }
-        LoweredStatement::Assign(AssignForm::Simple {
-            target_capture,
-            target,
-            value,
-        }) if target_capture.is_empty() && value.setup().is_empty() => rename_in(
-            vec![target.node_mut(), value.parts_mut().1.node_mut()],
+        LoweredStatement::Assign(AssignForm::Simple { target, value }) => rename_in(
+            vec![target.node_mut(), value.node_mut()],
             Some(0),
             temp,
             source,
         ),
         LoweredStatement::Assign(AssignForm::Compound {
-            target_capture,
             target,
             kind: CompoundKind::OpAssign {
                 rhs, pinned_left, ..
             },
-        }) if target_capture.is_empty() && rhs.setup().is_empty() => {
-            let mut siblings = vec![target.node_mut(), rhs.parts_mut().1.node_mut()];
+        }) => {
+            let mut siblings = vec![target.node_mut(), rhs.node_mut()];
             siblings.extend(pinned_left.as_mut().map(GoExpression::node_mut));
             rename_in(siblings, Some(0), temp, source)
         }
@@ -539,9 +507,7 @@ fn replace_only_read(
         LoweredStatement::ExpressionStatement { expression, .. } => {
             rename_in(vec![expression.node_mut()], None, temp, source)
         }
-        LoweredStatement::If(plan)
-            if plan.condition_setup.is_empty() && plan.initializer.is_none() =>
-        {
+        LoweredStatement::If(plan) if plan.initializer.is_none() => {
             rename_in(vec![plan.condition.node_mut()], None, temp, source)
         }
         LoweredStatement::Switch(plan) => match &mut plan.kind {
@@ -681,38 +647,42 @@ fn drop_unread_temps(statements: &mut Vec<Statement>, shadowing: &HashSet<LocalI
     loop {
         let uses = NameUses::of(statements);
         let mut discards: HashMap<LocalId, usize> = HashMap::default();
-        for_each_statement(statements, &mut |statement| {
-            if let Some(id) = discarded_name(statement).and_then(GoIdentifier::id) {
-                *discards.entry(id).or_default() += 1;
+        for_each_statements_mut(statements, &mut |list| {
+            for statement in list.iter() {
+                if let Some(id) = discarded_name(&statement.kind).and_then(GoIdentifier::id) {
+                    *discards.entry(id).or_default() += 1;
+                }
             }
         });
         let mut dropped: Option<GoIdentifier> = None;
-        for_each_statement(statements, &mut |statement| {
-            if dropped.is_some() {
-                return;
-            }
-            let Some((name, value)) = pure_define(statement) else {
-                return;
-            };
-            if name.id().is_some_and(|id| shadowing.contains(&id)) {
-                return;
-            }
-            let discard_count = name
-                .id()
-                .and_then(|id| discards.get(&id))
-                .copied()
-                .unwrap_or_default();
-            let unread = uses.value_reads(name) == discard_count
-                && uses.bindings(name) == 1
-                && !uses.is_written(name);
-            let mut sources = Vec::new();
-            value.node().visit(&mut |node| {
-                if let GoExpressionNode::Identifier(source) = node {
-                    sources.push(source.clone());
+        for_each_statements_mut(statements, &mut |list| {
+            for statement in list.iter() {
+                if dropped.is_some() {
+                    return;
                 }
-            });
-            if unread && sources.iter().all(|source| uses.value_reads(source) > 1) {
-                dropped = Some(name.clone());
+                let Some((name, value)) = pure_define(&statement.kind) else {
+                    continue;
+                };
+                if name.id().is_some_and(|id| shadowing.contains(&id)) {
+                    continue;
+                }
+                let discard_count = name
+                    .id()
+                    .and_then(|id| discards.get(&id))
+                    .copied()
+                    .unwrap_or_default();
+                let unread = uses.value_reads(name) == discard_count
+                    && uses.bindings(name) == 1
+                    && !uses.is_written(name);
+                let mut sources = Vec::new();
+                value.node().visit(&mut |node| {
+                    if let GoExpressionNode::Identifier(source) = node {
+                        sources.push(source.clone());
+                    }
+                });
+                if unread && sources.iter().all(|source| uses.value_reads(source) > 1) {
+                    dropped = Some(name.clone());
+                }
             }
         });
         let Some(name) = dropped else {
@@ -799,7 +769,6 @@ mod tests {
 
     fn returning_if(initializer: Option<Definition>, else_body: Vec<Statement>) -> Statement {
         LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
             initializer,
             condition: name("ok"),
             then_body: LoweredBlock {
@@ -1069,7 +1038,6 @@ mod tests {
             statements,
             vec![
                 LoweredStatement::Assign(AssignForm::Compound {
-                    target_capture: Vec::new(),
                     target: name("total"),
                     kind: CompoundKind::Increment,
                 })
@@ -1109,7 +1077,6 @@ mod tests {
             .into(),
             define("found".to_string(), literal("false")),
             LoweredStatement::Loop(LoopPlan {
-                prologue: Vec::new(),
                 kind: LoopKind::Generated { label: None },
                 header: LoopHeader::Range {
                     key: None,

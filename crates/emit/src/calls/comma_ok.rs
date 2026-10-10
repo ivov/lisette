@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::calls::bound_value::{BoundValue, LoweredPair, PairValue};
 use crate::calls::dispatch::extract_native_method_name;
 use crate::calls::go_interop::NilGuard;
@@ -9,9 +9,7 @@ use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{Statement, define, define_many};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::values::GoExpression;
-use crate::state::bindings::{
-    BindingValue, ComponentBinding, ComponentKind, WholeValueConstructor,
-};
+use crate::state::bindings::{BindingValue, ComponentBinding, ComponentKind};
 use crate::state::scope::PairStatusKind;
 use syntax::ast::Expression;
 use syntax::program::CallKind;
@@ -82,7 +80,7 @@ impl Planner<'_> {
         };
         let status_kind = match components.kind {
             ComponentKind::Option => PairStatusKind::Ok,
-            ComponentKind::Result => PairStatusKind::Error,
+            ComponentKind::ErrorResult | ComponentKind::OtherResult => PairStatusKind::Error,
         };
         let pair = LoweredPair {
             value: PairValue::Named {
@@ -114,13 +112,10 @@ impl Planner<'_> {
     }
 
     pub(crate) fn rebuild_from_components(&self, components: &ComponentBinding) -> GoExpression {
-        let constructor = match components
-            .whole_value_constructor
-            .expect("component binding has no whole-value constructor")
-        {
-            WholeValueConstructor::OptionFromCommaOk => "OptionFromCommaOk",
-            WholeValueConstructor::ResultFromPair => "ResultFromPair",
-        };
+        let constructor = components
+            .kind
+            .whole_value_constructor()
+            .expect("component binding has no whole-value constructor");
         GoExpression::call(
             GoExpression::generated(
                 GeneratedPackage::Prelude,
@@ -172,7 +167,7 @@ impl Planner<'_> {
                 let lowered = self.lowered_call_of(expression, Vec::new(), &plan)?;
                 if !matches!(
                     lowered.shape,
-                    CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
+                    LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
                         payload: PayloadLayout::Packed,
                     })
                 ) || lowered.ok_ty.is_unit()

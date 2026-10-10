@@ -9,7 +9,7 @@ use crate::names::go_name;
 use crate::names::go_name::PRELUDE_ERROR_ID;
 use crate::patterns::matching::prelude_constructor;
 use crate::types::go_type::GoType;
-use callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use coercion::CoercionPlan;
 use layout::SlotOrigin;
 use syntax::ast::{Expression, IdentifierResolution};
@@ -43,8 +43,10 @@ impl Planner<'_> {
 
     /// Natural physical ABI of a Lisette-authored callable return.
     pub(crate) fn callable_return_abi(&self, return_ty: &Type) -> CallableReturnAbi {
-        self.classify_direct_emission(return_ty)
-            .unwrap_or_else(|| self.value_return_abi(return_ty))
+        self.classify_direct_emission(return_ty).map_or_else(
+            || self.value_return_abi(return_ty),
+            CallableReturnAbi::Lowered,
+        )
     }
 
     pub(crate) fn slot_return_abi(
@@ -52,8 +54,10 @@ impl Planner<'_> {
         return_ty: &Type,
         origin: SlotOrigin,
     ) -> CallableReturnAbi {
-        self.classify_slot_emission(return_ty, origin)
-            .unwrap_or_else(|| self.value_return_abi(return_ty))
+        self.classify_slot_emission(return_ty, origin).map_or_else(
+            || self.value_return_abi(return_ty),
+            CallableReturnAbi::Lowered,
+        )
     }
 
     /// A Go-named function type renders as its Go name, so a value of that
@@ -126,7 +130,7 @@ impl Planner<'_> {
         &self,
         return_ty: &Type,
         origin: SlotOrigin,
-    ) -> Option<CallableReturnAbi> {
+    ) -> Option<LoweredReturnAbi> {
         let abi = self.classify_direct_emission(return_ty)?;
         Some(if origin.declared_by_go() && abi.payload().is_some() {
             abi.with_payload(go_payload_layout(&self.facts.peel_alias(return_ty)))
@@ -136,19 +140,19 @@ impl Planner<'_> {
     }
 
     /// Lowered shape for a Lisette return type, or `None` to keep it tagged.
-    pub(crate) fn classify_direct_emission(&self, return_ty: &Type) -> Option<CallableReturnAbi> {
+    pub(crate) fn classify_direct_emission(&self, return_ty: &Type) -> Option<LoweredReturnAbi> {
         let peeled = self.facts.peel_alias(return_ty);
         if peeled.is_result() && self.err_slot_is_nilable(&peeled) {
             return Some(if peeled.ok_type().is_unit() {
-                CallableReturnAbi::BareError
+                LoweredReturnAbi::BareError
             } else {
-                CallableReturnAbi::Result {
+                LoweredReturnAbi::Result {
                     payload: PayloadLayout::Packed,
                 }
             });
         }
         if peeled.is_partial() && self.err_slot_is_nilable(&peeled) {
-            return Some(CallableReturnAbi::Partial {
+            return Some(LoweredReturnAbi::Partial {
                 payload: PayloadLayout::Packed,
             });
         }
@@ -160,12 +164,12 @@ impl Planner<'_> {
                     payload: PayloadLayout::Packed,
                 }
             };
-            return Some(CallableReturnAbi::Option(encoding));
+            return Some(LoweredReturnAbi::Option(encoding));
         }
         if let Some(arity) = peeled.tuple_arity()
             && arity >= 2
         {
-            return Some(CallableReturnAbi::Tuple { arity });
+            return Some(LoweredReturnAbi::Tuple { arity });
         }
         None
     }
@@ -178,10 +182,30 @@ impl Planner<'_> {
             || self.facts.is_nilable_go_type(&err)
     }
 
+    pub(crate) fn render_callable_return_ty(
+        &mut self,
+        abi: &CallableReturnAbi,
+        return_ty: &Type,
+    ) -> String {
+        let go_type = self.callable_return_go_type(abi, return_ty);
+        self.use_rendered_go_type(go_type)
+    }
+
+    pub(crate) fn callable_return_go_type(
+        &self,
+        abi: &CallableReturnAbi,
+        return_ty: &Type,
+    ) -> GoType {
+        match abi.lowered() {
+            Some(lowered) => self.lowered_return_go_type(lowered, return_ty),
+            None => self.go_type(&self.facts.peel_alias(return_ty)),
+        }
+    }
+
     /// Render the lowered Go return type.
     pub(crate) fn render_lowered_return_ty(
         &mut self,
-        shape: &CallableReturnAbi,
+        shape: &LoweredReturnAbi,
         return_ty: &Type,
     ) -> String {
         let go_type = self.lowered_return_go_type(shape, return_ty);
@@ -191,27 +215,26 @@ impl Planner<'_> {
     /// Render a lowered return type together with its package requirements.
     pub(crate) fn lowered_return_go_type(
         &self,
-        shape: &CallableReturnAbi,
+        shape: &LoweredReturnAbi,
         return_ty: &Type,
     ) -> GoType {
         let peeled = self.facts.peel_alias(return_ty);
         match shape {
-            CallableReturnAbi::Tagged | CallableReturnAbi::Direct => self.go_type(&peeled),
-            CallableReturnAbi::BareError => self.go_type(&peeled.err_type()),
-            CallableReturnAbi::Result { payload } | CallableReturnAbi::Partial { payload } => {
+            LoweredReturnAbi::BareError => self.go_type(&peeled.err_type()),
+            LoweredReturnAbi::Result { payload } | LoweredReturnAbi::Partial { payload } => {
                 let mut slots = self.lowered_payload_go_types(&peeled.ok_type(), *payload);
                 slots.push(self.go_type(&peeled.err_type()));
                 go_result_list(&slots)
             }
-            CallableReturnAbi::Option(OptionReturnAbi::CommaOk { payload }) => {
+            LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { payload }) => {
                 let mut slots = self.lowered_payload_go_types(&peeled.ok_type(), *payload);
                 slots.push(GoType::new("bool"));
                 go_result_list(&slots)
             }
-            CallableReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
+            LoweredReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
                 self.go_type(&peeled.ok_type())
             }
-            CallableReturnAbi::Tuple { .. } => go_result_list(&self.tuple_slot_go_types(&peeled)),
+            LoweredReturnAbi::Tuple { .. } => go_result_list(&self.tuple_slot_go_types(&peeled)),
         }
     }
 

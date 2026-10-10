@@ -5,13 +5,15 @@ use super::bodies::{
 use super::go_expression::GoExpressionNode;
 use super::local::GoIdentifier;
 use super::local::LocalId;
-use super::values::ValuePlan;
 use crate::state::scope::ScopeState;
 use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
 
 pub(crate) trait VisitorMut {
     fn expression(&mut self, node: &mut GoExpressionNode);
+
+    /// Sees each statement list, including those inside function literals, before its statements.
+    fn statements(&mut self, _statements: &mut Vec<Statement>) {}
 
     fn enter_scope(&mut self) {}
 
@@ -23,7 +25,8 @@ pub(crate) trait VisitorMut {
     fn assignment_target(&mut self, _target: &GoExpressionNode) {}
 }
 
-pub(crate) fn visit_statements_mut(statements: &mut [Statement], visitor: &mut impl VisitorMut) {
+pub(crate) fn visit_statements_mut(statements: &mut Vec<Statement>, visitor: &mut impl VisitorMut) {
+    visitor.statements(statements);
     for statement in statements {
         visit_statement(&mut statement.kind, visitor);
     }
@@ -53,14 +56,7 @@ fn visit_definition(definition: &mut Definition, visitor: &mut impl VisitorMut) 
     }
 }
 
-fn visit_value(value: &mut ValuePlan, visitor: &mut impl VisitorMut) {
-    let (setup, expression) = value.parts_mut();
-    visit_statements_mut(setup, visitor);
-    visit_expression(expression.node_mut(), visitor);
-}
-
 fn visit_if(plan: &mut IfPlan, visitor: &mut impl VisitorMut) {
-    visit_statements_mut(&mut plan.condition_setup, visitor);
     visitor.enter_scope();
     if let Some(initializer) = &mut plan.initializer {
         visit_definition(initializer, visitor);
@@ -100,7 +96,6 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
     match statement {
         LoweredStatement::If(plan) => visit_if(plan, visitor),
         LoweredStatement::Loop(plan) => {
-            visit_statements_mut(&mut plan.prologue, visitor);
             visitor.enter_scope();
             match &mut plan.header {
                 LoopHeader::Infinite => {}
@@ -151,19 +146,14 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
             }
         }
         LoweredStatement::Assign(form) => match form {
-            AssignForm::Compound {
-                target_capture,
-                target,
-                kind,
-            } => {
-                visit_statements_mut(target_capture, visitor);
+            AssignForm::Compound { target, kind } => {
                 visitor.assignment_target(target.node());
                 visit_expression(target.node_mut(), visitor);
                 match kind {
                     CompoundKind::OpAssign {
                         rhs, pinned_left, ..
                     } => {
-                        visit_value(rhs, visitor);
+                        visit_expression(rhs.node_mut(), visitor);
                         if let Some(left) = pinned_left {
                             visit_expression(left.node_mut(), visitor);
                         }
@@ -171,15 +161,10 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
                     CompoundKind::Increment | CompoundKind::Decrement => {}
                 }
             }
-            AssignForm::Simple {
-                target_capture,
-                target,
-                value,
-            } => {
-                visit_statements_mut(target_capture, visitor);
+            AssignForm::Simple { target, value } => {
                 visitor.assignment_target(target.node());
                 visit_expression(target.node_mut(), visitor);
-                visit_value(value, visitor);
+                visit_expression(value.node_mut(), visitor);
             }
         },
         LoweredStatement::Async { call, .. } => visit_expression(call.node_mut(), visitor),
@@ -241,7 +226,6 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
                 visitor.exit_scope();
             }
             visitor.exit_scope();
-            visit_statements_mut(&mut plan.postlude, visitor);
         }
         LoweredStatement::Define(definition) => visit_definition(definition, visitor),
         LoweredStatement::AssignMany { targets, value } => {
@@ -265,7 +249,7 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
 }
 
 pub(crate) fn identify_body_locals(
-    statements: &mut [Statement],
+    statements: &mut Vec<Statement>,
     parameters: &[GoIdentifier],
     scope: &mut ScopeState,
 ) -> HashSet<LocalId> {
@@ -519,7 +503,7 @@ mod tests {
         assert!(verify_local_scopes(&mut statements, &[]).is_ok());
     }
 
-    fn rename_suffix(statements: &mut [Statement]) {
+    fn rename_suffix(statements: &mut Vec<Statement>) {
         use rustc_hash::FxHashMap as HashMap;
 
         let mut bindings = HashMap::default();
@@ -673,14 +657,12 @@ mod tests {
     fn renaming_reaches_each_else_if_initializer() {
         let mut statements = vec![
             LoweredStatement::If(IfPlan {
-                condition_setup: Vec::new(),
                 initializer: Some(Definition::single("first_1".to_string(), name("source"))),
                 condition: name("first_1"),
                 then_body: LoweredBlock {
                     statements: Vec::new(),
                 },
                 else_arm: ElseArm::ElseIf(Box::new(IfPlan {
-                    condition_setup: Vec::new(),
                     initializer: Some(Definition::single("second_1".to_string(), name("source"))),
                     condition: name("second_1"),
                     then_body: LoweredBlock {

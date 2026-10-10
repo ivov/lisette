@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn pick(n: int) -> int {
+    let total = if n > 0 {
+      let f = |k: int| -> int { let total = k * 2; fmt.Println(total); total + 1 }
+      f(n)
+    } else { 0 }
+    fmt.Println(total)
+    total
+  }
+---
+package main
+
+import "fmt"
+
+func pick(n int) int {
+	var total int
+	if n > 0 {
+		f := func(k int) int {
+			total := k * 2
+			fmt.Println(total)
+			return total + 1
+		}
+		total = f(n)
+	} else {
+		total = 0
+	}
+	fmt.Println(total)
+	return total
+}

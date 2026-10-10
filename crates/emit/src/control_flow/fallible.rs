@@ -120,31 +120,6 @@ impl Fallible {
             Self::Option { .. } => OPTION_NONE_CTOR,
         }
     }
-
-    pub(crate) fn err_constructor_takes_arg(&self) -> bool {
-        self.is_result()
-    }
-
-    fn make_success(
-        &self,
-        value: GoExpression,
-        inner_ty: &str,
-        err_ty: Option<&str>,
-    ) -> GoExpression {
-        match self {
-            Self::Option { .. } => {
-                prelude_call(OPTION_SOME_CTOR, format!("[{}]", inner_ty), vec![value])
-            }
-            Self::Result { .. } => {
-                let err_ty = err_ty.expect("Result must have error type");
-                prelude_call(
-                    RESULT_OK_CTOR,
-                    format!("[{}, {}]", inner_ty, err_ty),
-                    vec![value],
-                )
-            }
-        }
-    }
 }
 
 pub(crate) fn prelude_call(
@@ -213,8 +188,7 @@ impl Planner<'_> {
                 _ => transition::lowered_none_values(self, &shape, &return_ty),
             };
         }
-        let mut fallible_planner = FalliblePlanner::new(self, fallible);
-        vec![fallible_planner.emit_contextual_failure(error)]
+        vec![self.contextual_failure(fallible, error)]
     }
 
     pub(crate) fn failure_return(
@@ -237,7 +211,7 @@ impl Planner<'_> {
         value: GoExpression,
     ) -> Vec<Statement> {
         let Some(shape) = self.return_ctx().lowered_shape() else {
-            let success = FalliblePlanner::new(self, fallible).emit_success(value);
+            let success = self.fallible_success(fallible, value);
             return vec![plain_return(success)];
         };
         let (mut statements, payload) =
@@ -249,129 +223,74 @@ impl Planner<'_> {
     }
 }
 
-/// Emits Result/Option success and failure constructors with resolved Go
-/// type strings.
-pub(crate) struct FalliblePlanner<'a, 'e> {
-    pub(crate) planner: &'a mut Planner<'e>,
-    fallible: &'a Fallible,
-}
-
-impl<'a, 'e> FalliblePlanner<'a, 'e> {
-    pub(crate) fn new(planner: &'a mut Planner<'e>, fallible: &'a Fallible) -> Self {
-        Self { planner, fallible }
-    }
-
-    fn ok_type_string(&mut self) -> String {
-        self.planner.use_go_type(self.fallible.ok_ty())
-    }
-
-    fn err_type_string(&mut self) -> Option<String> {
-        self.fallible.err_ty().map(|t| self.planner.use_go_type(t))
-    }
-
-    /// Ok type from the enclosing return context, with the fallible's own ok type as fallback.
-    fn contextual_ok_type_string(&mut self) -> String {
-        let return_ctx = self.planner.return_ctx();
-        if let Some(ty) = return_ctx.ty() {
-            let ok_ty = self.planner.facts.peel_alias(ty).ok_type();
-            self.planner.use_go_type(&ok_ty)
-        } else {
-            self.ok_type_string()
+impl Planner<'_> {
+    /// `T` or `T, E`, the type arguments of a prelude `Option` or `Result`.
+    fn fallible_type_args(&mut self, ok_ty: &Type, err_ty: Option<&Type>) -> String {
+        let ok = self.use_go_type(ok_ty);
+        match err_ty {
+            Some(err_ty) => format!("{ok}, {}", self.use_go_type(err_ty)),
+            None => ok,
         }
     }
 
-    pub(crate) fn full_type_string(&mut self) -> String {
-        let pkg = go_name::GO_STDLIB_PKG;
-        let inner_ty = self.ok_type_string();
-        let code = if self.fallible.is_result() {
-            let err_ty = self.planner.use_go_type(
-                self.fallible
-                    .err_ty()
-                    .expect("Result type must have an error type"),
-            );
-            format!(
-                "{}.{}[{}, {}]",
-                pkg,
-                self.fallible.struct_name(),
-                inner_ty,
-                err_ty
-            )
-        } else {
-            format!("{}.{}[{}]", pkg, self.fallible.struct_name(), inner_ty)
-        };
-        self.planner.use_rendered_go_type(GoType::stdlib(code))
+    pub(crate) fn fallible_go_type(&mut self, fallible: &Fallible) -> String {
+        let type_args = self.fallible_type_args(fallible.ok_ty(), fallible.err_ty());
+        let code = format!(
+            "{}.{}[{type_args}]",
+            go_name::GO_STDLIB_PKG,
+            fallible.struct_name()
+        );
+        self.use_rendered_go_type(GoType::stdlib(code))
     }
 
-    pub(crate) fn emit_success(&mut self, value: GoExpression) -> GoExpression {
-        let inner_ty = self.ok_type_string();
-        let err_ty = self.err_type_string();
-        self.fallible
-            .make_success(value, &inner_ty, err_ty.as_deref())
-    }
-
-    pub(crate) fn emit_failure(&mut self, error_value: Option<GoExpression>) -> GoExpression {
-        let inner_ty = self.ok_type_string();
-        if self.fallible.is_result() {
-            let err_ty = self.err_type_string().expect("Result must have error type");
-            make_failure(&inner_ty, Some(&err_ty), error_value)
-        } else {
-            make_failure(&inner_ty, None, None)
-        }
-    }
-
-    /// Emit a failure wrapper using the contextual ok and err types (from return context).
-    pub(crate) fn emit_contextual_failure(
+    pub(crate) fn fallible_call(
         &mut self,
-        error_value: Option<GoExpression>,
-    ) -> GoExpression {
-        let inner_ty = self.contextual_ok_type_string();
-        if self.fallible.is_result() {
-            let err_ty = self
-                .planner
-                .contextual_err_ty(self.fallible)
-                .expect("Result must have error type");
-            let err_ty = self.planner.use_go_type(&err_ty);
-            make_failure(&inner_ty, Some(&err_ty), error_value)
-        } else {
-            make_failure(&inner_ty, None, None)
-        }
-    }
-
-    pub(crate) fn format_constructor_call(
-        &mut self,
+        fallible: &Fallible,
         constructor: &str,
-        arg: Option<GoExpression>,
+        arguments: Vec<GoExpression>,
     ) -> GoExpression {
-        let inner_ty = self.ok_type_string();
-        let type_args = if self.fallible.is_result() {
-            let err_ty = self
-                .err_type_string()
-                .expect("Result type must have an error type");
-            format!("[{}, {}]", inner_ty, err_ty)
-        } else {
-            format!("[{}]", inner_ty)
-        };
-        GoExpression::call(
-            GoExpression::instantiation(
-                GoExpression::generated(GeneratedPackage::Prelude, constructor),
-                type_args,
-            ),
-            arg.into_iter().collect(),
-        )
+        let type_args = self.fallible_type_args(fallible.ok_ty(), fallible.err_ty());
+        prelude_call(constructor, format!("[{type_args}]"), arguments)
     }
-}
 
-fn make_failure(
-    inner_ty: &str,
-    err_ty: Option<&str>,
-    error_value: Option<GoExpression>,
-) -> GoExpression {
-    match err_ty {
-        Some(err_ty) => prelude_call(
-            RESULT_ERR_CTOR,
-            format!("[{}, {}]", inner_ty, err_ty),
-            error_value.into_iter().collect(),
-        ),
-        None => prelude_call(OPTION_NONE_CTOR, format!("[{}]", inner_ty), Vec::new()),
+    pub(crate) fn fallible_success(
+        &mut self,
+        fallible: &Fallible,
+        value: GoExpression,
+    ) -> GoExpression {
+        self.fallible_call(fallible, fallible.ok_constructor(), vec![value])
+    }
+
+    /// `Err(error)` or `None`: an `Option` failure carries no error.
+    pub(crate) fn fallible_failure(
+        &mut self,
+        fallible: &Fallible,
+        error: Option<GoExpression>,
+    ) -> GoExpression {
+        let arguments = error.filter(|_| fallible.is_result()).into_iter().collect();
+        self.fallible_call(fallible, fallible.err_constructor(), arguments)
+    }
+
+    /// A failure typed by the enclosing return type, with the fallible's own types as fallback.
+    fn contextual_failure(
+        &mut self,
+        fallible: &Fallible,
+        error: Option<GoExpression>,
+    ) -> GoExpression {
+        let ok_ty = match self.return_ctx().ty() {
+            Some(ty) => self.facts.peel_alias(ty).ok_type(),
+            None => fallible.ok_ty().clone(),
+        };
+        let err_ty = fallible.is_result().then(|| {
+            self.contextual_err_ty(fallible)
+                .expect("Result must have error type")
+        });
+        let type_args = self.fallible_type_args(&ok_ty, err_ty.as_ref());
+        let arguments = error.filter(|_| fallible.is_result()).into_iter().collect();
+        prelude_call(
+            fallible.err_constructor(),
+            format!("[{type_args}]"),
+            arguments,
+        )
     }
 }

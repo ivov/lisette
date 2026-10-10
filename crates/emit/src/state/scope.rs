@@ -7,7 +7,6 @@ use std::mem;
 use crate::ReturnContext;
 use crate::context::lowering::LoopContext;
 use crate::plan::bodies::LoopId;
-use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::values::GoExpression;
 use crate::state::bindings::{BindingValue, ComponentBinding, InlineExpr, TupleBinding};
@@ -20,10 +19,8 @@ pub(crate) struct ScopeState {
     next_local_id: u32,
     next_loop_id: u32,
     frames: Vec<ScopeFrame>,
-    loop_stack: Vec<LoopContext>,
-    assign_targets: HashSet<String>,
-    /// Type parameters in scope with their bounds, receiver first.
-    type_params: Vec<(EcoString, Vec<Type>)>,
+    /// Type parameters of the declaration being emitted, receiver first.
+    type_params: Vec<TypeParam>,
 }
 
 struct ScopeFrame {
@@ -40,20 +37,38 @@ enum DeclarationScope {
     /// to the nearest enclosing Go scope.
     Transparent,
     Block(Declarations),
-    /// A Go function body: hides outer declarations and lowers `return` against `return_ctx`.
-    Function {
-        declarations: Declarations,
-        return_ctx: ReturnContext,
-        test_handle: Option<GoIdentifier>,
-    },
+    /// A Go function body: hides outer declarations, loops, and assign targets,
+    /// and lowers `return` against `return_ctx`.
+    Function(FunctionScope),
 }
 
-type Declarations = HashMap<String, DeclarationKind>;
+struct FunctionScope {
+    declarations: Declarations,
+    return_ctx: ReturnContext,
+    test_handle: Option<GoIdentifier>,
+    loops: Vec<LoopContext>,
+    /// Go names written later in the region being lowered, innermost last.
+    assign_targets: Vec<String>,
+}
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum DeclarationKind {
-    Local,
-    TypeParameter,
+impl FunctionScope {
+    fn new(declarations: Declarations, return_ctx: ReturnContext) -> Self {
+        Self {
+            declarations,
+            return_ctx,
+            test_handle: None,
+            loops: Vec::new(),
+            assign_targets: Vec::new(),
+        }
+    }
+}
+
+type Declarations = HashSet<String>;
+
+pub(crate) struct TypeParam {
+    pub(crate) name: EcoString,
+    pub(crate) go_name: String,
+    pub(crate) bounds: Vec<Type>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -62,21 +77,27 @@ pub(crate) enum PairStatusKind {
     Ok,
 }
 
+impl ScopeFrame {
+    fn new(declarations: DeclarationScope) -> Self {
+        Self {
+            bindings: HashMap::default(),
+            binding_ids: HashMap::default(),
+            binding_values: Vec::new(),
+            declarations,
+            established: Vec::new(),
+        }
+    }
+}
+
 impl ScopeState {
     pub(crate) fn new() -> Self {
         Self {
             names: LocalNames::default(),
             next_local_id: 0,
             next_loop_id: 0,
-            frames: vec![ScopeFrame {
-                bindings: HashMap::default(),
-                binding_ids: HashMap::default(),
-                binding_values: Vec::new(),
-                declarations: DeclarationScope::Block(HashMap::default()),
-                established: Vec::new(),
-            }],
-            loop_stack: Vec::new(),
-            assign_targets: HashSet::default(),
+            frames: vec![ScopeFrame::new(DeclarationScope::Function(
+                FunctionScope::new(HashSet::default(), ReturnContext::None),
+            ))],
             type_params: Vec::new(),
         }
     }
@@ -89,17 +110,19 @@ impl ScopeState {
         *self = outer;
     }
 
-    pub(crate) fn set_type_params(&mut self, type_params: Vec<(EcoString, Vec<Type>)>) {
+    pub(crate) fn set_type_params(&mut self, type_params: Vec<TypeParam>) {
         self.type_params = type_params;
     }
 
-    pub(crate) fn type_params(&self) -> &[(EcoString, Vec<Type>)] {
+    pub(crate) fn type_params(&self) -> &[TypeParam] {
         &self.type_params
     }
 
-    pub(crate) fn declare_type_param(&mut self, go_name: &str) {
-        self.current_declarations_mut()
-            .insert(go_name.to_string(), DeclarationKind::TypeParameter);
+    /// No local may take a type parameter's name: types in its block may spell it.
+    fn declares_type_param(&self, go_name: &str) -> bool {
+        self.type_params
+            .iter()
+            .any(|param| param.go_name == go_name)
     }
 
     /// Bind `lisette_name` to `go_name`, read by identifiers resolved to any of `ids`.
@@ -109,16 +132,37 @@ impl ScopeState {
         ids: &[BindingId],
         go_name: impl Into<String>,
     ) -> GoIdentifier {
-        let go_name = crate::escape_reserved(&go_name.into()).into_owned();
+        self.bind_name(
+            lisette_name.into(),
+            ids,
+            go_name.into(),
+            BindingValue::GoName,
+        )
+    }
+
+    /// Bind a local `const` that Go can declare as a Go constant.
+    pub(crate) fn bind_go_const(&mut self, lisette_name: &str, go_name: String) -> GoIdentifier {
+        self.bind_name(
+            lisette_name.to_string(),
+            &[],
+            go_name,
+            BindingValue::GoConst,
+        )
+    }
+
+    fn bind_name(
+        &mut self,
+        lisette_name: String,
+        ids: &[BindingId],
+        go_name: String,
+        value: fn(GoIdentifier) -> BindingValue,
+    ) -> GoIdentifier {
+        let go_name = crate::escape_reserved(&go_name).into_owned();
         let id = self
             .generated_local_id(&go_name)
             .unwrap_or_else(|| self.new_local_id());
         let identifier = GoIdentifier::local(go_name, id);
-        self.set_binding(
-            lisette_name.into(),
-            ids,
-            BindingValue::GoName(identifier.clone()),
-        );
+        self.set_binding(lisette_name, ids, value(identifier.clone()));
         identifier
     }
 
@@ -178,19 +222,6 @@ impl ScopeState {
         self.set_binding(lisette_name.into(), ids, BindingValue::InlineExpr(expr));
     }
 
-    pub(crate) fn mark_go_const(&mut self, lisette_name: &str) {
-        let Some(BindingValue::GoName(name)) =
-            self.resolve_identifier_binding(lisette_name).cloned()
-        else {
-            return;
-        };
-        if let Some(slot) = self.current_frame().bindings.get(lisette_name).copied() {
-            self.current_frame_mut().binding_values[slot] = BindingValue::GoConst(name);
-        } else {
-            self.set_binding(lisette_name.to_string(), &[], BindingValue::GoConst(name));
-        }
-    }
-
     pub(crate) fn resolve_identifier_binding(&self, lisette_name: &str) -> Option<&BindingValue> {
         self.frames.iter().rev().find_map(|frame| {
             frame
@@ -219,12 +250,18 @@ impl ScopeState {
     /// `None` when the innermost local with this name is generated.
     pub(crate) fn source_binding_for_go_name(&self, go_name: &str) -> Option<BindingId> {
         for frame in self.frames.iter().rev() {
-            for (id, slot) in &frame.binding_ids {
-                if let Some(BindingValue::GoName(name)) = frame.binding_values.get(*slot)
-                    && name.spelling() == go_name
-                {
-                    return Some(*id);
-                }
+            let latest = frame
+                .binding_ids
+                .iter()
+                .filter(|(_, slot)| {
+                    matches!(
+                        frame.binding_values.get(**slot),
+                        Some(BindingValue::GoName(name)) if name.spelling() == go_name
+                    )
+                })
+                .max_by_key(|(id, slot)| (**slot, **id));
+            if let Some((id, _)) = latest {
+                return Some(*id);
             }
             if frame
                 .binding_values
@@ -285,16 +322,18 @@ impl ScopeState {
         GoIdentifier::name(go_name)
     }
 
+    /// Whether a visible binding or an active assign target uses `go_name`.
     pub(crate) fn has_binding_for_go_name(&self, go_name: &str) -> bool {
-        self.frames.iter().any(|frame| {
-            frame.bindings.iter().any(|(source_name, slot)| {
-                let value = &frame.binding_values[*slot];
-                value.mentions(go_name)
-                    && self
-                        .resolve_identifier_binding(source_name)
-                        .is_some_and(|visible| visible.mentions(go_name))
+        self.is_active_assign_target(go_name)
+            || self.frames.iter().any(|frame| {
+                frame.bindings.iter().any(|(source_name, slot)| {
+                    let value = &frame.binding_values[*slot];
+                    value.mentions(go_name)
+                        && self
+                            .resolve_identifier_binding(source_name)
+                            .is_some_and(|visible| visible.mentions(go_name))
+                })
             })
-        })
     }
 
     pub(crate) fn has_other_binding_for_go_name(&self, go_name: &str, lisette_name: &str) -> bool {
@@ -326,32 +365,29 @@ impl ScopeState {
     }
 
     pub(crate) fn declare_go_name(&mut self, go_name: &str) {
-        self.current_declarations_mut()
-            .insert(go_name.to_string(), DeclarationKind::Local);
+        self.current_declarations_mut().insert(go_name.to_string());
     }
 
     pub(crate) fn try_declare_go_name(&mut self, go_name: &str) -> bool {
-        let current = self.current_declarations_mut();
-        if current.contains_key(go_name) {
-            false
-        } else {
-            current.insert(go_name.to_string(), DeclarationKind::Local);
-            true
-        }
+        !self.declares_type_param(go_name)
+            && self.current_declarations_mut().insert(go_name.to_string())
     }
 
     pub(crate) fn current_block_declares(&self, go_name: &str) -> bool {
-        self.current_declarations().contains_key(go_name)
+        self.declares_type_param(go_name) || self.current_declarations().contains(go_name)
     }
 
     pub(crate) fn is_go_name_declared(&self, go_name: &str) -> bool {
+        if self.declares_type_param(go_name) {
+            return true;
+        }
         for frame in self.frames.iter().rev() {
             match &frame.declarations {
                 DeclarationScope::Transparent => {}
-                DeclarationScope::Block(names) if names.contains_key(go_name) => return true,
+                DeclarationScope::Block(names) if names.contains(go_name) => return true,
                 DeclarationScope::Block(_) => {}
-                DeclarationScope::Function { declarations, .. } => {
-                    return declarations.contains_key(go_name);
+                DeclarationScope::Function(function) => {
+                    return function.declarations.contains(go_name);
                 }
             }
         }
@@ -363,7 +399,7 @@ impl ScopeState {
     }
 
     pub(crate) fn enter_block(&mut self) {
-        self.push_frame(DeclarationScope::Block(HashMap::default()));
+        self.push_frame(DeclarationScope::Block(HashSet::default()));
     }
 
     pub(crate) fn exit_block(&mut self) {
@@ -400,7 +436,7 @@ impl ScopeState {
             {
                 return true;
             }
-            if matches!(frame.declarations, DeclarationScope::Function { .. }) {
+            if matches!(frame.declarations, DeclarationScope::Function(_)) {
                 return false;
             }
         }
@@ -408,18 +444,17 @@ impl ScopeState {
     }
 
     pub(crate) fn enter_isolated_function(&mut self, return_ctx: ReturnContext) {
-        self.push_frame(DeclarationScope::Function {
-            declarations: self.visible_type_params(),
+        self.push_frame(DeclarationScope::Function(FunctionScope::new(
+            HashSet::default(),
             return_ctx,
-            test_handle: None,
-        });
+        )));
     }
 
     pub(crate) fn exit_isolated_function(&mut self) {
         assert!(
             matches!(
                 self.current_frame().declarations,
-                DeclarationScope::Function { .. }
+                DeclarationScope::Function(_)
             ),
             "an isolated function must be entered before it is exited"
         );
@@ -429,26 +464,20 @@ impl ScopeState {
     pub(crate) fn push_loop(&mut self, result: GoExpression) {
         let id = LoopId(self.next_loop_id);
         self.next_loop_id += 1;
-        self.loop_stack.push(LoopContext { id, result });
+        self.current_function_mut()
+            .loops
+            .push(LoopContext { id, result });
     }
 
     pub(crate) fn pop_loop(&mut self) {
-        self.loop_stack
+        self.current_function_mut()
+            .loops
             .pop()
             .expect("a loop context must be pushed before it is popped");
     }
 
     pub(crate) fn set_test_handle(&mut self, handle: GoIdentifier) {
-        let slot = self
-            .frames
-            .iter_mut()
-            .rev()
-            .find_map(|frame| match &mut frame.declarations {
-                DeclarationScope::Function { test_handle, .. } => Some(test_handle),
-                _ => None,
-            })
-            .expect("a test handle is a parameter of an isolated function");
-        *slot = Some(handle);
+        self.current_function_mut().test_handle = Some(handle);
     }
 
     /// The test handle of the nearest enclosing function that has one.
@@ -457,58 +486,72 @@ impl ScopeState {
             .iter()
             .rev()
             .find_map(|frame| match &frame.declarations {
-                DeclarationScope::Function { test_handle, .. } => test_handle.as_ref(),
+                DeclarationScope::Function(function) => function.test_handle.as_ref(),
                 _ => None,
             })
     }
 
     pub(crate) fn current_return_ctx(&self) -> ReturnContext {
+        self.current_function().return_ctx.clone()
+    }
+
+    pub(crate) fn current_loop_result(&self) -> Option<&GoExpression> {
+        self.current_function()
+            .loops
+            .last()
+            .map(|context| &context.result)
+    }
+
+    pub(crate) fn current_loop_id(&self) -> Option<LoopId> {
+        self.current_function()
+            .loops
+            .last()
+            .map(|context| context.id)
+    }
+
+    /// Mark `name` as written later in the region being lowered.
+    pub(crate) fn push_assign_target(&mut self, name: String) {
+        self.current_function_mut().assign_targets.push(name);
+    }
+
+    pub(crate) fn pop_assign_target(&mut self) {
+        self.current_function_mut()
+            .assign_targets
+            .pop()
+            .expect("an assign target must be pushed before it is popped");
+    }
+
+    pub(crate) fn is_active_assign_target(&self, var: &str) -> bool {
+        self.current_function()
+            .assign_targets
+            .iter()
+            .any(|target| target == var)
+    }
+
+    fn current_function(&self) -> &FunctionScope {
         self.frames
             .iter()
             .rev()
             .find_map(|frame| match &frame.declarations {
-                DeclarationScope::Function { return_ctx, .. } => Some(return_ctx.clone()),
+                DeclarationScope::Function(function) => Some(function),
                 _ => None,
             })
-            .unwrap_or_default()
+            .expect("scope state always retains a function scope")
     }
 
-    pub(crate) fn current_loop_result(&self) -> Option<&GoExpression> {
-        self.loop_stack.last().map(|context| &context.result)
-    }
-
-    pub(crate) fn current_loop_id(&self) -> Option<LoopId> {
-        self.loop_stack.last().map(|context| context.id)
-    }
-
-    /// Mark `target` as written later in the region, returning whether it became active.
-    pub(crate) fn activate_assign_target(&mut self, target: &GoExpression) -> bool {
-        match target.node() {
-            GoExpressionNode::Identifier(name) if name.spelling() != "_" => {
-                self.assign_targets.insert(name.to_string())
-            }
-            _ => false,
-        }
-    }
-
-    pub(crate) fn deactivate_assign_target(&mut self, target: &GoExpression) {
-        if let GoExpressionNode::Identifier(name) = target.node() {
-            self.assign_targets.remove(name.spelling());
-        }
-    }
-
-    pub(crate) fn is_active_assign_target(&self, var: &str) -> bool {
-        self.assign_targets.contains(var)
+    fn current_function_mut(&mut self) -> &mut FunctionScope {
+        self.frames
+            .iter_mut()
+            .rev()
+            .find_map(|frame| match &mut frame.declarations {
+                DeclarationScope::Function(function) => Some(function),
+                _ => None,
+            })
+            .expect("scope state always retains a function scope")
     }
 
     fn push_frame(&mut self, declarations: DeclarationScope) {
-        self.frames.push(ScopeFrame {
-            bindings: HashMap::default(),
-            binding_ids: HashMap::default(),
-            binding_values: Vec::new(),
-            declarations,
-            established: Vec::new(),
-        });
+        self.frames.push(ScopeFrame::new(declarations));
     }
 
     fn pop_frame(&mut self) {
@@ -545,10 +588,10 @@ impl ScopeState {
             .find_map(|frame| match &frame.declarations {
                 DeclarationScope::Transparent => None,
                 DeclarationScope::Block(names)
-                | DeclarationScope::Function {
+                | DeclarationScope::Function(FunctionScope {
                     declarations: names,
                     ..
-                } => Some(names),
+                }) => Some(names),
             })
             .expect("scope state always retains a declaration scope")
     }
@@ -560,26 +603,12 @@ impl ScopeState {
             .find_map(|frame| match &mut frame.declarations {
                 DeclarationScope::Transparent => None,
                 DeclarationScope::Block(names)
-                | DeclarationScope::Function {
+                | DeclarationScope::Function(FunctionScope {
                     declarations: names,
                     ..
-                } => Some(names),
+                }) => Some(names),
             })
             .expect("scope state always retains a declaration scope")
-    }
-
-    fn visible_type_params(&self) -> Declarations {
-        self.frames
-            .iter()
-            .filter_map(|frame| match &frame.declarations {
-                DeclarationScope::Transparent => None,
-                DeclarationScope::Block(declarations)
-                | DeclarationScope::Function { declarations, .. } => Some(declarations),
-            })
-            .flat_map(|declarations| declarations.iter())
-            .filter(|(_, kind)| **kind == DeclarationKind::TypeParameter)
-            .map(|(name, kind)| (name.clone(), *kind))
-            .collect()
     }
 }
 
@@ -592,6 +621,24 @@ mod tests {
 
     fn pair_first() -> GoExpression {
         GoExpression::selector(GoExpression::name("pair".to_string()), "F0".to_string())
+    }
+
+    #[test]
+    fn isolated_functions_hide_enclosing_loops_and_assign_targets() {
+        let mut scope = ScopeState::new();
+        scope.push_loop(GoExpression::name("result".to_string()));
+        scope.push_assign_target("result".to_string());
+        let outer_loop = scope.current_loop_id();
+
+        scope.enter_isolated_function(ReturnContext::None);
+        assert!(scope.current_loop_id().is_none());
+        assert!(!scope.is_active_assign_target("result"));
+        assert!(!scope.has_binding_for_go_name("result"));
+        scope.exit_isolated_function();
+
+        assert_eq!(scope.current_loop_id(), outer_loop);
+        assert!(scope.is_active_assign_target("result"));
+        assert!(scope.has_binding_for_go_name("result"));
     }
 
     #[test]
@@ -668,17 +715,6 @@ mod tests {
                 .and_then(BindingValue::as_go_name),
             Some("original")
         );
-        scope.mark_go_const("value");
-        assert!(
-            !scope
-                .resolve_binding_id(old_id)
-                .is_some_and(BindingValue::is_go_const)
-        );
-        assert!(
-            scope
-                .resolve_binding_id(new_id)
-                .is_some_and(BindingValue::is_go_const)
-        );
     }
 
     #[test]
@@ -749,8 +785,7 @@ mod tests {
     #[test]
     fn nested_bindings_restore_names_constants_and_inline_expressions() {
         let mut scope = ScopeState::new();
-        scope.bind_source("value", &[], "outer");
-        scope.mark_go_const("value");
+        scope.bind_go_const("value", "outer".to_string());
         scope.push_binding_frame();
         scope.bind_inline_expr(
             "value",

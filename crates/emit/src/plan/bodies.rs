@@ -3,9 +3,8 @@
 
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
 use crate::plan::local::{GoIdentifier, LocalId};
-use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::values::GoExpression;
 use rustc_hash::FxHashSet as HashSet;
-use std::mem::{replace, take};
 use syntax::types::Type;
 
 pub(crate) fn define(name: impl Into<GoIdentifier>, value: GoExpression) -> Statement {
@@ -33,12 +32,7 @@ pub(crate) fn expression_statement(expression: GoExpression) -> Statement {
 }
 
 pub(crate) fn assign(target: GoExpression, value: GoExpression) -> Statement {
-    LoweredStatement::Assign(AssignForm::Simple {
-        target_capture: Vec::new(),
-        target,
-        value: ValuePlan::computed(Vec::new(), value, EvaluationEffect::Pure),
-    })
-    .into()
+    LoweredStatement::Assign(AssignForm::Simple { target, value }).into()
 }
 
 /// Destination for a lowered block's tail. The enclosing function's return
@@ -244,12 +238,11 @@ pub(crate) enum LoweredStatement {
     UnreachablePanic,
 }
 
-/// A source `const` (or `var` when the value is not Go-const-eligible).
+/// A source `const` that Go can declare as a constant. `go_type` is `None` when untyped.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ConstPlan {
-    pub(crate) is_const: bool,
     pub(crate) name: GoIdentifier,
-    pub(crate) ty_str: String,
+    pub(crate) go_type: Option<String>,
     pub(crate) value: GoExpression,
 }
 
@@ -258,15 +251,13 @@ pub(crate) struct ConstPlan {
 pub(crate) enum AssignForm {
     /// `target++`, `target--`, or `target op= rhs`.
     Compound {
-        target_capture: Vec<Statement>,
         target: GoExpression,
         kind: CompoundKind,
     },
     /// `target = value`.
     Simple {
-        target_capture: Vec<Statement>,
         target: GoExpression,
-        value: ValuePlan,
+        value: GoExpression,
     },
 }
 
@@ -278,7 +269,7 @@ pub(crate) enum CompoundKind {
     /// into `pinned_left`, rendered as `target = pinned_left op rhs`.
     OpAssign {
         operator: BinaryOp,
-        rhs: Box<ValuePlan>,
+        rhs: GoExpression,
         pinned_left: Option<GoExpression>,
     },
 }
@@ -290,8 +281,6 @@ pub(crate) struct SwitchStatementPlan {
     pub(crate) kind: SwitchKind,
     pub(crate) cases: Vec<SwitchCasePlan>,
     pub(crate) default: Option<LoweredBlock>,
-    /// Statements after the switch, such as an unreachable panic.
-    pub(crate) postlude: Vec<Statement>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -337,7 +326,7 @@ impl SwitchStatementPlan {
             cases.go_falls_through = true;
         }
         cases.consume_unlabeled_breaks();
-        cases.sequence(FlowSummary::statements(&self.postlude))
+        cases
     }
 }
 
@@ -399,12 +388,10 @@ impl SelectArmPlan {
     }
 }
 
-/// A statement-position loop. `prologue` is pre-loop setup (a for-loop's
-/// iterable capture); its kind records whether transfers inside it can target
-/// an enclosing source loop.
+/// A statement-position loop. Its kind records whether transfers inside it
+/// can target an enclosing source loop.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LoopPlan {
-    pub(crate) prologue: Vec<Statement>,
     pub(crate) kind: LoopKind,
     pub(crate) header: LoopHeader,
     pub(crate) body: LoweredBlock,
@@ -418,7 +405,7 @@ impl LoopPlan {
         let go_breaks = consume_loop_exits(&mut body.go_exits, label);
         body.falls_through = source_breaks || !matches!(self.header, LoopHeader::Infinite);
         body.go_falls_through = go_breaks || !matches!(self.header, LoopHeader::Infinite);
-        FlowSummary::statements(&self.prologue).sequence(body)
+        body
     }
 }
 
@@ -475,7 +462,6 @@ impl LoopKind {
 pub(crate) struct IfPlan {
     /// Side-effecting setup hoisted before the `if` condition (temps from a
     /// condition that lowered to statements).
-    pub(crate) condition_setup: Vec<Statement>,
     pub(crate) initializer: Option<Definition>,
     pub(crate) condition: GoExpression,
     pub(crate) then_body: LoweredBlock,
@@ -489,13 +475,22 @@ impl IfPlan {
         else_arm: ElseArm,
     ) -> Self {
         Self {
-            condition_setup: Vec::new(),
             initializer: None,
             condition,
             then_body,
             else_arm,
         }
     }
+}
+
+/// `setup` runs before `statement` in the same Go block.
+pub(crate) fn with_setup(setup: Vec<Statement>, statement: LoweredStatement) -> LoweredStatement {
+    if setup.is_empty() {
+        return statement;
+    }
+    let mut statements = setup;
+    statements.push(statement.into());
+    LoweredStatement::Body(LoweredBlock { statements })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -525,15 +520,8 @@ fn visit_statements(statements: &[Statement], visit: &mut impl FnMut(&GoExpressi
     }
 }
 
-pub(crate) fn for_each_statement(statements: &[Statement], f: &mut impl FnMut(&LoweredStatement)) {
-    for statement in statements {
-        f(&statement.kind);
-        statement.kind.for_each_nested_statement(f);
-    }
-}
-
 pub(crate) fn rename_generated_locals(
-    statements: &mut [Statement],
+    statements: &mut Vec<Statement>,
     by_id: &rustc_hash::FxHashMap<LocalId, String>,
 ) {
     struct Rename<'a>(&'a rustc_hash::FxHashMap<LocalId, String>);
@@ -557,24 +545,22 @@ pub(crate) fn rename_generated_locals(
     super::visit::visit_statements_mut(statements, &mut Rename(by_id));
 }
 
+/// Run `f` on every statement list in `statements`, including those inside function literals.
 pub(crate) fn for_each_statements_mut(
     statements: &mut Vec<Statement>,
     f: &mut impl FnMut(&mut Vec<Statement>),
 ) {
-    f(statements);
-    for statement in statements {
-        statement.kind.for_each_nested_statements_mut(f);
-    }
-}
+    struct Lists<'f, F>(&'f mut F);
 
-pub(crate) fn legalize_else_if_scopes(statements: &mut Vec<Statement>) {
-    for_each_statements_mut(statements, &mut |statements| {
-        for statement in statements {
-            if let LoweredStatement::If(plan) = &mut statement.kind {
-                plan.legalize_else_if_scope();
-            }
+    impl<F: FnMut(&mut Vec<Statement>)> super::visit::VisitorMut for Lists<'_, F> {
+        fn expression(&mut self, _node: &mut GoExpressionNode) {}
+
+        fn statements(&mut self, statements: &mut Vec<Statement>) {
+            (self.0)(statements);
         }
-    });
+    }
+
+    super::visit::visit_statements_mut(statements, &mut Lists(f));
 }
 
 #[derive(Default)]
@@ -688,7 +674,6 @@ impl LoweredStatement {
         match self {
             LoweredStatement::If(plan) => plan.visit_expressions(visit),
             LoweredStatement::Loop(plan) => {
-                visit_statements(&plan.prologue, visit);
                 match &plan.header {
                     LoopHeader::Infinite => {}
                     LoopHeader::While(condition) => condition.node().visit(visit),
@@ -717,31 +702,21 @@ impl LoweredStatement {
                 }
             }
             LoweredStatement::Assign(form) => match form {
-                AssignForm::Compound {
-                    target_capture,
-                    target,
-                    kind,
-                } => {
-                    visit_statements(target_capture, visit);
+                AssignForm::Compound { target, kind } => {
                     target.node().visit(visit);
                     if let CompoundKind::OpAssign {
                         rhs, pinned_left, ..
                     } = kind
                     {
-                        rhs.visit_expressions(visit);
+                        rhs.node().visit(visit);
                         if let Some(left) = pinned_left {
                             left.node().visit(visit);
                         }
                     }
                 }
-                AssignForm::Simple {
-                    target_capture,
-                    target,
-                    value,
-                } => {
-                    visit_statements(target_capture, visit);
+                AssignForm::Simple { target, value } => {
                     target.node().visit(visit);
-                    value.visit_expressions(visit);
+                    value.node().visit(visit);
                 }
             },
             LoweredStatement::Async { call, .. } => call.node().visit(visit),
@@ -778,7 +753,6 @@ impl LoweredStatement {
                 if let Some(default) = &plan.default {
                     default.visit_expressions(visit);
                 }
-                visit_statements(&plan.postlude, visit);
             }
             LoweredStatement::Define(definition) => definition.value.node().visit(visit),
             LoweredStatement::AssignMany { targets, value } => {
@@ -796,122 +770,6 @@ impl LoweredStatement {
             | LoweredStatement::ExpressionStatement { expression, .. } => {
                 expression.node().visit(visit)
             }
-        }
-    }
-
-    fn for_each_nested_statement(&self, f: &mut impl FnMut(&LoweredStatement)) {
-        match self {
-            LoweredStatement::If(plan) => plan.for_each_statement(f),
-            LoweredStatement::Loop(plan) => {
-                for_each_statement(&plan.prologue, f);
-                for_each_statement(&plan.body.statements, f);
-            }
-            LoweredStatement::Block(body) | LoweredStatement::Body(body) => {
-                for_each_statement(&body.statements, f)
-            }
-            LoweredStatement::Assign(form) => match form {
-                AssignForm::Compound {
-                    target_capture,
-                    kind,
-                    ..
-                } => {
-                    for_each_statement(target_capture, f);
-                    if let CompoundKind::OpAssign { rhs, .. } = kind {
-                        for_each_statement(rhs.setup(), f);
-                    }
-                }
-                AssignForm::Simple {
-                    target_capture,
-                    value,
-                    ..
-                } => {
-                    for_each_statement(target_capture, f);
-                    for_each_statement(value.setup(), f);
-                }
-            },
-            LoweredStatement::Select(plan) => {
-                for arm in &plan.arms {
-                    for_each_statement(&arm.body().statements, f);
-                }
-            }
-            LoweredStatement::Switch(plan) => {
-                for case in &plan.cases {
-                    for_each_statement(&case.body.statements, f);
-                }
-                if let Some(default) = &plan.default {
-                    for_each_statement(&default.statements, f);
-                }
-                for_each_statement(&plan.postlude, f);
-            }
-            LoweredStatement::Break(_)
-            | LoweredStatement::Continue(_)
-            | LoweredStatement::Return(_)
-            | LoweredStatement::Const(_)
-            | LoweredStatement::Async { .. }
-            | LoweredStatement::Define(_)
-            | LoweredStatement::AssignMany { .. }
-            | LoweredStatement::VarDecl { .. }
-            | LoweredStatement::Discard(_)
-            | LoweredStatement::ExpressionStatement { .. }
-            | LoweredStatement::UnreachablePanic => {}
-        }
-    }
-
-    fn for_each_nested_statements_mut(&mut self, f: &mut impl FnMut(&mut Vec<Statement>)) {
-        match self {
-            LoweredStatement::If(plan) => plan.for_each_statements_mut(f),
-            LoweredStatement::Loop(plan) => {
-                for_each_statements_mut(&mut plan.prologue, f);
-                for_each_statements_mut(&mut plan.body.statements, f);
-            }
-            LoweredStatement::Block(body) | LoweredStatement::Body(body) => {
-                for_each_statements_mut(&mut body.statements, f)
-            }
-            LoweredStatement::Assign(form) => match form {
-                AssignForm::Compound {
-                    target_capture,
-                    kind,
-                    ..
-                } => {
-                    for_each_statements_mut(target_capture, f);
-                    if let CompoundKind::OpAssign { rhs, .. } = kind {
-                        for_each_statements_mut(rhs.parts_mut().0, f);
-                    }
-                }
-                AssignForm::Simple {
-                    target_capture,
-                    value,
-                    ..
-                } => {
-                    for_each_statements_mut(target_capture, f);
-                    for_each_statements_mut(value.parts_mut().0, f);
-                }
-            },
-            LoweredStatement::Select(plan) => {
-                for arm in &mut plan.arms {
-                    for_each_statements_mut(&mut arm.body_mut().statements, f);
-                }
-            }
-            LoweredStatement::Switch(plan) => {
-                for case in &mut plan.cases {
-                    for_each_statements_mut(&mut case.body.statements, f);
-                }
-                if let Some(default) = &mut plan.default {
-                    for_each_statements_mut(&mut default.statements, f);
-                }
-                for_each_statements_mut(&mut plan.postlude, f);
-            }
-            LoweredStatement::Break(_)
-            | LoweredStatement::Continue(_)
-            | LoweredStatement::Return(_)
-            | LoweredStatement::Const(_)
-            | LoweredStatement::Async { .. }
-            | LoweredStatement::Define(_)
-            | LoweredStatement::AssignMany { .. }
-            | LoweredStatement::VarDecl { .. }
-            | LoweredStatement::Discard(_)
-            | LoweredStatement::ExpressionStatement { .. }
-            | LoweredStatement::UnreachablePanic => {}
         }
     }
 
@@ -1023,45 +881,7 @@ impl SwitchCasePlan {
 }
 
 impl IfPlan {
-    fn legalize_else_if_scope(&mut self) {
-        if let ElseArm::ElseIf(inner) = &mut self.else_arm {
-            inner.legalize_else_if_scope();
-            if !inner.condition_setup.is_empty() {
-                let ElseArm::ElseIf(mut inner) = replace(&mut self.else_arm, ElseArm::None) else {
-                    unreachable!("else-if was checked before replacement");
-                };
-                let mut statements = take(&mut inner.condition_setup);
-                statements.push(LoweredStatement::If(*inner).into());
-                self.else_arm = ElseArm::Else {
-                    body: LoweredBlock { statements },
-                    inline: false,
-                };
-            }
-        }
-    }
-
-    fn for_each_statement(&self, f: &mut impl FnMut(&LoweredStatement)) {
-        for_each_statement(&self.condition_setup, f);
-        for_each_statement(&self.then_body.statements, f);
-        match &self.else_arm {
-            ElseArm::None => {}
-            ElseArm::ElseIf(plan) => plan.for_each_statement(f),
-            ElseArm::Else { body, .. } => for_each_statement(&body.statements, f),
-        }
-    }
-
-    fn for_each_statements_mut(&mut self, f: &mut impl FnMut(&mut Vec<Statement>)) {
-        for_each_statements_mut(&mut self.condition_setup, f);
-        for_each_statements_mut(&mut self.then_body.statements, f);
-        match &mut self.else_arm {
-            ElseArm::None => {}
-            ElseArm::ElseIf(plan) => plan.for_each_statements_mut(f),
-            ElseArm::Else { body, .. } => for_each_statements_mut(&mut body.statements, f),
-        }
-    }
-
     pub(super) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
-        visit_statements(&self.condition_setup, visit);
         if let Some(initializer) = &self.initializer {
             initializer.value.node().visit(visit);
         }
@@ -1096,7 +916,7 @@ impl IfPlan {
             branches.go_falls_through = go.go_falls_through;
             branches.go_exits = go.go_exits;
         }
-        FlowSummary::statements(&self.condition_setup).sequence(branches)
+        branches
     }
 }
 
@@ -1117,7 +937,6 @@ mod flow_tests {
 
     fn infinite(statements: Vec<Statement>) -> LoweredStatement {
         LoweredStatement::Loop(LoopPlan {
-            prologue: Vec::new(),
             kind: LoopKind::Source { label: None },
             header: LoopHeader::Infinite,
             body: block(statements),
@@ -1261,7 +1080,6 @@ mod flow_tests {
                 ]),
             }],
             default: Some(block(vec![LoweredStatement::Return(vec![]).into()])),
-            postlude: Vec::new(),
         });
         let body = block(vec![infinite(vec![switch.into()]).into()]);
         assert!(body.go_terminates());
@@ -1280,11 +1098,9 @@ mod flow_tests {
             default: Some(block(vec![
                 LoweredStatement::Continue(LoopTransfer::Labeled("outer".into())).into(),
             ])),
-            postlude: Vec::new(),
         });
         let body = block(vec![
             LoweredStatement::Loop(LoopPlan {
-                prologue: Vec::new(),
                 kind: LoopKind::Source {
                     label: Some("outer".into()),
                 },

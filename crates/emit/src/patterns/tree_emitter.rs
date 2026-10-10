@@ -153,13 +153,6 @@ pub(crate) enum MatchSubject {
 }
 
 impl MatchSubject {
-    fn var(&self) -> &GoExpression {
-        match self {
-            Self::Var(var) => var,
-            Self::Elements(_) => unreachable!("tuple elements carry no bindings"),
-        }
-    }
-
     pub(crate) fn root(&self) -> SubjectRoot<'_> {
         match self {
             Self::Var(var) => SubjectRoot::Var(var),
@@ -396,7 +389,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
         statements.push(
             LoweredStatement::Loop(LoopPlan {
-                prologue: Vec::new(),
                 kind: LoopKind::Generated { label: Some(label) },
                 header: LoopHeader::Infinite,
                 body: LoweredBlock { statements: body },
@@ -472,16 +464,15 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             return true;
         }
 
-        let postlude = switch_postlude(place, has_default);
         statements.push(
             LoweredStatement::Switch(SwitchStatementPlan {
                 kind: SwitchKind::Conditional,
                 cases,
                 default,
-                postlude,
             })
             .into(),
         );
+        statements.extend(unreachable_panic_if_needed(place, has_default));
         true
     }
 
@@ -652,10 +643,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             Decision::Switch(switch) => self.walk_switch(statements, switch, ctx),
             Decision::TypeSwitch { branches, fallback } => {
                 let subject = AccessPath::root().render(self.subject.root());
-                let plan =
+                let switch =
                     self.lower_type_switch(subject, branches, fallback.as_deref(), ctx.arm_place);
-                let body_diverges =
-                    capture_diverge(vec![LoweredStatement::Switch(plan).into()], statements);
+                let body_diverges = capture_diverge(switch, statements);
                 apply_leaf_terminator(statements, ctx, body_diverges);
             }
             Decision::Chain { tests, catchall } => {
@@ -768,9 +758,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             }
             SwitchShape::Multi => {
                 let expr = render_switch_expression(rendered_path, kind);
-                let plan = self.lower_value_switch(expr, branches, fallback, ctx.arm_place);
-                let body_diverges =
-                    capture_diverge(vec![LoweredStatement::Switch(plan).into()], statements);
+                let switch = self.lower_value_switch(expr, branches, fallback, ctx.arm_place);
+                let body_diverges = capture_diverge(switch, statements);
                 apply_leaf_terminator(statements, ctx, body_diverges);
             }
         }
@@ -846,9 +835,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 } else {
                     ElseArm::None
                 };
+                guard_statements.extend(condition_setup);
                 guard_statements.push(
                     LoweredStatement::If(IfPlan {
-                        condition_setup,
                         initializer: None,
                         condition,
                         then_body,
@@ -931,7 +920,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         branches: &[SwitchBranch<GoExpression>],
         fallback: Option<&Decision>,
         place: &PlacePlan,
-    ) -> SwitchStatementPlan {
+    ) -> Vec<Statement> {
         let (regular, default) = split_with_default_lift(branches, fallback);
         let case_plans = regular
             .iter()
@@ -947,12 +936,15 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             })
             .collect();
         let default_block = self.lower_switch_default(default, place);
-        SwitchStatementPlan {
-            kind: SwitchKind::Value { subject },
-            cases: case_plans,
-            default: default_block,
-            postlude: switch_postlude(place, default.is_some()),
-        }
+        switch_statements(
+            SwitchStatementPlan {
+                kind: SwitchKind::Value { subject },
+                cases: case_plans,
+                default: default_block,
+            },
+            place,
+            default.is_some(),
+        )
     }
 
     fn lower_type_switch(
@@ -961,7 +953,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         branches: &[SwitchBranch<Vec<String>>],
         fallback: Option<&Decision>,
         place: &PlacePlan,
-    ) -> SwitchStatementPlan {
+    ) -> Vec<Statement> {
         let (regular, default) = split_with_default_lift(branches, fallback);
         let arms = self.arms;
         let subject_ty = self.subject_ty.clone();
@@ -1005,12 +997,15 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             .contains_identifier(&binding_name)
             .then_some(binding_name);
 
-        SwitchStatementPlan {
-            kind: SwitchKind::Type { subject, binding },
-            cases: case_plans,
-            default: default_block,
-            postlude: switch_postlude(place, default.is_some()),
-        }
+        switch_statements(
+            SwitchStatementPlan {
+                kind: SwitchKind::Type { subject, binding },
+                cases: case_plans,
+                default: default_block,
+            },
+            place,
+            default.is_some(),
+        )
     }
 
     fn lower_switch_case(
@@ -1182,9 +1177,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                             this.emit_arm_leaf(&mut then_body, arm_index, ctx);
                             then_body
                         });
+                        statements.extend(condition_setup);
                         statements.push(
                             LoweredStatement::If(IfPlan {
-                                condition_setup,
                                 initializer: None,
                                 condition,
                                 then_body: LoweredBlock {
@@ -1249,7 +1244,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     this.planner,
                     statements,
                     bindings,
-                    this.subject.var(),
+                    this.subject.root(),
                     consumers,
                 );
             }
@@ -1268,7 +1263,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         statements.extend(block.statements);
     }
 
-    /// Lower an arm's guard to `(condition_setup, condition)` for an `IfPlan`,
+    /// Lower an arm's guard to the setup statements and the `IfPlan` condition,
     /// or `None` when the arm has no guard. The caller owns the scope and body.
     fn lower_guard_condition(
         &mut self,
@@ -1439,12 +1434,16 @@ fn build_chain_plan(branches: Vec<ChainBranch>, trailing: ElseArm) -> IfPlan {
     IfPlan::plain(head.condition, head.body, else_arm)
 }
 
-/// Build the post-switch unreachable panic (when the place requires a tail
-/// return and the switch is non-exhaustive) as the switch postlude.
-fn switch_postlude(place: &PlacePlan, has_default: bool) -> Vec<Statement> {
-    unreachable_panic_if_needed(place, has_default)
-        .into_iter()
-        .collect()
+/// The switch, then an unreachable panic when the place needs a tail return
+/// and the switch is not exhaustive.
+fn switch_statements(
+    switch: SwitchStatementPlan,
+    place: &PlacePlan,
+    has_default: bool,
+) -> Vec<Statement> {
+    let mut statements = vec![LoweredStatement::Switch(switch).into()];
+    statements.extend(unreachable_panic_if_needed(place, has_default));
+    statements
 }
 
 /// Compute `ends_with_diverge` of `body_statements`, then move them into `statements`.

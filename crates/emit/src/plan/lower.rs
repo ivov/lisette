@@ -6,10 +6,9 @@ use crate::calls::predicates::strip_negations;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::control_flow::targets::legalize_source_loop;
-use crate::definitions::ConstScope;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
-    PlacePlan, Statement, directed_first,
+    PlacePlan, Statement, directed_first, with_setup,
 };
 use crate::plan::go_expression::UnaryOp;
 use crate::plan::placement::{
@@ -234,13 +233,13 @@ impl Planner<'_> {
                 alternative,
                 ..
             } => {
-                let plan = self.lower_if(
+                let statement = self.lower_if(
                     condition,
                     consequence,
                     alternative.as_deref(),
                     &PlacePlan::Statement,
                 );
-                self.directed_at(expression, LoweredStatement::If(plan))
+                self.directed_at(expression, statement)
             }
             Expression::Loop { body, .. } => {
                 let plan = self.lower_infinite_loop(body);
@@ -284,8 +283,8 @@ impl Planner<'_> {
                 let Some(value) = value.value() else {
                     return LoweredStatement::Block(LoweredBlock { statements: vec![] }).into();
                 };
-                let plan = self.build_const_plan(identifier, value, ty, ConstScope::Local);
-                self.directed_at(expression, LoweredStatement::Const(plan))
+                let statement = self.lower_const(identifier, value, ty);
+                self.directed_at(expression, statement)
             }
             Expression::Return {
                 expression: value, ..
@@ -468,11 +467,7 @@ impl Planner<'_> {
         );
         let lowered_body = self.with_scope(|this| this.lower_block_as_body(body));
         statements.extend(lowered_body.statements);
-        self.build_source_loop(
-            Vec::new(),
-            LoopHeader::Infinite,
-            LoweredBlock { statements },
-        )
+        self.build_source_loop(LoopHeader::Infinite, LoweredBlock { statements })
     }
 
     /// Shared loop lowering once the header is known. The caller must have an
@@ -483,12 +478,11 @@ impl Planner<'_> {
         body: &Expression,
     ) -> LoopPlan {
         let lowered_body = self.with_scope(|this| this.lower_block_as_body(body));
-        self.build_source_loop(Vec::new(), header, lowered_body)
+        self.build_source_loop(header, lowered_body)
     }
 
     pub(crate) fn build_source_loop(
         &mut self,
-        prologue: Vec<Statement>,
         header: LoopHeader,
         mut body: LoweredBlock,
     ) -> LoopPlan {
@@ -497,7 +491,6 @@ impl Planner<'_> {
             .expect("source loop plan requires an active loop context");
         let label = legalize_source_loop(&mut body, target);
         LoopPlan {
-            prologue,
             kind: LoopKind::Source { label },
             header,
             body,
@@ -534,9 +527,10 @@ impl Planner<'_> {
                 alternative,
                 ..
             } => {
-                let plan = self.lower_if(condition, consequence, alternative.as_deref(), place);
+                let statement =
+                    self.lower_if(condition, consequence, alternative.as_deref(), place);
                 LoweredBlock {
-                    statements: vec![LoweredStatement::If(plan).into()],
+                    statements: vec![statement.into()],
                 }
             }
             Expression::IfLet {
@@ -703,7 +697,7 @@ impl Planner<'_> {
         consequence: &Expression,
         alternative: Option<&Expression>,
         place: &PlacePlan,
-    ) -> IfPlan {
+    ) -> LoweredStatement {
         let (condition_setup, condition) = self.lower_if_condition(condition);
 
         let then_body = self.with_scope(|this| this.lower_block_to_place(consequence, place));
@@ -711,13 +705,15 @@ impl Planner<'_> {
         let preceding_diverges = then_body.ends_with_diverge();
         let else_arm = self.lower_else_chain(alternative, preceding_diverges, place);
 
-        IfPlan {
+        with_setup(
             condition_setup,
-            initializer: condition.initializer,
-            condition: condition.condition,
-            then_body,
-            else_arm,
-        }
+            LoweredStatement::If(IfPlan {
+                initializer: condition.initializer,
+                condition: condition.condition,
+                then_body,
+                else_arm,
+            }),
+        )
     }
 
     fn lower_else_chain(
@@ -739,12 +735,9 @@ impl Planner<'_> {
         {
             let (condition_setup, condition) = self.lower_if_condition(condition);
 
-            // With-setup else-if renders as a nested block (`} else { setup; if
-            // ... }`), so its body sits in an inner scope inside an outer scope
-            // that also wraps the recursion. Plain else-if uses a single scope
-            // around the body and recurses outside it.
+            // Go has no else-if with setup, so the setup and its `if` nest in `} else { ... }`.
             if !condition_setup.is_empty() {
-                self.with_scope(|this| {
+                let body = self.with_scope(|this| {
                     let then_body =
                         this.with_scope(|this| this.lower_block_to_place(consequence, place));
                     let inner = this.lower_else_chain(
@@ -752,14 +745,22 @@ impl Planner<'_> {
                         then_body.ends_with_diverge(),
                         place,
                     );
-                    ElseArm::ElseIf(Box::new(IfPlan {
-                        condition_setup,
-                        initializer: condition.initializer,
-                        condition: condition.condition,
-                        then_body,
-                        else_arm: inner,
-                    }))
-                })
+                    let mut statements = condition_setup;
+                    statements.push(
+                        LoweredStatement::If(IfPlan {
+                            initializer: condition.initializer,
+                            condition: condition.condition,
+                            then_body,
+                            else_arm: inner,
+                        })
+                        .into(),
+                    );
+                    LoweredBlock { statements }
+                });
+                ElseArm::Else {
+                    body,
+                    inline: false,
+                }
             } else {
                 let then_body =
                     self.with_scope(|this| this.lower_block_to_place(consequence, place));
@@ -769,7 +770,6 @@ impl Planner<'_> {
                     place,
                 );
                 ElseArm::ElseIf(Box::new(IfPlan {
-                    condition_setup,
                     initializer: condition.initializer,
                     condition: condition.condition,
                     then_body,

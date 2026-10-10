@@ -3422,3 +3422,39 @@ fn mapped(xs: Slice<int>) {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn lambda_body_gets_the_same_cleanup_as_a_function_body() {
+    let input = r#"
+import "go:fmt"
+
+fn pick(xs: Slice<int>, i: int) -> int {
+  match xs.get(i) { Some(value) => value, None => -1 }
+}
+
+fn main() {
+  let f = |xs: Slice<int>, i: int| -> int {
+    match xs.get(i) { Some(value) => value, None => -1 }
+  }
+  fmt.Println(f([7], 0), pick([7], 0))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn lambda_locals_ignore_the_enclosing_assign_target() {
+    let input = r#"
+import "go:fmt"
+
+fn pick(n: int) -> int {
+  let total = if n > 0 {
+    let f = |k: int| -> int { let total = k * 2; fmt.Println(total); total + 1 }
+    f(n)
+  } else { 0 }
+  fmt.Println(total)
+  total
+}
+"#;
+    assert_emit_snapshot!(input);
+}

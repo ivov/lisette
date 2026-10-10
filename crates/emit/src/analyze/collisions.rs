@@ -10,12 +10,8 @@ use syntax::go_names;
 use syntax::program::File;
 
 use crate::Planner;
-use crate::definitions::enum_layout::{
-    ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD, ENUM_TAG_FIELD,
-};
-use crate::definitions::structs::{
-    DEBUG_STRING_METHOD, should_synthesize_stringer, struct_field_go_name,
-};
+use crate::definitions::enum_layout::ENUM_TAG_FIELD;
+use crate::definitions::structs::{StructShape, struct_field_go_name};
 use crate::names::go_name;
 
 type SpanMap = HashMap<String, Vec<Span>>;
@@ -216,35 +212,14 @@ impl Planner<'_> {
                 }
             }
         }
-        if let Some(stringer) = self.stringer_method_name(name, attributes) {
-            members
-                .entry(stringer.to_string())
-                .or_default()
-                .push(*name_span);
-        }
-        if self.synthesizes_embedded_stringer_shadow(name) {
-            members
-                .entry(ENUM_STRINGER_METHOD.to_string())
-                .or_default()
-                .push(*name_span);
-        }
-        if self.should_synthesize_to_string(name) {
-            members
-                .entry(self.to_string_method_go_name())
-                .or_default()
-                .push(*name_span);
-        }
-        if self.should_synthesize_equals(name) {
-            members
-                .entry(self.equals_method_go_name())
-                .or_default()
-                .push(*name_span);
-        }
-        if self.facts.emit_tests_enabled() && !self.debug_string_override(name) {
-            members
-                .entry(DEBUG_STRING_METHOD.to_string())
-                .or_default()
-                .push(*name_span);
+        let shape = match fields {
+            StructFields::Record(_) => StructShape::Record,
+            StructFields::Tuple(_) => StructShape::Tuple,
+        };
+        for method in self.struct_synthesized_methods(name, attributes, shape) {
+            for go_name in self.synthesized_method_go_names(method) {
+                members.entry(go_name).or_default().push(*name_span);
+            }
         }
     }
 
@@ -307,47 +282,10 @@ impl Planner<'_> {
             .entry(ENUM_TAG_FIELD.to_string())
             .or_default()
             .push(*name_span);
-        let synthesize = should_synthesize_stringer(attributes);
-        let (has_user_string, has_user_go_string) = self.stringer_overrides(name);
-        if synthesize && !has_user_string {
-            members
-                .entry(ENUM_STRINGER_METHOD.to_string())
-                .or_default()
-                .push(*name_span);
-        }
-        if synthesize && !has_user_go_string {
-            members
-                .entry(ENUM_GO_STRINGER_METHOD.to_string())
-                .or_default()
-                .push(*name_span);
-        }
-        if self.should_synthesize_to_string(name) {
-            members
-                .entry(self.to_string_method_go_name())
-                .or_default()
-                .push(*name_span);
-        }
-        if self.should_synthesize_equals(name) {
-            members
-                .entry(self.equals_method_go_name())
-                .or_default()
-                .push(*name_span);
-        }
-        if self.facts.emit_tests_enabled() && !self.debug_string_override(name) {
-            members
-                .entry(DEBUG_STRING_METHOD.to_string())
-                .or_default()
-                .push(*name_span);
-        }
-        if attributes.iter().any(|attribute| attribute.name == "json") {
-            members
-                .entry("MarshalJSON".to_string())
-                .or_default()
-                .push(*name_span);
-            members
-                .entry("UnmarshalJSON".to_string())
-                .or_default()
-                .push(*name_span);
+        for method in self.enum_synthesized_methods(name, attributes) {
+            for go_name in self.synthesized_method_go_names(method) {
+                members.entry(go_name).or_default().push(*name_span);
+            }
         }
         self.collect_enum_payload_fields(name, variants, members, diagnostics);
     }

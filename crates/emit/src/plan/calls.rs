@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::abi::callable::{AbiTransition, CallableAbi, CallableParamAbi, CallableReturnAbi};
+use crate::abi::callable::{CallableAbi, CallableParamAbi, CallableReturnAbi, LoweredReturnAbi};
 use crate::abi::coercion::LayoutBridge;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::definitions::interface_adapter::with_comma_ok_hint;
@@ -15,7 +15,13 @@ use syntax::types::{CompoundKind, FunctionParameter, Type};
 pub(crate) struct CallPlan<'a> {
     pub(crate) resolved: ResolvedCallee<'a>,
     pub(crate) arguments: Vec<ArgumentPlan>,
-    pub(crate) result_transition: AbiTransition,
+}
+
+impl CallPlan<'_> {
+    /// Whether the physical Go result must be wrapped into its tagged Lisette value.
+    pub(crate) fn wraps_result(&self) -> bool {
+        self.resolved.abi.result.is_lowered()
+    }
 }
 
 #[derive(Debug)]
@@ -80,8 +86,7 @@ pub(crate) enum ArgumentPlan {
     Direct,
     GoCallbackAdapter {
         source: CallableReturnAbi,
-        target: CallableReturnAbi,
-        transition: AbiTransition,
+        target: LoweredReturnAbi,
     },
     LoweredFnShapeAdapter(Box<FunctionArgumentAdapter>),
     GoSlotBridge(Box<ArgumentSlotBridge>),
@@ -136,22 +141,10 @@ impl<'a> Planner<'a> {
         };
 
         let resolved = self.resolve_callee(function, origin, go_return.as_ref(), args.len());
-        let callee_diverges = resolved
-            .instantiated
-            .get_function_ret()
-            .is_some_and(Type::is_never);
-        let result_transition = if callee_diverges {
-            AbiTransition::Identity
-        } else {
-            resolved
-                .abi
-                .result
-                .transition_to(&self.value_return_abi(ty))
-        };
-        debug_assert_ne!(
-            result_transition,
-            AbiTransition::Incompatible,
-            "a typed call must preserve its logical result type"
+        debug_assert!(
+            !resolved.abi.result.is_lowered()
+                || self.value_return_abi(ty) == CallableReturnAbi::Tagged,
+            "a lowered call result wraps into its tagged Lisette value"
         );
         let arguments = args
             .iter()
@@ -165,7 +158,6 @@ impl<'a> Planner<'a> {
         Some(CallPlan {
             resolved,
             arguments,
-            result_transition,
         })
     }
 
@@ -173,7 +165,7 @@ impl<'a> Planner<'a> {
         &self,
         function: &Expression,
         origin: CallableOrigin,
-        go_return: Option<&CallableReturnAbi>,
+        go_return: Option<&LoweredReturnAbi>,
         arg_count: usize,
     ) -> ResolvedCallee<'a> {
         let (id, declaration) = self.resolve_callee_definition(function);
@@ -193,7 +185,7 @@ impl<'a> Planner<'a> {
             &origin,
         );
         let result = match go_return {
-            Some(result) => result.clone(),
+            Some(result) => CallableReturnAbi::Lowered(result.clone()),
             None => self
                 .classify_callee_abi(function, id.as_deref(), declaration)
                 .unwrap_or_else(|| {
@@ -349,7 +341,7 @@ impl<'a> Planner<'a> {
             declaration.and_then(|declaration| declaration.ty().unwrap_forall().get_function_ret());
         let classify_ty = declared_return.unwrap_or(f.return_type.as_ref());
         let origin = self.function_type_origin(&callee_ty, SlotOrigin::Lisette);
-        let abi = self.classify_slot_emission(classify_ty, origin)?;
+        let abi = CallableReturnAbi::Lowered(self.classify_slot_emission(classify_ty, origin)?);
 
         // Interface methods carry `#[go(...)]` hints the call must read.
         if let Some(CallableDeclaration::Method(method)) = declaration
@@ -403,7 +395,7 @@ impl<'a> Planner<'a> {
     }
 
     /// Resolve a Go-interop call's strategy.
-    fn resolve_go_call_abi(&self, expression: &Expression) -> Option<CallableReturnAbi> {
+    fn resolve_go_call_abi(&self, expression: &Expression) -> Option<LoweredReturnAbi> {
         let Expression::Call {
             expression: callee,
             ty,
@@ -420,7 +412,7 @@ impl<'a> Planner<'a> {
         &self,
         callee: &Expression,
         return_ty: &Type,
-    ) -> Option<CallableReturnAbi> {
+    ) -> Option<LoweredReturnAbi> {
         let qualified_name = resolved_definition(callee)?;
         if !qualified_name.starts_with("go:") {
             return None;

@@ -5,6 +5,7 @@ use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoweredBlock, LoweredStatement, Statement, define, discard,
+    with_setup,
 };
 use crate::plan::go_expression::BinaryOp;
 use crate::plan::local::GoIdentifier;
@@ -64,7 +65,10 @@ impl Planner<'_> {
                     return this.lower_iterate_for(binding, iterable, yields, simple_pattern, body);
                 }
             };
-            LoweredStatement::Loop(this.build_source_loop(prologue, header, lowered_body))
+            with_setup(
+                prologue,
+                LoweredStatement::Loop(this.build_source_loop(header, lowered_body)),
+            )
         });
         Statement { line, kind: plan }
     }
@@ -244,18 +248,23 @@ impl Planner<'_> {
         });
 
         let Some(condition) = nil_guard else {
-            return LoweredStatement::Loop(self.build_source_loop(prologue, header, lowered_body));
+            return with_setup(
+                prologue,
+                LoweredStatement::Loop(self.build_source_loop(header, lowered_body)),
+            );
         };
-        let plan = self.build_source_loop(Vec::new(), header, lowered_body);
-        LoweredStatement::If(IfPlan {
-            condition_setup: prologue,
-            initializer: None,
-            condition,
-            then_body: LoweredBlock {
-                statements: vec![LoweredStatement::Loop(plan).into()],
-            },
-            else_arm: ElseArm::None,
-        })
+        let plan = self.build_source_loop(header, lowered_body);
+        with_setup(
+            prologue,
+            LoweredStatement::If(IfPlan {
+                initializer: None,
+                condition,
+                then_body: LoweredBlock {
+                    statements: vec![LoweredStatement::Loop(plan).into()],
+                },
+                else_arm: ElseArm::None,
+            }),
+        )
     }
 
     /// `for (k, v) in map`. Simple identifier/wildcard pairs bind directly

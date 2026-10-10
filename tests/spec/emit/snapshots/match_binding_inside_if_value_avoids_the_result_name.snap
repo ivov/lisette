@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let xs = [1, 5, 9]
+    let i = 1
+    let v = if i > 0 {
+      match xs.get(0) {
+        Some(v) => v + 1,
+        None => 0,
+      }
+    } else { 2 }
+    fmt.Println(v)
+  }
+---
+package main
+
+import "fmt"
+
+func main() {
+	xs := []int{1, 5, 9}
+	i := 1
+	var v int
+	if i > 0 {
+		if len(xs) > 0 {
+			v_2 := xs[0]
+			v = v_2 + 1
+		} else {
+			v = 0
+		}
+	} else {
+		v = 2
+	}
+	fmt.Println(v)
+}

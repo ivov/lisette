@@ -1,5 +1,6 @@
+use crate::OuterBindings;
 use crate::Planner;
-use crate::abi::callable::{AbiTransition, CallableReturnAbi};
+use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
 use crate::abi::layout::SlotOrigin;
 use crate::abi::tuple_element_types;
 use crate::analyze::component_uses::ComponentDemand;
@@ -15,15 +16,12 @@ use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
 use crate::plan::bodies::{
     LoweredBlock, LoweredStatement, Statement, define, define_many, expression_statement,
 };
-use crate::plan::local::GoIdentifier;
 use crate::plan::placement::{
     collapse_declared_temp, expression_contains_binding, is_unit_call, is_zero_call,
     rebind_trailing_temp, rebind_updated_temp, requires_temp_var,
 };
 use crate::plan::values::GoExpression;
-use crate::state::bindings::{
-    ComponentBinding, ComponentKind, TupleBinding, WholeValueConstructor,
-};
+use crate::state::bindings::{ComponentBinding, ComponentKind, TupleBinding};
 use std::mem;
 use syntax::ast::{Binding, BindingId, Expression, LetMode, Pattern};
 use syntax::program::NativeTypeKind;
@@ -85,23 +83,6 @@ fn resolve_let_temp_declaration_ty(
 }
 
 impl Planner<'_> {
-    fn claim_direct_let_name(
-        &mut self,
-        identifier: &str,
-        ids: &[BindingId],
-        raw_go_name: &str,
-    ) -> GoIdentifier {
-        let bound = self.scope.bind_source(identifier, ids, raw_go_name);
-        let is_new = !self.package.is_package_block_name(&bound) && self.try_declare(&bound);
-        if is_new && !self.scope.is_active_assign_target(&bound) {
-            return bound;
-        }
-        let fresh = self.fresh_var(Some(identifier));
-        let bound = self.scope.bind_source(identifier, ids, &fresh);
-        self.try_declare(&fresh);
-        bound
-    }
-
     fn choose_let_go_name(
         &mut self,
         identifier: &str,
@@ -177,6 +158,12 @@ impl Planner<'_> {
             {
                 return statements;
             }
+            if !let_spec.mutable
+                && let Some(statements) =
+                    self.try_lower_let_into_wrapper_slot(let_spec, raw_go_name)
+            {
+                return statements;
+            }
         }
         if needs_temp {
             if self.shadows_declaration(&go_identifier)
@@ -217,25 +204,18 @@ impl Planner<'_> {
         let value = let_spec.value;
         let kind = if ty.is_option() {
             ComponentKind::Option
-        } else if ty.is_result() {
-            ComponentKind::Result
-        } else {
+        } else if !ty.is_result() {
             return None;
+        } else if matches!(
+            self.facts.peel_alias(&ty.err_type()),
+            Type::Nominal { id, .. } if id.as_str() == go_name::PRELUDE_ERROR_ID
+        ) {
+            ComponentKind::ErrorResult
+        } else {
+            ComponentKind::OtherResult
         };
         let (needs_value, needs_whole_value) = (demand.needs_value, demand.needs_whole_value);
-        let whole_value_constructor = match kind {
-            ComponentKind::Option => Some(WholeValueConstructor::OptionFromCommaOk),
-            ComponentKind::Result
-                if matches!(
-                    self.facts.peel_alias(&ty.err_type()),
-                    Type::Nominal { id, .. } if id.as_str() == go_name::PRELUDE_ERROR_ID
-                ) =>
-            {
-                Some(WholeValueConstructor::ResultFromPair)
-            }
-            ComponentKind::Result => None,
-        };
-        if needs_whole_value && whole_value_constructor.is_none() {
+        if needs_whole_value && kind.whole_value_constructor().is_none() {
             return None;
         }
         let source = match (value.unwrap_parens(), kind) {
@@ -251,7 +231,7 @@ impl Planner<'_> {
                 }
                 FallibleComponentSource::CommaOk(source)
             }
-            (_, ComponentKind::Result) => {
+            (_, ComponentKind::ErrorResult | ComponentKind::OtherResult) => {
                 let fuse = self.result_fuse_plan(value)?;
                 if fuse.has_nil_guard() || fuse.wraps_error() || !fuse.carries_payload() {
                     return None;
@@ -284,7 +264,6 @@ impl Planner<'_> {
                 status: status.into(),
                 payload_go_type,
                 kind,
-                whole_value_constructor,
                 shared_payload: demand.defaults > 1,
             },
         );
@@ -312,7 +291,7 @@ impl Planner<'_> {
         let plan = self.plan_call(value)?;
         if !matches!(
             plan.resolved.abi.result,
-            CallableReturnAbi::Tuple { arity } if arity == elements.len()
+            CallableReturnAbi::Lowered(LoweredReturnAbi::Tuple { arity }) if arity == elements.len()
         ) {
             return None;
         }
@@ -435,15 +414,9 @@ impl Planner<'_> {
             binding_id,
             value,
             binding_ty,
-            mutable,
+            ..
         } = let_spec;
         let ids = binding_id.as_slice();
-        if !mutable
-            && let Some(statements) = self.try_lower_let_into_wrapper_slot(let_spec, raw_go_name)
-        {
-            return statements;
-        }
-
         let origin = self.function_type_origin(binding_ty, SlotOrigin::Lisette);
         let plan = self.lower_value(
             value,
@@ -458,7 +431,8 @@ impl Planner<'_> {
         let (coercion_setup, value_expression) = coercion.lower(self, plan_value);
         statements.extend(coercion_setup);
 
-        let go_identifier = self.claim_direct_let_name(identifier, ids, raw_go_name);
+        let go_identifier =
+            self.claim_block_binding(identifier, ids, raw_go_name, OuterBindings::MayShadow);
 
         // A bare `var x T` only where the slot's zero is the value.
         if is_zero_call(value)
@@ -517,20 +491,14 @@ impl Planner<'_> {
             ..
         } = let_spec;
         let go_identifier = escape_reserved(raw_go_name);
-        if self.shadows_declaration(&go_identifier)
-            || self.scope.is_active_assign_target(&go_identifier)
-            || self.scope.has_binding_for_go_name(&go_identifier)
-        {
-            return None;
-        }
-        if value.get_type().demoted() != binding_ty.demoted() {
-            return None;
-        }
         let plan = self.plan_call(value)?;
-        if !matches!(plan.result_transition, AbiTransition::WrapToTagged) {
+        if !plan.wraps_result() {
             return None;
         }
-        if matches!(plan.resolved.abi.result, CallableReturnAbi::Tuple { .. }) {
+        if matches!(
+            plan.resolved.abi.result.lowered(),
+            Some(LoweredReturnAbi::Tuple { .. })
+        ) {
             return None;
         }
         if self.call_result_layout_bridge(&plan, binding_ty).is_some() {
@@ -641,10 +609,11 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             } = &self.binding.pattern
                 && let Some(raw_go_name) = self.planner.go_name_for_binding(&self.binding.pattern)
             {
-                let go_identifier = self.planner.claim_direct_let_name(
+                let go_identifier = self.planner.claim_block_binding(
                     identifier,
                     binding.as_slice(),
                     &raw_go_name,
+                    OuterBindings::MayShadow,
                 );
                 let var_ty = self.planner.use_go_type(&self.binding.ty);
                 statements.push(
@@ -808,11 +777,13 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             .all(|slot_ty| !self.planner.facts.is_nullable_option(slot_ty));
         slots_read_in_place
             && self.planner.plan_call(self.value).is_some_and(|plan| {
-                matches!(plan.resolved.abi.result, CallableReturnAbi::Tuple { .. })
-                    && self
-                        .planner
-                        .go_result_bridge(&plan.resolved.abi, &value_ty)
-                        .is_none()
+                matches!(
+                    plan.resolved.abi.result.lowered(),
+                    Some(LoweredReturnAbi::Tuple { .. })
+                ) && self
+                    .planner
+                    .go_result_bridge(&plan.resolved.abi, &value_ty)
+                    .is_none()
             })
     }
 

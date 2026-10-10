@@ -2,16 +2,17 @@ use crate::Planner;
 use crate::analyze::inline_uses::region_blocks_inline;
 use crate::calls::native::{clip_shared_capacity, is_clip_safe_path};
 use crate::context::expression::ExpressionContext;
-use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
+use crate::control_flow::fallible::{ConstructorKind, Fallible};
 use crate::expressions::staging::SpreadSequenceOptions;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::binding_decls::pattern_binds_name;
+use crate::plan::bodies::with_setup;
 use crate::plan::bodies::{
     AssignForm, Definition, ElseArm, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, Statement, assign, discard, expression_statement,
 };
-use crate::plan::evaluation::Reads;
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
+use crate::plan::values::Stability;
 use crate::plan::values::{
     CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
 };
@@ -84,13 +85,16 @@ pub(crate) fn is_unit_call(expression: &Expression) -> bool {
             if *call_kind != CallKind::Zero)
 }
 
-/// A `target = value` assignment with no lvalue capture.
+/// A `target = value` assignment with no lvalue capture, after the value's setup.
 pub(crate) fn simple_assign(target: &GoExpression, value: ValuePlan) -> LoweredStatement {
-    LoweredStatement::Assign(AssignForm::Simple {
-        target_capture: Vec::new(),
-        target: target.clone(),
-        value,
-    })
+    let (setup, value) = value.into_parts();
+    with_setup(
+        setup,
+        LoweredStatement::Assign(AssignForm::Simple {
+            target: target.clone(),
+            value,
+        }),
+    )
 }
 
 /// Bind the setup's trailing temp under `name` instead of copying it.
@@ -109,22 +113,15 @@ pub(crate) fn rebind_updated_temp(statements: &mut [Statement], name: &str, temp
         .split_first_mut()
         .expect("rposition found a statement");
     let writes_field_of_temp = |statement: &Statement| {
-        let LoweredStatement::Assign(AssignForm::Simple {
-            target_capture,
-            target,
-            value,
-        }) = &statement.kind
-        else {
+        let LoweredStatement::Assign(AssignForm::Simple { target, value }) = &statement.kind else {
             return false;
         };
         matches!(
             target.node(),
             GoExpressionNode::Selector { base, .. }
                 if matches!(base.as_ref(), GoExpressionNode::Identifier(read) if read == temp)
-        ) && target_capture.is_empty()
-            && value.setup().is_empty()
-            && !value.expression().node().mentions(name)
-            && !value.expression().node().mentions(temp)
+        ) && !value.node().mentions(name)
+            && !value.node().mentions(temp)
     };
     if writes.is_empty() || !writes.iter().all(writes_field_of_temp) {
         return false;
@@ -163,23 +160,17 @@ pub(crate) fn collapse_declared_temp(
         return;
     }
     let value = match &filler.kind {
-        LoweredStatement::Assign(AssignForm::Simple {
-            target_capture,
-            target,
-            value,
-        }) => {
-            if !infers_declared_type(go_type, value.expression(), value_has_declared_type)
+        LoweredStatement::Assign(AssignForm::Simple { target, value }) => {
+            if !infers_declared_type(go_type, value, value_has_declared_type)
                 || target.as_identifier() != Some(name)
-                || !target_capture.is_empty()
-                || !value.setup().is_empty()
-                || value.expression().effects().runs_code()
+                || value.effects().runs_code()
             {
                 return;
             }
-            value.expression().clone()
+            value.clone()
         }
         LoweredStatement::If(plan) => {
-            if go_type != "bool" || !plan.condition_setup.is_empty() || plan.initializer.is_some() {
+            if go_type != "bool" || plan.initializer.is_some() {
                 return;
             }
             let ElseArm::Else {
@@ -271,19 +262,10 @@ fn single_simple_assign_value(body: &LoweredBlock, name: &str) -> Option<GoExpre
     else {
         return None;
     };
-    let AssignForm::Simple {
-        target_capture,
-        target,
-        value,
-    } = assign
-    else {
+    let AssignForm::Simple { target, value } = assign else {
         return None;
     };
-    (target.as_identifier() == Some(name)
-        && target_capture.is_empty()
-        && value.setup().is_empty()
-        && !value.expression().effects().runs_code())
-    .then(|| value.expression().clone())
+    (target.as_identifier() == Some(name) && !value.effects().runs_code()).then(|| value.clone())
 }
 
 fn join_boolean_branches(
@@ -463,7 +445,7 @@ impl Planner<'_> {
             let staged = self.plan_operand(value, ExpressionContext::value());
             let (mut statements, staged_value) = staged.into_parts();
             let effects = staged_value.effects();
-            let reads_or_acts = !effects.can_erase() || effects.reads() != Reads::Nothing;
+            let reads_or_acts = !effects.can_erase() || effects.reads() != Stability::Fixed;
             if !staged_value.is_empty() && reads_or_acts {
                 if matches!(unwrapped, Expression::Call { .. }) {
                     // A never-typed call (e.g. `panic(...)`) diverges.
@@ -604,7 +586,7 @@ impl Planner<'_> {
                         fallible.ok_constructor(),
                         Some(args.first().expect("success constructor has an argument")),
                     ),
-                    Some(ConstructorKind::Failure) if fallible.err_constructor_takes_arg() => (
+                    Some(ConstructorKind::Failure) if fallible.is_result() => (
                         fallible.err_constructor(),
                         Some(args.first().expect("failure constructor has an argument")),
                     ),
@@ -614,18 +596,11 @@ impl Planner<'_> {
                     }
                 };
                 if let Some(constructor_arg) = constructor_arg {
-                    let (arg_setup, call, argument_effect) = {
-                        let mut fe = FalliblePlanner::new(self, &fallible);
-                        let argument = fe
-                            .planner
-                            .lower_composite_value(constructor_arg, ExpressionContext::value());
-                        let (argument_setup, argument, facts) = argument.into_parts_with_facts();
-                        (
-                            argument_setup,
-                            fe.format_constructor_call(constructor_name, Some(argument)),
-                            facts.effect,
-                        )
-                    };
+                    let argument =
+                        self.lower_composite_value(constructor_arg, ExpressionContext::value());
+                    let (arg_setup, argument, facts) = argument.into_parts_with_facts();
+                    let call = self.fallible_call(&fallible, constructor_name, vec![argument]);
+                    let argument_effect = facts.effect;
                     let value = ValuePlan::plain_call(
                         arg_setup,
                         call,
@@ -633,10 +608,7 @@ impl Planner<'_> {
                     );
                     vec![simple_assign(target, value).into()]
                 } else {
-                    let call = {
-                        let mut fe = FalliblePlanner::new(self, &fallible);
-                        fe.format_constructor_call(constructor_name, None)
-                    };
+                    let call = self.fallible_call(&fallible, constructor_name, Vec::new());
                     vec![
                         simple_assign(
                             target,
@@ -650,10 +622,8 @@ impl Planner<'_> {
                 if fallible.classify_constructor(actual_expression)
                     == Some(ConstructorKind::Failure)
                 {
-                    let call = {
-                        let mut fe = FalliblePlanner::new(self, &fallible);
-                        fe.format_constructor_call(fallible.err_constructor(), None)
-                    };
+                    let call =
+                        self.fallible_call(&fallible, fallible.err_constructor(), Vec::new());
                     vec![
                         simple_assign(
                             target,

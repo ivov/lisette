@@ -1,18 +1,13 @@
 use crate::Planner;
 use crate::Renderer;
 use crate::context::expression::ExpressionContext;
+use crate::escape_reserved;
 use crate::names::go_name;
 use crate::plan::bodies::{ConstPlan, LoweredStatement, Statement};
 use crate::plan::values::GoExpression;
 use std::slice;
 use syntax::ast::{Expression, Generic};
 use syntax::types::{SimpleKind, Type};
-
-#[derive(Clone, Copy)]
-pub(crate) enum ConstScope {
-    Package,
-    Local,
-}
 
 impl Planner<'_> {
     pub(crate) fn emit_type_alias(
@@ -51,31 +46,26 @@ impl Planner<'_> {
         )
     }
 
-    pub(crate) fn build_const_plan(
+    pub(crate) fn lower_const(
         &mut self,
         identifier: &str,
         expression: &Expression,
         ty: &Type,
-        scope: ConstScope,
-    ) -> ConstPlan {
+    ) -> LoweredStatement {
         let target_name = go_name::screaming_snake_to_camel(identifier);
-        let initial_go_name = self.scope.bind_source(identifier, &[], target_name);
-        let go_identifier = if self.try_declare(&initial_go_name) {
-            initial_go_name
+        let preferred = escape_reserved(&target_name).into_owned();
+        let go_name = if self.try_declare(&preferred) {
+            preferred
         } else {
             let fresh = self.fresh_var(Some(identifier));
-            let go_identifier = self.scope.bind_source(identifier, &[], &fresh);
-            self.try_declare(&fresh);
-            go_identifier
+            self.declare(&fresh);
+            fresh
         };
         let is_const = self.is_go_constant_expression(expression);
         // An untyped string or bool constant also assigns to named types.
-        let ty_str =
-            if is_const && matches!(ty, Type::Simple(SimpleKind::String | SimpleKind::Bool)) {
-                String::new()
-            } else {
-                self.use_go_type(ty)
-            };
+        let go_type = (!is_const
+            || !matches!(ty, Type::Simple(SimpleKind::String | SimpleKind::Bool)))
+        .then(|| self.use_go_type(ty));
 
         // `is_go_constant_expression` admits only literals, identifiers, and
         // constexpr unary/binary, none of which carry setup statements.
@@ -85,14 +75,18 @@ impl Planner<'_> {
         } else {
             raw_value.into_parts().1
         };
-        if is_const && matches!(scope, ConstScope::Local) {
-            self.scope.mark_go_const(identifier);
-        }
-        ConstPlan {
-            is_const,
-            name: go_identifier,
-            ty_str,
-            value,
+        if is_const {
+            LoweredStatement::Const(ConstPlan {
+                name: self.scope.bind_go_const(identifier, go_name),
+                go_type,
+                value,
+            })
+        } else {
+            LoweredStatement::VarDecl {
+                name: self.scope.bind_source(identifier, &[], go_name),
+                go_type: go_type.expect("a non-constant `var` names its type"),
+                value: Some(value),
+            }
         }
     }
 
@@ -102,13 +96,7 @@ impl Planner<'_> {
         expression: &Expression,
         ty: &Type,
     ) -> String {
-        let statement: Statement = LoweredStatement::Const(self.build_const_plan(
-            identifier,
-            expression,
-            ty,
-            ConstScope::Package,
-        ))
-        .into();
+        let statement: Statement = self.lower_const(identifier, expression, ty).into();
         self.collect_imports(slice::from_ref(&statement));
         let out = Renderer.render_setup(slice::from_ref(&statement));
         out.trim_end_matches('\n').to_string()

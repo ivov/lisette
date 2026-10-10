@@ -367,7 +367,6 @@ impl Planner<'_> {
         };
         setup.push(
             LoweredStatement::Loop(LoopPlan {
-                prologue: Vec::new(),
                 kind: LoopKind::Generated { label: None },
                 header,
                 body: LoweredBlock {

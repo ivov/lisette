@@ -856,3 +856,15 @@ pub type StringFlag = FlagBase<string, int>
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/cli", typedef)]);
 }
+
+#[test]
+fn assigning_a_go_package_variable_imports_the_package() {
+    let input = r#"
+import "go:os"
+
+fn main() {
+  os.Args = ["a"]
+}
+"#;
+    assert_emit_snapshot!(input);
+}

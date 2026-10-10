@@ -1699,3 +1699,23 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn select_receive_binding_inside_loop_value_avoids_the_result_name() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let ch = Channel.buffered<int>(4)
+  ch.send(3)
+  let w = loop {
+    select {
+      let Some(w) = ch.receive() => { if w > 2 { break w } },
+      _ => { fmt.Print("") },
+    }
+  }
+  fmt.Println(w)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

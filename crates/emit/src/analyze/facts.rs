@@ -8,7 +8,7 @@ use syntax::types::{Symbol, Type};
 
 use crate::EnumLayout;
 use crate::SharedEmitContext;
-use crate::abi::callable::CallableReturnAbi;
+use crate::abi::callable::LoweredReturnAbi;
 use crate::abi::catalog::GoSlotDescriptor;
 use crate::classify_go_return_type;
 use crate::context::lowering::LineIndex;
@@ -57,7 +57,7 @@ impl<'a> EmitFacts<'a> {
         &self,
         return_ty: &Type,
         go_hints: &[String],
-    ) -> Option<CallableReturnAbi> {
+    ) -> Option<LoweredReturnAbi> {
         classify_go_return_type(&self.input.definitions, return_ty, go_hints)
     }
 
@@ -308,7 +308,7 @@ impl<'a> EmitFacts<'a> {
         self.make_function_name(enum_id, variant)
     }
 
-    pub(crate) fn go_callable_return(&self, qualified_name: &str) -> Option<&CallableReturnAbi> {
+    pub(crate) fn go_callable_return(&self, qualified_name: &str) -> Option<&LoweredReturnAbi> {
         self.shared
             .globals
             .go_abi_catalog

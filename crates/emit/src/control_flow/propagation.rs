@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::transition;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::calls::go_interop::{
@@ -232,13 +232,13 @@ impl Planner<'_> {
         } = self.lowered_call(expression)?;
         let payload_bridge = bridge.and_then(GoResultBridge::into_payload);
         match shape {
-            CallableReturnAbi::Result {
+            LoweredReturnAbi::Result {
                 payload: PayloadLayout::Packed,
             } if !ok_ty.is_unit() => {}
-            CallableReturnAbi::BareError => {}
+            LoweredReturnAbi::BareError => {}
             _ => return None,
         }
-        let has_value_slot = !matches!(shape, CallableReturnAbi::BareError);
+        let has_value_slot = !matches!(shape, LoweredReturnAbi::BareError);
         if !self.returns_fallible() {
             return None;
         }
@@ -566,13 +566,13 @@ impl Planner<'_> {
             return None;
         }
         let return_ctx = self.return_ctx();
-        if return_ctx.lowered_shape() != Some(CallableReturnAbi::BareError)
+        if return_ctx.lowered_shape() != Some(LoweredReturnAbi::BareError)
             || !self.is_error_interface(&return_ctx.ty()?.err_type())
         {
             return None;
         }
         let lowered = self.lowered_call(inner)?;
-        if lowered.shape != CallableReturnAbi::BareError
+        if lowered.shape != LoweredReturnAbi::BareError
             || !lowered.wraps.is_empty()
             || lowered.is_bridged()
             || !self.is_error_interface(&lowered.call.get_type().err_type())
@@ -775,7 +775,7 @@ impl Planner<'_> {
     ) -> Vec<Statement> {
         let mut statements = Vec::new();
         match self.return_ctx().lowered_shape().as_ref() {
-            Some(CallableReturnAbi::BareError) => {
+            Some(LoweredReturnAbi::BareError) => {
                 if !args.is_empty() {
                     let (setup, _) = self
                         .lower_composite_value(&args[0], ExpressionContext::value())
@@ -783,7 +783,7 @@ impl Planner<'_> {
                     statements.extend(setup);
                 }
                 statements.push(transition::multi_value_return(
-                    transition::lowered_ok_values(&CallableReturnAbi::BareError, Vec::new()),
+                    transition::lowered_ok_values(&LoweredReturnAbi::BareError, Vec::new()),
                 ));
             }
             Some(shape) if args.is_empty() => {
@@ -853,7 +853,7 @@ impl Planner<'_> {
         let lowered = self.return_ctx().lowered_shape();
         let lowered = lowered.as_ref();
         let mut statements = Vec::new();
-        if let Some(CallableReturnAbi::Option(_)) = lowered
+        if let Some(LoweredReturnAbi::Option(_)) = lowered
             && self.facts.peel_alias(return_ty).demoted()
                 == self.facts.peel_alias(&expression.get_type()).demoted()
             && matches!(
@@ -870,7 +870,7 @@ impl Planner<'_> {
         }
         if matches!(
             lowered,
-            Some(CallableReturnAbi::Result { .. } | CallableReturnAbi::BareError)
+            Some(LoweredReturnAbi::Result { .. } | LoweredReturnAbi::BareError)
         ) && (self
             .result_fuse_plan(expression)
             .is_some_and(|plan| plan.wraps_error())
@@ -895,7 +895,7 @@ impl Planner<'_> {
             statements.push(plain_return(call));
             return statements;
         }
-        if let Some(CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
+        if let Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
             payload: PayloadLayout::Packed,
         })) = lowered
             && let Some(source) = self.comma_ok_source(expression)
@@ -913,7 +913,7 @@ impl Planner<'_> {
             return statements;
         }
         if let Some(plan) = self.plan_call(expression)
-            && !plan.resolved.abi.result.is_passthrough()
+            && plan.resolved.abi.result.is_lowered()
         {
             if let Some(shape) = lowered {
                 let (setup, result_var) = self
@@ -967,12 +967,12 @@ impl Planner<'_> {
     fn callee_matches_lowered_shape(
         &self,
         call_expression: &Expression,
-        enclosing_shape: &CallableReturnAbi,
+        enclosing_shape: &LoweredReturnAbi,
     ) -> bool {
         let Some(plan) = self.plan_call(call_expression) else {
             return false;
         };
-        plan.resolved.abi.result == *enclosing_shape
+        plan.resolved.abi.result.lowered() == Some(enclosing_shape)
             && self
                 .go_result_bridge(&plan.resolved.abi, &call_expression.get_type())
                 .is_none()

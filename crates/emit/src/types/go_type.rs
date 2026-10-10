@@ -6,6 +6,7 @@ use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::plan::values::GoExpression;
 use crate::types::native;
 use crate::types::prelude::PreludeType;
+use std::slice;
 use syntax::ast::ResolvedCallTypeArguments;
 use syntax::program::DefinitionBody;
 use syntax::program::NativeTypeKind;
@@ -121,33 +122,20 @@ impl Planner<'_> {
     fn emit_compound(&self, kind: CompoundKind, args: &[Type], ty: &Type) -> GoType {
         use syntax::types::CompoundKind;
 
-        if kind == CompoundKind::Ref
-            && let Some(inner) = args.first()
-        {
-            return self.emit_ref_type(inner);
+        match kind {
+            CompoundKind::Ref => {
+                self.emit_ref_type(args.first().expect("a reference has a pointee type"))
+            }
+            CompoundKind::VarArgs => {
+                let element = self.go_type(args.first().expect("varargs have an element type"));
+                build_param_typed(format!("...{}", element.code), slice::from_ref(&element))
+            }
+            _ => {
+                let native = NativeTypeKind::from_type(ty)
+                    .expect("every other compound type is a native Go type");
+                self.emit_native_type(native, ty)
+            }
         }
-
-        if let Some(native) = NativeTypeKind::from_type(ty) {
-            return self.emit_native_type(native, ty);
-        }
-
-        let param_types: Vec<GoType> = args.iter().map(|p| self.go_type(p)).collect();
-        let type_args = param_types
-            .iter()
-            .map(|t| t.code.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        if kind == CompoundKind::EnumeratedSlice {
-            return build_param_typed(format!("[]{}", type_args), &param_types);
-        }
-        if kind == CompoundKind::VarArgs {
-            return build_param_typed(format!("...{}", type_args), &param_types);
-        }
-        if args.is_empty() {
-            return GoType::new(kind.leaf_name().to_string());
-        }
-        build_param_typed(format!("{}[{}]", kind.leaf_name(), type_args), &param_types)
     }
 
     pub(crate) fn format_type_args(&mut self, params: &[Type]) -> String {
@@ -248,29 +236,12 @@ impl Planner<'_> {
             return GoType::new("struct{}");
         }
 
-        if qualified_name == "prelude.Ref"
-            && let Some(inner) = params.first()
-        {
-            return self.emit_ref_type(inner);
-        }
-
-        if let Some(native) = NativeTypeKind::from_type(ty) {
-            return self.emit_native_type(native, ty);
-        }
-
         let param_types: Vec<GoType> = params.iter().map(|p| self.go_type(p)).collect();
         let type_args = param_types
             .iter()
             .map(|t| t.code.as_str())
             .collect::<Vec<_>>()
             .join(", ");
-
-        if name == "EnumeratedSlice" {
-            return build_param_typed(format!("[]{}", type_args), &param_types);
-        }
-        if name == "VarArgs" {
-            return build_param_typed(format!("...{}", type_args), &param_types);
-        }
 
         if let Some(package) = package {
             let code = if params.is_empty() {

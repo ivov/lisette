@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::go_names::is_go_reserved_word;
 
-use super::{DeclarationKind, DeclarationScope, ScopeState};
+use super::ScopeState;
 use crate::plan::local::{GoIdentifier, LocalId};
 use crate::state::package_state::PackageState;
 
@@ -46,17 +46,6 @@ impl ScopeState {
         candidate
     }
 
-    fn declares_type_parameter(&self, go_name: &str) -> bool {
-        self.frames.iter().any(|frame| match &frame.declarations {
-            DeclarationScope::Transparent => false,
-            DeclarationScope::Block(names)
-            | DeclarationScope::Function {
-                declarations: names,
-                ..
-            } => names.get(go_name) == Some(&DeclarationKind::TypeParameter),
-        })
-    }
-
     fn free_name_from(&self, base: &str, taken: impl Fn(&str) -> bool) -> String {
         let mut candidate = base.to_string();
         let mut suffix = 0;
@@ -96,7 +85,7 @@ impl ScopeState {
                 taken.contains(candidate)
                     || is_go_reserved_word(candidate)
                     || self.has_binding_for_go_name(candidate)
-                    || self.declares_type_parameter(candidate)
+                    || self.declares_type_param(candidate)
                     // Type strings can name import qualifiers the body never shows.
                     || package.is_import_qualifier(candidate)
             });

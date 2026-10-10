@@ -1,3 +1,4 @@
+use crate::OuterBindings;
 use crate::Planner;
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::patterns::decision_tree::{
@@ -152,7 +153,7 @@ pub(crate) fn tree_binding_statements(
     planner: &mut Planner,
     statements: &mut Vec<Statement>,
     bindings: &[PatternBinding],
-    subject: &GoExpression,
+    subject: SubjectRoot<'_>,
     consumers: &[&Expression],
 ) {
     for binding in bindings {
@@ -161,10 +162,10 @@ pub(crate) fn tree_binding_statements(
             continue;
         };
 
-        let access_expression = binding.path.render(SubjectRoot::Var(subject));
+        let access_expression = binding.path.render(subject);
 
         if analyze_inline_candidate_ids(&binding.binding_ids, consumers) == InlineDecision::Inline {
-            let composable = binding.path.render(SubjectRoot::Var(subject));
+            let composable = binding.path.render(subject);
             let stability = planner.path_read_stability(&composable);
             planner.scope.bind_inline_expr(
                 &binding.lisette_name,
@@ -173,29 +174,12 @@ pub(crate) fn tree_binding_statements(
             );
             continue;
         }
-        let ids = &binding.binding_ids;
-        let name = if planner.scope.has_binding_for_go_name(go_name) {
-            let fresh = planner.fresh_var(Some(&binding.lisette_name));
-            let name = planner
-                .scope
-                .bind_source(&binding.lisette_name, ids, &fresh);
-            planner.try_declare(&fresh);
-            name
-        } else {
-            let name = planner
-                .scope
-                .bind_source(&binding.lisette_name, ids, go_name);
-            if !planner.package.is_package_block_name(&name) && planner.try_declare(&name) {
-                name
-            } else {
-                let fresh = planner.fresh_var(Some(&binding.lisette_name));
-                let name = planner
-                    .scope
-                    .bind_source(&binding.lisette_name, ids, &fresh);
-                planner.try_declare(&fresh);
-                name
-            }
-        };
+        let name = planner.claim_block_binding(
+            &binding.lisette_name,
+            &binding.binding_ids,
+            go_name,
+            OuterBindings::StayVisible,
+        );
         statements
             .push(LoweredStatement::Define(Definition::single(name, access_expression)).into());
     }
@@ -206,7 +190,7 @@ pub(crate) fn bind_inline_unit(planner: &mut Planner, binding: &PatternBinding) 
     planner.scope.bind_inline_expr(
         &binding.lisette_name,
         &binding.binding_ids,
-        InlineExpr::new(unit, Stability::Literal),
+        InlineExpr::new(unit, Stability::Fixed),
     );
 }
 
@@ -219,7 +203,13 @@ pub(crate) fn with_tree_bindings<R>(
     f: impl FnOnce(&mut Planner, &mut Vec<Statement>) -> R,
 ) -> R {
     planner.with_binding_frame(|planner| {
-        tree_binding_statements(planner, statements, bindings, subject, &[body]);
+        tree_binding_statements(
+            planner,
+            statements,
+            bindings,
+            SubjectRoot::Var(subject),
+            &[body],
+        );
         f(planner, statements)
     })
 }

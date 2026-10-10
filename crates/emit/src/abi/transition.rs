@@ -1,7 +1,7 @@
 use syntax::types::Type;
 
 use crate::Planner;
-use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::LayoutBridge;
 use crate::abi::tuple_element_types;
 use crate::calls::go_interop::WrapperTarget;
@@ -44,7 +44,6 @@ pub(crate) fn tag_check_with_initializer(
     let mut statements = setup;
     statements.push(multi_value_return(then_values));
     LoweredStatement::If(IfPlan {
-        condition_setup: Vec::new(),
         initializer,
         condition,
         then_body: LoweredBlock { statements },
@@ -68,22 +67,22 @@ fn field(value: &GoExpression, field: &str) -> GoExpression {
 /// enclosing function's lowered shape (e.g. `[zero, err]`).
 pub(crate) fn lowered_err_values(
     planner: &mut Planner,
-    shape: &CallableReturnAbi,
+    shape: &LoweredReturnAbi,
     return_ty: &Type,
     err_expr: GoExpression,
 ) -> Vec<GoExpression> {
     match shape {
-        CallableReturnAbi::BareError => vec![err_expr],
-        CallableReturnAbi::Result { .. } | CallableReturnAbi::Partial { .. } => {
+        LoweredReturnAbi::BareError => vec![err_expr],
+        LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. } => {
             let ok_ty = planner.facts.peel_alias(return_ty).ok_type();
             let mut values = lowered_payload_zeros(planner, shape, &ok_ty);
             values.push(err_expr);
             values
         }
-        CallableReturnAbi::Tuple { .. } => {
+        LoweredReturnAbi::Tuple { .. } => {
             unreachable!("a tuple return has no failure path")
         }
-        CallableReturnAbi::Tagged | CallableReturnAbi::Direct | CallableReturnAbi::Option(_) => {
+        LoweredReturnAbi::Option(_) => {
             unreachable!("Option's failure constructor `None` carries no payload")
         }
     }
@@ -93,27 +92,24 @@ pub(crate) fn lowered_err_values(
 /// enclosing function's lowered shape (e.g. `[ok, nil]`). `payload` holds
 /// the already-lowered payload slots.
 pub(crate) fn lowered_ok_values(
-    shape: &CallableReturnAbi,
+    shape: &LoweredReturnAbi,
     mut payload: Vec<GoExpression>,
 ) -> Vec<GoExpression> {
     match shape {
-        CallableReturnAbi::BareError => vec![GoExpression::nil()],
-        CallableReturnAbi::Result { .. } | CallableReturnAbi::Partial { .. } => {
+        LoweredReturnAbi::BareError => vec![GoExpression::nil()],
+        LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. } => {
             payload.push(GoExpression::nil());
             payload
         }
-        CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
+        LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
             payload.push(GoExpression::literal("true".to_string()));
             payload
         }
-        CallableReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
+        LoweredReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
             payload
         }
-        CallableReturnAbi::Tuple { .. } => {
+        LoweredReturnAbi::Tuple { .. } => {
             unreachable!("a tuple return has its own emission path")
-        }
-        CallableReturnAbi::Tagged | CallableReturnAbi::Direct => {
-            unreachable!("not a lowered Lisette return ABI")
         }
     }
 }
@@ -122,18 +118,18 @@ pub(crate) fn lowered_ok_values(
 /// lowered shape (e.g. `[zero, false]`).
 pub(crate) fn lowered_none_values(
     planner: &mut Planner,
-    shape: &CallableReturnAbi,
+    shape: &LoweredReturnAbi,
     return_ty: &Type,
 ) -> Vec<GoExpression> {
     match shape {
-        CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
+        LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
             let inner = planner.facts.peel_alias(return_ty).ok_type();
             let mut values = lowered_payload_zeros(planner, shape, &inner);
             values.push(GoExpression::literal("false".to_string()));
             values
         }
-        CallableReturnAbi::Option(OptionReturnAbi::Nullable) => vec![GoExpression::nil()],
-        CallableReturnAbi::Option(OptionReturnAbi::Sentinel(value)) => {
+        LoweredReturnAbi::Option(OptionReturnAbi::Nullable) => vec![GoExpression::nil()],
+        LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(value)) => {
             vec![GoExpression::literal(value.to_string())]
         }
         _ => unreachable!("only Option's `None` lacks a payload"),
@@ -142,7 +138,7 @@ pub(crate) fn lowered_none_values(
 
 pub(crate) fn lowered_payload_values(
     planner: &mut Planner,
-    shape: &CallableReturnAbi,
+    shape: &LoweredReturnAbi,
     payload_ty: &Type,
     payload_expr: GoExpression,
 ) -> (Vec<Statement>, Vec<GoExpression>) {
@@ -159,7 +155,7 @@ pub(crate) fn lowered_payload_values(
 
 fn lowered_payload_zeros(
     planner: &mut Planner,
-    shape: &CallableReturnAbi,
+    shape: &LoweredReturnAbi,
     payload_ty: &Type,
 ) -> Vec<GoExpression> {
     if shape.has_flattened_payload() {
@@ -185,13 +181,13 @@ pub(crate) fn emit_lowered_result_return(
     result_value: GoExpression,
     hint: &str,
     return_ty: &Type,
-    shape: &CallableReturnAbi,
+    shape: &LoweredReturnAbi,
 ) -> Vec<Statement> {
     let mut statements = Vec::new();
     let p = &planner.stable_source(&mut statements, hint, result_value);
     let ok_ty = || planner.facts.peel_alias(return_ty).ok_type();
     let arms = match shape {
-        CallableReturnAbi::BareError | CallableReturnAbi::Result { .. } => {
+        LoweredReturnAbi::BareError | LoweredReturnAbi::Result { .. } => {
             let (ok_setup, ok_payload) =
                 lowered_payload_values(planner, shape, &ok_ty(), field(p, "OkVal"));
             vec![
@@ -209,7 +205,7 @@ pub(crate) fn emit_lowered_result_return(
                 )),
             ]
         }
-        CallableReturnAbi::Partial { .. } => {
+        LoweredReturnAbi::Partial { .. } => {
             let ok_ty = ok_ty();
             let (ok_setup, ok_payload) =
                 lowered_payload_values(planner, shape, &ok_ty, field(p, "OkVal"));
@@ -234,7 +230,7 @@ pub(crate) fn emit_lowered_result_return(
             statements.push(multi_value_return(both_values));
             statements
         }
-        CallableReturnAbi::Option(_) => {
+        LoweredReturnAbi::Option(_) => {
             let (some_setup, some_payload) =
                 lowered_payload_values(planner, shape, &ok_ty(), field(p, "SomeVal"));
             vec![
@@ -247,10 +243,7 @@ pub(crate) fn emit_lowered_result_return(
                 multi_value_return(lowered_none_values(planner, shape, return_ty)),
             ]
         }
-        CallableReturnAbi::Tuple { .. } => emit_lowered_tuple_return(planner, p, return_ty),
-        CallableReturnAbi::Tagged | CallableReturnAbi::Direct => {
-            unreachable!("not a lowered Lisette return ABI")
-        }
+        LoweredReturnAbi::Tuple { .. } => emit_lowered_tuple_return(planner, p, return_ty),
     };
     statements.extend(arms);
     statements
@@ -349,13 +342,13 @@ impl Planner<'_> {
 }
 
 /// Wrap a Lisette tagged-shape function value into a Go closure that
-/// presents `target_abi` to callers. Identity when the target is not lowered.
+/// presents `target_abi` to callers.
 pub(crate) fn emit_lisette_callback_wrapper(
     planner: &mut Planner,
     setup: &mut Vec<Statement>,
     fn_value: GoExpression,
     fn_type: &Type,
-    target_abi: &CallableReturnAbi,
+    target_abi: &LoweredReturnAbi,
 ) -> GoExpression {
     let Type::Function(f) = fn_type else {
         return fn_value;
@@ -367,7 +360,7 @@ pub(crate) fn emit_lisette_callback_wrapper(
     let (param_strs, arguments) = planner.build_wrapper_params(params);
     let params_str = param_strs;
 
-    let cb_var = planner.hoist_tmp_value_statement(setup, "cb", fn_value.clone());
+    let cb_var = planner.hoist_tmp_value_statement(setup, "cb", fn_value);
 
     let mut prelude = Vec::new();
     let inner_args: Vec<GoExpression> = arguments
@@ -378,12 +371,9 @@ pub(crate) fn emit_lisette_callback_wrapper(
 
     let call = GoExpression::call(GoExpression::name(cb_var), inner_args);
 
-    if !target_abi.is_lowered() {
-        return fn_value;
-    }
     let hint = match target_abi {
-        CallableReturnAbi::Option(_) => "opt",
-        CallableReturnAbi::Tuple { .. } => "tup",
+        LoweredReturnAbi::Option(_) => "opt",
+        LoweredReturnAbi::Tuple { .. } => "tup",
         _ => "res",
     };
     prelude.extend(emit_lowered_result_return(
@@ -421,17 +411,8 @@ pub(crate) fn emit_fn_arg_shape_adapter(
     let (param_strs, arguments) = planner.build_wrapper_params(params);
     let inner_call = GoExpression::call(GoExpression::name(cb_var), arguments);
 
-    let outer_ret = planner.render_lowered_return_ty(target_abi, arg_ret);
-
-    let body = if target_abi.is_passthrough() {
-        planner.lower_abi_to_tagged_return(inner_call, arg_abi, arg_ret)
-    } else {
-        let (mut body, tagged) = planner.lower_abi_to_tagged(inner_call, arg_abi, arg_ret);
-        body.extend(emit_lowered_result_return(
-            planner, tagged, "res", arg_ret, target_abi,
-        ));
-        body
-    };
+    let outer_ret = planner.render_callable_return_ty(target_abi, arg_ret);
+    let body = reencode_return(planner, inner_call, arg_abi, target_abi, arg_ret);
 
     Some(GoExpression::function_literal(
         param_strs,
@@ -439,6 +420,26 @@ pub(crate) fn emit_fn_arg_shape_adapter(
         LoweredBlock { statements: body },
         FunctionLiteralLayout::MultiLine,
     ))
+}
+
+/// Return the `source` result of `call` in the `target` ABI, through its tagged value.
+pub(crate) fn reencode_return(
+    planner: &mut Planner,
+    call: GoExpression,
+    source: &CallableReturnAbi,
+    target: &CallableReturnAbi,
+    return_ty: &Type,
+) -> Vec<Statement> {
+    match target.lowered() {
+        None => planner.lower_abi_to_tagged_return(call, source, return_ty),
+        Some(target) => {
+            let (mut statements, tagged) = planner.lower_abi_to_tagged(call, source, return_ty);
+            statements.extend(emit_lowered_result_return(
+                planner, tagged, "res", return_ty, target,
+            ));
+            statements
+        }
+    }
 }
 
 /// Wrap a Go-void function value so it fills a slot whose result is a type parameter.
@@ -495,7 +496,8 @@ pub(crate) fn lower_arg_to_tagged(
     let inner_call = GoExpression::call(argument, inner_arguments);
     let tagged_ret = planner.use_go_type(inner_ret);
 
-    let body = planner.lower_abi_to_tagged_return(inner_call, &abi, inner_ret);
+    let body =
+        planner.lower_abi_to_tagged_return(inner_call, &CallableReturnAbi::Lowered(abi), inner_ret);
 
     let tagged_var = planner.fresh_var(Some("tagged"));
     planner.declare(&tagged_var);
@@ -519,10 +521,10 @@ pub(crate) fn try_emit_lowered_tail_return(
 ) -> Option<Vec<Statement>> {
     let shape = planner.return_ctx().lowered_shape()?;
     match shape {
-        CallableReturnAbi::Partial {
+        LoweredReturnAbi::Partial {
             payload: PayloadLayout::Packed,
         } => Some(emit_lowered_partial_tail(planner, expression)),
-        CallableReturnAbi::Tuple { arity, .. } => {
+        LoweredReturnAbi::Tuple { arity, .. } => {
             Some(emit_lowered_tuple_tail(planner, expression, arity))
         }
         _ => None,
@@ -545,7 +547,7 @@ fn emit_lowered_tuple_tail(
     }
 
     if let Some(plan) = planner.plan_call(expression)
-        && plan.resolved.abi.result == (CallableReturnAbi::Tuple { arity })
+        && plan.resolved.abi.result == CallableReturnAbi::Lowered(LoweredReturnAbi::Tuple { arity })
         && planner.facts.peel_alias(&expression.get_type()) == planner.facts.peel_alias(&return_ty)
         && planner
             .go_result_bridge(&plan.resolved.abi, &return_ty)
@@ -568,7 +570,7 @@ fn emit_lowered_tuple_tail(
         GoExpression::name(tup),
         "tup",
         &return_ty,
-        &CallableReturnAbi::Tuple { arity },
+        &LoweredReturnAbi::Tuple { arity },
     ));
     statements
 }
@@ -625,7 +627,7 @@ fn emit_lowered_partial_tail(planner: &mut Planner, expression: &Expression) -> 
         value,
         "v",
         &return_ty,
-        &CallableReturnAbi::Partial {
+        &LoweredReturnAbi::Partial {
             payload: PayloadLayout::Packed,
         },
     ));

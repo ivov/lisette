@@ -1,7 +1,7 @@
 use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::Planner;
-use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
+use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use crate::abi::{go_result_list, is_prelude_container_type};
 use crate::types::go_type::{GoType, returns_go_void};
 
@@ -93,25 +93,25 @@ impl FunctionLayout {
             .iter()
             .map(|result| result.go_type(planner))
             .collect();
-        Some(match &self.return_abi {
-            CallableReturnAbi::Tagged
-            | CallableReturnAbi::Direct
-            | CallableReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) =>
-            {
+        Some(match self.return_abi.lowered() {
+            None
+            | Some(LoweredReturnAbi::Option(
+                OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_),
+            )) => {
                 let [slot] = <[GoType; 1]>::try_from(slots)
                     .unwrap_or_else(|_| unreachable!("a single-result ABI has one result slot"));
                 slot
             }
-            CallableReturnAbi::BareError => planner.go_type(&self.result_type.err_type()),
-            CallableReturnAbi::Result { .. } | CallableReturnAbi::Partial { .. } => {
+            Some(LoweredReturnAbi::BareError) => planner.go_type(&self.result_type.err_type()),
+            Some(LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. }) => {
                 slots.push(planner.go_type(&self.result_type.err_type()));
                 go_result_list(&slots)
             }
-            CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
+            Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. })) => {
                 slots.push(GoType::new("bool"));
                 go_result_list(&slots)
             }
-            CallableReturnAbi::Tuple { .. } => go_result_list(&slots),
+            Some(LoweredReturnAbi::Tuple { .. }) => go_result_list(&slots),
         })
     }
 }
@@ -370,22 +370,24 @@ impl Planner<'_> {
                 .payload()
                 .expect("a payload-carrying return ABI has a payload layout")
         };
-        let results = match &return_abi {
-            CallableReturnAbi::Tagged | CallableReturnAbi::Direct => vec![result.clone()],
-            CallableReturnAbi::BareError => Vec::new(),
-            CallableReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
-                vec![payload().clone()]
-            }
-            CallableReturnAbi::Result { .. }
-            | CallableReturnAbi::Partial { .. }
-            | CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
-                if return_abi.has_flattened_payload() {
+        let results = match return_abi.lowered() {
+            None => vec![result.clone()],
+            Some(LoweredReturnAbi::BareError) => Vec::new(),
+            Some(LoweredReturnAbi::Option(
+                OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_),
+            )) => vec![payload().clone()],
+            Some(
+                lowered @ (LoweredReturnAbi::Result { .. }
+                | LoweredReturnAbi::Partial { .. }
+                | LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. })),
+            ) => {
+                if lowered.has_flattened_payload() {
                     self.tuple_result_slots(payload())
                 } else {
                     vec![payload().clone()]
                 }
             }
-            CallableReturnAbi::Tuple { .. } => self.tuple_result_slots(result),
+            Some(LoweredReturnAbi::Tuple { .. }) => self.tuple_result_slots(result),
         };
         FunctionLayout {
             parameters,

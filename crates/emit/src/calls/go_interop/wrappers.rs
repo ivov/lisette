@@ -1,10 +1,10 @@
 use crate::Planner;
-use crate::abi::callable::{CallableAbi, CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::callable::{CallableAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::{LayoutBridge, resolve_layout_bridge};
 use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::abi::transition::multi_value_return;
 use crate::control_flow::fallible::{
-    Fallible, FalliblePlanner, PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR, prelude_call,
+    Fallible, PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR, prelude_call,
 };
 use crate::control_flow::propagation::plain_return;
 use crate::is_order_sensitive;
@@ -170,8 +170,8 @@ impl Planner<'_> {
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) {
-        match &source.return_abi {
-            CallableReturnAbi::Tagged | CallableReturnAbi::Direct => {
+        match source.return_abi.lowered() {
+            None => {
                 if returns_go_void(&source.result_type) {
                     statements.push(expression_statement(call));
                     return;
@@ -180,16 +180,22 @@ impl Planner<'_> {
                 let value = self.plan_layout_bridge(statements, call, &bridge);
                 statements.push(plain_return(value));
             }
-            CallableReturnAbi::BareError => statements.push(plain_return(call)),
-            CallableReturnAbi::Result { .. }
-            | CallableReturnAbi::Partial { .. }
-            | CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
+            Some(LoweredReturnAbi::BareError) => statements.push(plain_return(call)),
+            Some(
+                LoweredReturnAbi::Result { .. }
+                | LoweredReturnAbi::Partial { .. }
+                | LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. }),
+            ) => {
                 let source_flat = source.return_abi.has_flattened_payload();
                 let mut values = self.create_temp_vars("ret", source.results.len() + 1);
                 statements.push(define_many(values.clone(), call));
                 let auxiliary = values.pop().expect("a lowered callable has a status slot");
 
-                if matches!(source.return_abi, CallableReturnAbi::Partial { .. }) && !source_flat {
+                if matches!(
+                    source.return_abi.lowered(),
+                    Some(LoweredReturnAbi::Partial { .. })
+                ) && !source_flat
+                {
                     let ok_type = source.result_type.ok_type();
                     if let Some(condition) =
                         self.partial_ok_nil_check(&ok_type, GoExpression::name(values[0].clone()))
@@ -220,7 +226,7 @@ impl Planner<'_> {
                 values.push(GoExpression::name(auxiliary));
                 statements.push(multi_value_return(values));
             }
-            CallableReturnAbi::Option(OptionReturnAbi::Nullable) => {
+            Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)) => {
                 let raw = self.hoist_tmp_value_statement(statements, "raw", call);
                 let condition = self
                     .option_nil_guard(&source.result_type)
@@ -239,10 +245,10 @@ impl Planner<'_> {
                 let value = self.plan_layout_bridge(statements, GoExpression::name(raw), &bridge);
                 statements.push(plain_return(value));
             }
-            CallableReturnAbi::Option(OptionReturnAbi::Sentinel(_)) => {
+            Some(LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(_))) => {
                 statements.push(plain_return(call))
             }
-            CallableReturnAbi::Tuple { arity } => {
+            Some(LoweredReturnAbi::Tuple { arity }) => {
                 let values = self.create_temp_vars("ret", *arity);
                 statements.push(define_many(values.clone(), call));
                 let values = names(&values)
@@ -580,10 +586,7 @@ impl Planner<'_> {
         let err = || GoExpression::name(err_var.clone());
         let ok = || ok_value.clone();
 
-        let result_ty_str = {
-            let mut fe = FalliblePlanner::new(self, &fallible);
-            fe.full_type_string()
-        };
+        let result_ty_str = { self.fallible_go_type(&fallible) };
 
         let nil_guard = self.result_nil_guard(ok_ty);
 
@@ -591,27 +594,18 @@ impl Planner<'_> {
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
 
         let (mut ok_setup, ok_value) = self.plan_optional_payload_bridge(ok(), payload_bridge);
-        let ok_wrapper = {
-            let mut fe = FalliblePlanner::new(self, &fallible);
-            fe.emit_success(ok_value)
-        };
+        let ok_wrapper = { self.fallible_success(&fallible, ok_value) };
         ok_setup.push(leaf_statement(&sink, ok_wrapper));
         let ok_body = LoweredBlock {
             statements: ok_setup,
         };
 
-        let err_wrapper = {
-            let mut fe = FalliblePlanner::new(self, &fallible);
-            fe.emit_failure(Some(err()))
-        };
+        let err_wrapper = { self.fallible_failure(&fallible, Some(err())) };
         let then_body = leaf_block(&sink, err_wrapper);
 
         let else_arm = if let Some(nil_guard) = nil_guard {
             let nil_condition = nil_guard.is_nil(ok());
-            let nil_err = {
-                let mut fe = FalliblePlanner::new(self, &fallible);
-                fe.emit_failure(Some(unexpected_nil_error()))
-            };
+            let nil_err = { self.fallible_failure(&fallible, Some(unexpected_nil_error())) };
             ElseArm::ElseIf(Box::new(IfPlan::plain(
                 nil_condition,
                 leaf_block(&sink, nil_err),
@@ -661,23 +655,19 @@ impl Planner<'_> {
         let err_var = self.hoist_tmp_value_statement(&mut statements, "ret", call);
         let err = || GoExpression::name(err_var.clone());
 
-        let result_ty_str = {
-            let mut fe = FalliblePlanner::new(self, fallible);
-            fe.full_type_string()
-        };
+        let result_ty_str = { self.fallible_go_type(fallible) };
 
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
 
-        let err_wrapper = {
-            let mut fe = FalliblePlanner::new(self, fallible);
-            fe.emit_failure(Some(err()))
-        };
+        let err_wrapper = { self.fallible_failure(fallible, Some(err())) };
         let then_body = leaf_block(&sink, err_wrapper);
 
         let ok_wrapper = {
-            let mut fe = FalliblePlanner::new(self, fallible);
-            fe.emit_success(GoExpression::empty_composite("struct{}".to_string()))
+            self.fallible_success(
+                fallible,
+                GoExpression::empty_composite("struct{}".to_string()),
+            )
         };
         let else_arm = ElseArm::from_body(leaf_block(&sink, ok_wrapper), false);
 

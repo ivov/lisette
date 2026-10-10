@@ -3,8 +3,8 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
 use crate::names::packages::PackageUse;
-use crate::plan::bodies::{LoweredBlock, Statement, legalize_else_if_scopes};
-use crate::plan::evaluation::{Effects, Reads};
+use crate::plan::bodies::{LoweredBlock, Statement};
+use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::{
     BinaryOp, CompositeElement, CompositeLayout, FunctionLiteralLayout, GoExpressionNode,
     GoParameter, UnaryOp,
@@ -253,12 +253,11 @@ impl GoExpression {
         mut body: LoweredBlock,
         layout: FunctionLiteralLayout,
     ) -> Self {
-        legalize_else_if_scopes(&mut body.statements);
         if !result.is_empty() {
             body.ensure_go_termination();
         }
         #[cfg(debug_assertions)]
-        verify_final_function_body(&body, !result.is_empty())
+        verify_final_function_body(&mut body, !result.is_empty())
             .unwrap_or_else(|error| panic!("{error}"));
         Self::new(GoExpressionNode::FunctionLiteral {
             parameters,
@@ -469,18 +468,21 @@ impl Display for GoExpression {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// What can change a value that an evaluation reads, weakest last.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Stability {
-    Literal,
-    /// A name nothing can rebind before its readers run.
+    /// Nothing can rebind it before its readers run.
+    #[default]
     Fixed,
-    Observable,
+    /// Only an assignment to a named local.
     StableAcrossCalls,
+    /// Also a call, through an alias or a reference.
+    Observable,
 }
 
 impl Stability {
     pub(crate) fn is_fixed(self) -> bool {
-        matches!(self, Stability::Literal | Stability::Fixed)
+        matches!(self, Stability::Fixed)
     }
 
     pub(crate) fn is_observable(self) -> bool {
@@ -490,24 +492,11 @@ impl Stability {
     pub(crate) fn is_stable_across_calls(self) -> bool {
         matches!(self, Stability::StableAcrossCalls)
     }
-
-    pub(crate) fn weaker(self, other: Self) -> Self {
-        let rank = |stability: Self| match stability {
-            Stability::Literal => 0,
-            Stability::Fixed => 1,
-            Stability::StableAcrossCalls => 2,
-            Stability::Observable => 3,
-        };
-        if rank(other) > rank(self) {
-            other
-        } else {
-            self
-        }
-    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum EvaluationEffect {
+    #[default]
     Pure,
     PureCall,
     EffectfulCall,
@@ -558,7 +547,7 @@ impl EvaluationFacts {
     }
 
     const fn literal() -> Self {
-        Self::new(Stability::Literal, EvaluationEffect::Pure)
+        Self::new(Stability::Fixed, EvaluationEffect::Pure)
     }
 
     const fn value(effect: EvaluationEffect) -> Self {
@@ -613,18 +602,6 @@ impl ValuePlan {
             evaluation,
         } = self;
         (setup, Self::from_facts(Vec::new(), expression, evaluation))
-    }
-
-    /// For passes that keep evaluation unchanged.
-    pub(crate) fn parts_mut(&mut self) -> (&mut Vec<Statement>, &mut GoExpression) {
-        (&mut self.setup, &mut self.expression)
-    }
-
-    pub(crate) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
-        for statement in &self.setup {
-            statement.kind.visit_expressions(visit);
-        }
-        self.expression.node().visit(visit);
     }
 
     fn from_facts(
@@ -828,9 +805,9 @@ impl ValuePlan {
 
     pub(crate) fn effects(&self) -> Effects {
         let reads = if self.reads_only_own_setup() {
-            Reads::Nothing
+            Stability::Fixed
         } else {
-            Reads::of(self.evaluation.stability)
+            self.evaluation.stability
         };
         self.expression
             .effects()
@@ -838,7 +815,7 @@ impl ValuePlan {
     }
 
     fn reads_only_own_setup(&self) -> bool {
-        if self.setup.is_empty() || self.expression.effects().reads() == Reads::Shared {
+        if self.setup.is_empty() || self.expression.effects().reads() == Stability::Observable {
             return false;
         }
         let mut own = true;

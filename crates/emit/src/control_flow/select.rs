@@ -1,3 +1,4 @@
+use crate::OuterBindings;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::patterns::sites::{
@@ -85,12 +86,12 @@ impl Planner<'_> {
                 body.push(LoweredStatement::Break(LoopTransfer::Unlabeled).into());
             }
             let loop_plan = LoopPlan {
-                prologue: setup,
                 kind: LoopKind::Generated { label: None },
                 header: LoopHeader::Infinite,
                 body: LoweredBlock { statements: body },
             };
-            let mut statements = vec![LoweredStatement::Loop(loop_plan).into()];
+            let mut statements = setup;
+            statements.push(LoweredStatement::Loop(loop_plan).into());
             statements.extend(postlude);
             LoweredStatement::Body(LoweredBlock { statements })
         } else {
@@ -380,8 +381,12 @@ impl Planner<'_> {
         {
             return self.lower_ok_guard(
                 |this| {
-                    this.scope
-                        .bind_source(identifier, binding.as_slice(), go_name)
+                    this.claim_block_binding(
+                        identifier,
+                        binding.as_slice(),
+                        &go_name,
+                        OuterBindings::MayShadow,
+                    )
                 },
                 None,
                 ctx,
@@ -422,10 +427,12 @@ impl Planner<'_> {
             } = effective_pattern
                 && let Some(go_name) = this.go_name_for_binding(effective_pattern)
             {
-                vec![
-                    this.scope
-                        .bind_source(identifier, binding.as_slice(), go_name),
-                ]
+                vec![this.claim_block_binding(
+                    identifier,
+                    binding.as_slice(),
+                    &go_name,
+                    OuterBindings::MayShadow,
+                )]
             } else if matches!(
                 effective_pattern,
                 Pattern::Identifier { .. } | Pattern::WildCard { .. }

@@ -1,0 +1,52 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn main() {
+    let ch = Channel.buffered<int>(4)
+    ch.send(3)
+    let w = loop {
+      select {
+        let Some(w) = ch.receive() => { if w > 2 { break w } },
+        _ => { fmt.Print("") },
+      }
+    }
+    fmt.Println(w)
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ch := make(chan int, 4)
+	lisette.ChannelSend(ch, 3)
+	var w int
+loop_1:
+	for {
+		ch_1 := ch
+		for {
+			select {
+			case w_1, ok := <-ch_1:
+				if ok {
+					if w_1 > 2 {
+						w = w_1
+						break loop_1
+					}
+				} else {
+					ch_1 = nil
+					continue
+				}
+			default:
+				fmt.Print("")
+			}
+			break
+		}
+	}
+	fmt.Println(w)
+}

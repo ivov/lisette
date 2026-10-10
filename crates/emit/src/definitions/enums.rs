@@ -1,6 +1,5 @@
 use crate::Planner;
-use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD, EnumLayout};
-use crate::definitions::structs::{StringFormat, should_synthesize_stringer};
+use crate::definitions::structs::SynthesizedMethod;
 use crate::names::go_name;
 use crate::plan::values::GoExpression;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
@@ -21,41 +20,39 @@ impl Planner<'_> {
 
         let generics_string = self.generics_to_string(generics);
         let receiver_generics = self.receiver_generics_string(generics);
-        let has_json = attributes.iter().any(|a| a.name == "json");
         let has_iterate = attributes.iter().any(|a| a.name == "iterate");
 
-        let synthesize = should_synthesize_stringer(attributes);
-        let (has_user_string, has_user_go_string) = self.stringer_overrides(name);
-        let emit_string = synthesize && !has_user_string;
-        let emit_go_string = synthesize && !has_user_go_string;
         let mut result = layout.emit_definition(self, &generics_string);
-        if emit_string {
-            let (method, requirements) = layout.emit_format_method(
-                &receiver_generics,
-                StringFormat::Display {
-                    method: ENUM_STRINGER_METHOD,
-                    qualified: false,
-                },
-            );
-            self.require_packages(&requirements);
+        for method in self.enum_synthesized_methods(name, attributes) {
+            let code = match method {
+                SynthesizedMethod::Format(format) => {
+                    let (code, requirements) =
+                        layout.emit_format_method(&receiver_generics, format);
+                    self.require_packages(&requirements);
+                    code
+                }
+                SynthesizedMethod::Json => {
+                    self.require_fmt();
+                    self.require_errors();
+                    if !layout.variants.is_empty() {
+                        self.require_json();
+                    }
+                    layout.emit_json_methods(&receiver_generics)
+                }
+                SynthesizedMethod::ToString => self.to_string_method(name, &receiver_generics),
+                SynthesizedMethod::Equals => {
+                    let Some(code) = self.enum_equals_method(name, &enum_id, &receiver_generics)
+                    else {
+                        continue;
+                    };
+                    code
+                }
+                SynthesizedMethod::StringerShadow => {
+                    unreachable!("only structs embed a stringer to shadow")
+                }
+            };
             result.push_str("\n\n");
-            result.push_str(&method);
-        }
-        if emit_go_string {
-            let (method, requirements) = layout.emit_format_method(
-                &receiver_generics,
-                StringFormat::Display {
-                    method: ENUM_GO_STRINGER_METHOD,
-                    qualified: true,
-                },
-            );
-            self.require_packages(&requirements);
-            result.push_str("\n\n");
-            result.push_str(&method);
-        }
-        if has_json {
-            result.push_str("\n\n");
-            result.push_str(&layout.emit_json_methods(&receiver_generics));
+            result.push_str(&code);
         }
         if has_iterate {
             let is_public = self
@@ -66,47 +63,16 @@ impl Planner<'_> {
             result.push_str("\n\n");
             result.push_str(&layout.emit_variants_function(&fn_name));
         }
-        self.append_enum_debug_method(&mut result, name, &receiver_generics, layout);
-        self.append_to_string_method(&mut result, name, &receiver_generics);
-        self.append_enum_equals_method(&mut result, name, &enum_id, &receiver_generics);
-        if has_json {
-            self.require_fmt();
-            self.require_errors();
-            if !layout.variants.is_empty() {
-                self.require_json();
-            }
-        }
 
         Some(result)
     }
 
-    fn append_enum_debug_method(
+    fn enum_equals_method(
         &mut self,
-        out: &mut String,
-        name: &str,
-        receiver_generics: &str,
-        layout: &EnumLayout,
-    ) {
-        if !self.synthesizes_debug_string(name) {
-            return;
-        }
-        let (method, requirements) =
-            layout.emit_format_method(receiver_generics, StringFormat::Debug);
-        self.require_packages(&requirements);
-        out.push_str("\n\n");
-        out.push_str(&method);
-    }
-
-    fn append_enum_equals_method(
-        &mut self,
-        out: &mut String,
         name: &str,
         enum_id: &str,
         receiver_generics: &str,
-    ) {
-        if !self.should_synthesize_equals(name) {
-            return;
-        }
+    ) -> Option<String> {
         let Some(Definition {
             body:
                 DefinitionBody::Enum {
@@ -117,7 +83,7 @@ impl Planner<'_> {
             ..
         }) = self.facts.definition(enum_id)
         else {
-            return;
+            return None;
         };
         let sem_generics = sem_generics.clone();
         let sem_variants = sem_variants.clone();
@@ -169,12 +135,10 @@ impl Planner<'_> {
             ));
         }
 
-        out.push_str("\n\n");
         if cases.is_empty() {
-            out.push_str(&format!(
+            return Some(format!(
                 "func ({receiver} {receiver_type}) {go_method}({other} {receiver_type}) bool {{\nreturn {receiver}.Tag == {other}.Tag\n}}"
             ));
-            return;
         }
         let mut method = format!(
             "func ({receiver} {receiver_type}) {go_method}({other} {receiver_type}) bool {{\nif {receiver}.Tag != {other}.Tag {{\nreturn false\n}}\nswitch {receiver}.Tag {{\n"
@@ -184,7 +148,7 @@ impl Planner<'_> {
             method.push('\n');
         }
         method.push_str("default:\nreturn true\n}\n}");
-        out.push_str(&method);
+        Some(method)
     }
 
     /// Export-aware Go name for an `#[iterate]` enum's synthesized `variants`

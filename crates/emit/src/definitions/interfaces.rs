@@ -74,10 +74,9 @@ impl Planner<'_> {
             })
             .expect("interface method must be registered");
         let return_abi = self.interface_method_return_abi(func.name, method);
-        let return_type = if return_abi.is_lowered() {
-            self.render_lowered_return_ty(&return_abi, &raw_return_ty)
-        } else {
-            self.use_go_type(&raw_return_ty)
+        let return_type = match return_abi.lowered() {
+            Some(lowered) => self.render_lowered_return_ty(lowered, &raw_return_ty),
+            None => self.use_go_type(&raw_return_ty),
         };
 
         let method_name = self.method_go_name(func.name, is_public);
