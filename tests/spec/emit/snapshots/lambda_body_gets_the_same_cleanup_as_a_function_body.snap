@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn pick(xs: Slice<int>, i: int) -> int {
+    match xs.get(i) { Some(value) => value, None => -1 }
+  }
+  
+  fn main() {
+    let f = |xs: Slice<int>, i: int| -> int {
+      match xs.get(i) { Some(value) => value, None => -1 }
+    }
+    fmt.Println(f([7], 0), pick([7], 0))
+  }
+---
+package main
+
+import "fmt"
+
+func pick(xs []int, i int) int {
+	if i >= 0 && i < len(xs) {
+		return xs[i]
+	}
+	return -1
+}
+
+func main() {
+	f := func(xs []int, i int) int {
+		if i >= 0 && i < len(xs) {
+			return xs[i]
+		}
+		return -1
+	}
+	fmt.Println(f([]int{7}, 0), pick([]int{7}, 0))
+}

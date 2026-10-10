@@ -35,6 +35,12 @@ pub(crate) enum CallableReturnAbi {
     Tagged,
     /// No generated tagged/lowered boundary encoding is required.
     Direct,
+    Lowered(LoweredReturnAbi),
+}
+
+/// A `Result`, `Partial`, `Option`, or tuple spread across Go result slots.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LoweredReturnAbi {
     /// A `Result<(), E>` represented by its error value alone.
     BareError,
     Result {
@@ -50,36 +56,37 @@ pub(crate) enum CallableReturnAbi {
 }
 
 impl CallableReturnAbi {
-    pub(crate) fn transition_to(&self, target: &Self) -> AbiTransition {
-        if self == target {
-            return AbiTransition::Identity;
+    pub(crate) fn lowered(&self) -> Option<&LoweredReturnAbi> {
+        match self {
+            Self::Lowered(lowered) => Some(lowered),
+            Self::Tagged | Self::Direct => None,
         }
-        match (self, target) {
-            (Self::Tagged, target) if target.is_lowered() => AbiTransition::LowerFromTagged,
-            (source, Self::Tagged) if source.is_lowered() => AbiTransition::WrapToTagged,
-            (source, target) if source.is_lowered() && target.is_lowered() => {
-                AbiTransition::Reencode
-            }
-            _ => AbiTransition::Incompatible,
-        }
-    }
-
-    pub(crate) fn is_passthrough(&self) -> bool {
-        matches!(self, Self::Tagged | Self::Direct)
     }
 
     pub(crate) fn is_lowered(&self) -> bool {
-        !self.is_passthrough()
+        matches!(self, Self::Lowered(_))
     }
 
+    pub(crate) fn has_flattened_payload(&self) -> bool {
+        self.lowered()
+            .is_some_and(LoweredReturnAbi::has_flattened_payload)
+    }
+
+    pub(crate) fn same_logical_contract(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Lowered(left), Self::Lowered(right)) => left.same_logical_contract(right),
+            _ => self == other,
+        }
+    }
+}
+
+impl LoweredReturnAbi {
     pub(crate) fn payload(&self) -> Option<PayloadLayout> {
         match self {
             Self::Result { payload }
             | Self::Partial { payload }
             | Self::Option(OptionReturnAbi::CommaOk { payload }) => Some(*payload),
-            Self::Tagged
-            | Self::Direct
-            | Self::BareError
+            Self::BareError
             | Self::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_))
             | Self::Tuple { .. } => None,
         }
@@ -100,24 +107,10 @@ impl CallableReturnAbi {
         self.payload().is_some_and(PayloadLayout::is_flattened)
     }
 
-    pub(crate) fn same_logical_contract(&self, other: &Self) -> bool {
+    fn same_logical_contract(&self, other: &Self) -> bool {
         self.clone().with_payload(PayloadLayout::Packed)
             == other.clone().with_payload(PayloadLayout::Packed)
     }
-}
-
-/// Required conversion between two callable result contracts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AbiTransition {
-    Identity,
-    /// Convert a tagged Lisette result into a lowered Go result.
-    LowerFromTagged,
-    /// Reconstruct the tagged Lisette result from lowered Go results.
-    WrapToTagged,
-    /// Convert between two non-tagged physical layouts through the logical value.
-    Reencode,
-    /// The contracts describe different logical result types.
-    Incompatible,
 }
 
 /// The instantiated and declaration-level views of one callable parameter.

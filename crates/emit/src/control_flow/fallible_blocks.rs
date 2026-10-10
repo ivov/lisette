@@ -1,11 +1,11 @@
 use super::propagation::plain_return;
 use crate::Planner;
 use crate::ReturnContext;
-use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::calls::bound_value::BoundValue;
 use crate::calls::comma_ok::{CommaOkValueSlot, PairKind};
 use crate::context::expression::ExpressionContext;
-use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
+use crate::control_flow::fallible::{ConstructorKind, Fallible};
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredBlock, Statement, define};
 use crate::plan::go_expression::FunctionLiteralLayout;
@@ -19,7 +19,7 @@ pub(crate) struct TryBlockPairPlan<'e> {
     effective_ty: Type,
     fallible: Fallible,
     body_ctx: ReturnContext,
-    shape: CallableReturnAbi,
+    shape: LoweredReturnAbi,
     kind: PairKind,
 }
 
@@ -57,17 +57,15 @@ impl Planner<'_> {
         items: &'e [Expression],
         ty: &Type,
     ) -> Option<TryBlockPairPlan<'e>> {
-        let return_ctx = self.return_ctx();
-        let ty = self.facts.peel_alias(ty);
-        let effective_ty = resolve_fallible_block_type(items, &ty, Some(&return_ctx));
+        let effective_ty = self.fallible_block_type(items, ty);
         let fallible = Fallible::from_type(&effective_ty)?;
         let body_ctx = self.return_context_for_type(effective_ty.clone());
         let shape = body_ctx.lowered_shape()?;
         let kind = match shape {
-            CallableReturnAbi::Result {
+            LoweredReturnAbi::Result {
                 payload: PayloadLayout::Packed,
             } => PairKind::Result { nil_guard: None },
-            CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
+            LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
                 payload: PayloadLayout::Packed,
             }) => PairKind::CommaOk { nil_guard: None },
             _ => return None,
@@ -88,17 +86,12 @@ impl Planner<'_> {
         ty: &Type,
         result_var: String,
     ) -> ValuePlan {
-        let return_ctx = self.return_ctx();
-        let ty = self.facts.peel_alias(ty);
-        let effective_ty = resolve_fallible_block_type(items, &ty, Some(&return_ctx));
+        let effective_ty = self.fallible_block_type(items, ty);
         let fallible = Fallible::from_type(&effective_ty)
             .expect("`try` block must have Result or Option type");
 
         self.declare(&result_var);
-        let full_ty = {
-            let mut fe = FalliblePlanner::new(self, &fallible);
-            fe.full_type_string()
-        };
+        let full_ty = { self.fallible_go_type(&fallible) };
 
         let body_ctx = ReturnContext::Tagged(effective_ty);
         let body = self
@@ -123,10 +116,8 @@ impl Planner<'_> {
         items: &[Expression],
         ty: &Type,
     ) -> Option<Vec<Statement>> {
-        let return_ctx = self.return_ctx();
-        let return_ty = self.facts.peel_alias(return_ctx.ty()?);
-        let effective_ty =
-            resolve_fallible_block_type(items, &self.facts.peel_alias(ty), Some(&return_ctx));
+        let return_ty = self.facts.peel_alias(self.return_ctx().ty()?);
+        let effective_ty = self.fallible_block_type(items, ty);
         if return_ty.demoted() != effective_ty.demoted() {
             return None;
         }
@@ -228,9 +219,7 @@ impl Planner<'_> {
 
     /// `recover { ... }` → `result := lisette.RecoverBlock(func() T { ... })`.
     pub(crate) fn lower_recover_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
-        let return_ctx = self.return_ctx();
-        let ty = self.facts.peel_alias(ty);
-        let effective_ty = resolve_fallible_block_type(items, &ty, Some(&return_ctx));
+        let effective_ty = self.fallible_block_type(items, ty);
         let fallible = Fallible::from_type(&effective_ty)
             .expect("recover block type must be Result<T, PanicValue>");
 
@@ -295,39 +284,31 @@ impl Planner<'_> {
         statements
     }
 
+    /// Prefer the function's return type when the block's own ok type is a
+    /// type variable (a statement tail) or `Never` (a diverging tail), since
+    /// nothing else constrains it.
+    fn fallible_block_type(&self, items: &[Expression], ty: &Type) -> Type {
+        let ty = self.facts.peel_alias(ty);
+        let tail_is_never = items.last().is_some_and(|last| {
+            let t = last.get_type();
+            t.is_never() || last.diverges().is_some()
+        });
+        let needs_return_context = tail_is_never
+            || Fallible::from_type(&ty).is_some_and(|f| {
+                f.ok_ty().is_variable() || f.ok_ty().is_placeholder() || f.ok_ty().is_never()
+            });
+        if !needs_return_context {
+            return ty;
+        }
+        self.return_ctx()
+            .ty()
+            .filter(|return_ty| Fallible::from_type(return_ty).is_some())
+            .cloned()
+            .unwrap_or(ty)
+    }
+
     /// A structured zero-value return for a `recover` block's inner type.
     fn lower_zero_return(&mut self, ty: &Type) -> Statement {
         plain_return(self.zero_value_expression(ty))
     }
-}
-
-/// Prefer the function's return context type when the block's own ok_ty
-/// is a type variable (e.g. `Result[any, ...]` when tail is a statement),
-/// or when the tail is Never-typed (ok_ty resolves to unit/Never because
-/// nothing constrains it).
-fn resolve_fallible_block_type(
-    items: &[Expression],
-    ty: &Type,
-    outer: Option<&ReturnContext>,
-) -> Type {
-    let tail_is_never = items.last().is_some_and(|last| {
-        let t = last.get_type();
-        t.is_never() || last.diverges().is_some()
-    });
-    let base = Fallible::from_type(ty);
-    let needs_return_context = tail_is_never
-        || base.as_ref().is_some_and(|f| {
-            f.ok_ty().is_variable() || f.ok_ty().is_placeholder() || f.ok_ty().is_never()
-        });
-    if !needs_return_context {
-        return ty.clone();
-    }
-    let resolved = outer
-        .expect("fallible block type resolution requires a threaded outer return context")
-        .clone();
-    resolved
-        .ty()
-        .filter(|ty| Fallible::from_type(ty).is_some())
-        .cloned()
-        .unwrap_or_else(|| ty.clone())
 }

@@ -4,6 +4,7 @@ use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::LaterStages;
 use crate::is_order_sensitive;
+use crate::plan::bodies::with_setup;
 use crate::plan::bodies::{
     AssignForm, CompoundKind, LoweredBlock, LoweredStatement, Statement, define,
 };
@@ -12,8 +13,6 @@ use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
 use crate::state::bindings::BindingValue;
 use syntax::ast::Literal;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
-use syntax::parse::TUPLE_FIELDS;
-use syntax::program::DotAccessResolution;
 use syntax::types::Type;
 
 #[derive(Clone, Copy)]
@@ -72,7 +71,7 @@ impl Planner<'_> {
         }
 
         if let Some((op, rhs)) = detect_compound_assignment(target, value, compound_operator) {
-            return LoweredStatement::Assign(self.build_compound_assignment_plan(target, op, rhs));
+            return self.build_compound_assignment_plan(target, op, rhs);
         }
 
         if self.target_binds_to_discard(target) {
@@ -120,16 +119,18 @@ impl Planner<'_> {
         } else {
             self.value_slot_coercion(value, &target.get_type())
         };
-        let value = right_hand_side.map_expression(|value_setup, rhs_value| {
-            let (coercion_setup, final_value) = coercion.lower(self, rhs_value);
-            value_setup.extend(coercion_setup);
-            final_value
-        });
-        LoweredStatement::Assign(AssignForm::Simple {
-            target_capture,
-            target: target_place,
-            value,
-        })
+        let (value_setup, value) = right_hand_side.into_parts();
+        let (coercion_setup, value) = coercion.lower(self, value);
+        let mut setup = target_capture;
+        setup.extend(value_setup);
+        setup.extend(coercion_setup);
+        with_setup(
+            setup,
+            LoweredStatement::Assign(AssignForm::Simple {
+                target: target_place,
+                value,
+            }),
+        )
     }
 
     fn lower_target_operands(&mut self, target: &Expression) -> Vec<Statement> {
@@ -159,7 +160,7 @@ impl Planner<'_> {
         target: &Expression,
         op: &BinaryOperator,
         rhs: &Expression,
-    ) -> AssignForm {
+    ) -> LoweredStatement {
         let is_inc_dec = is_literal_one(rhs)
             && matches!(op, BinaryOperator::Addition | BinaryOperator::Subtraction);
         if is_inc_dec {
@@ -170,11 +171,13 @@ impl Planner<'_> {
             };
             let (target_capture, target_place) =
                 self.capture_assignment_target(target, PlaceOrdering::alone());
-            return AssignForm::Compound {
+            return with_setup(
                 target_capture,
-                target: target_place,
-                kind,
-            };
+                LoweredStatement::Assign(AssignForm::Compound {
+                    target: target_place,
+                    kind,
+                }),
+            );
         }
 
         let right_hand_side = self.plan_operand(rhs, ExpressionContext::value());
@@ -192,16 +195,20 @@ impl Planner<'_> {
             target_capture.push(define(tmp.clone(), target_place.clone()));
             GoExpression::name(tmp)
         });
+        let (rhs_setup, rhs) = right_hand_side.into_parts();
+        target_capture.extend(rhs_setup);
         let kind = CompoundKind::OpAssign {
             operator: op.into(),
-            rhs: Box::new(right_hand_side),
+            rhs,
             pinned_left,
         };
-        AssignForm::Compound {
+        with_setup(
             target_capture,
-            target: target_place,
-            kind,
-        }
+            LoweredStatement::Assign(AssignForm::Compound {
+                target: target_place,
+                kind,
+            }),
+        )
     }
 
     fn capture_assignment_target(
@@ -253,6 +260,11 @@ impl Planner<'_> {
                 resolution,
                 ..
             } => {
+                let expression_ty = base.get_type();
+                if let Some(package) = expression_ty.as_import_namespace() {
+                    let field = self.dot_member_go_name(base, &expression_ty, member, resolution);
+                    return GoExpression::qualified(self.package_use_for_package(package), field);
+                }
                 let base_value = if let Some(inner) = base.deref_inner() {
                     self.place_operand(setup, inner, "ref", ordering)
                 } else if reads_through_reference(base) || !is_place_expression(base) {
@@ -260,8 +272,13 @@ impl Planner<'_> {
                 } else {
                     self.lower_place(setup, base, ordering)
                 };
-                let expression_ty = base.get_type();
-                self.format_dot_access_lvalue(base_value, &expression_ty, member, resolution)
+                if let Some(access) =
+                    self.try_emit_tuple_member_dot(&base_value, &expression_ty, member, resolution)
+                {
+                    return access;
+                }
+                let field = self.dot_member_go_name(base, &expression_ty, member, resolution);
+                self.field_access(base_value, &expression_ty, field)
             }
             Expression::IndexedAccess {
                 expression: base,
@@ -387,36 +404,6 @@ impl Planner<'_> {
             return GoExpression::dereference(GoExpression::name(tmp));
         }
         GoExpression::dereference(pointee_value)
-    }
-
-    /// Format a dot-access lvalue (struct field or tuple element) onto the
-    /// already-emitted base expression. Numeric members route through the
-    /// tuple-struct field helper (newtype unwrap) or positional `Fi` fallback.
-    fn format_dot_access_lvalue(
-        &mut self,
-        base: GoExpression,
-        expression_ty: &Type,
-        member: &str,
-        resolution: &DotAccessResolution,
-    ) -> GoExpression {
-        if let Ok(index) = member.parse::<usize>() {
-            let access =
-                self.try_emit_tuple_struct_field_access(base.clone(), expression_ty, index);
-            if let Some(access) = access {
-                return access;
-            }
-            let field = TUPLE_FIELDS.get(index).expect("oversize tuple arity");
-            return self.field_access(base, expression_ty, field.to_string());
-        }
-        let semantic_exported = matches!(
-            resolution,
-            DotAccessResolution::StructField {
-                is_exported: true,
-                ..
-            }
-        );
-        let field = self.struct_field_go_name(expression_ty, member, semantic_exported);
-        self.field_access(base, expression_ty, field)
     }
 }
 

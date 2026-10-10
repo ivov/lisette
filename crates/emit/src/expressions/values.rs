@@ -5,7 +5,7 @@ use crate::calls::split_native_receiver;
 use crate::expressions::access::struct_call::emit_struct_literal;
 use syntax::program::DefinitionBody;
 
-use crate::abi::callable::{AbiTransition, CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::{
@@ -68,7 +68,9 @@ impl Planner<'_> {
                 let mut setup = Vec::new();
                 let value = if self.go_fn_needs_lowered_tuple_adapter(expression, abi, ctx) {
                     self.emit_go_fn_lowered_tuple_adapter(&mut setup, expression)
-                } else if let CallableReturnAbi::Option(OptionReturnAbi::Sentinel(value)) = abi
+                } else if let CallableReturnAbi::Lowered(LoweredReturnAbi::Option(
+                    OptionReturnAbi::Sentinel(value),
+                )) = abi
                     && !ctx.forces_tagged_go_function()
                 {
                     self.emit_go_fn_sentinel_adapter(&mut setup, expression, *value)
@@ -163,11 +165,10 @@ impl Planner<'_> {
             .plan_call(expression)
             .expect("plan_call yields Some for a Call expression");
         let layout_bridge = self.call_result_layout_bridge(&plan, result_type);
-        let result_transition = plan.result_transition;
+        let wraps_result = plan.wraps_result();
 
         if let Some(bridge) = layout_bridge {
-            let call_type =
-                matches!(result_transition, AbiTransition::Identity).then_some(result_type);
+            let call_type = (!wraps_result).then_some(result_type);
             let call = self.lower_call_with_plan(expression, call_type, context, plan);
             return call.map_observable_expression(|setup, call| {
                 let (bridge_setup, value) = bridge.lower(self, call);
@@ -176,18 +177,10 @@ impl Planner<'_> {
             });
         }
 
-        match result_transition {
-            AbiTransition::Identity => {
-                self.lower_call_with_plan(expression, Some(result_type), context, plan)
-            }
-            AbiTransition::WrapToTagged => {
-                self.lower_go_abi_wrapped_call(expression, &plan.resolved.abi, result_type)
-            }
-            AbiTransition::LowerFromTagged
-            | AbiTransition::Reencode
-            | AbiTransition::Incompatible => {
-                unreachable!("call results target their Lisette value representation")
-            }
+        if wraps_result {
+            self.lower_go_abi_wrapped_call(expression, &plan.resolved.abi, result_type)
+        } else {
+            self.lower_call_with_plan(expression, Some(result_type), context, plan)
         }
     }
 
@@ -256,20 +249,22 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> bool {
         matches!(
-            (source, self.go_fn_slot_abi(expression, ctx)),
+            (source.lowered(), self.go_fn_slot_abi(expression, ctx)),
             (
-                CallableReturnAbi::Result {
-                    payload: PayloadLayout::Flattened,
-                } | CallableReturnAbi::Partial {
-                    payload: PayloadLayout::Flattened,
-                },
                 Some(
-                    CallableReturnAbi::Result {
+                    LoweredReturnAbi::Result {
+                        payload: PayloadLayout::Flattened,
+                    } | LoweredReturnAbi::Partial {
+                        payload: PayloadLayout::Flattened,
+                    }
+                ),
+                Some(CallableReturnAbi::Lowered(
+                    LoweredReturnAbi::Result {
                         payload: PayloadLayout::Packed,
-                    } | CallableReturnAbi::Partial {
+                    } | LoweredReturnAbi::Partial {
                         payload: PayloadLayout::Packed,
                     }
-                )
+                ))
             )
         )
     }

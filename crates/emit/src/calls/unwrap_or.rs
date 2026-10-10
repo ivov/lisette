@@ -5,9 +5,10 @@ use crate::patterns::matching::{
     FusedName, OptionArms, OptionFusePlan, ResultFusePlan, field_binding,
 };
 use crate::plan::bodies::{
-    AssignForm, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, define,
+    ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, define,
 };
 use crate::plan::placement::collapse_declared_temp;
+use crate::plan::placement::simple_assign;
 use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
@@ -204,17 +205,11 @@ impl Planner<'_> {
         statements.extend(default_setup);
         statements.push(
             LoweredStatement::If(IfPlan {
-                condition_setup: Vec::new(),
                 initializer: failure.initializer,
                 condition: failure.condition,
                 then_body: LoweredBlock {
                     statements: vec![
-                        LoweredStatement::Assign(AssignForm::Simple {
-                            target_capture: Vec::new(),
-                            target: GoExpression::name(value.clone()),
-                            value: default,
-                        })
-                        .into(),
+                        simple_assign(&GoExpression::name(value.clone()), default).into(),
                     ],
                 },
                 else_arm: ElseArm::None,

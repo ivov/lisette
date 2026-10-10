@@ -56,49 +56,30 @@ impl Planner<'_> {
             )
         };
 
-        let mut result = if let Some(stringer_name) = self.stringer_method_name(name, struct_attrs)
-        {
-            let (string_method, requirements) = emit_struct_format_method(
-                name,
-                &receiver_generics,
-                &stringer_fields,
-                StringFormat::Display {
-                    method: stringer_name,
-                    qualified: false,
-                },
-            );
+        let mut result = definition;
+        for method in self.struct_synthesized_methods(name, struct_attrs, StructShape::Record) {
+            let (code, requirements) = match method {
+                SynthesizedMethod::Format(format) => {
+                    emit_struct_format_method(name, &receiver_generics, &stringer_fields, format)
+                }
+                SynthesizedMethod::StringerShadow => {
+                    emit_struct_shadow_stringer_method(name, &receiver_generics, &stringer_fields)
+                }
+                SynthesizedMethod::ToString => (
+                    self.to_string_method(name, &receiver_generics),
+                    PackageRequirements::default(),
+                ),
+                SynthesizedMethod::Equals => (
+                    self.struct_equals_method(name, generics, fields, struct_attrs),
+                    PackageRequirements::default(),
+                ),
+                SynthesizedMethod::Json => unreachable!("only enums synthesize JSON methods"),
+            };
             self.require_packages(&requirements);
-            format!("{definition}\n\n{string_method}")
-        } else {
-            definition
-        };
-        self.append_struct_debug_method(&mut result, name, &receiver_generics, &stringer_fields);
-        self.append_to_string_method(&mut result, name, &receiver_generics);
-        self.append_equals_method(&mut result, name, generics, fields, struct_attrs);
-        self.append_embedded_stringer_shadow(
-            &mut result,
-            name,
-            &receiver_generics,
-            &stringer_fields,
-        );
-        result
-    }
-
-    fn append_embedded_stringer_shadow(
-        &mut self,
-        out: &mut String,
-        name: &str,
-        receiver_generics: &str,
-        stringer_fields: &[StringerField],
-    ) {
-        if !self.synthesizes_embedded_stringer_shadow(name) {
-            return;
+            result.push_str("\n\n");
+            result.push_str(&code);
         }
-        let (method, requirements) =
-            emit_struct_shadow_stringer_method(name, receiver_generics, stringer_fields);
-        self.require_packages(&requirements);
-        out.push_str("\n\n");
-        out.push_str(&method);
+        result
     }
 
     pub(crate) fn synthesizes_embedded_stringer_shadow(&self, name: &str) -> bool {
@@ -183,39 +164,39 @@ impl Planner<'_> {
         generics: &[Generic],
         struct_attrs: &[Attribute],
     ) -> String {
-        let definition = self.emit_tuple_struct_definition(name, generics_string, fields);
-        let receiver_generics = self.receiver_generics_string(generics);
-        let mut result = definition;
-        if self.is_pointer_backed_newtype(name) {
+        let mut result = self.emit_tuple_struct_definition(name, generics_string, fields);
+        let methods = self.struct_synthesized_methods(name, struct_attrs, StructShape::Tuple);
+        if methods.is_empty() {
             return result;
         }
+        let receiver_generics = self.receiver_generics_string(generics);
         let is_type_alias = fields.len() == 1 && generics_string.is_empty();
         let underlying_go_type = is_type_alias.then(|| self.use_go_type(&fields[0].ty));
         let field_is_function: Vec<bool> =
             fields.iter().map(|f| is_raw_function_type(&f.ty)).collect();
-        if let Some(stringer_name) = self.stringer_method_name(name, struct_attrs) {
-            let (string_method, requirements) = emit_tuple_struct_format_method(
-                name,
-                &receiver_generics,
-                &field_is_function,
-                underlying_go_type.as_deref(),
-                StringFormat::Display {
-                    method: stringer_name,
-                    qualified: false,
-                },
-            );
-            self.require_packages(&requirements);
+        for method in methods {
+            let code = match method {
+                SynthesizedMethod::Format(format) => {
+                    let (code, requirements) = emit_tuple_struct_format_method(
+                        name,
+                        &receiver_generics,
+                        &field_is_function,
+                        underlying_go_type.as_deref(),
+                        format,
+                    );
+                    self.require_packages(&requirements);
+                    code
+                }
+                SynthesizedMethod::ToString => self.to_string_method(name, &receiver_generics),
+                SynthesizedMethod::StringerShadow
+                | SynthesizedMethod::Equals
+                | SynthesizedMethod::Json => {
+                    unreachable!("a tuple struct synthesizes only formatting methods")
+                }
+            };
             result.push_str("\n\n");
-            result.push_str(&string_method);
+            result.push_str(&code);
         }
-        self.append_tuple_struct_debug_method(
-            &mut result,
-            name,
-            &receiver_generics,
-            &field_is_function,
-            underlying_go_type.as_deref(),
-        );
-        self.append_to_string_method(&mut result, name, &receiver_generics);
         result
     }
 
@@ -333,50 +314,6 @@ impl Planner<'_> {
         self.facts.emit_tests_enabled() && !self.debug_string_override(name)
     }
 
-    fn append_struct_debug_method(
-        &mut self,
-        out: &mut String,
-        name: &str,
-        receiver_generics: &str,
-        stringer_fields: &[StringerField],
-    ) {
-        if !self.synthesizes_debug_string(name) {
-            return;
-        }
-        let (method, requirements) = emit_struct_format_method(
-            name,
-            receiver_generics,
-            stringer_fields,
-            StringFormat::Debug,
-        );
-        self.require_packages(&requirements);
-        out.push_str("\n\n");
-        out.push_str(&method);
-    }
-
-    fn append_tuple_struct_debug_method(
-        &mut self,
-        out: &mut String,
-        name: &str,
-        receiver_generics: &str,
-        field_is_function: &[bool],
-        underlying: Option<&str>,
-    ) {
-        if !self.synthesizes_debug_string(name) {
-            return;
-        }
-        let (method, requirements) = emit_tuple_struct_format_method(
-            name,
-            receiver_generics,
-            field_is_function,
-            underlying,
-            StringFormat::Debug,
-        );
-        self.require_packages(&requirements);
-        out.push_str("\n\n");
-        out.push_str(&method);
-    }
-
     pub(crate) fn should_synthesize_to_string(&self, name: &str) -> bool {
         let qualified = self.facts.qualified_current(name);
         self.facts
@@ -406,30 +343,17 @@ impl Planner<'_> {
         self.method_go_name("equals", false)
     }
 
-    pub(crate) fn append_to_string_method(
-        &self,
-        out: &mut String,
-        name: &str,
-        receiver_generics: &str,
-    ) {
-        if self.should_synthesize_to_string(name) {
-            let go_method = self.to_string_method_go_name();
-            out.push_str("\n\n");
-            out.push_str(&emit_to_string_method(name, receiver_generics, &go_method));
-        }
+    pub(crate) fn to_string_method(&self, name: &str, receiver_generics: &str) -> String {
+        emit_to_string_method(name, receiver_generics, &self.to_string_method_go_name())
     }
 
-    fn append_equals_method(
+    fn struct_equals_method(
         &mut self,
-        out: &mut String,
         name: &str,
         generics: &[Generic],
         fields: &[StructFieldDefinition],
         attributes: &[Attribute],
-    ) {
-        if !self.should_synthesize_equals(name) {
-            return;
-        }
+    ) -> String {
         let receiver_generics = self.receiver_generics_string(generics);
         let receiver = synthesized_receiver_name(name, &receiver_generics);
         let other = synthesized_local_name("other", &receiver, &receiver_generics);
@@ -453,10 +377,90 @@ impl Planner<'_> {
         let go_method = self.equals_method_go_name();
         let go_type_name = go_name::escape_type_name(name);
         let receiver_type = format!("{go_type_name}{receiver_generics}");
-        out.push_str("\n\n");
-        out.push_str(&format!(
+        format!(
             "func ({receiver} {receiver_type}) {go_method}({other} {receiver_type}) bool {{\nreturn {body}\n}}"
-        ));
+        )
+    }
+
+    /// The Go methods emit adds to the struct `name`, in emission order.
+    pub(crate) fn struct_synthesized_methods(
+        &self,
+        name: &str,
+        attributes: &[Attribute],
+        shape: StructShape,
+    ) -> Vec<SynthesizedMethod> {
+        if shape == StructShape::Tuple && self.is_pointer_backed_newtype(name) {
+            return Vec::new();
+        }
+        let mut methods = Vec::new();
+        if let Some(method) = self.stringer_method_name(name, attributes) {
+            methods.push(SynthesizedMethod::Format(StringFormat::Display {
+                method,
+                qualified: false,
+            }));
+        }
+        if self.synthesizes_debug_string(name) {
+            methods.push(SynthesizedMethod::Format(StringFormat::Debug));
+        }
+        if self.should_synthesize_to_string(name) {
+            methods.push(SynthesizedMethod::ToString);
+        }
+        if shape == StructShape::Record {
+            if self.should_synthesize_equals(name) {
+                methods.push(SynthesizedMethod::Equals);
+            }
+            if self.synthesizes_embedded_stringer_shadow(name) {
+                methods.push(SynthesizedMethod::StringerShadow);
+            }
+        }
+        methods
+    }
+
+    /// The Go methods emit adds to the enum `name`, in emission order.
+    pub(crate) fn enum_synthesized_methods(
+        &self,
+        name: &str,
+        attributes: &[Attribute],
+    ) -> Vec<SynthesizedMethod> {
+        let mut methods = Vec::new();
+        if should_synthesize_stringer(attributes) {
+            let (has_user_string, has_user_go_string) = self.stringer_overrides(name);
+            if !has_user_string {
+                methods.push(SynthesizedMethod::Format(StringFormat::Display {
+                    method: ENUM_STRINGER_METHOD,
+                    qualified: false,
+                }));
+            }
+            if !has_user_go_string {
+                methods.push(SynthesizedMethod::Format(StringFormat::Display {
+                    method: ENUM_GO_STRINGER_METHOD,
+                    qualified: true,
+                }));
+            }
+        }
+        if attributes.iter().any(|attribute| attribute.name == "json") {
+            methods.push(SynthesizedMethod::Json);
+        }
+        if self.synthesizes_debug_string(name) {
+            methods.push(SynthesizedMethod::Format(StringFormat::Debug));
+        }
+        if self.should_synthesize_to_string(name) {
+            methods.push(SynthesizedMethod::ToString);
+        }
+        if self.should_synthesize_equals(name) {
+            methods.push(SynthesizedMethod::Equals);
+        }
+        methods
+    }
+
+    pub(crate) fn synthesized_method_go_names(&self, method: SynthesizedMethod) -> Vec<String> {
+        match method {
+            SynthesizedMethod::Format(format) => vec![format.method().to_string()],
+            SynthesizedMethod::StringerShadow => vec![ENUM_STRINGER_METHOD.to_string()],
+            SynthesizedMethod::Json => vec!["MarshalJSON".to_string(), "UnmarshalJSON".to_string()],
+            SynthesizedMethod::ToString => vec![self.to_string_method_go_name()],
+            SynthesizedMethod::Equals => vec![self.equals_method_go_name()],
+        }
     }
 
     /// Single stringer to synthesize for structs: `String` by default,
@@ -505,6 +509,24 @@ pub(crate) fn is_raw_function_type(ty: &Type) -> bool {
         Type::Forall { body, .. } => is_raw_function_type(body),
         _ => false,
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StructShape {
+    Record,
+    Tuple,
+}
+
+/// A Go method that emit adds to a Lisette struct or enum.
+#[derive(Clone, Copy)]
+pub(crate) enum SynthesizedMethod {
+    Format(StringFormat<'static>),
+    /// A struct `String` that hides the one an embedded field synthesizes.
+    StringerShadow,
+    /// An enum's `MarshalJSON` and `UnmarshalJSON`.
+    Json,
+    ToString,
+    Equals,
 }
 
 #[derive(Clone, Copy)]

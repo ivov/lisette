@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::abi::callable::PayloadLayout;
-use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
+use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi};
 use crate::calls::NativeMethodCall;
 use crate::calls::bound_value::{BoundValue, PairCondition};
 use crate::calls::comma_ok::CommaOkSource;
@@ -32,7 +32,7 @@ use syntax::types::{Type, unqualified_name};
 
 pub(crate) struct ResultFusePlan<'a> {
     subject: &'a Expression,
-    shape: CallableReturnAbi,
+    shape: LoweredReturnAbi,
     nil_guard: Option<NilGuard>,
     wraps: Vec<&'a Expression>,
     bound: Option<ComponentBinding>,
@@ -128,12 +128,12 @@ impl ResultFusePlan<'_> {
         self.nil_guard.is_some()
     }
 
-    pub(super) fn shape(&self) -> &CallableReturnAbi {
+    pub(super) fn shape(&self) -> &LoweredReturnAbi {
         &self.shape
     }
 
     pub(crate) fn carries_payload(&self) -> bool {
-        matches!(self.shape, CallableReturnAbi::Result { .. })
+        matches!(self.shape, LoweredReturnAbi::Result { .. })
     }
 
     pub(crate) fn bind(
@@ -456,7 +456,6 @@ impl Planner<'_> {
         let else_arm = ElseArm::from_body(else_body, then_body.ends_with_diverge());
         bound.statements.push(
             LoweredStatement::If(IfPlan {
-                condition_setup: Vec::new(),
                 initializer: condition.initializer,
                 condition: condition.condition,
                 then_body,
@@ -543,9 +542,9 @@ impl Planner<'_> {
         subject: &'a Expression,
     ) -> Option<ResultFusePlan<'a>> {
         if let Some(components) = self.component_binding(subject) {
-            return (components.kind == ComponentKind::Result).then(|| ResultFusePlan {
+            return (components.kind.is_result()).then(|| ResultFusePlan {
                 subject,
-                shape: CallableReturnAbi::Result {
+                shape: LoweredReturnAbi::Result {
                     payload: PayloadLayout::Packed,
                 },
                 nil_guard: None,
@@ -624,7 +623,7 @@ impl Planner<'_> {
         }
         if !matches!(
             lowered.shape,
-            CallableReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_))
+            LoweredReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_))
         ) {
             return None;
         }
@@ -940,7 +939,10 @@ impl Planner<'_> {
     }
 
     fn fusable_partial(&self, subject: &Expression, plan: &CallPlan<'_>) -> bool {
-        let is_partial = matches!(plan.resolved.abi.result, CallableReturnAbi::Partial { .. });
+        let is_partial = matches!(
+            plan.resolved.abi.result.lowered(),
+            Some(LoweredReturnAbi::Partial { .. })
+        );
         if !is_partial {
             return false;
         }
@@ -1032,7 +1034,6 @@ impl Planner<'_> {
 
         statements.push(
             LoweredStatement::If(IfPlan {
-                condition_setup: Vec::new(),
                 initializer: Some(initializer),
                 condition: is_nil(err()),
                 then_body: ok_body,
@@ -1137,7 +1138,6 @@ impl Planner<'_> {
         let selected_diverges = selected.ends_with_diverge();
         statements.push(
             LoweredStatement::If(IfPlan {
-                condition_setup: Vec::new(),
                 initializer: Some(Definition {
                     names: vec![bound_value.into(), error.clone().into()],
                     value: call,
@@ -1221,10 +1221,11 @@ impl Planner<'_> {
                             (this.scope.bind_source(name, id.as_slice(), go_name), None)
                         }
                         ArmBinding::Copy { name, value } => {
-                            let id = name.binding;
-                            let name = name.name;
-                            let go_name = this.scope.bind_source(name, id.as_slice(), name);
+                            let go_name = this.arm_value_name(name.name);
                             this.declare(&go_name);
+                            let go_name =
+                                this.scope
+                                    .bind_source(name.name, name.binding.as_slice(), go_name);
                             (go_name, Some(value.clone()))
                         }
                     })
@@ -1349,11 +1350,7 @@ fn header_mut(statement: &mut Statement) -> Option<&mut GoExpression> {
             SwitchKind::Value { subject } | SwitchKind::Type { subject, .. } => Some(subject),
             SwitchKind::Conditional => None,
         },
-        LoweredStatement::If(plan)
-            if plan.condition_setup.is_empty() && plan.initializer.is_none() =>
-        {
-            Some(&mut plan.condition)
-        }
+        LoweredStatement::If(plan) if plan.initializer.is_none() => Some(&mut plan.condition),
         _ => None,
     }
 }
@@ -1383,7 +1380,6 @@ fn leading_subject_read<'n>(
 
 fn pair_if(test: PairCondition, then_body: LoweredBlock, else_arm: ElseArm) -> IfPlan {
     IfPlan {
-        condition_setup: Vec::new(),
         initializer: test.initializer,
         condition: test.condition,
         then_body,
@@ -1607,20 +1603,18 @@ fn partial_both_bindings(arm: &MatchArm) -> Option<(Option<FusedName<'_>>, Optio
 
 /// True when an Ok arm has no value to bind: empty `Ok` or `Ok(())`,
 /// only meaningful under `BareError`.
-fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &CallableReturnAbi) -> bool {
+fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &LoweredReturnAbi) -> bool {
     let Pattern::EnumVariant { fields, .. } = &arm.pattern else {
         return false;
     };
     match shape {
-        CallableReturnAbi::BareError => {
+        LoweredReturnAbi::BareError => {
             fields.is_empty() || matches!(fields.as_slice(), [Pattern::Unit { .. }])
         }
-        CallableReturnAbi::Tagged
-        | CallableReturnAbi::Direct
-        | CallableReturnAbi::Result { .. }
-        | CallableReturnAbi::Partial { .. }
-        | CallableReturnAbi::Option(_)
-        | CallableReturnAbi::Tuple { .. } => false,
+        LoweredReturnAbi::Result { .. }
+        | LoweredReturnAbi::Partial { .. }
+        | LoweredReturnAbi::Option(_)
+        | LoweredReturnAbi::Tuple { .. } => false,
     }
 }
 

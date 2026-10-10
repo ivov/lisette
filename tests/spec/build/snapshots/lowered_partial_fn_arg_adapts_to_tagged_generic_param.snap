@@ -23,8 +23,7 @@ func main() {
 		ret, ret_1 := cb(arg0)
 		if ret_1 != nil {
 			return lisette.MakePartialBoth[int, Face](ret, ret_1)
-		} else {
-			return lisette.MakePartialOk[int, Face](ret)
 		}
+		return lisette.MakePartialOk[int, Face](ret)
 	})
 }

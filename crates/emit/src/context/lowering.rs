@@ -1,4 +1,4 @@
-use crate::abi::callable::CallableReturnAbi;
+use crate::abi::callable::LoweredReturnAbi;
 use crate::plan::bodies::LoopId;
 use crate::plan::values::GoExpression;
 use syntax::types::Type;
@@ -42,7 +42,7 @@ pub(crate) enum ReturnContext {
     Tagged(Type),
     Lowered {
         return_ty: Type,
-        shape: CallableReturnAbi,
+        shape: LoweredReturnAbi,
     },
 }
 
@@ -54,7 +54,7 @@ impl ReturnContext {
         }
     }
 
-    pub(crate) fn lowered_shape(&self) -> Option<CallableReturnAbi> {
+    pub(crate) fn lowered_shape(&self) -> Option<LoweredReturnAbi> {
         match self {
             ReturnContext::Lowered { shape, .. } => Some(shape.clone()),
             _ => None,

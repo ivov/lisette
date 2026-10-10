@@ -7,7 +7,7 @@ use crate::calls::go_interop::wrappers::{
     WrapperOutcome, WrapperTarget, is_nil_interface, leaf_block, non_nil,
 };
 use crate::context::expression::ExpressionContext;
-use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG, prelude_call};
+use crate::control_flow::fallible::{Fallible, OPTION_SOME_TAG, prelude_call};
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::plan::bodies::{
@@ -191,10 +191,7 @@ impl Planner<'_> {
             None => (Vec::new(), val_expression),
         };
 
-        let option_ty_str = {
-            let mut fe = FalliblePlanner::new(self, &fallible);
-            fe.full_type_string()
-        };
+        let option_ty_str = { self.fallible_go_type(&fallible) };
 
         let ok = GoExpression::name(ok_var);
         let condition = match self.nullable_option_nil_guard(option_ty) {
@@ -205,14 +202,8 @@ impl Planner<'_> {
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &option_ty_str, "option");
 
-        let some_wrapper = {
-            let mut fe = FalliblePlanner::new(self, &fallible);
-            fe.emit_success(val_expression)
-        };
-        let none_wrapper = {
-            let mut fe = FalliblePlanner::new(self, &fallible);
-            fe.emit_failure(None)
-        };
+        let some_wrapper = { self.fallible_success(&fallible, val_expression) };
+        let none_wrapper = { self.fallible_failure(&fallible, None) };
 
         let mut then_body = leaf_block(&sink, some_wrapper);
         payload_setup.append(&mut then_body.statements);
@@ -314,15 +305,9 @@ impl Planner<'_> {
         };
         let mut then_statements = Vec::new();
         let payload = self.plan_layout_bridge(&mut then_statements, raw_payload, payload_bridge);
-        let some = {
-            let mut planner = FalliblePlanner::new(self, &fallible);
-            planner.emit_success(payload)
-        };
+        let some = { self.fallible_success(&fallible, payload) };
         then_statements.push(assign(slot.clone(), some));
-        let none = {
-            let mut planner = FalliblePlanner::new(self, &fallible);
-            planner.emit_failure(None)
-        };
+        let none = { self.fallible_failure(&fallible, None) };
         let condition = if !pointer && self.is_interface_option(option_type) {
             GoExpression::unary(UnaryOp::Not, is_nil_interface(raw))
         } else {
@@ -455,10 +440,7 @@ impl Planner<'_> {
     ) -> GoExpression {
         let source = self.stable_source(statements, "raw", raw_value);
         let fallible = Fallible::from_type(option_type).expect("Option type expected");
-        let option_type_string = {
-            let mut planner = FalliblePlanner::new(self, &fallible);
-            planner.full_type_string()
-        };
+        let option_type_string = { self.fallible_go_type(&fallible) };
         let option = self.fresh_var(Some("option"));
         self.declare(&option);
         statements.push(
@@ -504,11 +486,11 @@ impl Planner<'_> {
         let source = self.stable_source(statements, "src", value);
         let direction = key_bridge
             .and_then(LayoutBridge::direction)
-            .or_else(|| element_bridge.direction())
-            .expect("aggregate layout bridge must contain an option bridge");
+            .or_else(|| element_bridge.direction());
         let output_hint = match direction {
-            BridgeDirection::ToGo => "unwrapped",
-            BridgeDirection::FromGo => "wrapped",
+            Some(BridgeDirection::ToGo) => "unwrapped",
+            Some(BridgeDirection::FromGo) => "wrapped",
+            None => "adapted",
         };
         let target_type = target_layout.go_type(self);
         let target_type = self.use_rendered_go_type(target_type);
@@ -559,7 +541,6 @@ impl Planner<'_> {
         }
         statements.push(
             LoweredStatement::Loop(LoopPlan {
-                prologue: Vec::new(),
                 kind: LoopKind::Generated { label: None },
                 header: LoopHeader::Range {
                     key: Some(index.into()),

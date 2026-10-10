@@ -253,7 +253,13 @@ impl Planner<'_> {
 
         let mut body = Vec::new();
         let asserted = apply_root_assertion(self, &mut body, info, resolved.var());
-        tree_binding_statements(self, &mut body, &asserted.bindings, &asserted.subject, &[]);
+        tree_binding_statements(
+            self,
+            &mut body,
+            &asserted.bindings,
+            SubjectRoot::Var(&asserted.subject),
+            &[],
+        );
 
         resolved.push_declaration(&mut statements, &body);
         statements.extend(body);
@@ -423,7 +429,6 @@ impl Planner<'_> {
         let fail_body = self.lower_block_as_body(else_block);
         statements.push(
             LoweredStatement::If(IfPlan {
-                condition_setup: Vec::new(),
                 initializer: fail_condition.initializer,
                 condition: fail_condition.condition,
                 then_body: fail_body,
@@ -513,7 +518,6 @@ impl Planner<'_> {
             body,
         );
         let plan = self.build_source_loop(
-            Vec::new(),
             LoopHeader::Infinite,
             LoweredBlock {
                 statements: loop_body,
@@ -547,7 +551,6 @@ impl Planner<'_> {
         let mut loop_body = bound.statements;
         loop_body.push(
             LoweredStatement::If(IfPlan {
-                condition_setup: Vec::new(),
                 initializer: none_condition.initializer,
                 condition: none_condition.condition,
                 then_body: LoweredBlock {
@@ -568,7 +571,6 @@ impl Planner<'_> {
         loop_body.extend(body_block.statements);
 
         let plan = self.build_source_loop(
-            Vec::new(),
             LoopHeader::Infinite,
             LoweredBlock {
                 statements: loop_body,
@@ -651,7 +653,7 @@ impl Planner<'_> {
                 self,
                 &mut statements,
                 &asserted.bindings,
-                &asserted.subject,
+                SubjectRoot::Var(&asserted.subject),
                 &[],
             );
             return statements;
@@ -685,7 +687,13 @@ impl Planner<'_> {
         statements
             .push(LoweredStatement::If(IfPlan::plain(guard, fail_body, ElseArm::None)).into());
 
-        tree_binding_statements(self, &mut statements, &bindings, &effective_subject, &[]);
+        tree_binding_statements(
+            self,
+            &mut statements,
+            &bindings,
+            SubjectRoot::Var(&effective_subject),
+            &[],
+        );
         statements
     }
 

@@ -7,7 +7,7 @@ use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::prelude_constructor;
 use crate::plan::bodies::Statement;
 use crate::plan::calls::CallableOrigin;
-use crate::plan::evaluation::{Effects, Reads};
+use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{
@@ -193,16 +193,18 @@ impl Planner<'_> {
     }
 
     pub(crate) fn path_read_stability(&self, path: &GoExpression) -> Stability {
-        if path.effects().reads() == Reads::Shared {
+        if path.effects().reads() == Stability::Observable {
             return Stability::Observable;
         }
-        let mut stability = Stability::Literal;
+        let mut stability = Stability::Fixed;
         path.node().visit(&mut |node| {
             if let GoExpressionNode::Identifier(name) = node {
-                stability = match self.scope.source_binding_for_go_name(name.spelling()) {
-                    Some(id) => self.binding_read_stability(id),
-                    None => Stability::StableAcrossCalls,
-                };
+                stability = stability.max(
+                    match self.scope.source_binding_for_go_name(name.spelling()) {
+                        Some(id) => self.binding_read_stability(id),
+                        None => Stability::StableAcrossCalls,
+                    },
+                );
             }
         });
         stability
@@ -386,17 +388,16 @@ impl Planner<'_> {
 
         let mut setup = Vec::new();
         let mut results = Vec::with_capacity(stages.len());
-        let mut stability = Stability::Literal;
+        let mut stability = Stability::Fixed;
         for (stage, pin) in stages.into_iter().rev() {
             let can_delay = stage.can_delay();
             let (stage_setup, expression, evaluation) = stage.into_parts_with_facts();
             setup.extend(stage_setup);
             if pin || (eager && !can_delay) {
                 let tmp = self.hoist_tmp_value_statement(&mut setup, prefix, expression);
-                stability = stability.weaker(Stability::Fixed);
                 results.push(GoExpression::name(tmp));
             } else {
-                stability = stability.weaker(evaluation.stability);
+                stability = stability.max(evaluation.stability);
                 results.push(expression);
             }
         }

@@ -2,7 +2,7 @@ use rustc_hash::FxHashMap as HashMap;
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Symbol, Type};
 
-use crate::abi::callable::CallableReturnAbi;
+use crate::abi::callable::LoweredReturnAbi;
 use crate::abi::layout::SlotOrigin;
 use crate::classify_go_return_type;
 use crate::names::go_name;
@@ -18,7 +18,7 @@ pub(crate) struct GoAbiCatalog {
 struct GoCallableSlots {
     parameters: Vec<GoSlotDescriptor>,
     return_slot: GoSlotDescriptor,
-    return_abi: Option<CallableReturnAbi>,
+    return_abi: Option<LoweredReturnAbi>,
 }
 
 #[derive(Debug, Clone)]
@@ -69,7 +69,7 @@ impl GoAbiCatalog {
             .map(|callable| &callable.return_slot)
     }
 
-    pub(crate) fn callable_return_abi(&self, qualified_name: &str) -> Option<&CallableReturnAbi> {
+    pub(crate) fn callable_return_abi(&self, qualified_name: &str) -> Option<&LoweredReturnAbi> {
         self.callables.get(qualified_name)?.return_abi.as_ref()
     }
 

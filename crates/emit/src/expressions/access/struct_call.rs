@@ -626,7 +626,6 @@ impl Planner<'_> {
                     }
                     .into(),
                     LoweredStatement::Loop(LoopPlan {
-                        prologue: Vec::new(),
                         kind: LoopKind::Generated { label: None },
                         header: LoopHeader::Range {
                             key: Some("i".to_string().into()),

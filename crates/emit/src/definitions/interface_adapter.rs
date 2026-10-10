@@ -1,6 +1,6 @@
 use crate::Planner;
-use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
-use crate::abi::transition::emit_lowered_result_return;
+use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::transition::reencode_return;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
 use crate::names::go_name::GO_IMPORT_PREFIX;
@@ -188,9 +188,12 @@ impl Planner<'_> {
         let context = self.scope.type_params();
         if context
             .iter()
-            .any(|(name, _)| adapter_uses_type_parameter(source_ty, methods, name))
+            .any(|param| adapter_uses_type_parameter(source_ty, methods, &param.name))
         {
-            context.to_vec()
+            context
+                .iter()
+                .map(|param| (param.name.clone(), param.bounds.clone()))
+                .collect()
         } else {
             Vec::new()
         }
@@ -224,7 +227,7 @@ impl Planner<'_> {
                     requirement.declaring_interface, requirement.method.source_name
                 ))
                 .cloned()
-                .unwrap_or(CallableReturnAbi::Direct)
+                .map_or(CallableReturnAbi::Direct, CallableReturnAbi::Lowered)
         } else {
             self.interface_method_return_abi(&requirement.name, &requirement.method)
         };
@@ -235,9 +238,9 @@ impl Planner<'_> {
             AdapterReturn::ZeroFill
         } else if !abi_matches_type(&interface_abi, &self.facts.peel_alias(&return_type)) {
             AdapterReturn::Forward(user_abi)
-        } else if self.lowered_return_go_type(&user_abi, &return_type).code
+        } else if self.callable_return_go_type(&user_abi, &return_type).code
             == self
-                .lowered_return_go_type(&interface_abi, &return_type)
+                .callable_return_go_type(&interface_abi, &return_type)
                 .code
         {
             AdapterReturn::Forward(interface_abi)
@@ -351,10 +354,7 @@ impl Planner<'_> {
         method: &AdapterMethod,
     ) {
         self.with_declaration_scope(|this| {
-            for (name, _) in generic_context {
-                let go_name = this.generic_go_name(name).into_owned();
-                this.declare(&go_name);
-            }
+            this.set_type_params(generic_context);
             let receiver_name = this.declare_adapter_method_binding("a".to_string());
             let param_names: Vec<GoIdentifier> = (0..method.param_types.len())
                 .map(|i| this.declare_adapter_method_binding(format!("arg{}", i)))
@@ -423,7 +423,7 @@ impl Planner<'_> {
         }
         #[cfg(debug_assertions)]
         {
-            verify_final_function_body(&body, !go_ret.is_empty())
+            verify_final_function_body(&mut body, !go_ret.is_empty())
                 .unwrap_or_else(|error| panic!("{error}"));
             verify_local_scopes(&mut body.statements, &parameters.iter().collect::<Vec<_>>())
                 .unwrap_or_else(|error| panic!("{error}"));
@@ -452,7 +452,7 @@ impl Planner<'_> {
                 );
             }
             AdapterReturn::Forward(abi) => {
-                let go_ret = self.render_lowered_return_ty(abi, return_type);
+                let go_ret = self.render_callable_return_ty(abi, return_type);
                 return (go_ret, vec![plain_return(inner_call)]);
             }
             AdapterReturn::Convert {
@@ -462,19 +462,8 @@ impl Planner<'_> {
         };
 
         let logical_ty = self.facts.peel_alias(return_type);
-        let go_ret = self.render_lowered_return_ty(interface_abi, return_type);
-        if interface_abi.is_passthrough() {
-            let statements = self.lower_abi_to_tagged_return(inner_call, user_abi, &logical_ty);
-            return (go_ret, statements);
-        }
-        let (mut statements, tagged) = self.lower_abi_to_tagged(inner_call, user_abi, &logical_ty);
-        statements.extend(emit_lowered_result_return(
-            self,
-            tagged,
-            "res",
-            &logical_ty,
-            interface_abi,
-        ));
+        let go_ret = self.render_callable_return_ty(interface_abi, return_type);
+        let statements = reencode_return(self, inner_call, user_abi, interface_abi, &logical_ty);
         (go_ret, statements)
     }
 }
@@ -604,23 +593,25 @@ fn adapter_uses_type_parameter(
 }
 
 fn abi_matches_type(abi: &CallableReturnAbi, peeled: &Type) -> bool {
-    match abi {
-        CallableReturnAbi::Tagged | CallableReturnAbi::Direct => true,
-        CallableReturnAbi::BareError | CallableReturnAbi::Result { .. } => peeled.is_result(),
-        CallableReturnAbi::Partial { .. } => peeled.is_partial(),
-        CallableReturnAbi::Option(_) => peeled.is_option(),
-        CallableReturnAbi::Tuple { .. } => peeled.tuple_arity().is_some_and(|arity| arity >= 2),
+    match abi.lowered() {
+        None => true,
+        Some(LoweredReturnAbi::BareError | LoweredReturnAbi::Result { .. }) => peeled.is_result(),
+        Some(LoweredReturnAbi::Partial { .. }) => peeled.is_partial(),
+        Some(LoweredReturnAbi::Option(_)) => peeled.is_option(),
+        Some(LoweredReturnAbi::Tuple { .. }) => {
+            peeled.tuple_arity().is_some_and(|arity| arity >= 2)
+        }
     }
 }
 
 /// `#[go(comma_ok)]` shifts a nullable `Option` return to comma-ok form.
 pub(crate) fn with_comma_ok_hint(base: CallableReturnAbi, method: &Method) -> CallableReturnAbi {
-    if matches!(base, CallableReturnAbi::Option(OptionReturnAbi::Nullable))
+    if base == CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::Nullable))
         && method.go_hints.iter().any(|hint| hint == "comma_ok")
     {
-        return CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
+        return CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
             payload: PayloadLayout::Packed,
-        });
+        }));
     }
     base
 }

@@ -1,6 +1,5 @@
 use crate::plan::bodies::{
-    AssignForm, ElseArm, LoopTransfer, LoweredBlock, LoweredStatement, Statement,
-    for_each_statement,
+    AssignForm, LoopTransfer, LoweredBlock, LoweredStatement, Statement, for_each_statements_mut,
 };
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::local::{GoIdentifier, LocalId};
@@ -12,7 +11,6 @@ use std::fmt::{self, Display, Formatter};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BodyErrorKind {
     EmptyIfCondition,
-    ElseIfHasSetup,
     MissingGoTermination,
     UnresolvedLoopTarget,
     ConflictingLocalSpelling,
@@ -34,26 +32,25 @@ impl Display for BodyError {
     }
 }
 
-pub(crate) fn verify_control_structure(statements: &[Statement]) -> Result<(), BodyError> {
+pub(crate) fn verify_control_structure(statements: &mut Vec<Statement>) -> Result<(), BodyError> {
     let mut error = None;
-    for_each_statement(statements, &mut |statement| {
-        if error.is_some() {
-            return;
+    for_each_statements_mut(statements, &mut |list| {
+        for statement in list.iter() {
+            if error.is_some() {
+                return;
+            }
+            let kind = match &statement.kind {
+                LoweredStatement::If(plan) if plan.condition.is_empty() => {
+                    Some(BodyErrorKind::EmptyIfCondition)
+                }
+                LoweredStatement::Break(LoopTransfer::Source(_))
+                | LoweredStatement::Continue(LoopTransfer::Source(_)) => {
+                    Some(BodyErrorKind::UnresolvedLoopTarget)
+                }
+                _ => None,
+            };
+            error = kind.or(error);
         }
-        let kind = match statement {
-            LoweredStatement::If(plan) if plan.condition.is_empty() => {
-                Some(BodyErrorKind::EmptyIfCondition)
-            }
-            LoweredStatement::If(plan) if matches!(&plan.else_arm, ElseArm::ElseIf(inner) if !inner.condition_setup.is_empty()) => {
-                Some(BodyErrorKind::ElseIfHasSetup)
-            }
-            LoweredStatement::Break(LoopTransfer::Source(_))
-            | LoweredStatement::Continue(LoopTransfer::Source(_)) => {
-                Some(BodyErrorKind::UnresolvedLoopTarget)
-            }
-            _ => None,
-        };
-        error = kind.or(error);
     });
     error.map_or(Ok(()), |kind| Err(BodyError { kind }))
 }
@@ -75,11 +72,11 @@ pub(crate) fn verify_operand_order(values: &[GoExpression]) -> Result<(), BodyEr
 }
 
 pub(crate) fn verify_final_function_body(
-    body: &LoweredBlock,
+    body: &mut LoweredBlock,
     has_result: bool,
 ) -> Result<(), BodyError> {
-    verify_control_structure(&body.statements)?;
-    verify_values(&body.statements)?;
+    verify_control_structure(&mut body.statements)?;
+    verify_values(&mut body.statements)?;
     if has_result && !body.go_terminates() {
         return Err(BodyError {
             kind: BodyErrorKind::MissingGoTermination,
@@ -88,26 +85,28 @@ pub(crate) fn verify_final_function_body(
     Ok(())
 }
 
-fn verify_values(statements: &[Statement]) -> Result<(), BodyError> {
+fn verify_values(statements: &mut Vec<Statement>) -> Result<(), BodyError> {
     let mut missing = false;
-    for statement in statements {
+    for statement in statements.iter() {
         statement.kind.visit_expressions(&mut |node| {
             node.visit_children(&mut |child| {
                 missing |= matches!(child, GoExpressionNode::Empty);
             });
         });
     }
-    for_each_statement(statements, &mut |statement| {
-        let values: Vec<&GoExpression> = match statement {
-            LoweredStatement::Define(definition) => vec![&definition.value],
-            LoweredStatement::Discard(value) => vec![value],
-            LoweredStatement::Return(values) => values.iter().collect(),
-            LoweredStatement::Assign(AssignForm::Simple { value, .. }) => vec![value.expression()],
-            _ => Vec::new(),
-        };
-        missing |= values
-            .iter()
-            .any(|value| matches!(value.node(), GoExpressionNode::Empty));
+    for_each_statements_mut(statements, &mut |list| {
+        for statement in list.iter() {
+            let values: Vec<&GoExpression> = match &statement.kind {
+                LoweredStatement::Define(definition) => vec![&definition.value],
+                LoweredStatement::Discard(value) => vec![value],
+                LoweredStatement::Return(values) => values.iter().collect(),
+                LoweredStatement::Assign(AssignForm::Simple { value, .. }) => vec![value],
+                _ => Vec::new(),
+            };
+            missing |= values
+                .iter()
+                .any(|value| matches!(value.node(), GoExpressionNode::Empty));
+        }
     });
     if missing {
         return Err(BodyError {
@@ -118,7 +117,7 @@ fn verify_values(statements: &[Statement]) -> Result<(), BodyError> {
 }
 
 pub(crate) fn verify_local_scopes(
-    statements: &mut [Statement],
+    statements: &mut Vec<Statement>,
     bindings: &[&GoIdentifier],
 ) -> Result<(), BodyError> {
     struct Check {
@@ -217,7 +216,7 @@ pub(crate) fn verify_local_scopes(
 #[cfg(test)]
 mod control_tests {
     use super::*;
-    use crate::plan::bodies::{IfPlan, LoopId};
+    use crate::plan::bodies::{ElseArm, IfPlan, LoopId};
     use crate::plan::values::GoExpression;
 
     fn block(statements: Vec<Statement>) -> LoweredBlock {
@@ -226,7 +225,7 @@ mod control_tests {
 
     #[test]
     fn source_transfer_must_be_resolved_even_when_nested() {
-        let body = block(vec![
+        let mut body = block(vec![
             LoweredStatement::If(IfPlan::plain(
                 GoExpression::literal("true".into()),
                 block(vec![
@@ -237,38 +236,16 @@ mod control_tests {
             .into(),
         ]);
         assert_eq!(
-            verify_final_function_body(&body, false).unwrap_err().kind,
+            verify_final_function_body(&mut body, false)
+                .unwrap_err()
+                .kind,
             BodyErrorKind::UnresolvedLoopTarget
         );
     }
 
     #[test]
-    fn else_if_setup_must_be_nested_before_rendering() {
-        let mut inner = IfPlan::plain(
-            GoExpression::literal("true".into()),
-            block(vec![]),
-            ElseArm::None,
-        );
-        inner
-            .condition_setup
-            .push(LoweredStatement::UnreachablePanic.into());
-        let body = block(vec![
-            LoweredStatement::If(IfPlan::plain(
-                GoExpression::literal("false".into()),
-                block(vec![]),
-                ElseArm::ElseIf(Box::new(inner)),
-            ))
-            .into(),
-        ]);
-        assert_eq!(
-            verify_final_function_body(&body, false).unwrap_err().kind,
-            BodyErrorKind::ElseIfHasSetup
-        );
-    }
-
-    #[test]
     fn result_body_requires_go_termination() {
-        let body = block(vec![
+        let mut body = block(vec![
             LoweredStatement::ExpressionStatement {
                 expression: GoExpression::call(GoExpression::name("fail".into()), vec![]),
                 diverges: true,
@@ -276,7 +253,9 @@ mod control_tests {
             .into(),
         ]);
         assert_eq!(
-            verify_final_function_body(&body, true).unwrap_err().kind,
+            verify_final_function_body(&mut body, true)
+                .unwrap_err()
+                .kind,
             BodyErrorKind::MissingGoTermination
         );
     }
@@ -309,25 +288,29 @@ mod tests {
             GoExpression::name("show".to_string()),
             vec![GoExpression::empty()],
         );
-        let body = LoweredBlock {
+        let mut body = LoweredBlock {
             statements: vec![expression_statement(call)],
         };
         assert_eq!(
-            verify_final_function_body(&body, false).unwrap_err().kind,
+            verify_final_function_body(&mut body, false)
+                .unwrap_err()
+                .kind,
             BodyErrorKind::MissingValue
         );
 
-        let body = LoweredBlock {
+        let mut body = LoweredBlock {
             statements: vec![define("x".to_string(), GoExpression::empty())],
         };
         assert_eq!(
-            verify_final_function_body(&body, false).unwrap_err().kind,
+            verify_final_function_body(&mut body, false)
+                .unwrap_err()
+                .kind,
             BodyErrorKind::MissingValue
         );
 
-        let body = LoweredBlock {
+        let mut body = LoweredBlock {
             statements: vec![expression_statement(GoExpression::empty())],
         };
-        assert!(verify_final_function_body(&body, false).is_ok());
+        assert!(verify_final_function_body(&mut body, false).is_ok());
     }
 }

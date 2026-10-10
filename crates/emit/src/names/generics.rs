@@ -4,6 +4,7 @@ use rustc_hash::FxHashMap as HashMap;
 
 use crate::Planner;
 use crate::names::go_name;
+use crate::state::scope::TypeParam;
 use syntax::EcoString;
 use syntax::ast::Generic;
 use syntax::types::{SubstitutionMap, Type};
@@ -67,6 +68,19 @@ impl Planner<'_> {
         }
 
         Some(format!("[{}]", args.join(", ")))
+    }
+
+    /// Make `generics` the type parameters of the declaration being emitted.
+    pub(crate) fn set_type_params(&mut self, generics: &[(EcoString, Vec<Type>)]) {
+        let type_params = generics
+            .iter()
+            .map(|(name, bounds)| TypeParam {
+                name: name.clone(),
+                go_name: self.generic_go_name(name).into_owned(),
+                bounds: bounds.clone(),
+            })
+            .collect();
+        self.scope.set_type_params(type_params);
     }
 
     pub(crate) fn generic_go_name<'a>(&'a self, source_name: &'a str) -> Cow<'a, str> {

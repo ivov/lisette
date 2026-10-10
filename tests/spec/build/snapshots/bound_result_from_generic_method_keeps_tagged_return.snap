@@ -27,9 +27,8 @@ func main() {
 		ret, ret_1 := cb(arg0)
 		if ret_1 != nil {
 			return lisette.MakeResultErr[int, Face](ret_1)
-		} else {
-			return lisette.MakeResultOk[int, Face](ret)
 		}
+		return lisette.MakeResultOk[int, Face](ret)
 	})
 	_ = rez
 }

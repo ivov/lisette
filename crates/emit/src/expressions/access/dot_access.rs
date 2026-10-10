@@ -1,7 +1,7 @@
 use crate::state::bindings::BindingValue;
-use syntax::ast::{Expression, StructFields};
+use syntax::ast::Expression;
 use syntax::parse;
-use syntax::program::{Definition, DefinitionBody, DotAccessResolution, ReceiverCoercion};
+use syntax::program::{DefinitionBody, DotAccessResolution, ReceiverCoercion};
 use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::Planner;
@@ -90,11 +90,7 @@ impl Planner<'_> {
             return ValuePlan::computed(setup, member_access, effect).with_stability(stability);
         }
 
-        let is_exported = self.resolve_is_exported(expression, &expression_ty, member, resolution);
-        let is_embedded = self.field_is_embedded(&expression_ty, member);
-        let field = self
-            .try_resolve_cross_package_const(&expression_ty, member)
-            .unwrap_or_else(|| go_field_name(&expression_ty, member, is_exported, is_embedded));
+        let field = self.dot_member_go_name(expression, &expression_ty, member, resolution);
 
         if wrap_nullable
             && let Some(wrapped) = self.plan_nullable_field_access(
@@ -172,7 +168,21 @@ impl Planner<'_> {
     /// Tuple-shape members: plain tuple slots emit as `.F{index}` (or the
     /// `TUPLE_FIELDS` name); tuple-struct slots additionally try a newtype
     /// cast when the struct has a single field and no generics.
-    fn try_emit_tuple_member_dot(
+    /// The Go name of `member` on `expression`, for a read or a write.
+    pub(crate) fn dot_member_go_name(
+        &self,
+        expression: &Expression,
+        expression_ty: &Type,
+        member: &str,
+        resolution: &DotAccessResolution,
+    ) -> String {
+        let is_exported = self.resolve_is_exported(expression, expression_ty, member, resolution);
+        let is_embedded = self.field_is_embedded(expression_ty, member);
+        self.try_resolve_cross_package_const(expression_ty, member)
+            .unwrap_or_else(|| go_field_name(expression_ty, member, is_exported, is_embedded))
+    }
+
+    pub(crate) fn try_emit_tuple_member_dot(
         &mut self,
         base: &GoExpression,
         expression_ty: &Type,
@@ -366,32 +376,6 @@ impl Planner<'_> {
                 _ => base,
             }
         })
-    }
-
-    pub(crate) fn try_emit_tuple_struct_field_access(
-        &self,
-        base: GoExpression,
-        expression_ty: &Type,
-        index: usize,
-    ) -> Option<GoExpression> {
-        let deref_ty = expression_ty.strip_refs();
-        let Type::Nominal { ref id, .. } = deref_ty else {
-            return None;
-        };
-
-        let Some(Definition {
-            body:
-                DefinitionBody::Struct {
-                    fields: StructFields::Tuple(_),
-                    ..
-                },
-            ..
-        }) = self.facts.definition(id.as_str())
-        else {
-            return None;
-        };
-
-        Some(GoExpression::selector(base, format!("F{index}")))
     }
 
     fn package_member_is_fixed(&self, package: &str, member: &str) -> bool {

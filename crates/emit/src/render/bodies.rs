@@ -3,7 +3,7 @@ use crate::plan::bodies::{
     LoopTransfer, LoweredBlock, LoweredStatement, SelectArmPlan, SelectStatementPlan, Statement,
     SwitchKind, SwitchStatementPlan,
 };
-use crate::plan::values::{GoExpression, ValuePlan};
+use crate::plan::values::GoExpression;
 use crate::render::Renderer;
 use crate::write_line;
 
@@ -40,7 +40,7 @@ impl Renderer {
     }
 
     /// Render a `switch` statement: the value/type-switch header, each
-    /// `case`/`default:` plus body, the closing brace, and any postlude.
+    /// `case`/`default:` plus body, and the closing brace.
     fn render_switch(&self, output: &mut String, plan: &SwitchStatementPlan) {
         match &plan.kind {
             SwitchKind::Conditional => output.push_str("switch {\n"),
@@ -72,9 +72,6 @@ impl Renderer {
             self.render_lowered_block(output, default_body);
         }
         output.push_str("}\n");
-        for statement in &plan.postlude {
-            self.render_statement(output, statement);
-        }
     }
 
     fn render_select_arm(&self, output: &mut String, arm: &SelectArmPlan) {
@@ -189,61 +186,26 @@ impl Renderer {
 
     fn render_assign_statement(&self, output: &mut String, plan: &AssignForm) {
         match plan {
-            AssignForm::Compound {
-                target_capture,
-                target,
-                kind,
-            } => {
-                self.render_capture_statements(output, target_capture);
-                match kind {
-                    CompoundKind::Increment => write_line!(output, "{}++", target),
-                    CompoundKind::Decrement => write_line!(output, "{}--", target),
-                    CompoundKind::OpAssign {
-                        operator,
-                        rhs,
-                        pinned_left,
-                    } => {
-                        for statement in rhs.setup() {
-                            self.render_statement(output, statement);
-                        }
-                        match pinned_left {
-                            Some(left) => {
-                                let value = GoExpression::binary(
-                                    left.clone(),
-                                    *operator,
-                                    rhs.expression().clone(),
-                                );
-                                write_line!(output, "{} = {}", target, value)
-                            }
-                            None => {
-                                write_line!(
-                                    output,
-                                    "{} {}= {}",
-                                    target,
-                                    operator.symbol(),
-                                    rhs.expression()
-                                )
-                            }
-                        }
+            AssignForm::Compound { target, kind } => match kind {
+                CompoundKind::Increment => write_line!(output, "{}++", target),
+                CompoundKind::Decrement => write_line!(output, "{}--", target),
+                CompoundKind::OpAssign {
+                    operator,
+                    rhs,
+                    pinned_left,
+                } => match pinned_left {
+                    Some(left) => {
+                        let value = GoExpression::binary(left.clone(), *operator, rhs.clone());
+                        write_line!(output, "{} = {}", target, value)
                     }
-                }
+                    None => {
+                        write_line!(output, "{} {}= {}", target, operator.symbol(), rhs)
+                    }
+                },
+            },
+            AssignForm::Simple { target, value } => {
+                write_line!(output, "{} = {}", target, value);
             }
-            AssignForm::Simple {
-                target_capture,
-                target,
-                value,
-            } => {
-                self.render_capture_statements(output, target_capture);
-                let value_text = self.render_value(output, value);
-                write_line!(output, "{} = {}", target, value_text);
-            }
-        }
-    }
-
-    /// Render a sequence of capture statements (order-sensitive lvalue setup).
-    fn render_capture_statements(&self, output: &mut String, statements: &[Statement]) {
-        for statement in statements {
-            self.render_statement(output, statement);
         }
     }
 
@@ -260,24 +222,15 @@ impl Renderer {
     }
 
     fn render_const_declaration(&self, output: &mut String, plan: &ConstPlan) {
-        let value_text = &plan.value;
-        let keyword = if plan.is_const { "const" } else { "var" };
-        if plan.ty_str.is_empty() {
-            write_line!(output, "{} {} = {}", keyword, plan.name, value_text);
-        } else {
-            write_line!(
-                output,
-                "{} {} {} = {}",
-                keyword,
-                plan.name,
-                plan.ty_str,
-                value_text
-            );
+        match &plan.go_type {
+            Some(go_type) => {
+                write_line!(output, "const {} {} = {}", plan.name, go_type, plan.value)
+            }
+            None => write_line!(output, "const {} = {}", plan.name, plan.value),
         }
     }
 
     fn render_loop(&self, output: &mut String, plan: &LoopPlan) {
-        output.push_str(&self.render_setup(&plan.prologue));
         if let Some(label) = plan.kind.label() {
             write_line!(output, "{}:", label);
         }
@@ -346,7 +299,6 @@ impl Renderer {
     }
 
     fn render_if(&self, output: &mut String, plan: &IfPlan) {
-        output.push_str(&self.render_setup(&plan.condition_setup));
         self.render_if_header(output, plan);
         self.render_lowered_block(output, &plan.then_body);
         self.render_else_arm(output, &plan.else_arm);
@@ -356,10 +308,6 @@ impl Renderer {
         match arm {
             ElseArm::None => output.push_str("}\n"),
             ElseArm::ElseIf(plan) => {
-                debug_assert!(
-                    plan.condition_setup.is_empty(),
-                    "else-if setup must be legalized"
-                );
                 output.push_str("} else ");
                 self.render_if_header(output, plan);
                 self.render_lowered_block(output, &plan.then_body);
@@ -377,14 +325,5 @@ impl Renderer {
                 }
             }
         }
-    }
-
-    /// Render a value plan: emit its setup statements (if any), then return the
-    /// value text.
-    fn render_value(&self, output: &mut String, plan: &ValuePlan) -> String {
-        for statement in plan.setup() {
-            self.render_statement(output, statement);
-        }
-        plan.expression().rendered()
     }
 }

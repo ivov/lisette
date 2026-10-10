@@ -32,7 +32,7 @@ pub use output::OutputFile;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use abi::callable::{CallableReturnAbi, OptionReturnAbi};
+use abi::callable::{LoweredReturnAbi, OptionReturnAbi};
 use abi::catalog::GoAbiCatalog;
 use abi::go_payload_layout;
 use abi::layout::SlotOrigin;
@@ -206,38 +206,38 @@ pub(crate) fn classify_go_return_type(
     definitions: &HashMap<Symbol, Definition>,
     return_ty: &Type,
     go_hints: &[String],
-) -> Option<CallableReturnAbi> {
+) -> Option<LoweredReturnAbi> {
     let payload = || go_payload_layout(return_ty);
     if return_ty.is_partial() {
-        return Some(CallableReturnAbi::Partial { payload: payload() });
+        return Some(LoweredReturnAbi::Partial { payload: payload() });
     }
     if return_ty.is_result() {
         return Some(if return_ty.ok_type().is_unit() {
-            CallableReturnAbi::BareError
+            LoweredReturnAbi::BareError
         } else {
-            CallableReturnAbi::Result { payload: payload() }
+            LoweredReturnAbi::Result { payload: payload() }
         });
     }
     if return_ty.is_option() {
         if let Some(value) = sentinel_hint(go_hints) {
-            return Some(CallableReturnAbi::Option(OptionReturnAbi::Sentinel(value)));
+            return Some(LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(value)));
         }
         if !is_nullable_option(definitions, return_ty) {
-            return Some(CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
+            return Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
                 payload: payload(),
             }));
         }
         if go_hints.iter().any(|s| s == "comma_ok") {
-            return Some(CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
+            return Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk {
                 payload: payload(),
             }));
         }
-        return Some(CallableReturnAbi::Option(OptionReturnAbi::Nullable));
+        return Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable));
     }
     if let Some(arity) = return_ty.tuple_arity()
         && arity >= 2
     {
-        return Some(CallableReturnAbi::Tuple { arity });
+        return Some(LoweredReturnAbi::Tuple { arity });
     }
     None
 }
@@ -488,6 +488,31 @@ impl<'a> Planner<'a> {
         self.scope.bind_source(lisette_name, ids, go_name)
     }
 
+    /// Bind `lisette_name` in the current Go block to `preferred`, or to a fresh name
+    /// when `preferred` would hide a name the block still reads or writes.
+    fn claim_block_binding(
+        &mut self,
+        lisette_name: &str,
+        ids: &[BindingId],
+        preferred: &str,
+        outer: OuterBindings,
+    ) -> GoIdentifier {
+        let go_name = escape_reserved(preferred).into_owned();
+        let hides = self.package.is_package_block_name(&go_name)
+            || self.scope.current_block_declares(&go_name)
+            || match outer {
+                OuterBindings::MayShadow => self.scope.is_active_assign_target(&go_name),
+                OuterBindings::StayVisible => self.scope.has_binding_for_go_name(&go_name),
+            };
+        let go_name = if hides {
+            self.fresh_var(Some(lisette_name))
+        } else {
+            go_name
+        };
+        self.declare(&go_name);
+        self.scope.bind_source(lisette_name, ids, go_name)
+    }
+
     /// Declare `preferred` for `lisette_name`, or a fresh name if it would shadow. Binds nothing.
     fn claim_declared_go_name(
         &mut self,
@@ -592,10 +617,17 @@ impl<'a> Planner<'a> {
         target: &GoExpression,
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        let newly_active = self.scope.activate_assign_target(target);
+        let name = target
+            .as_identifier()
+            .filter(|name| *name != "_")
+            .map(str::to_string);
+        let pushed = name.is_some();
+        if let Some(name) = name {
+            self.scope.push_assign_target(name);
+        }
         let result = f(self);
-        if newly_active {
-            self.scope.deactivate_assign_target(target);
+        if pushed {
+            self.scope.pop_assign_target();
         }
         result
     }
@@ -687,6 +719,14 @@ impl<'a> Planner<'a> {
         self.drain_file_emission_into(&mut source);
         source.render()
     }
+}
+
+/// Whether a new Go block binding may hide outer bindings of the same spelling.
+#[derive(Clone, Copy)]
+pub(crate) enum OuterBindings {
+    MayShadow,
+    /// The block still reads them, as a pattern subject does.
+    StayVisible,
 }
 
 /// Emit state built once in [`Planner::emit`] and shared by every package worker.

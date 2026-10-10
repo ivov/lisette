@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::EcoString;
 
 use crate::Planner;
-use crate::abi::callable::{AbiTransition, CallableParamAbi, CallableReturnAbi};
+use crate::abi::callable::{CallableParamAbi, CallableReturnAbi, LoweredReturnAbi};
 use crate::abi::coercion::{CoercionPlan, resolve_layout_bridge};
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
@@ -85,16 +85,11 @@ impl Planner<'_> {
             .expect("CallPlan has one argument plan per argument");
 
         match plan {
-            ArgumentPlan::GoCallbackAdapter {
-                source,
-                target,
-                transition,
-            } => self.lower_callback_wrapper(
+            ArgumentPlan::GoCallbackAdapter { source, target } => self.lower_callback_wrapper(
                 arg,
                 effective_param_ty.expect("GoCallbackAdapter requires effective_param_ty"),
                 source,
                 target,
-                *transition,
             ),
             ArgumentPlan::LoweredFnShapeAdapter(adapter) => {
                 self.lower_function_argument_adapter(arg, adapter)
@@ -122,13 +117,9 @@ impl Planner<'_> {
         let effective_param_ty = param.map(|param| &param.instantiated);
         let declared_param_ty = param.and_then(|param| param.declared.as_ref());
         if matches!(callee.origin, CallableOrigin::GoInterop)
-            && let Some((source, target, transition)) = self.detect_callback_wrapper(arg, param)
+            && let Some((source, target)) = self.detect_callback_wrapper(arg, param)
         {
-            return ArgumentPlan::GoCallbackAdapter {
-                source,
-                target,
-                transition,
-            };
+            return ArgumentPlan::GoCallbackAdapter { source, target };
         }
         if let Some(adapter) = self.plan_function_argument_adapter(arg, declared_param_ty) {
             return ArgumentPlan::LoweredFnShapeAdapter(Box::new(adapter));
@@ -294,7 +285,8 @@ impl Planner<'_> {
         } else {
             self.function_type_origin(source_ty, SlotOrigin::Lisette)
         };
-        let source_abi = self.classify_slot_emission(source_ret, source_origin)?;
+        let source_abi =
+            CallableReturnAbi::Lowered(self.classify_slot_emission(source_ret, source_origin)?);
 
         (param_abi != source_abi).then_some(FunctionArgumentAdapter {
             source_function: source_fn,
@@ -349,7 +341,7 @@ impl Planner<'_> {
             });
         let source_variable = source.expression().clone();
 
-        let target_element_ret = self.render_lowered_return_ty(&param_abi, arg_ret);
+        let target_element_ret = self.render_callable_return_ty(&param_abi, arg_ret);
         let arg_fn_params = arg_fn.get_function_params().unwrap_or(&[]);
         let param_type_strs: Vec<String> = arg_fn_params
             .iter()
@@ -398,7 +390,6 @@ impl Planner<'_> {
             ));
             setup.push(
                 LoweredStatement::Loop(LoopPlan {
-                    prologue: Vec::new(),
                     kind: LoopKind::Generated { label: None },
                     header: LoopHeader::Range {
                         key: Some("i".to_string().into()),
@@ -417,7 +408,7 @@ impl Planner<'_> {
         &self,
         arg: &Expression,
         param: Option<&CallableParamAbi>,
-    ) -> Option<(CallableReturnAbi, CallableReturnAbi, AbiTransition)> {
+    ) -> Option<(CallableReturnAbi, LoweredReturnAbi)> {
         // Closures already return values in the form expected by the parameter.
         if is_closure_literal(arg) {
             return None;
@@ -446,8 +437,7 @@ impl Planner<'_> {
                 .map(|callee| callee.abi.result)
                 .unwrap_or(CallableReturnAbi::Direct)
         };
-        let transition = source.transition_to(&target);
-        (!matches!(transition, AbiTransition::Identity)).then_some((source, target, transition))
+        (source != CallableReturnAbi::Lowered(target.clone())).then_some((source, target))
     }
 
     fn lower_callback_wrapper(
@@ -455,34 +445,30 @@ impl Planner<'_> {
         arg: &Expression,
         effective_param_ty: &Type,
         source: &CallableReturnAbi,
-        target: &CallableReturnAbi,
-        transition: AbiTransition,
+        target: &LoweredReturnAbi,
     ) -> ValuePlan {
-        let argument = match transition {
-            AbiTransition::Identity => self.lower_value(arg, ExpressionContext::value()),
-            _ => self.plan_operand(
-                arg,
-                ExpressionContext::value().with_forced_tagged_go_function(true),
-            ),
-        };
-        argument.map_expression(|setup, value| match transition {
-            AbiTransition::Identity => value,
-            AbiTransition::LowerFromTagged => {
+        let argument = self.plan_operand(
+            arg,
+            ExpressionContext::value().with_forced_tagged_go_function(true),
+        );
+        argument.map_expression(|setup, value| match source {
+            CallableReturnAbi::Tagged => {
                 let param_fn_ty = self
                     .facts
                     .resolve_to_function_type(effective_param_ty.unwrap_forall())
                     .expect("callback target resolves to a fn type");
                 emit_lisette_callback_wrapper(self, setup, value, &param_fn_ty, target)
             }
-            AbiTransition::WrapToTagged | AbiTransition::Reencode => {
+            CallableReturnAbi::Lowered(_) => {
                 let arg_fn_ty = self
                     .facts
                     .resolve_to_function_type(arg.get_type().unwrap_forall())
                     .expect("callback source resolves to a fn type");
-                emit_fn_arg_shape_adapter(self, setup, value, &arg_fn_ty, source, target)
+                let target = CallableReturnAbi::Lowered(target.clone());
+                emit_fn_arg_shape_adapter(self, setup, value, &arg_fn_ty, source, &target)
                     .expect("callback ABI transition has a function signature")
             }
-            AbiTransition::Incompatible => {
+            CallableReturnAbi::Direct => {
                 unreachable!("type-checked callback ABIs must describe the same result")
             }
         })

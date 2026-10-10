@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::Renderer;
 use crate::ReturnContext;
-use crate::abi::callable::CallableReturnAbi;
+use crate::abi::callable::LoweredReturnAbi;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
@@ -77,7 +77,7 @@ impl Planner<'_> {
         self.settle_generated_names(&mut lowered.statements);
         #[cfg(debug_assertions)]
         {
-            verify_final_function_body(&lowered, should_return)
+            verify_final_function_body(&mut lowered, should_return)
                 .unwrap_or_else(|error| panic!("{error}"));
             verify_local_scopes(
                 &mut lowered.statements,
@@ -97,7 +97,7 @@ impl Planner<'_> {
         }
     }
 
-    fn settle_generated_names(&mut self, statements: &mut [Statement]) {
+    fn settle_generated_names(&mut self, statements: &mut Vec<Statement>) {
         #[derive(Default)]
         struct Names {
             present: HashSet<String>,
@@ -313,11 +313,7 @@ impl Planner<'_> {
             None => (None, function_definition.params),
         };
 
-        for (name, _) in &generic_context {
-            let go = self.generic_go_name(name).to_string();
-            self.scope.declare_type_param(&go);
-        }
-        self.scope.set_type_params(generic_context);
+        self.set_type_params(&generic_context);
         self.scope.enter_isolated_function(return_ctx.clone());
 
         let mut parts = vec!["func".to_string()];
@@ -387,7 +383,7 @@ impl Planner<'_> {
         &mut self,
         function_definition: FunctionDefinitionView<'_>,
         params_to_process: &'a [Binding],
-        return_shape: Option<&CallableReturnAbi>,
+        return_shape: Option<&LoweredReturnAbi>,
     ) -> (String, String, Vec<ParamDestructure<'a>>, Vec<GoIdentifier>) {
         let LoweredParams {
             pairs,

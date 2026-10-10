@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:os"
+  
+  fn main() {
+    os.Args = ["a"]
+  }
+---
+package main
+
+import "os"
+
+func main() {
+	os.Args = []string{"a"}
+}

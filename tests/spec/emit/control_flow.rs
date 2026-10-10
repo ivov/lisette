@@ -4377,3 +4377,44 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn match_binding_inside_loop_value_avoids_the_result_name() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let xs = [1, 5, 9]
+  let mut i = 0
+  let w = loop {
+    match xs.get(i) {
+      Some(w) => { if w > 2 { break w } },
+      None => { break 0 },
+    }
+    i += 1
+  }
+  fmt.Println(w)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_binding_inside_if_value_avoids_the_result_name() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let xs = [1, 5, 9]
+  let i = 1
+  let v = if i > 0 {
+    match xs.get(0) {
+      Some(v) => v + 1,
+      None => 0,
+    }
+  } else { 2 }
+  fmt.Println(v)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

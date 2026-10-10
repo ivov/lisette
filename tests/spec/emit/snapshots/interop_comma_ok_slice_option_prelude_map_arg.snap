@@ -31,9 +31,8 @@ func main() {
 				}
 			}
 			return lisette.MakeOptionSome[[]lisette.Option[string]](wrapped)
-		} else {
-			return lisette.MakeOptionNone[[]lisette.Option[string]]()
 		}
+		return lisette.MakeOptionNone[[]lisette.Option[string]]()
 	})
 	_ = out
 }

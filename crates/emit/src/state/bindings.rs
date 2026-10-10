@@ -45,20 +45,31 @@ pub(crate) struct ComponentBinding {
     pub(crate) status: GoIdentifier,
     pub(crate) payload_go_type: String,
     pub(crate) kind: ComponentKind,
-    pub(crate) whole_value_constructor: Option<WholeValueConstructor>,
     pub(crate) shared_payload: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ComponentKind {
     Option,
-    Result,
+    /// A `Result` whose error is the prelude `error`.
+    ErrorResult,
+    /// A `Result` with another error type, which no prelude constructor rebuilds.
+    OtherResult,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum WholeValueConstructor {
-    OptionFromCommaOk,
-    ResultFromPair,
+impl ComponentKind {
+    pub(crate) fn is_result(self) -> bool {
+        matches!(self, Self::ErrorResult | Self::OtherResult)
+    }
+
+    /// The prelude function that rebuilds the whole value from its components.
+    pub(crate) fn whole_value_constructor(self) -> Option<&'static str> {
+        match self {
+            Self::Option => Some("OptionFromCommaOk"),
+            Self::ErrorResult => Some("ResultFromPair"),
+            Self::OtherResult => None,
+        }
+    }
 }
 
 impl BindingValue {

@@ -3,27 +3,6 @@
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
 use crate::plan::values::{EvaluationEffect, Stability};
 
-/// What can change a value that an evaluation reads.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum Reads {
-    #[default]
-    Nothing,
-    /// Only an assignment to a named local.
-    Locals,
-    /// Also a call, through an alias or a reference.
-    Shared,
-}
-
-impl Reads {
-    pub(crate) fn of(stability: Stability) -> Self {
-        match stability {
-            Stability::Literal | Stability::Fixed => Self::Nothing,
-            Stability::StableAcrossCalls => Self::Locals,
-            Stability::Observable => Self::Shared,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Writes {
     #[default]
@@ -35,12 +14,11 @@ pub(crate) enum Writes {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct Effects {
-    runs_code: bool,
-    runs_effectful_code: bool,
+    calls: EvaluationEffect,
     /// Outside a call, whose own panics are part of the call.
     may_panic: bool,
     may_block: bool,
-    reads: Reads,
+    reads: Stability,
     writes: Writes,
     creates_identity: bool,
 }
@@ -48,8 +26,7 @@ pub(crate) struct Effects {
 impl Effects {
     pub(crate) fn union(self, other: Self) -> Self {
         Self {
-            runs_code: self.runs_code || other.runs_code,
-            runs_effectful_code: self.runs_effectful_code || other.runs_effectful_code,
+            calls: self.calls.max(other.calls),
             may_panic: self.may_panic || other.may_panic,
             may_block: self.may_block || other.may_block,
             reads: self.reads.max(other.reads),
@@ -60,11 +37,10 @@ impl Effects {
 
     pub(crate) fn anything() -> Self {
         Self {
-            runs_code: true,
-            runs_effectful_code: true,
+            calls: EvaluationEffect::EffectfulCall,
             may_panic: true,
             may_block: true,
-            reads: Reads::Shared,
+            reads: Stability::Observable,
             writes: Writes::Any,
             creates_identity: true,
         }
@@ -72,22 +48,26 @@ impl Effects {
 
     pub(crate) fn local_read() -> Self {
         Self {
-            reads: Reads::Locals,
+            reads: Stability::StableAcrossCalls,
             ..Self::default()
         }
     }
 
     pub(crate) fn read_of(stability: Stability) -> Self {
         Self {
-            reads: Reads::of(stability),
+            reads: stability,
             ..Self::default()
         }
     }
 
     pub(crate) fn calls_of(effect: EvaluationEffect) -> Self {
         Self {
-            runs_code: effect.has_call(),
-            runs_effectful_code: effect.has_call(),
+            // Plan facts do not yet mark which calls the tree spells as pure.
+            calls: if effect.has_call() {
+                EvaluationEffect::EffectfulCall
+            } else {
+                EvaluationEffect::Pure
+            },
             writes: if effect.has_effectful_call() {
                 Writes::Shared
             } else {
@@ -97,11 +77,14 @@ impl Effects {
         }
     }
 
-    pub(crate) fn with_facts(self, reads: Reads, effect: EvaluationEffect) -> Self {
+    pub(crate) fn with_facts(self, reads: Stability, effect: EvaluationEffect) -> Self {
         let calls = Self::calls_of(effect);
         Self {
-            runs_code: self.runs_code && calls.runs_code,
-            runs_effectful_code: self.runs_effectful_code && calls.runs_code,
+            calls: if effect.has_call() {
+                self.calls
+            } else {
+                EvaluationEffect::Pure
+            },
             reads,
             writes: self.writes.min(calls.writes),
             ..self
@@ -112,36 +95,35 @@ impl Effects {
     /// the spec, this assumes an earlier call runs before a later read.
     pub(crate) fn without_go_order(self) -> Self {
         Self {
-            runs_code: false,
-            runs_effectful_code: false,
+            calls: EvaluationEffect::Pure,
             writes: Writes::Nothing,
             ..self
         }
     }
 
     pub(crate) fn runs_code(self) -> bool {
-        self.runs_code
+        self.calls.has_call()
     }
 
     pub(crate) fn runs_effectful_code(self) -> bool {
-        self.runs_effectful_code
+        self.calls.has_effectful_call()
     }
 
     pub(crate) fn panics_or_blocks(self) -> bool {
         self.may_panic || self.may_block
     }
 
-    pub(crate) fn reads(self) -> Reads {
+    pub(crate) fn reads(self) -> Stability {
         self.reads
     }
 
     pub(crate) fn can_erase(self) -> bool {
-        !self.runs_code && !self.panics_or_blocks() && self.writes == Writes::Nothing
+        !self.runs_code() && !self.panics_or_blocks() && self.writes == Writes::Nothing
     }
 
     /// A panic repeats only after the first evaluation panicked.
     pub(crate) fn can_duplicate(self) -> bool {
-        !self.runs_code
+        !self.runs_code()
             && !self.may_block
             && self.writes == Writes::Nothing
             && !self.creates_identity
@@ -150,7 +132,7 @@ impl Effects {
     /// The order of two panics is not kept.
     pub(crate) fn can_move_across(self, between: Self) -> bool {
         let orders = |first: Self, second: Self| {
-            first.runs_effectful_code && (second.runs_code || second.panics_or_blocks())
+            first.runs_effectful_code() && (second.runs_code() || second.panics_or_blocks())
         };
         !orders(self, between)
             && !orders(between, self)
@@ -160,10 +142,12 @@ impl Effects {
     }
 }
 
-fn observes(reads: Reads, writes: Writes) -> bool {
+fn observes(reads: Stability, writes: Writes) -> bool {
     !matches!(
         (reads, writes),
-        (Reads::Nothing, _) | (_, Writes::Nothing) | (Reads::Locals, Writes::Shared)
+        (Stability::Fixed, _)
+            | (_, Writes::Nothing)
+            | (Stability::StableAcrossCalls, Writes::Shared)
     )
 }
 
@@ -182,7 +166,7 @@ impl GoExpressionNode {
     fn own_effects(&self) -> Effects {
         let reference_read = |may_panic| Effects {
             may_panic,
-            reads: Reads::Shared,
+            reads: Stability::Observable,
             ..Effects::default()
         };
         match self {
@@ -195,13 +179,12 @@ impl GoExpressionNode {
             Self::Identifier(_) => Effects::local_read(),
             Self::Qualified { .. } => reference_read(false),
             Self::Call { pure: true, .. } => Effects {
-                runs_code: true,
+                calls: EvaluationEffect::PureCall,
                 ..Effects::default()
             },
             Self::Call { .. } | Self::Verbatim(_) => Effects {
-                runs_code: true,
-                runs_effectful_code: true,
-                reads: Reads::Shared,
+                calls: EvaluationEffect::EffectfulCall,
+                reads: Stability::Observable,
                 writes: Writes::Any,
                 ..Effects::default()
             },
@@ -374,7 +357,7 @@ mod tests {
     #[test]
     fn source_facts_refine_reads_and_calls() {
         let local = name("x").effects();
-        let fixed = local.with_facts(Reads::Nothing, EvaluationEffect::Pure);
+        let fixed = local.with_facts(Stability::Fixed, EvaluationEffect::Pure);
         let effectful = Effects::calls_of(EvaluationEffect::EffectfulCall);
         assert!(!local.can_move_across(Effects::anything()));
         assert!(fixed.can_move_across(Effects::anything().without_go_order()));

@@ -1,8 +1,6 @@
 use crate::plan::bodies::{
-    AssignForm, CompoundKind, ElseArm, IfPlan, LoopId, LoopKind, LoopTransfer, LoweredBlock,
-    LoweredStatement, Statement,
+    ElseArm, IfPlan, LoopId, LoopKind, LoopTransfer, LoweredBlock, LoweredStatement, Statement,
 };
-use crate::plan::values::ValuePlan;
 
 #[derive(Clone, Copy)]
 enum Interception {
@@ -57,10 +55,6 @@ impl Legalizer {
         }
     }
 
-    fn walk_value(&mut self, value: &mut ValuePlan, interception: Interception) {
-        self.walk_statements(value.parts_mut().0, interception);
-    }
-
     fn resolve_transfer(&mut self, transfer: &mut LoopTransfer, intercepted: bool) {
         let LoopTransfer::Source(target) = transfer else {
             return;
@@ -84,7 +78,6 @@ impl Legalizer {
         match statement {
             LoweredStatement::If(plan) => self.walk_if(plan, interception),
             LoweredStatement::Loop(plan) => {
-                self.walk_statements(&mut plan.prologue, interception);
                 if matches!(&plan.kind, LoopKind::Generated { .. }) {
                     self.walk_block(&mut plan.body, Interception::All);
                 }
@@ -97,26 +90,7 @@ impl Legalizer {
             LoweredStatement::Continue(target) => {
                 self.resolve_transfer(target, interception.intercepts_continue())
             }
-            LoweredStatement::Assign(plan) => match plan {
-                AssignForm::Compound {
-                    target_capture,
-                    kind,
-                    ..
-                } => {
-                    self.walk_statements(target_capture, interception);
-                    if let CompoundKind::OpAssign { rhs, .. } = kind {
-                        self.walk_value(rhs, interception);
-                    }
-                }
-                AssignForm::Simple {
-                    target_capture,
-                    value,
-                    ..
-                } => {
-                    self.walk_statements(target_capture, interception);
-                    self.walk_value(value, interception);
-                }
-            },
+            LoweredStatement::Assign(_) => {}
             LoweredStatement::Select(plan) => {
                 for arm in &mut plan.arms {
                     self.walk_block(arm.body_mut(), interception.with_break());
@@ -130,7 +104,6 @@ impl Legalizer {
                 if let Some(body) = &mut plan.default {
                     self.walk_block(body, case_interception);
                 }
-                self.walk_statements(&mut plan.postlude, interception);
             }
             LoweredStatement::Return(_)
             | LoweredStatement::Const(_)
@@ -153,7 +126,6 @@ impl Legalizer {
     }
 
     fn walk_if(&mut self, plan: &mut IfPlan, interception: Interception) {
-        self.walk_statements(&mut plan.condition_setup, interception);
         self.walk_block(&mut plan.then_body, interception);
         self.walk_else(&mut plan.else_arm, interception);
     }
