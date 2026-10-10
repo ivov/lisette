@@ -332,7 +332,7 @@ impl Planner<'_> {
 }
 
 pub(crate) fn build_tuple_literal(values: Vec<GoExpression>) -> GoExpression {
-    GoExpression::call(
+    GoExpression::pure_call(
         GoExpression::generated(
             GeneratedPackage::Prelude,
             format!("MakeTuple{}", values.len()),

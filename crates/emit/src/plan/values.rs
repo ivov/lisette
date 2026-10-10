@@ -287,6 +287,20 @@ impl GoExpression {
         Self::call_node(callee, arguments, CallPurity::Constructor)
     }
 
+    pub(crate) fn read_only_call(callee: GoExpression, arguments: Vec<GoExpression>) -> Self {
+        Self::call_node(callee, arguments, CallPurity::ReadOnly)
+    }
+
+    /// Marks an outermost effectful call as only reading memory.
+    pub(crate) fn into_read_only_call(mut self) -> Self {
+        if let GoExpressionNode::Call { purity, .. } = &mut self.node
+            && *purity == CallPurity::Effectful
+        {
+            *purity = CallPurity::ReadOnly;
+        }
+        self
+    }
+
     fn call_node(callee: GoExpression, arguments: Vec<GoExpression>, purity: CallPurity) -> Self {
         let node = GoExpressionNode::Call {
             callee: Box::new(callee.node),
@@ -495,28 +509,6 @@ impl Stability {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum EvaluationEffect {
-    #[default]
-    Pure,
-    PureCall,
-    EffectfulCall,
-}
-
-impl EvaluationEffect {
-    pub(crate) fn combine(self, other: Self) -> Self {
-        self.max(other)
-    }
-
-    pub(crate) fn has_call(self) -> bool {
-        !matches!(self, EvaluationEffect::Pure)
-    }
-
-    pub(crate) fn has_effectful_call(self) -> bool {
-        matches!(self, EvaluationEffect::EffectfulCall)
-    }
-}
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) enum CaptureBoundary {
     #[default]
@@ -535,57 +527,18 @@ impl CaptureBoundary {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct EvaluationFacts {
-    pub stability: Stability,
-    pub effect: EvaluationEffect,
-}
-
-impl EvaluationFacts {
-    const fn new(stability: Stability, effect: EvaluationEffect) -> Self {
-        Self { stability, effect }
-    }
-
-    const fn literal() -> Self {
-        Self::new(Stability::Fixed, EvaluationEffect::Pure)
-    }
-
-    const fn value(effect: EvaluationEffect) -> Self {
-        Self::new(Stability::Observable, effect)
-    }
-
-    const fn call(effect: EvaluationEffect) -> Self {
-        Self::new(Stability::StableAcrossCalls, effect)
-    }
-
-    const fn with_stability(self, stability: Stability) -> Self {
-        Self { stability, ..self }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ValuePlan {
     setup: Vec<Statement>,
     expression: GoExpression,
-    evaluation: EvaluationFacts,
+    stability: Stability,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SequencedValues {
     pub setup: Vec<Statement>,
     pub values: Vec<GoExpression>,
-    pub effect: EvaluationEffect,
     pub stability: Stability,
-}
-
-/// The facts know that no call here writes, but not which calls construct.
-fn mark_calls_read_only(node: &mut GoExpressionNode) {
-    if let GoExpressionNode::Call { purity, .. } = node
-        && *purity == CallPurity::Effectful
-    {
-        *purity = CallPurity::ReadOnly;
-    }
-    node.visit_children_mut(&mut mark_calls_read_only);
 }
 
 impl ValuePlan {
@@ -597,89 +550,62 @@ impl ValuePlan {
         &self.expression
     }
 
-    pub(crate) fn facts(&self) -> EvaluationFacts {
-        self.evaluation
+    pub(crate) fn stability(&self) -> Stability {
+        self.stability
     }
 
-    pub(crate) fn into_parts_with_facts(self) -> (Vec<Statement>, GoExpression, EvaluationFacts) {
-        (self.setup, self.expression, self.evaluation)
+    pub(crate) fn into_parts_with_stability(self) -> (Vec<Statement>, GoExpression, Stability) {
+        (self.setup, self.expression, self.stability)
     }
 
     pub(crate) fn split_setup(self) -> (Vec<Statement>, Self) {
         let Self {
             setup,
             expression,
-            evaluation,
+            stability,
         } = self;
-        (setup, Self::from_facts(Vec::new(), expression, evaluation))
+        (setup, Self::new(Vec::new(), expression, stability))
     }
 
-    fn from_facts(
-        setup: Vec<Statement>,
-        mut expression: GoExpression,
-        evaluation: EvaluationFacts,
-    ) -> Self {
-        if !evaluation.effect.has_effectful_call() {
-            mark_calls_read_only(&mut expression.node);
-        }
+    fn new(setup: Vec<Statement>, expression: GoExpression, stability: Stability) -> Self {
         Self {
             setup,
             expression,
-            evaluation,
+            stability,
         }
     }
 
     pub(crate) fn constant(rendered: String, kind: ConstantKind) -> Self {
-        Self::from_facts(
+        Self::new(
             Vec::new(),
             GoExpression::constant(rendered, kind),
-            EvaluationFacts::literal(),
+            Stability::Fixed,
         )
     }
 
     pub(crate) fn literal(rendered: String) -> Self {
-        Self::from_facts(
+        Self::new(
             Vec::new(),
             GoExpression::literal(rendered),
-            EvaluationFacts::literal(),
+            Stability::Fixed,
         )
     }
 
-    pub(crate) fn evaluated_literal(
-        setup: Vec<Statement>,
-        rendered: String,
-        effect: EvaluationEffect,
-    ) -> Self {
-        Self::from_facts(
+    pub(crate) fn evaluated_literal(setup: Vec<Statement>, rendered: String) -> Self {
+        Self::new(
             setup,
             GoExpression::literal(rendered),
-            EvaluationFacts::new(Stability::Observable, effect),
+            Stability::Observable,
         )
     }
 
     /// A name the setup just bound, or which nothing can rebind.
     pub(crate) fn captured(setup: Vec<Statement>, name: String) -> Self {
-        Self::captured_with_effect(setup, name, EvaluationEffect::Pure)
+        Self::new(setup, GoExpression::name(name), Stability::Fixed)
     }
 
-    pub(crate) fn captured_with_effect(
-        setup: Vec<Statement>,
-        name: String,
-        effect: EvaluationEffect,
-    ) -> Self {
-        Self::from_facts(
-            setup,
-            GoExpression::name(name),
-            EvaluationFacts::new(Stability::Fixed, effect),
-        )
-    }
-
-    pub(crate) fn computed(
-        setup: Vec<Statement>,
-        expression: GoExpression,
-        effect: EvaluationEffect,
-    ) -> Self {
-        Self::from_facts(setup, expression, EvaluationFacts::value(effect))
+    pub(crate) fn computed(setup: Vec<Statement>, expression: GoExpression) -> Self {
+        Self::new(setup, expression, Stability::Observable)
     }
 
     /// `stability` describes the binding, so only a bare name inherits it
@@ -688,60 +614,38 @@ impl ValuePlan {
         expression: GoExpression,
         stability: Stability,
     ) -> Self {
-        let evaluation = match expression.syntax_form() {
-            OperandForm::Literal => EvaluationFacts::literal(),
-            OperandForm::Call => EvaluationFacts::call(EvaluationEffect::PureCall),
-            OperandForm::Name => EvaluationFacts::new(stability, EvaluationEffect::Pure),
-            OperandForm::Other => EvaluationFacts::value(EvaluationEffect::Pure).with_stability(
-                if stability.is_observable() {
-                    Stability::Observable
-                } else {
-                    Stability::StableAcrossCalls
-                },
-            ),
+        let stability = match expression.syntax_form() {
+            OperandForm::Literal => Stability::Fixed,
+            OperandForm::Call => Stability::StableAcrossCalls,
+            OperandForm::Name => stability,
+            OperandForm::Other if stability.is_observable() => Stability::Observable,
+            OperandForm::Other => Stability::StableAcrossCalls,
         };
-        Self::from_facts(Vec::new(), expression, evaluation)
+        Self::new(Vec::new(), expression, stability)
     }
 
-    pub(crate) fn plain_call(
-        setup: Vec<Statement>,
-        expression: GoExpression,
-        effect: EvaluationEffect,
-    ) -> Self {
-        Self::from_facts(setup, expression, EvaluationFacts::call(effect))
+    pub(crate) fn plain_call(setup: Vec<Statement>, expression: GoExpression) -> Self {
+        Self::new(setup, expression, Stability::StableAcrossCalls)
     }
 
     pub(crate) fn built_from(
         setup: Vec<Statement>,
         expression: GoExpression,
-        effect: EvaluationEffect,
         stability: Stability,
     ) -> Self {
-        Self::from_facts(setup, expression, EvaluationFacts::new(stability, effect))
+        Self::new(setup, expression, stability)
     }
 
-    pub(crate) fn observable_call(
-        setup: Vec<Statement>,
-        expression: GoExpression,
-        effect: EvaluationEffect,
-    ) -> Self {
-        Self::from_facts(
-            setup,
-            expression,
-            EvaluationFacts::call(effect).with_stability(Stability::Observable),
-        )
+    pub(crate) fn observable_call(setup: Vec<Statement>, expression: GoExpression) -> Self {
+        Self::new(setup, expression, Stability::Observable)
     }
 
     pub(crate) fn verbatim(source: String) -> Self {
-        Self::observable_call(
-            Vec::new(),
-            GoExpression::verbatim(source),
-            EvaluationEffect::EffectfulCall,
-        )
+        Self::observable_call(Vec::new(), GoExpression::verbatim(source))
     }
 
     /// Represent the same value differently. The transform must not add an
-    /// effect, so the facts carry over.
+    /// effect, so the stability carries over.
     pub(crate) fn map_expression(
         self,
         transform: impl FnOnce(&mut Vec<Statement>, GoExpression) -> GoExpression,
@@ -749,10 +653,10 @@ impl ValuePlan {
         let Self {
             mut setup,
             expression,
-            evaluation,
+            stability,
         } = self;
         let expression = transform(&mut setup, expression);
-        Self::from_facts(setup, expression, evaluation)
+        Self::new(setup, expression, stability)
     }
 
     pub(crate) fn map_observable_expression(
@@ -765,18 +669,18 @@ impl ValuePlan {
     }
 
     pub(crate) fn make_observable(&mut self) {
-        self.evaluation.stability = Stability::Observable;
+        self.stability = Stability::Observable;
     }
 
     pub(crate) fn stable_across_calls_if(mut self, stable_across_calls: bool) -> Self {
         if stable_across_calls {
-            self.evaluation.stability = Stability::StableAcrossCalls;
+            self.stability = Stability::StableAcrossCalls;
         }
         self
     }
 
     pub(crate) fn into_addressed_location(mut self) -> Self {
-        self.evaluation.stability = Stability::StableAcrossCalls;
+        self.stability = Stability::StableAcrossCalls;
         self
     }
 
@@ -784,15 +688,10 @@ impl ValuePlan {
         let value = mem::replace(&mut self.expression, GoExpression::empty());
         let name = bind(&mut self.setup, value);
         self.expression = GoExpression::name(name);
-        self.evaluation.effect = EvaluationEffect::Pure;
     }
 
-    pub(crate) fn with_pure_constructor_evaluation(mut self) -> Self {
-        self.evaluation.effect = EvaluationEffect::PureCall.combine(self.evaluation.effect);
-        if !self.evaluation.effect.has_effectful_call() {
-            mark_calls_read_only(&mut self.expression.node);
-        }
-        self.evaluation.stability = if matches!(self.expression.syntax_form(), OperandForm::Call) {
+    pub(crate) fn with_constructor_stability(mut self) -> Self {
+        self.stability = if matches!(self.expression.syntax_form(), OperandForm::Call) {
             Stability::StableAcrossCalls
         } else {
             Stability::Observable
@@ -801,7 +700,7 @@ impl ValuePlan {
     }
 
     pub(crate) fn with_stability(mut self, stability: Stability) -> Self {
-        self.evaluation.stability = stability;
+        self.stability = stability;
         self
     }
 
@@ -823,7 +722,7 @@ impl ValuePlan {
         let reads = if self.reads_only_own_setup() {
             Stability::Fixed
         } else {
-            self.evaluation.stability
+            self.stability
         };
         self.expression.effects().with_known_reads(reads)
     }
@@ -846,12 +745,11 @@ impl ValuePlan {
 
     /// Fixed and unable to panic, so it may run later.
     pub(crate) fn can_delay(&self) -> bool {
-        self.evaluation.stability.is_fixed() && !self.effects().panics_or_blocks()
+        self.stability.is_fixed() && !self.effects().panics_or_blocks()
     }
 
     pub(crate) fn rests_in_fixed_name(&self) -> bool {
-        matches!(self.expression.syntax_form(), OperandForm::Name)
-            && self.evaluation.stability.is_fixed()
+        matches!(self.expression.syntax_form(), OperandForm::Name) && self.stability.is_fixed()
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -864,21 +762,21 @@ impl ValuePlan {
 
     pub(crate) fn conversion(mut self, go_type: String) -> Self {
         self.expression = GoExpression::conversion(go_type, self.expression);
-        if !self.evaluation.stability.is_stable_across_calls() {
-            self.evaluation.stability = Stability::Observable;
+        if !self.stability.is_stable_across_calls() {
+            self.stability = Stability::Observable;
         }
         self
     }
 
     pub(crate) fn unary(mut self, operator: UnaryOp) -> Self {
         self.expression = GoExpression::unary(operator, self.expression);
-        self.evaluation.stability = Stability::Observable;
+        self.stability = Stability::Observable;
         self
     }
 
     pub(crate) fn dereference(mut self) -> Self {
         self.expression = GoExpression::dereference(self.expression);
-        self.evaluation.stability = Stability::Observable;
+        self.stability = Stability::Observable;
         self
     }
 }
@@ -893,7 +791,7 @@ impl Planner<'_> {
     ) -> ValuePlan {
         if self.is_test_log_call(expression) {
             let (setup, call) = self.lower_test_log_call(expression);
-            return ValuePlan::plain_call(setup, call, EvaluationEffect::EffectfulCall);
+            return ValuePlan::plain_call(setup, call);
         }
         match expression {
             Expression::Paren { expression, .. } => self.plan_operand(expression, ctx),
@@ -944,11 +842,7 @@ impl Planner<'_> {
             Expression::Propagate { expression, .. } => {
                 let (setup, value) = self.lower_propagate(expression);
                 let stability = self.path_read_stability(&value);
-                ValuePlan::from_facts(
-                    setup,
-                    value,
-                    EvaluationFacts::new(stability, EvaluationEffect::Pure),
-                )
+                ValuePlan::built_from(setup, value, stability)
             }
             Expression::If { ty, .. } => self.plan_branching_as_operand_temp(expression, ty),
             Expression::Loop { ty, .. } => self.plan_loop_as_operand_temp(expression, ty),

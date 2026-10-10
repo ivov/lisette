@@ -11,7 +11,7 @@ use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::go_name;
 use crate::plan::bodies::Statement;
-use crate::plan::values::{EvaluationEffect, GoExpression, Stability, ValuePlan};
+use crate::plan::values::{GoExpression, Stability, ValuePlan};
 use crate::utils::reads_value_member;
 
 struct NullableFieldAccess<'a> {
@@ -57,7 +57,7 @@ impl Planner<'_> {
 
         if let Some(expression) = self.try_emit_pre_receiver_dot(member, result_ty, resolution, ctx)
         {
-            return ValuePlan::computed(Vec::new(), expression, EvaluationEffect::Pure);
+            return ValuePlan::computed(Vec::new(), expression);
         }
 
         if let Some(component) = self.tuple_component_read(expression, member) {
@@ -73,13 +73,12 @@ impl Planner<'_> {
             Some(package) => ValuePlan::captured(Vec::new(), package.qualifier().to_string()),
             None => self.plan_coerced_expression(expression, receiver_coercion, ctx),
         };
-        let effect = base_plan.facts().effect;
         let stability = if let Some(package) = expression_ty.as_import_namespace()
             && self.package_member_is_fixed(package, member)
         {
             Stability::Fixed
         } else if reads_value_member(resolution, expression, &expression_ty) {
-            base_plan.facts().stability
+            base_plan.stability()
         } else {
             Stability::Observable
         };
@@ -87,7 +86,7 @@ impl Planner<'_> {
         if let Some(member_access) =
             self.try_emit_tuple_member_dot(&base, &expression_ty, member, resolution)
         {
-            return ValuePlan::computed(setup, member_access, effect).with_stability(stability);
+            return ValuePlan::computed(setup, member_access).with_stability(stability);
         }
 
         let field = self.dot_member_go_name(expression, &expression_ty, member, resolution);
@@ -105,7 +104,7 @@ impl Planner<'_> {
                 },
             )
         {
-            return ValuePlan::computed(setup, wrapped, effect);
+            return ValuePlan::computed(setup, wrapped);
         }
 
         let value_field =
@@ -117,7 +116,7 @@ impl Planner<'_> {
         };
         let expression =
             self.append_cross_package_type_args(selector, &expression_ty, resolution, ctx);
-        ValuePlan::computed(setup, expression, effect).with_stability(stability)
+        ValuePlan::computed(setup, expression).with_stability(stability)
     }
 
     fn try_emit_pre_receiver_dot(

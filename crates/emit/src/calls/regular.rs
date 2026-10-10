@@ -13,9 +13,7 @@ use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::values::{
-    ConstantKind, EvaluationEffect, GoExpression, SequencedValues, ValuePlan,
-};
+use crate::plan::values::{ConstantKind, GoExpression, SequencedValues, ValuePlan};
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::program::resolved_instantiation;
 use syntax::types::Type;
@@ -276,7 +274,6 @@ impl<'a> Planner<'a> {
                     boundary: expression_ctx.capture_boundary(),
                 },
             );
-            let effect = self.regular_call_effect(function, sequenced.effect);
             let callee = GoExpression::name(go_name);
             let expression = if self.is_pure_constructor_callee(function) {
                 GoExpression::pure_call(callee, sequenced.values)
@@ -284,14 +281,13 @@ impl<'a> Planner<'a> {
                 GoExpression::call(callee, sequenced.values)
             };
             return if self.callee_lowers_to_type_construction(function) {
-                ValuePlan::observable_call(sequenced.setup, expression, effect)
+                ValuePlan::observable_call(sequenced.setup, expression)
             } else {
-                ValuePlan::plain_call(sequenced.setup, expression, effect)
+                ValuePlan::plain_call(sequenced.setup, expression)
             };
         }
 
         let callee_staged = self.plan_operand(function, expression_ctx.callee());
-        let callee_effect = callee_staged.facts().effect;
         let (mut setup, mut callee) = callee_staged.into_parts();
 
         let mut type_args_string = self.resolve_call_type_args(CallTypeArgsRequest {
@@ -329,7 +325,6 @@ impl<'a> Planner<'a> {
             receiver_binding: receiver_type_binding(function, &call_plan.resolved),
         };
         let sequenced_args = self.emit_call_args(args, &args_ctx, None);
-        let args_effect = sequenced_args.effect;
         let constant_result = go_builtin_name(function)
             .filter(|_| builtin_conversion.is_none())
             .and_then(|builtin| builtin_constant(builtin, &sequenced_args.values));
@@ -375,14 +370,11 @@ impl<'a> Planner<'a> {
 
         setup.extend(args_setup);
 
-        let effect = self
-            .regular_call_effect(function, args_effect)
-            .combine(callee_effect);
         let expression = call.with_constant(constant_result);
         if self.callee_lowers_to_type_construction(function) {
-            ValuePlan::computed(setup, expression, effect)
+            ValuePlan::computed(setup, expression)
         } else {
-            ValuePlan::plain_call(setup, expression, effect)
+            ValuePlan::plain_call(setup, expression)
         }
     }
 
@@ -414,7 +406,6 @@ impl<'a> Planner<'a> {
         let staged = self.plan_operand(argument, ExpressionContext::value());
         let mut sequenced =
             self.sequence_values(vec![staged], expression_ctx.capture_boundary(), "arg");
-        let effect = self.regular_call_effect(function, sequenced.effect);
         let value = sequenced
             .values
             .pop()
@@ -433,19 +424,7 @@ impl<'a> Planner<'a> {
                 vec![value],
             ),
         };
-        Some(ValuePlan::plain_call(sequenced.setup, call, effect))
-    }
-
-    fn regular_call_effect(
-        &self,
-        function: &Expression,
-        argument_effect: EvaluationEffect,
-    ) -> EvaluationEffect {
-        if self.is_pure_constructor_callee(function) {
-            EvaluationEffect::PureCall.combine(argument_effect)
-        } else {
-            EvaluationEffect::EffectfulCall
-        }
+        Some(ValuePlan::plain_call(sequenced.setup, call))
     }
 
     fn callee_collapsed_recipe(&self, callee: &ResolvedCallee<'_>) -> Option<String> {

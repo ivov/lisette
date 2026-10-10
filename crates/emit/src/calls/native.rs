@@ -11,7 +11,7 @@ use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredBlock, Statement};
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, GoParameter, UnaryOp};
-use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::statements::assignments::lvalues_match;
 use crate::types::native;
 use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
@@ -21,20 +21,11 @@ use syntax::types::{CompoundKind, Type, peel_to_range_type};
 pub(super) struct NativeCallResult {
     pub setup: Vec<Statement>,
     pub value: GoExpression,
-    pub argument_effect: EvaluationEffect,
 }
 
 impl NativeCallResult {
-    pub(super) fn new(
-        setup: Vec<Statement>,
-        value: GoExpression,
-        argument_effect: EvaluationEffect,
-    ) -> Self {
-        Self {
-            setup,
-            value,
-            argument_effect,
-        }
+    pub(super) fn new(setup: Vec<Statement>, value: GoExpression) -> Self {
+        Self { setup, value }
     }
 }
 
@@ -248,7 +239,7 @@ static INLINE_METHODS: &[InlineRule] = &[
 
 /// `receiver[:len(receiver):len(receiver)]`, so a later `append` cannot write through an alias.
 pub(crate) fn clip_shared_capacity(receiver: GoExpression) -> GoExpression {
-    let length = GoExpression::call(
+    let length = GoExpression::read_only_call(
         GoExpression::name("len".to_string()),
         vec![receiver.clone()],
     );
@@ -542,12 +533,11 @@ struct StagedNativeMethod {
     setup: Vec<Statement>,
     receiver: GoExpression,
     arguments: Vec<GoExpression>,
-    effect: EvaluationEffect,
 }
 
 impl StagedNativeMethod {
     fn finish(self, value: GoExpression) -> NativeCallResult {
-        NativeCallResult::new(self.setup, value, self.effect)
+        NativeCallResult::new(self.setup, value)
     }
 }
 
@@ -874,14 +864,12 @@ impl Planner<'_> {
                 boundary: ctx.capture_boundary,
             },
         );
-        let effect = sequenced.effect;
         let mut values = sequenced.values;
         let receiver = values.remove(0);
         StagedNativeMethod {
             setup: sequenced.setup,
             receiver,
             arguments: values,
-            effect,
         }
     }
 
@@ -957,7 +945,6 @@ impl Planner<'_> {
                 stages.push(self.plan_operand(e, ExpressionContext::value()));
             }
             let sequenced = self.sequence_values(stages, capture_boundary, "arg");
-            let effect = sequenced.effect;
             let mut values = sequenced.values.into_iter();
             let receiver = values.next().expect("substring has a receiver");
             let start_bound = start
@@ -974,7 +961,6 @@ impl Planner<'_> {
             return NativeCallResult::new(
                 sequenced.setup,
                 substring_call(deref(receiver), start_bound, end_bound),
-                effect,
             );
         }
 
@@ -986,16 +972,11 @@ impl Planner<'_> {
         let range_staged = self.stage_or_capture(arg, "range");
         let sequenced =
             self.sequence_values(vec![receiver_staged, range_staged], capture_boundary, "arg");
-        let effect = sequenced.effect;
         let mut values = sequenced.values.into_iter();
         let receiver = values.next().expect("substring has a receiver");
         let range = values.next().expect("substring has a range");
         let (start, end) = range_var_bounds(&range, &range_kind);
-        NativeCallResult::new(
-            sequenced.setup,
-            substring_call(deref(receiver), start, end),
-            effect,
-        )
+        NativeCallResult::new(sequenced.setup, substring_call(deref(receiver), start, end))
     }
 
     pub(crate) fn equality_expression(

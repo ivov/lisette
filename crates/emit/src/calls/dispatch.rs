@@ -17,7 +17,7 @@ use crate::plan::bodies::{
 };
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::go_expression::{BinaryOp, CompositeLayout, FunctionLiteralLayout, GoParameter};
-use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, Stability, ValuePlan};
+use crate::plan::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments, StructFields};
 use syntax::program::NativeTypeKind;
@@ -193,21 +193,12 @@ impl<'a> Planner<'a> {
         (params[0].clone(), params[1].clone())
     }
 
-    fn stage_size_argument(
-        &mut self,
-        ctx: &NativeCallContext,
-    ) -> (Vec<Statement>, GoExpression, EvaluationEffect) {
+    fn stage_size_argument(&mut self, ctx: &NativeCallContext) -> (Vec<Statement>, GoExpression) {
         match ctx.args.first() {
-            Some(a) => {
-                let staged = self.plan_operand(a, ExpressionContext::value());
-                let (setup, expression, facts) = staged.into_parts_with_facts();
-                (setup, expression, facts.effect)
-            }
-            None => (
-                Vec::new(),
-                GoExpression::literal("0".to_string()),
-                EvaluationEffect::Pure,
-            ),
+            Some(a) => self
+                .plan_operand(a, ExpressionContext::value())
+                .into_parts(),
+            None => (Vec::new(), GoExpression::literal("0".to_string())),
         }
     }
 
@@ -222,13 +213,12 @@ impl<'a> Planner<'a> {
                         GoExpression::name("make".to_string()),
                         vec![GoExpression::type_name(format!("chan {}", element))],
                     ),
-                    self.native_constructor_effect(ctx, EvaluationEffect::Pure),
                 ))
             }
             (NativeTypeKind::Channel, "buffered") => {
                 let element =
                     self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
-                let (setup, capacity, argument_effect) = self.stage_size_argument(ctx);
+                let (setup, capacity) = self.stage_size_argument(ctx);
                 Some(ValuePlan::observable_call(
                     setup,
                     GoExpression::call(
@@ -238,7 +228,6 @@ impl<'a> Planner<'a> {
                             capacity,
                         ],
                     ),
-                    self.native_constructor_effect(ctx, argument_effect),
                 ))
             }
             (NativeTypeKind::Map, "new") => {
@@ -250,7 +239,6 @@ impl<'a> Planner<'a> {
                         GoExpression::name("make".to_string()),
                         vec![GoExpression::type_name(format!("map[{}]{}", key, val))],
                     ),
-                    self.native_constructor_effect(ctx, EvaluationEffect::Pure),
                 ))
             }
             (NativeTypeKind::Map, "from") => self.try_lower_map_from_pairs(ctx),
@@ -260,7 +248,6 @@ impl<'a> Planner<'a> {
                 Some(ValuePlan::computed(
                     Vec::new(),
                     GoExpression::empty_composite(format!("[]{}", element)),
-                    self.native_constructor_effect(ctx, EvaluationEffect::Pure),
                 ))
             }
             (NativeTypeKind::Slice, "make") => {
@@ -270,7 +257,7 @@ impl<'a> Planner<'a> {
                     ctx.call_ty,
                 );
                 let element = self.use_go_type(&element_ty);
-                let (setup, length, argument_effect) = self.stage_size_argument(ctx);
+                let (setup, length) = self.stage_size_argument(ctx);
                 let value = if self.element_go_zero_ok(&element_ty) {
                     GoExpression::call(
                         GoExpression::name("make".to_string()),
@@ -313,11 +300,7 @@ impl<'a> Planner<'a> {
                         FunctionLiteralLayout::MultiLine,
                     )
                 };
-                Some(ValuePlan::observable_call(
-                    setup,
-                    value,
-                    self.native_constructor_effect(ctx, argument_effect),
-                ))
+                Some(ValuePlan::observable_call(setup, value))
             }
             (NativeTypeKind::Array, "new") => {
                 let peeled = ctx.call_ty.map(|t| self.facts.peel_alias(t));
@@ -325,7 +308,6 @@ impl<'a> Planner<'a> {
                     Some(ValuePlan::computed(
                         Vec::new(),
                         self.array_zero(*length, element),
-                        self.native_constructor_effect(ctx, EvaluationEffect::Pure),
                     ))
                 } else {
                     None
@@ -355,7 +337,6 @@ impl<'a> Planner<'a> {
         let array_go = format!("[{length}]{element_go}");
 
         let staged = self.plan_operand(argument, ExpressionContext::value());
-        let argument_effect = staged.facts().effect;
         let (setup, source) = staged.into_parts();
 
         let slice = || GoExpression::name("s".to_string());
@@ -395,11 +376,7 @@ impl<'a> Planner<'a> {
             vec![source],
         );
 
-        Some(ValuePlan::observable_call(
-            setup,
-            value,
-            self.native_constructor_effect(ctx, argument_effect),
-        ))
+        Some(ValuePlan::observable_call(setup, value))
     }
 
     fn try_lower_map_from_pairs(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
@@ -441,7 +418,6 @@ impl<'a> Planner<'a> {
             return Some(ValuePlan::computed(
                 Vec::new(),
                 GoExpression::empty_composite(map_ty),
-                self.native_constructor_effect(ctx, EvaluationEffect::Pure),
             ));
         }
 
@@ -451,7 +427,6 @@ impl<'a> Planner<'a> {
             .map(|e| self.lower_composite_value(e, ExpressionContext::value()))
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "entry");
-        let effect = sequenced.effect;
         let mut setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
 
@@ -482,20 +457,7 @@ impl<'a> Planner<'a> {
         Some(ValuePlan::computed(
             setup,
             GoExpression::composite(Some(map_ty), lowered, layout),
-            self.native_constructor_effect(ctx, effect),
         ))
-    }
-
-    fn native_constructor_effect(
-        &self,
-        ctx: &NativeCallContext,
-        argument_effect: EvaluationEffect,
-    ) -> EvaluationEffect {
-        if self.is_pure_constructor_callee(ctx.function) {
-            EvaluationEffect::PureCall.combine(argument_effect)
-        } else {
-            EvaluationEffect::EffectfulCall
-        }
     }
 
     /// Emit `call_expression` in negated form when the underlying inline rule
@@ -610,11 +572,11 @@ impl<'a> Planner<'a> {
                     Some(go_type) => GoExpression::conversion(go_type, value),
                     None => value,
                 };
-                return ValuePlan::computed(Vec::new(), value, EvaluationEffect::Pure);
+                return ValuePlan::computed(Vec::new(), value);
             }
             CallableOrigin::Source(CallKind::AssertType) => {
                 let (setup, value) = self.lower_assert_type(function, args, resolved_type_args);
-                return ValuePlan::plain_call(setup, value, EvaluationEffect::EffectfulCall);
+                return ValuePlan::plain_call(setup, value);
             }
             CallableOrigin::Source(CallKind::UfcsMethod) => {
                 return self.lower_ufcs_call(function, args, resolved_type_args, spread, &plan);
@@ -661,13 +623,6 @@ impl<'a> Planner<'a> {
         }
         let result = self.lower_native_method(ctx);
         let is_constructor = matches!(ctx.form, NativeCallForm::Constructor);
-        let effect = if is_constructor {
-            self.native_constructor_effect(ctx, result.argument_effect)
-        } else if native_method_is_pure(ctx.native_type, ctx.method) {
-            EvaluationEffect::PureCall.combine(result.argument_effect)
-        } else {
-            EvaluationEffect::EffectfulCall
-        };
         let split = ctx.receiver_and_arguments();
         // Channel length can change without rebinding the receiver.
         let reads_fixed_length = matches!(ctx.method, "length" | "capacity")
@@ -683,15 +638,20 @@ impl<'a> Planner<'a> {
                 .as_identifier()
                 .is_some_and(|name| statement.kind.binds_name(name))
         }) {
-            return ValuePlan::captured_with_effect(result.setup, result.value.rendered(), effect);
+            return ValuePlan::captured(result.setup, result.value.rendered());
         }
         let receiver_arity = split.map_or(0, |(_, arguments)| arguments.len());
         let plain_call = !is_constructor
             && native_method_lowers_to_plain_call(ctx.native_type, ctx.method, receiver_arity);
-        let plan = if plain_call {
-            ValuePlan::plain_call(result.setup, result.value, effect)
+        let value = if !is_constructor && native_method_is_pure(ctx.native_type, ctx.method) {
+            result.value.into_read_only_call()
         } else {
-            ValuePlan::computed(result.setup, result.value, effect)
+            result.value
+        };
+        let plan = if plain_call {
+            ValuePlan::plain_call(result.setup, value)
+        } else {
+            ValuePlan::computed(result.setup, value)
         };
         if reads_fixed_length {
             plan.with_stability(Stability::Fixed)
@@ -758,7 +718,6 @@ impl<'a> Planner<'a> {
             .map(|a| self.lower_composite_value(a, arg_ctx))
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "arg");
-        let effect = EvaluationEffect::PureCall.combine(sequenced.effect);
         let mut setup = sequenced.setup;
 
         let mut field_pairs = Vec::with_capacity(target.field_tys.len());
@@ -779,7 +738,6 @@ impl<'a> Planner<'a> {
         Some(ValuePlan::computed(
             setup,
             emit_struct_literal(&target.go_ty, field_pairs),
-            effect,
         ))
     }
 

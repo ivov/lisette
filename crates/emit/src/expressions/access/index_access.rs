@@ -50,12 +50,11 @@ impl Planner<'_> {
                 CaptureBoundary::SiblingSequence,
                 "base",
             );
-            let effect = sequenced.effect;
             let mut values = sequenced.values.into_iter();
             let base = values.next().expect("range index has a base");
             let range = values.next().expect("range index has a range");
             let value = range_var_slice(base, &range, &range_kind, needs_cap);
-            return ValuePlan::computed(sequenced.setup, value, effect);
+            return ValuePlan::computed(sequenced.setup, value);
         }
 
         self.sequence_indexed_access(expression, base_staged, index, "base")
@@ -69,12 +68,12 @@ impl Planner<'_> {
         prefix: &str,
     ) -> ValuePlan {
         let index_staged = self.lower_composite_value(index, ExpressionContext::value());
-        let index_facts = index_staged.facts();
-        let index_is_fixed = index_staged.can_delay() && !index_facts.effect.has_call();
+        let index_effects = index_staged.effects();
+        let index_is_fixed = index_staged.can_delay() && !index_effects.runs_code();
         if base_staged.setup().is_empty()
             && is_order_sensitive(base)
-            && ((base_staged.facts().effect.has_effectful_call() && !index_is_fixed)
-                || index_facts.effect.has_effectful_call())
+            && ((base_staged.effects().runs_effectful_code() && !index_is_fixed)
+                || index_effects.runs_effectful_code())
         {
             self.pin_staged(&mut base_staged, prefix);
         }
@@ -83,12 +82,11 @@ impl Planner<'_> {
             CaptureBoundary::SiblingSequence,
             prefix,
         );
-        let effect = sequenced.effect;
         let setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
         let base = values.next().expect("indexed access has a base");
         let index = values.next().expect("indexed access has an index");
-        ValuePlan::computed(setup, GoExpression::index(base, index), effect)
+        ValuePlan::computed(setup, GoExpression::index(base, index))
     }
 
     /// Builtin `append` copies the spread elements, so their capacity needs no cap.
@@ -146,8 +144,10 @@ impl Planner<'_> {
         if let Some(e) = end {
             all_stages.push(self.plan_operand(e, ExpressionContext::value()));
         }
+        let runs_effectful_code = all_stages
+            .iter()
+            .any(|stage| stage.effects().runs_effectful_code());
         let sequenced = self.sequence_values(all_stages, CaptureBoundary::SiblingSequence, "base");
-        let effect = sequenced.effect;
         let mut setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
         let mut base = values.next().expect("slice access has a base");
@@ -165,7 +165,6 @@ impl Planner<'_> {
             return ValuePlan::computed(
                 setup,
                 GoExpression::slice(base, start_value.as_ref(), end_value.as_ref(), None),
-                effect,
             );
         }
 
@@ -175,7 +174,7 @@ impl Planner<'_> {
         {
             let base_expr = expression.deref_inner().unwrap_or(expression);
             if !base.effects().can_duplicate()
-                || (is_order_sensitive(base_expr) && effect.has_effectful_call())
+                || (is_order_sensitive(base_expr) && runs_effectful_code)
             {
                 base = GoExpression::name(self.hoist_tmp_value_statement(&mut setup, "base", base));
             }
@@ -188,7 +187,6 @@ impl Planner<'_> {
                 return ValuePlan::computed(
                     setup,
                     GoExpression::slice(base, start_value.as_ref(), Some(&length), Some(&length)),
-                    effect,
                 );
             };
             if start.is_some_and(is_order_sensitive) {
@@ -213,7 +211,6 @@ impl Planner<'_> {
                     Some(&end_variable),
                     Some(&end_variable),
                 ),
-                effect,
             );
         }
 
@@ -225,7 +222,6 @@ impl Planner<'_> {
                 end_value.as_ref(),
                 end_value.as_ref(),
             ),
-            effect,
         )
     }
 }

@@ -9,7 +9,7 @@ use crate::expressions::staging::SpreadSequenceOptions;
 use crate::plan::bodies::Statement;
 use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::program::ReceiverCoercion;
 use syntax::program::{NativeTypeKind, resolved_instantiation};
@@ -114,9 +114,9 @@ impl Planner<'_> {
             let plain_call =
                 native_method_lowers_to_plain_call(&native_type, member, emitted_args.len());
             return if plain_call {
-                ValuePlan::plain_call(setup, inlined, EvaluationEffect::EffectfulCall)
+                ValuePlan::plain_call(setup, inlined)
             } else {
-                ValuePlan::computed(setup, inlined, EvaluationEffect::EffectfulCall)
+                ValuePlan::computed(setup, inlined)
             };
         }
 
@@ -131,9 +131,9 @@ impl Planner<'_> {
         );
         let expression = GoExpression::call(callee, new_args);
         if self.callee_lowers_to_type_construction(function) {
-            ValuePlan::observable_call(setup, expression, EvaluationEffect::EffectfulCall)
+            ValuePlan::observable_call(setup, expression)
         } else {
-            ValuePlan::plain_call(setup, expression, EvaluationEffect::EffectfulCall)
+            ValuePlan::plain_call(setup, expression)
         }
     }
 
@@ -281,7 +281,6 @@ impl Planner<'_> {
         ValuePlan::observable_call(
             sequenced.setup,
             GoExpression::call(GoExpression::selector(receiver, go_method), emitted_all),
-            EvaluationEffect::EffectfulCall,
         )
     }
 }

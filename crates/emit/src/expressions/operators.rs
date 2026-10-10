@@ -6,9 +6,7 @@ use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
 use crate::plan::bodies::{LoweredBlock, Statement};
 use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, UnaryOp};
-use crate::plan::values::{
-    CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
-};
+use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, UnaryOperator};
 use syntax::program::DefinitionBody;
 use syntax::types::Type;
@@ -138,7 +136,6 @@ impl Planner<'_> {
     ) -> ValuePlan {
         let sequenced =
             self.sequence_values(vec![left, right], CaptureBoundary::SiblingSequence, "left");
-        let effect = sequenced.effect;
         let stability = sequenced.stability;
         let setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
@@ -150,7 +147,6 @@ impl Planner<'_> {
             return ValuePlan::built_from(
                 setup,
                 GoExpression::binary(left, operator.into(), right),
-                effect,
                 stability,
             );
         };
@@ -160,11 +156,7 @@ impl Planner<'_> {
         if let Some(ty) = &casts.cast_right_to {
             right = GoExpression::conversion(self.use_go_type(ty), right);
         }
-        ValuePlan::computed(
-            setup,
-            GoExpression::binary(left, operator.into(), right),
-            effect,
-        )
+        ValuePlan::computed(setup, GoExpression::binary(left, operator.into(), right))
     }
 
     fn plan_short_circuit_binary(
@@ -175,12 +167,10 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         let left_staged = self.lower_composite_value(left_expression, ctx);
-        let left_effect = left_staged.facts().effect;
 
         // Wrap RHS setup in an IIFE so it runs only when control reaches the
         // RHS. Hoisting it before the operator would defeat short-circuit.
         let right_staged = self.lower_composite_value(right_expression, ctx);
-        let right_effect = right_staged.facts().effect;
         let (mut statements, right_value) = right_staged.into_parts();
         let right_value = if statements.is_empty() {
             right_value
@@ -197,7 +187,6 @@ impl Planner<'_> {
         ValuePlan::computed(
             left_setup,
             GoExpression::binary(left_value, operator.into(), right_value),
-            left_effect.combine(right_effect),
         )
     }
 
@@ -262,7 +251,7 @@ impl Planner<'_> {
         if matches!(target, Expression::Call { .. }) {
             let mut setup: Vec<Statement> = Vec::new();
             if let Some(negated) = self.try_emit_negated_call(&mut setup, target) {
-                return ValuePlan::computed(setup, negated, EvaluationEffect::EffectfulCall);
+                return ValuePlan::computed(setup, negated);
             }
         }
 

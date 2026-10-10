@@ -18,9 +18,7 @@ use crate::plan::calls::{
     ArgumentPlan, ArgumentSlotBridge, ArgumentValueSource, CallPlan, CallableOrigin,
     FunctionArgumentAdapter, ResolvedCallee,
 };
-use crate::plan::values::{
-    CaptureBoundary, EvaluationEffect, GoExpression, SequencedValues, ValuePlan,
-};
+use crate::plan::values::{CaptureBoundary, GoExpression, SequencedValues, ValuePlan};
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -525,11 +523,7 @@ impl Planner<'_> {
         plan: &ArgumentSlotBridge,
     ) -> ValuePlan {
         if prelude_constructor(argument) == Some(PreludeVariant::None) {
-            return ValuePlan::evaluated_literal(
-                Vec::new(),
-                "nil".to_string(),
-                EvaluationEffect::PureCall,
-            );
+            return ValuePlan::evaluated_literal(Vec::new(), "nil".to_string());
         }
         if let Some(literal) = self.lower_option_literal_into_layout(argument, &plan.target) {
             return literal;

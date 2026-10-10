@@ -1,7 +1,25 @@
 //! What evaluating a Go expression can do besides producing its value.
 
 use crate::plan::go_expression::{BinaryOp, CallPurity, GoExpressionNode};
-use crate::plan::values::{EvaluationEffect, Stability};
+use crate::plan::values::Stability;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum EvaluationEffect {
+    #[default]
+    Pure,
+    PureCall,
+    EffectfulCall,
+}
+
+impl EvaluationEffect {
+    pub(crate) fn has_call(self) -> bool {
+        !matches!(self, EvaluationEffect::Pure)
+    }
+
+    pub(crate) fn has_effectful_call(self) -> bool {
+        matches!(self, EvaluationEffect::EffectfulCall)
+    }
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Writes {
@@ -364,18 +382,20 @@ mod tests {
     }
 
     #[test]
-    fn plan_facts_without_an_effectful_call_mark_the_tree() {
-        use crate::plan::values::{GoExpression, ValuePlan};
-        let call = || {
-            GoExpression::call(
-                GoExpression::name("len".to_string()),
-                vec![GoExpression::name("xs".to_string())],
-            )
+    fn a_read_only_call_marks_only_itself() {
+        use crate::plan::values::GoExpression;
+        let next = GoExpression::call(GoExpression::name("next".to_string()), Vec::new());
+        let length = GoExpression::call(GoExpression::name("len".to_string()), vec![next])
+            .into_read_only_call();
+        let GoExpressionNode::Call {
+            purity, arguments, ..
+        } = length.node()
+        else {
+            panic!("expected a call");
         };
-        let read_only = ValuePlan::computed(Vec::new(), call(), EvaluationEffect::PureCall);
-        assert!(!read_only.expression().effects().runs_effectful_code());
-        let effectful = ValuePlan::computed(Vec::new(), call(), EvaluationEffect::EffectfulCall);
-        assert!(effectful.expression().effects().runs_effectful_code());
+        assert_eq!(*purity, CallPurity::ReadOnly);
+        assert!(arguments[0].effects().runs_effectful_code());
+        assert!(length.effects().runs_effectful_code());
     }
 
     #[test]

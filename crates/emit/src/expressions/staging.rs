@@ -9,9 +9,7 @@ use crate::plan::calls::CallableOrigin;
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::values::{
-    CaptureBoundary, EvaluationEffect, GoExpression, SequencedValues, Stability, ValuePlan,
-};
+use crate::plan::values::{CaptureBoundary, GoExpression, SequencedValues, Stability, ValuePlan};
 #[cfg(debug_assertions)]
 use crate::plan::verify::verify_operand_order;
 use crate::utils::reads_value_member;
@@ -368,9 +366,6 @@ impl Planner<'_> {
         boundary: CaptureBoundary,
         prefix: &str,
     ) -> SequencedValues {
-        let effect = stages.iter().fold(EvaluationEffect::Pure, |effect, stage| {
-            effect.combine(stage.facts().effect)
-        });
         let eager = boundary.delays_reads();
         let mut later = LaterStages::default();
         let stages: Vec<_> = stages
@@ -387,13 +382,13 @@ impl Planner<'_> {
         let mut stability = Stability::Fixed;
         for (stage, pin) in stages.into_iter().rev() {
             let can_delay = stage.can_delay();
-            let (stage_setup, expression, evaluation) = stage.into_parts_with_facts();
+            let (stage_setup, expression, stage_stability) = stage.into_parts_with_stability();
             setup.extend(stage_setup);
             if pin || (eager && !can_delay) {
                 let tmp = self.hoist_tmp_value_statement(&mut setup, prefix, expression);
                 results.push(GoExpression::name(tmp));
             } else {
-                stability = stability.max(evaluation.stability);
+                stability = stability.max(stage_stability);
                 results.push(expression);
             }
         }
@@ -402,7 +397,6 @@ impl Planner<'_> {
         SequencedValues {
             setup,
             values: results,
-            effect,
             stability,
         }
     }
