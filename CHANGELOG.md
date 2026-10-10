@@ -2,6 +2,55 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.12.4](https://github.com/ivov/lisette/compare/lisette-v0.12.3...lisette-v0.12.4) - 2026-10-10
+
+### Features
+
+- feat: idiomatic Go for struct update copies [#1530](https://github.com/ivov/lisette/pull/1530) [`76ca217`](https://github.com/ivov/lisette/commit/76ca217f6fd23a1318f2f876daba20ae05c88662)
+- feat: idiomatic Go for nullable Go fields in patterns [#1529](https://github.com/ivov/lisette/pull/1529) [`b2de03d`](https://github.com/ivov/lisette/commit/b2de03d8eca216554aa9e1127cbe59f4c338a7c4)
+- feat: idiomatic Go for returning a Go error call [#1528](https://github.com/ivov/lisette/pull/1528) [`37c46a9`](https://github.com/ivov/lisette/commit/37c46a91486883909dd99d4794b7161e20128bd3)
+- feat: idiomatic Go for range slices spread into append [#1527](https://github.com/ivov/lisette/pull/1527) [`7ae4689`](https://github.com/ivov/lisette/commit/7ae4689839e61645caf05616ae2eee686f33aa06)
+- feat: idiomatic Go for patterns on a propagated payload [#1526](https://github.com/ivov/lisette/pull/1526) [`c427253`](https://github.com/ivov/lisette/commit/c427253d6009b2f6b37048dac5770d3904218c5f)
+- feat: idiomatic Go for empty wildcard arms in a switch [#1525](https://github.com/ivov/lisette/pull/1525) [`6e12ff6`](https://github.com/ivov/lisette/commit/6e12ff6473bcc4ffb4a22bfb21937bb5e1cfe35e)
+- feat: idiomatic Go for map loops over field paths [#1524](https://github.com/ivov/lisette/pull/1524) [`24dc4c1`](https://github.com/ivov/lisette/commit/24dc4c1eb6535d7ea629716998b1e5051ab9a895)
+- feat: idiomatic Go for indexing a call result [#1523](https://github.com/ivov/lisette/pull/1523) [`d974cc0`](https://github.com/ivov/lisette/commit/d974cc0b7e99e4512cad116714ee964f87fc94b4)
+- feat: idiomatic Go for zero defaults on map lookups [#1522](https://github.com/ivov/lisette/pull/1522) [`42d51e7`](https://github.com/ivov/lisette/commit/42d51e7e0b41e56a4c02313991ad073eeb67c2d9)
+- feat: idiomatic Go for Go calls that return a sentinel [#1521](https://github.com/ivov/lisette/pull/1521) [`78c43bc`](https://github.com/ivov/lisette/commit/78c43bcc7b0b08108b9bb19fef816c433663b562)
+- feat: idiomatic Go for comparisons with unit enum variants [#1520](https://github.com/ivov/lisette/pull/1520) [`e52626b`](https://github.com/ivov/lisette/commit/e52626bac2fcea0926b8904658149b52c3ea96d2)
+- feat: idiomatic Go for range loops counting from zero [#1519](https://github.com/ivov/lisette/pull/1519) [`57105e3`](https://github.com/ivov/lisette/commit/57105e3471442cfef872e448be63ceb3b9d62c2b)
+- feat: idiomatic Go for returning a tuple-returning call [#1517](https://github.com/ivov/lisette/pull/1517) [`1b814c7`](https://github.com/ivov/lisette/commit/1b814c73c684e34856fa5026cdd9175e92e8919b)
+- feat: idiomatic Go for zero fields in struct autofill [#1516](https://github.com/ivov/lisette/pull/1516) [`df5ab32`](https://github.com/ivov/lisette/commit/df5ab3250214d4539d0a4f444dc093ee5efd27f5)
+- feat: idiomatic Go for values built from stable operands [#1514](https://github.com/ivov/lisette/pull/1514) [`c2430fc`](https://github.com/ivov/lisette/commit/c2430fc3d85df3db816667d01bd446308a5bad58)
+- feat: idiomatic Go for `?` in struct literal fields [#1513](https://github.com/ivov/lisette/pull/1513) [`6b30d58`](https://github.com/ivov/lisette/commit/6b30d58e2b7e9daac4105352ed88c2712846d236)
+- feat: idiomatic Go for package constants and functions [#1512](https://github.com/ivov/lisette/pull/1512) [`a6bb453`](https://github.com/ivov/lisette/commit/a6bb4537294a8773c1741b2bb05902b4ad619848)
+
+### Fixes
+
+- fix: match percent-encoded file URIs from client in LSP [#1515](https://github.com/ivov/lisette/pull/1515) [`9433391`](https://github.com/ivov/lisette/commit/9433391d2d19b18de88487dfa5bee907ef6dffe5)
+- fix: alias a Go import when a package name is already taken [#1511](https://github.com/ivov/lisette/pull/1511) [`1c99f36`](https://github.com/ivov/lisette/commit/1c99f361ea66536a90379fb825c509473732f736)
+- fix: keep unit values and assignment targets in emitted Go [#1510](https://github.com/ivov/lisette/pull/1510) [`dca136e`](https://github.com/ivov/lisette/commit/dca136edd9f2158df4a6007e6bcd5d92357e5107)
+- fix: include closed packages in LSP references and rename [#1505](https://github.com/ivov/lisette/pull/1505) [`22c3b37`](https://github.com/ivov/lisette/commit/22c3b37821757ffe305aed3c615ec57109459977)
+- fix: keep LSP responsive during analysis and honor cancellation [#1503](https://github.com/ivov/lisette/pull/1503) [`d79b94e`](https://github.com/ivov/lisette/commit/d79b94e3cee9798e2e51d9975346404ddf597d40)
+- fix: refresh LSP analysis after disk and configuration changes [#1502](https://github.com/ivov/lisette/pull/1502) [`7f02b36`](https://github.com/ivov/lisette/commit/7f02b36aa80b30d96a7e0c4ce3b5452ec56748b1)
+- fix: keep LSP analysis separate across projects and scripts [#1501](https://github.com/ivov/lisette/pull/1501) [`7992960`](https://github.com/ivov/lisette/commit/79929600e9f36e671589749040954eddc7a6e73e)
+- fix: reject LSP navigation and rename inside strings and comments [#1499](https://github.com/ivov/lisette/pull/1499) [`f294150`](https://github.com/ivov/lisette/commit/f294150e7a2a9d1a7d16ccc6d5e903cc1158237e)
+
+### Internals
+
+- refactor: simplify emit plan representation [#1534](https://github.com/ivov/lisette/pull/1534) [`3192fcd`](https://github.com/ivov/lisette/commit/3192fcd6d9fd5707cde73e7825534e9befd1425b)
+- refactor: simplify emit name resolution [#1533](https://github.com/ivov/lisette/pull/1533) [`684c1a7`](https://github.com/ivov/lisette/commit/684c1a7de015236722bdaa9e3fccc1a79284bada)
+- refactor: deduplicate emit decisions [#1532](https://github.com/ivov/lisette/pull/1532) [`199bd28`](https://github.com/ivov/lisette/commit/199bd28fe8d3a39f52a6aefc96350dce85176e65)
+- chore: upgrade `ecow` to 0.3 to replace yanked 0.2.7 [#1518](https://github.com/ivov/lisette/pull/1518) [`117df46`](https://github.com/ivov/lisette/commit/117df4659a52766c0387cd07ca362cf53051b42e)
+- refactor: unify bound `Option` and `Result` values in emit [#1509](https://github.com/ivov/lisette/pull/1509) [`d7732e2`](https://github.com/ivov/lisette/commit/d7732e2f9b727e896dd12f4fdc291008eaf222d4)
+- refactor: centralize evaluation safety checks in emit [#1508](https://github.com/ivov/lisette/pull/1508) [`76dcd40`](https://github.com/ivov/lisette/commit/76dcd40f6ab2d79105523bbadd82d012fcf85745)
+- refactor: centralize unreachable panic insertion in emit [#1507](https://github.com/ivov/lisette/pull/1507) [`786c4a9`](https://github.com/ivov/lisette/commit/786c4a91751e1666160fabe4f222cbd5931437a7)
+- perf: cache dependency warnings to speed up LSP analysis [#1506](https://github.com/ivov/lisette/pull/1506) [`09cf67a`](https://github.com/ivov/lisette/commit/09cf67ab990377ce5934538d02aff8d905589668)
+- perf: avoid rebuilding unrelated LSP packages after edits [#1504](https://github.com/ivov/lisette/pull/1504) [`97c4ce3`](https://github.com/ivov/lisette/commit/97c4ce3938386df42eefe007195ef301452e76b9)
+- refactor: give each emitted Go local a stable ID [#1498](https://github.com/ivov/lisette/pull/1498) [`1ba6ac5`](https://github.com/ivov/lisette/commit/1ba6ac5ddc087cd09518711a0ffd81c61f71ae1c)
+- chore: bump IntelliJ plugin to 0.1.2 [#1496](https://github.com/ivov/lisette/pull/1496) [`9259b1f`](https://github.com/ivov/lisette/commit/9259b1fc5cfd5f59e74660189ba4b598f67f5e93)
+- ci: restore default runners for Windows release builds [#1495](https://github.com/ivov/lisette/pull/1495) [`d66a214`](https://github.com/ivov/lisette/commit/d66a214ee92fa4d58ddae777d457c992e87fd7cf)
+
+
 ## [0.12.3](https://github.com/ivov/lisette/compare/lisette-v0.12.2...lisette-v0.12.3) - 2026-09-27
 
 ### Features
