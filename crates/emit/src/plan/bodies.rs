@@ -20,7 +20,7 @@ pub(crate) fn define_many<T: Into<GoIdentifier>>(names: Vec<T>, value: GoExpress
 }
 
 pub(crate) fn discard(value: GoExpression) -> Statement {
-    LoweredStatement::Discard(value).into()
+    LoweredStatement::Discard { arity: 1, value }.into()
 }
 
 pub(crate) fn expression_statement(expression: GoExpression) -> Statement {
@@ -213,23 +213,23 @@ pub(crate) enum LoweredStatement {
     Return(Vec<GoExpression>),
     Assign(AssignForm),
     Async {
-        keyword: String,
+        kind: AsyncKind,
         call: GoExpression,
     },
     Select(SelectStatementPlan),
     Switch(SwitchStatementPlan),
     Define(Definition),
-    AssignMany {
-        targets: Vec<GoExpression>,
-        value: GoExpression,
-    },
     /// `var name go_type` (with `= value` when `value` is set).
     VarDecl {
         name: GoIdentifier,
         go_type: String,
         value: Option<GoExpression>,
     },
-    Discard(GoExpression),
+    /// `_, _ = value`, one `_` per result.
+    Discard {
+        arity: usize,
+        value: GoExpression,
+    },
     ExpressionStatement {
         expression: GoExpression,
         diverges: bool,
@@ -261,16 +261,29 @@ pub(crate) enum AssignForm {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AsyncKind {
+    Task,
+    Defer,
+}
+
+impl AsyncKind {
+    pub(crate) fn keyword(self) -> &'static str {
+        match self {
+            Self::Task => "go",
+            Self::Defer => "defer",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CompoundKind {
     Increment,
     Decrement,
-    /// `target op= rhs`. An effectful RHS forces the target's prior value
-    /// into `pinned_left`, rendered as `target = pinned_left op rhs`.
+    /// `target op= rhs`.
     OpAssign {
         operator: BinaryOp,
         rhs: GoExpression,
-        pinned_left: Option<GoExpression>,
     },
 }
 
@@ -704,14 +717,8 @@ impl LoweredStatement {
             LoweredStatement::Assign(form) => match form {
                 AssignForm::Compound { target, kind } => {
                     target.node().visit(visit);
-                    if let CompoundKind::OpAssign {
-                        rhs, pinned_left, ..
-                    } = kind
-                    {
+                    if let CompoundKind::OpAssign { rhs, .. } = kind {
                         rhs.node().visit(visit);
-                        if let Some(left) = pinned_left {
-                            left.node().visit(visit);
-                        }
                     }
                 }
                 AssignForm::Simple { target, value } => {
@@ -755,18 +762,14 @@ impl LoweredStatement {
                 }
             }
             LoweredStatement::Define(definition) => definition.value.node().visit(visit),
-            LoweredStatement::AssignMany { targets, value } => {
-                for target in targets {
-                    target.node().visit(visit);
-                }
-                value.node().visit(visit);
-            }
             LoweredStatement::VarDecl { value, .. } => {
                 if let Some(value) = value {
                     value.node().visit(visit);
                 }
             }
-            LoweredStatement::Discard(expression)
+            LoweredStatement::Discard {
+                value: expression, ..
+            }
             | LoweredStatement::ExpressionStatement { expression, .. } => {
                 expression.node().visit(visit)
             }
@@ -814,8 +817,7 @@ impl LoweredStatement {
             | LoweredStatement::Async { .. }
             | LoweredStatement::Define(_)
             | LoweredStatement::VarDecl { .. }
-            | LoweredStatement::Discard(_)
-            | LoweredStatement::AssignMany { .. }
+            | LoweredStatement::Discard { .. }
             | LoweredStatement::UnreachablePanic => true,
             LoweredStatement::Body(body) => !body.renders_empty(),
             LoweredStatement::Return(_) => true,
@@ -860,8 +862,7 @@ impl LoweredStatement {
             | LoweredStatement::Const(_)
             | LoweredStatement::Define(_)
             | LoweredStatement::VarDecl { .. }
-            | LoweredStatement::Discard(_)
-            | LoweredStatement::AssignMany { .. }
+            | LoweredStatement::Discard { .. }
             | LoweredStatement::ExpressionStatement { .. } => FlowSummary::next(),
         }
     }

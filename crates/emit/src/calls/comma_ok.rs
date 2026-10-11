@@ -16,28 +16,32 @@ use syntax::program::CallKind;
 use syntax::program::NativeTypeKind;
 
 /// How an Option-typed scrutinee produces its Go comma-ok pair.
-enum CommaOkPair {
+pub(crate) enum CommaOkSource {
     /// Call whose lowered ABI is already `(T, bool)`.
-    LoweredCall,
+    LoweredCall {
+        /// Nil test the tagged wrap would apply on top of `ok`.
+        nil_guard: Option<NilGuard>,
+    },
     /// `m.get(k)` lowered as `m[k]`.
     MapIndex,
     /// `assert_type<T>(x)` lowered as `x.(T)`.
     TypeAssert,
 }
 
-pub(crate) struct CommaOkSource {
-    pair: CommaOkPair,
-    /// Nil test the tagged wrap would apply on top of `ok`.
-    nil_guard: Option<NilGuard>,
-}
-
 impl CommaOkSource {
+    fn nil_guard(&self) -> Option<NilGuard> {
+        match self {
+            Self::LoweredCall { nil_guard } => *nil_guard,
+            Self::MapIndex | Self::TypeAssert => None,
+        }
+    }
+
     pub(crate) fn has_nil_guard(&self) -> bool {
-        self.nil_guard.is_some()
+        self.nil_guard().is_some()
     }
 
     pub(crate) fn is_map_index(&self) -> bool {
-        matches!(self.pair, CommaOkPair::MapIndex)
+        matches!(self, Self::MapIndex)
     }
 }
 
@@ -147,10 +151,7 @@ impl Planner<'_> {
                 let operand_ty = operand.get_type();
                 let asserts_on_interface = self.facts.is_interface_or_unknown(&operand_ty)
                     || self.facts.peel_alias(&operand_ty).is_error();
-                asserts_on_interface.then_some(CommaOkSource {
-                    pair: CommaOkPair::TypeAssert,
-                    nil_guard: None,
-                })
+                asserts_on_interface.then_some(CommaOkSource::TypeAssert)
             }
             CallableOrigin::Source(CallKind::NativeMethod(kind))
                 if matches!(kind, NativeTypeKind::Map)
@@ -158,10 +159,7 @@ impl Planner<'_> {
                     && args.len() == 1
                     && spread.is_none() =>
             {
-                Some(CommaOkSource {
-                    pair: CommaOkPair::MapIndex,
-                    nil_guard: None,
-                })
+                Some(CommaOkSource::MapIndex)
             }
             _ => {
                 let lowered = self.lowered_call_of(expression, Vec::new(), &plan)?;
@@ -175,8 +173,7 @@ impl Planner<'_> {
                 {
                     return None;
                 }
-                Some(CommaOkSource {
-                    pair: CommaOkPair::LoweredCall,
+                Some(CommaOkSource::LoweredCall {
                     nil_guard: lowered.nil_guard,
                 })
             }
@@ -190,13 +187,13 @@ impl Planner<'_> {
         source: CommaOkSource,
         slot: CommaOkValueSlot,
     ) -> BoundValue {
-        let (statements, pair) = self.lower_comma_ok_pair(expression, &source.pair);
+        let (statements, pair) = self.lower_comma_ok_pair(expression, &source);
         self.bind_pair(
             statements,
             pair,
             slot,
             PairKind::CommaOk {
-                nil_guard: source.nil_guard,
+                nil_guard: source.nil_guard(),
             },
             None,
         )
@@ -309,14 +306,14 @@ impl Planner<'_> {
     fn lower_comma_ok_pair(
         &mut self,
         expression: &Expression,
-        pair: &CommaOkPair,
+        source: &CommaOkSource,
     ) -> (Vec<Statement>, GoExpression) {
-        match pair {
-            CommaOkPair::LoweredCall => self
+        match source {
+            CommaOkSource::LoweredCall { .. } => self
                 .lower_call(expression, None, ExpressionContext::value())
                 .into_parts(),
-            CommaOkPair::MapIndex => self.lower_map_index_pair(expression),
-            CommaOkPair::TypeAssert => {
+            CommaOkSource::MapIndex => self.lower_map_index_pair(expression),
+            CommaOkSource::TypeAssert => {
                 let Expression::Call { args, .. } = expression else {
                     unreachable!("comma_ok_source only accepts Call expressions");
                 };

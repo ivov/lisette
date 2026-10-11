@@ -150,13 +150,8 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
                 visitor.assignment_target(target.node());
                 visit_expression(target.node_mut(), visitor);
                 match kind {
-                    CompoundKind::OpAssign {
-                        rhs, pinned_left, ..
-                    } => {
+                    CompoundKind::OpAssign { rhs, .. } => {
                         visit_expression(rhs.node_mut(), visitor);
-                        if let Some(left) = pinned_left {
-                            visit_expression(left.node_mut(), visitor);
-                        }
                     }
                     CompoundKind::Increment | CompoundKind::Decrement => {}
                 }
@@ -228,20 +223,15 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
             visitor.exit_scope();
         }
         LoweredStatement::Define(definition) => visit_definition(definition, visitor),
-        LoweredStatement::AssignMany { targets, value } => {
-            for target in targets {
-                visitor.assignment_target(target.node());
-                visit_expression(target.node_mut(), visitor);
-            }
-            visit_expression(value.node_mut(), visitor);
-        }
         LoweredStatement::VarDecl { name, value, .. } => {
             if let Some(value) = value {
                 visit_expression(value.node_mut(), visitor);
             }
             visitor.local_binding(name);
         }
-        LoweredStatement::Discard(expression)
+        LoweredStatement::Discard {
+            value: expression, ..
+        }
         | LoweredStatement::ExpressionStatement { expression, .. } => {
             visit_expression(expression.node_mut(), visitor)
         }

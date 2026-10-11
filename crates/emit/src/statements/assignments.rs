@@ -197,18 +197,18 @@ impl Planner<'_> {
         });
         let (rhs_setup, rhs) = right_hand_side.into_parts();
         target_capture.extend(rhs_setup);
-        let kind = CompoundKind::OpAssign {
-            operator: op.into(),
-            rhs,
-            pinned_left,
-        };
-        with_setup(
-            target_capture,
-            LoweredStatement::Assign(AssignForm::Compound {
+        let operator = op.into();
+        let assignment = match pinned_left {
+            Some(left) => AssignForm::Simple {
                 target: target_place,
-                kind,
-            }),
-        )
+                value: GoExpression::binary(left, operator, rhs),
+            },
+            None => AssignForm::Compound {
+                target: target_place,
+                kind: CompoundKind::OpAssign { operator, rhs },
+            },
+        };
+        with_setup(target_capture, LoweredStatement::Assign(assignment))
     }
 
     fn capture_assignment_target(

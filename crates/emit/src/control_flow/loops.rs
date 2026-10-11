@@ -103,7 +103,7 @@ impl Planner<'_> {
                     &mut prologue,
                     iterable,
                     "range",
-                    CaptureBoundary::LoopLifetime,
+                    CaptureBoundary::Delayed,
                 )
             };
             let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
@@ -166,7 +166,7 @@ impl Planner<'_> {
                     &mut prologue,
                     receiver,
                     "s",
-                    CaptureBoundary::LoopLifetime,
+                    CaptureBoundary::Delayed,
                 )
             };
             let index_var = this.fresh_var(Some("i"));
@@ -462,7 +462,7 @@ impl Planner<'_> {
                 if counts_from_zero {
                     CaptureBoundary::SiblingSequence
                 } else {
-                    CaptureBoundary::LoopLifetime
+                    CaptureBoundary::Delayed
                 },
             )
         });

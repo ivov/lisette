@@ -8,9 +8,9 @@ use crate::context::expression::ExpressionContext;
 use crate::patterns::binding_decls::{is_catchall_pattern, is_unconditional_catchall};
 use crate::patterns::binding_emit::tree_binding_statements;
 use crate::patterns::decision_tree::{
-    AccessPath, ArmLeaf, ChainArm, ChainTest, Decision, GuardedLeaf, PatternBinding, SubjectRoot,
-    SwitchBranch, SwitchKind as PatternSwitchKind, SwitchShape, ValueSwitch, boolean_literal,
-    compile_match_arms, render_condition, tree_has_unguarded_terminal,
+    AccessPath, ArmLeaf, ChainArm, ChainTail, ChainTest, Decision, GuardedLeaf, PatternBinding,
+    SubjectRoot, SwitchBranch, SwitchKind as PatternSwitchKind, SwitchShape, ValueSwitch,
+    boolean_literal, compile_match_arms, render_condition, tree_has_unguarded_terminal,
 };
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
@@ -86,20 +86,20 @@ struct ChainGroup<'a> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum WalkRole {
+enum WalkRole<'a> {
     SwitchCase,
     ChainBody,
-    RetryLoopTop,
-    RetryLoopNested,
+    RetryLoop {
+        top: bool,
+        /// Ends each non-divergent leaf with `break <label>`.
+        break_label: Option<&'a str>,
+    },
 }
 
 #[derive(Clone, Copy)]
 struct WalkCtx<'a> {
     arm_place: &'a PlacePlan<'a>,
-    role: WalkRole,
-    /// `Some` on retry-loop walks needing a `break <label>` terminator at
-    /// non-divergent leaves.
-    break_label: Option<&'a str>,
+    role: WalkRole<'a>,
 }
 
 impl<'a> WalkCtx<'a> {
@@ -107,7 +107,6 @@ impl<'a> WalkCtx<'a> {
         Self {
             arm_place,
             role: WalkRole::SwitchCase,
-            break_label: None,
         }
     }
 
@@ -115,35 +114,36 @@ impl<'a> WalkCtx<'a> {
         Self {
             arm_place,
             role: WalkRole::ChainBody,
-            break_label: None,
         }
     }
 
     fn retry_loop(arm_place: &'a PlacePlan<'a>, break_label: Option<&'a str>) -> Self {
         Self {
             arm_place,
-            role: WalkRole::RetryLoopTop,
-            break_label,
+            role: WalkRole::RetryLoop {
+                top: true,
+                break_label,
+            },
         }
     }
 
     fn nested(self) -> Self {
         let role = match self.role {
             WalkRole::SwitchCase | WalkRole::ChainBody => WalkRole::ChainBody,
-            WalkRole::RetryLoopTop | WalkRole::RetryLoopNested => WalkRole::RetryLoopNested,
+            WalkRole::RetryLoop { break_label, .. } => WalkRole::RetryLoop {
+                top: false,
+                break_label,
+            },
         };
         Self { role, ..self }
     }
 
     fn is_grouped_retry(&self) -> bool {
-        matches!(
-            self.role,
-            WalkRole::RetryLoopTop | WalkRole::RetryLoopNested
-        )
+        matches!(self.role, WalkRole::RetryLoop { .. })
     }
 
     fn leaf_scope_explicit(&self) -> bool {
-        matches!(self.role, WalkRole::RetryLoopTop)
+        matches!(self.role, WalkRole::RetryLoop { top: true, .. })
     }
 }
 
@@ -198,11 +198,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             _ if self.arms.iter().any(|arm| arm.has_guard()) => {
                 self.render_retry_loop(&mut statements, &tree, place);
             }
-            Decision::Chain { tests, catchall } => {
-                self.render_chain_root(&mut statements, tests, catchall.as_ref(), place);
+            Decision::Chain { tests, tail } => {
+                self.render_chain_root(&mut statements, tests, tail, place);
             }
             Decision::Unreachable => {
-                self.render_chain_root(&mut statements, &[], None, place);
+                self.render_chain_root(&mut statements, &[], &ChainTail::Open, place);
             }
             Decision::Guard(_) => unreachable!("a guard root implies a guarded arm"),
         }
@@ -264,16 +264,15 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         &mut self,
         statements: &mut Vec<Statement>,
         tests: &[ChainTest],
-        catchall: Option<&ArmLeaf>,
+        tail: &ChainTail,
         place: &PlacePlan,
     ) {
-        let chain_tail_is_exhaustive = catchall.is_some()
-            || chain_last_is_catchall(tests, catchall)
+        let chain_tail_is_exhaustive = !matches!(tail, ChainTail::Open)
             || self
                 .arms
                 .last()
                 .is_some_and(|arm| !arm.has_guard() && is_unconditional_catchall(&arm.pattern));
-        self.lower_chain_branch(statements, tests, catchall, place);
+        self.lower_chain_branch(statements, tests, tail, place);
         if let Some(panic) = unreachable_panic_if_needed(place, chain_tail_is_exhaustive) {
             statements.push(panic);
         }
@@ -283,15 +282,13 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         &mut self,
         statements: &mut Vec<Statement>,
         tests: &[ChainTest],
-        catchall: Option<&ArmLeaf>,
+        tail: &ChainTail,
         place: &PlacePlan,
     ) {
-        let last_is_catchall = chain_last_is_catchall(tests, catchall);
         let conditions = self.render_chain_conditions(tests);
-        let regular_len = if last_is_catchall {
-            tests.len() - 1
-        } else {
-            tests.len()
+        let regular_len = match tail {
+            ChainTail::LastTest => tests.len() - 1,
+            ChainTail::Catchall(_) | ChainTail::Open => tests.len(),
         };
 
         let guard_ctx = WalkCtx::switch_case(place);
@@ -318,17 +315,17 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             branches.push(ChainBranch { condition, body });
         }
 
-        let trailing = if last_is_catchall {
-            match &tests.last().unwrap().arm {
+        let trailing = match tail {
+            ChainTail::LastTest => match &tests[regular_len].arm {
                 ChainArm::Leaf(leaf) => self.lower_leaf_else_or_flat(leaf, &chain_ctx, all_diverge),
                 ChainArm::Guard(guard) => self.lower_else_body(all_diverge, |this, body| {
                     this.walk_guard(body, guard, &chain_ctx)
                 }),
+            },
+            ChainTail::Catchall(catchall) => {
+                self.lower_leaf_else_or_flat(catchall, &chain_ctx, all_diverge)
             }
-        } else if let Some(catchall) = catchall {
-            self.lower_leaf_else_or_flat(catchall, &chain_ctx, all_diverge)
-        } else {
-            ElseArm::None
+            ChainTail::Open => ElseArm::None,
         };
 
         if branches.is_empty() {
@@ -498,8 +495,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 }
                 !tail || self.collect_flat_cases(&guard.failure, conditions, out, tail)
             }
-            Decision::Chain { tests, catchall } => {
-                let (cased, lifted) = split_chain_with_catchall_lift(tests, catchall.as_ref());
+            Decision::Chain { tests, tail } => {
+                let (cased, lifted) = split_chain_with_catchall_lift(tests, tail);
                 for test in cased {
                     let has_checks = !test.checks.is_empty();
                     if has_checks {
@@ -524,7 +521,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                         return false;
                     }
                 }
-                if let Some(leaf) = lifted.or(catchall.as_ref()) {
+                if let Some(leaf) = lifted {
                     out.push(FlatCase {
                         conditions: conditions.clone(),
                         body: FlatCaseBody::Leaf(leaf),
@@ -648,11 +645,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 let body_diverges = capture_diverge(switch, statements);
                 apply_leaf_terminator(statements, ctx, body_diverges);
             }
-            Decision::Chain { tests, catchall } => {
+            Decision::Chain { tests, tail } => {
                 if ctx.is_grouped_retry() {
-                    self.emit_chain_grouped(statements, tests, catchall.as_ref(), ctx);
+                    self.emit_chain_grouped(statements, tests, tail, ctx);
                 } else {
-                    self.lower_chain_branch(statements, tests, catchall.as_ref(), ctx.arm_place);
+                    self.lower_chain_branch(statements, tests, tail, ctx.arm_place);
                 }
             }
             Decision::Unreachable => {}
@@ -858,7 +855,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         } else {
             statements.extend(guard_statements);
         }
-        if ctx.role == WalkRole::RetryLoopTop {
+        if ctx.leaf_scope_explicit() {
             self.walk(statements, failure, ctx);
         }
     }
@@ -1050,10 +1047,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         &mut self,
         statements: &mut Vec<Statement>,
         tests: &[ChainTest],
-        catchall: Option<&ArmLeaf>,
+        tail: &ChainTail,
         ctx: &WalkCtx,
     ) {
-        let last_is_catchall = chain_last_is_catchall(tests, catchall);
         let conditions = self.render_chain_conditions(tests);
         let inner_ctx = ctx.nested();
         let groups = group_chain_tests_by_condition(&conditions);
@@ -1061,7 +1057,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
 
         for (g, (_condition, indices)) in groups.iter().enumerate() {
             let is_last_group = g == group_count - 1;
-            let collapse_as_catchall = is_last_group && last_is_catchall;
+            let collapse_as_catchall = is_last_group && matches!(tail, ChainTail::LastTest);
             self.emit_chain_group(
                 statements,
                 ChainGroup {
@@ -1074,7 +1070,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             );
         }
 
-        if let Some(catchall) = catchall {
+        if let ChainTail::Catchall(catchall) = tail {
             self.walk_leaf(statements, catchall, ctx);
         }
     }
@@ -1288,25 +1284,24 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     }
 }
 
-fn chain_last_is_catchall(tests: &[ChainTest], catchall: Option<&ArmLeaf>) -> bool {
-    catchall.is_none() && tests.len() > 1
-}
-
+/// The chain's tests as cases, and the leaf that runs when none matches.
+/// A guarded last test keeps its checks.
 fn split_chain_with_catchall_lift<'t>(
     tests: &'t [ChainTest],
-    catchall: Option<&ArmLeaf>,
+    tail: &'t ChainTail,
 ) -> (&'t [ChainTest], Option<&'t ArmLeaf>) {
-    if !chain_last_is_catchall(tests, catchall) {
-        return (tests, None);
-    }
-    match tests.split_last() {
-        Some((
-            ChainTest {
-                arm: ChainArm::Leaf(leaf),
-                ..
-            },
-            rest,
-        )) => (rest, Some(leaf)),
+    match (tail, tests.split_last()) {
+        (ChainTail::Catchall(catchall), _) => (tests, Some(catchall)),
+        (
+            ChainTail::LastTest,
+            Some((
+                ChainTest {
+                    arm: ChainArm::Leaf(leaf),
+                    ..
+                },
+                rest,
+            )),
+        ) => (rest, Some(leaf)),
         _ => (tests, None),
     }
 }
@@ -1457,7 +1452,10 @@ fn capture_diverge(body_statements: Vec<Statement>, statements: &mut Vec<Stateme
 }
 
 fn apply_leaf_terminator(statements: &mut Vec<Statement>, ctx: &WalkCtx, body_diverges: bool) {
-    if let Some(label) = ctx.break_label
+    if let WalkRole::RetryLoop {
+        break_label: Some(label),
+        ..
+    } = ctx.role
         && !body_diverges
     {
         statements.push(LoweredStatement::Break(LoopTransfer::Labeled(label.to_string())).into());

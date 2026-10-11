@@ -109,14 +109,7 @@ impl Planner<'_> {
         );
 
         let ok_access = GoExpression::value_field(check, fallible.ok_field().to_string());
-        let value = match target {
-            PropagateTarget::Value => Some(ok_access),
-            PropagateTarget::Discard => None,
-            PropagateTarget::Bind(name) => {
-                statements.push(self.bind_propagate_ok(name, ok_access));
-                None
-            }
-        };
+        let value = self.propagated_value(&mut statements, target, None, Some(ok_access));
         (statements, value)
     }
 
@@ -247,17 +240,13 @@ impl Planner<'_> {
             .lower_call(call, None, ExpressionContext::value())
             .into_parts();
         let want_value = !matches!(target, PropagateTarget::Discard);
-        let let_slot = target
-            .bound_name()
-            .filter(|name| has_value_slot && payload_bridge.is_none() && !self.is_declared(name));
-        let value_var =
-            (has_value_slot && (want_value || nil_guard.is_some())).then(|| match let_slot {
-                Some(name) => {
-                    self.declare(name);
-                    name.to_string()
-                }
-                None => self.fresh_pair_value(),
-            });
+        let named = if has_value_slot && payload_bridge.is_none() {
+            self.declare_propagate_target(target)
+        } else {
+            None
+        };
+        let value_var = (has_value_slot && (want_value || nil_guard.is_some()))
+            .then(|| named.map_or_else(|| self.fresh_pair_value(), str::to_string));
         let (message_setup, wraps) = self.prepare_wrap_messages(&wraps, true);
         let opens_if = value_var.is_none() && message_setup.is_empty();
         let outcome_var = self.pair_status(None, PairStatusKind::Error, opens_if);
@@ -306,18 +295,9 @@ impl Planner<'_> {
                 _ => val,
             }
         });
-        let unit = || GoExpression::empty_composite("struct{}".to_string());
-
-        let value = match target {
-            PropagateTarget::Value => Some(ok_value.unwrap_or_else(unit)),
-            PropagateTarget::Discard => None,
-            PropagateTarget::Bind(_) if let_slot.is_some() => None,
-            PropagateTarget::Bind(name) => {
-                let v = ok_value.unwrap_or_else(unit);
-                statements.push(self.bind_propagate_ok(name, v));
-                None
-            }
-        };
+        let ok_value =
+            ok_value.unwrap_or_else(|| GoExpression::empty_composite("struct{}".to_string()));
+        let value = self.propagated_value(&mut statements, target, named, Some(ok_value));
         Some((statements, value))
     }
 
@@ -355,28 +335,13 @@ impl Planner<'_> {
             .into(),
         );
         statements.extend(late_binding);
-        let value = match target {
-            PropagateTarget::Value => {
-                let payload = payload.expect("a propagated Option carries its payload");
-                Some(if reads_element {
-                    GoExpression::name(self.hoist_tmp_value_statement(
-                        &mut statements,
-                        "elem",
-                        payload,
-                    ))
-                } else {
-                    payload
-                })
-            }
-            PropagateTarget::Discard => None,
-            PropagateTarget::Bind(name) => {
-                if named.is_none() {
-                    let payload = payload.expect("a propagated Option carries its payload");
-                    statements.push(self.bind_propagate_ok(name, payload));
-                }
-                None
-            }
+        let payload = match (target, payload) {
+            (PropagateTarget::Value, Some(payload)) if reads_element => Some(GoExpression::name(
+                self.hoist_tmp_value_statement(&mut statements, "elem", payload),
+            )),
+            (_, payload) => payload,
         };
+        let value = self.propagated_value(&mut statements, target, named, payload);
         Some((statements, value))
     }
 
@@ -512,19 +477,7 @@ impl Planner<'_> {
             .into(),
         );
         statements.extend(late_binding);
-        let value = match target {
-            PropagateTarget::Value => {
-                Some(payload.expect("a propagated source carries its payload"))
-            }
-            PropagateTarget::Discard => None,
-            PropagateTarget::Bind(name) => {
-                if named.is_none() {
-                    let payload = payload.expect("a propagated source carries its payload");
-                    statements.push(self.bind_propagate_ok(name, payload));
-                }
-                None
-            }
-        };
+        let value = self.propagated_value(&mut statements, target, named, payload);
         Some((statements, value))
     }
 
@@ -601,6 +554,27 @@ impl Planner<'_> {
         let name = target.bound_name().filter(|name| !self.is_declared(name))?;
         self.declare(name);
         Some(name)
+    }
+
+    /// The `?` value for `target`. A bound target is assigned unless `named` already holds it.
+    fn propagated_value(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        target: PropagateTarget<'_>,
+        named: Option<&str>,
+        payload: Option<GoExpression>,
+    ) -> Option<GoExpression> {
+        let payload = || payload.expect("a propagated source carries its payload");
+        match target {
+            PropagateTarget::Value => Some(payload()),
+            PropagateTarget::Discard => None,
+            PropagateTarget::Bind(_) if named.is_some() => None,
+            PropagateTarget::Bind(name) => {
+                let ok = payload();
+                statements.push(self.bind_propagate_ok(name, ok));
+                None
+            }
+        }
     }
 
     fn bind_propagate_ok(&mut self, name: &str, ok_access: GoExpression) -> Statement {

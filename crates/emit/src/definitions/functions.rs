@@ -6,6 +6,7 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
 use crate::patterns::sites::PatternSubject;
+use crate::plan::bodies::AsyncKind;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement, Statement, rename_generated_locals};
 use crate::plan::cleanup::clean_up;
 use crate::plan::go_expression::{
@@ -163,7 +164,7 @@ impl Planner<'_> {
                 this.require_testkit();
                 let span = body.get_span();
                 LoweredStatement::Async {
-                    keyword: "defer".to_string(),
+                    kind: AsyncKind::Defer,
                     call: test_context_call(
                         GoExpression::identifier(handle),
                         "Recover",

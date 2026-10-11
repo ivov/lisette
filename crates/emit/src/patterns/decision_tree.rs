@@ -443,13 +443,23 @@ pub(crate) enum Decision {
         branches: Vec<SwitchBranch<Vec<String>>>,
         fallback: Option<Box<Decision>>,
     },
-    /// `catchall` is the unguarded arm that ends the chain.
     Chain {
         tests: Vec<ChainTest>,
-        catchall: Option<ArmLeaf>,
+        tail: ChainTail,
     },
     /// Emits `panic("unreachable")` in tail position.
     Unreachable,
+}
+
+/// What runs when no test of a chain matches.
+#[derive(Debug)]
+pub(crate) enum ChainTail {
+    /// The unguarded arm without checks that ends the chain.
+    Catchall(ArmLeaf),
+    /// The match is exhaustive, so the last test needs no checks.
+    LastTest,
+    /// A lone test, which keeps its checks and has no else.
+    Open,
 }
 
 #[derive(Debug)]
@@ -498,8 +508,8 @@ pub(crate) fn tree_has_unguarded_terminal(tree: &Decision) -> bool {
     match tree {
         Decision::Success(_) => true,
         Decision::Guard(guard) => tree_has_unguarded_terminal(&guard.failure),
-        Decision::Chain { tests, catchall } => {
-            catchall.is_some()
+        Decision::Chain { tests, tail } => {
+            matches!(tail, ChainTail::Catchall(_))
                 || tests.last().is_some_and(|t| match &t.arm {
                     ChainArm::Leaf(_) => true,
                     ChainArm::Guard(guard) => tree_has_unguarded_terminal(&guard.failure),
@@ -738,7 +748,7 @@ fn build_chain(arms: Vec<ArmInfo>) -> Decision {
             } else {
                 Decision::Chain {
                     tests,
-                    catchall: Some(catchall),
+                    tail: ChainTail::Catchall(catchall),
                 }
             };
         }
@@ -763,10 +773,12 @@ fn build_chain(arms: Vec<ArmInfo>) -> Decision {
         });
     }
 
-    Decision::Chain {
-        tests,
-        catchall: None,
-    }
+    let tail = if tests.len() > 1 {
+        ChainTail::LastTest
+    } else {
+        ChainTail::Open
+    };
+    Decision::Chain { tests, tail }
 }
 
 /// Recursively walk a pattern, collecting checks and bindings.
@@ -1594,8 +1606,9 @@ fn join_conditions(checks: &[Check], subject: SubjectRoot<'_>) -> GoExpression {
 #[cfg(test)]
 mod tests {
     use super::{
-        AccessPath, ArmInfo, ArmLeaf, BindingTarget, ChainArm, Check, Decision, GoExpression,
-        GuardedLeaf, PatternBinding, build_chain, share_alternative_bindings, try_build_switch,
+        AccessPath, ArmInfo, ArmLeaf, BindingTarget, ChainArm, ChainTail, Check, Decision,
+        GoExpression, GuardedLeaf, PatternBinding, build_chain, share_alternative_bindings,
+        try_build_switch,
     };
     use syntax::ast::BindingId;
     use syntax::types::Type;
@@ -1658,7 +1671,7 @@ mod tests {
 
     #[test]
     fn chain_ends_at_the_first_unguarded_catchall() {
-        let Decision::Chain { tests, catchall } = build_chain(vec![
+        let Decision::Chain { tests, tail } = build_chain(vec![
             arm(0, true, false),
             arm(1, false, true),
             arm(2, false, false),
@@ -1666,7 +1679,10 @@ mod tests {
         ]) else {
             panic!("expected a chain");
         };
-        assert!(matches!(catchall, Some(ArmLeaf { arm_index: 2, .. })));
+        assert!(matches!(
+            tail,
+            ChainTail::Catchall(ArmLeaf { arm_index: 2, .. })
+        ));
         assert!(matches!(
             tests[0].arm,
             ChainArm::Leaf(ArmLeaf { arm_index: 0, .. })
@@ -1686,14 +1702,18 @@ mod tests {
     }
 
     #[test]
-    fn chain_without_unguarded_catchall_has_no_catchall() {
-        let Decision::Chain { tests, catchall } =
+    fn chain_without_unguarded_catchall_ends_at_its_last_test() {
+        let Decision::Chain { tests, tail } =
             build_chain(vec![arm(0, true, false), arm(1, true, true)])
         else {
             panic!("expected a chain");
         };
-        assert!(catchall.is_none());
+        assert!(matches!(tail, ChainTail::LastTest));
         assert_eq!(tests.len(), 2);
+        let Decision::Chain { tail, .. } = build_chain(vec![arm(0, true, false)]) else {
+            panic!("expected a chain");
+        };
+        assert!(matches!(tail, ChainTail::Open));
     }
 
     fn switch_arm(arm_index: usize, check: Option<Check>, has_guard: bool) -> ArmInfo {
