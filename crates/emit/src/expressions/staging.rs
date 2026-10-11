@@ -41,14 +41,14 @@ pub(crate) struct LaterStages {
 }
 
 impl LaterStages {
-    pub(crate) fn sequenced(setup: &[Statement], effect: EvaluationEffect) -> Self {
+    pub(crate) fn sequenced(setup: &[Statement], inline: Effects) -> Self {
         Self {
             before: if setup.is_empty() {
                 Effects::default()
             } else {
                 Effects::anything()
             },
-            inline: Effects::calls_of(effect),
+            inline,
         }
     }
 

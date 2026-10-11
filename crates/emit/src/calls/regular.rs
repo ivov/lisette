@@ -11,6 +11,7 @@ use crate::expressions::staging::SpreadSequenceOptions;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::plan::calls::{CallPlan, ResolvedCallee};
+use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{
     ConstantKind, EvaluationEffect, GoExpression, SequencedValues, ValuePlan,
@@ -338,11 +339,19 @@ impl<'a> Planner<'a> {
             ..
         } = sequenced_args;
 
+        let arguments_effects = arguments
+            .iter()
+            .fold(Effects::default(), |effects, argument| {
+                effects.union(argument.effects())
+            });
         let callee_needs_pin = setup.is_empty()
             && type_args_string.is_empty()
             && !pointer_receiver_on_value_local(function, &call_plan.resolved)
-            && LaterStages::sequenced(&args_setup, args_effect)
-                .can_change(self.place_read_stability(function));
+            && LaterStages::sequenced(
+                &args_setup,
+                arguments_effects.with_known_reads(arguments_effects.reads()),
+            )
+            .can_change(self.place_read_stability(function));
         if callee_needs_pin {
             let pinned = self.hoist_tmp_value_statement(&mut setup, "callee", callee);
             callee = GoExpression::name(pinned);

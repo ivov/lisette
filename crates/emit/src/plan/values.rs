@@ -7,8 +7,8 @@ use crate::plan::bodies::AsyncKind;
 use crate::plan::bodies::{LoweredBlock, Statement};
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::{
-    BinaryOp, CompositeElement, CompositeLayout, FunctionLiteralLayout, GoExpressionNode,
-    GoParameter, UnaryOp,
+    BinaryOp, CallPurity, CompositeElement, CompositeLayout, FunctionLiteralLayout,
+    GoExpressionNode, GoParameter, UnaryOp,
 };
 use crate::plan::local::{GoIdentifier, LocalId};
 #[cfg(debug_assertions)]
@@ -280,21 +280,21 @@ impl GoExpression {
     }
 
     pub(crate) fn call(callee: GoExpression, arguments: Vec<GoExpression>) -> Self {
-        Self::call_node(callee, arguments, false)
+        Self::call_node(callee, arguments, CallPurity::Effectful)
     }
 
     pub(crate) fn pure_call(callee: GoExpression, arguments: Vec<GoExpression>) -> Self {
-        Self::call_node(callee, arguments, true)
+        Self::call_node(callee, arguments, CallPurity::Constructor)
     }
 
-    fn call_node(callee: GoExpression, arguments: Vec<GoExpression>, pure: bool) -> Self {
+    fn call_node(callee: GoExpression, arguments: Vec<GoExpression>, purity: CallPurity) -> Self {
         let node = GoExpressionNode::Call {
             callee: Box::new(callee.node),
             arguments: arguments
                 .into_iter()
                 .map(|argument| argument.node)
                 .collect(),
-            pure,
+            purity,
         };
         Self::new(node)
     }
@@ -578,6 +578,16 @@ pub(crate) struct SequencedValues {
     pub stability: Stability,
 }
 
+/// The facts know that no call here writes, but not which calls construct.
+fn mark_calls_read_only(node: &mut GoExpressionNode) {
+    if let GoExpressionNode::Call { purity, .. } = node
+        && *purity == CallPurity::Effectful
+    {
+        *purity = CallPurity::ReadOnly;
+    }
+    node.visit_children_mut(&mut mark_calls_read_only);
+}
+
 impl ValuePlan {
     pub(crate) fn setup(&self) -> &[Statement] {
         &self.setup
@@ -606,9 +616,12 @@ impl ValuePlan {
 
     fn from_facts(
         setup: Vec<Statement>,
-        expression: GoExpression,
+        mut expression: GoExpression,
         evaluation: EvaluationFacts,
     ) -> Self {
+        if !evaluation.effect.has_effectful_call() {
+            mark_calls_read_only(&mut expression.node);
+        }
         Self {
             setup,
             expression,
@@ -776,6 +789,9 @@ impl ValuePlan {
 
     pub(crate) fn with_pure_constructor_evaluation(mut self) -> Self {
         self.evaluation.effect = EvaluationEffect::PureCall.combine(self.evaluation.effect);
+        if !self.evaluation.effect.has_effectful_call() {
+            mark_calls_read_only(&mut self.expression.node);
+        }
         self.evaluation.stability = if matches!(self.expression.syntax_form(), OperandForm::Call) {
             Stability::StableAcrossCalls
         } else {
@@ -809,9 +825,7 @@ impl ValuePlan {
         } else {
             self.evaluation.stability
         };
-        self.expression
-            .effects()
-            .with_facts(reads, self.evaluation.effect)
+        self.expression.effects().with_known_reads(reads)
     }
 
     fn reads_only_own_setup(&self) -> bool {

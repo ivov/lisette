@@ -145,6 +145,16 @@ impl From<&BinaryOperator> for BinaryOp {
     }
 }
 
+/// What a call does besides evaluating its arguments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CallPurity {
+    /// Runs no code of its own.
+    Constructor,
+    /// Reads memory, but writes none and runs no caller code.
+    ReadOnly,
+    Effectful,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GoExpressionNode {
     Identifier(GoIdentifier),
@@ -164,8 +174,7 @@ pub(crate) enum GoExpressionNode {
     Call {
         callee: Box<GoExpressionNode>,
         arguments: Vec<GoExpressionNode>,
-        /// A constructor runs no code of its own.
-        pure: bool,
+        purity: CallPurity,
     },
     /// A generic function or type with its type arguments, `f[T, U]`.
     Instantiation {
@@ -865,7 +874,7 @@ mod tests {
         let call = GoExpressionNode::Call {
             callee: Box::new(GoExpressionNode::Dereference(Box::new(name("f")))),
             arguments: vec![name("x")],
-            pure: false,
+            purity: CallPurity::Effectful,
         };
         assert_eq!(call.print(), "(*f)(x)");
     }
@@ -878,7 +887,7 @@ mod tests {
         let called = GoExpressionNode::Call {
             callee: Box::new(name("f")),
             arguments: vec![literal_struct("Point")],
-            pure: false,
+            purity: CallPurity::Effectful,
         };
         assert_eq!(called.print_header(), "f(Point{})");
     }
