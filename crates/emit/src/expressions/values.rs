@@ -3,6 +3,7 @@ use crate::calls::dispatch::extract_native_method_name;
 use crate::calls::native::native_method_lowers_to_plain_call;
 use crate::calls::split_native_receiver;
 use crate::expressions::access::struct_call::emit_struct_literal;
+use crate::plan::bodies::AsyncKind;
 use syntax::program::DefinitionBody;
 
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
@@ -642,13 +643,10 @@ impl Planner<'_> {
     /// Plan a `Task`/`Defer` operand.
     pub(crate) fn plan_async_wrapper(
         &mut self,
-        keyword: &str,
+        kind: AsyncKind,
         expression: &Expression,
     ) -> ValuePlan {
-        let async_statement = |call: GoExpression| LoweredStatement::Async {
-            keyword: keyword.to_string(),
-            call,
-        };
+        let async_statement = |call: GoExpression| LoweredStatement::Async { kind, call };
         let statement_plan = |setup: Vec<Statement>| {
             ValuePlan::computed(setup, GoExpression::empty(), EvaluationEffect::Pure)
         };
@@ -676,15 +674,10 @@ impl Planner<'_> {
             ExpressionContext::value().with_capture_boundary(CaptureBoundary::DirectDelayedCall),
         );
         if needs_iife_for_async(expression, plan.expression()) {
-            let capture_boundary = if keyword == "defer" {
-                CaptureBoundary::DeferSite
-            } else {
-                CaptureBoundary::TaskSite
-            };
             let (mut setup, inner) = self
                 .lower_value(
                     expression,
-                    ExpressionContext::value().with_capture_boundary(capture_boundary),
+                    ExpressionContext::value().with_capture_boundary(CaptureBoundary::Delayed),
                 )
                 .into_parts();
             let mut body_statements = Vec::new();

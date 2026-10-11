@@ -3,6 +3,7 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
 use crate::names::packages::PackageUse;
+use crate::plan::bodies::AsyncKind;
 use crate::plan::bodies::{LoweredBlock, Statement};
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::{
@@ -521,9 +522,8 @@ pub(crate) enum CaptureBoundary {
     #[default]
     SiblingSequence,
     DirectDelayedCall,
-    DeferSite,
-    TaskSite,
-    LoopLifetime,
+    /// A `defer`, a task, or a loop iteration reads the value later.
+    Delayed,
 }
 
 impl CaptureBoundary {
@@ -921,10 +921,10 @@ impl Planner<'_> {
             Expression::DotAccess { .. } => self.plan_dot_access(expression, ctx),
             Expression::Task {
                 expression: inner, ..
-            } => self.plan_async_wrapper("go", inner),
+            } => self.plan_async_wrapper(AsyncKind::Task, inner),
             Expression::Defer {
                 expression: inner, ..
-            } => self.plan_async_wrapper("defer", inner),
+            } => self.plan_async_wrapper(AsyncKind::Defer, inner),
             Expression::TryBlock { items, ty, .. } => self.lower_try_block(items, ty),
             Expression::RecoverBlock { items, ty, .. } => self.lower_recover_block(items, ty),
             Expression::Propagate { expression, .. } => {

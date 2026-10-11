@@ -3,7 +3,7 @@ use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
 use crate::abi::layout::SlotOrigin;
 use crate::abi::tuple_element_types;
-use crate::analyze::component_uses::ComponentDemand;
+use crate::analyze::component_uses::{ComponentDemand, ValueDemand};
 use crate::calls::comma_ok::{CommaOkSource, CommaOkValueSlot};
 use crate::calls::go_interop::WrapperTarget;
 use crate::context::expression::ExpressionContext;
@@ -214,8 +214,7 @@ impl Planner<'_> {
         } else {
             ComponentKind::OtherResult
         };
-        let (needs_value, needs_whole_value) = (demand.needs_value, demand.needs_whole_value);
-        if needs_whole_value && kind.whole_value_constructor().is_none() {
+        if demand.value == ValueDemand::Whole && kind.whole_value_constructor().is_none() {
             return None;
         }
         let source = match (value.unwrap_parens(), kind) {
@@ -240,7 +239,7 @@ impl Planner<'_> {
             }
         };
         let payload_go_type = self.use_go_type(&ty.ok_type());
-        let slot = if needs_value {
+        let slot = if demand.value != ValueDemand::StatusOnly {
             self.declare(go_identifier);
             CommaOkValueSlot::Named(go_identifier.to_string())
         } else {
@@ -287,7 +286,7 @@ impl Planner<'_> {
             return None;
         }
         let read_indices = demand.read_indices;
-        let needs_whole_value = demand.needs_whole_value;
+        let needs_whole_value = demand.value == ValueDemand::Whole;
         let plan = self.plan_call(value)?;
         if !matches!(
             plan.resolved.abi.result,
@@ -876,8 +875,8 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         statements.push(if planned.iter().any(Option::is_some) {
             define_many(go_vars, call)
         } else {
-            LoweredStatement::AssignMany {
-                targets: go_vars.into_iter().map(GoExpression::name).collect(),
+            LoweredStatement::Discard {
+                arity: planned.len(),
                 value: call,
             }
             .into()

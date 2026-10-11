@@ -110,8 +110,7 @@ impl Legalizer {
             | LoweredStatement::Async { .. }
             | LoweredStatement::Define(_)
             | LoweredStatement::VarDecl { .. }
-            | LoweredStatement::Discard(_)
-            | LoweredStatement::AssignMany { .. }
+            | LoweredStatement::Discard { .. }
             | LoweredStatement::ExpressionStatement { .. }
             | LoweredStatement::UnreachablePanic => {}
         }

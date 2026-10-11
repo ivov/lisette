@@ -154,8 +154,8 @@ impl Renderer {
             LoweredStatement::Assign(plan) => {
                 self.render_assign_statement(output, plan);
             }
-            LoweredStatement::Async { keyword, call } => {
-                write_line!(output, "{} {}", keyword, call);
+            LoweredStatement::Async { kind, call } => {
+                write_line!(output, "{} {}", kind.keyword(), call);
             }
             LoweredStatement::Select(plan) => self.render_select(output, plan),
             LoweredStatement::Switch(plan) => self.render_switch(output, plan),
@@ -171,9 +171,8 @@ impl Renderer {
                 Some(value) => write_line!(output, "var {} {} = {}", name, go_type, value),
                 None => write_line!(output, "var {} {}", name, go_type),
             },
-            LoweredStatement::Discard(value) => write_line!(output, "_ = {}", value),
-            LoweredStatement::AssignMany { targets, value } => {
-                write_line!(output, "{} = {}", join_expressions(targets), value);
+            LoweredStatement::Discard { arity, value } => {
+                write_line!(output, "{} = {}", vec!["_"; *arity].join(", "), value)
             }
             LoweredStatement::ExpressionStatement { expression, .. } => {
                 if !expression.is_empty() {
@@ -189,19 +188,9 @@ impl Renderer {
             AssignForm::Compound { target, kind } => match kind {
                 CompoundKind::Increment => write_line!(output, "{}++", target),
                 CompoundKind::Decrement => write_line!(output, "{}--", target),
-                CompoundKind::OpAssign {
-                    operator,
-                    rhs,
-                    pinned_left,
-                } => match pinned_left {
-                    Some(left) => {
-                        let value = GoExpression::binary(left.clone(), *operator, rhs.clone());
-                        write_line!(output, "{} = {}", target, value)
-                    }
-                    None => {
-                        write_line!(output, "{} {}= {}", target, operator.symbol(), rhs)
-                    }
-                },
+                CompoundKind::OpAssign { operator, rhs } => {
+                    write_line!(output, "{} {}= {}", target, operator.symbol(), rhs)
+                }
             },
             AssignForm::Simple { target, value } => {
                 write_line!(output, "{} = {}", target, value);

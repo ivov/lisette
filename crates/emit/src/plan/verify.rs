@@ -98,7 +98,7 @@ fn verify_values(statements: &mut Vec<Statement>) -> Result<(), BodyError> {
         for statement in list.iter() {
             let values: Vec<&GoExpression> = match &statement.kind {
                 LoweredStatement::Define(definition) => vec![&definition.value],
-                LoweredStatement::Discard(value) => vec![value],
+                LoweredStatement::Discard { value, .. } => vec![value],
                 LoweredStatement::Return(values) => values.iter().collect(),
                 LoweredStatement::Assign(AssignForm::Simple { value, .. }) => vec![value],
                 _ => Vec::new(),

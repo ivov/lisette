@@ -9,10 +9,18 @@ const PAYLOAD_METHODS: &[&str] = &["unwrap_or", "map_or"];
 
 #[derive(Clone)]
 pub(crate) struct ComponentDemand {
-    pub(crate) needs_value: bool,
-    pub(crate) needs_whole_value: bool,
+    pub(crate) value: ValueDemand,
     pub(crate) read_indices: HashSet<usize>,
     pub(crate) defaults: usize,
+}
+
+/// How much of a fallible local's payload later code reads.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ValueDemand {
+    StatusOnly,
+    Payload,
+    /// The whole value, rebuilt from its components.
+    Whole,
 }
 
 pub(crate) fn component_demand<'a, I>(region: I, binding_id: BindingId) -> Option<ComponentDemand>
@@ -29,9 +37,15 @@ where
         defaults: 0,
     };
     walker.walk_items(region);
+    let value = if walker.needs_whole_value {
+        ValueDemand::Whole
+    } else if walker.needs_value {
+        ValueDemand::Payload
+    } else {
+        ValueDemand::StatusOnly
+    };
     (walker.supported > 0 && !walker.blocked).then_some(ComponentDemand {
-        needs_value: walker.needs_value || walker.needs_whole_value,
-        needs_whole_value: walker.needs_whole_value,
+        value,
         read_indices: walker.read_indices,
         defaults: walker.defaults,
     })

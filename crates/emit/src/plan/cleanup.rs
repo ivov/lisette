@@ -332,7 +332,6 @@ fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredSta
         _ => CompoundKind::OpAssign {
             operator: *operator,
             rhs: GoExpression::from_node(right.as_ref().clone()),
-            pinned_left: None,
         },
     };
     Some(LoweredStatement::Assign(AssignForm::Compound {
@@ -490,14 +489,13 @@ fn replace_only_read(
         ),
         LoweredStatement::Assign(AssignForm::Compound {
             target,
-            kind: CompoundKind::OpAssign {
-                rhs, pinned_left, ..
-            },
-        }) => {
-            let mut siblings = vec![target.node_mut(), rhs.node_mut()];
-            siblings.extend(pinned_left.as_mut().map(GoExpression::node_mut));
-            rename_in(siblings, Some(0), temp, source)
-        }
+            kind: CompoundKind::OpAssign { rhs, .. },
+        }) => rename_in(
+            vec![target.node_mut(), rhs.node_mut()],
+            Some(0),
+            temp,
+            source,
+        ),
         LoweredStatement::Return(values) => rename_in(
             values.iter_mut().map(GoExpression::node_mut).collect(),
             None,
@@ -733,7 +731,10 @@ fn pure_define(statement: &LoweredStatement) -> Option<(&GoIdentifier, &GoExpres
 
 fn discarded_name(statement: &LoweredStatement) -> Option<&GoIdentifier> {
     match statement {
-        LoweredStatement::Discard(expression) => match expression.node() {
+        LoweredStatement::Discard {
+            arity: 1,
+            value: expression,
+        } => match expression.node() {
             GoExpressionNode::Identifier(name) => Some(name),
             _ => None,
         },
