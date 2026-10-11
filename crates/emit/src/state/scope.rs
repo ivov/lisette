@@ -11,7 +11,7 @@ use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::values::GoExpression;
 use crate::state::bindings::{BindingValue, ComponentBinding, InlineExpr, TupleBinding};
 use syntax::EcoString;
-use syntax::ast::{BindingId, IdentifierResolution};
+use syntax::ast::{BindingId, Expression, IdentifierResolution};
 use syntax::types::Type;
 
 pub(crate) struct ScopeState {
@@ -334,6 +334,22 @@ impl ScopeState {
                             .is_some_and(|visible| visible.mentions(go_name))
                 })
             })
+    }
+
+    /// Whether `expression` reads a visible binding that `go_name` spells,
+    /// such as a captured local that a closure's own `let` would shadow.
+    pub(crate) fn expression_reads_go_name(&self, expression: &Expression, go_name: &str) -> bool {
+        match expression {
+            Expression::Identifier {
+                value, resolution, ..
+            } => self
+                .resolve_identifier_with_resolution(value, resolution)
+                .is_some_and(|binding| binding.mentions(go_name)),
+            _ => expression
+                .children()
+                .into_iter()
+                .any(|child| self.expression_reads_go_name(child, go_name)),
+        }
     }
 
     pub(crate) fn has_other_binding_for_go_name(&self, go_name: &str, lisette_name: &str) -> bool {

@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn run(x: Option<int>) -> int {
+    let f = |k: int| {
+      let x = match x {
+        Some(v) => v + k,
+        None => 0,
+      }
+      x * 2
+    }
+    f(1)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func run(x lisette.Option[int]) int {
+	f := func(k int) int {
+		var x_1 int
+		if x.Tag == lisette.OptionSome {
+			x_1 = x.SomeVal + k
+		} else {
+			x_1 = 0
+		}
+		return x_1 * 2
+	}
+	return f(1)
+}
