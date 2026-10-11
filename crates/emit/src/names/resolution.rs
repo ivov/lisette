@@ -8,6 +8,7 @@ use crate::output::imports::rendered_qualifier;
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
+use crate::state::bindings::BindingValue;
 use syntax::program::{self, Definition};
 
 impl Planner<'_> {
@@ -71,18 +72,26 @@ impl Planner<'_> {
         GoExpression::qualified(self.package_use_for_package(package), member)
     }
 
-    pub(crate) fn reference_go_name(
+    /// The Go local an identifier reads, keeping a source binding's `LocalId`.
+    pub(crate) fn reference_go_identifier(
         &self,
         lisette_name: &str,
         resolution: &IdentifierResolution,
-    ) -> String {
+    ) -> GoIdentifier {
         if let IdentifierResolution::Definition { name, .. } = resolution {
-            return self.definition_reference(name).to_string();
+            return self
+                .scope
+                .identifier_for_go_name(self.definition_reference(name).to_string());
         }
-        if let Some(bound) = self.scope.resolve_binding_go_name(lisette_name) {
-            return bound.to_string();
+        match self
+            .scope
+            .resolve_identifier_with_resolution(lisette_name, resolution)
+        {
+            Some(BindingValue::GoName(name) | BindingValue::GoConst(name)) => name.clone(),
+            _ => self
+                .scope
+                .identifier_for_go_name(go_name::escape_reserved(lisette_name).into_owned()),
         }
-        go_name::escape_reserved(lisette_name).into_owned()
     }
 
     pub(crate) fn canonical_package(&self, package: &str) -> String {

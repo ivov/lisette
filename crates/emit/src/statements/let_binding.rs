@@ -168,6 +168,7 @@ impl Planner<'_> {
         if needs_temp {
             if self.shadows_declaration(&go_identifier)
                 || expression_contains_binding(value, identifier)
+                || self.scope.expression_reads_go_name(value, &go_identifier)
             {
                 let fresh = self.fresh_var(Some(identifier));
                 let statements = self.lower_let_temp(&fresh, value, binding_ty);

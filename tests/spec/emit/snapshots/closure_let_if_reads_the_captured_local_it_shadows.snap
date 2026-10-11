@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn run(x: int) -> int {
+    let f = |c: bool| {
+      let x = if c { x + 1 } else { 0 }
+      x * 2
+    }
+    f(true)
+  }
+---
+package main
+
+func run(x int) int {
+	f := func(c bool) int {
+		var x_1 int
+		if c {
+			x_1 = x + 1
+		} else {
+			x_1 = 0
+		}
+		return x_1 * 2
+	}
+	return f(true)
+}

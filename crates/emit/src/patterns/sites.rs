@@ -4,7 +4,7 @@ use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::plan::bodies::GoUses;
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
 
-use syntax::ast::{Expression, MatchArm, Pattern, Span};
+use syntax::ast::{Expression, IdentifierResolution, MatchArm, Pattern, Span};
 use syntax::types::Type;
 
 use crate::Planner;
@@ -93,12 +93,24 @@ impl<'a> PatternSubject<'a> {
 /// pick `var := expr` vs `_ = expr` based on body usage.
 struct ResolvedSubject {
     subject: GoExpression,
-    pending: Option<PendingSubject>,
+    pending: Option<DeferredSubject>,
 }
 
-struct PendingSubject {
-    name: GoIdentifier,
-    expression: GoExpression,
+/// A subject temp declared only if the body reads it.
+pub(crate) struct DeferredSubject {
+    pub(crate) name: GoIdentifier,
+    pub(crate) expression: GoExpression,
+}
+
+impl DeferredSubject {
+    /// `name := expression` when `body` reads the temp, else `_ = expression`.
+    pub(crate) fn settle(self, statements: &mut Vec<Statement>, body: &[Statement]) {
+        if GoUses::of(body).contains_identifier(&self.name) {
+            statements.push(define(self.name, self.expression));
+        } else {
+            statements.push(discard(self.expression));
+        }
+    }
 }
 
 impl ResolvedSubject {
@@ -114,18 +126,14 @@ impl ResolvedSubject {
     }
 
     fn push_declaration(self, statements: &mut Vec<Statement>, body: &[Statement]) {
-        if let Some(PendingSubject { name, expression }) = self.pending {
-            if GoUses::of(body).contains_identifier(&name) {
-                statements.push(define(name, expression));
-            } else {
-                statements.push(discard(expression));
-            }
+        if let Some(pending) = self.pending {
+            pending.settle(statements, body);
         }
     }
 }
 
 /// The identifier under a chain of field accesses.
-fn field_path_root(expression: &Expression) -> Option<&str> {
+fn field_path_root(expression: &Expression) -> Option<(&str, &IdentifierResolution)> {
     let mut expression = expression.unwrap_parens();
     while let Expression::DotAccess {
         expression: inner, ..
@@ -134,7 +142,9 @@ fn field_path_root(expression: &Expression) -> Option<&str> {
         expression = inner.unwrap_parens();
     }
     match expression {
-        Expression::Identifier { value, .. } => Some(value),
+        Expression::Identifier {
+            value, resolution, ..
+        } => Some((value, resolution)),
         _ => None,
     }
 }
@@ -162,12 +172,17 @@ fn loop_break(planner: &Planner) -> LoweredStatement {
 }
 
 impl Planner<'_> {
-    pub(crate) fn can_reuse_subject_identifier(&self, value: &str, binds_name: bool) -> bool {
+    pub(crate) fn can_reuse_subject_identifier(
+        &self,
+        value: &str,
+        resolution: &IdentifierResolution,
+        binds_name: bool,
+    ) -> bool {
         !binds_name
             && !value.contains('.')
             && self
                 .scope
-                .resolve_identifier_binding(value)
+                .resolve_identifier_with_resolution(value, resolution)
                 .is_none_or(BindingValue::can_reuse_pattern_subject)
     }
 
@@ -178,11 +193,11 @@ impl Planner<'_> {
         expression: &GoExpression,
         binds_root: impl Fn(&str) -> bool,
     ) -> bool {
-        let Some(root) = field_path_root(subject) else {
+        let Some((root, resolution)) = field_path_root(subject) else {
             return false;
         };
         field_path_go_root(expression).is_some()
-            && self.can_reuse_subject_identifier(root, binds_root(root))
+            && self.can_reuse_subject_identifier(root, resolution, binds_root(root))
     }
 
     fn resolve_pattern_subject(
@@ -200,11 +215,14 @@ impl Planner<'_> {
                 if let Expression::Identifier {
                     value, resolution, ..
                 } = scrutinee
-                    && self.can_reuse_subject_identifier(value, pattern_binds_name(pattern, value))
+                    && self.can_reuse_subject_identifier(
+                        value,
+                        resolution,
+                        pattern_binds_name(pattern, value),
+                    )
                 {
-                    let var = self.reference_go_name(value, resolution);
                     return ResolvedSubject::existing(GoExpression::identifier(
-                        self.scope.identifier_for_go_name(var),
+                        self.reference_go_identifier(value, resolution),
                     ));
                 }
                 let plan = self.lower_value(scrutinee, ExpressionContext::value());
@@ -230,7 +248,7 @@ impl Planner<'_> {
                 let identifier = self.scope.generated_identifier(&name);
                 ResolvedSubject {
                     subject: GoExpression::identifier(identifier.clone()),
-                    pending: Some(PendingSubject {
+                    pending: Some(DeferredSubject {
                         name: identifier,
                         expression,
                     }),
@@ -469,10 +487,9 @@ impl Planner<'_> {
         } = scrutinee
         {
             let has_collision = pattern_binds_name(pattern, value);
-            if self.can_reuse_subject_identifier(value, has_collision) {
-                let var = self.reference_go_name(value, resolution);
+            if self.can_reuse_subject_identifier(value, resolution, has_collision) {
                 return (
-                    GoExpression::identifier(self.scope.identifier_for_go_name(var)),
+                    GoExpression::identifier(self.reference_go_identifier(value, resolution)),
                     Vec::new(),
                 );
             }

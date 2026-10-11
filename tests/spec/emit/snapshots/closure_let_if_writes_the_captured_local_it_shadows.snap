@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn run(start: int) -> int {
+    let mut total = start
+    let f = |c: bool| {
+      let total = if c {
+        total = total + 1
+        total
+      } else {
+        0
+      }
+      total * 2
+    }
+    let r = f(true)
+    r + total
+  }
+---
+package main
+
+func run(start int) int {
+	total := start
+	f := func(c bool) int {
+		var total_1 int
+		if c {
+			total++
+			total_1 = total
+		} else {
+			total_1 = 0
+		}
+		return total_1 * 2
+	}
+	r := f(true)
+	return r + total
+}

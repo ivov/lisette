@@ -207,6 +207,58 @@ fn test() -> string {
 }
 
 #[test]
+fn closure_let_if_reads_the_captured_local_it_shadows() {
+    let input = r#"
+fn run(x: int) -> int {
+  let f = |c: bool| {
+    let x = if c { x + 1 } else { 0 }
+    x * 2
+  }
+  f(true)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn closure_let_match_reads_the_captured_subject_it_shadows() {
+    let input = r#"
+fn run(x: Option<int>) -> int {
+  let f = |k: int| {
+    let x = match x {
+      Some(v) => v + k,
+      None => 0,
+    }
+    x * 2
+  }
+  f(1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn closure_let_if_writes_the_captured_local_it_shadows() {
+    let input = r#"
+fn run(start: int) -> int {
+  let mut total = start
+  let f = |c: bool| {
+    let total = if c {
+      total = total + 1
+      total
+    } else {
+      0
+    }
+    total * 2
+  }
+  let r = f(true)
+  r + total
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn function_call_no_args() {
     let input = r#"
 fn get_value() -> int {

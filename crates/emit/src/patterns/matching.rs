@@ -11,6 +11,7 @@ use crate::calls::wrap_err::WrapMessage;
 use crate::context::expression::ExpressionContext;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::decision_tree;
+use crate::patterns::sites::DeferredSubject;
 use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
 use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
@@ -301,11 +302,7 @@ enum SubjectDeclaration {
     PlainDiscard {
         var: String,
     },
-    /// Composite path: `<var> := <expression>` if used, `_ = <expression>` if not.
-    Deferred {
-        var: String,
-        expression: GoExpression,
-    },
+    Deferred(DeferredSubject),
     None,
 }
 
@@ -365,8 +362,12 @@ impl Planner<'_> {
         let mut block =
             self.lower_match_tree(arms, MatchSubject::Var(subject_var), subject_ty, place);
         let declaration = match declaration {
-            SubjectDeclaration::Deferred { var, expression }
-                if inline_subject_into_header(&mut block.statements, &var, &expression) =>
+            SubjectDeclaration::Deferred(deferred)
+                if inline_subject_into_header(
+                    &mut block.statements,
+                    deferred.name.spelling(),
+                    &deferred.expression,
+                ) =>
             {
                 SubjectDeclaration::None
             }
@@ -380,12 +381,8 @@ impl Planner<'_> {
                     statements.push(discard(GoExpression::name(var)));
                 }
             }
-            SubjectDeclaration::Deferred { var, expression } => {
-                if used.contains(&var) {
-                    statements.push(define(var, expression));
-                } else {
-                    statements.push(discard(expression));
-                }
+            SubjectDeclaration::Deferred(deferred) => {
+                deferred.settle(&mut statements, &block.statements);
             }
             SubjectDeclaration::None => {}
         }
@@ -1272,10 +1269,11 @@ impl Planner<'_> {
             let has_collision = arms
                 .iter()
                 .any(|arm| pattern_binds_name(&arm.pattern, &name));
-            if self.can_reuse_subject_identifier(&name, has_collision) {
-                let var = self.reference_go_name(&name, resolution);
+            if self.can_reuse_subject_identifier(&name, resolution, has_collision) {
+                let identifier = self.reference_go_identifier(&name, resolution);
+                let var = identifier.spelling().to_string();
                 return (
-                    GoExpression::name(var.clone()),
+                    GoExpression::identifier(identifier),
                     SubjectDeclaration::PlainDiscard { var },
                 );
             }
@@ -1312,11 +1310,13 @@ impl Planner<'_> {
         }
         let var = self.fresh_var(Some("subject"));
         self.declare(&var);
-        let declaration = SubjectDeclaration::Deferred {
-            var: var.clone(),
+        let name = self.scope.generated_identifier(&var);
+        let subject = GoExpression::identifier(name.clone());
+        let declaration = SubjectDeclaration::Deferred(DeferredSubject {
+            name,
             expression: value,
-        };
-        (GoExpression::name(var), declaration)
+        });
+        (subject, declaration)
     }
 }
 
