@@ -211,7 +211,7 @@ impl Planner<'_> {
         let outcome = match target {
             WrapperTarget::FreshSlot => Some(value),
             WrapperTarget::Slot(name) => {
-                let slot = GoExpression::name(name.to_string());
+                let slot = GoExpression::identifier(name.clone());
                 statements.push(assign(slot.clone(), value));
                 Some(slot)
             }

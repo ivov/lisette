@@ -8,6 +8,7 @@ use crate::escape_reserved;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{Statement, define, define_many};
 use crate::plan::calls::CallableOrigin;
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::{BindingValue, ComponentBinding, ComponentKind};
 use crate::state::scope::PairStatusKind;
@@ -47,8 +48,8 @@ impl CommaOkSource {
 
 /// What the caller needs from the pair's value slot.
 pub(crate) enum CommaOkValueSlot {
-    /// Bind this Go name (already freshened and declared).
-    Named(String),
+    /// Bind this local (already freshened and declared).
+    Named(GoIdentifier),
     /// Allocate a fresh temporary.
     Temp,
     Arm(String),
@@ -71,16 +72,12 @@ impl Planner<'_> {
         slot: CommaOkValueSlot,
     ) -> BoundValue {
         let (statements, value, borrowed) = match slot {
-            CommaOkValueSlot::Named(name) if name != components.value.spelling() => {
-                self.declare(&name);
+            CommaOkValueSlot::Named(name) if name.spelling() != components.value.spelling() => {
+                self.declare(name.spelling());
                 let copy = define(name.clone(), GoExpression::identifier(components.value));
                 (vec![copy], name, false)
             }
-            _ => (
-                Vec::new(),
-                components.value.to_string(),
-                components.shared_payload,
-            ),
+            _ => (Vec::new(), components.value, components.shared_payload),
         };
         let status_kind = match components.kind {
             ComponentKind::Option => PairStatusKind::Ok,
@@ -91,7 +88,7 @@ impl Planner<'_> {
                 name: value,
                 nil_guard: None,
             },
-            status: components.status.to_string(),
+            status: components.status,
             status_kind,
             initializer_call: None,
             borrowed,
@@ -216,10 +213,11 @@ impl Planner<'_> {
             PairKind::BareError => PairValue::Absent,
             PairKind::CommaOk { nil_guard } | PairKind::Result { nil_guard } => {
                 let name = match slot {
-                    CommaOkValueSlot::Named(name) | CommaOkValueSlot::Arm(name) => Some(name),
-                    CommaOkValueSlot::Temp => Some(self.fresh_pair_value()),
+                    CommaOkValueSlot::Named(name) => Some(name),
+                    CommaOkValueSlot::Arm(name) => Some(self.scope.new_local_identifier(&name)),
+                    CommaOkValueSlot::Temp => Some(self.fresh_pair_identifier()),
                     CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => {
-                        nil_guard.map(|_| self.fresh_pair_value())
+                        nil_guard.map(|_| self.fresh_pair_identifier())
                     }
                 };
                 match name {
@@ -229,11 +227,12 @@ impl Planner<'_> {
             }
         };
         let mut status = self.pair_status(status_hint, status_kind, opens_if);
-        if opens_if && value.name() == Some(status.as_str()) {
+        if opens_if && value.name().map(GoIdentifier::spelling) == Some(status.as_str()) {
             self.scope.reserve_go_name(&status);
             status = self.fresh_var(Some(&status));
         }
         let mut statements = statements;
+        let status = self.scope.new_local_identifier(&status);
         let mut pair = LoweredPair {
             value,
             status,
@@ -253,6 +252,11 @@ impl Planner<'_> {
         let v = self.fresh_var(Some("ret"));
         self.declare(&v);
         v
+    }
+
+    pub(crate) fn fresh_pair_identifier(&mut self) -> GoIdentifier {
+        let name = self.fresh_pair_value();
+        self.scope.generated_identifier(&name)
     }
 
     pub(crate) fn arm_value_name(&mut self, name: &str) -> String {

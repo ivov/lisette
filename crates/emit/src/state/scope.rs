@@ -157,13 +157,27 @@ impl ScopeState {
         go_name: String,
         value: fn(GoIdentifier) -> BindingValue,
     ) -> GoIdentifier {
-        let go_name = crate::escape_reserved(&go_name).into_owned();
+        let identifier = self.new_local_identifier(&go_name);
+        self.set_binding(lisette_name, ids, value(identifier.clone()));
+        identifier
+    }
+
+    /// A new local, which `bind_identifier` can bind to a source name later.
+    pub(crate) fn new_local_identifier(&mut self, go_name: &str) -> GoIdentifier {
+        let go_name = crate::escape_reserved(go_name).into_owned();
         let id = self
             .generated_local_id(&go_name)
             .unwrap_or_else(|| self.new_local_id());
-        let identifier = GoIdentifier::local(go_name, id);
-        self.set_binding(lisette_name, ids, value(identifier.clone()));
-        identifier
+        GoIdentifier::local(go_name, id)
+    }
+
+    pub(crate) fn bind_identifier(
+        &mut self,
+        lisette_name: impl Into<String>,
+        ids: &[BindingId],
+        identifier: GoIdentifier,
+    ) {
+        self.set_binding(lisette_name.into(), ids, BindingValue::GoName(identifier));
     }
 
     pub(crate) fn new_local_id(&mut self) -> LocalId {
@@ -204,7 +218,7 @@ impl ScopeState {
     }
 
     fn identify_binding_name(&mut self, name: &mut GoIdentifier) {
-        if name.spelling() == "_" {
+        if name.spelling() == "_" || name.id().is_some() {
             return;
         }
         let id = self

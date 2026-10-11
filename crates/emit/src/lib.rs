@@ -636,6 +636,11 @@ impl<'a> Planner<'a> {
         self.scope.fresh_go_name(hint, &self.package)
     }
 
+    fn fresh_local(&mut self, hint: Option<&str>) -> GoIdentifier {
+        let name = self.fresh_var(hint);
+        self.scope.generated_identifier(&name)
+    }
+
     fn maybe_line_directive(&self, span: &Span) -> Option<String> {
         if span.is_dummy() {
             return None;

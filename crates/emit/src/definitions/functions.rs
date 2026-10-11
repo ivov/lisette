@@ -36,9 +36,8 @@ pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
 type ParamDestructure<'a> = (String, &'a Pattern, &'a Type);
 
 struct LoweredParams<'a> {
-    pairs: Vec<(String, String)>,
+    pairs: Vec<(GoIdentifier, String)>,
     destructures: Vec<ParamDestructure<'a>>,
-    identifiers: Vec<GoIdentifier>,
     test_handle: Option<GoIdentifier>,
 }
 
@@ -152,11 +151,12 @@ impl Planner<'_> {
                 let index = params
                     .iter()
                     .position(|param| is_test_context_ty(&param.ty))
-                    .filter(|&index| param_pairs[index].0 == "_")?;
+                    .filter(|&index| param_pairs[index].0.spelling() == "_")?;
                 let name = this.fresh_var(Some("lisetteSub"));
                 this.declare(&name);
-                param_pairs[index].0 = name.clone();
-                Some(this.scope.generated_identifier(&name))
+                let handle = this.scope.generated_identifier(&name);
+                param_pairs[index].0 = handle.clone();
+                Some(handle)
             });
 
             let recover = test_handle.map(|handle| {
@@ -194,8 +194,8 @@ impl Planner<'_> {
 
             GoExpression::function_literal(
                 param_pairs
-                    .iter()
-                    .map(|(name, go_type)| GoParameter::new(name.clone(), go_type.clone()))
+                    .into_iter()
+                    .map(|(name, go_type)| GoParameter { name, go_type })
                     .collect(),
                 return_info.signature().trim_start().to_string(),
                 body,
@@ -389,13 +389,21 @@ impl Planner<'_> {
         let LoweredParams {
             pairs,
             destructures,
-            identifiers,
             test_handle,
         } = self.lower_parameters(params_to_process);
         if let Some(handle) = test_handle {
             self.scope.set_test_handle(handle);
         }
-        let params_string = format!("({})", group_params(&pairs));
+        let identifiers = pairs
+            .iter()
+            .map(|(name, _)| name.clone())
+            .filter(|name| name.spelling() != "_")
+            .collect();
+        let rendered: Vec<(String, String)> = pairs
+            .into_iter()
+            .map(|(name, go_type)| (name.to_string(), go_type))
+            .collect();
+        let params_string = format!("({})", group_params(&rendered));
 
         let return_ty = if returns_go_void(function_definition.return_type) {
             String::new()
@@ -496,7 +504,6 @@ impl Planner<'_> {
         let mut lowered = LoweredParams {
             pairs: Vec::with_capacity(params.len()),
             destructures: Vec::new(),
-            identifiers: Vec::new(),
             test_handle: None,
         };
         for param in params {
@@ -512,25 +519,20 @@ impl Planner<'_> {
                             .test_handle
                             .take()
                             .or_else(|| is_test_context_ty(&param.ty).then(|| name.clone()));
-                        lowered.identifiers.push(name.clone());
-                        name.to_string()
+                        name
                     } else {
                         self.scope
                             .bind_source(identifier.as_str(), id.as_slice(), "_")
-                            .to_string()
                     }
                 }
-                Pattern::WildCard { .. } => "_".to_string(),
+                Pattern::WildCard { .. } => GoIdentifier::name("_".to_string()),
                 _ => {
                     let var = self.fresh_var(Some("arg"));
                     self.declare(&var);
                     lowered
-                        .identifiers
-                        .push(self.scope.generated_identifier(&var));
-                    lowered
                         .destructures
                         .push((var.clone(), &param.pattern, &param.ty));
-                    var
+                    self.scope.generated_identifier(&var)
                 }
             };
             lowered.pairs.push((name, self.use_go_type(&param.ty)));

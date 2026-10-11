@@ -787,7 +787,7 @@ impl LoweredStatement {
     }
 
     /// `false` when the statement binds nothing.
-    pub(crate) fn rename_bound_name(&mut self, go_name: &str) -> bool {
+    pub(crate) fn rename_bound_name(&mut self, go_name: &GoIdentifier) -> bool {
         let bound = match self {
             LoweredStatement::Define(Definition { names, .. }) => match names.as_mut_slice() {
                 [name] => name,
@@ -800,7 +800,7 @@ impl LoweredStatement {
             } => name,
             _ => return false,
         };
-        *bound = go_name.to_string().into();
+        *bound = go_name.clone();
         true
     }
 

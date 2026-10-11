@@ -9,6 +9,7 @@ use crate::control_flow::fallible::{ConstructorKind, Fallible};
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredBlock, Statement, define};
 use crate::plan::go_expression::FunctionLiteralLayout;
+use crate::plan::local::GoIdentifier;
 use crate::plan::placement::is_unit_call;
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
@@ -41,6 +42,7 @@ impl Planner<'_> {
     /// `try { ... }` → `result := func() T { ... }()`; value is the bound result var.
     pub(crate) fn lower_try_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
         let result_var = self.fresh_var(Some("tryResult"));
+        let result_var = self.scope.generated_identifier(&result_var);
         self.lower_try_block_as(items, ty, result_var)
     }
 
@@ -48,9 +50,9 @@ impl Planner<'_> {
         &mut self,
         items: &[Expression],
         ty: &Type,
-        name: &str,
+        name: &GoIdentifier,
     ) -> Vec<Statement> {
-        self.lower_try_block_as(items, ty, name.to_string())
+        self.lower_try_block_as(items, ty, name.clone())
             .into_parts()
             .0
     }
@@ -87,13 +89,13 @@ impl Planner<'_> {
         &mut self,
         items: &[Expression],
         ty: &Type,
-        result_var: String,
+        result_var: GoIdentifier,
     ) -> ValuePlan {
         let effective_ty = self.fallible_block_type(items, ty);
         let fallible = Fallible::from_type(&effective_ty)
             .expect("`try` block must have Result or Option type");
 
-        self.declare(&result_var);
+        self.declare(result_var.spelling());
         let full_ty = { self.fallible_go_type(&fallible) };
 
         let body_ctx = ReturnContext::Tagged(effective_ty);
@@ -104,7 +106,7 @@ impl Planner<'_> {
             result_var.clone(),
             GoExpression::immediate_call(full_ty, body, FunctionLiteralLayout::MultiLine),
         )];
-        ValuePlan::captured(setup, result_var)
+        ValuePlan::captured(setup, result_var.to_string())
     }
 
     fn lower_try_body(&mut self, items: &[Expression], fallible: &Fallible) -> LoweredBlock {
@@ -247,7 +249,7 @@ impl Planner<'_> {
                 )],
             ),
         )];
-        ValuePlan::captured(setup, result_var)
+        ValuePlan::captured(setup, result_var.to_string())
     }
 
     fn lower_recover_body_block(

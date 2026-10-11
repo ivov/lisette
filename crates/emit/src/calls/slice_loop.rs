@@ -1,3 +1,4 @@
+use crate::plan::local::GoIdentifier;
 use syntax::ast::{Binding, Expression, Pattern};
 use syntax::program::NativeTypeKind;
 use syntax::types::Type;
@@ -85,43 +86,43 @@ struct SliceLoopBody<'a> {
     body: &'a Expression,
     result_ty: &'a Type,
     element_ty: &'a Type,
-    element_name: &'a str,
+    element_name: &'a GoIdentifier,
 }
 
 #[derive(Clone, Copy)]
 pub(crate) struct FoundSink<'a> {
-    pub value: Option<&'a str>,
+    pub value: Option<&'a GoIdentifier>,
     pub flag: &'a str,
 }
 
 #[derive(Clone, Copy)]
 pub(super) enum SliceLoopTarget<'a> {
     Fresh,
-    Into(&'a str),
+    Into(&'a GoIdentifier),
     Found(FoundSink<'a>),
 }
 
 enum PlannedLoop<'a> {
     Map {
-        result: String,
-        index: String,
+        result: GoIdentifier,
+        index: GoIdentifier,
     },
     Filter {
-        result: String,
+        result: GoIdentifier,
     },
     Fold {
-        result: String,
+        result: GoIdentifier,
         accumulator: &'a Pattern,
         init: GoExpression,
     },
     Find {
-        result: String,
+        result: GoIdentifier,
     },
     FindInto(FoundSink<'a>),
 }
 
 impl PlannedLoop<'_> {
-    fn result(&self) -> Option<&str> {
+    fn result(&self) -> Option<&GoIdentifier> {
         match self {
             Self::Map { result, .. }
             | Self::Filter { result }
@@ -163,6 +164,10 @@ struct SliceLoopShape<'a> {
     patterns: Vec<&'a Pattern>,
     result_ty: Type,
     element_ty: Type,
+}
+
+fn local(identifier: &GoIdentifier) -> GoExpression {
+    GoExpression::identifier(identifier.clone())
 }
 
 fn name(text: &str) -> GoExpression {
@@ -216,7 +221,7 @@ impl Planner<'_> {
     pub(crate) fn lower_slice_loop_into(
         &mut self,
         value: &Expression,
-        go_name: &str,
+        go_name: &GoIdentifier,
     ) -> Option<Vec<Statement>> {
         let call = self.native_method_call(value)?;
         if !matches!(call.kind, NativeTypeKind::Slice) {
@@ -303,16 +308,16 @@ impl Planner<'_> {
             SliceLoopTarget::Found(sink) => PlannedLoop::FindInto(sink),
             target => {
                 let result = match target {
-                    SliceLoopTarget::Into(name) => name.to_string(),
+                    SliceLoopTarget::Into(name) => name.clone(),
                     _ if kind == SliceLoop::Fold => self.accumulator_slot_name(patterns[0]),
-                    _ => self.fresh_var(Some("result")),
+                    _ => self.fresh_local(Some("result")),
                 };
                 // The result claims its name before the `map` index does.
-                self.declare(&result);
+                self.declare(result.spelling());
                 match kind {
                     SliceLoop::Map => {
-                        let index = self.fresh_var(Some("i"));
-                        self.declare(&index);
+                        let index = self.fresh_local(Some("i"));
+                        self.declare(index.spelling());
                         PlannedLoop::Map { result, index }
                     }
                     SliceLoop::Filter => PlannedLoop::Filter { result },
@@ -350,19 +355,19 @@ impl Planner<'_> {
         };
         let (element_name, body_statements) = match planned.result() {
             Some(result) => {
-                self.with_assign_target(&GoExpression::name(result.to_string()), lower_body)
+                self.with_assign_target(&GoExpression::identifier(result.clone()), lower_body)
             }
             None => lower_body(self),
         };
 
         // Go rejects a range variable nothing reads.
         let header = LoopHeader::Range {
-            key: match (&planned, element_name.as_str()) {
-                (PlannedLoop::Map { index, .. }, _) => Some(index.clone().into()),
+            key: match (&planned, element_name.spelling()) {
+                (PlannedLoop::Map { index, .. }, _) => Some(index.clone()),
                 (_, "_") => None,
-                _ => Some("_".to_string().into()),
+                _ => Some(GoIdentifier::name("_".to_string())),
             },
-            value: (element_name != "_").then_some(element_name.into()),
+            value: (element_name.spelling() != "_").then_some(element_name),
             iterable: source,
         };
         setup.push(
@@ -376,7 +381,10 @@ impl Planner<'_> {
             .into(),
         );
 
-        let result = planned.result().map_or_else(GoExpression::empty, name);
+        let result = planned
+            .result()
+            .cloned()
+            .map_or_else(GoExpression::empty, GoExpression::identifier);
         Some(NativeCallResult::new(
             setup,
             result,
@@ -384,28 +392,35 @@ impl Planner<'_> {
         ))
     }
 
-    fn accumulator_slot_name(&mut self, pattern: &Pattern) -> String {
+    fn accumulator_slot_name(&mut self, pattern: &Pattern) -> GoIdentifier {
         let Pattern::Identifier { identifier, .. } = pattern else {
-            return self.fresh_var(Some("result"));
+            return self.fresh_local(Some("result"));
         };
         match self.go_name_for_binding(pattern) {
-            Some(name) => self.claim_declared_go_name(identifier, name),
-            None => self.fresh_var(Some("result")),
+            Some(name) => {
+                let name = self.claim_declared_go_name(identifier, name);
+                self.scope.new_local_identifier(&name)
+            }
+            None => self.fresh_local(Some("result")),
         }
     }
 
     /// `filter` and `find` read the element back whatever the body does.
-    fn element_loop_name(&mut self, kind: SliceLoop, pattern: &Pattern) -> String {
+    fn element_loop_name(&mut self, kind: SliceLoop, pattern: &Pattern) -> GoIdentifier {
         let name = self.bind_loop_callback_param(pattern, None);
-        if name != "_" || matches!(kind, SliceLoop::Map | SliceLoop::Fold) {
+        if name.spelling() != "_" || matches!(kind, SliceLoop::Map | SliceLoop::Fold) {
             return name;
         }
-        let name = self.fresh_var(Some("v"));
-        self.declare(&name);
+        let name = self.fresh_local(Some("v"));
+        self.declare(name.spelling());
         name
     }
 
-    fn bind_loop_callback_param(&mut self, pattern: &Pattern, existing: Option<String>) -> String {
+    fn bind_loop_callback_param(
+        &mut self,
+        pattern: &Pattern,
+        existing: Option<GoIdentifier>,
+    ) -> GoIdentifier {
         let Pattern::Identifier {
             identifier,
             binding: ids,
@@ -416,16 +431,14 @@ impl Planner<'_> {
         };
         match existing {
             Some(name) => {
-                self.declare(&name);
+                self.declare(name.spelling());
                 self.scope
-                    .bind_source(identifier.as_str(), ids.as_slice(), name.clone());
+                    .bind_identifier(identifier.as_str(), ids.as_slice(), name.clone());
                 name
             }
             None => match self.go_name_for_binding(pattern) {
-                Some(name) => self
-                    .claim_declared_binding(identifier, ids.as_slice(), name)
-                    .to_string(),
-                None => "_".to_string(),
+                Some(name) => self.claim_declared_binding(identifier, ids.as_slice(), name),
+                None => GoIdentifier::name("_".to_string()),
             },
         }
     }
@@ -453,7 +466,7 @@ impl Planner<'_> {
                 )
             }
             PlannedLoop::Filter { result } => LoweredStatement::VarDecl {
-                name: result.clone().into(),
+                name: result.clone(),
                 go_type: format!("[]{}", self.first_type_argument_go_string(result_ty)),
                 value: None,
             }
@@ -471,7 +484,7 @@ impl Planner<'_> {
                     let go_type = self.use_go_type(element_ty);
                     setup.push(
                         LoweredStatement::VarDecl {
-                            name: value.to_string().into(),
+                            name: value.clone(),
                             go_type,
                             value: None,
                         }
@@ -502,25 +515,25 @@ impl Planner<'_> {
                 let element_ty = self
                     .first_type_argument(result_ty)
                     .expect("map returns a slice carrying its element type");
-                let slot = GoExpression::index(name(result), name(index));
+                let slot = GoExpression::index(local(result), local(index));
                 return self.lower_body_into_slot(body, &slot, &element_ty);
             }
             PlannedLoop::Fold { result, .. } => {
-                return self.lower_body_into_slot(body, &name(result), result_ty);
+                return self.lower_body_into_slot(body, &local(result), result_ty);
             }
             PlannedLoop::Filter { result } => vec![assign(
-                name(result),
-                GoExpression::call(name("append"), vec![name(result), name(element_name)]),
+                local(result),
+                GoExpression::call(name("append"), vec![local(result), local(element_name)]),
             )],
             PlannedLoop::Find { result } => {
                 let payload = self.use_go_type(element_ty);
                 vec![
                     assign(
-                        name(result),
+                        local(result),
                         prelude_call(
                             "MakeOptionSome",
                             format!("[{}]", payload),
-                            vec![name(element_name)],
+                            vec![local(element_name)],
                         ),
                     ),
                     LoweredStatement::Break(LoopTransfer::Unlabeled).into(),
@@ -529,7 +542,7 @@ impl Planner<'_> {
             PlannedLoop::FindInto(sink) => {
                 let mut statements = Vec::new();
                 if let Some(value) = sink.value {
-                    statements.push(assign(name(value), name(element_name)));
+                    statements.push(assign(local(value), local(element_name)));
                 }
                 statements.push(assign(
                     name(sink.flag),

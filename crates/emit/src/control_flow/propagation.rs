@@ -18,6 +18,7 @@ use crate::plan::bodies::{
     define,
 };
 use crate::plan::go_expression::BinaryOp;
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::state::scope::PairStatusKind;
 use syntax::ast::Expression;
@@ -31,11 +32,11 @@ pub(crate) fn plain_return(value: GoExpression) -> Statement {
 enum PropagateTarget<'a> {
     Value,
     Discard,
-    Bind(&'a str),
+    Bind(&'a GoIdentifier),
 }
 
 impl<'a> PropagateTarget<'a> {
-    fn bound_name(self) -> Option<&'a str> {
+    fn bound_name(self) -> Option<&'a GoIdentifier> {
         match self {
             PropagateTarget::Bind(name) => Some(name),
             PropagateTarget::Value | PropagateTarget::Discard => None,
@@ -63,7 +64,7 @@ impl Planner<'_> {
     pub(crate) fn lower_propagate_binding(
         &mut self,
         inner: &Expression,
-        name: &str,
+        name: &GoIdentifier,
     ) -> Vec<Statement> {
         self.lower_propagate_to(inner, PropagateTarget::Bind(name))
             .0
@@ -119,25 +120,25 @@ impl Planner<'_> {
     fn declare_zero_for_dead_path(
         &mut self,
         statements: &mut Vec<Statement>,
-        var_name: &str,
+        var_name: &GoIdentifier,
         fallible: &Fallible,
     ) {
         let inner_ty = fallible.ok_ty();
         let zero = self.zero_value_expression(inner_ty);
-        if self.is_declared(var_name) {
-            statements.push(assign(GoExpression::name(var_name.to_string()), zero));
+        if self.is_declared(var_name.spelling()) {
+            statements.push(assign(GoExpression::identifier(var_name.clone()), zero));
         } else {
             // Declared so the dead-path binding stays in scope for later references.
             let go_ty = self.use_go_type(inner_ty);
             statements.push(
                 LoweredStatement::VarDecl {
-                    name: var_name.to_string().into(),
+                    name: var_name.clone(),
                     go_type: go_ty,
                     value: Some(zero),
                 }
                 .into(),
             );
-            self.declare(var_name);
+            self.declare(var_name.spelling());
         }
     }
 
@@ -245,15 +246,18 @@ impl Planner<'_> {
         } else {
             None
         };
-        let value_var = (has_value_slot && (want_value || nil_guard.is_some()))
-            .then(|| named.map_or_else(|| self.fresh_pair_value(), str::to_string));
+        let value_var = (has_value_slot && (want_value || nil_guard.is_some())).then(|| {
+            named
+                .cloned()
+                .unwrap_or_else(|| self.fresh_pair_identifier())
+        });
         let (message_setup, wraps) = self.prepare_wrap_messages(&wraps, true);
         let opens_if = value_var.is_none() && message_setup.is_empty();
         let outcome_var = self.pair_status(None, PairStatusKind::Error, opens_if);
         let outcome = || GoExpression::name(outcome_var.clone());
         let binding = Definition {
             names: match &value_var {
-                Some(value) => vec![value.clone().into(), outcome_var.clone().into()],
+                Some(value) => vec![value.clone(), outcome_var.clone().into()],
                 None if has_value_slot => vec!["_".to_string().into(), outcome_var.clone().into()],
                 None => vec![outcome_var.clone().into()],
             },
@@ -266,8 +270,9 @@ impl Planner<'_> {
             None
         };
         statements.extend(message_setup);
-        let guarded_value =
-            || GoExpression::name(value_var.clone().expect("nil guard requires the value var"));
+        let guarded_value = || {
+            GoExpression::identifier(value_var.clone().expect("nil guard requires the value var"))
+        };
 
         let error = self.wrap_error(&wraps, outcome());
         let (failure_setup, failure_values) = self.propagate_failure_values(fallible, error);
@@ -289,7 +294,7 @@ impl Planner<'_> {
         }
 
         let ok_value = value_var.map(|val| {
-            let val = GoExpression::name(val);
+            let val = GoExpression::identifier(val);
             match &payload_bridge {
                 Some(bridge) if want_value => self.plan_layout_bridge(&mut statements, val, bridge),
                 _ => val,
@@ -314,7 +319,7 @@ impl Planner<'_> {
         let fuse = self.option_fuse_plan(expression)?;
         let named = self.declare_propagate_target(target);
         let slot = match (named, target) {
-            (Some(name), _) => CommaOkValueSlot::Named(name.to_string()),
+            (Some(name), _) => CommaOkValueSlot::Named(name.clone()),
             (None, PropagateTarget::Discard) => CommaOkValueSlot::Unused,
             (None, _) => CommaOkValueSlot::Temp,
         };
@@ -379,7 +384,7 @@ impl Planner<'_> {
 
         let named = self.declare_propagate_target(target);
         let slot = match (named, target) {
-            (Some(name), _) => CommaOkValueSlot::Named(name.to_string()),
+            (Some(name), _) => CommaOkValueSlot::Named(name.clone()),
             (None, PropagateTarget::Discard) => CommaOkValueSlot::Discarded,
             (None, _) => CommaOkValueSlot::Temp,
         };
@@ -390,15 +395,15 @@ impl Planner<'_> {
                     let has_nil_guard = fuse.has_nil_guard();
                     let pair = fuse.bind(self, slot, None);
                     let failure = pair.failure_condition();
-                    let status = pair.status().to_string();
+                    let status = pair.status_identifier().clone();
                     let mut failure_setup = Vec::new();
                     if has_nil_guard && map.param.is_some() {
                         failure_setup.push(
                             LoweredStatement::If(IfPlan::plain(
-                                is_nil(GoExpression::name(status.clone())),
+                                is_nil(GoExpression::identifier(status.clone())),
                                 LoweredBlock {
                                     statements: vec![assign(
-                                        GoExpression::name(status.clone()),
+                                        GoExpression::identifier(status.clone()),
                                         unexpected_nil_error(),
                                     )],
                                 },
@@ -409,8 +414,11 @@ impl Planner<'_> {
                     }
                     let (body_setup, error) = self.with_binding_frame(|this| {
                         if let Some(param) = map.param {
-                            this.scope
-                                .bind_source(param.name, param.binding.as_slice(), &status);
+                            this.scope.bind_identifier(
+                                param.name,
+                                param.binding.as_slice(),
+                                status.clone(),
+                            );
                         }
                         this.lower_composite_value(map.body, ExpressionContext::value())
                             .into_parts()
@@ -550,9 +558,14 @@ impl Planner<'_> {
                 .is_some_and(|ty| Fallible::from_type(ty).is_some())
     }
 
-    fn declare_propagate_target<'a>(&mut self, target: PropagateTarget<'a>) -> Option<&'a str> {
-        let name = target.bound_name().filter(|name| !self.is_declared(name))?;
-        self.declare(name);
+    fn declare_propagate_target<'a>(
+        &mut self,
+        target: PropagateTarget<'a>,
+    ) -> Option<&'a GoIdentifier> {
+        let name = target
+            .bound_name()
+            .filter(|name| !self.is_declared(name.spelling()))?;
+        self.declare(name.spelling());
         Some(name)
     }
 
@@ -561,7 +574,7 @@ impl Planner<'_> {
         &mut self,
         statements: &mut Vec<Statement>,
         target: PropagateTarget<'_>,
-        named: Option<&str>,
+        named: Option<&GoIdentifier>,
         payload: Option<GoExpression>,
     ) -> Option<GoExpression> {
         let payload = || payload.expect("a propagated source carries its payload");
@@ -577,12 +590,12 @@ impl Planner<'_> {
         }
     }
 
-    fn bind_propagate_ok(&mut self, name: &str, ok_access: GoExpression) -> Statement {
-        if self.is_declared(name) {
-            assign(GoExpression::name(name.to_string()), ok_access)
+    fn bind_propagate_ok(&mut self, name: &GoIdentifier, ok_access: GoExpression) -> Statement {
+        if self.is_declared(name.spelling()) {
+            assign(GoExpression::identifier(name.clone()), ok_access)
         } else {
-            self.declare(name);
-            define(name.to_string(), ok_access)
+            self.declare(name.spelling());
+            define(name.clone(), ok_access)
         }
     }
 
