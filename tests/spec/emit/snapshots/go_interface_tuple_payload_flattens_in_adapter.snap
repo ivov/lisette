@@ -52,10 +52,6 @@ type _lisAdapter_Conn_Hijacker_0 struct {
 }
 
 func (a _lisAdapter_Conn_Hijacker_0) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	result := lisette.ResultFromPair[lisette.Tuple2[net.Conn, *bufio.ReadWriter]](a.inner.Hijack())
-	if result.Tag == lisette.ResultOk {
-		tup := result.OkVal
-		return tup.First, tup.Second, nil
-	}
-	return nil, nil, result.ErrVal
+	ret, ret_1 := a.inner.Hijack()
+	return ret.First, ret.Second, ret_1
 }

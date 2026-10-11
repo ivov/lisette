@@ -1363,3 +1363,45 @@ pub fn Use(i: Indexer)
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/idx", typedef)]);
 }
+
+#[test]
+fn go_interface_pointer_option_slots_bridge_in_adapter() {
+    let input = r#"
+import "go:example.com/box"
+
+struct Holder {}
+
+impl Holder {
+  fn Value(self) -> Option<int> {
+    Some(1)
+  }
+  fn Load(self) -> Result<Option<int>, error> {
+    Ok(None)
+  }
+  fn Set(self, v: Option<int>) {
+    let _ = v
+  }
+}
+
+fn use_box(b: box.Box) {
+  let _ = b.Value()
+  match b.Load() {
+    Ok(Some(v)) => { let _ = v },
+    _ => {},
+  }
+  b.Set(Some(3))
+}
+
+fn main() {
+  use_box(Holder {} as box.Box)
+}
+"#;
+    let typedef = r#"
+pub interface Box {
+  fn Value() -> Option<int>
+  fn Load() -> Result<Option<int>, error>
+  fn Set(v: Option<int>)
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/box", typedef)]);
+}

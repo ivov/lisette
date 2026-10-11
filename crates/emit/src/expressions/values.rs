@@ -1,4 +1,4 @@
-use crate::abi::is_tagged_shape_fn_value;
+use crate::abi::is_closure_literal;
 use crate::calls::dispatch::extract_native_method_name;
 use crate::calls::native::native_method_lowers_to_plain_call;
 use crate::calls::split_native_receiver;
@@ -85,29 +85,58 @@ impl Planner<'_> {
             }
         }
 
-        if !ctx.is_callee()
-            && !ctx.forces_tagged_go_function()
-            && self.callee_uses_tagged_method_return(expression)
-            && let Some(function) = expression.get_type().as_function_type()
-        {
-            let target = self.slot_return_abi(&function.return_type, ctx.function_slot_origin());
-            if target.is_lowered() {
-                let value = self.plan_operand(expression, ctx);
-                return value.map_expression(|setup, value| {
-                    emit_fn_arg_shape_adapter(
+        if let Some((prelude, target)) = self.tagged_function_value_target(expression, ctx) {
+            let value = self.plan_operand(expression, ctx);
+            return value.map_expression(|setup, value| {
+                let function_ty = expression.get_type();
+                if prelude {
+                    // A prelude function also takes its callbacks tagged.
+                    return emit_lisette_callback_wrapper(
                         self,
                         setup,
                         value,
-                        &expression.get_type(),
-                        &CallableReturnAbi::Tagged,
+                        function_ty.unwrap_forall(),
                         &target,
-                    )
-                    .expect("method value has a function signature")
-                });
-            }
+                    );
+                }
+                emit_fn_arg_shape_adapter(
+                    self,
+                    setup,
+                    value,
+                    &function_ty,
+                    &CallableReturnAbi::Value,
+                    &CallableReturnAbi::Lowered(target),
+                )
+                .expect("a function value has a function signature")
+            });
         }
 
         self.plan_operand(expression, ctx)
+    }
+
+    /// The lowered result a function value must present when it returns its
+    /// tagged value, and whether it is a prelude function.
+    fn tagged_function_value_target(
+        &self,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> Option<(bool, LoweredReturnAbi)> {
+        if ctx.is_callee() || ctx.forces_tagged_go_function() || is_closure_literal(expression) {
+            return None;
+        }
+        let callee = self.resolve_callable_value(expression)?;
+        if callee.abi.result != CallableReturnAbi::Value
+            || matches!(callee.origin, CallableOrigin::GoInterop)
+        {
+            return None;
+        }
+        let function = expression.get_type();
+        let return_ty = function.unwrap_forall().get_function_ret()?;
+        let target = self.slot_return_abi(return_ty, ctx.function_slot_origin());
+        let CallableReturnAbi::Lowered(target) = target else {
+            return None;
+        };
+        Some((callee.is_prelude_dispatch, target))
     }
 
     pub(crate) fn lower_composite_value(
@@ -199,32 +228,6 @@ impl Planner<'_> {
         }
     }
 
-    /// Wrap a captured tagged-shape prelude fn ref into a lowered-ABI closure
-    /// so its Go type matches what the rest of the pipeline expects.
-    fn maybe_lower_tagged_fn_ref(
-        &mut self,
-        setup: &mut Vec<Statement>,
-        expression: &Expression,
-        ty: &Type,
-        raw: GoExpression,
-        ctx: ExpressionContext<'_>,
-    ) -> GoExpression {
-        if ctx.is_callee() || ctx.forces_tagged_go_function() {
-            return raw;
-        }
-        if !is_tagged_shape_fn_value(expression) {
-            return raw;
-        }
-        let fn_ty = ty.unwrap_forall();
-        let Type::Function(f) = fn_ty else {
-            return raw;
-        };
-        let Some(target) = self.classify_direct_emission(&f.return_type) else {
-            return raw;
-        };
-        emit_lisette_callback_wrapper(self, setup, raw, fn_ty, &target)
-    }
-
     /// Result ABI the slot expects from a Go function value, or `None` when
     /// the value is not a function. A forced-tagged slot calls through a
     /// Lisette-shaped callback, so it wants the tagged ABI, not the lowered one.
@@ -236,7 +239,7 @@ impl Planner<'_> {
         let fn_ty = expression.get_type();
         let f = fn_ty.as_function_type()?;
         Some(if ctx.forces_tagged_go_function() {
-            self.value_return_abi(&f.return_type)
+            CallableReturnAbi::Value
         } else {
             self.slot_return_abi(&f.return_type, ctx.function_slot_origin())
         })
@@ -293,23 +296,7 @@ impl Planner<'_> {
                     Some(BindingValue::InlineExpr(inline)) => inline.stability(),
                     _ => self.identifier_read_stability(expression),
                 };
-                let plan = ValuePlan::from_identifier_expression(go_expression, stability);
-                let mut adapter_setup = Vec::new();
-                let value = self.maybe_lower_tagged_fn_ref(
-                    &mut adapter_setup,
-                    expression,
-                    ty,
-                    plan.expression().clone(),
-                    ctx,
-                );
-                if adapter_setup.is_empty() {
-                    plan
-                } else {
-                    plan.map_expression(|setup, _| {
-                        setup.extend(adapter_setup);
-                        value
-                    })
-                }
+                ValuePlan::from_identifier_expression(go_expression, stability)
             }
             Expression::Call { ty, .. } => self.lower_call_value(expression, ty, ctx),
             Expression::RawGo { text } => ValuePlan::verbatim(text.clone()),

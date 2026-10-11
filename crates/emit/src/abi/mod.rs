@@ -7,12 +7,11 @@ pub(crate) mod transition;
 use crate::Planner;
 use crate::names::go_name;
 use crate::names::go_name::PRELUDE_ERROR_ID;
-use crate::patterns::matching::prelude_constructor;
 use crate::types::go_type::GoType;
 use callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use coercion::CoercionPlan;
-use layout::SlotOrigin;
-use syntax::ast::{Expression, IdentifierResolution};
+use layout::{SlotOrigin, ValueLayout};
+use syntax::ast::Expression;
 use syntax::types::Type;
 
 /// Go spells a tuple payload as one result per element.
@@ -29,24 +28,10 @@ pub(crate) fn go_payload_layout(return_ty: &Type) -> PayloadLayout {
 }
 
 impl Planner<'_> {
-    /// ABI of a value after it has crossed into Lisette expression space.
-    pub(crate) fn value_return_abi(&self, return_ty: &Type) -> CallableReturnAbi {
-        let peeled = self.facts.peel_alias(return_ty);
-        if is_prelude_container_type(&peeled)
-            || peeled.tuple_arity().is_some_and(|arity| arity >= 2)
-        {
-            CallableReturnAbi::Tagged
-        } else {
-            CallableReturnAbi::Direct
-        }
-    }
-
     /// Natural physical ABI of a Lisette-authored callable return.
     pub(crate) fn callable_return_abi(&self, return_ty: &Type) -> CallableReturnAbi {
-        self.classify_direct_emission(return_ty).map_or_else(
-            || self.value_return_abi(return_ty),
-            CallableReturnAbi::Lowered,
-        )
+        self.classify_direct_emission(return_ty)
+            .map_or(CallableReturnAbi::Value, CallableReturnAbi::Lowered)
     }
 
     pub(crate) fn slot_return_abi(
@@ -54,10 +39,8 @@ impl Planner<'_> {
         return_ty: &Type,
         origin: SlotOrigin,
     ) -> CallableReturnAbi {
-        self.classify_slot_emission(return_ty, origin).map_or_else(
-            || self.value_return_abi(return_ty),
-            CallableReturnAbi::Lowered,
-        )
+        self.classify_slot_emission(return_ty, origin)
+            .map_or(CallableReturnAbi::Value, CallableReturnAbi::Lowered)
     }
 
     /// A Go-named function type renders as its Go name, so a value of that
@@ -75,15 +58,33 @@ impl Planner<'_> {
             && self.facts.resolve_to_function_type(ty).is_some()
     }
 
-    pub(crate) fn emitted_function_origin(
+    /// A function value's layout as emitted into a slot at `slot_origin`.
+    /// A closure literal returns in the slot's ABI but keeps Lisette value slots.
+    pub(crate) fn emitted_value_layout(
         &self,
         value: &Expression,
         slot_origin: SlotOrigin,
-    ) -> SlotOrigin {
-        if is_closure_literal(value) || self.is_go_callable(value) {
-            slot_origin
-        } else {
-            self.function_type_origin(&value.get_type(), SlotOrigin::Lisette)
+    ) -> ValueLayout {
+        let ty = value.get_type();
+        if self.is_go_callable(value) {
+            return self.value_layout(&ty, slot_origin);
+        }
+        let layout = self.value_layout(&ty, SlotOrigin::Lisette);
+        if !is_closure_literal(value) {
+            return layout;
+        }
+        let ValueLayout::Function {
+            function_type,
+            layout,
+        } = layout
+        else {
+            return layout;
+        };
+        let result = self.value_layout(&layout.result_type, SlotOrigin::Lisette);
+        let return_abi = self.slot_return_abi(&layout.result_type, slot_origin);
+        ValueLayout::Function {
+            function_type,
+            layout: self.function_layout(layout.parameters, &result, return_abi),
         }
     }
 
@@ -93,27 +94,33 @@ impl Planner<'_> {
         value: &Expression,
         target_ty: &Type,
     ) -> CoercionPlan {
-        let slot_origin = self.function_type_origin(target_ty, SlotOrigin::Lisette);
-        let source_origin = self.emitted_function_origin(value, slot_origin);
-        self.function_type_slot_bridge(&value.get_type(), target_ty, source_origin)
+        let Some(slot_origin) = self.go_function_slot_origin(&value.get_type(), target_ty) else {
+            return CoercionPlan::Identity;
+        };
+        let source = self.emitted_value_layout(value, slot_origin);
+        let target = self.value_layout(target_ty, slot_origin);
+        CoercionPlan::bridge(self, &source, &target)
     }
 
     pub(crate) fn function_type_slot_bridge(
         &self,
         value_ty: &Type,
         target_ty: &Type,
-        source_origin: SlotOrigin,
     ) -> CoercionPlan {
-        let slot_origin = self.function_type_origin(target_ty, SlotOrigin::Lisette);
-        if !slot_origin.declared_by_go()
-            || self.facts.resolve_to_function_type(value_ty).is_none()
-            || self.facts.resolve_to_function_type(target_ty).is_none()
-        {
+        let Some(slot_origin) = self.go_function_slot_origin(value_ty, target_ty) else {
             return CoercionPlan::Identity;
-        }
-        let source = self.value_layout(value_ty, source_origin);
+        };
+        let source = self.value_layout(value_ty, SlotOrigin::Lisette);
         let target = self.value_layout(target_ty, slot_origin);
         CoercionPlan::bridge(self, &source, &target)
+    }
+
+    fn go_function_slot_origin(&self, value_ty: &Type, target_ty: &Type) -> Option<SlotOrigin> {
+        let slot_origin = self.function_type_origin(target_ty, SlotOrigin::Lisette);
+        (slot_origin.declared_by_go()
+            && self.facts.resolve_to_function_type(value_ty).is_some()
+            && self.facts.resolve_to_function_type(target_ty).is_some())
+        .then_some(slot_origin)
     }
 
     pub(crate) fn value_slot_coercion(&self, value: &Expression, target_ty: &Type) -> CoercionPlan {
@@ -191,72 +198,17 @@ impl Planner<'_> {
         self.use_rendered_go_type(go_type)
     }
 
+    /// The Go result of a Lisette-authored callable with this return ABI.
     pub(crate) fn callable_return_go_type(
         &self,
         abi: &CallableReturnAbi,
         return_ty: &Type,
     ) -> GoType {
-        match abi.lowered() {
-            Some(lowered) => self.lowered_return_go_type(lowered, return_ty),
-            None => self.go_type(&self.facts.peel_alias(return_ty)),
-        }
-    }
-
-    /// Render the lowered Go return type.
-    pub(crate) fn render_lowered_return_ty(
-        &mut self,
-        shape: &LoweredReturnAbi,
-        return_ty: &Type,
-    ) -> String {
-        let go_type = self.lowered_return_go_type(shape, return_ty);
-        self.use_rendered_go_type(go_type)
-    }
-
-    /// Render a lowered return type together with its package requirements.
-    pub(crate) fn lowered_return_go_type(
-        &self,
-        shape: &LoweredReturnAbi,
-        return_ty: &Type,
-    ) -> GoType {
         let peeled = self.facts.peel_alias(return_ty);
-        match shape {
-            LoweredReturnAbi::BareError => self.go_type(&peeled.err_type()),
-            LoweredReturnAbi::Result { payload } | LoweredReturnAbi::Partial { payload } => {
-                let mut slots = self.lowered_payload_go_types(&peeled.ok_type(), *payload);
-                slots.push(self.go_type(&peeled.err_type()));
-                go_result_list(&slots)
-            }
-            LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { payload }) => {
-                let mut slots = self.lowered_payload_go_types(&peeled.ok_type(), *payload);
-                slots.push(GoType::new("bool"));
-                go_result_list(&slots)
-            }
-            LoweredReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
-                self.go_type(&peeled.ok_type())
-            }
-            LoweredReturnAbi::Tuple { .. } => go_result_list(&self.tuple_slot_go_types(&peeled)),
-        }
-    }
-
-    fn lowered_payload_go_types(&self, ok_ty: &Type, payload: PayloadLayout) -> Vec<GoType> {
-        match payload {
-            PayloadLayout::Flattened => self.tuple_slot_go_types(&self.facts.peel_alias(ok_ty)),
-            PayloadLayout::Packed => vec![self.go_type(ok_ty)],
-        }
-    }
-
-    fn tuple_slot_go_types(&self, tuple_ty: &Type) -> Vec<GoType> {
-        tuple_element_types(tuple_ty)
-            .iter()
-            .map(|t| {
-                if self.facts.is_nullable_option(t) {
-                    let inner = self.facts.peel_alias(t).ok_type();
-                    self.go_type(&inner)
-                } else {
-                    self.go_type(t)
-                }
-            })
-            .collect()
+        let result = self.value_layout(&peeled, SlotOrigin::Lisette);
+        self.function_layout(Vec::new(), &result, abi.clone())
+            .result_go_type(self)
+            .unwrap_or_else(|| self.go_type(&peeled))
     }
 }
 
@@ -278,22 +230,6 @@ pub(crate) fn tuple_element_types(ty: &Type) -> Vec<Type> {
         Type::Nominal { params, .. } => params.clone(),
         _ => Vec::new(),
     }
-}
-
-/// Prelude fn refs emit with tagged Go return (`Option[T]`); user fns
-/// and lambdas emit with the lowered ABI (`(T, bool)`).
-pub(crate) fn is_tagged_shape_fn_value(expression: &Expression) -> bool {
-    let inner = expression.unwrap_parens();
-    if prelude_constructor(inner).is_some() {
-        return true;
-    }
-    matches!(
-        inner,
-        Expression::Identifier {
-            resolution: IdentifierResolution::Definition { name: q, .. },
-            ..
-        } if q.starts_with("prelude.")
-    )
 }
 
 pub(crate) fn is_closure_literal(expression: &Expression) -> bool {

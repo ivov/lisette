@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::abi::callable::{CallableAbi, CallableParamAbi, CallableReturnAbi, LoweredReturnAbi};
 use crate::abi::coercion::LayoutBridge;
+use crate::abi::is_prelude_container_type;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::definitions::interface_adapter::with_comma_ok_hint;
 use crate::patterns::matching::prelude_constructor;
@@ -142,8 +143,11 @@ impl<'a> Planner<'a> {
 
         let resolved = self.resolve_callee(function, origin, go_return.as_ref(), args.len());
         debug_assert!(
-            !resolved.abi.result.is_lowered()
-                || self.value_return_abi(ty) == CallableReturnAbi::Tagged,
+            !resolved.abi.result.is_lowered() || {
+                let peeled = self.facts.peel_alias(ty);
+                is_prelude_container_type(&peeled)
+                    || peeled.tuple_arity().is_some_and(|arity| arity >= 2)
+            },
             "a lowered call result wraps into its tagged Lisette value"
         );
         let arguments = args
@@ -188,12 +192,7 @@ impl<'a> Planner<'a> {
             Some(result) => CallableReturnAbi::Lowered(result.clone()),
             None => self
                 .classify_callee_abi(function, id.as_deref(), declaration)
-                .unwrap_or_else(|| {
-                    instantiated
-                        .get_function_ret()
-                        .map(|return_ty| self.value_return_abi(return_ty))
-                        .unwrap_or(CallableReturnAbi::Direct)
-                }),
+                .unwrap_or(CallableReturnAbi::Value),
         };
         let return_type = instantiated.get_function_ret().unwrap_or(&Type::Never);
         let declared_return = declared_type.and_then(|ty| ty.unwrap_forall().get_function_ret());
@@ -355,7 +354,7 @@ impl<'a> Planner<'a> {
         Some(abi)
     }
 
-    pub(crate) fn callee_uses_tagged_method_return(&self, callee: &Expression) -> bool {
+    fn callee_uses_tagged_method_return(&self, callee: &Expression) -> bool {
         let callee_definition = resolved_definition(callee);
         if callee_definition.is_some_and(|id| {
             id.starts_with("go:")

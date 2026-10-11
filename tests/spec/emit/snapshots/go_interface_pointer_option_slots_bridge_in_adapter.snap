@@ -1,0 +1,98 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:example.com/box"
+  
+  struct Holder {}
+  
+  impl Holder {
+    fn Value(self) -> Option<int> {
+      Some(1)
+    }
+    fn Load(self) -> Result<Option<int>, error> {
+      Ok(None)
+    }
+    fn Set(self, v: Option<int>) {
+      let _ = v
+    }
+  }
+  
+  fn use_box(b: box.Box) {
+    let _ = b.Value()
+    match b.Load() {
+      Ok(Some(v)) => { let _ = v },
+      _ => {},
+    }
+    b.Set(Some(3))
+  }
+  
+  fn main() {
+    use_box(Holder {} as box.Box)
+  }
+---
+package main
+
+import (
+	"example.com/box"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Holder struct{}
+
+func (h Holder) Value() (int, bool) {
+	return 1, true
+}
+
+func (h Holder) Load() (lisette.Option[int], error) {
+	return lisette.MakeOptionNone[int](), nil
+}
+
+func (h Holder) Set(v lisette.Option[int]) {
+	_ = v
+}
+
+func useBox(b box.Box) {
+	b.Value()
+	ret, ret_1 := b.Load()
+	var result lisette.Result[lisette.Option[int], error]
+	if ret_1 != nil {
+		result = lisette.MakeResultErr[lisette.Option[int], error](ret_1)
+	} else {
+		option := lisette.OptionFromPointer[int](ret)
+		result = lisette.MakeResultOk[lisette.Option[int], error](option)
+	}
+	if result.Tag == lisette.ResultOk {
+		if result.OkVal.Tag == lisette.OptionSome {
+			_ = result.OkVal.SomeVal
+		}
+	}
+	var ptr int = 3
+	b.Set(&ptr)
+}
+
+func main() {
+	useBox(_lisAdapter_Holder_Box_0{inner: Holder{}})
+}
+
+type _lisAdapter_Holder_Box_0 struct {
+	inner Holder
+}
+
+func (a _lisAdapter_Holder_Box_0) Value() (int, bool) {
+	return a.inner.Value()
+}
+
+func (a _lisAdapter_Holder_Box_0) Load() (*int, error) {
+	ret, ret_1 := a.inner.Load()
+	var ptr *int
+	if ret.Tag == lisette.OptionSome {
+		ptr = &ret.SomeVal
+	}
+	return ptr, ret_1
+}
+
+func (a _lisAdapter_Holder_Box_0) Set(arg0 *int) {
+	option := lisette.OptionFromPointer[int](arg0)
+	a.inner.Set(option)
+}

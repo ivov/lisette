@@ -2,7 +2,7 @@ use crate::Planner;
 use crate::abi::callable::{CallableAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::{LayoutBridge, resolve_layout_bridge};
 use crate::abi::layout::{FunctionLayout, ValueLayout};
-use crate::abi::transition::multi_value_return;
+use crate::abi::transition::{multi_value_return, reencode_return};
 use crate::control_flow::fallible::{
     Fallible, PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR, prelude_call,
 };
@@ -127,28 +127,18 @@ impl Planner<'_> {
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) -> GoExpression {
-        debug_assert!(source.return_abi.same_logical_contract(&target.return_abi));
         let function = self.hoist_tmp_value_statement(statements, "cb", value);
         let mut body = Vec::new();
         let mut parameters = Vec::new();
-        let mut arguments = Vec::new();
-
-        for (index, (source, target)) in
-            source.parameters.iter().zip(&target.parameters).enumerate()
-        {
+        let mut names = Vec::new();
+        for (index, target) in target.parameters.iter().enumerate() {
             let name = format!("arg{index}");
             let target_type = target.go_type(self);
             let target_type = self.use_rendered_go_type(target_type);
             parameters.push(GoParameter::new(name.clone(), target_type));
-            let bridge = resolve_layout_bridge(self, target, source);
-            let argument = self.plan_layout_bridge(&mut body, GoExpression::name(name), &bridge);
-            if source.logical_type().get_name() == Some("VarArgs") {
-                arguments.push(GoExpression::spread(argument));
-            } else {
-                arguments.push(argument);
-            }
+            names.push(GoExpression::name(name));
         }
-
+        let arguments = self.plan_bridged_arguments(&mut body, names, source, target);
         let call = GoExpression::call(GoExpression::name(function), arguments);
         self.plan_function_result_bridge(&mut body, call, source, target);
         let result = target
@@ -163,13 +153,46 @@ impl Planner<'_> {
         )
     }
 
-    fn plan_function_result_bridge(
+    /// Bridge each `target` parameter value into the matching `source` slot.
+    pub(crate) fn plan_bridged_arguments(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        parameters: Vec<GoExpression>,
+        source: &FunctionLayout,
+        target: &FunctionLayout,
+    ) -> Vec<GoExpression> {
+        parameters
+            .into_iter()
+            .zip(source.parameters.iter().zip(&target.parameters))
+            .map(|(parameter, (source, target))| {
+                let bridge = resolve_layout_bridge(self, target, source);
+                let argument = self.plan_layout_bridge(statements, parameter, &bridge);
+                if source.logical_type().get_name() == Some("VarArgs") {
+                    GoExpression::spread(argument)
+                } else {
+                    argument
+                }
+            })
+            .collect()
+    }
+
+    pub(crate) fn plan_function_result_bridge(
         &mut self,
         statements: &mut Vec<Statement>,
         call: GoExpression,
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) {
+        if !source.return_abi.same_logical_contract(&target.return_abi) {
+            statements.extend(reencode_return(
+                self,
+                call,
+                &source.return_abi,
+                &target.return_abi,
+                &source.result_type,
+            ));
+            return;
+        }
         match source.return_abi.lowered() {
             None => {
                 if returns_go_void(&source.result_type) {

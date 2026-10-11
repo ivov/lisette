@@ -31,10 +31,8 @@ pub(crate) enum OptionReturnAbi {
 /// Physical Go result contract for a callable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CallableReturnAbi {
-    /// One generated Lisette tagged value (`Result`, `Option`, or tuple).
-    Tagged,
-    /// No generated tagged/lowered boundary encoding is required.
-    Direct,
+    /// One Go result holding the Lisette value.
+    Value,
     Lowered(LoweredReturnAbi),
 }
 
@@ -59,7 +57,7 @@ impl CallableReturnAbi {
     pub(crate) fn lowered(&self) -> Option<&LoweredReturnAbi> {
         match self {
             Self::Lowered(lowered) => Some(lowered),
-            Self::Tagged | Self::Direct => None,
+            Self::Value => None,
         }
     }
 

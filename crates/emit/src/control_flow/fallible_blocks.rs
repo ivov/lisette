@@ -1,7 +1,7 @@
 use super::propagation::plain_return;
 use crate::Planner;
 use crate::ReturnContext;
-use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::calls::bound_value::BoundValue;
 use crate::calls::comma_ok::{CommaOkValueSlot, PairKind};
 use crate::context::expression::ExpressionContext;
@@ -25,7 +25,10 @@ pub(crate) struct TryBlockPairPlan<'e> {
 
 impl TryBlockPairPlan<'_> {
     pub(crate) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundValue {
-        let go_return = planner.render_lowered_return_ty(&self.shape, &self.effective_ty);
+        let go_return = planner.render_callable_return_ty(
+            &CallableReturnAbi::Lowered(self.shape.clone()),
+            &self.effective_ty,
+        );
         let body = planner.with_isolated_function(self.body_ctx, |planner| LoweredBlock {
             statements: planner.lower_try_items(self.items, &self.fallible),
         });

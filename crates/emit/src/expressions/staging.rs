@@ -1,6 +1,5 @@
 use crate::Planner;
 use crate::abi::callable::CallableAbi;
-use crate::abi::is_tagged_shape_fn_value;
 use crate::abi::transition::lower_arg_to_tagged;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
@@ -285,13 +284,10 @@ impl Planner<'_> {
         if matches!(arg.unwrap_parens(), Expression::Lambda { .. }) {
             return None;
         }
-        if is_tagged_shape_fn_value(arg) {
-            return None;
-        }
-        if self
-            .resolve_callable_value(arg)
-            .is_some_and(|callee| matches!(callee.origin, CallableOrigin::GoInterop))
-        {
+        // A Go function value is already wrapped to the tagged ABI here.
+        if self.resolve_callable_value(arg).is_some_and(|callee| {
+            matches!(callee.origin, CallableOrigin::GoInterop) || !callee.abi.result.is_lowered()
+        }) {
             return None;
         }
         let param_ty = param_ty?;

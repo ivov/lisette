@@ -62,12 +62,8 @@ func count(input string, split bufio.SplitFunc) int {
 func main() {
 	cb := splitWords
 	fmt.Println(count("one two three", func(arg0 []byte, arg1 bool) (int, []byte, error) {
-		result := lisette.ResultFromPair[lisette.Tuple2[int, []byte]](cb(arg0, arg1))
-		if result.Tag == lisette.ResultOk {
-			tup := result.OkVal
-			return tup.First, tup.Second, nil
-		}
-		return 0, nil, result.ErrVal
+		ret, ret_1 := cb(arg0, arg1)
+		return ret.First, ret.Second, ret_1
 	}))
 	fmt.Println(count("four five", bufio.ScanWords))
 }

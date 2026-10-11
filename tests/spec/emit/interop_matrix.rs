@@ -3357,3 +3357,25 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn closure_in_go_function_slot_bridges_pointer_option_slots() {
+    let input = r#"
+import "go:example.com/cb"
+
+fn named() -> Result<Option<int>, error> {
+  Ok(Some(2))
+}
+
+fn main() {
+  cb.Run(|| Ok(Some(1)))
+  cb.Run(named)
+  cb.Each(|v| { let _ = v })
+}
+"#;
+    let typedef = r#"
+pub fn Run(f: fn() -> Result<Option<int>, error>)
+pub fn Each(f: fn(Option<int>))
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/cb", typedef)]);
+}

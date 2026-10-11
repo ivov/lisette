@@ -7537,3 +7537,36 @@ struct cap { embed Inner }
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn tagged_method_value_fills_prelude_callback_without_wrapper() {
+    let input = r#"
+pub interface Getter<T> {
+  fn get() -> T
+}
+
+struct Box {
+  n: int,
+}
+
+impl Box {
+  pub fn get(self) -> Option<int> { Some(self.n) }
+}
+
+fn use_getter<G: Getter<Option<int>>>(g: G) -> Option<int> { g.get() }
+
+fn main() {
+  let b = Box { n: 1 }
+  let _ = use_getter(b)
+  let o: Option<int> = None
+  let _ = o.or_else(b.get)
+  let _ = Option.and_then(Some(b), Box.get)
+  let f = Box.get
+  let x = f(b)
+  let g = b.get
+  let y = g()
+  let _ = (x, y)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

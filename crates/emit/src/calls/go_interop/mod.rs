@@ -66,12 +66,9 @@ impl Planner<'_> {
         result_ty: &Type,
     ) -> Option<GoResultBridge> {
         let CallableReturnAbi::Lowered(lowered) = &abi.result else {
-            return match abi.result {
-                CallableReturnAbi::Direct => self
-                    .whole_result_bridge(abi, result_ty)
-                    .map(GoResultBridge::Whole),
-                _ => None,
-            };
+            return self
+                .whole_result_bridge(abi, result_ty)
+                .map(GoResultBridge::Whole);
         };
         match lowered {
             LoweredReturnAbi::BareError
@@ -93,7 +90,7 @@ impl Planner<'_> {
     fn whole_result_bridge(&self, abi: &CallableAbi, result_ty: &Type) -> Option<CoercionPlan> {
         let target = self.value_layout(result_ty, SlotOrigin::Lisette);
         match abi.result {
-            CallableReturnAbi::Direct => {}
+            CallableReturnAbi::Value => {}
             CallableReturnAbi::Lowered(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)) => {
                 let source_payload = abi.return_layout.payload()?;
                 let target_payload = target.payload()?;

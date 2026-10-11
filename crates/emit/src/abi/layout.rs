@@ -55,9 +55,15 @@ pub(crate) struct FunctionLayout {
 
 impl FunctionLayout {
     fn same_representation(&self, other: &Self) -> bool {
-        self.return_abi == other.return_abi
-            && layouts_match(&self.parameters, &other.parameters)
-            && layouts_match(&self.results, &other.results)
+        self.same_parameter_representation(other) && self.same_result_representation(other)
+    }
+
+    pub(crate) fn same_parameter_representation(&self, other: &Self) -> bool {
+        layouts_match(&self.parameters, &other.parameters)
+    }
+
+    pub(crate) fn same_result_representation(&self, other: &Self) -> bool {
+        self.return_abi == other.return_abi && layouts_match(&self.results, &other.results)
     }
 
     fn go_type(&self, planner: &Planner<'_>) -> GoType {
