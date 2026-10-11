@@ -1,0 +1,52 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn next() -> int { 3 }
+  
+  fn pick(a: int, found: bool) -> int {
+    if found { a } else { 0 }
+  }
+  
+  fn pick_then(a: int, found: bool, b: int) -> int {
+    if found { a + b } else { b }
+  }
+  
+  fn inline(xs: Slice<int>, i: int, s: string) -> int {
+    pick(xs[i], s.contains("a"))
+  }
+  
+  fn pinned(xs: Slice<int>, i: int, s: string) -> int {
+    pick_then(xs[i], s.contains("a"), next())
+  }
+---
+package main
+
+import "strings"
+
+func next() int {
+	return 3
+}
+
+func pick(a int, found bool) int {
+	if found {
+		return a
+	}
+	return 0
+}
+
+func pickThen(a int, found bool, b int) int {
+	if found {
+		return a + b
+	}
+	return b
+}
+
+func inline(xs []int, i int, s string) int {
+	return pick(xs[i], strings.Contains(s, "a"))
+}
+
+func pinned(xs []int, i int, s string) int {
+	arg := xs[i]
+	return pickThen(arg, strings.Contains(s, "a"), next())
+}

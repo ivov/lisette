@@ -46,7 +46,7 @@ impl<'a> PlaceOrdering<'a> {
     fn later(self) -> LaterStages {
         self.right_hand_side
             .map_or_else(LaterStages::default, |value| {
-                LaterStages::sequenced(value.setup(), value.facts().effect)
+                LaterStages::sequenced(value.setup(), value.effects())
             })
     }
 

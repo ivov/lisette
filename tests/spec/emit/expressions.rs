@@ -5417,6 +5417,30 @@ fn quotient(a: int, b: int) -> int {
 }
 
 #[test]
+fn panicking_index_stays_inline_before_a_read_only_native_call() {
+    let input = r#"
+fn next() -> int { 3 }
+
+fn pick(a: int, found: bool) -> int {
+  if found { a } else { 0 }
+}
+
+fn pick_then(a: int, found: bool, b: int) -> int {
+  if found { a + b } else { b }
+}
+
+fn inline(xs: Slice<int>, i: int, s: string) -> int {
+  pick(xs[i], s.contains("a"))
+}
+
+fn pinned(xs: Slice<int>, i: int, s: string) -> int {
+  pick_then(xs[i], s.contains("a"), next())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn pointer_field_read_stays_inline_before_a_constructor() {
     let input = r#"
 enum Mode {

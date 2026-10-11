@@ -1,6 +1,6 @@
 //! What evaluating a Go expression can do besides producing its value.
 
-use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
+use crate::plan::go_expression::{BinaryOp, CallPurity, GoExpressionNode};
 use crate::plan::values::{EvaluationEffect, Stability};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -60,33 +60,11 @@ impl Effects {
         }
     }
 
-    pub(crate) fn calls_of(effect: EvaluationEffect) -> Self {
+    /// With every read's stability known, a call reaches only shared memory.
+    pub(crate) fn with_known_reads(self, reads: Stability) -> Self {
         Self {
-            // Plan facts do not yet mark which calls the tree spells as pure.
-            calls: if effect.has_call() {
-                EvaluationEffect::EffectfulCall
-            } else {
-                EvaluationEffect::Pure
-            },
-            writes: if effect.has_effectful_call() {
-                Writes::Shared
-            } else {
-                Writes::Nothing
-            },
-            ..Self::default()
-        }
-    }
-
-    pub(crate) fn with_facts(self, reads: Stability, effect: EvaluationEffect) -> Self {
-        let calls = Self::calls_of(effect);
-        Self {
-            calls: if effect.has_call() {
-                self.calls
-            } else {
-                EvaluationEffect::Pure
-            },
             reads,
-            writes: self.writes.min(calls.writes),
+            writes: self.writes.min(Writes::Shared),
             ..self
         }
     }
@@ -178,8 +156,19 @@ impl GoExpressionNode {
             | Self::FunctionLiteral { .. } => Effects::default(),
             Self::Identifier(_) => Effects::local_read(),
             Self::Qualified { .. } => reference_read(false),
-            Self::Call { pure: true, .. } => Effects {
+            Self::Call {
+                purity: CallPurity::Constructor,
+                ..
+            } => Effects {
                 calls: EvaluationEffect::PureCall,
+                ..Effects::default()
+            },
+            Self::Call {
+                purity: CallPurity::ReadOnly,
+                ..
+            } => Effects {
+                calls: EvaluationEffect::PureCall,
+                reads: Stability::Observable,
                 ..Effects::default()
             },
             Self::Call { .. } | Self::Verbatim(_) => Effects {
@@ -278,7 +267,7 @@ mod tests {
         GoExpressionNode::Call {
             callee: Box::new(name(callee)),
             arguments,
-            pure: false,
+            purity: CallPurity::Effectful,
         }
     }
 
@@ -321,7 +310,9 @@ mod tests {
 
     #[test]
     fn go_orders_calls_but_not_the_reads_around_them() {
-        let effectful = Effects::calls_of(EvaluationEffect::EffectfulCall);
+        let effectful = call("next", Vec::new())
+            .effects()
+            .with_known_reads(Stability::Fixed);
         assert!(effectful.without_go_order().can_move_across(effectful));
         let call = call("next", Vec::new()).effects();
         assert!(!index().effects().without_go_order().can_move_across(call));
@@ -333,7 +324,7 @@ mod tests {
         let constructor = GoExpressionNode::Call {
             callee: Box::new(name("MakeModeClean")),
             arguments: Vec::new(),
-            pure: true,
+            purity: CallPurity::Constructor,
         }
         .effects();
         let read = index().effects().without_go_order();
@@ -355,10 +346,45 @@ mod tests {
     }
 
     #[test]
-    fn source_facts_refine_reads_and_calls() {
+    fn a_read_only_call_does_not_order_a_panicking_read() {
+        let read_only = GoExpressionNode::Call {
+            callee: Box::new(name("len")),
+            arguments: vec![name("xs")],
+            purity: CallPurity::ReadOnly,
+        }
+        .effects();
+        assert!(!read_only.runs_effectful_code());
+        assert!(
+            index()
+                .effects()
+                .without_go_order()
+                .can_move_across(read_only)
+        );
+        assert!(!read_only.can_move_across(call("next", Vec::new()).effects()));
+    }
+
+    #[test]
+    fn plan_facts_without_an_effectful_call_mark_the_tree() {
+        use crate::plan::values::{GoExpression, ValuePlan};
+        let call = || {
+            GoExpression::call(
+                GoExpression::name("len".to_string()),
+                vec![GoExpression::name("xs".to_string())],
+            )
+        };
+        let read_only = ValuePlan::computed(Vec::new(), call(), EvaluationEffect::PureCall);
+        assert!(!read_only.expression().effects().runs_effectful_code());
+        let effectful = ValuePlan::computed(Vec::new(), call(), EvaluationEffect::EffectfulCall);
+        assert!(effectful.expression().effects().runs_effectful_code());
+    }
+
+    #[test]
+    fn known_reads_refine_reads_and_writes() {
         let local = name("x").effects();
-        let fixed = local.with_facts(Stability::Fixed, EvaluationEffect::Pure);
-        let effectful = Effects::calls_of(EvaluationEffect::EffectfulCall);
+        let fixed = local.with_known_reads(Stability::Fixed);
+        let effectful = call("next", Vec::new())
+            .effects()
+            .with_known_reads(Stability::Fixed);
         assert!(!local.can_move_across(Effects::anything()));
         assert!(fixed.can_move_across(Effects::anything().without_go_order()));
         assert!(Effects::read_of(Stability::StableAcrossCalls).can_move_across(effectful));
