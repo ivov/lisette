@@ -3,6 +3,7 @@ use syntax::types::Type;
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::LayoutBridge;
+use crate::abi::layout::SlotOrigin;
 use crate::abi::tuple_element_types;
 use crate::calls::go_interop::WrapperTarget;
 use crate::context::expression::ExpressionContext;
@@ -385,7 +386,10 @@ pub(crate) fn emit_lisette_callback_wrapper(
     ));
     GoExpression::function_literal(
         params_str,
-        planner.render_lowered_return_ty(target_abi, return_type),
+        planner.render_callable_return_ty(
+            &CallableReturnAbi::Lowered(target_abi.clone()),
+            return_type,
+        ),
         LoweredBlock {
             statements: prelude,
         },
@@ -406,20 +410,17 @@ pub(crate) fn emit_fn_arg_shape_adapter(
 ) -> Option<GoExpression> {
     let params = arg_fn_type.get_function_params()?;
     let arg_ret = arg_fn_type.get_function_ret()?;
-
-    let cb_var = planner.hoist_tmp_value_statement(setup, "cb", fn_value);
-    let (param_strs, arguments) = planner.build_wrapper_params(params);
-    let inner_call = GoExpression::call(GoExpression::name(cb_var), arguments);
-
-    let outer_ret = planner.render_callable_return_ty(target_abi, arg_ret);
-    let body = reencode_return(planner, inner_call, arg_abi, target_abi, arg_ret);
-
-    Some(GoExpression::function_literal(
-        param_strs,
-        outer_ret,
-        LoweredBlock { statements: body },
-        FunctionLiteralLayout::MultiLine,
-    ))
+    let layout = |planner: &Planner, abi: &CallableReturnAbi| {
+        let parameters = params
+            .iter()
+            .map(|param| planner.value_layout(&param.ty, SlotOrigin::Lisette))
+            .collect();
+        let result = planner.value_layout(arg_ret, SlotOrigin::Lisette);
+        planner.function_layout(parameters, &result, abi.clone())
+    };
+    let source = layout(planner, arg_abi);
+    let target = layout(planner, target_abi);
+    Some(planner.plan_function_layout_bridge(setup, fn_value, &source, &target))
 }
 
 /// Return the `source` result of `call` in the `target` ABI, through its tagged value.

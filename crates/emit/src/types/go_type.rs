@@ -1,4 +1,5 @@
 use crate::Planner;
+use crate::abi::callable::CallableReturnAbi;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::definitions::structs::struct_field_go_name;
 use crate::names::go_name;
@@ -286,9 +287,10 @@ impl Planner<'_> {
     fn emit_function_type(&self, params: &[FunctionParameter], return_ty: &Type) -> GoType {
         let param_types: Vec<GoType> = params.iter().map(|p| self.go_type(&p.ty)).collect();
 
-        let lowered = self.classify_direct_emission(return_ty);
-        let return_type = match &lowered {
-            Some(shape) => self.lowered_return_go_type(shape, return_ty),
+        let return_type = match self.classify_direct_emission(return_ty) {
+            Some(shape) => {
+                self.callable_return_go_type(&CallableReturnAbi::Lowered(shape), return_ty)
+            }
             None => self.go_type(return_ty),
         };
 

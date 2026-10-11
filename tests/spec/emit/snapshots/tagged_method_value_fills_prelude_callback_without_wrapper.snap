@@ -1,0 +1,81 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  pub interface Getter<T> {
+    fn get() -> T
+  }
+  
+  struct Box {
+    n: int,
+  }
+  
+  impl Box {
+    pub fn get(self) -> Option<int> { Some(self.n) }
+  }
+  
+  fn use_getter<G: Getter<Option<int>>>(g: G) -> Option<int> { g.get() }
+  
+  fn main() {
+    let b = Box { n: 1 }
+    let _ = use_getter(b)
+    let o: Option<int> = None
+    let _ = o.or_else(b.get)
+    let _ = Option.and_then(Some(b), Box.get)
+    let f = Box.get
+    let x = f(b)
+    let g = b.get
+    let y = g()
+    let _ = (x, y)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Getter[T any] interface {
+	Get() T
+}
+
+type Box struct {
+	n int
+}
+
+func (b Box) Get() lisette.Option[int] {
+	return lisette.MakeOptionSome[int](b.n)
+}
+
+func useGetter[G Getter[lisette.Option[int]]](g G) (int, bool) {
+	v := g.Get()
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	return 0, false
+}
+
+func main() {
+	b := Box{n: 1}
+	useGetter(b)
+	o := lisette.MakeOptionNone[int]()
+	o.OrElse(b.Get)
+	lisette.OptionAndThen(lisette.MakeOptionSome(b), Box.Get)
+	cb := Box.Get
+	f := func(arg0 Box) (int, bool) {
+		res := cb(arg0)
+		if res.Tag == lisette.OptionSome {
+			return res.SomeVal, true
+		}
+		return 0, false
+	}
+	x := lisette.OptionFromCommaOk[int](f(b))
+	cb_1 := b.Get
+	g := func() (int, bool) {
+		res_1 := cb_1()
+		if res_1.Tag == lisette.OptionSome {
+			return res_1.SomeVal, true
+		}
+		return 0, false
+	}
+	y := lisette.OptionFromCommaOk[int](g())
+	_ = lisette.MakeTuple2[lisette.Option[int], lisette.Option[int]](x, y)
+}

@@ -1,4 +1,4 @@
-use crate::abi::{is_closure_literal, is_tagged_shape_fn_value};
+use crate::abi::is_closure_literal;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::EcoString;
 
@@ -255,7 +255,10 @@ impl Planner<'_> {
         arg: &Expression,
         generic_param_ty: Option<&Type>,
     ) -> Option<FunctionArgumentAdapter> {
-        if is_tagged_shape_fn_value(arg) {
+        if self
+            .resolve_callable_value(arg)
+            .is_some_and(|callee| callee.is_prelude_dispatch)
+        {
             return None;
         }
         let source_follows_param = is_closure_literal(arg) || self.is_go_callable(arg);
@@ -430,13 +433,9 @@ impl Planner<'_> {
             return None;
         };
         let target = self.classify_slot_emission(&param_f.return_type, param.origin)?;
-        let source = if is_tagged_shape_fn_value(arg) {
-            CallableReturnAbi::Tagged
-        } else {
-            self.resolve_callable_value(arg)
-                .map(|callee| callee.abi.result)
-                .unwrap_or(CallableReturnAbi::Direct)
-        };
+        let source = self
+            .resolve_callable_value(arg)
+            .map_or(CallableReturnAbi::Value, |callee| callee.abi.result);
         (source != CallableReturnAbi::Lowered(target.clone())).then_some((source, target))
     }
 
@@ -452,7 +451,7 @@ impl Planner<'_> {
             ExpressionContext::value().with_forced_tagged_go_function(true),
         );
         argument.map_expression(|setup, value| match source {
-            CallableReturnAbi::Tagged => {
+            CallableReturnAbi::Value => {
                 let param_fn_ty = self
                     .facts
                     .resolve_to_function_type(effective_param_ty.unwrap_forall())
@@ -468,9 +467,6 @@ impl Planner<'_> {
                 emit_fn_arg_shape_adapter(self, setup, value, &arg_fn_ty, source, &target)
                     .expect("callback ABI transition has a function signature")
             }
-            CallableReturnAbi::Direct => {
-                unreachable!("type-checked callback ABIs must describe the same result")
-            }
         })
     }
 
@@ -479,12 +475,12 @@ impl Planner<'_> {
         argument: &Expression,
         parameter: &CallableParamAbi,
     ) -> ValueLayout {
-        let origin = if is_closure_literal(argument) {
-            self.function_type_origin(&parameter.instantiated, parameter.origin)
+        if is_closure_literal(argument) {
+            let slot_origin = self.function_type_origin(&parameter.instantiated, parameter.origin);
+            self.emitted_value_layout(argument, slot_origin)
         } else {
-            SlotOrigin::Lisette
-        };
-        self.value_layout(&argument.get_type(), origin)
+            self.value_layout(&argument.get_type(), SlotOrigin::Lisette)
+        }
     }
 
     fn plan_argument_slot_bridge(
@@ -563,7 +559,7 @@ impl Planner<'_> {
     fn go_physical_expression_layout(&self, expression: &Expression) -> Option<ValueLayout> {
         if self.call_target_is_go(expression)
             && let Some(plan) = self.plan_call(expression)
-            && matches!(plan.resolved.abi.result, CallableReturnAbi::Direct)
+            && matches!(plan.resolved.abi.result, CallableReturnAbi::Value)
         {
             return Some(plan.resolved.abi.return_layout.clone());
         }

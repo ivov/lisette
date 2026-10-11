@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::Renderer;
 use crate::ReturnContext;
-use crate::abi::callable::LoweredReturnAbi;
+use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
@@ -234,7 +234,7 @@ impl Planner<'_> {
             match return_ctx.lowered_shape() {
                 Some(shape) => Some(format!(
                     " {}",
-                    self.render_lowered_return_ty(&shape, return_ty)
+                    self.render_callable_return_ty(&CallableReturnAbi::Lowered(shape), return_ty)
                 )),
                 None => Some(format!(" {}", self.use_go_type(return_ty))),
             }
@@ -400,7 +400,10 @@ impl Planner<'_> {
         let return_ty = if returns_go_void(function_definition.return_type) {
             String::new()
         } else if let Some(shape) = return_shape {
-            self.render_lowered_return_ty(shape, function_definition.return_type)
+            self.render_callable_return_ty(
+                &CallableReturnAbi::Lowered(shape.clone()),
+                function_definition.return_type,
+            )
         } else {
             self.use_go_type(function_definition.return_type)
         };
