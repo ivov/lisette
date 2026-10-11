@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791740129160,
+  "lastUpdate": 1791741726954,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -44413,6 +44413,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 37643,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28624,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19366,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15270,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9029,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7381,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2945,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8aea6703d8daa0a9bc03a85b7cbf8eea0a035b2e",
+          "message": "fix: keep closure lets from shadowing the locals they read (#1539)",
+          "timestamp": "2026-10-11T20:01:39+02:00",
+          "tree_id": "da62dcf28d3dff67f3f6ac0e2ed4992a8ca3968d",
+          "url": "https://github.com/ivov/lisette/commit/8aea6703d8daa0a9bc03a85b7cbf8eea0a035b2e"
+        },
+        "date": 1791741724425,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 147417,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 37679,
             "unit": "lines"
           },
           {
