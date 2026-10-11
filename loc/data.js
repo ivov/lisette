@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791741726954,
+  "lastUpdate": 1791742135901,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -44502,6 +44502,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 37679,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28624,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19366,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15270,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9029,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7381,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2945,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e59b8c7eb62513ff2c431b9519bb6b101d63e347",
+          "message": "refactor: resolve emitted locals by ID instead of spelling (#1540)",
+          "timestamp": "2026-10-11T20:08:31+02:00",
+          "tree_id": "da75b06c420a3c1a2e85ba0ffb9b86b9a66c4923",
+          "url": "https://github.com/ivov/lisette/commit/e59b8c7eb62513ff2c431b9519bb6b101d63e347"
+        },
+        "date": 1791742133799,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 147527,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 37789,
             "unit": "lines"
           },
           {
