@@ -12,6 +12,7 @@ use crate::plan::bodies::{
     PlacePlan, Statement, assign, discard, expression_statement,
 };
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::Stability;
 use crate::plan::values::{
     CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
@@ -98,14 +99,22 @@ pub(crate) fn simple_assign(target: &GoExpression, value: ValuePlan) -> LoweredS
 }
 
 /// Bind the setup's trailing temp under `name` instead of copying it.
-pub(crate) fn rebind_trailing_temp(statements: &mut [Statement], name: &str, temp: &str) -> bool {
+pub(crate) fn rebind_trailing_temp(
+    statements: &mut [Statement],
+    name: &GoIdentifier,
+    temp: &str,
+) -> bool {
     statements.last_mut().is_some_and(|statement| {
         statement.kind.binds_name(temp) && statement.kind.rename_bound_name(name)
     })
 }
 
 /// Name a struct update's copy `name` when only field writes that do not read `name` follow it.
-pub(crate) fn rebind_updated_temp(statements: &mut [Statement], name: &str, temp: &str) -> bool {
+pub(crate) fn rebind_updated_temp(
+    statements: &mut [Statement],
+    name: &GoIdentifier,
+    temp: &str,
+) -> bool {
     let Some(start) = statements.iter().rposition(|s| s.kind.binds_name(temp)) else {
         return false;
     };
@@ -120,7 +129,7 @@ pub(crate) fn rebind_updated_temp(statements: &mut [Statement], name: &str, temp
             target.node(),
             GoExpressionNode::Selector { base, .. }
                 if matches!(base.as_ref(), GoExpressionNode::Identifier(read) if read == temp)
-        ) && !value.node().mentions(name)
+        ) && !value.node().mentions(name.spelling())
             && !value.node().mentions(temp)
     };
     if writes.is_empty() || !writes.iter().all(writes_field_of_temp) {
@@ -133,7 +142,7 @@ pub(crate) fn rebind_updated_temp(statements: &mut [Statement], name: &str, temp
         if let LoweredStatement::Assign(AssignForm::Simple { target, .. }) = &mut write.kind
             && let GoExpressionNode::Selector { base, .. } = target.node_mut()
         {
-            **base = GoExpressionNode::Identifier(name.to_string().into());
+            **base = GoExpressionNode::Identifier(name.clone());
         }
     }
     true
@@ -159,6 +168,7 @@ pub(crate) fn collapse_declared_temp(
     if declared != name {
         return;
     }
+    let declared = declared.clone();
     let value = match &filler.kind {
         LoweredStatement::Assign(AssignForm::Simple { target, value }) => {
             if !infers_declared_type(go_type, value, value_has_declared_type)
@@ -194,7 +204,7 @@ pub(crate) fn collapse_declared_temp(
         _ => return,
     };
     statements.pop();
-    statements[0].kind = LoweredStatement::Define(Definition::single(name.to_string(), value));
+    statements[0].kind = LoweredStatement::Define(Definition::single(declared, value));
 }
 
 fn infers_declared_type(

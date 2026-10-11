@@ -273,6 +273,11 @@ pub(crate) fn identify_body_locals(
                         .any(|frame| frame.values().any(|local| *local == id))
                 });
                 if !in_scope {
+                    debug_assert!(
+                        name.is_pending(),
+                        "identified read of `{}` has no visible declaration",
+                        name.spelling()
+                    );
                     name.resolve_to(visible);
                 }
             } else if name.is_pending()
@@ -405,7 +410,9 @@ mod tests {
     }
 
     #[test]
-    fn local_resolution_gives_an_out_of_scope_read_the_binding_id() {
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "has no visible declaration")]
+    fn an_identified_read_without_its_declaration_fails() {
         let mut statements = vec![
             define("result".to_string(), GoExpression::literal("1".to_string())),
             LoweredStatement::Return(vec![GoExpression::identifier(GoIdentifier::local(
@@ -414,16 +421,7 @@ mod tests {
             ))])
             .into(),
         ];
-        let mut scope = ScopeState::new();
-        identify_body_locals(&mut statements, &[], &mut scope);
-        let LoweredStatement::Define(binding) = &statements[0].kind else {
-            panic!("expected a binding");
-        };
-        let LoweredStatement::Return(values) = &statements[1].kind else {
-            panic!("expected a return");
-        };
-        assert_eq!(identifier_id(&values[0]), binding.names[0].id());
-        assert_ne!(binding.names[0].id(), Some(LocalId(42)));
+        identify_body_locals(&mut statements, &[], &mut ScopeState::new());
     }
 
     #[test]
@@ -454,26 +452,6 @@ mod tests {
             verify_local_scopes(&mut statements, &[]).unwrap_err().kind,
             BodyErrorKind::ShadowedLocalReference
         );
-    }
-
-    #[test]
-    fn source_alias_uses_the_generated_go_binding_id() {
-        let mut scope = ScopeState::new();
-        let generated = scope.fresh_go_name(Some("value"), &PackageState::default());
-        let go_binding = scope.generated_identifier(&generated);
-        let mut statements = vec![
-            define(go_binding.clone(), GoExpression::literal("1".to_string())),
-            LoweredStatement::Return(vec![GoExpression::identifier(GoIdentifier::local(
-                generated,
-                LocalId(42),
-            ))])
-            .into(),
-        ];
-        identify_body_locals(&mut statements, &[], &mut scope);
-        let LoweredStatement::Return(values) = &statements[1].kind else {
-            panic!("expected a return");
-        };
-        assert_eq!(identifier_id(&values[0]), go_binding.id());
     }
 
     #[test]

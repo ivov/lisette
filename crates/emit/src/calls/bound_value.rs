@@ -3,6 +3,7 @@ use crate::calls::bounds::BoundsCheckedIndex;
 use crate::calls::go_interop::{NilGuard, is_nil, non_nil};
 use crate::plan::bodies::{Definition, Statement, define, discard};
 use crate::plan::go_expression::{BinaryOp, UnaryOp};
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::state::scope::PairStatusKind;
 
@@ -14,16 +15,16 @@ pub(crate) struct BoundValue {
 enum BoundSource {
     Pair(LoweredPair),
     Nullable {
-        value: String,
+        value: GoIdentifier,
         nil_guard: NilGuard,
         initializer_call: Option<GoExpression>,
     },
     Index {
         index: BoundsCheckedIndex,
-        target: Option<String>,
+        target: Option<GoIdentifier>,
     },
     Found {
-        value: Option<String>,
+        value: Option<GoIdentifier>,
         flag: String,
     },
 }
@@ -31,7 +32,7 @@ enum BoundSource {
 /// A bound two-result expression and the rule that distinguishes success.
 pub(super) struct LoweredPair {
     pub(super) value: PairValue,
-    pub(super) status: String,
+    pub(super) status: GoIdentifier,
     pub(super) status_kind: PairStatusKind,
     pub(super) initializer_call: Option<GoExpression>,
     pub(super) borrowed: bool,
@@ -41,13 +42,13 @@ pub(super) enum PairValue {
     Absent,
     Discarded,
     Named {
-        name: String,
+        name: GoIdentifier,
         nil_guard: Option<NilGuard>,
     },
 }
 
 impl PairValue {
-    pub(super) fn name(&self) -> Option<&str> {
+    pub(super) fn name(&self) -> Option<&GoIdentifier> {
         match self {
             Self::Named { name, .. } => Some(name),
             Self::Absent | Self::Discarded => None,
@@ -56,24 +57,25 @@ impl PairValue {
 }
 
 impl LoweredPair {
-    pub(super) fn binding(&self) -> Vec<String> {
+    pub(super) fn binding(&self) -> Vec<GoIdentifier> {
+        let status = self.status.clone();
         match &self.value {
-            PairValue::Named { name, .. } => vec![name.clone(), self.status.clone()],
-            PairValue::Discarded => vec!["_".to_string(), self.status.clone()],
-            PairValue::Absent => vec![self.status.clone()],
+            PairValue::Named { name, .. } => vec![name.clone(), status],
+            PairValue::Discarded => vec![GoIdentifier::name("_".to_string()), status],
+            PairValue::Absent => vec![status],
         }
     }
 
     fn initializer(&self) -> Option<Definition> {
         let call = self.initializer_call.as_ref()?;
         Some(Definition {
-            names: self.binding().into_iter().map(Into::into).collect(),
+            names: self.binding(),
             value: call.clone(),
         })
     }
 
     fn condition(&self, success: bool) -> PairCondition {
-        let status = GoExpression::name(self.status.clone());
+        let status = GoExpression::identifier(self.status.clone());
         let status = match (self.status_kind, success) {
             (PairStatusKind::Ok, true) => status,
             (PairStatusKind::Ok, false) => GoExpression::unary(UnaryOp::Not, status),
@@ -85,7 +87,7 @@ impl LoweredPair {
                 name,
                 nil_guard: Some(guard),
             } => {
-                let value = GoExpression::name(name.clone());
+                let value = GoExpression::identifier(name.clone());
                 let nil_condition = if success {
                     guard.non_nil(value)
                 } else {
@@ -118,7 +120,7 @@ impl BoundValue {
 
     pub(crate) fn nullable(
         statements: Vec<Statement>,
-        value: String,
+        value: GoIdentifier,
         nil_guard: NilGuard,
         initializer_call: Option<GoExpression>,
     ) -> Self {
@@ -135,7 +137,7 @@ impl BoundValue {
     pub(crate) fn index(
         statements: Vec<Statement>,
         index: BoundsCheckedIndex,
-        target: Option<String>,
+        target: Option<GoIdentifier>,
     ) -> Self {
         Self {
             statements,
@@ -143,7 +145,11 @@ impl BoundValue {
         }
     }
 
-    pub(crate) fn found(statements: Vec<Statement>, value: Option<String>, flag: String) -> Self {
+    pub(crate) fn found(
+        statements: Vec<Statement>,
+        value: Option<GoIdentifier>,
+        flag: String,
+    ) -> Self {
         Self {
             statements,
             source: BoundSource::Found { value, flag },
@@ -155,17 +161,22 @@ impl BoundValue {
         match &self.source {
             BoundSource::Index { index, .. } => Some(index.element.clone()),
             _ => self
-                .payload_name()
-                .map(|name| GoExpression::name(name.to_string())),
+                .payload_identifier()
+                .cloned()
+                .map(GoExpression::identifier),
         }
     }
 
     pub(crate) fn payload_name(&self) -> Option<&str> {
+        self.payload_identifier().map(GoIdentifier::spelling)
+    }
+
+    pub(crate) fn payload_identifier(&self) -> Option<&GoIdentifier> {
         match &self.source {
             BoundSource::Pair(pair) => pair.value.name(),
             BoundSource::Nullable { value, .. } => Some(value),
             BoundSource::Index { .. } => None,
-            BoundSource::Found { value, .. } => value.as_deref(),
+            BoundSource::Found { value, .. } => value.as_ref(),
         }
     }
 
@@ -175,10 +186,10 @@ impl BoundValue {
             && let Some(shared) = pair.value.name()
         {
             let copy = planner.fresh_pair_value();
-            self.statements
-                .push(define(copy.clone(), GoExpression::name(shared.to_string())));
+            let shared = GoExpression::identifier(shared.clone());
+            self.statements.push(define(copy.clone(), shared));
             pair.value = PairValue::Named {
-                name: copy.clone(),
+                name: planner.scope.generated_identifier(&copy),
                 nil_guard: None,
             };
             pair.borrowed = false;
@@ -190,6 +201,10 @@ impl BoundValue {
     }
 
     pub(crate) fn status(&self) -> &str {
+        self.status_identifier().spelling()
+    }
+
+    pub(crate) fn status_identifier(&self) -> &GoIdentifier {
         match &self.source {
             BoundSource::Pair(pair) => &pair.status,
             _ => unreachable!("only a pair has a status local"),
@@ -229,7 +244,7 @@ impl BoundValue {
                 value: Some(value), ..
             } => {
                 self.statements
-                    .push(discard(GoExpression::name(value.clone())));
+                    .push(discard(GoExpression::identifier(value.clone())));
             }
             _ => {}
         }
@@ -255,7 +270,7 @@ impl BoundValue {
                 nil_guard,
                 initializer_call,
             } => {
-                let tested = GoExpression::name(value.clone());
+                let tested = GoExpression::identifier(value.clone());
                 let test = if success {
                     nil_guard.non_nil(tested)
                 } else {
@@ -263,7 +278,7 @@ impl BoundValue {
                 };
                 PairCondition {
                     initializer: initializer_call.as_ref().map(|call| Definition {
-                        names: vec![value.clone().into()],
+                        names: vec![value.clone()],
                         value: call.clone(),
                     }),
                     condition: test,

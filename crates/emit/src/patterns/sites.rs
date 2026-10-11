@@ -440,7 +440,7 @@ impl Planner<'_> {
         &mut self,
         mut statements: Vec<Statement>,
         fail_condition: PairCondition,
-        binding: Option<(FusedName<'_>, String)>,
+        binding: Option<(FusedName<'_>, GoIdentifier)>,
         else_block: &Expression,
     ) -> Vec<Statement> {
         // The else block sees the enclosing scope, so it lowers before the binding installs.
@@ -456,12 +456,15 @@ impl Planner<'_> {
         );
         if let Some((name, go_name)) = binding {
             self.scope
-                .bind_source(name.name, name.binding.as_slice(), go_name);
+                .bind_identifier(name.name, name.binding.as_slice(), go_name);
         }
         statements
     }
 
-    fn declare_fused_binding<'p>(&mut self, field: &'p Pattern) -> Option<(FusedName<'p>, String)> {
+    fn declare_fused_binding<'p>(
+        &mut self,
+        field: &'p Pattern,
+    ) -> Option<(FusedName<'p>, GoIdentifier)> {
         let name = field_binding(field)
             .flatten()
             .filter(|_| !self.facts.is_unused_binding(field))?;
@@ -472,7 +475,7 @@ impl Planner<'_> {
             escaped
         };
         self.declare(&go_name);
-        Some((name, go_name))
+        Some((name, self.scope.new_local_identifier(&go_name)))
     }
 
     /// Resolve a while-let scrutinee to its loop-subject var, returning any

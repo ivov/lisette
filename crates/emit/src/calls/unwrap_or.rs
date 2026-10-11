@@ -7,6 +7,7 @@ use crate::patterns::matching::{
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, define,
 };
+use crate::plan::local::GoIdentifier;
 use crate::plan::placement::collapse_declared_temp;
 use crate::plan::placement::simple_assign;
 use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
@@ -247,18 +248,18 @@ impl Planner<'_> {
     pub(crate) fn lower_defaulted_call_into(
         &mut self,
         value: &Expression,
-        go_name: &str,
+        go_name: &GoIdentifier,
     ) -> Option<Vec<Statement>> {
         let call = self.defaulted_call(value)?;
         if let Some((mut statements, read)) = self.zero_defaulted_map_read(&call, &value.get_type())
         {
-            self.declare(go_name);
-            statements.push(define(go_name.to_string(), read));
+            self.declare(go_name.spelling());
+            statements.push(define(go_name.clone(), read));
             return Some(statements);
         }
-        self.declare(go_name);
+        self.declare(go_name.spelling());
         let Some(map) = call.map else {
-            let slot = CommaOkValueSlot::Named(go_name.to_string());
+            let slot = CommaOkValueSlot::Named(go_name.clone());
             return Some(
                 self.lower_default_into_slot(call.fuse, call.default, slot)
                     .0,
@@ -270,13 +271,19 @@ impl Planner<'_> {
         let ty = value.get_type();
         let mut statements = vec![
             LoweredStatement::VarDecl {
-                name: go_name.to_string().into(),
+                name: go_name.clone(),
                 go_type: self.use_go_type(&ty),
                 value: None,
             }
             .into(),
         ];
-        statements.extend(self.lower_mapped_default_into(fuse, map, call.default, go_name, &ty));
+        statements.extend(self.lower_mapped_default_into(
+            fuse,
+            map,
+            call.default,
+            go_name.spelling(),
+            &ty,
+        ));
         Some(statements)
     }
 

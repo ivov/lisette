@@ -79,11 +79,13 @@ impl OptionFusePlan<'_> {
                 let (mut statements, call) = value.into_parts();
                 let (value, opens_if) = match slot {
                     CommaOkValueSlot::Named(name) => (name, false),
-                    CommaOkValueSlot::Arm(name) => (name, true),
-                    CommaOkValueSlot::Temp | CommaOkValueSlot::Discarded => {
-                        (planner.fresh_pair_value(), false)
+                    CommaOkValueSlot::Arm(name) => {
+                        (planner.scope.new_local_identifier(&name), true)
                     }
-                    CommaOkValueSlot::Unused => (planner.fresh_pair_value(), true),
+                    CommaOkValueSlot::Temp | CommaOkValueSlot::Discarded => {
+                        (planner.fresh_pair_identifier(), false)
+                    }
+                    CommaOkValueSlot::Unused => (planner.fresh_pair_identifier(), true),
                 };
                 let initializer_call = if opens_if {
                     Some(call)
@@ -104,8 +106,11 @@ impl OptionFusePlan<'_> {
             Self::Found { subject, call } => {
                 let value = match slot {
                     CommaOkValueSlot::Named(name) => Some(name),
-                    CommaOkValueSlot::Arm(name) => Some(planner.declared_arm_value_name(&name)),
-                    CommaOkValueSlot::Temp => Some(planner.fresh_pair_value()),
+                    CommaOkValueSlot::Arm(name) => {
+                        let name = planner.declared_arm_value_name(&name);
+                        Some(planner.scope.new_local_identifier(&name))
+                    }
+                    CommaOkValueSlot::Temp => Some(planner.fresh_pair_identifier()),
                     CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => None,
                 };
                 let flag = planner.fresh_var(Some("found"));
@@ -114,7 +119,7 @@ impl OptionFusePlan<'_> {
                     subject,
                     &call,
                     FoundSink {
-                        value: value.as_deref(),
+                        value: value.as_ref(),
                         flag: &flag,
                     },
                 );
@@ -168,7 +173,8 @@ impl ResultFusePlan<'_> {
         } else {
             match slot {
                 CommaOkValueSlot::Arm(name) => {
-                    CommaOkValueSlot::Named(planner.declared_arm_value_name(&name))
+                    let name = planner.declared_arm_value_name(&name);
+                    CommaOkValueSlot::Named(planner.scope.new_local_identifier(&name))
                 }
                 CommaOkValueSlot::Unused => CommaOkValueSlot::Discarded,
                 slot => slot,
@@ -198,11 +204,11 @@ pub(crate) struct FusedName<'a> {
     pub(crate) binding: Option<BindingId>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(super) enum ArmBinding<'a> {
     Alias {
         name: FusedName<'a>,
-        go_name: &'a str,
+        go_name: GoIdentifier,
     },
     Copy {
         name: FusedName<'a>,
@@ -211,9 +217,14 @@ pub(super) enum ArmBinding<'a> {
 }
 
 impl<'a> ArmBinding<'a> {
-    pub(super) fn alias_at(name: Option<FusedName<'a>>, go_name: Option<&'a str>) -> Option<Self> {
-        name.zip(go_name)
-            .map(|(name, go_name)| Self::Alias { name, go_name })
+    pub(super) fn alias_at(
+        name: Option<FusedName<'a>>,
+        go_name: Option<&GoIdentifier>,
+    ) -> Option<Self> {
+        name.zip(go_name).map(|(name, go_name)| Self::Alias {
+            name,
+            go_name: go_name.clone(),
+        })
     }
 
     pub(super) fn copy_at(
@@ -632,7 +643,7 @@ impl Planner<'_> {
     pub(crate) fn lower_fused_result_match_into(
         &mut self,
         value: &Expression,
-        go_name: &str,
+        go_name: &GoIdentifier,
     ) -> Option<Vec<Statement>> {
         let Expression::Match { subject, arms, .. } = value.unwrap_parens() else {
             return None;
@@ -645,7 +656,7 @@ impl Planner<'_> {
     pub(crate) fn lower_fused_option_match_into(
         &mut self,
         value: &Expression,
-        go_name: &str,
+        go_name: &GoIdentifier,
     ) -> Option<Vec<Statement>> {
         let Expression::Match { subject, arms, .. } = value.unwrap_parens() else {
             return None;
@@ -660,8 +671,8 @@ impl Planner<'_> {
             return None;
         }
 
-        self.declare(go_name);
-        let bound = fuse.bind(self, CommaOkValueSlot::Named(go_name.to_string()));
+        self.declare(go_name.spelling());
+        let bound = fuse.bind(self, CommaOkValueSlot::Named(go_name.clone()));
         let none_condition = bound.failure_condition();
         let fail_body = self.lower_block_as_body(arms.none_body);
         let late_binding = bound.late_binding();
@@ -694,7 +705,7 @@ impl Planner<'_> {
         subject: &Expression,
         arms: &[MatchArm],
         place: &PlacePlan,
-        destination: Option<&str>,
+        destination: Option<&GoIdentifier>,
     ) -> Option<Vec<Statement>> {
         let fuse = self.result_fuse_plan(subject)?;
         let (ok, err) = classify_result_arms(arms)?;
@@ -747,19 +758,19 @@ impl Planner<'_> {
         let has_nil_guard = fuse.has_nil_guard();
         let carries_payload = fuse.carries_payload();
         let slot = match (destination, ok_name) {
-            (Some(name), _) => CommaOkValueSlot::Named(name.to_string()),
+            (Some(name), _) => CommaOkValueSlot::Named(name.clone()),
             (None, Some(ok)) => CommaOkValueSlot::Arm(self.arm_value_name(ok.name)),
             (None, None) => CommaOkValueSlot::Unused,
         };
         let err_hint = err_name.map(|err| err.name);
         let (mut bound, wraps) = fuse.bind_wrapped(self, slot, err_hint, err_hint.is_some());
-        let error = || GoExpression::name(bound.status().to_string());
+        let error = || GoExpression::identifier(bound.status_identifier().clone());
 
         let unit = unit_value();
         let then_body = destination.is_none().then(|| {
             // A call returning only `error` has no value, so `Ok(x)` takes unit.
             let ok_binding = if carries_payload {
-                ArmBinding::alias_at(ok_name, bound.payload_name())
+                ArmBinding::alias_at(ok_name, bound.payload_identifier())
             } else {
                 ArmBinding::copy_at(ok_name, Some(&unit))
             };
@@ -771,7 +782,7 @@ impl Planner<'_> {
         } else {
             place
         };
-        let err_binding = ArmBinding::alias_at(err_name, Some(bound.status()));
+        let err_binding = ArmBinding::alias_at(err_name, Some(bound.status_identifier()));
         let (mut else_body, err_used) =
             self.lower_fused_arm(&[err_binding], &err.arm.expression, arm_place);
 
@@ -904,7 +915,7 @@ impl Planner<'_> {
                 err_hint.is_some(),
             )
         };
-        let value = GoExpression::name(bound.payload_name()?.to_string());
+        let value = GoExpression::identifier(bound.payload_identifier()?.clone());
         let then_body =
             self.lower_match_tree(&ok_arms, MatchSubject::Var(value), payload_ty, place);
         let then_body = match then_body.statements.as_slice() {
@@ -921,11 +932,11 @@ impl Planner<'_> {
         {
             bound.discard_value();
         }
-        let err_binding = ArmBinding::alias_at(err_name, Some(bound.status()));
+        let err_binding = ArmBinding::alias_at(err_name, Some(bound.status_identifier()));
         let (mut else_body, err_used) =
             self.lower_fused_arm(&[err_binding], &err_arm.expression, place);
         let err_read = err_used.first().copied().unwrap_or(false);
-        let error = GoExpression::name(bound.status().to_string());
+        let error = GoExpression::identifier(bound.status_identifier().clone());
         self.prepend_error_prologue(&mut else_body, error, has_nil_guard, err_read, &wraps);
 
         let ok_condition = bound.success_condition();
@@ -984,34 +995,36 @@ impl Planner<'_> {
         if val_var.as_deref() == Some(err_var.as_str()) {
             err_var = self.fresh_var(Some(&err_var));
         }
-        let err = || GoExpression::name(err_var.clone());
+        let val_var = val_var.map(|name| self.scope.new_local_identifier(&name));
+        let err_var = self.scope.new_local_identifier(&err_var);
+        let err = || GoExpression::identifier(err_var.clone());
 
         let (ok_body, ok_uses) = self.lower_fused_arm(
-            &[ArmBinding::alias_at(ok_name, val_var.as_deref())],
+            &[ArmBinding::alias_at(ok_name, val_var.as_ref())],
             &ok_arm.expression,
             place,
         );
         let (both_body, both_uses) = self.lower_fused_arm(
             &[
-                ArmBinding::alias_at(both_val, val_var.as_deref()),
+                ArmBinding::alias_at(both_val, val_var.as_ref()),
                 ArmBinding::alias_at(both_err, Some(&err_var)),
             ],
             &both_arm.expression,
             place,
         );
         let val_used = nilable || ok_uses[0] || both_uses[0];
-        let bound_value = match val_var.as_deref().filter(|_| val_used) {
-            Some(v) => v.to_string(),
-            None => "_".to_string(),
+        let bound_value = match val_var.as_ref().filter(|_| val_used) {
+            Some(v) => v.clone(),
+            None => GoIdentifier::name("_".to_string()),
         };
         let initializer = Definition {
-            names: vec![bound_value.into(), err_var.clone().into()],
+            names: vec![bound_value, err_var.clone()],
             value: call,
         };
 
         let nil_check = val_var
-            .as_deref()
-            .and_then(|v| self.partial_ok_nil_check(&ok_ty, GoExpression::name(v.to_string())));
+            .as_ref()
+            .and_then(|v| self.partial_ok_nil_check(&ok_ty, GoExpression::identifier(v.clone())));
 
         let else_arm = match nil_check {
             Some(check) => {
@@ -1090,9 +1103,11 @@ impl Planner<'_> {
         if value.as_deref() == Some(error.as_str()) {
             error = self.fresh_var(Some(&error));
         }
+        let value = value.map(|name| self.scope.new_local_identifier(&name));
+        let error = self.scope.new_local_identifier(&error);
         let (selected, binding_uses) = self.lower_fused_arm(
             &[
-                ArmBinding::alias_at(value_binding, value.as_deref()),
+                ArmBinding::alias_at(value_binding, value.as_ref()),
                 ArmBinding::alias_at(error_binding, Some(&error)),
             ],
             &arms.selected.expression,
@@ -1109,14 +1124,14 @@ impl Planner<'_> {
 
         let value_is_used = binding_uses.first().copied().unwrap_or(false);
         let value_slot = (condition_needs_value || value_is_used)
-            .then(|| value.as_deref().expect("value use allocates a result slot"));
+            .then(|| value.as_ref().expect("value use allocates a result slot"));
         let bound_value = match value_slot {
-            Some(value) => value.to_string(),
-            None => "_".to_string(),
+            Some(value) => value.clone(),
+            None => GoIdentifier::name("_".to_string()),
         };
-        let err = || GoExpression::name(error.clone());
+        let err = || GoExpression::identifier(error.clone());
         let guarded_value =
-            || GoExpression::name(value.clone().expect("nil guard captures the value"));
+            || GoExpression::identifier(value.clone().expect("nil guard captures the value"));
         let condition = match arms.variant {
             PartialVariant::Ok => is_nil(err()),
             PartialVariant::Both => match nil_guard {
@@ -1136,7 +1151,7 @@ impl Planner<'_> {
         statements.push(
             LoweredStatement::If(IfPlan {
                 initializer: Some(Definition {
-                    names: vec![bound_value.into(), error.clone().into()],
+                    names: vec![bound_value, error.clone()],
                     value: call,
                 }),
                 condition,
@@ -1175,7 +1190,7 @@ impl Planner<'_> {
 
         let element = bound.payload();
         let some_binding = if bound.binds_value() {
-            ArmBinding::alias_at(arms.some_binding, bound.payload_name())
+            ArmBinding::alias_at(arms.some_binding, bound.payload_identifier())
         } else {
             ArmBinding::copy_at(arms.some_binding, element.as_ref())
         };
@@ -1211,11 +1226,14 @@ impl Planner<'_> {
             let bound: Vec<Option<(GoIdentifier, Option<GoExpression>)>> = bindings
                 .iter()
                 .map(|binding| {
-                    binding.map(|binding| match binding {
+                    binding.as_ref().map(|binding| match binding {
                         ArmBinding::Alias { name, go_name } => {
-                            let id = name.binding;
-                            let name = name.name;
-                            (this.scope.bind_source(name, id.as_slice(), go_name), None)
+                            this.scope.bind_identifier(
+                                name.name,
+                                name.binding.as_slice(),
+                                go_name.clone(),
+                            );
+                            (go_name.clone(), None)
                         }
                         ArmBinding::Copy { name, value } => {
                             let go_name = this.arm_value_name(name.name);
@@ -1223,7 +1241,7 @@ impl Planner<'_> {
                             let go_name =
                                 this.scope
                                     .bind_source(name.name, name.binding.as_slice(), go_name);
-                            (go_name, Some(value.clone()))
+                            (go_name, Some((*value).clone()))
                         }
                     })
                 })

@@ -15,6 +15,7 @@ use crate::plan::bodies::{
     expression_statement,
 };
 use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, GoParameter, UnaryOp};
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::types::go_type::{GoType, returns_go_void};
 use syntax::ast::Expression;
@@ -77,7 +78,7 @@ pub(crate) enum WrapperTarget<'a> {
     /// Allocate a fresh `var slot T` and write `slot = X` per branch.
     FreshSlot,
     /// Write `slot = X` per branch into the caller-provided slot name.
-    Slot(&'a str),
+    Slot(&'a GoIdentifier),
     /// Emit `return X` per branch; caller skips its trailing return.
     Return,
 }
@@ -364,13 +365,13 @@ impl Planner<'_> {
             WrapperTarget::Slot(name) => {
                 statements.push(
                     LoweredStatement::VarDecl {
-                        name: name.to_string().into(),
+                        name: name.clone(),
                         go_type: type_str.to_string(),
                         value: None,
                     }
                     .into(),
                 );
-                self.declare(name);
+                self.declare(name.spelling());
                 let owned = name.to_string();
                 (ResolvedSink::Slot(owned.clone()), Some(owned))
             }
@@ -420,8 +421,8 @@ impl Planner<'_> {
                 Some(self.hoist_tmp_value_statement(statements, name_hint, value))
             }
             WrapperTarget::Slot(name) => {
-                self.declare(name);
-                statements.push(define(name.to_string(), value));
+                self.declare(name.spelling());
+                statements.push(define(name.clone(), value));
                 Some(name.to_string())
             }
             WrapperTarget::Return => {
