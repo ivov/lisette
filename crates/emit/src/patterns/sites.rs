@@ -743,7 +743,14 @@ impl Planner<'_> {
             .then(|| self.lower_refutable_fail(fail, subject_var));
 
         let mut statements = Vec::new();
-        self.declare_alternative_bindings(&mut statements, &infos[0].bindings);
+        let failure_uses = failure
+            .as_ref()
+            .map(|failure| GoUses::of(&failure.statements));
+        self.declare_alternative_bindings(
+            &mut statements,
+            &infos[0].bindings,
+            failure_uses.as_ref(),
+        );
         let alternatives = self.prepare_refutable_alternatives(&mut statements, infos, subject_var);
         let mut pieces = Vec::new();
         for alternative in alternatives {
@@ -777,6 +784,7 @@ impl Planner<'_> {
         &mut self,
         statements: &mut Vec<Statement>,
         bindings: &[PatternBinding],
+        failure_uses: Option<&GoUses>,
     ) {
         for binding in bindings {
             let (go_name, ty) = match &binding.target {
@@ -791,11 +799,13 @@ impl Planner<'_> {
                 }
                 BindingTarget::Named { go_name, ty } => (go_name, ty),
             };
-            let go_name = self.claim_declared_binding(
-                &binding.lisette_name,
-                &binding.binding_ids,
-                go_name.clone(),
-            );
+            let preferred = if failure_uses.is_some_and(|uses| uses.contains(go_name)) {
+                self.fresh_var(Some(&binding.lisette_name))
+            } else {
+                go_name.clone()
+            };
+            let go_name =
+                self.claim_declared_binding(&binding.lisette_name, &binding.binding_ids, preferred);
             let go_type = self.use_go_type(ty);
             statements.push(
                 LoweredStatement::VarDecl {

@@ -259,6 +259,22 @@ fn run(start: int) -> int {
 }
 
 #[test]
+fn closure_let_else_or_pattern_reads_the_captured_local_it_shadows() {
+    let input = r#"
+enum E { A(int), B(int), C }
+
+fn run(x: int, e: E) -> int {
+  let f = || {
+    let E.A(x) | E.B(x) = e else { return x }
+    x
+  }
+  f()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn function_call_no_args() {
     let input = r#"
 fn get_value() -> int {

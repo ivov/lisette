@@ -1,0 +1,56 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  enum E { A(int), B(int), C }
+  
+  fn run(x: int, e: E) -> int {
+    let f = || {
+      let E.A(x) | E.B(x) = e else { return x }
+      x
+    }
+    f()
+  }
+---
+package main
+
+func MakeEA(arg0 int) E {
+	return E{Tag: EA, A: arg0}
+}
+
+func MakeEB(arg0 int) E {
+	return E{Tag: EB, B: arg0}
+}
+
+func MakeEC() E {
+	return E{Tag: EC}
+}
+
+type ETag uint8
+
+const (
+	EA ETag = iota
+	EB
+	EC
+)
+
+type E struct {
+	Tag ETag
+	A   int
+	B   int
+}
+
+func run(x int, e E) int {
+	f := func() int {
+		var x_1 int
+		if e.Tag == EA {
+			x_1 = e.A
+		} else if e.Tag == EB {
+			x_1 = e.B
+		} else {
+			return x
+		}
+		return x_1
+	}
+	return f()
+}
