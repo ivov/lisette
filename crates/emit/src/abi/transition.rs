@@ -18,7 +18,7 @@ use crate::plan::bodies::{
     expression_statement,
 };
 use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout};
-use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use syntax::ast::Expression;
 use syntax::parse::TUPLE_FIELDS;
 
@@ -653,14 +653,10 @@ fn lower_nullable_slot_value(
         debug_assert_eq!(args.len(), 1, "Some(...) takes exactly one arg");
         return planner
             .lower_composite_value(&args[0], ExpressionContext::value())
-            .with_pure_constructor_evaluation();
+            .with_constructor_stability();
     }
     if prelude_constructor(expression) == Some(PreludeVariant::None) {
-        return ValuePlan::evaluated_literal(
-            Vec::new(),
-            "nil".to_string(),
-            EvaluationEffect::PureCall,
-        );
+        return ValuePlan::evaluated_literal(Vec::new(), "nil".to_string());
     }
     let value = planner.lower_value(expression, ExpressionContext::value());
     let inner = planner.use_go_type(&slot_ty.ok_type());

@@ -18,9 +18,7 @@ use crate::plan::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign, discard,
 };
 use crate::plan::go_expression::{CompositeLayout, FunctionLiteralLayout};
-use crate::plan::values::{
-    CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
-};
+use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
 use crate::types::go_type::GoType;
 use crate::utils::is_order_sensitive;
 use syntax::program::AliasKind;
@@ -118,7 +116,6 @@ impl Planner<'_> {
         let field_evaluations: Vec<bool> = stages.iter().map(|value| !value.can_delay()).collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "field");
         let fields_stability = sequenced.stability;
-        let mut effect = sequenced.effect;
         let mut setup = sequenced.setup;
         let emitted_values = sequenced.values;
 
@@ -171,14 +168,10 @@ impl Planner<'_> {
                 // Never-typed spread base diverges, emit as statement and
                 // return a zero-value struct literal (dead code follows).
                 if base.get_type().is_never() {
-                    if matches!(base.unwrap_parens(), Expression::Call { .. }) {
-                        effect = effect.combine(EvaluationEffect::EffectfulCall);
-                    }
                     setup.push(self.lower_statement(base));
                     GoExpression::empty_composite(ctx.go_type.clone())
                 } else {
                     let base_staged = self.plan_operand(base, ExpressionContext::value());
-                    effect = effect.combine(base_staged.facts().effect);
                     let (spread_setup, value) = if ctx.enum_ctx.is_some() {
                         let field_pairs = self.hoist_observable_fields(&mut setup, fields);
                         self.lower_enum_variant_spread(
@@ -220,9 +213,9 @@ impl Planner<'_> {
         };
 
         if built_from_fields {
-            return ValuePlan::built_from(setup, value, effect, fields_stability);
+            return ValuePlan::built_from(setup, value, fields_stability);
         }
-        ValuePlan::computed(setup, value, effect)
+        ValuePlan::computed(setup, value)
     }
 
     /// Apply Go-boundary coercion followed by internal coercion. The Go-boundary
@@ -510,7 +503,7 @@ impl Planner<'_> {
                     .map(|element| self.lisette_zero(element.logical_type()))
                     .collect();
                 let callee = self.make_tuple_callee(slots, parts.len());
-                GoExpression::call(callee, parts)
+                GoExpression::pure_call(callee, parts)
             }
             (
                 Type::Array { .. },

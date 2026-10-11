@@ -12,7 +12,7 @@ use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, Statement, assign, define,
 };
-use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression};
+use crate::plan::values::{CaptureBoundary, GoExpression};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SliceLoop {
@@ -299,7 +299,6 @@ impl Planner<'_> {
             stages.push(self.plan_operand(&args[0], ExpressionContext::value()));
         }
         let sequenced = self.sequence_values(stages, ctx.capture_boundary, "arg");
-        let effect = sequenced.effect;
         let mut setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
         let source = values.next().expect("the source is staged first");
@@ -385,11 +384,7 @@ impl Planner<'_> {
             .result()
             .cloned()
             .map_or_else(GoExpression::empty, GoExpression::identifier);
-        Some(NativeCallResult::new(
-            setup,
-            result,
-            effect.combine(EvaluationEffect::EffectfulCall),
-        ))
+        Some(NativeCallResult::new(setup, result))
     }
 
     fn accumulator_slot_name(&mut self, pattern: &Pattern) -> GoIdentifier {

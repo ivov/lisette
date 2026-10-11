@@ -5,9 +5,7 @@ use crate::abi::coercion::CoercionPlan;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::go_expression::{BinaryOp, CompositeLayout};
-use crate::plan::values::{
-    CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
-};
+use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
 use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::types::{SimpleKind, Type};
 
@@ -97,11 +95,7 @@ impl Planner<'_> {
 
         let go_type = format!("{}{}", type_prefix, element_ty);
         if elements.is_empty() {
-            return ValuePlan::computed(
-                Vec::new(),
-                GoExpression::empty_composite(go_type),
-                EvaluationEffect::Pure,
-            );
+            return ValuePlan::computed(Vec::new(), GoExpression::empty_composite(go_type));
         }
 
         let stages: Vec<ValuePlan> = elements
@@ -109,7 +103,6 @@ impl Planner<'_> {
             .map(|e| self.lower_composite_value(e, ExpressionContext::value()))
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "v");
-        let effect = sequenced.effect;
         let stability = sequenced.stability;
         let mut setup = sequenced.setup;
 
@@ -135,7 +128,6 @@ impl Planner<'_> {
         ValuePlan::built_from(
             setup,
             GoExpression::composite(Some(go_type), wrapped, layout),
-            effect,
             stability,
         )
     }
@@ -160,7 +152,6 @@ impl Planner<'_> {
             return stages.pop().expect("one staged operand");
         }
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "fmtarg");
-        let effect = sequenced.effect;
         let stability = sequenced.stability;
         let setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
@@ -191,13 +182,13 @@ impl Planner<'_> {
             let concatenation = pieces.fold(first, |left, right| {
                 GoExpression::binary(left, BinaryOp::Add, right)
             });
-            return ValuePlan::built_from(setup, concatenation, effect, stability);
+            return ValuePlan::built_from(setup, concatenation, stability);
         }
 
         let (format_string, args) = self.sprintf_pieces(parts, values, has_interpolation);
 
         if args.is_empty() {
-            return ValuePlan::evaluated_literal(setup, format!("\"{}\"", format_string), effect);
+            return ValuePlan::evaluated_literal(setup, format!("\"{}\"", format_string));
         }
 
         // Solo-expression f-strings round-trip through fmt.Sprint, which skips
@@ -208,22 +199,20 @@ impl Planner<'_> {
         {
             return ValuePlan::observable_call(
                 setup,
-                GoExpression::call(
+                GoExpression::read_only_call(
                     GoExpression::generated(GeneratedPackage::Fmt, "Sprint"),
                     args,
                 ),
-                effect,
             );
         }
         let mut arguments = vec![GoExpression::literal(format!("\"{}\"", format_string))];
         arguments.extend(args);
         ValuePlan::observable_call(
             setup,
-            GoExpression::call(
+            GoExpression::read_only_call(
                 GoExpression::generated(GeneratedPackage::Fmt, "Sprintf"),
                 arguments,
             ),
-            effect,
         )
     }
 

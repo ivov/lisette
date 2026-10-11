@@ -10,7 +10,7 @@ use crate::plan::bodies::{
 use crate::plan::local::GoIdentifier;
 use crate::plan::placement::collapse_declared_temp;
 use crate::plan::placement::simple_assign;
-use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
 
@@ -293,7 +293,7 @@ impl Planner<'_> {
     ) -> Option<ValuePlan> {
         let call = self.defaulted_call(expression)?;
         if let Some((setup, read)) = self.zero_defaulted_map_read(&call, &expression.get_type()) {
-            return Some(ValuePlan::computed(setup, read, EvaluationEffect::Pure));
+            return Some(ValuePlan::computed(setup, read));
         }
         let Some(map) = call.map else {
             let (statements, value) =

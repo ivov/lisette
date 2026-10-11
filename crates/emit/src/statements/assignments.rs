@@ -9,7 +9,7 @@ use crate::plan::bodies::{
     AssignForm, CompoundKind, LoweredBlock, LoweredStatement, Statement, define,
 };
 use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
+use crate::plan::values::{GoExpression, ValuePlan};
 use crate::state::bindings::BindingValue;
 use syntax::ast::Literal;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
@@ -322,12 +322,7 @@ impl Planner<'_> {
         };
         let index_plan = self.lower_composite_value(index, ExpressionContext::value());
         let pin_index = ordering.pins(&index_plan);
-        let base_effect = if base_expression.effects().runs_code() {
-            EvaluationEffect::EffectfulCall
-        } else {
-            EvaluationEffect::Pure
-        };
-        let base_plan = ValuePlan::computed(Vec::new(), base_expression, base_effect)
+        let base_plan = ValuePlan::computed(Vec::new(), base_expression)
             .with_stability(self.place_read_stability(base));
         let mut later = ordering.later();
         later.prepend(&index_plan);
@@ -335,7 +330,7 @@ impl Planner<'_> {
             || later.prepend(&base_plan)
             || (is_order_sensitive(base)
                 && (base_plan.expression().effects().runs_code()
-                    || index_plan.facts().effect.has_call()));
+                    || index_plan.effects().runs_code()));
         let base_expression = base_plan.into_parts().1;
         let base_expression = if pin_base {
             self.pin_place_base(setup, base, base_expression)

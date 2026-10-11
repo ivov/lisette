@@ -21,9 +21,7 @@ use crate::plan::bodies::{
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::placement::is_unit_call;
-use crate::plan::values::{
-    CaptureBoundary, EvaluationEffect, GoExpression, OperandForm, ValuePlan,
-};
+use crate::plan::values::{CaptureBoundary, GoExpression, OperandForm, ValuePlan};
 use crate::state::bindings::BindingValue;
 use crate::types::go_type::returns_go_void;
 use crate::{Planner, ReturnContext};
@@ -78,10 +76,9 @@ impl Planner<'_> {
                 } else {
                     self.emit_go_fn_wrapper(&mut setup, expression, &callee.abi)
                 };
-                return ValuePlan::computed(setup, value, EvaluationEffect::Pure)
-                    .stable_across_calls_if(
-                        self.identifier_immune_to_calls(expression.unwrap_parens()),
-                    );
+                return ValuePlan::computed(setup, value).stable_across_calls_if(
+                    self.identifier_immune_to_calls(expression.unwrap_parens()),
+                );
             }
         }
 
@@ -303,26 +300,17 @@ impl Planner<'_> {
             Expression::Unit { .. } => ValuePlan::computed(
                 Vec::new(),
                 GoExpression::empty_composite("struct{}".to_string()),
-                EvaluationEffect::Pure,
             ),
             Expression::Lambda {
                 params, body, ty, ..
-            } => ValuePlan::computed(
-                Vec::new(),
-                self.emit_lambda(params, body, ty, ctx),
-                EvaluationEffect::Pure,
-            ),
+            } => ValuePlan::computed(Vec::new(), self.emit_lambda(params, body, ty, ctx)),
             Expression::Function {
                 params, body, ty, ..
             } => match body.definition() {
-                Some(body) => ValuePlan::computed(
-                    Vec::new(),
-                    self.emit_lambda(params, body, ty, ctx),
-                    EvaluationEffect::Pure,
-                ),
-                None => {
-                    ValuePlan::computed(Vec::new(), GoExpression::empty(), EvaluationEffect::Pure)
+                Some(body) => {
+                    ValuePlan::computed(Vec::new(), self.emit_lambda(params, body, ty, ctx))
                 }
+                None => ValuePlan::computed(Vec::new(), GoExpression::empty()),
             },
             Expression::IfLet { ty, .. }
             | Expression::Match { ty, .. }
@@ -333,11 +321,7 @@ impl Planner<'_> {
                 ..
             } => {
                 let plan = self.build_return_plan(return_expression);
-                ValuePlan::computed(
-                    plan.statements,
-                    GoExpression::empty(),
-                    EvaluationEffect::Pure,
-                )
+                ValuePlan::computed(plan.statements, GoExpression::empty())
             }
             Expression::Assignment {
                 target,
@@ -349,16 +333,11 @@ impl Planner<'_> {
                     self.build_assignment_plan(target, value, compound_operator.as_ref())
                         .into(),
                 ];
-                ValuePlan::computed(
-                    setup,
-                    GoExpression::empty_composite("struct{}".to_string()),
-                    EvaluationEffect::Pure,
-                )
+                ValuePlan::computed(setup, GoExpression::empty_composite("struct{}".to_string()))
             }
             Expression::Assert { .. } => ValuePlan::computed(
                 vec![self.lower_assert_statement(expression).into()],
                 GoExpression::empty_composite("struct{}".to_string()),
-                EvaluationEffect::Pure,
             ),
             _ => unreachable!(
                 "unexpected leaf expression in plan_operand: {:?}",
@@ -426,17 +405,12 @@ impl Planner<'_> {
             })
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "v");
-        let effect = sequenced.effect;
         let mut setup = sequenced.setup;
 
         let element_expressions =
             self.coerce_elements_to_slots(&mut setup, elements, sequenced.values, &slot_types);
         let callee = self.make_tuple_callee(&slot_types, element_expressions.len());
-        ValuePlan::observable_call(
-            setup,
-            GoExpression::call(callee, element_expressions),
-            effect,
-        )
+        ValuePlan::observable_call(setup, GoExpression::pure_call(callee, element_expressions))
     }
 
     /// Plan a `cast` expression. The interface-target path resolves through
@@ -462,7 +436,7 @@ impl Planner<'_> {
                 setup.extend(coercion_setup);
                 coerced
             });
-            if !converted.facts().stability.is_stable_across_calls() {
+            if !converted.stability().is_stable_across_calls() {
                 converted.make_observable();
             }
             return converted;
@@ -603,12 +577,10 @@ impl Planner<'_> {
             return ValuePlan::computed(
                 Vec::new(),
                 GoExpression::empty_composite("struct{}".to_string()),
-                EvaluationEffect::Pure,
             );
         }
 
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "range");
-        let effect = sequenced.effect;
         let mut values = sequenced.values.into_iter();
         let mut fields = Vec::new();
         if has_start {
@@ -624,7 +596,7 @@ impl Planner<'_> {
         }
 
         let value = emit_struct_literal(&type_string, fields);
-        ValuePlan::computed(sequenced.setup, value, effect)
+        ValuePlan::computed(sequenced.setup, value)
     }
 
     /// Plan a `Task`/`Defer` operand.
@@ -634,9 +606,8 @@ impl Planner<'_> {
         expression: &Expression,
     ) -> ValuePlan {
         let async_statement = |call: GoExpression| LoweredStatement::Async { kind, call };
-        let statement_plan = |setup: Vec<Statement>| {
-            ValuePlan::computed(setup, GoExpression::empty(), EvaluationEffect::Pure)
-        };
+        let statement_plan =
+            |setup: Vec<Statement>| ValuePlan::computed(setup, GoExpression::empty());
         let immediate_call = |body: LoweredBlock| {
             GoExpression::immediate_call(String::new(), body, FunctionLiteralLayout::MultiLine)
         };

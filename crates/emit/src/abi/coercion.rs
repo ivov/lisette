@@ -240,7 +240,7 @@ impl Planner<'_> {
             statements.extend(element_setup);
             arguments.push(coerced);
         }
-        GoExpression::call(
+        GoExpression::pure_call(
             self.make_tuple_callee(slot_types, slot_types.len()),
             arguments,
         )

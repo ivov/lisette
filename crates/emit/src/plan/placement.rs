@@ -14,9 +14,7 @@ use crate::plan::bodies::{
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::Stability;
-use crate::plan::values::{
-    CaptureBoundary, ConstantKind, EvaluationEffect, GoExpression, ValuePlan,
-};
+use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
 use crate::statements::assignments::{PlaceOrdering, is_lvalue_chain};
 use std::slice;
 use syntax::ast::Pattern;
@@ -510,7 +508,6 @@ impl Planner<'_> {
                 ValuePlan::computed(
                     Vec::new(),
                     GoExpression::empty_composite("struct{}".to_string()),
-                    EvaluationEffect::Pure,
                 ),
             )
             .into(),
@@ -608,24 +605,13 @@ impl Planner<'_> {
                 if let Some(constructor_arg) = constructor_arg {
                     let argument =
                         self.lower_composite_value(constructor_arg, ExpressionContext::value());
-                    let (arg_setup, argument, facts) = argument.into_parts_with_facts();
+                    let (arg_setup, argument) = argument.into_parts();
                     let call = self.fallible_call(&fallible, constructor_name, vec![argument]);
-                    let argument_effect = facts.effect;
-                    let value = ValuePlan::plain_call(
-                        arg_setup,
-                        call,
-                        EvaluationEffect::PureCall.combine(argument_effect),
-                    );
+                    let value = ValuePlan::plain_call(arg_setup, call);
                     vec![simple_assign(target, value).into()]
                 } else {
                     let call = self.fallible_call(&fallible, constructor_name, Vec::new());
-                    vec![
-                        simple_assign(
-                            target,
-                            ValuePlan::computed(Vec::new(), call, EvaluationEffect::Pure),
-                        )
-                        .into(),
-                    ]
+                    vec![simple_assign(target, ValuePlan::computed(Vec::new(), call)).into()]
                 }
             }
             Expression::Identifier { .. } => {
@@ -634,13 +620,7 @@ impl Planner<'_> {
                 {
                     let call =
                         self.fallible_call(&fallible, fallible.err_constructor(), Vec::new());
-                    vec![
-                        simple_assign(
-                            target,
-                            ValuePlan::computed(Vec::new(), call, EvaluationEffect::Pure),
-                        )
-                        .into(),
-                    ]
+                    vec![simple_assign(target, ValuePlan::computed(Vec::new(), call)).into()]
                 } else {
                     self.lower_plain_assign(target, expression)
                 }
@@ -810,13 +790,7 @@ impl Planner<'_> {
             (value, setup)
         };
 
-        statements.push(
-            simple_assign(
-                target,
-                ValuePlan::computed(Vec::new(), value, EvaluationEffect::Pure),
-            )
-            .into(),
-        );
+        statements.push(simple_assign(target, ValuePlan::computed(Vec::new(), value)).into());
         Some(statements)
     }
 
@@ -857,8 +831,7 @@ impl Planner<'_> {
                 boundary: CaptureBoundary::SiblingSequence,
             },
         );
-        let ordering =
-            ValuePlan::computed(sequenced.setup, GoExpression::empty(), sequenced.effect);
+        let ordering = ValuePlan::computed(sequenced.setup, GoExpression::empty());
         (sequenced.values, ordering)
     }
 
@@ -887,7 +860,6 @@ impl Planner<'_> {
                 return ValuePlan::computed(
                     self.lower_block_as_body(expression).statements,
                     GoExpression::empty(),
-                    EvaluationEffect::Pure,
                 );
             }
             let (result_var, declaration) = self.operand_temp_declaration(ty);

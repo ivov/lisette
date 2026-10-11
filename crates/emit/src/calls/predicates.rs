@@ -3,7 +3,7 @@ use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::patterns::matching::{OptionFusePlan, ResultFusePlan};
 use crate::plan::bodies::Statement;
-use crate::plan::values::{EvaluationEffect, ValuePlan};
+use crate::plan::values::ValuePlan;
 use syntax::ast::{Expression, UnaryOperator};
 use syntax::program::CallKind;
 
@@ -107,10 +107,6 @@ impl Planner<'_> {
         let (setup, condition) =
             self.bind_fused_predicate(predicate, negated, CommaOkValueSlot::Discarded);
         debug_assert!(condition.initializer.is_none());
-        Some(ValuePlan::plain_call(
-            setup,
-            condition.condition,
-            EvaluationEffect::EffectfulCall,
-        ))
+        Some(ValuePlan::plain_call(setup, condition.condition))
     }
 }
