@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn test() {
+    let mut rows = [[1]]
+    match rows.get(0) {
+      Some(row) => { row[0] = 9 },
+      None => (),
+    }
+    if rows[0][0] != 9 { panic("the payload write should reach the original slice") }
+  }
+---
+package main
+
+func test() {
+	rows := [][]int{{1}}
+	if len(rows) > 0 {
+		row := rows[0]
+		row[0] = 9
+	}
+	if rows[0][0] != 9 {
+		panic("the payload write should reach the original slice")
+	}
+}

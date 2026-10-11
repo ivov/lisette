@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn fetch(xs: mut Slice<int>) -> Result<mut Slice<int>, error> {
+    Ok(xs)
+  }
+  
+  fn test() {
+    let mut xs = [1]
+    match fetch(xs) {
+      Ok(row) => { row[0] = 9 },
+      Err(_) => (),
+    }
+    if xs[0] != 9 { panic("the payload write should reach the original slice") }
+  }
+---
+package main
+
+func fetch(xs []int) ([]int, error) {
+	return xs, nil
+}
+
+func test() {
+	xs := []int{1}
+	if row, err := fetch(xs); err == nil {
+		row[0] = 9
+	}
+	if xs[0] != 9 {
+		panic("the payload write should reach the original slice")
+	}
+}

@@ -5340,3 +5340,51 @@ fn parse(text: string) -> int {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn fused_option_match_payload_write() {
+    let input = r#"
+fn test() {
+  let mut rows = [[1]]
+  match rows.get(0) {
+    Some(row) => { row[0] = 9 },
+    None => (),
+  }
+  if rows[0][0] != 9 { panic("the payload write should reach the original slice") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_option_if_let_payload_write() {
+    let input = r#"
+fn test() {
+  let mut rows = [[1]]
+  if let Some(row) = rows.get(0) {
+    row[0] = 9
+  }
+  if rows[0][0] != 9 { panic("the payload write should reach the original slice") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_result_match_payload_write() {
+    let input = r#"
+fn fetch(xs: mut Slice<int>) -> Result<mut Slice<int>, error> {
+  Ok(xs)
+}
+
+fn test() {
+  let mut xs = [1]
+  match fetch(xs) {
+    Ok(row) => { row[0] = 9 },
+    Err(_) => (),
+  }
+  if xs[0] != 9 { panic("the payload write should reach the original slice") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

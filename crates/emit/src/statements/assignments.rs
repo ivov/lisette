@@ -247,13 +247,14 @@ impl Planner<'_> {
         match expression {
             Expression::Identifier {
                 value, resolution, ..
-            } => GoExpression::name(
-                self.scope
-                    .resolve_identifier_with_resolution(value, resolution)
-                    .and_then(BindingValue::as_go_name)
-                    .unwrap_or(value)
-                    .to_string(),
-            ),
+            } => match self
+                .scope
+                .resolve_identifier_with_resolution(value, resolution)
+                .and_then(BindingValue::as_go_identifier)
+            {
+                Some(identifier) => GoExpression::identifier(identifier.clone()),
+                None => GoExpression::name(value.to_string()),
+            },
             Expression::DotAccess {
                 expression: base,
                 member,

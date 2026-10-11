@@ -98,6 +98,15 @@ impl BindingValue {
         }
     }
 
+    pub(crate) fn as_go_identifier(&self) -> Option<&GoIdentifier> {
+        match self {
+            BindingValue::GoName(name) | BindingValue::GoConst(name) => Some(name),
+            BindingValue::InlineExpr(_)
+            | BindingValue::Components(_)
+            | BindingValue::TupleComponents(_) => None,
+        }
+    }
+
     pub(crate) fn mentions(&self, go_name: &str) -> bool {
         match self {
             BindingValue::GoName(name) | BindingValue::GoConst(name) => name == go_name,
