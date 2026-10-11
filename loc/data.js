@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791631283243,
+  "lastUpdate": 1791712076841,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -44057,6 +44057,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 37656,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28624,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19366,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15270,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9029,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7381,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2945,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "me@bojin.li",
+            "name": "Bojin Li",
+            "username": "xxxbrian"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fb57b2d258242eadc27390229892229c6d14f6ca",
+          "message": "fix: preserve local IDs in assignment targets (#1535)",
+          "timestamp": "2026-10-11T11:47:31+02:00",
+          "tree_id": "62c435d19c96d851bad04fd7c67f35b26ee21b81",
+          "url": "https://github.com/ivov/lisette/commit/fb57b2d258242eadc27390229892229c6d14f6ca"
+        },
+        "date": 1791712074528,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 147402,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 37664,
             "unit": "lines"
           },
           {
