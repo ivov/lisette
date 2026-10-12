@@ -4648,9 +4648,12 @@ import "lib"
 
 type Alias = lib.Event
 
+fn click() -> Alias {
+  Alias.Click { x: 1 }
+}
+
 fn main() {
-  let e = Alias.Click { x: 1 }
-  let _ = e
+  let _ = click()
 }
 "#,
     );
@@ -4680,9 +4683,12 @@ import L "lib"
 
 type Alias = L.Event
 
+fn click() -> Alias {
+  Alias.Click { x: 1 }
+}
+
 fn main() {
-  let e = Alias.Click { x: 1 }
-  let _ = e
+  let _ = click()
 }
 "#,
     );
@@ -6237,9 +6243,12 @@ impl Widget {
   }
 }
 
+fn marshaler() -> encoding.TextMarshaler {
+  Widget { id: 7 }
+}
+
 fn main() {
-  let w = Widget { id: 7 }
-  let _: encoding.TextMarshaler = w
+  let _ = marshaler()
 }
 "#,
     );

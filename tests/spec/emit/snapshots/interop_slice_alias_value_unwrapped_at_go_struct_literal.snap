@@ -7,19 +7,18 @@ description: |
   
   type URLs = Slice<Option<Ref<url.URL>>>
   
-  fn main() {
+  fn certificate() -> x509.Certificate {
     let u = url.URL {
       Scheme: "https",
       Host: "example.com",
       ..,
     }
     let urls: URLs = [Some(&u), None]
-    let cert = x509.Certificate {
+    x509.Certificate {
       URIs: urls,
       PublicKey: 0,
       ..,
     }
-    let _ = cert
   }
 ---
 package main
@@ -32,7 +31,7 @@ import (
 
 type URLs = []lisette.Option[*url.URL]
 
-func main() {
+func certificate() x509.Certificate {
 	u := url.URL{
 		Scheme: "https",
 		Host:   "example.com",
@@ -47,9 +46,8 @@ func main() {
 			unwrapped[i] = v.SomeVal
 		}
 	}
-	cert := x509.Certificate{
+	return x509.Certificate{
 		URIs:      unwrapped,
 		PublicKey: 0,
 	}
-	_ = cert
 }

@@ -390,15 +390,15 @@ enum LiteralInlining {
 fn paired_operands(lhs: &GoExpression, rhs: &GoExpression) -> Vec<GoExpression> {
     let test_kit = testkit_qualifier();
     let operand = |label: &str, value: &GoExpression| {
-        GoExpression::composite(
-            Some(format!("{test_kit}.Operand")),
+        GoExpression::struct_literal(
+            format!("{test_kit}.Operand"),
             vec![
                 (
-                    Some(GoExpression::name("Label".to_string())),
+                    "Label".to_string(),
                     GoExpression::literal(format!("\"{label}\"")),
                 ),
                 (
-                    Some(GoExpression::name("Value".to_string())),
+                    "Value".to_string(),
                     GoExpression::call(
                         GoExpression::generated(GeneratedPackage::Prelude, "Debug"),
                         vec![value.clone()],

@@ -4636,6 +4636,17 @@ fn test() -> int {
 }
 
 #[test]
+fn local_binding_complex_not_hijacked() {
+    let input = r#"
+fn test() -> complex128 {
+  let complex = 3.0
+  complex * 2i
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn parenthesized_builtin_imaginary_call() {
     let input = r#"
 fn test(c: complex128) -> float64 {

@@ -16,7 +16,4 @@ type P struct {
 	v int
 }
 
-func test() {
-	p := P{v: 1}
-	_ = p
-}
+func test() {}

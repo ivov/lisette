@@ -5388,3 +5388,29 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn fused_go_result_binding_shares_a_struct_field_name() {
+    let input = r#"
+import "go:strconv"
+
+struct Target {
+  name: string,
+  value: int,
+}
+
+fn compile(name: string) -> Result<Target, error> {
+  let ready: Result<(), error> = Ok(())
+  match ready {
+    Result.Err(error) => Err(error),
+    Result.Ok(_) => {
+      match strconv.Atoi(name) {
+        Result.Ok(value) => Ok(Target { name, value }),
+        Result.Err(error) => Err(error),
+      }
+    },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

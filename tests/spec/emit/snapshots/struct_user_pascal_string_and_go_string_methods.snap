@@ -34,10 +34,4 @@ func (p Point) GoString() string {
 	return "custom debug"
 }
 
-func main() {
-	p := Point{
-		x: 1,
-		y: 2,
-	}
-	_ = p
-}
+func main() {}

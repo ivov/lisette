@@ -4,6 +4,8 @@ source: tests/spec/build/mod.rs
 // === main.go ===
 package main
 
+import "encoding"
+
 type Widget struct {
 	id int
 }
@@ -12,7 +14,10 @@ func (w Widget) MarshalText() ([]byte, error) {
 	return ([]byte)("custom"), nil
 }
 
+func marshaler() encoding.TextMarshaler {
+	return Widget{id: 7}
+}
+
 func main() {
-	w := Widget{id: 7}
-	_ = w
+	marshaler()
 }

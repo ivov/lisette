@@ -7,7 +7,7 @@ use crate::plan::bodies::AsyncKind;
 use crate::plan::bodies::{LoweredBlock, Statement};
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::{
-    BinaryOp, CallPurity, CompositeElement, CompositeLayout, FunctionLiteralLayout,
+    BinaryOp, CallPurity, CompositeElement, CompositeKey, CompositeLayout, FunctionLiteralLayout,
     GoExpressionNode, GoParameter, UnaryOp,
 };
 use crate::plan::local::{GoIdentifier, LocalId};
@@ -181,7 +181,27 @@ impl GoExpression {
             elements: elements
                 .into_iter()
                 .map(|(key, value)| CompositeElement {
-                    key: key.map(|key| key.node),
+                    key: key.map(|key| CompositeKey::Value(key.node)),
+                    value: value.node,
+                })
+                .collect(),
+            layout,
+        };
+        Self::new(node)
+    }
+
+    /// `T{field: value, ...}`, whose keys name fields of `T`.
+    pub(crate) fn struct_literal(
+        go_type: String,
+        fields: Vec<(String, GoExpression)>,
+        layout: CompositeLayout,
+    ) -> Self {
+        let node = GoExpressionNode::CompositeLiteral {
+            go_type: Some(go_type),
+            elements: fields
+                .into_iter()
+                .map(|(name, value)| CompositeElement {
+                    key: Some(CompositeKey::Field(name)),
                     value: value.node,
                 })
                 .collect(),

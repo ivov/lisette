@@ -1,0 +1,50 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  struct Target {
+    name: string,
+    value: int,
+  }
+  
+  fn compile(name: string) -> Result<Target, error> {
+    let ready: Result<(), error> = Ok(())
+    match ready {
+      Result.Err(error) => Err(error),
+      Result.Ok(_) => {
+        match strconv.Atoi(name) {
+          Result.Ok(value) => Ok(Target { name, value }),
+          Result.Err(error) => Err(error),
+        }
+      },
+    }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+type Target struct {
+	name  string
+	value int
+}
+
+func compile(name string) (Target, error) {
+	ready := lisette.MakeResultOk[struct{}, error](struct{}{})
+	if ready.Tag == lisette.ResultErr {
+		return Target{}, ready.ErrVal
+	}
+	if value, error_ := strconv.Atoi(name); error_ == nil {
+		return Target{
+			name:  name,
+			value: value,
+		}, nil
+	} else {
+		return Target{}, error_
+	}
+}

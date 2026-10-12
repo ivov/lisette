@@ -1803,7 +1803,7 @@ import "go:go/ast"
 
 type Objects = mut Map<string, Option<mut Ref<ast.Object>>>
 
-fn main() {
+fn scope() -> ast.Scope {
   let mut obj = ast.Object {
     Kind: ast.Bad,
     Name: "x",
@@ -1814,11 +1814,10 @@ fn main() {
   let mut objects: Objects = Map.new<string, Option<mut Ref<ast.Object>>>()
   objects["present"] = Some(&obj)
   objects["absent"] = None
-  let scope = ast.Scope {
+  ast.Scope {
     Outer: None,
     Objects: Some(objects),
   }
-  let _ = scope
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1832,19 +1831,18 @@ import "go:net/url"
 
 type URLs = Slice<Option<Ref<url.URL>>>
 
-fn main() {
+fn certificate() -> x509.Certificate {
   let u = url.URL {
     Scheme: "https",
     Host: "example.com",
     ..,
   }
   let urls: URLs = [Some(&u), None]
-  let cert = x509.Certificate {
+  x509.Certificate {
     URIs: urls,
     PublicKey: 0,
     ..,
   }
-  let _ = cert
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1855,14 +1853,13 @@ fn interop_nested_slice_of_option_unwrapped_at_go_field() {
     let input = r#"
 import "go:example.com/cli"
 
-fn main() {
+fn group() -> cli.Group {
   let f1 = &cli.Flag { Name: "a", .. }
   let f2 = &cli.Flag { Name: "b", .. }
-  let g = cli.Group {
+  cli.Group {
     Flags: [[Some(f1), Some(f2)]],
     ..,
   }
-  let _ = g
 }
 "#;
     let typedef = r#"

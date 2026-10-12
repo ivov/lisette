@@ -136,9 +136,9 @@ impl CoercionPlan {
             Self::Identity => value,
             Self::WrapAsInterface(plan) => {
                 let adapter_name = planner.ensure_adapter_type(plan);
-                GoExpression::composite(
-                    Some(adapter_name),
-                    vec![(Some(GoExpression::name("inner".to_string())), value)],
+                GoExpression::struct_literal(
+                    adapter_name,
+                    vec![("inner".to_string(), value)],
                     CompositeLayout::Inline { padded: false },
                 )
             }
