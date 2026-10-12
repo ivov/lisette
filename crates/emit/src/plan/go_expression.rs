@@ -256,8 +256,16 @@ pub(crate) enum FunctionLiteralLayout {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CompositeElement {
-    pub key: Option<GoExpressionNode>,
+    pub key: Option<CompositeKey>,
     pub value: GoExpressionNode,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CompositeKey {
+    /// A struct field name, which never reads a local.
+    Field(String),
+    /// A map key or an array index.
+    Value(GoExpressionNode),
 }
 
 /// The whitespace forms match the text the string emitters produced, because
@@ -337,7 +345,7 @@ impl GoExpressionNode {
             | Self::FunctionLiteral { .. } => {}
             Self::CompositeLiteral { elements, .. } => {
                 for element in elements {
-                    if let Some(key) = &element.key {
+                    if let Some(CompositeKey::Value(key)) = &element.key {
                         visit(key);
                     }
                     visit(&element.value);
@@ -392,7 +400,7 @@ impl GoExpressionNode {
             | Self::FunctionLiteral { .. } => {}
             Self::CompositeLiteral { elements, .. } => {
                 for element in elements {
-                    if let Some(key) = &mut element.key {
+                    if let Some(CompositeKey::Value(key)) = &mut element.key {
                         visit(key);
                     }
                     visit(&mut element.value);
@@ -745,7 +753,10 @@ enum Binding {
 impl CompositeElement {
     fn write(&self, output: &mut String) {
         if let Some(key) = &self.key {
-            key.write(output, Slot::FREE);
+            match key {
+                CompositeKey::Field(name) => output.push_str(name),
+                CompositeKey::Value(key) => key.write(output, Slot::FREE),
+            }
             output.push_str(": ");
         }
         self.value.write(output, Slot::FREE);

@@ -219,9 +219,7 @@ pub(crate) fn enum_make_function(enum_name: &str, variant_name: &str) -> String 
     format!("Make{}{}", escape_type_name(enum_name), variant_name)
 }
 
-/// Go builtins re-exposed by the Lisette prelude under the same name. The
-/// `prelude_function_shadowed` diagnostic forbids user code from declaring
-/// identifiers with these names, so the emitter need not escape them.
+/// Go builtins re-exposed by the Lisette prelude under the same name.
 const PRELUDE_BUILTIN_NAMES: &[&str] = &["complex", "max", "min", "panic", "real"];
 
 pub(crate) fn is_prelude_go_builtin(qualified_name: &str) -> bool {
@@ -313,7 +311,7 @@ fn is_reserved_package_name(name: &str) -> bool {
 
 fn is_reserved_identifier(name: &str) -> bool {
     GO_KEYWORDS.contains(&name)
-        || (GO_BUILTINS.contains(&name) && !PRELUDE_BUILTIN_NAMES.contains(&name))
+        || GO_BUILTINS.contains(&name)
         || is_generated_import_qualifier(name)
 }
 

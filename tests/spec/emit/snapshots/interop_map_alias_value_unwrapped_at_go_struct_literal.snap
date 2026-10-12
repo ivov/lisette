@@ -6,7 +6,7 @@ description: |
   
   type Objects = mut Map<string, Option<mut Ref<ast.Object>>>
   
-  fn main() {
+  fn scope() -> ast.Scope {
     let mut obj = ast.Object {
       Kind: ast.Bad,
       Name: "x",
@@ -17,11 +17,10 @@ description: |
     let mut objects: Objects = Map.new<string, Option<mut Ref<ast.Object>>>()
     objects["present"] = Some(&obj)
     objects["absent"] = None
-    let scope = ast.Scope {
+    ast.Scope {
       Outer: None,
       Objects: Some(objects),
     }
-    let _ = scope
   }
 ---
 package main
@@ -33,7 +32,7 @@ import (
 
 type Objects = map[string]lisette.Option[*ast.Object]
 
-func main() {
+func scope() ast.Scope {
 	obj := ast.Object{
 		Kind: ast.Bad,
 		Name: "x",
@@ -52,9 +51,8 @@ func main() {
 			unwrapped[i] = nil
 		}
 	}
-	scope := ast.Scope{
+	return ast.Scope{
 		Outer:   nil,
 		Objects: unwrapped,
 	}
-	_ = scope
 }

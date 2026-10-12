@@ -955,12 +955,5 @@ pub(crate) fn emit_struct_literal(ty: &str, fields: Vec<(String, GoExpression)>)
     } else {
         CompositeLayout::Inline { padded: true }
     };
-    GoExpression::composite(
-        Some(ty.to_string()),
-        fields
-            .into_iter()
-            .map(|(name, value)| (Some(GoExpression::name(name)), value))
-            .collect(),
-        layout,
-    )
+    GoExpression::struct_literal(ty.to_string(), fields, layout)
 }

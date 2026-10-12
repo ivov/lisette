@@ -27,10 +27,13 @@ import L "github.com/user/myproject/lib"
 
 type Alias = L.Event
 
-func main() {
-	e := L.Event{
+func click() Alias {
+	return L.Event{
 		Tag: L.EventClick,
 		X:   1,
 	}
-	_ = e
+}
+
+func main() {
+	click()
 }

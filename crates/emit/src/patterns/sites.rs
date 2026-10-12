@@ -617,10 +617,10 @@ impl Planner<'_> {
                 self.require_testkit();
                 let testkit = testkit_qualifier();
                 let literal = |text: String| GoExpression::literal(text);
-                let operand = GoExpression::composite(
-                    Some(format!("{testkit}.Operand")),
+                let operand = GoExpression::struct_literal(
+                    format!("{testkit}.Operand"),
                     vec![(
-                        Some(GoExpression::name("Value".to_string())),
+                        "Value".to_string(),
                         GoExpression::call(
                             GoExpression::generated(GeneratedPackage::Prelude, "Debug"),
                             vec![subject_var.clone()],

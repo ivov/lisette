@@ -26,10 +26,4 @@ func (p Point) String() string {
 	return "custom"
 }
 
-func main() {
-	p := Point{
-		x: 1,
-		y: 2,
-	}
-	_ = p
-}
+func main() {}

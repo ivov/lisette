@@ -4,14 +4,13 @@ description: |
   
   import "go:example.com/cli"
   
-  fn main() {
+  fn group() -> cli.Group {
     let f1 = &cli.Flag { Name: "a", .. }
     let f2 = &cli.Flag { Name: "b", .. }
-    let g = cli.Group {
+    cli.Group {
       Flags: [[Some(f1), Some(f2)]],
       ..,
     }
-    let _ = g
   }
 ---
 package main
@@ -21,7 +20,7 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func main() {
+func group() cli.Group {
 	f1 := &cli.Flag{Name: "a"}
 	f2 := &cli.Flag{Name: "b"}
 	src := [][]lisette.Option[*cli.Flag]{{lisette.MakeOptionSome(f1), lisette.MakeOptionSome(f2)}}
@@ -35,6 +34,5 @@ func main() {
 		}
 		unwrapped[i] = unwrapped_1
 	}
-	g := cli.Group{Flags: unwrapped}
-	_ = g
+	return cli.Group{Flags: unwrapped}
 }

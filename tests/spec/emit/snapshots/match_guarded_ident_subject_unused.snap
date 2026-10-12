@@ -18,8 +18,6 @@ type P struct {
 }
 
 func test() {
-	p := P{v: 1}
-	_ = p
 	switch {
 	case false:
 	}
