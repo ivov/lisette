@@ -1,16 +1,16 @@
 use crate::Planner;
 use crate::analyze::inline_uses::region_blocks_inline;
-use crate::calls::native::{clip_shared_capacity, is_clip_safe_path};
+use crate::calls::native::{is_clip_safe_path, slice_growth_call};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible};
-use crate::expressions::staging::SpreadSequenceOptions;
-use crate::names::go_name::GeneratedPackage;
+use crate::expressions::staging::{LaterStages, SpreadSequenceOptions};
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::plan::bodies::with_setup;
 use crate::plan::bodies::{
     AssignForm, Definition, ElseArm, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, Statement, assign, discard, expression_statement,
 };
+use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::Stability;
@@ -752,35 +752,42 @@ impl Planner<'_> {
             let mut capture: Vec<Statement> = Vec::new();
             let receiver_lv =
                 self.lower_place(&mut capture, unwrapped, PlaceOrdering::before(&ordering));
-            let grows = !arguments.is_empty();
-            let receiver = if grows && receiver_lv.node() != target.node() {
-                let clippable = if is_clip_safe_path(&receiver_lv) && ordering.setup().is_empty() {
-                    receiver_lv
-                } else {
-                    GoExpression::name(self.hoist_tmp_value_statement(
-                        &mut capture,
-                        "recv",
-                        receiver_lv,
-                    ))
-                };
-                clip_shared_capacity(clippable)
+            let target_differs = receiver_lv.node() != target.node();
+            let receiver_read = ValuePlan::computed(Vec::new(), receiver_lv.clone())
+                .with_stability(self.path_read_stability(&receiver_lv));
+            let arguments_effects = arguments
+                .iter()
+                .fold(Effects::default(), |effects, argument| {
+                    effects.union(argument.effects())
+                });
+            let mut later = LaterStages::sequenced(
+                ordering.setup(),
+                arguments_effects.with_known_reads(arguments_effects.reads()),
+            );
+            // Detaching may evaluate an argument before the receiver is read.
+            let receiver = if target_differs
+                && !arguments.is_empty()
+                && (!is_clip_safe_path(&receiver_lv) || later.prepend(&receiver_read))
+            {
+                GoExpression::name(self.hoist_tmp_value_statement(
+                    &mut capture,
+                    "recv",
+                    receiver_lv,
+                ))
             } else {
                 receiver_lv
             };
             capture.extend(ordering.into_parts().0);
-            let value = if method == "reserve" {
-                let mut all = vec![receiver];
-                all.extend(arguments);
-                GoExpression::call(
-                    GoExpression::generated(GeneratedPackage::Slices, "Grow"),
-                    all,
+            let value = if target_differs {
+                self.detach_slice_growth(
+                    &mut capture,
+                    method,
+                    receiver,
+                    &arguments,
+                    &last.get_type(),
                 )
-            } else if arguments.is_empty() {
-                receiver
             } else {
-                let mut all = vec![receiver];
-                all.extend(arguments);
-                GoExpression::call(GoExpression::name("append".to_string()), all)
+                slice_growth_call(method, receiver, &arguments)
             };
             (value, capture)
         } else {

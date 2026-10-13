@@ -1,0 +1,126 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+
+  import "go:os"
+
+  struct Holder {
+    slc: Slice<int>,
+  }
+
+  fn main() {
+    for n in [0, 2] {
+      let mut base = [1, 2]
+      let mut calls = 0
+      let count = || {
+        calls += 1
+        base = [3, 4]
+        n
+      }
+      let result = { base.reserve(count()) }
+      if calls != 1 || result[0] != 1 {
+        panic("reserve must read the receiver before evaluating the count once")
+      }
+    }
+
+    for extra in [[], [7]] {
+      let mut holder = Holder { slc: [1, 2] }
+      let mut calls = 0
+      let make_extra = || {
+        calls += 1
+        holder.slc = [3, 4]
+        extra
+      }
+      let result = { holder.slc.append(make_extra()...) }
+      if calls != 1 || result[0] != 1 || result.length() != 2 + extra.length() {
+        panic("append must read the receiver before evaluating the spread once")
+      }
+    }
+
+    for n in [0, 2] {
+      os.Args = ["before"]
+      let count = || {
+        os.Args = ["after"]
+        n
+      }
+      let result = { os.Args.reserve(count()) }
+      if result[0] != "before" {
+        panic("reserve must read a package receiver before argument effects")
+      }
+    }
+  }
+---
+package main
+
+import (
+	"os"
+	"slices"
+)
+
+type Holder struct {
+	slc []int
+}
+
+func main() {
+	for _, n := range []int{0, 2} {
+		base := []int{1, 2}
+		calls := 0
+		count := func() int {
+			calls++
+			base = []int{3, 4}
+			return n
+		}
+		var result []int
+		recv := base
+		added := count()
+		result = func() []int {
+			if added == 0 {
+				return slices.Clone(recv)
+			}
+			return slices.Grow(recv[:len(recv):len(recv)], added)
+		}()
+		if calls != 1 || result[0] != 1 {
+			panic("reserve must read the receiver before evaluating the count once")
+		}
+	}
+	for _, extra := range [][]int{{}, {7}} {
+		holder := Holder{slc: []int{1, 2}}
+		calls := 0
+		make_extra := func() []int {
+			calls++
+			holder.slc = []int{3, 4}
+			return extra
+		}
+		var result []int
+		recv_1 := holder.slc
+		added_1 := make_extra()
+		result = func() []int {
+			if len(added_1) == 0 {
+				return slices.Clone(recv_1)
+			}
+			return append(recv_1[:len(recv_1):len(recv_1)], added_1...)
+		}()
+		if calls != 1 || result[0] != 1 || len(result) != 2+len(extra) {
+			panic("append must read the receiver before evaluating the spread once")
+		}
+	}
+	for _, n := range []int{0, 2} {
+		os.Args = []string{"before"}
+		count := func() int {
+			os.Args = []string{"after"}
+			return n
+		}
+		var result []string
+		recv_2 := os.Args
+		added_2 := count()
+		result = func() []string {
+			if added_2 == 0 {
+				return slices.Clone(recv_2)
+			}
+			return slices.Grow(recv_2[:len(recv_2):len(recv_2)], added_2)
+		}()
+		if result[0] != "before" {
+			panic("reserve must read a package receiver before argument effects")
+		}
+	}
+}

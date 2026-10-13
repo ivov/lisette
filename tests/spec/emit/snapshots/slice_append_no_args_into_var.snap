@@ -9,10 +9,12 @@ description: |
 ---
 package main
 
+import "slices"
+
 func test(s []int, flag bool) []int {
 	var out []int
 	if flag {
-		out = s
+		out = slices.Clone(s)
 	} else {
 		out = s
 	}

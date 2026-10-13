@@ -8,6 +8,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 func test(s []int) []int {
-	return s
+	return slices.Clone(s)
 }

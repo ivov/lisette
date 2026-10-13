@@ -1,0 +1,93 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+
+  fn check(calls: int, result: mut Slice<int>) -> mut Slice<int> {
+    if calls != 1 {
+      panic("a spread operand must not reorder an earlier read")
+    }
+    result
+  }
+
+  fn main() {
+    for n in [0, 2] {
+      let mut calls = 0
+      let count = || {
+        calls += 1
+        n
+      }
+      let a = [1, 2]
+      let mut reserved = a.reserve(count())
+      if calls != 1 {
+        panic("a reserve count must be evaluated once")
+      }
+      let extra = || {
+        calls += 1
+        if n == 0 { [] } else { [7] }
+      }
+      let mut appended = check(calls, a.append(extra()...))
+      if calls != 2 {
+        panic("a spread operand must be evaluated once")
+      }
+      reserved[0] = 99
+      appended[0] = 99
+      if a[0] != 1 {
+        panic("slice growth must not alias a read-only slice")
+      }
+    }
+  }
+---
+package main
+
+import "slices"
+
+func check(calls int, result []int) []int {
+	if calls != 1 {
+		panic("a spread operand must not reorder an earlier read")
+	}
+	return result
+}
+
+func main() {
+	for _, n := range []int{0, 2} {
+		calls := 0
+		count := func() int {
+			calls++
+			return n
+		}
+		a := []int{1, 2}
+		added := count()
+		reserved := func() []int {
+			if added == 0 {
+				return slices.Clone(a)
+			}
+			return slices.Grow(a[:len(a):len(a)], added)
+		}()
+		if calls != 1 {
+			panic("a reserve count must be evaluated once")
+		}
+		extra := func() []int {
+			calls++
+			if n == 0 {
+				return []int{}
+			}
+			return []int{7}
+		}
+		arg := calls
+		added_1 := extra()
+		appended := check(arg, func() []int {
+			if len(added_1) == 0 {
+				return slices.Clone(a)
+			}
+			return append(a[:len(a):len(a)], added_1...)
+		}())
+		if calls != 2 {
+			panic("a spread operand must be evaluated once")
+		}
+		reserved[0] = 99
+		appended[0] = 99
+		if a[0] != 1 {
+			panic("slice growth must not alias a read-only slice")
+		}
+	}
+}
