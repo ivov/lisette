@@ -84,7 +84,7 @@ impl Planner<'_> {
         let return_abi = self.slot_return_abi(&layout.result_type, slot_origin);
         ValueLayout::Function {
             function_type,
-            layout: self.function_layout(layout.parameters, &result, return_abi),
+            layout: self.function_layout(layout.parameters, &result, return_abi, None),
         }
     }
 
@@ -206,7 +206,7 @@ impl Planner<'_> {
     ) -> GoType {
         let peeled = self.facts.peel_alias(return_ty);
         let result = self.value_layout(&peeled, SlotOrigin::Lisette);
-        self.function_layout(Vec::new(), &result, abi.clone())
+        self.function_layout(Vec::new(), &result, abi.clone(), None)
             .result_go_type(self)
             .unwrap_or_else(|| self.go_type(&peeled))
     }

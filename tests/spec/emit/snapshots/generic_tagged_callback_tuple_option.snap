@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn pair<T>(x: T) -> (T, T) { (x, x) }
+  fn main() {
+    let x = 3
+    let result = Option.map(Some(Some(&x)), pair)
+    let Some((Some(left), Some(right))) = result else { panic("generic tuple options") }
+    if left != &x || right != &x { panic("generic tuple payload") }
+    let (direct_left, direct_right) = pair(Some(&x))
+    if direct_left.is_none() || direct_right.is_none() { panic("generic direct tuple") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func pair[T any](x T) (T, T) {
+	return x, x
+}
+
+func main() {
+	x := 3
+	arg := lisette.MakeOptionSome(lisette.MakeOptionSome(&x))
+	cb := pair[lisette.Option[*int]]
+	tagged := func(arg0 lisette.Option[*int]) lisette.Tuple2[lisette.Option[*int], lisette.Option[*int]] {
+		ret, ret_1 := cb(arg0)
+		tup := lisette.MakeTuple2(ret, ret_1)
+		return tup
+	}
+	result := lisette.OptionMap(arg, tagged)
+	if !(result.Tag == lisette.OptionSome && result.SomeVal.First.Tag == lisette.OptionSome && result.SomeVal.Second.Tag == lisette.OptionSome) {
+		panic("generic tuple options")
+	}
+	left := result.SomeVal.First.SomeVal
+	right := result.SomeVal.Second.SomeVal
+	if left != &x || right != &x {
+		panic("generic tuple payload")
+	}
+	ret_2, ret_3 := pair(lisette.MakeOptionSome(&x))
+	tup_1 := lisette.MakeTuple2(ret_2, ret_3)
+	direct_left := tup_1.First
+	direct_right := tup_1.Second
+	if direct_left.IsNone() || direct_right.IsNone() {
+		panic("generic direct tuple")
+	}
+}

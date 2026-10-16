@@ -7,7 +7,7 @@ pub(crate) use wrappers::{NilGuard, WrapperTarget, is_nil, non_nil, unexpected_n
 use crate::Planner;
 use crate::abi::callable::{CallableAbi, CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge, resolve_layout_bridge};
-use crate::abi::layout::{SlotOrigin, ValueLayout};
+use crate::abi::layout::SlotOrigin;
 use crate::abi::tuple_element_types;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
@@ -27,7 +27,7 @@ impl Planner<'_> {
         result_ty: &Type,
     ) -> ValuePlan {
         let bridge = self.go_result_bridge(abi, result_ty);
-        let bridged = bridge.is_some();
+        let bridged = bridge.as_ref().is_some_and(|bridge| !bridge.is_identity());
         let call_plan = self.lower_call(call_expression, None, ExpressionContext::value());
         let mut wrapped_in_place = false;
         let mut plan = call_plan.map_expression(|setup, call| {
@@ -73,9 +73,9 @@ impl Planner<'_> {
         match lowered {
             LoweredReturnAbi::BareError
             | LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(_)) => None,
-            LoweredReturnAbi::Tuple { .. } => self
-                .tuple_result_bridges(abi, result_ty)
-                .map(GoResultBridge::Tuple),
+            LoweredReturnAbi::Tuple { .. } => Some(GoResultBridge::Tuple(
+                self.tuple_result_bridges(abi, result_ty),
+            )),
             LoweredReturnAbi::Option(OptionReturnAbi::Nullable) => self
                 .whole_result_bridge(abi, result_ty)
                 .map(GoResultBridge::Whole),
@@ -104,35 +104,22 @@ impl Planner<'_> {
         (!bridge.is_identity()).then_some(bridge)
     }
 
-    fn tuple_result_bridges(
-        &self,
-        abi: &CallableAbi,
-        result_ty: &Type,
-    ) -> Option<Vec<LayoutBridge>> {
-        let ValueLayout::Tuple {
-            elements: source, ..
-        } = &abi.return_layout
-        else {
-            return None;
-        };
-        let ValueLayout::Tuple {
-            elements: target, ..
-        } = self.value_layout(result_ty, SlotOrigin::Lisette)
-        else {
-            return None;
-        };
-        if source.len() != target.len() {
-            return None;
-        }
-        let bridges = source
+    fn tuple_result_bridges(&self, abi: &CallableAbi, result_ty: &Type) -> Vec<LayoutBridge> {
+        let source = abi.function_layout(self).results;
+        let target = self.value_layout(result_ty, SlotOrigin::Lisette);
+        let target = target
+            .tuple_elements()
+            .expect("a tuple result ABI has a tuple value layout");
+        assert_eq!(
+            source.len(),
+            target.len(),
+            "tuple result slot arity differs"
+        );
+        source
             .iter()
-            .zip(&target)
+            .zip(target)
             .map(|(source, target)| resolve_layout_bridge(self, source, target))
-            .collect::<Vec<_>>();
-        bridges
-            .iter()
-            .any(|bridge| !bridge.is_identity())
-            .then_some(bridges)
+            .collect()
     }
 
     /// Convert a callable's Go result into its Lisette value and deliver it to `target`.
@@ -341,6 +328,7 @@ pub(crate) fn build_tuple_literal(values: Vec<GoExpression>) -> GoExpression {
     )
 }
 
+#[derive(Debug, Clone)]
 pub(crate) enum GoResultBridge {
     Tuple(Vec<LayoutBridge>),
     Whole(CoercionPlan),
@@ -348,6 +336,14 @@ pub(crate) enum GoResultBridge {
 }
 
 impl GoResultBridge {
+    pub(crate) fn is_identity(&self) -> bool {
+        match self {
+            Self::Tuple(bridges) => bridges.iter().all(LayoutBridge::is_identity),
+            Self::Whole(bridge) => bridge.is_identity(),
+            Self::Payload(bridge) => bridge.is_identity(),
+        }
+    }
+
     pub(crate) fn into_payload(self) -> Option<LayoutBridge> {
         match self {
             Self::Payload(bridge) => Some(bridge),
@@ -375,7 +371,9 @@ impl LoweredCall<'_> {
     }
 
     pub(crate) fn is_bridged(&self) -> bool {
-        self.bridge.is_some()
+        self.bridge
+            .as_ref()
+            .is_some_and(|bridge| !bridge.is_identity())
     }
 
     pub(crate) fn has_tuple_payload(&self, planner: &Planner<'_>) -> bool {

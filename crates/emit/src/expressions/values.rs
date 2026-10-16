@@ -8,10 +8,8 @@ use syntax::program::DefinitionBody;
 
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::CoercionPlan;
-use crate::abi::layout::{SlotOrigin, ValueLayout};
-use crate::abi::transition::{
-    emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper, emit_unit_result_adapter,
-};
+use crate::abi::layout::{FunctionLayout, SlotOrigin, ValueLayout};
+use crate::abi::transition::{emit_lisette_callback_wrapper, emit_unit_result_adapter};
 use crate::calls::go_interop::GoResultBridge;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
@@ -28,6 +26,11 @@ use crate::{Planner, ReturnContext};
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::program::CallKind;
 use syntax::types::Type;
+
+enum FunctionValueAdapter {
+    Prelude(LoweredReturnAbi),
+    Layout(Box<(FunctionLayout, FunctionLayout)>),
+}
 
 impl Planner<'_> {
     pub(crate) fn lower_value(
@@ -82,58 +85,68 @@ impl Planner<'_> {
             }
         }
 
-        if let Some((prelude, target)) = self.tagged_function_value_target(expression, ctx) {
+        if let Some(adapter) = self.function_value_adapter(expression, ctx) {
             let value = self.plan_operand(expression, ctx);
-            return value.map_expression(|setup, value| {
-                let function_ty = expression.get_type();
-                if prelude {
+            return value.map_expression(|setup, value| match adapter {
+                FunctionValueAdapter::Prelude(target) => {
                     // A prelude function also takes its callbacks tagged.
-                    return emit_lisette_callback_wrapper(
+                    emit_lisette_callback_wrapper(
                         self,
                         setup,
                         value,
-                        function_ty.unwrap_forall(),
+                        expression.get_type().unwrap_forall(),
                         &target,
-                    );
+                    )
                 }
-                emit_fn_arg_shape_adapter(
-                    self,
-                    setup,
-                    value,
-                    &function_ty,
-                    &CallableReturnAbi::Value,
-                    &CallableReturnAbi::Lowered(target),
-                )
-                .expect("a function value has a function signature")
+                FunctionValueAdapter::Layout(layouts) => {
+                    let (source, target) = *layouts;
+                    self.plan_function_layout_bridge(setup, value, &source, &target)
+                }
             });
         }
 
         self.plan_operand(expression, ctx)
     }
 
-    /// The lowered result a function value must present when it returns its
-    /// tagged value, and whether it is a prelude function.
-    fn tagged_function_value_target(
+    /// Normalize the callable's physical declaration layout to its value slot.
+    fn function_value_adapter(
         &self,
         expression: &Expression,
         ctx: ExpressionContext<'_>,
-    ) -> Option<(bool, LoweredReturnAbi)> {
+    ) -> Option<FunctionValueAdapter> {
         if ctx.is_callee() || ctx.forces_tagged_go_function() || is_closure_literal(expression) {
             return None;
         }
         let callee = self.resolve_callable_value(expression)?;
-        if callee.abi.result != CallableReturnAbi::Value
-            || matches!(callee.origin, CallableOrigin::GoInterop)
-        {
+        if matches!(callee.origin, CallableOrigin::GoInterop) {
             return None;
         }
         let function = expression.get_type();
-        let return_ty = function.unwrap_forall().get_function_ret()?;
-        let target = self.slot_return_abi(return_ty, ctx.function_slot_origin());
-        let CallableReturnAbi::Lowered(target) = target else {
-            return None;
+        // Ordinary named values normalize to their concrete Lisette type before
+        // the argument/slot adapter handles a Go boundary. Prelude wrappers also
+        // adapt their callback parameters, so they own the destination transition.
+        let origin = if callee.is_prelude_dispatch {
+            ctx.function_slot_origin()
+        } else {
+            SlotOrigin::Lisette
         };
-        Some((callee.is_prelude_dispatch, target))
+        let mut target = self.value_layout(&function, origin);
+        while let ValueLayout::Named { underlying, .. } = target {
+            target = *underlying;
+        }
+        let ValueLayout::Function { layout: target, .. } = target else {
+            unreachable!("a resolved function value has a function layout");
+        };
+        if callee.is_prelude_dispatch {
+            return target
+                .return_abi
+                .lowered()
+                .cloned()
+                .map(FunctionValueAdapter::Prelude);
+        }
+        let source = callee.abi.function_layout(self);
+        (!source.same_representation(&target))
+            .then(|| FunctionValueAdapter::Layout(Box::new((source, target))))
     }
 
     pub(crate) fn lower_composite_value(

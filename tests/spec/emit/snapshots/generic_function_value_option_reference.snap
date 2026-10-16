@@ -1,0 +1,67 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn some<T>(x: T) -> Option<T> { Some(x) }
+  fn consume(f: fn(Ref<int>) -> Option<Ref<int>>, x: Ref<int>) -> Option<Ref<int>> { f(x) }
+  fn main() {
+    let x = 3
+    let stored: fn(Ref<int>) -> Option<Ref<int>> = some
+    let Some(first) = stored(&x) else { panic("stored generic option") }
+    let Some(second) = consume(some, &x) else { panic("generic option callback") }
+    if first != &x || second != &x { panic("generic option payload") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func some[T any](x T) (T, bool) {
+	return x, true
+}
+
+func consume(f func(*int) *int, x *int) *int {
+	return f(x)
+}
+
+func main() {
+	x := 3
+	cb := some[*int]
+	stored := func(arg0 *int) *int {
+		ret, ret_1 := cb(arg0)
+		var option lisette.Option[*int]
+		if ret_1 && ret != nil {
+			option = lisette.MakeOptionSome[*int](ret)
+		} else {
+			option = lisette.MakeOptionNone[*int]()
+		}
+		if option.Tag == lisette.OptionSome {
+			return option.SomeVal
+		}
+		return nil
+	}
+	first := stored(&x)
+	if first == nil {
+		panic("stored generic option")
+	}
+	cb_1 := some[*int]
+	second := consume(func(arg0 *int) *int {
+		ret_2, ret_3 := cb_1(arg0)
+		var option_1 lisette.Option[*int]
+		if ret_3 && ret_2 != nil {
+			option_1 = lisette.MakeOptionSome[*int](ret_2)
+		} else {
+			option_1 = lisette.MakeOptionNone[*int]()
+		}
+		if option_1.Tag == lisette.OptionSome {
+			return option_1.SomeVal
+		}
+		return nil
+	}, &x)
+	if second == nil {
+		panic("generic option callback")
+	}
+	if first != &x || second != &x {
+		panic("generic option payload")
+	}
+}

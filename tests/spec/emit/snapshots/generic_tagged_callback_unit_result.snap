@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn okay<T>(x: T) -> Result<T, error> { Ok(x) }
+  fn main() {
+    let result = Option.map(Some(()), okay)
+    let Some(Ok(_)) = result else { panic("generic unit result") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func okay[T any](x T) (T, error) {
+	return x, nil
+}
+
+func main() {
+	arg := lisette.MakeOptionSome(struct{}{})
+	cb := okay[struct{}]
+	tagged := func(arg0 struct{}) lisette.Result[struct{}, error] {
+		return lisette.ResultFromPair[struct{}](cb(arg0))
+	}
+	result := lisette.OptionMap(arg, tagged)
+	if !(result.Tag == lisette.OptionSome && result.SomeVal.Tag == lisette.ResultOk) {
+		panic("generic unit result")
+	}
+}

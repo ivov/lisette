@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn okay<T>(x: T) -> Result<T, error> { Ok(x) }
+  fn consume(f: fn(()) -> Result<(), error>) -> bool { f(()).is_ok() }
+  fn main() {
+    if !consume(okay) { panic("generic callback unit result") }
+    let stored: fn(()) -> Result<(), error> = okay
+    if stored(()).is_err() { panic("stored generic unit result") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func okay[T any](x T) (T, error) {
+	return x, nil
+}
+
+func consume(f func(struct{}) error) bool {
+	err := f(struct{}{})
+	return err == nil
+}
+
+func main() {
+	cb := okay[struct{}]
+	if !consume(func(arg0 struct{}) error {
+		result := lisette.ResultFromPair[struct{}](cb(arg0))
+		if result.Tag == lisette.ResultOk {
+			return nil
+		}
+		return result.ErrVal
+	}) {
+		panic("generic callback unit result")
+	}
+	cb_1 := okay[struct{}]
+	stored := func(arg0 struct{}) error {
+		result_1 := lisette.ResultFromPair[struct{}](cb_1(arg0))
+		if result_1.Tag == lisette.ResultOk {
+			return nil
+		}
+		return result_1.ErrVal
+	}
+	if err := stored(struct{}{}); err != nil {
+		panic("stored generic unit result")
+	}
+}
