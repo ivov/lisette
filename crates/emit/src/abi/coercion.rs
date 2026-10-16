@@ -13,6 +13,7 @@ use crate::plan::values::GoExpression;
 
 use super::layout::{FunctionLayout, ValueLayout};
 
+#[derive(Debug, Clone)]
 pub(crate) enum CoercionPlan {
     Identity,
     WrapAsInterface(AdapterPlan),

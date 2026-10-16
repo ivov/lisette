@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn some<T>(x: T) -> Option<T> { Some(x) }
+  fn main() {
+    let x = 3
+    let got = Option.and_then(Some(&x), some)
+    let Some(value) = got else { panic("generic option reference") }
+    if value != &x { panic("generic reference payload") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func some[T any](x T) (T, bool) {
+	return x, true
+}
+
+func main() {
+	x := 3
+	arg := lisette.MakeOptionSome(&x)
+	cb := some[*int]
+	tagged := func(arg0 *int) lisette.Option[*int] {
+		ret, ret_1 := cb(arg0)
+		if ret_1 && ret != nil {
+			return lisette.MakeOptionSome[*int](ret)
+		}
+		return lisette.MakeOptionNone[*int]()
+	}
+	got := lisette.OptionAndThen(arg, tagged)
+	if got.Tag != lisette.OptionSome {
+		panic("generic option reference")
+	}
+	value := got.SomeVal
+	if value != &x {
+		panic("generic reference payload")
+	}
+}

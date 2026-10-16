@@ -787,7 +787,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 ) && self
                     .planner
                     .go_result_bridge(&plan.resolved.abi, &value_ty)
-                    .is_none()
+                    .is_none_or(|bridge| bridge.is_identity())
             })
     }
 

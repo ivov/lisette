@@ -3,6 +3,7 @@ use crate::abi::callable::{CallableAbi, CallableParamAbi, CallableReturnAbi, Low
 use crate::abi::coercion::LayoutBridge;
 use crate::abi::is_prelude_container_type;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
+use crate::calls::go_interop::GoResultBridge;
 use crate::definitions::interface_adapter::with_comma_ok_hint;
 use crate::patterns::matching::prelude_constructor;
 use syntax::ast::{Expression, IdentifierResolution};
@@ -91,7 +92,26 @@ pub(crate) enum ArgumentPlan {
     },
     LoweredFnShapeAdapter(Box<FunctionArgumentAdapter>),
     GoSlotBridge(Box<ArgumentSlotBridge>),
-    TaggedGoLowering,
+    TaggedGoLowering(Box<TaggedArgumentAdapter>),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct TaggedArgumentAdapter {
+    pub(crate) function: Type,
+    pub(crate) result: LoweredReturnAbi,
+    pub(crate) bridge: Option<GoResultBridge>,
+}
+
+impl TaggedArgumentAdapter {
+    pub(crate) fn plan(planner: &Planner, ty: &Type) -> Option<Self> {
+        let function = ty.as_function_type()?;
+        let result = planner.classify_direct_emission(&function.return_type)?;
+        Some(Self {
+            function: ty.unwrap_forall().clone(),
+            result,
+            bridge: None,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -240,6 +260,7 @@ impl<'a> Planner<'a> {
                 params,
                 result,
                 return_layout,
+                result_declaration: return_declaration.cloned(),
             },
             is_prelude_dispatch,
         }

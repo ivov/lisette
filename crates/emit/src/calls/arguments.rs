@@ -93,13 +93,11 @@ impl Planner<'_> {
                 self.lower_function_argument_adapter(arg, adapter)
             }
             ArgumentPlan::GoSlotBridge(bridge) => self.lower_go_slot_bridge(arg, bridge),
-            ArgumentPlan::TaggedGoLowering => {
-                let target =
-                    effective_param_ty.expect("TaggedGoLowering requires effective_param_ty");
+            ArgumentPlan::TaggedGoLowering(adapter) => {
                 let arg_ctx = self.direct_arg_emit_ctx(param, true);
                 let argument = self.lower_composite_value(arg, arg_ctx);
                 argument.map_expression(|setup, value| {
-                    self.emit_lower_arg_to_tagged(setup, value, target)
+                    self.emit_lower_arg_to_tagged(setup, value, adapter)
                 })
             }
             ArgumentPlan::Direct => self.lower_direct_arg(arg, ctx, param, declared_param_ty),
@@ -119,19 +117,19 @@ impl Planner<'_> {
         {
             return ArgumentPlan::GoCallbackAdapter { source, target };
         }
+        // Prelude callbacks return tagged values even when their instantiated
+        // result could use a nullable or multi-value ABI in a Lisette function.
+        if would_suppress_tagged_go(callee, declared_param_ty) {
+            return match self.detect_lower_arg_to_tagged(arg, effective_param_ty) {
+                Some(adapter) => ArgumentPlan::TaggedGoLowering(Box::new(adapter)),
+                None => ArgumentPlan::Direct,
+            };
+        }
         if let Some(adapter) = self.plan_function_argument_adapter(arg, declared_param_ty) {
             return ArgumentPlan::LoweredFnShapeAdapter(Box::new(adapter));
         }
         if let Some(bridge) = param.and_then(|param| self.plan_argument_slot_bridge(arg, param)) {
             return ArgumentPlan::GoSlotBridge(Box::new(bridge));
-        }
-        let suppress = would_suppress_tagged_go(callee, declared_param_ty);
-        if suppress
-            && self
-                .detect_lower_arg_to_tagged(arg, effective_param_ty)
-                .is_some()
-        {
-            return ArgumentPlan::TaggedGoLowering;
         }
         ArgumentPlan::Direct
     }

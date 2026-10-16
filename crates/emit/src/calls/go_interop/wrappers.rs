@@ -594,7 +594,6 @@ impl Planner<'_> {
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
         let fallible = Fallible::from_type(result_ty).expect("Result type expected");
-        debug_assert!(!fallible.ok_ty().is_unit());
 
         let mut statements = Vec::new();
         let call = match self.result_from_pair(call, result_ty, layout, payload_bridge) {

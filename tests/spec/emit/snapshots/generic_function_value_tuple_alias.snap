@@ -1,0 +1,73 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  type Pair<T> = (T, T)
+  fn pair<T>(x: T) -> Pair<T> { (x, x) }
+  fn main() {
+    let x = 3
+    let (Some(first), Some(second)) = pair(Some(&x)) else { panic("generic tuple alias") }
+    let Some((Some(third), Some(fourth))) = Option.map(Some(Some(&x)), pair) else { panic("generic alias callback") }
+    let stored = pair
+    let (Some(fifth), Some(sixth)) = stored(Some(&x)) else { panic("generic stored alias") }
+    if first != &x || second != &x || third != &x || fourth != &x || fifth != &x || sixth != &x { panic("generic alias payloads") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Pair[T any] = lisette.Tuple2[T, T]
+
+func pair[T any](x T) (T, T) {
+	return x, x
+}
+
+func main() {
+	x := 3
+	ret, ret_1 := pair(lisette.MakeOptionSome(&x))
+	tup := lisette.MakeTuple2(ret, ret_1)
+	if !(tup.First.Tag == lisette.OptionSome && tup.Second.Tag == lisette.OptionSome) {
+		panic("generic tuple alias")
+	}
+	first := tup.First.SomeVal
+	second := tup.Second.SomeVal
+	arg := lisette.MakeOptionSome(lisette.MakeOptionSome(&x))
+	cb := pair[lisette.Option[*int]]
+	tagged := func(arg0 lisette.Option[*int]) Pair[lisette.Option[*int]] {
+		ret_2, ret_3 := cb(arg0)
+		tup_1 := lisette.MakeTuple2(ret_2, ret_3)
+		return tup_1
+	}
+	subject := lisette.OptionMap(arg, tagged)
+	if !(subject.Tag == lisette.OptionSome && subject.SomeVal.First.Tag == lisette.OptionSome && subject.SomeVal.Second.Tag == lisette.OptionSome) {
+		panic("generic alias callback")
+	}
+	third := subject.SomeVal.First.SomeVal
+	fourth := subject.SomeVal.Second.SomeVal
+	cb_1 := pair[lisette.Option[*int]]
+	stored := func(arg0 lisette.Option[*int]) (*int, *int) {
+		ret_4, ret_5 := cb_1(arg0)
+		var unwrap *int
+		if ret_4.Tag == lisette.OptionSome {
+			unwrap = ret_4.SomeVal
+		}
+		var unwrap_1 *int
+		if ret_5.Tag == lisette.OptionSome {
+			unwrap_1 = ret_5.SomeVal
+		}
+		return unwrap, unwrap_1
+	}
+	ret_6, ret_7 := stored(lisette.MakeOptionSome(&x))
+	option := lisette.OptionFromNilable[*int](ret_6, ret_6 == nil)
+	option_1 := lisette.OptionFromNilable[*int](ret_7, ret_7 == nil)
+	tup_2 := lisette.MakeTuple2(option, option_1)
+	if !(tup_2.First.Tag == lisette.OptionSome && tup_2.Second.Tag == lisette.OptionSome) {
+		panic("generic stored alias")
+	}
+	fifth := tup_2.First.SomeVal
+	sixth := tup_2.Second.SomeVal
+	if first != &x || second != &x || third != &x || fourth != &x || fifth != &x || sixth != &x {
+		panic("generic alias payloads")
+	}
+}

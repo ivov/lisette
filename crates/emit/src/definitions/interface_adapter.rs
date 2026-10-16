@@ -23,6 +23,7 @@ use syntax::program::{
 use syntax::types::{
     SubstitutionMap, Symbol, Type, build_substitution_map, substitute, unqualified_name,
 };
+#[derive(Debug, Clone)]
 pub(crate) struct AdapterPlan {
     concrete_id: EcoString,
     interface_id: EcoString,
@@ -31,6 +32,7 @@ pub(crate) struct AdapterPlan {
     generic_context: Vec<(EcoString, Vec<Type>)>,
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct AdapterMethod {
     name: EcoString,
     /// The implementation's Go slots.
@@ -40,6 +42,7 @@ pub(crate) struct AdapterMethod {
     ret: AdapterReturn,
 }
 
+#[derive(Debug, Clone)]
 enum AdapterReturn {
     Discard { user_returns_value: bool },
     ZeroFill,
@@ -226,6 +229,7 @@ impl Planner<'_> {
                 .collect(),
             &user_result,
             user_abi,
+            Some(&f.return_type),
         );
 
         let interface_return = &requirement.method.ty.as_function_type()?.return_type;
@@ -248,9 +252,14 @@ impl Planner<'_> {
         let parameters = self.interface_parameter_layouts(go_method.as_deref(), &param_types);
         let target = if abi_matches_type(&interface_abi, &peeled_return) {
             let result = self.interface_result_layout(go_method.as_deref(), &peeled_return);
-            self.function_layout(parameters, &result, interface_abi)
+            self.function_layout(parameters, &result, interface_abi, Some(interface_return))
         } else {
-            self.function_layout(parameters, &user_result, source.return_abi.clone())
+            self.function_layout(
+                parameters,
+                &user_result,
+                source.return_abi.clone(),
+                Some(&f.return_type),
+            )
         };
 
         let user_returns_value = !returns_go_void(&f.return_type);

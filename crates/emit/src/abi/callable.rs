@@ -128,6 +128,7 @@ pub(crate) struct CallableAbi {
     pub(crate) params: Vec<CallableParamAbi>,
     pub(crate) result: CallableReturnAbi,
     pub(crate) return_layout: ValueLayout,
+    pub(crate) result_declaration: Option<Type>,
 }
 
 impl CallableAbi {
@@ -155,6 +156,7 @@ impl CallableAbi {
                 .collect(),
             &self.return_layout,
             self.result.clone(),
+            self.result_declaration.as_ref(),
         )
     }
 }

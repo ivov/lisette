@@ -5,7 +5,7 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::prelude_constructor;
 use crate::plan::bodies::Statement;
-use crate::plan::calls::CallableOrigin;
+use crate::plan::calls::{CallableOrigin, TaggedArgumentAdapter};
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::go_expression::GoExpressionNode;
@@ -256,17 +256,9 @@ impl Planner<'_> {
             .with_generic_result_slot(declared_param, param_ty);
         let staged = self.lower_composite_value(expression, arg_ctx);
 
-        if suppress
-            && self
-                .detect_lower_arg_to_tagged(expression, param_ty)
-                .is_some()
-        {
+        if suppress && let Some(adapter) = self.detect_lower_arg_to_tagged(expression, param_ty) {
             return staged.map_expression(|setup, value| {
-                self.emit_lower_arg_to_tagged(
-                    setup,
-                    value,
-                    param_ty.expect("detected lowering requires a parameter type"),
-                )
+                self.emit_lower_arg_to_tagged(setup, value, &adapter)
             });
         }
 
@@ -278,30 +270,34 @@ impl Planner<'_> {
         &self,
         arg: &Expression,
         param_ty: Option<&Type>,
-    ) -> Option<()> {
+    ) -> Option<TaggedArgumentAdapter> {
         if matches!(arg.unwrap_parens(), Expression::Lambda { .. }) {
             return None;
         }
         // A Go function value is already wrapped to the tagged ABI here.
-        if self.resolve_callable_value(arg).is_some_and(|callee| {
-            matches!(callee.origin, CallableOrigin::GoInterop) || !callee.abi.result.is_lowered()
-        }) {
+        let callee = self.resolve_callable_value(arg)?;
+        if matches!(callee.origin, CallableOrigin::GoInterop) {
             return None;
         }
-        let param_ty = param_ty?;
-        let f = param_ty.as_function_type()?;
-        self.classify_direct_emission(&f.return_type)?;
-        Some(())
+        let result = callee.abi.result.lowered()?.clone();
+        let function = param_ty?.unwrap_forall();
+        let signature = function.as_function_type()?;
+        let bridge = self.go_result_bridge(&callee.abi, &signature.return_type);
+        Some(TaggedArgumentAdapter {
+            function: function.clone(),
+            result,
+            bridge,
+        })
     }
 
     pub(crate) fn emit_lower_arg_to_tagged(
         &mut self,
         setup: &mut Vec<Statement>,
         value: GoExpression,
-        param_ty: &Type,
+        adapter: &TaggedArgumentAdapter,
     ) -> GoExpression {
         let cb_var = self.hoist_tmp_value_statement(setup, "cb", value);
-        lower_arg_to_tagged(self, setup, GoExpression::name(cb_var), param_ty)
+        lower_arg_to_tagged(self, setup, GoExpression::name(cb_var), adapter)
     }
 
     pub(crate) fn stage_native_method_args_from(

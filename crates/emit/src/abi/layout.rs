@@ -2,7 +2,7 @@ use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
-use crate::abi::{go_result_list, is_prelude_container_type};
+use crate::abi::{go_result_list, is_prelude_container_type, tuple_element_types};
 use crate::types::go_type::{GoType, returns_go_void};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,7 +54,7 @@ pub(crate) struct FunctionLayout {
 }
 
 impl FunctionLayout {
-    fn same_representation(&self, other: &Self) -> bool {
+    pub(crate) fn same_representation(&self, other: &Self) -> bool {
         self.same_parameter_representation(other) && self.same_result_representation(other)
     }
 
@@ -370,6 +370,7 @@ impl Planner<'_> {
         parameters: Vec<ValueLayout>,
         result: &ValueLayout,
         return_abi: CallableReturnAbi,
+        declaration: Option<&Type>,
     ) -> FunctionLayout {
         let payload = || {
             result
@@ -388,12 +389,12 @@ impl Planner<'_> {
                 | LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. })),
             ) => {
                 if lowered.has_flattened_payload() {
-                    self.tuple_result_slots(payload())
+                    self.tuple_result_slots(payload(), declaration.map(Type::ok_type).as_ref())
                 } else {
                     vec![payload().clone()]
                 }
             }
-            Some(LoweredReturnAbi::Tuple { .. }) => self.tuple_result_slots(result),
+            Some(LoweredReturnAbi::Tuple { .. }) => self.tuple_result_slots(result, declaration),
         };
         FunctionLayout {
             parameters,
@@ -403,19 +404,32 @@ impl Planner<'_> {
         }
     }
 
-    fn tuple_result_slots(&self, tuple: &ValueLayout) -> Vec<ValueLayout> {
+    fn tuple_result_slots(
+        &self,
+        tuple: &ValueLayout,
+        declaration: Option<&Type>,
+    ) -> Vec<ValueLayout> {
+        let declared = declaration
+            .map(|ty| tuple_element_types(&self.facts.peel_alias(ty)))
+            .unwrap_or_default();
         tuple
             .tuple_elements()
             .expect("a tuple-shaped return ABI has a tuple layout")
             .iter()
-            .map(|element| match element {
+            .enumerate()
+            .map(|(index, element)| match element {
                 ValueLayout::TaggedOption {
                     option_type,
                     payload,
-                } if self.facts.is_nullable_option(option_type) => ValueLayout::NullableOption {
-                    option_type: option_type.clone(),
-                    payload: payload.clone(),
-                },
+                } if self
+                    .facts
+                    .is_nullable_option(declared.get(index).unwrap_or(option_type)) =>
+                {
+                    ValueLayout::NullableOption {
+                        option_type: option_type.clone(),
+                        payload: payload.clone(),
+                    }
+                }
                 element => element.clone(),
             })
             .collect()
@@ -622,7 +636,12 @@ impl Planner<'_> {
                     let return_abi = self.slot_return_abi(&result_type, origin);
                     return ValueLayout::Function {
                         function_type: ty,
-                        layout: self.function_layout(parameters, &result, return_abi),
+                        layout: self.function_layout(
+                            parameters,
+                            &result,
+                            return_abi,
+                            declared_result,
+                        ),
                     };
                 }
                 if let Some(underlying) = self.get_newtype_underlying(&ty) {

@@ -3526,3 +3526,186 @@ fn pick(n: int) -> int {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn tagged_argument_collections() {
+    let input = r#"
+import "go:mime/multipart"
+
+fn file(n: int) -> Option<mut Ref<multipart.FileHeader>> {
+  let mut header = multipart.FileHeader { Filename: "file", Header: None, Size: n as int64 }
+  Some(&header)
+}
+
+fn main() {
+  let picked = Option.and_then(Some(3), file)
+  let mut files = Map.new<string, mut Slice<Option<mut Ref<multipart.FileHeader>>>>()
+  files["key"] = [picked, None]
+  let form = multipart.Form { Value: None, File: Some(files) }
+  let Some(fields) = form.File else { panic("missing files") }
+  let Some(roundtrip) = fields.get("key") else { panic("missing slice") }
+  if roundtrip.length() != 2 || roundtrip[1].is_some() { panic("collection shape") }
+  let Some(header) = roundtrip[0] else { panic("missing header") }
+  if header.Size != 3 { panic("collection payload") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tagged_argument_channel_variadic() {
+    let input = r#"
+import "go:fmt"
+import "go:time"
+
+fn channel(n: int) -> Option<Receiver<time.Time>> {
+  time.Tick(n as time.Duration)
+}
+
+fn label(n: int) -> Option<string> { Some(fmt.Sprint(n)) }
+
+fn main() {
+  if Option.and_then(Some(0), channel).is_some() { panic("nil channel") }
+  let value = Option.and_then(Some(7), label)
+  let absent: Option<string> = None
+  let rendered = fmt.Sprint(value, absent)
+  if value.unwrap_or("bad") != "7" || rendered.is_empty() { panic("variadic options") }
+  let ch = Channel.buffered<Option<string>>(2)
+  ch.send(value)
+  ch.send(absent)
+  if ch.receive().unwrap_or(None).unwrap_or("bad") != "7" || ch.receive().unwrap_or(None).is_some() { panic("channel options") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tagged_argument_go_function_type() {
+    let input = r#"
+import "go:bufio"
+import "go:strings"
+
+fn split(data: mut Slice<byte>, at_eof: bool) -> Result<(int, Slice<byte>), error> {
+  bufio.ScanWords(data, at_eof)
+}
+
+fn count(n: int) -> Option<int> {
+  let splitter: bufio.SplitFunc = split
+  let mut scanner = bufio.NewScanner(strings.NewReader("one two"))
+  scanner.Split(splitter)
+  let mut total = n
+  while scanner.Scan() { total += 1 }
+  Some(total)
+}
+
+fn main() {
+  if Option.and_then(Some(3), count).unwrap_or(-1) != 5 { panic("Go function type") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_tagged_callback_unit_result() {
+    let input = r#"
+fn okay<T>(x: T) -> Result<T, error> { Ok(x) }
+fn main() {
+  let result = Option.map(Some(()), okay)
+  let Some(Ok(_)) = result else { panic("generic unit result") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_tagged_callback_tuple_option() {
+    let input = r#"
+fn pair<T>(x: T) -> (T, T) { (x, x) }
+fn main() {
+  let x = 3
+  let result = Option.map(Some(Some(&x)), pair)
+  let Some((Some(left), Some(right))) = result else { panic("generic tuple options") }
+  if left != &x || right != &x { panic("generic tuple payload") }
+  let (direct_left, direct_right) = pair(Some(&x))
+  if direct_left.is_none() || direct_right.is_none() { panic("generic direct tuple") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_tagged_callback_option_reference() {
+    let input = r#"
+fn some<T>(x: T) -> Option<T> { Some(x) }
+fn main() {
+  let x = 3
+  let got = Option.and_then(Some(&x), some)
+  let Some(value) = got else { panic("generic option reference") }
+  if value != &x { panic("generic reference payload") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_function_value_option_reference() {
+    let input = r#"
+fn some<T>(x: T) -> Option<T> { Some(x) }
+fn consume(f: fn(Ref<int>) -> Option<Ref<int>>, x: Ref<int>) -> Option<Ref<int>> { f(x) }
+fn main() {
+  let x = 3
+  let stored: fn(Ref<int>) -> Option<Ref<int>> = some
+  let Some(first) = stored(&x) else { panic("stored generic option") }
+  let Some(second) = consume(some, &x) else { panic("generic option callback") }
+  if first != &x || second != &x { panic("generic option payload") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_function_value_tuple() {
+    let input = r#"
+fn pair<T>(x: T) -> (T, T) { (x, x) }
+fn main() {
+  let x = 3
+  let stored: fn(Option<Ref<int>>) -> (Option<Ref<int>>, Option<Ref<int>>) = pair
+  let (Some(first), Some(second)) = stored(Some(&x)) else { panic("stored generic tuple") }
+  let inferred = pair
+  let Some((Some(third), Some(fourth))) = Option.map(Some(Some(&x)), inferred) else { panic("inferred generic tuple") }
+  if first != &x || second != &x || third != &x || fourth != &x { panic("generic tuple payloads") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_function_value_tuple_alias() {
+    let input = r#"
+type Pair<T> = (T, T)
+fn pair<T>(x: T) -> Pair<T> { (x, x) }
+fn main() {
+  let x = 3
+  let (Some(first), Some(second)) = pair(Some(&x)) else { panic("generic tuple alias") }
+  let Some((Some(third), Some(fourth))) = Option.map(Some(Some(&x)), pair) else { panic("generic alias callback") }
+  let stored = pair
+  let (Some(fifth), Some(sixth)) = stored(Some(&x)) else { panic("generic stored alias") }
+  if first != &x || second != &x || third != &x || fourth != &x || fifth != &x || sixth != &x { panic("generic alias payloads") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_function_value_unit_result() {
+    let input = r#"
+fn okay<T>(x: T) -> Result<T, error> { Ok(x) }
+fn consume(f: fn(()) -> Result<(), error>) -> bool { f(()).is_ok() }
+fn main() {
+  if !consume(okay) { panic("generic callback unit result") }
+  let stored: fn(()) -> Result<(), error> = okay
+  if stored(()).is_err() { panic("stored generic unit result") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

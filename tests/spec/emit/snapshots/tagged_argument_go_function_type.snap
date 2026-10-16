@@ -1,0 +1,73 @@
+---
+source: tests/spec/emit/functions.rs
+assertion_line: 3892
+description: |
+  
+  import "go:bufio"
+  import "go:strings"
+  
+  fn split(data: mut Slice<byte>, at_eof: bool) -> Result<(int, Slice<byte>), error> {
+    bufio.ScanWords(data, at_eof)
+  }
+  
+  fn count(n: int) -> Option<int> {
+    let splitter: bufio.SplitFunc = split
+    let mut scanner = bufio.NewScanner(strings.NewReader("one two"))
+    scanner.Split(splitter)
+    let mut total = n
+    while scanner.Scan() { total += 1 }
+    Some(total)
+  }
+  
+  fn main() {
+    if Option.and_then(Some(3), count).unwrap_or(-1) != 5 { panic("Go function type") }
+  }
+---
+package main
+
+import (
+	"bufio"
+	lisette "github.com/ivov/lisette/prelude"
+	"strings"
+)
+
+func split(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
+	ret, ret_1, ret_2 := bufio.ScanWords(data, at_eof)
+	tup := lisette.MakeTuple2(ret, ret_1)
+	var result lisette.Result[lisette.Tuple2[int, []byte], error]
+	if ret_2 != nil {
+		result = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_2)
+	} else {
+		result = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup)
+	}
+	if result.Tag == lisette.ResultOk {
+		return result.OkVal, nil
+	}
+	return lisette.Tuple2[int, []byte]{}, result.ErrVal
+}
+
+func count(n int) (int, bool) {
+	cb := split
+	var splitter bufio.SplitFunc = func(arg0 []byte, arg1 bool) (int, []byte, error) {
+		ret, ret_1 := cb(arg0, arg1)
+		return ret.First, ret.Second, ret_1
+	}
+	scanner := bufio.NewScanner(strings.NewReader("one two"))
+	scanner.Split(splitter)
+	total := n
+	for scanner.Scan() {
+		total++
+	}
+	return total, true
+}
+
+func main() {
+	arg := lisette.MakeOptionSome(3)
+	cb := count
+	tagged := func(arg0 int) lisette.Option[int] {
+		return lisette.OptionFromCommaOk[int](cb(arg0))
+	}
+	if lisette.OptionAndThen(arg, tagged).UnwrapOr(-1) != 5 {
+		panic("Go function type")
+	}
+}

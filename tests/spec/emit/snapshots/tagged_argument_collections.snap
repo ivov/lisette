@@ -1,0 +1,106 @@
+---
+source: tests/spec/emit/functions.rs
+assertion_line: 3839
+description: |
+  
+  import "go:mime/multipart"
+  
+  fn file(n: int) -> Option<mut Ref<multipart.FileHeader>> {
+    let mut header = multipart.FileHeader { Filename: "file", Header: None, Size: n as int64 }
+    Some(&header)
+  }
+  
+  fn main() {
+    let picked = Option.and_then(Some(3), file)
+    let mut files = Map.new<string, mut Slice<Option<mut Ref<multipart.FileHeader>>>>()
+    files["key"] = [picked, None]
+    let form = multipart.Form { Value: None, File: Some(files) }
+    let Some(fields) = form.File else { panic("missing files") }
+    let Some(roundtrip) = fields.get("key") else { panic("missing slice") }
+    if roundtrip.length() != 2 || roundtrip[1].is_some() { panic("collection shape") }
+    let Some(header) = roundtrip[0] else { panic("missing header") }
+    if header.Size != 3 { panic("collection payload") }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"mime/multipart"
+)
+
+func file(n int) *multipart.FileHeader {
+	header := multipart.FileHeader{
+		Filename: "file",
+		Header:   nil,
+		Size:     int64(n),
+	}
+	return &header
+}
+
+func main() {
+	arg := lisette.MakeOptionSome(3)
+	cb := file
+	tagged := func(arg0 int) lisette.Option[*multipart.FileHeader] {
+		raw := cb(arg0)
+		return lisette.OptionFromNilable[*multipart.FileHeader](raw, raw == nil)
+	}
+	picked := lisette.OptionAndThen(arg, tagged)
+	files := make(map[string][]lisette.Option[*multipart.FileHeader])
+	files["key"] = []lisette.Option[*multipart.FileHeader]{
+		picked,
+		lisette.MakeOptionNone[*multipart.FileHeader](),
+	}
+	unwrapped := make(map[string][]*multipart.FileHeader, len(files))
+	for i, v := range files {
+		unwrapped_1 := make([]*multipart.FileHeader, len(v))
+		for i_1, v_1 := range v {
+			if v_1.Tag == lisette.OptionSome {
+				unwrapped_1[i_1] = v_1.SomeVal
+			}
+		}
+		unwrapped[i] = unwrapped_1
+	}
+	form := multipart.Form{
+		Value: nil,
+		File:  unwrapped,
+	}
+	raw_1 := form.File
+	var option lisette.Option[map[string][]lisette.Option[*multipart.FileHeader]]
+	if raw_1 != nil {
+		wrapped := make(map[string][]lisette.Option[*multipart.FileHeader], len(raw_1))
+		for i_2, v_2 := range raw_1 {
+			wrapped_1 := make([]lisette.Option[*multipart.FileHeader], len(v_2))
+			for i_3, v_3 := range v_2 {
+				if v_3 != nil {
+					wrapped_1[i_3] = lisette.MakeOptionSome[*multipart.FileHeader](v_3)
+				} else {
+					wrapped_1[i_3] = lisette.MakeOptionNone[*multipart.FileHeader]()
+				}
+			}
+			wrapped[i_2] = wrapped_1
+		}
+		option = lisette.MakeOptionSome[map[string][]lisette.Option[*multipart.FileHeader]](wrapped)
+	} else {
+		option = lisette.MakeOptionNone[map[string][]lisette.Option[*multipart.FileHeader]]()
+	}
+	if option.Tag != lisette.OptionSome {
+		panic("missing files")
+	}
+	fields := option.SomeVal
+	roundtrip, ok := fields["key"]
+	if !ok {
+		panic("missing slice")
+	}
+	if len(roundtrip) != 2 || roundtrip[1].IsSome() {
+		panic("collection shape")
+	}
+	subject := roundtrip[0]
+	if subject.Tag != lisette.OptionSome {
+		panic("missing header")
+	}
+	header := subject.SomeVal
+	if header.Size != 3 {
+		panic("collection payload")
+	}
+}

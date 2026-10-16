@@ -17,6 +17,7 @@ use crate::plan::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define,
     expression_statement,
 };
+use crate::plan::calls::TaggedArgumentAdapter;
 use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout};
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use syntax::ast::Expression;
@@ -367,7 +368,12 @@ pub(crate) fn emit_lisette_callback_wrapper(
     let inner_args: Vec<GoExpression> = arguments
         .into_iter()
         .zip(params.iter())
-        .map(|(argument, param)| lower_arg_to_tagged(planner, &mut prelude, argument, &param.ty))
+        .map(
+            |(argument, param)| match TaggedArgumentAdapter::plan(planner, &param.ty) {
+                Some(adapter) => lower_arg_to_tagged(planner, &mut prelude, argument, &adapter),
+                None => argument,
+            },
+        )
         .collect();
 
     let call = GoExpression::call(GoExpression::name(cb_var), inner_args);
@@ -416,7 +422,7 @@ pub(crate) fn emit_fn_arg_shape_adapter(
             .map(|param| planner.value_layout(&param.ty, SlotOrigin::Lisette))
             .collect();
         let result = planner.value_layout(arg_ret, SlotOrigin::Lisette);
-        planner.function_layout(parameters, &result, abi.clone())
+        planner.function_layout(parameters, &result, abi.clone(), None)
     };
     let source = layout(planner, arg_abi);
     let target = layout(planner, target_abi);
@@ -474,31 +480,36 @@ pub(crate) fn emit_unit_result_adapter(
     )
 }
 
-/// Convert a fn-typed wrapper arg from lowered Go ABI back to tagged for
-/// the inner call. Identity for non-fn args and for fn args with no
-/// lowered return.
+/// Emit the already planned conversion from lowered Go ABI to a tagged function value.
 pub(crate) fn lower_arg_to_tagged(
     planner: &mut Planner,
     prelude: &mut Vec<Statement>,
     argument: GoExpression,
-    param_ty: &Type,
+    adapter: &TaggedArgumentAdapter,
 ) -> GoExpression {
-    let unwrapped = param_ty.unwrap_forall();
-    let Type::Function(f) = unwrapped else {
-        return argument;
-    };
-    let inner_params = &f.params;
-    let inner_ret = f.return_type.as_ref();
-    let Some(abi) = planner.classify_direct_emission(inner_ret) else {
-        return argument;
-    };
+    let function = adapter
+        .function
+        .as_function_type()
+        .expect("tagged adapter contains a function signature");
+    let inner_params = &function.params;
+    let inner_ret = function.return_type.as_ref();
+    let abi = adapter.result.clone();
 
     let (inner_param_strs, inner_arguments) = planner.build_wrapper_params(inner_params);
     let inner_call = GoExpression::call(argument, inner_arguments);
     let tagged_ret = planner.use_go_type(inner_ret);
 
-    let body =
-        planner.lower_abi_to_tagged_return(inner_call, &CallableReturnAbi::Lowered(abi), inner_ret);
+    let (body, outcome) = planner.lower_abi_wrapping(
+        inner_call,
+        &CallableReturnAbi::Lowered(abi),
+        inner_ret,
+        adapter.bridge.clone(),
+        WrapperTarget::Return,
+    );
+    assert!(
+        outcome.is_none(),
+        "tagged adapter returns its result directly"
+    );
 
     let tagged_var = planner.fresh_var(Some("tagged"));
     planner.declare(&tagged_var);
@@ -552,7 +563,7 @@ fn emit_lowered_tuple_tail(
         && planner.facts.peel_alias(&expression.get_type()) == planner.facts.peel_alias(&return_ty)
         && planner
             .go_result_bridge(&plan.resolved.abi, &return_ty)
-            .is_none()
+            .is_none_or(|bridge| bridge.is_identity())
     {
         let (mut statements, call) = planner
             .lower_call(expression, None, ExpressionContext::value())

@@ -1,0 +1,78 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn pair<T>(x: T) -> (T, T) { (x, x) }
+  fn main() {
+    let x = 3
+    let stored: fn(Option<Ref<int>>) -> (Option<Ref<int>>, Option<Ref<int>>) = pair
+    let (Some(first), Some(second)) = stored(Some(&x)) else { panic("stored generic tuple") }
+    let inferred = pair
+    let Some((Some(third), Some(fourth))) = Option.map(Some(Some(&x)), inferred) else { panic("inferred generic tuple") }
+    if first != &x || second != &x || third != &x || fourth != &x { panic("generic tuple payloads") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func pair[T any](x T) (T, T) {
+	return x, x
+}
+
+func main() {
+	x := 3
+	cb := pair[lisette.Option[*int]]
+	stored := func(arg0 lisette.Option[*int]) (*int, *int) {
+		ret, ret_1 := cb(arg0)
+		var unwrap *int
+		if ret.Tag == lisette.OptionSome {
+			unwrap = ret.SomeVal
+		}
+		var unwrap_1 *int
+		if ret_1.Tag == lisette.OptionSome {
+			unwrap_1 = ret_1.SomeVal
+		}
+		return unwrap, unwrap_1
+	}
+	ret_2, ret_3 := stored(lisette.MakeOptionSome(&x))
+	option := lisette.OptionFromNilable[*int](ret_2, ret_2 == nil)
+	option_1 := lisette.OptionFromNilable[*int](ret_3, ret_3 == nil)
+	tup := lisette.MakeTuple2(option, option_1)
+	if !(tup.First.Tag == lisette.OptionSome && tup.Second.Tag == lisette.OptionSome) {
+		panic("stored generic tuple")
+	}
+	first := tup.First.SomeVal
+	second := tup.Second.SomeVal
+	cb_1 := pair[lisette.Option[*int]]
+	inferred := func(arg0 lisette.Option[*int]) (*int, *int) {
+		ret_4, ret_5 := cb_1(arg0)
+		var unwrap_2 *int
+		if ret_4.Tag == lisette.OptionSome {
+			unwrap_2 = ret_4.SomeVal
+		}
+		var unwrap_3 *int
+		if ret_5.Tag == lisette.OptionSome {
+			unwrap_3 = ret_5.SomeVal
+		}
+		return unwrap_2, unwrap_3
+	}
+	arg := lisette.MakeOptionSome(lisette.MakeOptionSome(&x))
+	cb_2 := inferred
+	tagged := func(arg0 lisette.Option[*int]) lisette.Tuple2[lisette.Option[*int], lisette.Option[*int]] {
+		ret_6, ret_7 := cb_2(arg0)
+		option_2 := lisette.OptionFromNilable[*int](ret_6, ret_6 == nil)
+		option_3 := lisette.OptionFromNilable[*int](ret_7, ret_7 == nil)
+		tup_1 := lisette.MakeTuple2(option_2, option_3)
+		return tup_1
+	}
+	subject := lisette.OptionMap(arg, tagged)
+	if !(subject.Tag == lisette.OptionSome && subject.SomeVal.First.Tag == lisette.OptionSome && subject.SomeVal.Second.Tag == lisette.OptionSome) {
+		panic("inferred generic tuple")
+	}
+	third := subject.SomeVal.First.SomeVal
+	fourth := subject.SomeVal.Second.SomeVal
+	if first != &x || second != &x || third != &x || fourth != &x {
+		panic("generic tuple payloads")
+	}
+}
