@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792178219753,
+  "lastUpdate": 1792182554197,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -45214,6 +45214,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 37612,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28624,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19366,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15270,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9029,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7381,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2945,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c918ffbb6abea5aa20a7963c31203c6d2a2278d3",
+          "message": "refactor: plan tagged function adapters from declared slot layouts (#1551)",
+          "timestamp": "2026-10-16T22:28:49+02:00",
+          "tree_id": "53183dcbc63b0e5b157576a5896d2e2d785de786",
+          "url": "https://github.com/ivov/lisette/commit/c918ffbb6abea5aa20a7963c31203c6d2a2278d3"
+        },
+        "date": 1792182552297,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 147413,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 37675,
             "unit": "lines"
           },
           {
