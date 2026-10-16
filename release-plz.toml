@@ -10,6 +10,7 @@ The `CHANGELOG.md` and PR body are populated by a follow-up CI step.
 
 [[package]]
 name = "lisette"
+publish_allow_dirty = true
 git_tag_enable = true
 git_release_enable = true
 changelog_update = false

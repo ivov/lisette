@@ -27,6 +27,9 @@ jobs:
       - name: Install Rust toolchain
         run: rustup show
 
+      - name: Add install profile to the lisette manifest
+        run: scripts/add-install-profile.sh
+
       - uses: release-plz/action@1528104d2ca23787631a1c1f022abb64b34c1e11 # ratchet:release-plz/action@v0.5
         id: release
         with:

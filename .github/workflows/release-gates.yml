@@ -30,3 +30,4 @@ jobs:
       - uses: ./.github/actions/setup-rust
       - run: cargo test -p tests --test manifest_pins --locked -- --format terse
       - run: cargo publish --workspace --dry-run
+      - run: scripts/check-install-profile.sh
