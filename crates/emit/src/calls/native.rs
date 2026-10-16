@@ -8,7 +8,7 @@ use crate::expressions::access::index_access::range_var_bounds;
 use crate::expressions::staging::SpreadSequenceOptions;
 use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{LoweredBlock, Statement};
+use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement};
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, GoParameter, UnaryOp};
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
@@ -237,6 +237,23 @@ static INLINE_METHODS: &[InlineRule] = &[
     },
 ];
 
+fn clone_slice(receiver: GoExpression) -> GoExpression {
+    GoExpression::call(
+        GoExpression::generated(GeneratedPackage::Slices, "Clone"),
+        vec![receiver],
+    )
+}
+
+/// `append(receiver, arguments...)` or `slices.Grow(receiver, arguments...)`.
+pub(crate) fn slice_growth_call(
+    method: &str,
+    receiver: GoExpression,
+    arguments: &[GoExpression],
+) -> GoExpression {
+    try_inline_native_method(&NativeTypeKind::Slice, method, &receiver, arguments, false)
+        .expect("slice growth has an inline rule")
+}
+
 /// `receiver[:len(receiver):len(receiver)]`, so a later `append` cannot write through an alias.
 pub(crate) fn clip_shared_capacity(receiver: GoExpression) -> GoExpression {
     let length = GoExpression::read_only_call(
@@ -244,10 +261,6 @@ pub(crate) fn clip_shared_capacity(receiver: GoExpression) -> GoExpression {
         vec![receiver.clone()],
     );
     GoExpression::slice(receiver, None, Some(&length), Some(&length))
-}
-
-fn grows_into_capacity(method: &str, appends_anything: bool) -> bool {
-    method == "reserve" || (method == "append" && appends_anything)
 }
 
 /// Natives that write no memory a sibling operand can read and run no caller code.
@@ -299,13 +312,8 @@ pub(crate) fn is_clip_safe_path(value: &GoExpression) -> bool {
     is_path(value.node())
 }
 
-fn growth_clip_applies(
-    ctx: &NativeCallContext,
-    receiver: &Expression,
-    arguments: &[Expression],
-) -> bool {
-    let appends_anything = !arguments.is_empty() || ctx.spread.is_some();
-    grows_into_capacity(ctx.method, appends_anything)
+fn growth_detach_applies(ctx: &NativeCallContext, receiver: &Expression) -> bool {
+    matches!(ctx.method, "append" | "reserve")
         && !is_fresh_slice_value(receiver)
         && !ctx
             .retired_receiver
@@ -320,25 +328,15 @@ fn is_fresh_slice_value(receiver: &Expression) -> bool {
         } => true,
         Expression::Call {
             expression: callee,
-            args,
-            spread,
             call_kind,
             ..
         } => match call_kind {
             CallKind::NativeConstructor(NativeTypeKind::Slice) => true,
             CallKind::NativeMethod(NativeTypeKind::Slice)
-            | CallKind::NativeMethodIdentifier(NativeTypeKind::Slice) => {
-                let function = callee.unwrap_parens();
-                match extract_native_method_name(function) {
-                    "append" => {
-                        split_native_receiver(function, args)
-                            .is_some_and(|(_, arguments)| !arguments.is_empty())
-                            || spread.is_some()
-                    }
-                    "reserve" | "clone" | "filter" | "map" => true,
-                    _ => false,
-                }
-            }
+            | CallKind::NativeMethodIdentifier(NativeTypeKind::Slice) => matches!(
+                extract_native_method_name(callee.unwrap_parens()),
+                "append" | "reserve" | "clone" | "filter" | "map"
+            ),
             CallKind::NativeMethod(NativeTypeKind::Array)
             | CallKind::NativeMethodIdentifier(NativeTypeKind::Array) => {
                 extract_native_method_name(callee.unwrap_parens()) == "to_slice"
@@ -542,6 +540,80 @@ impl StagedNativeMethod {
 }
 
 impl Planner<'_> {
+    /// Grow into independent storage even when nothing is added. The receiver
+    /// is staged before any argument effects and is safe to read more than once.
+    pub(crate) fn detach_slice_growth(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        method: &str,
+        receiver: GoExpression,
+        arguments: &[GoExpression],
+        result_ty: &Type,
+    ) -> GoExpression {
+        let clipped = clip_shared_capacity(receiver.clone());
+        let shared = match method {
+            "append" => {
+                let Some(last) = arguments.last() else {
+                    return clone_slice(receiver);
+                };
+                let GoExpressionNode::Spread(spread) = last.node() else {
+                    return slice_growth_call(method, clipped, arguments);
+                };
+                GoExpression::from_node((**spread).clone())
+            }
+            "reserve" => {
+                let count = &arguments[0];
+                // A constant expression can be zero; only a literal has a known value here.
+                if let Some(value) = count
+                    .as_literal()
+                    .and_then(|value| value.parse::<i64>().ok())
+                {
+                    return if value == 0 {
+                        clone_slice(receiver)
+                    } else {
+                        slice_growth_call(method, clipped, arguments)
+                    };
+                }
+                count.clone()
+            }
+            _ => unreachable!("not a slice growth method: {method}"),
+        };
+        // Keep argument effects visible to operand ordering, outside the IIFE.
+        let shared = self.stable_source(setup, "added", shared);
+        self.with_scope(|this| {
+            let mut statements = Vec::new();
+            let (count, arguments) = if method == "append" {
+                let count = GoExpression::read_only_call(
+                    GoExpression::name("len".to_string()),
+                    vec![shared.clone()],
+                );
+                (count, [GoExpression::spread(shared)])
+            } else {
+                (shared.clone(), [shared])
+            };
+            statements.push(
+                LoweredStatement::If(IfPlan::plain(
+                    GoExpression::binary(
+                        count,
+                        BinaryOp::Eq,
+                        GoExpression::literal("0".to_string()),
+                    ),
+                    LoweredBlock {
+                        statements: vec![plain_return(clone_slice(receiver))],
+                    },
+                    ElseArm::None,
+                ))
+                .into(),
+            );
+            statements.push(plain_return(slice_growth_call(method, clipped, &arguments)));
+            GoExpression::immediate_call(
+                this.use_go_type(result_ty),
+                LoweredBlock { statements },
+                FunctionLiteralLayout::MultiLine,
+            )
+        })
+    }
+
     pub(super) fn lower_native_method(&mut self, ctx: &NativeCallContext) -> NativeCallResult {
         let (receiver_expression, arguments) = ctx
             .receiver_and_arguments()
@@ -633,8 +705,15 @@ impl Planner<'_> {
         }
 
         let mut staged = self.stage_native_method(ctx);
-        if growth_clip_applies(ctx, receiver_expression, arguments) {
-            staged.receiver = clip_shared_capacity(staged.receiver);
+        if growth_detach_applies(ctx, receiver_expression) {
+            let detached = self.detach_slice_growth(
+                &mut staged.setup,
+                ctx.method,
+                staged.receiver.clone(),
+                &staged.arguments,
+                &receiver_expression.get_type(),
+            );
+            return staged.finish(detached);
         }
 
         if let Some(inlined) = try_inline_native_method(
@@ -849,7 +928,8 @@ impl Planner<'_> {
             let receiver = stages.remove(0).dereference();
             stages.insert(0, receiver);
         }
-        if growth_clip_applies(ctx, receiver, arguments)
+        if growth_detach_applies(ctx, receiver)
+            && (!arguments.is_empty() || ctx.spread.is_some())
             && !is_clip_safe_path(stages[0].expression())
         {
             self.pin_staged(&mut stages[0], "recv");

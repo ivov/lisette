@@ -8,6 +8,13 @@ description: |
 ---
 package main
 
+import "slices"
+
 func test(s, more []int) []int {
-	return append(s[:len(s):len(s)], more...)
+	return func() []int {
+		if len(more) == 0 {
+			return slices.Clone(s)
+		}
+		return append(s[:len(s):len(s)], more...)
+	}()
 }

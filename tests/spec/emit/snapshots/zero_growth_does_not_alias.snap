@@ -1,0 +1,101 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+
+  fn merge(base: Slice<int>, extra: Slice<int>) -> mut Slice<int> {
+    base.append(extra...)
+  }
+
+  fn check(base: Slice<int>, copied: mut Slice<int>) {
+    copied[0] = 99
+    if base[0] != 1 {
+      panic("zero growth must not write through to its receiver")
+    }
+  }
+
+  fn main() {
+    let a = [1, 2]
+    check(a, merge(a, []))
+    check(a, a.append())
+    check(a, a.reserve(0))
+    check(a, a.reserve(1 - 1))
+    let mut from_block = { a.append() }
+    check(a, from_block)
+    from_block = { a.append([]...) }
+    check(a, from_block)
+    from_block = { a.reserve(1 - 1) }
+    check(a, from_block)
+    check(a, Slice.append(a))
+    check(a, Slice.append(a, []...))
+    check(a, Slice.reserve(a, 0))
+    check(a, a.append().append())
+    check(a, a.reserve(0).append([]...))
+  }
+---
+package main
+
+import "slices"
+
+func merge(base, extra []int) []int {
+	return func() []int {
+		if len(extra) == 0 {
+			return slices.Clone(base)
+		}
+		return append(base[:len(base):len(base)], extra...)
+	}()
+}
+
+func check(base, copied []int) {
+	copied[0] = 99
+	if base[0] != 1 {
+		panic("zero growth must not write through to its receiver")
+	}
+}
+
+func main() {
+	a := []int{1, 2}
+	check(a, merge(a, []int{}))
+	check(a, slices.Clone(a))
+	check(a, slices.Clone(a))
+	added := 1 - 1
+	check(a, func() []int {
+		if added == 0 {
+			return slices.Clone(a)
+		}
+		return slices.Grow(a[:len(a):len(a)], added)
+	}())
+	var from_block []int
+	from_block = slices.Clone(a)
+	check(a, from_block)
+	var tmp []int
+	added_1 := []int{}
+	tmp = func() []int {
+		if len(added_1) == 0 {
+			return slices.Clone(a)
+		}
+		return append(a[:len(a):len(a)], added_1...)
+	}()
+	from_block = tmp
+	check(a, from_block)
+	var tmp_1 []int
+	added_2 := 1 - 1
+	tmp_1 = func() []int {
+		if added_2 == 0 {
+			return slices.Clone(a)
+		}
+		return slices.Grow(a[:len(a):len(a)], added_2)
+	}()
+	from_block = tmp_1
+	check(a, from_block)
+	check(a, slices.Clone(a))
+	added_3 := []int{}
+	check(a, func() []int {
+		if len(added_3) == 0 {
+			return slices.Clone(a)
+		}
+		return append(a[:len(a):len(a)], added_3...)
+	}())
+	check(a, slices.Clone(a))
+	check(a, slices.Clone(a))
+	check(a, append(slices.Clone(a), []int{}...))
+}

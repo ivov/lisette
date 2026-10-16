@@ -1,12 +1,12 @@
 ---
 source: tests/spec/emit/expressions.rs
 description: |
-  
+
   fn bump_and_make(i: mut Ref<int>) -> Slice<int> {
     i.* = 1
     [99]
   }
-  
+
   fn test() -> int {
     let xss = [[10], [20]]
     let mut i = 0
@@ -15,6 +15,8 @@ description: |
   }
 ---
 package main
+
+import "slices"
 
 func bumpAndMake(i *int) []int {
 	*i = 1
@@ -25,6 +27,12 @@ func test() int {
 	xss := [][]int{{10}, {20}}
 	i := 0
 	recv := xss[i]
-	ys := append(recv[:len(recv):len(recv)], bumpAndMake(&i)...)
+	added := bumpAndMake(&i)
+	ys := func() []int {
+		if len(added) == 0 {
+			return slices.Clone(recv)
+		}
+		return append(recv[:len(recv):len(recv)], added...)
+	}()
 	return ys[0]
 }

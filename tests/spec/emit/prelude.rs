@@ -338,6 +338,137 @@ fn main() {
 }
 
 #[test]
+fn zero_growth_does_not_alias() {
+    let input = r#"
+fn merge(base: Slice<int>, extra: Slice<int>) -> mut Slice<int> {
+  base.append(extra...)
+}
+
+fn check(base: Slice<int>, copied: mut Slice<int>) {
+  copied[0] = 99
+  if base[0] != 1 {
+    panic("zero growth must not write through to its receiver")
+  }
+}
+
+fn main() {
+  let a = [1, 2]
+  check(a, merge(a, []))
+  check(a, a.append())
+  check(a, a.reserve(0))
+  check(a, a.reserve(1 - 1))
+  let mut from_block = { a.append() }
+  check(a, from_block)
+  from_block = { a.append([]...) }
+  check(a, from_block)
+  from_block = { a.reserve(1 - 1) }
+  check(a, from_block)
+  check(a, Slice.append(a))
+  check(a, Slice.append(a, []...))
+  check(a, Slice.reserve(a, 0))
+  check(a, a.append().append())
+  check(a, a.reserve(0).append([]...))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn growth_count_evaluated_once() {
+    let input = r#"
+fn check(calls: int, result: mut Slice<int>) -> mut Slice<int> {
+  if calls != 1 {
+    panic("a spread operand must not reorder an earlier read")
+  }
+  result
+}
+
+fn main() {
+  for n in [0, 2] {
+    let mut calls = 0
+    let count = || {
+      calls += 1
+      n
+    }
+    let a = [1, 2]
+    let mut reserved = a.reserve(count())
+    if calls != 1 {
+      panic("a reserve count must be evaluated once")
+    }
+    let extra = || {
+      calls += 1
+      if n == 0 { [] } else { [7] }
+    }
+    let mut appended = check(calls, a.append(extra()...))
+    if calls != 2 {
+      panic("a spread operand must be evaluated once")
+    }
+    reserved[0] = 99
+    appended[0] = 99
+    if a[0] != 1 {
+      panic("slice growth must not alias a read-only slice")
+    }
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn block_tail_growth_reads_receiver_before_argument_effects() {
+    let input = r#"
+import "go:os"
+
+struct Holder {
+  slc: Slice<int>,
+}
+
+fn main() {
+  for n in [0, 2] {
+    let mut base = [1, 2]
+    let mut calls = 0
+    let count = || {
+      calls += 1
+      base = [3, 4]
+      n
+    }
+    let result = { base.reserve(count()) }
+    if calls != 1 || result[0] != 1 {
+      panic("reserve must read the receiver before evaluating the count once")
+    }
+  }
+
+  for extra in [[], [7]] {
+    let mut holder = Holder { slc: [1, 2] }
+    let mut calls = 0
+    let make_extra = || {
+      calls += 1
+      holder.slc = [3, 4]
+      extra
+    }
+    let result = { holder.slc.append(make_extra()...) }
+    if calls != 1 || result[0] != 1 || result.length() != 2 + extra.length() {
+      panic("append must read the receiver before evaluating the spread once")
+    }
+  }
+
+  for n in [0, 2] {
+    os.Args = ["before"]
+    let count = || {
+      os.Args = ["after"]
+      n
+    }
+    let result = { os.Args.reserve(count()) }
+    if result[0] != "before" {
+      panic("reserve must read a package receiver before argument effects")
+    }
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn append_from_zero_growth_append_does_not_alias() {
     let input = r#"
 fn main() {
@@ -346,10 +477,10 @@ fn main() {
   let u1 = s.append().append(7)
   let u2 = s.append().append(8)
   if u1.get(3).unwrap_or(-1) != 7 {
-    panic("a zero-growth append receiver must not be treated as fresh")
+    panic("zero-growth append chains must not share storage")
   }
   if u2.get(3).unwrap_or(-1) != 8 {
-    panic("a zero-growth append receiver must not be treated as fresh")
+    panic("zero-growth append chains must not share storage")
   }
 }
 "#;

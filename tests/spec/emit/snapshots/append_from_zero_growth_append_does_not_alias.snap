@@ -8,26 +8,29 @@ description: |
     let u1 = s.append().append(7)
     let u2 = s.append().append(8)
     if u1.get(3).unwrap_or(-1) != 7 {
-      panic("a zero-growth append receiver must not be treated as fresh")
+      panic("zero-growth append chains must not share storage")
     }
     if u2.get(3).unwrap_or(-1) != 8 {
-      panic("a zero-growth append receiver must not be treated as fresh")
+      panic("zero-growth append chains must not share storage")
     }
   }
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"slices"
+)
 
 func main() {
 	s := []int{1, 2}
 	s = append(s, 3)
-	u1 := append(s[:len(s):len(s)], 7)
-	u2 := append(s[:len(s):len(s)], 8)
+	u1 := append(slices.Clone(s), 7)
+	u2 := append(slices.Clone(s), 8)
 	if lisette.SliceGet(u1, 3).UnwrapOr(-1) != 7 {
-		panic("a zero-growth append receiver must not be treated as fresh")
+		panic("zero-growth append chains must not share storage")
 	}
 	if lisette.SliceGet(u2, 3).UnwrapOr(-1) != 8 {
-		panic("a zero-growth append receiver must not be treated as fresh")
+		panic("zero-growth append chains must not share storage")
 	}
 }
