@@ -2,6 +2,20 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.12.5](https://github.com/ivov/lisette/compare/lisette-v0.12.4...lisette-v0.12.5) - 2026-10-17
+
+### Fixes
+
+- fix: prevent slice aliasing on zero growth [#1547](https://github.com/ivov/lisette/pull/1547) [`5fb831c`](https://github.com/ivov/lisette/commit/5fb831c39f95858ca9a179902cfcad876eaa52cc)
+- fix: separate struct field keys from locals [#1545](https://github.com/ivov/lisette/pull/1545) [`8155fce`](https://github.com/ivov/lisette/commit/8155fcef4402de86e0722b367fdcd8894c631aae)
+
+### Internals
+
+- refactor: track every emitted Go local by ID [#1552](https://github.com/ivov/lisette/pull/1552) [`9d1b463`](https://github.com/ivov/lisette/commit/9d1b46323b9279e6fcc3d2c2c6e3612db482ff43)
+- refactor: plan tagged function adapters from declared slot layouts [#1551](https://github.com/ivov/lisette/pull/1551) [`c918ffb`](https://github.com/ivov/lisette/commit/c918ffbb6abea5aa20a7963c31203c6d2a2278d3)
+- perf: build `cargo install lisette` with dist profile settings [#1550](https://github.com/ivov/lisette/pull/1550) [`bb8c0eb`](https://github.com/ivov/lisette/commit/bb8c0eb0270fb77c69b5df86949692814869b3c8)
+
+
 ## [0.12.4](https://github.com/ivov/lisette/compare/lisette-v0.12.3...lisette-v0.12.4) - 2026-10-11
 
 ### Features
