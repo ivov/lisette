@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792250328732,
+  "lastUpdate": 1792270528829,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -45392,6 +45392,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 37720,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28624,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19366,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15270,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9029,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7381,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2945,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e280484eefd6704751c223a87ad53581e740c427",
+          "message": "fix: keep function value layouts through containers and `any` (#1553)",
+          "timestamp": "2026-10-17T22:55:00+02:00",
+          "tree_id": "3928fae9db0c4dc93b0e0215382e4c65c121ac2f",
+          "url": "https://github.com/ivov/lisette/commit/e280484eefd6704751c223a87ad53581e740c427"
+        },
+        "date": 1792270525411,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 149187,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39449,
             "unit": "lines"
           },
           {
