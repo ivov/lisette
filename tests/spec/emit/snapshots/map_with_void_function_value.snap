@@ -8,6 +8,6 @@ description: |
 ---
 package main
 
-func test() map[string]func() {
-	return make(map[string]func())
+func test() map[string]func() struct{} {
+	return make(map[string]func() struct{})
 }

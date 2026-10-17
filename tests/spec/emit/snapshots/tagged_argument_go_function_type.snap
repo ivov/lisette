@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/functions.rs
-assertion_line: 3892
 description: |
   
   import "go:bufio"
@@ -48,12 +47,27 @@ func split(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
 
 func count(n int) (int, bool) {
 	cb := split
-	var splitter bufio.SplitFunc = func(arg0 []byte, arg1 bool) (int, []byte, error) {
-		ret, ret_1 := cb(arg0, arg1)
-		return ret.First, ret.Second, ret_1
+	var adapted func([]byte, bool) lisette.Result[lisette.Tuple2[int, []byte], error]
+	if cb != nil {
+		adapted = func(arg0 []byte, arg1 bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
+			return lisette.ResultFromPair[lisette.Tuple2[int, []byte]](cb(arg0, arg1))
+		}
 	}
+	cb_1 := adapted
+	var adapted_1 func([]byte, bool) (int, []byte, error)
+	if cb_1 != nil {
+		adapted_1 = func(arg0 []byte, arg1 bool) (int, []byte, error) {
+			res := cb_1(arg0, arg1)
+			if res.Tag == lisette.ResultOk {
+				tup := res.OkVal
+				return tup.First, tup.Second, nil
+			}
+			return 0, nil, res.ErrVal
+		}
+	}
+	var splitter bufio.SplitFunc = adapted_1
 	scanner := bufio.NewScanner(strings.NewReader("one two"))
-	scanner.Split(splitter)
+	scanner.Split(bufio.SplitFunc(splitter))
 	total := n
 	for scanner.Scan() {
 		total++

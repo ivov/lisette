@@ -1,0 +1,88 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:io"
+  
+  type Answer = Partial<int, error>
+  interface Base { fn fetch(fail: bool) -> Answer }
+  interface Child { embed Base }
+  type Face = Child
+  struct Source {}
+  impl Source {
+    fn fetch(self, fail: bool) -> Answer {
+      if fail { Partial.Err(io.EOF) } else { Partial.Both(0, io.EOF) }
+    }
+  }
+  fn capture<T: Face>(source: T, fail: bool) -> Answer {
+    let fetch = source.fetch
+    fetch(fail)
+  }
+  fn main() {
+    let both = capture(Source {}, false)
+    if !both.is_both() { panic("lost Both tag") }
+    let err = capture(Source {}, true)
+    if !err.is_both() { panic("Err through a method reads back as Both") }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"io"
+)
+
+type Answer = lisette.Partial[int, error]
+
+type Base interface {
+	fetch(bool) (int, error)
+}
+
+type Child interface {
+	Base
+}
+
+type Face = Child
+
+type Source struct{}
+
+func (s Source) fetch(fail bool) (int, error) {
+	if fail {
+		return 0, io.EOF
+	}
+	return 0, io.EOF
+}
+
+func capture[T any](source T, fail bool) Answer {
+	fetch := _lisAdapter_T_Child_0[T]{inner: source}.fetch
+	return fetch(fail)
+}
+
+func main() {
+	both := capture(Source{}, false)
+	if !both.IsBoth() {
+		panic("lost Both tag")
+	}
+	err := capture(Source{}, true)
+	if !err.IsBoth() {
+		panic("Err through a method reads back as Both")
+	}
+}
+
+type _lisAdapter_T_Child_0[T any] struct {
+	inner T
+}
+
+func (a _lisAdapter_T_Child_0[T]) fetch(arg0 bool) lisette.Partial[int, error] {
+	receiver, ok := any(a.inner).(interface{ fetch(bool) (int, error) })
+	if ok {
+		ret, ret_1 := receiver.fetch(arg0)
+		if ret_1 != nil {
+			return lisette.MakePartialBoth[int, error](ret, ret_1)
+		}
+		return lisette.MakePartialOk[int, error](ret)
+	}
+	return any(a.inner).(interface {
+		fetch(bool) lisette.Partial[int, error]
+	}).fetch(arg0)
+}

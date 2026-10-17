@@ -16,12 +16,12 @@ import lisette "github.com/ivov/lisette/prelude"
 
 type Par = lisette.Partial[int, error]
 
-func read(n int, e error) (int, error) {
+func read(n int, e error) Par {
 	if n > 0 {
-		return n, nil
+		return lisette.MakePartialOk[int, error](n)
 	}
 	if n < -1 {
-		return n, e
+		return lisette.MakePartialBoth[int, error](n, e)
 	}
-	return 0, e
+	return lisette.MakePartialErr[int, error](e)
 }

@@ -30,8 +30,12 @@ func noop() {}
 func main() {
 	h := Holder{}
 	cb := noop
-	Holder_Run(h, func() struct{} {
-		cb()
-		return struct{}{}
-	})
+	var adapted func() struct{}
+	if cb != nil {
+		adapted = func() struct{} {
+			cb()
+			return struct{}{}
+		}
+	}
+	Holder_Run(h, adapted)
 }

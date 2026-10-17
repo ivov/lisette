@@ -46,27 +46,21 @@ func main() {
 	third := subject.SomeVal.First.SomeVal
 	fourth := subject.SomeVal.Second.SomeVal
 	cb_1 := pair[lisette.Option[*int]]
-	stored := func(arg0 lisette.Option[*int]) (*int, *int) {
-		ret_4, ret_5 := cb_1(arg0)
-		var unwrap *int
-		if ret_4.Tag == lisette.OptionSome {
-			unwrap = ret_4.SomeVal
+	var adapted func(lisette.Option[*int]) Pair[lisette.Option[*int]]
+	if cb_1 != nil {
+		adapted = func(arg0 lisette.Option[*int]) Pair[lisette.Option[*int]] {
+			ret_4, ret_5 := cb_1(arg0)
+			tup_2 := lisette.MakeTuple2(ret_4, ret_5)
+			return tup_2
 		}
-		var unwrap_1 *int
-		if ret_5.Tag == lisette.OptionSome {
-			unwrap_1 = ret_5.SomeVal
-		}
-		return unwrap, unwrap_1
 	}
-	ret_6, ret_7 := stored(lisette.MakeOptionSome(&x))
-	option := lisette.OptionFromNilable[*int](ret_6, ret_6 == nil)
-	option_1 := lisette.OptionFromNilable[*int](ret_7, ret_7 == nil)
-	tup_2 := lisette.MakeTuple2(option, option_1)
-	if !(tup_2.First.Tag == lisette.OptionSome && tup_2.Second.Tag == lisette.OptionSome) {
+	stored := adapted
+	subject_1 := stored(lisette.MakeOptionSome(&x))
+	if !(subject_1.First.Tag == lisette.OptionSome && subject_1.Second.Tag == lisette.OptionSome) {
 		panic("generic stored alias")
 	}
-	fifth := tup_2.First.SomeVal
-	sixth := tup_2.Second.SomeVal
+	fifth := subject_1.First.SomeVal
+	sixth := subject_1.Second.SomeVal
 	if first != &x || second != &x || third != &x || fourth != &x || fifth != &x || sixth != &x {
 		panic("generic alias payloads")
 	}

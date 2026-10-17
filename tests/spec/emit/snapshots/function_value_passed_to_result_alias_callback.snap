@@ -27,18 +27,36 @@ func make_(x int) (int, error) {
 	return x, nil
 }
 
-func apply(f func(int) (int, error)) (int, error) {
-	return f(1)
+func apply(f func(int) MyRes) (int, error) {
+	v := f(1)
+	if v.Tag == lisette.ResultOk {
+		return v.OkVal, nil
+	}
+	return 0, v.ErrVal
 }
 
 func main() {
-	apply(make_)
-	cb := lisette.MakeResultOk[int, error]
-	apply(func(arg0 int) (int, error) {
-		res := cb(arg0)
-		if res.Tag == lisette.ResultOk {
-			return res.OkVal, nil
+	cb := make_
+	var adapted func(int) lisette.Result[int, error]
+	if cb != nil {
+		adapted = func(arg0 int) lisette.Result[int, error] {
+			return lisette.ResultFromPair[int](cb(arg0))
 		}
-		return 0, res.ErrVal
-	})
+	}
+	cb_1 := adapted
+	var adapted_1 func(int) MyRes
+	if cb_1 != nil {
+		adapted_1 = func(arg0 int) MyRes {
+			return cb_1(arg0)
+		}
+	}
+	apply(adapted_1)
+	cb_2 := lisette.MakeResultOk[int, error]
+	var adapted_2 func(int) MyRes
+	if cb_2 != nil {
+		adapted_2 = func(arg0 int) MyRes {
+			return cb_2(arg0)
+		}
+	}
+	apply(adapted_2)
 }

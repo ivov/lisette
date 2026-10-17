@@ -5,8 +5,9 @@ use syntax::program::{DefinitionBody, DotAccessResolution, ReceiverCoercion};
 use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::Planner;
+use crate::abi::callable::CallableReturnAbi;
 use crate::abi::coercion::{CoercionPlan, LayoutBridge};
-use crate::abi::layout::SlotOrigin;
+use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::go_name;
@@ -16,12 +17,12 @@ use crate::plan::values::{GoExpression, Stability, ValuePlan};
 use crate::utils::reads_value_member;
 
 struct NullableFieldAccess<'a> {
-    base: &'a GoExpression,
+    value: GoExpression,
     member: &'a str,
-    field: &'a str,
     expression_ty: &'a Type,
     declaring_type: Option<&'a Symbol>,
     result_ty: &'a Type,
+    callee: bool,
 }
 
 impl Planner<'_> {
@@ -61,11 +62,26 @@ impl Planner<'_> {
             return ValuePlan::computed(Vec::new(), expression);
         }
 
+        let expression_ty = expression.get_type();
         if let Some(component) = self.tuple_component_read(expression, member) {
+            let mut setup = Vec::new();
+            if wrap_nullable
+                && let Some(wrapped) = self.plan_nullable_field_access(
+                    &mut setup,
+                    NullableFieldAccess {
+                        value: GoExpression::identifier(component.clone()),
+                        member,
+                        expression_ty: &expression_ty,
+                        declaring_type: resolution.declaring_type(),
+                        result_ty,
+                        callee: ctx.is_callee(),
+                    },
+                )
+            {
+                return ValuePlan::computed(setup, wrapped);
+            }
             return ValuePlan::captured(Vec::new(), component);
         }
-
-        let expression_ty = expression.get_type();
 
         let package = expression_ty
             .as_import_namespace()
@@ -86,10 +102,34 @@ impl Planner<'_> {
         } else {
             Stability::Observable
         };
-        let (mut setup, base) = base_plan.into_parts();
+        let (mut setup, mut base) = base_plan.into_parts();
+        if let Some((bound, _)) = self.bound_dispatch_requirement(dot_access) {
+            let receiver_type = self.facts.strip_and_peel(&expression_ty);
+            let adapter = self
+                .dynamic_interface_adapter(&receiver_type, &bound, true)
+                .expect("a dispatched bound has an adapter");
+            let (adapter_setup, adapted) = CoercionPlan::WrapAsInterface(adapter).lower(self, base);
+            setup.extend(adapter_setup);
+            base = adapted;
+        }
         if let Some(member_access) =
             self.try_emit_tuple_member_dot(&base, &expression_ty, member, resolution)
         {
+            if wrap_nullable
+                && let Some(wrapped) = self.plan_nullable_field_access(
+                    &mut setup,
+                    NullableFieldAccess {
+                        value: member_access.clone(),
+                        member,
+                        expression_ty: &expression_ty,
+                        declaring_type: resolution.declaring_type(),
+                        result_ty,
+                        callee: ctx.is_callee(),
+                    },
+                )
+            {
+                return ValuePlan::computed(setup, wrapped);
+            }
             return ValuePlan::computed(setup, member_access).with_stability(stability);
         }
 
@@ -99,12 +139,12 @@ impl Planner<'_> {
             && let Some(wrapped) = self.plan_nullable_field_access(
                 &mut setup,
                 NullableFieldAccess {
-                    base: &base,
+                    value: GoExpression::selector(base.clone(), field.clone()),
                     member,
-                    field: &field,
                     expression_ty: &expression_ty,
                     declaring_type: resolution.declaring_type(),
                     result_ty,
+                    callee: ctx.is_callee(),
                 },
             )
         {
@@ -120,6 +160,12 @@ impl Planner<'_> {
         };
         let expression =
             self.append_cross_package_type_args(selector, &expression_ty, resolution, ctx);
+        let expression =
+            if let Some((source, target)) = self.prelude_receiver_method_layouts(dot_access) {
+                self.plan_function_layout_bridge(&mut setup, expression, &source, &target)
+            } else {
+                expression
+            };
         ValuePlan::computed(setup, expression).with_stability(stability)
     }
 
@@ -179,10 +225,11 @@ impl Planner<'_> {
         member: &str,
         resolution: &DotAccessResolution,
     ) -> String {
-        let is_exported = self.resolve_is_exported(expression, expression_ty, member, resolution);
+        let canonical_ty = self.facts.strip_and_peel(expression_ty);
+        let is_exported = self.resolve_is_exported(expression, &canonical_ty, member, resolution);
         let is_embedded = self.field_is_embedded(expression_ty, member);
         self.try_resolve_cross_package_const(expression_ty, member)
-            .unwrap_or_else(|| go_field_name(expression_ty, member, is_exported, is_embedded))
+            .unwrap_or_else(|| go_field_name(&canonical_ty, member, is_exported, is_embedded))
     }
 
     pub(crate) fn try_emit_tuple_member_dot(
@@ -226,7 +273,12 @@ impl Planner<'_> {
                 *is_exported || self.struct_field_is_exported(expression_ty, member)
             }
             DotAccessResolution::InstanceMethod { is_exported, .. } => {
-                *is_exported || self.method_needs_export(member)
+                *is_exported
+                    || self.method_needs_export(member)
+                    || expression_ty
+                        .get_qualified_id()
+                        .and_then(|owner| self.facts.method(owner, member))
+                        .is_some_and(|method| method.visibility.is_public())
             }
             _ => {
                 if self.compute_is_exported_context(expression, expression_ty)
@@ -257,6 +309,7 @@ impl Planner<'_> {
         let source_layout = self.field_slot_layout(
             &expression_ty,
             resolution.declaring_type(),
+            None,
             member,
             result_ty,
         )?;
@@ -281,22 +334,33 @@ impl Planner<'_> {
         access: NullableFieldAccess<'_>,
     ) -> Option<GoExpression> {
         let NullableFieldAccess {
-            base,
+            value,
             member,
-            field,
             expression_ty,
             declaring_type,
             result_ty,
+            callee,
         } = access;
         let source_layout =
-            self.field_slot_layout(expression_ty, declaring_type, member, result_ty)?;
+            self.field_slot_layout(expression_ty, declaring_type, None, member, result_ty)?;
         let target_layout = self.value_layout(result_ty, SlotOrigin::Lisette);
+        if callee
+            && let (
+                ValueLayout::Function { layout: source, .. },
+                ValueLayout::Function { layout: target, .. },
+            ) = (&source_layout, &target_layout)
+            && source.return_abi == CallableReturnAbi::Value
+            && target.return_abi == CallableReturnAbi::Void
+            && source.same_parameter_representation(target)
+        {
+            // A direct Go call can discard a generic unit result without a wrapper.
+            return None;
+        }
         let coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
         if coercion.is_identity() {
             return None;
         }
-        let raw_access = GoExpression::selector(base.clone(), field.to_string());
-        let raw_var = self.hoist_tmp_value_statement(setup, "raw", raw_access);
+        let raw_var = self.hoist_tmp_value_statement(setup, "raw", value);
         let (coercion_setup, coerced) = coercion.lower(self, GoExpression::identifier(raw_var));
         setup.extend(coercion_setup);
         Some(coerced)

@@ -1,0 +1,56 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  type Done = ()
+  interface Action<T> { fn Run() -> T }
+  interface Child { embed Action<Done> }
+  struct Counter { n: mut Ref<int> }
+  impl Counter { fn Run(self: mut Ref<Counter>) -> Done { self.n.* += 1; return () } }
+  fn apply<A: Child>(a: A) { let f = a.Run; let _ = f(); let _ = f() }
+  fn main() {
+   let mut n = 0
+   let mut c = Counter { n: &n }
+   apply(&c)
+   let f = c.Run
+   f()
+   if n != 3 { panic("bound method value count") }
+  }
+---
+package main
+
+type Done = struct{}
+
+type Action[T any] interface {
+	Run() T
+}
+
+type Child interface {
+	Action[Done]
+}
+
+type Counter struct {
+	n *int
+}
+
+func (c *Counter) Run() Done {
+	*c.n++
+	return struct{}{}
+}
+
+func apply[A Child](a A) {
+	f := a.Run
+	f()
+	f()
+}
+
+func main() {
+	n := 0
+	c := Counter{n: &n}
+	apply(&c)
+	f := c.Run
+	f()
+	if n != 3 {
+		panic("bound method value count")
+	}
+}

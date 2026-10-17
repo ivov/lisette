@@ -18,19 +18,26 @@ description: |
 ---
 package main
 
-import "errors"
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+)
 
-func attempt(ok bool) (int, error) {
+func attempt(ok bool) lisette.Partial[int, error] {
 	if ok {
-		return 1, nil
+		return lisette.MakePartialOk[int, error](1)
 	}
-	return 0, errors.New("nope")
+	return lisette.MakePartialErr[int, error](errors.New("nope"))
 }
 
 func test() int {
-	if n, err := attempt(true); err == nil {
-		return n
-	} else {
-		return n
+	subject := attempt(true)
+	switch subject.Tag {
+	case lisette.PartialOk:
+		return subject.OkVal
+	case lisette.PartialBoth:
+		return subject.OkVal
+	default:
+		return 0
 	}
 }

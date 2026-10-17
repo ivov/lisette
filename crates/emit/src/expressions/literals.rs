@@ -1,7 +1,7 @@
 use std::fmt::Write;
 
 use crate::Planner;
-use crate::abi::coercion::CoercionPlan;
+use crate::abi::layout::SlotOrigin;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::go_expression::{BinaryOp, CompositeLayout};
@@ -100,7 +100,13 @@ impl Planner<'_> {
 
         let stages: Vec<ValuePlan> = elements
             .iter()
-            .map(|e| self.lower_composite_value(e, ExpressionContext::value()))
+            .map(|e| {
+                let origin = self.function_type_origin(&element_lisette_ty, SlotOrigin::Lisette);
+                self.lower_composite_value(
+                    e,
+                    ExpressionContext::value().with_function_slot_origin(origin),
+                )
+            })
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "v");
         let stability = sequenced.stability;
@@ -109,7 +115,7 @@ impl Planner<'_> {
         let mut wrapped = Vec::with_capacity(sequenced.values.len());
         let mut widest = 0;
         for (expr, value) in elements.iter().zip(sequenced.values) {
-            let coercion = CoercionPlan::internal(self, &expr.get_type(), &element_lisette_ty);
+            let coercion = self.value_slot_coercion(expr, &element_lisette_ty);
             let is_whole_literal = coercion.is_identity() && value.is_composite_literal();
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);

@@ -24,14 +24,16 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func makeLookup() func(string) *flag.Flag {
-	return flag.Lookup
+func makeLookup() func(string) lisette.Option[*flag.Flag] {
+	return func(arg0 string) lisette.Option[*flag.Flag] {
+		raw := flag.Lookup(arg0)
+		return lisette.OptionFromNilable[*flag.Flag](raw, raw == nil)
+	}
 }
 
 func main() {
 	f := makeLookup()
-	raw := f("verbose")
-	r := lisette.OptionFromNilable[*flag.Flag](raw, raw == nil)
+	r := f("verbose")
 	if r.Tag == lisette.OptionSome {
 		_ = r.SomeVal
 	}

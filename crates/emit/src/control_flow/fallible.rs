@@ -261,16 +261,6 @@ impl Planner<'_> {
         self.fallible_call(fallible, fallible.ok_constructor(), vec![value])
     }
 
-    /// `Err(error)` or `None`: an `Option` failure carries no error.
-    pub(crate) fn fallible_failure(
-        &mut self,
-        fallible: &Fallible,
-        error: Option<GoExpression>,
-    ) -> GoExpression {
-        let arguments = error.filter(|_| fallible.is_result()).into_iter().collect();
-        self.fallible_call(fallible, fallible.err_constructor(), arguments)
-    }
-
     /// A failure typed by the enclosing return type, with the fallible's own types as fallback.
     fn contextual_failure(
         &mut self,

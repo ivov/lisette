@@ -24,18 +24,23 @@ description: |
 ---
 package main
 
-import "strconv"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
 
-func make_() (func(string) (int, error), error) {
-	return strconv.Atoi, nil
+func make_() (func(string) lisette.Result[int, error], error) {
+	return func(arg0 string) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](strconv.Atoi(arg0))
+	}, nil
 }
 
 func main() {
 	r, err := make_()
 	if err == nil {
-		r2, err_1 := r("1")
-		if err_1 == nil {
-			_ = r2
+		r2 := r("1")
+		if r2.Tag == lisette.ResultOk {
+			_ = r2.OkVal
 		}
 	}
 }

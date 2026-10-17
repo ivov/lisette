@@ -164,6 +164,25 @@ impl<'a> EmitFacts<'a> {
         resolve_to_function_type(&self.input.definitions, ty)
     }
 
+    /// Named Go function types keep the slots of their generic declaration.
+    pub(crate) fn function_alias_declaration(&self, ty: &Type) -> Option<Type> {
+        self.resolve_to_function_type(self.alias_declaration(ty)?)
+    }
+
+    pub(crate) fn alias_declaration(&self, ty: &Type) -> Option<&Type> {
+        let Type::Nominal { id, .. } = ty.unwrap_forall() else {
+            return None;
+        };
+        let DefinitionBody::TypeAlias {
+            alias: AliasKind::Transparent { target, .. },
+            ..
+        } = &self.definition(id)?.body
+        else {
+            return None;
+        };
+        Some(target)
+    }
+
     pub(crate) fn is_unused_binding(&self, pattern: &Pattern) -> bool {
         self.input.bindings.is_unused_binding(pattern)
     }

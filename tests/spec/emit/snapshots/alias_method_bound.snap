@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  type Maybe<T> = Option<T>
+  type Outcome<T> = Result<T, string>
+  fn main() {
+   let o: Maybe<int> = None
+   let missing = o.is_none
+   let r: Outcome<int> = Err("x")
+   let failed = r.is_err
+   if !missing() || !failed() { panic("bound alias methods") }
+   let mut calls = 0
+   let n = o.unwrap_or_else(|| { calls += 1; 7 })
+   if n != 7 || calls != 1 { panic("fallback evaluation") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Maybe[T any] = lisette.Option[T]
+
+type Outcome[T any] = lisette.Result[T, string]
+
+func main() {
+	o := lisette.MakeOptionNone[int]()
+	missing := o.IsNone
+	r := lisette.MakeResultErr[int, string]("x")
+	failed := r.IsErr
+	if !missing() || !failed() {
+		panic("bound alias methods")
+	}
+	calls := 0
+	n := o.UnwrapOrElse(func() int {
+		calls++
+		return 7
+	})
+	if n != 7 || calls != 1 {
+		panic("fallback evaluation")
+	}
+}

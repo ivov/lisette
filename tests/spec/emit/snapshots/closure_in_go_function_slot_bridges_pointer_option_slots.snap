@@ -26,31 +26,63 @@ func named() (lisette.Option[int], error) {
 }
 
 func main() {
-	cb_1 := func() (lisette.Option[int], error) {
-		return lisette.MakeOptionSome(1), nil
+	cb_1 := func() lisette.Result[lisette.Option[int], error] {
+		return lisette.MakeResultOk[lisette.Option[int], error](lisette.MakeOptionSome(1))
 	}
-	cb.Run(func() (*int, error) {
-		ret, ret_1 := cb_1()
-		var ptr *int
-		if ret.Tag == lisette.OptionSome {
-			ptr = &ret.SomeVal
+	var adapted func() (*int, error)
+	if cb_1 != nil {
+		adapted = func() (*int, error) {
+			ret, ret_1 := func() (lisette.Option[int], error) {
+				res := cb_1()
+				if res.Tag == lisette.ResultOk {
+					return res.OkVal, nil
+				}
+				return lisette.Option[int]{}, res.ErrVal
+			}()
+			var ptr *int
+			if ret.Tag == lisette.OptionSome {
+				ptr = &ret.SomeVal
+			}
+			return ptr, ret_1
 		}
-		return ptr, ret_1
-	})
+	}
+	cb.Run(adapted)
 	cb_2 := named
-	cb.Run(func() (*int, error) {
-		ret_2, ret_3 := cb_2()
-		var ptr_1 *int
-		if ret_2.Tag == lisette.OptionSome {
-			ptr_1 = &ret_2.SomeVal
+	var adapted_1 func() lisette.Result[lisette.Option[int], error]
+	if cb_2 != nil {
+		adapted_1 = func() lisette.Result[lisette.Option[int], error] {
+			return lisette.ResultFromPair[lisette.Option[int]](cb_2())
 		}
-		return ptr_1, ret_3
-	})
-	cb_3 := func(v lisette.Option[int]) {
-		_ = v
 	}
-	cb.Each(func(arg0 *int) {
-		option := lisette.OptionFromPointer[int](arg0)
-		cb_3(option)
-	})
+	cb_3 := adapted_1
+	var adapted_2 func() (*int, error)
+	if cb_3 != nil {
+		adapted_2 = func() (*int, error) {
+			ret_2, ret_3 := func() (lisette.Option[int], error) {
+				res_1 := cb_3()
+				if res_1.Tag == lisette.ResultOk {
+					return res_1.OkVal, nil
+				}
+				return lisette.Option[int]{}, res_1.ErrVal
+			}()
+			var ptr_1 *int
+			if ret_2.Tag == lisette.OptionSome {
+				ptr_1 = &ret_2.SomeVal
+			}
+			return ptr_1, ret_3
+		}
+	}
+	cb.Run(adapted_2)
+	cb_4 := func(v lisette.Option[int]) struct{} {
+		_ = v
+		return struct{}{}
+	}
+	var adapted_3 func(*int)
+	if cb_4 != nil {
+		adapted_3 = func(arg0 *int) {
+			option := lisette.OptionFromPointer[int](arg0)
+			cb_4(option)
+		}
+	}
+	cb.Each(adapted_3)
 }

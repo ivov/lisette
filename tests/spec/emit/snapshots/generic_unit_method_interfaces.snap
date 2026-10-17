@@ -1,0 +1,87 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  type Done = ()
+  type Completion = Done
+  interface Perform<T> { fn perform() -> T }
+  interface Plain { fn perform() -> Completion }
+  fn invoke<T, A: Perform<T>>(a: A) -> T { a.perform() }
+  struct Worker { stop: bool }
+  impl Worker {
+      fn perform(self) -> Completion {
+          fmt.Print("enter,")
+          if self.stop { return () }
+          fmt.Print("tail,")
+          ()
+      }
+  }
+  fn through_interface(a: Plain) -> Completion { a.perform() }
+  fn through_callback(f: fn() -> Completion) -> Completion { f() }
+  fn main() {
+      let early = Worker { stop: true }
+      let normal = Worker { stop: false }
+      through_interface(early)
+      through_interface(normal)
+      through_callback(early.perform)
+      invoke<Completion, Worker>(normal)
+      let iface: Plain = early
+      iface.perform()
+      fmt.Println("done")
+  }
+---
+package main
+
+import "fmt"
+
+type Done = struct{}
+
+type Completion = Done
+
+type Perform[T any] interface {
+	perform() T
+}
+
+type Plain interface {
+	perform() Completion
+}
+
+func invoke[T any, A Perform[T]](a A) T {
+	return a.perform()
+}
+
+type Worker struct {
+	stop bool
+}
+
+func (w Worker) perform() Completion {
+	fmt.Print("enter,")
+	if w.stop {
+		return struct{}{}
+	}
+	fmt.Print("tail,")
+	return *new(Completion)
+}
+
+func throughInterface(a Plain) Completion {
+	a.perform()
+	return *new(Completion)
+}
+
+func throughCallback(f func() Completion) Completion {
+	f()
+	return *new(Completion)
+}
+
+func main() {
+	early := Worker{stop: true}
+	normal := Worker{stop: false}
+	throughInterface(early)
+	throughInterface(normal)
+	throughCallback(early.perform)
+	invoke[Completion, Worker](normal)
+	var iface Plain = early
+	iface.perform()
+	fmt.Println("done")
+}

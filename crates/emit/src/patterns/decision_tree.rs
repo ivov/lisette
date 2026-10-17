@@ -5,14 +5,17 @@ use rustc_hash::FxHashMap as HashMap;
 use std::slice;
 
 use syntax::ast::{
-    BindingId, ConstructorPatternResolution, EnumFieldDefinition, MatchArm, Pattern,
-    RecordPatternResolution, RestPattern, SequencePatternResolution, StructFieldPattern,
+    BindingId, ConstructorPatternResolution, MatchArm, Pattern, RecordPatternResolution,
+    RestPattern, SequencePatternResolution, StructFieldPattern,
 };
 use syntax::parse::TUPLE_FIELDS;
 use syntax::program::DefinitionBody;
 use syntax::types::{Type, unqualified_name};
 
 use crate::Planner;
+use crate::abi::coercion::CoercionPlan;
+use crate::abi::layout::{SlotOrigin, ValueLayout};
+use crate::calls::go_interop::NilGuard;
 use crate::control_flow::propagation::plain_return;
 use crate::names::generics;
 use crate::names::packages::PackageRequirements;
@@ -166,6 +169,11 @@ fn field_segment(planner: &Planner<'_>, receiver_ty: &Type, name: String) -> Pat
 
 #[derive(Clone, Debug)]
 pub(crate) enum Check {
+    Nilable {
+        path: AccessPath,
+        guard: NilGuard,
+        some: bool,
+    },
     EnumTag {
         path: AccessPath,
         tag_constant: GoExpression,
@@ -227,6 +235,14 @@ impl Check {
             )
         };
         match self {
+            Check::Nilable { path, guard, some } => {
+                let value = path.render(subject);
+                if *some != negative {
+                    guard.non_nil(value)
+                } else {
+                    guard.is_nil(value)
+                }
+            }
             Check::EnumTag { path, tag_constant } => {
                 let operator = if negative { BinaryOp::Ne } else { BinaryOp::Eq };
                 GoExpression::binary(
@@ -296,7 +312,8 @@ impl Check {
 
     fn rebase_past(&mut self, segment: &PathSegment) {
         match self {
-            Check::EnumTag { path, .. }
+            Check::Nilable { path, .. }
+            | Check::EnumTag { path, .. }
             | Check::Literal { path, .. }
             | Check::SliceLenEq { path, .. }
             | Check::SliceLenGe { path, .. }
@@ -311,7 +328,8 @@ impl Check {
 
     fn path(&self) -> Option<&AccessPath> {
         match self {
-            Check::EnumTag { path, .. }
+            Check::Nilable { path, .. }
+            | Check::EnumTag { path, .. }
             | Check::Literal { path, .. }
             | Check::SliceLenEq { path, .. }
             | Check::SliceLenGe { path, .. }
@@ -365,6 +383,7 @@ pub(crate) struct PatternBinding {
     pub binding_ids: Vec<BindingId>,
     pub target: BindingTarget,
     pub path: AccessPath,
+    pub coercion: CoercionPlan,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -800,6 +819,7 @@ fn collect_checks_and_bindings(
     path: &AccessPath,
     pattern: &Pattern,
     path_ty: &Type,
+    path_layout: Option<&ValueLayout>,
     collector: &mut PatternInfo,
 ) {
     match pattern {
@@ -816,6 +836,13 @@ fn collect_checks_and_bindings(
                 binding_ids: binding.as_slice().to_vec(),
                 target: BindingTarget::from_go_name(go_name, path_ty),
                 path: path.clone(),
+                coercion: path_layout.map_or(CoercionPlan::Identity, |source| {
+                    CoercionPlan::bridge(
+                        planner,
+                        source,
+                        &planner.value_layout(path_ty, SlotOrigin::Lisette),
+                    )
+                }),
             });
         }
 
@@ -835,7 +862,7 @@ fn collect_checks_and_bindings(
                 ) || matches!(resolution, ConstructorPatternResolution::EnumVariant { .. })
                     && !planner.is_tuple_struct_type(ty);
             collector.requires_materialized_subject |= !can_split_tuple;
-            collect_enum_variant_checks(planner, path, pattern, path_ty, collector);
+            collect_enum_variant_checks(planner, path, pattern, path_ty, path_layout, collector);
         }
 
         Pattern::Struct { .. } => {
@@ -844,7 +871,7 @@ fn collect_checks_and_bindings(
         }
 
         Pattern::Tuple { elements, .. } => {
-            collect_tuple_checks(planner, path, elements, path_ty, collector);
+            collect_tuple_checks(planner, path, elements, path_ty, path_layout, collector);
         }
 
         Pattern::Slice { .. } => {
@@ -852,8 +879,8 @@ fn collect_checks_and_bindings(
             collect_slice_checks(planner, path, pattern, path_ty, collector);
         }
 
-        Pattern::Or { patterns, .. } => {
-            collect_or_pattern_checks(planner, path, patterns, pattern, path_ty, collector);
+        Pattern::Or { .. } => {
+            collect_or_pattern_checks(planner, path, pattern, path_ty, path_layout, collector);
         }
 
         p @ Pattern::AsBinding {
@@ -862,13 +889,20 @@ fn collect_checks_and_bindings(
             binding,
             ..
         } => {
-            collect_checks_and_bindings(planner, path, inner, path_ty, collector);
+            collect_checks_and_bindings(planner, path, inner, path_ty, path_layout, collector);
             let go_name = planner.go_name_for_binding(p);
             collector.bindings.push(PatternBinding {
                 lisette_name: name.to_string(),
                 binding_ids: binding.as_slice().to_vec(),
                 target: BindingTarget::from_go_name(go_name, path_ty),
                 path: path.clone(),
+                coercion: path_layout.map_or(CoercionPlan::Identity, |source| {
+                    CoercionPlan::bridge(
+                        planner,
+                        source,
+                        &planner.value_layout(path_ty, SlotOrigin::Lisette),
+                    )
+                }),
             });
         }
     }
@@ -879,6 +913,7 @@ fn collect_tuple_checks(
     path: &AccessPath,
     elements: &[Pattern],
     path_ty: &Type,
+    path_layout: Option<&ValueLayout>,
     collector: &mut PatternInfo,
 ) {
     let Type::Tuple(element_tys) = planner.facts.strip_and_peel(path_ty) else {
@@ -888,7 +923,16 @@ fn collect_tuple_checks(
     for (i, element) in elements.iter().enumerate() {
         let field_name = TUPLE_FIELDS.get(i).expect("oversize tuple arity");
         let field_path = path.push(field_segment(planner, path_ty, field_name.to_string()));
-        collect_checks_and_bindings(planner, &field_path, element, &element_tys[i], collector);
+        collect_checks_and_bindings(
+            planner,
+            &field_path,
+            element,
+            &element_tys[i],
+            path_layout
+                .and_then(ValueLayout::tuple_elements)
+                .and_then(|elements| elements.get(i)),
+            collector,
+        );
     }
 }
 
@@ -940,7 +984,14 @@ fn collect_slice_checks(
 
     for (i, element) in prefix.iter().enumerate() {
         let element_path = path.push(PathSegment::Index(i));
-        collect_checks_and_bindings(planner, &element_path, element, element_type, collector);
+        collect_checks_and_bindings(
+            planner,
+            &element_path,
+            element,
+            element_type,
+            None,
+            collector,
+        );
     }
 
     if let RestPattern::Bind { name, binding, .. } = rest {
@@ -969,6 +1020,7 @@ fn collect_slice_checks(
             binding_ids: binding.as_slice().to_vec(),
             target: BindingTarget::from_go_name(go_name, &rest_ty),
             path: path.push(segment),
+            coercion: CoercionPlan::Identity,
         });
     }
 }
@@ -978,18 +1030,28 @@ fn collect_slice_checks(
 fn collect_or_pattern_checks(
     planner: &Planner,
     path: &AccessPath,
-    patterns: &[Pattern],
     pattern: &Pattern,
     path_ty: &Type,
+    path_layout: Option<&ValueLayout>,
     collector: &mut PatternInfo,
 ) {
+    let Pattern::Or { patterns, .. } = pattern else {
+        unreachable!("or-pattern collection requires an or-pattern");
+    };
     let has_bindings = pattern_has_bindings(pattern);
     if !has_bindings {
         let alt_collectors: Vec<PatternInfo> = patterns
             .iter()
             .map(|p| {
                 let mut alt_collector = PatternInfo::new();
-                collect_checks_and_bindings(planner, path, p, path_ty, &mut alt_collector);
+                collect_checks_and_bindings(
+                    planner,
+                    path,
+                    p,
+                    path_ty,
+                    path_layout,
+                    &mut alt_collector,
+                );
                 alt_collector
             })
             .collect();
@@ -1068,8 +1130,10 @@ fn collect_enum_variant_checks(
     path: &AccessPath,
     pattern: &Pattern,
     path_ty: &Type,
+    path_layout: Option<&ValueLayout>,
     collector: &mut PatternInfo,
 ) {
+    let path_layout = path_layout.map(ValueLayout::underlying);
     let Pattern::EnumVariant {
         identifier,
         fields,
@@ -1097,17 +1161,57 @@ fn collect_enum_variant_checks(
     else {
         return;
     };
+    if let Some(
+        layout @ (ValueLayout::NullableOption { payload, .. }
+        | ValueLayout::PointerOption { payload, .. }),
+    ) = path_layout
+    {
+        let some = unqualified_name(variant_name) == "Some";
+        assert!(
+            some || unqualified_name(variant_name) == "None",
+            "nilable option patterns require Some or None"
+        );
+        let pointer = matches!(layout, ValueLayout::PointerOption { .. });
+        collector.checks.push(Check::Nilable {
+            path: path.clone(),
+            guard: if pointer {
+                NilGuard::Pointer
+            } else {
+                planner.option_nil_guard(ty)
+            },
+            some,
+        });
+        if some {
+            let [field] = fields.as_slice() else {
+                unreachable!("Some pattern has one payload");
+            };
+            let child_path = if pointer {
+                path.push(PathSegment::Deref)
+            } else {
+                path.clone()
+            };
+            collect_checks_and_bindings(
+                planner,
+                &child_path,
+                field,
+                &ty.ok_type(),
+                Some(payload),
+                collector,
+            );
+        }
+        return;
+    }
     let params = pattern_type_args(planner, ty);
     let Some(definition) = planner.facts.definition(enum_name) else {
         return;
     };
-    let field_types: Vec<Type> = match &definition.body {
+    let (declared_fields, generics) = match &definition.body {
         DefinitionBody::Struct {
             fields, generics, ..
-        } => fields
-            .iter()
-            .map(|field| generics::resolve_field_type(generics, &params, &field.ty))
-            .collect(),
+        } => (
+            fields.iter().map(|field| &field.ty).collect::<Vec<_>>(),
+            generics,
+        ),
         DefinitionBody::Enum {
             variants, generics, ..
         } => {
@@ -1117,20 +1221,52 @@ fn collect_enum_variant_checks(
             else {
                 return;
             };
-            variant
-                .fields
-                .iter()
-                .map(|field| generics::resolve_field_type(generics, &params, &field.ty))
-                .collect()
+            (
+                variant
+                    .fields
+                    .iter()
+                    .map(|field| &field.ty)
+                    .collect::<Vec<_>>(),
+                generics,
+            )
         }
         _ => return,
     };
+
+    let field_types: Vec<Type> = declared_fields
+        .iter()
+        .map(|ty| generics::resolve_field_type(generics, &params, ty))
+        .collect();
+    let field_layouts: Vec<ValueLayout> = declared_fields
+        .iter()
+        .zip(&field_types)
+        .enumerate()
+        .map(|(index, (declared, ty))| {
+            let inherited = path_layout.and_then(|layout| match layout {
+                ValueLayout::TaggedOption { payload, .. }
+                | ValueLayout::NullableOption { payload, .. }
+                | ValueLayout::PointerOption { payload, .. } => Some(payload.as_ref()),
+                ValueLayout::Fallible { payload, error, .. } => {
+                    Some(if unqualified_name(variant_name) == "Err" || index == 1 {
+                        error.as_ref()
+                    } else {
+                        payload.as_ref()
+                    })
+                }
+                _ => None,
+            });
+            inherited.cloned().unwrap_or_else(|| {
+                planner.value_layout_with_declaration(ty, SlotOrigin::Lisette, declared)
+            })
+        })
+        .collect();
 
     let variant_data = EnumVariantData {
         identifier,
         fields,
         ty,
         field_types: &field_types,
+        field_layouts: &field_layouts,
     };
 
     if planner.is_tuple_struct_type(ty) {
@@ -1139,7 +1275,14 @@ fn collect_enum_variant_checks(
         if planner.is_newtype_struct(ty) {
             collect_newtype_checks(planner, &child_path, &variant_data, collector);
         } else {
-            collect_tuple_struct_checks(planner, &child_path, fields, &field_types, collector);
+            collect_tuple_struct_checks(
+                planner,
+                &child_path,
+                fields,
+                &field_types,
+                &field_layouts,
+                collector,
+            );
         }
         return;
     }
@@ -1211,6 +1354,7 @@ fn collect_newtype_checks(
             &field_path,
             field,
             &variant.field_types[0],
+            variant.field_layouts.first(),
             collector,
         );
     }
@@ -1222,11 +1366,19 @@ fn collect_tuple_struct_checks(
     path: &AccessPath,
     fields: &[Pattern],
     field_types: &[Type],
+    field_layouts: &[ValueLayout],
     collector: &mut PatternInfo,
 ) {
     for (i, field) in fields.iter().enumerate() {
         let field_path = path.push(PathSegment::Field(format!("F{}", i)));
-        collect_checks_and_bindings(planner, &field_path, field, &field_types[i], collector);
+        collect_checks_and_bindings(
+            planner,
+            &field_path,
+            field,
+            &field_types[i],
+            field_layouts.get(i),
+            collector,
+        );
     }
 }
 
@@ -1235,6 +1387,7 @@ struct EnumVariantData<'a> {
     fields: &'a [Pattern],
     ty: &'a Type,
     field_types: &'a [Type],
+    field_layouts: &'a [ValueLayout],
 }
 
 fn enum_tag_constant(planner: &Planner, identifier: &str, ty: &Type) -> GoExpression {
@@ -1285,6 +1438,7 @@ fn collect_tagged_enum_checks(
                     binding_ids: binding.as_slice().to_vec(),
                     target: BindingTarget::Unit,
                     path: field_path,
+                    coercion: CoercionPlan::Identity,
                 });
             }
         } else {
@@ -1293,6 +1447,7 @@ fn collect_tagged_enum_checks(
                 &field_path,
                 field,
                 &variant.field_types[i],
+                variant.field_layouts.get(i),
                 collector,
             );
         }
@@ -1335,13 +1490,26 @@ fn collect_struct_checks(
 
     let (enum_info, child_path) =
         resolve_struct_child_path(planner, path, pattern, path_ty, collector);
+    let variant = match resolution {
+        RecordPatternResolution::EnumVariant { variant_name, .. } => Some(variant_name.as_str()),
+        RecordPatternResolution::Struct { .. } | RecordPatternResolution::Unresolved => None,
+    };
 
     for field in fields {
         let field_path =
             compute_struct_field_path(planner, &child_path, field, ty, enum_info.as_ref());
-        let field_ty = record_field_type(planner, resolution, ty, &field.name)
+        let field_ty = planner
+            .lookup_field_ty(ty, variant, &field.name)
             .unwrap_or_else(|| panic!("record pattern field not resolved: {}", field.name));
-        collect_checks_and_bindings(planner, &field_path, &field.value, &field_ty, collector);
+        let layout = planner.field_slot_layout(ty, None, variant, &field.name, &field_ty);
+        collect_checks_and_bindings(
+            planner,
+            &field_path,
+            &field.value,
+            &field_ty,
+            layout.as_ref(),
+            collector,
+        );
     }
 }
 
@@ -1366,81 +1534,22 @@ fn resolve_struct_child_path(
     else {
         unreachable!("resolve_struct_child_path requires a Struct pattern");
     };
-    if let Some(asserted) = interface_assert_child_path(planner, path, ty, path_ty, collector) {
-        return (None, asserted);
-    }
     let enum_info = detect_enum_info(resolution);
+    let child_path = interface_assert_child_path(planner, path, ty, path_ty, collector)
+        .unwrap_or_else(|| path.clone());
     if enum_info.is_some() {
         collector.checks.push(Check::EnumTag {
-            path: path.clone(),
+            path: child_path.clone(),
             tag_constant: enum_tag_constant(planner, identifier, ty),
         });
     }
-    (enum_info, path.clone())
+    (enum_info, child_path)
 }
 
 fn pattern_type_args(planner: &Planner, ty: &Type) -> Vec<Type> {
     match planner.facts.peel_alias(ty) {
         Type::Nominal { params, .. } => params,
         _ => vec![],
-    }
-}
-
-fn record_variant_fields<'a>(
-    planner: &'a Planner,
-    resolution: &RecordPatternResolution,
-) -> Option<&'a [EnumFieldDefinition]> {
-    let RecordPatternResolution::EnumVariant {
-        enum_name,
-        variant_name,
-    } = resolution
-    else {
-        return None;
-    };
-    let DefinitionBody::Enum { variants, .. } = &planner.facts.definition(enum_name)?.body else {
-        return None;
-    };
-    variants
-        .iter()
-        .find(|variant| variant.name == unqualified_name(variant_name))
-        .map(|variant| variant.fields.as_slice())
-}
-
-fn record_field_type(
-    planner: &Planner,
-    resolution: &RecordPatternResolution,
-    pattern_ty: &Type,
-    field_name: &str,
-) -> Option<Type> {
-    let params = pattern_type_args(planner, pattern_ty);
-    match resolution {
-        RecordPatternResolution::Struct { struct_name } => {
-            let DefinitionBody::Struct {
-                fields, generics, ..
-            } = &planner.facts.definition(struct_name)?.body
-            else {
-                return None;
-            };
-            fields
-                .iter()
-                .find(|field| field.name == field_name)
-                .map(|field| generics::resolve_field_type(generics, &params, &field.ty))
-        }
-        RecordPatternResolution::EnumVariant { .. } => {
-            let fields = record_variant_fields(planner, resolution)?;
-            let RecordPatternResolution::EnumVariant { enum_name, .. } = resolution else {
-                unreachable!()
-            };
-            let DefinitionBody::Enum { generics, .. } = &planner.facts.definition(enum_name)?.body
-            else {
-                return None;
-            };
-            fields
-                .iter()
-                .find(|field| field.name == field_name)
-                .map(|field| generics::resolve_field_type(generics, &params, &field.ty))
-        }
-        RecordPatternResolution::Unresolved => None,
     }
 }
 
@@ -1552,7 +1661,14 @@ pub(crate) fn collect_pattern_info(
     subject_ty: &Type,
 ) -> PatternInfo {
     let mut info = PatternInfo::new();
-    collect_checks_and_bindings(planner, &AccessPath::root(), pattern, subject_ty, &mut info);
+    collect_checks_and_bindings(
+        planner,
+        &AccessPath::root(),
+        pattern,
+        subject_ty,
+        Some(&planner.value_layout(subject_ty, SlotOrigin::Lisette)),
+        &mut info,
+    );
     info
 }
 
@@ -1628,6 +1744,7 @@ mod tests {
         GoExpression, GuardedLeaf, PatternBinding, build_chain, share_alternative_bindings,
         try_build_switch,
     };
+    use crate::abi::coercion::CoercionPlan;
     use syntax::ast::BindingId;
     use syntax::types::Type;
 
@@ -1637,6 +1754,7 @@ mod tests {
             binding_ids: vec![BindingId::new(id)],
             target,
             path: AccessPath::root(),
+            coercion: CoercionPlan::Identity,
         }
     }
 

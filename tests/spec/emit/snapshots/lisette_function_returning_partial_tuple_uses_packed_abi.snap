@@ -27,27 +27,21 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func pair[A any, B any](a A, b B) (lisette.Tuple2[A, B], error) {
-	return lisette.MakeTuple2[A, B](a, b), nil
+func pair[A any, B any](a A, b B) lisette.Partial[lisette.Tuple2[A, B], error] {
+	return lisette.MakePartialOk[lisette.Tuple2[A, B], error](lisette.MakeTuple2[A, B](a, b))
 }
 
 func test() {
-	ret, ret_1 := pair[int, string](1, "x")
-	var result lisette.Partial[lisette.Tuple2[int, string], error]
-	if ret_1 != nil {
-		result = lisette.MakePartialBoth[lisette.Tuple2[int, string], error](ret, ret_1)
-	} else {
-		result = lisette.MakePartialOk[lisette.Tuple2[int, string], error](ret)
-	}
-	switch result.Tag {
+	subject := pair[int, string](1, "x")
+	switch subject.Tag {
 	case lisette.PartialOk:
-		_ = result.OkVal.First
-		_ = result.OkVal.Second
+		_ = subject.OkVal.First
+		_ = subject.OkVal.Second
 	case lisette.PartialErr:
-		_ = result.ErrVal
+		_ = subject.ErrVal
 	default:
-		_ = result.OkVal.First
-		_ = result.OkVal.Second
-		_ = result.ErrVal
+		_ = subject.OkVal.First
+		_ = subject.OkVal.Second
+		_ = subject.ErrVal
 	}
 }

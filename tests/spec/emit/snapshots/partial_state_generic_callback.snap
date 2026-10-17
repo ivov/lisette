@@ -1,0 +1,61 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:errors"
+  fn choose<T>(value: T, mode: int) -> Partial<T, error> {
+   if mode == 0 { Partial.Err(errors.New("err")) } else if mode == 1 { Partial.Ok(value) } else { Partial.Both(value, errors.New("both")) }
+  }
+  fn invoke<T>(f: fn() -> T) -> T { f() }
+  fn tag<T>(p: Partial<T,error>) -> int { match p { Partial.Err(_) => 0, Partial.Ok(_) => 1, Partial.Both(_,_) => 2 } }
+  fn main() {
+   let mut calls = 0
+   let f = || { calls += 1; choose((3, 4), 0) }
+   if tag(invoke(f)) != 0 || calls != 1 { panic("generic callback Err") }
+   if tag(choose((3, 4), 1)) != 1 || tag(choose((3, 4), 2)) != 2 { panic("generic Partial state") }
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func choose[T any](value T, mode int) lisette.Partial[T, error] {
+	if mode == 0 {
+		return lisette.MakePartialErr[T, error](errors.New("err"))
+	} else if mode == 1 {
+		return lisette.MakePartialOk[T, error](value)
+	}
+	return lisette.MakePartialBoth[T, error](value, errors.New("both"))
+}
+
+func invoke[T any](f func() T) T {
+	return f()
+}
+
+func tag[T any](p lisette.Partial[T, error]) int {
+	switch p.Tag {
+	case lisette.PartialErr:
+		return 0
+	case lisette.PartialOk:
+		return 1
+	default:
+		return 2
+	}
+}
+
+func main() {
+	calls := 0
+	f := func() lisette.Partial[lisette.Tuple2[int, int], error] {
+		calls++
+		return choose(lisette.MakeTuple2[int, int](3, 4), 0)
+	}
+	if tag(invoke(f)) != 0 || calls != 1 {
+		panic("generic callback Err")
+	}
+	if tag(choose(lisette.MakeTuple2[int, int](3, 4), 1)) != 1 || tag(choose(lisette.MakeTuple2[int, int](3, 4), 2)) != 2 {
+		panic("generic Partial state")
+	}
+}

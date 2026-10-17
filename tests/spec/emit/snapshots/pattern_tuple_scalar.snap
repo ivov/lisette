@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct H<T>(fn() -> T)
+  fn make<T>(x:T) -> H<T> { H(|| x) }
+  fn main() { let n=5; let H(f) = make(Some(&n)); let Some(p)=f() else { panic("inner") }; if p!=&n { panic("pointer") } }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type H[T any] struct {
+	F0 func() T
+}
+
+func make_[T any](x T) H[T] {
+	return H[T]{F0: func() T {
+		return x
+	}}
+}
+
+func main() {
+	n := 5
+	tmp := make_(lisette.MakeOptionSome(&n))
+	f := tmp.F0
+	subject := f()
+	if subject.Tag != lisette.OptionSome {
+		panic("inner")
+	}
+	p := subject.SomeVal
+	if p != &n {
+		panic("pointer")
+	}
+}

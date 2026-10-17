@@ -18,9 +18,12 @@ description: |
 ---
 package main
 
-import "strconv"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
 
-type F func(string) (int, error)
+type F func(string) lisette.Result[int, error]
 
 type Pair struct {
 	F0 F
@@ -29,11 +32,13 @@ type Pair struct {
 
 func main() {
 	p := Pair{
-		F0: strconv.Atoi,
+		F0: func(arg0 string) lisette.Result[int, error] {
+			return lisette.ResultFromPair[int](strconv.Atoi(arg0))
+		},
 		F1: 1,
 	}
-	r, err := p.F0("1")
-	if err == nil {
-		_ = r
+	r := p.F0("1")
+	if r.Tag == lisette.ResultOk {
+		_ = r.OkVal
 	}
 }

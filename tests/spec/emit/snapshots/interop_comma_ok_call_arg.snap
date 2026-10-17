@@ -18,17 +18,27 @@ description: |
 ---
 package main
 
-import "os"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"os"
+)
 
-func apply(f func(string) (string, bool), key string) string {
-	if v, ok := f(key); ok {
-		return v
-	} else {
-		return "unset"
+func apply(f func(string) lisette.Option[string], key string) string {
+	subject := f(key)
+	if subject.Tag == lisette.OptionSome {
+		return subject.SomeVal
 	}
+	return "unset"
 }
 
 func main() {
-	r := apply(os.LookupEnv, "HOME")
+	cb := os.LookupEnv
+	var adapted func(string) lisette.Option[string]
+	if cb != nil {
+		adapted = func(arg0 string) lisette.Option[string] {
+			return lisette.OptionFromCommaOk[string](cb(arg0))
+		}
+	}
+	r := apply(adapted, "HOME")
 	_ = r
 }

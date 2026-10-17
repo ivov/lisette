@@ -10,8 +10,8 @@ description: |
 ---
 package main
 
-type Handler func(int)
+type Handler func(int) struct{}
 
-func test(h Handler) func(int) {
-	return (func(int))(h)
+func test(h Handler) func(int) struct{} {
+	return (func(int) struct{})(h)
 }

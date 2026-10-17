@@ -2,7 +2,7 @@ use syntax::types::Type;
 
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
-use crate::abi::coercion::LayoutBridge;
+use crate::abi::coercion::{CoercionPlan, LayoutBridge};
 use crate::abi::layout::SlotOrigin;
 use crate::abi::tuple_element_types;
 use crate::calls::go_interop::WrapperTarget;
@@ -306,7 +306,15 @@ pub(crate) fn lowered_tuple_literal_values(
             Some(slot_ty) if planner.facts.is_nullable_option(slot_ty) => {
                 lower_nullable_slot_value(planner, e, slot_ty)
             }
-            _ => planner.lower_composite_value(e, ExpressionContext::value()),
+            slot => {
+                let origin = slot.map_or(SlotOrigin::Lisette, |ty| {
+                    planner.function_type_origin(ty, SlotOrigin::Lisette)
+                });
+                planner.lower_composite_value(
+                    e,
+                    ExpressionContext::value().with_function_slot_origin(origin),
+                )
+            }
         })
         .collect();
     let sequenced = planner.sequence_values(stages, CaptureBoundary::SiblingSequence, "ret");
@@ -525,14 +533,45 @@ pub(crate) fn lower_arg_to_tagged(
     GoExpression::identifier(tagged_var)
 }
 
-/// Tail return for packed `Partial` and `Tuple` ABIs. A flattened `Partial`
-/// takes the generic wrapped-return path.
-pub(crate) fn try_emit_lowered_tail_return(
+/// Normalize alias layouts to the callable's result slots, then handle packed
+/// `Partial` and `Tuple` tails. A flattened `Partial` takes the wrapped-return path.
+pub(crate) fn try_emit_layout_return(
     planner: &mut Planner,
     expression: &Expression,
 ) -> Option<Vec<Statement>> {
-    let shape = planner.return_ctx().lowered_shape()?;
-    match shape {
+    let return_ctx = planner.return_ctx();
+    let return_ty = return_ctx.ty()?.clone();
+    let shape = return_ctx.lowered_shape();
+    let source_ty = expression.get_type();
+    if planner.facts.alias_declaration(&source_ty).is_some()
+        || planner.facts.alias_declaration(&return_ty).is_some()
+        || (source_ty != return_ty && !matches!(expression, Expression::Tuple { .. }))
+    {
+        let abi = shape.clone().map_or_else(
+            || CallableReturnAbi::unlowered(&return_ty),
+            CallableReturnAbi::Lowered,
+        );
+        let source = planner.emitted_value_layout(expression, ExpressionContext::value());
+        let target =
+            planner.callable_result_layout(&return_ty, SlotOrigin::Lisette, Some(&return_ty), &abi);
+        let coercion = CoercionPlan::bridge(planner, &source, &target);
+        if !coercion.is_identity() {
+            let (mut statements, value) = planner
+                .lower_value(expression, ExpressionContext::value())
+                .into_parts();
+            let (setup, value) = coercion.lower(planner, value);
+            statements.extend(setup);
+            if let Some(shape) = &shape {
+                statements.extend(emit_lowered_result_return(
+                    planner, value, "v", &return_ty, shape,
+                ));
+            } else {
+                statements.push(plain_return(value));
+            }
+            return Some(statements);
+        }
+    }
+    match shape? {
         LoweredReturnAbi::Partial {
             payload: PayloadLayout::Packed,
         } => Some(emit_lowered_partial_tail(planner, expression)),
@@ -564,6 +603,16 @@ fn emit_lowered_tuple_tail(
         && planner
             .go_result_bridge(&plan.resolved.abi, &return_ty)
             .is_none_or(|bridge| bridge.is_identity())
+        && plan
+            .resolved
+            .abi
+            .function_layout(planner)
+            .same_result_representation(&planner.function_layout(
+                Vec::new(),
+                &planner.value_layout(&return_ty, SlotOrigin::Lisette),
+                CallableReturnAbi::Lowered(LoweredReturnAbi::Tuple { arity }),
+                Some(&return_ty),
+            ))
     {
         let (mut statements, call) = planner
             .lower_call(expression, None, ExpressionContext::value())

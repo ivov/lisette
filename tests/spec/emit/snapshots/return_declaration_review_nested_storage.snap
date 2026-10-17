@@ -1,0 +1,160 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:errors"
+  type F<T> = fn(int) -> T
+  type Nested<T> = (Option<F<T>>, Result<F<T>, string>)
+  type Alias<T> = Nested<T>
+  struct Box<T> { value: Alias<T> }
+  fn check(ok: bool) { if !ok { panic("runtime assertion failed") } }
+  fn source(n: int) -> Result<int, error> { if n > 0 { Ok(n + 1) } else { Err(errors.New("fail")) } }
+  fn make(n: int) -> Alias<Result<int, error>> { if n == 0 { return (None, Err("none")) }; (Some(source), Ok(|x| source(x))) }
+  fn forward(x: Alias<Result<int, error>>) -> Nested<Result<int, error>> { x }
+  fn boxed(b: Box<Result<int, error>>) -> Alias<Result<int, error>> { b.value }
+  fn main() {
+    let empty = make(0)
+    let (none, err) = empty
+    let None = none else { panic("expected none") }
+    let Err(text) = err else { panic("expected err") }
+    check(text == "none")
+    let pair = make(1)
+    let stored = Box { value: pair }
+    let (o, r) = forward(boxed(stored))
+    let Some(f) = o else { panic("missing f") }
+    let Ok(g) = r else { panic("missing g") }
+    check(f(5).unwrap_or(0) == 6)
+    check(g(8).unwrap_or(0) == 9)
+    check(f(0).is_err())
+    check(g(0).is_err())
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type F[T any] func(int) T
+
+type Nested[T any] = lisette.Tuple2[lisette.Option[F[T]], lisette.Result[F[T], string]]
+
+type Alias[T any] = Nested[T]
+
+type Box[T any] struct {
+	value Alias[T]
+}
+
+func check(ok bool) {
+	if !ok {
+		panic("runtime assertion failed")
+	}
+}
+
+func source(n int) (int, error) {
+	if n > 0 {
+		return n + 1, nil
+	}
+	return 0, errors.New("fail")
+}
+
+func make_(n int) (F[lisette.Result[int, error]], lisette.Result[F[lisette.Result[int, error]], string]) {
+	if n == 0 {
+		return nil, lisette.MakeResultErr[F[lisette.Result[int, error]], string]("none")
+	}
+	cb := source
+	var adapted func(int) lisette.Result[int, error]
+	if cb != nil {
+		adapted = func(arg0 int) lisette.Result[int, error] {
+			return lisette.ResultFromPair[int](cb(arg0))
+		}
+	}
+	src := lisette.MakeTuple2[lisette.Option[func(int) lisette.Result[int, error]], lisette.Result[func(int) lisette.Result[int, error], string]](lisette.MakeOptionSome(adapted), lisette.MakeResultOk[func(int) lisette.Result[int, error], string](func(x int) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](source(x))
+	}))
+	var adapted_1 lisette.Tuple2[lisette.Option[F[lisette.Result[int, error]]], lisette.Result[F[lisette.Result[int, error]], string]]
+	src_1 := src.First
+	var adapted_2 lisette.Option[F[lisette.Result[int, error]]]
+	adapted_2.Tag = src_1.Tag
+	if src_1.Tag == lisette.OptionSome {
+		adapted_2.SomeVal = src_1.SomeVal
+	}
+	adapted_1.First = adapted_2
+	src_2 := src.Second
+	var adapted_3 lisette.Result[F[lisette.Result[int, error]], string]
+	adapted_3.Tag = src_2.Tag
+	if src_2.Tag == lisette.ResultOk {
+		adapted_3.OkVal = src_2.OkVal
+	}
+	if src_2.Tag == lisette.ResultErr {
+		adapted_3.ErrVal = src_2.ErrVal
+	}
+	adapted_1.Second = adapted_3
+	opt := adapted_1.First
+	var unwrap F[lisette.Result[int, error]]
+	if opt.Tag == lisette.OptionSome {
+		unwrap = opt.SomeVal
+	}
+	return unwrap, adapted_1.Second
+}
+
+func forward(x Alias[lisette.Result[int, error]]) (F[lisette.Result[int, error]], lisette.Result[F[lisette.Result[int, error]], string]) {
+	tup := x
+	opt := tup.First
+	var unwrap F[lisette.Result[int, error]]
+	if opt.Tag == lisette.OptionSome {
+		unwrap = opt.SomeVal
+	}
+	return unwrap, tup.Second
+}
+
+func boxed(b Box[lisette.Result[int, error]]) (F[lisette.Result[int, error]], lisette.Result[F[lisette.Result[int, error]], string]) {
+	tup := b.value
+	opt := tup.First
+	var unwrap F[lisette.Result[int, error]]
+	if opt.Tag == lisette.OptionSome {
+		unwrap = opt.SomeVal
+	}
+	return unwrap, tup.Second
+}
+
+func main() {
+	ret, ret_1 := make_(0)
+	option := lisette.OptionFromNilable[F[lisette.Result[int, error]]](ret, ret == nil)
+	empty := lisette.MakeTuple2(option, ret_1)
+	none := empty.First
+	err := empty.Second
+	if none.Tag != lisette.OptionNone {
+		panic("expected none")
+	}
+	if err.Tag != lisette.ResultErr {
+		panic("expected err")
+	}
+	text := err.ErrVal
+	check(text == "none")
+	ret_2, ret_3 := make_(1)
+	option_1 := lisette.OptionFromNilable[F[lisette.Result[int, error]]](ret_2, ret_2 == nil)
+	pair := lisette.MakeTuple2(option_1, ret_3)
+	stored := Box[lisette.Result[int, error]]{value: pair}
+	ret_4, ret_5 := boxed(stored)
+	option_2 := lisette.OptionFromNilable[F[lisette.Result[int, error]]](ret_4, ret_4 == nil)
+	tup := lisette.MakeTuple2(option_2, ret_5)
+	ret_6, ret_7 := forward(tup)
+	option_3 := lisette.OptionFromNilable[F[lisette.Result[int, error]]](ret_6, ret_6 == nil)
+	tup_3 := lisette.MakeTuple2(option_3, ret_7)
+	o := tup_3.First
+	r := tup_3.Second
+	if o.Tag != lisette.OptionSome {
+		panic("missing f")
+	}
+	f := o.SomeVal
+	if r.Tag != lisette.ResultOk {
+		panic("missing g")
+	}
+	g := r.OkVal
+	check(f(5).UnwrapOr(0) == 6)
+	check(g(8).UnwrapOr(0) == 9)
+	check(f(0).IsErr())
+	check(g(0).IsErr())
+}

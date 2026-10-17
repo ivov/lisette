@@ -4,7 +4,6 @@ use crate::abi::coercion::LayoutBridge;
 use crate::abi::is_prelude_container_type;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::calls::go_interop::GoResultBridge;
-use crate::definitions::interface_adapter::with_comma_ok_hint;
 use crate::patterns::matching::prelude_constructor;
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::program::NativeTypeKind;
@@ -90,7 +89,6 @@ pub(crate) enum ArgumentPlan {
         source: CallableReturnAbi,
         target: LoweredReturnAbi,
     },
-    LoweredFnShapeAdapter(Box<FunctionArgumentAdapter>),
     GoSlotBridge(Box<ArgumentSlotBridge>),
     TaggedGoLowering(Box<TaggedArgumentAdapter>),
 }
@@ -112,14 +110,6 @@ impl TaggedArgumentAdapter {
             bridge: None,
         })
     }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct FunctionArgumentAdapter {
-    pub(crate) source_function: Type,
-    pub(crate) source_abi: CallableReturnAbi,
-    pub(crate) target_abi: CallableReturnAbi,
-    pub(crate) target_origin: SlotOrigin,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -192,13 +182,23 @@ impl<'a> Planner<'a> {
         go_return: Option<&LoweredReturnAbi>,
         arg_count: usize,
     ) -> ResolvedCallee<'a> {
+        let bound_layout = self.bound_dispatch_layout(function);
+        let origin = if bound_layout.is_some() {
+            CallableOrigin::Source(CallKind::Regular)
+        } else {
+            origin
+        };
         let (id, declaration) = self.resolve_callee_definition(function);
-        let declared_type = declaration.map(CallableDeclaration::ty);
+        let alias_declaration = self.facts.function_alias_declaration(&function.get_type());
+        let declared_type = declaration
+            .map(CallableDeclaration::ty)
+            .or(alias_declaration.as_ref());
         let instantiated = self
             .facts
             .resolve_to_function_type(function.get_type().unwrap_forall())
             .unwrap_or_else(|| function.get_type().unwrap_forall().clone());
         let declared_params = declared_type.and_then(|ty| ty.unwrap_forall().get_function_params());
+        let declared_return = declared_type.and_then(|ty| ty.unwrap_forall().get_function_ret());
         let receiver_offset = receiver_offset(declared_params, &instantiated, arg_count);
         let params = build_param_abi(
             self,
@@ -208,14 +208,28 @@ impl<'a> Planner<'a> {
             id.as_deref(),
             &origin,
         );
-        let result = match go_return {
-            Some(result) => CallableReturnAbi::Lowered(result.clone()),
-            None => self
-                .classify_callee_abi(function, id.as_deref(), declaration)
-                .unwrap_or(CallableReturnAbi::Value),
-        };
         let return_type = instantiated.get_function_ret().unwrap_or(&Type::Never);
-        let declared_return = declared_type.and_then(|ty| ty.unwrap_forall().get_function_ret());
+        let result = if let Some(layout) = bound_layout {
+            layout.return_abi
+        } else {
+            match go_return {
+                Some(result) => CallableReturnAbi::Lowered(result.clone()),
+                None if matches!(
+                    origin,
+                    CallableOrigin::Source(CallKind::NativeConstructor(NativeTypeKind::Array))
+                ) =>
+                {
+                    // Array.from emits a comma-ok pair even though its callee has
+                    // no source declaration. Array.new has an ordinary value result.
+                    self.callable_return_abi(return_type)
+                }
+                None => self
+                    .classify_callee_abi(function, id.as_deref(), declaration, declared_return)
+                    .unwrap_or_else(|| {
+                        CallableReturnAbi::unlowered(declared_return.unwrap_or(return_type))
+                    }),
+            }
+        };
         let catalog_return = matches!(origin, CallableOrigin::GoInterop)
             .then(|| {
                 id.as_deref()
@@ -233,12 +247,8 @@ impl<'a> Planner<'a> {
         let return_declaration = catalog_return
             .map(|slot| &slot.declared_type)
             .or(declared_return);
-        let return_layout = return_declaration.map_or_else(
-            || self.value_layout(return_type, return_origin),
-            |declaration| {
-                self.value_layout_with_declaration(return_type, return_origin, declaration)
-            },
-        );
+        let return_layout =
+            self.callable_result_layout(return_type, return_origin, return_declaration, &result);
         let is_prelude_dispatch = id
             .as_deref()
             .is_some_and(|definition| definition.starts_with("prelude."))
@@ -288,7 +298,14 @@ impl<'a> Planner<'a> {
         &self,
         function: &Expression,
     ) -> (Option<String>, Option<CallableDeclaration<'a>>) {
-        let id = resolved_definition(function).map(str::to_string);
+        let id = resolved_definition(function).map(|id| {
+            if let Some((owner, method)) = id.rsplit_once('.') {
+                let owner = self.peel_alias_id(owner);
+                format!("{owner}.{method}")
+            } else {
+                id.to_string()
+            }
+        });
         let declaration = id.as_deref().and_then(|id| self.callable_declaration(id));
         (id, declaration)
     }
@@ -312,6 +329,7 @@ impl<'a> Planner<'a> {
         callee: &Expression,
         id: Option<&str>,
         declaration: Option<CallableDeclaration<'a>>,
+        declared_return: Option<&Type>,
     ) -> Option<CallableReturnAbi> {
         let callee_ty = callee.get_type();
         let unwrapped = callee_ty.unwrap_forall();
@@ -323,7 +341,7 @@ impl<'a> Planner<'a> {
             return None;
         };
         let inner = callee.unwrap_parens();
-        let callee_definition = resolved_definition(callee);
+        let callee_definition = id;
         if callee_definition.is_some_and(|definition| definition.starts_with("go:")) {
             return None;
         }
@@ -334,7 +352,7 @@ impl<'a> Planner<'a> {
         {
             let receiver_type = receiver.get_type();
             if NativeTypeKind::from_type(&self.facts.strip_and_peel(&receiver_type)).is_some()
-                || receiver_is_prelude_type(&receiver_type)
+                || receiver_is_prelude_type(&self.facts.strip_and_peel(&receiver_type))
                 || matches!(
                     &**receiver,
                     Expression::Identifier {
@@ -354,25 +372,27 @@ impl<'a> Planner<'a> {
         if prelude_constructor(inner).is_some() {
             return None;
         }
-        if self.callee_uses_tagged_method_return(callee) {
-            return None;
-        }
-        let declared_return =
-            declaration.and_then(|declaration| declaration.ty().unwrap_forall().get_function_ret());
-        let classify_ty = declared_return.unwrap_or(f.return_type.as_ref());
-        let origin = self.function_type_origin(&callee_ty, SlotOrigin::Lisette);
-        let abi = CallableReturnAbi::Lowered(self.classify_slot_emission(classify_ty, origin)?);
-
-        // Interface methods carry `#[go(...)]` hints the call must read.
+        // The declaration producer also owns interface-specific hints and void aliases.
         if let Some(CallableDeclaration::Method(method)) = declaration
             && id
                 .and_then(|id| id.rsplit_once('.'))
                 .and_then(|(owner, _)| self.facts.definition(owner))
                 .is_some_and(Definition::is_interface)
         {
-            return Some(with_comma_ok_hint(abi, method));
+            return Some(self.interface_method_return_abi(&method.source_name, method));
         }
-        Some(abi)
+        if self.callee_uses_tagged_method_return(callee) {
+            return Some(CallableReturnAbi::Value);
+        }
+        let classify_ty = declared_return.unwrap_or(f.return_type.as_ref());
+        if let Some(CallableDeclaration::Method(_)) = declaration {
+            return Some(self.method_return_abi(classify_ty));
+        }
+        if declaration.is_some_and(|declaration| !declaration.is_type_definition()) {
+            return Some(self.callable_return_abi(classify_ty));
+        }
+        let origin = self.function_type_origin(&callee_ty, SlotOrigin::Lisette);
+        Some(self.slot_return_abi(classify_ty, origin))
     }
 
     fn callee_uses_tagged_method_return(&self, callee: &Expression) -> bool {
@@ -433,6 +453,9 @@ impl<'a> Planner<'a> {
         callee: &Expression,
         return_ty: &Type,
     ) -> Option<LoweredReturnAbi> {
+        if self.bound_dispatch_requirement(callee).is_some() {
+            return None;
+        }
         let qualified_name = resolved_definition(callee)?;
         if !qualified_name.starts_with("go:") {
             return None;
@@ -455,7 +478,11 @@ impl<'a> Planner<'a> {
     }
 
     pub(crate) fn is_go_callable(&self, expression: &Expression) -> bool {
+        if self.bound_dispatch_requirement(expression).is_some() {
+            return false;
+        }
         resolved_definition(expression).is_some_and(|definition| definition.starts_with("go:"))
+            || self.is_go_named_function_type(&expression.get_type())
     }
 
     pub(crate) fn call_target_is_go(&self, expression: &Expression) -> bool {

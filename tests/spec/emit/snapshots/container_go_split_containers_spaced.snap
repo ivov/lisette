@@ -1,0 +1,72 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:bufio"
+  struct Pair(bufio.SplitFunc,int)
+  fn main(){let s:Slice<bufio.SplitFunc> =[bufio.ScanWords];let a:Array<bufio.SplitFunc,1> =[bufio.ScanWords];let m:Map<string,bufio.SplitFunc> =Map.from([("f",bufio.ScanWords)]);let t:(bufio.SplitFunc,int)=(bufio.ScanWords,1);let p=Pair(bufio.ScanWords,1);let Some(mf)=m.get("f") else {panic("map")};for f in [s[0],a[0],mf,t.0,p.0]{let Ok((n,token))=f([65,32],true) else {panic("split")};if n!=2||token.length()!=1||token[0]!=65{panic("split result")}}}
+---
+package main
+
+import (
+	"bufio"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Pair struct {
+	F0 bufio.SplitFunc
+	F1 int
+}
+
+func main() {
+	s := []bufio.SplitFunc{bufio.ScanWords}
+	a := [1]bufio.SplitFunc{bufio.ScanWords}
+	m := map[string]bufio.SplitFunc{"f": bufio.ScanWords}
+	tup_1 := lisette.MakeTuple2[func([]byte, bool) lisette.Result[lisette.Tuple2[int, []byte], error], int](func(arg0 []byte, arg1 bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
+		ret, ret_1, ret_2 := bufio.ScanWords(arg0, arg1)
+		tup := lisette.MakeTuple2(ret, ret_1)
+		if ret_2 != nil {
+			return lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_2)
+		}
+		return lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup)
+	}, 1)
+	cb := tup_1.First
+	var adapted func([]byte, bool) (int, []byte, error)
+	if cb != nil {
+		adapted = func(arg0 []byte, arg1 bool) (int, []byte, error) {
+			res := cb(arg0, arg1)
+			if res.Tag == lisette.ResultOk {
+				tup_2 := res.OkVal
+				return tup_2.First, tup_2.Second, nil
+			}
+			return 0, nil, res.ErrVal
+		}
+	}
+	t := lisette.MakeTuple2[bufio.SplitFunc, int](adapted, tup_1.Second)
+	p := Pair{
+		F0: bufio.ScanWords,
+		F1: 1,
+	}
+	mf, ok := m["f"]
+	if !ok {
+		panic("map")
+	}
+	for _, f := range []bufio.SplitFunc{s[0], a[0], mf, t.First, p.F0} {
+		ret_3, ret_4, ret_5 := f([]byte{65, 32}, true)
+		tup_3 := lisette.MakeTuple2(ret_3, ret_4)
+		var result lisette.Result[lisette.Tuple2[int, []byte], error]
+		if ret_5 != nil {
+			result = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_5)
+		} else {
+			result = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup_3)
+		}
+		if result.Tag != lisette.ResultOk {
+			panic("split")
+		}
+		n := result.OkVal.First
+		token := result.OkVal.Second
+		if n != 2 || len(token) != 1 || token[0] != 65 {
+			panic("split result")
+		}
+	}
+}

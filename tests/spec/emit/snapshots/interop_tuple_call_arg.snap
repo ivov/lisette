@@ -16,14 +16,28 @@ description: |
 ---
 package main
 
-import "path"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"path"
+)
 
-func useSplit(f func(string) (string, string), p string) string {
-	dir, file := f(p)
+func useSplit(f func(string) lisette.Tuple2[string, string], p string) string {
+	tmp := f(p)
+	dir := tmp.First
+	file := tmp.Second
 	return dir + "/" + file
 }
 
 func main() {
-	r := useSplit(path.Split, "/foo/bar.txt")
+	cb := path.Split
+	var adapted func(string) lisette.Tuple2[string, string]
+	if cb != nil {
+		adapted = func(arg0 string) lisette.Tuple2[string, string] {
+			ret, ret_1 := cb(arg0)
+			tup := lisette.MakeTuple2(ret, ret_1)
+			return tup
+		}
+	}
+	r := useSplit(adapted, "/foo/bar.txt")
 	_ = r
 }

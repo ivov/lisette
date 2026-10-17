@@ -28,16 +28,20 @@ func makeIt() []lisette.Option[string] {
 
 func main() {
 	cb := makeIt
-	aws.Use(func() []*string {
-		src := cb()
-		unwrapped := make([]*string, len(src))
-		for i, v := range src {
-			if v.Tag == lisette.OptionSome {
-				unwrapped[i] = &v.SomeVal
-			} else {
-				unwrapped[i] = nil
+	var adapted func() []*string
+	if cb != nil {
+		adapted = func() []*string {
+			src := cb()
+			unwrapped := make([]*string, len(src))
+			for i, v := range src {
+				if v.Tag == lisette.OptionSome {
+					unwrapped[i] = &v.SomeVal
+				} else {
+					unwrapped[i] = nil
+				}
 			}
+			return unwrapped
 		}
-		return unwrapped
-	})
+	}
+	aws.Use(adapted)
 }

@@ -1,0 +1,72 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:errors"
+  import "go:strings"
+  import "go:text/template"
+  fn fail(s: string) -> Result<string, error> { Err(errors.New("bad " + s)) }
+  fn main() {
+    let mut funcs = Map.new<string, Unknown>()
+    funcs["fail"] = fail
+    let Ok(parsed) = template.New("x").Funcs(funcs).Parse("{{fail \"a\"}}") else { panic("parse") }
+    let mut out = strings.Builder {}
+    let Err(e) = parsed.Execute(&out, 0) else { panic("template swallowed the function error") }
+    if !strings.Contains(e.Error(), "bad a") { panic("wrong error") }
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+	"strings"
+	"text/template"
+)
+
+func fail(s string) (string, error) {
+	return "", errors.New("bad " + s)
+}
+
+func main() {
+	funcs := make(map[string]any)
+	base := funcs
+	cb := fail
+	var adapted func(string) lisette.Result[string, error]
+	if cb != nil {
+		adapted = func(arg0 string) lisette.Result[string, error] {
+			return lisette.ResultFromPair[string](cb(arg0))
+		}
+	}
+	cb_1 := adapted
+	var adapted_1 func(string) (string, error)
+	if cb_1 != nil {
+		adapted_1 = func(arg0 string) (string, error) {
+			res := cb_1(arg0)
+			if res.Tag == lisette.ResultOk {
+				return res.OkVal, nil
+			}
+			return "", res.ErrVal
+		}
+	}
+	base["fail"] = adapted_1
+	parsed, err := template.New("x").Funcs(template.FuncMap(funcs)).Parse("{{fail \"a\"}}")
+	if err != nil || parsed == nil {
+		panic("parse")
+	}
+	out := strings.Builder{}
+	ret := parsed.Execute(&out, 0)
+	var result lisette.Result[struct{}, error]
+	if ret != nil {
+		result = lisette.MakeResultErr[struct{}, error](ret)
+	} else {
+		result = lisette.MakeResultOk[struct{}, error](struct{}{})
+	}
+	if result.Tag != lisette.ResultErr {
+		panic("template swallowed the function error")
+	}
+	e := result.ErrVal
+	if !strings.Contains(e.Error(), "bad a") {
+		panic("wrong error")
+	}
+}

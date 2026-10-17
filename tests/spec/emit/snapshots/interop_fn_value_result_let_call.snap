@@ -30,22 +30,25 @@ import (
 )
 
 func main() {
-	cb := aws.Make
-	f := func() ([]lisette.Option[string], error) {
-		ret, ret_1 := cb()
-		wrapped := make([]lisette.Option[string], len(ret))
-		for i, v := range ret {
-			if v != nil {
-				wrapped[i] = lisette.MakeOptionSome[string](*v)
-			} else {
-				wrapped[i] = lisette.MakeOptionNone[string]()
+	f := func() lisette.Result[[]lisette.Option[string], error] {
+		ret, ret_1 := aws.Make()
+		if ret_1 != nil {
+			return lisette.MakeResultErr[[]lisette.Option[string], error](ret_1)
+		} else {
+			wrapped := make([]lisette.Option[string], len(ret))
+			for i, v := range ret {
+				if v != nil {
+					wrapped[i] = lisette.MakeOptionSome[string](*v)
+				} else {
+					wrapped[i] = lisette.MakeOptionNone[string]()
+				}
 			}
+			return lisette.MakeResultOk[[]lisette.Option[string], error](wrapped)
 		}
-		return wrapped, ret_1
 	}
-	r, err := f()
-	if err == nil {
-		for _, x := range r {
+	r := f()
+	if r.Tag == lisette.ResultOk {
+		for _, x := range r.OkVal {
 			if x.Tag == lisette.OptionSome {
 				fmt.Println(x.SomeVal)
 			} else {
@@ -53,6 +56,6 @@ func main() {
 			}
 		}
 	} else {
-		_ = err
+		_ = r.ErrVal
 	}
 }

@@ -15,6 +15,13 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func pick(opt lisette.Option[func(int) (string, error)]) {
-	opt.UnwrapOr(ext.MakeParser())
+func pick(opt lisette.Option[func(int) lisette.Result[string, error]]) {
+	cb := ext.MakeParser()
+	var adapted func(int) lisette.Result[string, error]
+	if cb != nil {
+		adapted = func(arg0 int) lisette.Result[string, error] {
+			return lisette.ResultFromPair[string](cb(arg0))
+		}
+	}
+	opt.UnwrapOr(adapted)
 }

@@ -1,0 +1,68 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  type Maybe<T> = Option<fn() -> Option<T>>
+  fn main() {
+   let mut calls = 0
+   let mut a: Maybe<fn() -> int> = Some(|| Some(|| 743))
+   let r = &a
+   let change = || { calls += 1; a = Some(|| Some(|| 751)); 0 }
+   let n = r.map_or(change(), |f| { let Some(g) = f() else { panic("inner") }; g() })
+   verify(n == 743 && calls == 1)
+   let Some(f) = a else { panic("outer") }
+   let Some(g) = f() else { panic("inner") }
+   verify(g() == 751)
+  }
+  fn verify(ok: bool) { if !ok { panic("assertion failed") } }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Maybe[T any] = lisette.Option[func() lisette.Option[T]]
+
+func main() {
+	calls := 0
+	a := lisette.MakeOptionSome(func() lisette.Option[func() int] {
+		return lisette.MakeOptionSome[func() int](func() int {
+			return 743
+		})
+	})
+	r := &a
+	change := func() int {
+		calls++
+		a = lisette.MakeOptionSome(func() lisette.Option[func() int] {
+			return lisette.MakeOptionSome[func() int](func() int {
+				return 751
+			})
+		})
+		return 0
+	}
+	arg := *r
+	n := lisette.OptionMapOr(arg, change(), func(f func() lisette.Option[func() int]) int {
+		subject := f()
+		if subject.Tag != lisette.OptionSome {
+			panic("inner")
+		}
+		g := subject.SomeVal
+		return g()
+	})
+	verify(n == 743 && calls == 1)
+	if a.Tag != lisette.OptionSome {
+		panic("outer")
+	}
+	f := a.SomeVal
+	subject_1 := f()
+	if subject_1.Tag != lisette.OptionSome {
+		panic("inner")
+	}
+	g := subject_1.SomeVal
+	verify(g() == 751)
+}
+
+func verify(ok bool) {
+	if !ok {
+		panic("assertion failed")
+	}
+}

@@ -8,6 +8,8 @@ description: |
 ---
 package main
 
-func run(x int) (int, error) {
-	return x, nil
+import lisette "github.com/ivov/lisette/prelude"
+
+func run(x int) lisette.Partial[int, error] {
+	return lisette.MakePartialOk[int, error](x)
 }

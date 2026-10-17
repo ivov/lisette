@@ -10,8 +10,8 @@ description: |
 ---
 package main
 
-type Cb func(int)
+type Cb func(int) struct{}
 
 func test(cb Cb) {
-	(func(int))(cb)(1)
+	(func(int) struct{})(cb)(1)
 }

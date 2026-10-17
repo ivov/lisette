@@ -18,17 +18,21 @@ import lisette "github.com/ivov/lisette/prelude"
 
 type MyOpt = lisette.Option[int]
 
-func apply(f func(int) (int, bool)) (int, bool) {
-	return f(1)
+func apply(f func(int) MyOpt) (int, bool) {
+	v := f(1)
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	return 0, false
 }
 
 func main() {
 	cb := lisette.MakeOptionSome[int]
-	apply(func(arg0 int) (int, bool) {
-		opt := cb(arg0)
-		if opt.Tag == lisette.OptionSome {
-			return opt.SomeVal, true
+	var adapted func(int) MyOpt
+	if cb != nil {
+		adapted = func(arg0 int) MyOpt {
+			return cb(arg0)
 		}
-		return 0, false
-	})
+	}
+	apply(adapted)
 }

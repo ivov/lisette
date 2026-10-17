@@ -14,10 +14,14 @@ package main
 
 import (
 	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"io"
 	"os"
 )
 
 func main() {
-	f := fmt.Fprintf
+	f := func(arg0 io.Writer, arg1 string, arg2 ...any) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](fmt.Fprintf(arg0, arg1, arg2...))
+	}
 	f(os.Stdout, "hi %d", 3)
 }

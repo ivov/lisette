@@ -19,16 +19,21 @@ description: |
 ---
 package main
 
-import "os"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"os"
+)
 
-func makeLookup() func(string) (string, bool) {
-	return os.LookupEnv
+func makeLookup() func(string) lisette.Option[string] {
+	return func(arg0 string) lisette.Option[string] {
+		return lisette.OptionFromCommaOk[string](os.LookupEnv(arg0))
+	}
 }
 
 func main() {
 	f := makeLookup()
-	r, ok := f("HOME")
-	if ok {
-		_ = r
+	r := f("HOME")
+	if r.Tag == lisette.OptionSome {
+		_ = r.SomeVal
 	}
 }

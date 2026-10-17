@@ -55,20 +55,17 @@ func useGetter[G Getter[lisette.Result[int, error]]](g G) (int, error) {
 	return 0, v.ErrVal
 }
 
-func take(f func() (int, error)) (int, error) {
-	return f()
+func take(f func() lisette.Result[int, error]) (int, error) {
+	v := f()
+	if v.Tag == lisette.ResultOk {
+		return v.OkVal, nil
+	}
+	return 0, v.ErrVal
 }
 
 func main() {
 	b := Box{n: 1}
 	useGetter(b)
-	cb := b.get
-	g := func() (int, error) {
-		res := cb()
-		if res.Tag == lisette.ResultOk {
-			return res.OkVal, nil
-		}
-		return 0, res.ErrVal
-	}
+	g := b.get
 	take(g)
 }

@@ -1,7 +1,9 @@
 use crate::Planner;
-use crate::abi::callable::{CallableAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::callable::{
+    CallableAbi, CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout,
+};
 use crate::abi::coercion::{LayoutBridge, resolve_layout_bridge};
-use crate::abi::layout::{FunctionLayout, ValueLayout};
+use crate::abi::layout::{FunctionLayout, SlotOrigin, ValueLayout};
 use crate::abi::transition::{multi_value_return, reencode_return};
 use crate::control_flow::fallible::{
     Fallible, PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR, prelude_call,
@@ -17,9 +19,10 @@ use crate::plan::bodies::{
 use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, GoParameter, UnaryOp};
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
-use crate::types::go_type::{GoType, returns_go_void};
+use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::parse::TUPLE_FIELDS;
+use syntax::program::{DefinitionBody, resolved_definition};
 use syntax::types::{FunctionParameter, Type};
 
 pub(crate) fn is_nil(value: GoExpression) -> GoExpression {
@@ -37,7 +40,7 @@ pub(crate) fn is_nil_interface(value: GoExpression) -> GoExpression {
     )
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum NilGuard {
     /// Pointer ok-type: `ptr == nil`.
     Pointer,
@@ -142,18 +145,41 @@ impl Planner<'_> {
             names.push(GoExpression::identifier(name));
         }
         let arguments = self.plan_bridged_arguments(&mut body, names, source, target);
-        let call = GoExpression::call(GoExpression::identifier(function), arguments);
+        let call = GoExpression::call(GoExpression::identifier(function.clone()), arguments);
         self.plan_function_result_bridge(&mut body, call, source, target);
         let result = target
             .result_go_type(self)
             .map(|result| self.use_rendered_go_type(result))
             .unwrap_or_default();
-        GoExpression::function_literal(
+        let callback = GoExpression::function_literal(
             parameters,
             result,
             LoweredBlock { statements: body },
             FunctionLiteralLayout::MultiLine,
-        )
+        );
+        let adapted = self.fresh_local(Some("adapted"));
+        self.declare(&adapted);
+        let go_type = target.go_type(self);
+        let go_type = self.use_rendered_go_type(go_type);
+        statements.push(
+            LoweredStatement::VarDecl {
+                name: adapted.clone(),
+                go_type,
+                value: None,
+            }
+            .into(),
+        );
+        statements.push(
+            LoweredStatement::If(IfPlan::plain(
+                non_nil(GoExpression::identifier(function)),
+                LoweredBlock {
+                    statements: vec![assign(GoExpression::identifier(adapted.clone()), callback)],
+                },
+                ElseArm::None,
+            ))
+            .into(),
+        );
+        GoExpression::identifier(adapted)
     }
 
     /// Bridge each `target` parameter value into the matching `source` slot.
@@ -186,7 +212,78 @@ impl Planner<'_> {
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) {
+        if matches!(
+            source.return_abi.lowered(),
+            Some(LoweredReturnAbi::Tuple { .. })
+        ) && target.return_abi == CallableReturnAbi::Value
+        {
+            let target_slots = target.results[0]
+                .tuple_elements()
+                .expect("a tagged tuple result has tuple element layouts");
+            let bridges = source
+                .results
+                .iter()
+                .zip(target_slots)
+                .map(|(source, target)| resolve_layout_bridge(self, source, target))
+                .collect();
+            let (body, _) = self.lower_abi_wrapping(
+                call,
+                &source.return_abi,
+                &source.result_type,
+                Some(super::GoResultBridge::Tuple(bridges)),
+                WrapperTarget::Return,
+            );
+            statements.extend(body);
+            return;
+        }
+        if matches!(
+            source.return_abi.lowered(),
+            Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable))
+        ) && target.return_abi == CallableReturnAbi::Value
+        {
+            let source = ValueLayout::NullableOption {
+                option_type: source.result_type.clone(),
+                payload: Box::new(source.results[0].clone()),
+            };
+            let bridge = resolve_layout_bridge(self, &source, &target.results[0]);
+            let raw = self.hoist_tmp_value_statement(statements, "raw", call);
+            let value = self.plan_layout_bridge(statements, GoExpression::identifier(raw), &bridge);
+            statements.push(plain_return(value));
+            return;
+        }
         if !source.return_abi.same_logical_contract(&target.return_abi) {
+            if target.return_abi.is_lowered() {
+                let tagged = self.value_layout(&source.result_type, SlotOrigin::Lisette);
+                let intermediate =
+                    self.function_layout(Vec::new(), &tagged, target.return_abi.clone(), None);
+                if !intermediate.same_result_representation(target) {
+                    // Re-encoding changes the result convention; the remaining
+                    // slot bridge changes physical payloads such as Option<int>
+                    // to Go's *int. Keep both contracts explicit.
+                    let body = reencode_return(
+                        self,
+                        call,
+                        &source.return_abi,
+                        &intermediate.return_abi,
+                        &source.result_type,
+                    );
+                    let result = intermediate
+                        .result_go_type(self)
+                        .expect("a lowered result has a Go signature");
+                    let result = self.use_rendered_go_type(result);
+                    let call = GoExpression::call(
+                        GoExpression::function_literal(
+                            Vec::new(),
+                            result,
+                            LoweredBlock { statements: body },
+                            FunctionLiteralLayout::MultiLine,
+                        ),
+                        Vec::new(),
+                    );
+                    self.plan_function_result_bridge(statements, call, &intermediate, target);
+                    return;
+                }
+            }
             statements.extend(reencode_return(
                 self,
                 call,
@@ -198,7 +295,18 @@ impl Planner<'_> {
         }
         match source.return_abi.lowered() {
             None => {
-                if returns_go_void(&source.result_type) {
+                if source.results.is_empty() {
+                    statements.push(expression_statement(call));
+                    if !target.results.is_empty() {
+                        statements.push(if source.result_type.is_never() {
+                            LoweredStatement::UnreachablePanic.into()
+                        } else {
+                            plain_return(GoExpression::empty_composite("struct{}".to_string()))
+                        });
+                    }
+                    return;
+                }
+                if target.results.is_empty() {
                     statements.push(expression_statement(call));
                     return;
                 }
@@ -441,21 +549,24 @@ impl Planner<'_> {
     pub(crate) fn lower_partial_wrapping(
         &mut self,
         call: GoExpression,
-        partial_ty: &Type,
+        partial_layout: &ValueLayout,
         layout: PayloadLayout,
-        payload_bridge: Option<&LayoutBridge>,
+        bridges: Option<(&LayoutBridge, &LayoutBridge)>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
-        let ok_ty = partial_ty.ok_type();
-        let err_ty = partial_ty.err_type();
-        let ok_ty_str = self.use_go_type(&ok_ty);
-        let err_ty_str = self.use_go_type(&err_ty);
+        let (payload_bridge, error_bridge) = bridges.unzip();
+        let ValueLayout::Fallible { payload, error, .. } = partial_layout.underlying() else {
+            unreachable!("Partial wrapping requires a fallible layout")
+        };
+        let ok_ty = payload.logical_type();
+        let ok_ty_str = self.use_rendered_go_type(payload.go_type(self));
+        let err_ty_str = self.use_rendered_go_type(error.go_type(self));
 
         let mut statements = Vec::new();
-        let (err_var, val_value) = self.push_go_returns(&mut statements, call, &ok_ty, layout);
+        let (err_var, val_value) = self.push_go_returns(&mut statements, call, ok_ty, layout);
         let err = || GoExpression::identifier(err_var.clone());
         let val = || val_value.clone();
-        let nil_check = self.partial_ok_nil_check(&ok_ty, val());
+        let nil_check = self.partial_ok_nil_check(ok_ty, val());
 
         let type_params = format!("[{}, {}]", ok_ty_str, err_ty_str);
         let result_ty_str = self.use_rendered_go_type(GoType::stdlib(format!(
@@ -466,10 +577,12 @@ impl Planner<'_> {
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
 
         let (mut both_setup, both_value) = self.plan_optional_payload_bridge(val(), payload_bridge);
+        let (error_setup, both_error) = self.plan_optional_payload_bridge(err(), error_bridge);
+        both_setup.extend(error_setup);
         let both = prelude_call(
             PARTIAL_BOTH_CTOR,
             type_params.clone(),
-            vec![both_value, err()],
+            vec![both_value, both_error],
         );
         both_setup.push(leaf_statement(&sink, both));
         let both_body = LoweredBlock {
@@ -486,12 +599,16 @@ impl Planner<'_> {
         };
 
         let then_body = if let Some(check) = nil_check {
+            let (mut error_setup, error) = self.plan_optional_payload_bridge(err(), error_bridge);
+            error_setup.push(leaf_statement(
+                &sink,
+                prelude_call(PARTIAL_ERR_CTOR, type_params, vec![error]),
+            ));
             let inner = IfPlan::plain(
                 check,
-                leaf_block(
-                    &sink,
-                    prelude_call(PARTIAL_ERR_CTOR, type_params, vec![err()]),
-                ),
+                LoweredBlock {
+                    statements: error_setup,
+                },
                 ElseArm::from_body(both_body, false),
             );
             LoweredBlock {
@@ -558,11 +675,11 @@ impl Planner<'_> {
     pub(crate) fn result_from_pair(
         &mut self,
         call: GoExpression,
-        result_ty: &Type,
+        result_layout: &ValueLayout,
         layout: PayloadLayout,
         payload_bridge: Option<&LayoutBridge>,
     ) -> Result<GoExpression, GoExpression> {
-        let Some(fallible) = Fallible::from_type(result_ty) else {
+        let Some(fallible) = Fallible::from_type(result_layout.underlying().logical_type()) else {
             return Err(call);
         };
         let ok_ty = fallible.ok_ty();
@@ -579,7 +696,10 @@ impl Planner<'_> {
         {
             return Err(call);
         }
-        let ok_ty_str = self.use_go_type(ok_ty);
+        let payload = result_layout
+            .payload()
+            .expect("Result layout has a payload");
+        let ok_ty_str = self.use_rendered_go_type(payload.go_type(self));
         Ok(prelude_call(
             "ResultFromPair",
             format!("[{}]", ok_ty_str),
@@ -591,15 +711,24 @@ impl Planner<'_> {
     pub(crate) fn lower_result_wrapping(
         &mut self,
         call: GoExpression,
-        result_ty: &Type,
+        result_layout: &ValueLayout,
         layout: PayloadLayout,
-        payload_bridge: Option<&LayoutBridge>,
+        bridges: Option<(&LayoutBridge, &LayoutBridge)>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
-        let fallible = Fallible::from_type(result_ty).expect("Result type expected");
+        let (payload_bridge, error_bridge) = bridges.unzip();
+        let ValueLayout::Fallible {
+            fallible_type,
+            payload,
+            error,
+        } = result_layout.underlying()
+        else {
+            unreachable!("Result wrapping requires a fallible layout")
+        };
+        let fallible = Fallible::from_type(fallible_type).expect("Result type expected");
 
         let mut statements = Vec::new();
-        let call = match self.result_from_pair(call, result_ty, layout, payload_bridge) {
+        let call = match self.result_from_pair(call, result_layout, layout, payload_bridge) {
             Ok(value) => {
                 let outcome =
                     self.push_simple_wrapper_value(&mut statements, target, "result", value);
@@ -612,7 +741,10 @@ impl Planner<'_> {
         let err = || GoExpression::identifier(err_var.clone());
         let ok = || ok_value.clone();
 
-        let result_ty_str = { self.fallible_go_type(&fallible) };
+        let result_ty_str = self.use_rendered_go_type(result_layout.underlying().go_type(self));
+        let ok_ty_str = self.use_rendered_go_type(payload.go_type(self));
+        let err_ty_str = self.use_rendered_go_type(error.go_type(self));
+        let type_params = format!("[{ok_ty_str}, {err_ty_str}]");
 
         let nil_guard = self.result_nil_guard(ok_ty);
 
@@ -620,18 +752,31 @@ impl Planner<'_> {
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
 
         let (mut ok_setup, ok_value) = self.plan_optional_payload_bridge(ok(), payload_bridge);
-        let ok_wrapper = { self.fallible_success(&fallible, ok_value) };
+        let ok_wrapper = prelude_call(
+            fallible.ok_constructor(),
+            type_params.clone(),
+            vec![ok_value],
+        );
         ok_setup.push(leaf_statement(&sink, ok_wrapper));
         let ok_body = LoweredBlock {
             statements: ok_setup,
         };
 
-        let err_wrapper = { self.fallible_failure(&fallible, Some(err())) };
-        let then_body = leaf_block(&sink, err_wrapper);
+        let (mut error_setup, error) = self.plan_optional_payload_bridge(err(), error_bridge);
+        let err_wrapper =
+            prelude_call(fallible.err_constructor(), type_params.clone(), vec![error]);
+        error_setup.push(leaf_statement(&sink, err_wrapper));
+        let then_body = LoweredBlock {
+            statements: error_setup,
+        };
 
         let else_arm = if let Some(nil_guard) = nil_guard {
             let nil_condition = nil_guard.is_nil(ok());
-            let nil_err = { self.fallible_failure(&fallible, Some(unexpected_nil_error())) };
+            let nil_err = prelude_call(
+                fallible.err_constructor(),
+                type_params,
+                vec![unexpected_nil_error()],
+            );
             ElseArm::ElseIf(Box::new(IfPlan::plain(
                 nil_condition,
                 leaf_block(&sink, nil_err),
@@ -650,12 +795,14 @@ impl Planner<'_> {
     pub(crate) fn lower_bare_error_wrapping(
         &mut self,
         call: GoExpression,
-        result_ty: &Type,
+        result_layout: &ValueLayout,
+        error_bridge: Option<&LayoutBridge>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
-        let fallible = Fallible::from_type(result_ty).expect("Result type expected");
+        let fallible = Fallible::from_type(result_layout.underlying().logical_type())
+            .expect("Result type expected");
         debug_assert!(fallible.ok_ty().is_unit());
-        self.lower_unit_result_wrapping(call, &fallible, target)
+        self.lower_unit_result_wrapping(call, result_layout, error_bridge, target)
     }
 
     fn plan_optional_payload_bridge(
@@ -674,25 +821,44 @@ impl Planner<'_> {
     fn lower_unit_result_wrapping(
         &mut self,
         call: GoExpression,
-        fallible: &Fallible,
+        result_layout: &ValueLayout,
+        error_bridge: Option<&LayoutBridge>,
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
         let mut statements = Vec::new();
         let err_var = self.hoist_tmp_value_statement(&mut statements, "ret", call);
         let err = || GoExpression::identifier(err_var.clone());
 
-        let result_ty_str = { self.fallible_go_type(fallible) };
+        let ValueLayout::Fallible {
+            fallible_type,
+            payload,
+            error,
+        } = result_layout.underlying()
+        else {
+            unreachable!("unit Result wrapping requires a fallible layout")
+        };
+        let fallible = Fallible::from_type(fallible_type).expect("Result type expected");
+        let result_ty_str = self.use_rendered_go_type(result_layout.underlying().go_type(self));
+        let ok_type = self.use_rendered_go_type(payload.go_type(self));
+        let err_type = self.use_rendered_go_type(error.go_type(self));
+        let type_params = format!("[{ok_type}, {err_type}]");
 
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
 
-        let err_wrapper = { self.fallible_failure(fallible, Some(err())) };
-        let then_body = leaf_block(&sink, err_wrapper);
+        let (mut error_setup, error) = self.plan_optional_payload_bridge(err(), error_bridge);
+        let err_wrapper =
+            prelude_call(fallible.err_constructor(), type_params.clone(), vec![error]);
+        error_setup.push(leaf_statement(&sink, err_wrapper));
+        let then_body = LoweredBlock {
+            statements: error_setup,
+        };
 
         let ok_wrapper = {
-            self.fallible_success(
-                fallible,
-                GoExpression::empty_composite("struct{}".to_string()),
+            prelude_call(
+                fallible.ok_constructor(),
+                type_params,
+                vec![GoExpression::empty_composite("struct{}".to_string())],
             )
         };
         let else_arm = ElseArm::from_body(leaf_block(&sink, ok_wrapper), false);
@@ -754,7 +920,9 @@ impl Planner<'_> {
         setup: &mut Vec<Statement>,
         expression: &Expression,
     ) -> Option<(Type, Vec<GoParameter>, GoExpression)> {
-        let fn_type = expression.get_type();
+        let fn_type = self
+            .facts
+            .resolve_to_function_type(&expression.get_type())?;
         let f = fn_type.as_function_type()?;
         let (params, return_type) = (f.params.clone(), (*f.return_type).clone());
         let go_fn = self.hoist_go_fn_if_needed(setup, expression);
@@ -769,28 +937,89 @@ impl Planner<'_> {
         expression: &Expression,
         abi: &CallableAbi,
     ) -> GoExpression {
-        let (return_type, param_strs, call) = self
-            .wrapper_call_parts(setup, expression)
-            .expect("expected function type");
-
-        let ret_ty_str = self.use_go_type(&return_type);
-
-        let bridge = self.go_result_bridge(abi, &return_type);
-        let (statements, outcome) = self.lower_abi_wrapping(
-            call,
-            &abi.result,
-            &return_type,
-            bridge,
-            WrapperTarget::Return,
+        let function = self
+            .facts
+            .resolve_to_function_type(&expression.get_type())
+            .expect("a Go callable has a function type");
+        let function = function.as_function_type().expect("resolved function type");
+        let return_type = &function.return_type;
+        let (param_strs, _) = self.build_wrapper_params(&function.params);
+        let result = self.value_layout(return_type, SlotOrigin::Lisette);
+        let target = self.function_layout(
+            function
+                .params
+                .iter()
+                .map(|p| self.value_layout(&p.ty, SlotOrigin::Lisette))
+                .collect(),
+            &result,
+            CallableReturnAbi::Value,
+            None,
         );
-        debug_assert!(outcome.is_none(), "Return target emits its own returns");
-
-        GoExpression::function_literal(
+        let source = abi.function_layout(self);
+        let is_declaration = resolved_definition(expression)
+            .and_then(|id| self.facts.definition(id))
+            .is_some_and(|definition| {
+                matches!(definition.body, DefinitionBody::Value { .. }) && !definition.is_variable()
+            });
+        let value = self.capture_operand_into(setup, expression);
+        let value = if is_declaration {
+            value
+        } else {
+            GoExpression::identifier(self.hoist_tmp_value_statement(setup, "cb", value))
+        };
+        let mut statements = Vec::new();
+        let arguments = param_strs
+            .iter()
+            .map(|parameter| GoExpression::identifier(parameter.name.clone()))
+            .collect();
+        let arguments = self.plan_bridged_arguments(&mut statements, arguments, &source, &target);
+        let call = GoExpression::call(value.clone(), arguments);
+        if abi.result == CallableReturnAbi::Void {
+            self.plan_function_result_bridge(&mut statements, call, &source, &target);
+        } else {
+            let bridge = self.go_result_bridge(abi, return_type);
+            let (body, outcome) = self.lower_abi_wrapping(
+                call,
+                &abi.result,
+                return_type,
+                bridge,
+                WrapperTarget::Return,
+            );
+            debug_assert!(outcome.is_none(), "Return target emits its own returns");
+            statements.extend(body);
+        }
+        let ret_ty_str = self.use_go_type(return_type);
+        let callback = GoExpression::function_literal(
             param_strs,
             ret_ty_str,
             LoweredBlock { statements },
             FunctionLiteralLayout::MultiLine,
-        )
+        );
+        if is_declaration {
+            return callback;
+        }
+        let adapted = self.fresh_local(Some("adapted"));
+        self.declare(&adapted);
+        let go_type = self.use_rendered_go_type(target.go_type(self));
+        setup.push(
+            LoweredStatement::VarDecl {
+                name: adapted.clone(),
+                go_type,
+                value: None,
+            }
+            .into(),
+        );
+        setup.push(
+            LoweredStatement::If(IfPlan::plain(
+                non_nil(value),
+                LoweredBlock {
+                    statements: vec![assign(GoExpression::identifier(adapted.clone()), callback)],
+                },
+                ElseArm::None,
+            ))
+            .into(),
+        );
+        GoExpression::identifier(adapted)
     }
 
     /// Closure that bundles a raw `(T1, T2, error)` return into the slot's `(Tuple, error)` shape.

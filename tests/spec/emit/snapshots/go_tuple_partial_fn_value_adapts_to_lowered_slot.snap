@@ -19,14 +19,22 @@ import (
 	"mime"
 )
 
-func useFn(f func(string) (lisette.Tuple2[string, map[string]string], error)) {
+func useFn(f func(string) lisette.Partial[lisette.Tuple2[string, map[string]string], error]) {
 	f("text/plain")
 }
 
 func main() {
-	useFn(func(arg0 string) (lisette.Tuple2[string, map[string]string], error) {
-		ret, ret_1, ret_2 := mime.ParseMediaType(arg0)
-		tup := lisette.MakeTuple2(ret, ret_1)
-		return tup, ret_2
-	})
+	cb := mime.ParseMediaType
+	var adapted func(string) lisette.Partial[lisette.Tuple2[string, map[string]string], error]
+	if cb != nil {
+		adapted = func(arg0 string) lisette.Partial[lisette.Tuple2[string, map[string]string], error] {
+			ret, ret_1, ret_2 := cb(arg0)
+			tup := lisette.MakeTuple2(ret, ret_1)
+			if ret_2 != nil {
+				return lisette.MakePartialBoth[lisette.Tuple2[string, map[string]string], error](tup, ret_2)
+			}
+			return lisette.MakePartialOk[lisette.Tuple2[string, map[string]string], error](tup)
+		}
+	}
+	useFn(adapted)
 }

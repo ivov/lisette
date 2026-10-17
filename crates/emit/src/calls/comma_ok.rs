@@ -148,7 +148,13 @@ impl Planner<'_> {
                 let operand_ty = operand.get_type();
                 let asserts_on_interface = self.facts.is_interface_or_unknown(&operand_ty)
                     || self.facts.peel_alias(&operand_ty).is_error();
-                asserts_on_interface.then_some(CommaOkSource::TypeAssert)
+                // A function asserted out of `any` needs a bridge to its Lisette layout.
+                let asserts_function = self
+                    .any_slot_function_layouts(
+                        &self.facts.peel_alias(&expression.get_type()).ok_type(),
+                    )
+                    .is_some();
+                (asserts_on_interface && !asserts_function).then_some(CommaOkSource::TypeAssert)
             }
             CallableOrigin::Source(CallKind::NativeMethod(kind))
                 if matches!(kind, NativeTypeKind::Map)

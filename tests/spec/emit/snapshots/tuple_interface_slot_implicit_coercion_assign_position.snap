@@ -42,13 +42,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var result lisette.Tuple2[Model, lisette.Option[func() tea.Msg]]
 	_ = msg
 	result = lisette.MakeTuple2[Model, lisette.Option[func() tea.Msg]](m, lisette.MakeOptionSome(tea.Quit))
-	tup := result
-	opt := tup.Second
+	var adapted lisette.Tuple2[tea.Model, lisette.Option[tea.Cmd]]
+	adapted.First = result.First
+	src := result.Second
+	var adapted_1 lisette.Option[tea.Cmd]
+	adapted_1.Tag = src.Tag
+	if src.Tag == lisette.OptionSome {
+		adapted_1.SomeVal = src.SomeVal
+	}
+	adapted.Second = adapted_1
+	opt := adapted.Second
 	var unwrap tea.Cmd
 	if opt.Tag == lisette.OptionSome {
 		unwrap = opt.SomeVal
 	}
-	return tup.First, unwrap
+	return adapted.First, unwrap
 }
 
 func (m Model) View() string {

@@ -21,7 +21,11 @@ import (
 )
 
 func main() {
-	f := flag.UnquoteUsage
+	f := func(arg0 *flag.Flag) lisette.Tuple2[string, string] {
+		ret, ret_1 := flag.UnquoteUsage(arg0)
+		tup := lisette.MakeTuple2(ret, ret_1)
+		return tup
+	}
 	raw := flag.Lookup("verbose")
 	fl := lisette.OptionFromNilable[*flag.Flag](raw, raw == nil)
 	if fl.Tag == lisette.OptionSome {

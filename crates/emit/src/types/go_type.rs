@@ -1,5 +1,4 @@
 use crate::Planner;
-use crate::abi::callable::CallableReturnAbi;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::definitions::structs::struct_field_go_name;
 use crate::names::go_name;
@@ -285,35 +284,18 @@ impl Planner<'_> {
     }
 
     fn emit_function_type(&self, params: &[FunctionParameter], return_ty: &Type) -> GoType {
-        let param_types: Vec<GoType> = params.iter().map(|p| self.go_type(&p.ty)).collect();
-
-        let return_type = match self.classify_direct_emission(return_ty) {
-            Some(shape) => {
-                self.callable_return_go_type(&CallableReturnAbi::Lowered(shape), return_ty)
-            }
-            None => self.go_type(return_ty),
-        };
-
-        let args = param_types
+        let parameters = params
             .iter()
-            .map(|t| t.code.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let is_void = returns_go_void(return_ty);
-
-        let code = if is_void {
-            format!("func({})", args)
-        } else {
-            format!("func({}) {}", args, return_type.code)
-        };
-
-        let mut result = GoType::new(code);
-        result.merge_all(&param_types);
-        if !is_void {
-            result.merge(&return_type);
-        }
-        result
+            .map(|p| self.value_layout(&p.ty, SlotOrigin::Lisette))
+            .collect();
+        let result = self.value_layout(return_ty, SlotOrigin::Lisette);
+        self.function_layout(
+            parameters,
+            &result,
+            self.slot_return_abi(return_ty, SlotOrigin::Lisette),
+            None,
+        )
+        .go_type(self)
     }
 
     fn unqualify_name(&self, id: &str) -> (String, Option<PackageUse>) {

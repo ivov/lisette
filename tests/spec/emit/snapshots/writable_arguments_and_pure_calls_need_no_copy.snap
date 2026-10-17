@@ -70,8 +70,9 @@ func sortedText() string {
 func reboundText() string {
 	xs := []int{3, 1}
 	sort.Ints(xs)
-	reset := func() {
+	reset := func() any {
 		xs = []int{9}
+		return struct{}{}
 	}
 	bump := func() int {
 		reset()

@@ -25,18 +25,22 @@ import (
 
 func main() {
 	cb := aws.Make
-	f := func() []lisette.Option[string] {
-		src := cb()
-		wrapped := make([]lisette.Option[string], len(src))
-		for i, v := range src {
-			if v != nil {
-				wrapped[i] = lisette.MakeOptionSome[string](*v)
-			} else {
-				wrapped[i] = lisette.MakeOptionNone[string]()
+	var adapted func() []lisette.Option[string]
+	if cb != nil {
+		adapted = func() []lisette.Option[string] {
+			src := cb()
+			wrapped := make([]lisette.Option[string], len(src))
+			for i, v := range src {
+				if v != nil {
+					wrapped[i] = lisette.MakeOptionSome[string](*v)
+				} else {
+					wrapped[i] = lisette.MakeOptionNone[string]()
+				}
 			}
+			return wrapped
 		}
-		return wrapped
 	}
+	f := adapted
 	for _, x := range f() {
 		if x.Tag == lisette.OptionSome {
 			fmt.Println(x.SomeVal)

@@ -1,0 +1,66 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:go/ast"
+  import "go:go/doc"
+  
+  fn replace(slot: mut Ref<doc.Filter>, next: doc.Filter) { slot.* = next }
+  fn returned(slot: mut Ref<ast.Filter>) -> mut Ref<doc.Filter> { slot }
+  fn main() {
+    let mut hits = 0
+    let mut original: ast.Filter = |s: string| { hits += 1; s == "before" }
+    let view: mut Ref<doc.Filter> = &original
+    if !(view.*)("before") { panic("initial callback changed") }
+    replace(view, |s: string| { hits += 10; s == "after" })
+    if !original("after") { panic("reference write detached") }
+    let mut returned_view = returned(&original)
+    replace(returned_view, |s: string| { hits += 100; s == "last" })
+    if !original("last") { panic("returned reference detached") }
+    if hits != 111 { panic("closure effects changed") }
+  }
+---
+package main
+
+import (
+	"go/ast"
+	"go/doc"
+)
+
+func replace(slot *doc.Filter, next doc.Filter) {
+	*slot = (func(string) bool)(next)
+}
+
+func returned(slot *ast.Filter) *doc.Filter {
+	return (*doc.Filter)(slot)
+}
+
+func main() {
+	hits := 0
+	var original ast.Filter = func(s string) bool {
+		hits++
+		return s == "before"
+	}
+	view := (*doc.Filter)(&original)
+	if !(*view)("before") {
+		panic("initial callback changed")
+	}
+	replace(view, func(s string) bool {
+		hits += 10
+		return s == "after"
+	})
+	if !original("after") {
+		panic("reference write detached")
+	}
+	returned_view := returned(&original)
+	replace(returned_view, func(s string) bool {
+		hits += 100
+		return s == "last"
+	})
+	if !original("last") {
+		panic("returned reference detached")
+	}
+	if hits != 111 {
+		panic("closure effects changed")
+	}
+}

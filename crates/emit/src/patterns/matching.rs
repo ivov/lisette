@@ -559,12 +559,12 @@ impl Planner<'_> {
             });
         }
         let lowered = self.lowered_call(subject)?;
-        if !lowered.is_result() {
+        if !lowered.is_result() || lowered.is_bridged() {
             return None;
         }
         let nil_guard = match lowered.origin {
             CallableOrigin::GoInterop => {
-                if lowered.has_tuple_payload(self) || lowered.is_bridged() {
+                if lowered.has_tuple_payload(self) {
                     return None;
                 }
                 lowered.nil_guard

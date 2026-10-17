@@ -1,0 +1,81 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  import "go:io"
+  import "go:strings"
+  struct Dev { id: int }
+  impl Dev {
+    fn Read(self, _p: mut Slice<byte>) -> Partial<int, error> { Partial.Err(io.EOF) }
+    fn WriteTo(self, w: io.Writer) -> Result<int64, error> {
+      let _ = fmt.Fprint(w, "via WriteTo")
+      Ok(0)
+    }
+    fn String(self) -> string { f"dev {self.id}" }
+  }
+  fn which(r: io.Reader) -> string {
+    match r {
+      Dev { id } => f"dev {id}",
+      _ => "other",
+    }
+  }
+  fn main() {
+    let d = Dev { id: 7 }
+    let r = d as io.Reader
+    if which(r) != "dev 7" { panic("type switch lost the concrete type") }
+    if fmt.Sprint(r) != "dev 7" { panic("fmt lost the Stringer") }
+    let mut out = strings.Builder {}
+    let _ = io.Copy(&out, r)
+    if out.String() != "via WriteTo" { panic("io.Copy skipped WriteTo") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"io"
+	"strings"
+)
+
+type Dev struct {
+	id int
+}
+
+func (d Dev) Read(_ []byte) (int, error) {
+	return 0, io.EOF
+}
+
+func (d Dev) WriteTo(w io.Writer) (int64, error) {
+	fmt.Fprint(w, "via WriteTo")
+	return 0, nil
+}
+
+func (d Dev) String() string {
+	return fmt.Sprintf("dev %d", d.id)
+}
+
+func which(r io.Reader) string {
+	switch r := r.(type) {
+	case Dev:
+		return fmt.Sprintf("dev %d", r.id)
+	default:
+		return "other"
+	}
+}
+
+func main() {
+	d := Dev{id: 7}
+	r := d
+	if which(r) != "dev 7" {
+		panic("type switch lost the concrete type")
+	}
+	if fmt.Sprint(r) != "dev 7" {
+		panic("fmt lost the Stringer")
+	}
+	out := strings.Builder{}
+	io.Copy(&out, r)
+	if out.String() != "via WriteTo" {
+		panic("io.Copy skipped WriteTo")
+	}
+}

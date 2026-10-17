@@ -18,20 +18,28 @@ description: |
 ---
 package main
 
-import "example.com/idx"
+import (
+	"example.com/idx"
+	lisette "github.com/ivov/lisette/prelude"
+)
 
-func apply(f func(string, string) (int, bool), s string) int {
-	if v, ok := f(s, "ll"); ok {
-		return v
-	} else {
-		return -2
+func apply(f func(string, string) lisette.Option[int], s string) int {
+	subject := f(s, "ll")
+	if subject.Tag == lisette.OptionSome {
+		return subject.SomeVal
 	}
+	return -2
 }
 
 func main() {
-	r := apply(func(arg0, arg1 string) (int, bool) {
-		ret := idx.Find(arg0, arg1)
-		return ret, ret != -1
-	}, "hello")
+	cb := idx.Find
+	var adapted func(string, string) lisette.Option[int]
+	if cb != nil {
+		adapted = func(arg0, arg1 string) lisette.Option[int] {
+			ret := cb(arg0, arg1)
+			return lisette.OptionFromCommaOk[int](ret, ret != -1)
+		}
+	}
+	r := apply(adapted, "hello")
 	_ = r
 }

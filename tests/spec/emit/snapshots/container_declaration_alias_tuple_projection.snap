@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn use_f(f:fn(int)->()){f(3)}
+  type P<T> = (fn(int)->T,int)
+  fn make<T>(f:fn(int)->T)->P<T>{(f,7)}
+  fn main(){let mut n=0;let p=make(|x|{n+=x});let f=p.0;use_f(f);if n!=3||p.1!=7{panic("count")}}
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func useF(f func(int) struct{}) {
+	f(3)
+}
+
+type P[T any] = lisette.Tuple2[func(int) T, int]
+
+func make_[T any](f func(int) T) (func(int) T, int) {
+	return f, 7
+}
+
+func main() {
+	n := 0
+	p0, p1 := make_(func(x int) struct{} {
+		n += x
+		return struct{}{}
+	})
+	f := p0
+	useF(f)
+	if n != 3 || p1 != 7 {
+		panic("count")
+	}
+}

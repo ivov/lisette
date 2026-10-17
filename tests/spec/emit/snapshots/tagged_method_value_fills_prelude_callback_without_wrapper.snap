@@ -59,23 +59,9 @@ func main() {
 	o := lisette.MakeOptionNone[int]()
 	o.OrElse(b.Get)
 	lisette.OptionAndThen(lisette.MakeOptionSome(b), Box.Get)
-	cb := Box.Get
-	f := func(arg0 Box) (int, bool) {
-		res := cb(arg0)
-		if res.Tag == lisette.OptionSome {
-			return res.SomeVal, true
-		}
-		return 0, false
-	}
-	x := lisette.OptionFromCommaOk[int](f(b))
-	cb_1 := b.Get
-	g := func() (int, bool) {
-		res_1 := cb_1()
-		if res_1.Tag == lisette.OptionSome {
-			return res_1.SomeVal, true
-		}
-		return 0, false
-	}
-	y := lisette.OptionFromCommaOk[int](g())
+	f := Box.Get
+	x := f(b)
+	g := b.Get
+	y := g()
 	_ = lisette.MakeTuple2[lisette.Option[int], lisette.Option[int]](x, y)
 }

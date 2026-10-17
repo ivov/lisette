@@ -1,0 +1,93 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  interface Marker { fn code() -> int }
+  enum Event { Value { item: int }, Empty }
+  impl Event { fn code(self) -> int { 7 } }
+  fn get(v: Marker, count: mut Ref<int>) -> int {
+   match v {
+    Event.Value { item } if { count.* += 1; item > 5 } => item,
+    Event.Value { item } => item + 10,
+    _ => -1,
+   }
+  }
+  fn main() {
+   let mut count = 0
+   let first = get(Event.Value { item: 3 }, &count)
+   let empty = get(Event.Empty, &count)
+   let last = get(Event.Value { item: 8 }, &count)
+   if first != 13 || empty != -1 || last != 8 || count != 2 { panic("guard and variant checks") }
+  }
+---
+package main
+
+func MakeEventValue(arg0 int) Event {
+	return Event{Tag: EventValue, Item: arg0}
+}
+
+func MakeEventEmpty() Event {
+	return Event{Tag: EventEmpty}
+}
+
+type Marker interface {
+	code() int
+}
+
+type EventTag uint8
+
+const (
+	EventValue EventTag = iota
+	EventEmpty
+)
+
+type Event struct {
+	Tag  EventTag
+	Item int
+}
+
+func (e Event) code() int {
+	return 7
+}
+
+func get(v Marker, count *int) int {
+	switch v := v.(type) {
+	case Event:
+		if v.Tag == EventValue {
+			item := v.Item
+			var tmp bool
+			{
+				*count++
+				tmp = item > 5
+			}
+			if tmp {
+				return item
+			}
+			if v.Tag == EventValue {
+				return v.Item + 10
+			}
+			return -1
+		} else if v.Tag == EventValue {
+			return v.Item + 10
+		}
+		return -1
+	default:
+		return -1
+	}
+}
+
+func main() {
+	count := 0
+	first := get(Event{
+		Tag:  EventValue,
+		Item: 3,
+	}, &count)
+	empty := get(MakeEventEmpty(), &count)
+	last := get(Event{
+		Tag:  EventValue,
+		Item: 8,
+	}, &count)
+	if first != 13 || empty != -1 || last != 8 || count != 2 {
+		panic("guard and variant checks")
+	}
+}

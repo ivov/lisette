@@ -21,10 +21,11 @@ use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::placement::is_unit_call;
 use crate::plan::values::{CaptureBoundary, GoExpression, OperandForm, ValuePlan};
 use crate::state::bindings::BindingValue;
+use crate::statements::assignments::PlaceOrdering;
 use crate::types::go_type::returns_go_void;
 use crate::{Planner, ReturnContext};
-use syntax::ast::{Expression, IdentifierResolution};
-use syntax::program::CallKind;
+use syntax::ast::{Expression, IdentifierResolution, UnaryOperator};
+use syntax::program::{CallKind, DotAccessResolution};
 use syntax::types::Type;
 
 enum FunctionValueAdapter {
@@ -73,7 +74,12 @@ impl Planner<'_> {
                 } else if let CallableReturnAbi::Lowered(LoweredReturnAbi::Option(
                     OptionReturnAbi::Sentinel(value),
                 )) = abi
-                    && !ctx.forces_tagged_go_function()
+                    && matches!(
+                        self.go_fn_slot_abi(expression, ctx),
+                        Some(CallableReturnAbi::Lowered(LoweredReturnAbi::Option(
+                            OptionReturnAbi::CommaOk { .. }
+                        )))
+                    )
                 {
                     self.emit_go_fn_sentinel_adapter(&mut setup, expression, *value)
                 } else {
@@ -137,12 +143,10 @@ impl Planner<'_> {
         let ValueLayout::Function { layout: target, .. } = target else {
             unreachable!("a resolved function value has a function layout");
         };
-        if callee.is_prelude_dispatch {
-            return target
-                .return_abi
-                .lowered()
-                .cloned()
-                .map(FunctionValueAdapter::Prelude);
+        if callee.is_prelude_dispatch
+            && let Some(target) = target.return_abi.lowered()
+        {
+            return Some(FunctionValueAdapter::Prelude(target.clone()));
         }
         let source = callee.abi.function_layout(self);
         (!source.same_representation(&target))
@@ -173,7 +177,7 @@ impl Planner<'_> {
                 expression.unwrap_parens(),
                 Expression::Lambda { .. } | Expression::Function { .. }
             )
-            && ty.get_function_ret().is_some_and(returns_go_void)
+            && ty.get_function_ret().is_some_and(Type::is_never)
         {
             // A Never value can fill a slot with a concrete result type.
             let slot_result = slot
@@ -229,12 +233,9 @@ impl Planner<'_> {
         plan: &CallPlan<'_>,
         result_type: &Type,
     ) -> Option<CoercionPlan> {
-        if !matches!(plan.resolved.origin, CallableOrigin::GoInterop) {
-            return None;
-        }
         match self.go_result_bridge(&plan.resolved.abi, result_type)? {
             GoResultBridge::Whole(bridge) => Some(bridge),
-            GoResultBridge::Tuple(_) | GoResultBridge::Payload(_) => None,
+            GoResultBridge::Tuple(_) | GoResultBridge::Payload { .. } => None,
         }
     }
 
@@ -246,13 +247,16 @@ impl Planner<'_> {
         expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> Option<CallableReturnAbi> {
-        let fn_ty = expression.get_type();
+        let expression_ty = expression.get_type();
+        let origin = self.function_type_origin(&expression_ty, ctx.function_slot_origin());
+        let fn_ty = self.facts.resolve_to_function_type(&expression_ty)?;
         let f = fn_ty.as_function_type()?;
-        Some(if ctx.forces_tagged_go_function() {
-            CallableReturnAbi::Value
-        } else {
-            self.slot_return_abi(&f.return_type, ctx.function_slot_origin())
-        })
+        Some(
+            self.function_expression_return_abi(
+                &f.return_type,
+                ctx.with_function_slot_origin(origin),
+            ),
+        )
     }
 
     /// True when a tuple-ok fallible Go function value must be wrapped to match a lowered slot.
@@ -372,7 +376,7 @@ impl Planner<'_> {
                 coerced_elements.push(value);
                 continue;
             };
-            let coercion = CoercionPlan::internal(self, &element.get_type(), slot);
+            let coercion = self.value_slot_coercion(element, slot);
             let (coercion_setup, coerced) = coercion.lower(self, value);
             setup.extend(coercion_setup);
             coerced_elements.push(coerced);
@@ -412,8 +416,13 @@ impl Planner<'_> {
             .iter()
             .enumerate()
             .map(|(i, e)| {
-                let element_ctx =
-                    ExpressionContext::value().with_expected_slot_type(slot_types.get(i));
+                let slot = slot_types.get(i);
+                let origin = slot.map_or(SlotOrigin::Lisette, |ty| {
+                    self.function_type_origin(ty, SlotOrigin::Lisette)
+                });
+                let element_ctx = ExpressionContext::value()
+                    .with_expected_slot_type(slot)
+                    .with_function_slot_origin(origin);
                 self.lower_composite_value(e, element_ctx)
             })
             .collect();
@@ -535,13 +544,29 @@ impl Planner<'_> {
             });
         }
 
-        let inner_plan = self.lower_value(inner, ExpressionContext::value());
+        let unaddressable = self.is_go_unaddressable(inner);
+        let inner_plan = if self
+            .facts
+            .resolve_to_function_type(&inner.get_type())
+            .is_some()
+            && (!unaddressable
+                || matches!(inner.unwrap_parens(), Expression::DotAccess { resolution, .. } if resolution.is_field_read()))
+        {
+            // References retain storage and its physical function signature.
+            if matches!(inner.unwrap_parens(), Expression::Identifier { .. }) {
+                self.plan_operand(inner, ExpressionContext::value())
+            } else {
+                let mut setup = Vec::new();
+                let place = self.lower_place(&mut setup, inner, PlaceOrdering::alone());
+                ValuePlan::computed(setup, place)
+            }
+        } else {
+            self.lower_value(inner, ExpressionContext::value())
+        };
         inner_plan.map_observable_expression(|setup, emitted| {
             if inner.get_type() == *ty {
                 emitted
-            } else if self.is_go_unaddressable(inner)
-                || matches!(inner.get_type(), Type::Function(_))
-            {
+            } else if unaddressable {
                 let tmp = self.hoist_tmp_value_statement(setup, "ref", emitted);
                 GoExpression::address_of(GoExpression::identifier(tmp))
             } else {
@@ -627,10 +652,9 @@ impl Planner<'_> {
 
         if let Expression::Block { .. } = expression {
             // The block runs as its own Go function, so `return` leaves it.
-            let body = self
-                .with_isolated_function(ReturnContext::Tagged(Type::unit()), |planner| {
-                    planner.lower_block_as_body(expression)
-                });
+            let body = self.with_isolated_function(ReturnContext::Void(Type::unit()), |planner| {
+                planner.lower_block_as_body(expression)
+            });
             return statement_plan(vec![async_statement(immediate_call(body)).into()]);
         }
 
@@ -673,6 +697,44 @@ impl Planner<'_> {
 
 impl Planner<'_> {
     fn is_go_unaddressable(&self, expression: &Expression) -> bool {
+        if self
+            .facts
+            .resolve_to_function_type(&expression.get_type())
+            .is_some()
+        {
+            return match expression.unwrap_parens() {
+                Expression::Identifier {
+                    resolution: IdentifierResolution::Definition { name, .. },
+                    ..
+                } => !self
+                    .facts
+                    .definition(name)
+                    .is_some_and(|definition| definition.is_variable()),
+                Expression::Identifier {
+                    value, resolution, ..
+                } => !matches!(
+                    self.scope
+                        .resolve_identifier_with_resolution(value, resolution),
+                    Some(BindingValue::GoName(_))
+                ),
+                Expression::DotAccess {
+                    resolution: DotAccessResolution::PackageMember { definition, .. },
+                    ..
+                } => !definition
+                    .as_ref()
+                    .and_then(|name| self.facts.definition(name))
+                    .is_some_and(|definition| definition.is_variable()),
+                Expression::DotAccess { resolution, .. } if resolution.is_field_read() => {
+                    !self.receiver_is_addressable(expression)
+                }
+                Expression::IndexedAccess { .. }
+                | Expression::Unary {
+                    operator: UnaryOperator::Deref,
+                    ..
+                } => !self.receiver_is_addressable(expression),
+                _ => true,
+            };
+        }
         match expression.unwrap_parens() {
             Expression::Call { .. } => true,
             Expression::Identifier {

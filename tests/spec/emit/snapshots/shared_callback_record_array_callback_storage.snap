@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn use_f(f:fn(int)->()){f(3)}
+  struct H<T>{fs:Array<fn(int)->T,2>}
+  fn make<T>(f:fn(int)->T)->H<T>{H{fs:[f,f]}}
+  fn main(){let mut n=0;let h=make<()>(|x|{n+=x});let H{fs:[f,g]}=h;use_f(f);use_f(g);if n!=6{panic("count")}}
+---
+package main
+
+func useF(f func(int) struct{}) {
+	f(3)
+}
+
+type H[T any] struct {
+	fs [2]func(int) T
+}
+
+func make_[T any](f func(int) T) H[T] {
+	return H[T]{fs: [2]func(int) T{f, f}}
+}
+
+func main() {
+	n := 0
+	h := make_[struct{}](func(x int) struct{} {
+		n += x
+		return struct{}{}
+	})
+	f := h.fs[0]
+	g := h.fs[1]
+	useF(f)
+	useF(g)
+	if n != 6 {
+		panic("count")
+	}
+}

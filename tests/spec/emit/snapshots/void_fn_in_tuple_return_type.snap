@@ -10,11 +10,12 @@ description: |
 ---
 package main
 
-func makePair() (func() int, func()) {
+func makePair() (func() int, func() struct{}) {
 	get := func() int {
 		return 42
 	}
-	inc := func() {
+	inc := func() struct{} {
+		return struct{}{}
 	}
 	return get, inc
 }

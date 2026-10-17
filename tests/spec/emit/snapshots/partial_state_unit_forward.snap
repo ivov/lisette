@@ -1,0 +1,55 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:errors"
+  fn choose(mode: int) -> Partial<(), error> {
+   match mode { 0 => Partial.Err(errors.New("err")), 1 => Partial.Ok(()), _ => Partial.Both((), errors.New("both")) }
+  }
+  fn forward(mode: int) -> Partial<(), error> { choose(mode) }
+  fn tag<T>(p: Partial<T,error>) -> int { match p { Partial.Err(_) => 0, Partial.Ok(_) => 1, Partial.Both(_,_) => 2 } }
+  fn main() {
+   let f = forward
+   if tag(f(0)) != 0 || tag(f(1)) != 1 || tag(f(2)) != 2 { panic("unit Partial state") }
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func choose(mode int) lisette.Partial[struct{}, error] {
+	switch mode {
+	case 0:
+		return lisette.MakePartialErr[struct{}, error](errors.New("err"))
+	case 1:
+		return lisette.MakePartialOk[struct{}, error](struct{}{})
+	default:
+		arg := struct{}{}
+		return lisette.MakePartialBoth[struct{}, error](arg, errors.New("both"))
+	}
+}
+
+func forward(mode int) lisette.Partial[struct{}, error] {
+	return choose(mode)
+}
+
+func tag[T any](p lisette.Partial[T, error]) int {
+	switch p.Tag {
+	case lisette.PartialErr:
+		return 0
+	case lisette.PartialOk:
+		return 1
+	default:
+		return 2
+	}
+}
+
+func main() {
+	f := forward
+	if tag(f(0)) != 0 || tag(f(1)) != 1 || tag(f(2)) != 2 {
+		panic("unit Partial state")
+	}
+}

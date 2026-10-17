@@ -18,18 +18,17 @@ func Resolve[R any, E any](default_ R, _ ...func(int) lisette.Result[R, E]) lise
 }
 
 func main() {
-	fns := []func(int) (int, Face){Resultant}
-	src := fns
-	adapted := make([]func(int) lisette.Result[int, Face], len(src))
-	for i, cb := range src {
-		cb_1 := cb
-		adapted[i] = func(arg0 int) lisette.Result[int, Face] {
-			ret, ret_1 := cb_1(arg0)
+	cb := Resultant
+	var adapted func(int) lisette.Result[int, Face]
+	if cb != nil {
+		adapted = func(arg0 int) lisette.Result[int, Face] {
+			ret, ret_1 := cb(arg0)
 			if ret_1 != nil {
 				return lisette.MakeResultErr[int, Face](ret_1)
 			}
 			return lisette.MakeResultOk[int, Face](ret)
 		}
 	}
-	Resolve[int, Face](0, adapted...)
+	fns := []func(int) lisette.Result[int, Face]{adapted}
+	Resolve[int, Face](0, fns...)
 }

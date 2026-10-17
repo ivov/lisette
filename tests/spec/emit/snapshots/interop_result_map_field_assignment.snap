@@ -23,28 +23,35 @@ description: |
 ---
 package main
 
-import "strconv"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
 
 type Holder struct {
-	f func(string) (int, error)
+	f func(string) lisette.Result[int, error]
 }
 
 func main() {
 	m := make(map[string]Holder)
-	m["a"] = Holder{f: strconv.Atoi}
+	m["a"] = Holder{f: func(arg0 string) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](strconv.Atoi(arg0))
+	}}
 	found, ok := m["a"]
 	if !ok {
 		return
 	}
 	entry := found
-	entry.f = strconv.Atoi
+	entry.f = func(arg0 string) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](strconv.Atoi(arg0))
+	}
 	m["a"] = entry
 	h, ok_1 := m["a"]
 	if !ok_1 {
 		return
 	}
-	r, err := h.f("1")
-	if err == nil {
-		_ = r
+	r := h.f("1")
+	if r.Tag == lisette.ResultOk {
+		_ = r.OkVal
 	}
 }

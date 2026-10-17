@@ -1,0 +1,125 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:go/ast"
+  import "go:go/doc"
+  
+  fn option(value: Option<ast.Filter>) -> Option<doc.Filter> { value }
+  fn pair(value: (ast.Filter, Option<ast.Filter>)) -> (doc.Filter, Option<doc.Filter>) { value }
+  fn fallible(value: Result<ast.Filter, string>) -> Result<doc.Filter, string> { value }
+  fn main() {
+    let mut hits = 0
+    let callback: ast.Filter = |s: string| { hits += 1; s == "ok" }
+    let present = option(Some(callback))
+    let Some(f) = present else { panic("some became none") }
+    if !f("ok") { panic("option callback changed") }
+    if !option(None).is_none() { panic("none became some") }
+    let converted = pair((callback, Some(callback)))
+    if !(converted.0)("ok") { panic("tuple callback changed") }
+    let Some(g) = converted.1 else { panic("nested option lost") }
+    if !g("ok") { panic("nested callback changed") }
+    let Ok(h) = fallible(Ok(callback)) else { panic("ok became err") }
+    if !h("ok") { panic("result callback changed") }
+    let Err(message) = fallible(Err("sentinel")) else { panic("err became ok") }
+    if message != "sentinel" || hits != 4 { panic("effects or error changed") }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"go/ast"
+	"go/doc"
+)
+
+func option(value lisette.Option[ast.Filter]) doc.Filter {
+	var adapted lisette.Option[doc.Filter]
+	adapted.Tag = value.Tag
+	if value.Tag == lisette.OptionSome {
+		adapted.SomeVal = doc.Filter(value.SomeVal)
+	}
+	if adapted.Tag == lisette.OptionSome {
+		return adapted.SomeVal
+	}
+	return nil
+}
+
+func pair(value lisette.Tuple2[ast.Filter, lisette.Option[ast.Filter]]) (doc.Filter, doc.Filter) {
+	var adapted lisette.Tuple2[doc.Filter, lisette.Option[doc.Filter]]
+	adapted.First = doc.Filter(value.First)
+	src := value.Second
+	var adapted_1 lisette.Option[doc.Filter]
+	adapted_1.Tag = src.Tag
+	if src.Tag == lisette.OptionSome {
+		adapted_1.SomeVal = doc.Filter(src.SomeVal)
+	}
+	adapted.Second = adapted_1
+	opt := adapted.Second
+	var unwrap doc.Filter
+	if opt.Tag == lisette.OptionSome {
+		unwrap = opt.SomeVal
+	}
+	return adapted.First, unwrap
+}
+
+func fallible(value lisette.Result[ast.Filter, string]) lisette.Result[doc.Filter, string] {
+	var adapted lisette.Result[doc.Filter, string]
+	adapted.Tag = value.Tag
+	if value.Tag == lisette.ResultOk {
+		adapted.OkVal = doc.Filter(value.OkVal)
+	}
+	if value.Tag == lisette.ResultErr {
+		adapted.ErrVal = value.ErrVal
+	}
+	return adapted
+}
+
+func main() {
+	hits := 0
+	var callback ast.Filter = func(s string) bool {
+		hits++
+		return s == "ok"
+	}
+	raw := option(lisette.MakeOptionSome[ast.Filter](ast.Filter(callback)))
+	present := lisette.OptionFromNilable[doc.Filter](raw, raw == nil)
+	if present.Tag != lisette.OptionSome {
+		panic("some became none")
+	}
+	f := present.SomeVal
+	if !f("ok") {
+		panic("option callback changed")
+	}
+	if ret := option(lisette.MakeOptionNone[ast.Filter]()); ret != nil {
+		panic("none became some")
+	}
+	ret_1, ret_2 := pair(lisette.MakeTuple2[ast.Filter, lisette.Option[ast.Filter]](callback, lisette.MakeOptionSome[ast.Filter](ast.Filter(callback))))
+	option_1 := lisette.OptionFromNilable[doc.Filter](ret_2, ret_2 == nil)
+	converted := lisette.MakeTuple2(ret_1, option_1)
+	if !converted.First("ok") {
+		panic("tuple callback changed")
+	}
+	if converted.Second.Tag != lisette.OptionSome {
+		panic("nested option lost")
+	}
+	g := converted.Second.SomeVal
+	if !g("ok") {
+		panic("nested callback changed")
+	}
+	subject := fallible(lisette.MakeResultOk[ast.Filter, string](ast.Filter(callback)))
+	if subject.Tag != lisette.ResultOk {
+		panic("ok became err")
+	}
+	h := subject.OkVal
+	if !h("ok") {
+		panic("result callback changed")
+	}
+	subject_1 := fallible(lisette.MakeResultErr[ast.Filter, string]("sentinel"))
+	if subject_1.Tag != lisette.ResultErr {
+		panic("err became ok")
+	}
+	message := subject_1.ErrVal
+	if message != "sentinel" || hits != 4 {
+		panic("effects or error changed")
+	}
+}

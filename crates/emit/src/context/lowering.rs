@@ -39,6 +39,7 @@ impl LineIndex {
 pub(crate) enum ReturnContext {
     #[default]
     None,
+    Void(Type),
     Tagged(Type),
     Lowered {
         return_ty: Type,
@@ -50,7 +51,9 @@ impl ReturnContext {
     pub(crate) fn ty(&self) -> Option<&Type> {
         match self {
             ReturnContext::None => None,
-            ReturnContext::Tagged(ty) | ReturnContext::Lowered { return_ty: ty, .. } => Some(ty),
+            ReturnContext::Void(ty)
+            | ReturnContext::Tagged(ty)
+            | ReturnContext::Lowered { return_ty: ty, .. } => Some(ty),
         }
     }
 

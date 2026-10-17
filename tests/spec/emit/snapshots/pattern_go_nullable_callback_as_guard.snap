@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:crypto/tls"
+  import "go:time"
+  fn main(){let mut calls=0;let h=tls.Config{Time:Some(||{calls+=1;time.Unix(7,0)}),..};match h{tls.Config{Time:Some(f) as opt,..} if opt.is_some()=>{if f().Unix()!=7{panic("time")};let Some(g)=opt else{panic("none")};let _=g()},_=>panic("missing")};if calls!=2{panic("callback")}}
+---
+package main
+
+import (
+	"crypto/tls"
+	lisette "github.com/ivov/lisette/prelude"
+	"time"
+)
+
+func main() {
+	calls := 0
+	h := tls.Config{Time: func() time.Time {
+		calls++
+		return time.Unix(7, 0)
+	}}
+match:
+	for {
+		if h.Time != nil {
+			f := h.Time
+			option := lisette.OptionFromNilable[func() time.Time](h.Time, h.Time == nil)
+			opt := option
+			if opt.IsSome() {
+				if f().Unix() != 7 {
+					panic("time")
+				}
+				if opt.Tag != lisette.OptionSome {
+					panic("none")
+				}
+				g := opt.SomeVal
+				g()
+				break match
+			}
+		}
+		{
+			panic("missing")
+		}
+	}
+	if calls != 2 {
+		panic("callback")
+	}
+}

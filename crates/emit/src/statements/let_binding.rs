@@ -11,6 +11,7 @@ use crate::control_flow::fallible::Fallible;
 use crate::control_flow::fallible_blocks::TryBlockPairPlan;
 use crate::escape_reserved;
 use crate::names::go_name;
+use crate::patterns::decision_tree::collect_pattern_info;
 use crate::patterns::matching::ResultFusePlan;
 use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
 use crate::plan::bodies::{
@@ -292,6 +293,12 @@ impl Planner<'_> {
         ) {
             return None;
         }
+        if self
+            .go_result_bridge(&plan.resolved.abi, &value.get_type())
+            .is_some_and(|bridge| !bridge.is_identity())
+        {
+            return None;
+        }
         // Go rejects a name that no later line reads, so an unread element gets `_`.
         let is_read = |index: usize| needs_whole_value || read_indices.contains(&index);
         if !(0..elements.len()).any(is_read) {
@@ -523,7 +530,7 @@ impl Planner<'_> {
             && name != "_"
             && !self.is_declared(name)
         {
-            return self.lower_try_block_into(items, ty, identifier);
+            return self.lower_try_block_into(items, ty, binding_ty, identifier);
         }
         let mut statements = Vec::new();
         if !self.is_declared(name) {
@@ -774,6 +781,13 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
 
     fn can_use_multi_value_optimization(&self) -> bool {
         let value_ty = self.value.get_type();
+        if collect_pattern_info(self.planner, &self.binding.pattern, &value_ty)
+            .bindings
+            .iter()
+            .any(|binding| !binding.coercion.is_identity())
+        {
+            return false;
+        }
         let slots_read_in_place = tuple_element_types(&self.planner.facts.peel_alias(&value_ty))
             .iter()
             .all(|slot_ty| !self.planner.facts.is_nullable_option(slot_ty));

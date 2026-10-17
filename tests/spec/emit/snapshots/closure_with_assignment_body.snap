@@ -12,8 +12,9 @@ package main
 
 func test() {
 	count := 0
-	inc := func() {
+	inc := func() any {
 		count++
+		return struct{}{}
 	}
 	inc()
 }

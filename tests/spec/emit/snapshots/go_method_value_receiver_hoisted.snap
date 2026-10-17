@@ -26,6 +26,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func make_(counter *int) *bytes.Buffer {
@@ -33,13 +34,24 @@ func make_(counter *int) *bytes.Buffer {
 	return bytes.NewBufferString("a\nb\n")
 }
 
-func useFn(f func(uint8) (string, error)) {
+func useFn(f func(uint8) lisette.Partial[string, error]) {
 	f(10)
 	f(10)
 }
 
 func main() {
 	count := 0
-	useFn(make_(&count).ReadString)
+	cb := make_(&count).ReadString
+	var adapted func(uint8) lisette.Partial[string, error]
+	if cb != nil {
+		adapted = func(arg0 uint8) lisette.Partial[string, error] {
+			ret, ret_1 := cb(arg0)
+			if ret_1 != nil {
+				return lisette.MakePartialBoth[string, error](ret, ret_1)
+			}
+			return lisette.MakePartialOk[string, error](ret)
+		}
+	}
+	useFn(adapted)
 	fmt.Println(count)
 }

@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct H<T> { f: fn(int) -> T }
+  fn replace<T>(f: mut Ref<fn(int) -> T>, replacement: fn(int) -> T) { f.* = replacement }
+  fn main() { let mut n = 0
+   let mut h: H<()> = H { f: |x| { n += x } }
+   replace<()>( &h.f, |x| { n += 10 * x } )
+   h.f(3)
+   if n != 30 { panic("reference alias") }
+  }
+---
+package main
+
+type H[T any] struct {
+	f func(int) T
+}
+
+func replace[T any](f *func(int) T, replacement func(int) T) {
+	*f = replacement
+}
+
+func main() {
+	n := 0
+	h := H[struct{}]{f: func(x int) struct{} {
+		n += x
+		return struct{}{}
+	}}
+	replace[struct{}](&h.f, func(x int) struct{} {
+		n += 10 * x
+		return struct{}{}
+	})
+	h.f(3)
+	if n != 30 {
+		panic("reference alias")
+	}
+}

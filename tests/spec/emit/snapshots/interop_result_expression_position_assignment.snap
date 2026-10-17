@@ -15,16 +15,21 @@ description: |
 ---
 package main
 
-import "strconv"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
 
-type F func(string) (int, error)
+type F func(string) lisette.Result[int, error]
 
 func main() {
-	var f F = func(_ string) (int, error) {
-		return 0, nil
+	var f F = func(_ string) lisette.Result[int, error] {
+		return lisette.MakeResultOk[int, error](0)
 	}
 	var u any
-	f = strconv.Atoi
+	f = func(arg0 string) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](strconv.Atoi(arg0))
+	}
 	u = struct{}{}
 	_ = u
 	f("1")

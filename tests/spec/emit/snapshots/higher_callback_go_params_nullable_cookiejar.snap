@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:net/http/cookiejar"
+  fn give<T>(f:fn(Option<Ref<cookiejar.Options>>)->T)->fn(Option<Ref<cookiejar.Options>>)->T{f}
+  fn main(){let f=give(cookiejar.New);if f(None).is_err(){panic("none")};let opts=cookiejar.Options{PublicSuffixList:None};if f(Some(&opts)).is_err(){panic("some")}}
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+	"net/http/cookiejar"
+)
+
+func give[T any](f func(lisette.Option[*cookiejar.Options]) T) func(lisette.Option[*cookiejar.Options]) T {
+	return f
+}
+
+func main() {
+	cb := cookiejar.New
+	var adapted func(lisette.Option[*cookiejar.Options]) lisette.Result[*cookiejar.Jar, error]
+	if cb != nil {
+		adapted = func(arg0 lisette.Option[*cookiejar.Options]) lisette.Result[*cookiejar.Jar, error] {
+			var unwrap *cookiejar.Options
+			if arg0.Tag == lisette.OptionSome {
+				unwrap = arg0.SomeVal
+			}
+			ret, ret_1 := cb(unwrap)
+			if ret_1 != nil {
+				return lisette.MakeResultErr[*cookiejar.Jar, error](ret_1)
+			} else if ret == nil {
+				return lisette.MakeResultErr[*cookiejar.Jar, error](errors.New("unexpected nil"))
+			}
+			return lisette.MakeResultOk[*cookiejar.Jar, error](ret)
+		}
+	}
+	f := give(adapted)
+	if f(lisette.MakeOptionNone[*cookiejar.Options]()).IsErr() {
+		panic("none")
+	}
+	opts := cookiejar.Options{PublicSuffixList: nil}
+	if f(lisette.MakeOptionSome(&opts)).IsErr() {
+		panic("some")
+	}
+}

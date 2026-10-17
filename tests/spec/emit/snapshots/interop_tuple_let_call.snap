@@ -18,8 +18,11 @@ import (
 )
 
 func main() {
-	f := path.Split
-	ret, ret_1 := f("/foo/bar.txt")
-	r := lisette.MakeTuple2(ret, ret_1)
+	f := func(arg0 string) lisette.Tuple2[string, string] {
+		ret, ret_1 := path.Split(arg0)
+		tup := lisette.MakeTuple2(ret, ret_1)
+		return tup
+	}
+	r := f("/foo/bar.txt")
 	_ = r
 }

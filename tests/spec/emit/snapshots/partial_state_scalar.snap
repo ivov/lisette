@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:errors"
+  fn choose(mode: int) -> Partial<int, error> {
+   if mode == 0 { return Partial.Err(errors.New("err")) }
+   if mode == 1 { Partial.Ok(0) } else { Partial.Both(0, errors.New("both")) }
+  }
+  fn tag<T>(p: Partial<T,error>) -> int { match p { Partial.Err(_) => 0, Partial.Ok(_) => 1, Partial.Both(_,_) => 2 } }
+  fn main() {
+   if tag(choose(0)) != 0 || tag(choose(1)) != 1 || tag(choose(2)) != 2 { panic("scalar Partial state") }
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func choose(mode int) lisette.Partial[int, error] {
+	if mode == 0 {
+		return lisette.MakePartialErr[int, error](errors.New("err"))
+	}
+	if mode == 1 {
+		return lisette.MakePartialOk[int, error](0)
+	}
+	return lisette.MakePartialBoth[int, error](0, errors.New("both"))
+}
+
+func tag[T any](p lisette.Partial[T, error]) int {
+	switch p.Tag {
+	case lisette.PartialErr:
+		return 0
+	case lisette.PartialOk:
+		return 1
+	default:
+		return 2
+	}
+}
+
+func main() {
+	if tag(choose(0)) != 0 || tag(choose(1)) != 1 || tag(choose(2)) != 2 {
+		panic("scalar Partial state")
+	}
+}

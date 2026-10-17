@@ -588,6 +588,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         arm_index: usize,
         bindings: &[PatternBinding],
     ) -> Option<GoExpression> {
+        if bindings
+            .iter()
+            .any(|binding| !binding.coercion.is_identity())
+        {
+            return None;
+        }
         let lowered = self.with_binding_frame(|this| {
             this.install_path_overlays(bindings);
             this.lower_guard_condition(arm_index)
@@ -958,7 +964,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         fallback: Option<&Decision>,
         place: &PlacePlan,
     ) -> Vec<Statement> {
-        let (regular, default) = split_with_default_lift(branches, fallback);
+        // A default case leaves Go's switch binding at the interface type.
+        // Keep concrete case labels so field projections retain their asserted type.
+        let (regular, default) = (branches, fallback);
         let arms = self.arms;
         let subject_ty = self.subject_ty.clone();
         let binding_name = match subject.node() {

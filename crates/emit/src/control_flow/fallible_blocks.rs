@@ -2,6 +2,8 @@ use super::propagation::plain_return;
 use crate::Planner;
 use crate::ReturnContext;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::coercion::CoercionPlan;
+use crate::abi::layout::SlotOrigin;
 use crate::calls::bound_value::BoundValue;
 use crate::calls::comma_ok::{CommaOkValueSlot, PairKind};
 use crate::context::expression::ExpressionContext;
@@ -42,16 +44,17 @@ impl Planner<'_> {
     /// `try { ... }` → `result := func() T { ... }()`; value is the bound result var.
     pub(crate) fn lower_try_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
         let result_var = self.fresh_local(Some("tryResult"));
-        self.lower_try_block_as(items, ty, result_var)
+        self.lower_try_block_as(items, ty, ty, result_var)
     }
 
     pub(crate) fn lower_try_block_into(
         &mut self,
         items: &[Expression],
         ty: &Type,
+        target_ty: &Type,
         name: &GoIdentifier,
     ) -> Vec<Statement> {
-        self.lower_try_block_as(items, ty, name.clone())
+        self.lower_try_block_as(items, ty, target_ty, name.clone())
             .into_parts()
             .0
     }
@@ -88,6 +91,7 @@ impl Planner<'_> {
         &mut self,
         items: &[Expression],
         ty: &Type,
+        target_ty: &Type,
         result_var: GoIdentifier,
     ) -> ValuePlan {
         let effective_ty = self.fallible_block_type(items, ty);
@@ -96,15 +100,17 @@ impl Planner<'_> {
 
         self.declare(result_var.spelling());
         let full_ty = { self.fallible_go_type(&fallible) };
+        let source = self.value_layout(&effective_ty, SlotOrigin::Lisette);
+        let target = self.value_layout(target_ty, SlotOrigin::Lisette);
+        let coercion = CoercionPlan::bridge(self, &source, &target);
 
         let body_ctx = ReturnContext::Tagged(effective_ty);
         let body = self
             .with_isolated_function(body_ctx, |planner| planner.lower_try_body(items, &fallible));
 
-        let setup = vec![define(
-            result_var.clone(),
-            GoExpression::immediate_call(full_ty, body, FunctionLiteralLayout::MultiLine),
-        )];
+        let value = GoExpression::immediate_call(full_ty, body, FunctionLiteralLayout::MultiLine);
+        let (mut setup, value) = coercion.lower(self, value);
+        setup.push(define(result_var.clone(), value));
         ValuePlan::captured(setup, result_var)
     }
 
@@ -231,7 +237,11 @@ impl Planner<'_> {
         self.declare(&result_var);
         let inner_ty_str = self.use_go_type(fallible.ok_ty());
 
-        let body_return_ctx = self.return_context_for_type(fallible.ok_ty().clone());
+        let body_return_ctx = if fallible.ok_ty().is_unit() {
+            ReturnContext::Tagged(Type::unit())
+        } else {
+            self.return_context_for_type(fallible.ok_ty().clone())
+        };
         let body = self.with_isolated_function(body_return_ctx, |planner| {
             planner.lower_recover_body_block(items, &fallible)
         });

@@ -31,7 +31,15 @@ type Outer struct {
 }
 
 func main() {
-	g := (*Outer).Bump
+	cb := (*Outer).Bump
+	var adapted func(*Outer) struct{}
+	if cb != nil {
+		adapted = func(arg0 *Outer) struct{} {
+			cb(arg0)
+			return struct{}{}
+		}
+	}
+	g := adapted
 	o := Outer{Base: Base{Id: 1}}
 	g(&o)
 }

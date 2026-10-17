@@ -21,22 +21,31 @@ func die() {
 	panic("x")
 }
 
-func call(f func()) {
+func call(f func() struct{}) {
 	f()
 }
 
 func named() {
-	call(die)
+	cb := die
+	var adapted func() struct{}
+	if cb != nil {
+		adapted = func() struct{} {
+			cb()
+			panic("unreachable")
+		}
+	}
+	call(adapted)
 }
 
 func lambda() {
-	call(func() {
+	call(func() struct{} {
 		die()
+		panic("unreachable")
 	})
 }
 
 func typedLambda() {
-	g := func() {
+	g := func() struct{} {
 		panic("z")
 	}
 	call(g)
