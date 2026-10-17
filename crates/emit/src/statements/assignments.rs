@@ -190,10 +190,10 @@ impl Planner<'_> {
         }
         let (mut target_capture, target_place) = self.capture_assignment_target(target, ordering);
         let pinned_left = needs_left_pin.then(|| {
-            let tmp = self.fresh_var(Some("left"));
+            let tmp = self.fresh_local(Some("left"));
             self.declare(&tmp);
             target_capture.push(define(tmp.clone(), target_place.clone()));
-            GoExpression::name(tmp)
+            GoExpression::identifier(tmp)
         });
         let (rhs_setup, rhs) = right_hand_side.into_parts();
         target_capture.extend(rhs_setup);
@@ -253,7 +253,13 @@ impl Planner<'_> {
                 .and_then(BindingValue::as_go_identifier)
             {
                 Some(identifier) => GoExpression::identifier(identifier.clone()),
-                None => GoExpression::name(value.to_string()),
+                None => {
+                    assert!(
+                        resolution.binding_id().is_none(),
+                        "assignment target has no local identity: {value}"
+                    );
+                    GoExpression::external_name(value.to_string())
+                }
             },
             Expression::DotAccess {
                 expression: base,
@@ -296,7 +302,7 @@ impl Planner<'_> {
                     .lower_composite_value(expression, ExpressionContext::value())
                     .into_parts();
                 setup.extend(call_setup);
-                GoExpression::name(self.hoist_tmp_value_statement(setup, "ref", call))
+                GoExpression::identifier(self.hoist_tmp_value_statement(setup, "ref", call))
             }
             _ => unreachable!(
                 "assignment target has no Go place at {:?}: {:?}",
@@ -340,7 +346,7 @@ impl Planner<'_> {
         let (index_setup, index_expression) = index_plan.into_parts();
         setup.extend(index_setup);
         let index_expression = if pin_index {
-            GoExpression::name(self.hoist_tmp_value_statement(setup, "idx", index_expression))
+            GoExpression::identifier(self.hoist_tmp_value_statement(setup, "idx", index_expression))
         } else {
             index_expression
         };
@@ -360,7 +366,7 @@ impl Planner<'_> {
         } else {
             GoExpression::address_of(expression)
         };
-        GoExpression::name(self.hoist_tmp_value_statement(setup, "base", pinned))
+        GoExpression::identifier(self.hoist_tmp_value_statement(setup, "base", pinned))
     }
 
     fn place_operand(
@@ -375,7 +381,7 @@ impl Planner<'_> {
         let (value_setup, value) = plan.into_parts();
         setup.extend(value_setup);
         if pin {
-            GoExpression::name(self.hoist_tmp_value_statement(setup, prefix, value))
+            GoExpression::identifier(self.hoist_tmp_value_statement(setup, prefix, value))
         } else {
             value
         }
@@ -397,7 +403,7 @@ impl Planner<'_> {
         setup.extend(pointee_setup);
         if needs_capture {
             let tmp = self.hoist_tmp_value_statement(setup, "ref", pointee_value);
-            return GoExpression::dereference(GoExpression::name(tmp));
+            return GoExpression::dereference(GoExpression::identifier(tmp));
         }
         GoExpression::dereference(pointee_value)
     }

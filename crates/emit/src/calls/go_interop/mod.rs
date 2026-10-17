@@ -14,6 +14,7 @@ use crate::control_flow::propagation::plain_return;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{Statement, assign, define_many};
 use crate::plan::calls::{CallPlan, CallableOrigin};
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -138,7 +139,7 @@ impl Planner<'_> {
         };
         let payload_bridge = payload_bridge.as_ref();
         let named = |(statements, outcome): (Vec<Statement>, WrapperOutcome)| {
-            (statements, outcome.map(GoExpression::name))
+            (statements, outcome.map(GoExpression::identifier))
         };
         let (mut statements, value) = match (abi.lowered(), bridge) {
             (_, Some(GoResultBridge::Whole(bridge))) => bridge.lower(self, call),
@@ -184,7 +185,7 @@ impl Planner<'_> {
                 let mut statements = Vec::new();
                 let raw_var = self.hoist_tmp_value_statement(&mut statements, "raw", call);
                 let (wrap, outcome) = self.lower_nil_check_option_wrap(
-                    GoExpression::name(raw_var),
+                    GoExpression::identifier(raw_var),
                     result_ty,
                     target,
                 );
@@ -225,7 +226,7 @@ impl Planner<'_> {
             .into_iter()
             .enumerate()
             .map(|(index, value)| {
-                let value = GoExpression::name(value);
+                let value = GoExpression::identifier(value);
                 if let Some(bridges) = slot_bridges {
                     return self.plan_layout_bridge(&mut statements, value, &bridges[index]);
                 }
@@ -298,10 +299,10 @@ impl Planner<'_> {
         Some(call)
     }
 
-    pub(crate) fn create_temp_vars(&mut self, hint: &str, count: usize) -> Vec<String> {
+    pub(crate) fn create_temp_vars(&mut self, hint: &str, count: usize) -> Vec<GoIdentifier> {
         (0..count)
             .map(|_| {
-                let v = self.fresh_var(Some(hint));
+                let v = self.fresh_local(Some(hint));
                 self.declare(&v);
                 v
             })
@@ -314,7 +315,7 @@ impl Planner<'_> {
         values: Vec<GoExpression>,
     ) -> GoExpression {
         let constructor = build_tuple_literal(values);
-        GoExpression::name(self.hoist_tmp_value_statement(statements, "tup", constructor))
+        GoExpression::identifier(self.hoist_tmp_value_statement(statements, "tup", constructor))
     }
 }
 

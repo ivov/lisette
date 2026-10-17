@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn pair(ch: Channel<int>) -> ((), (int, ())) { ch.send(7); ((), (2, ())) }
+  fn main() {
+    let ch = Channel.buffered<int>(3)
+    let (_, (_, _)) = pair(ch) else { panic("irrefutable nested tuple") }
+    ch.send(9)
+    if ch.receive().unwrap_or(0) != 7 { panic("nested subject omitted") }
+    if ch.receive().unwrap_or(0) != 9 { panic("nested subject repeated") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func pair(ch chan int) (struct{}, lisette.Tuple2[int, struct{}]) {
+	lisette.ChannelSend(ch, 7)
+	return struct{}{}, lisette.MakeTuple2[int, struct{}](2, struct{}{})
+}
+
+func main() {
+	ch := make(chan int, 3)
+	ret, ret_1 := pair(ch)
+	tup := lisette.MakeTuple2(ret, ret_1)
+	_ = tup
+	lisette.ChannelSend(ch, 9)
+	if lisette.ChannelReceive(ch).UnwrapOr(0) != 7 {
+		panic("nested subject omitted")
+	}
+	if lisette.ChannelReceive(ch).UnwrapOr(0) != 9 {
+		panic("nested subject repeated")
+	}
+}

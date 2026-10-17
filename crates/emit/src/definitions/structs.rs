@@ -4,6 +4,7 @@ use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
 use crate::expressions::top_items::emit_doc;
 use crate::names::go_name::{self, GeneratedPackage, prelude_qualifier};
 use crate::names::packages::PackageRequirements;
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::types::go_type::render_conversion;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
@@ -357,12 +358,14 @@ impl Planner<'_> {
         let receiver_generics = self.receiver_generics_string(generics);
         let receiver = synthesized_receiver_name(name, &receiver_generics);
         let other = synthesized_local_name("other", &receiver, &receiver_generics);
+        let receiver = self.scope.new_local_identifier(receiver);
+        let other = self.scope.new_local_identifier(other);
         let comparisons: Vec<String> = fields
             .iter()
             .map(|f| {
                 let go_field = struct_field_go_name(f, attributes);
-                let field = |base: &str| {
-                    GoExpression::selector(GoExpression::name(base.to_string()), go_field.clone())
+                let field = |base: &GoIdentifier| {
+                    GoExpression::selector(GoExpression::identifier(base.clone()), go_field.clone())
                 };
                 let comparison =
                     self.equality_expression(field(&receiver), field(&other), &f.ty, generics);

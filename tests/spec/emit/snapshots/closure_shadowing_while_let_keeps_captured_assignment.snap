@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn main() {
+    let mut x = 10
+    let f = || {
+      let mut next = Some(2)
+      while let Some(x) = next {
+        let read = || x
+        next = None
+        if read() != 2 { panic("loop capture") }
+      }
+      x += 1
+      x
+    }
+    if f() != 11 || x != 11 { panic("outer capture") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	x := 10
+	f := func() int {
+		next := lisette.MakeOptionSome(2)
+		for {
+			if next.Tag == lisette.OptionSome {
+				x_1 := next.SomeVal
+				read := func() int {
+					return x_1
+				}
+				next = lisette.MakeOptionNone[int]()
+				if read() != 2 {
+					panic("loop capture")
+				}
+			} else {
+				break
+			}
+		}
+		x++
+		return x
+	}
+	if f() != 11 || x != 11 {
+		panic("outer capture")
+	}
+}

@@ -73,22 +73,6 @@ impl ComponentKind {
 }
 
 impl BindingValue {
-    pub(crate) fn local_named(&self, go_name: &str) -> Option<&GoIdentifier> {
-        match self {
-            Self::GoName(name) | Self::GoConst(name) if name.spelling() == go_name => Some(name),
-            Self::Components(components) if components.value.spelling() == go_name => {
-                Some(&components.value)
-            }
-            Self::Components(components) if components.status.spelling() == go_name => {
-                Some(&components.status)
-            }
-            Self::TupleComponents(tuple) => {
-                tuple.names.iter().find(|name| name.spelling() == go_name)
-            }
-            _ => None,
-        }
-    }
-
     pub(crate) fn as_go_name(&self) -> Option<&str> {
         match self {
             BindingValue::GoName(name) | BindingValue::GoConst(name) => Some(name.spelling()),
@@ -107,14 +91,30 @@ impl BindingValue {
         }
     }
 
+    pub(crate) fn mentions_local(&self, local: &GoIdentifier) -> bool {
+        let Some(id) = local.id() else {
+            return false;
+        };
+        match self {
+            Self::GoName(name) | Self::GoConst(name) => name.id() == Some(id),
+            Self::InlineExpr(inline) => inline.expression().node().mentions_local(local),
+            Self::Components(components) => {
+                components.value.id() == Some(id) || components.status.id() == Some(id)
+            }
+            Self::TupleComponents(tuple) => tuple.names.iter().any(|name| name.id() == Some(id)),
+        }
+    }
+
     pub(crate) fn mentions(&self, go_name: &str) -> bool {
         match self {
-            BindingValue::GoName(name) | BindingValue::GoConst(name) => name == go_name,
+            BindingValue::GoName(name) | BindingValue::GoConst(name) => name.spelling() == go_name,
             BindingValue::InlineExpr(inline) => inline.expression().node().mentions(go_name),
             BindingValue::Components(components) => {
-                components.value == go_name || components.status == go_name
+                components.value.spelling() == go_name || components.status.spelling() == go_name
             }
-            BindingValue::TupleComponents(tuple) => tuple.names.iter().any(|name| name == go_name),
+            BindingValue::TupleComponents(tuple) => {
+                tuple.names.iter().any(|name| name.spelling() == go_name)
+            }
         }
     }
 

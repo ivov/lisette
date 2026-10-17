@@ -312,7 +312,7 @@ impl Planner<'_> {
             };
         };
         let (_, value) = plan.into_parts();
-        let name = self.fresh_var(Some(hint));
+        let name = self.fresh_local(Some(hint));
         self.declare(&name);
         // An untyped integer can overflow if `:=` infers `int`.
         let constant_needs_type = self
@@ -321,7 +321,7 @@ impl Planner<'_> {
         statements.push(
             if constant_needs_type || self.is_go_constant_expression(expression) {
                 LoweredStatement::VarDecl {
-                    name: name.clone().into(),
+                    name: name.clone(),
                     go_type,
                     value: Some(value),
                 }

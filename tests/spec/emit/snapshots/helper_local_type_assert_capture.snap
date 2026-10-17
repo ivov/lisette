@@ -1,0 +1,46 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  import "go:time"
+  fn inspect(pair: (fmt.Stringer, int)) -> int {
+    let ok = 7
+    let f = || {
+      match pair {
+        (time.Duration(value), ok) => value as int + ok,
+        _ => ok,
+      }
+    }
+    f() + ok
+  }
+  fn main() {
+    let value: fmt.Stringer = 3 as time.Duration
+    if inspect((value, 2)) != 12 { panic("type assertion identity") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"time"
+)
+
+func inspect(pair lisette.Tuple2[fmt.Stringer, int]) int {
+	ok := 7
+	f := func() int {
+		if func() bool { _, ok := pair.First.(time.Duration); return ok }() {
+			return int(int64(pair.First.(time.Duration))) + pair.Second
+		}
+		return ok
+	}
+	return f() + ok
+}
+
+func main() {
+	var value fmt.Stringer = time.Duration(3)
+	if inspect(lisette.MakeTuple2[fmt.Stringer, int](value, 2)) != 12 {
+		panic("type assertion identity")
+	}
+}

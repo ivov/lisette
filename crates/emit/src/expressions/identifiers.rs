@@ -1,7 +1,6 @@
 use crate::Planner;
 use crate::calls::go_interop::build_tuple_literal;
 use crate::context::expression::ExpressionContext;
-use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
 use syntax::ast::IdentifierResolution;
@@ -44,16 +43,15 @@ impl Planner<'_> {
                 );
             }
             Some(BindingValue::GoName(name) | BindingValue::GoConst(name)) => name.clone(),
-            None => return self.resolve_go_name(value, resolution.binding_id().is_some()),
+            None => {
+                assert!(
+                    resolution.binding_id().is_none(),
+                    "source binding has no emitted value: {value}"
+                );
+                return self.resolve_go_name(value);
+            }
         };
-        let mut go_name = self.resolve_go_name(local.spelling(), true);
-        if let Some(id) = local.id()
-            && let GoExpressionNode::Identifier(identifier) = go_name.node_mut()
-            && identifier.spelling() == local.spelling()
-        {
-            identifier.identify(id);
-        }
-        go_name
+        GoExpression::identifier(local)
     }
 
     fn emit_definition_identifier(
@@ -74,7 +72,7 @@ impl Planner<'_> {
                     };
                     return GoExpression::pure_call(
                         GoExpression::instantiation(
-                            self.resolve_go_name(&make_function, false),
+                            self.resolve_go_name(&make_function),
                             type_args,
                         ),
                         Vec::new(),
@@ -87,7 +85,7 @@ impl Planner<'_> {
                     {
                         let type_args = self.constructor_fn_type_args(&f.params, ret_params, ctx);
                         return GoExpression::instantiation(
-                            self.resolve_go_name(&make_function, false),
+                            self.resolve_go_name(&make_function),
                             type_args,
                         );
                     }

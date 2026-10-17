@@ -64,12 +64,6 @@ pub(crate) enum PatternSubject<'a> {
 }
 
 impl<'a> PatternSubject<'a> {
-    pub(crate) fn for_value(var: impl Into<String>) -> Self {
-        Self::Existing {
-            var: GoExpression::name(var.into()),
-        }
-    }
-
     pub(crate) fn for_identifier(var: GoIdentifier) -> Self {
         Self::Existing {
             var: GoExpression::identifier(var),
@@ -93,7 +87,13 @@ impl<'a> PatternSubject<'a> {
 /// pick `var := expr` vs `_ = expr` based on body usage.
 struct ResolvedSubject {
     subject: GoExpression,
-    pending: Option<DeferredSubject>,
+    storage: SubjectStorage,
+}
+
+enum SubjectStorage {
+    Existing,
+    Materialized(GoIdentifier),
+    Deferred(DeferredSubject),
 }
 
 /// A subject temp declared only if the body reads it.
@@ -117,7 +117,7 @@ impl ResolvedSubject {
     fn existing(subject: GoExpression) -> Self {
         Self {
             subject,
-            pending: None,
+            storage: SubjectStorage::Existing,
         }
     }
 
@@ -126,8 +126,14 @@ impl ResolvedSubject {
     }
 
     fn push_declaration(self, statements: &mut Vec<Statement>, body: &[Statement]) {
-        if let Some(pending) = self.pending {
-            pending.settle(statements, body);
+        match self.storage {
+            SubjectStorage::Existing => {}
+            SubjectStorage::Materialized(local) => {
+                if !GoUses::of(body).contains_identifier(&local) {
+                    statements.push(discard(self.subject));
+                }
+            }
+            SubjectStorage::Deferred(pending) => pending.settle(statements, body),
         }
     }
 }
@@ -149,7 +155,7 @@ fn field_path_root(expression: &Expression) -> Option<(&str, &IdentifierResoluti
     }
 }
 
-fn field_path_go_root(expression: &GoExpression) -> Option<&str> {
+fn field_path_go_root(expression: &GoExpression) -> Option<&GoIdentifier> {
     let GoExpressionNode::Selector { base, .. } = expression.node() else {
         return None;
     };
@@ -158,7 +164,7 @@ fn field_path_go_root(expression: &GoExpression) -> Option<&str> {
         base = inner;
     }
     match base {
-        GoExpressionNode::Identifier(name) => Some(name.spelling()),
+        GoExpressionNode::Identifier(name) => Some(name),
         _ => None,
     }
 }
@@ -226,10 +232,18 @@ impl Planner<'_> {
                     ));
                 }
                 let plan = self.lower_value(scrutinee, ExpressionContext::value());
+                let materialized = plan
+                    .expression()
+                    .as_identifier()
+                    .or_else(|| field_path_go_root(plan.expression()))
+                    .filter(|local| {
+                        plan.binds_local(local) && !self.scope.has_binding_for_local(local)
+                    })
+                    .cloned();
                 let rests_in_own_temp_path =
                     field_path_go_root(plan.expression()).is_some_and(|root| {
-                        plan.rests_in_own_temp(root)
-                            && !self.scope.has_binding_for_go_name(root)
+                        plan.binds_local(root)
+                            && !self.scope.has_binding_for_local(root)
                             && !pattern_binds_name(pattern, root)
                     });
                 let rests_in_stable_name =
@@ -241,14 +255,18 @@ impl Planner<'_> {
                         pattern_binds_name(pattern, root)
                     })
                 {
-                    return ResolvedSubject::existing(expression);
+                    return ResolvedSubject {
+                        subject: expression,
+                        storage: materialized
+                            .map_or(SubjectStorage::Existing, SubjectStorage::Materialized),
+                    };
                 }
-                let name = self.fresh_var(temp_hint);
+                let name = self.fresh_local(temp_hint);
                 self.declare(&name);
-                let identifier = self.scope.generated_identifier(&name);
+                let identifier = name.clone();
                 ResolvedSubject {
                     subject: GoExpression::identifier(identifier.clone()),
-                    pending: Some(DeferredSubject {
+                    storage: SubjectStorage::Deferred(DeferredSubject {
                         name: identifier,
                         expression,
                     }),
@@ -396,14 +414,14 @@ impl Planner<'_> {
             CommaOkValueSlot::Discarded
         };
         let bound = fuse.bind(self, slot, None);
-        let value = bound.payload_name().map(str::to_string);
+        let value = bound.payload_identifier().cloned();
         let fail_condition = bound.failure_condition();
         // The else block lowers before the pattern binds its names.
         let mut statements =
             self.finish_fused_let_else(bound.statements, fail_condition, None, else_block);
         if let Some(value) = value.filter(|_| binds) {
             statements.extend(self.lower_irrefutable_pattern_site(
-                PatternSubject::for_value(value),
+                PatternSubject::for_identifier(value),
                 payload,
                 &payload_ty,
             ));
@@ -470,12 +488,12 @@ impl Planner<'_> {
             .filter(|_| !self.facts.is_unused_binding(field))?;
         let escaped = go_name::escape_reserved(name.name).into_owned();
         let go_name = if self.shadows_declaration(&escaped) {
-            self.fresh_var(Some(name.name))
+            self.fresh_local(Some(name.name))
         } else {
-            escaped
+            self.scope.new_local_identifier(escaped)
         };
         self.declare(&go_name);
-        Some((name, self.scope.new_local_identifier(&go_name)))
+        Some((name, go_name))
     }
 
     /// Resolve a while-let scrutinee to its loop-subject var, returning any
@@ -504,9 +522,9 @@ impl Planner<'_> {
         {
             return (value, setup);
         }
-        let var = self.fresh_var(Some("subject"));
+        let var = self.fresh_local(Some("subject"));
         setup.push(define(var.clone(), value));
-        (GoExpression::name(var), setup)
+        (GoExpression::identifier(var), setup)
     }
 
     pub(crate) fn lower_while_let(
@@ -664,7 +682,8 @@ impl Planner<'_> {
 
         if subject_is_fixed {
             asserted.checks.retain(|check| {
-                !self.is_condition_established(&check.render(SubjectRoot::Var(&asserted.subject)))
+                let condition = check.render(&mut self.scope, SubjectRoot::Var(&asserted.subject));
+                !self.is_condition_established(&condition)
             });
         }
 
@@ -691,10 +710,16 @@ impl Planner<'_> {
         }
         if !checks.is_empty() {
             let negated = match checks.as_slice() {
-                [check] => check.render_negated(SubjectRoot::Var(&effective_subject)),
+                [check] => {
+                    check.render_negated(&mut self.scope, SubjectRoot::Var(&effective_subject))
+                }
                 _ => GoExpression::unary(
                     UnaryOp::Not,
-                    render_condition(&checks, SubjectRoot::Var(&effective_subject)),
+                    render_condition(
+                        &mut self.scope,
+                        &checks,
+                        SubjectRoot::Var(&effective_subject),
+                    ),
                 ),
             };
             guard_parts.push(negated);
@@ -772,7 +797,7 @@ impl Planner<'_> {
                 }
                 return statements;
             }
-            pieces.push((alternative.condition(), body));
+            pieces.push((alternative.condition(&mut self.scope), body));
         }
         statements.push(
             assemble_if_else_chain(pieces, failure.expect("all alternatives are refutable")).into(),
@@ -800,9 +825,9 @@ impl Planner<'_> {
                 BindingTarget::Named { go_name, ty } => (go_name, ty),
             };
             let preferred = if failure_uses.is_some_and(|uses| uses.contains(go_name)) {
-                self.fresh_var(Some(&binding.lisette_name))
+                self.fresh_local(Some(&binding.lisette_name))
             } else {
-                go_name.clone()
+                GoIdentifier::from(go_name)
             };
             let go_name =
                 self.claim_declared_binding(&binding.lisette_name, &binding.binding_ids, preferred);
@@ -867,7 +892,10 @@ impl Planner<'_> {
                 branch
             });
 
-            pieces.push((alternative.condition(), LoweredBlock { statements: branch }));
+            pieces.push((
+                alternative.condition(&mut self.scope),
+                LoweredBlock { statements: branch },
+            ));
         }
 
         let terminal = LoweredBlock {
@@ -936,7 +964,7 @@ impl Planner<'_> {
             );
             return statements;
         }
-        let condition = asserted.condition();
+        let condition = asserted.condition(&mut self.scope);
         let mut then_body = Vec::new();
         with_tree_bindings(
             self,
@@ -1019,18 +1047,18 @@ impl Planner<'_> {
         pattern: &Pattern,
     ) -> (GoIdentifier, bool) {
         match pattern {
-            Pattern::WildCard { .. } => (GoIdentifier::name("_".to_string()), false),
+            Pattern::WildCard { .. } => (GoIdentifier::external("_".to_string()), false),
             Pattern::Identifier {
                 identifier,
                 binding,
                 ..
             } => {
                 let Some(go_name) = self.go_name_for_binding(pattern) else {
-                    return (GoIdentifier::name("_".to_string()), false);
+                    return (GoIdentifier::external("_".to_string()), false);
                 };
                 if self.scope.resolve_identifier_binding(identifier).is_some() {
-                    let name = self.fresh_var(Some("recv"));
-                    return (self.scope.generated_identifier(&name), true);
+                    let name = self.fresh_local(Some("recv"));
+                    return (name.clone(), true);
                 }
                 (
                     self.scope
@@ -1039,8 +1067,8 @@ impl Planner<'_> {
                 )
             }
             _ => {
-                let name = self.fresh_var(Some("recv"));
-                (self.scope.generated_identifier(&name), true)
+                let name = self.fresh_local(Some("recv"));
+                (name.clone(), true)
             }
         }
     }

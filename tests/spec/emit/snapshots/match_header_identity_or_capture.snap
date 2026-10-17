@@ -1,0 +1,105 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  enum Item { A(int), B(int), Empty }
+  fn value(ch: Channel<int>, x: int) -> Item { ch.send(x); Item.A(x) }
+  fn main() {
+    let subject = 7
+    let ch = Channel.buffered<int>(3)
+    let f = || match value(ch, subject) {
+      Item.A(subject) | Item.B(subject) => {
+        let read = || subject
+        let Some(subject) = Some(read() + 1) else { return read() }
+        if let Some(subject) = Some(subject + 1) { subject } else { read() }
+      },
+      Item.Empty => subject,
+    }
+    if f() != 9 || subject != 7 { panic("or pattern capture") }
+    ch.send(9)
+    if ch.receive().unwrap_or(0) != 7 || ch.receive().unwrap_or(0) != 9 { panic("or pattern evaluation") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func MakeItemA(arg0 int) Item {
+	return Item{Tag: ItemA, A: arg0}
+}
+
+func MakeItemB(arg0 int) Item {
+	return Item{Tag: ItemB, B: arg0}
+}
+
+func MakeItemEmpty() Item {
+	return Item{Tag: ItemEmpty}
+}
+
+type ItemTag uint8
+
+const (
+	ItemA ItemTag = iota
+	ItemB
+	ItemEmpty
+)
+
+type Item struct {
+	Tag ItemTag
+	A   int
+	B   int
+}
+
+func value(ch chan int, x int) Item {
+	lisette.ChannelSend(ch, x)
+	return MakeItemA(x)
+}
+
+func main() {
+	subject := 7
+	ch := make(chan int, 3)
+	f := func() int {
+		subject_1 := value(ch, subject)
+		switch subject_1.Tag {
+		case ItemA:
+			subject_2 := subject_1.A
+			read := func() int {
+				return subject_2
+			}
+			subject_3 := lisette.MakeOptionSome(read() + 1)
+			if subject_3.Tag != lisette.OptionSome {
+				return read()
+			}
+			subject := subject_3.SomeVal
+			subject_4 := lisette.MakeOptionSome(subject + 1)
+			if subject_4.Tag == lisette.OptionSome {
+				return subject_4.SomeVal
+			}
+			return read()
+		case ItemB:
+			subject_5 := subject_1.B
+			read := func() int {
+				return subject_5
+			}
+			subject_6 := lisette.MakeOptionSome(read() + 1)
+			if subject_6.Tag != lisette.OptionSome {
+				return read()
+			}
+			subject := subject_6.SomeVal
+			subject_7 := lisette.MakeOptionSome(subject + 1)
+			if subject_7.Tag == lisette.OptionSome {
+				return subject_7.SomeVal
+			}
+			return read()
+		default:
+			return subject
+		}
+	}
+	if f() != 9 || subject != 7 {
+		panic("or pattern capture")
+	}
+	lisette.ChannelSend(ch, 9)
+	if lisette.ChannelReceive(ch).UnwrapOr(0) != 7 || lisette.ChannelReceive(ch).UnwrapOr(0) != 9 {
+		panic("or pattern evaluation")
+	}
+}

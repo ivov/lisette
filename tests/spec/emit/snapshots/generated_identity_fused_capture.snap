@@ -1,0 +1,65 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn main() {
+    let found = 40
+    let ret = 2
+    let f = || {
+      let found = [ret, found].find(|found| found > 3)
+      let Some(ret) = found else { panic("find lost payload") }
+      let read = || ret
+      read()
+    }
+    let mut next = Some(3)
+    let mut total = 0
+    while let Some(found_1) = next {
+      let read = || found_1 + f()
+      total += read()
+      next = None
+    }
+    if total != 43 || found != 40 || ret != 2 { panic("capture changed") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	found := 40
+	ret := 2
+	f := func() int {
+		found_1 := lisette.MakeOptionNone[int]()
+		for _, found_2 := range []int{ret, found} {
+			if found_2 > 3 {
+				found_1 = lisette.MakeOptionSome[int](found_2)
+				break
+			}
+		}
+		if found_1.Tag != lisette.OptionSome {
+			panic("find lost payload")
+		}
+		ret_1 := found_1.SomeVal
+		read := func() int {
+			return ret_1
+		}
+		return read()
+	}
+	next := lisette.MakeOptionSome(3)
+	total := 0
+	for {
+		if next.Tag == lisette.OptionSome {
+			found_1 := next.SomeVal
+			read := func() int {
+				return found_1 + f()
+			}
+			total += read()
+			next = lisette.MakeOptionNone[int]()
+		} else {
+			break
+		}
+	}
+	if total != 43 || found != 40 || ret != 2 {
+		panic("capture changed")
+	}
+}

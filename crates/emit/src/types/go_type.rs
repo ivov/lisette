@@ -402,7 +402,7 @@ impl Planner<'_> {
         let literal = |text: &str| GoExpression::literal(text.to_string());
         let dereferenced_new = |code: &str| {
             GoExpression::dereference(GoExpression::call(
-                GoExpression::name("new".to_string()),
+                GoExpression::external_name("new".to_string()),
                 vec![GoExpression::type_name(code.to_string())],
             ))
         };

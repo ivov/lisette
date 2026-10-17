@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn count<arr>(_seed: arr) -> int {
+    let values = Array.new<Option<arr>, 2>()
+    let mut count = 0
+    for value in values { if value.is_none() { count += 1 } }
+    count
+  }
+  fn main() { if count(1) != 2 { panic("generic array helper") } }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func count[arr any](_ arr) int {
+	values := func() [2]lisette.Option[arr] {
+		var arr_1 [2]lisette.Option[arr]
+		for i := range arr_1 {
+			arr_1[i] = lisette.MakeOptionNone[arr]()
+		}
+		return arr_1
+	}()
+	count := 0
+	for _, value := range values {
+		if value.IsNone() {
+			count++
+		}
+	}
+	return count
+}
+
+func main() {
+	if count(1) != 2 {
+		panic("generic array helper")
+	}
+}

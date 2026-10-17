@@ -443,9 +443,9 @@ impl Planner<'_> {
         if self.try_declare(&preferred) {
             return GoIdentifier::local(preferred, self.scope.new_local_id());
         }
-        let name = self.fresh_var(Some(&preferred));
+        let name = self.fresh_local(Some(&preferred));
         self.declare(&name);
-        self.scope.generated_identifier(&name)
+        name
     }
 
     fn build_adapter_body(

@@ -41,8 +41,7 @@ impl TryBlockPairPlan<'_> {
 impl Planner<'_> {
     /// `try { ... }` → `result := func() T { ... }()`; value is the bound result var.
     pub(crate) fn lower_try_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
-        let result_var = self.fresh_var(Some("tryResult"));
-        let result_var = self.scope.generated_identifier(&result_var);
+        let result_var = self.fresh_local(Some("tryResult"));
         self.lower_try_block_as(items, ty, result_var)
     }
 
@@ -106,7 +105,7 @@ impl Planner<'_> {
             result_var.clone(),
             GoExpression::immediate_call(full_ty, body, FunctionLiteralLayout::MultiLine),
         )];
-        ValuePlan::captured(setup, result_var.to_string())
+        ValuePlan::captured(setup, result_var)
     }
 
     fn lower_try_body(&mut self, items: &[Expression], fallible: &Fallible) -> LoweredBlock {
@@ -228,7 +227,7 @@ impl Planner<'_> {
         let fallible = Fallible::from_type(&effective_ty)
             .expect("recover block type must be Result<T, PanicValue>");
 
-        let result_var = self.fresh_var(Some("recoverResult"));
+        let result_var = self.fresh_local(Some("recoverResult"));
         self.declare(&result_var);
         let inner_ty_str = self.use_go_type(fallible.ok_ty());
 
@@ -249,7 +248,7 @@ impl Planner<'_> {
                 )],
             ),
         )];
-        ValuePlan::captured(setup, result_var.to_string())
+        ValuePlan::captured(setup, result_var)
     }
 
     fn lower_recover_body_block(

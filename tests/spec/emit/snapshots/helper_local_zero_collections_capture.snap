@@ -1,0 +1,69 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn main() {
+    let s = 3
+    let i = 7
+    let arr = [9]
+    let f = || {
+      let s = Slice.make<Option<int>>(s)
+      let arr = Array.new<Option<int>, 2>()
+      let mut count = 0
+      for i in s { if i.is_none() { count += 1 } }
+      for i in arr { if i.is_none() { count += 1 } }
+      count
+    }
+    let Some(converted) = Array.from<int, 1>(arr) else { panic("array conversion") }
+    if f() != 5 || converted[0] != 9 || i != 7 { panic("helper local captures") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	s := 3
+	i := 7
+	arr := []int{9}
+	f := func() int {
+		s_1 := func() []lisette.Option[int] {
+			s := make([]lisette.Option[int], s)
+			for i := range s {
+				s[i] = lisette.MakeOptionNone[int]()
+			}
+			return s
+		}()
+		arr_1 := func() [2]lisette.Option[int] {
+			var arr [2]lisette.Option[int]
+			for i := range arr {
+				arr[i] = lisette.MakeOptionNone[int]()
+			}
+			return arr
+		}()
+		count := 0
+		for _, i_1 := range s_1 {
+			if i_1.IsNone() {
+				count++
+			}
+		}
+		for _, i_2 := range arr_1 {
+			if i_2.IsNone() {
+				count++
+			}
+		}
+		return count
+	}
+	converted, ok := func(s []int) ([1]int, bool) {
+		if len(s) != 1 {
+			return [1]int{}, false
+		}
+		return ([1]int)(s), true
+	}(arr)
+	if !ok {
+		panic("array conversion")
+	}
+	if f() != 5 || converted[0] != 9 || i != 7 {
+		panic("helper local captures")
+	}
+}

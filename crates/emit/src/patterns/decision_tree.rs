@@ -1,4 +1,6 @@
 use crate::patterns::binding_decls::pattern_has_bindings;
+use crate::plan::local::GoIdentifier;
+use crate::state::scope::ScopeState;
 use rustc_hash::FxHashMap as HashMap;
 use std::slice;
 
@@ -199,16 +201,21 @@ enum CheckPolarity {
 }
 
 impl Check {
-    pub(crate) fn render(&self, subject: SubjectRoot<'_>) -> GoExpression {
-        self.render_with_polarity(subject, CheckPolarity::Positive)
+    pub(crate) fn render(&self, scope: &mut ScopeState, subject: SubjectRoot<'_>) -> GoExpression {
+        self.render_with_polarity(scope, subject, CheckPolarity::Positive)
     }
 
-    pub(crate) fn render_negated(&self, subject: SubjectRoot<'_>) -> GoExpression {
-        self.render_with_polarity(subject, CheckPolarity::Negative)
+    pub(crate) fn render_negated(
+        &self,
+        scope: &mut ScopeState,
+        subject: SubjectRoot<'_>,
+    ) -> GoExpression {
+        self.render_with_polarity(scope, subject, CheckPolarity::Negative)
     }
 
     fn render_with_polarity(
         &self,
+        scope: &mut ScopeState,
         subject: SubjectRoot<'_>,
         polarity: CheckPolarity,
     ) -> GoExpression {
@@ -261,25 +268,28 @@ impl Check {
             }
             Check::Or { alternatives } if !negative => alternatives
                 .iter()
-                .map(|checks| join_conditions(checks, subject))
+                .map(|checks| join_conditions(scope, checks, subject))
                 .reduce(|left, right| GoExpression::binary(left, BinaryOp::Or, right))
                 .expect("an or-check has at least one alternative"),
-            Check::TypeAssert { path, go_type } if !negative => GoExpression::immediate_call(
-                "bool".to_string(),
-                LoweredBlock {
-                    statements: vec![
-                        define_many(
-                            vec!["_".to_string(), "ok".to_string()],
-                            GoExpression::type_assertion(path.render(subject), go_type.clone()),
-                        ),
-                        plain_return(GoExpression::name("ok".to_string())),
-                    ],
-                },
-                FunctionLiteralLayout::Inline,
-            ),
+            Check::TypeAssert { path, go_type } if !negative => {
+                let ok = scope.new_local_identifier("ok");
+                GoExpression::immediate_call(
+                    "bool".to_string(),
+                    LoweredBlock {
+                        statements: vec![
+                            define_many(
+                                vec![GoIdentifier::external("_".to_string()), ok.clone()],
+                                GoExpression::type_assertion(path.render(subject), go_type.clone()),
+                            ),
+                            plain_return(GoExpression::identifier(ok)),
+                        ],
+                    },
+                    FunctionLiteralLayout::Inline,
+                )
+            }
             Check::Or { .. } | Check::TypeAssert { .. } => GoExpression::unary(
                 UnaryOp::Not,
-                self.render_with_polarity(subject, CheckPolarity::Positive),
+                self.render_with_polarity(scope, subject, CheckPolarity::Positive),
             ),
         }
     }
@@ -1173,7 +1183,7 @@ fn handle_foreign_variant_literal(
                 member,
             )
         }
-        _ => GoExpression::name(identifier.to_string()),
+        _ => GoExpression::external_name(identifier.to_string()),
     };
     collector.checks.push(Check::Literal {
         path: path.clone(),
@@ -1230,7 +1240,7 @@ struct EnumVariantData<'a> {
 fn enum_tag_constant(planner: &Planner, identifier: &str, ty: &Type) -> GoExpression {
     match ty {
         Type::Nominal { id, .. } => planner.resolve_variant(identifier, id),
-        _ => GoExpression::name(identifier.replace('.', "_")),
+        _ => GoExpression::external_name(identifier.replace('.', "_")),
     }
 }
 
@@ -1588,17 +1598,25 @@ pub(super) fn lift_root_assertion(
     }
 }
 
-pub(super) fn render_condition(checks: &[Check], subject_var: SubjectRoot<'_>) -> GoExpression {
+pub(super) fn render_condition(
+    scope: &mut ScopeState,
+    checks: &[Check],
+    subject_var: SubjectRoot<'_>,
+) -> GoExpression {
     if checks.is_empty() {
         return GoExpression::literal("true".to_string());
     }
-    join_conditions(checks, subject_var)
+    join_conditions(scope, checks, subject_var)
 }
 
-fn join_conditions(checks: &[Check], subject: SubjectRoot<'_>) -> GoExpression {
+fn join_conditions(
+    scope: &mut ScopeState,
+    checks: &[Check],
+    subject: SubjectRoot<'_>,
+) -> GoExpression {
     checks
         .iter()
-        .map(|check| check.render(subject))
+        .map(|check| check.render(scope, subject))
         .reduce(|left, right| GoExpression::binary(left, BinaryOp::And, right))
         .expect("join_conditions requires at least one check")
 }

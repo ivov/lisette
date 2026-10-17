@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn main() {
+    let x = 7
+    let f = || {
+      let g = || {
+        let x = [x, x + 1].fold(0, |x, y| x + y)
+        x
+      }
+      g() + x
+    }
+    if f() != 22 || x != 7 { panic("nested capture") }
+  }
+---
+package main
+
+func main() {
+	x := 7
+	f := func() int {
+		g := func() int {
+			x_1 := 0
+			for _, y := range []int{x, x + 1} {
+				x_1 += y
+			}
+			return x_1
+		}
+		return g() + x
+	}
+	if f() != 22 || x != 7 {
+		panic("nested capture")
+	}
+}

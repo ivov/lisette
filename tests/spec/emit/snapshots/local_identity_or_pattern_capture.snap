@@ -1,0 +1,82 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  enum Choice { A(int), B(int), Missing }
+  
+  fn choose(item: Choice) -> int {
+    let value = 40
+    let read = || value
+    let Choice.A(value) | Choice.B(value) = item else { return read() + 2 }
+    let f = || {
+      let Choice.A(value) | Choice.B(value) = Choice.B(value + 1) else { return read() }
+      value + read()
+    }
+    f()
+  }
+  
+  fn main() {
+    if choose(Choice.B(7)) != 48 || choose(Choice.Missing) != 42 { panic("or-pattern identity") }
+  }
+---
+package main
+
+func MakeChoiceA(arg0 int) Choice {
+	return Choice{Tag: ChoiceA, A: arg0}
+}
+
+func MakeChoiceB(arg0 int) Choice {
+	return Choice{Tag: ChoiceB, B: arg0}
+}
+
+func MakeChoiceMissing() Choice {
+	return Choice{Tag: ChoiceMissing}
+}
+
+type ChoiceTag uint8
+
+const (
+	ChoiceA ChoiceTag = iota
+	ChoiceB
+	ChoiceMissing
+)
+
+type Choice struct {
+	Tag ChoiceTag
+	A   int
+	B   int
+}
+
+func choose(item Choice) int {
+	value := 40
+	read := func() int {
+		return value
+	}
+	var value_1 int
+	if item.Tag == ChoiceA {
+		value_1 = item.A
+	} else if item.Tag == ChoiceB {
+		value_1 = item.B
+	} else {
+		return read() + 2
+	}
+	f := func() int {
+		subject := MakeChoiceB(value_1 + 1)
+		var value int
+		if subject.Tag == ChoiceA {
+			value = subject.A
+		} else if subject.Tag == ChoiceB {
+			value = subject.B
+		} else {
+			return read()
+		}
+		return value + read()
+	}
+	return f()
+}
+
+func main() {
+	if choose(MakeChoiceB(7)) != 48 || choose(MakeChoiceMissing()) != 42 {
+		panic("or-pattern identity")
+	}
+}

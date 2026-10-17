@@ -1,0 +1,51 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Item { value: int, marker: int }
+  fn main() {
+    let base = Item { value: 7, marker: 3 }
+    let out = base
+    let read = || out.value
+    let f = || {
+      let out = Item { value: read() + 1, ..out }
+      let read = || out.value + out.marker
+      read()
+    }
+    let mut total = 0
+    for out in [1, 2] { total += f() + out }
+    if total != 25 || read() != 7 { panic("updated temp identity") }
+  }
+---
+package main
+
+type Item struct {
+	value  int
+	marker int
+}
+
+func main() {
+	base := Item{
+		value:  7,
+		marker: 3,
+	}
+	out := base
+	read := func() int {
+		return out.value
+	}
+	f := func() int {
+		out_1 := out
+		out_1.value = read() + 1
+		read_1 := func() int {
+			return out_1.value + out_1.marker
+		}
+		return read_1()
+	}
+	total := 0
+	for _, out_2 := range []int{1, 2} {
+		total += f() + out_2
+	}
+	if total != 25 || read() != 7 {
+		panic("updated temp identity")
+	}
+}

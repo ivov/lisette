@@ -18,8 +18,8 @@ func test() int {
 	y := 10
 	var z int
 	{
-		y := 20
-		z = y
+		y_1 := 20
+		z = y_1
 	}
 	_ = z
 	return y

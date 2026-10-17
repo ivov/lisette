@@ -18,7 +18,7 @@ impl Planner<'_> {
         let make_fn = if make_fn_name.starts_with(go_name::PRELUDE_PREFIX) {
             go_name::resolve(&make_fn_name).into_expression()
         } else if self.facts.is_current_package(enum_package) {
-            GoExpression::name(make_fn_name)
+            GoExpression::external_name(make_fn_name)
         } else {
             GoExpression::qualified(self.package_use_for_package(enum_package), make_fn_name)
         };

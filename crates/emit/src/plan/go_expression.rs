@@ -236,9 +236,9 @@ pub(crate) struct GoParameter {
 }
 
 impl GoParameter {
-    pub(crate) fn new(name: impl Into<String>, go_type: impl Into<String>) -> Self {
+    pub(crate) fn new(name: impl Into<GoIdentifier>, go_type: impl Into<String>) -> Self {
         Self {
-            name: GoIdentifier::name(name.into()),
+            name: name.into(),
             go_type: go_type.into(),
         }
     }
@@ -313,11 +313,26 @@ impl GoExpressionNode {
         )
     }
 
+    pub(crate) fn mentions_local(&self, name: &GoIdentifier) -> bool {
+        let Some(id) = name.id() else {
+            return false;
+        };
+        let mut found = false;
+        self.visit(&mut |inner| {
+            if let Self::Identifier(read) = inner
+                && read.id() == Some(id)
+            {
+                found = true;
+            }
+        });
+        found
+    }
+
     pub(crate) fn mentions(&self, name: &str) -> bool {
         let mut found = false;
         self.visit(&mut |inner| {
             if let Self::Identifier(read) = inner
-                && read == name
+                && read.spelling() == name
             {
                 found = true;
             }

@@ -1,0 +1,84 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct Item { value: Option<int> }
+  fn main() {
+    let subject = 7
+    let f = || {
+      let Some(subject) = (Item { value: Some(subject + 1) }).value else { return subject }
+      let g = || subject
+      g()
+    }
+    let mut pending = Some(2)
+    let mut total = 0
+    while let Some(subject) = pending {
+      total += subject + f()
+      pending = None
+    }
+    let ch = Channel.buffered<int>(1)
+    ch.send(3)
+    total += select {
+      let Some(subject) = ch.receive() => subject + f(),
+      _ => 0,
+    }
+    if total != 21 || subject != 7 { panic("subject temp identity") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Item struct {
+	value lisette.Option[int]
+}
+
+func main() {
+	subject := 7
+	f := func() int {
+		subject_1 := Item{value: lisette.MakeOptionSome(subject + 1)}.value
+		if subject_1.Tag != lisette.OptionSome {
+			return subject
+		}
+		subject_2 := subject_1.SomeVal
+		g := func() int {
+			return subject_2
+		}
+		return g()
+	}
+	pending := lisette.MakeOptionSome(2)
+	total := 0
+	for {
+		if pending.Tag == lisette.OptionSome {
+			left_1 := total
+			left := pending.SomeVal
+			total = left_1 + (left + f())
+			pending = lisette.MakeOptionNone[int]()
+		} else {
+			break
+		}
+	}
+	ch := make(chan int, 1)
+	lisette.ChannelSend(ch, 3)
+	left_2 := total
+	var tmp int
+	ch_1 := ch
+	for {
+		select {
+		case subject, ok := <-ch_1:
+			if ok {
+				tmp = subject + f()
+			} else {
+				ch_1 = nil
+				continue
+			}
+		default:
+			tmp = 0
+		}
+		break
+	}
+	total = left_2 + tmp
+	if total != 21 || subject != 7 {
+		panic("subject temp identity")
+	}
+}

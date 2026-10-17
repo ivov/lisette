@@ -11,6 +11,7 @@ use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::go_name;
 use crate::plan::bodies::Statement;
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::{GoExpression, Stability, ValuePlan};
 use crate::utils::reads_value_member;
 
@@ -70,7 +71,10 @@ impl Planner<'_> {
             .as_import_namespace()
             .map(|package| self.package_use_for_package(package));
         let base_plan = match &package {
-            Some(package) => ValuePlan::captured(Vec::new(), package.qualifier().to_string()),
+            Some(package) => ValuePlan::captured(
+                Vec::new(),
+                GoIdentifier::external(package.qualifier().to_string()),
+            ),
             None => self.plan_coerced_expression(expression, receiver_coercion, ctx),
         };
         let stability = if let Some(package) = expression_ty.as_import_namespace()
@@ -147,7 +151,7 @@ impl Planner<'_> {
         }
     }
 
-    fn tuple_component_read(&self, expression: &Expression, member: &str) -> Option<String> {
+    fn tuple_component_read(&self, expression: &Expression, member: &str) -> Option<GoIdentifier> {
         let Expression::Identifier {
             value, resolution, ..
         } = expression.unwrap_parens()
@@ -161,7 +165,7 @@ impl Planner<'_> {
             return None;
         };
         let index = member.parse::<usize>().ok()?;
-        tuple.names.get(index).map(ToString::to_string)
+        tuple.names.get(index).cloned()
     }
 
     /// Tuple-shape members: plain tuple slots emit as `.F{index}` (or the
@@ -293,7 +297,7 @@ impl Planner<'_> {
         }
         let raw_access = GoExpression::selector(base.clone(), field.to_string());
         let raw_var = self.hoist_tmp_value_statement(setup, "raw", raw_access);
-        let (coercion_setup, coerced) = coercion.lower(self, GoExpression::name(raw_var));
+        let (coercion_setup, coerced) = coercion.lower(self, GoExpression::identifier(raw_var));
         setup.extend(coercion_setup);
         Some(coerced)
     }
@@ -369,7 +373,7 @@ impl Planner<'_> {
             }
             match expression.unwrap_parens() {
                 Expression::Call { .. } => {
-                    GoExpression::name(self.hoist_tmp_value_statement(setup, "ref", base))
+                    GoExpression::identifier(self.hoist_tmp_value_statement(setup, "ref", base))
                 }
                 Expression::StructCall { .. } => GoExpression::address_of(base),
                 _ => base,

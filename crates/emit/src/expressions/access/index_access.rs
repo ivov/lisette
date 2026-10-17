@@ -176,13 +176,18 @@ impl Planner<'_> {
             if !base.effects().can_duplicate()
                 || (is_order_sensitive(base_expr) && runs_effectful_code)
             {
-                base = GoExpression::name(self.hoist_tmp_value_statement(&mut setup, "base", base));
+                base = GoExpression::identifier(
+                    self.hoist_tmp_value_statement(&mut setup, "base", base),
+                );
             }
             let Some(end_expression) = end_value else {
-                let length = GoExpression::name(self.hoist_tmp_value_statement(
+                let length = GoExpression::identifier(self.hoist_tmp_value_statement(
                     &mut setup,
                     "len",
-                    GoExpression::call(GoExpression::name("len".to_string()), vec![base.clone()]),
+                    GoExpression::call(
+                        GoExpression::external_name("len".to_string()),
+                        vec![base.clone()],
+                    ),
                 ));
                 return ValuePlan::computed(
                     setup,
@@ -191,14 +196,14 @@ impl Planner<'_> {
             };
             if start.is_some_and(is_order_sensitive) {
                 start_value = start_value.map(|start_expression| {
-                    GoExpression::name(self.hoist_tmp_value_statement(
+                    GoExpression::identifier(self.hoist_tmp_value_statement(
                         &mut setup,
                         "start",
                         start_expression,
                     ))
                 });
             }
-            let end_variable = GoExpression::name(self.hoist_tmp_value_statement(
+            let end_variable = GoExpression::identifier(self.hoist_tmp_value_statement(
                 &mut setup,
                 "end",
                 end_expression,
@@ -260,7 +265,10 @@ fn range_var_slice(
         return GoExpression::slice(base, start.as_ref(), end.as_ref(), None);
     }
     let bound = end.unwrap_or_else(|| {
-        GoExpression::call(GoExpression::name("len".to_string()), vec![base.clone()])
+        GoExpression::call(
+            GoExpression::external_name("len".to_string()),
+            vec![base.clone()],
+        )
     });
     GoExpression::slice(base, start.as_ref(), Some(&bound), Some(&bound))
 }

@@ -67,7 +67,7 @@ impl Planner<'_> {
                 let staged = self.plan_operand(left_expression, ctx);
                 return staged.map_expression(|_, value| {
                     GoExpression::call(
-                        GoExpression::name("complex".to_string()),
+                        GoExpression::external_name("complex".to_string()),
                         vec![
                             GoExpression::literal("0".to_string()),
                             GoExpression::binary(
@@ -89,7 +89,7 @@ impl Planner<'_> {
                 let staged = self.plan_operand(right_expression, ctx);
                 return staged.map_expression(|_, value| {
                     GoExpression::call(
-                        GoExpression::name("complex".to_string()),
+                        GoExpression::external_name("complex".to_string()),
                         vec![
                             GoExpression::literal("0".to_string()),
                             GoExpression::binary(

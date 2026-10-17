@@ -249,43 +249,26 @@ pub(crate) fn identify_body_locals(
         shadowing: HashSet<LocalId>,
     }
 
-    impl Resolve<'_> {
-        fn visible(&self, spelling: &str) -> Option<LocalId> {
-            self.frames
-                .iter()
-                .rev()
-                .find_map(|frame| frame.get(spelling).copied())
-        }
-    }
-
     impl VisitorMut for Resolve<'_> {
         fn expression(&mut self, node: &mut GoExpressionNode) {
             let GoExpressionNode::Identifier(name) = node else {
                 return;
             };
-            if name.id().is_none() && !name.is_pending() {
-                return;
-            }
-            if let Some(visible) = self.visible(name.spelling()) {
-                let in_scope = name.id().is_some_and(|id| {
+            if let Some(id) = name.id() {
+                assert!(
                     self.frames
                         .iter()
-                        .any(|frame| frame.values().any(|local| *local == id))
-                });
-                if !in_scope {
-                    debug_assert!(
-                        name.is_pending(),
-                        "identified read of `{}` has no visible declaration",
-                        name.spelling()
-                    );
-                    name.resolve_to(visible);
-                }
-            } else if name.is_pending()
-                && let Some(id) = self.scope.generated_local_id(name.spelling())
-            {
-                name.resolve_to(id);
+                        .any(|frame| frame.values().any(|local| *local == id)),
+                    "identified read of `{}` has no visible declaration",
+                    name.spelling()
+                );
+                return;
             }
-            name.finish();
+            assert!(
+                !name.is_pending(),
+                "read has no producer-assigned identity: {}",
+                name.spelling()
+            );
         }
 
         fn local_binding(&mut self, name: &mut GoIdentifier) {
@@ -299,12 +282,9 @@ pub(crate) fn identify_body_locals(
                 .expect("a local scope exists")
                 .get(name.spelling())
                 .copied();
-            let id = current.unwrap_or_else(|| {
-                name.id()
-                    .or_else(|| self.scope.generated_local_id(name.spelling()))
-                    .unwrap_or_else(|| self.scope.new_local_id())
-            });
-            name.resolve_to(id);
+            let id =
+                current.unwrap_or_else(|| name.id().unwrap_or_else(|| self.scope.new_local_id()));
+            name.identify(id);
             if self.frames[..self.frames.len() - 1]
                 .iter()
                 .any(|frame| frame.get(name.spelling()).is_some_and(|outer| *outer != id))
@@ -376,18 +356,21 @@ mod tests {
 
     #[test]
     fn local_resolution_follows_lexical_shadowing() {
+        let mut scope = ScopeState::new();
+        let outer_id = scope.new_local_identifier("value");
+        let inner_id = scope.new_local_identifier("value");
         let mut statements = vec![
-            define("value".to_string(), GoExpression::literal("1".to_string())),
+            define(outer_id.clone(), GoExpression::literal("1".to_string())),
             LoweredStatement::Block(LoweredBlock {
                 statements: vec![
-                    define("value".to_string(), name("value")),
-                    LoweredStatement::Return(vec![name("value")]).into(),
+                    define(inner_id.clone(), GoExpression::identifier(outer_id.clone())),
+                    LoweredStatement::Return(vec![GoExpression::identifier(inner_id)]).into(),
                 ],
             })
             .into(),
-            LoweredStatement::Return(vec![name("value")]).into(),
+            LoweredStatement::Return(vec![GoExpression::identifier(outer_id)]).into(),
         ];
-        let shadowing = identify_body_locals(&mut statements, &[], &mut ScopeState::new());
+        let shadowing = identify_body_locals(&mut statements, &[], &mut scope);
         let LoweredStatement::Define(outer) = &statements[0].kind else {
             panic!("expected outer binding");
         };
@@ -410,13 +393,35 @@ mod tests {
     }
 
     #[test]
-    #[cfg(debug_assertions)]
+    #[should_panic(expected = "read has no producer-assigned identity")]
+    fn a_pending_read_is_not_resolved_by_spelling() {
+        let mut statements = vec![
+            define("value".to_string(), GoExpression::literal("1".to_string())),
+            LoweredStatement::Return(vec![name("value")]).into(),
+        ];
+        identify_body_locals(&mut statements, &[], &mut ScopeState::new());
+    }
+
+    #[test]
     #[should_panic(expected = "has no visible declaration")]
     fn an_identified_read_without_its_declaration_fails() {
         let mut statements = vec![
             define("result".to_string(), GoExpression::literal("1".to_string())),
             LoweredStatement::Return(vec![GoExpression::identifier(GoIdentifier::local(
                 "result".to_string(),
+                LocalId(42),
+            ))])
+            .into(),
+        ];
+        identify_body_locals(&mut statements, &[], &mut ScopeState::new());
+    }
+
+    #[test]
+    #[should_panic(expected = "has no visible declaration")]
+    fn an_identified_read_without_any_matching_spelling_fails() {
+        let mut statements = vec![
+            LoweredStatement::Return(vec![GoExpression::identifier(GoIdentifier::local(
+                "missing".to_string(),
                 LocalId(42),
             ))])
             .into(),
@@ -645,12 +650,32 @@ mod tests {
         let LoweredStatement::If(first) = &statements[0].kind else {
             panic!("expected if");
         };
-        assert_eq!(first.initializer.as_ref().unwrap().names, ["first"]);
+        assert_eq!(
+            first
+                .initializer
+                .as_ref()
+                .unwrap()
+                .names
+                .iter()
+                .map(GoIdentifier::spelling)
+                .collect::<Vec<_>>(),
+            ["first"]
+        );
         assert_eq!(first.condition, name("first"));
         let ElseArm::ElseIf(second) = &first.else_arm else {
             panic!("expected else-if");
         };
-        assert_eq!(second.initializer.as_ref().unwrap().names, ["second"]);
+        assert_eq!(
+            second
+                .initializer
+                .as_ref()
+                .unwrap()
+                .names
+                .iter()
+                .map(GoIdentifier::spelling)
+                .collect::<Vec<_>>(),
+            ["second"]
+        );
         assert_eq!(second.condition, name("second"));
     }
 }

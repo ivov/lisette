@@ -579,7 +579,6 @@ pub(crate) fn for_each_statements_mut(
 #[derive(Default)]
 pub(crate) struct GoUses {
     locals: HashSet<LocalId>,
-    unidentified: HashSet<String>,
     spellings: HashSet<String>,
 }
 
@@ -606,11 +605,6 @@ impl GoUses {
 
     pub(crate) fn contains_identifier(&self, name: &GoIdentifier) -> bool {
         let id = name.id().expect("local-use queries need a local ID");
-        assert!(
-            !self.unidentified.contains(name.spelling()),
-            "unidentified reference to queried local {}",
-            name.spelling()
-        );
         self.locals.contains(&id)
     }
 
@@ -620,11 +614,13 @@ impl GoUses {
 
     fn record(&mut self, node: &GoExpressionNode) {
         if let GoExpressionNode::Identifier(name) = node {
+            assert!(
+                !name.is_pending(),
+                "local-use analysis needs identified reads"
+            );
             self.spellings.insert(name.spelling().to_string());
             if let Some(id) = name.id() {
                 self.locals.insert(id);
-            } else if name.is_pending() {
-                self.unidentified.insert(name.spelling().to_string());
             }
         }
     }
@@ -776,14 +772,14 @@ impl LoweredStatement {
         }
     }
 
-    pub(crate) fn binds_name(&self, go_name: &str) -> bool {
-        match self {
+    pub(crate) fn binds_local(&self, local: &GoIdentifier) -> bool {
+        local.id().is_some_and(|id| match self {
             LoweredStatement::Define(Definition { names, .. }) => {
-                names.iter().any(|name| name == go_name)
+                names.iter().any(|name| name.id() == Some(id))
             }
-            LoweredStatement::VarDecl { name, .. } => name == go_name,
+            LoweredStatement::VarDecl { name, .. } => name.id() == Some(id),
             _ => false,
-        }
+        })
     }
 
     /// `false` when the statement binds nothing.
@@ -849,7 +845,7 @@ impl LoweredStatement {
                 diverges: true,
             } => {
                 let go_panic = matches!(expression.node(), GoExpressionNode::Call { callee, .. }
-                    if matches!(callee.as_ref(), GoExpressionNode::Identifier(name) if name == "panic"));
+                    if matches!(callee.as_ref(), GoExpressionNode::Identifier(name) if name.spelling() == "panic"));
                 if go_panic {
                     FlowSummary::terminal()
                 } else {
@@ -1125,11 +1121,12 @@ mod go_uses_tests {
     fn inner_binding_does_not_count_as_a_read_of_the_outer_local() {
         let mut scope = ScopeState::new();
         let outer = GoIdentifier::local("value".to_string(), scope.new_local_id());
+        let inner = scope.new_local_identifier("value");
         let mut statements = vec![
             LoweredStatement::Block(LoweredBlock {
                 statements: vec![
-                    define("value".to_string(), GoExpression::literal("1".to_string())),
-                    LoweredStatement::Return(vec![GoExpression::name("value".to_string())]).into(),
+                    define(inner.clone(), GoExpression::literal("1".to_string())),
+                    LoweredStatement::Return(vec![GoExpression::identifier(inner)]).into(),
                 ],
             })
             .into(),

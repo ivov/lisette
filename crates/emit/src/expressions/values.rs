@@ -531,7 +531,7 @@ impl Planner<'_> {
                     "ref",
                     GoExpression::empty_composite("struct{}".to_string()),
                 );
-                GoExpression::address_of(GoExpression::name(tmp))
+                GoExpression::address_of(GoExpression::identifier(tmp))
             });
         }
 
@@ -543,7 +543,7 @@ impl Planner<'_> {
                 || matches!(inner.get_type(), Type::Function(_))
             {
                 let tmp = self.hoist_tmp_value_statement(setup, "ref", emitted);
-                GoExpression::address_of(GoExpression::name(tmp))
+                GoExpression::address_of(GoExpression::identifier(tmp))
             } else {
                 GoExpression::address_of(emitted)
             }

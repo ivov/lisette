@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn main() {
+    let x = 7
+    let f = || [x].fold(0, |x, y| x + y)
+    if f() != 7 { panic("captured source") }
+  }
+---
+package main
+
+func main() {
+	x := 7
+	f := func() int {
+		x_1 := 0
+		for _, y := range []int{x} {
+			x_1 += y
+		}
+		return x_1
+	}
+	if f() != 7 {
+		panic("captured source")
+	}
+}

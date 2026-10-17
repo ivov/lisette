@@ -82,17 +82,17 @@ impl Planner<'_> {
             };
             let go_type = pointee.go_type(self);
             let go_type = self.use_rendered_go_type(go_type);
-            let copy = self.fresh_var(Some("ptr"));
+            let copy = self.fresh_local(Some("ptr"));
             self.declare(&copy);
             setup.push(
                 LoweredStatement::VarDecl {
-                    name: copy.clone().into(),
+                    name: copy.clone(),
                     go_type,
                     value: Some(value),
                 }
                 .into(),
             );
-            GoExpression::address_of(GoExpression::name(copy))
+            GoExpression::address_of(GoExpression::identifier(copy))
         }))
     }
 
@@ -106,7 +106,7 @@ impl Planner<'_> {
     ) -> (Vec<Statement>, WrapperOutcome) {
         let mut statements = Vec::new();
         let raw = self.hoist_tmp_value_statement(&mut statements, "ret", call);
-        let raw = || GoExpression::name(raw.clone());
+        let raw = || GoExpression::identifier(raw.clone());
         let inner_ty_str = self.use_go_type(&option_ty.ok_type());
         let value = prelude_call(
             "OptionFromCommaOk",
@@ -165,18 +165,18 @@ impl Planner<'_> {
         } else {
             self.create_temp_vars("ret", 1)
         };
-        let ok_var = self.fresh_var(Some("ret"));
+        let ok_var = self.fresh_local(Some("ret"));
         self.declare(&ok_var);
 
         let mut all_vars = val_vars.clone();
         all_vars.push(ok_var.clone());
         statements.push(define_many(all_vars, call));
 
-        let first_val = GoExpression::name(val_vars[0].clone());
+        let first_val = GoExpression::identifier(val_vars[0].clone());
         let val_expression = if layout.is_flattened() && inner_tuple_arity.is_some() {
             let values = val_vars
                 .iter()
-                .map(|var| GoExpression::name(var.clone()))
+                .map(|var| GoExpression::identifier(var.clone()))
                 .collect();
             build_tuple_literal(values)
         } else {
@@ -193,7 +193,7 @@ impl Planner<'_> {
 
         let option_ty_str = { self.fallible_go_type(&fallible) };
 
-        let ok = GoExpression::name(ok_var);
+        let ok = GoExpression::identifier(ok_var);
         let condition = match self.nullable_option_nil_guard(option_ty) {
             Some(guard) => GoExpression::binary(ok, BinaryOp::And, guard.non_nil(first_val)),
             None => ok,
@@ -249,25 +249,25 @@ impl Planner<'_> {
         address: bool,
     ) -> GoExpression {
         let option = self.stable_source(statements, "opt", option_value);
-        let slot = self.fresh_var(Some(if address { "ptr" } else { "unwrap" }));
+        let slot = self.fresh_local(Some(if address { "ptr" } else { "unwrap" }));
         self.declare(&slot);
         statements.push(
             LoweredStatement::VarDecl {
-                name: slot.clone().into(),
+                name: slot.clone(),
                 go_type: slot_ty.to_string(),
                 value: None,
             }
             .into(),
         );
         let body = self.project_some_into(
-            GoExpression::name(slot.clone()),
+            GoExpression::identifier(slot.clone()),
             option.clone(),
             payload_bridge,
             address,
         );
         statements
             .push(LoweredStatement::If(IfPlan::plain(is_some(option), body, ElseArm::None)).into());
-        GoExpression::name(slot)
+        GoExpression::identifier(slot)
     }
 
     fn project_some_into(
@@ -340,7 +340,7 @@ impl Planner<'_> {
             format!("[{}]", inner_ty_str),
             vec![pointer],
         );
-        GoExpression::name(self.hoist_tmp_value_statement(statements, "option", value))
+        GoExpression::identifier(self.hoist_tmp_value_statement(statements, "option", value))
     }
 
     /// `FreshSlot` form of `lower_nil_check_option_wrap` (extends `statements`
@@ -354,7 +354,7 @@ impl Planner<'_> {
         let (wrap_statements, outcome) =
             self.lower_nil_check_option_wrap(raw_value, option_ty, WrapperTarget::FreshSlot);
         statements.extend(wrap_statements);
-        GoExpression::name(outcome.expect("FreshSlot produces a slot"))
+        GoExpression::identifier(outcome.expect("FreshSlot produces a slot"))
     }
 
     pub(crate) fn plan_layout_bridge(
@@ -415,7 +415,7 @@ impl Planner<'_> {
                 let source = self.stable_source(statements, "src", value);
                 let pointee =
                     self.plan_layout_bridge(statements, GoExpression::dereference(source), pointee);
-                GoExpression::name(self.hoist_tmp_value_statement(
+                GoExpression::identifier(self.hoist_tmp_value_statement(
                     statements,
                     "ref",
                     GoExpression::address_of(pointee),
@@ -441,11 +441,11 @@ impl Planner<'_> {
         let source = self.stable_source(statements, "raw", raw_value);
         let fallible = Fallible::from_type(option_type).expect("Option type expected");
         let option_type_string = { self.fallible_go_type(&fallible) };
-        let option = self.fresh_var(Some("option"));
+        let option = self.fresh_local(Some("option"));
         self.declare(&option);
         statements.push(
             LoweredStatement::VarDecl {
-                name: option.clone().into(),
+                name: option.clone(),
                 go_type: option_type_string,
                 value: None,
             }
@@ -453,7 +453,7 @@ impl Planner<'_> {
         );
         statements.push(
             self.wrap_nilable_into(
-                GoExpression::name(option.clone()),
+                GoExpression::identifier(option.clone()),
                 source,
                 option_type,
                 payload_bridge,
@@ -461,7 +461,7 @@ impl Planner<'_> {
             )
             .into(),
         );
-        GoExpression::name(option)
+        GoExpression::identifier(option)
     }
 
     fn plan_aggregate_layout_bridge(
@@ -495,11 +495,11 @@ impl Planner<'_> {
         let target_type = target_layout.go_type(self);
         let target_type = self.use_rendered_go_type(target_type);
         let output = if matches!(target_layout, ValueLayout::Array { .. }) {
-            let output = self.fresh_var(Some(output_hint));
+            let output = self.fresh_local(Some(output_hint));
             self.declare(&output);
             statements.push(
                 LoweredStatement::VarDecl {
-                    name: output.clone().into(),
+                    name: output.clone(),
                     go_type: target_type,
                     value: None,
                 }
@@ -508,30 +508,33 @@ impl Planner<'_> {
             output
         } else {
             let make = GoExpression::call(
-                GoExpression::name("make".to_string()),
+                GoExpression::external_name("make".to_string()),
                 vec![
                     GoExpression::type_name(target_type),
-                    GoExpression::call(GoExpression::name("len".to_string()), vec![source.clone()]),
+                    GoExpression::call(
+                        GoExpression::external_name("len".to_string()),
+                        vec![source.clone()],
+                    ),
                 ],
             );
             self.hoist_tmp_value_statement(statements, output_hint, make)
         };
-        let index = self.fresh_var(Some("i"));
+        let index = self.fresh_local(Some("i"));
         self.declare(&index);
-        let element = self.fresh_var(Some("v"));
+        let element = self.fresh_local(Some("v"));
         self.declare(&element);
         let mut key_statements = Vec::new();
         let output_index = match key_bridge {
             Some(bridge) => self.plan_layout_bridge(
                 &mut key_statements,
-                GoExpression::name(index.clone()),
+                GoExpression::identifier(index.clone()),
                 bridge,
             ),
-            None => GoExpression::name(index.clone()),
+            None => GoExpression::identifier(index.clone()),
         };
         let mut body = self.plan_aggregate_element_bridge(
-            GoExpression::index(GoExpression::name(output.clone()), output_index),
-            GoExpression::name(element.clone()),
+            GoExpression::index(GoExpression::identifier(output.clone()), output_index),
+            GoExpression::identifier(element.clone()),
             source_layout,
             element_bridge,
         );
@@ -543,15 +546,15 @@ impl Planner<'_> {
             LoweredStatement::Loop(LoopPlan {
                 kind: LoopKind::Generated { label: None },
                 header: LoopHeader::Range {
-                    key: Some(index.into()),
-                    value: Some(element.into()),
+                    key: Some(index),
+                    value: Some(element),
                     iterable: source,
                 },
                 body,
             })
             .into(),
         );
-        GoExpression::name(output)
+        GoExpression::identifier(output)
     }
 
     fn plan_aggregate_element_bridge(

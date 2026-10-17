@@ -1,0 +1,65 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn n() -> string { "context" }
+  
+  fn main() {
+    let err = 9
+    let f = || {
+      match strconv.Atoi("7").wrap_err(n()) {
+        Ok(n) => { let read = || n + err; read() },
+        Err(_) => 0,
+      }
+    }
+    let mut total = 0
+    for ret in [1, 2] {
+      if let Some(err) = Some(ret) {
+        let read = || err + f()
+        total += read()
+      }
+    }
+    if total != 35 || err != 9 { panic("wrapped arm capture") }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func n() string {
+	return "context"
+}
+
+func main() {
+	err := 9
+	f := func() int {
+		n_1, err_1 := strconv.Atoi("7")
+		n()
+		if err_1 == nil {
+			read := func() int {
+				return n_1 + err
+			}
+			return read()
+		}
+		return 0
+	}
+	total := 0
+	for _, ret := range []int{1, 2} {
+		subject := lisette.MakeOptionSome(ret)
+		if subject.Tag == lisette.OptionSome {
+			err_2 := subject.SomeVal
+			read := func() int {
+				return err_2 + f()
+			}
+			total += read()
+		}
+	}
+	if total != 35 || err != 9 {
+		panic("wrapped arm capture")
+	}
+}

@@ -376,7 +376,7 @@ pub(crate) fn emit_lisette_callback_wrapper(
         )
         .collect();
 
-    let call = GoExpression::call(GoExpression::name(cb_var), inner_args);
+    let call = GoExpression::call(GoExpression::identifier(cb_var), inner_args);
 
     let hint = match target_abi {
         LoweredReturnAbi::Option(_) => "opt",
@@ -462,7 +462,7 @@ pub(crate) fn emit_unit_result_adapter(
     };
     let cb_var = planner.hoist_tmp_value_statement(setup, "cb", fn_value);
     let (param_strs, arguments) = planner.build_wrapper_params(params);
-    let call = GoExpression::call(GoExpression::name(cb_var), arguments);
+    let call = GoExpression::call(GoExpression::identifier(cb_var), arguments);
     let (result, tail) = match slot_result {
         Some(result) => (result, LoweredStatement::UnreachablePanic.into()),
         None => (
@@ -511,7 +511,7 @@ pub(crate) fn lower_arg_to_tagged(
         "tagged adapter returns its result directly"
     );
 
-    let tagged_var = planner.fresh_var(Some("tagged"));
+    let tagged_var = planner.fresh_local(Some("tagged"));
     planner.declare(&tagged_var);
     prelude.push(define(
         tagged_var.clone(),
@@ -522,7 +522,7 @@ pub(crate) fn lower_arg_to_tagged(
             FunctionLiteralLayout::MultiLine,
         ),
     ));
-    GoExpression::name(tagged_var)
+    GoExpression::identifier(tagged_var)
 }
 
 /// Tail return for packed `Partial` and `Tuple` ABIs. A flattened `Partial`
@@ -579,7 +579,7 @@ fn emit_lowered_tuple_tail(
     let tup = planner.hoist_tmp_value_statement(&mut statements, "tup", value);
     statements.extend(emit_lowered_result_return(
         planner,
-        GoExpression::name(tup),
+        GoExpression::identifier(tup),
         "tup",
         &return_ty,
         &LoweredReturnAbi::Tuple { arity },

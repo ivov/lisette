@@ -16,8 +16,6 @@ package main
 func test() string {
 	x := "outer"
 	{
-		x := "inner"
-		_ = x
 	}
 	return x
 }

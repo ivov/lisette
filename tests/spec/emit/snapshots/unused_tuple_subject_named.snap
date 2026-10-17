@@ -1,0 +1,51 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn pair(ch: Channel<int>) -> (int, int) { ch.send(7); (1, 2) }
+  fn main() {
+    let ch = Channel.buffered<int>(3)
+    let first = 7
+    let read = || first
+    let f = || {
+      let (first, second) = pair(ch) else { panic("irrefutable named tuple") }
+      read()
+    }
+    if f() != 7 { panic("unused binding replaced capture") }
+    ch.send(9)
+    if ch.receive().unwrap_or(0) != 7 { panic("named subject omitted") }
+    if ch.receive().unwrap_or(0) != 9 { panic("named subject repeated") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func pair(ch chan int) (int, int) {
+	lisette.ChannelSend(ch, 7)
+	return 1, 2
+}
+
+func main() {
+	ch := make(chan int, 3)
+	first := 7
+	read := func() int {
+		return first
+	}
+	f := func() int {
+		ret, ret_1 := pair(ch)
+		tup := lisette.MakeTuple2(ret, ret_1)
+		_ = tup
+		return read()
+	}
+	if f() != 7 {
+		panic("unused binding replaced capture")
+	}
+	lisette.ChannelSend(ch, 9)
+	if lisette.ChannelReceive(ch).UnwrapOr(0) != 7 {
+		panic("named subject omitted")
+	}
+	if lisette.ChannelReceive(ch).UnwrapOr(0) != 9 {
+		panic("named subject repeated")
+	}
+}

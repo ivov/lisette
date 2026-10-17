@@ -39,7 +39,7 @@ impl Planner<'_> {
         }
         let length = || {
             GoExpression::call(
-                GoExpression::name("len".to_string()),
+                GoExpression::external_name("len".to_string()),
                 vec![receiver.clone()],
             )
         };

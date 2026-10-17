@@ -152,7 +152,7 @@ impl Planner<'_> {
         let (mut setup, value) = plan.into_parts();
         if requires_capture {
             let check = self.hoist_tmp_value_statement(&mut setup, "check", value);
-            (setup, GoExpression::name(check))
+            (setup, GoExpression::identifier(check))
         } else {
             (setup, value)
         }
@@ -254,12 +254,12 @@ impl Planner<'_> {
         let (message_setup, wraps) = self.prepare_wrap_messages(&wraps, true);
         let opens_if = value_var.is_none() && message_setup.is_empty();
         let outcome_var = self.pair_status(None, PairStatusKind::Error, opens_if);
-        let outcome = || GoExpression::name(outcome_var.clone());
+        let outcome = || GoExpression::identifier(outcome_var.clone());
         let binding = Definition {
             names: match &value_var {
-                Some(value) => vec![value.clone(), outcome_var.clone().into()],
-                None if has_value_slot => vec!["_".to_string().into(), outcome_var.clone().into()],
-                None => vec![outcome_var.clone().into()],
+                Some(value) => vec![value.clone(), outcome_var.clone()],
+                None if has_value_slot => vec!["_".to_string().into(), outcome_var.clone()],
+                None => vec![outcome_var.clone()],
             },
             value: call,
         };
@@ -341,9 +341,13 @@ impl Planner<'_> {
         );
         statements.extend(late_binding);
         let payload = match (target, payload) {
-            (PropagateTarget::Value, Some(payload)) if reads_element => Some(GoExpression::name(
-                self.hoist_tmp_value_statement(&mut statements, "elem", payload),
-            )),
+            (PropagateTarget::Value, Some(payload)) if reads_element => {
+                Some(GoExpression::identifier(self.hoist_tmp_value_statement(
+                    &mut statements,
+                    "elem",
+                    payload,
+                )))
+            }
             (_, payload) => payload,
         };
         let value = self.propagated_value(&mut statements, target, named, payload);
@@ -889,11 +893,11 @@ impl Planner<'_> {
             && !source.has_nil_guard()
         {
             let pair = self.bind_comma_ok_pair(expression, source, CommaOkValueSlot::Temp);
-            let ok = GoExpression::name(pair.status().to_string());
-            let value = GoExpression::name(
-                pair.payload_name()
+            let ok = GoExpression::identifier(pair.status_identifier().clone());
+            let value = GoExpression::identifier(
+                pair.payload_identifier()
                     .expect("Temp slot always captures the value")
-                    .to_string(),
+                    .clone(),
             );
             let mut statements = pair.statements;
             statements.push(transition::multi_value_return(vec![value, ok]));

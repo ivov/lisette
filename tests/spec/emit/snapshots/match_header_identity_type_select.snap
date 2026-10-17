@@ -1,0 +1,74 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  import "go:time"
+  fn value(ch: Channel<int>) -> fmt.Stringer { ch.send(7); 3 as time.Duration }
+  fn main() {
+    let subject = 7
+    let effects = Channel.buffered<int>(3)
+    let ch = Channel.buffered<int>(1)
+    ch.send(2)
+    let f = || match value(effects) {
+      time.Duration(subject) => {
+        let read = || subject as int
+        select { let Some(subject) = ch.receive() => subject + read(), _ => 0 }
+      },
+      _ => subject,
+    }
+    if f() != 5 || subject != 7 { panic("type switch capture") }
+    effects.send(9)
+    if effects.receive().unwrap_or(0) != 7 || effects.receive().unwrap_or(0) != 9 { panic("type switch evaluation") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"time"
+)
+
+func value(ch chan int) fmt.Stringer {
+	lisette.ChannelSend(ch, 7)
+	return time.Duration(3)
+}
+
+func main() {
+	subject := 7
+	effects := make(chan int, 3)
+	ch := make(chan int, 1)
+	lisette.ChannelSend(ch, 2)
+	f := func() int {
+		switch subject_1 := value(effects).(type) {
+		case time.Duration:
+			subject_2 := int64(subject_1)
+			read := func() int {
+				return int(subject_2)
+			}
+			ch_1 := ch
+			for {
+				select {
+				case subject, ok := <-ch_1:
+					if ok {
+						return subject + read()
+					}
+					ch_1 = nil
+					continue
+				default:
+					return 0
+				}
+			}
+		default:
+			return subject
+		}
+	}
+	if f() != 5 || subject != 7 {
+		panic("type switch capture")
+	}
+	lisette.ChannelSend(effects, 9)
+	if lisette.ChannelReceive(effects).UnwrapOr(0) != 7 || lisette.ChannelReceive(effects).UnwrapOr(0) != 9 {
+		panic("type switch evaluation")
+	}
+}

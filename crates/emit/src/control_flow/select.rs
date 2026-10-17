@@ -178,7 +178,7 @@ impl Planner<'_> {
                     let (channel_setup, channel_value) = channel.into_parts();
                     setup.extend(channel_setup);
                     let channel = if is_some_pattern(binding) || (needs_retry_loop && !repeats) {
-                        GoExpression::name(self.hoist_tmp_value_statement(
+                        GoExpression::identifier(self.hoist_tmp_value_statement(
                             setup,
                             "ch",
                             channel_value,
@@ -202,7 +202,7 @@ impl Planner<'_> {
                     let (channel_setup, channel_value) = channel.into_parts();
                     setup.extend(channel_setup);
                     let channel = if needs_retry_loop && !repeats {
-                        GoExpression::name(self.hoist_tmp_value_statement(
+                        GoExpression::identifier(self.hoist_tmp_value_statement(
                             setup,
                             "ch",
                             channel_value,
@@ -238,8 +238,7 @@ impl Planner<'_> {
 
     fn fresh_ok_var(&mut self) -> GoIdentifier {
         if self.scope.has_binding_for_go_name("ok") || self.shadows_declaration("ok") {
-            let name = self.fresh_var(Some("ok"));
-            self.scope.generated_identifier(&name)
+            self.fresh_local(Some("ok"))
         } else {
             GoIdentifier::local("ok".to_string(), self.scope.new_local_id())
         }
@@ -402,13 +401,12 @@ impl Planner<'_> {
                 (ok_var, body)
             });
             return SelectArmPlan::Receive {
-                receive_vars: vec![GoIdentifier::name("_".to_string()), ok_var],
+                receive_vars: vec![GoIdentifier::external("_".to_string()), ok_var],
                 channel: ctx.channel.clone(),
                 body: LoweredBlock { statements: body },
             };
         }
-        let receiver_var = self.fresh_var(Some("recv"));
-        let receiver_var = self.scope.generated_identifier(&receiver_var);
+        let receiver_var = self.fresh_local(Some("recv"));
         self.lower_ok_guard(|_| receiver_var, Some(effective_pattern), ctx)
     }
 
@@ -439,13 +437,13 @@ impl Planner<'_> {
             ) {
                 Vec::new()
             } else {
-                let receiver_var = this.fresh_var(Some("recv"));
+                let receiver_var = this.fresh_local(Some("recv"));
                 body_statements.extend(this.lower_irrefutable_pattern_site(
-                    PatternSubject::for_value(receiver_var.clone()),
+                    PatternSubject::for_identifier(receiver_var.clone()),
                     effective_pattern,
                     &ctx.element_ty,
                 ));
-                vec![this.scope.generated_identifier(&receiver_var)]
+                vec![receiver_var.clone()]
             };
             let block = this.lower_block_to_place(ctx.body, ctx.place);
             body_statements.extend(block.statements);
@@ -476,8 +474,11 @@ impl Planner<'_> {
                 channel_value = cancel_deref_of_address(channel_value);
             }
             if pin_channel {
-                channel_value =
-                    GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", channel_value));
+                channel_value = GoExpression::identifier(self.hoist_tmp_value_statement(
+                    setup,
+                    "ch",
+                    channel_value,
+                ));
             }
             match operation {
                 ChannelOperation::Send { value, .. } => {
@@ -486,7 +487,7 @@ impl Planner<'_> {
                     let (value_setup, mut sent) = value_plan.into_parts();
                     setup.extend(value_setup);
                     if pin_value {
-                        sent = GoExpression::name(
+                        sent = GoExpression::identifier(
                             self.hoist_tmp_value_statement(setup, "send_val", sent),
                         );
                     }
@@ -505,8 +506,11 @@ impl Planner<'_> {
                 channel_value = cancel_deref_of_address(channel_value);
             }
             if pin_channel {
-                channel_value =
-                    GoExpression::name(self.hoist_tmp_value_statement(setup, "ch", channel_value));
+                channel_value = GoExpression::identifier(self.hoist_tmp_value_statement(
+                    setup,
+                    "ch",
+                    channel_value,
+                ));
             }
             PreparedChannelOperation::Receive(channel_value)
         }
@@ -576,7 +580,7 @@ impl Planner<'_> {
             if !used.contains_identifier(&ok_var) {
                 body_statements.push(discard(GoExpression::identifier(ok_var.clone())));
             }
-            if case_var != "_" && !used.contains_identifier(&case_var) {
+            if case_var.spelling() != "_" && !used.contains_identifier(&case_var) {
                 body_statements.push(discard(GoExpression::identifier(case_var.clone())));
             }
             if let Some(plan) = arms_plan {

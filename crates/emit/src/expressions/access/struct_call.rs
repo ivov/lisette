@@ -605,15 +605,17 @@ impl Planner<'_> {
         }
         let zero = self.lisette_zero(elem);
         let array_type = format!("[{len}]{elem_go}");
-        let arr = || GoExpression::name("arr".to_string());
-        let index = || GoExpression::name("i".to_string());
+        let array_name = self.scope.helper_local("arr", &self.package);
+        let index_name = self.scope.helper_local("i", &self.package);
+        let arr = || GoExpression::identifier(array_name.clone());
+        let index = || GoExpression::identifier(index_name.clone());
         // Go has no syntax to repeat a value across all N slots, so fill each index.
         GoExpression::immediate_call(
             array_type.clone(),
             LoweredBlock {
                 statements: vec![
                     LoweredStatement::VarDecl {
-                        name: "arr".to_string().into(),
+                        name: array_name.clone(),
                         go_type: array_type,
                         value: None,
                     }
@@ -621,7 +623,7 @@ impl Planner<'_> {
                     LoweredStatement::Loop(LoopPlan {
                         kind: LoopKind::Generated { label: None },
                         header: LoopHeader::Range {
-                            key: Some("i".to_string().into()),
+                            key: Some(index_name.clone()),
                             value: None,
                             iterable: arr(),
                         },
@@ -678,7 +680,7 @@ impl Planner<'_> {
             return value;
         }
         let temp = self.hoist_tmp_value_statement(statements, "ptr", value);
-        GoExpression::address_of(GoExpression::name(temp))
+        GoExpression::address_of(GoExpression::identifier(temp))
     }
 
     /// Analyze a struct call to determine Go type and enum context.
@@ -820,7 +822,7 @@ impl Planner<'_> {
                 let (name, value) = field.into_pair();
                 if has_observable_evaluation {
                     let temp = self.hoist_tmp_value_statement(statements, "field", value);
-                    (name, GoExpression::name(temp))
+                    (name, GoExpression::identifier(temp))
                 } else {
                     (name, value)
                 }
@@ -843,12 +845,12 @@ impl Planner<'_> {
 
         for (name, value) in fields {
             statements.push(assign(
-                GoExpression::selector(GoExpression::name(tmp.clone()), name.clone()),
+                GoExpression::selector(GoExpression::identifier(tmp.clone()), name.clone()),
                 value.clone(),
             ));
         }
 
-        (statements, GoExpression::name(tmp))
+        (statements, GoExpression::identifier(tmp))
     }
 
     fn lower_enum_variant_spread(
@@ -875,7 +877,7 @@ impl Planner<'_> {
         }
 
         let source = if is_order_sensitive(base) {
-            GoExpression::name(self.hoist_tmp_value_statement(
+            GoExpression::identifier(self.hoist_tmp_value_statement(
                 &mut statements,
                 "spread",
                 base_value,
@@ -894,7 +896,7 @@ impl Planner<'_> {
 /// `*new(T)`, the zero of a Go named type with no literal form.
 fn dereferenced_new(go_type: String) -> GoExpression {
     GoExpression::dereference(GoExpression::call(
-        GoExpression::name("new".to_string()),
+        GoExpression::external_name("new".to_string()),
         vec![GoExpression::type_name(go_type)],
     ))
 }

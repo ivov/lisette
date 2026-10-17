@@ -19,8 +19,6 @@ func test() string {
 	result := "final"
 	i := 0
 	for i < 3 {
-		result := i * 10
-		_ = result
 		i++
 	}
 	return result

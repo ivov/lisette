@@ -478,7 +478,9 @@ fn replace_only_read(
 ) -> bool {
     match statement {
         LoweredStatement::Define(Definition { names, value }) => {
-            !names.iter().any(|name| name == source.spelling())
+            !names
+                .iter()
+                .any(|name| name.spelling() == source.spelling())
                 && rename_in(vec![value.node_mut()], None, temp, source)
         }
         LoweredStatement::Assign(AssignForm::Simple { target, value }) => rename_in(
@@ -968,21 +970,29 @@ mod tests {
 
     #[test]
     fn unread_temp_pass_preserves_the_sources_last_read() {
+        let first = GoIdentifier::local("first".into(), LocalId(0));
+        let second = GoIdentifier::local("second".into(), LocalId(1));
         let unread = vec![
-            define("first".to_string(), literal("1")),
-            define("second".to_string(), name("first")),
-            discard(name("second")),
+            define(first.clone(), literal("1")),
+            define(second.clone(), GoExpression::identifier(first.clone())),
+            discard(GoExpression::identifier(second.clone())),
         ];
         let mut statements = identified(unread.clone());
         let original = statements.clone();
         drop_unread_temps(&mut statements, &HashSet::default());
         assert_eq!(statements, original);
 
-        let mut statements = identified([unread, vec![returned(name("first"))]].concat());
+        let mut statements = identified(
+            [
+                unread,
+                vec![returned(GoExpression::identifier(first.clone()))],
+            ]
+            .concat(),
+        );
         drop_unread_temps(&mut statements, &HashSet::default());
         let expected = identified(vec![
-            define("first".to_string(), literal("1")),
-            returned(name("first")),
+            define(first.clone(), literal("1")),
+            returned(GoExpression::identifier(first.clone())),
         ]);
         assert_eq!(statements, expected);
         drop_unread_temps(&mut statements, &HashSet::default());
@@ -1010,22 +1020,35 @@ mod tests {
 
     #[test]
     fn cleanup_is_one_sweep_rather_than_a_fixed_point() {
+        let first = GoIdentifier::local("first".into(), LocalId(0));
+        let second = GoIdentifier::local("second".into(), LocalId(1));
         let mut statements = identified(vec![
-            define("first".to_string(), name("source")),
-            define("second".to_string(), name("first")),
-            discard(name("second")),
-            returned(name("first")),
+            define(
+                first.clone(),
+                GoExpression::external_name("source".to_string()),
+            ),
+            define(second.clone(), GoExpression::identifier(first.clone())),
+            discard(GoExpression::identifier(second.clone())),
+            returned(GoExpression::identifier(first.clone())),
         ]);
         clean_up(&mut statements, &HashSet::default());
         assert_eq!(
             statements,
             identified(vec![
-                define("first".to_string(), name("source")),
-                returned(name("first"))
+                define(
+                    first.clone(),
+                    GoExpression::external_name("source".to_string())
+                ),
+                returned(GoExpression::identifier(first.clone()))
             ])
         );
         clean_up(&mut statements, &HashSet::default());
-        assert_eq!(statements, identified(vec![returned(name("source"))]));
+        assert_eq!(
+            statements,
+            identified(vec![returned(GoExpression::external_name(
+                "source".to_string()
+            ))])
+        );
     }
 
     #[test]

@@ -377,7 +377,10 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         }
 
         // Wrap the tree in a labeled `for { ... }` retry loop.
-        let label = self.planner.fresh_var(Some("match"));
+        let label = self
+            .planner
+            .scope
+            .fresh_binding_go_name("match", &self.planner.package);
         let ctx = WalkCtx::retry_loop(place, Some(label.as_str()));
         let mut body: Vec<Statement> = Vec::new();
         self.walk(&mut body, tree, &ctx);
@@ -500,7 +503,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 for test in cased {
                     let has_checks = !test.checks.is_empty();
                     if has_checks {
-                        conditions.push(render_condition(&test.checks, self.subject.root()));
+                        conditions.push(render_condition(
+                            &mut self.planner.scope,
+                            &test.checks,
+                            self.subject.root(),
+                        ));
                     }
                     let flattened = match &test.arm {
                         ChainArm::Leaf(leaf) => {
@@ -959,9 +966,9 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 GoIdentifier::local(name.to_string(), self.planner.scope.new_local_id())
             }
             _ => {
-                let name = self.planner.fresh_var(Some("subject"));
+                let name = self.planner.fresh_local(Some("subject"));
                 self.planner.declare(&name);
-                self.planner.scope.generated_identifier(&name)
+                name
             }
         };
         let mut nested = TreePlanner::new(
@@ -1273,12 +1280,13 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         Some((setup, value))
     }
 
-    fn render_chain_conditions(&self, tests: &[ChainTest]) -> Vec<Option<GoExpression>> {
+    fn render_chain_conditions(&mut self, tests: &[ChainTest]) -> Vec<Option<GoExpression>> {
         tests
             .iter()
             .map(|test| {
-                (!test.checks.is_empty())
-                    .then(|| render_condition(&test.checks, self.subject.root()))
+                (!test.checks.is_empty()).then(|| {
+                    render_condition(&mut self.planner.scope, &test.checks, self.subject.root())
+                })
             })
             .collect()
     }

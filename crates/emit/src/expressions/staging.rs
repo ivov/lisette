@@ -126,7 +126,7 @@ impl Planner<'_> {
         let (value_setup, value) = plan.into_parts();
         setup.extend(value_setup);
         if requires_capture {
-            GoExpression::name(self.hoist_tmp_value_statement(setup, prefix, value))
+            GoExpression::identifier(self.hoist_tmp_value_statement(setup, prefix, value))
         } else {
             value
         }
@@ -164,8 +164,9 @@ impl Planner<'_> {
         if plan.rests_in_fixed_name() {
             return true;
         }
-        let rendered = plan.rendered();
-        plan.rests_in_own_temp(&rendered) && !self.scope.has_binding_for_go_name(&rendered)
+        plan.expression().as_identifier().is_some_and(|local| {
+            plan.binds_local(local) && !self.scope.has_binding_for_local(local)
+        })
     }
 
     /// How much of a read's surroundings can change the value it observes.
@@ -196,12 +197,10 @@ impl Planner<'_> {
         let mut stability = Stability::Fixed;
         path.node().visit(&mut |node| {
             if let GoExpressionNode::Identifier(name) = node {
-                stability = stability.max(
-                    match self.scope.source_binding_for_go_name(name.spelling()) {
-                        Some(id) => self.binding_read_stability(id),
-                        None => Stability::StableAcrossCalls,
-                    },
-                );
+                stability = stability.max(match self.scope.source_binding_for_local(name) {
+                    Some(id) => self.binding_read_stability(id),
+                    None => Stability::StableAcrossCalls,
+                });
             }
         });
         stability
@@ -297,7 +296,7 @@ impl Planner<'_> {
         adapter: &TaggedArgumentAdapter,
     ) -> GoExpression {
         let cb_var = self.hoist_tmp_value_statement(setup, "cb", value);
-        lower_arg_to_tagged(self, setup, GoExpression::name(cb_var), adapter)
+        lower_arg_to_tagged(self, setup, GoExpression::identifier(cb_var), adapter)
     }
 
     pub(crate) fn stage_native_method_args_from(
@@ -348,7 +347,7 @@ impl Planner<'_> {
                 CompositeLayout::Inline { padded: false },
             );
             spread = GoExpression::call(
-                GoExpression::name("append".to_string()),
+                GoExpression::external_name("append".to_string()),
                 vec![leading, GoExpression::spread(spread)],
             );
         }
@@ -382,7 +381,7 @@ impl Planner<'_> {
             setup.extend(stage_setup);
             if pin || (eager && !can_delay) {
                 let tmp = self.hoist_tmp_value_statement(&mut setup, prefix, expression);
-                results.push(GoExpression::name(tmp));
+                results.push(GoExpression::identifier(tmp));
             } else {
                 stability = stability.max(stage_stability);
                 results.push(expression);

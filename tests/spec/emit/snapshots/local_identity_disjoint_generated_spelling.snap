@@ -1,0 +1,75 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn main() {
+    let value = 7
+    let f = || { let value = value + 1; value }
+    let mut next = Some(3)
+    let mut total = 0
+    while let Some(value_1) = next {
+      let g = || { let value_1 = value_1 + 1; value_1 + f() }
+      total += g()
+      next = None
+    }
+    let ch = Channel.buffered<int>(1)
+    ch.send(5)
+    total += select {
+      let Some(value_1) = ch.receive() => { let g = || value_1 + f(); g() },
+      _ => 0,
+    }
+    if total != 25 || value != 7 { panic("disjoint local identity") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	value := 7
+	f := func() int {
+		value_2 := value + 1
+		return value_2
+	}
+	next := lisette.MakeOptionSome(3)
+	total := 0
+	for {
+		if next.Tag == lisette.OptionSome {
+			value_1 := next.SomeVal
+			g := func() int {
+				value_1_1 := value_1 + 1
+				return value_1_1 + f()
+			}
+			total += g()
+			next = lisette.MakeOptionNone[int]()
+		} else {
+			break
+		}
+	}
+	ch := make(chan int, 1)
+	lisette.ChannelSend(ch, 5)
+	left := total
+	var tmp int
+	ch_1 := ch
+	for {
+		select {
+		case value_1, ok := <-ch_1:
+			if ok {
+				g := func() int {
+					return value_1 + f()
+				}
+				tmp = g()
+			} else {
+				ch_1 = nil
+				continue
+			}
+		default:
+			tmp = 0
+		}
+		break
+	}
+	total = left + tmp
+	if total != 25 || value != 7 {
+		panic("disjoint local identity")
+	}
+}

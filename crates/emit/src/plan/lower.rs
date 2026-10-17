@@ -11,6 +11,7 @@ use crate::plan::bodies::{
     PlacePlan, Statement, directed_first, with_setup,
 };
 use crate::plan::go_expression::UnaryOp;
+use crate::plan::local::GoIdentifier;
 use crate::plan::placement::{
     ElidableTail, collapse_declared_temp, requires_temp_var, try_elide_tail_let,
 };
@@ -53,10 +54,10 @@ impl Planner<'_> {
     /// Allocate a fresh operand-temp result var and its `var V T` declaration
     /// as a typed setup leaf. The control-flow that assigns it follows as a
     /// typed `If`/`Loop`/`Match`/`Select` statement.
-    pub(crate) fn operand_temp_declaration(&mut self, ty: &Type) -> (String, Statement) {
-        let result_var = self.fresh_var(None);
+    pub(crate) fn operand_temp_declaration(&mut self, ty: &Type) -> (GoIdentifier, Statement) {
+        let result_var = self.fresh_local(None);
         let declaration = LoweredStatement::VarDecl {
-            name: result_var.clone().into(),
+            name: result_var.clone(),
             go_type: self.use_go_type(ty),
             value: None,
         }
@@ -74,7 +75,7 @@ impl Planner<'_> {
         ty: &Type,
     ) -> ValuePlan {
         let (result_var, declaration) = self.operand_temp_declaration(ty);
-        let target = GoExpression::name(result_var.clone());
+        let target = GoExpression::identifier(result_var.clone());
         let block = self.lower_branching_to_block(
             expression,
             &PlacePlan::Assign {
@@ -104,7 +105,7 @@ impl Planner<'_> {
             unreachable!("plan_loop_as_operand_temp called on non-Loop expression");
         };
         let (result_var, declaration) = self.operand_temp_declaration(ty);
-        let plan = self.with_loop(GoExpression::name(result_var.clone()), |this| {
+        let plan = self.with_loop(GoExpression::identifier(result_var.clone()), |this| {
             this.lower_loop_with_header(LoopHeader::Infinite, body)
         });
         ValuePlan::captured(
@@ -390,14 +391,14 @@ impl Planner<'_> {
         else {
             unreachable!("lower_while_let_statement requires a WhileLet expression");
         };
-        let body = self.with_loop(GoExpression::name("_".to_string()), |this| {
+        let body = self.with_loop(GoExpression::external_name("_".to_string()), |this| {
             this.lower_while_let(pattern, scrutinee, body)
         });
         self.directed_at(expression, LoweredStatement::Body(body))
     }
 
     fn lower_infinite_loop(&mut self, body: &Expression) -> LoopPlan {
-        self.with_loop(GoExpression::name("_".to_string()), |this| {
+        self.with_loop(GoExpression::external_name("_".to_string()), |this| {
             this.lower_loop_with_header(LoopHeader::Infinite, body)
         })
     }
@@ -422,7 +423,7 @@ impl Planner<'_> {
     }
 
     fn lower_while(&mut self, condition: &Expression, body: &Expression) -> LoopPlan {
-        self.with_loop(GoExpression::name("_".to_string()), |this| {
+        self.with_loop(GoExpression::external_name("_".to_string()), |this| {
             let (target, negated) = strip_negations(condition);
             if let Some(exit) = this.lower_fused_predicate_value(target, !negated) {
                 let (setup, failure) = exit.into_parts();

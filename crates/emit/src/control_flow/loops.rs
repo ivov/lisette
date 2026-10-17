@@ -20,7 +20,7 @@ fn range_header(
     value: Option<&GoIdentifier>,
     iterable: GoExpression,
 ) -> LoopHeader {
-    let named = |name: Option<&GoIdentifier>| name.filter(|name| *name != "_").cloned();
+    let named = |name: Option<&GoIdentifier>| name.filter(|name| name.spelling() != "_").cloned();
     LoopHeader::Range {
         key: named(key),
         value: named(value),
@@ -45,7 +45,7 @@ impl Planner<'_> {
         let shape = self.classify_for(binding, iterable);
 
         let line = self.maybe_line_directive(&full_expression.get_span());
-        let plan = self.with_loop(GoExpression::name("_".to_string()), |this| {
+        let plan = self.with_loop(GoExpression::external_name("_".to_string()), |this| {
             let (prologue, header, lowered_body) = match shape {
                 ForShape::Range => this.lower_range_for(binding, iterable, body),
                 ForShape::StoredRange(range_shape) => {
@@ -169,13 +169,13 @@ impl Planner<'_> {
                     CaptureBoundary::Delayed,
                 )
             };
-            let index_var = this.fresh_var(Some("i"));
+            let index_var = this.fresh_local(Some("i"));
             let loop_var = this.bind_loop_pattern(&binding.pattern, None);
             let header = LoopHeader::Counted {
-                variable: index_var.clone().into(),
+                variable: index_var.clone(),
                 start: GoExpression::literal("0".to_string()),
                 condition: Some(GoExpression::binary(
-                    GoExpression::name(index_var.clone()),
+                    GoExpression::identifier(index_var.clone()),
                     BinaryOp::Lt,
                     GoExpression::call(
                         GoExpression::external_name("len".to_string()),
@@ -184,12 +184,12 @@ impl Planner<'_> {
                 )),
             };
             let mut lowered_body = this.lower_block_as_body(body);
-            if loop_var != "_" {
+            if loop_var.spelling() != "_" {
                 lowered_body.statements.insert(
                     0,
                     define(
                         loop_var,
-                        GoExpression::index(receiver_var, GoExpression::name(index_var)),
+                        GoExpression::index(receiver_var, GoExpression::identifier(index_var)),
                     ),
                 );
             }
@@ -349,10 +349,10 @@ impl Planner<'_> {
         let first_ty = element_tys.first().unwrap_or(binding_ty);
         let second_ty = element_tys.get(1).unwrap_or(binding_ty);
 
-        let key_var = self.fresh_var(Some("key"));
-        let value_var = self.fresh_var(Some("value"));
-        let key_identifier = self.scope.generated_identifier(&key_var);
-        let value_identifier = self.scope.generated_identifier(&value_var);
+        let key_var = self.fresh_local(Some("key"));
+        let value_var = self.fresh_local(Some("value"));
+        let key_identifier = key_var.clone();
+        let value_identifier = value_var.clone();
         let header = LoopHeader::Range {
             key: Some(key_identifier.clone()),
             value: Some(value_identifier.clone()),
@@ -398,8 +398,8 @@ impl Planner<'_> {
             let header = range_header(None, None, iter_expression);
             return (header, self.lower_block_as_body(body));
         }
-        let item_var = self.fresh_var(Some("item"));
-        let item_identifier = self.scope.generated_identifier(&item_var);
+        let item_var = self.fresh_local(Some("item"));
+        let item_identifier = item_var.clone();
         let header = match yields {
             RangeYield::Channel | RangeYield::Single => {
                 range_header(Some(&item_identifier), None, iter_expression)
@@ -473,10 +473,10 @@ impl Planner<'_> {
         {
             // The end bound's capture inserted statements after the start value;
             // hoist start into its own temp before them so it evaluates first.
-            let var = self.fresh_var(Some("start"));
+            let var = self.fresh_local(Some("start"));
             self.declare(&var);
             prologue.insert(checkpoint, define(var.clone(), start_expression));
-            start_expression = GoExpression::name(var);
+            start_expression = GoExpression::identifier(var);
         }
 
         let (header, lowered_body) = self.with_scope(|this| {
@@ -567,23 +567,22 @@ impl Planner<'_> {
             binding,
             ..
         } = pattern
-            && let Some(mut go_name) = self.go_name_for_binding(pattern)
+            && let Some(go_name) = self.go_name_for_binding(pattern)
         {
-            if self.scope.has_binding_for_go_name(&go_name)
+            let go_name = if self.scope.has_binding_for_go_name(&go_name)
                 || self.scope.is_go_name_declared(&go_name)
             {
-                go_name = self.fresh_var(Some(&go_name));
-            }
+                self.fresh_local(Some(&go_name))
+            } else {
+                self.scope.new_local_identifier(go_name)
+            };
             return self
                 .scope
                 .bind_source(identifier, binding.as_slice(), go_name);
         }
         match fallback {
-            Some(hint) => {
-                let name = self.fresh_var(Some(hint));
-                self.scope.generated_identifier(&name)
-            }
-            None => GoIdentifier::name("_".to_string()),
+            Some(hint) => self.fresh_local(Some(hint)),
+            None => GoIdentifier::external("_".to_string()),
         }
     }
 
