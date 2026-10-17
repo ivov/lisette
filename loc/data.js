@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792182554197,
+  "lastUpdate": 1792250328732,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -45303,6 +45303,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 37675,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28624,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19366,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15270,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9029,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7381,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2945,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9d1b46323b9279e6fcc3d2c2c6e3612db482ff43",
+          "message": "refactor: track every emitted Go local by ID (#1552)",
+          "timestamp": "2026-10-17T17:18:20+02:00",
+          "tree_id": "bfb12838a38e745a2a7f73e4a5ec2195c7d7e1da",
+          "url": "https://github.com/ivov/lisette/commit/9d1b46323b9279e6fcc3d2c2c6e3612db482ff43"
+        },
+        "date": 1792250326660,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 147458,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 37720,
             "unit": "lines"
           },
           {
