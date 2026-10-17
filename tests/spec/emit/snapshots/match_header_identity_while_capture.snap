@@ -1,0 +1,66 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn value(ch: Channel<int>, x: int) -> int { ch.send(x); x }
+  fn main() {
+    let subject = 7
+    let ch = Channel.buffered<int>(3)
+    let read = || subject
+    let f = || match value(ch, subject + 1) {
+      8 => { let subject = read() + 1; let g = || subject; g() },
+      _ => 0,
+    }
+    let mut pending = Some(2)
+    let mut total = 0
+    while let Some(subject) = pending { total += subject + f(); pending = None }
+    ch.send(9)
+    if total != 10 || subject != 7 { panic("match header capture") }
+    if ch.receive().unwrap_or(0) != 8 || ch.receive().unwrap_or(0) != 9 { panic("match header evaluation") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func value(ch chan int, x int) int {
+	lisette.ChannelSend(ch, x)
+	return x
+}
+
+func main() {
+	subject := 7
+	ch := make(chan int, 3)
+	read := func() int {
+		return subject
+	}
+	f := func() int {
+		if value(ch, subject+1) == 8 {
+			subject_2 := read() + 1
+			g := func() int {
+				return subject_2
+			}
+			return g()
+		}
+		return 0
+	}
+	pending := lisette.MakeOptionSome(2)
+	total := 0
+	for {
+		if pending.Tag == lisette.OptionSome {
+			left_1 := total
+			left := pending.SomeVal
+			total = left_1 + (left + f())
+			pending = lisette.MakeOptionNone[int]()
+		} else {
+			break
+		}
+	}
+	lisette.ChannelSend(ch, 9)
+	if total != 10 || subject != 7 {
+		panic("match header capture")
+	}
+	if lisette.ChannelReceive(ch).UnwrapOr(0) != 8 || lisette.ChannelReceive(ch).UnwrapOr(0) != 9 {
+		panic("match header evaluation")
+	}
+}

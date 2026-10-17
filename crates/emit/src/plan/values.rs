@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
+#[cfg(test)]
 use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
 use crate::names::packages::PackageUse;
@@ -10,7 +11,7 @@ use crate::plan::go_expression::{
     BinaryOp, CallPurity, CompositeElement, CompositeKey, CompositeLayout, FunctionLiteralLayout,
     GoExpressionNode, GoParameter, UnaryOp,
 };
-use crate::plan::local::{GoIdentifier, LocalId};
+use crate::plan::local::GoIdentifier;
 #[cfg(debug_assertions)]
 use crate::plan::verify::verify_final_function_body;
 use std::fmt::{self, Display, Formatter};
@@ -123,6 +124,7 @@ impl GoExpression {
         self.constant
     }
 
+    #[cfg(test)]
     pub(crate) fn name(value: String) -> Self {
         debug_assert!(
             go_name::is_plain_identifier(&value),
@@ -132,6 +134,10 @@ impl GoExpression {
     }
 
     pub(crate) fn identifier(value: GoIdentifier) -> Self {
+        assert!(
+            !value.is_pending(),
+            "identifier expressions need an explicit target"
+        );
         Self::new(GoExpressionNode::Identifier(value))
     }
 
@@ -423,20 +429,7 @@ impl GoExpression {
         self.node.print_header()
     }
 
-    pub(crate) fn identify_names(&mut self, resolve: &impl Fn(&str) -> Option<LocalId>) {
-        fn visit(node: &mut GoExpressionNode, resolve: &impl Fn(&str) -> Option<LocalId>) {
-            if let GoExpressionNode::Identifier(name) = node
-                && name.is_pending()
-                && let Some(id) = resolve(name.spelling())
-            {
-                name.identify(id);
-            }
-            node.visit_children_mut(&mut |child| visit(child, resolve));
-        }
-        visit(&mut self.node, resolve);
-    }
-
-    pub(crate) fn as_identifier(&self) -> Option<&str> {
+    pub(crate) fn as_identifier(&self) -> Option<&GoIdentifier> {
         match &self.node {
             GoExpressionNode::Identifier(name) => Some(name),
             _ => None,
@@ -620,8 +613,8 @@ impl ValuePlan {
     }
 
     /// A name the setup just bound, or which nothing can rebind.
-    pub(crate) fn captured(setup: Vec<Statement>, name: String) -> Self {
-        Self::new(setup, GoExpression::name(name), Stability::Fixed)
+    pub(crate) fn captured(setup: Vec<Statement>, name: GoIdentifier) -> Self {
+        Self::new(setup, GoExpression::identifier(name), Stability::Fixed)
     }
 
     pub(crate) fn computed(setup: Vec<Statement>, expression: GoExpression) -> Self {
@@ -704,10 +697,13 @@ impl ValuePlan {
         self
     }
 
-    pub(crate) fn pin(&mut self, bind: impl FnOnce(&mut Vec<Statement>, GoExpression) -> String) {
+    pub(crate) fn pin(
+        &mut self,
+        bind: impl FnOnce(&mut Vec<Statement>, GoExpression) -> GoIdentifier,
+    ) {
         let value = mem::replace(&mut self.expression, GoExpression::empty());
         let name = bind(&mut self.setup, value);
-        self.expression = GoExpression::name(name);
+        self.expression = GoExpression::identifier(name);
     }
 
     pub(crate) fn with_constructor_stability(mut self) -> Self {
@@ -724,18 +720,11 @@ impl ValuePlan {
         self
     }
 
-    pub(crate) fn rendered(&self) -> String {
-        self.expression.rendered()
-    }
-
-    /// `rendered` is a name this plan's own setup bound. Callers must also
-    /// check that no source binding answers to it.
-    pub(crate) fn rests_in_own_temp(&self, rendered: &str) -> bool {
-        go_name::is_plain_identifier(rendered)
-            && self
-                .setup
-                .iter()
-                .any(|statement| statement.kind.binds_name(rendered))
+    /// Whether the plan's setup declares this local.
+    pub(crate) fn binds_local(&self, local: &GoIdentifier) -> bool {
+        self.setup
+            .iter()
+            .any(|statement| statement.kind.binds_local(local))
     }
 
     pub(crate) fn effects(&self) -> Effects {
@@ -754,10 +743,7 @@ impl ValuePlan {
         let mut own = true;
         self.expression.node().visit(&mut |node| {
             if let GoExpressionNode::Identifier(name) = node {
-                own &= self
-                    .setup
-                    .iter()
-                    .any(|statement| statement.kind.binds_name(name.spelling()));
+                own &= self.binds_local(name);
             }
         });
         own
@@ -884,4 +870,22 @@ fn is_value_only_builtin(name: &str) -> bool {
         name,
         "append" | "cap" | "complex" | "imag" | "len" | "make" | "max" | "min" | "new" | "real"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plan::bodies::define;
+    use crate::plan::local::LocalId;
+
+    #[test]
+    fn setup_does_not_own_a_captured_local_with_the_same_spelling() {
+        let temporary = GoIdentifier::local("value".into(), LocalId(1));
+        let captured = GoIdentifier::local("value".into(), LocalId(2));
+        let setup = vec![define(temporary.clone(), GoExpression::literal("3".into()))];
+        let plan = ValuePlan::computed(setup, GoExpression::identifier(captured.clone()));
+        assert!(plan.binds_local(&temporary));
+        assert!(!plan.binds_local(&captured));
+        assert!(!plan.reads_only_own_setup());
+    }
 }

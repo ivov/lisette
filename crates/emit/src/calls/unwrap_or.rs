@@ -187,7 +187,7 @@ impl Planner<'_> {
         fuse: FusedCall<'_>,
         default: &Expression,
         slot: CommaOkValueSlot,
-    ) -> (Vec<Statement>, String) {
+    ) -> (Vec<Statement>, GoIdentifier) {
         let mut bound = match fuse {
             FusedCall::Result(fuse) => fuse.bind(self, slot, None),
             FusedCall::Option(fuse) => fuse.bind(self, slot),
@@ -210,7 +210,7 @@ impl Planner<'_> {
                 condition: failure.condition,
                 then_body: LoweredBlock {
                     statements: vec![
-                        simple_assign(&GoExpression::name(value.clone()), default).into(),
+                        simple_assign(&GoExpression::identifier(value.clone()), default).into(),
                     ],
                 },
                 else_arm: ElseArm::None,
@@ -225,7 +225,7 @@ impl Planner<'_> {
         fuse: OptionFusePlan<'_>,
         map: MapLambda<'_>,
         default: &Expression,
-        target: &str,
+        target: &GoIdentifier,
         target_ty: &Type,
     ) -> Vec<Statement> {
         let arms = OptionArms {
@@ -233,7 +233,7 @@ impl Planner<'_> {
             some_body: map.body,
             none_body: default,
         };
-        let target = GoExpression::name(target.to_string());
+        let target = GoExpression::identifier(target.clone());
         self.lower_fused_option_arms(
             fuse,
             arms,
@@ -277,13 +277,7 @@ impl Planner<'_> {
             }
             .into(),
         ];
-        statements.extend(self.lower_mapped_default_into(
-            fuse,
-            map,
-            call.default,
-            go_name.spelling(),
-            &ty,
-        ));
+        statements.extend(self.lower_mapped_default_into(fuse, map, call.default, go_name, &ty));
         Some(statements)
     }
 

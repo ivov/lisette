@@ -1,0 +1,85 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn next(arg0: int) -> Option<int> { Some(arg0 + 1) }
+  fn main() {
+    let arg0 = 7
+    let cb = || {
+      let arg0 = Option.and_then(Some(arg0), next).unwrap_or(0)
+      let read = || arg0
+      read()
+    }
+    let mut pending = Some(2)
+    let mut total = 0
+    while let Some(arg0) = pending {
+      total += arg0 + cb()
+      pending = None
+    }
+    let ch = Channel.buffered<int>(1)
+    ch.send(3)
+    total += select {
+      let Some(arg0) = ch.receive() => arg0 + cb(),
+      _ => 0,
+    }
+    if total != 21 || arg0 != 7 { panic("callback parameter identity") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func next(arg0 int) (int, bool) {
+	return arg0 + 1, true
+}
+
+func main() {
+	arg0 := 7
+	cb := func() int {
+		arg := lisette.MakeOptionSome(arg0)
+		cb_1 := next
+		tagged := func(arg0 int) lisette.Option[int] {
+			return lisette.OptionFromCommaOk[int](cb_1(arg0))
+		}
+		arg0_1 := lisette.OptionAndThen(arg, tagged).UnwrapOr(0)
+		read := func() int {
+			return arg0_1
+		}
+		return read()
+	}
+	pending := lisette.MakeOptionSome(2)
+	total := 0
+	for {
+		if pending.Tag == lisette.OptionSome {
+			left_1 := total
+			left := pending.SomeVal
+			total = left_1 + (left + cb())
+			pending = lisette.MakeOptionNone[int]()
+		} else {
+			break
+		}
+	}
+	ch := make(chan int, 1)
+	lisette.ChannelSend(ch, 3)
+	left_2 := total
+	var tmp int
+	ch_1 := ch
+	for {
+		select {
+		case arg0, ok := <-ch_1:
+			if ok {
+				tmp = arg0 + cb()
+			} else {
+				ch_1 = nil
+				continue
+			}
+		default:
+			tmp = 0
+		}
+		break
+	}
+	total = left_2 + tmp
+	if total != 21 || arg0 != 7 {
+		panic("callback parameter identity")
+	}
+}

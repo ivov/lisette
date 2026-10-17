@@ -1,0 +1,56 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn main() {
+    let target = 7
+    let f = || {
+      let target = [1].get(0).map(|ret| ret + target).unwrap_or(0)
+      let read = || target
+      read()
+    }
+    let mut total = 0
+    for target in [2, 3] {
+      total += match target {
+        value if value > 0 => { let read = || value; read() + f() },
+        _ => 0,
+      }
+    }
+    if total != 21 || target != 7 { panic("mapped default identity") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	target := 7
+	f := func() int {
+		target_1 := lisette.OptionMap(lisette.SliceGet([]int{1}, 0), func(ret int) int {
+			return ret + target
+		}).UnwrapOr(0)
+		read := func() int {
+			return target_1
+		}
+		return read()
+	}
+	total := 0
+	for _, target_2 := range []int{2, 3} {
+		left := total
+		var tmp int
+		switch {
+		case target_2 > 0:
+			value := target_2
+			read := func() int {
+				return value
+			}
+			tmp = read() + f()
+		default:
+			tmp = 0
+		}
+		total = left + tmp
+	}
+	if total != 21 || target != 7 {
+		panic("mapped default identity")
+	}
+}

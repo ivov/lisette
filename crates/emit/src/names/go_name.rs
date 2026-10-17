@@ -182,7 +182,7 @@ impl ResolvedName {
     pub(crate) fn into_expression(self) -> GoExpression {
         match self.package {
             Some(package) => GoExpression::qualified(package, self.name),
-            None => GoExpression::name(self.name),
+            None => GoExpression::external_name(self.name),
         }
     }
 }

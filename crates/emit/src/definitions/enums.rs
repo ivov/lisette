@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::definitions::structs::SynthesizedMethod;
 use crate::names::go_name;
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{Attribute, Generic};
@@ -94,6 +95,8 @@ impl Planner<'_> {
 
         let receiver = synthesized_receiver_name(name, receiver_generics);
         let other = synthesized_local_name("other", &receiver, receiver_generics);
+        let receiver = self.scope.new_local_identifier(receiver);
+        let other = self.scope.new_local_identifier(other);
         let go_type_name = go_name::escape_type_name(name);
         let receiver_type = format!("{go_type_name}{receiver_generics}");
         let go_method = self.equals_method_go_name();
@@ -108,9 +111,9 @@ impl Planner<'_> {
                 .iter()
                 .zip(layout_variant.fields.iter())
                 .map(|(sem_field, layout_field)| {
-                    let field = |base: &str| {
+                    let field = |base: &GoIdentifier| {
                         let access = GoExpression::selector(
-                            GoExpression::name(base.to_string()),
+                            GoExpression::identifier(base.clone()),
                             layout_field.go_name.clone(),
                         );
                         if layout_field.is_recursive() {

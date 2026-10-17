@@ -8,7 +8,8 @@ use crate::plan::bodies::{Definition, LoweredStatement, Statement, assign, defin
 use crate::plan::go_expression::BinaryOp;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::{GoExpression, Stability};
-use crate::state::bindings::InlineExpr;
+use crate::state::bindings::{BindingValue, InlineExpr};
+use crate::state::scope::ScopeState;
 use syntax::ast::Expression;
 
 pub(crate) struct AssertedPattern {
@@ -23,8 +24,8 @@ impl AssertedPattern {
         self.ok_test.is_none() && self.checks.is_empty()
     }
 
-    pub(crate) fn condition(&self) -> GoExpression {
-        let condition = render_condition(&self.checks, SubjectRoot::Var(&self.subject));
+    pub(crate) fn condition(&self, scope: &mut ScopeState) -> GoExpression {
+        let condition = render_condition(scope, &self.checks, SubjectRoot::Var(&self.subject));
         match &self.ok_test {
             None => condition,
             Some(ok) if self.checks.is_empty() => ok.clone(),
@@ -60,7 +61,7 @@ pub(crate) fn apply_root_assertion(
             };
             let expression = GoExpression::type_assertion(subject.clone(), go_type.clone());
             let var = planner.hoist_tmp_value_statement(statements, "asserted", expression);
-            GoExpression::name(var)
+            GoExpression::identifier(var)
         }
         _ => subject.clone(),
     };
@@ -100,15 +101,14 @@ pub(crate) fn apply_refutable_root_assertion(
     let (subject, ok_test) = match go_types.as_slice() {
         [go_type] => {
             let asserted_lhs = if needs_asserted {
-                let v = planner.fresh_var(Some("asserted"));
+                let v = planner.fresh_local(Some("asserted"));
                 planner.declare(&v);
-                planner.scope.generated_identifier(&v)
+                v
             } else {
-                GoIdentifier::name("_".to_string())
+                GoIdentifier::external("_".to_string())
             };
-            let ok = planner.fresh_var(Some("ok"));
+            let ok = planner.fresh_local(Some("ok"));
             planner.declare(&ok);
-            let ok = planner.scope.generated_identifier(&ok);
             statements.push(define_many(
                 vec![asserted_lhs.clone(), ok.clone()],
                 assertion_of(go_type),
@@ -126,11 +126,10 @@ pub(crate) fn apply_refutable_root_assertion(
             let oks = multiple
                 .iter()
                 .map(|t| {
-                    let ok = planner.fresh_var(Some("ok"));
+                    let ok = planner.fresh_local(Some("ok"));
                     planner.declare(&ok);
-                    let ok = planner.scope.generated_identifier(&ok);
                     statements.push(define_many(
-                        vec![GoIdentifier::name("_".to_string()), ok.clone()],
+                        vec![GoIdentifier::external("_".to_string()), ok.clone()],
                         assertion_of(t),
                     ));
                     GoExpression::identifier(ok)
@@ -226,12 +225,14 @@ pub(crate) fn tree_assignment_statements(
             continue;
         }
 
-        let Some(registered_name) = planner.scope.resolve_binding_go_name(&binding.lisette_name)
-        else {
-            continue;
-        };
-        let name = registered_name.to_string();
+        let name = binding
+            .binding_ids
+            .iter()
+            .find_map(|id| planner.scope.resolve_binding_id(*id))
+            .and_then(BindingValue::as_go_identifier)
+            .expect("a named alternative binding is registered")
+            .clone();
         let access_expression = binding.path.render(SubjectRoot::Var(subject));
-        statements.push(assign(GoExpression::name(name), access_expression));
+        statements.push(assign(GoExpression::identifier(name), access_expression));
     }
 }

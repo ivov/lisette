@@ -79,9 +79,7 @@ impl OptionFusePlan<'_> {
                 let (mut statements, call) = value.into_parts();
                 let (value, opens_if) = match slot {
                     CommaOkValueSlot::Named(name) => (name, false),
-                    CommaOkValueSlot::Arm(name) => {
-                        (planner.scope.new_local_identifier(&name), true)
-                    }
+                    CommaOkValueSlot::Arm(name) => (name, true),
                     CommaOkValueSlot::Temp | CommaOkValueSlot::Discarded => {
                         (planner.fresh_pair_identifier(), false)
                     }
@@ -108,12 +106,12 @@ impl OptionFusePlan<'_> {
                     CommaOkValueSlot::Named(name) => Some(name),
                     CommaOkValueSlot::Arm(name) => {
                         let name = planner.declared_arm_value_name(&name);
-                        Some(planner.scope.new_local_identifier(&name))
+                        Some(name)
                     }
                     CommaOkValueSlot::Temp => Some(planner.fresh_pair_identifier()),
                     CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => None,
                 };
-                let flag = planner.fresh_var(Some("found"));
+                let flag = planner.fresh_local(Some("found"));
                 planner.declare(&flag);
                 let statements = planner.lower_find_loop(
                     subject,
@@ -174,7 +172,7 @@ impl ResultFusePlan<'_> {
             match slot {
                 CommaOkValueSlot::Arm(name) => {
                     let name = planner.declared_arm_value_name(&name);
-                    CommaOkValueSlot::Named(planner.scope.new_local_identifier(&name))
+                    CommaOkValueSlot::Named(name)
                 }
                 CommaOkValueSlot::Unused => CommaOkValueSlot::Discarded,
                 slot => slot,
@@ -311,7 +309,7 @@ struct SelectivePartialArms<'a> {
 enum SubjectDeclaration {
     /// Identifier path: emit `_ = <var>` when unused, else nothing.
     PlainDiscard {
-        var: String,
+        var: GoIdentifier,
     },
     Deferred(DeferredSubject),
     None,
@@ -376,7 +374,7 @@ impl Planner<'_> {
             SubjectDeclaration::Deferred(deferred)
                 if inline_subject_into_header(
                     &mut block.statements,
-                    deferred.name.spelling(),
+                    &deferred.name,
                     &deferred.expression,
                 ) =>
             {
@@ -388,8 +386,8 @@ impl Planner<'_> {
 
         match declaration {
             SubjectDeclaration::PlainDiscard { var } => {
-                if !used.contains(&var) {
-                    statements.push(discard(GoExpression::name(var)));
+                if !used.contains_identifier(&var) {
+                    statements.push(discard(GoExpression::identifier(var)));
                 }
             }
             SubjectDeclaration::Deferred(deferred) => {
@@ -455,8 +453,8 @@ impl Planner<'_> {
             ] => inner.clone(),
             _ => then_body,
         };
-        if let Some(name) = bound.payload_name()
-            && !GoUses::of(&then_body.statements).contains(name)
+        if let Some(name) = bound.payload_identifier()
+            && !GoUses::of(&then_body.statements).contains_identifier(name)
         {
             bound.discard_value();
         }
@@ -907,7 +905,7 @@ impl Planner<'_> {
 
         let has_nil_guard = fuse.has_nil_guard();
         let (mut bound, wraps) = {
-            let value_name = self.fresh_var(Some("ret"));
+            let value_name = self.fresh_local(Some("ret"));
             fuse.bind_wrapped(
                 self,
                 CommaOkValueSlot::Arm(value_name),
@@ -927,8 +925,8 @@ impl Planner<'_> {
             ] => inner.clone(),
             _ => then_body,
         };
-        if let Some(name) = bound.payload_name()
-            && !GoUses::of(&then_body.statements).contains(name)
+        if let Some(name) = bound.payload_identifier()
+            && !GoUses::of(&then_body.statements).contains_identifier(name)
         {
             bound.discard_value();
         }
@@ -988,15 +986,13 @@ impl Planner<'_> {
             .into_parts();
         let val_var = match ok_name.or(both_val) {
             Some(value) => Some(self.arm_value_name(value.name)),
-            None => nilable.then(|| self.fresh_var(Some("ret"))),
+            None => nilable.then(|| self.fresh_local(Some("ret"))),
         };
         let err_hint = both_err.or(err_name).map(|err| err.name);
         let mut err_var = self.pair_status(err_hint, PairStatusKind::Error, true);
-        if val_var.as_deref() == Some(err_var.as_str()) {
-            err_var = self.fresh_var(Some(&err_var));
+        if val_var.as_deref() == Some(err_var.spelling()) {
+            err_var = self.fresh_local(Some(&err_var));
         }
-        let val_var = val_var.map(|name| self.scope.new_local_identifier(&name));
-        let err_var = self.scope.new_local_identifier(&err_var);
         let err = || GoExpression::identifier(err_var.clone());
 
         let (ok_body, ok_uses) = self.lower_fused_arm(
@@ -1015,7 +1011,7 @@ impl Planner<'_> {
         let val_used = nilable || ok_uses[0] || both_uses[0];
         let bound_value = match val_var.as_ref().filter(|_| val_used) {
             Some(v) => v.clone(),
-            None => GoIdentifier::name("_".to_string()),
+            None => GoIdentifier::external("_".to_string()),
         };
         let initializer = Definition {
             names: vec![bound_value, err_var.clone()],
@@ -1096,15 +1092,13 @@ impl Planner<'_> {
             && matches!(arms.variant, PartialVariant::Both | PartialVariant::Err);
         let value = match value_binding {
             Some(value) => Some(self.arm_value_name(value.name)),
-            None => condition_needs_value.then(|| self.fresh_var(Some("ret"))),
+            None => condition_needs_value.then(|| self.fresh_local(Some("ret"))),
         };
         let error_hint = error_binding.map(|error| error.name);
         let mut error = self.pair_status(error_hint, PairStatusKind::Error, true);
-        if value.as_deref() == Some(error.as_str()) {
-            error = self.fresh_var(Some(&error));
+        if value.as_deref() == Some(error.spelling()) {
+            error = self.fresh_local(Some(&error));
         }
-        let value = value.map(|name| self.scope.new_local_identifier(&name));
-        let error = self.scope.new_local_identifier(&error);
         let (selected, binding_uses) = self.lower_fused_arm(
             &[
                 ArmBinding::alias_at(value_binding, value.as_ref()),
@@ -1127,7 +1121,7 @@ impl Planner<'_> {
             .then(|| value.as_ref().expect("value use allocates a result slot"));
         let bound_value = match value_slot {
             Some(value) => value.clone(),
-            None => GoIdentifier::name("_".to_string()),
+            None => GoIdentifier::external("_".to_string()),
         };
         let err = || GoExpression::identifier(error.clone());
         let guarded_value =
@@ -1289,11 +1283,14 @@ impl Planner<'_> {
                 .any(|arm| pattern_binds_name(&arm.pattern, &name));
             if self.can_reuse_subject_identifier(&name, resolution, has_collision) {
                 let identifier = self.reference_go_identifier(&name, resolution);
-                let var = identifier.spelling().to_string();
-                return (
-                    GoExpression::identifier(identifier),
-                    SubjectDeclaration::PlainDiscard { var },
-                );
+                let declaration = if identifier.id().is_some() {
+                    SubjectDeclaration::PlainDiscard {
+                        var: identifier.clone(),
+                    }
+                } else {
+                    SubjectDeclaration::None
+                };
+                return (GoExpression::identifier(identifier), declaration);
             }
         }
         if matches!(subject, Expression::Literal { .. }) {
@@ -1317,18 +1314,14 @@ impl Planner<'_> {
         if any_guard
             && rests_in_stable_name
             && let GoExpressionNode::Identifier(var) = value.node()
+            && var.id().is_some()
         {
             let var = var.clone();
-            return (
-                value,
-                SubjectDeclaration::PlainDiscard {
-                    var: var.to_string(),
-                },
-            );
+            return (value, SubjectDeclaration::PlainDiscard { var });
         }
-        let var = self.fresh_var(Some("subject"));
+        let var = self.fresh_local(Some("subject"));
         self.declare(&var);
-        let name = self.scope.generated_identifier(&var);
+        let name = var.clone();
         let subject = GoExpression::identifier(name.clone());
         let declaration = SubjectDeclaration::Deferred(DeferredSubject {
             name,
@@ -1341,7 +1334,7 @@ impl Planner<'_> {
 /// Move a subject temp into the first header when that header is its only read.
 fn inline_subject_into_header(
     statements: &mut [Statement],
-    var: &str,
+    var: &GoIdentifier,
     expression: &GoExpression,
 ) -> bool {
     let Some(header) = statements.first_mut().and_then(header_mut) else {
@@ -1352,7 +1345,8 @@ fn inline_subject_into_header(
         return false;
     };
     *read = expression.node().clone();
-    if !GoUses::of(statements).contains(var) {
+    let used = GoUses::of(statements);
+    if !used.contains_identifier(var) {
         return true;
     }
     *statements
@@ -1375,7 +1369,7 @@ fn header_mut(statement: &mut Statement) -> Option<&mut GoExpression> {
 
 fn leading_subject_read<'n>(
     node: &'n mut GoExpressionNode,
-    var: &str,
+    var: &GoIdentifier,
 ) -> Option<&'n mut GoExpressionNode> {
     let compares_to_name = matches!(
         node,
@@ -1393,7 +1387,7 @@ fn leading_subject_read<'n>(
     if let GoExpressionNode::Selector { base, .. } = node {
         node = base.as_mut();
     }
-    matches!(node, GoExpressionNode::Identifier(name) if name == var).then_some(node)
+    matches!(node, GoExpressionNode::Identifier(name) if name.refers_to_same(var)).then_some(node)
 }
 
 fn pair_if(test: PairCondition, then_body: LoweredBlock, else_arm: ElseArm) -> IfPlan {
@@ -1684,6 +1678,19 @@ mod tests {
         arm(Pattern::WildCard {
             span: Span::dummy(),
         })
+    }
+
+    #[test]
+    fn leading_subject_read_requires_the_same_local_id() {
+        use crate::plan::go_expression::GoExpressionNode;
+        use crate::plan::local::{GoIdentifier, LocalId};
+
+        let subject = GoIdentifier::local("subject".into(), LocalId(1));
+        let mut other =
+            GoExpressionNode::Identifier(GoIdentifier::local("subject".into(), LocalId(2)));
+        assert!(super::leading_subject_read(&mut other, &subject).is_none());
+        let mut actual = GoExpressionNode::Identifier(subject.clone());
+        assert!(super::leading_subject_read(&mut actual, &subject).is_some());
     }
 
     #[test]

@@ -21,9 +21,9 @@ func pick(n int) int {
 	var total int
 	if n > 0 {
 		f := func(k int) int {
-			total := k * 2
-			fmt.Println(total)
-			return total + 1
+			total_1 := k * 2
+			fmt.Println(total_1)
+			return total_1 + 1
 		}
 		total = f(n)
 	} else {

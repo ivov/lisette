@@ -1,0 +1,50 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn pair(ch: Channel<int>) -> (int, int) { ch.send(7); (1, 2) }
+  fn choose(ch: Channel<int>, flag: bool) {
+    let (_, _) = (if flag { pair(ch) } else { pair(ch) }) else { panic("irrefutable branch tuple") }
+  }
+  fn main() {
+    let ch = Channel.buffered<int>(3)
+    choose(ch, true)
+    ch.send(9)
+    if ch.receive().unwrap_or(0) != 7 { panic("branch subject omitted") }
+    if ch.receive().unwrap_or(0) != 9 { panic("branch subject repeated") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func pair(ch chan int) (int, int) {
+	lisette.ChannelSend(ch, 7)
+	return 1, 2
+}
+
+func choose(ch chan int, flag bool) {
+	var tmp lisette.Tuple2[int, int]
+	if flag {
+		ret, ret_1 := pair(ch)
+		tup := lisette.MakeTuple2(ret, ret_1)
+		tmp = tup
+	} else {
+		ret_2, ret_3 := pair(ch)
+		tup_1 := lisette.MakeTuple2(ret_2, ret_3)
+		tmp = tup_1
+	}
+	_ = tmp
+}
+
+func main() {
+	ch := make(chan int, 3)
+	choose(ch, true)
+	lisette.ChannelSend(ch, 9)
+	if lisette.ChannelReceive(ch).UnwrapOr(0) != 7 {
+		panic("branch subject omitted")
+	}
+	if lisette.ChannelReceive(ch).UnwrapOr(0) != 9 {
+		panic("branch subject repeated")
+	}
+}

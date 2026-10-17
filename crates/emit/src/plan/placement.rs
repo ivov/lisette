@@ -100,10 +100,10 @@ pub(crate) fn simple_assign(target: &GoExpression, value: ValuePlan) -> LoweredS
 pub(crate) fn rebind_trailing_temp(
     statements: &mut [Statement],
     name: &GoIdentifier,
-    temp: &str,
+    temp: &GoIdentifier,
 ) -> bool {
     statements.last_mut().is_some_and(|statement| {
-        statement.kind.binds_name(temp) && statement.kind.rename_bound_name(name)
+        statement.kind.binds_local(temp) && statement.kind.rename_bound_name(name)
     })
 }
 
@@ -111,9 +111,9 @@ pub(crate) fn rebind_trailing_temp(
 pub(crate) fn rebind_updated_temp(
     statements: &mut [Statement],
     name: &GoIdentifier,
-    temp: &str,
+    temp: &GoIdentifier,
 ) -> bool {
-    let Some(start) = statements.iter().rposition(|s| s.kind.binds_name(temp)) else {
+    let Some(start) = statements.iter().rposition(|s| s.kind.binds_local(temp)) else {
         return false;
     };
     let (copy, writes) = statements[start..]
@@ -127,8 +127,8 @@ pub(crate) fn rebind_updated_temp(
             target.node(),
             GoExpressionNode::Selector { base, .. }
                 if matches!(base.as_ref(), GoExpressionNode::Identifier(read) if read == temp)
-        ) && !value.node().mentions(name.spelling())
-            && !value.node().mentions(temp)
+        ) && !value.node().mentions_local(name)
+            && !value.node().mentions_local(temp)
     };
     if writes.is_empty() || !writes.iter().all(writes_field_of_temp) {
         return false;
@@ -149,7 +149,7 @@ pub(crate) fn rebind_updated_temp(
 /// Collapse `var x T` plus the one statement that fills it into `x := value`.
 pub(crate) fn collapse_declared_temp(
     statements: &mut Vec<Statement>,
-    name: &str,
+    name: &GoIdentifier,
     value_has_declared_type: bool,
 ) {
     let [declaration, filler] = statements.as_slice() else {
@@ -260,7 +260,7 @@ fn infers_declared_type(
 }
 
 /// The value of a body that is exactly one plain `name = value`.
-fn single_simple_assign_value(body: &LoweredBlock, name: &str) -> Option<GoExpression> {
+fn single_simple_assign_value(body: &LoweredBlock, name: &GoIdentifier) -> Option<GoExpression> {
     let [
         Statement {
             kind: LoweredStatement::Assign(assign),
@@ -769,7 +769,7 @@ impl Planner<'_> {
                 && !arguments.is_empty()
                 && (!is_clip_safe_path(&receiver_lv) || later.prepend(&receiver_read))
             {
-                GoExpression::name(self.hoist_tmp_value_statement(
+                GoExpression::identifier(self.hoist_tmp_value_statement(
                     &mut capture,
                     "recv",
                     receiver_lv,
@@ -847,6 +847,14 @@ impl Planner<'_> {
     pub(crate) fn lower_tail_value(&mut self, last: &Expression) -> (Vec<Statement>, GoExpression) {
         let plan = if let Expression::Tuple { elements, ty, .. } = last {
             self.plan_tuple_value(elements, ty, true)
+        } else if matches!(
+            last,
+            Expression::For { .. } | Expression::While { .. } | Expression::WhileLet { .. }
+        ) {
+            ValuePlan::computed(
+                vec![self.lower_statement(last)],
+                GoExpression::empty_composite("struct{}".to_string()),
+            )
         } else {
             self.lower_value(last, ExpressionContext::value())
         };
@@ -871,7 +879,7 @@ impl Planner<'_> {
             }
             let (result_var, declaration) = self.operand_temp_declaration(ty);
             let needs_braces = items.len() > 1;
-            let target = GoExpression::name(result_var.clone());
+            let target = GoExpression::identifier(result_var.clone());
             let body = self.lower_block_to_var(expression, &target, None, needs_braces);
             let mut statements = vec![declaration];
             if needs_braces {
@@ -886,7 +894,7 @@ impl Planner<'_> {
         }
         let (result_var, declaration) = self.operand_temp_declaration(ty);
         let mut statements = vec![declaration];
-        let target = GoExpression::name(result_var.clone());
+        let target = GoExpression::identifier(result_var.clone());
         statements.extend(self.lower_assign(expression, &target, Some(ty)));
         ValuePlan::captured(statements, result_var)
     }

@@ -275,6 +275,123 @@ fn run(x: int, e: E) -> int {
 }
 
 #[test]
+fn closure_shadowing_while_let_keeps_captured_assignment() {
+    let input = r#"
+fn main() {
+  let mut x = 10
+  let f = || {
+    let mut next = Some(2)
+    while let Some(x) = next {
+      let read = || x
+      next = None
+      if read() != 2 { panic("loop capture") }
+    }
+    x += 1
+    x
+  }
+  if f() != 11 || x != 11 { panic("outer capture") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn closure_shadowing_if_let_and_for_keeps_outer_read() {
+    let input = r#"
+fn main() {
+  let x = 7
+  let f = || {
+    let mut total = 0
+    if let Some(x) = Some(x + 1) {
+      for x in [x, x + 1] {
+        let read = || x
+        total += read()
+      }
+    }
+    total + x
+  }
+  if f() != 24 { panic("shadowed capture") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn closure_shadowing_select_and_let_else_keeps_failure_capture() {
+    let input = r#"
+enum Choice { A(int), B(int), Empty }
+
+fn main() {
+  let x = 13
+  let ch = Channel.buffered<int>(1)
+  ch.send(4)
+  let f = || {
+    let selected = select {
+      let Some(x) = ch.receive() => {
+        let read = || x
+        read()
+      },
+      _ => 0,
+    }
+    let Choice.A(x) | Choice.B(x) = Choice.Empty else {
+      return selected + x
+    }
+    x
+  }
+  if f() != 17 { panic("failure capture") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn closure_fold_accumulator_keeps_captured_source() {
+    let input = r#"
+fn main() {
+  let x = 7
+  let f = || [x].fold(0, |x, y| x + y)
+  if f() != 7 { panic("captured source") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_closure_fold_accumulator_keeps_captured_source() {
+    let input = r#"
+fn main() {
+  let x = 7
+  let f = || {
+    let g = || {
+      let x = [x, x + 1].fold(0, |x, y| x + y)
+      x
+    }
+    g() + x
+  }
+  if f() != 22 || x != 7 { panic("nested capture") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn closure_branch_fold_accumulator_keeps_captured_source() {
+    let input = r#"
+fn main() {
+  let x = 7
+  let f = || {
+    if x > 0 {
+      let x = [x, x + 1].fold(0, |x, y| x + y)
+      x
+    } else { x }
+  }
+  if f() != 15 || x != 7 { panic("branch capture") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn function_call_no_args() {
     let input = r#"
 fn get_value() -> int {
@@ -3528,6 +3645,176 @@ fn pick(n: int) -> int {
 }
 
 #[test]
+fn generated_identity_fused_capture() {
+    let input = r#"
+fn main() {
+  let found = 40
+  let ret = 2
+  let f = || {
+    let found = [ret, found].find(|found| found > 3)
+    let Some(ret) = found else { panic("find lost payload") }
+    let read = || ret
+    read()
+  }
+  let mut next = Some(3)
+  let mut total = 0
+  while let Some(found_1) = next {
+    let read = || found_1 + f()
+    total += read()
+    next = None
+  }
+  if total != 43 || found != 40 || ret != 2 { panic("capture changed") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generated_identity_tuple_callback() {
+    let input = r#"
+import "go:encoding/pem"
+
+fn apply(f: fn(Slice<byte>) -> (Option<Ref<pem.Block>>, Slice<byte>), data: Slice<byte>) -> int {
+  let (ret, ret_1) = f(data)
+  if ret.is_some() { panic("unexpected PEM") }
+  let read = || ret_1.length()
+  read()
+}
+
+fn main() {
+  let cb = 11
+  let f = || {
+    let cb = apply(pem.Decode, [65, 66])
+    let ch = Channel.buffered<int>(1)
+    ch.send(cb)
+    select {
+      let Some(ret) = ch.receive() => { let read = || ret; read() },
+      _ => 0,
+    }
+  }
+  if f() != 2 || cb != 11 { panic("tuple callback capture") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generated_identity_wrapped_arm() {
+    let input = r#"
+import "go:strconv"
+
+fn n() -> string { "context" }
+
+fn main() {
+  let err = 9
+  let f = || {
+    match strconv.Atoi("7").wrap_err(n()) {
+      Ok(n) => { let read = || n + err; read() },
+      Err(_) => 0,
+    }
+  }
+  let mut total = 0
+  for ret in [1, 2] {
+    if let Some(err) = Some(ret) {
+      let read = || err + f()
+      total += read()
+    }
+  }
+  if total != 35 || err != 9 { panic("wrapped arm capture") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn local_identity_or_pattern_capture() {
+    let input = r#"
+enum Choice { A(int), B(int), Missing }
+
+fn choose(item: Choice) -> int {
+  let value = 40
+  let read = || value
+  let Choice.A(value) | Choice.B(value) = item else { return read() + 2 }
+  let f = || {
+    let Choice.A(value) | Choice.B(value) = Choice.B(value + 1) else { return read() }
+    value + read()
+  }
+  f()
+}
+
+fn main() {
+  if choose(Choice.B(7)) != 48 || choose(Choice.Missing) != 42 { panic("or-pattern identity") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn local_identity_mapped_default_capture() {
+    let input = r#"
+fn main() {
+  let target = 7
+  let f = || {
+    let target = [1].get(0).map(|ret| ret + target).unwrap_or(0)
+    let read = || target
+    read()
+  }
+  let mut total = 0
+  for target in [2, 3] {
+    total += match target {
+      value if value > 0 => { let read = || value; read() + f() },
+      _ => 0,
+    }
+  }
+  if total != 21 || target != 7 { panic("mapped default identity") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn local_identity_disjoint_generated_spelling() {
+    let input = r#"
+fn main() {
+  let value = 7
+  let f = || { let value = value + 1; value }
+  let mut next = Some(3)
+  let mut total = 0
+  while let Some(value_1) = next {
+    let g = || { let value_1 = value_1 + 1; value_1 + f() }
+    total += g()
+    next = None
+  }
+  let ch = Channel.buffered<int>(1)
+  ch.send(5)
+  total += select {
+    let Some(value_1) = ch.receive() => { let g = || value_1 + f(); g() },
+    _ => 0,
+  }
+  if total != 25 || value != 7 { panic("disjoint local identity") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn local_identity_const_capture() {
+    let input = r#"
+fn main() {
+  const MAX_SIZE = 7
+  let f = || {
+    const INNER_SIZE = 3
+    match INNER_SIZE { 3 => INNER_SIZE, _ => 0 }
+  }
+  if f() != 3 { panic("constant capture") }
+  let value = match MAX_SIZE { 7 => MAX_SIZE, _ => 0 }
+  if value != 7 { panic("constant subject") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn tagged_argument_collections() {
     let input = r#"
 import "go:mime/multipart"
@@ -3606,6 +3893,78 @@ fn main() {
 }
 
 #[test]
+fn local_setup_struct_update_capture() {
+    let input = r#"
+struct Item { value: int, marker: int }
+fn main() {
+  let base = Item { value: 7, marker: 3 }
+  let out = base
+  let read = || out.value
+  let f = || {
+    let out = Item { value: read() + 1, ..out }
+    let read = || out.value + out.marker
+    read()
+  }
+  let mut total = 0
+  for out in [1, 2] { total += f() + out }
+  if total != 25 || read() != 7 { panic("updated temp identity") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn local_setup_field_subject_capture() {
+    let input = r#"
+struct Item { value: Option<int> }
+fn main() {
+  let subject = 7
+  let f = || {
+    let Some(subject) = (Item { value: Some(subject + 1) }).value else { return subject }
+    let g = || subject
+    g()
+  }
+  let mut pending = Some(2)
+  let mut total = 0
+  while let Some(subject) = pending {
+    total += subject + f()
+    pending = None
+  }
+  let ch = Channel.buffered<int>(1)
+  ch.send(3)
+  total += select {
+    let Some(subject) = ch.receive() => subject + f(),
+    _ => 0,
+  }
+  if total != 21 || subject != 7 { panic("subject temp identity") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn local_setup_branch_target_capture() {
+    let input = r#"
+fn main() {
+  let result = 7
+  let f = || {
+    let result = if result > 0 { 3 } else { 4 }
+    let read = || result
+    let flag = if read() == 3 { true } else { false }
+    if flag { read() } else { 0 }
+  }
+  let mut total = 0
+  for result in [Some(2), None] {
+    if let Some(result) = result { total += result + f() }
+    else { total += f() }
+  }
+  if total != 8 || result != 7 { panic("branch target identity") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn generic_tagged_callback_unit_result() {
     let input = r#"
 fn okay<T>(x: T) -> Result<T, error> { Ok(x) }
@@ -3642,6 +4001,80 @@ fn main() {
   let got = Option.and_then(Some(&x), some)
   let Some(value) = got else { panic("generic option reference") }
   if value != &x { panic("generic reference payload") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn helper_local_zero_collections_capture() {
+    let input = r#"
+fn main() {
+  let s = 3
+  let i = 7
+  let arr = [9]
+  let f = || {
+    let s = Slice.make<Option<int>>(s)
+    let arr = Array.new<Option<int>, 2>()
+    let mut count = 0
+    for i in s { if i.is_none() { count += 1 } }
+    for i in arr { if i.is_none() { count += 1 } }
+    count
+  }
+  let Some(converted) = Array.from<int, 1>(arr) else { panic("array conversion") }
+  if f() != 5 || converted[0] != 9 || i != 7 { panic("helper local captures") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn helper_local_type_assert_capture() {
+    let input = r#"
+import "go:fmt"
+import "go:time"
+fn inspect(pair: (fmt.Stringer, int)) -> int {
+  let ok = 7
+  let f = || {
+    match pair {
+      (time.Duration(value), ok) => value as int + ok,
+      _ => ok,
+    }
+  }
+  f() + ok
+}
+fn main() {
+  let value: fmt.Stringer = 3 as time.Duration
+  if inspect((value, 2)) != 12 { panic("type assertion identity") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn helper_local_callback_parameter_capture() {
+    let input = r#"
+fn next(arg0: int) -> Option<int> { Some(arg0 + 1) }
+fn main() {
+  let arg0 = 7
+  let cb = || {
+    let arg0 = Option.and_then(Some(arg0), next).unwrap_or(0)
+    let read = || arg0
+    read()
+  }
+  let mut pending = Some(2)
+  let mut total = 0
+  while let Some(arg0) = pending {
+    total += arg0 + cb()
+    pending = None
+  }
+  let ch = Channel.buffered<int>(1)
+  ch.send(3)
+  total += select {
+    let Some(arg0) = ch.receive() => arg0 + cb(),
+    _ => 0,
+  }
+  if total != 21 || arg0 != 7 { panic("callback parameter identity") }
 }
 "#;
     assert_emit_snapshot!(input);
@@ -3705,6 +4138,194 @@ fn main() {
   if !consume(okay) { panic("generic callback unit result") }
   let stored: fn(()) -> Result<(), error> = okay
   if stored(()).is_err() { panic("stored generic unit result") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unused_tuple_subject_branch() {
+    let input = r#"
+fn pair(ch: Channel<int>) -> (int, int) { ch.send(7); (1, 2) }
+fn choose(ch: Channel<int>, flag: bool) {
+  let (_, _) = (if flag { pair(ch) } else { pair(ch) }) else { panic("irrefutable branch tuple") }
+}
+fn main() {
+  let ch = Channel.buffered<int>(3)
+  choose(ch, true)
+  ch.send(9)
+  if ch.receive().unwrap_or(0) != 7 { panic("branch subject omitted") }
+  if ch.receive().unwrap_or(0) != 9 { panic("branch subject repeated") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unused_tuple_subject_named() {
+    let input = r#"
+fn pair(ch: Channel<int>) -> (int, int) { ch.send(7); (1, 2) }
+fn main() {
+  let ch = Channel.buffered<int>(3)
+  let first = 7
+  let read = || first
+  let f = || {
+    let (first, second) = pair(ch) else { panic("irrefutable named tuple") }
+    read()
+  }
+  if f() != 7 { panic("unused binding replaced capture") }
+  ch.send(9)
+  if ch.receive().unwrap_or(0) != 7 { panic("named subject omitted") }
+  if ch.receive().unwrap_or(0) != 9 { panic("named subject repeated") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unused_tuple_subject_nested_unit() {
+    let input = r#"
+fn pair(ch: Channel<int>) -> ((), (int, ())) { ch.send(7); ((), (2, ())) }
+fn main() {
+  let ch = Channel.buffered<int>(3)
+  let (_, (_, _)) = pair(ch) else { panic("irrefutable nested tuple") }
+  ch.send(9)
+  if ch.receive().unwrap_or(0) != 7 { panic("nested subject omitted") }
+  if ch.receive().unwrap_or(0) != 9 { panic("nested subject repeated") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unused_tuple_subject_wildcards() {
+    let input = r#"
+fn pair(ch: Channel<int>) -> (int, int) { ch.send(7); (1, 2) }
+fn main() {
+  let ch = Channel.buffered<int>(3)
+  let (_, _) = pair(ch) else { panic("irrefutable wildcard tuple") }
+  ch.send(9)
+  if ch.receive().unwrap_or(0) != 7 { panic("tuple subject omitted") }
+  if ch.receive().unwrap_or(0) != 9 { panic("tuple subject repeated") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_header_identity_or_capture() {
+    let input = r#"
+enum Item { A(int), B(int), Empty }
+fn value(ch: Channel<int>, x: int) -> Item { ch.send(x); Item.A(x) }
+fn main() {
+  let subject = 7
+  let ch = Channel.buffered<int>(3)
+  let f = || match value(ch, subject) {
+    Item.A(subject) | Item.B(subject) => {
+      let read = || subject
+      let Some(subject) = Some(read() + 1) else { return read() }
+      if let Some(subject) = Some(subject + 1) { subject } else { read() }
+    },
+    Item.Empty => subject,
+  }
+  if f() != 9 || subject != 7 { panic("or pattern capture") }
+  ch.send(9)
+  if ch.receive().unwrap_or(0) != 7 || ch.receive().unwrap_or(0) != 9 { panic("or pattern evaluation") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_header_identity_type_select() {
+    let input = r#"
+import "go:fmt"
+import "go:time"
+fn value(ch: Channel<int>) -> fmt.Stringer { ch.send(7); 3 as time.Duration }
+fn main() {
+  let subject = 7
+  let effects = Channel.buffered<int>(3)
+  let ch = Channel.buffered<int>(1)
+  ch.send(2)
+  let f = || match value(effects) {
+    time.Duration(subject) => {
+      let read = || subject as int
+      select { let Some(subject) = ch.receive() => subject + read(), _ => 0 }
+    },
+    _ => subject,
+  }
+  if f() != 5 || subject != 7 { panic("type switch capture") }
+  effects.send(9)
+  if effects.receive().unwrap_or(0) != 7 || effects.receive().unwrap_or(0) != 9 { panic("type switch evaluation") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_header_identity_while_capture() {
+    let input = r#"
+fn value(ch: Channel<int>, x: int) -> int { ch.send(x); x }
+fn main() {
+  let subject = 7
+  let ch = Channel.buffered<int>(3)
+  let read = || subject
+  let f = || match value(ch, subject + 1) {
+    8 => { let subject = read() + 1; let g = || subject; g() },
+    _ => 0,
+  }
+  let mut pending = Some(2)
+  let mut total = 0
+  while let Some(subject) = pending { total += subject + f(); pending = None }
+  ch.send(9)
+  if total != 10 || subject != 7 { panic("match header capture") }
+  if ch.receive().unwrap_or(0) != 8 || ch.receive().unwrap_or(0) != 9 { panic("match header evaluation") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn helper_type_parameter_slice() {
+    let input = r#"
+fn count<s>(_seed: s) -> int { Slice.make<Option<s>>(2).length() }
+fn count_index<i>(_seed: i) -> int { Slice.make<Option<i>>(3).length() }
+fn main() { if count(1) != 2 || count_index(1) != 3 { panic("generic slice helper") } }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn helper_type_parameter_array() {
+    let input = r#"
+fn count<arr>(_seed: arr) -> int {
+  let values = Array.new<Option<arr>, 2>()
+  let mut count = 0
+  for value in values { if value.is_none() { count += 1 } }
+  count
+}
+fn main() { if count(1) != 2 { panic("generic array helper") } }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn helper_type_parameter_callback() {
+    let input = r#"
+fn some<T>(value: T) -> Option<T> { Some(value) }
+fn adapt<arg0>(seed: arg0) -> Option<arg0> { Option.and_then(Some(seed), some) }
+fn main() { if adapt(7).unwrap_or(0) != 7 { panic("generic callback helper") } }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn helper_package_type_namespace() {
+    let input = r#"
+struct s { value: int }
+fn main() {
+  let values = Slice.make<Option<s>>(2)
+  for value in values { if value.is_some() { panic("zero") } }
 }
 "#;
     assert_emit_snapshot!(input);

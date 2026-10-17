@@ -17,9 +17,9 @@ func test() int {
 	x := 5
 	var tmp int
 	{
-		x := x * 2
-		x_1 := x + 100
-		tmp = x_1
+		x_1 := x * 2
+		x := x_1 + 100
+		tmp = x
 	}
 	return tmp
 }

@@ -48,7 +48,7 @@ struct FunctionScope {
     test_handle: Option<GoIdentifier>,
     loops: Vec<LoopContext>,
     /// Go names written later in the region being lowered, innermost last.
-    assign_targets: Vec<String>,
+    assign_targets: Vec<GoIdentifier>,
 }
 
 impl FunctionScope {
@@ -130,7 +130,7 @@ impl ScopeState {
         &mut self,
         lisette_name: impl Into<String>,
         ids: &[BindingId],
-        go_name: impl Into<String>,
+        go_name: impl Into<GoIdentifier>,
     ) -> GoIdentifier {
         self.bind_name(
             lisette_name.into(),
@@ -141,7 +141,11 @@ impl ScopeState {
     }
 
     /// Bind a local `const` that Go can declare as a Go constant.
-    pub(crate) fn bind_go_const(&mut self, lisette_name: &str, go_name: String) -> GoIdentifier {
+    pub(crate) fn bind_go_const(
+        &mut self,
+        lisette_name: &str,
+        go_name: GoIdentifier,
+    ) -> GoIdentifier {
         self.bind_name(
             lisette_name.to_string(),
             &[],
@@ -154,21 +158,25 @@ impl ScopeState {
         &mut self,
         lisette_name: String,
         ids: &[BindingId],
-        go_name: String,
+        go_name: GoIdentifier,
         value: fn(GoIdentifier) -> BindingValue,
     ) -> GoIdentifier {
-        let identifier = self.new_local_identifier(&go_name);
+        let identifier = self.new_local_identifier(go_name);
         self.set_binding(lisette_name, ids, value(identifier.clone()));
         identifier
     }
 
     /// A new local, which `bind_identifier` can bind to a source name later.
-    pub(crate) fn new_local_identifier(&mut self, go_name: &str) -> GoIdentifier {
-        let go_name = crate::escape_reserved(go_name).into_owned();
-        let id = self
-            .generated_local_id(&go_name)
-            .unwrap_or_else(|| self.new_local_id());
-        GoIdentifier::local(go_name, id)
+    pub(crate) fn new_local_identifier(
+        &mut self,
+        go_name: impl Into<GoIdentifier>,
+    ) -> GoIdentifier {
+        let mut name = go_name.into();
+        *name.spelling_mut() = crate::escape_reserved(name.spelling()).into_owned();
+        if name.id().is_none() {
+            name.identify(self.new_local_id());
+        }
+        name
     }
 
     pub(crate) fn bind_identifier(
@@ -221,9 +229,7 @@ impl ScopeState {
         if name.spelling() == "_" || name.id().is_some() {
             return;
         }
-        let id = self
-            .generated_local_id(name.spelling())
-            .unwrap_or_else(|| self.new_local_id());
+        let id = self.new_local_id();
         name.identify(id);
     }
 
@@ -261,31 +267,20 @@ impl ScopeState {
         })
     }
 
-    /// `None` when the innermost local with this name is generated.
-    pub(crate) fn source_binding_for_go_name(&self, go_name: &str) -> Option<BindingId> {
-        for frame in self.frames.iter().rev() {
-            let latest = frame
+    /// Find the source binding for this local, including captured locals hidden by a spelling.
+    pub(crate) fn source_binding_for_local(&self, local: &GoIdentifier) -> Option<BindingId> {
+        let local_id = local.id()?;
+        self.frames.iter().rev().find_map(|frame| {
+            frame
                 .binding_ids
                 .iter()
                 .filter(|(_, slot)| {
-                    matches!(
-                        frame.binding_values.get(**slot),
-                        Some(BindingValue::GoName(name)) if name.spelling() == go_name
-                    )
+                    matches!(frame.binding_values.get(**slot),
+                    Some(BindingValue::GoName(name)) if name.id() == Some(local_id))
                 })
-                .max_by_key(|(id, slot)| (**slot, **id));
-            if let Some((id, _)) = latest {
-                return Some(*id);
-            }
-            if frame
-                .binding_values
-                .iter()
-                .any(|value| value.local_named(go_name).is_some())
-            {
-                return None;
-            }
-        }
-        None
+                .max_by_key(|(id, slot)| (**slot, **id))
+                .map(|(id, _)| *id)
+        })
     }
 
     /// The slot an identifier reads: source bindings by ID, others by spelling.
@@ -302,38 +297,20 @@ impl ScopeState {
         }
     }
 
-    pub(crate) fn resolve_binding_go_name(&self, lisette_name: &str) -> Option<&str> {
-        self.resolve_identifier_binding(lisette_name)
-            .and_then(BindingValue::as_go_name)
-    }
-
-    pub(crate) fn identifier_for_go_name(&self, go_name: String) -> GoIdentifier {
-        if let Some(id) = self.generated_local_id(&go_name) {
-            return GoIdentifier::local(go_name, id);
-        }
-        for frame in self.frames.iter().rev() {
-            let mut found: Option<GoIdentifier> = None;
-            for value in frame
-                .bindings
-                .values()
-                .filter_map(|slot| frame.binding_values.get(*slot))
-            {
-                let Some(name) = value.local_named(&go_name) else {
-                    continue;
-                };
-                if found
-                    .as_ref()
-                    .is_some_and(|previous| !previous.refers_to_same(name))
-                {
-                    return GoIdentifier::name(go_name);
-                }
-                found = Some(name.clone());
-            }
-            if let Some(name) = found {
-                return name;
-            }
-        }
-        GoIdentifier::name(go_name)
+    pub(crate) fn has_binding_for_local(&self, local: &GoIdentifier) -> bool {
+        let Some(id) = local.id() else {
+            return false;
+        };
+        self.current_function()
+            .assign_targets
+            .iter()
+            .any(|target| target.id() == Some(id))
+            || self.frames.iter().any(|frame| {
+                frame
+                    .bindings
+                    .values()
+                    .any(|slot| frame.binding_values[*slot].mentions_local(local))
+            })
     }
 
     /// Whether a visible binding or an active assign target uses `go_name`.
@@ -366,11 +343,11 @@ impl ScopeState {
         }
     }
 
-    pub(crate) fn has_other_binding_for_go_name(&self, go_name: &str, lisette_name: &str) -> bool {
+    pub(crate) fn has_other_binding_for_go_name(&self, go_name: &str, ids: &[BindingId]) -> bool {
         self.frames.iter().any(|frame| {
             frame.bindings.iter().any(|(source_name, slot)| {
                 let value = &frame.binding_values[*slot];
-                source_name != lisette_name
+                !ids.iter().any(|id| frame.binding_ids.get(id) == Some(slot))
                     && value.mentions(go_name)
                     && self
                         .resolve_identifier_binding(source_name)
@@ -444,8 +421,7 @@ impl ScopeState {
     }
 
     /// Record that the block being lowered runs only when `condition` holds.
-    pub(crate) fn establish_condition(&mut self, mut condition: GoExpression) {
-        condition.identify_names(&|name| self.identifier_for_go_name(name.to_string()).id());
+    pub(crate) fn establish_condition(&mut self, condition: GoExpression) {
         self.frames
             .iter_mut()
             .rev()
@@ -456,8 +432,6 @@ impl ScopeState {
     }
 
     pub(crate) fn is_condition_established(&self, condition: &GoExpression) -> bool {
-        let mut condition = condition.clone();
-        condition.identify_names(&|name| self.identifier_for_go_name(name.to_string()).id());
         for frame in self.frames.iter().rev() {
             if frame
                 .established
@@ -540,7 +514,7 @@ impl ScopeState {
     }
 
     /// Mark `name` as written later in the region being lowered.
-    pub(crate) fn push_assign_target(&mut self, name: String) {
+    pub(crate) fn push_assign_target(&mut self, name: GoIdentifier) {
         self.current_function_mut().assign_targets.push(name);
     }
 
@@ -555,7 +529,7 @@ impl ScopeState {
         self.current_function()
             .assign_targets
             .iter()
-            .any(|target| target == var)
+            .any(|target| target.spelling() == var)
     }
 
     fn current_function(&self) -> &FunctionScope {
@@ -657,7 +631,8 @@ mod tests {
     fn isolated_functions_hide_enclosing_loops_and_assign_targets() {
         let mut scope = ScopeState::new();
         scope.push_loop(GoExpression::name("result".to_string()));
-        scope.push_assign_target("result".to_string());
+        let result = scope.new_local_identifier("result");
+        scope.push_assign_target(result);
         let outer_loop = scope.current_loop_id();
 
         scope.enter_isolated_function(ReturnContext::None);
@@ -680,7 +655,12 @@ mod tests {
 
         scope.exit_block();
 
-        assert_eq!(scope.resolve_binding_go_name("value"), Some("outer"));
+        assert_eq!(
+            scope
+                .resolve_identifier_binding("value")
+                .and_then(BindingValue::as_go_name),
+            Some("outer")
+        );
     }
 
     #[test]
@@ -715,6 +695,18 @@ mod tests {
     }
 
     #[test]
+    fn binding_collision_exempts_only_the_same_source_binding() {
+        let mut scope = ScopeState::new();
+        let outer = BindingId::new(1);
+        let inner = BindingId::new(2);
+        scope.bind_source("value", &[outer], "value");
+
+        assert!(!scope.has_other_binding_for_go_name("value", &[outer]));
+        assert!(scope.has_other_binding_for_go_name("value", &[inner]));
+        assert!(scope.has_other_binding_for_go_name("value", &[]));
+    }
+
+    #[test]
     fn source_rebind_moves_its_ids_and_generated_bind_does_not_take_them() {
         let mut scope = ScopeState::new();
         let id = BindingId::new(5);
@@ -728,7 +720,12 @@ mod tests {
                 .and_then(BindingValue::as_go_name),
             Some("value_2")
         );
-        assert_eq!(scope.resolve_binding_go_name("value"), Some("generated"));
+        assert_eq!(
+            scope
+                .resolve_identifier_binding("value")
+                .and_then(BindingValue::as_go_name),
+            Some("generated")
+        );
     }
 
     #[test]
@@ -775,47 +772,53 @@ mod tests {
     }
 
     #[test]
-    fn go_name_reference_uses_the_visible_local_id() {
+    fn source_origin_keeps_captured_locals_distinct_from_same_spelled_bindings() {
         let mut scope = ScopeState::new();
-        scope.bind_source("outer", &[], "value");
-        let outer = scope.identifier_for_go_name("value".to_string());
+        let outer_id = BindingId::new(1);
+        let inner_id = BindingId::new(2);
+        let outer = scope.bind_source("value", &[outer_id], "value");
         scope.enter_block();
-        scope.bind_source("inner", &[], "value");
-        let inner = scope.identifier_for_go_name("value".to_string());
-        assert_ne!(outer.id(), inner.id());
+        let inner = scope.bind_source("value", &[inner_id], "value");
+        assert_eq!(scope.source_binding_for_local(&outer), Some(outer_id));
+        assert_eq!(scope.source_binding_for_local(&inner), Some(inner_id));
         scope.exit_block();
-        assert_eq!(
-            scope.identifier_for_go_name("value".to_string()).id(),
-            outer.id()
-        );
+        assert_eq!(scope.source_binding_for_local(&outer), Some(outer_id));
+        assert_eq!(scope.source_binding_for_local(&inner), None);
     }
 
     #[test]
     fn established_conditions_keep_the_binding_seen_when_recorded() {
         let mut scope = ScopeState::new();
         scope.bind_source("value", &[], "value");
-        let condition = || {
+        let condition = |scope: &ScopeState| {
             GoExpression::binary(
-                GoExpression::name("value".to_string()),
+                GoExpression::identifier(
+                    scope
+                        .resolve_identifier_binding("value")
+                        .unwrap()
+                        .as_go_identifier()
+                        .unwrap()
+                        .clone(),
+                ),
                 BinaryOp::Eq,
                 GoExpression::literal("1".to_string()),
             )
         };
-        scope.establish_condition(condition());
-        assert!(scope.is_condition_established(&condition()));
+        scope.establish_condition(condition(&scope));
+        assert!(scope.is_condition_established(&condition(&scope)));
 
         scope.enter_block();
         scope.bind_source("value", &[], "value");
-        assert!(!scope.is_condition_established(&condition()));
+        assert!(!scope.is_condition_established(&condition(&scope)));
         scope.exit_block();
 
-        assert!(scope.is_condition_established(&condition()));
+        assert!(scope.is_condition_established(&condition(&scope)));
     }
 
     #[test]
     fn nested_bindings_restore_names_constants_and_inline_expressions() {
         let mut scope = ScopeState::new();
-        scope.bind_go_const("value", "outer".to_string());
+        scope.bind_go_const("value", "outer".into());
         scope.push_binding_frame();
         scope.bind_inline_expr(
             "value",
@@ -833,7 +836,7 @@ mod tests {
         scope.pop_binding_frame();
         assert!(matches!(
             scope.resolve_identifier_binding("value"),
-            Some(BindingValue::GoConst(name)) if name == "outer"
+            Some(BindingValue::GoConst(name)) if name.spelling() == "outer"
         ));
     }
 
@@ -847,7 +850,12 @@ mod tests {
         scope.declare_go_name("local");
         scope.pop_binding_frame();
 
-        assert_eq!(scope.resolve_binding_go_name("value"), Some("outer"));
+        assert_eq!(
+            scope
+                .resolve_identifier_binding("value")
+                .and_then(BindingValue::as_go_name),
+            Some("outer")
+        );
         assert!(scope.resolve_identifier_binding("new").is_none());
         assert!(!scope.has_binding_for_go_name("inner"));
         assert!(scope.is_go_name_declared("local"));

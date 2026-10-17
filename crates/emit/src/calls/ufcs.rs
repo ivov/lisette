@@ -223,7 +223,7 @@ impl Planner<'_> {
             Expression::Call { .. } => stage
                 .map_expression(|setup, value| {
                     let temp = self.hoist_tmp_value_statement(setup, "ref", value);
-                    GoExpression::address_of(GoExpression::name(temp))
+                    GoExpression::address_of(GoExpression::identifier(temp))
                 })
                 .into_addressed_location(),
             Expression::Identifier { .. } => stage

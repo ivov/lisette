@@ -1,0 +1,95 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  enum Choice { A(int), B(int), Empty }
+  
+  fn main() {
+    let x = 13
+    let ch = Channel.buffered<int>(1)
+    ch.send(4)
+    let f = || {
+      let selected = select {
+        let Some(x) = ch.receive() => {
+          let read = || x
+          read()
+        },
+        _ => 0,
+      }
+      let Choice.A(x) | Choice.B(x) = Choice.Empty else {
+        return selected + x
+      }
+      x
+    }
+    if f() != 17 { panic("failure capture") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func MakeChoiceA(arg0 int) Choice {
+	return Choice{Tag: ChoiceA, A: arg0}
+}
+
+func MakeChoiceB(arg0 int) Choice {
+	return Choice{Tag: ChoiceB, B: arg0}
+}
+
+func MakeChoiceEmpty() Choice {
+	return Choice{Tag: ChoiceEmpty}
+}
+
+type ChoiceTag uint8
+
+const (
+	ChoiceA ChoiceTag = iota
+	ChoiceB
+	ChoiceEmpty
+)
+
+type Choice struct {
+	Tag ChoiceTag
+	A   int
+	B   int
+}
+
+func main() {
+	x := 13
+	ch := make(chan int, 1)
+	lisette.ChannelSend(ch, 4)
+	f := func() int {
+		var selected int
+		ch_1 := ch
+		for {
+			select {
+			case x, ok := <-ch_1:
+				if ok {
+					read := func() int {
+						return x
+					}
+					selected = read()
+				} else {
+					ch_1 = nil
+					continue
+				}
+			default:
+				selected = 0
+			}
+			break
+		}
+		subject := MakeChoiceEmpty()
+		var x_1 int
+		if subject.Tag == ChoiceA {
+			x_1 = subject.A
+		} else if subject.Tag == ChoiceB {
+			x_1 = subject.B
+		} else {
+			return selected + x
+		}
+		return x_1
+	}
+	if f() != 17 {
+		panic("failure capture")
+	}
+}

@@ -52,7 +52,7 @@ pub(crate) enum CommaOkValueSlot {
     Named(GoIdentifier),
     /// Allocate a fresh temporary.
     Temp,
-    Arm(String),
+    Arm(GoIdentifier),
     /// No payload use. The value is still captured when the nil guard needs it.
     Unused,
     /// No payload use, bound as a statement so the status can serve as a value.
@@ -214,7 +214,7 @@ impl Planner<'_> {
             PairKind::CommaOk { nil_guard } | PairKind::Result { nil_guard } => {
                 let name = match slot {
                     CommaOkValueSlot::Named(name) => Some(name),
-                    CommaOkValueSlot::Arm(name) => Some(self.scope.new_local_identifier(&name)),
+                    CommaOkValueSlot::Arm(name) => Some(name),
                     CommaOkValueSlot::Temp => Some(self.fresh_pair_identifier()),
                     CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => {
                         nil_guard.map(|_| self.fresh_pair_identifier())
@@ -227,12 +227,11 @@ impl Planner<'_> {
             }
         };
         let mut status = self.pair_status(status_hint, status_kind, opens_if);
-        if opens_if && value.name().map(GoIdentifier::spelling) == Some(status.as_str()) {
+        if opens_if && value.name().map(GoIdentifier::spelling) == Some(status.spelling()) {
             self.scope.reserve_go_name(&status);
-            status = self.fresh_var(Some(&status));
+            status = self.fresh_local(Some(&status));
         }
         let mut statements = statements;
-        let status = self.scope.new_local_identifier(&status);
         let mut pair = LoweredPair {
             value,
             status,
@@ -248,32 +247,27 @@ impl Planner<'_> {
         BoundValue::pair(statements, pair)
     }
 
-    pub(crate) fn fresh_pair_value(&mut self) -> String {
-        let v = self.fresh_var(Some("ret"));
+    pub(crate) fn fresh_pair_identifier(&mut self) -> GoIdentifier {
+        let v = self.fresh_local(Some("ret"));
         self.declare(&v);
         v
     }
 
-    pub(crate) fn fresh_pair_identifier(&mut self) -> GoIdentifier {
-        let name = self.fresh_pair_value();
-        self.scope.generated_identifier(&name)
-    }
-
-    pub(crate) fn arm_value_name(&mut self, name: &str) -> String {
+    pub(crate) fn arm_value_name(&mut self, name: &str) -> GoIdentifier {
         let candidate = escape_reserved(name);
         if self.scope.has_binding_for_go_name(&candidate)
             || self.package.is_package_block_name(&candidate)
         {
-            self.fresh_var(Some(&candidate))
+            self.fresh_local(Some(&candidate))
         } else {
-            candidate.into_owned()
+            self.scope.new_local_identifier(candidate.as_ref())
         }
     }
 
-    pub(crate) fn declared_arm_value_name(&mut self, name: &str) -> String {
-        let candidate = self.arm_value_name(name);
+    pub(crate) fn declared_arm_value_name(&mut self, name: &GoIdentifier) -> GoIdentifier {
+        let candidate = name.clone();
         let name = if self.is_declared(&candidate) {
-            self.fresh_var(Some(&candidate))
+            self.fresh_local(Some(&candidate))
         } else {
             candidate
         };
@@ -287,7 +281,7 @@ impl Planner<'_> {
         hint: Option<&str>,
         kind: PairStatusKind,
         opens_if: bool,
-    ) -> String {
+    ) -> GoIdentifier {
         let candidate = escape_reserved(hint.unwrap_or(match kind {
             PairStatusKind::Error => "err",
             PairStatusKind::Ok => "ok",
@@ -296,9 +290,9 @@ impl Planner<'_> {
             || self.scope.has_binding_for_go_name(&candidate)
             || self.package.is_package_block_name(&candidate);
         let name = if taken {
-            self.fresh_var(Some(&candidate))
+            self.fresh_local(Some(&candidate))
         } else {
-            candidate.into_owned()
+            self.scope.new_local_identifier(candidate.as_ref())
         };
         if !opens_if {
             self.declare(&name);

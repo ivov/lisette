@@ -482,9 +482,9 @@ impl<'a> Planner<'a> {
         &mut self,
         lisette_name: &str,
         ids: &[BindingId],
-        preferred: impl Into<String>,
+        preferred: impl Into<GoIdentifier>,
     ) -> GoIdentifier {
-        let go_name = self.claim_declared_go_name(lisette_name, preferred);
+        let go_name = self.claim_declared_go_name(lisette_name, ids, preferred);
         self.scope.bind_source(lisette_name, ids, go_name)
     }
 
@@ -494,10 +494,10 @@ impl<'a> Planner<'a> {
         &mut self,
         lisette_name: &str,
         ids: &[BindingId],
-        preferred: &str,
+        preferred: impl Into<GoIdentifier>,
         outer: OuterBindings,
     ) -> GoIdentifier {
-        let go_name = escape_reserved(preferred).into_owned();
+        let go_name = self.scope.new_local_identifier(preferred);
         let hides = self.package.is_package_block_name(&go_name)
             || self.scope.current_block_declares(&go_name)
             || match outer {
@@ -505,7 +505,7 @@ impl<'a> Planner<'a> {
                 OuterBindings::StayVisible => self.scope.has_binding_for_go_name(&go_name),
             };
         let go_name = if hides {
-            self.fresh_var(Some(lisette_name))
+            self.fresh_local(Some(lisette_name))
         } else {
             go_name
         };
@@ -517,18 +517,17 @@ impl<'a> Planner<'a> {
     fn claim_declared_go_name(
         &mut self,
         lisette_name: &str,
-        preferred: impl Into<String>,
-    ) -> String {
-        let go_name = escape_reserved(&preferred.into()).into_owned();
+        ids: &[BindingId],
+        preferred: impl Into<GoIdentifier>,
+    ) -> GoIdentifier {
+        let go_name = self.scope.new_local_identifier(preferred);
         let go_name = if self.shadows_declaration(&go_name)
-            || self
-                .scope
-                .has_other_binding_for_go_name(&go_name, lisette_name)
+            || self.scope.has_other_binding_for_go_name(&go_name, ids)
         {
             let fresh = self
                 .scope
                 .fresh_binding_go_name(lisette_name, &self.package);
-            escape_reserved(&fresh).into_owned()
+            self.scope.new_local_identifier(fresh)
         } else {
             go_name
         };
@@ -546,7 +545,7 @@ impl<'a> Planner<'a> {
         if value.as_identifier().is_some() {
             return value;
         }
-        GoExpression::name(self.hoist_tmp_value_statement(statements, hint, value))
+        GoExpression::identifier(self.hoist_tmp_value_statement(statements, hint, value))
     }
 
     /// Allocate a fresh Go temp, register it as declared, and push `tmp := value`.
@@ -555,8 +554,8 @@ impl<'a> Planner<'a> {
         setup: &mut Vec<Statement>,
         hint: &str,
         value: GoExpression,
-    ) -> String {
-        let tmp = self.fresh_var(Some(hint));
+    ) -> GoIdentifier {
+        let tmp = self.fresh_local(Some(hint));
         self.declare(&tmp);
         setup.push(define(tmp.clone(), value));
         tmp
@@ -619,8 +618,8 @@ impl<'a> Planner<'a> {
     ) -> R {
         let name = target
             .as_identifier()
-            .filter(|name| *name != "_")
-            .map(str::to_string);
+            .filter(|name| name.spelling() != "_")
+            .cloned();
         let pushed = name.is_some();
         if let Some(name) = name {
             self.scope.push_assign_target(name);
@@ -632,13 +631,8 @@ impl<'a> Planner<'a> {
         result
     }
 
-    fn fresh_var(&mut self, hint: Option<&str>) -> String {
-        self.scope.fresh_go_name(hint, &self.package)
-    }
-
     fn fresh_local(&mut self, hint: Option<&str>) -> GoIdentifier {
-        let name = self.fresh_var(hint);
-        self.scope.generated_identifier(&name)
+        self.scope.fresh_go_name(hint, &self.package)
     }
 
     fn maybe_line_directive(&self, span: &Span) -> Option<String> {

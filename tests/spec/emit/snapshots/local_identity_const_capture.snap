@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn main() {
+    const MAX_SIZE = 7
+    let f = || {
+      const INNER_SIZE = 3
+      match INNER_SIZE { 3 => INNER_SIZE, _ => 0 }
+    }
+    if f() != 3 { panic("constant capture") }
+    let value = match MAX_SIZE { 7 => MAX_SIZE, _ => 0 }
+    if value != 7 { panic("constant subject") }
+  }
+---
+package main
+
+func main() {
+	const MaxSize int = 7
+	f := func() int {
+		const InnerSize int = 3
+		if InnerSize == 3 {
+			return InnerSize
+		}
+		return 0
+	}
+	if f() != 3 {
+		panic("constant capture")
+	}
+	var value int
+	if MaxSize == 7 {
+		value = MaxSize
+	} else {
+		value = 0
+	}
+	if value != 7 {
+		panic("constant subject")
+	}
+}

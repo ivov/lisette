@@ -31,6 +31,24 @@ impl From<String> for GoIdentifier {
     }
 }
 
+impl From<&String> for GoIdentifier {
+    fn from(spelling: &String) -> Self {
+        Self::name(spelling.clone())
+    }
+}
+
+impl From<&str> for GoIdentifier {
+    fn from(spelling: &str) -> Self {
+        Self::name(spelling.to_string())
+    }
+}
+
+impl From<&GoIdentifier> for GoIdentifier {
+    fn from(name: &GoIdentifier) -> Self {
+        name.clone()
+    }
+}
+
 impl GoIdentifier {
     pub(crate) fn name(spelling: String) -> Self {
         Self {
@@ -72,11 +90,11 @@ impl GoIdentifier {
     }
 
     pub(crate) fn identify(&mut self, id: LocalId) {
-        debug_assert!(self.id().is_none_or(|existing| existing == id));
-        self.target = IdentifierTarget::Local(id);
-    }
-
-    pub(crate) fn resolve_to(&mut self, id: LocalId) {
+        assert!(
+            self.id().is_none_or(|existing| existing == id),
+            "cannot change the identity of local `{}`",
+            self.spelling
+        );
         self.target = IdentifierTarget::Local(id);
     }
 
@@ -107,24 +125,6 @@ impl Deref for GoIdentifier {
     }
 }
 
-impl PartialEq<str> for GoIdentifier {
-    fn eq(&self, other: &str) -> bool {
-        self.spelling == other
-    }
-}
-
-impl PartialEq<&str> for GoIdentifier {
-    fn eq(&self, other: &&str) -> bool {
-        self.spelling == *other
-    }
-}
-
-impl PartialEq<String> for GoIdentifier {
-    fn eq(&self, other: &String) -> bool {
-        self.spelling == *other
-    }
-}
-
 impl Display for GoIdentifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(&self.spelling)
@@ -141,5 +141,12 @@ mod tests {
         let inner = GoIdentifier::local("x".to_string(), LocalId(2));
         assert!(!outer.refers_to_same(&inner));
         assert_ne!(outer, inner);
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot change the identity")]
+    fn identifying_a_local_cannot_retarget_it() {
+        let mut name = GoIdentifier::local("x".to_string(), LocalId(1));
+        name.identify(LocalId(2));
     }
 }

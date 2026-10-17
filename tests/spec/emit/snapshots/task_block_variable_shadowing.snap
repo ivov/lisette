@@ -23,9 +23,9 @@ func main() {
 	x := 1
 	fmt.Println(x)
 	go func() {
-		x := 2
-		fmt.Println(x)
-		x_1 := 3
+		x_1 := 2
 		fmt.Println(x_1)
+		x := 3
+		fmt.Println(x)
 	}()
 }

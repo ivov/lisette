@@ -92,7 +92,7 @@ struct SliceLoopBody<'a> {
 #[derive(Clone, Copy)]
 pub(crate) struct FoundSink<'a> {
     pub value: Option<&'a GoIdentifier>,
-    pub flag: &'a str,
+    pub flag: &'a GoIdentifier,
 }
 
 #[derive(Clone, Copy)]
@@ -171,7 +171,7 @@ fn local(identifier: &GoIdentifier) -> GoExpression {
 }
 
 fn name(text: &str) -> GoExpression {
-    GoExpression::name(text.to_string())
+    GoExpression::external_name(text.to_string())
 }
 
 impl Planner<'_> {
@@ -364,7 +364,7 @@ impl Planner<'_> {
             key: match (&planned, element_name.spelling()) {
                 (PlannedLoop::Map { index, .. }, _) => Some(index.clone()),
                 (_, "_") => None,
-                _ => Some(GoIdentifier::name("_".to_string())),
+                _ => Some(GoIdentifier::external("_".to_string())),
             },
             value: (element_name.spelling() != "_").then_some(element_name),
             iterable: source,
@@ -388,14 +388,16 @@ impl Planner<'_> {
     }
 
     fn accumulator_slot_name(&mut self, pattern: &Pattern) -> GoIdentifier {
-        let Pattern::Identifier { identifier, .. } = pattern else {
+        let Pattern::Identifier {
+            identifier,
+            binding,
+            ..
+        } = pattern
+        else {
             return self.fresh_local(Some("result"));
         };
         match self.go_name_for_binding(pattern) {
-            Some(name) => {
-                let name = self.claim_declared_go_name(identifier, name);
-                self.scope.new_local_identifier(&name)
-            }
+            Some(name) => self.claim_declared_go_name(identifier, binding.as_slice(), name),
             None => self.fresh_local(Some("result")),
         }
     }
@@ -433,7 +435,7 @@ impl Planner<'_> {
             }
             None => match self.go_name_for_binding(pattern) {
                 Some(name) => self.claim_declared_binding(identifier, ids.as_slice(), name),
-                None => GoIdentifier::name("_".to_string()),
+                None => GoIdentifier::external("_".to_string()),
             },
         }
     }
@@ -487,7 +489,7 @@ impl Planner<'_> {
                     );
                 }
                 define(
-                    sink.flag.to_string(),
+                    sink.flag.clone(),
                     GoExpression::literal("false".to_string()),
                 )
             }
@@ -540,7 +542,7 @@ impl Planner<'_> {
                     statements.push(assign(local(value), local(element_name)));
                 }
                 statements.push(assign(
-                    name(sink.flag),
+                    GoExpression::identifier(sink.flag.clone()),
                     GoExpression::literal("true".to_string()),
                 ));
                 statements.push(LoweredStatement::Break(LoopTransfer::Unlabeled).into());

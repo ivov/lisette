@@ -336,7 +336,7 @@ impl Planner<'_> {
         let source = self
             .lower_value(spread, ExpressionContext::value())
             .map_expression(|setup, source_value| {
-                GoExpression::name(self.hoist_tmp_value_statement(setup, "src", source_value))
+                GoExpression::identifier(self.hoist_tmp_value_statement(setup, "src", source_value))
             });
         let source_variable = source.expression().clone();
 
@@ -352,23 +352,24 @@ impl Planner<'_> {
             target_element_ret
         );
 
-        let adapted = self.fresh_var(Some("adapted"));
+        let adapted = self.fresh_local(Some("adapted"));
         self.declare(&adapted);
-        let loop_cb = self.fresh_var(Some("cb"));
+        let loop_cb = self.fresh_local(Some("cb"));
+        let index = self.scope.helper_local("i", &self.package);
 
         let mut body = Vec::new();
         let closure = emit_fn_arg_shape_adapter(
             self,
             &mut body,
-            GoExpression::name(loop_cb.clone()),
+            GoExpression::identifier(loop_cb.clone()),
             &arg_fn,
             &arg_abi,
             &param_abi,
         )?;
         body.push(assign(
             GoExpression::index(
-                GoExpression::name(adapted.clone()),
-                GoExpression::name("i".to_string()),
+                GoExpression::identifier(adapted.clone()),
+                GoExpression::identifier(index.clone()),
             ),
             closure,
         ));
@@ -377,11 +378,11 @@ impl Planner<'_> {
             setup.push(define(
                 adapted.clone(),
                 GoExpression::call(
-                    GoExpression::name("make".to_string()),
+                    GoExpression::external_name("make".to_string()),
                     vec![
                         GoExpression::type_name(format!("[]{target_element_ty}")),
                         GoExpression::call(
-                            GoExpression::name("len".to_string()),
+                            GoExpression::external_name("len".to_string()),
                             vec![source_variable.clone()],
                         ),
                     ],
@@ -391,15 +392,15 @@ impl Planner<'_> {
                 LoweredStatement::Loop(LoopPlan {
                     kind: LoopKind::Generated { label: None },
                     header: LoopHeader::Range {
-                        key: Some("i".to_string().into()),
-                        value: Some(loop_cb.into()),
+                        key: Some(index),
+                        value: Some(loop_cb),
                         iterable: source_variable,
                     },
                     body: LoweredBlock { statements: body },
                 })
                 .into(),
             );
-            GoExpression::name(adapted)
+            GoExpression::identifier(adapted)
         }))
     }
 

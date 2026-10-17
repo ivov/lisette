@@ -50,8 +50,8 @@ func pathOf(r *http.Request) string {
 
 func setAuth(req *http.Request, auth string) {
 	if h := req.Header; h != nil {
-		h := h
-		h.Set("Authorization", auth)
+		h_1 := h
+		h_1.Set("Authorization", auth)
 	}
 }
 

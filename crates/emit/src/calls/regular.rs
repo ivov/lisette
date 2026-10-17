@@ -274,7 +274,7 @@ impl<'a> Planner<'a> {
                     boundary: expression_ctx.capture_boundary(),
                 },
             );
-            let callee = GoExpression::name(go_name);
+            let callee = GoExpression::external_name(go_name);
             let expression = if self.is_pure_constructor_callee(function) {
                 GoExpression::pure_call(callee, sequenced.values)
             } else {
@@ -349,7 +349,7 @@ impl<'a> Planner<'a> {
             .can_change(self.place_read_stability(function));
         if callee_needs_pin {
             let pinned = self.hoist_tmp_value_statement(&mut setup, "callee", callee);
-            callee = GoExpression::name(pinned);
+            callee = GoExpression::identifier(pinned);
         }
 
         let call = match collapse_fmt_print(self, &callee, args, &arguments) {

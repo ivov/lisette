@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn main() {
+    let x = 7
+    let f = || {
+      let mut total = 0
+      if let Some(x) = Some(x + 1) {
+        for x in [x, x + 1] {
+          let read = || x
+          total += read()
+        }
+      }
+      total + x
+    }
+    if f() != 24 { panic("shadowed capture") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	x := 7
+	f := func() int {
+		total := 0
+		subject := lisette.MakeOptionSome(x + 1)
+		if subject.Tag == lisette.OptionSome {
+			x_1 := subject.SomeVal
+			for _, x := range []int{x_1, x_1 + 1} {
+				read := func() int {
+					return x
+				}
+				total += read()
+			}
+		}
+		return total + x
+	}
+	if f() != 24 {
+		panic("shadowed capture")
+	}
+}

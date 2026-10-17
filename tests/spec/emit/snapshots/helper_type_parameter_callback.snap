@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn some<T>(value: T) -> Option<T> { Some(value) }
+  fn adapt<arg0>(seed: arg0) -> Option<arg0> { Option.and_then(Some(seed), some) }
+  fn main() { if adapt(7).unwrap_or(0) != 7 { panic("generic callback helper") } }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func some[T any](value T) (T, bool) {
+	return value, true
+}
+
+func adapt[arg0 any](seed arg0) (arg0, bool) {
+	arg := lisette.MakeOptionSome(seed)
+	cb := some[arg0]
+	tagged := func(arg0_1 arg0) lisette.Option[arg0] {
+		return lisette.OptionFromCommaOk[arg0](cb(arg0_1))
+	}
+	v := lisette.OptionAndThen(arg, tagged)
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	return *new(arg0), false
+}
+
+func main() {
+	ret, ok := adapt(7)
+	if !ok {
+		ret = 0
+	}
+	if ret != 7 {
+		panic("generic callback helper")
+	}
+}

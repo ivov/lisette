@@ -25,7 +25,7 @@ enum BoundSource {
     },
     Found {
         value: Option<GoIdentifier>,
-        flag: String,
+        flag: GoIdentifier,
     },
 }
 
@@ -61,7 +61,7 @@ impl LoweredPair {
         let status = self.status.clone();
         match &self.value {
             PairValue::Named { name, .. } => vec![name.clone(), status],
-            PairValue::Discarded => vec![GoIdentifier::name("_".to_string()), status],
+            PairValue::Discarded => vec![GoIdentifier::external("_".to_string()), status],
             PairValue::Absent => vec![status],
         }
     }
@@ -148,7 +148,7 @@ impl BoundValue {
     pub(crate) fn found(
         statements: Vec<Statement>,
         value: Option<GoIdentifier>,
-        flag: String,
+        flag: GoIdentifier,
     ) -> Self {
         Self {
             statements,
@@ -167,10 +167,6 @@ impl BoundValue {
         }
     }
 
-    pub(crate) fn payload_name(&self) -> Option<&str> {
-        self.payload_identifier().map(GoIdentifier::spelling)
-    }
-
     pub(crate) fn payload_identifier(&self) -> Option<&GoIdentifier> {
         match &self.source {
             BoundSource::Pair(pair) => pair.value.name(),
@@ -180,28 +176,24 @@ impl BoundValue {
         }
     }
 
-    pub(crate) fn writable_payload(&mut self, planner: &mut Planner<'_>) -> String {
+    pub(crate) fn writable_payload(&mut self, planner: &mut Planner<'_>) -> GoIdentifier {
         if let BoundSource::Pair(pair) = &mut self.source
             && pair.borrowed
             && let Some(shared) = pair.value.name()
         {
-            let copy = planner.fresh_pair_value();
+            let copy = planner.fresh_pair_identifier();
             let shared = GoExpression::identifier(shared.clone());
             self.statements.push(define(copy.clone(), shared));
             pair.value = PairValue::Named {
-                name: planner.scope.generated_identifier(&copy),
+                name: copy.clone(),
                 nil_guard: None,
             };
             pair.borrowed = false;
             return copy;
         }
-        self.payload_name()
+        self.payload_identifier()
             .expect("a payload slot was requested")
-            .to_string()
-    }
-
-    pub(crate) fn status(&self) -> &str {
-        self.status_identifier().spelling()
+            .clone()
     }
 
     pub(crate) fn status_identifier(&self) -> &GoIdentifier {
@@ -286,10 +278,12 @@ impl BoundValue {
             }
             BoundSource::Index { index, .. } if success => plain(index.in_bounds.clone()),
             BoundSource::Index { index, .. } => plain(index.out_of_bounds.clone()),
-            BoundSource::Found { flag, .. } if success => plain(GoExpression::name(flag.clone())),
+            BoundSource::Found { flag, .. } if success => {
+                plain(GoExpression::identifier(flag.clone()))
+            }
             BoundSource::Found { flag, .. } => plain(GoExpression::unary(
                 UnaryOp::Not,
-                GoExpression::name(flag.clone()),
+                GoExpression::identifier(flag.clone()),
             )),
         }
     }

@@ -45,9 +45,9 @@ impl Planner<'_> {
         }
         let peeled = self.facts.peel_alias(ty);
         let go_ty = self.use_go_type(ty);
-        let var = self.fresh_var(Some("e"));
+        let var = self.fresh_local(Some("e"));
         let parameters = vec![GoParameter::new(var.clone(), go_ty.clone())];
-        let element = GoExpression::name(var);
+        let element = GoExpression::identifier(var);
         match &peeled {
             Type::Tuple(elems) => {
                 let mut statements = self.tuple_clone_statements(&element, elems);

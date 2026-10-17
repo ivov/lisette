@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct s { value: int }
+  fn main() {
+    let values = Slice.make<Option<s>>(2)
+    for value in values { if value.is_some() { panic("zero") } }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type s struct {
+	value int
+}
+
+func main() {
+	values := func() []lisette.Option[s] {
+		s_1 := make([]lisette.Option[s], 2)
+		for i := range s_1 {
+			s_1[i] = lisette.MakeOptionNone[s]()
+		}
+		return s_1
+	}()
+	for _, value := range values {
+		if value.IsSome() {
+			panic("zero")
+		}
+	}
+}

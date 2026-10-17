@@ -85,17 +85,17 @@ pub(crate) enum WrapperTarget<'a> {
 
 /// `Some(slot_name)` when the wrapper wrote into a fresh or named slot; `None`
 /// when it wrote a `return` statement and the caller should not emit its own.
-pub(crate) type WrapperOutcome = Option<String>;
+pub(crate) type WrapperOutcome = Option<GoIdentifier>;
 
 pub(super) enum ResolvedSink {
-    Slot(String),
+    Slot(GoIdentifier),
     Return,
 }
 
 /// `slot = value` or `return value`.
 fn leaf_statement(sink: &ResolvedSink, value: GoExpression) -> Statement {
     match sink {
-        ResolvedSink::Slot(name) => assign(GoExpression::name(name.clone()), value),
+        ResolvedSink::Slot(name) => assign(GoExpression::identifier(name.clone()), value),
         ResolvedSink::Return => plain_return(value),
     }
 }
@@ -113,10 +113,10 @@ fn packed_tuple_elements(slots: &[ValueLayout]) -> &[ValueLayout] {
         .expect("a payload bridged against a flattened one is a tuple")
 }
 
-fn names(names: &[String]) -> Vec<GoExpression> {
+fn names(names: &[GoIdentifier]) -> Vec<GoExpression> {
     names
         .iter()
-        .map(|name| GoExpression::name(name.clone()))
+        .map(|name| GoExpression::identifier(name.clone()))
         .collect()
 }
 
@@ -133,14 +133,16 @@ impl Planner<'_> {
         let mut parameters = Vec::new();
         let mut names = Vec::new();
         for (index, target) in target.parameters.iter().enumerate() {
-            let name = format!("arg{index}");
+            let name = self
+                .scope
+                .helper_local(&format!("arg{index}"), &self.package);
             let target_type = target.go_type(self);
             let target_type = self.use_rendered_go_type(target_type);
             parameters.push(GoParameter::new(name.clone(), target_type));
-            names.push(GoExpression::name(name));
+            names.push(GoExpression::identifier(name));
         }
         let arguments = self.plan_bridged_arguments(&mut body, names, source, target);
-        let call = GoExpression::call(GoExpression::name(function), arguments);
+        let call = GoExpression::call(GoExpression::identifier(function), arguments);
         self.plan_function_result_bridge(&mut body, call, source, target);
         let result = target
             .result_go_type(self)
@@ -221,8 +223,8 @@ impl Planner<'_> {
                 ) && !source_flat
                 {
                     let ok_type = source.result_type.ok_type();
-                    if let Some(condition) =
-                        self.partial_ok_nil_check(&ok_type, GoExpression::name(values[0].clone()))
+                    if let Some(condition) = self
+                        .partial_ok_nil_check(&ok_type, GoExpression::identifier(values[0].clone()))
                     {
                         statements.push(
                             LoweredStatement::If(IfPlan::plain(
@@ -230,7 +232,7 @@ impl Planner<'_> {
                                 LoweredBlock {
                                     statements: vec![multi_value_return(vec![
                                         GoExpression::nil(),
-                                        GoExpression::name(auxiliary.clone()),
+                                        GoExpression::identifier(auxiliary.clone()),
                                     ])],
                                 },
                                 ElseArm::None,
@@ -247,14 +249,14 @@ impl Planner<'_> {
                     &target.results,
                     target.return_abi.has_flattened_payload(),
                 );
-                values.push(GoExpression::name(auxiliary));
+                values.push(GoExpression::identifier(auxiliary));
                 statements.push(multi_value_return(values));
             }
             Some(LoweredReturnAbi::Option(OptionReturnAbi::Nullable)) => {
                 let raw = self.hoist_tmp_value_statement(statements, "raw", call);
                 let condition = self
                     .option_nil_guard(&source.result_type)
-                    .is_nil(GoExpression::name(raw.clone()));
+                    .is_nil(GoExpression::identifier(raw.clone()));
                 statements.push(
                     LoweredStatement::If(IfPlan::plain(
                         condition,
@@ -266,7 +268,8 @@ impl Planner<'_> {
                     .into(),
                 );
                 let bridge = resolve_layout_bridge(self, &source.results[0], &target.results[0]);
-                let value = self.plan_layout_bridge(statements, GoExpression::name(raw), &bridge);
+                let value =
+                    self.plan_layout_bridge(statements, GoExpression::identifier(raw), &bridge);
                 statements.push(plain_return(value));
             }
             Some(LoweredReturnAbi::Option(OptionReturnAbi::Sentinel(_))) => {
@@ -350,11 +353,11 @@ impl Planner<'_> {
     ) -> (ResolvedSink, WrapperOutcome) {
         match target {
             WrapperTarget::FreshSlot => {
-                let var = self.fresh_var(Some(name_hint));
+                let var = self.fresh_local(Some(name_hint));
                 self.declare(&var);
                 statements.push(
                     LoweredStatement::VarDecl {
-                        name: var.clone().into(),
+                        name: var.clone(),
                         go_type: type_str.to_string(),
                         value: None,
                     }
@@ -372,7 +375,7 @@ impl Planner<'_> {
                     .into(),
                 );
                 self.declare(name.spelling());
-                let owned = name.to_string();
+                let owned = name.clone();
                 (ResolvedSink::Slot(owned.clone()), Some(owned))
             }
             WrapperTarget::Return => (ResolvedSink::Return, None),
@@ -389,7 +392,7 @@ impl Planner<'_> {
         call: GoExpression,
         ok_ty: &Type,
         layout: PayloadLayout,
-    ) -> (String, GoExpression) {
+    ) -> (GoIdentifier, GoExpression) {
         if layout.is_flattened()
             && let Type::Tuple(elements) = ok_ty
         {
@@ -399,12 +402,12 @@ impl Planner<'_> {
             let tuple = self.plan_tuple_from_vars(statements, names(&temp_vars[..tuple_arity]));
             (temp_vars.last().unwrap().clone(), tuple)
         } else {
-            let val_var = self.fresh_var(Some("ret"));
+            let val_var = self.fresh_local(Some("ret"));
             self.declare(&val_var);
-            let err_var = self.fresh_var(Some("ret"));
+            let err_var = self.fresh_local(Some("ret"));
             self.declare(&err_var);
             statements.push(define_many(vec![val_var.clone(), err_var.clone()], call));
-            (err_var, GoExpression::name(val_var))
+            (err_var, GoExpression::identifier(val_var))
         }
     }
 
@@ -423,7 +426,7 @@ impl Planner<'_> {
             WrapperTarget::Slot(name) => {
                 self.declare(name.spelling());
                 statements.push(define(name.clone(), value));
-                Some(name.to_string())
+                Some(name.clone())
             }
             WrapperTarget::Return => {
                 statements.push(plain_return(value));
@@ -450,7 +453,7 @@ impl Planner<'_> {
 
         let mut statements = Vec::new();
         let (err_var, val_value) = self.push_go_returns(&mut statements, call, &ok_ty, layout);
-        let err = || GoExpression::name(err_var.clone());
+        let err = || GoExpression::identifier(err_var.clone());
         let val = || val_value.clone();
         let nil_check = self.partial_ok_nil_check(&ok_ty, val());
 
@@ -606,7 +609,7 @@ impl Planner<'_> {
         };
         let ok_ty = fallible.ok_ty();
         let (err_var, ok_value) = self.push_go_returns(&mut statements, call, ok_ty, layout);
-        let err = || GoExpression::name(err_var.clone());
+        let err = || GoExpression::identifier(err_var.clone());
         let ok = || ok_value.clone();
 
         let result_ty_str = { self.fallible_go_type(&fallible) };
@@ -676,7 +679,7 @@ impl Planner<'_> {
     ) -> (Vec<Statement>, WrapperOutcome) {
         let mut statements = Vec::new();
         let err_var = self.hoist_tmp_value_statement(&mut statements, "ret", call);
-        let err = || GoExpression::name(err_var.clone());
+        let err = || GoExpression::identifier(err_var.clone());
 
         let result_ty_str = { self.fallible_go_type(fallible) };
 
@@ -717,7 +720,7 @@ impl Planner<'_> {
         }
 
         if is_order_sensitive(expression) {
-            GoExpression::name(self.hoist_tmp_value_statement(setup, "fn", go_fn))
+            GoExpression::identifier(self.hoist_tmp_value_statement(setup, "fn", go_fn))
         } else {
             go_fn
         }
@@ -731,10 +734,10 @@ impl Planner<'_> {
         let mut arguments = Vec::new();
         let last_index = params.len().saturating_sub(1);
         for (i, param) in params.iter().enumerate() {
-            let name = format!("arg{}", i);
+            let name = self.scope.helper_local(&format!("arg{}", i), &self.package);
             let ty_str = self.use_go_type(&param.ty);
             param_strs.push(GoParameter::new(name.clone(), ty_str));
-            let argument = GoExpression::name(name);
+            let argument = GoExpression::identifier(name);
             if i == last_index && param.ty.get_name() == Some("VarArgs") {
                 arguments.push(GoExpression::spread(argument));
             } else {
@@ -815,7 +818,7 @@ impl Planner<'_> {
         let tuple = self.plan_tuple_from_vars(&mut statements, names(&temp_vars[..arity]));
         statements.push(multi_value_return(vec![
             tuple,
-            GoExpression::name(temp_vars[arity].clone()),
+            GoExpression::identifier(temp_vars[arity].clone()),
         ]));
 
         GoExpression::function_literal(
@@ -837,9 +840,9 @@ impl Planner<'_> {
             .expect("expected function type");
 
         let inner_ty_str = self.use_go_type(&return_type.ok_type());
-        let ret_var = self.fresh_var(Some("ret"));
+        let ret_var = self.fresh_local(Some("ret"));
         self.declare(&ret_var);
-        let ret = || GoExpression::name(ret_var.clone());
+        let ret = || GoExpression::identifier(ret_var.clone());
 
         let statements = vec![
             define(ret_var.clone(), call),

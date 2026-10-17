@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn main() {
+    let x = 7
+    let f = || {
+      if x > 0 {
+        let x = [x, x + 1].fold(0, |x, y| x + y)
+        x
+      } else { x }
+    }
+    if f() != 15 || x != 7 { panic("branch capture") }
+  }
+---
+package main
+
+func main() {
+	x := 7
+	f := func() int {
+		if x > 0 {
+			x_1 := 0
+			for _, y := range []int{x, x + 1} {
+				x_1 += y
+			}
+			return x_1
+		}
+		return x
+	}
+	if f() != 15 || x != 7 {
+		panic("branch capture")
+	}
+}

@@ -187,25 +187,26 @@ impl Planner<'_> {
     ) -> GoExpression {
         let source = self.stable_source(statements, "src", value);
         let go_type = self.use_go_type(array_type);
-        let output = self.fresh_var(Some("boxed"));
+        let output = self.fresh_local(Some("boxed"));
         self.declare(&output);
         statements.push(
             LoweredStatement::VarDecl {
-                name: output.clone().into(),
+                name: output.clone(),
                 go_type,
                 value: None,
             }
             .into(),
         );
 
-        let index = self.fresh_var(Some("i"));
+        let index = self.fresh_local(Some("i"));
         self.declare(&index);
-        let element_read = GoExpression::index(source.clone(), GoExpression::name(index.clone()));
+        let element_read =
+            GoExpression::index(source.clone(), GoExpression::identifier(index.clone()));
         let (mut body, coerced) = element.lower(self, element_read);
         body.push(assign(
             GoExpression::index(
-                GoExpression::name(output.clone()),
-                GoExpression::name(index.clone()),
+                GoExpression::identifier(output.clone()),
+                GoExpression::identifier(index.clone()),
             ),
             coerced,
         ));
@@ -213,7 +214,7 @@ impl Planner<'_> {
             LoweredStatement::Loop(LoopPlan {
                 kind: LoopKind::Generated { label: None },
                 header: LoopHeader::Range {
-                    key: Some(index.into()),
+                    key: Some(index),
                     value: None,
                     iterable: source,
                 },
@@ -221,7 +222,7 @@ impl Planner<'_> {
             })
             .into(),
         );
-        GoExpression::name(output)
+        GoExpression::identifier(output)
     }
 
     fn plan_tuple_rebuild(

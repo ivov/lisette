@@ -12,15 +12,16 @@ use crate::plan::cleanup::clean_up;
 use crate::plan::go_expression::{
     FunctionLiteralLayout, GoExpressionNode, GoParameter, verbatim_identifiers,
 };
-use crate::plan::local::GoIdentifier;
+use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::values::GoExpression;
 #[cfg(debug_assertions)]
-use crate::plan::verify::{verify_final_function_body, verify_local_scopes};
+use crate::plan::verify::verify_final_function_body;
+use crate::plan::verify::verify_local_scopes;
 use crate::plan::visit::{VisitorMut, identify_body_locals, visit_statements_mut};
 use crate::statements::testing::test_context_call;
 use crate::types::go_type::returns_go_void;
 use crate::utils::{fresh_receiver_name, group_params};
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::EcoString;
 use syntax::ast::{Binding, Expression, FunctionDefinitionView, Pattern, collect_pattern_bindings};
 use syntax::types::{Type, build_substitution_map, substitute};
@@ -33,7 +34,7 @@ pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
     })
 }
 
-type ParamDestructure<'a> = (String, &'a Pattern, &'a Type);
+type ParamDestructure<'a> = (GoIdentifier, &'a Pattern, &'a Type);
 
 struct LoweredParams<'a> {
     pairs: Vec<(GoIdentifier, String)>,
@@ -76,15 +77,13 @@ impl Planner<'_> {
         }
         self.settle_generated_names(&mut lowered.statements);
         #[cfg(debug_assertions)]
-        {
-            verify_final_function_body(&mut lowered, should_return)
-                .unwrap_or_else(|error| panic!("{error}"));
-            verify_local_scopes(
-                &mut lowered.statements,
-                &parameters.iter().collect::<Vec<_>>(),
-            )
+        verify_final_function_body(&mut lowered, should_return)
             .unwrap_or_else(|error| panic!("{error}"));
-        }
+        verify_local_scopes(
+            &mut lowered.statements,
+            &parameters.iter().collect::<Vec<_>>(),
+        )
+        .unwrap_or_else(|error| panic!("{error}"));
         self.collect_imports(&lowered.statements);
         Renderer.render_lowered_block(output, &lowered);
     }
@@ -100,14 +99,18 @@ impl Planner<'_> {
     fn settle_generated_names(&mut self, statements: &mut Vec<Statement>) {
         #[derive(Default)]
         struct Names {
-            present: HashSet<String>,
+            present: HashMap<LocalId, String>,
             pinned: HashSet<String>,
         }
 
         impl VisitorMut for Names {
             fn expression(&mut self, node: &mut GoExpressionNode) {
                 if let GoExpressionNode::Identifier(name) = node {
-                    self.present.insert(name.to_string());
+                    if let Some(id) = name.id() {
+                        self.present.insert(id, name.to_string());
+                    } else {
+                        self.pinned.insert(name.to_string());
+                    }
                 } else if let GoExpressionNode::Verbatim(source) = node {
                     self.pinned
                         .extend(verbatim_identifiers(source).map(str::to_string));
@@ -115,7 +118,11 @@ impl Planner<'_> {
             }
 
             fn local_binding(&mut self, name: &mut GoIdentifier) {
-                self.present.insert(name.to_string());
+                if let Some(id) = name.id() {
+                    self.present.insert(id, name.to_string());
+                } else {
+                    self.pinned.insert(name.to_string());
+                }
             }
         }
 
@@ -152,9 +159,9 @@ impl Planner<'_> {
                     .iter()
                     .position(|param| is_test_context_ty(&param.ty))
                     .filter(|&index| param_pairs[index].0.spelling() == "_")?;
-                let name = this.fresh_var(Some("lisetteSub"));
+                let name = this.fresh_local(Some("lisetteSub"));
                 this.declare(&name);
-                let handle = this.scope.generated_identifier(&name);
+                let handle = name.clone();
                 param_pairs[index].0 = handle.clone();
                 Some(handle)
             });
@@ -525,14 +532,14 @@ impl Planner<'_> {
                             .bind_source(identifier.as_str(), id.as_slice(), "_")
                     }
                 }
-                Pattern::WildCard { .. } => GoIdentifier::name("_".to_string()),
+                Pattern::WildCard { .. } => GoIdentifier::external("_".to_string()),
                 _ => {
-                    let var = self.fresh_var(Some("arg"));
+                    let var = self.fresh_local(Some("arg"));
                     self.declare(&var);
                     lowered
                         .destructures
                         .push((var.clone(), &param.pattern, &param.ty));
-                    self.scope.generated_identifier(&var)
+                    var.clone()
                 }
             };
             lowered.pairs.push((name, self.use_go_type(&param.ty)));
@@ -547,7 +554,7 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         for (temp_name, pattern, param_ty) in destructures {
             statements.extend(self.lower_irrefutable_pattern_site(
-                PatternSubject::for_value(temp_name.clone()),
+                PatternSubject::for_identifier(temp_name.clone()),
                 pattern,
                 param_ty,
             ));

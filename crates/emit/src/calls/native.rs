@@ -257,7 +257,7 @@ pub(crate) fn slice_growth_call(
 /// `receiver[:len(receiver):len(receiver)]`, so a later `append` cannot write through an alias.
 pub(crate) fn clip_shared_capacity(receiver: GoExpression) -> GoExpression {
     let length = GoExpression::read_only_call(
-        GoExpression::name("len".to_string()),
+        GoExpression::external_name("len".to_string()),
         vec![receiver.clone()],
     );
     GoExpression::slice(receiver, None, Some(&length), Some(&length))
@@ -370,7 +370,7 @@ fn build_inline(
     match form {
         InlineForm::Call(callee) => {
             let callee = match package {
-                InlinePackage::None => GoExpression::name(callee.to_string()),
+                InlinePackage::None => GoExpression::external_name(callee.to_string()),
                 InlinePackage::Slices => GoExpression::generated(GeneratedPackage::Slices, callee),
                 InlinePackage::Strings => {
                     GoExpression::generated(GeneratedPackage::Strings, callee)
@@ -387,7 +387,7 @@ fn build_inline(
             let operator = if negated { BinaryOp::Ne } else { BinaryOp::Eq };
             GoExpression::binary(
                 GoExpression::call(
-                    GoExpression::name("len".to_string()),
+                    GoExpression::external_name("len".to_string()),
                     vec![receiver.clone()],
                 ),
                 operator,
@@ -584,7 +584,7 @@ impl Planner<'_> {
             let mut statements = Vec::new();
             let (count, arguments) = if method == "append" {
                 let count = GoExpression::read_only_call(
-                    GoExpression::name("len".to_string()),
+                    GoExpression::external_name("len".to_string()),
                     vec![shared.clone()],
                 );
                 (count, [GoExpression::spread(shared)])
@@ -656,7 +656,8 @@ impl Planner<'_> {
                 let mut staged = self.stage_native_method(ctx);
                 let searched = staged.arguments[0].clone();
                 let target = self.hoist_tmp_value_statement(&mut staged.setup, "want", searched);
-                let predicate = self.contains_predicate(&element, GoExpression::name(target), &[]);
+                let predicate =
+                    self.contains_predicate(&element, GoExpression::identifier(target), &[]);
                 let body = GoExpression::call(
                     GoExpression::generated(GeneratedPackage::Slices, "ContainsFunc"),
                     vec![staged.receiver.clone(), predicate],
@@ -788,12 +789,12 @@ impl Planner<'_> {
         let base = if self.receiver_is_addressable(expression) {
             receiver
         } else {
-            GoExpression::name(self.hoist_tmp_value_statement(setup, "arr", receiver))
+            GoExpression::identifier(self.hoist_tmp_value_statement(setup, "arr", receiver))
         };
         GoExpression::slice(base, None, None, None)
     }
 
-    fn receiver_is_addressable(&self, expression: &Expression) -> bool {
+    pub(crate) fn receiver_is_addressable(&self, expression: &Expression) -> bool {
         if expression.get_type().is_ref() {
             return true;
         }
@@ -1145,11 +1146,11 @@ impl Planner<'_> {
 
     fn equality_closure(&mut self, ty: &Type, generics: &[Generic]) -> GoExpression {
         let go_ty = self.use_go_type(ty);
-        let a = self.fresh_var(Some("a"));
-        let b = self.fresh_var(Some("b"));
+        let a = self.fresh_local(Some("a"));
+        let b = self.fresh_local(Some("b"));
         let body = self.equality_expression(
-            GoExpression::name(a.clone()),
-            GoExpression::name(b.clone()),
+            GoExpression::identifier(a.clone()),
+            GoExpression::identifier(b.clone()),
             ty,
             generics,
         );
@@ -1169,9 +1170,13 @@ impl Planner<'_> {
         generics: &[Generic],
     ) -> GoExpression {
         let go_ty = self.use_go_type(ty);
-        let element = self.fresh_var(Some("e"));
-        let body =
-            self.equality_expression(GoExpression::name(element.clone()), target, ty, generics);
+        let element = self.fresh_local(Some("e"));
+        let body = self.equality_expression(
+            GoExpression::identifier(element.clone()),
+            target,
+            ty,
+            generics,
+        );
         predicate_literal(vec![GoParameter::new(element.clone(), go_ty.clone())], body)
     }
 

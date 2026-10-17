@@ -1,0 +1,54 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn main() {
+    let result = 7
+    let f = || {
+      let result = if result > 0 { 3 } else { 4 }
+      let read = || result
+      let flag = if read() == 3 { true } else { false }
+      if flag { read() } else { 0 }
+    }
+    let mut total = 0
+    for result in [Some(2), None] {
+      if let Some(result) = result { total += result + f() }
+      else { total += f() }
+    }
+    if total != 8 || result != 7 { panic("branch target identity") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	result := 7
+	f := func() int {
+		var result_1 int
+		if result > 0 {
+			result_1 = 3
+		} else {
+			result_1 = 4
+		}
+		read := func() int {
+			return result_1
+		}
+		flag := read() == 3
+		if flag {
+			return read()
+		}
+		return 0
+	}
+	total := 0
+	for _, result_2 := range []lisette.Option[int]{lisette.MakeOptionSome(2), lisette.MakeOptionNone[int]()} {
+		if result_2.Tag == lisette.OptionSome {
+			total += result_2.SomeVal + f()
+		} else {
+			total += f()
+		}
+	}
+	if total != 8 || result != 7 {
+		panic("branch target identity")
+	}
+}

@@ -18,9 +18,9 @@ import "fmt"
 
 func test() string {
 	x := "outer"
-	f := func(x int) string {
-		x_1 := x * 2
-		return fmt.Sprintf("doubled: %d", x_1)
+	f := func(x_1 int) string {
+		x := x_1 * 2
+		return fmt.Sprintf("doubled: %d", x)
 	}
 	result := f(5)
 	return result + " and " + x

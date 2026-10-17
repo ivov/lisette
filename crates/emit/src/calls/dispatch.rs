@@ -16,7 +16,9 @@ use crate::plan::bodies::{
     assign, define,
 };
 use crate::plan::calls::{CallPlan, CallableOrigin};
-use crate::plan::go_expression::{BinaryOp, CompositeLayout, FunctionLiteralLayout, GoParameter};
+use crate::plan::go_expression::{
+    BinaryOp, CompositeLayout, FunctionLiteralLayout, GoExpressionNode, GoParameter,
+};
 use crate::plan::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments, StructFields};
@@ -210,7 +212,7 @@ impl<'a> Planner<'a> {
                 Some(ValuePlan::observable_call(
                     Vec::new(),
                     GoExpression::call(
-                        GoExpression::name("make".to_string()),
+                        GoExpression::external_name("make".to_string()),
                         vec![GoExpression::type_name(format!("chan {}", element))],
                     ),
                 ))
@@ -222,7 +224,7 @@ impl<'a> Planner<'a> {
                 Some(ValuePlan::observable_call(
                     setup,
                     GoExpression::call(
-                        GoExpression::name("make".to_string()),
+                        GoExpression::external_name("make".to_string()),
                         vec![
                             GoExpression::type_name(format!("chan {}", element)),
                             capacity,
@@ -236,7 +238,7 @@ impl<'a> Planner<'a> {
                 Some(ValuePlan::observable_call(
                     Vec::new(),
                     GoExpression::call(
-                        GoExpression::name("make".to_string()),
+                        GoExpression::external_name("make".to_string()),
                         vec![GoExpression::type_name(format!("map[{}]{}", key, val))],
                     ),
                 ))
@@ -260,29 +262,31 @@ impl<'a> Planner<'a> {
                 let (setup, length) = self.stage_size_argument(ctx);
                 let value = if self.element_go_zero_ok(&element_ty) {
                     GoExpression::call(
-                        GoExpression::name("make".to_string()),
+                        GoExpression::external_name("make".to_string()),
                         vec![GoExpression::type_name(format!("[]{}", element)), length],
                     )
                 } else {
                     let zero = self.lisette_zero(&element_ty);
                     let slice_type = format!("[]{element}");
-                    let slice = || GoExpression::name("s".to_string());
-                    let index = || GoExpression::name("i".to_string());
+                    let slice_name = self.scope.helper_local("s", &self.package);
+                    let index_name = self.scope.helper_local("i", &self.package);
+                    let slice = || GoExpression::identifier(slice_name.clone());
+                    let index = || GoExpression::identifier(index_name.clone());
                     GoExpression::immediate_call(
                         slice_type.clone(),
                         LoweredBlock {
                             statements: vec![
                                 define(
-                                    "s".to_string(),
+                                    slice_name.clone(),
                                     GoExpression::call(
-                                        GoExpression::name("make".to_string()),
+                                        GoExpression::external_name("make".to_string()),
                                         vec![GoExpression::type_name(slice_type), length],
                                     ),
                                 ),
                                 LoweredStatement::Loop(LoopPlan {
                                     kind: LoopKind::Generated { label: None },
                                     header: LoopHeader::Range {
-                                        key: Some("i".to_string().into()),
+                                        key: Some(index_name.clone()),
                                         value: None,
                                         iterable: slice(),
                                     },
@@ -339,18 +343,22 @@ impl<'a> Planner<'a> {
         let staged = self.plan_operand(argument, ExpressionContext::value());
         let (setup, source) = staged.into_parts();
 
-        let slice = || GoExpression::name("s".to_string());
+        let slice_name = self.scope.helper_local("s", &self.package);
+        let slice = || GoExpression::identifier(slice_name.clone());
         let literal = |text: String| GoExpression::literal(text);
         let value = GoExpression::call(
             GoExpression::function_literal(
-                vec![GoParameter::new("s", format!("[]{element_go}"))],
+                vec![GoParameter::new(
+                    slice_name.clone(),
+                    format!("[]{element_go}"),
+                )],
                 format!("({array_go}, bool)"),
                 LoweredBlock {
                     statements: vec![
                         LoweredStatement::If(IfPlan::plain(
                             GoExpression::binary(
                                 GoExpression::call(
-                                    GoExpression::name("len".to_string()),
+                                    GoExpression::external_name("len".to_string()),
                                     vec![slice()],
                                 ),
                                 BinaryOp::Ne,
@@ -632,13 +640,13 @@ impl<'a> Planner<'a> {
                 NativeTypeKind::Channel | NativeTypeKind::Sender | NativeTypeKind::Receiver
             )
             && split.is_some_and(|(receiver, _)| self.is_unmutated_identifier(receiver));
-        if result.setup.iter().any(|statement| {
-            result
-                .value
-                .as_identifier()
-                .is_some_and(|name| statement.kind.binds_name(name))
-        }) {
-            return ValuePlan::captured(result.setup, result.value.rendered());
+        if let GoExpressionNode::Identifier(name) = result.value.node()
+            && result
+                .setup
+                .iter()
+                .any(|statement| statement.kind.binds_local(name))
+        {
+            return ValuePlan::captured(result.setup, name.clone());
         }
         let receiver_arity = split.map_or(0, |(_, arguments)| arguments.len());
         let plain_call = !is_constructor

@@ -13,16 +13,8 @@ use syntax::program::{self, Definition};
 
 impl Planner<'_> {
     /// A name the checker did not resolve to a definition.
-    pub(crate) fn resolve_go_name(&self, name: &str, locally_bound: bool) -> GoExpression {
-        let mut expression = go_name::resolve(name).into_expression();
-        if let GoExpressionNode::Identifier(identifier) = expression.node_mut() {
-            *identifier = if locally_bound {
-                GoIdentifier::name(identifier.spelling().to_string())
-            } else {
-                GoIdentifier::external(identifier.spelling().to_string())
-            };
-        }
-        expression
+    pub(crate) fn resolve_go_name(&self, name: &str) -> GoExpression {
+        go_name::resolve(name).into_expression()
     }
 
     pub(crate) fn definition_reference(&self, symbol: &str) -> GoExpression {
@@ -79,18 +71,20 @@ impl Planner<'_> {
         resolution: &IdentifierResolution,
     ) -> GoIdentifier {
         if let IdentifierResolution::Definition { name, .. } = resolution {
-            return self
-                .scope
-                .identifier_for_go_name(self.definition_reference(name).to_string());
+            return GoIdentifier::external(self.definition_reference(name).to_string());
         }
         match self
             .scope
             .resolve_identifier_with_resolution(lisette_name, resolution)
         {
             Some(BindingValue::GoName(name) | BindingValue::GoConst(name)) => name.clone(),
-            _ => self
-                .scope
-                .identifier_for_go_name(go_name::escape_reserved(lisette_name).into_owned()),
+            _ => {
+                assert!(
+                    resolution.binding_id().is_none(),
+                    "source binding has no emitted identifier: {lisette_name}"
+                );
+                GoIdentifier::external(go_name::escape_reserved(lisette_name).into_owned())
+            }
         }
     }
 

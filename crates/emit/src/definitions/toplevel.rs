@@ -55,9 +55,9 @@ impl Planner<'_> {
         let target_name = go_name::screaming_snake_to_camel(identifier);
         let preferred = escape_reserved(&target_name).into_owned();
         let go_name = if self.try_declare(&preferred) {
-            preferred
+            self.scope.new_local_identifier(preferred)
         } else {
-            let fresh = self.fresh_var(Some(identifier));
+            let fresh = self.fresh_local(Some(identifier));
             self.declare(&fresh);
             fresh
         };
