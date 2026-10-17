@@ -20,7 +20,15 @@ import "github.com/user/myproject/lib"
 
 func main() {
 	c := lib.Counter{Count: 0}
-	f := (*lib.Counter).Increment
+	cb := (*lib.Counter).Increment
+	var adapted func(*lib.Counter) struct{}
+	if cb != nil {
+		adapted = func(arg0 *lib.Counter) struct{} {
+			cb(arg0)
+			return struct{}{}
+		}
+	}
+	f := adapted
 	f(&c)
 	_ = c.Count
 }

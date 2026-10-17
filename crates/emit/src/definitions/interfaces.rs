@@ -1,4 +1,5 @@
 use crate::Planner;
+use crate::abi::callable::CallableReturnAbi;
 use crate::names::go_name;
 use syntax::ast::{Annotation, Expression, Generic, ParentInterface};
 use syntax::program::Definition;
@@ -82,7 +83,7 @@ impl Planner<'_> {
 
         let method_name = self.method_go_name(func.name, is_public);
 
-        if self.interface_method_returns_void(&return_abi, &raw_return_ty) {
+        if return_abi == CallableReturnAbi::Void {
             format!("{}({})", method_name, args.join(", "))
         } else {
             format!("{}({}) {}", method_name, args.join(", "), return_type)

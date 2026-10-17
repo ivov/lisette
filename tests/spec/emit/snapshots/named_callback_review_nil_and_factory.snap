@@ -1,0 +1,76 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:go/ast"
+  import "go:go/doc"
+  import "go:reflect"
+  
+  fn named(value: ast.Filter) -> doc.Filter { value }
+  fn plain(value: ast.Filter) -> fn(string) -> bool { value }
+  fn main() {
+    let Some(zero) = assert_type<ast.Filter>(reflect.Zero(reflect.TypeFor<ast.Filter>()).Interface()) else { panic("nil callback type assertion failed") }
+    let nil_named = named(zero)
+    if !reflect.ValueOf(nil_named).IsNil() { panic("named conversion made nil nonnil") }
+    let nil_plain = plain(zero)
+    if !reflect.ValueOf(nil_plain).IsNil() { panic("plain conversion made nil nonnil") }
+    let mut made = 0
+    let mut calls = 0
+    let factory = || -> ast.Filter { made += 1; |s: string| { calls += 1; s == "ok" } }
+    let first: doc.Filter = factory()
+    let second = named(factory())
+    if made != 2 || calls != 0 { panic("conversion effects changed") }
+    if !first("ok") || !second("ok") { panic("callback changed") }
+    if made != 2 || calls != 2 { panic("callback effects changed") }
+  }
+---
+package main
+
+import (
+	"go/ast"
+	"go/doc"
+	"reflect"
+)
+
+func named(value ast.Filter) doc.Filter {
+	return doc.Filter(value)
+}
+
+func plain(value ast.Filter) func(string) bool {
+	return value
+}
+
+func main() {
+	zero, ok := reflect.Zero(reflect.TypeFor[ast.Filter]()).Interface().(ast.Filter)
+	if !ok {
+		panic("nil callback type assertion failed")
+	}
+	nil_named := named(ast.Filter(zero))
+	if !reflect.ValueOf(nil_named).IsNil() {
+		panic("named conversion made nil nonnil")
+	}
+	nil_plain := plain(ast.Filter(zero))
+	if !reflect.ValueOf(nil_plain).IsNil() {
+		panic("plain conversion made nil nonnil")
+	}
+	made := 0
+	calls := 0
+	factory := func() ast.Filter {
+		made++
+		return func(s string) bool {
+			calls++
+			return s == "ok"
+		}
+	}
+	first := doc.Filter(factory())
+	second := named(ast.Filter(factory()))
+	if made != 2 || calls != 0 {
+		panic("conversion effects changed")
+	}
+	if !first("ok") || !second("ok") {
+		panic("callback changed")
+	}
+	if made != 2 || calls != 2 {
+		panic("callback effects changed")
+	}
+}

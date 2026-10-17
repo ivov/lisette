@@ -1,0 +1,188 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:errors"
+  type O = Option<int>
+  type R = Result<int, error>
+  type P = Partial<int, error>
+  type Pair = (int, Option<Ref<int>>)
+  fn check(ok: bool) { if !ok { panic("runtime assertion failed") } }
+  fn opt(n: int) -> O { if n > 0 { Some(n) } else { None } }
+  fn opt_explicit(n: int) -> O { return opt(n) }
+  fn opt_try(n: int) -> O { try { opt(n)? + 1 } }
+  fn res(n: int) -> R { if n > 0 { Ok(n) } else { Err(errors.New("negative")) } }
+  fn res_try(n: int) -> R { try { res(n)? + 1 } }
+  fn partial(n: int) -> P { match n { 0 => Partial.Err(errors.New("zero")), 1 => Partial.Ok(n), _ => Partial.Both(n, errors.New("both")) } }
+  fn partial_forward(n: int) -> P { partial(n) }
+  fn pair(n: int) -> Pair { let x = n + 1; (n, Some(&x)) }
+  fn main() {
+    let passed_15 = match opt_explicit(4) { Some(n) => n == 4, _ => false }
+    check(passed_15)
+    let passed_16 = match opt_explicit(0) { None => true, _ => false }
+    check(passed_16)
+    let passed_17 = match opt_try(4) { Some(n) => n == 5, _ => false }
+    check(passed_17)
+    let passed_18 = match opt_try(0) { None => true, _ => false }
+    check(passed_18)
+    let passed_19 = match res_try(4) { Ok(n) => n == 5, _ => false }
+    check(passed_19)
+    let passed_20 = match res_try(0) { Err(_) => true, _ => false }
+    check(passed_20)
+    let passed_21 = match partial_forward(0) { Partial.Err(_) => true, _ => false }
+    check(passed_21)
+    let passed_22 = match partial_forward(1) { Partial.Ok(n) => n == 1, _ => false }
+    check(passed_22)
+    let passed_23 = match partial_forward(2) { Partial.Both(n, _) => n == 2, _ => false }
+    check(passed_23)
+    let (n, m) = pair(8)
+    check(n == 8)
+    let passed_26 = match m { Some(x) => x.* == 9, None => false }
+    check(passed_26)
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type O = lisette.Option[int]
+
+type R = lisette.Result[int, error]
+
+type P = lisette.Partial[int, error]
+
+type Pair = lisette.Tuple2[int, lisette.Option[*int]]
+
+func check(ok bool) {
+	if !ok {
+		panic("runtime assertion failed")
+	}
+}
+
+func opt(n int) (int, bool) {
+	if n > 0 {
+		return n, true
+	}
+	return 0, false
+}
+
+func optExplicit(n int) (int, bool) {
+	return opt(n)
+}
+
+func optTry(n int) (int, bool) {
+	ret, ok := opt(n)
+	if !ok {
+		return 0, false
+	}
+	return ret + 1, true
+}
+
+func res(n int) (int, error) {
+	if n > 0 {
+		return n, nil
+	}
+	return 0, errors.New("negative")
+}
+
+func resTry(n int) (int, error) {
+	ret, err := res(n)
+	if err != nil {
+		return 0, err
+	}
+	return ret + 1, nil
+}
+
+func partial(n int) P {
+	switch n {
+	case 0:
+		return lisette.MakePartialErr[int, error](errors.New("zero"))
+	case 1:
+		return lisette.MakePartialOk[int, error](n)
+	default:
+		return lisette.MakePartialBoth[int, error](n, errors.New("both"))
+	}
+}
+
+func partialForward(n int) P {
+	return partial(n)
+}
+
+func pair(n int) (int, *int) {
+	x := n + 1
+	return n, &x
+}
+
+func main() {
+	var passed_15 bool
+	if n, ok := optExplicit(4); ok {
+		passed_15 = n == 4
+	} else {
+		passed_15 = false
+	}
+	check(passed_15)
+	var passed_16 bool
+	if _, ok := optExplicit(0); ok {
+		passed_16 = false
+	} else {
+		passed_16 = true
+	}
+	check(passed_16)
+	var passed_17 bool
+	if n, ok := optTry(4); ok {
+		passed_17 = n == 5
+	} else {
+		passed_17 = false
+	}
+	check(passed_17)
+	var passed_18 bool
+	if _, ok := optTry(0); ok {
+		passed_18 = false
+	} else {
+		passed_18 = true
+	}
+	check(passed_18)
+	var passed_19 bool
+	if n, err := resTry(4); err == nil {
+		passed_19 = n == 5
+	} else {
+		passed_19 = false
+	}
+	check(passed_19)
+	var passed_20 bool
+	if _, err := resTry(0); err == nil {
+		passed_20 = false
+	} else {
+		passed_20 = true
+	}
+	check(passed_20)
+	passed_21 := partialForward(0).Tag == lisette.PartialErr
+	check(passed_21)
+	var passed_22 bool
+	subject := partialForward(1)
+	if subject.Tag == lisette.PartialOk {
+		passed_22 = subject.OkVal == 1
+	} else {
+		passed_22 = false
+	}
+	check(passed_22)
+	var passed_23 bool
+	subject_2 := partialForward(2)
+	if subject_2.Tag == lisette.PartialBoth {
+		passed_23 = subject_2.OkVal == 2
+	} else {
+		passed_23 = false
+	}
+	check(passed_23)
+	ret, ret_1 := pair(8)
+	option := lisette.OptionFromNilable[*int](ret_1, ret_1 == nil)
+	tup := lisette.MakeTuple2(ret, option)
+	n := tup.First
+	m := tup.Second
+	check(n == 8)
+	passed_26 := m.Tag == lisette.OptionSome && *m.SomeVal == 9
+	check(passed_26)
+}

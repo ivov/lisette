@@ -19,7 +19,6 @@ use crate::plan::verify::verify_final_function_body;
 use crate::plan::verify::verify_local_scopes;
 use crate::plan::visit::{VisitorMut, identify_body_locals, visit_statements_mut};
 use crate::statements::testing::test_context_call;
-use crate::types::go_type::returns_go_void;
 use crate::utils::{fresh_receiver_name, group_params};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::EcoString;
@@ -218,7 +217,6 @@ impl Planner<'_> {
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> LambdaReturnInfo {
-        let suppress_lowering = ctx.forces_tagged_go_function();
         let Type::Function(function) = ty else {
             return LambdaReturnInfo {
                 signature: None,
@@ -227,15 +225,15 @@ impl Planner<'_> {
         };
 
         let return_ty = function.return_type.as_ref();
-        let has_return = match return_ty {
-            Type::Var { .. } | Type::Uninferred | Type::Ignored => false,
-            _ if returns_go_void(return_ty) => ctx.result_fills_type_parameter(),
-            _ => true,
-        };
-        let return_ctx = if suppress_lowering {
-            ReturnContext::Tagged(return_ty.clone())
-        } else {
-            self.return_context_for_slot(return_ty.clone(), ctx.function_slot_origin())
+        let abi = self.function_expression_return_abi(return_ty, ctx);
+        let has_return = abi != CallableReturnAbi::Void;
+        let return_ctx = match abi {
+            CallableReturnAbi::Void => ReturnContext::Void(return_ty.clone()),
+            CallableReturnAbi::Value => ReturnContext::Tagged(return_ty.clone()),
+            CallableReturnAbi::Lowered(shape) => ReturnContext::Lowered {
+                return_ty: return_ty.clone(),
+                shape,
+            },
         };
         let signature = if has_return {
             match return_ctx.lowered_shape() {
@@ -305,6 +303,8 @@ impl Planner<'_> {
                 .method_uses_tagged_return(function_definition.name)
         {
             ReturnContext::Tagged(function_definition.return_type.clone())
+        } else if receiver_ty.is_some() {
+            self.return_context_for_method(function_definition.return_type.clone())
         } else {
             self.return_context_for_type(function_definition.return_type.clone())
         };
@@ -412,7 +412,7 @@ impl Planner<'_> {
             .collect();
         let params_string = format!("({})", group_params(&rendered));
 
-        let return_ty = if returns_go_void(function_definition.return_type) {
+        let return_ty = if matches!(self.return_ctx(), ReturnContext::Void(_)) {
             String::new()
         } else if let Some(shape) = return_shape {
             self.render_callable_return_ty(
@@ -433,7 +433,7 @@ impl Planner<'_> {
         deferred_patterns: &[ParamDestructure<'_>],
         parameters: &[GoIdentifier],
     ) {
-        let should_return = !returns_go_void(function_definition.return_type);
+        let should_return = !matches!(self.return_ctx(), ReturnContext::Void(_));
         let prefix = self.lower_param_destructures(deferred_patterns);
         self.emit_function_body_inner(
             body,

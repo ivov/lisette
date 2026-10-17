@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:path/filepath"
+  fn give<T>(f:fn(string,filepath.WalkFunc)->T)->fn(string,filepath.WalkFunc)->T{f}
+  fn main(){let mut calls=0;let f=give(filepath.Walk);let cb:filepath.WalkFunc=|_,_,_|{calls+=1;Ok(())};if f("/__lisette_nonexistent_callback_review__",cb).is_err(){panic("walk")};if calls!=1{panic("calls")}}
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"io/fs"
+	"path/filepath"
+)
+
+func give[T any](f func(string, filepath.WalkFunc) T) func(string, filepath.WalkFunc) T {
+	return f
+}
+
+func main() {
+	calls := 0
+	cb_1 := filepath.Walk
+	var adapted func(string, filepath.WalkFunc) lisette.Result[struct{}, error]
+	if cb_1 != nil {
+		adapted = func(arg0 string, arg1 filepath.WalkFunc) lisette.Result[struct{}, error] {
+			ret := cb_1(arg0, arg1)
+			if ret != nil {
+				return lisette.MakeResultErr[struct{}, error](ret)
+			}
+			return lisette.MakeResultOk[struct{}, error](struct{}{})
+		}
+	}
+	f := give(adapted)
+	var cb filepath.WalkFunc = func(_ string, _ fs.FileInfo, _ error) error {
+		calls++
+		return nil
+	}
+	if f("/__lisette_nonexistent_callback_review__", filepath.WalkFunc(cb)).IsErr() {
+		panic("walk")
+	}
+	if calls != 1 {
+		panic("calls")
+	}
+}

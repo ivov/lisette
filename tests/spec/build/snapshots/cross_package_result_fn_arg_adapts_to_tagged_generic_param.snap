@@ -11,13 +11,17 @@ import (
 
 func main() {
 	cb := resolver.Resultant
-	rez := resolver.Resolve(42, func(arg0 int) lisette.Result[int, resolver.Face] {
-		ret, ret_1 := cb(arg0)
-		if ret_1 != nil {
-			return lisette.MakeResultErr[int, resolver.Face](ret_1)
+	var adapted func(int) lisette.Result[int, resolver.Face]
+	if cb != nil {
+		adapted = func(arg0 int) lisette.Result[int, resolver.Face] {
+			ret, ret_1 := cb(arg0)
+			if ret_1 != nil {
+				return lisette.MakeResultErr[int, resolver.Face](ret_1)
+			}
+			return lisette.MakeResultOk[int, resolver.Face](ret)
 		}
-		return lisette.MakeResultOk[int, resolver.Face](ret)
-	})
+	}
+	rez := resolver.Resolve(42, adapted)
 	_ = rez
 }
 

@@ -32,7 +32,7 @@ pub use output::OutputFile;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use abi::callable::{LoweredReturnAbi, OptionReturnAbi};
+use abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use abi::catalog::GoAbiCatalog;
 use abi::go_payload_layout;
 use abi::layout::SlotOrigin;
@@ -328,15 +328,20 @@ impl<'a> Planner<'a> {
         self.return_context_for_slot(return_ty, SlotOrigin::Lisette)
     }
 
+    fn return_context_for_method(&self, return_ty: Type) -> ReturnContext {
+        match self.method_return_abi(&return_ty) {
+            CallableReturnAbi::Lowered(shape) => ReturnContext::Lowered { return_ty, shape },
+            _ => self.return_context_for_type(return_ty),
+        }
+    }
+
     fn return_context_for_slot(&self, return_ty: Type, origin: SlotOrigin) -> ReturnContext {
+        if types::go_type::returns_go_void(&return_ty) {
+            return ReturnContext::Void(return_ty);
+        }
         let peeled = self.facts.peel_alias(&return_ty);
         match self.classify_slot_emission(&peeled, origin) {
-            Some(shape) => ReturnContext::Lowered {
-                return_ty: peeled,
-                shape,
-            },
-            // A non-container keeps its declared name, so a Go-named
-            // function type still identifies its slot.
+            Some(shape) => ReturnContext::Lowered { return_ty, shape },
             None => ReturnContext::Tagged(return_ty),
         }
     }

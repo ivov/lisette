@@ -12,8 +12,8 @@ description: |
 ---
 package main
 
-type Cb func(int)
+type Cb func(int) struct{}
 
 func test(c Cb) {
-	(func(int))(c)(1)
+	(func(int) struct{})(c)(1)
 }

@@ -14,12 +14,26 @@ description: |
 ---
 package main
 
-import "bytes"
+import (
+	"bytes"
+	lisette "github.com/ivov/lisette/prelude"
+)
 
 type Buffer = bytes.Buffer
 
 func main() {
-	f := (*bytes.Buffer).ReadString
+	cb := (*bytes.Buffer).ReadString
+	var adapted func(*bytes.Buffer, byte) lisette.Partial[string, error]
+	if cb != nil {
+		adapted = func(arg0 *bytes.Buffer, arg1 byte) lisette.Partial[string, error] {
+			ret, ret_1 := cb(arg0, arg1)
+			if ret_1 != nil {
+				return lisette.MakePartialBoth[string, error](ret, ret_1)
+			}
+			return lisette.MakePartialOk[string, error](ret)
+		}
+	}
+	f := adapted
 	buf := bytes.Buffer{}
 	f(&buf, 10)
 }

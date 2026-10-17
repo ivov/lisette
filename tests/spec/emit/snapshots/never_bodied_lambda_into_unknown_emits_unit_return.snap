@@ -13,7 +13,14 @@ package main
 func takeAny(_ any) {}
 
 func test() {
-	takeAny(func() {
+	cb := func() struct{} {
 		panic("boom")
-	})
+	}
+	var adapted func()
+	if cb != nil {
+		adapted = func() {
+			cb()
+		}
+	}
+	takeAny(adapted)
 }

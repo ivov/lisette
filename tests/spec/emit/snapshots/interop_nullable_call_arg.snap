@@ -18,17 +18,28 @@ description: |
 ---
 package main
 
-import "flag"
+import (
+	"flag"
+	lisette "github.com/ivov/lisette/prelude"
+)
 
-func apply(f func(string) *flag.Flag, name string) bool {
-	if ret := f(name); ret != nil {
+func apply(f func(string) lisette.Option[*flag.Flag], name string) bool {
+	if f(name).Tag == lisette.OptionSome {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
 func main() {
-	r := apply(flag.Lookup, "verbose")
+	cb := flag.Lookup
+	var adapted func(string) lisette.Option[*flag.Flag]
+	if cb != nil {
+		adapted = func(arg0 string) lisette.Option[*flag.Flag] {
+			raw := cb(arg0)
+			option := lisette.OptionFromNilable[*flag.Flag](raw, raw == nil)
+			return option
+		}
+	}
+	r := apply(adapted, "verbose")
 	_ = r
 }

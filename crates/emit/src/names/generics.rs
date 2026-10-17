@@ -141,6 +141,11 @@ impl Planner<'_> {
         let has_ordered = bounds.iter().any(is_ordered_bound);
         let mut named_bounds: Vec<String> = Vec::new();
         for bound in bounds {
+            if self.bound_needs_dispatch(bound) {
+                // Source conformance is checked; the generated adapter selects
+                // the implementation's physical method ABI without changing T.
+                continue;
+            }
             if is_zeroable_bound(bound) {
                 // Lisette-only constraint: every Go type is zeroable.
                 continue;

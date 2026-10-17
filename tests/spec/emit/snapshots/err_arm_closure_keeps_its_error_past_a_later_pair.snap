@@ -21,6 +21,7 @@ package main
 
 import (
 	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
 	"strconv"
 )
 
@@ -29,17 +30,17 @@ func message() string {
 }
 
 func parse() (int, error) {
-	var show func() (int, error)
+	var show func() lisette.Result[int, error]
 	_, err := strconv.Atoi("bad")
 	msg := message()
 	if err == nil {
-		show = func() (int, error) {
-			return fmt.Println("ok")
+		show = func() lisette.Result[int, error] {
+			return lisette.ResultFromPair[int](fmt.Println("ok"))
 		}
 	} else {
 		err = fmt.Errorf("%s: %w", msg, err)
-		show = func() (int, error) {
-			return fmt.Println(err)
+		show = func() lisette.Result[int, error] {
+			return lisette.ResultFromPair[int](fmt.Println(err))
 		}
 	}
 	n, err_1 := strconv.Atoi("2")

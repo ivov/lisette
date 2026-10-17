@@ -23,5 +23,5 @@ func main() {
 	var walker filepath.WalkFunc = func(_ string, _ fs.FileInfo, _ error) error {
 		return nil
 	}
-	filepath.Walk("/tmp", walker)
+	filepath.Walk("/tmp", filepath.WalkFunc(walker))
 }

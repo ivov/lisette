@@ -12,12 +12,17 @@ description: |
 ---
 package main
 
-import "fmt"
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
 
 func main() {
-	pair := func(n int) (int, int) {
-		return n, n + 1
+	pair := func(n int) lisette.Tuple2[int, int] {
+		return lisette.MakeTuple2[int, int](n, n+1)
 	}
-	a, b := pair(3)
+	tmp := pair(3)
+	a := tmp.First
+	b := tmp.Second
 	fmt.Println(a, b)
 }

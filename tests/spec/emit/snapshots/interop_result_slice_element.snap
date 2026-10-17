@@ -15,12 +15,17 @@ description: |
 ---
 package main
 
-import "strconv"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
 
 func main() {
-	arr := []func(string) (int, error){strconv.Atoi}
-	r, err := arr[0]("1")
-	if err == nil {
-		_ = r
+	arr := []func(string) lisette.Result[int, error]{func(arg0 string) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](strconv.Atoi(arg0))
+	}}
+	r := arr[0]("1")
+	if r.Tag == lisette.ResultOk {
+		_ = r.OkVal
 	}
 }

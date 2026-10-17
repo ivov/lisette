@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn check(ok:bool){if !ok {panic("assertion failed")}}
+  fn id<T>(f:T)->T { f }
+  fn main(){let mut f=|x:int| (x,x+1); let mut r=id(&f); r.* = |x:int| (x+2,x+3); let p=f(4); check(p.0==6 && p.1==7)}
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func check(ok bool) {
+	if !ok {
+		panic("assertion failed")
+	}
+}
+
+func id[T any](f T) T {
+	return f
+}
+
+func main() {
+	f := func(x int) lisette.Tuple2[int, int] {
+		return lisette.MakeTuple2[int, int](x, x+1)
+	}
+	r := id(&f)
+	*r = func(x int) lisette.Tuple2[int, int] {
+		return lisette.MakeTuple2[int, int](x+2, x+3)
+	}
+	p := f(4)
+	check(p.First == 6 && p.Second == 7)
+}

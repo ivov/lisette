@@ -1,0 +1,69 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  enum E<T>{A(fn()->T),B(fn()->T)}
+  fn make<T>(f:fn()->T,first:bool)->E<T>{if first{E.A(f)}else{E.B(f)}}
+  fn main(){let n=7;let mut calls=0;for first in [true,false]{let e=make(||{calls+=1;Some(&n)},first);let E.A(f)|E.B(f)=e else{panic("variant")};let Some(p)=f() else{panic("none")};if p.*!=7{panic("value")}};if calls!=2{panic("calls")}}
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func MakeEA[T any](arg0 func() T) E[T] {
+	return E[T]{Tag: EA, A: arg0}
+}
+
+func MakeEB[T any](arg0 func() T) E[T] {
+	return E[T]{Tag: EB, B: arg0}
+}
+
+type ETag uint8
+
+const (
+	EA ETag = iota
+	EB
+)
+
+type E[T any] struct {
+	Tag ETag
+	A   func() T
+	B   func() T
+}
+
+func make_[T any](f func() T, first bool) E[T] {
+	if first {
+		return MakeEA(f)
+	}
+	return MakeEB(f)
+}
+
+func main() {
+	n := 7
+	calls := 0
+	for _, first := range []bool{true, false} {
+		e := make_(func() lisette.Option[*int] {
+			calls++
+			return lisette.MakeOptionSome[*int](&n)
+		}, first)
+		var f func() lisette.Option[*int]
+		if e.Tag == EA {
+			f = e.A
+		} else if e.Tag == EB {
+			f = e.B
+		} else {
+			panic("variant")
+		}
+		subject := f()
+		if subject.Tag != lisette.OptionSome {
+			panic("none")
+		}
+		p := subject.SomeVal
+		if *p != 7 {
+			panic("value")
+		}
+	}
+	if calls != 2 {
+		panic("calls")
+	}
+}

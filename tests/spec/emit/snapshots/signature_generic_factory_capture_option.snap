@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn check(ok:bool){if !ok {panic("assertion failed")}}
+  fn make<T>(value:T)->fn()->T { || value }
+  fn main(){let f=make(Some(5));let v=f();check(v.unwrap_or(0)==5)}
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func check(ok bool) {
+	if !ok {
+		panic("assertion failed")
+	}
+}
+
+func make_[T any](value T) func() T {
+	return func() T {
+		return value
+	}
+}
+
+func main() {
+	f := make_(lisette.MakeOptionSome(5))
+	v := f()
+	check(v.UnwrapOr(0) == 5)
+}

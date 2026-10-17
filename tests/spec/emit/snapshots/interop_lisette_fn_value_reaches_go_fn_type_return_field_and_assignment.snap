@@ -53,24 +53,69 @@ func splitWords(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
 
 func pick() bufio.SplitFunc {
 	cb := splitWords
-	return func(arg0 []byte, arg1 bool) (int, []byte, error) {
-		ret, ret_1 := cb(arg0, arg1)
-		return ret.First, ret.Second, ret_1
+	var adapted func([]byte, bool) lisette.Result[lisette.Tuple2[int, []byte], error]
+	if cb != nil {
+		adapted = func(arg0 []byte, arg1 bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
+			return lisette.ResultFromPair[lisette.Tuple2[int, []byte]](cb(arg0, arg1))
+		}
 	}
+	cb_1 := adapted
+	var adapted_1 func([]byte, bool) (int, []byte, error)
+	if cb_1 != nil {
+		adapted_1 = func(arg0 []byte, arg1 bool) (int, []byte, error) {
+			res := cb_1(arg0, arg1)
+			if res.Tag == lisette.ResultOk {
+				tup := res.OkVal
+				return tup.First, tup.Second, nil
+			}
+			return 0, nil, res.ErrVal
+		}
+	}
+	return adapted_1
 }
 
 func main() {
 	var assigned bufio.SplitFunc = bufio.ScanWords
 	cb := splitWords
-	assigned = func(arg0 []byte, arg1 bool) (int, []byte, error) {
-		ret, ret_1 := cb(arg0, arg1)
-		return ret.First, ret.Second, ret_1
+	var adapted func([]byte, bool) lisette.Result[lisette.Tuple2[int, []byte], error]
+	if cb != nil {
+		adapted = func(arg0 []byte, arg1 bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
+			return lisette.ResultFromPair[lisette.Tuple2[int, []byte]](cb(arg0, arg1))
+		}
 	}
-	cb_1 := splitWords
-	holder := Splitter{split: func(arg0 []byte, arg1 bool) (int, []byte, error) {
-		ret_2, ret_3 := cb_1(arg0, arg1)
-		return ret_2.First, ret_2.Second, ret_3
-	}}
+	cb_1 := adapted
+	var adapted_1 func([]byte, bool) (int, []byte, error)
+	if cb_1 != nil {
+		adapted_1 = func(arg0 []byte, arg1 bool) (int, []byte, error) {
+			res := cb_1(arg0, arg1)
+			if res.Tag == lisette.ResultOk {
+				tup := res.OkVal
+				return tup.First, tup.Second, nil
+			}
+			return 0, nil, res.ErrVal
+		}
+	}
+	assigned = adapted_1
+	cb_2 := splitWords
+	var adapted_2 func([]byte, bool) lisette.Result[lisette.Tuple2[int, []byte], error]
+	if cb_2 != nil {
+		adapted_2 = func(arg0 []byte, arg1 bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
+			return lisette.ResultFromPair[lisette.Tuple2[int, []byte]](cb_2(arg0, arg1))
+		}
+	}
+	cb_3 := adapted_2
+	var adapted_3 func([]byte, bool) (int, []byte, error)
+	if cb_3 != nil {
+		adapted_3 = func(arg0 []byte, arg1 bool) (int, []byte, error) {
+			res_1 := cb_3(arg0, arg1)
+			if res_1.Tag == lisette.ResultOk {
+				tup_1 := res_1.OkVal
+				return tup_1.First, tup_1.Second, nil
+			}
+			return 0, nil, res_1.ErrVal
+		}
+	}
+	holder := Splitter{split: adapted_3}
 	pick()
 	_ = assigned
 	_ = holder

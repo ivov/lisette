@@ -18,14 +18,28 @@ description: |
 ---
 package main
 
-import "strconv"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
 
-func apply(f func(string) (int, error), s string) (int, error) {
-	return f(s)
+func apply(f func(string) lisette.Result[int, error], s string) (int, error) {
+	v := f(s)
+	if v.Tag == lisette.ResultOk {
+		return v.OkVal, nil
+	}
+	return 0, v.ErrVal
 }
 
 func main() {
-	r, err := apply(strconv.Atoi, "42")
+	cb := strconv.Atoi
+	var adapted func(string) lisette.Result[int, error]
+	if cb != nil {
+		adapted = func(arg0 string) lisette.Result[int, error] {
+			return lisette.ResultFromPair[int](cb(arg0))
+		}
+	}
+	r, err := apply(adapted, "42")
 	if err == nil {
 		_ = r
 	}

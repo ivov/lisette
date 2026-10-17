@@ -17,7 +17,7 @@ description: |
 ---
 package main
 
-func run(items []int, action func([]int)) {
+func run(items []int, action func([]int) struct{}) {
 	action(items)
 }
 
@@ -27,5 +27,14 @@ func bump(items []int) {
 
 func test() {
 	data := []int{0}
-	run(data, bump)
+	arg := data
+	cb := bump
+	var adapted func([]int) struct{}
+	if cb != nil {
+		adapted = func(arg0 []int) struct{} {
+			cb(arg0)
+			return struct{}{}
+		}
+	}
+	run(arg, adapted)
 }

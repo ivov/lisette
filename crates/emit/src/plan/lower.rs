@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::abi::transition::try_emit_lowered_tail_return;
+use crate::abi::transition::try_emit_layout_return;
 use crate::analyze::component_uses::component_demand;
 use crate::calls::bound_value::PairCondition;
 use crate::calls::predicates::strip_negations;
@@ -157,6 +157,20 @@ impl Planner<'_> {
             return self.lower_block_as_body(body);
         }
 
+        if let Some(ty) = self.return_ctx().ty()
+            && self.facts.peel_alias(ty).is_unit()
+        {
+            // A unit body evaluates statements for their effects, even when its
+            // physical signature must carry a value for a generic result slot.
+            let mut block = self.lower_block_as_body(body);
+            if !block.go_terminates() {
+                block
+                    .statements
+                    .push(plain_return(self.zero_value_expression(ty)));
+            }
+            return block;
+        }
+
         let items: &[Expression] = if let Expression::Block { items, .. } = body {
             items
         } else {
@@ -171,15 +185,14 @@ impl Planner<'_> {
             };
         };
 
-        let (mut statements, diverged) = self.lower_body_until_diverge(rest, last);
+        let (statements, diverged) = self.lower_body_until_diverge(rest, last);
         if diverged {
             return LoweredBlock { statements };
         }
 
-        // A unit/statement-only body under a non-unit signature has no value to
-        // return, so `lower_return_tail` emits it as a bare statement. A
-        // function body must still close with an explicit zero-value return;
-        // branch arms instead rely on a trailing unreachable panic.
+        // A statement-only tail can leave a value-returning body without a Go
+        // return. Supply its zero result only if lowering has not already closed
+        // the path. Branch arms retain their own terminal handling.
         let is_statement_only = matches!(
             last,
             Expression::Assignment { .. } | Expression::Let { .. } | Expression::Const { .. }
@@ -187,16 +200,18 @@ impl Planner<'_> {
         let is_unit_tail = !is_statement_only
             && !matches!(last, Expression::Return { .. })
             && last.get_type().is_unit();
+        let mut body = LoweredBlock { statements };
         let return_ctx = self.return_ctx();
         if (is_statement_only || is_unit_tail)
+            && !body.go_terminates()
             && let Some(return_ty) = return_ctx.ty().filter(|ty| !ty.is_unit())
         {
             let return_ty = return_ty.clone();
             let zero = self.zero_value_expression(&return_ty);
-            statements.push(plain_return(zero));
+            body.statements.push(plain_return(zero));
         }
 
-        LoweredBlock { statements }
+        body
     }
 
     pub(crate) fn lower_block_item<'r>(
@@ -655,7 +670,7 @@ impl Planner<'_> {
                 statements.extend(directed_first(line, inlined));
             }
             _ => {
-                let tail = if let Some(tail) = try_emit_lowered_tail_return(self, last) {
+                let tail = if let Some(tail) = try_emit_layout_return(self, last) {
                     tail
                 } else if let Some(wrapped) = self.lower_wrapped_return(last) {
                     wrapped

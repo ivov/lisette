@@ -494,7 +494,12 @@ impl<'a> Planner<'a> {
         if type_args_string.is_empty()
             && matches!(
                 prelude_constructor(function),
-                Some(PreludeVariant::Some | PreludeVariant::Ok | PreludeVariant::Err)
+                Some(
+                    PreludeVariant::Some
+                        | PreludeVariant::Ok
+                        | PreludeVariant::Err
+                        | PreludeVariant::Partial(_)
+                )
             )
         {
             let mut candidate = call_ty.and_then(|t| self.prelude_container_type_args(t));

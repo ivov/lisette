@@ -5,6 +5,7 @@ use super::{NativeCallContext, NativeCallForm};
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::is_prelude_container_type;
+use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::multi_value_return;
 use crate::calls::native::{native_method_is_pure, native_method_lowers_to_plain_call};
 use crate::context::expression::ExpressionContext;
@@ -31,6 +32,7 @@ use syntax::types::{CompoundKind, FunctionParameter, Type, build_substitution_ma
 struct TupleStructTarget {
     go_ty: String,
     field_tys: Vec<Type>,
+    owner_type: Type,
 }
 
 /// The duplicate-key check compares integers and runes as separate kinds, so a
@@ -431,8 +433,14 @@ impl<'a> Planner<'a> {
 
         let stages: Vec<ValuePlan> = pairs
             .iter()
-            .flat_map(|(key, value)| [*key, *value])
-            .map(|e| self.lower_composite_value(e, ExpressionContext::value()))
+            .flat_map(|(key, value)| [(*key, &key_ty), (*value, &value_ty)])
+            .map(|(e, slot)| {
+                let origin = self.function_type_origin(slot, SlotOrigin::Lisette);
+                self.lower_composite_value(
+                    e,
+                    ExpressionContext::value().with_function_slot_origin(origin),
+                )
+            })
             .collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "entry");
         let mut setup = sequenced.setup;
@@ -443,10 +451,11 @@ impl<'a> Planner<'a> {
         for (key, value) in &pairs {
             let staged_key = values.next().expect("each pair stages a key");
             let staged_value = values.next().expect("each pair stages a value");
-            let (key_setup, coerced_key) =
-                CoercionPlan::internal(self, &key.get_type(), &key_ty).lower(self, staged_key);
+            let (key_setup, coerced_key) = self
+                .value_slot_coercion(key, &key_ty)
+                .lower(self, staged_key);
             setup.extend(key_setup);
-            let value_coercion = CoercionPlan::internal(self, &value.get_type(), &value_ty);
+            let value_coercion = self.value_slot_coercion(value, &value_ty);
             let is_whole_literal =
                 value_coercion.is_identity() && staged_value.is_composite_literal();
             let (value_setup, coerced_value) = value_coercion.lower(self, staged_value);
@@ -721,25 +730,36 @@ impl<'a> Planner<'a> {
             (Some(retired), 1) => ExpressionContext::value().with_retired_receiver(retired),
             _ => ExpressionContext::value(),
         };
-        let stages: Vec<ValuePlan> = args
+        let field_layouts: Vec<_> = target
+            .field_tys
             .iter()
-            .map(|a| self.lower_composite_value(a, arg_ctx))
+            .enumerate()
+            .map(|(index, ty)| {
+                self.field_slot_layout(&target.owner_type, None, None, &index.to_string(), ty)
+            })
             .collect();
+        let (stages, source_layouts): (Vec<ValuePlan>, Vec<ValueLayout>) = args
+            .iter()
+            .zip(&target.field_tys)
+            .map(|(a, slot)| {
+                let origin = self.function_type_origin(slot, SlotOrigin::Lisette);
+                let ctx = arg_ctx.with_function_slot_origin(origin);
+                let source = self.emitted_value_layout(a, ctx);
+                (self.lower_composite_value(a, ctx), source)
+            })
+            .unzip();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "arg");
         let mut setup = sequenced.setup;
 
         let mut field_pairs = Vec::with_capacity(target.field_tys.len());
-        for (i, ((field_ty, arg), value)) in target
-            .field_tys
-            .iter()
-            .zip(args.iter())
-            .zip(sequenced.values)
-            .enumerate()
-        {
-            let value_ty = arg.get_type();
-            let coercion = CoercionPlan::internal(self, &value_ty, field_ty);
-            let (coercion_setup, coerced) = coercion.lower(self, value);
-            setup.extend(coercion_setup);
+        for (i, (field_ty, value)) in target.field_tys.iter().zip(sequenced.values).enumerate() {
+            let coerced = self.coerce_struct_field(
+                &mut setup,
+                value,
+                &source_layouts[i],
+                Some(field_ty),
+                field_layouts[i].as_ref(),
+            );
             field_pairs.push((format!("F{}", i), coerced));
         }
 
@@ -795,7 +815,11 @@ impl<'a> Planner<'a> {
         };
 
         let go_ty = self.use_go_type(&return_ty);
-        Some(TupleStructTarget { go_ty, field_tys })
+        Some(TupleStructTarget {
+            go_ty,
+            field_tys,
+            owner_type: return_ty,
+        })
     }
 
     fn lower_assert_type(
@@ -804,14 +828,22 @@ impl<'a> Planner<'a> {
         args: &[Expression],
         type_args: ResolvedCallTypeArguments<'_>,
     ) -> (Vec<Statement>, GoExpression) {
-        let target_ty = if !type_args.is_empty() {
-            self.use_go_type(&type_args[0])
+        let asserted = if !type_args.is_empty() {
+            type_args[0].clone()
         } else {
-            let param = extract_return_type_param(function)
-                .expect("AssertType must have constructor return type");
-            self.use_go_type(&param)
+            extract_return_type_param(function)
+                .expect("AssertType must have constructor return type")
         };
-        let (setup, arguments) = match args.first() {
+        // `any` holds a function in its direct Go form, so assert that form.
+        let function_layouts = self.any_slot_function_layouts(&asserted);
+        let target_ty = match &function_layouts {
+            Some((stored, _)) => {
+                let go_type = stored.go_type(self);
+                self.use_rendered_go_type(go_type)
+            }
+            None => self.use_go_type(&asserted),
+        };
+        let (mut setup, arguments) = match args.first() {
             Some(a) => {
                 let (setup, value) = self
                     .lower_composite_value(a, ExpressionContext::value())
@@ -820,16 +852,29 @@ impl<'a> Planner<'a> {
             }
             None => (Vec::new(), Vec::new()),
         };
-        (
-            setup,
-            GoExpression::call(
-                GoExpression::instantiation(
-                    GoExpression::generated(GeneratedPackage::Prelude, "AssertType"),
-                    format!("[{target_ty}]"),
-                ),
-                arguments,
+        let call = GoExpression::call(
+            GoExpression::instantiation(
+                GoExpression::generated(GeneratedPackage::Prelude, "AssertType"),
+                format!("[{target_ty}]"),
             ),
-        )
+            arguments,
+        );
+        let Some((stored, lisette)) = function_layouts else {
+            return (setup, call);
+        };
+        let option_type = function
+            .get_type()
+            .get_function_ret()
+            .cloned()
+            .expect("assert_type returns an Option");
+        let option_layout = |payload| ValueLayout::TaggedOption {
+            option_type: option_type.clone(),
+            payload: Box::new(payload),
+        };
+        let bridge = CoercionPlan::bridge(self, &option_layout(stored), &option_layout(lisette));
+        let (bridge_setup, value) = bridge.lower(self, call);
+        setup.extend(bridge_setup);
+        (setup, value)
     }
 
     /// Look up the `#[go("name")]` override for a callee, if any.

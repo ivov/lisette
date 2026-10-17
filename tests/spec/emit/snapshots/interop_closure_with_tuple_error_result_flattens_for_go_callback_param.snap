@@ -38,32 +38,63 @@ import (
 
 func main() {
 	forwarded := bufio.NewScanner(strings.NewReader("one two three"))
-	forwarded.Split(func(data []byte, at_eof bool) (int, []byte, error) {
-		return bufio.ScanWords(data, at_eof)
-	})
+	callee := forwarded.Split
+	cb := func(data []byte, at_eof bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
+		ret, ret_1, ret_2 := bufio.ScanWords(data, at_eof)
+		tup := lisette.MakeTuple2(ret, ret_1)
+		if ret_2 != nil {
+			return lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_2)
+		}
+		return lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup)
+	}
+	var adapted func([]byte, bool) (int, []byte, error)
+	if cb != nil {
+		adapted = func(arg0 []byte, arg1 bool) (int, []byte, error) {
+			res := cb(arg0, arg1)
+			if res.Tag == lisette.ResultOk {
+				tup_1 := res.OkVal
+				return tup_1.First, tup_1.Second, nil
+			}
+			return 0, nil, res.ErrVal
+		}
+	}
+	callee(adapted)
 	count := 0
 	for forwarded.Scan() {
 		count++
 	}
 	fmt.Println(count)
 	rebuilt := bufio.NewScanner(strings.NewReader("four five"))
-	rebuilt.Split(func(data []byte, at_eof bool) (int, []byte, error) {
-		ret, ret_1, ret_2 := bufio.ScanWords(data, at_eof)
-		tup := lisette.MakeTuple2(ret, ret_1)
+	callee_1 := rebuilt.Split
+	cb_1 := func(data []byte, at_eof bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
+		ret_3, ret_4, ret_5 := bufio.ScanWords(data, at_eof)
+		tup_2 := lisette.MakeTuple2(ret_3, ret_4)
 		var result lisette.Result[lisette.Tuple2[int, []byte], error]
-		if ret_2 != nil {
-			result = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_2)
+		if ret_5 != nil {
+			result = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_5)
 		} else {
-			result = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup)
+			result = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup_2)
 		}
 		check := result
 		if check.Tag != lisette.ResultOk {
-			return 0, nil, check.ErrVal
+			return check
 		}
 		advance := check.OkVal.First
 		token := check.OkVal.Second
-		return advance, token, nil
-	})
+		return lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](lisette.MakeTuple2[int, []byte](advance, token))
+	}
+	var adapted_1 func([]byte, bool) (int, []byte, error)
+	if cb_1 != nil {
+		adapted_1 = func(arg0 []byte, arg1 bool) (int, []byte, error) {
+			res_1 := cb_1(arg0, arg1)
+			if res_1.Tag == lisette.ResultOk {
+				tup_3 := res_1.OkVal
+				return tup_3.First, tup_3.Second, nil
+			}
+			return 0, nil, res_1.ErrVal
+		}
+	}
+	callee_1(adapted_1)
 	words := 0
 	for rebuilt.Scan() {
 		words++

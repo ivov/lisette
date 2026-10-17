@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  struct H{f:fn(int)}
+  fn main(){let mut n=0;let mut h=H{f:|x|{n+=x}};let mut r=&h.f;r.* = |x|{n+=10*x};h.f(3);if n!=30{panic("field storage")}}
+---
+package main
+
+type H struct {
+	f func(int) struct{}
+}
+
+func main() {
+	n := 0
+	h := H{f: func(x int) struct{} {
+		n += x
+		return struct{}{}
+	}}
+	r := &h.f
+	*r = func(x int) struct{} {
+		n += 10 * x
+		return struct{}{}
+	}
+	h.f(3)
+	if n != 30 {
+		panic("field storage")
+	}
+}

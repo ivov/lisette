@@ -13,20 +13,25 @@ func Lookup(_ int) Face {
 	return nil
 }
 
-func Resolve[T any, R any](a T, f func(T) (R, bool)) (R, bool) {
-	return f(a)
+func Resolve[T any, R any](a T, f func(T) lisette.Option[R]) (R, bool) {
+	v := f(a)
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	return *new(R), false
 }
 
 func main() {
 	cb := Lookup
-	ret, ret_1 := Resolve(0, func(arg0 int) (Face, bool) {
-		raw := cb(arg0)
-		option := lisette.OptionFromNilable[Face](raw, lisette.IsNilInterface(raw))
-		if option.Tag == lisette.OptionSome {
-			return option.SomeVal, true
+	var adapted func(int) lisette.Option[Face]
+	if cb != nil {
+		adapted = func(arg0 int) lisette.Option[Face] {
+			raw := cb(arg0)
+			option := lisette.OptionFromNilable[Face](raw, lisette.IsNilInterface(raw))
+			return option
 		}
-		return nil, false
-	})
+	}
+	ret, ret_1 := Resolve(0, adapted)
 	var rez lisette.Option[Face]
 	if ret_1 && !lisette.IsNilInterface(ret) {
 		rez = lisette.MakeOptionSome[Face](ret)

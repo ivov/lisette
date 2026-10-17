@@ -4,6 +4,8 @@ use crate::calls::native::native_method_lowers_to_plain_call;
 use crate::calls::regular::receiver_type_binding;
 
 use crate::Planner;
+use crate::abi::coercion::CoercionPlan;
+use crate::abi::layout::SlotOrigin;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::SpreadSequenceOptions;
 use crate::plan::bodies::Statement;
@@ -72,7 +74,7 @@ impl Planner<'_> {
             unreachable!("lower_ufcs_call called on non-DotAccess");
         };
 
-        let coercion = resolution.receiver_coercion();
+        let mut coercion = resolution.receiver_coercion();
         let receiver_ty = self.facts.strip_and_peel(&receiver.get_type());
         let site = UfcsCallSite {
             function,
@@ -91,8 +93,32 @@ impl Planner<'_> {
             .unwrap_or_default();
 
         let mut receiver_stage = self.plan_operand(receiver, ExpressionContext::value());
+        if call_plan.resolved.is_prelude_dispatch && coercion != Some(ReceiverCoercion::AutoAddress)
+        {
+            let source = self.value_layout(&receiver.get_type().strip_refs(), SlotOrigin::Lisette);
+            let target = self.value_layout(&receiver_ty, SlotOrigin::Lisette);
+            let bridge = CoercionPlan::bridge(self, &source, &target);
+            if !bridge.is_identity() {
+                receiver_stage = receiver_stage.map_expression(|setup, value| {
+                    let value = if coercion == Some(ReceiverCoercion::AutoDeref) {
+                        GoExpression::dereference(value)
+                    } else {
+                        value
+                    };
+                    let (bridge_setup, value) = bridge.lower(self, value);
+                    setup.extend(bridge_setup);
+                    value
+                });
+                coercion = None;
+            }
+        }
         if coercion == Some(ReceiverCoercion::AutoAddress) {
             receiver_stage = self.coerce_receiver_address_stage(receiver, receiver_stage);
+        } else if coercion == Some(ReceiverCoercion::AutoDeref) {
+            // Read the receiver value before sequencing arguments that can
+            // mutate its pointee; capturing only the pointer is insufficient.
+            receiver_stage = receiver_stage.dereference();
+            coercion = None;
         }
         let (setup, receiver_arg, emitted_args) = self.lower_ufcs_call_args(
             site,

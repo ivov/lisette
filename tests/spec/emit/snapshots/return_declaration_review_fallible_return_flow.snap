@@ -1,0 +1,188 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:errors"
+  type F<T> = fn(int) -> T
+  type R = Result<F<Option<int>>, error>
+  type O = Option<F<Option<int>>>
+  fn check(ok: bool) { if !ok { panic("runtime assertion failed") } }
+  fn source(n: int) -> Option<int> { if n > 0 { Some(n) } else { None } }
+  fn int_result(n: int) -> Result<int, error> { if n == 0 { Err(errors.New("empty")) } else { Ok(n) } }
+  fn make_r(n: int) -> R { let _ = int_result(n)?; Ok(source) }
+  fn make_o(n: int) -> O { let _ = source(n)?; Some(source) }
+  fn try_r(n: int) -> R { try { let _ = int_result(n)?; source } }
+  fn try_o(n: int) -> O { try { let _ = source(n)?; source } }
+  fn main() {
+    let Ok(r) = make_r(1) else { panic("missing result") }
+    check(r(2).unwrap_or(0) == 2)
+    let Some(o) = make_o(1) else { panic("missing option") }
+    check(o(3).unwrap_or(0) == 3)
+    let Ok(tr) = try_r(1) else { panic("missing try result") }
+    check(tr(4).unwrap_or(0) == 4)
+    let Some(to) = try_o(1) else { panic("missing try option") }
+    check(to(5).unwrap_or(0) == 5)
+    let Err(_) = make_r(0) else { panic("expected result failure") }
+    let None = make_o(0) else { panic("expected option failure") }
+    let Err(_) = try_r(0) else { panic("expected try result failure") }
+    let None = try_o(0) else { panic("expected try option failure") }
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type F[T any] func(int) T
+
+type R = lisette.Result[F[lisette.Option[int]], error]
+
+type O = lisette.Option[F[lisette.Option[int]]]
+
+func check(ok bool) {
+	if !ok {
+		panic("runtime assertion failed")
+	}
+}
+
+func source(n int) (int, bool) {
+	if n > 0 {
+		return n, true
+	}
+	return 0, false
+}
+
+func intResult(n int) (int, error) {
+	if n == 0 {
+		return 0, errors.New("empty")
+	}
+	return n, nil
+}
+
+func makeR(n int) (F[lisette.Option[int]], error) {
+	if _, err := intResult(n); err != nil {
+		return *new(F[lisette.Option[int]]), err
+	}
+	cb := source
+	var adapted func(int) lisette.Option[int]
+	if cb != nil {
+		adapted = func(arg0 int) lisette.Option[int] {
+			return lisette.OptionFromCommaOk[int](cb(arg0))
+		}
+	}
+	return adapted, nil
+}
+
+func makeO(n int) F[lisette.Option[int]] {
+	if _, ok := source(n); !ok {
+		return nil
+	}
+	cb := source
+	var adapted func(int) lisette.Option[int]
+	if cb != nil {
+		adapted = func(arg0 int) lisette.Option[int] {
+			return lisette.OptionFromCommaOk[int](cb(arg0))
+		}
+	}
+	return adapted
+}
+
+func tryR(n int) (F[lisette.Option[int]], error) {
+	tryResult := func() lisette.Result[func(int) lisette.Option[int], error] {
+		if _, err := intResult(n); err != nil {
+			return lisette.MakeResultErr[func(int) lisette.Option[int], error](err)
+		}
+		cb := source
+		var adapted func(int) lisette.Option[int]
+		if cb != nil {
+			adapted = func(arg0 int) lisette.Option[int] {
+				return lisette.OptionFromCommaOk[int](cb(arg0))
+			}
+		}
+		return lisette.MakeResultOk[func(int) lisette.Option[int], error](adapted)
+	}()
+	var adapted_1 lisette.Result[F[lisette.Option[int]], error]
+	adapted_1.Tag = tryResult.Tag
+	if tryResult.Tag == lisette.ResultOk {
+		adapted_1.OkVal = tryResult.OkVal
+	}
+	if tryResult.Tag == lisette.ResultErr {
+		adapted_1.ErrVal = tryResult.ErrVal
+	}
+	if adapted_1.Tag == lisette.ResultOk {
+		return adapted_1.OkVal, nil
+	}
+	return *new(F[lisette.Option[int]]), adapted_1.ErrVal
+}
+
+func tryO(n int) F[lisette.Option[int]] {
+	tryResult := func() lisette.Option[func(int) lisette.Option[int]] {
+		if _, ok := source(n); !ok {
+			return lisette.MakeOptionNone[func(int) lisette.Option[int]]()
+		}
+		cb := source
+		var adapted func(int) lisette.Option[int]
+		if cb != nil {
+			adapted = func(arg0 int) lisette.Option[int] {
+				return lisette.OptionFromCommaOk[int](cb(arg0))
+			}
+		}
+		return lisette.MakeOptionSome[func(int) lisette.Option[int]](adapted)
+	}()
+	var adapted_1 lisette.Option[F[lisette.Option[int]]]
+	adapted_1.Tag = tryResult.Tag
+	if tryResult.Tag == lisette.OptionSome {
+		adapted_1.SomeVal = tryResult.SomeVal
+	}
+	if adapted_1.Tag == lisette.OptionSome {
+		return adapted_1.SomeVal
+	}
+	return nil
+}
+
+func main() {
+	r, err := makeR(1)
+	if err != nil {
+		panic("missing result")
+	}
+	check(r(2).UnwrapOr(0) == 2)
+	raw := makeO(1)
+	option := lisette.OptionFromNilable[F[lisette.Option[int]]](raw, raw == nil)
+	if option.Tag != lisette.OptionSome {
+		panic("missing option")
+	}
+	o := option.SomeVal
+	check(o(3).UnwrapOr(0) == 3)
+	tr, err_1 := tryR(1)
+	if err_1 != nil {
+		panic("missing try result")
+	}
+	check(tr(4).UnwrapOr(0) == 4)
+	raw_1 := tryO(1)
+	option_1 := lisette.OptionFromNilable[F[lisette.Option[int]]](raw_1, raw_1 == nil)
+	if option_1.Tag != lisette.OptionSome {
+		panic("missing try option")
+	}
+	to := option_1.SomeVal
+	check(to(5).UnwrapOr(0) == 5)
+	subject := lisette.ResultFromPair[F[lisette.Option[int]]](makeR(0))
+	if subject.Tag != lisette.ResultErr {
+		panic("expected result failure")
+	}
+	raw_2 := makeO(0)
+	option_2 := lisette.OptionFromNilable[F[lisette.Option[int]]](raw_2, raw_2 == nil)
+	if option_2.Tag != lisette.OptionNone {
+		panic("expected option failure")
+	}
+	subject_1 := lisette.ResultFromPair[F[lisette.Option[int]]](tryR(0))
+	if subject_1.Tag != lisette.ResultErr {
+		panic("expected try result failure")
+	}
+	raw_3 := tryO(0)
+	option_3 := lisette.OptionFromNilable[F[lisette.Option[int]]](raw_3, raw_3 == nil)
+	if option_3.Tag != lisette.OptionNone {
+		panic("expected try option failure")
+	}
+}

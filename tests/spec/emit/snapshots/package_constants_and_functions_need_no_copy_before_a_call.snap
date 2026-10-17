@@ -40,8 +40,16 @@ import (
 )
 
 func bump() int {
-	flag.Usage = func() {
+	cb := func() struct{} {
+		return struct{}{}
 	}
+	var adapted func()
+	if cb != nil {
+		adapted = func() {
+			cb()
+		}
+	}
+	flag.Usage = adapted
 	return 1
 }
 
@@ -49,7 +57,7 @@ func run(f func(string) string, n int) string {
 	return f(fmt.Sprint(n))
 }
 
-func call(f func(), n int) int {
+func call(f func() struct{}, n int) int {
 	f()
 	return n
 }
@@ -58,11 +66,26 @@ func test() {
 	a := math.MaxInt8 + bump()
 	s := run(strings.ToUpper, bump())
 	seen := ""
-	flag.Usage = func() {
+	cb := func() struct{} {
 		seen = "original"
+		return struct{}{}
 	}
-	arg := flag.Usage
-	n := call(arg, bump())
+	var adapted func()
+	if cb != nil {
+		adapted = func() {
+			cb()
+		}
+	}
+	flag.Usage = adapted
+	cb_1 := flag.Usage
+	var adapted_1 func() struct{}
+	if cb_1 != nil {
+		adapted_1 = func() struct{} {
+			cb_1()
+			return struct{}{}
+		}
+	}
+	n := call(adapted_1, bump())
 	if a != 128 || s != "1" || n != 1 {
 		panic(fmt.Sprintf("a=%d s=%s n=%d", a, s, n))
 	}

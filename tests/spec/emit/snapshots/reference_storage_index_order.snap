@@ -1,0 +1,53 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn index(calls: mut Ref<int>) -> int { calls.* += 1; 0 }
+  fn main() {
+   let mut n = 0
+   let mut calls = 0
+   let mut fs: mut Slice<fn()> = [|| { n += 1 }]
+   let mut r = &fs[index(&calls)]
+   r.* = || { n += 10 }
+   fs[0]()
+   if n != 10 || calls != 1 { panic("indexed storage evaluation") }
+   let saved = &fs[0]
+   fs[0] = || { n += 100 }
+   saved.*()
+   if n != 110 { panic("replacement visibility") }
+  }
+---
+package main
+
+func index(calls *int) int {
+	*calls++
+	return 0
+}
+
+func main() {
+	n := 0
+	calls := 0
+	fs := []func() struct{}{func() struct{} {
+		n++
+		return struct{}{}
+	}}
+	base := fs
+	r := &base[index(&calls)]
+	*r = func() struct{} {
+		n += 10
+		return struct{}{}
+	}
+	fs[0]()
+	if n != 10 || calls != 1 {
+		panic("indexed storage evaluation")
+	}
+	saved := &fs[0]
+	fs[0] = func() struct{} {
+		n += 100
+		return struct{}{}
+	}
+	(*saved)()
+	if n != 110 {
+		panic("replacement visibility")
+	}
+}

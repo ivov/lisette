@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::Renderer;
+use crate::abi::layout::SlotOrigin;
 use crate::context::expression::ExpressionContext;
 use crate::escape_reserved;
 use crate::names::go_name;
@@ -32,7 +33,14 @@ impl Planner<'_> {
             .as_ref()
             .or(declared_target.as_ref())
             .unwrap_or(ty);
-        let ty_string = self.use_go_type(underlying);
+        let ty_string = if is_fn_alias {
+            let target = declared_target.as_ref().unwrap_or(ty);
+            let layout = self.value_layout(target, SlotOrigin::Lisette);
+            let go_type = layout.go_type(self);
+            self.use_rendered_go_type(go_type)
+        } else {
+            self.use_go_type(underlying)
+        };
 
         let generics_string = self.generics_to_string(generics);
 

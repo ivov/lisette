@@ -14,19 +14,8 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
-	cb := lisette.MakeOptionSome[int]
-	g := func(arg0 int) (int, bool) {
-		opt_1 := cb(arg0)
-		if opt_1.Tag == lisette.OptionSome {
-			return opt_1.SomeVal, true
-		}
-		return 0, false
-	}
+	g := lisette.MakeOptionSome[int]
 	opt := lisette.MakeOptionSome(1)
-	cb_1 := g
-	tagged := func(arg0 int) lisette.Option[int] {
-		return lisette.OptionFromCommaOk[int](cb_1(arg0))
-	}
-	r := lisette.OptionAndThen(opt, tagged)
+	r := lisette.OptionAndThen(opt, g)
 	_ = r
 }

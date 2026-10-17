@@ -1,5 +1,8 @@
 use crate::Planner;
+use crate::ReturnContext;
 use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::coercion::CoercionPlan;
+use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::calls::go_interop::{
@@ -105,11 +108,22 @@ impl Planner<'_> {
         let (check_setup, check) = self.hoist_propagate_check_var(expression);
         statements.extend(check_setup);
         statements.push(
-            self.build_propagate_failure_check(&check, &fallible, &expression_ty)
+            self.build_propagate_failure_check(&check, &fallible, &expression.get_type())
                 .into(),
         );
 
         let ok_access = GoExpression::value_field(check, fallible.ok_field().to_string());
+        let source = self.value_layout(&expression.get_type(), SlotOrigin::Lisette);
+        let target_layout = self.value_layout(fallible.ok_ty(), SlotOrigin::Lisette);
+        let coercion = CoercionPlan::bridge(
+            self,
+            source
+                .payload()
+                .expect("propagation requires a payload layout"),
+            &target_layout,
+        );
+        let (setup, ok_access) = coercion.lower(self, ok_access);
+        statements.extend(setup);
         let value = self.propagated_value(&mut statements, target, None, Some(ok_access));
         (statements, value)
     }
@@ -165,15 +179,32 @@ impl Planner<'_> {
         fallible: &Fallible,
         expression_ty: &Type,
     ) -> LoweredStatement {
-        let (setup, values) = if self.returns_tagged_type(expression_ty) {
+        let return_layout = self.value_layout(&self.return_ctx().expect_ty(), SlotOrigin::Lisette);
+        let source_layout = self.value_layout(expression_ty, SlotOrigin::Lisette);
+        let (setup, values) = if self.returns_tagged_type(expression_ty)
+            && source_layout
+                .underlying()
+                .same_representation(return_layout.underlying())
+        {
             (Vec::new(), vec![check.clone()])
         } else {
+            let mut setup = Vec::new();
             let err_expr = if fallible.is_result() {
-                GoExpression::value_field(check.clone(), "ErrVal".to_string())
+                let error = GoExpression::value_field(check.clone(), "ErrVal".to_string());
+                let ValueLayout::Fallible { error: source, .. } = source_layout.underlying() else {
+                    unreachable!("Result propagation requires an error layout")
+                };
+                let target = self.value_layout(source.logical_type(), SlotOrigin::Lisette);
+                let (error_setup, error) =
+                    CoercionPlan::bridge(self, source, &target).lower(self, error);
+                setup.extend(error_setup);
+                error
             } else {
                 check.clone()
             };
-            self.propagate_failure_values(fallible, err_expr)
+            let (failure_setup, values) = self.propagate_failure_values(fallible, err_expr);
+            setup.extend(failure_setup);
+            (setup, values)
         };
         transition::tag_check(
             GoExpression::binary(
@@ -189,9 +220,9 @@ impl Planner<'_> {
     fn returns_tagged_type(&self, ty: &Type) -> bool {
         let return_ctx = self.return_ctx();
         return_ctx.lowered_shape().is_none()
-            && return_ctx
-                .ty()
-                .is_some_and(|return_ty| self.facts.peel_alias(return_ty).demoted() == ty.demoted())
+            && return_ctx.ty().is_some_and(|return_ty| {
+                self.facts.peel_alias(return_ty).demoted() == self.facts.peel_alias(ty).demoted()
+            })
     }
 
     fn propagate_failure_values(
@@ -224,7 +255,11 @@ impl Planner<'_> {
             bridge,
             ..
         } = self.lowered_call(expression)?;
-        let payload_bridge = bridge.and_then(GoResultBridge::into_payload);
+        let payload_bridge = match bridge {
+            Some(GoResultBridge::Payload { value, error }) if error.is_identity() => Some(value),
+            Some(GoResultBridge::Payload { .. }) => return None,
+            _ => None,
+        };
         match shape {
             LoweredReturnAbi::Result {
                 payload: PayloadLayout::Packed,
@@ -605,10 +640,12 @@ impl Planner<'_> {
 
     pub(crate) fn build_return_plan(&mut self, expression: &Expression) -> LoweredBlock {
         let return_ctx = self.return_ctx();
-        let is_unit = return_ctx.ty().is_some_and(Type::is_unit);
+        let is_unit = return_ctx
+            .ty()
+            .is_some_and(|ty| self.facts.peel_alias(ty).is_unit());
         if is_unit {
-            // Unit return: impure expressions run as a statement before the
-            // bare `return`; pure ones (Unit, Identifier, Literal) emit nothing.
+            // Unit expressions still run for their effects. The enclosing
+            // physical signature decides whether `return` carries unit data.
             let is_pure = matches!(
                 expression,
                 Expression::Unit { .. }
@@ -619,11 +656,15 @@ impl Planner<'_> {
             if !is_pure {
                 statements.push(self.lower_statement(expression));
             }
-            statements.push(LoweredStatement::Return(Vec::new()).into());
+            statements.push(if matches!(return_ctx, ReturnContext::Void(_)) {
+                LoweredStatement::Return(Vec::new()).into()
+            } else {
+                plain_return(GoExpression::empty_composite("struct{}".to_string()))
+            });
             return LoweredBlock { statements };
         }
 
-        if let Some(statements) = transition::try_emit_lowered_tail_return(self, expression) {
+        if let Some(statements) = transition::try_emit_layout_return(self, expression) {
             return LoweredBlock { statements };
         }
 
@@ -801,6 +842,12 @@ impl Planner<'_> {
                     .lower_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
                 statements.extend(setup);
+                let value = self.apply_type_coercion(
+                    &mut statements,
+                    Some(fallible.ok_ty()),
+                    &args[0],
+                    value,
+                );
                 statements.extend(self.success_return(fallible, value));
             }
         }
@@ -827,7 +874,7 @@ impl Planner<'_> {
             let to = self
                 .contextual_err_ty(fallible)
                 .expect("Result must have error type");
-            let error = self.coerce_value(&mut statements, error, &arg.get_type(), &to);
+            let error = self.apply_type_coercion(&mut statements, Some(&to), arg, error);
             statements.extend(message_setup);
             self.wrap_error(&wraps, error)
         });

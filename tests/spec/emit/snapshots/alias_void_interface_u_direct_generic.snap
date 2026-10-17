@@ -1,0 +1,63 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  type U = ()
+  interface Action { fn Run() -> U }
+  struct Counter { n: mut Ref<int> }
+  impl Counter { fn Run(self: mut Ref<Counter>) -> U { self.n.* += 1; () } }
+  fn apply<T>(f: fn() -> T) -> T { f() }
+  fn main() {
+   let mut n = 0
+   let mut c = Counter { n: &n }
+   let action = &c as Action
+   let _ = apply(action.Run)
+   if n != 1 { panic("direct generic interface method count") }
+  }
+---
+package main
+
+type U = struct{}
+
+type Action interface {
+	Run()
+}
+
+type Counter struct {
+	n *int
+}
+
+func (c *Counter) Run() U {
+	*c.n++
+	return *new(U)
+}
+
+func apply[T any](f func() T) T {
+	return f()
+}
+
+func main() {
+	n := 0
+	c := Counter{n: &n}
+	action := _lisAdapter_Counter_Action_0{inner: &c}
+	cb := action.Run
+	var adapted func() U
+	if cb != nil {
+		adapted = func() U {
+			cb()
+			return struct{}{}
+		}
+	}
+	apply(adapted)
+	if n != 1 {
+		panic("direct generic interface method count")
+	}
+}
+
+type _lisAdapter_Counter_Action_0 struct {
+	inner *Counter
+}
+
+func (a _lisAdapter_Counter_Action_0) Run() {
+	a.inner.Run()
+}

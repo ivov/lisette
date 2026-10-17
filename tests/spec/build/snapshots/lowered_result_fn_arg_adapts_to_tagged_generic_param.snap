@@ -19,11 +19,15 @@ func Resolve[T any, R any, E any](a T, f func(T) lisette.Result[R, E]) lisette.R
 
 func main() {
 	cb := Resultant
-	Resolve(42, func(arg0 int) lisette.Result[int, Face] {
-		ret, ret_1 := cb(arg0)
-		if ret_1 != nil {
-			return lisette.MakeResultErr[int, Face](ret_1)
+	var adapted func(int) lisette.Result[int, Face]
+	if cb != nil {
+		adapted = func(arg0 int) lisette.Result[int, Face] {
+			ret, ret_1 := cb(arg0)
+			if ret_1 != nil {
+				return lisette.MakeResultErr[int, Face](ret_1)
+			}
+			return lisette.MakeResultOk[int, Face](ret)
 		}
-		return lisette.MakeResultOk[int, Face](ret)
-	})
+	}
+	Resolve(42, adapted)
 }

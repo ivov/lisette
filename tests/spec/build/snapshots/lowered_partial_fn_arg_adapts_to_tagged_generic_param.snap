@@ -9,8 +9,8 @@ import lisette "github.com/ivov/lisette/prelude"
 type Face interface {
 }
 
-func Fallible(arg int) (int, Face) {
-	return arg, nil
+func Fallible(arg int) lisette.Partial[int, Face] {
+	return lisette.MakePartialOk[int, Face](arg)
 }
 
 func Resolve[T any, R any, E any](a T, f func(T) lisette.Partial[R, E]) lisette.Partial[R, E] {
@@ -18,12 +18,5 @@ func Resolve[T any, R any, E any](a T, f func(T) lisette.Partial[R, E]) lisette.
 }
 
 func main() {
-	cb := Fallible
-	Resolve(42, func(arg0 int) lisette.Partial[int, Face] {
-		ret, ret_1 := cb(arg0)
-		if ret_1 != nil {
-			return lisette.MakePartialBoth[int, Face](ret, ret_1)
-		}
-		return lisette.MakePartialOk[int, Face](ret)
-	})
+	Resolve(42, Fallible)
 }

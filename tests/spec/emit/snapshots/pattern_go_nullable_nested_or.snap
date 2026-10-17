@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:runtime/debug"
+  fn main(){let mut child=debug.Module{Path:"child",..};let h=debug.Module{Replace:Some(&child),..};let out=match (h,7){(debug.Module{Replace:Some(r),..},0)|(debug.Module{Replace:Some(r),..},7)=>r.Path,_=>"none"};if out!="child"{panic("or")}}
+---
+package main
+
+import "runtime/debug"
+
+func main() {
+	child := debug.Module{Path: "child"}
+	h := debug.Module{Replace: &child}
+	var out string
+	_ = h
+	if h.Replace != nil && 7 == 0 {
+		out = h.Replace.Path
+	} else if h.Replace != nil && 7 == 7 {
+		out = h.Replace.Path
+	} else {
+		out = "none"
+	}
+	if out != "child" {
+		panic("or")
+	}
+}

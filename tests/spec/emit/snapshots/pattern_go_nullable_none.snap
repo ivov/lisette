@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:runtime/debug"
+  fn main(){let outer=debug.Module{Path:"outer",Version:"",Sum:"",Replace:None};let debug.Module{Replace:None,..}=outer else{panic("some")}}
+---
+package main
+
+import "runtime/debug"
+
+func main() {
+	outer := debug.Module{
+		Path:    "outer",
+		Version: "",
+		Sum:     "",
+		Replace: nil,
+	}
+	if outer.Replace != nil {
+		panic("some")
+	}
+}

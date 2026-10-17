@@ -20,44 +20,45 @@ func some[T any](x T) (T, bool) {
 	return x, true
 }
 
-func consume(f func(*int) *int, x *int) *int {
-	return f(x)
+func consume(f func(*int) lisette.Option[*int], x *int) *int {
+	v := f(x)
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal
+	}
+	return nil
 }
 
 func main() {
 	x := 3
 	cb := some[*int]
-	stored := func(arg0 *int) *int {
-		ret, ret_1 := cb(arg0)
-		var option lisette.Option[*int]
-		if ret_1 && ret != nil {
-			option = lisette.MakeOptionSome[*int](ret)
-		} else {
-			option = lisette.MakeOptionNone[*int]()
+	var adapted func(*int) lisette.Option[*int]
+	if cb != nil {
+		adapted = func(arg0 *int) lisette.Option[*int] {
+			ret, ret_1 := cb(arg0)
+			if ret_1 && ret != nil {
+				return lisette.MakeOptionSome[*int](ret)
+			}
+			return lisette.MakeOptionNone[*int]()
 		}
-		if option.Tag == lisette.OptionSome {
-			return option.SomeVal
-		}
-		return nil
 	}
-	first := stored(&x)
-	if first == nil {
+	stored := adapted
+	subject := stored(&x)
+	if subject.Tag != lisette.OptionSome {
 		panic("stored generic option")
 	}
+	first := subject.SomeVal
 	cb_1 := some[*int]
-	second := consume(func(arg0 *int) *int {
-		ret_2, ret_3 := cb_1(arg0)
-		var option_1 lisette.Option[*int]
-		if ret_3 && ret_2 != nil {
-			option_1 = lisette.MakeOptionSome[*int](ret_2)
-		} else {
-			option_1 = lisette.MakeOptionNone[*int]()
+	var adapted_1 func(*int) lisette.Option[*int]
+	if cb_1 != nil {
+		adapted_1 = func(arg0 *int) lisette.Option[*int] {
+			ret_2, ret_3 := cb_1(arg0)
+			if ret_3 && ret_2 != nil {
+				return lisette.MakeOptionSome[*int](ret_2)
+			}
+			return lisette.MakeOptionNone[*int]()
 		}
-		if option_1.Tag == lisette.OptionSome {
-			return option_1.SomeVal
-		}
-		return nil
-	}, &x)
+	}
+	second := consume(adapted_1, &x)
 	if second == nil {
 		panic("generic option callback")
 	}

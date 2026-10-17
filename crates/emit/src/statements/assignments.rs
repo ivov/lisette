@@ -29,7 +29,7 @@ impl<'a> PlaceOrdering<'a> {
         }
     }
 
-    fn alone() -> Self {
+    pub(crate) fn alone() -> Self {
         Self {
             right_hand_side: None,
             read_twice: false,
@@ -89,12 +89,17 @@ impl Planner<'_> {
                 .field_slot_layout(
                     &expression.get_type(),
                     resolution.declaring_type(),
+                    None,
                     member,
                     ty,
                 )
                 .map(|layout| (ty.clone(), layout)),
             _ => None,
-        };
+        }
+        .or_else(|| {
+            self.go_physical_expression_layout(target)
+                .map(|layout| (target.get_type(), layout))
+        });
 
         // `target = value`. Stage RHS first (so the target capture knows
         // whether RHS produced setup), capture the target, then fold RHS
@@ -103,10 +108,17 @@ impl Planner<'_> {
             .as_ref()
             .and_then(|(_, layout)| self.lower_option_literal_into_layout(value, layout));
         let is_literal_slot = literal_slot.is_some();
+        let origin = if go_field_slot.is_some() {
+            SlotOrigin::Lisette
+        } else {
+            self.function_type_origin(&target.get_type(), SlotOrigin::Lisette)
+        };
         let right_hand_side = literal_slot.unwrap_or_else(|| {
             self.lower_composite_value(
                 value,
-                ExpressionContext::value().with_retired_receiver(target),
+                ExpressionContext::value()
+                    .with_function_slot_origin(origin)
+                    .with_retired_receiver(target),
             )
         });
         let (target_capture, target_place) =

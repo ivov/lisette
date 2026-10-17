@@ -163,7 +163,10 @@ pub(crate) fn tree_binding_statements(
 
         let access_expression = binding.path.render(subject);
 
-        if analyze_inline_candidate_ids(&binding.binding_ids, consumers) == InlineDecision::Inline {
+        if binding.coercion.is_identity()
+            && analyze_inline_candidate_ids(&binding.binding_ids, consumers)
+                == InlineDecision::Inline
+        {
             let composable = binding.path.render(subject);
             let stability = planner.path_read_stability(&composable);
             planner.scope.bind_inline_expr(
@@ -173,6 +176,8 @@ pub(crate) fn tree_binding_statements(
             );
             continue;
         }
+        let (setup, access_expression) = binding.coercion.clone().lower(planner, access_expression);
+        statements.extend(setup);
         let name = planner.claim_block_binding(
             &binding.lisette_name,
             &binding.binding_ids,
@@ -233,6 +238,8 @@ pub(crate) fn tree_assignment_statements(
             .expect("a named alternative binding is registered")
             .clone();
         let access_expression = binding.path.render(SubjectRoot::Var(subject));
+        let (setup, access_expression) = binding.coercion.clone().lower(planner, access_expression);
+        statements.extend(setup);
         statements.push(assign(GoExpression::identifier(name), access_expression));
     }
 }

@@ -13,16 +13,9 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
-	cb := lisette.OptionMap[int, int]
-	f := func(arg0 lisette.Option[int], arg1 func(int) int) (int, bool) {
-		opt := cb(arg0, arg1)
-		if opt.Tag == lisette.OptionSome {
-			return opt.SomeVal, true
-		}
-		return 0, false
-	}
-	x := lisette.OptionFromCommaOk[int](f(lisette.MakeOptionSome(1), func(v int) int {
+	f := lisette.OptionMap[int, int]
+	x := f(lisette.MakeOptionSome(1), func(v int) int {
 		return v + 1
-	}))
+	})
 	_ = x
 }

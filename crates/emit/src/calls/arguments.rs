@@ -4,7 +4,7 @@ use syntax::EcoString;
 
 use crate::Planner;
 use crate::abi::callable::{CallableParamAbi, CallableReturnAbi, LoweredReturnAbi};
-use crate::abi::coercion::{CoercionPlan, resolve_layout_bridge};
+use crate::abi::coercion::{CoercionPlan, LayoutBridge, resolve_layout_bridge};
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
 use crate::context::expression::ExpressionContext;
@@ -15,8 +15,7 @@ use crate::plan::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, assign, define,
 };
 use crate::plan::calls::{
-    ArgumentPlan, ArgumentSlotBridge, ArgumentValueSource, CallPlan, CallableOrigin,
-    FunctionArgumentAdapter, ResolvedCallee,
+    ArgumentPlan, ArgumentSlotBridge, ArgumentValueSource, CallPlan, CallableOrigin, ResolvedCallee,
 };
 use crate::plan::values::{CaptureBoundary, GoExpression, SequencedValues, ValuePlan};
 use syntax::ast::Expression;
@@ -51,8 +50,8 @@ impl Planner<'_> {
         let stages: Vec<ValuePlan> = leading.into_iter().chain(stages).collect();
         let variadic = ctx.plan.resolved.abi.variadic_param();
         let spread_stage = ctx.spread.map(|spread| {
-            self.lower_variadic_spread_slot_bridge(spread, variadic)
-                .or_else(|| self.try_emit_variadic_spread_adapter(spread, variadic))
+            self.try_emit_variadic_spread_adapter(spread, variadic)
+                .or_else(|| self.lower_variadic_spread_slot_bridge(spread, variadic))
                 .unwrap_or_else(|| self.plan_operand(spread, ExpressionContext::value()))
         });
         self.sequence_with_spread_values(
@@ -89,9 +88,6 @@ impl Planner<'_> {
                 source,
                 target,
             ),
-            ArgumentPlan::LoweredFnShapeAdapter(adapter) => {
-                self.lower_function_argument_adapter(arg, adapter)
-            }
             ArgumentPlan::GoSlotBridge(bridge) => self.lower_go_slot_bridge(arg, bridge),
             ArgumentPlan::TaggedGoLowering(adapter) => {
                 let arg_ctx = self.direct_arg_emit_ctx(param, true);
@@ -124,9 +120,6 @@ impl Planner<'_> {
                 Some(adapter) => ArgumentPlan::TaggedGoLowering(Box::new(adapter)),
                 None => ArgumentPlan::Direct,
             };
-        }
-        if let Some(adapter) = self.plan_function_argument_adapter(arg, declared_param_ty) {
-            return ArgumentPlan::LoweredFnShapeAdapter(Box::new(adapter));
         }
         if let Some(bridge) = param.and_then(|param| self.plan_argument_slot_bridge(arg, param)) {
             return ArgumentPlan::GoSlotBridge(Box::new(bridge));
@@ -246,92 +239,29 @@ impl Planner<'_> {
             )
     }
 
-    fn plan_function_argument_adapter(
-        &self,
-        arg: &Expression,
-        generic_param_ty: Option<&Type>,
-    ) -> Option<FunctionArgumentAdapter> {
-        if self
-            .resolve_callable_value(arg)
-            .is_some_and(|callee| callee.is_prelude_dispatch)
-        {
-            return None;
-        }
-        let source_follows_param = is_closure_literal(arg) || self.is_go_callable(arg);
-        self.plan_fn_shape_adapter(generic_param_ty?, &arg.get_type(), source_follows_param)
-    }
-
-    /// The adapter a function value needs to fill a slot whose lowered return shape differs.
-    fn plan_fn_shape_adapter(
-        &self,
-        param_ty: &Type,
-        source_ty: &Type,
-        source_follows_param: bool,
-    ) -> Option<FunctionArgumentAdapter> {
-        let param_fn = self
-            .facts
-            .resolve_to_function_type(param_ty.unwrap_forall())?;
-        let param_ret = param_fn.get_function_ret()?;
-        let param_origin = self.function_type_origin(param_ty, SlotOrigin::Lisette);
-        let param_abi = self.slot_return_abi(param_ret, param_origin);
-
-        let source_fn = self
-            .facts
-            .resolve_to_function_type(source_ty.unwrap_forall())?;
-        let source_ret = source_fn.get_function_ret()?;
-        let source_origin = if source_follows_param {
-            param_origin
-        } else {
-            self.function_type_origin(source_ty, SlotOrigin::Lisette)
-        };
-        let source_abi =
-            CallableReturnAbi::Lowered(self.classify_slot_emission(source_ret, source_origin)?);
-
-        (param_abi != source_abi).then_some(FunctionArgumentAdapter {
-            source_function: source_fn,
-            source_abi,
-            target_abi: param_abi,
-            target_origin: param_origin,
-        })
-    }
-
-    fn lower_function_argument_adapter(
-        &mut self,
-        arg: &Expression,
-        adapter: &FunctionArgumentAdapter,
-    ) -> ValuePlan {
-        let FunctionArgumentAdapter {
-            source_function,
-            source_abi,
-            target_abi,
-            target_origin,
-        } = adapter;
-        let argument = self.lower_value(
-            arg,
-            ExpressionContext::value().with_function_slot_origin(*target_origin),
-        );
-        argument.map_expression(|setup, value| {
-            emit_fn_arg_shape_adapter(self, setup, value, source_function, source_abi, target_abi)
-                .expect("argument adapter contains a function signature")
-        })
-    }
-
     fn try_emit_variadic_spread_adapter(
         &mut self,
         spread: &Expression,
         parameter: Option<&CallableParamAbi>,
     ) -> Option<ValuePlan> {
-        let param_ty = parameter?.declared.as_ref()?;
+        if self.go_physical_expression_layout(spread).is_some() {
+            return None;
+        }
+        let parameter = parameter?;
         let element_ty = spread.get_type().unwrap_forall().inner()?;
-        let FunctionArgumentAdapter {
-            source_function: arg_fn,
-            source_abi: arg_abi,
-            target_abi: param_abi,
-            ..
-        } = self.plan_fn_shape_adapter(param_ty, &element_ty, false)?;
-        let arg_ret = arg_fn
-            .get_function_ret()
-            .expect("an adapted source has a function type");
+        let element = self.value_layout(&element_ty, SlotOrigin::Lisette);
+        let LayoutBridge::Function {
+            source: source_layout,
+            target: target_layout,
+        } = resolve_layout_bridge(self, &element, &parameter.layout)
+        else {
+            return None;
+        };
+        if source_layout.return_abi.lowered().is_none()
+            || source_layout.return_abi == target_layout.return_abi
+        {
+            return None;
+        }
 
         let source = self
             .lower_value(spread, ExpressionContext::value())
@@ -340,32 +270,21 @@ impl Planner<'_> {
             });
         let source_variable = source.expression().clone();
 
-        let target_element_ret = self.render_callable_return_ty(&param_abi, arg_ret);
-        let arg_fn_params = arg_fn.get_function_params().unwrap_or(&[]);
-        let param_type_strs: Vec<String> = arg_fn_params
-            .iter()
-            .map(|param| self.use_go_type(&param.ty))
-            .collect();
-        let target_element_ty = format!(
-            "func({}) {}",
-            param_type_strs.join(", "),
-            target_element_ret
-        );
+        let target_element_ty = target_layout.go_type(self);
+        let target_element_ty = self.use_rendered_go_type(target_element_ty);
 
         let adapted = self.fresh_local(Some("adapted"));
         self.declare(&adapted);
         let loop_cb = self.fresh_local(Some("cb"));
-        let index = self.scope.helper_local("i", &self.package);
 
+        let index = self.scope.helper_local("i", &self.package);
         let mut body = Vec::new();
-        let closure = emit_fn_arg_shape_adapter(
-            self,
+        let closure = self.plan_function_layout_bridge(
             &mut body,
             GoExpression::identifier(loop_cb.clone()),
-            &arg_fn,
-            &arg_abi,
-            &param_abi,
-        )?;
+            &source_layout,
+            &target_layout,
+        );
         body.push(assign(
             GoExpression::index(
                 GoExpression::identifier(adapted.clone()),
@@ -448,7 +367,7 @@ impl Planner<'_> {
             ExpressionContext::value().with_forced_tagged_go_function(true),
         );
         argument.map_expression(|setup, value| match source {
-            CallableReturnAbi::Value => {
+            CallableReturnAbi::Value | CallableReturnAbi::Void => {
                 let param_fn_ty = self
                     .facts
                     .resolve_to_function_type(effective_param_ty.unwrap_forall())
@@ -467,45 +386,27 @@ impl Planner<'_> {
         })
     }
 
-    fn argument_source_layout(
-        &self,
-        argument: &Expression,
-        parameter: &CallableParamAbi,
-    ) -> ValueLayout {
-        if is_closure_literal(argument) {
-            let slot_origin = self.function_type_origin(&parameter.instantiated, parameter.origin);
-            self.emitted_value_layout(argument, slot_origin)
-        } else {
-            self.value_layout(&argument.get_type(), SlotOrigin::Lisette)
-        }
-    }
-
     fn plan_argument_slot_bridge(
         &self,
         argument: &Expression,
         parameter: &CallableParamAbi,
     ) -> Option<ArgumentSlotBridge> {
         let physical_source = self.go_physical_expression_layout(argument);
+        if physical_source.is_none()
+            && self
+                .emitted_value_layout(argument, self.direct_arg_emit_ctx(Some(parameter), false))
+                .same_representation(&parameter.layout)
+        {
+            return None;
+        }
         let source = physical_source
             .clone()
-            .unwrap_or_else(|| self.argument_source_layout(argument, parameter));
+            // Slot bridges lower their source in a Lisette value context;
+            // only direct arguments emit a closure into the Go slot itself.
+            .unwrap_or_else(|| self.emitted_value_layout(argument, ExpressionContext::value()));
         let target = parameter.layout.clone();
-        let can_forward_physical = match (&physical_source, &target) {
-            (
-                Some(ValueLayout::Function { layout: source, .. }),
-                ValueLayout::Function { layout: target, .. },
-            ) => {
-                // `lower_value` already converts the function's return values.
-                if source.return_abi != target.return_abi {
-                    return None;
-                }
-                true
-            }
-            (Some(_), _) => true,
-            (None, _) => false,
-        };
         let bridge = resolve_layout_bridge(self, &source, &target);
-        (can_forward_physical || !bridge.is_identity()).then_some(ArgumentSlotBridge {
+        (physical_source.is_some() || !bridge.is_identity()).then_some(ArgumentSlotBridge {
             target,
             bridge,
             source: if physical_source.is_some() {
@@ -521,7 +422,12 @@ impl Planner<'_> {
         argument: &Expression,
         plan: &ArgumentSlotBridge,
     ) -> ValuePlan {
-        if prelude_constructor(argument) == Some(PreludeVariant::None) {
+        if prelude_constructor(argument) == Some(PreludeVariant::None)
+            && matches!(
+                plan.target,
+                ValueLayout::NullableOption { .. } | ValueLayout::PointerOption { .. }
+            )
+        {
             return ValuePlan::evaluated_literal(Vec::new(), "nil".to_string());
         }
         if let Some(literal) = self.lower_option_literal_into_layout(argument, &plan.target) {
@@ -549,7 +455,10 @@ impl Planner<'_> {
         })
     }
 
-    fn go_physical_expression_layout(&self, expression: &Expression) -> Option<ValueLayout> {
+    pub(crate) fn go_physical_expression_layout(
+        &self,
+        expression: &Expression,
+    ) -> Option<ValueLayout> {
         if self.call_target_is_go(expression)
             && let Some(plan) = self.plan_call(expression)
             && matches!(plan.resolved.abi.result, CallableReturnAbi::Value)

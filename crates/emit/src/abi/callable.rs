@@ -1,6 +1,7 @@
 use syntax::types::Type;
 
 use crate::Planner;
+use crate::types::go_type::returns_go_void;
 
 use crate::abi::layout::{FunctionLayout, SlotOrigin, ValueLayout};
 use crate::expressions::staging::VariadicCombine;
@@ -31,6 +32,8 @@ pub(crate) enum OptionReturnAbi {
 /// Physical Go result contract for a callable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CallableReturnAbi {
+    /// No Go result, including a concrete unit or diverging function.
+    Void,
     /// One Go result holding the Lisette value.
     Value,
     Lowered(LoweredReturnAbi),
@@ -54,10 +57,18 @@ pub(crate) enum LoweredReturnAbi {
 }
 
 impl CallableReturnAbi {
+    pub(crate) fn unlowered(return_type: &Type) -> Self {
+        if returns_go_void(return_type) {
+            Self::Void
+        } else {
+            Self::Value
+        }
+    }
+
     pub(crate) fn lowered(&self) -> Option<&LoweredReturnAbi> {
         match self {
             Self::Lowered(lowered) => Some(lowered),
-            Self::Value => None,
+            Self::Void | Self::Value => None,
         }
     }
 
@@ -73,6 +84,7 @@ impl CallableReturnAbi {
     pub(crate) fn same_logical_contract(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Lowered(left), Self::Lowered(right)) => left.same_logical_contract(right),
+            (Self::Void | Self::Value, Self::Void | Self::Value) => true,
             _ => self == other,
         }
     }

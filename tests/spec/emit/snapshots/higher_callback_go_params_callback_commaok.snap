@@ -1,0 +1,46 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:sort"
+  fn give<T>(f:fn(int,fn(int)->int)->T)->fn(int,fn(int)->int)->T{f}
+  fn main(){let mut calls=0;let f=give(sort.Find);let Some(n)=f(5,|i|{calls+=1;2-i}) else {panic("none")};if n!=2 || calls<1{panic("search")};if f(5,|_|1).is_some(){panic("missing")}}
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"sort"
+)
+
+func give[T any](f func(int, func(int) int) T) func(int, func(int) int) T {
+	return f
+}
+
+func main() {
+	calls := 0
+	cb := sort.Find
+	var adapted func(int, func(int) int) lisette.Option[int]
+	if cb != nil {
+		adapted = func(arg0 int, arg1 func(int) int) lisette.Option[int] {
+			return lisette.OptionFromCommaOk[int](cb(arg0, arg1))
+		}
+	}
+	f := give(adapted)
+	subject := f(5, func(i int) int {
+		calls++
+		return 2 - i
+	})
+	if subject.Tag != lisette.OptionSome {
+		panic("none")
+	}
+	n := subject.SomeVal
+	if n != 2 || calls < 1 {
+		panic("search")
+	}
+	if f(5, func(_ int) int {
+		return 1
+	}).IsSome() {
+		panic("missing")
+	}
+}

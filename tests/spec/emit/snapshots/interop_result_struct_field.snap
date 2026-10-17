@@ -17,16 +17,21 @@ description: |
 ---
 package main
 
-import "strconv"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
 
 type Parser struct {
-	parse func(string) (int, error)
+	parse func(string) lisette.Result[int, error]
 }
 
 func main() {
-	p := Parser{parse: strconv.Atoi}
-	r, err := p.parse("42")
-	if err == nil {
-		_ = r
+	p := Parser{parse: func(arg0 string) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](strconv.Atoi(arg0))
+	}}
+	r := p.parse("42")
+	if r.Tag == lisette.ResultOk {
+		_ = r.OkVal
 	}
 }

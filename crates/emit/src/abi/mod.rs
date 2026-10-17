@@ -5,6 +5,7 @@ pub(crate) mod layout;
 pub(crate) mod transition;
 
 use crate::Planner;
+use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::names::go_name::PRELUDE_ERROR_ID;
 use crate::types::go_type::GoType;
@@ -30,8 +31,23 @@ pub(crate) fn go_payload_layout(return_ty: &Type) -> PayloadLayout {
 impl Planner<'_> {
     /// Natural physical ABI of a Lisette-authored callable return.
     pub(crate) fn callable_return_abi(&self, return_ty: &Type) -> CallableReturnAbi {
-        self.classify_direct_emission(return_ty)
-            .map_or(CallableReturnAbi::Value, CallableReturnAbi::Lowered)
+        self.classify_direct_emission(return_ty).map_or_else(
+            || CallableReturnAbi::unlowered(return_ty),
+            CallableReturnAbi::Lowered,
+        )
+    }
+
+    /// A method keeps Go's `(T, error)` for `Partial`, so the type itself
+    /// satisfies Go interfaces such as `io.Reader`. Go's pair cannot tell
+    /// `Err(e)` from `Both(zero, e)`, so a non-nilable payload reads back as `Both`.
+    pub(crate) fn method_return_abi(&self, return_ty: &Type) -> CallableReturnAbi {
+        let peeled = self.facts.peel_alias(return_ty);
+        if peeled.is_partial() && self.err_slot_is_nilable(&peeled) {
+            return CallableReturnAbi::Lowered(LoweredReturnAbi::Partial {
+                payload: PayloadLayout::Packed,
+            });
+        }
+        self.callable_return_abi(return_ty)
     }
 
     pub(crate) fn slot_return_abi(
@@ -39,38 +55,72 @@ impl Planner<'_> {
         return_ty: &Type,
         origin: SlotOrigin,
     ) -> CallableReturnAbi {
-        self.classify_slot_emission(return_ty, origin)
-            .map_or(CallableReturnAbi::Value, CallableReturnAbi::Lowered)
+        // Go code that receives a function as `any` sees its direct Go
+        // signature, the same one a Lisette function declaration has.
+        if matches!(origin, SlotOrigin::GoAny) {
+            return self.classify_direct_emission(return_ty).map_or_else(
+                || CallableReturnAbi::unlowered(return_ty),
+                CallableReturnAbi::Lowered,
+            );
+        }
+        // Internal callback storage must have the same type before and after
+        // generic instantiation, including unit and container results.
+        if !origin.declared_by_go() {
+            return CallableReturnAbi::Value;
+        }
+        self.classify_slot_emission(return_ty, origin).map_or_else(
+            || CallableReturnAbi::unlowered(return_ty),
+            CallableReturnAbi::Lowered,
+        )
+    }
+
+    pub(crate) fn function_expression_return_abi(
+        &self,
+        return_ty: &Type,
+        ctx: ExpressionContext<'_>,
+    ) -> CallableReturnAbi {
+        if ctx.forces_tagged_go_function() || ctx.result_fills_type_parameter() {
+            CallableReturnAbi::Value
+        } else {
+            self.slot_return_abi(return_ty, ctx.function_slot_origin())
+        }
     }
 
     /// A Go-named function type renders as its Go name, so a value of that
     /// type has Go's shape in any slot.
     pub(crate) fn function_type_origin(&self, fn_ty: &Type, origin: SlotOrigin) -> SlotOrigin {
-        if origin.declared_by_go() || !self.is_go_named_function_type(fn_ty) {
+        if origin.declared_by_go() {
             origin
-        } else {
+        } else if self.is_go_named_function_type(fn_ty) {
             SlotOrigin::GoParameter
+        } else if let Some(target) = self.facts.alias_declaration(fn_ty) {
+            self.function_type_origin(target, origin)
+        } else {
+            origin
         }
     }
 
-    fn is_go_named_function_type(&self, ty: &Type) -> bool {
+    pub(crate) fn is_go_named_function_type(&self, ty: &Type) -> bool {
         matches!(ty.unwrap_forall(), Type::Nominal { id, .. } if go_name::is_go_import(id))
             && self.facts.resolve_to_function_type(ty).is_some()
     }
 
-    /// A function value's layout as emitted into a slot at `slot_origin`.
-    /// A closure literal returns in the slot's ABI but keeps Lisette value slots.
+    /// A composite value's layout after context-directed function emission.
     pub(crate) fn emitted_value_layout(
         &self,
         value: &Expression,
-        slot_origin: SlotOrigin,
+        ctx: ExpressionContext<'_>,
     ) -> ValueLayout {
         let ty = value.get_type();
-        if self.is_go_callable(value) {
-            return self.value_layout(&ty, slot_origin);
-        }
-        let layout = self.value_layout(&ty, SlotOrigin::Lisette);
-        if !is_closure_literal(value) {
+        let slot_origin = ctx.function_slot_origin();
+        let origin = if self.is_go_callable(value) {
+            slot_origin
+        } else {
+            SlotOrigin::Lisette
+        };
+        let layout = self.value_layout(&ty, origin);
+        let closure = is_closure_literal(value);
+        if !closure && !ctx.result_fills_type_parameter() {
             return layout;
         }
         let ValueLayout::Function {
@@ -80,15 +130,16 @@ impl Planner<'_> {
         else {
             return layout;
         };
-        let result = self.value_layout(&layout.result_type, SlotOrigin::Lisette);
-        let return_abi = self.slot_return_abi(&layout.result_type, slot_origin);
+        let result_type = &layout.result_type;
+        let result = self.value_layout(result_type, SlotOrigin::Lisette);
+        let return_abi = self.function_expression_return_abi(result_type, ctx);
         ValueLayout::Function {
             function_type,
             layout: self.function_layout(layout.parameters, &result, return_abi, None),
         }
     }
 
-    /// Non-identity for e.g. a Lisette `fn` bound to a Go-named function type.
+    /// Named function slots retain their declaration's physical signature.
     pub(crate) fn function_slot_bridge(
         &self,
         value: &Expression,
@@ -97,7 +148,10 @@ impl Planner<'_> {
         let Some(slot_origin) = self.go_function_slot_origin(&value.get_type(), target_ty) else {
             return CoercionPlan::Identity;
         };
-        let source = self.emitted_value_layout(value, slot_origin);
+        let source = self.emitted_value_layout(
+            value,
+            ExpressionContext::value().with_function_slot_origin(slot_origin),
+        );
         let target = self.value_layout(target_ty, slot_origin);
         CoercionPlan::bridge(self, &source, &target)
     }
@@ -115,9 +169,23 @@ impl Planner<'_> {
         CoercionPlan::bridge(self, &source, &target)
     }
 
+    /// The direct Go layout that `any` holds for a function type, with its
+    /// Lisette layout, or `None` when both have the same representation.
+    pub(crate) fn any_slot_function_layouts(
+        &self,
+        ty: &Type,
+    ) -> Option<(ValueLayout, ValueLayout)> {
+        self.facts.resolve_to_function_type(ty)?;
+        let stored = self.value_layout(ty, SlotOrigin::GoAny);
+        let lisette = self.value_layout(ty, SlotOrigin::Lisette);
+        (!stored.same_representation(&lisette)).then_some((stored, lisette))
+    }
+
     fn go_function_slot_origin(&self, value_ty: &Type, target_ty: &Type) -> Option<SlotOrigin> {
         let slot_origin = self.function_type_origin(target_ty, SlotOrigin::Lisette);
-        (slot_origin.declared_by_go()
+        ((slot_origin.declared_by_go()
+            || self.facts.function_alias_declaration(value_ty).is_some()
+            || self.facts.function_alias_declaration(target_ty).is_some())
             && self.facts.resolve_to_function_type(value_ty).is_some()
             && self.facts.resolve_to_function_type(target_ty).is_some())
         .then_some(slot_origin)
@@ -126,7 +194,34 @@ impl Planner<'_> {
     pub(crate) fn value_slot_coercion(&self, value: &Expression, target_ty: &Type) -> CoercionPlan {
         let bridge = self.function_slot_bridge(value, target_ty);
         if bridge.is_identity() {
-            CoercionPlan::internal(self, &value.get_type(), target_ty)
+            let internal = CoercionPlan::internal(self, &value.get_type(), target_ty);
+            if !internal.is_identity() {
+                return internal;
+            }
+            let target = self.value_layout(target_ty, SlotOrigin::Lisette);
+            if matches!(
+                target.underlying(),
+                ValueLayout::TaggedOption { .. }
+                    | ValueLayout::Fallible { .. }
+                    | ValueLayout::Tuple { .. }
+                    | ValueLayout::Reference { .. }
+            ) {
+                let source = self.value_layout(&value.get_type(), SlotOrigin::Lisette);
+                let bridge = CoercionPlan::bridge(self, &source, &target);
+                // References can change a named function type by conversion,
+                // but adapting a copied pointee would lose storage identity.
+                let reference = matches!(target.underlying(), ValueLayout::Reference { .. });
+                if !bridge.is_identity()
+                    && (!reference
+                        || matches!(
+                            bridge,
+                            CoercionPlan::Layout(coercion::LayoutBridge::Conversion { .. })
+                        ))
+                {
+                    return bridge;
+                }
+            }
+            internal
         } else {
             bridge
         }
@@ -138,6 +233,12 @@ impl Planner<'_> {
         return_ty: &Type,
         origin: SlotOrigin,
     ) -> Option<LoweredReturnAbi> {
+        let peeled = self.facts.peel_alias(return_ty);
+        if origin.declared_by_go() && peeled.is_partial() && self.err_slot_is_nilable(&peeled) {
+            return Some(LoweredReturnAbi::Partial {
+                payload: go_payload_layout(&peeled),
+            });
+        }
         let abi = self.classify_direct_emission(return_ty)?;
         Some(if origin.declared_by_go() && abi.payload().is_some() {
             abi.with_payload(go_payload_layout(&self.facts.peel_alias(return_ty)))
@@ -158,11 +259,8 @@ impl Planner<'_> {
                 }
             });
         }
-        if peeled.is_partial() && self.err_slot_is_nilable(&peeled) {
-            return Some(LoweredReturnAbi::Partial {
-                payload: PayloadLayout::Packed,
-            });
-        }
+        // Go's value/error pair cannot distinguish Err from Both(zero, error).
+        // Functions keep Partial tagged; methods and Go slots use the pair.
         if peeled.is_option() {
             let encoding = if self.facts.is_nullable_option(&peeled) {
                 OptionReturnAbi::Nullable

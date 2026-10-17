@@ -18,31 +18,30 @@ func okay[T any](x T) (T, error) {
 	return x, nil
 }
 
-func consume(f func(struct{}) error) bool {
-	err := f(struct{}{})
-	return err == nil
+func consume(f func(struct{}) lisette.Result[struct{}, error]) bool {
+	return f(struct{}{}).IsOk()
 }
 
 func main() {
 	cb := okay[struct{}]
-	if !consume(func(arg0 struct{}) error {
-		result := lisette.ResultFromPair[struct{}](cb(arg0))
-		if result.Tag == lisette.ResultOk {
-			return nil
+	var adapted func(struct{}) lisette.Result[struct{}, error]
+	if cb != nil {
+		adapted = func(arg0 struct{}) lisette.Result[struct{}, error] {
+			return lisette.ResultFromPair[struct{}](cb(arg0))
 		}
-		return result.ErrVal
-	}) {
+	}
+	if !consume(adapted) {
 		panic("generic callback unit result")
 	}
 	cb_1 := okay[struct{}]
-	stored := func(arg0 struct{}) error {
-		result_1 := lisette.ResultFromPair[struct{}](cb_1(arg0))
-		if result_1.Tag == lisette.ResultOk {
-			return nil
+	var adapted_1 func(struct{}) lisette.Result[struct{}, error]
+	if cb_1 != nil {
+		adapted_1 = func(arg0 struct{}) lisette.Result[struct{}, error] {
+			return lisette.ResultFromPair[struct{}](cb_1(arg0))
 		}
-		return result_1.ErrVal
 	}
-	if err := stored(struct{}{}); err != nil {
+	stored := adapted_1
+	if stored(struct{}{}).IsErr() {
 		panic("stored generic unit result")
 	}
 }

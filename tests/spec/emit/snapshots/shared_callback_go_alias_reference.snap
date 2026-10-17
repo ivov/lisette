@@ -1,0 +1,51 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:context"
+  type Cancel = context.CancelFunc
+  type Second = Cancel
+  fn view(f: mut Ref<Second>) -> mut Ref<context.CancelFunc> { f }
+  fn main() {
+   let mut calls = 0
+   let mut original: Second = || { calls += 1 }
+   let mut forwarded = view(&original)
+   forwarded.* = || { calls += 10 }
+   original()
+   if calls != 10 { panic("Go alias reference identity") }
+  }
+---
+package main
+
+import "context"
+
+type Cancel context.CancelFunc
+
+type Second Cancel
+
+func view(f *Second) *context.CancelFunc {
+	return (*context.CancelFunc)(f)
+}
+
+func main() {
+	calls := 0
+	var original Second = func() {
+		calls++
+	}
+	forwarded := view(&original)
+	cb := func() struct{} {
+		calls += 10
+		return struct{}{}
+	}
+	var adapted func()
+	if cb != nil {
+		adapted = func() {
+			cb()
+		}
+	}
+	*forwarded = adapted
+	original()
+	if calls != 10 {
+		panic("Go alias reference identity")
+	}
+}

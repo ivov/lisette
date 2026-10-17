@@ -14,13 +14,65 @@ description: |
 package main
 
 import (
+	"errors"
 	"example.com/ext"
 	lisette "github.com/ivov/lisette/prelude"
 )
 
 func configure(conf *ext.Config) {
-	wrapped := []lisette.Option[func(ext.Config) (ext.Listener, error)]{}
-	for _, listener := range ext.WrapListeners(conf.Listeners) {
+	wrapped := []lisette.Option[func(ext.Config) lisette.Result[ext.Listener, error]]{}
+	raw := conf.Listeners
+	adapted := make([]func(ext.Config) lisette.Result[ext.Listener, error], len(raw))
+	for i, v := range raw {
+		cb := v
+		var adapted_1 func(ext.Config) lisette.Result[ext.Listener, error]
+		if cb != nil {
+			adapted_1 = func(arg0 ext.Config) lisette.Result[ext.Listener, error] {
+				ret, ret_1 := cb(arg0)
+				if ret_1 != nil {
+					return lisette.MakeResultErr[ext.Listener, error](ret_1)
+				} else if lisette.IsNilInterface(ret) {
+					return lisette.MakeResultErr[ext.Listener, error](errors.New("unexpected nil"))
+				}
+				return lisette.MakeResultOk[ext.Listener, error](ret)
+			}
+		}
+		adapted[i] = adapted_1
+	}
+	adapted_2 := make([]func(ext.Config) (ext.Listener, error), len(adapted))
+	for i_1, v_1 := range adapted {
+		cb_1 := v_1
+		var adapted_3 func(ext.Config) (ext.Listener, error)
+		if cb_1 != nil {
+			adapted_3 = func(arg0 ext.Config) (ext.Listener, error) {
+				res := cb_1(arg0)
+				if res.Tag == lisette.ResultOk {
+					return res.OkVal, nil
+				}
+				return nil, res.ErrVal
+			}
+		}
+		adapted_2[i_1] = adapted_3
+	}
+	src := ext.WrapListeners(adapted_2)
+	adapted_4 := make([]func(ext.Config) lisette.Result[ext.Listener, error], len(src))
+	for i_2, v_2 := range src {
+		cb_2 := v_2
+		var adapted_5 func(ext.Config) lisette.Result[ext.Listener, error]
+		if cb_2 != nil {
+			adapted_5 = func(arg0 ext.Config) lisette.Result[ext.Listener, error] {
+				ret_2, ret_3 := cb_2(arg0)
+				if ret_3 != nil {
+					return lisette.MakeResultErr[ext.Listener, error](ret_3)
+				} else if lisette.IsNilInterface(ret_2) {
+					return lisette.MakeResultErr[ext.Listener, error](errors.New("unexpected nil"))
+				}
+				return lisette.MakeResultOk[ext.Listener, error](ret_2)
+			}
+		}
+		adapted_4[i_2] = adapted_5
+	}
+	for _, listener := range adapted_4 {
 		wrapped = append(wrapped, lisette.MakeOptionSome(listener))
 	}
 }

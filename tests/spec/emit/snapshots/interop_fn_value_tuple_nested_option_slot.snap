@@ -24,31 +24,37 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func apply(f func() (lisette.Option[[]lisette.Option[string]], int)) (lisette.Option[[]lisette.Option[string]], int) {
-	return f()
+func apply(f func() lisette.Tuple2[lisette.Option[[]lisette.Option[string]], int]) (lisette.Option[[]lisette.Option[string]], int) {
+	tup := f()
+	return tup.First, tup.Second
 }
 
 func main() {
 	cb := aws.Make
-	xs, n := apply(func() (lisette.Option[[]lisette.Option[string]], int) {
-		ret, ret_1 := cb()
-		var option lisette.Option[[]lisette.Option[string]]
-		if ret != nil {
-			src := *ret
-			wrapped := make([]lisette.Option[string], len(src))
-			for i, v := range src {
-				if v != nil {
-					wrapped[i] = lisette.MakeOptionSome[string](*v)
-				} else {
-					wrapped[i] = lisette.MakeOptionNone[string]()
+	var adapted func() lisette.Tuple2[lisette.Option[[]lisette.Option[string]], int]
+	if cb != nil {
+		adapted = func() lisette.Tuple2[lisette.Option[[]lisette.Option[string]], int] {
+			ret, ret_1 := cb()
+			var option lisette.Option[[]lisette.Option[string]]
+			if ret != nil {
+				src := *ret
+				wrapped := make([]lisette.Option[string], len(src))
+				for i, v := range src {
+					if v != nil {
+						wrapped[i] = lisette.MakeOptionSome[string](*v)
+					} else {
+						wrapped[i] = lisette.MakeOptionNone[string]()
+					}
 				}
+				option = lisette.MakeOptionSome[[]lisette.Option[string]](wrapped)
+			} else {
+				option = lisette.MakeOptionNone[[]lisette.Option[string]]()
 			}
-			option = lisette.MakeOptionSome[[]lisette.Option[string]](wrapped)
-		} else {
-			option = lisette.MakeOptionNone[[]lisette.Option[string]]()
+			tup := lisette.MakeTuple2(option, ret_1)
+			return tup
 		}
-		return option, ret_1
-	})
+	}
+	xs, n := apply(adapted)
 	_ = n
 	if xs.Tag == lisette.OptionSome {
 		for _, x := range xs.SomeVal {

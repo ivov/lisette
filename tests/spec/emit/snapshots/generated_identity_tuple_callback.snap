@@ -32,12 +32,10 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func apply(f func([]byte) (*pem.Block, []byte), data []byte) int {
-	ret_2, ret_3 := f(data)
-	option := lisette.OptionFromNilable[*pem.Block](ret_2, ret_2 == nil)
-	tup := lisette.MakeTuple2(option, ret_3)
-	ret := tup.First
-	ret_1 := tup.Second
+func apply(f func([]byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte], data []byte) int {
+	tmp := f(data)
+	ret := tmp.First
+	ret_1 := tmp.Second
 	if ret.IsSome() {
 		panic("unexpected PEM")
 	}
@@ -50,7 +48,17 @@ func apply(f func([]byte) (*pem.Block, []byte), data []byte) int {
 func main() {
 	cb := 11
 	f := func() int {
-		cb_1 := apply(pem.Decode, []byte{65, 66})
+		cb_2 := pem.Decode
+		var adapted func([]byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte]
+		if cb_2 != nil {
+			adapted = func(arg0 []byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte] {
+				ret, ret_1 := cb_2(arg0)
+				option := lisette.OptionFromNilable[*pem.Block](ret, ret == nil)
+				tup := lisette.MakeTuple2(option, ret_1)
+				return tup
+			}
+		}
+		cb_1 := apply(adapted, []byte{65, 66})
 		ch := make(chan int, 1)
 		lisette.ChannelSend(ch, cb_1)
 		ch_1 := ch

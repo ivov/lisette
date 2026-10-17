@@ -6,4 +6,4 @@ description: |
 ---
 package main
 
-func run(_ func(int)) {}
+func run(_ func(int) struct{}) {}

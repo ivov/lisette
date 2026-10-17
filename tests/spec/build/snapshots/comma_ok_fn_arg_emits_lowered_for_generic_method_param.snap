@@ -10,13 +10,17 @@ type Holder struct {
 	N int
 }
 
-func Holder_Resolve[R any](self Holder, f func(int) (R, bool)) (R, bool) {
-	return f(self.N)
+func Holder_Resolve[R any](self Holder, f func(int) lisette.Option[R]) (R, bool) {
+	v := f(self.N)
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	return *new(R), false
 }
 
 func main() {
-	rez := lisette.OptionFromCommaOk[int](Holder_Resolve(Holder{N: 5}, func(x int) (int, bool) {
-		return x, true
+	rez := lisette.OptionFromCommaOk[int](Holder_Resolve(Holder{N: 5}, func(x int) lisette.Option[int] {
+		return lisette.MakeOptionSome[int](x)
 	}))
 	_ = rez
 }

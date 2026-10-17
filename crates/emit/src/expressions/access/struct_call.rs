@@ -78,15 +78,17 @@ impl Planner<'_> {
         });
 
         let is_go_struct = self.is_go_abi_type(ty);
+        let variant = ctx.enum_ctx.as_ref().map(|ctx| ctx.variant_name.as_str());
 
         let field_slots: Vec<(Option<Type>, Option<ValueLayout>)> = field_assignments
             .iter()
             .map(|f| {
-                let field_ty = self.lookup_struct_field_ty(ty, &f.name);
+                let field_ty = self.lookup_field_ty(ty, variant, &f.name);
                 let value_ty = f.value.get_type();
                 let layout = self.field_slot_layout(
                     ty,
                     None,
+                    variant,
                     &f.name,
                     field_ty.as_ref().unwrap_or(&value_ty),
                 );
@@ -94,7 +96,7 @@ impl Planner<'_> {
             })
             .collect();
         let mut literal_slots = vec![false; field_assignments.len()];
-        let stages: Vec<ValuePlan> = field_assignments
+        let (stages, source_layouts): (Vec<ValuePlan>, Vec<ValueLayout>) = field_assignments
             .iter()
             .zip(&field_slots)
             .zip(&mut literal_slots)
@@ -103,16 +105,20 @@ impl Planner<'_> {
                     && let Some(literal) = self.lower_option_literal_into_layout(&f.value, layout)
                 {
                     *literal_slot = true;
-                    return literal;
+                    return (literal, layout.clone());
                 }
                 let declared = self
-                    .declared_struct_field_ty(ty, &f.name)
+                    .declared_field_ty(ty, variant, &f.name)
                     .map(|(declared, _)| declared);
                 let field_ctx = ExpressionContext::value()
                     .with_generic_result_slot(declared.as_ref(), field_ty.as_ref());
-                self.lower_composite_value(&f.value, field_ctx)
+                let source_layout = self.emitted_value_layout(&f.value, field_ctx);
+                (
+                    self.lower_composite_value(&f.value, field_ctx),
+                    source_layout,
+                )
             })
-            .collect();
+            .unzip();
         let field_evaluations: Vec<bool> = stages.iter().map(|value| !value.can_delay()).collect();
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "field");
         let fields_stability = sequenced.stability;
@@ -122,12 +128,15 @@ impl Planner<'_> {
         let mut fields =
             Vec::with_capacity(field_assignments.len() + usize::from(ctx.enum_ctx.is_some()));
         for (
-            (((f, has_observable_evaluation), mut value), (field_ty, field_layout)),
+            (
+                ((f, has_observable_evaluation), (mut value, source_layout)),
+                (field_ty, field_layout),
+            ),
             literal_slot,
         ) in field_assignments
             .iter()
             .zip(field_evaluations)
-            .zip(emitted_values)
+            .zip(emitted_values.into_iter().zip(source_layouts))
             .zip(field_slots)
             .zip(literal_slots)
         {
@@ -136,11 +145,10 @@ impl Planner<'_> {
             }
             let field_name = self.resolve_struct_call_field_name(&f.name, &ctx);
             value = self.wrap_recursive_enum_field(&mut setup, value, f, &ctx);
-            let value_ty = f.value.get_type();
             value = self.coerce_struct_field(
                 &mut setup,
                 value,
-                &value_ty,
+                &source_layout,
                 field_ty.as_ref(),
                 field_layout.as_ref().filter(|_| !literal_slot),
             );
@@ -221,23 +229,27 @@ impl Planner<'_> {
     /// Apply Go-boundary coercion followed by internal coercion. The Go-boundary
     /// step targets `field_ty` (falling back to `value_ty` when no declared
     /// field exists); the internal step targets `field_ty` only.
-    fn coerce_struct_field(
+    pub(crate) fn coerce_struct_field(
         &mut self,
         statements: &mut Vec<Statement>,
         mut value: GoExpression,
-        value_ty: &Type,
+        source_layout: &ValueLayout,
         field_ty: Option<&Type>,
         field_layout: Option<&ValueLayout>,
     ) -> GoExpression {
         if let Some(field_layout) = field_layout {
-            let source_layout = self.value_layout(value_ty, SlotOrigin::Lisette);
-            let coercion = CoercionPlan::bridge(self, &source_layout, field_layout);
+            let coercion = CoercionPlan::bridge(self, source_layout, field_layout);
             let (coercion_setup, coerced) = coercion.lower(self, value);
             statements.extend(coercion_setup);
             value = coerced;
         }
         if let Some(field_ty) = field_ty {
-            let bridge = self.function_type_slot_bridge(value_ty, field_ty);
+            let value_ty = source_layout.logical_type();
+            let bridge = if field_layout.is_some() {
+                CoercionPlan::Identity
+            } else {
+                self.function_type_slot_bridge(value_ty, field_ty)
+            };
             let coercion = if bridge.is_identity() {
                 CoercionPlan::internal(self, value_ty, field_ty)
             } else {
@@ -310,7 +322,7 @@ impl Planner<'_> {
         field: &str,
         field_ty: &Type,
     ) -> Option<GoExpression> {
-        let layout = self.field_slot_layout(owner, None, field, field_ty)?;
+        let layout = self.field_slot_layout(owner, None, None, field, field_ty)?;
         if !layout_is_map(&layout) {
             return None;
         }

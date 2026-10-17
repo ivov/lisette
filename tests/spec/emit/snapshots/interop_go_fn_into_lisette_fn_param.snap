@@ -31,18 +31,22 @@ func apply(f func() []lisette.Option[string]) []lisette.Option[string] {
 
 func main() {
 	cb := aws.Make
-	xs := apply(func() []lisette.Option[string] {
-		src := cb()
-		wrapped := make([]lisette.Option[string], len(src))
-		for i, v := range src {
-			if v != nil {
-				wrapped[i] = lisette.MakeOptionSome[string](*v)
-			} else {
-				wrapped[i] = lisette.MakeOptionNone[string]()
+	var adapted func() []lisette.Option[string]
+	if cb != nil {
+		adapted = func() []lisette.Option[string] {
+			src := cb()
+			wrapped := make([]lisette.Option[string], len(src))
+			for i, v := range src {
+				if v != nil {
+					wrapped[i] = lisette.MakeOptionSome[string](*v)
+				} else {
+					wrapped[i] = lisette.MakeOptionNone[string]()
+				}
 			}
+			return wrapped
 		}
-		return wrapped
-	})
+	}
+	xs := apply(adapted)
 	for _, x := range xs {
 		if x.Tag == lisette.OptionSome {
 			_ = x.SomeVal

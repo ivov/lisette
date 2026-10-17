@@ -23,27 +23,42 @@ import (
 )
 
 func main() {
-	cb := aws.Read
-	f := func() ([]lisette.Option[string], error) {
-		ret, ret_1 := cb()
-		if ret == nil {
-			return nil, ret_1
-		}
-		wrapped := make([]lisette.Option[string], len(ret))
-		for i, v := range ret {
-			if v != nil {
-				wrapped[i] = lisette.MakeOptionSome[string](*v)
+	f := func() lisette.Partial[[]lisette.Option[string], error] {
+		ret, ret_1 := aws.Read()
+		if ret_1 != nil {
+			if ret == nil {
+				return lisette.MakePartialErr[[]lisette.Option[string], error](ret_1)
 			} else {
-				wrapped[i] = lisette.MakeOptionNone[string]()
+				wrapped := make([]lisette.Option[string], len(ret))
+				for i, v := range ret {
+					if v != nil {
+						wrapped[i] = lisette.MakeOptionSome[string](*v)
+					} else {
+						wrapped[i] = lisette.MakeOptionNone[string]()
+					}
+				}
+				return lisette.MakePartialBoth[[]lisette.Option[string], error](wrapped, ret_1)
 			}
+		} else {
+			wrapped_1 := make([]lisette.Option[string], len(ret))
+			for i_1, v_1 := range ret {
+				if v_1 != nil {
+					wrapped_1[i_1] = lisette.MakeOptionSome[string](*v_1)
+				} else {
+					wrapped_1[i_1] = lisette.MakeOptionNone[string]()
+				}
+			}
+			return lisette.MakePartialOk[[]lisette.Option[string], error](wrapped_1)
 		}
-		return wrapped, ret_1
 	}
-	if xs, e := f(); e == nil {
-		fmt.Println("ok", len(xs))
-	} else if xs == nil {
-		fmt.Println("err", e)
-	} else {
-		fmt.Println("both", len(xs), e)
+	subject := f()
+	switch subject.Tag {
+	case lisette.PartialOk:
+		fmt.Println("ok", len(subject.OkVal))
+	case lisette.PartialBoth:
+		e := subject.ErrVal
+		fmt.Println("both", len(subject.OkVal), e)
+	default:
+		fmt.Println("err", subject.ErrVal)
 	}
 }

@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  type Maybe<T> = Option<fn() -> T>
+  fn source() -> Option<int> { Some(43) }
+  fn inspect(input: Maybe<Option<int>>) {
+    let restored = input.or_else(|| Some(source))
+    match restored {
+      Some(callback) => { if callback().unwrap_or(0) != 43 { panic("or_else callback payload") } },
+      None => panic("or_else missing callback"),
+    }
+  }
+  fn main() { inspect(None) }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Maybe[T any] = lisette.Option[func() T]
+
+func source() (int, bool) {
+	return 43, true
+}
+
+func inspect(input Maybe[lisette.Option[int]]) {
+	restored := input.OrElse(func() lisette.Option[func() lisette.Option[int]] {
+		cb := source
+		var adapted func() lisette.Option[int]
+		if cb != nil {
+			adapted = func() lisette.Option[int] {
+				return lisette.OptionFromCommaOk[int](cb())
+			}
+		}
+		return lisette.MakeOptionSome[func() lisette.Option[int]](adapted)
+	})
+	if restored.Tag == lisette.OptionSome {
+		if restored.SomeVal().UnwrapOr(0) != 43 {
+			panic("or_else callback payload")
+		}
+	} else {
+		panic("or_else missing callback")
+	}
+}
+
+func main() {
+	inspect(lisette.MakeOptionNone[func() lisette.Option[int]]())
+}

@@ -40,6 +40,9 @@ pub(crate) enum BridgeDirection {
 #[derive(Debug, Clone)]
 pub(crate) enum LayoutBridge {
     Identity,
+    Conversion {
+        target: Box<ValueLayout>,
+    },
     UnwrapNullableOption {
         target_payload: Box<ValueLayout>,
         payload: Box<LayoutBridge>,
@@ -49,11 +52,11 @@ pub(crate) enum LayoutBridge {
         payload: Box<LayoutBridge>,
     },
     WrapNullableOption {
-        option_type: Type,
+        target: Box<ValueLayout>,
         payload: Box<LayoutBridge>,
     },
     WrapPointerOption {
-        option_type: Type,
+        target: Box<ValueLayout>,
         payload: Box<LayoutBridge>,
     },
     Reference {
@@ -62,6 +65,14 @@ pub(crate) enum LayoutBridge {
     Function {
         source: Box<FunctionLayout>,
         target: Box<FunctionLayout>,
+    },
+    NilablePayload {
+        target: Box<ValueLayout>,
+        payload: Box<LayoutBridge>,
+    },
+    Immutable {
+        target: Box<ValueLayout>,
+        elements: Vec<LayoutBridge>,
     },
     Aggregate {
         source: Box<ValueLayout>,
@@ -78,7 +89,7 @@ impl LayoutBridge {
 
     pub(crate) fn direction(&self) -> Option<BridgeDirection> {
         match self {
-            Self::Identity => None,
+            Self::Identity | Self::Conversion { .. } => None,
             Self::UnwrapNullableOption { .. } | Self::UnwrapPointerOption { .. } => {
                 Some(BridgeDirection::ToGo)
             }
@@ -86,7 +97,9 @@ impl LayoutBridge {
                 Some(BridgeDirection::FromGo)
             }
             Self::Reference { pointee } => pointee.direction(),
+            Self::NilablePayload { payload, .. } => payload.direction(),
             Self::Function { .. } => None,
+            Self::Immutable { elements, .. } => elements.iter().find_map(LayoutBridge::direction),
             Self::Aggregate { key, element, .. } => key
                 .as_deref()
                 .and_then(LayoutBridge::direction)
@@ -101,6 +114,10 @@ impl CoercionPlan {
             Self::Identity
         } else if let Some(plan) = planner.needs_adapter(from, to) {
             Self::WrapAsInterface(plan)
+        } else if planner.facts.is_interface_or_unknown(to)
+            && let Some((stored, lisette)) = planner.any_slot_function_layouts(from)
+        {
+            Self::bridge(planner, &lisette, &stored)
         } else if needs_newtype_wrap(planner, from, to) {
             Self::WrapNewtype { ty: to.clone() }
         } else if let Some(rebuild) = aggregate_rebuild(planner, from, to) {
@@ -259,8 +276,31 @@ pub(crate) fn resolve_layout_bridge(
     }
 
     use ValueLayout::{
-        Array, Function, Map, Named, NullableOption, PointerOption, Reference, Slice, TaggedOption,
+        Array, Fallible, Function, Map, Named, NullableOption, PointerOption, Reference, Slice,
+        TaggedOption, Tuple,
     };
+
+    if let (
+        Function {
+            layout: source_layout,
+            ..
+        },
+        Function {
+            layout: target_layout,
+            ..
+        },
+    ) = (source.underlying(), target.underlying())
+        && source_layout.same_representation(target_layout)
+    {
+        // Go assigns an unnamed function to the same underlying signature.
+        // Two defined function types require an explicit conversion.
+        if source.function_name().is_none() || target.function_name().is_none() {
+            return LayoutBridge::Identity;
+        }
+        return LayoutBridge::Conversion {
+            target: Box::new(target.clone()),
+        };
+    }
 
     match (source, target) {
         (
@@ -303,11 +343,11 @@ pub(crate) fn resolve_layout_bridge(
                 ..
             },
             TaggedOption {
-                option_type,
                 payload: target_payload,
+                ..
             },
         ) => LayoutBridge::WrapNullableOption {
-            option_type: option_type.clone(),
+            target: Box::new(target.clone()),
             payload: Box::new(resolve_layout_bridge(
                 planner,
                 source_payload,
@@ -320,11 +360,11 @@ pub(crate) fn resolve_layout_bridge(
                 ..
             },
             TaggedOption {
-                option_type,
                 payload: target_payload,
+                ..
             },
         ) => LayoutBridge::WrapPointerOption {
-            option_type: option_type.clone(),
+            target: Box::new(target.clone()),
             payload: Box::new(resolve_layout_bridge(
                 planner,
                 source_payload,
@@ -343,9 +383,93 @@ pub(crate) fn resolve_layout_bridge(
                 payload: Box::new(resolve_layout_bridge(planner, source_payload, target)),
             }
         }
-        (Function { layout: source, .. }, Function { layout: target, .. })
-            if source.return_abi.same_logical_contract(&target.return_abi) =>
-        {
+        (
+            TaggedOption {
+                payload: source_payload,
+                ..
+            },
+            TaggedOption {
+                payload: target_payload,
+                ..
+            },
+        ) => LayoutBridge::Immutable {
+            target: Box::new(target.clone()),
+            elements: vec![resolve_layout_bridge(
+                planner,
+                source_payload,
+                target_payload,
+            )],
+        },
+        (
+            Fallible {
+                payload: source_payload,
+                error: source_error,
+                ..
+            },
+            Fallible {
+                payload: target_payload,
+                error: target_error,
+                ..
+            },
+        ) => LayoutBridge::Immutable {
+            target: Box::new(target.clone()),
+            elements: vec![
+                resolve_layout_bridge(planner, source_payload, target_payload),
+                resolve_layout_bridge(planner, source_error, target_error),
+            ],
+        },
+        (
+            Tuple {
+                elements: source_elements,
+                ..
+            },
+            Tuple {
+                elements: target_elements,
+                ..
+            },
+        ) => {
+            assert_eq!(
+                source_elements.len(),
+                target_elements.len(),
+                "tuple layout bridge preserves arity"
+            );
+            LayoutBridge::Immutable {
+                target: Box::new(target.clone()),
+                elements: source_elements
+                    .iter()
+                    .zip(target_elements)
+                    .map(|(source, target)| resolve_layout_bridge(planner, source, target))
+                    .collect(),
+            }
+        }
+        (
+            NullableOption {
+                payload: source_payload,
+                ..
+            },
+            NullableOption {
+                payload: target_payload,
+                ..
+            },
+        )
+        | (
+            PointerOption {
+                payload: source_payload,
+                ..
+            },
+            PointerOption {
+                payload: target_payload,
+                ..
+            },
+        ) => LayoutBridge::NilablePayload {
+            target: Box::new(target.clone()),
+            payload: Box::new(resolve_layout_bridge(
+                planner,
+                source_payload,
+                target_payload,
+            )),
+        },
+        (Function { layout: source, .. }, Function { layout: target, .. }) => {
             LayoutBridge::Function {
                 source: Box::new(source.clone()),
                 target: Box::new(target.clone()),
@@ -361,6 +485,21 @@ pub(crate) fn resolve_layout_bridge(
                 ..
             },
         ) => {
+            if let (
+                Function { layout: source, .. },
+                Function {
+                    layout: target_layout,
+                    ..
+                },
+            ) = (source_pointee.underlying(), target_pointee.underlying())
+                && source.same_representation(target_layout)
+            {
+                // A pointer conversion changes only the named function type,
+                // keeping both references attached to the same mutable slot.
+                return LayoutBridge::Conversion {
+                    target: Box::new(target.clone()),
+                };
+            }
             let pointee = resolve_layout_bridge(planner, source_pointee, target_pointee);
             if pointee.is_identity() {
                 LayoutBridge::Identity
@@ -506,7 +645,12 @@ fn aggregate_rebuild(planner: &Planner<'_>, from: &Type, to: &Type) -> Option<Co
 }
 
 fn widening_element_plan(planner: &Planner<'_>, from: &Type, to: &Type) -> Option<CoercionPlan> {
-    let plan = CoercionPlan::internal(planner, from, to);
+    let bridge = planner.function_type_slot_bridge(from, to);
+    let plan = if bridge.is_identity() {
+        CoercionPlan::internal(planner, from, to)
+    } else {
+        bridge
+    };
     (from != to && (planner.facts.is_interface_or_unknown(to) || !plan.is_identity()))
         .then_some(plan)
 }

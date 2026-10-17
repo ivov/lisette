@@ -1,0 +1,54 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:reflect"
+  fn give<T>(f:fn(Unknown)->T)->fn(Unknown)->T{f}
+  fn main(){let mut xs=[1,2];let f=give(reflect.Swapper);let Some(swap)=f(xs) else {panic("none")};swap(0,1);if xs[0]!=2 || xs[1]!=1{panic("swap")}}
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"reflect"
+)
+
+func give[T any](f func(any) T) func(any) T {
+	return f
+}
+
+func main() {
+	xs := []int{1, 2}
+	cb := reflect.Swapper
+	var adapted_1 func(any) lisette.Option[func(int, int) struct{}]
+	if cb != nil {
+		adapted_1 = func(arg0 any) lisette.Option[func(int, int) struct{}] {
+			raw := cb(arg0)
+			var option lisette.Option[func(int, int) struct{}]
+			if raw != nil {
+				cb_1 := raw
+				var adapted func(int, int) struct{}
+				if cb_1 != nil {
+					adapted = func(arg0, arg1 int) struct{} {
+						cb_1(arg0, arg1)
+						return struct{}{}
+					}
+				}
+				option = lisette.MakeOptionSome[func(int, int) struct{}](adapted)
+			} else {
+				option = lisette.MakeOptionNone[func(int, int) struct{}]()
+			}
+			return option
+		}
+	}
+	f := give(adapted_1)
+	subject := f(xs)
+	if subject.Tag != lisette.OptionSome {
+		panic("none")
+	}
+	swap := subject.SomeVal
+	swap(0, 1)
+	if xs[0] != 2 || xs[1] != 1 {
+		panic("swap")
+	}
+}

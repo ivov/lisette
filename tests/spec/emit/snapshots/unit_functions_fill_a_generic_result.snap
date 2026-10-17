@@ -56,19 +56,12 @@ func test() {
 		return struct{}{}
 	})
 	total := 0
-	add := func(n int) {
+	add := func(n int) struct{} {
 		record(&total, n)
+		return struct{}{}
 	}
-	cb := add
-	apply(3, func(arg0 int) struct{} {
-		cb(arg0)
-		return struct{}{}
-	})
-	cb_1 := add
-	holder := Holder[struct{}]{f: func(arg0 int) struct{} {
-		cb_1(arg0)
-		return struct{}{}
-	}}
+	apply(3, add)
+	holder := Holder[struct{}]{f: add}
 	holder.f(4)
 	if calls != 3 || total != 7 {
 		panic(fmt.Sprintf("calls=%d total=%d", calls, total))

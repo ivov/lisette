@@ -9,10 +9,10 @@ package main
 
 import "fmt"
 
-type Cb func(int)
+type Cb func(int) struct{}
 
 func (c Cb) String() string {
-	return fmt.Sprintf("Cb(%p)", (func(int))(c))
+	return fmt.Sprintf("Cb(%p)", (func(int) struct{})(c))
 }
 
 func (c Cb) toString() string {

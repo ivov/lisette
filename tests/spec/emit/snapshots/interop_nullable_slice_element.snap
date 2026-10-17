@@ -21,9 +21,11 @@ import (
 )
 
 func main() {
-	arr := []func(string) *flag.Flag{flag.Lookup}
-	raw := arr[0]("verbose")
-	r := lisette.OptionFromNilable[*flag.Flag](raw, raw == nil)
+	arr := []func(string) lisette.Option[*flag.Flag]{func(arg0 string) lisette.Option[*flag.Flag] {
+		raw := flag.Lookup(arg0)
+		return lisette.OptionFromNilable[*flag.Flag](raw, raw == nil)
+	}}
+	r := arr[0]("verbose")
 	if r.Tag == lisette.OptionSome {
 		_ = r.SomeVal
 	}

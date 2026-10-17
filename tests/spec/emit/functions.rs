@@ -4330,3 +4330,795 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn alias_void_interface_u_direct_generic() {
+    let input = r#"
+type U = ()
+interface Action { fn Run() -> U }
+struct Counter { n: mut Ref<int> }
+impl Counter { fn Run(self: mut Ref<Counter>) -> U { self.n.* += 1; () } }
+fn apply<T>(f: fn() -> T) -> T { f() }
+fn main() {
+ let mut n = 0
+ let mut c = Counter { n: &n }
+ let action = &c as Action
+ let _ = apply(action.Run)
+ if n != 1 { panic("direct generic interface method count") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn scalar_fn_option_reference() {
+    let input = r#"
+struct Holder<T, U> { f: fn(T) -> U }
+fn some<T>(x: T) -> Option<T> { Some(x) }
+fn main() {
+  let x = 3
+  let mut holder: Holder<Ref<int>, Option<Ref<int>>> = Holder { f: some }
+  let Some(a) = holder.f(&x) else { panic("field call") }
+  let stored = holder.f
+  let Some(b) = stored(&x) else { panic("stored field") }
+  holder.f = some
+  let Some(c) = holder.f(&x) else { panic("assigned field") }
+  if a != &x || b != &x || c != &x { panic("field payloads") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn signature_generic_factory_capture_option() {
+    let input = r#"
+fn check(ok:bool){if !ok {panic("assertion failed")}}
+fn make<T>(value:T)->fn()->T { || value }
+fn main(){let f=make(Some(5));let v=f();check(v.unwrap_or(0)==5)}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn higher_callback_variadic_tuple() {
+    let input = r#"
+fn first<T>(fs: VarArgs<fn(fn(int) -> T) -> T>) -> fn(fn(int) -> T) -> T { fs[0] }
+fn invoke(f: fn(int) -> (int, int)) -> (int, int) { f(4) }
+fn main() {
+ let f = first<(int, int)>([invoke]...)
+ let (a,b) = f(|x| (x,x+1))
+ if a != 4 || b != 5 { panic("tuple") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn higher_callback_go_params_callback_commaok() {
+    let input = r#"
+import "go:sort"
+fn give<T>(f:fn(int,fn(int)->int)->T)->fn(int,fn(int)->int)->T{f}
+fn main(){let mut calls=0;let f=give(sort.Find);let Some(n)=f(5,|i|{calls+=1;2-i}) else {panic("none")};if n!=2 || calls<1{panic("search")};if f(5,|_|1).is_some(){panic("missing")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn higher_callback_go_params_callback_named_error() {
+    let input = r#"
+import "go:path/filepath"
+fn give<T>(f:fn(string,filepath.WalkFunc)->T)->fn(string,filepath.WalkFunc)->T{f}
+fn main(){let mut calls=0;let f=give(filepath.Walk);let cb:filepath.WalkFunc=|_,_,_|{calls+=1;Ok(())};if f("/__lisette_nonexistent_callback_review__",cb).is_err(){panic("walk")};if calls!=1{panic("calls")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn higher_callback_go_params_nullable_cookiejar() {
+    let input = r#"
+import "go:net/http/cookiejar"
+fn give<T>(f:fn(Option<Ref<cookiejar.Options>>)->T)->fn(Option<Ref<cookiejar.Options>>)->T{f}
+fn main(){let f=give(cookiejar.New);if f(None).is_err(){panic("none")};let opts=cookiejar.Options{PublicSuffixList:None};if f(Some(&opts)).is_err(){panic("some")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn higher_callback_go_params_optional_fn_result() {
+    let input = r#"
+import "go:reflect"
+fn give<T>(f:fn(Unknown)->T)->fn(Unknown)->T{f}
+fn main(){let mut xs=[1,2];let f=give(reflect.Swapper);let Some(swap)=f(xs) else {panic("none")};swap(0,1);if xs[0]!=2 || xs[1]!=1{panic("swap")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn container_go_split_containers_spaced() {
+    let input = r#"
+import "go:bufio"
+struct Pair(bufio.SplitFunc,int)
+fn main(){let s:Slice<bufio.SplitFunc> =[bufio.ScanWords];let a:Array<bufio.SplitFunc,1> =[bufio.ScanWords];let m:Map<string,bufio.SplitFunc> =Map.from([("f",bufio.ScanWords)]);let t:(bufio.SplitFunc,int)=(bufio.ScanWords,1);let p=Pair(bufio.ScanWords,1);let Some(mf)=m.get("f") else {panic("map")};for f in [s[0],a[0],mf,t.0,p.0]{let Ok((n,token))=f([65,32],true) else {panic("split")};if n!=2||token.length()!=1||token[0]!=65{panic("split result")}}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pattern_callback_or() {
+    let input = r#"
+enum E<T>{A(fn()->T),B(fn()->T)}
+fn make<T>(f:fn()->T,first:bool)->E<T>{if first{E.A(f)}else{E.B(f)}}
+fn main(){let n=7;let mut calls=0;for first in [true,false]{let e=make(||{calls+=1;Some(&n)},first);let E.A(f)|E.B(f)=e else{panic("variant")};let Some(p)=f() else{panic("none")};if p.*!=7{panic("value")}};if calls!=2{panic("calls")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pattern_tuple_scalar() {
+    let input = r#"
+struct H<T>(fn() -> T)
+fn make<T>(x:T) -> H<T> { H(|| x) }
+fn main() { let n=5; let H(f) = make(Some(&n)); let Some(p)=f() else { panic("inner") }; if p!=&n { panic("pointer") } }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pattern_go_nullable_none() {
+    let input = r#"
+import "go:runtime/debug"
+fn main(){let outer=debug.Module{Path:"outer",Version:"",Sum:"",Replace:None};let debug.Module{Replace:None,..}=outer else{panic("some")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pattern_go_nullable_callback_as_guard() {
+    let input = r#"
+import "go:crypto/tls"
+import "go:time"
+fn main(){let mut calls=0;let h=tls.Config{Time:Some(||{calls+=1;time.Unix(7,0)}),..};match h{tls.Config{Time:Some(f) as opt,..} if opt.is_some()=>{if f().Unix()!=7{panic("time")};let Some(g)=opt else{panic("none")};let _=g()},_=>panic("missing")};if calls!=2{panic("callback")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pattern_go_nullable_nested_or() {
+    let input = r#"
+import "go:runtime/debug"
+fn main(){let mut child=debug.Module{Path:"child",..};let h=debug.Module{Replace:Some(&child),..};let out=match (h,7){(debug.Module{Replace:Some(r),..},0)|(debug.Module{Replace:Some(r),..},7)=>r.Path,_=>"none"};if out!="child"{panic("or")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn container_declaration_alias_tuple_projection() {
+    let input = r#"
+fn use_f(f:fn(int)->()){f(3)}
+type P<T> = (fn(int)->T,int)
+fn make<T>(f:fn(int)->T)->P<T>{(f,7)}
+fn main(){let mut n=0;let p=make(|x|{n+=x});let f=p.0;use_f(f);if n!=3||p.1!=7{panic("count")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn container_declaration_review_r18_ref_receiver_before_argument() {
+    let input = r#"
+type Maybe<T> = Option<fn() -> Option<T>>
+fn main() {
+ let mut calls = 0
+ let mut a: Maybe<fn() -> int> = Some(|| Some(|| 743))
+ let r = &a
+ let change = || { calls += 1; a = Some(|| Some(|| 751)); 0 }
+ let n = r.map_or(change(), |f| { let Some(g) = f() else { panic("inner") }; g() })
+ verify(n == 743 && calls == 1)
+ let Some(f) = a else { panic("outer") }
+ let Some(g) = f() else { panic("inner") }
+ verify(g() == 751)
+}
+fn verify(ok: bool) { if !ok { panic("assertion failed") } }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn return_declaration_review_nested_storage() {
+    let input = r#"
+import "go:errors"
+type F<T> = fn(int) -> T
+type Nested<T> = (Option<F<T>>, Result<F<T>, string>)
+type Alias<T> = Nested<T>
+struct Box<T> { value: Alias<T> }
+fn check(ok: bool) { if !ok { panic("runtime assertion failed") } }
+fn source(n: int) -> Result<int, error> { if n > 0 { Ok(n + 1) } else { Err(errors.New("fail")) } }
+fn make(n: int) -> Alias<Result<int, error>> { if n == 0 { return (None, Err("none")) }; (Some(source), Ok(|x| source(x))) }
+fn forward(x: Alias<Result<int, error>>) -> Nested<Result<int, error>> { x }
+fn boxed(b: Box<Result<int, error>>) -> Alias<Result<int, error>> { b.value }
+fn main() {
+  let empty = make(0)
+  let (none, err) = empty
+  let None = none else { panic("expected none") }
+  let Err(text) = err else { panic("expected err") }
+  check(text == "none")
+  let pair = make(1)
+  let stored = Box { value: pair }
+  let (o, r) = forward(boxed(stored))
+  let Some(f) = o else { panic("missing f") }
+  let Ok(g) = r else { panic("missing g") }
+  check(f(5).unwrap_or(0) == 6)
+  check(g(8).unwrap_or(0) == 9)
+  check(f(0).is_err())
+  check(g(0).is_err())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn return_declaration_review_fallible_return_flow() {
+    let input = r#"
+import "go:errors"
+type F<T> = fn(int) -> T
+type R = Result<F<Option<int>>, error>
+type O = Option<F<Option<int>>>
+fn check(ok: bool) { if !ok { panic("runtime assertion failed") } }
+fn source(n: int) -> Option<int> { if n > 0 { Some(n) } else { None } }
+fn int_result(n: int) -> Result<int, error> { if n == 0 { Err(errors.New("empty")) } else { Ok(n) } }
+fn make_r(n: int) -> R { let _ = int_result(n)?; Ok(source) }
+fn make_o(n: int) -> O { let _ = source(n)?; Some(source) }
+fn try_r(n: int) -> R { try { let _ = int_result(n)?; source } }
+fn try_o(n: int) -> O { try { let _ = source(n)?; source } }
+fn main() {
+  let Ok(r) = make_r(1) else { panic("missing result") }
+  check(r(2).unwrap_or(0) == 2)
+  let Some(o) = make_o(1) else { panic("missing option") }
+  check(o(3).unwrap_or(0) == 3)
+  let Ok(tr) = try_r(1) else { panic("missing try result") }
+  check(tr(4).unwrap_or(0) == 4)
+  let Some(to) = try_o(1) else { panic("missing try option") }
+  check(to(5).unwrap_or(0) == 5)
+  let Err(_) = make_r(0) else { panic("expected result failure") }
+  let None = make_o(0) else { panic("expected option failure") }
+  let Err(_) = try_r(0) else { panic("expected try result failure") }
+  let None = try_o(0) else { panic("expected try option failure") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn reference_storage_field_unit_ref_alias_mutation() {
+    let input = r#"
+struct H<T> { f: fn(int) -> T }
+fn replace<T>(f: mut Ref<fn(int) -> T>, replacement: fn(int) -> T) { f.* = replacement }
+fn main() { let mut n = 0
+ let mut h: H<()> = H { f: |x| { n += x } }
+ replace<()>( &h.f, |x| { n += 10 * x } )
+ h.f(3)
+ if n != 30 { panic("reference alias") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn reference_storage_generic_ref_identity() {
+    let input = r#"
+fn check(ok:bool){if !ok {panic("assertion failed")}}
+fn id<T>(f:T)->T { f }
+fn main(){let mut f=|x:int| (x,x+1); let mut r=id(&f); r.* = |x:int| (x+2,x+3); let p=f(4); check(p.0==6 && p.1==7)}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn reference_storage_index_order() {
+    let input = r#"
+fn index(calls: mut Ref<int>) -> int { calls.* += 1; 0 }
+fn main() {
+ let mut n = 0
+ let mut calls = 0
+ let mut fs: mut Slice<fn()> = [|| { n += 1 }]
+ let mut r = &fs[index(&calls)]
+ r.* = || { n += 10 }
+ fs[0]()
+ if n != 10 || calls != 1 { panic("indexed storage evaluation") }
+ let saved = &fs[0]
+ fs[0] = || { n += 100 }
+ saved.*()
+ if n != 110 { panic("replacement visibility") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn reference_storage_reference_function_field_storage() {
+    let input = r#"
+struct H{f:fn(int)}
+fn main(){let mut n=0;let mut h=H{f:|x|{n+=x}};let mut r=&h.f;r.* = |x|{n+=10*x};h.f(3);if n!=30{panic("field storage")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn reference_storage_reference_function_index_storage() {
+    let input = r#"
+fn main(){let mut n=0;let mut fs:mut Slice<fn(int)> = [|x|{n+=x}];let mut r=&fs[0];r.* = |x|{n+=10*x};fs[0](3);if n!=30{panic("index storage")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn reference_storage_reference_function_local_storage() {
+    let input = r#"
+fn main(){let mut n=0;let mut f:fn(int)=|x|{n+=x};let mut r=&f;r.* = |x|{n+=10*x};f(3);if n!=30{panic("local storage")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn reference_storage_reference_function_observes_replacement() {
+    let input = r#"
+fn main(){let mut n=0;let mut f:fn(int)=|x|{n+=x};let r=&f;f=|x|{n+=10*x};r.*(3);if n!=30{panic("read storage")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn reference_storage_reference_generic_field_storage() {
+    let input = r#"
+struct H<T>{f:fn(int)->T}
+fn replace<T>(f:mut Ref<fn(int)->T>,g:fn(int)->T){f.* = g}
+fn main(){let mut n=0;let mut h:H<()> = H{f:|x|{n+=x}};let mut r=&h.f;replace<()>(r,|x|{n+=10*x});h.f(3);if n!=30{panic("generic field storage")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn alias_method_bound() {
+    let input = r#"
+type Maybe<T> = Option<T>
+type Outcome<T> = Result<T, string>
+fn main() {
+ let o: Maybe<int> = None
+ let missing = o.is_none
+ let r: Outcome<int> = Err("x")
+ let failed = r.is_err
+ if !missing() || !failed() { panic("bound alias methods") }
+ let mut calls = 0
+ let n = o.unwrap_or_else(|| { calls += 1; 7 })
+ if n != 7 || calls != 1 { panic("fallback evaluation") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn alias_method_r4_or_else_direct() {
+    let input = r#"
+type Maybe<T> = Option<fn() -> T>
+fn source() -> Option<int> { Some(43) }
+fn inspect(input: Maybe<Option<int>>) {
+  let restored = input.or_else(|| Some(source))
+  match restored {
+    Some(callback) => { if callback().unwrap_or(0) != 43 { panic("or_else callback payload") } },
+    None => panic("or_else missing callback"),
+  }
+}
+fn main() { inspect(None) }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interface_record_guard() {
+    let input = r#"
+interface Marker { fn code() -> int }
+enum Event { Value { item: int }, Empty }
+impl Event { fn code(self) -> int { 7 } }
+fn get(v: Marker, count: mut Ref<int>) -> int {
+ match v {
+  Event.Value { item } if { count.* += 1; item > 5 } => item,
+  Event.Value { item } => item + 10,
+  _ => -1,
+ }
+}
+fn main() {
+ let mut count = 0
+ let first = get(Event.Value { item: 3 }, &count)
+ let empty = get(Event.Empty, &count)
+ let last = get(Event.Value { item: 8 }, &count)
+ if first != 13 || empty != -1 || last != 8 || count != 2 { panic("guard and variant checks") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_alias_callback_inferred() {
+    let input = r#"
+type Callback<T> = fn() -> T
+enum Event<T> { Value { call: Callback<T> }, Empty }
+fn wrap<T>(f: Callback<T>) -> Event<T> { Event.Value { call: f } }
+fn main() {
+ let mut n = 0
+ let value = wrap(|| { n += 1 })
+ match value { Event.Value { call } => call(), Event.Empty => () }
+ if n != 1 { panic("wrapped callback") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn named_callback_review_direct_reference() {
+    let input = r#"
+import "go:go/ast"
+import "go:go/doc"
+
+fn replace(slot: mut Ref<doc.Filter>, next: doc.Filter) { slot.* = next }
+fn returned(slot: mut Ref<ast.Filter>) -> mut Ref<doc.Filter> { slot }
+fn main() {
+  let mut hits = 0
+  let mut original: ast.Filter = |s: string| { hits += 1; s == "before" }
+  let view: mut Ref<doc.Filter> = &original
+  if !(view.*)("before") { panic("initial callback changed") }
+  replace(view, |s: string| { hits += 10; s == "after" })
+  if !original("after") { panic("reference write detached") }
+  let mut returned_view = returned(&original)
+  replace(returned_view, |s: string| { hits += 100; s == "last" })
+  if !original("last") { panic("returned reference detached") }
+  if hits != 111 { panic("closure effects changed") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn named_callback_review_immutable_containers() {
+    let input = r#"
+import "go:go/ast"
+import "go:go/doc"
+
+fn option(value: Option<ast.Filter>) -> Option<doc.Filter> { value }
+fn pair(value: (ast.Filter, Option<ast.Filter>)) -> (doc.Filter, Option<doc.Filter>) { value }
+fn fallible(value: Result<ast.Filter, string>) -> Result<doc.Filter, string> { value }
+fn main() {
+  let mut hits = 0
+  let callback: ast.Filter = |s: string| { hits += 1; s == "ok" }
+  let present = option(Some(callback))
+  let Some(f) = present else { panic("some became none") }
+  if !f("ok") { panic("option callback changed") }
+  if !option(None).is_none() { panic("none became some") }
+  let converted = pair((callback, Some(callback)))
+  if !(converted.0)("ok") { panic("tuple callback changed") }
+  let Some(g) = converted.1 else { panic("nested option lost") }
+  if !g("ok") { panic("nested callback changed") }
+  let Ok(h) = fallible(Ok(callback)) else { panic("ok became err") }
+  if !h("ok") { panic("result callback changed") }
+  let Err(message) = fallible(Err("sentinel")) else { panic("err became ok") }
+  if message != "sentinel" || hits != 4 { panic("effects or error changed") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn named_callback_review_nil_and_factory() {
+    let input = r#"
+import "go:go/ast"
+import "go:go/doc"
+import "go:reflect"
+
+fn named(value: ast.Filter) -> doc.Filter { value }
+fn plain(value: ast.Filter) -> fn(string) -> bool { value }
+fn main() {
+  let Some(zero) = assert_type<ast.Filter>(reflect.Zero(reflect.TypeFor<ast.Filter>()).Interface()) else { panic("nil callback type assertion failed") }
+  let nil_named = named(zero)
+  if !reflect.ValueOf(nil_named).IsNil() { panic("named conversion made nil nonnil") }
+  let nil_plain = plain(zero)
+  if !reflect.ValueOf(nil_plain).IsNil() { panic("plain conversion made nil nonnil") }
+  let mut made = 0
+  let mut calls = 0
+  let factory = || -> ast.Filter { made += 1; |s: string| { calls += 1; s == "ok" } }
+  let first: doc.Filter = factory()
+  let second = named(factory())
+  if made != 2 || calls != 0 { panic("conversion effects changed") }
+  if !first("ok") || !second("ok") { panic("callback changed") }
+  if made != 2 || calls != 2 { panic("callback effects changed") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_unit_method_value() {
+    let input = r#"
+type Done = ()
+interface Action<T> { fn Run() -> T }
+interface Child { embed Action<Done> }
+struct Counter { n: mut Ref<int> }
+impl Counter { fn Run(self: mut Ref<Counter>) -> Done { self.n.* += 1; return () } }
+fn apply<A: Child>(a: A) { let f = a.Run; let _ = f(); let _ = f() }
+fn main() {
+ let mut n = 0
+ let mut c = Counter { n: &n }
+ apply(&c)
+ let f = c.Run
+ f()
+ if n != 3 { panic("bound method value count") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_unit_method_interfaces() {
+    let input = r#"
+import "go:fmt"
+type Done = ()
+type Completion = Done
+interface Perform<T> { fn perform() -> T }
+interface Plain { fn perform() -> Completion }
+fn invoke<T, A: Perform<T>>(a: A) -> T { a.perform() }
+struct Worker { stop: bool }
+impl Worker {
+    fn perform(self) -> Completion {
+        fmt.Print("enter,")
+        if self.stop { return () }
+        fmt.Print("tail,")
+        ()
+    }
+}
+fn through_interface(a: Plain) -> Completion { a.perform() }
+fn through_callback(f: fn() -> Completion) -> Completion { f() }
+fn main() {
+    let early = Worker { stop: true }
+    let normal = Worker { stop: false }
+    through_interface(early)
+    through_interface(normal)
+    through_callback(early.perform)
+    invoke<Completion, Worker>(normal)
+    let iface: Plain = early
+    iface.perform()
+    fmt.Println("done")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn shared_callback_go_alias_reference() {
+    let input = r#"
+import "go:context"
+type Cancel = context.CancelFunc
+type Second = Cancel
+fn view(f: mut Ref<Second>) -> mut Ref<context.CancelFunc> { f }
+fn main() {
+ let mut calls = 0
+ let mut original: Second = || { calls += 1 }
+ let mut forwarded = view(&original)
+ forwarded.* = || { calls += 10 }
+ original()
+ if calls != 10 { panic("Go alias reference identity") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn shared_callback_record_array_callback_storage() {
+    let input = r#"
+fn use_f(f:fn(int)->()){f(3)}
+struct H<T>{fs:Array<fn(int)->T,2>}
+fn make<T>(f:fn(int)->T)->H<T>{H{fs:[f,f]}}
+fn main(){let mut n=0;let h=make<()>(|x|{n+=x});let H{fs:[f,g]}=h;use_f(f);use_f(g);if n!=6{panic("count")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_state_alias_forward() {
+    let input = r#"
+import "go:errors"
+type O = Option<int>
+type R = Result<int, error>
+type P = Partial<int, error>
+type Pair = (int, Option<Ref<int>>)
+fn check(ok: bool) { if !ok { panic("runtime assertion failed") } }
+fn opt(n: int) -> O { if n > 0 { Some(n) } else { None } }
+fn opt_explicit(n: int) -> O { return opt(n) }
+fn opt_try(n: int) -> O { try { opt(n)? + 1 } }
+fn res(n: int) -> R { if n > 0 { Ok(n) } else { Err(errors.New("negative")) } }
+fn res_try(n: int) -> R { try { res(n)? + 1 } }
+fn partial(n: int) -> P { match n { 0 => Partial.Err(errors.New("zero")), 1 => Partial.Ok(n), _ => Partial.Both(n, errors.New("both")) } }
+fn partial_forward(n: int) -> P { partial(n) }
+fn pair(n: int) -> Pair { let x = n + 1; (n, Some(&x)) }
+fn main() {
+  let passed_15 = match opt_explicit(4) { Some(n) => n == 4, _ => false }
+  check(passed_15)
+  let passed_16 = match opt_explicit(0) { None => true, _ => false }
+  check(passed_16)
+  let passed_17 = match opt_try(4) { Some(n) => n == 5, _ => false }
+  check(passed_17)
+  let passed_18 = match opt_try(0) { None => true, _ => false }
+  check(passed_18)
+  let passed_19 = match res_try(4) { Ok(n) => n == 5, _ => false }
+  check(passed_19)
+  let passed_20 = match res_try(0) { Err(_) => true, _ => false }
+  check(passed_20)
+  let passed_21 = match partial_forward(0) { Partial.Err(_) => true, _ => false }
+  check(passed_21)
+  let passed_22 = match partial_forward(1) { Partial.Ok(n) => n == 1, _ => false }
+  check(passed_22)
+  let passed_23 = match partial_forward(2) { Partial.Both(n, _) => n == 2, _ => false }
+  check(passed_23)
+  let (n, m) = pair(8)
+  check(n == 8)
+  let passed_26 = match m { Some(x) => x.* == 9, None => false }
+  check(passed_26)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_state_generic_callback() {
+    let input = r#"
+import "go:errors"
+fn choose<T>(value: T, mode: int) -> Partial<T, error> {
+ if mode == 0 { Partial.Err(errors.New("err")) } else if mode == 1 { Partial.Ok(value) } else { Partial.Both(value, errors.New("both")) }
+}
+fn invoke<T>(f: fn() -> T) -> T { f() }
+fn tag<T>(p: Partial<T,error>) -> int { match p { Partial.Err(_) => 0, Partial.Ok(_) => 1, Partial.Both(_,_) => 2 } }
+fn main() {
+ let mut calls = 0
+ let f = || { calls += 1; choose((3, 4), 0) }
+ if tag(invoke(f)) != 0 || calls != 1 { panic("generic callback Err") }
+ if tag(choose((3, 4), 1)) != 1 || tag(choose((3, 4), 2)) != 2 { panic("generic Partial state") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_state_scalar() {
+    let input = r#"
+import "go:errors"
+fn choose(mode: int) -> Partial<int, error> {
+ if mode == 0 { return Partial.Err(errors.New("err")) }
+ if mode == 1 { Partial.Ok(0) } else { Partial.Both(0, errors.New("both")) }
+}
+fn tag<T>(p: Partial<T,error>) -> int { match p { Partial.Err(_) => 0, Partial.Ok(_) => 1, Partial.Both(_,_) => 2 } }
+fn main() {
+ if tag(choose(0)) != 0 || tag(choose(1)) != 1 || tag(choose(2)) != 2 { panic("scalar Partial state") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_state_unit_forward() {
+    let input = r#"
+import "go:errors"
+fn choose(mode: int) -> Partial<(), error> {
+ match mode { 0 => Partial.Err(errors.New("err")), 1 => Partial.Ok(()), _ => Partial.Both((), errors.New("both")) }
+}
+fn forward(mode: int) -> Partial<(), error> { choose(mode) }
+fn tag<T>(p: Partial<T,error>) -> int { match p { Partial.Err(_) => 0, Partial.Ok(_) => 1, Partial.Both(_,_) => 2 } }
+fn main() {
+ let f = forward
+ if tag(f(0)) != 0 || tag(f(1)) != 1 || tag(f(2)) != 2 { panic("unit Partial state") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_review_alias_stored() {
+    let input = r#"
+import "go:io"
+
+type Answer = Partial<int, error>
+interface Base { fn fetch(fail: bool) -> Answer }
+interface Child { embed Base }
+type Face = Child
+struct Source {}
+impl Source {
+  fn fetch(self, fail: bool) -> Answer {
+    if fail { Partial.Err(io.EOF) } else { Partial.Both(0, io.EOF) }
+  }
+}
+fn capture<T: Face>(source: T, fail: bool) -> Answer {
+  let fetch = source.fetch
+  fetch(fail)
+}
+fn main() {
+  let both = capture(Source {}, false)
+  if !both.is_both() { panic("lost Both tag") }
+  let err = capture(Source {}, true)
+  if !err.is_both() { panic("Err through a method reads back as Both") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn function_values_in_unknown_slots_keep_go_signatures() {
+    let input = r#"
+import "go:errors"
+import "go:fmt"
+fn fail(s: string) -> Result<string, error> { Err(errors.New("bad " + s)) }
+fn find(_s: string) -> Option<int> { None }
+fn unit() {}
+fn kind(value: Unknown) -> string { fmt.Sprintf("%T", value) }
+fn main() {
+  let lambda = |_s: string| -> Result<int, error> { Ok(1) }
+  let stored: Unknown = fail
+  let values: Slice<Unknown> = [find, unit]
+  if kind(stored) != "func(string) (string, error)" { panic("let binding") }
+  if kind(lambda) != "func(string) (int, error)" { panic("local lambda") }
+  if kind(values[0]) != "func(string) (int, bool)" { panic("option result") }
+  if kind(values[1]) != "func()" { panic("unit result") }
+  let Some(f) = assert_type<fn(string) -> Result<string, error>>(stored) else { panic("assert") }
+  let Err(e) = f("x") else { panic("call after assert") }
+  if e.Error() != "bad x" { panic("wrong error") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn template_funcs_reports_errors_from_lisette_functions() {
+    let input = r#"
+import "go:errors"
+import "go:strings"
+import "go:text/template"
+fn fail(s: string) -> Result<string, error> { Err(errors.New("bad " + s)) }
+fn main() {
+  let mut funcs = Map.new<string, Unknown>()
+  funcs["fail"] = fail
+  let Ok(parsed) = template.New("x").Funcs(funcs).Parse("{{fail \"a\"}}") else { panic("parse") }
+  let mut out = strings.Builder {}
+  let Err(e) = parsed.Execute(&out, 0) else { panic("template swallowed the function error") }
+  if !strings.Contains(e.Error(), "bad a") { panic("wrong error") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_methods_keep_the_type_visible_to_go_interfaces() {
+    let input = r#"
+import "go:fmt"
+import "go:io"
+import "go:strings"
+struct Dev { id: int }
+impl Dev {
+  fn Read(self, _p: mut Slice<byte>) -> Partial<int, error> { Partial.Err(io.EOF) }
+  fn WriteTo(self, w: io.Writer) -> Result<int64, error> {
+    let _ = fmt.Fprint(w, "via WriteTo")
+    Ok(0)
+  }
+  fn String(self) -> string { f"dev {self.id}" }
+}
+fn which(r: io.Reader) -> string {
+  match r {
+    Dev { id } => f"dev {id}",
+    _ => "other",
+  }
+}
+fn main() {
+  let d = Dev { id: 7 }
+  let r = d as io.Reader
+  if which(r) != "dev 7" { panic("type switch lost the concrete type") }
+  if fmt.Sprint(r) != "dev 7" { panic("fmt lost the Stringer") }
+  let mut out = strings.Builder {}
+  let _ = io.Copy(&out, r)
+  if out.String() != "via WriteTo" { panic("io.Copy skipped WriteTo") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

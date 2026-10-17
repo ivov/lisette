@@ -19,16 +19,21 @@ description: |
 ---
 package main
 
-import "strconv"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
 
-func makeParser() func(string) (int, error) {
-	return strconv.Atoi
+func makeParser() func(string) lisette.Result[int, error] {
+	return func(arg0 string) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](strconv.Atoi(arg0))
+	}
 }
 
 func main() {
 	f := makeParser()
-	r, err := f("42")
-	if err == nil {
-		_ = r
+	r := f("42")
+	if r.Tag == lisette.ResultOk {
+		_ = r.OkVal
 	}
 }

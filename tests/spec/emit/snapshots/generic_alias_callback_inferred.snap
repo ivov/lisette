@@ -1,0 +1,58 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  type Callback<T> = fn() -> T
+  enum Event<T> { Value { call: Callback<T> }, Empty }
+  fn wrap<T>(f: Callback<T>) -> Event<T> { Event.Value { call: f } }
+  fn main() {
+   let mut n = 0
+   let value = wrap(|| { n += 1 })
+   match value { Event.Value { call } => call(), Event.Empty => () }
+   if n != 1 { panic("wrapped callback") }
+  }
+---
+package main
+
+func MakeEventValue[T any](arg0 Callback[T]) Event[T] {
+	return Event[T]{Tag: EventValue, Call: arg0}
+}
+
+func MakeEventEmpty[T any]() Event[T] {
+	return Event[T]{Tag: EventEmpty}
+}
+
+type Callback[T any] func() T
+
+type EventTag uint8
+
+const (
+	EventValue EventTag = iota
+	EventEmpty
+)
+
+type Event[T any] struct {
+	Tag  EventTag
+	Call Callback[T]
+}
+
+func wrap[T any](f Callback[T]) Event[T] {
+	return Event[T]{
+		Tag:  EventValue,
+		Call: f,
+	}
+}
+
+func main() {
+	n := 0
+	value := wrap(func() any {
+		n++
+		return struct{}{}
+	})
+	if value.Tag == EventValue {
+		value.Call()
+	}
+	if n != 1 {
+		panic("wrapped callback")
+	}
+}
