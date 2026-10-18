@@ -40,7 +40,11 @@ fn is_function_type(ty: &Type) -> bool {
     }
 }
 
-pub(super) fn sweep(usages: &[&Usage], index: &HashMap<Span, String>, sink: &LocalSink) {
+pub(super) fn sweep<'a>(
+    usages: impl Iterator<Item = &'a Usage>,
+    index: &HashMap<Span, String>,
+    sink: &LocalSink,
+) {
     for usage in usages {
         if let Some(message) = index.get(&usage.definition_span) {
             sink.push(diagnostics::lint::deprecated_api(

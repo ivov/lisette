@@ -5,28 +5,34 @@
 //! handle, so `Type` is a pure value (Clone / Eq / Hash / Serialize friendly)
 //! with no shared mutable state.
 //!
-//! Speculative unification uses a stack of undo logs. Bindings go into the
-//! innermost log; a successful nested region joins its parent, while a failed
-//! region restores its entries in reverse order.
+//! Speculative unification uses checkpoints into one undo log. Nested commits
+//! leave their writes in the parent region; rollback restores slots before
+//! truncating the bound-type pool.
 
-use std::mem;
+use std::num::NonZeroU32;
 use syntax::types::FunctionParameter;
 use syntax::types::{Bound, Type, TypeVarId};
 
-#[derive(Debug, Clone)]
-enum VarState {
-    Unbound,
-    Bound(Type),
-}
+/// Zero means unbound; nonzero indices address the append-only bound-type pool.
+#[derive(Debug, Clone, Copy)]
+struct BindingSlot(NonZeroU32);
+
+type VarState = Option<BindingSlot>;
+
+const _: () = assert!(size_of::<VarState>() == 4);
 
 pub struct TypeEnv {
     entries: Vec<VarState>,
-    undo_logs: Vec<Vec<(TypeVarId, VarState)>>,
+    bound: Vec<Type>,
+    undo: Vec<(TypeVarId, VarState)>,
+    speculation_depth: usize,
 }
 
 #[must_use]
 pub(super) struct Speculation {
     depth: usize,
+    undo_start: usize,
+    bound_start: usize,
 }
 
 pub(super) enum SpeculationOutcome {
@@ -44,14 +50,16 @@ impl TypeEnv {
     pub(crate) fn new() -> Self {
         Self {
             entries: Vec::new(),
-            undo_logs: Vec::new(),
+            bound: Vec::new(),
+            undo: Vec::new(),
+            speculation_depth: 0,
         }
     }
 
     /// Allocate a fresh unbound variable and return its handle.
     pub(crate) fn fresh(&mut self) -> TypeVarId {
         let id = TypeVarId::new(self.entries.len() as u32);
-        self.entries.push(VarState::Unbound);
+        self.entries.push(None);
         id
     }
 
@@ -61,10 +69,20 @@ impl TypeEnv {
 
     pub(crate) fn bind(&mut self, id: TypeVarId, ty: Type) {
         let slot = Self::slot(id);
-        let old = mem::replace(&mut self.entries[slot], VarState::Bound(ty));
-        if let Some(log) = self.undo_logs.last_mut() {
-            log.push((id, old));
+        let index = u32::try_from(self.bound.len()).expect("too many type bindings");
+        let binding = BindingSlot(
+            NonZeroU32::new(index.checked_add(1).expect("too many type bindings"))
+                .expect("binding indices start at one"),
+        );
+        self.bound.push(ty);
+        let old = self.entries[slot].replace(binding);
+        if self.speculation_depth != 0 {
+            self.undo.push((id, old));
         }
+    }
+
+    fn binding(&self, id: TypeVarId) -> Option<&Type> {
+        self.entries[Self::slot(id)].map(|slot| &self.bound[(slot.0.get() - 1) as usize])
     }
 
     /// Follow a `Type::Var` chain one step at a time until we reach either
@@ -73,9 +91,9 @@ impl TypeEnv {
         let mut current = ty.clone();
         loop {
             match &current {
-                Type::Var { id, .. } => match &self.entries[Self::slot(*id)] {
-                    VarState::Unbound => return current,
-                    VarState::Bound(bound) => current = bound.clone(),
+                Type::Var { id, .. } => match self.binding(*id) {
+                    None => return current,
+                    Some(bound) => current = bound.clone(),
                 },
                 _ => return current,
             }
@@ -104,15 +122,15 @@ impl TypeEnv {
     /// is reachable), allocating just the changed spine. `None` means unchanged.
     fn resolve_changed(&self, ty: &Type) -> Option<Type> {
         match ty {
-            Type::Var { id, .. } => match &self.entries[Self::slot(*id)] {
-                VarState::Unbound => None,
-                VarState::Bound(first) => {
+            Type::Var { id, .. } => match self.binding(*id) {
+                None => None,
+                Some(first) => {
                     let mut cursor = first;
                     loop {
                         match cursor {
-                            Type::Var { id, .. } => match &self.entries[Self::slot(*id)] {
-                                VarState::Unbound => return Some(cursor.clone()),
-                                VarState::Bound(next) => cursor = next,
+                            Type::Var { id, .. } => match self.binding(*id) {
+                                None => return Some(cursor.clone()),
+                                Some(next) => cursor = next,
                             },
                             _ => return Some(self.resolve(cursor)),
                         }
@@ -232,9 +250,9 @@ impl TypeEnv {
                 if *other == id {
                     return true;
                 }
-                match &self.entries[Self::slot(*other)] {
-                    VarState::Unbound => false,
-                    VarState::Bound(bound) => self.occurs(id, bound),
+                match self.binding(*other) {
+                    None => false,
+                    Some(bound) => self.occurs(id, bound),
                 }
             }
             _ => ty
@@ -245,9 +263,11 @@ impl TypeEnv {
     }
 
     pub(super) fn begin_speculation(&mut self) -> Speculation {
-        self.undo_logs.push(Vec::new());
+        self.speculation_depth += 1;
         Speculation {
-            depth: self.undo_logs.len(),
+            depth: self.speculation_depth,
+            undo_start: self.undo.len(),
+            bound_start: self.bound.len(),
         }
     }
 
@@ -257,23 +277,20 @@ impl TypeEnv {
         outcome: SpeculationOutcome,
     ) {
         assert_eq!(
-            speculation.depth,
-            self.undo_logs.len(),
+            speculation.depth, self.speculation_depth,
             "speculations must finish in nesting order"
         );
-        let log = self
-            .undo_logs
-            .pop()
-            .expect("speculation must be started before it is ended");
+        self.speculation_depth -= 1;
         match outcome {
             SpeculationOutcome::Rollback => {
-                for (id, original) in log.into_iter().rev() {
+                for (id, original) in self.undo.drain(speculation.undo_start..).rev() {
                     self.entries[Self::slot(id)] = original;
                 }
+                self.bound.truncate(speculation.bound_start);
             }
             SpeculationOutcome::Commit => {
-                if let Some(parent_log) = self.undo_logs.last_mut() {
-                    parent_log.extend(log);
+                if self.speculation_depth == 0 {
+                    self.undo.clear();
                 }
             }
         }
@@ -334,5 +351,48 @@ mod tests {
 
         assert_eq!(env.shallow_resolve(&var(outer)), var(outer));
         assert_eq!(env.shallow_resolve(&var(inner)), var(inner));
+    }
+
+    #[test]
+    fn rollback_restores_rebindings_and_keeps_new_variables_usable() {
+        let mut env = TypeEnv::new();
+        let existing = env.fresh();
+        env.bind(existing, Type::int());
+
+        let outer = env.begin_speculation();
+        env.bind(existing, Type::bool());
+        let created = env.fresh();
+        env.bind(created, Type::string());
+        let inner = env.begin_speculation();
+        env.bind(existing, Type::string());
+        env.end_speculation(inner, SpeculationOutcome::Commit);
+        env.bind(existing, Type::Never);
+        env.end_speculation(outer, SpeculationOutcome::Rollback);
+
+        assert_eq!(env.resolve(&var(existing)), Type::int());
+        assert_eq!(env.resolve(&var(created)), var(created));
+        env.bind(created, Type::bool());
+        assert_eq!(env.resolve(&var(created)), Type::bool());
+        assert_eq!(env.resolve(&var(existing)), Type::int());
+    }
+
+    #[test]
+    fn inner_rollback_preserves_outer_writes_and_later_commit() {
+        let mut env = TypeEnv::new();
+        let id = env.fresh();
+        env.bind(id, Type::int());
+        let outer = env.begin_speculation();
+        env.bind(id, Type::string());
+        let inner = env.begin_speculation();
+        env.bind(id, Type::bool());
+
+        env.end_speculation(inner, SpeculationOutcome::Rollback);
+        assert_eq!(env.resolve(&var(id)), Type::string());
+        env.end_speculation(outer, SpeculationOutcome::Commit);
+
+        let later = env.begin_speculation();
+        env.bind(id, Type::Never);
+        env.end_speculation(later, SpeculationOutcome::Rollback);
+        assert_eq!(env.resolve(&var(id)), Type::string());
     }
 }

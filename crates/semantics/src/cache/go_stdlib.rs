@@ -189,7 +189,7 @@ mod tests {
     #[test]
     fn package_presence_terminates_cached_import_cycles() {
         let package = |import: &str| GoPackageCache {
-            definitions: HashMap::default(),
+            definitions: Default::default(),
             go_imports: vec![import.to_string()],
         };
         let cache = GoStdlibCache {

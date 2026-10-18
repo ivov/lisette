@@ -360,4 +360,39 @@ mod tests {
 
         assert_eq!(restored, expected);
     }
+
+    #[test]
+    fn cached_methods_preserve_dictionary_format_and_iteration_order() {
+        let methods: rustc_hash::FxHashMap<EcoString, Method> = ["get", "set", "compare"]
+            .into_iter()
+            .map(|name| {
+                let name = EcoString::from(name);
+                let method = Method {
+                    source_name: name.clone(),
+                    ty: Type::Error,
+                    visibility: Visibility::Public,
+                    origin: MethodOrigin::Declared,
+                    name_span: None,
+                    doc: None,
+                    allowed_lints: Vec::new(),
+                    go_hints: Vec::new(),
+                    superseded_by: None,
+                };
+                (name, method)
+            })
+            .collect();
+        let bytes = bincode::serialize(&methods).unwrap();
+        let restored: Methods = bincode::deserialize(&bytes).unwrap();
+        let original_format: rustc_hash::FxHashMap<EcoString, Method> =
+            bincode::deserialize(&bytes).unwrap();
+
+        assert_eq!(
+            restored.iter().collect::<Vec<_>>(),
+            original_format.iter().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            bincode::serialize(&restored).unwrap(),
+            bincode::serialize(&original_format).unwrap()
+        );
+    }
 }

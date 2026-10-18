@@ -1,10 +1,11 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashMap as HashMap;
+use syntax::collections::DenseMap;
 
 use std::sync::Arc;
 
 use crate::protocol::{Position, Url};
 use passes::Analysis;
-use semantics::facts::{BindingFact, Usage};
+use semantics::facts::{BindingFact, UsageIndex};
 use syntax::FileParseStatus::Failed;
 use syntax::ast::BindingId;
 use syntax::program::{Definition, File};
@@ -192,7 +193,7 @@ impl AnalysisSnapshot {
         &self.analysis.emit_input.files
     }
 
-    pub(crate) fn bindings(&self) -> &HashMap<BindingId, BindingFact> {
+    pub(crate) fn bindings(&self) -> &DenseMap<BindingId, BindingFact> {
         self.analysis.bindings()
     }
 
@@ -207,7 +208,7 @@ impl AnalysisSnapshot {
             .find(|binding| offset_in_span(offset, &binding.span))
     }
 
-    pub(crate) fn usages(&self) -> &HashSet<Usage> {
+    pub(crate) fn usages(&self) -> &UsageIndex {
         self.analysis.usages()
     }
 

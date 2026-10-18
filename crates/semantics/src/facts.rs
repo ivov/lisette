@@ -1,3 +1,7 @@
+use syntax::collections::DenseMap;
+mod usages;
+pub use usages::{UsageFacts, UsageIndex};
+
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -31,8 +35,8 @@ pub struct Facts {
     allocator: Arc<BindingIdAllocator>,
 
     // Retained after analysis for editor tooling.
-    pub bindings: HashMap<BindingId, BindingFact>,
-    pub usages: HashSet<Usage>,
+    pub bindings: DenseMap<BindingId, BindingFact>,
+    pub usages: UsageFacts,
 
     pub dead_code: Vec<DeadCodeFact>,
     pub overused_references: Vec<OverusedReferenceFact>,
@@ -192,7 +196,7 @@ impl Facts {
     pub fn new(allocator: Arc<BindingIdAllocator>) -> Self {
         Self {
             allocator,
-            bindings: HashMap::default(),
+            bindings: Default::default(),
             dead_code: Vec::new(),
             overused_references: Vec::new(),
             always_failing_try_blocks: Vec::new(),
@@ -202,7 +206,7 @@ impl Facts {
             or_pattern_error_spans: HashSet::default(),
             type_error_spans: HashSet::default(),
             function_spans: Vec::new(),
-            usages: HashSet::default(),
+            usages: UsageFacts::default(),
             interface_satisfied_methods: HashMap::default(),
         }
     }
@@ -376,7 +380,7 @@ impl Facts {
         self.type_error_spans.extend(type_error_spans);
         self.function_spans.extend(function_spans);
 
-        self.usages.extend(usages);
+        self.usages.merge(usages);
 
         for (package_id, methods) in interface_satisfied_methods {
             let existing_methods = self

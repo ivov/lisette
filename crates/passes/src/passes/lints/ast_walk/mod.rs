@@ -14,7 +14,7 @@ use crate::passes::walk::{
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use rayon::prelude::*;
 use rustc_hash::FxHashMap as HashMap;
-use semantics::facts::{Facts, Usage};
+use semantics::facts::{Facts, UsageFacts};
 use semantics::store::Store;
 use syntax::ast::{Expression, Pattern, Span};
 use syntax::program::{Package, is_internal_package_id};
@@ -268,35 +268,27 @@ fn run_pattern_checks(pattern: &Pattern, ctx: &mut NodeCtx<'_>, role: PatternRol
 struct OlderApis<'a> {
     deprecated: HashMap<Span, String>,
     superseded: HashMap<Span, String>,
-    usages_by_file: HashMap<u32, Vec<&'a Usage>>,
+    usages: &'a UsageFacts,
 }
 
 impl OlderApis<'_> {
     fn sweep_file(&self, file_id: u32, sink: &LocalSink) {
-        let Some(usages) = self.usages_by_file.get(&file_id) else {
-            return;
-        };
-        deprecation::sweep(usages, &self.deprecated, sink);
-        superseded::sweep(usages, &self.superseded, sink);
+        if !self.deprecated.is_empty() {
+            deprecation::sweep(self.usages.in_file(file_id), &self.deprecated, sink);
+        }
+        if !self.superseded.is_empty() {
+            superseded::sweep(self.usages.in_file(file_id), &self.superseded, sink);
+        }
     }
 }
 
 pub(crate) fn run(store: &Store, facts: &Facts) -> Vec<LisetteDiagnostic> {
     let deprecated = deprecation::build_index(store);
     let superseded = superseded::build_index(store);
-    let mut usages_by_file: HashMap<u32, Vec<&Usage>> = HashMap::default();
-    if !deprecated.is_empty() || !superseded.is_empty() {
-        for usage in &facts.usages {
-            usages_by_file
-                .entry(usage.usage_span.file_id)
-                .or_default()
-                .push(usage);
-        }
-    }
     let older = OlderApis {
         deprecated,
         superseded,
-        usages_by_file,
+        usages: &facts.usages,
     };
 
     let mut packages: Vec<&Package> = store

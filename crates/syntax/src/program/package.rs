@@ -1,3 +1,4 @@
+use crate::collections::DenseMap;
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::borrow::Borrow;
@@ -77,7 +78,7 @@ pub struct Package {
     /// file ID -> file. Source and declaration files are classified by [`File::is_d_lis`].
     pub files: HashMap<u32, File>,
     /// qualified name -> definition
-    pub definitions: HashMap<Symbol, Definition>,
+    pub definitions: DenseMap<Symbol, Definition>,
     /// Set when an import cycle keeps the package out of inference: nothing
     /// registers its files, so its exports are read from syntax.
     pub uninferred_exports: Option<UninferredExports>,

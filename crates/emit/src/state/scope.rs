@@ -1,8 +1,9 @@
 mod names;
 
 use names::LocalNames;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashSet as HashSet;
 use std::mem;
+use syntax::collections::FlatMap;
 
 use crate::ReturnContext;
 use crate::context::lowering::LoopContext;
@@ -23,9 +24,14 @@ pub(crate) struct ScopeState {
     type_params: Vec<TypeParam>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct BindingSlot(u32);
+
+const _: () = assert!(size_of::<BindingSlot>() == 4);
+
 struct ScopeFrame {
-    bindings: HashMap<String, usize>,
-    binding_ids: HashMap<BindingId, usize>,
+    bindings: FlatMap<String, BindingSlot>,
+    binding_ids: FlatMap<BindingId, BindingSlot>,
     binding_values: Vec<BindingValue>,
     declarations: DeclarationScope,
     /// Conditions the branch being lowered has already tested in this scope.
@@ -80,8 +86,8 @@ pub(crate) enum PairStatusKind {
 impl ScopeFrame {
     fn new(declarations: DeclarationScope) -> Self {
         Self {
-            bindings: HashMap::default(),
-            binding_ids: HashMap::default(),
+            bindings: FlatMap::default(),
+            binding_ids: FlatMap::default(),
             binding_values: Vec::new(),
             declarations,
             established: Vec::new(),
@@ -247,7 +253,7 @@ impl ScopeState {
             frame
                 .bindings
                 .get(lisette_name)
-                .and_then(|slot| frame.binding_values.get(*slot))
+                .and_then(|slot| frame.binding_values.get(slot.0 as usize))
         })
     }
 
@@ -263,7 +269,7 @@ impl ScopeState {
             frame
                 .binding_ids
                 .get(&id)
-                .and_then(|slot| frame.binding_values.get(*slot))
+                .and_then(|slot| frame.binding_values.get(slot.0 as usize))
         })
     }
 
@@ -275,7 +281,7 @@ impl ScopeState {
                 .binding_ids
                 .iter()
                 .filter(|(_, slot)| {
-                    matches!(frame.binding_values.get(**slot),
+                    matches!(frame.binding_values.get(slot.0 as usize),
                     Some(BindingValue::GoName(name)) if name.id() == Some(local_id))
                 })
                 .max_by_key(|(id, slot)| (**slot, **id))
@@ -309,7 +315,7 @@ impl ScopeState {
                 frame
                     .bindings
                     .values()
-                    .any(|slot| frame.binding_values[*slot].mentions_local(local))
+                    .any(|slot| frame.binding_values[slot.0 as usize].mentions_local(local))
             })
     }
 
@@ -318,7 +324,7 @@ impl ScopeState {
         self.is_active_assign_target(go_name)
             || self.frames.iter().any(|frame| {
                 frame.bindings.iter().any(|(source_name, slot)| {
-                    let value = &frame.binding_values[*slot];
+                    let value = &frame.binding_values[slot.0 as usize];
                     value.mentions(go_name)
                         && self
                             .resolve_identifier_binding(source_name)
@@ -346,7 +352,7 @@ impl ScopeState {
     pub(crate) fn has_other_binding_for_go_name(&self, go_name: &str, ids: &[BindingId]) -> bool {
         self.frames.iter().any(|frame| {
             frame.bindings.iter().any(|(source_name, slot)| {
-                let value = &frame.binding_values[*slot];
+                let value = &frame.binding_values[slot.0 as usize];
                 !ids.iter().any(|id| frame.binding_ids.get(id) == Some(slot))
                     && value.mentions(go_name)
                     && self
@@ -577,7 +583,9 @@ impl ScopeState {
 
     fn set_binding(&mut self, name: String, ids: &[BindingId], value: BindingValue) {
         let frame = self.current_frame_mut();
-        let slot = frame.binding_values.len();
+        let slot = BindingSlot(
+            u32::try_from(frame.binding_values.len()).expect("too many scope bindings"),
+        );
         frame.binding_values.push(value);
         frame.bindings.insert(name, slot);
         for id in ids {

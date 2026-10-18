@@ -1,5 +1,5 @@
-use rustc_hash::FxHashMap as HashMap;
 use syntax::ast::{BindingId, Expression, IdentifierResolution, UnaryOperator};
+use syntax::collections::DenseMap;
 
 use crate::passes::walk::NodeCtx;
 use semantics::facts::BindingFact;
@@ -29,7 +29,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
 /// the body but never wrongly flags a loop that can terminate.
 fn condition_is_unchanging(
     condition: &Expression,
-    bindings: &HashMap<BindingId, BindingFact>,
+    bindings: &DenseMap<BindingId, BindingFact>,
 ) -> bool {
     let mut references_binding = false;
     is_invariant(condition, bindings, &mut references_binding) && references_binding
@@ -37,7 +37,7 @@ fn condition_is_unchanging(
 
 fn is_invariant(
     expression: &Expression,
-    bindings: &HashMap<BindingId, BindingFact>,
+    bindings: &DenseMap<BindingId, BindingFact>,
     references_binding: &mut bool,
 ) -> bool {
     match expression {
