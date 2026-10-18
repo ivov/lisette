@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792353034045,
+  "lastUpdate": 1792355137363,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -45738,6 +45738,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/5839b1bdb621a0a110cadac07a5d1e1a8efb5ef9"
         },
         "date": 1792353029908,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 149711,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39454,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28693,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19459,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15617,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9037,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2945,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9b85ec82482e63e3ffe9c82431d0d02172ee44f0",
+          "message": "perf: format Go output in batches on macOS to speed up cold builds (#1557)",
+          "timestamp": "2026-10-18T22:25:11+02:00",
+          "tree_id": "ed07de290464d04a8ec492f38fc8715b1df33363",
+          "url": "https://github.com/ivov/lisette/commit/9b85ec82482e63e3ffe9c82431d0d02172ee44f0"
+        },
+        "date": 1792355134983,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
