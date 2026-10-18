@@ -1,5 +1,5 @@
 use ecow::EcoString;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashMap as HashMap;
 
 use syntax::ast::Span;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -66,14 +66,40 @@ impl EnumVariantId {
 
 #[derive(Debug, Default)]
 pub struct ReferenceGraph {
-    edges: HashMap<PackageItemId, HashSet<PackageItemId>>,
-    items: HashMap<PackageItemId, ItemInfo>,
+    index: HashMap<PackageItemId, NodeId>,
+    nodes: Vec<Node>,
     unused_members: HashMap<MemberId, Span>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct NodeId(u32);
+
+#[derive(Debug)]
+struct Node {
+    id: PackageItemId,
+    info: Option<ItemInfo>,
+    edges: Vec<NodeId>,
+}
+
+const _: () = assert!(size_of::<NodeId>() == 4);
 
 impl ReferenceGraph {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn node(&mut self, id: &PackageItemId) -> NodeId {
+        if let Some(index) = self.index.get(id) {
+            return *index;
+        }
+        let index = NodeId(u32::try_from(self.nodes.len()).expect("too many package items"));
+        self.nodes.push(Node {
+            id: id.clone(),
+            info: None,
+            edges: Vec::new(),
+        });
+        self.index.insert(id.clone(), index);
+        index
     }
 
     pub fn add_item(
@@ -83,61 +109,52 @@ impl ReferenceGraph {
         kind: ItemKind,
         is_entry_point: bool,
     ) {
-        self.items.insert(
-            id,
-            ItemInfo {
-                span,
-                kind,
-                is_entry_point,
-            },
-        );
+        let node = self.node(&id);
+        self.nodes[node.0 as usize].info = Some(ItemInfo {
+            span,
+            kind,
+            is_entry_point,
+        });
     }
 
     pub fn add_import(&mut self, id: PackageItemId, span: Span, statement_span: Span) {
-        self.items.insert(
-            id,
-            ItemInfo {
-                span,
-                kind: ItemKind::Import { statement_span },
-                is_entry_point: false,
-            },
-        );
+        self.add_item(id, span, ItemKind::Import { statement_span }, false);
     }
 
     pub fn add_reference(&mut self, from: &PackageItemId, to: PackageItemId) {
-        self.edges.entry(from.clone()).or_default().insert(to);
+        let from = self.node(from);
+        let to = self.node(&to);
+        let edges = &mut self.nodes[from.0 as usize].edges;
+        if !edges.contains(&to) {
+            edges.push(to);
+        }
     }
 
     pub fn mark_as_used(&mut self, id: PackageItemId) {
-        if let Some(item) = self.items.get_mut(&id) {
+        if let Some(node) = self.index.get(&id)
+            && let Some(item) = &mut self.nodes[node.0 as usize].info
+        {
             item.is_entry_point = true;
         }
     }
 
     pub fn analyze(&self) -> ReferenceUsage<'_> {
-        let mut reachable = HashSet::default();
-        let mut worklist: Vec<PackageItemId> = self
-            .items
-            .iter()
-            .filter(|(_, item)| item.is_entry_point)
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        while let Some(item) = worklist.pop() {
-            if reachable.contains(&item) {
-                continue;
+        let mut reachable = vec![false; self.nodes.len()];
+        let mut worklist = Vec::new();
+        for (index, node) in self.nodes.iter().enumerate() {
+            if node.info.as_ref().is_some_and(|info| info.is_entry_point) {
+                reachable[index] = true;
+                worklist.push(NodeId(index as u32));
             }
-            reachable.insert(item.clone());
-
-            if let Some(refs) = self.edges.get(&item) {
-                for referenced in refs {
-                    if !reachable.contains(referenced) {
-                        worklist.push(referenced.clone());
-                    }
+        }
+        while let Some(item) = worklist.pop() {
+            for referenced in &self.nodes[item.0 as usize].edges {
+                if !reachable[referenced.0 as usize] {
+                    reachable[referenced.0 as usize] = true;
+                    worklist.push(*referenced);
                 }
             }
         }
-
         ReferenceUsage {
             graph: self,
             reachable,
@@ -169,15 +186,21 @@ impl ReferenceGraph {
 
 pub struct ReferenceUsage<'a> {
     graph: &'a ReferenceGraph,
-    reachable: HashSet<PackageItemId>,
+    reachable: Vec<bool>,
 }
 
 impl<'a> ReferenceUsage<'a> {
     pub fn unreachable_items(&self) -> impl Iterator<Item = (&PackageItemId, &ItemInfo)> {
         self.graph
-            .items
+            .nodes
             .iter()
-            .filter(|(id, _)| !self.reachable.contains(*id))
+            .enumerate()
+            .filter_map(|(index, node)| {
+                if self.reachable[index] {
+                    return None;
+                }
+                node.info.as_ref().map(|info| (&node.id, info))
+            })
     }
 }
 
@@ -257,5 +280,57 @@ mod tests {
             PackageItemId::equals_method("Thing"),
             PackageItemId::new("Thing#equals"),
         );
+    }
+
+    #[test]
+    fn reachability_follows_early_edges_through_unregistered_nodes_and_cycles() {
+        let mut graph = ReferenceGraph::new();
+        let root = PackageItemId::new("root");
+        let bridge = PackageItemId::new("bridge");
+        let child = PackageItemId::new("child");
+        let unused = PackageItemId::new("unused");
+        graph.add_reference(&root, bridge.clone());
+        graph.add_reference(&root, bridge.clone());
+        graph.add_reference(&bridge, child.clone());
+        graph.add_reference(&child, root.clone());
+        graph.add_reference(&unused, unused.clone());
+        graph.add_item(root, span(0), ItemKind::Function, true);
+        graph.add_item(child, span(1), ItemKind::Function, false);
+        graph.add_item(unused.clone(), span(2), ItemKind::Function, false);
+
+        let unreachable: Vec<_> = graph
+            .analyze()
+            .unreachable_items()
+            .map(|(id, _)| id.clone())
+            .collect();
+        assert_eq!(unreachable, [unused]);
+    }
+
+    #[test]
+    fn marking_an_unregistered_reference_target_does_not_make_it_an_entry_point() {
+        let mut graph = ReferenceGraph::new();
+        let item = PackageItemId::new("item");
+        graph.add_reference(&PackageItemId::new("caller"), item.clone());
+        graph.mark_as_used(item.clone());
+        graph.add_item(item.clone(), span(0), ItemKind::Function, false);
+        assert_eq!(graph.analyze().unreachable_items().count(), 1);
+
+        graph.mark_as_used(item);
+        assert_eq!(graph.analyze().unreachable_items().count(), 0);
+    }
+
+    #[test]
+    fn reregistering_an_item_replaces_its_span_and_entry_point_status() {
+        let mut graph = ReferenceGraph::new();
+        let item = PackageItemId::new("item");
+        graph.add_item(item.clone(), span(0), ItemKind::Function, true);
+        graph.add_item(item.clone(), span(1), ItemKind::Function, false);
+
+        let unreachable: Vec<_> = graph
+            .analyze()
+            .unreachable_items()
+            .map(|(id, info)| (id.clone(), info.span))
+            .collect();
+        assert_eq!(unreachable, [(item, span(1))]);
     }
 }

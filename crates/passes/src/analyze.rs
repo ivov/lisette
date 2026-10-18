@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use syntax::collections::DenseMap;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
@@ -9,7 +10,7 @@ use syntax::program::{EmitInput, UnusedInfo, is_internal_package_id};
 
 use semantics::AnalyzeInput;
 use semantics::cache::{EmitStamp, diagnostic_dependencies_tracked, save_package_cache};
-use semantics::facts::{BindingFact, Usage};
+use semantics::facts::{BindingFact, UsageIndex};
 use semantics::package_graph::DependencyGraph;
 use semantics::store::{ENTRY_FILE_ID, ENTRY_PACKAGE_ID};
 use semantics::{InferenceOutput, PARALLEL_THRESHOLD, run_inference};
@@ -24,8 +25,8 @@ pub struct Analysis {
     pub emit_stamps: Vec<EmitStamp>,
     pub unreachable_packages: Vec<String>,
     dependencies: Option<DependencyGraph>,
-    bindings: HashMap<BindingId, BindingFact>,
-    usages: HashSet<Usage>,
+    bindings: DenseMap<BindingId, BindingFact>,
+    usages: UsageIndex,
     errors: Vec<LisetteDiagnostic>,
     lints: Vec<LisetteDiagnostic>,
 }
@@ -54,11 +55,11 @@ impl Analysis {
         }
     }
 
-    pub fn bindings(&self) -> &HashMap<BindingId, BindingFact> {
+    pub fn bindings(&self) -> &DenseMap<BindingId, BindingFact> {
         &self.bindings
     }
 
-    pub fn usages(&self) -> &HashSet<Usage> {
+    pub fn usages(&self) -> &UsageIndex {
         &self.usages
     }
 
@@ -139,7 +140,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     };
     let emit_bindings = passes::emit_bindings(&facts);
     let bindings = facts.bindings;
-    let usages = facts.usages;
+    let usages = facts.usages.freeze();
 
     // Canonicalize diagnostic order so the output is stable regardless of
     // phase ordering, FxHashMap iteration, or parallel inference scheduling.

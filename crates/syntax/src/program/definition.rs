@@ -1,3 +1,4 @@
+use crate::collections::SharedMap;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use ecow::EcoString;
@@ -569,7 +570,7 @@ impl Method {
     }
 }
 
-pub type Methods = HashMap<EcoString, Method>;
+pub type Methods = SharedMap<EcoString, Method>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InterfaceInstance {
@@ -748,7 +749,7 @@ where
             let underlying = types::peel_alias(&stripped, lookup);
             if underlying != stripped {
                 for (name, method) in collect(&underlying, trait_bounds, lookup, visited) {
-                    methods.entry(name).or_insert(method);
+                    methods.insert_if_absent(name, method);
                 }
             }
         }
@@ -974,7 +975,7 @@ mod tests {
             body: DefinitionBody::Struct {
                 generics: vec![generic("T")],
                 fields: StructFields::Record(vec![]),
-                methods: HashMap::from_iter([(
+                methods: Methods::from_iter([(
                     "map".into(),
                     Method {
                         source_name: "map".into(),
@@ -1127,7 +1128,7 @@ mod tests {
                 interface_definition(
                     "m.Child",
                     vec![nominal("m.Parent")],
-                    HashMap::from_iter([named_method("run", Type::int())]),
+                    Methods::from_iter([named_method("run", Type::int())]),
                 ),
             ),
             (
@@ -1135,7 +1136,7 @@ mod tests {
                 interface_definition(
                     "m.Parent",
                     vec![],
-                    HashMap::from_iter([named_method("run", Type::string())]),
+                    Methods::from_iter([named_method("run", Type::string())]),
                 ),
             ),
         ]);
@@ -1151,7 +1152,7 @@ mod tests {
                 interface_definition(
                     "m.First",
                     vec![],
-                    HashMap::from_iter([named_method("run", Type::int())]),
+                    Methods::from_iter([named_method("run", Type::int())]),
                 ),
             ),
             (
@@ -1159,7 +1160,7 @@ mod tests {
                 interface_definition(
                     "m.Second",
                     vec![],
-                    HashMap::from_iter([named_method("run", Type::string())]),
+                    Methods::from_iter([named_method("run", Type::string())]),
                 ),
             ),
         ]);
@@ -1201,7 +1202,7 @@ mod tests {
             "m.Boxed",
             generic_interface_definition(
                 "m.Boxed",
-                HashMap::from_iter([named_method("run", Type::Parameter("T".into()))]),
+                Methods::from_iter([named_method("run", Type::Parameter("T".into()))]),
             ),
         )]);
         let trait_bounds = HashMap::from_iter([(
@@ -1231,14 +1232,14 @@ mod tests {
                 alias_definition(
                     "m.Alias",
                     nominal("m.Target"),
-                    HashMap::from_iter([named_method("run", Type::int())]),
+                    Methods::from_iter([named_method("run", Type::int())]),
                 ),
             ),
             (
                 "m.Target",
                 struct_definition(
                     "m.Target",
-                    HashMap::from_iter([named_method("run", Type::string())]),
+                    Methods::from_iter([named_method("run", Type::string())]),
                 ),
             ),
         ]);
@@ -1257,7 +1258,7 @@ mod tests {
                 "m.Target",
                 struct_definition(
                     "m.Target",
-                    HashMap::from_iter([named_method("run", Type::string())]),
+                    Methods::from_iter([named_method("run", Type::string())]),
                 ),
             ),
         ]);
@@ -1294,7 +1295,7 @@ mod tests {
                 interface_definition(
                     "m.Parent",
                     vec![],
-                    HashMap::from_iter([named_method("run", Type::int())]),
+                    Methods::from_iter([named_method("run", Type::int())]),
                 ),
             ),
         ]);

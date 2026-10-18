@@ -1,5 +1,3 @@
-use rustc_hash::FxHashMap as HashMap;
-
 use semantics::store::Store;
 use syntax::ast::{EnumVariant, Generic, StructFieldDefinition};
 use syntax::program::AliasKind;
@@ -16,12 +14,37 @@ enum InhabitanceState {
 
 #[derive(Default)]
 pub struct InhabitanceCache {
-    states: HashMap<Type, InhabitanceState>,
+    states: Vec<(Type, InhabitanceState)>,
 }
+
+#[must_use]
+struct PendingInhabitance(usize);
 
 impl InhabitanceCache {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn lookup(&self, ty: &Type) -> Option<bool> {
+        self.states
+            .iter()
+            .rev()
+            .find(|(key, _)| key == ty)
+            .map(|(_, state)| *state != InhabitanceState::Uninhabited)
+    }
+
+    fn begin(&mut self, ty: Type) -> PendingInhabitance {
+        let pending = PendingInhabitance(self.states.len());
+        self.states.push((ty, InhabitanceState::Visiting));
+        pending
+    }
+
+    fn finish(&mut self, pending: PendingInhabitance, inhabited: bool) {
+        self.states[pending.0].1 = if inhabited {
+            InhabitanceState::Inhabited
+        } else {
+            InhabitanceState::Uninhabited
+        };
     }
 }
 
@@ -37,14 +60,10 @@ pub fn is_inhabited(ty: &Type, store: &Store, cache: &mut InhabitanceCache) -> b
         return elements.iter().all(|e| is_inhabited(e, store, cache));
     }
 
-    if let Some(state) = cache.states.get(ty) {
-        return match state {
-            InhabitanceState::Visiting | InhabitanceState::Inhabited => true,
-            InhabitanceState::Uninhabited => false,
-        };
+    if let Some(inhabited) = cache.lookup(ty) {
+        return inhabited;
     }
-
-    cache.states.insert(ty.clone(), InhabitanceState::Visiting);
+    let pending = cache.begin(ty.clone());
 
     let result = match ty {
         Type::Nominal { id, params, .. } => check_constructor_inhabited(id, params, store, cache),
@@ -53,12 +72,7 @@ pub fn is_inhabited(ty: &Type, store: &Store, cache: &mut InhabitanceCache) -> b
         _ => true,
     };
 
-    let final_state = if result {
-        InhabitanceState::Inhabited
-    } else {
-        InhabitanceState::Uninhabited
-    };
-    cache.states.insert(ty.clone(), final_state);
+    cache.finish(pending, result);
 
     result
 }
@@ -156,4 +170,27 @@ pub fn is_struct_inhabited(
         let field_ty = substitute(&f.ty, &map);
         is_inhabited(&field_ty, store, cache)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nested_visits_remain_provisional_until_their_own_result_is_finalized() {
+        let mut cache = InhabitanceCache::new();
+        assert_eq!(cache.lookup(&Type::int()), None);
+        let outer = cache.begin(Type::int());
+        let inner = cache.begin(Type::string());
+        assert_eq!(cache.lookup(&Type::int()), Some(true));
+        assert_eq!(cache.lookup(&Type::string()), Some(true));
+
+        cache.finish(inner, false);
+        assert_eq!(cache.lookup(&Type::int()), Some(true));
+        assert_eq!(cache.lookup(&Type::string()), Some(false));
+        cache.finish(outer, true);
+
+        assert_eq!(cache.lookup(&Type::int()), Some(true));
+        assert_eq!(cache.lookup(&Type::string()), Some(false));
+    }
 }

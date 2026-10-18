@@ -45,8 +45,7 @@ impl TaskState {
         for (qualified_name, definition) in type_name_entries {
             package
                 .definitions
-                .entry(qualified_name)
-                .or_insert(definition);
+                .insert_if_absent(qualified_name, definition);
         }
     }
 
@@ -83,8 +82,7 @@ impl TaskState {
         for (qualified_name, definition) in entries {
             package
                 .definitions
-                .entry(qualified_name)
-                .or_insert(definition);
+                .insert_if_absent(qualified_name, definition);
         }
     }
 

@@ -187,8 +187,7 @@ impl TaskState {
                 if let Some(simple_qualified_name) = simple_name {
                     package
                         .definitions
-                        .entry(simple_qualified_name)
-                        .or_insert(definition);
+                        .insert_if_absent(simple_qualified_name, definition);
                 }
             }
         }

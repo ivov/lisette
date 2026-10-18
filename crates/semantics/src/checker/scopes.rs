@@ -3,6 +3,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::mem;
 use syntax::ast::BindingId;
 use syntax::ast::Span;
+use syntax::collections::FlatMap;
 use syntax::types::Type;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -140,7 +141,7 @@ impl FunctionContext {
 
 #[derive(Debug)]
 pub struct Scope {
-    values: HashMap<String, ScopedValue>,
+    values: FlatMap<String, ScopedValue>,
     generic_parameters: HashMap<String, GenericParameter>,
     function: Option<FunctionContext>,
     propagation_context: PropagationContext,
@@ -157,7 +158,7 @@ impl Default for Scope {
 impl Scope {
     fn new() -> Self {
         Scope {
-            values: HashMap::default(),
+            values: Default::default(),
             generic_parameters: HashMap::default(),
             function: None,
             propagation_context: PropagationContext::None,
@@ -177,10 +178,13 @@ impl Scope {
     }
 
     pub(crate) fn insert_value_if_absent(&mut self, name: String, ty: Type) {
-        self.values.entry(name).or_insert(ScopedValue {
-            ty,
-            kind: ScopedValueKind::Value,
-        });
+        self.values.insert_if_absent(
+            name,
+            ScopedValue {
+                ty,
+                kind: ScopedValueKind::Value,
+            },
+        );
     }
 
     pub(crate) fn insert_binding(&mut self, name: String, ty: Type, id: BindingId, mutable: bool) {

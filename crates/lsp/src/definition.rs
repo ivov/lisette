@@ -148,6 +148,7 @@ pub(crate) fn resolve_dot_access_definition(
     result.or_else(resolve_by_type).or_else(|| {
         snapshot
             .usages()
+            .in_file(dot_access_span.file_id)
             .iter()
             .find(|usage| usage.usage_span == dot_access_span)
             .map(|usage| usage.definition_span)
