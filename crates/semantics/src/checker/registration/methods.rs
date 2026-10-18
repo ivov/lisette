@@ -245,7 +245,7 @@ impl TaskState {
         self.resolve_generic_bounds(&*store, generics, span);
         let impl_bounds = resolved_generic_bounds(generics);
 
-        self.check_undeclared_impl_type_params(annotation, generics);
+        self.check_undeclared_impl_type_params(annotation);
         self.reject_writable_impl_target(annotation);
         let receiver_ty = self
             .convert_receiver_to_type(&*store, annotation, span)

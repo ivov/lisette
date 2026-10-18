@@ -5,7 +5,7 @@ use crate::checker::infer::expressions::comparison::{
 };
 use std::mem;
 use syntax::EcoString;
-use syntax::ast::{Annotation, Generic, Span, StructFields, VariantFields};
+use syntax::ast::{Annotation, Span, StructFields, VariantFields};
 use syntax::display::annotation_to_string;
 use syntax::program::{AliasKind, ConstantValue, DefinitionBody};
 use syntax::types::{
@@ -370,7 +370,7 @@ impl TaskState {
             return Type::unit();
         }
 
-        if self.lookup_generic_index(type_name).is_some() {
+        if self.scopes.has_type_param(type_name) {
             if !params.is_empty() {
                 self.sink.push(diagnostics::infer::type_param_with_args(
                     params.len(),
@@ -617,7 +617,7 @@ impl TaskState {
                 .check_array_size_in_bounds(*value, span)
                 .then_some(*value),
             Annotation::Constructor { name, params, .. }
-                if params.is_empty() && self.lookup_generic_index(name).is_none() =>
+                if params.is_empty() && !self.scopes.has_type_param(name) =>
             {
                 self.resolve_named_array_size(store, name, span)
             }
@@ -731,7 +731,7 @@ impl TaskState {
 
     /// Classifies `Enum.Variant` in type position before its constructor value exists.
     fn classify_unregistered_variant(
-        &mut self,
+        &self,
         store: &Store,
         type_name: &str,
     ) -> Option<(&'static str, Option<String>)> {
@@ -872,11 +872,7 @@ impl TaskState {
     /// Pre-check impl annotation for undeclared type params (e.g. `impl Container<T>`
     /// without `impl<T>`). Adds them to scope to prevent cascading errors from
     /// `convert_to_type`, and emits a diagnostic with the specific fix.
-    pub(crate) fn check_undeclared_impl_type_params(
-        &mut self,
-        annotation: &Annotation,
-        generics: &[Generic],
-    ) {
+    pub(crate) fn check_undeclared_impl_type_params(&mut self, annotation: &Annotation) {
         let Annotation::Constructor {
             name: receiver_name,
             params,
@@ -904,7 +900,7 @@ impl TaskState {
                 if sub_params.is_empty()
                     && name.len() == 1
                     && name.chars().next().is_some_and(|c| c.is_uppercase())
-                    && self.lookup_generic_index(name).is_none()
+                    && !self.scopes.has_type_param(name)
                 {
                     Some((name.to_string(), *param_span))
                 } else {
@@ -913,8 +909,8 @@ impl TaskState {
             })
             .collect();
 
-        for (i, (name, param_span)) in undeclared.iter().enumerate() {
-            self.scopes.insert_type_param(name, generics.len() + i);
+        for (name, param_span) in &undeclared {
+            self.scopes.insert_type_param(name);
             self.sink
                 .push(diagnostics::infer::undeclared_impl_type_param(
                     name,

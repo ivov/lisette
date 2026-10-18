@@ -91,12 +91,6 @@ struct ScopedValue {
     kind: ScopedValueKind,
 }
 
-#[derive(Debug, Clone)]
-struct GenericParameter {
-    index: usize,
-    bounds: Vec<Type>,
-}
-
 #[derive(Debug)]
 enum FunctionContext {
     LambdaPendingReturn,
@@ -142,7 +136,7 @@ impl FunctionContext {
 #[derive(Debug)]
 pub struct Scope {
     values: FlatMap<String, ScopedValue>,
-    generic_parameters: HashMap<String, GenericParameter>,
+    generic_parameters: HashMap<String, Vec<Type>>,
     function: Option<FunctionContext>,
     propagation_context: PropagationContext,
     impl_receiver_type: Option<Type>,
@@ -343,34 +337,27 @@ impl Scopes {
             .find_map(|scope| scope.values.get(name))
     }
 
-    /// Look up a type parameter by walking the scope stack from top to bottom.
-    pub(crate) fn lookup_type_param(&self, name: &str) -> Option<usize> {
-        self.stack.iter().rev().find_map(|scope| {
-            scope
-                .generic_parameters
-                .get(name)
-                .map(|parameter| parameter.index)
-        })
+    pub(crate) fn has_type_param(&self, name: &str) -> bool {
+        self.stack
+            .iter()
+            .rev()
+            .any(|scope| scope.generic_parameters.contains_key(name))
     }
 
-    pub(crate) fn insert_type_param(&mut self, name: &str, index: usize) {
-        self.current_mut().generic_parameters.insert(
-            name.to_string(),
-            GenericParameter {
-                index,
-                bounds: Vec::new(),
-            },
-        );
+    pub(crate) fn insert_type_param(&mut self, name: &str) {
+        self.current_mut()
+            .generic_parameters
+            .insert(name.to_string(), Vec::new());
     }
 
     pub(crate) fn insert_trait_bound(&mut self, parameter: &str, bound: Type) {
-        let parameter = self
+        let bounds = self
             .current_mut()
             .generic_parameters
             .get_mut(parameter)
             .expect("a generic parameter must be in scope before recording its bounds");
-        if !parameter.bounds.contains(&bound) {
-            parameter.bounds.push(bound);
+        if !bounds.contains(&bound) {
+            bounds.push(bound);
         }
     }
 
@@ -488,8 +475,8 @@ impl Scopes {
             .rev()
             .flat_map(|scope| &scope.generic_parameters)
             .filter(move |(name, _)| seen.insert(name.as_str()))
-            .filter(|(_, parameter)| !parameter.bounds.is_empty())
-            .map(|(name, parameter)| (name.as_str(), parameter.bounds.as_slice()))
+            .filter(|(_, bounds)| !bounds.is_empty())
+            .map(|(name, bounds)| (name.as_str(), bounds.as_slice()))
     }
 
     pub(crate) fn bounds_on_param(&self, name: &str) -> &[Type] {
@@ -497,7 +484,7 @@ impl Scopes {
             .iter()
             .rev()
             .find_map(|scope| scope.generic_parameters.get(name))
-            .map_or(&[], |parameter| parameter.bounds.as_slice())
+            .map_or(&[], Vec::as_slice)
     }
 
     pub(crate) fn mark_test_handle(&mut self) {
@@ -676,12 +663,26 @@ mod tests {
     }
 
     #[test]
+    fn type_parameters_keep_independent_bounds_by_name() {
+        let mut scopes = Scopes::new();
+        scopes.insert_type_param("T");
+        scopes.insert_type_param("U");
+        scopes.insert_trait_bound("T", Type::int());
+        scopes.insert_trait_bound("U", Type::string());
+
+        assert!(scopes.has_type_param("T"));
+        assert!(scopes.has_type_param("U"));
+        assert_eq!(scopes.bounds_on_param("T"), [Type::int()]);
+        assert_eq!(scopes.bounds_on_param("U"), [Type::string()]);
+    }
+
+    #[test]
     fn inner_type_parameter_shadows_outer_bounds_without_declaring_its_own() {
         let mut scopes = Scopes::new();
-        scopes.insert_type_param("T", 0);
+        scopes.insert_type_param("T");
         scopes.insert_trait_bound("T", Type::Error);
         scopes.push();
-        scopes.insert_type_param("T", 0);
+        scopes.insert_type_param("T");
 
         assert_eq!(scopes.visible_parameter_bounds().count(), 0);
         assert!(scopes.bounds_on_param("T").is_empty());
@@ -690,10 +691,10 @@ mod tests {
     #[test]
     fn popping_type_parameter_scope_restores_outer_bounds() {
         let mut scopes = Scopes::new();
-        scopes.insert_type_param("T", 0);
+        scopes.insert_type_param("T");
         scopes.insert_trait_bound("T", Type::Error);
         scopes.push();
-        scopes.insert_type_param("T", 0);
+        scopes.insert_type_param("T");
 
         scopes.pop();
 
@@ -703,29 +704,29 @@ mod tests {
     #[test]
     fn redeclaring_a_parameter_does_not_resurrect_its_bounds_after_pop() {
         let mut scopes = Scopes::new();
-        scopes.insert_type_param("T", 0);
+        scopes.insert_type_param("T");
         scopes.insert_trait_bound("T", Type::int());
         scopes.push();
-        scopes.insert_type_param("T", 1);
+        scopes.insert_type_param("T");
         scopes.insert_trait_bound("T", Type::string());
-        scopes.insert_type_param("T", 2);
+        scopes.insert_type_param("T");
         scopes.insert_trait_bound("T", Type::bool());
 
         scopes.pop();
 
         assert_eq!(scopes.bounds_on_param("T"), [Type::int()]);
-        assert_eq!(scopes.lookup_type_param("T"), Some(0));
+        assert!(scopes.has_type_param("T"));
     }
 
     #[test]
     fn visible_bounds_use_the_nearest_parameter_and_keep_unshadowed_parameters() {
         let mut scopes = Scopes::new();
-        scopes.insert_type_param("T", 0);
+        scopes.insert_type_param("T");
         scopes.insert_trait_bound("T", Type::int());
-        scopes.insert_type_param("U", 1);
+        scopes.insert_type_param("U");
         scopes.insert_trait_bound("U", Type::string());
         scopes.push();
-        scopes.insert_type_param("T", 0);
+        scopes.insert_type_param("T");
         scopes.insert_trait_bound("T", Type::bool());
         scopes.insert_trait_bound("T", Type::bool());
 
