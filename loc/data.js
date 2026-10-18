@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792270528829,
+  "lastUpdate": 1792343095935,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -45511,6 +45511,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "lsp",
             "value": 7381,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2945,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "93cf76ca3fe9c52fcbf3c6bbb56448fcee051b5e",
+          "message": "perf: compact collections for analysis facts and scopes (#1554)",
+          "timestamp": "2026-10-18T19:04:30+02:00",
+          "tree_id": "26de937e96e8cddc1cc23c69777034bf1ddd33a7",
+          "url": "https://github.com/ivov/lisette/commit/93cf76ca3fe9c52fcbf3c6bbb56448fcee051b5e"
+        },
+        "date": 1792343093232,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 149684,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39455,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28739,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19400,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15610,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9029,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
             "unit": "lines"
           },
           {
