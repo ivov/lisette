@@ -1,4 +1,5 @@
 mod fixes;
+mod unreachable_partial_err;
 
 use crate::_harness::build::compile_check;
 use crate::_harness::filesystem::MockFileSystem;

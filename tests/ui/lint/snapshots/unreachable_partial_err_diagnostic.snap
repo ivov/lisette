@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/unreachable_partial_err.rs
+---
+  ▲ Unreachable `Partial.Err` pattern
+   ╭─[test.lis:4:10]
+ 3 │ fn main() {
+ 4 │   if let Partial.Err(err) = os.Stdout.Write([1]) {
+   ·          ────────┬───────
+   ·                  ╰── never matches
+ 5 │     panic(err.Error())
+   ╰────
+  help: Go's `Write` reports failure as `Partial.Both`. To handle any error, check `.err()` · code: [lint.unreachable_partial_err]

@@ -1986,6 +1986,14 @@ pub fn is_nilable_go_type<'a>(ty: &Type, lookup: impl Fn(&str) -> Option<&'a Def
         || core.is_receiver()
 }
 
+/// Whether a Go `Partial` value can be nil, which makes the bare `Err` reachable.
+pub fn partial_ok_is_nilable<'a>(
+    ty: &Type,
+    lookup: impl Fn(&str) -> Option<&'a Definition>,
+) -> bool {
+    is_nilable_go_type(ty, &lookup) || peel_alias(ty, &lookup).is_slice()
+}
+
 /// Walk an alias chain by id alone (for example during Go-name resolution).
 pub fn peel_alias_id<F>(id: &str, next_alias: F) -> String
 where

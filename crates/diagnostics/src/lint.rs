@@ -133,6 +133,15 @@ pub fn dead_code(span: &Span, cause: DeadCodeCause) -> LisetteDiagnostic {
         .with_help("Remove this line and all code after it")
 }
 
+pub fn unreachable_partial_err(span: &Span, callee: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Unreachable `Partial.Err` pattern")
+        .with_lint_code("unreachable_partial_err")
+        .with_span_label(span, "never matches")
+        .with_help(format!(
+            "Go's `{callee}` reports failure as `Partial.Both`. To handle any error, check `.err()`"
+        ))
+}
+
 pub fn pattern_issue(span: &Span, kind: IssueKind) -> LisetteDiagnostic {
     let (code, message, label, help) = match kind {
         IssueKind::RedundantLetElse => (

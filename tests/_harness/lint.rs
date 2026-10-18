@@ -4,6 +4,10 @@ use syntax::{lex::Lexer, parse::Parser};
 use super::pipeline::{InferredTestFile, TEST_FILE_ID, infer_test_file};
 
 pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
+    lint_with_go_typedefs(source, &[])
+}
+
+pub fn lint_with_go_typedefs(source: &str, typedefs: &[(&str, &str)]) -> Vec<LisetteDiagnostic> {
     let lex_result = Lexer::new(source, TEST_FILE_ID).lex();
     if lex_result.failed() {
         panic!("Lexing failed in lint test: {:?}", lex_result.errors);
@@ -14,7 +18,11 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         panic!("Parsing failed in lint test: {:?}", parse_result.errors);
     }
 
-    let InferredTestFile { store, checker } = infer_test_file(source, parse_result.ast, &[]);
+    let typedefs: Vec<_> = typedefs
+        .iter()
+        .map(|(name, source)| (name.to_string(), source.to_string()))
+        .collect();
+    let InferredTestFile { store, checker } = infer_test_file(source, parse_result.ast, &typedefs);
     let inference_checkpoint = checker.sink.checkpoint();
 
     passes::run(

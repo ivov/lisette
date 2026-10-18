@@ -114,6 +114,7 @@ mod unnecessary_min_or_max;
 mod unnecessary_range_loop;
 mod unnecessary_raw_string;
 mod unnecessary_return;
+mod unreachable_partial_err;
 mod unsigned_comparison;
 mod verbose_failure_propagation;
 mod waitgroup;
@@ -237,6 +238,7 @@ pub use unnecessary_raw_string::{
     check_unnecessary_raw_string_expression, check_unnecessary_raw_string_pattern,
 };
 pub use unnecessary_return::check_unnecessary_return;
+pub use unreachable_partial_err::check_unreachable_partial_err;
 pub use unsigned_comparison::check_unsigned_comparison;
 pub use verbose_failure_propagation::check_verbose_failure_propagation;
 pub use while_let_loop::check_while_let_loop;

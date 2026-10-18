@@ -58,8 +58,8 @@ use checks::{
     check_unnecessary_lazy_evaluations, check_unnecessary_map_on_constructor,
     check_unnecessary_min_or_max, check_unnecessary_range_loop,
     check_unnecessary_raw_string_expression, check_unnecessary_raw_string_pattern,
-    check_unnecessary_return, check_unsigned_comparison, check_verbose_failure_propagation,
-    check_while_let_loop, check_wildcard_in_or_patterns,
+    check_unnecessary_return, check_unreachable_partial_err, check_unsigned_comparison,
+    check_verbose_failure_propagation, check_while_let_loop, check_wildcard_in_or_patterns,
 };
 
 fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, role: FunctionRole<'_>) {
@@ -135,6 +135,7 @@ fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, role: F
         (check_redundant_slice_bounds, &[IndexedAccess]),
         (check_redundant_pattern_matching, &[Match]),
         (check_equatable_if_let, &[IfLet]),
+        (check_unreachable_partial_err, &[IfLet]),
         (check_manual_map, &[Match]),
         (check_manual_map_or, &[Match]),
         (check_manual_filter, &[Match]),
