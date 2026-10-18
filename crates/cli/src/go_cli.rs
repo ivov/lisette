@@ -161,22 +161,24 @@ fn toolchain_switch_enabled() -> bool {
     value == "auto" || value == "path" || value.ends_with("+auto") || value.ends_with("+path")
 }
 
-pub fn go_fmt_paths(paths: &[PathBuf]) -> Result<(), String> {
-    if paths.is_empty() {
-        return Ok(());
-    }
-    let mut cmd = Command::new("gofmt");
-    cmd.arg("-w");
-    for path in paths {
-        cmd.arg(path);
-    }
-    let output = cmd
-        .output()
-        .map_err(|e| format!("Failed to run `gofmt`: {}", e))?;
+// `gofmt -w` creates a backup per file, and file creation from many threads contends in the macOS kernel.
+#[cfg(target_os = "macos")]
+const GOFMT_BATCH_SIZE: usize = 50;
+#[cfg(not(target_os = "macos"))]
+const GOFMT_BATCH_SIZE: usize = usize::MAX;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("`gofmt` error: {}", stderr));
+pub fn go_fmt_paths(paths: &[PathBuf]) -> Result<(), String> {
+    for batch in paths.chunks(GOFMT_BATCH_SIZE) {
+        let output = Command::new("gofmt")
+            .arg("-w")
+            .args(batch)
+            .output()
+            .map_err(|e| format!("Failed to run `gofmt`: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("`gofmt` error: {}", stderr));
+        }
     }
 
     Ok(())
