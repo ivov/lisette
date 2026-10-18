@@ -73,6 +73,47 @@ fn lis(project: &Path, subcommand: &str) -> Output {
         .expect("failed to invoke lisette")
 }
 
+#[test]
+fn unreachable_partial_err_through_go_interface() {
+    if !go_available() {
+        eprintln!("skipping unreachable_partial_err_through_go_interface: `go` not found");
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let source = scratch.path().join("interface.lis");
+    fs::write(
+        &source,
+        r#"
+import "go:io"
+import "go:fmt"
+
+struct FailingWriter {}
+impl FailingWriter {
+  fn Write(self, _data: Slice<byte>) -> Partial<int, error> {
+    let _ = fmt.Println("WRITE")
+    Partial.Err(io.EOF)
+  }
+}
+
+fn via_interface(w: io.Writer) {
+  if let Partial.Err(_) = w.Write([1]) {
+    panic("Err reached through Go interface")
+  } else {
+    let _ = fmt.Println("ELSE")
+  }
+}
+
+fn main() { via_interface(FailingWriter {}) }
+"#,
+    )
+    .unwrap();
+    let output = lis(&source, "run");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    assert_eq!(stdout.trim(), "WRITE\nELSE");
+}
+
 const STRENGTHENED_IMPL_BOX: &str = r#"
 pub struct Box<T: Comparable> { pub items: Slice<T> }
 

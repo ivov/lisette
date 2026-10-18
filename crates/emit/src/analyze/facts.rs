@@ -156,6 +156,10 @@ impl<'a> EmitFacts<'a> {
         is_nilable_go_type(&self.input.definitions, ty)
     }
 
+    pub(crate) fn partial_ok_is_nilable(&self, ty: &Type) -> bool {
+        types::partial_ok_is_nilable(ty, |id| self.input.definitions.get(id))
+    }
+
     pub(crate) fn is_nullable_option(&self, ty: &Type) -> bool {
         is_nullable_option(&self.input.definitions, ty)
     }

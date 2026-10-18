@@ -291,6 +291,10 @@ impl Store {
         types::is_nilable_go_type(ty, |id| self.get_definition(id))
     }
 
+    pub fn partial_ok_is_nilable(&self, ty: &Type) -> bool {
+        types::partial_ok_is_nilable(ty, |id| self.get_definition(id))
+    }
+
     pub fn peel_alias(&self, ty: &Type) -> Type {
         types::peel_alias(ty, |id| self.get_definition(id))
     }

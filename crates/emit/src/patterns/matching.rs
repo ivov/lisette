@@ -979,7 +979,7 @@ impl Planner<'_> {
         let (both_val, both_err) = partial_both_bindings(both_arm)?;
 
         let ok_ty = self.facts.peel_alias(&subject.get_type()).ok_type();
-        let nilable = self.partial_ok_is_nilable(&ok_ty);
+        let nilable = self.facts.partial_ok_is_nilable(&ok_ty);
 
         let (mut statements, call) = self
             .lower_call(subject, None, ExpressionContext::value())
