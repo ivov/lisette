@@ -411,7 +411,7 @@ impl InferCtx<'_> {
     }
 
     fn constructor_call_grants_write(
-        &mut self,
+        &self,
         callee: &Expression,
         parameters: &[FunctionParameter],
     ) -> bool {
@@ -819,7 +819,7 @@ impl InferCtx<'_> {
     }
 
     fn resolve_callee_forall_type(
-        &mut self,
+        &self,
         expression: &Expression,
         type_args: &[Annotation],
     ) -> Type {
@@ -829,7 +829,7 @@ impl InferCtx<'_> {
         self.declared_callee_type(expression)
     }
 
-    fn declared_callee_type(&mut self, expression: &Expression) -> Type {
+    fn declared_callee_type(&self, expression: &Expression) -> Type {
         let store = self.store;
         match expression {
             Expression::Identifier { value, .. } => self
@@ -868,7 +868,7 @@ impl InferCtx<'_> {
         }
     }
 
-    fn is_generic_callee(&mut self, expression: &Expression) -> bool {
+    fn is_generic_callee(&self, expression: &Expression) -> bool {
         matches!(self.declared_callee_type(expression), Type::Forall { .. })
     }
 

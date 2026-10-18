@@ -20,7 +20,7 @@ impl InferCtx<'_> {
             this.put_in_scope(&generics);
             let generics = this.ensure_generic_bounds(store, generics, &span);
 
-            this.check_undeclared_impl_type_params(&annotation, &generics);
+            this.check_undeclared_impl_type_params(&annotation);
             let impl_ty = this.convert_receiver_to_type(store, &annotation, &span);
 
             if let Type::Nominal { id, .. } = &impl_ty

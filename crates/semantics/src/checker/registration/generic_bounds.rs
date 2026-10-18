@@ -200,7 +200,7 @@ impl TaskState {
         parameter_name: &str,
         own_generics: &[Generic],
     ) -> Option<Vec<Type>> {
-        if self.scopes.lookup_type_param(parameter_name).is_some() {
+        if self.scopes.has_type_param(parameter_name) {
             let bounds: Vec<_> = self
                 .scopes
                 .bounds_on_param(parameter_name)

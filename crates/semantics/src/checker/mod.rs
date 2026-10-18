@@ -67,8 +67,8 @@ impl TaskState {
     }
 
     pub(crate) fn put_in_scope(&mut self, generics: &[Generic]) {
-        for (index, generic) in generics.iter().enumerate() {
-            self.scopes.insert_type_param(&generic.name, index);
+        for generic in generics {
+            self.scopes.insert_type_param(&generic.name);
         }
     }
 
