@@ -1254,6 +1254,10 @@ impl Span {
         let end = self.end().max(other.end());
         Span::new(self.file_id, start, end - start)
     }
+
+    pub fn after(self, prefix: Span) -> Span {
+        Span::new(self.file_id, prefix.end(), self.end() - prefix.end())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

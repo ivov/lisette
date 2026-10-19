@@ -112,8 +112,8 @@ description: |
                             },
                             span: Span {
                                 file_id: 0,
-                                byte_offset: 47,
-                                byte_length: 5,
+                                byte_offset: 38,
+                                byte_length: 14,
                             },
                             from_colon_syntax: false,
                         },

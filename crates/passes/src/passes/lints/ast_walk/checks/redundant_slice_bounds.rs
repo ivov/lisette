@@ -77,11 +77,11 @@ pub fn check_redundant_slice_bounds(expression: &Expression, ctx: &NodeCtx) {
         format!("{receiver_text}[{start_text}..]")
     };
 
-    let fix_span = receiver.get_span().merge(*span);
+    let brackets = span.after(receiver.get_span());
     ctx.sink.push(
-        diagnostics::lint::redundant_slice_bounds(span, &replacement).with_fix(Fix::new(
+        diagnostics::lint::redundant_slice_bounds(&brackets, &replacement).with_fix(Fix::new(
             format!("Replace with `{replacement}`"),
-            Edit::replacement(fix_span, replacement.clone()),
+            Edit::replacement(*span, replacement.clone()),
         )),
     );
 }

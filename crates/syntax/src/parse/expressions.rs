@@ -365,7 +365,7 @@ impl<'source> Parser<'source> {
     }
 
     pub(crate) fn parse_index_expression(&mut self, expression: Expression) -> Expression {
-        let start = self.current_token();
+        let start_offset = expression.get_span().byte_offset;
 
         self.ensure(LeftSquareBracket);
 
@@ -402,7 +402,7 @@ impl<'source> Parser<'source> {
             ty: Type::uninferred(),
             expression: expression.into(),
             index: index.into(),
-            span: self.span_from_offset(start.byte_offset),
+            span: self.span_from_offset(start_offset),
             from_colon_syntax,
         }
     }
@@ -959,14 +959,13 @@ impl<'source> Parser<'source> {
         self.ensure(Dot);
 
         let expression_start = expression.get_span().byte_offset;
-        let start = self.current_token();
 
         if self.advance_if(Star) {
             return Expression::Unary {
                 ty: Type::uninferred(),
                 operator: UnaryOperator::Deref,
                 expression: expression.into(),
-                span: self.span_from_offset(start.byte_offset),
+                span: self.span_from_offset(expression_start),
             };
         }
 

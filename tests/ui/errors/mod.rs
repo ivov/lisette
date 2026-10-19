@@ -3752,6 +3752,29 @@ fn test() {
 }
 
 #[test]
+fn infer_type_mismatch_span_covers_index_receiver() {
+    let input = r#"
+fn main() {
+  let s = [1, 2, 3]
+  let x: string = s[0]
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_mismatch_span_covers_deref_operand() {
+    let input = r#"
+fn main() {
+  let n = 1
+  let r = &n
+  let x: string = r.*
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_type_mismatch_return() {
     let input = r#"
 fn get_number() -> int {

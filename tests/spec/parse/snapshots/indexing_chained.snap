@@ -169,8 +169,8 @@ description: |
                                 },
                                 span: Span {
                                     file_id: 0,
-                                    byte_offset: 77,
-                                    byte_length: 5,
+                                    byte_offset: 71,
+                                    byte_length: 11,
                                 },
                                 from_colon_syntax: false,
                             },
@@ -191,8 +191,8 @@ description: |
                             },
                             span: Span {
                                 file_id: 0,
-                                byte_offset: 82,
-                                byte_length: 5,
+                                byte_offset: 71,
+                                byte_length: 16,
                             },
                             from_colon_syntax: false,
                         },
