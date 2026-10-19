@@ -6765,6 +6765,66 @@ fn test() {
 }
 
 #[test]
+fn unit_alias_call_in_block_value_has_no_go_result() {
+    let input = r#"
+type U = ()
+
+interface Doer {
+  fn run() -> U
+}
+
+struct A {}
+
+impl A {
+  fn run(self) {}
+}
+
+fn test() {
+  let d: Doer = A {}
+  let _ = { d.run() }
+  let x: U = { d.run() }
+  let _ = x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unit_call_bound_to_unknown_keeps_binding_type() {
+    let input = r#"
+type U = ()
+
+fn id<T>(v: T) -> T {
+  v
+}
+
+fn test() {
+  let mut a: Unknown = id<U>(())
+  a = 1
+  let mut b: Unknown = id<()>(())
+  b = 2
+  let _ = a
+  let _ = b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unit_alias_unwrap_or_on_map_get_keeps_call() {
+    let input = r#"
+type U = ()
+
+fn test() {
+  let m: Map<string, U> = Map.new()
+  let x = m.get("x").unwrap_or(())
+  let _ = x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn bare_param_interface_wraps_nullable_option_impl() {
     let input = r#"
 struct Thing {

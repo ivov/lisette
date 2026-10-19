@@ -8,7 +8,7 @@ use crate::patterns::binding_decls::pattern_binds_name;
 use crate::plan::bodies::with_setup;
 use crate::plan::bodies::{
     AssignForm, Definition, ElseArm, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement,
-    PlacePlan, Statement, assign, discard, expression_statement,
+    PlacePlan, Statement, assign, discard, effect_statement, expression_statement,
 };
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
@@ -75,13 +75,6 @@ pub(crate) fn is_zero_call(expression: &Expression) -> bool {
             ..
         }
     )
-}
-
-pub(crate) fn is_unit_call(expression: &Expression) -> bool {
-    // `zero<()>()` yields a value rather than running for its effect.
-    expression.get_type().is_unit()
-        && matches!(expression.unwrap_parens(), Expression::Call { call_kind, .. }
-            if *call_kind != CallKind::Zero)
 }
 
 /// A `target = value` assignment with no lvalue capture, after the value's setup.
@@ -424,6 +417,13 @@ pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -
 }
 
 impl Planner<'_> {
+    pub(crate) fn is_unit_call(&self, expression: &Expression) -> bool {
+        // `zero<()>()` yields a value rather than running for its effect.
+        self.facts.resolves_to_unit(&expression.get_type())
+            && matches!(expression.unwrap_parens(), Expression::Call { call_kind, .. }
+                if *call_kind != CallKind::Zero)
+    }
+
     pub(crate) fn short_declaration_keeps_type(&self, ty: &Type) -> bool {
         let peeled = self.facts.peel_alias(ty);
         !self.facts.is_interface_or_unknown(&peeled)
@@ -445,7 +445,7 @@ impl Planner<'_> {
         }
 
         let value_ty = value.get_type();
-        if value_ty.is_unit()
+        if self.facts.resolves_to_unit(&value_ty)
             || value_ty.is_variable()
             || value_ty.is_placeholder()
             || value_ty.is_never()
@@ -455,7 +455,9 @@ impl Planner<'_> {
             let effects = staged_value.effects();
             let reads_or_acts = !effects.can_erase() || effects.reads() != Stability::Fixed;
             if !staged_value.is_empty() && reads_or_acts {
-                if matches!(unwrapped, Expression::Call { .. }) {
+                if matches!(unwrapped, Expression::Call { .. })
+                    && staged_value.stands_as_a_statement()
+                {
                     // A never-typed call (e.g. `panic(...)`) diverges.
                     statements.push(
                         LoweredStatement::ExpressionStatement {
@@ -500,7 +502,7 @@ impl Planner<'_> {
             .lower_value(value, ExpressionContext::value())
             .into_parts();
         if !call.is_empty() {
-            statements.push(expression_statement(call));
+            statements.push(effect_statement(call));
         }
         statements.push(
             simple_assign(
@@ -703,7 +705,7 @@ impl Planner<'_> {
         if matches!(last, Expression::Block { .. }) {
             return self.lower_assign(last, target, target_ty);
         }
-        if is_unit_call(last) {
+        if self.is_unit_call(last) {
             return self.lower_unit_call_into_var(last, target);
         }
         if let Some(statements) = self.lower_slice_growth_to_var(target, last) {
@@ -871,7 +873,7 @@ impl Planner<'_> {
     ) -> ValuePlan {
         if let Expression::Block { items, .. } = expression {
             if ty.is_never()
-                || ty.is_unit()
+                || self.facts.resolves_to_unit(ty)
                 || ty.is_placeholder()
                 || matches!(ty, Type::Var { .. } | Type::Forall { .. })
             {
@@ -912,9 +914,9 @@ impl Planner<'_> {
 
         if let Some(loop_context) = self.current_loop().cloned() {
             let target = loop_context.result;
-            if is_unit_call(val) {
+            if self.is_unit_call(val) {
                 if !value.is_empty() {
-                    statements.push(expression_statement(value));
+                    statements.push(effect_statement(value));
                 }
                 statements.push(assign(
                     target,

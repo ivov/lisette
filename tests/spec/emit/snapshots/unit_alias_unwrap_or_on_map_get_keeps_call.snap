@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  type U = ()
+  
+  fn test() {
+    let m: Map<string, U> = Map.new()
+    let x = m.get("x").unwrap_or(())
+    let _ = x
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type U = struct{}
+
+func test() {
+	m := make(map[string]U)
+	lisette.MapGet(m, "x").UnwrapOr(struct{}{})
+}

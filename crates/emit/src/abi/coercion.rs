@@ -604,7 +604,10 @@ fn is_go_interface_slot(planner: &Planner<'_>, ty: &Type) -> bool {
 }
 
 fn aggregate_rebuild(planner: &Planner<'_>, from: &Type, to: &Type) -> Option<CoercionPlan> {
-    match (from, to) {
+    match (
+        &planner.facts.peel_alias(from),
+        &planner.facts.peel_alias(to),
+    ) {
         (
             Type::Array {
                 length: from_length,

@@ -1291,6 +1291,74 @@ fn test() {
 }
 
 #[test]
+fn array_of_concrete_widens_to_interface_elements_through_alias() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+type Errs = Array<error, 2>
+type Booms = Array<Boom, 2>
+
+struct Holder {
+  errs: Errs,
+}
+
+fn first(errs: Errs) -> string {
+  errs[0].Error()
+}
+
+fn give(concrete: Booms) -> Errs {
+  concrete
+}
+
+fn test() {
+  let concrete: Booms = [Boom {}, Boom {}]
+  let mut assigned: Errs = give(concrete)
+  assigned = concrete
+  let held = Holder { errs: concrete }
+  if first(concrete) != "boom" || first(assigned) != "boom" || first(held.errs) != "boom" {
+    panic("aliased array lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_of_concrete_widens_to_interface_elements_through_alias() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+type Pair = (error, int)
+type Rows = Array<(error, int), 2>
+
+fn first(rows: Rows) -> string {
+  rows[0].0.Error()
+}
+
+fn test() {
+  let pair: Pair = (Boom {}, 1)
+  let concrete: Array<(Boom, int), 2> = [(Boom {}, 1), (Boom {}, 2)]
+  if pair.0.Error() != "boom" || first(concrete) != "boom" {
+    panic("aliased tuple lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn tuple_tail_return_wraps_adapter_for_interface_slot() {
     let input = r#"
 struct Thing {

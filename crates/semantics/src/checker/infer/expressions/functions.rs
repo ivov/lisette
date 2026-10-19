@@ -253,7 +253,7 @@ impl InferCtx<'_> {
         } = body.as_ref()
             && items.is_empty()
             && *return_annotation != Annotation::Unknown
-            && !return_ty.is_unit()
+            && !self.store.resolves_to_unit(return_ty)
         {
             self.sink
                 .push(diagnostics::infer::empty_body_return_mismatch(

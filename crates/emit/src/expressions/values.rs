@@ -14,11 +14,10 @@ use crate::calls::go_interop::GoResultBridge;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{
-    LoweredBlock, LoweredStatement, Statement, discard, expression_statement,
+    LoweredBlock, LoweredStatement, Statement, discard, effect_statement, expression_statement,
 };
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::go_expression::FunctionLiteralLayout;
-use crate::plan::placement::is_unit_call;
 use crate::plan::values::{CaptureBoundary, GoExpression, OperandForm, ValuePlan};
 use crate::state::bindings::BindingValue;
 use crate::statements::assignments::PlaceOrdering;
@@ -158,15 +157,15 @@ impl Planner<'_> {
         expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        if is_unit_call(expression)
-            || (expression.get_type().is_unit()
+        if self.is_unit_call(expression)
+            || (self.facts.resolves_to_unit(&expression.get_type())
                 && matches!(expression.unwrap_parens(), Expression::Block { .. }))
         {
             return self
                 .lower_value(expression, ctx)
                 .map_observable_expression(|setup, call| {
                     if !call.is_empty() {
-                        setup.push(expression_statement(call));
+                        setup.push(effect_statement(call));
                     }
                     GoExpression::empty_composite("struct{}".to_string())
                 });
@@ -529,11 +528,11 @@ impl Planner<'_> {
     /// Plan a `&inner` reference, hoisting to a temp when the inner is
     /// Go-unaddressable.
     pub(crate) fn plan_reference(&mut self, inner: &Expression, ty: &Type) -> ValuePlan {
-        if is_unit_call(inner) {
+        if self.is_unit_call(inner) {
             let staged = self.plan_operand(inner.unwrap_parens(), ExpressionContext::value());
             return staged.map_observable_expression(|setup, staged_value| {
                 if !staged_value.is_empty() {
-                    setup.push(expression_statement(staged_value));
+                    setup.push(effect_statement(staged_value));
                 }
                 let tmp = self.hoist_tmp_value_statement(
                     setup,

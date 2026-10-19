@@ -121,6 +121,10 @@ impl<'a> EmitFacts<'a> {
         types::resolves_to_unknown(ty, |id| self.definition(id))
     }
 
+    pub(crate) fn resolves_to_unit(&self, ty: &Type) -> bool {
+        types::resolves_to_unit(ty, |id| self.definition(id))
+    }
+
     pub(crate) fn contains_unknown(&self, ty: &Type) -> bool {
         types::contains_unknown(ty, |id| self.definition(id))
     }

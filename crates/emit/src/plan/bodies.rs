@@ -31,6 +31,16 @@ pub(crate) fn expression_statement(expression: GoExpression) -> Statement {
     .into()
 }
 
+/// Run a lowered value for its effects. A fused call can lower to a temp
+/// rather than a Go call, and Go rejects a bare temp as a statement.
+pub(crate) fn effect_statement(value: GoExpression) -> Statement {
+    if value.stands_as_a_statement() {
+        expression_statement(value)
+    } else {
+        discard(value)
+    }
+}
+
 pub(crate) fn assign(target: GoExpression, value: GoExpression) -> Statement {
     LoweredStatement::Assign(AssignForm::Simple { target, value }).into()
 }
