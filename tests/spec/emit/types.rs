@@ -3915,6 +3915,50 @@ fn main() {
 }
 
 #[test]
+fn ref_collection_auto_deref_for_loop_yields_elements() {
+    let input = r#"
+fn main() {
+  let s = [1, 2]
+  let a: Array<int, 2> = [3, 4]
+  let m = Map.from([("a", 5)])
+  let rs = &s
+  let ra = &a
+  let rm = &m
+  let mut total = 0
+  for v in rs {
+    let w = { v }
+    total += w
+  }
+  for v in ra {
+    total += v
+  }
+  for (_, v) in rm {
+    total += v
+  }
+  if total != 15 { panic("wrong") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_ref_auto_deref_for_loop() {
+    let input = r#"
+fn sum(xs: Ref<Ref<Slice<int>>>, rs: Ref<Ref<Range<int>>>) -> int {
+  let mut total = 0
+  for v in xs {
+    total += v
+  }
+  for v in rs {
+    total += v
+  }
+  total
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn ref_newtype_dot0_auto_deref() {
     let input = r#"
 struct UserId(int)

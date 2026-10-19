@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  fn main() {
+    let s = [1, 2]
+    let a: Array<int, 2> = [3, 4]
+    let m = Map.from([("a", 5)])
+    let rs = &s
+    let ra = &a
+    let rm = &m
+    let mut total = 0
+    for v in rs {
+      let w = { v }
+      total += w
+    }
+    for v in ra {
+      total += v
+    }
+    for (_, v) in rm {
+      total += v
+    }
+    if total != 15 { panic("wrong") }
+  }
+---
+package main
+
+func main() {
+	s := []int{1, 2}
+	a := [2]int{3, 4}
+	m := map[string]int{"a": 5}
+	rs := &s
+	ra := &a
+	rm := &m
+	total := 0
+	for _, v := range *rs {
+		w := v
+		total += w
+	}
+	for _, v := range *ra {
+		total += v
+	}
+	for _, v := range *rm {
+		total += v
+	}
+	if total != 15 {
+		panic("wrong")
+	}
+}

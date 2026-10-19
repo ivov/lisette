@@ -653,6 +653,38 @@ fn for_loop_over_non_iterable() {
 }
 
 #[test]
+fn for_loop_over_reference_iterates_pointee() {
+    infer(
+        r#"
+    fn test(
+      s: Ref<Slice<int>>,
+      a: Ref<Array<int, 3>>,
+      m: Ref<Map<string, int>>,
+      r: Ref<Range<int>>,
+    ) {
+      for x: int in s {}
+      for x: int in a {}
+      for (k, v): (string, int) in m {}
+      for x: int in r {}
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn for_loop_over_reference_to_non_iterable() {
+    infer(
+        r#"
+    fn test(r: Ref<int>) {
+      for i in r {}
+    }
+        "#,
+    )
+    .assert_infer_code("not_iterable");
+}
+
+#[test]
 fn for_loop_over_slice_of_tuples_with_identifier() {
     infer(
         r#"
