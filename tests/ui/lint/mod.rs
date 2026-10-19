@@ -26035,6 +26035,19 @@ fn main() {
 }
 
 #[test]
+fn discarded_unit_binding_unit_alias() {
+    assert_lint_snapshot!(
+        r#"
+type U = ()
+fn touch() -> U {}
+fn main() {
+  let _ = touch()
+}
+"#
+    );
+}
+
+#[test]
 fn discarded_unit_binding_value_not_flagged() {
     assert_no_lint_warnings!(
         r#"

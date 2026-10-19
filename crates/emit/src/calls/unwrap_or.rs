@@ -143,7 +143,9 @@ impl Planner<'_> {
             return None;
         }
         let receiver_ty = self.facts.peel_alias(&receiver.get_type());
-        if (receiver_ty.is_option() || receiver_ty.is_result()) && receiver_ty.ok_type().is_unit() {
+        if (receiver_ty.is_option() || receiver_ty.is_result())
+            && self.facts.resolves_to_unit(&receiver_ty.ok_type())
+        {
             return None;
         }
         let fuse = if receiver_ty.is_option() {

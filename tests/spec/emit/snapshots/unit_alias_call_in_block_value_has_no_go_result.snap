@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  type U = ()
+  
+  interface Doer {
+    fn run() -> U
+  }
+  
+  struct A {}
+  
+  impl A {
+    fn run(self) {}
+  }
+  
+  fn test() {
+    let d: Doer = A {}
+    let _ = { d.run() }
+    let x: U = { d.run() }
+    let _ = x
+  }
+---
+package main
+
+type U = struct{}
+
+type Doer interface {
+	Run()
+}
+
+type A struct{}
+
+func (a A) Run() {}
+
+func test() {
+	var d Doer = A{}
+	d.Run()
+	var x U
+	d.Run()
+	x = struct{}{}
+	_ = x
+}

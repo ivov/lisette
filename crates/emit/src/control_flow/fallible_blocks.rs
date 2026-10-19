@@ -12,7 +12,6 @@ use crate::names::go_name::GeneratedPackage;
 use crate::plan::bodies::{LoweredBlock, Statement, define};
 use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::local::GoIdentifier;
-use crate::plan::placement::is_unit_call;
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -163,7 +162,7 @@ impl Planner<'_> {
                 | Expression::For { .. }
                 | Expression::Loop { .. }
         );
-        if is_statement_only || is_unit_call(last) {
+        if is_statement_only || self.is_unit_call(last) {
             let mut statements = vec![self.lower_statement(last)];
             statements.extend(self.lower_try_unit_return(fallible));
             return statements;

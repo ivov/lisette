@@ -1,0 +1,86 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  struct Boom {}
+  
+  impl Boom {
+    fn Error(self) -> string {
+      "boom"
+    }
+  }
+  
+  type Errs = Array<error, 2>
+  type Booms = Array<Boom, 2>
+  
+  struct Holder {
+    errs: Errs,
+  }
+  
+  fn first(errs: Errs) -> string {
+    errs[0].Error()
+  }
+  
+  fn give(concrete: Booms) -> Errs {
+    concrete
+  }
+  
+  fn test() {
+    let concrete: Booms = [Boom {}, Boom {}]
+    let mut assigned: Errs = give(concrete)
+    assigned = concrete
+    let held = Holder { errs: concrete }
+    if first(concrete) != "boom" || first(assigned) != "boom" || first(held.errs) != "boom" {
+      panic("aliased array lost its interface elements")
+    }
+  }
+---
+package main
+
+type Boom struct{}
+
+func (b Boom) Error() string {
+	return "boom"
+}
+
+type Errs = [2]error
+
+type Booms = [2]Boom
+
+type Holder struct {
+	errs Errs
+}
+
+func first(errs Errs) string {
+	return errs[0].Error()
+}
+
+func give(concrete Booms) Errs {
+	var boxed Errs
+	for i := range concrete {
+		boxed[i] = concrete[i]
+	}
+	return boxed
+}
+
+func test() {
+	concrete := [2]Boom{{}, {}}
+	assigned := give(concrete)
+	var boxed Errs
+	for i := range concrete {
+		boxed[i] = concrete[i]
+	}
+	assigned = boxed
+	var boxed_1 Errs
+	for i_1 := range concrete {
+		boxed_1[i_1] = concrete[i_1]
+	}
+	held := Holder{errs: boxed_1}
+	var boxed_2 Errs
+	for i_2 := range concrete {
+		boxed_2[i_2] = concrete[i_2]
+	}
+	if first(boxed_2) != "boom" || first(assigned) != "boom" || first(held.errs) != "boom" {
+		panic("aliased array lost its interface elements")
+	}
+}

@@ -15,12 +15,12 @@ use crate::patterns::decision_tree::collect_pattern_info;
 use crate::patterns::matching::ResultFusePlan;
 use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
 use crate::plan::bodies::{
-    LoweredBlock, LoweredStatement, Statement, define, define_many, expression_statement,
+    LoweredBlock, LoweredStatement, Statement, define, define_many, effect_statement,
 };
 use crate::plan::local::GoIdentifier;
 use crate::plan::placement::{
-    collapse_declared_temp, expression_contains_binding, is_unit_call, is_zero_call,
-    rebind_trailing_temp, rebind_updated_temp, requires_temp_var,
+    collapse_declared_temp, expression_contains_binding, is_zero_call, rebind_trailing_temp,
+    rebind_updated_temp, requires_temp_var,
 };
 use crate::plan::values::GoExpression;
 use crate::state::bindings::{ComponentBinding, ComponentKind, TupleBinding};
@@ -107,7 +107,7 @@ impl Planner<'_> {
             ..
         } = let_spec;
         let ids = binding_id.as_slice();
-        if is_unit_call(value) {
+        if self.is_unit_call(value) {
             return self.lower_let_unit_call(let_spec, raw_go_name);
         }
         let needs_temp = requires_temp_var(value);
@@ -371,27 +371,42 @@ impl Planner<'_> {
             identifier,
             binding_id,
             value,
+            binding_ty,
             ..
         } = let_spec;
         let ids = binding_id.as_slice();
         let (mut statements, value_expression) = self
             .lower_value(value, ExpressionContext::value())
             .into_parts();
-        statements.push(expression_statement(value_expression));
+        statements.push(effect_statement(value_expression));
         let Some(raw_go_name) = raw_go_name else {
             return statements;
         };
-        let unit = || GoExpression::empty_composite("struct{}".to_string());
         let escaped = escape_reserved(raw_go_name);
-        if self.shadows_declaration(&escaped) {
+        let go_identifier = if self.shadows_declaration(&escaped) {
             let fresh = self.fresh_local(Some(identifier));
             self.declare(&fresh);
-            statements.push(define(fresh.clone(), unit()));
             self.scope.bind_source(identifier, ids, &fresh);
+            fresh
         } else {
             let go_identifier = self.scope.bind_source(identifier, ids, raw_go_name);
             self.try_declare(&go_identifier);
-            statements.push(define(go_identifier, unit()));
+            go_identifier
+        };
+        let unit = GoExpression::empty_composite("struct{}".to_string());
+        // An `Unknown` or interface binding keeps its type for later assignments.
+        if needs_explicit_type_declaration(self, value, binding_ty) {
+            let go_type = self.use_go_type(binding_ty);
+            statements.push(
+                LoweredStatement::VarDecl {
+                    name: go_identifier,
+                    go_type,
+                    value: Some(unit),
+                }
+                .into(),
+            );
+        } else {
+            statements.push(define(go_identifier, unit));
         }
         statements
     }

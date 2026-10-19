@@ -1590,6 +1590,18 @@ fn explicit_unit_return_rejects_non_unit_body() {
 }
 
 #[test]
+fn unit_alias_return_allows_empty_body() {
+    infer(
+        r#"
+    type U = ()
+
+    fn f() -> U {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn implicit_unit_return_allows_any_body() {
     infer(
         r#"

@@ -27,7 +27,7 @@ pub fn check_discarded_unit_binding(expression: &Expression, ctx: &NodeCtx) {
 
     // Strictly unit, so never/error/variable types (e.g. `let _ = panic(...)`)
     // are left alone and the lint stays sound on checker-rejected code.
-    if !value.get_type().is_unit() {
+    if !ctx.store.resolves_to_unit(&value.get_type()) {
         return;
     }
 

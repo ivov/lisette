@@ -1,0 +1,63 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  struct Boom {}
+  
+  impl Boom {
+    fn Error(self) -> string {
+      "boom"
+    }
+  }
+  
+  type Pair = (error, int)
+  type Rows = Array<(error, int), 2>
+  
+  fn first(rows: Rows) -> string {
+    rows[0].0.Error()
+  }
+  
+  fn test() {
+    let pair: Pair = (Boom {}, 1)
+    let concrete: Array<(Boom, int), 2> = [(Boom {}, 1), (Boom {}, 2)]
+    if pair.0.Error() != "boom" || first(concrete) != "boom" {
+      panic("aliased tuple lost its interface elements")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Boom struct{}
+
+func (b Boom) Error() string {
+	return "boom"
+}
+
+type Pair = lisette.Tuple2[error, int]
+
+type Rows = [2]lisette.Tuple2[error, int]
+
+func first(rows Rows) string {
+	return rows[0].First.Error()
+}
+
+func test() {
+	tup := lisette.MakeTuple2[Boom, int](Boom{}, 1)
+	pair := lisette.MakeTuple2[error, int](tup.First, tup.Second)
+	concrete := [2]lisette.Tuple2[Boom, int]{
+		lisette.MakeTuple2[Boom, int](Boom{}, 1),
+		lisette.MakeTuple2[Boom, int](Boom{}, 2),
+	}
+	if pair.First.Error() != "boom" || func() bool {
+		var boxed Rows
+		for i := range concrete {
+			tup_1 := concrete[i]
+			boxed[i] = lisette.MakeTuple2[error, int](tup_1.First, tup_1.Second)
+		}
+		return first(boxed) != "boom"
+	}() {
+		panic("aliased tuple lost its interface elements")
+	}
+}

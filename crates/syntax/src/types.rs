@@ -1724,6 +1724,13 @@ where
     peel_alias(ty, lookup).is_unknown()
 }
 
+pub fn resolves_to_unit<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    peel_alias(ty, lookup).is_unit()
+}
+
 pub fn contains_unknown<'d, F>(ty: &Type, lookup: F) -> bool
 where
     F: Fn(&str) -> Option<&'d Definition>,
