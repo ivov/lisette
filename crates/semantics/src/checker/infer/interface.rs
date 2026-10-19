@@ -123,6 +123,16 @@ impl InferCtx<'_> {
         self.satisfies_interface_with_methods(ty, interface_ty, span, &methods)
     }
 
+    pub(super) fn conforms_to_interface(
+        &mut self,
+        ty: &Type,
+        interface_ty: &Type,
+        span: &Span,
+    ) -> Result<(), Vec<InterfaceViolation>> {
+        self.satisfies_interface(ty, interface_ty, span)
+            .and_then(|()| self.check_pointer_receivers(ty, interface_ty, span, None))
+    }
+
     fn satisfies_interface_with_methods(
         &mut self,
         ty: &Type,

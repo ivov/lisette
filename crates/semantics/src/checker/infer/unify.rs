@@ -160,8 +160,8 @@ impl InferCtx<'_> {
         let store = self.store;
         let r1 = self.env.shallow_resolve(t1);
         let r2 = self.env.shallow_resolve(t2);
-        let r1_is_unknown = r1.is_unknown();
-        let r2_is_unknown = r2.is_unknown();
+        let r1_unknown = self.unknown_writability(&r1);
+        let r2_unknown = self.unknown_writability(&r2);
 
         match (&r1, &r2) {
             _ if r1.is_ignored() || r2.is_ignored() || r1.is_uninferred() || r2.is_uninferred() => {
@@ -172,8 +172,8 @@ impl InferCtx<'_> {
 
             (Type::Var { id: i1, .. }, Type::Var { id: i2, .. }) if i1 == i2 => Ok(()),
 
-            _ if r1_is_unknown && r2_is_unknown => {
-                self.check_qualifier(r1.is_writable(), r2.is_writable())?;
+            _ if r1_unknown.is_some() && r2_unknown.is_some() => {
+                self.check_qualifier(r1_unknown == Some(true), r2_unknown == Some(true))?;
                 Ok(())
             }
 
@@ -186,11 +186,11 @@ impl InferCtx<'_> {
                 Ok(())
             }
 
-            _ if r1_is_unknown && self.is_inside_invariant_position() => {
+            _ if r1_unknown.is_some() && self.is_inside_invariant_position() => {
                 Err(UnifyError::TypeMismatch)
             }
-            _ if r1_is_unknown => {
-                if r1.is_writable()
+            _ if r1_unknown.is_some() => {
+                if r1_unknown == Some(true)
                     && !matches!(r2, Type::Never | Type::Error)
                     && !store.peel_alias(&r2).is_writable()
                 {
@@ -199,7 +199,7 @@ impl InferCtx<'_> {
                     Ok(())
                 }
             }
-            _ if r2_is_unknown => Err(UnifyError::TypeMismatch),
+            _ if r2_unknown.is_some() => Err(UnifyError::TypeMismatch),
 
             _ if matches!(r2, Type::Never) => Ok(()),
             _ if matches!(r1, Type::Never) => Err(UnifyError::TypeMismatch),
@@ -346,6 +346,17 @@ impl InferCtx<'_> {
             && neither_is_error
             && neither_is_never
             && neither_is_alias
+    }
+
+    fn unknown_writability(&self, ty: &Type) -> Option<bool> {
+        if ty.is_unknown() {
+            return Some(ty.is_writable());
+        }
+        if !self.is_transparent_alias(ty) {
+            return None;
+        }
+        let peeled = self.store.peel_alias(ty);
+        peeled.is_unknown().then(|| peeled.is_writable())
     }
 
     fn is_transparent_alias(&self, ty: &Type) -> bool {
@@ -530,8 +541,7 @@ impl InferCtx<'_> {
         if !self.store.is_interface(interface_ty) {
             return Err(UnifyError::TypeMismatch);
         }
-        self.satisfies_interface(actual, interface_ty, span)
-            .and_then(|()| self.check_pointer_receivers(actual, interface_ty, span, None))
+        self.conforms_to_interface(actual, interface_ty, span)
             .map_err(|_| UnifyError::AlreadyReported)
     }
 
