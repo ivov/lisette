@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test() {
+    let x = 7
+    let f = || {
+      let x = { [x, x + 1].fold(0, |x, y| x + y) }
+      x
+    }
+    if f() != 15 { panic("the receiver should read the captured x") }
+    let range = 7
+    let g = || {
+      let range = { [range, range + 1].fold(0, |range, y| range + y) }
+      range
+    }
+    if g() != 15 { panic("the receiver should read the captured range") }
+  }
+---
+package main
+
+func test() {
+	x := 7
+	f := func() int {
+		var x_1 int
+		x_2 := 0
+		for _, y := range []int{x, x + 1} {
+			x_2 += y
+		}
+		x_1 = x_2
+		return x_1
+	}
+	if f() != 15 {
+		panic("the receiver should read the captured x")
+	}
+	range_ := 7
+	g := func() int {
+		var range_1 int
+		range_2 := 0
+		for _, y := range []int{range_, range_ + 1} {
+			range_2 += y
+		}
+		range_1 = range_2
+		return range_1
+	}
+	if g() != 15 {
+		panic("the receiver should read the captured range")
+	}
+}
