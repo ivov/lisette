@@ -303,13 +303,13 @@ impl InferCtx<'_> {
     ) -> (Type, String, Option<IterSeqKind>) {
         let store = self.store;
 
-        let resolved_unpeeled = iterable_ty.resolve_in(&self.env);
+        let resolved_unpeeled = iterable_ty.resolve_in(&self.env).strip_refs();
         let iter_seq = iter_seq_kind(&resolved_unpeeled);
 
         let resolved_iterable_ty = if iter_seq.is_some() {
             resolved_unpeeled
         } else {
-            store.peel_alias(&resolved_unpeeled)
+            store.peel_refs_and_aliases(&resolved_unpeeled).0
         };
 
         let iterable_is_error = resolved_iterable_ty.is_error();

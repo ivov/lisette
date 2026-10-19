@@ -96,7 +96,16 @@ impl Planner<'_> {
     ) -> (Vec<Statement>, LoopHeader, LoweredBlock) {
         self.with_scope(|this| {
             let mut prologue = Vec::new();
-            let range_var = if this.is_unmutated_identifier(iterable) {
+            let iterable_ty = iterable.get_type();
+            let range_var = if this.facts.peel_alias(&iterable_ty).is_ref() {
+                let reference = this.capture_operand_into(&mut prologue, iterable);
+                let range = this.dereference_refs(&iterable_ty, reference);
+                GoExpression::identifier(this.hoist_tmp_value_statement(
+                    &mut prologue,
+                    "range",
+                    range,
+                ))
+            } else if this.is_unmutated_identifier(iterable) {
                 this.capture_operand_into(&mut prologue, iterable)
             } else {
                 this.capture_value_at_boundary(
@@ -204,15 +213,21 @@ impl Planner<'_> {
     ) -> (Vec<Statement>, GoExpression) {
         let mut prologue = Vec::new();
         let iter_raw = self.capture_operand_into(&mut prologue, iterable);
-        let mut iter_expression = if iterable.get_type().is_ref() {
-            GoExpression::dereference(iter_raw)
-        } else {
-            iter_raw
-        };
+        let mut iter_expression = self.dereference_refs(&iterable.get_type(), iter_raw);
         if is_channel {
             iter_expression = self.stable_source(&mut prologue, "ch", iter_expression);
         }
         (prologue, iter_expression)
+    }
+
+    fn dereference_refs(&self, ty: &Type, mut value: GoExpression) -> GoExpression {
+        let mut current = self.facts.peel_alias(ty);
+        while current.is_ref() {
+            value = GoExpression::dereference(value);
+            let pointee = current.inner().expect("Ref<T> must have inner");
+            current = self.facts.peel_alias(&pointee);
+        }
+        value
     }
 
     fn lower_iterate_for(

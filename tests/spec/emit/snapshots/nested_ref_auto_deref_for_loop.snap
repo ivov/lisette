@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  fn sum(xs: Ref<Ref<Slice<int>>>, rs: Ref<Ref<Range<int>>>) -> int {
+    let mut total = 0
+    for v in xs {
+      total += v
+    }
+    for v in rs {
+      total += v
+    }
+    total
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func sum(xs **[]int, rs **lisette.Range[int]) int {
+	total := 0
+	for _, v := range **xs {
+		total += v
+	}
+	range_1 := **rs
+	for v := range_1.Start; v < range_1.End; v++ {
+		total += v
+	}
+	return total
+}

@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn main() {
+    let mut x = 0..3
+    let mut r = &x
+    let mut n = 0
+    for i in r {
+      n += i
+      r.end = 10
+    }
+    if n != 3 { panic("wrong") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	x := lisette.Range[int]{
+		Start: 0,
+		End:   3,
+	}
+	r := &x
+	n := 0
+	range_1 := *r
+	for i := range_1.Start; i < range_1.End; i++ {
+		n += i
+		r.End = 10
+	}
+	if n != 3 {
+		panic("wrong")
+	}
+}

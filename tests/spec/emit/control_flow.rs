@@ -980,6 +980,23 @@ fn main() {
 }
 
 #[test]
+fn for_loop_stored_range_behind_reference_copies_pointee() {
+    let input = r#"
+fn main() {
+  let mut x = 0..3
+  let mut r = &x
+  let mut n = 0
+  for i in r {
+    n += i
+    r.end = 10
+  }
+  if n != 3 { panic("wrong") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn for_loop_inline_range_end_mutation_is_read_once() {
     let input = r#"
 fn main() {
