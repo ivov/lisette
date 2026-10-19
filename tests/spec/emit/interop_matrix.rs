@@ -3274,8 +3274,10 @@ fn main() {
     let f = split_words
     f
   }
+  let literal: bufio.SplitFunc = { |data, at_eof| bufio.ScanWords(data, at_eof) }
   let _ = annotated
   let _ = staged
+  let _ = literal
 }
 "#;
     assert_emit_snapshot!(input);

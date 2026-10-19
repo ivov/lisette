@@ -4936,6 +4936,25 @@ fn test() -> int {
 }
 
 #[test]
+fn typed_function_alias_from_block_declares_alias_type() {
+    let input = r#"
+type Handler = fn() -> int
+
+fn make_handler() -> int { 1 }
+
+fn use_ref(r: Ref<Handler>) -> int {
+  r.*()
+}
+
+fn test() -> int {
+  let h: Handler = { make_handler }
+  use_ref(&h)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn emitted_expr_call_before_setup_arg_capture() {
     let input = r#"
 fn side() -> int { 1 }
