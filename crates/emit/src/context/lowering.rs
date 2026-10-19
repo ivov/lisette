@@ -71,7 +71,9 @@ impl ReturnContext {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct LoopContext {
     pub(crate) id: LoopId,
     pub(crate) result: GoExpression,
+    pub(crate) result_ty: Option<Type>,
 }

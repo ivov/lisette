@@ -3260,6 +3260,28 @@ fn main() {
 }
 
 #[test]
+fn interop_lisette_fn_value_binds_to_annotated_go_fn_type_through_block() {
+    let input = r#"
+import "go:bufio"
+
+fn split_words(data: mut Slice<byte>, at_eof: bool) -> Result<(int, Slice<byte>), error> {
+  bufio.ScanWords(data, at_eof)
+}
+
+fn main() {
+  let annotated: bufio.SplitFunc = { split_words }
+  let staged: bufio.SplitFunc = {
+    let f = split_words
+    f
+  }
+  let _ = annotated
+  let _ = staged
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn interop_lisette_fn_value_casts_to_go_fn_type() {
     let input = r#"
 import "go:bufio"

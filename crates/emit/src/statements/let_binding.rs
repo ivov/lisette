@@ -64,24 +64,12 @@ fn needs_explicit_type_declaration(
     false
 }
 
-/// Pick the Go type for a `let` binding's `var X T` temp. Diverging values
-/// use the binding type so dead `return x` paths still typecheck.
-fn resolve_let_temp_declaration_ty(
-    planner: &Planner,
-    value: &Expression,
-    binding_ty: &Type,
-) -> Type {
-    let value_ty = value.get_type();
-    if value_ty.is_unit() || value_ty.is_never() {
-        if binding_ty.is_unit() || binding_ty.is_variable() || binding_ty.is_placeholder() {
-            return value_ty;
-        }
-        return binding_ty.clone();
+/// Pick the Go type for a `let` binding's `var X T` temp.
+fn resolve_let_temp_declaration_ty(value: &Expression, binding_ty: &Type) -> Type {
+    if binding_ty.is_unit() || binding_ty.is_variable() || binding_ty.is_placeholder() {
+        return value.get_type();
     }
-    if planner.facts.is_interface_or_unknown(binding_ty) && *binding_ty != value_ty {
-        return binding_ty.clone();
-    }
-    value_ty
+    binding_ty.clone()
 }
 
 impl Planner<'_> {
@@ -563,7 +551,7 @@ impl Planner<'_> {
             return None;
         }
         let return_ctx = self.return_ctx();
-        let resolved_ty = resolve_let_temp_declaration_ty(self, value, binding_ty);
+        let resolved_ty = resolve_let_temp_declaration_ty(value, binding_ty);
         let peeled_resolved = self.facts.peel_alias(&resolved_ty);
         let peeled_binding = self.facts.peel_alias(binding_ty);
         let needs_context = |ty: &Type| ty.is_variable() || ty.is_placeholder();

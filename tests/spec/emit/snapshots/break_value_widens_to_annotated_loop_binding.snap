@@ -1,0 +1,73 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  struct Boom {}
+  
+  impl Boom {
+    fn Error(self) -> string {
+      "boom"
+    }
+  }
+  
+  fn describe(pair: (error, int)) -> string {
+    pair.0.Error()
+  }
+  
+  fn test() {
+    let concrete = (Boom {}, 1)
+    let widened: (error, int) = loop {
+      break concrete
+    }
+    let booms: Array<Boom, 1> = [Boom {}]
+    let errs: Array<error, 1> = loop {
+      break booms
+    }
+    let e: error = loop {
+      break Boom {}
+    }
+    if describe(widened) != "boom" || errs[0].Error() != "boom" || e.Error() != "boom" {
+      panic("loop binding lost its interface elements")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Boom struct{}
+
+func (b Boom) Error() string {
+	return "boom"
+}
+
+func describe(pair lisette.Tuple2[error, int]) string {
+	return pair.First.Error()
+}
+
+func test() {
+	concrete := lisette.MakeTuple2[Boom, int](Boom{}, 1)
+	var widened lisette.Tuple2[error, int]
+	for {
+		widened = lisette.MakeTuple2[error, int](concrete.First, concrete.Second)
+		break
+	}
+	booms := [1]Boom{{}}
+	var errs [1]error
+	for {
+		var boxed [1]error
+		for i := range booms {
+			boxed[i] = booms[i]
+		}
+		errs = boxed
+		break
+	}
+	var e error
+	for {
+		e = Boom{}
+		break
+	}
+	if describe(widened) != "boom" || errs[0].Error() != "boom" || e.Error() != "boom" {
+		panic("loop binding lost its interface elements")
+	}
+}

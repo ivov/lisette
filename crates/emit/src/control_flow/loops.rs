@@ -45,7 +45,7 @@ impl Planner<'_> {
         let shape = self.classify_for(binding, iterable);
 
         let line = self.maybe_line_directive(&full_expression.get_span());
-        let plan = self.with_loop(GoExpression::external_name("_".to_string()), |this| {
+        let plan = self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
             let (prologue, header, lowered_body) = match shape {
                 ForShape::Range => this.lower_range_for(binding, iterable, body),
                 ForShape::StoredRange(range_shape) => {

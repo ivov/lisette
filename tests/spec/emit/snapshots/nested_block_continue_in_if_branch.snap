@@ -19,9 +19,7 @@ func test() {
 				continue
 			}
 		} else {
-			var tmp_1 int
-			tmp_1 = 1
-			tmp = tmp_1
+			tmp = 1
 		}
 		_ = tmp
 		break
