@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792441466371,
+  "lastUpdate": 1792441702717,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -46015,6 +46015,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 39468,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28688,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19460,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15619,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9037,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2945,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "908db8608630f6b524e54e5643f1c3bb8604efaa",
+          "message": "fix: convert block and loop values to annotated `let` type (#1560)",
+          "timestamp": "2026-10-19T22:27:56+02:00",
+          "tree_id": "6000a1132ce8f24c491dfebfc0a0b2b3382175a5",
+          "url": "https://github.com/ivov/lisette/commit/908db8608630f6b524e54e5643f1c3bb8604efaa"
+        },
+        "date": 1792441700131,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 149729,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39474,
             "unit": "lines"
           },
           {
