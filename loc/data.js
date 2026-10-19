@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792355137363,
+  "lastUpdate": 1792435466984,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -45837,6 +45837,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 39454,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28693,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19459,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15617,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9037,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2945,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c5db3dc6c63f94549696af18b6d399646f5260d5",
+          "message": "fix: iterate referenced collection in loops over a reference (#1558)",
+          "timestamp": "2026-10-19T20:44:03+02:00",
+          "tree_id": "c89a047aea77559f57c570b28178d7ef1cf69d5d",
+          "url": "https://github.com/ivov/lisette/commit/c5db3dc6c63f94549696af18b6d399646f5260d5"
+        },
+        "date": 1792435465570,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 149725,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39468,
             "unit": "lines"
           },
           {
