@@ -2,6 +2,7 @@
 mod _harness;
 #[path = "e2e_suite/build_snapshots.rs"]
 mod build_snapshots;
+#[allow(dead_code)]
 #[path = "e2e_suite/harness.rs"]
 mod harness;
 
@@ -40,7 +41,7 @@ fn e2e_suite() {
         snapshots.display()
     );
 
-    let skip_list = read_skip_list();
+    let skip_list = read_skip_list("e2e_suite/skip.txt");
 
     enum Outcome {
         Denylist(String),
@@ -67,7 +68,7 @@ fn e2e_suite() {
                 let EmittedTest { go_code, entry } =
                     match compile_e2e_suite_test(input, &format!("test_{name}")) {
                         Ok(emitted) => emitted,
-                        Err(error) => return Outcome::EmitFailure(name.clone(), error),
+                        Err(error) => return Outcome::EmitFailure(name.clone(), error.to_string()),
                     };
                 write_subpackage(&target, name, &go_code, entry).expect("write subpackage");
                 if entry.is_some() {

@@ -1,3 +1,4 @@
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -35,17 +36,33 @@ impl EntryPoint {
     }
 }
 
-pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<EmittedTest, String> {
+pub enum CompileError {
+    Inference(String),
+    Emit(String),
+}
+
+impl fmt::Display for CompileError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CompileError::Inference(message) | CompileError::Emit(message) => f.write_str(message),
+        }
+    }
+}
+
+pub fn compile_e2e_suite_test(
+    input: &str,
+    package_name: &str,
+) -> Result<EmittedTest, CompileError> {
     let pipeline = TestPipeline::new(input).wrapped().e2e_suite_mode();
     let compiled = pipeline.compile();
     let result = compiled.run_inference();
 
     if !result.errors.is_empty() {
-        return Err(format!(
+        return Err(CompileError::Inference(format!(
             "type inference failed: {} error(s); first: {:?}",
             result.errors.len(),
             result.errors.first()
-        ));
+        )));
     }
 
     let file = File {
@@ -76,10 +93,10 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
         emit_tests: false,
     };
     let mut emitted_files = Planner::emit(&input, GO_MODULE, "main", options)
-        .map_err(|diagnostics| format!("Emission failed: {diagnostics:?}"))?;
+        .map_err(|diagnostics| CompileError::Emit(format!("Emission failed: {diagnostics:?}")))?;
 
     if emitted_files.is_empty() {
-        return Err("emitter produced no files".to_string());
+        return Err(CompileError::Emit("emitter produced no files".to_string()));
     }
 
     let mut output = emitted_files.remove(0);
@@ -307,6 +324,23 @@ pub fn run_go_test(target_dir: &Path, timeout_per_pkg: &str) -> Result<String, S
     }
 }
 
+pub fn run_go_build(target_dir: &Path) -> Result<String, String> {
+    let output = Command::new("go")
+        .args(["build", "./..."])
+        .current_dir(target_dir)
+        .env("NO_COLOR", "1")
+        .output()
+        .map_err(|e| format!("failed to spawn go build: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    let combined = format!("{stdout}{stderr}");
+    if output.status.success() {
+        Ok(combined)
+    } else {
+        Err(combined)
+    }
+}
+
 pub fn run_go_vet(target_dir: &Path) -> Result<String, String> {
     let output = Command::new("go")
         .args(["vet", "-unreachable=false", "./..."])
@@ -365,8 +399,8 @@ pub fn target_dir() -> PathBuf {
     repo_root().join("target/e2e_suite")
 }
 
-pub fn read_skip_list() -> HashSet<String> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("e2e_suite/skip.txt");
+pub fn read_skip_list(relative_path: &str) -> HashSet<String> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative_path);
     let Ok(content) = fs::read_to_string(&path) else {
         return HashSet::new();
     };

@@ -1,0 +1,36 @@
+# Variants pending a compiler fix. One variant name per line, with an inline
+# `#` reason. Remove a line when its fix lands.
+
+# --- alias of `Never` emits a struct type where a value is expected ---
+a_diverging_assignment_still_evaluates_its_target__alias1  # alias of `Never`
+if_with_user_never_branch_tail__alias1                     # alias of `Never`
+match_with_user_never_arm_tail__alias1                     # alias of `Never`
+nested_try_in_if_arm_with_never_tail__alias1               # alias of `Never`
+never_returning_user_function_in_body__alias2              # alias of `Never`
+try_block_user_never_tail_result_context__alias1           # alias of `Never`
+
+# --- try or recover block with a diverging tail emits `Result[struct{}, E]` ---
+nested_try_in_if_arm_with_never_tail__alias3      # alias of the result type
+recover_block_panic_tail_result_context__alias1   # alias of the result type
+try_block_panic_tail_option_context__alias1       # alias of the result type
+try_block_panic_tail_result_context__alias1       # alias of the result type
+try_block_user_never_tail_result_context__alias2  # alias of the result type
+try_block_diverging_final_expression__wrap1       # block around the try block
+try_block_diverging_final_expression__wrap3       # block around the result
+
+# --- alias of `Result` as return type panics in `err_type` ---
+propagate_direct_err_lowered_bare_error__alias1               # alias of `Result`
+template_funcs_reports_errors_from_lisette_functions__alias2  # alias of `Result`
+
+# --- `to_string` returning an alias of `string` is not seen as the user's own ---
+display_user_to_string_suppresses_synthesis__alias1            # alias of `string`
+public_display_with_private_user_to_string_exports_it__alias1  # alias of `string`
+
+# --- function value loses its Go function type ---
+go_callback_bound_to_aliased_fn_type__wrap1                                     # block around a closure
+higher_callback_go_params_callback_named_error__wrap3                           # block around a closure
+interop_lisette_fn_value_binds_to_annotated_go_fn_type__wrap2                   # block around a closure
+interop_lisette_fn_value_reaches_go_fn_type_return_field_and_assignment__wrap1  # block around a Go function
+shared_callback_go_alias_reference__wrap2                                       # block around a closure
+typed_function_alias_from_named_function_declares_alias_type__wrap1             # block around a named function
+higher_callback_variadic_tuple__alias1                                          # alias of a function type

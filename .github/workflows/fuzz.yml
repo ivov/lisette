@@ -95,3 +95,33 @@ jobs:
           **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  rewrite:
+    if: github.repository == 'ivov/lisette'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          go: 'true'
+
+      - name: Rewrite suite
+        run: cargo test -p tests --test rewrite_suite --locked -- --nocapture
+
+      - name: Create issue on failure
+        if: failure()
+        run: |
+          open=$(gh issue list --repo ivov/lisette --state open --search 'in:title "rewrite-suite failure"' --json title --jq '[.[] | select(.title == "rewrite-suite failure")] | length')
+          if [ "$open" != "0" ]; then
+            echo "An open rewrite-suite issue already exists"
+            exit 0
+          fi
+          gh issue create \
+            --repo ivov/lisette \
+            --title "rewrite-suite failure" \
+            --body "The rewrite suite failed in a scheduled run. The \`Rewrite suite\` step log lists each failing variant with its change and its first error. To get the variant files, run \`cargo test -p tests --test rewrite_suite\` locally.
+
+          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
