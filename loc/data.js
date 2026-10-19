@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792441702717,
+  "lastUpdate": 1792442548319,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -46104,6 +46104,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 39474,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28688,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19460,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15619,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9037,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2945,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a74a860e30c5c49e76b45f167a70a24cbbca2618",
+          "message": "fix: allow `fold` callback parameter to reuse a captured name (#1561)",
+          "timestamp": "2026-10-19T22:42:06+02:00",
+          "tree_id": "066946c2bc5b3dbe4b1b020b298aaf8bd1a10275",
+          "url": "https://github.com/ivov/lisette/commit/a74a860e30c5c49e76b45f167a70a24cbbca2618"
+        },
+        "date": 1792442546845,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 149738,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39483,
             "unit": "lines"
           },
           {
