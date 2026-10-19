@@ -2,10 +2,10 @@
 source: tests/ui/errors/mod.rs
 ---
   ✕ Expression not modifiable
-    ╭─[test.lis:12:4]
+    ╭─[test.lis:12:3]
  11 │   let mut m = Map.new<string, Foo>();
  12 │   m["key"].increment()
-    ·    ────────┬────────
+    ·   ─────────┬────────
     ·            ╰── modifies its receiver
  13 │ }
     ╰────

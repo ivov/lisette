@@ -19,13 +19,15 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
+    let brackets = span.after(receiver.get_span());
+
     let receiver_ty = ctx.store.peel_alias(&receiver.get_type());
 
     if let Some(negative) = negative_index_literal(index)
         && (matches!(receiver_ty, Type::Array { .. }) || receiver_ty.is_slice())
     {
         ctx.sink.push(diagnostics::infer::negative_index(
-            span,
+            &brackets,
             &negative.to_string(),
         ));
         return;
@@ -36,7 +38,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
         && value >= *length
     {
         ctx.sink.push(diagnostics::infer::index_out_of_bounds(
-            span,
+            &brackets,
             &value.to_string(),
         ));
         return;
@@ -54,7 +56,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
         && value >= elements.len() as u64
     {
         ctx.sink.push(diagnostics::infer::index_out_of_bounds(
-            span,
+            &brackets,
             &value.to_string(),
         ));
         return;
@@ -77,7 +79,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     {
         let receiver_text = receiver.root_identifier().unwrap_or("xs");
         ctx.sink.push(diagnostics::infer::index_out_of_bounds(
-            span,
+            &brackets,
             &format!("{receiver_text}.length()"),
         ));
     }

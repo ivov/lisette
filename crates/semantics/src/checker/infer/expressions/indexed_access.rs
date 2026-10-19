@@ -83,10 +83,8 @@ impl InferCtx<'_> {
         ) {
             (Some(_), "string") => {
                 let receiver = collection_expression.root_identifier().unwrap_or("s");
-                let full_span = collection_expression.get_span().merge(span);
-                self.sink.push(diagnostics::infer::string_not_sliceable(
-                    full_span, receiver,
-                ));
+                self.sink
+                    .push(diagnostics::infer::string_not_sliceable(span, receiver));
                 return Expression::IndexedAccess {
                     expression: collection_expression.into(),
                     index: index_expression.into(),
@@ -210,10 +208,9 @@ impl InferCtx<'_> {
         let resolved_collection_ty = store.peel_alias(&collection_ty_var.resolve_in(&self.env));
 
         let receiver = collection_expression.root_identifier().unwrap_or("s");
-        let full_span = collection_expression.get_span().merge(span);
         let type_name = resolved_collection_ty.get_name();
         self.sink.push(diagnostics::infer::colon_in_subscript(
-            full_span, receiver, type_name,
+            span, receiver, type_name,
         ));
 
         Expression::IndexedAccess {
@@ -267,8 +264,7 @@ impl InferCtx<'_> {
         if type_name != "Slice" {
             let diagnostic = if type_name == "string" {
                 let receiver = collection_expression.root_identifier().unwrap_or("s");
-                let full_span = collection_expression.get_span().merge(span);
-                diagnostics::infer::string_not_sliceable(full_span, receiver)
+                diagnostics::infer::string_not_sliceable(span, receiver)
             } else {
                 diagnostics::infer::only_slices_indexable_by_range(
                     &resolved_collection_ty,

@@ -136,9 +136,8 @@ impl InferCtx<'_> {
         cause: MapReadNoZeroCause<'_>,
     ) {
         let receiver = collection.root_identifier().unwrap_or("m");
-        let full_span = collection.get_span().merge(span);
         self.sink.push(diagnostics::infer::map_read_no_zero(
-            value_ty, receiver, cause, full_span,
+            value_ty, receiver, cause, span,
         ));
     }
 }
