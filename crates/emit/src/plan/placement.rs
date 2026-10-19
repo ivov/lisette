@@ -1,4 +1,5 @@
 use crate::Planner;
+use crate::abi::layout::SlotOrigin;
 use crate::analyze::inline_uses::region_blocks_inline;
 use crate::calls::native::{is_clip_safe_path, slice_growth_call};
 use crate::context::expression::ExpressionContext;
@@ -426,7 +427,8 @@ impl Planner<'_> {
 
     pub(crate) fn short_declaration_keeps_type(&self, ty: &Type) -> bool {
         let peeled = self.facts.peel_alias(ty);
-        !self.facts.is_interface_or_unknown(&peeled)
+        !self.is_function_alias(ty)
+            && !self.facts.is_interface_or_unknown(&peeled)
             && !(matches!(peeled, Type::Nominal { .. })
                 && self.facts.underlying_simple_kind(&peeled).is_some())
     }
@@ -724,7 +726,13 @@ impl Planner<'_> {
             };
             return self.lower_branching_to_block(last, &place).statements;
         }
-        let value = self.lower_value(last, ExpressionContext::value());
+        let origin = target_ty.map_or(SlotOrigin::Lisette, |ty| {
+            self.function_type_origin(ty, SlotOrigin::Lisette)
+        });
+        let value = self.lower_value(
+            last,
+            ExpressionContext::value().with_function_slot_origin(origin),
+        );
         let value = value.map_expression(|setup, expression| {
             self.apply_type_coercion(setup, target_ty, last, expression)
         });

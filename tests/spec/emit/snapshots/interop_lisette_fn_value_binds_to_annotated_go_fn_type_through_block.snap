@@ -14,8 +14,10 @@ description: |
       let f = split_words
       f
     }
+    let literal: bufio.SplitFunc = { |data, at_eof| bufio.ScanWords(data, at_eof) }
     let _ = annotated
     let _ = staged
+    let _ = literal
   }
 ---
 package main
@@ -86,6 +88,11 @@ func main() {
 		}
 		staged = adapted_3
 	}
+	var literal bufio.SplitFunc
+	literal = func(data []byte, at_eof bool) (int, []byte, error) {
+		return bufio.ScanWords(data, at_eof)
+	}
 	_ = annotated
 	_ = staged
+	_ = literal
 }
