@@ -2072,6 +2072,27 @@ fn test() {
 }
 
 #[test]
+fn a_fold_accumulator_avoids_the_name_its_receiver_reads() {
+    let input = r#"
+fn test() {
+  let x = 7
+  let f = || {
+    let x = { [x, x + 1].fold(0, |x, y| x + y) }
+    x
+  }
+  if f() != 15 { panic("the receiver should read the captured x") }
+  let range = 7
+  let g = || {
+    let range = { [range, range + 1].fold(0, |range, y| range + y) }
+    range
+  }
+  if g() != 15 { panic("the receiver should read the captured range") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn an_assignment_after_a_fold_writes_the_outer_binding_the_accumulator_shadowed() {
     let input = r#"
 fn reassigned(xs: Slice<int>) -> int {

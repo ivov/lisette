@@ -8,6 +8,7 @@ use super::{NativeCallContext, NativeCallForm, NativeMethodCall};
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::prelude_call;
+use crate::escape_reserved;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, Statement, assign, define,
@@ -308,7 +309,9 @@ impl Planner<'_> {
             target => {
                 let result = match target {
                     SliceLoopTarget::Into(name) => name.clone(),
-                    _ if kind == SliceLoop::Fold => self.accumulator_slot_name(patterns[0]),
+                    _ if kind == SliceLoop::Fold => {
+                        self.accumulator_slot_name(patterns[0], receiver)
+                    }
                     _ => self.fresh_local(Some("result")),
                 };
                 // The result claims its name before the `map` index does.
@@ -387,7 +390,7 @@ impl Planner<'_> {
         Some(NativeCallResult::new(setup, result))
     }
 
-    fn accumulator_slot_name(&mut self, pattern: &Pattern) -> GoIdentifier {
+    fn accumulator_slot_name(&mut self, pattern: &Pattern, receiver: &Expression) -> GoIdentifier {
         let Pattern::Identifier {
             identifier,
             binding,
@@ -397,6 +400,13 @@ impl Planner<'_> {
             return self.fresh_local(Some("result"));
         };
         match self.go_name_for_binding(pattern) {
+            Some(name)
+                if self
+                    .scope
+                    .expression_reads_go_name(receiver, &escape_reserved(&name)) =>
+            {
+                self.fresh_local(Some(identifier))
+            }
             Some(name) => self.claim_declared_go_name(identifier, binding.as_slice(), name),
             None => self.fresh_local(Some("result")),
         }
