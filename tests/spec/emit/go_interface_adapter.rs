@@ -968,6 +968,32 @@ fn test() {
 }
 
 #[test]
+fn array_of_concrete_widens_to_interface_elements_in_let_block_value() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+fn first(errs: Array<error, 2>) -> string {
+  errs[0].Error()
+}
+
+fn test() {
+  let concrete: Array<Boom, 2> = [Boom {}, Boom {}]
+  let widened: Array<error, 2> = { concrete }
+  if first(widened) != "boom" {
+    panic("annotated array binding lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn array_of_concrete_widens_to_interface_elements_in_return_position() {
     let input = r#"
 struct Boom {}
@@ -1116,6 +1142,67 @@ fn describe(pair: (error, int)) -> string {
 
 fn test() {
   let widened: (error, int) = (Boom {}, 1)
+  if describe(widened) != "boom" {
+    panic("annotated tuple binding lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn break_value_widens_to_annotated_loop_binding() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+fn describe(pair: (error, int)) -> string {
+  pair.0.Error()
+}
+
+fn test() {
+  let concrete = (Boom {}, 1)
+  let widened: (error, int) = loop {
+    break concrete
+  }
+  let booms: Array<Boom, 1> = [Boom {}]
+  let errs: Array<error, 1> = loop {
+    break booms
+  }
+  let e: error = loop {
+    break Boom {}
+  }
+  if describe(widened) != "boom" || errs[0].Error() != "boom" || e.Error() != "boom" {
+    panic("loop binding lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_of_concrete_widens_to_interface_elements_in_let_block_value() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+fn describe(pair: (error, int)) -> string {
+  pair.0.Error()
+}
+
+fn test() {
+  let concrete = (Boom {}, 1)
+  let widened: (error, int) = { concrete }
   if describe(widened) != "boom" {
     panic("annotated tuple binding lost its interface elements")
   }

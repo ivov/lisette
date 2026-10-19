@@ -37,6 +37,7 @@ use abi::catalog::GoAbiCatalog;
 use abi::go_payload_layout;
 use abi::layout::SlotOrigin;
 use analyze::facts::is_nullable_option;
+use context::lowering::LoopContext;
 use diagnostics::LisetteDiagnostic;
 use names::go_name::GeneratedPackage;
 use names::packages::{PackageRequirements, PackageUse};
@@ -440,15 +441,20 @@ impl<'a> Planner<'a> {
     }
 
     /// Lower a loop body whose `break value` writes `result`.
-    fn with_loop<R>(&mut self, result: GoExpression, f: impl FnOnce(&mut Self) -> R) -> R {
-        self.scope.push_loop(result.clone());
+    fn with_loop<R>(
+        &mut self,
+        result: GoExpression,
+        result_ty: Option<Type>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        self.scope.push_loop(result.clone(), result_ty);
         let result = self.with_assign_target(&result, f);
         self.scope.pop_loop();
         result
     }
 
-    fn current_loop_result(&self) -> Option<&GoExpression> {
-        self.scope.current_loop_result()
+    fn current_loop(&self) -> Option<&LoopContext> {
+        self.scope.current_loop()
     }
 
     fn current_loop_id(&self) -> Option<LoopId> {

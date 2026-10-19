@@ -471,12 +471,14 @@ impl ScopeState {
         self.pop_frame();
     }
 
-    pub(crate) fn push_loop(&mut self, result: GoExpression) {
+    pub(crate) fn push_loop(&mut self, result: GoExpression, result_ty: Option<Type>) {
         let id = LoopId(self.next_loop_id);
         self.next_loop_id += 1;
-        self.current_function_mut()
-            .loops
-            .push(LoopContext { id, result });
+        self.current_function_mut().loops.push(LoopContext {
+            id,
+            result,
+            result_ty,
+        });
     }
 
     pub(crate) fn pop_loop(&mut self) {
@@ -505,11 +507,8 @@ impl ScopeState {
         self.current_function().return_ctx.clone()
     }
 
-    pub(crate) fn current_loop_result(&self) -> Option<&GoExpression> {
-        self.current_function()
-            .loops
-            .last()
-            .map(|context| &context.result)
+    pub(crate) fn current_loop(&self) -> Option<&LoopContext> {
+        self.current_function().loops.last()
     }
 
     pub(crate) fn current_loop_id(&self) -> Option<LoopId> {
@@ -638,7 +637,7 @@ mod tests {
     #[test]
     fn isolated_functions_hide_enclosing_loops_and_assign_targets() {
         let mut scope = ScopeState::new();
-        scope.push_loop(GoExpression::name("result".to_string()));
+        scope.push_loop(GoExpression::name("result".to_string()), None);
         let result = scope.new_local_identifier("result");
         scope.push_assign_target(result);
         let outer_loop = scope.current_loop_id();

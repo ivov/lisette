@@ -528,7 +528,7 @@ impl Planner<'_> {
         }
 
         if let Expression::Loop { body, .. } = expression {
-            let plan = self.with_loop(target.clone(), |this| {
+            let plan = self.with_loop(target.clone(), target_ty.cloned(), |this| {
                 this.lower_loop_with_header(LoopHeader::Infinite, body)
             });
             return vec![LoweredStatement::Loop(plan).into()];
@@ -699,6 +699,9 @@ impl Planner<'_> {
         }
         if last.get_type().is_never() {
             return vec![self.lower_statement(last)];
+        }
+        if matches!(last, Expression::Block { .. }) {
+            return self.lower_assign(last, target, target_ty);
         }
         if is_unit_call(last) {
             return self.lower_unit_call_into_var(last, target);
@@ -907,7 +910,8 @@ impl Planner<'_> {
             return LoweredBlock { statements };
         }
 
-        if let Some(target) = self.current_loop_result().cloned() {
+        if let Some(loop_context) = self.current_loop().cloned() {
+            let target = loop_context.result;
             if is_unit_call(val) {
                 if !value.is_empty() {
                     statements.push(expression_statement(value));
@@ -917,6 +921,12 @@ impl Planner<'_> {
                     GoExpression::empty_composite("struct{}".to_string()),
                 ));
             } else if !value.is_empty() {
+                let value = self.apply_type_coercion(
+                    &mut statements,
+                    loop_context.result_ty.as_ref(),
+                    val,
+                    value,
+                );
                 statements.push(assign(target, value));
             }
         } else if !value.is_empty() {

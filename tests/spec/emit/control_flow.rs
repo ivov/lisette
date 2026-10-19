@@ -3422,6 +3422,27 @@ fn test() {
 }
 
 #[test]
+fn nested_block_in_let_assigns_inner_tail() {
+    let input = r#"
+fn do_nothing() {}
+
+fn test() {
+  let unit = { { do_nothing() } }
+  let value = {
+    let k = 2
+    {
+      let m = k * 3
+      m + 1
+    }
+  }
+  let _ = unit
+  if value != 7 { panic("wrong") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn nested_block_continue_in_let() {
     let input = r#"
 fn test() {

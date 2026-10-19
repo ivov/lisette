@@ -105,7 +105,7 @@ impl Planner<'_> {
             unreachable!("plan_loop_as_operand_temp called on non-Loop expression");
         };
         let (result_var, declaration) = self.operand_temp_declaration(ty);
-        let plan = self.with_loop(GoExpression::identifier(result_var.clone()), |this| {
+        let plan = self.with_loop(GoExpression::identifier(result_var.clone()), None, |this| {
             this.lower_loop_with_header(LoopHeader::Infinite, body)
         });
         ValuePlan::captured(
@@ -406,14 +406,14 @@ impl Planner<'_> {
         else {
             unreachable!("lower_while_let_statement requires a WhileLet expression");
         };
-        let body = self.with_loop(GoExpression::external_name("_".to_string()), |this| {
+        let body = self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
             this.lower_while_let(pattern, scrutinee, body)
         });
         self.directed_at(expression, LoweredStatement::Body(body))
     }
 
     fn lower_infinite_loop(&mut self, body: &Expression) -> LoopPlan {
-        self.with_loop(GoExpression::external_name("_".to_string()), |this| {
+        self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
             this.lower_loop_with_header(LoopHeader::Infinite, body)
         })
     }
@@ -438,7 +438,7 @@ impl Planner<'_> {
     }
 
     fn lower_while(&mut self, condition: &Expression, body: &Expression) -> LoopPlan {
-        self.with_loop(GoExpression::external_name("_".to_string()), |this| {
+        self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
             let (target, negated) = strip_negations(condition);
             if let Some(exit) = this.lower_fused_predicate_value(target, !negated) {
                 let (setup, failure) = exit.into_parts();
