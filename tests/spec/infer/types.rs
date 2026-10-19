@@ -1733,6 +1733,92 @@ fn main() {
 }
 
 #[test]
+fn cast_of_read_only_ref_to_interface_needs_writable() {
+    infer(
+        r#"
+interface Writer { fn write(s: string) }
+struct Buf { text: string }
+impl Buf {
+  fn write(self: mut Ref<Buf>, s: string) { self.text = self.text + s }
+}
+fn sneak(b: Ref<Buf>) {
+  let _ = b as Writer
+}
+"#,
+    )
+    .assert_infer_code_once("needs_writable");
+}
+
+#[test]
+fn cast_of_value_to_interface_with_ref_receiver_rejected() {
+    infer(
+        r#"
+interface Writer { fn write(s: string) }
+struct Buf { text: string }
+impl Buf {
+  fn write(self: mut Ref<Buf>, s: string) { self.text = self.text + s }
+}
+fn main() {
+  let b = Buf { text: "" }
+  let _ = b as Writer
+}
+"#,
+    )
+    .assert_infer_code_once("interface_not_implemented");
+}
+
+#[test]
+fn cast_of_writable_ref_to_interface_accepted() {
+    infer(
+        r#"
+interface Writer { fn write(s: string) }
+struct Buf { text: string }
+impl Buf {
+  fn write(self: mut Ref<Buf>, s: string) { self.text = self.text + s }
+}
+fn main() {
+  let mut b = Buf { text: "" }
+  let w = &b as Writer
+  w.write("x")
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn interface_value_assigns_to_alias_of_unknown() {
+    infer(
+        r#"
+type Value = Unknown
+interface Named { fn name() -> string }
+fn store(n: Named) -> Value {
+  let v: Value = n
+  v
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn alias_of_mut_unknown_rejects_read_only_value() {
+    infer(
+        r#"
+type W = mut Unknown
+fn sink(x: W) {
+  let _ = x
+}
+fn main() {
+  let s = [1, 2]
+  sink(s)
+}
+"#,
+    )
+    .assert_infer_code_once("needs_writable");
+}
+
+#[test]
 fn generic_impl_mismatched_param_position_rejected() {
     infer(
         r#"

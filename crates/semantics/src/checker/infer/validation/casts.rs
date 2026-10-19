@@ -121,7 +121,7 @@ impl InferCtx<'_> {
         if let Type::Nominal { id, .. } = &peeled_target
             && store.get_interface(id).is_some()
         {
-            let _ = self.satisfies_interface(&source_ty, &peeled_target, &span);
+            let _ = self.conforms_to_interface(&raw_source_resolved, &peeled_target, &span);
             return;
         }
 
