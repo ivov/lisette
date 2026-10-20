@@ -1,0 +1,95 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:bufio"
+  import "go:errors"
+  import "go:strings"
+  
+  type SplitOut = Result<(int, Slice<byte>), error>
+  type Done = Result<(), error>
+  
+  fn split(data: Slice<byte>, at_eof: bool) -> SplitOut {
+    let (n, token) = bufio.ScanWords(data, at_eof)?
+    Ok((n, token))
+  }
+  
+  fn fail() -> Done {
+    Err(errors.New("boom"))?
+    Ok(())
+  }
+  
+  fn main() {
+    let mut s = bufio.NewScanner(strings.NewReader("ab cd"))
+    s.Split(split)
+    let mut words = 0
+    while s.Scan() { words += 1 }
+    if words != 2 { panic("wrong word count") }
+    let Err(_) = fail() else { panic("fail succeeded") }
+  }
+---
+package main
+
+import (
+	"bufio"
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+	"strings"
+)
+
+type SplitOut = lisette.Result[lisette.Tuple2[int, []byte], error]
+
+type Done = lisette.Result[struct{}, error]
+
+func split(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
+	ret, ret_1, ret_2 := bufio.ScanWords(data, at_eof)
+	tup := lisette.MakeTuple2(ret, ret_1)
+	var result lisette.Result[lisette.Tuple2[int, []byte], error]
+	if ret_2 != nil {
+		result = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_2)
+	} else {
+		result = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup)
+	}
+	check := result
+	if check.Tag != lisette.ResultOk {
+		return lisette.Tuple2[int, []byte]{}, check.ErrVal
+	}
+	n := check.OkVal.First
+	token := check.OkVal.Second
+	return lisette.MakeTuple2[int, []byte](n, token), nil
+}
+
+func fail() error {
+	return errors.New("boom")
+}
+
+func main() {
+	s := bufio.NewScanner(strings.NewReader("ab cd"))
+	callee := s.Split
+	cb := split
+	var adapted func([]byte, bool) (int, []byte, error)
+	if cb != nil {
+		adapted = func(arg0 []byte, arg1 bool) (int, []byte, error) {
+			ret, ret_1 := cb(arg0, arg1)
+			return ret.First, ret.Second, ret_1
+		}
+	}
+	callee(adapted)
+	words := 0
+	for s.Scan() {
+		words++
+	}
+	if words != 2 {
+		panic("wrong word count")
+	}
+	ret_2 := fail()
+	var result lisette.Result[struct{}, error]
+	if ret_2 != nil {
+		result = lisette.MakeResultErr[struct{}, error](ret_2)
+	} else {
+		result = lisette.MakeResultOk[struct{}, error](struct{}{})
+	}
+	if result.Tag != lisette.ResultErr {
+		panic("fail succeeded")
+	}
+}

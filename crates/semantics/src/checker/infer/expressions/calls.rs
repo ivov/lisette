@@ -1209,7 +1209,7 @@ impl InferCtx<'_> {
                 if variadic_start.is_some_and(|start| i >= start) {
                     return self.with_value_context(|s| s.infer_expression(arg, &expected_ty));
                 }
-                let resolved_expected = expected_ty.resolve_in(&self.env);
+                let resolved_expected = self.store.peel_alias(&expected_ty.resolve_in(&self.env));
                 if resolved_expected.is_writable()
                     && let Some(name) = arg.get_var_name()
                     && self

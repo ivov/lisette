@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  type Early = Halt
+  type Halt = Never
+  
+  fn die() -> Early { panic("dead") }
+  
+  fn pick(n: int) -> int {
+    match n {
+      0 => die(),
+      _ => n,
+    }
+  }
+  
+  fn main() {
+    let x: int = if pick(2) > 0 { 1 } else { die() }
+    if x != 1 { panic("wrong branch") }
+  }
+---
+package main
+
+type Early = struct{}
+
+type Halt = struct{}
+
+func die() {
+	panic("dead")
+}
+
+func pick(n int) int {
+	if n == 0 {
+		die()
+	}
+	return n
+}
+
+func main() {
+	var x int
+	if pick(2) > 0 {
+		x = 1
+	} else {
+		die()
+	}
+	if x != 1 {
+		panic("wrong branch")
+	}
+}

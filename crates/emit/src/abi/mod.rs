@@ -184,8 +184,8 @@ impl Planner<'_> {
     fn go_function_slot_origin(&self, value_ty: &Type, target_ty: &Type) -> Option<SlotOrigin> {
         let slot_origin = self.function_type_origin(target_ty, SlotOrigin::Lisette);
         ((slot_origin.declared_by_go()
-            || self.facts.function_alias_declaration(value_ty).is_some()
-            || self.facts.function_alias_declaration(target_ty).is_some())
+            || self.facts.mentions_function_alias(value_ty)
+            || self.facts.mentions_function_alias(target_ty))
             && self.facts.resolve_to_function_type(value_ty).is_some()
             && self.facts.resolve_to_function_type(target_ty).is_some())
         .then_some(slot_origin)

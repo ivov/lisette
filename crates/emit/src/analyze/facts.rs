@@ -177,6 +177,20 @@ impl<'a> EmitFacts<'a> {
         self.resolve_to_function_type(self.alias_declaration(ty)?)
     }
 
+    pub(crate) fn mentions_function_alias(&self, ty: &Type) -> bool {
+        if self.function_alias_declaration(ty).is_some() {
+            return true;
+        }
+        let Some(Type::Function(function)) = self.resolve_to_function_type(ty) else {
+            return false;
+        };
+        function
+            .params
+            .iter()
+            .any(|param| self.mentions_function_alias(&param.ty))
+            || self.mentions_function_alias(&function.return_type)
+    }
+
     pub(crate) fn alias_declaration(&self, ty: &Type) -> Option<&Type> {
         let Type::Nominal { id, .. } = ty.unwrap_forall() else {
             return None;

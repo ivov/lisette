@@ -363,11 +363,11 @@ fn user_equals(store: &Store, qualified: &Symbol) -> UserEquals {
     };
     if method_ty
         .ty
-        .equals_receiver_vars(qualified.as_str(), generics_len)
+        .equals_receiver_vars(qualified.as_str(), generics_len, |ty| store.peel_alias(ty))
         .is_some()
     {
         UserEquals::ValidReceiver
-    } else if method_ty.ty.is_equals_signature() {
+    } else if method_ty.ty.is_equals_signature(|ty| store.peel_alias(ty)) {
         UserEquals::Specialized
     } else {
         UserEquals::Conflict

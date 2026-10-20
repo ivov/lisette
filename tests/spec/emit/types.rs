@@ -258,6 +258,48 @@ impl Point {
 }
 
 #[test]
+fn user_methods_with_alias_return_types_replace_synthesized_ones() {
+    let input = r#"
+import "go:fmt"
+
+type Text = string
+type Flag = bool
+
+#[display]
+struct Point { x: int, y: int }
+
+impl Point {
+  fn to_string(self) -> Text { "p" }
+}
+
+struct Cell { v: int, tags: Slice<string> }
+
+impl Cell {
+  fn equals(self, other: Cell) -> Flag { self.v == other.v }
+}
+
+#[equality]
+struct Row { cell: Cell }
+
+struct Tag { v: int }
+
+impl Tag {
+  pub fn string(self) -> Text { "tag" }
+}
+
+fn main() {
+  if (Point { x: 1, y: 2 }).to_string() != "p" { panic("user to_string ignored") }
+  let a = Cell { v: 1, tags: ["a"] }
+  let b = Cell { v: 1, tags: ["b"] }
+  if ![a].equals([b]) { panic("user equals ignored") }
+  if !(Row { cell: a }).equals(Row { cell: b }) { panic("nested user equals ignored") }
+  if fmt.Sprint(Tag { v: 1 }) != "tag" { panic("user string ignored") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn display_to_string_delegates_to_user_stringer() {
     let input = r#"
 #[display]

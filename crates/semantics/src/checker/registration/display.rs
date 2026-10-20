@@ -89,7 +89,7 @@ impl TaskState {
                     ));
                 return;
             }
-            if user_ty.ty.is_stringer_signature() {
+            if user_ty.ty.is_stringer_signature(|ty| store.peel_alias(ty)) {
                 return;
             }
         }

@@ -567,7 +567,7 @@ impl Planner<'_> {
         }
         let return_ctx = self.return_ctx();
         if return_ctx.lowered_shape() != Some(LoweredReturnAbi::BareError)
-            || !self.is_error_interface(&return_ctx.ty()?.err_type())
+            || !self.is_error_interface(&self.facts.peel_alias(return_ctx.ty()?).err_type())
         {
             return None;
         }
@@ -575,7 +575,7 @@ impl Planner<'_> {
         if lowered.shape != LoweredReturnAbi::BareError
             || !lowered.wraps.is_empty()
             || lowered.is_bridged()
-            || !self.is_error_interface(&lowered.call.get_type().err_type())
+            || !self.is_error_interface(&self.facts.peel_alias(&lowered.call.get_type()).err_type())
         {
             return None;
         }

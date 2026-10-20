@@ -1189,7 +1189,7 @@ impl Type {
         }
     }
 
-    pub fn is_stringer_signature(&self) -> bool {
+    pub fn is_stringer_signature(&self, peel: impl Fn(&Type) -> Type) -> bool {
         let func = match self {
             Type::Forall { body, .. } => body.as_ref(),
             other => other,
@@ -1198,11 +1198,11 @@ impl Type {
             func,
             Type::Function(f)
                 if f.params.len() == 1
-                    && matches!(f.return_type.as_ref(), Type::Simple(SimpleKind::String))
+                    && matches!(peel(&f.return_type), Type::Simple(SimpleKind::String))
         )
     }
 
-    pub fn is_equals_signature(&self) -> bool {
+    pub fn is_equals_signature(&self, peel: impl Fn(&Type) -> Type) -> bool {
         let func = match self {
             Type::Forall { body, .. } => body.as_ref(),
             other => other,
@@ -1211,13 +1211,17 @@ impl Type {
             func,
             Type::Function(f)
                 if f.params.len() == 2
-                    && matches!(f.return_type.as_ref(), Type::Simple(SimpleKind::Bool))
-                    && f.params[0].ty == f.params[1].ty
-                    && !f.params[0].ty.is_ref()
+                    && matches!(peel(&f.return_type), Type::Simple(SimpleKind::Bool))
+                    && peel(&f.params[0].ty) == peel(&f.params[1].ty)
+                    && !peel(&f.params[0].ty).is_ref()
         )
     }
 
-    pub fn is_equals_bound_signature(&self, param_name: &str) -> bool {
+    pub fn is_equals_bound_signature(
+        &self,
+        param_name: &str,
+        peel: impl Fn(&Type) -> Type,
+    ) -> bool {
         let func = match self {
             Type::Forall { body, .. } => body.as_ref(),
             other => other,
@@ -1226,13 +1230,18 @@ impl Type {
             func,
             Type::Function(f)
                 if f.params.len() == 1
-                    && f.return_type.is_boolean()
+                    && peel(&f.return_type).is_boolean()
                     && matches!(&f.params[0].ty, Type::Parameter(name) if name.as_str() == param_name)
         )
     }
 
-    pub fn equals_receiver_vars(&self, owner_id: &str, arity: usize) -> Option<Vec<EcoString>> {
-        if !self.is_equals_signature() {
+    pub fn equals_receiver_vars(
+        &self,
+        owner_id: &str,
+        arity: usize,
+        peel: impl Fn(&Type) -> Type,
+    ) -> Option<Vec<EcoString>> {
+        if !self.is_equals_signature(&peel) {
             return None;
         }
         let (quantified, func): (&[EcoString], &Type) = match self {
@@ -1245,7 +1254,7 @@ impl Type {
         let Type::Function(f) = func else {
             return None;
         };
-        let Type::Nominal { id, params, .. } = &f.params[0].ty else {
+        let Type::Nominal { id, params, .. } = peel(&f.params[0].ty) else {
             return None;
         };
         if id.as_str() != owner_id || params.len() != arity {
@@ -1256,10 +1265,10 @@ impl Type {
             let Type::Parameter(name) = param else {
                 return None;
             };
-            if vars.contains(name) {
+            if vars.contains(&name) {
                 return None;
             }
-            vars.push(name.clone());
+            vars.push(name);
         }
         if !quantified.iter().all(|v| vars.contains(v)) {
             return None;

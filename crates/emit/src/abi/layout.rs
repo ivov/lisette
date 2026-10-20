@@ -93,6 +93,10 @@ impl FunctionLayout {
         go_type
     }
 
+    fn result_err_type(&self, planner: &Planner<'_>) -> Type {
+        planner.facts.peel_alias(&self.result_type).err_type()
+    }
+
     pub(crate) fn result_go_type(&self, planner: &Planner<'_>) -> Option<GoType> {
         if self.return_abi == CallableReturnAbi::Void {
             return None;
@@ -111,9 +115,9 @@ impl FunctionLayout {
                     .unwrap_or_else(|_| unreachable!("a single-result ABI has one result slot"));
                 slot
             }
-            Some(LoweredReturnAbi::BareError) => planner.go_type(&self.result_type.err_type()),
+            Some(LoweredReturnAbi::BareError) => planner.go_type(&self.result_err_type(planner)),
             Some(LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. }) => {
-                slots.push(planner.go_type(&self.result_type.err_type()));
+                slots.push(planner.go_type(&self.result_err_type(planner)));
                 go_result_list(&slots)
             }
             Some(LoweredReturnAbi::Option(OptionReturnAbi::CommaOk { .. })) => {

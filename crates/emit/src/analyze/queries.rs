@@ -158,7 +158,10 @@ impl Planner<'_> {
         interface_requirements(bound, |id| self.facts.definition(id))
             .into_iter()
             .any(|requirement| {
-                requirement.name == "equals" && requirement.ty.is_equals_bound_signature(param_name)
+                requirement.name == "equals"
+                    && requirement
+                        .ty
+                        .is_equals_bound_signature(param_name, |ty| self.facts.peel_alias(ty))
             })
     }
 

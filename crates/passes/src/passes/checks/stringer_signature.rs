@@ -6,18 +6,19 @@
 
 use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
+use semantics::store::Store;
 use syntax::ast::Expression;
 use syntax::types::{SimpleKind, Type};
 
 pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     if let Expression::ImplBlock { methods, .. } = expression {
         for method in methods {
-            check_method(method, ctx.sink);
+            check_method(method, ctx.store, ctx.sink);
         }
     }
 }
 
-fn check_method(method: &Expression, sink: &LocalSink) {
+fn check_method(method: &Expression, store: &Store, sink: &LocalSink) {
     let Expression::Function {
         name,
         name_span,
@@ -33,7 +34,10 @@ fn check_method(method: &Expression, sink: &LocalSink) {
         return;
     }
 
-    let returns_string = matches!(return_type, Type::Simple(SimpleKind::String));
+    let returns_string = matches!(
+        store.peel_alias(return_type),
+        Type::Simple(SimpleKind::String)
+    );
     if params.len() == 1 && returns_string {
         return;
     }
