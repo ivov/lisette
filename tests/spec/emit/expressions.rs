@@ -3379,6 +3379,89 @@ fn main() {
 }
 
 #[test]
+fn promoted_pointer_method_through_writable_embed() {
+    let input = r#"
+struct Counter { counts: mut Slice<int> }
+
+impl Counter {
+  fn bump(self: mut Ref<Counter>) { self.counts[0] += 1 }
+}
+
+struct Tally { embed mut Counter }
+
+fn bump_tally(tally: mut Ref<mut Tally>) {
+  tally.bump()
+}
+
+fn main() {
+  let mut tally = Tally { Counter: Counter { counts: [0] } }
+  bump_tally(&tally)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_tuple_struct_method_expression() {
+    let input = r#"
+import "go:fmt"
+import "go:time"
+
+fn main() {
+  let show = time.Duration.String
+  fmt.Println(show(time.Second))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_tuple_struct_conversion_as_member_access_base() {
+    let input = r#"
+import "go:fmt"
+import "go:time"
+
+fn main() {
+  fmt.Println(time.Duration(1000).String())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_pointer_method_expression_with_writable_receiver() {
+    let input = r#"
+import "go:archive/zip"
+import "go:io/fs"
+
+fn main() {
+  let mut header = zero<mut zip.FileHeader>()
+  let set_mode = zip.FileHeader.SetMode
+  set_mode(&header, fs.FileMode(0o644))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_generic_method_value() {
+    let input = r#"
+import "go:encoding/json"
+import "go:fmt"
+import "go:strings"
+
+fn main() {
+  let mut decoder = json.NewDecoder(strings.NewReader("1"))
+  let decode = decoder.Decode
+  let mut n = 0
+  let result = decode(&n)
+  fmt.Println(result.is_ok(), n)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn cast_in_statement_position_uses_discard() {
     let input = r#"
 fn main() {

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot use a type as a value
+   ╭─[test.lis:5:15]
+ 4 │ fn main() {
+ 5 │   let nanos = time.Duration.0
+   ·               ──────┬──────
+   ·                     ╰── type names are not runtime values
+ 6 │   let _ = nanos
+   ╰────
+  help: `time.Duration` refers to a type, not a value · code: [infer.type_used_as_value]

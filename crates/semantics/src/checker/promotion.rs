@@ -239,7 +239,7 @@ where
     if let [(entry, candidate)] = candidates.as_slice()
         && !entry.multiples
     {
-        return Resolution::Found(build_member(outer, entry, candidate));
+        return Resolution::Found(build_member(outer, entry, candidate, lookup));
     }
 
     let mut sources: Vec<Symbol> = candidates
@@ -299,7 +299,15 @@ where
     None
 }
 
-fn build_member(outer: &Type, entry: &Entry, candidate: &Candidate) -> ResolvedMember {
+fn build_member<'d, F>(
+    outer: &Type,
+    entry: &Entry,
+    candidate: &Candidate,
+    lookup: F,
+) -> ResolvedMember
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
     let kind = match &candidate.kind {
         MemberKind::Field { ty, visibility } => MemberKind::Field {
             ty: ty.clone(),
@@ -310,15 +318,16 @@ fn build_member(outer: &Type, entry: &Entry, candidate: &Candidate) -> ResolvedM
             let method_ty = if entry.depth == 0 {
                 method.ty.clone()
             } else {
-                let replacement = if !entry.indirect && method_has_pointer_receiver(&method.ty) {
-                    ref_of(outer)
-                } else {
-                    outer.clone()
-                };
-                let replacement = if receiver_writable {
-                    replacement.make_writable()
-                } else {
-                    replacement
+                let pointer = !entry.indirect && method_has_pointer_receiver(&method.ty);
+                let replacement = match (pointer, receiver_writable) {
+                    (true, true) => Type::qualified_compound(
+                        CompoundKind::Ref,
+                        vec![types::writable_ref_pointee(outer, &lookup)],
+                        true,
+                    ),
+                    (true, false) => ref_of(outer),
+                    (false, true) => outer.clone().make_writable(),
+                    (false, false) => outer.clone(),
                 };
                 method.ty.with_replaced_first_param(&replacement)
             };

@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:encoding/json"
+  import "go:fmt"
+  import "go:strings"
+  
+  fn main() {
+    let mut decoder = json.NewDecoder(strings.NewReader("1"))
+    let decode = decoder.Decode
+    let mut n = 0
+    let result = decode(&n)
+    fmt.Println(result.is_ok(), n)
+  }
+---
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strings"
+)
+
+func main() {
+	decoder := json.NewDecoder(strings.NewReader("1"))
+	cb := decoder.Decode
+	var adapted func(*int) lisette.Result[struct{}, error]
+	if cb != nil {
+		adapted = func(arg0 *int) lisette.Result[struct{}, error] {
+			ret := cb(arg0)
+			if ret != nil {
+				return lisette.MakeResultErr[struct{}, error](ret)
+			}
+			return lisette.MakeResultOk[struct{}, error](struct{}{})
+		}
+	}
+	decode := adapted
+	n := 0
+	result := decode(&n)
+	fmt.Println(result.IsOk(), n)
+}

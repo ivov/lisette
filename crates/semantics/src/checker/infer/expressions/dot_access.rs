@@ -65,8 +65,9 @@ impl InferCtx<'_> {
         expected_ty: &Type,
     ) -> Expression {
         let expression_ty = self.new_type_var();
-        let new_expression =
-            self.with_dot_access_base(|state| state.infer_expression(*expression, &expression_ty));
+        let new_expression = self.with_dot_access_base(true, |state| {
+            state.infer_expression(*expression, &expression_ty)
+        });
         let resolved_expression_ty =
             self.normalize_aliased_ref(expression_ty.resolve_in(&self.env));
 
@@ -103,6 +104,14 @@ impl InferCtx<'_> {
             .or_else(|| self.as_static_method(&args));
 
         if let Some(expression) = resolved {
+            if matches!(&expression, Expression::DotAccess { resolution, .. } if resolution.is_field_read())
+                && self.is_type_level_receiver(args.expression)
+            {
+                self.sink.push(diagnostics::infer::type_used_as_value(
+                    &args.expression.as_dotted_path().unwrap_or_default(),
+                    args.expression.get_span(),
+                ));
+            }
             if matches!(member.as_str(), "append" | "reserve")
                 && resolved_expression_ty.is_ref()
                 && args.deref_ty.is_slice()
@@ -178,6 +187,12 @@ impl InferCtx<'_> {
         type_package != self.cursor.package_id()
             && type_package != "prelude"
             && !type_package.starts_with("go:")
+    }
+
+    /// As the base of a member access, a type names itself, not its constructor.
+    pub(super) fn type_named_as_base(&self, definition: &Definition) -> Option<Type> {
+        (self.is_dot_access_base() && definition.is_type_definition())
+            .then(|| definition.ty.clone())
     }
 
     pub(super) fn is_type_level_receiver(&self, expression: &Expression) -> bool {
@@ -498,7 +513,9 @@ impl InferCtx<'_> {
                 },
             ));
         };
-        let member_type = self.resolve_definition_value_type(store, definition);
+        let member_type = self
+            .type_named_as_base(definition)
+            .unwrap_or_else(|| self.resolve_definition_value_type(store, definition));
 
         if let Some(definition_span) = self.get_definition_name_span(store, &resolved_definition) {
             self.facts.add_usage(*args.span, definition_span);
@@ -545,8 +562,9 @@ impl InferCtx<'_> {
         display_package: &str,
         args: &DotAccessResolutionArgs,
     ) {
-        let is_callee_context = self.is_callee_context();
-        let is_dot_access_base = self.is_dot_access_base();
+        if self.is_callee_context() || self.is_dot_access_base() {
+            return;
+        }
         let display_name = format!("{}.{}", display_package, args.member_name);
 
         if let Some(definition) = store.get_definition(resolved_definition) {
@@ -555,27 +573,22 @@ impl InferCtx<'_> {
                     fields: StructFields::Tuple(_),
                     ..
                 } => {
-                    // Deliberately omits `is_dot_access_base`, unlike the other arms below.
-                    if !is_callee_context {
-                        self.sink.push(diagnostics::infer::native_constructor_value(
-                            &display_name,
-                            *args.span,
-                        ));
-                    }
+                    self.sink.push(diagnostics::infer::native_constructor_value(
+                        &display_name,
+                        *args.span,
+                    ));
                 }
                 DefinitionBody::Struct {
                     fields: StructFields::Record(_),
                     ..
                 } => {
-                    if !is_callee_context && !is_dot_access_base {
-                        self.sink.push(diagnostics::infer::record_struct_value(
-                            &display_name,
-                            *args.span,
-                        ));
-                    }
+                    self.sink.push(diagnostics::infer::record_struct_value(
+                        &display_name,
+                        *args.span,
+                    ));
                 }
                 DefinitionBody::Enum { .. } => {
-                    if !is_callee_context && !is_dot_access_base && !self.is_let_binding_rhs() {
+                    if !self.is_let_binding_rhs() {
                         self.sink
                             .push(diagnostics::infer::namespace_alias_used_as_value(
                                 *args.span,
@@ -583,26 +596,18 @@ impl InferCtx<'_> {
                     }
                 }
                 DefinitionBody::TypeAlias { .. } => {
-                    if !is_callee_context && !is_dot_access_base {
-                        let diagnostic = match store.deep_struct_kind(definition.ty.unwrap_forall())
-                        {
-                            Some(StructKind::Record) => {
-                                diagnostics::infer::record_struct_value(&display_name, *args.span)
-                            }
-                            Some(StructKind::Tuple) => {
-                                diagnostics::infer::native_constructor_value(
-                                    &display_name,
-                                    *args.span,
-                                )
-                            }
-                            None => {
-                                diagnostics::infer::type_used_as_value(&display_name, *args.span)
-                            }
-                        };
-                        self.sink.push(diagnostic);
-                    }
+                    let diagnostic = match store.deep_struct_kind(definition.ty.unwrap_forall()) {
+                        Some(StructKind::Record) => {
+                            diagnostics::infer::record_struct_value(&display_name, *args.span)
+                        }
+                        Some(StructKind::Tuple) => {
+                            diagnostics::infer::native_constructor_value(&display_name, *args.span)
+                        }
+                        None => diagnostics::infer::type_used_as_value(&display_name, *args.span),
+                    };
+                    self.sink.push(diagnostic);
                 }
-                DefinitionBody::Interface { .. } if !is_callee_context && !is_dot_access_base => {
+                DefinitionBody::Interface { .. } => {
                     self.sink.push(diagnostics::infer::type_used_as_value(
                         &display_name,
                         *args.span,
@@ -612,27 +617,20 @@ impl InferCtx<'_> {
             }
         }
 
-        if !is_callee_context && !is_dot_access_base {
-            let phantom = phantom_type_params(member_type);
-            if !phantom.is_empty() {
-                self.sink
-                    .push(diagnostics::infer::uninferable_generic_reference(
-                        &display_name,
-                        &phantom,
-                        *args.span,
-                    ));
-            }
+        let phantom = phantom_type_params(member_type);
+        if !phantom.is_empty() {
+            self.sink
+                .push(diagnostics::infer::uninferable_generic_reference(
+                    &display_name,
+                    &phantom,
+                    *args.span,
+                ));
         }
     }
 
     fn as_enum_variant(&mut self, args: &DotAccessResolutionArgs) -> Option<Expression> {
         let store = self.store;
-        let receiver_ty = match &args.deref_ty {
-            Type::Nominal { .. } => args.deref_ty.clone(),
-            Type::Function(f) => f.return_type.as_ref().clone(),
-            _ => return None,
-        };
-        let Type::Nominal { id, .. } = store.peel_alias(&receiver_ty) else {
+        let Type::Nominal { id, .. } = store.peel_alias(&args.deref_ty) else {
             return None;
         };
 

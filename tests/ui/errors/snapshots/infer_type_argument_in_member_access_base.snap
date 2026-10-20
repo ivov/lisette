@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot use a type as a value
+   ╭─[test.lis:7:25]
+ 6 │ fn main() {
+ 7 │   let length = identity(strings.Builder).Len()
+   ·                         ───────┬───────
+   ·                                ╰── type names are not runtime values
+ 8 │   let _ = length
+   ╰────
+  help: `strings.Builder` refers to a type, not a value · code: [infer.type_used_as_value]

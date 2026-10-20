@@ -205,7 +205,11 @@ impl InferCtx<'_> {
             }
         }
 
+        let is_go_method = resolved_definition
+            .as_ref()
+            .is_some_and(|definition| definition.starts_with("go:"));
         if !self.is_callee_context()
+            && !is_go_method
             && (matches!(deref_ty, Type::Nominal { id, .. }
                     if self.store.is_ufcs_method(id.as_str(), args.member_name))
                 || matches!(store.deep_resolve_alias(deref_ty), Type::Nominal { id, .. }
@@ -283,7 +287,8 @@ impl InferCtx<'_> {
         // Don't remove self: the value type should include the receiver.
         // Still unify the receiver type with the expression type for generic resolution.
         let receiver_ty = params[0].ty.resolve_in(&self.env);
-        let receiver_stripped = receiver_ty.strip_refs();
+        // The type named by the expression carries no write permission of its own.
+        let receiver_stripped = receiver_ty.strip_refs().shallow_demoted();
         let expression_stripped = args.expression_ty.resolve_in(&self.env).strip_refs();
         self.unify(&receiver_stripped, &expression_stripped, args.span);
 
@@ -420,15 +425,10 @@ impl InferCtx<'_> {
         args: &DotAccessResolutionArgs,
     ) -> Option<Expression> {
         let store = self.store;
-        let is_constructor = matches!(args.deref_ty, Type::Function(_));
-        let owner_ty = match &args.deref_ty {
-            Type::Function(f) => store.peel_alias(&f.return_type),
-            ty => store.peel_alias(ty),
-        };
+        let owner_ty = store.peel_alias(&args.deref_ty);
         let id = match &owner_ty {
             Type::Nominal { id, .. } => {
-                if !is_constructor
-                    && let Some(def) = store.get_definition(id)
+                if let Some(def) = store.get_definition(id)
                     && matches!(def.body, DefinitionBody::Enum { .. })
                     && !self.is_type_level_receiver(args.expression)
                 {
@@ -436,12 +436,8 @@ impl InferCtx<'_> {
                 }
                 id.clone()
             }
-            Type::Simple(kind) if !is_constructor => {
-                Symbol::from_parts("prelude", kind.leaf_name())
-            }
-            Type::Compound { kind, .. } if !is_constructor => {
-                Symbol::from_parts("prelude", kind.leaf_name())
-            }
+            Type::Simple(kind) => Symbol::from_parts("prelude", kind.leaf_name()),
+            Type::Compound { kind, .. } => Symbol::from_parts("prelude", kind.leaf_name()),
             _ => return None,
         };
 

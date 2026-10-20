@@ -319,7 +319,11 @@ impl InferCtx<'_> {
             self.facts.add_usage(span, definition_span);
         }
 
-        let ty = match self.lookup_type(store, &value) {
+        let base_ty = qualified
+            .as_ref()
+            .and_then(|qname| store.get_definition(qname.as_str()))
+            .and_then(|definition| self.type_named_as_base(definition));
+        let ty = match base_ty.or_else(|| self.lookup_type(store, &value)) {
             Some(ty) => ty,
             None => {
                 if value == "self" {

@@ -100,15 +100,15 @@ fn check_one(
         } else {
             Symbol::from_parts(package_id, value).to_string()
         };
-        if resolves_to_struct_kind(&qualified, StructKind::Tuple, store) {
-            sink.push(diagnostics::infer::native_constructor_value(value, span));
-            return;
-        }
-        if position != Position::DotAccessBase
-            && resolves_to_struct_kind(&qualified, StructKind::Record, store)
-        {
-            sink.push(diagnostics::infer::record_struct_value(value, span));
-            return;
+        if position != Position::DotAccessBase {
+            if resolves_to_struct_kind(&qualified, StructKind::Tuple, store) {
+                sink.push(diagnostics::infer::native_constructor_value(value, span));
+                return;
+            }
+            if resolves_to_struct_kind(&qualified, StructKind::Record, store) {
+                sink.push(diagnostics::infer::record_struct_value(value, span));
+                return;
+            }
         }
     }
 
