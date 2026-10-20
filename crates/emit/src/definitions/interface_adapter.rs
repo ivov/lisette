@@ -13,16 +13,17 @@ use crate::plan::values::GoExpression;
 #[cfg(debug_assertions)]
 use crate::plan::verify::{verify_final_function_body, verify_local_scopes};
 use crate::plan::visit::identify_body_locals;
+use crate::utils::fresh_receiver_name;
 use crate::write_line;
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::ast::Expression;
 use syntax::ast::StructFields;
+use syntax::ast::{Expression, FunctionDefinitionView};
 use syntax::go_names;
 use syntax::go_names::ConformanceCandidate;
 use syntax::program::{
-    Definition, DefinitionBody, InterfaceRequirement, Method, interface_requirements,
-    methods_for_type,
+    Definition, DefinitionBody, DotAccessResolution, InterfaceRequirement, Method,
+    interface_requirements, methods_for_type, resolved_definition,
 };
 use syntax::types::{
     SubstitutionMap, Symbol, Type, build_substitution_map, substitute, unqualified_name,
@@ -38,8 +39,11 @@ pub(crate) struct AdapterPlan {
 
 #[derive(Debug, Clone)]
 pub(crate) struct AdapterMethod {
-    name: EcoString,
+    /// The interface's Go method name.
+    go_name: String,
     source_name: EcoString,
+    /// The implementation's Go method name.
+    source_go_name: String,
     /// An unconstrained generic receiver may expose either physical signature.
     alternate: Option<FunctionLayout>,
     /// The implementation's Go slots.
@@ -66,6 +70,7 @@ impl AdapterMethod {
         };
         self.alternate.is_some()
             || return_changes
+            || self.go_name != self.source_go_name
             || !self.source.same_parameter_representation(&self.target)
     }
 }
@@ -79,14 +84,165 @@ impl Planner<'_> {
         })
         .iter()
         .any(|requirement| {
-            requirement
-                .ty
-                .get_function_ret()
-                .is_some_and(|ty| self.facts.peel_alias(ty).is_partial())
+            !go_name::is_go_import(&requirement.declaring_interface)
+                && requirement
+                    .ty
+                    .get_function_ret()
+                    .is_some_and(|ty| self.facts.peel_alias(ty).is_partial())
         })
     }
 
+    /// Generic Lisette interfaces call a method's tagged twin.
+    pub(crate) fn requirement_uses_tagged_twin(&self, requirement: &InterfaceRequirement) -> bool {
+        !go_name::is_go_import(&requirement.declaring_interface)
+            && self.facts.method_uses_tagged_return(&requirement.name)
+    }
+
+    /// Lisette code calls the twin, so Go code alone sees the method's Go shape.
+    pub(crate) fn selects_tagged_twin(&self, expression: &Expression) -> bool {
+        match expression.unwrap_parens() {
+            Expression::DotAccess {
+                expression: receiver,
+                member,
+                resolution:
+                    DotAccessResolution::InstanceMethod { .. }
+                    | DotAccessResolution::InstanceMethodValue { .. },
+                ..
+            } => self.receiver_selects_tagged_twin(&receiver.get_type(), member),
+            Expression::Identifier { .. } => resolved_definition(expression)
+                .is_some_and(|symbol| self.definition_selects_tagged_twin(symbol)),
+            _ => false,
+        }
+    }
+
+    pub(crate) fn definition_selects_tagged_twin(&self, symbol: &str) -> bool {
+        symbol
+            .rsplit_once('.')
+            .is_some_and(|(owner, name)| self.has_tagged_twin(&self.peel_alias_id(owner), name))
+    }
+
+    fn receiver_selects_tagged_twin(&self, receiver_ty: &Type, member: &str) -> bool {
+        if !self.facts.method_uses_tagged_return(member) {
+            return false;
+        }
+        let receiver = self.facts.strip_and_peel(receiver_ty);
+        let interfaces = match &receiver {
+            Type::Parameter(name) => self
+                .scope
+                .type_params()
+                .iter()
+                .find(|parameter| &parameter.name == name)
+                .map(|parameter| parameter.bounds.clone())
+                .unwrap_or_default(),
+            Type::Nominal { id, .. }
+                if go_name::is_go_import(id) || id.starts_with(go_name::PRELUDE_PREFIX) =>
+            {
+                return false;
+            }
+            Type::Nominal { id, .. }
+                if !self
+                    .facts
+                    .definition(id)
+                    .is_some_and(Definition::is_interface) =>
+            {
+                return self.has_tagged_twin(id, member);
+            }
+            Type::Nominal { .. } => vec![receiver.clone()],
+            _ => return false,
+        };
+        interfaces.iter().any(|interface| {
+            interface_requirements(&self.facts.peel_alias(interface), |id| {
+                self.facts.definition(id)
+            })
+            .iter()
+            .any(|requirement| {
+                requirement.name == member && self.requirement_uses_tagged_twin(requirement)
+            })
+        })
+    }
+
+    fn has_tagged_twin(&self, owner: &str, member: &str) -> bool {
+        !go_name::is_go_import(owner)
+            && !owner.starts_with(go_name::PRELUDE_PREFIX)
+            && self.facts.method_uses_tagged_return(member)
+            && self.facts.method(owner, member).is_some()
+            && !self.facts.is_ufcs_method(owner, member)
+    }
+
+    /// A twin that returns the one tagged value a generic interface result needs.
+    pub(crate) fn emit_tagged_twin(
+        &mut self,
+        method: FunctionDefinitionView<'_>,
+        go_name: &str,
+        generic_context: &[(EcoString, Vec<Type>)],
+    ) -> String {
+        let (receiver, params) = method
+            .params
+            .split_first()
+            .expect("a method binds its receiver");
+        let return_ty = method.return_type;
+        let parameters: Vec<ValueLayout> = params
+            .iter()
+            .map(|param| self.value_layout(&param.ty, SlotOrigin::Lisette))
+            .collect();
+        let result = self.value_layout(return_ty, SlotOrigin::Lisette);
+        let source = self.function_layout(
+            parameters.clone(),
+            &result,
+            self.method_return_abi(return_ty),
+            Some(return_ty),
+        );
+        let target = self.function_layout(
+            parameters,
+            &result,
+            CallableReturnAbi::Value,
+            Some(return_ty),
+        );
+        let ret = if source.return_abi == CallableReturnAbi::Void {
+            AdapterReturn::ZeroFill
+        } else if source.same_result_representation(&target) {
+            AdapterReturn::Forward
+        } else {
+            AdapterReturn::Bridge
+        };
+        let twin = AdapterMethod {
+            go_name: go_name::tagged_twin(go_name),
+            source_name: method.name.clone(),
+            source_go_name: go_name.to_string(),
+            alternate: None,
+            source,
+            target,
+            ret,
+        };
+        let mut declaration = String::new();
+        self.emit_adapter_method(
+            &mut declaration,
+            MethodReceiver::Itself(&receiver.ty),
+            generic_context,
+            &twin,
+        );
+        declaration
+    }
+
+    fn requirement_go_name(&self, requirement: &InterfaceRequirement) -> String {
+        let name = self.method_go_name(&requirement.name, false);
+        if self.requirement_uses_tagged_twin(requirement) {
+            go_name::tagged_twin(&name)
+        } else {
+            name
+        }
+    }
+
     pub(crate) fn bound_dispatch_requirement(
+        &self,
+        expression: &Expression,
+    ) -> Option<(Type, InterfaceRequirement)> {
+        self.bound_requirement(expression)
+            .filter(|(bound, _)| self.bound_needs_dispatch(bound))
+    }
+
+    /// The requirement of a type parameter's bound that a method access selects.
+    pub(crate) fn bound_requirement(
         &self,
         expression: &Expression,
     ) -> Option<(Type, InterfaceRequirement)> {
@@ -106,20 +262,23 @@ impl Planner<'_> {
             .type_params()
             .iter()
             .find(|parameter| parameter.name == name)?;
-        for bound in &parameter.bounds {
-            if !self.bound_needs_dispatch(bound) {
-                continue;
-            }
-            if let Some(requirement) = interface_requirements(&self.facts.peel_alias(bound), |id| {
-                self.facts.definition(id)
-            })
-            .into_iter()
-            .find(|requirement| requirement.name == *member)
-            {
-                return Some((self.facts.peel_alias(bound), requirement));
-            }
-        }
-        None
+        parameter.bounds.iter().find_map(|bound| {
+            let bound = self.facts.peel_alias(bound);
+            let requirement = interface_requirements(&bound, |id| self.facts.definition(id))
+                .into_iter()
+                .find(|requirement| requirement.name == *member)?;
+            Some((bound, requirement))
+        })
+    }
+
+    /// The Go interface method a bound method access selects.
+    pub(crate) fn go_bound_requirement(
+        &self,
+        expression: &Expression,
+    ) -> Option<InterfaceRequirement> {
+        self.bound_requirement(expression)
+            .map(|(_, requirement)| requirement)
+            .filter(|requirement| go_name::is_go_import(&requirement.declaring_interface))
     }
 
     pub(crate) fn bound_dispatch_layout(&self, expression: &Expression) -> Option<FunctionLayout> {
@@ -210,8 +369,10 @@ impl Planner<'_> {
             } else {
                 local.clone()
             };
+            let name = self.requirement_go_name(&requirement);
             methods.push(AdapterMethod {
-                name: requirement.name.clone(),
+                source_go_name: name.clone(),
+                go_name: name,
                 source_name: requirement.name,
                 source: local,
                 alternate: Some(foreign),
@@ -228,11 +389,7 @@ impl Planner<'_> {
         })
     }
 
-    fn dynamic_method_interface(
-        &mut self,
-        method: &AdapterMethod,
-        layout: &FunctionLayout,
-    ) -> String {
+    fn dynamic_method_interface(&mut self, method_name: &str, layout: &FunctionLayout) -> String {
         let params = layout
             .parameters
             .iter()
@@ -246,12 +403,7 @@ impl Planner<'_> {
             .result_go_type(self)
             .map(|ty| self.use_rendered_go_type(ty))
             .unwrap_or_default();
-        format!(
-            "interface {{ {}({}) {} }}",
-            self.method_go_name(&method.source_name, false),
-            params,
-            result
-        )
+        format!("interface {{ {}({}) {} }}", method_name, params, result)
     }
 
     fn plan_dynamic_adapter_body(
@@ -272,7 +424,7 @@ impl Planner<'_> {
         if !method.source.same_parameter_representation(alternate)
             || !method.source.same_result_representation(alternate)
         {
-            let local_type = self.dynamic_method_interface(method, &method.source);
+            let local_type = self.dynamic_method_interface(&method.source_go_name, &method.source);
             let local = self.fresh_local(Some("receiver"));
             let ok = self.fresh_local(Some("ok"));
             statements.push(define_many(
@@ -292,7 +444,7 @@ impl Planner<'_> {
             let call = GoExpression::call(
                 GoExpression::selector(
                     GoExpression::identifier(local),
-                    self.method_go_name(&method.source_name, false),
+                    method.source_go_name.clone(),
                 ),
                 arguments,
             );
@@ -309,7 +461,8 @@ impl Planner<'_> {
                 .into(),
             );
         }
-        let foreign_type = self.dynamic_method_interface(method, alternate);
+        let foreign_name = self.method_go_name(&method.source_name, false);
+        let foreign_type = self.dynamic_method_interface(&foreign_name, alternate);
         let foreign = GoExpression::type_assertion(inner, foreign_type);
         let arguments = self.plan_bridged_arguments(
             &mut statements,
@@ -320,10 +473,7 @@ impl Planner<'_> {
             alternate,
             &method.target,
         );
-        let call = GoExpression::call(
-            GoExpression::selector(foreign, self.method_go_name(&method.source_name, false)),
-            arguments,
-        );
+        let call = GoExpression::call(GoExpression::selector(foreign, foreign_name), arguments);
         self.plan_function_result_bridge(&mut statements, call, alternate, &method.target);
         statements
     }
@@ -545,7 +695,7 @@ impl Planner<'_> {
             )
         } else if let Some(source) = source_requirement {
             self.interface_method_return_abi(&source.name, &source.method)
-        } else if self.facts.method_uses_tagged_return(impl_name) {
+        } else if self.requirement_uses_tagged_twin(requirement) {
             CallableReturnAbi::Value
         } else {
             self.method_return_abi(&f.return_type)
@@ -606,9 +756,19 @@ impl Planner<'_> {
             AdapterReturn::Bridge
         };
 
+        let source_go_name = match source_requirement {
+            Some(source) => self.requirement_go_name(source),
+            None if source_go_method.is_none()
+                && self.requirement_uses_tagged_twin(requirement) =>
+            {
+                go_name::tagged_twin(&self.method_go_name(impl_name, false))
+            }
+            None => self.method_go_name(impl_name, false),
+        };
         Some(AdapterMethod {
-            name: requirement.name.clone(),
+            go_name: self.requirement_go_name(requirement),
             source_name: impl_name.clone(),
+            source_go_name,
             alternate: None,
             source,
             target,
@@ -696,7 +856,7 @@ impl Planner<'_> {
         for method in &plan.methods {
             self.emit_adapter_method(
                 &mut declaration,
-                &adapter_type,
+                MethodReceiver::Adapter(&adapter_type),
                 &plan.generic_context,
                 method,
             );
@@ -730,13 +890,22 @@ impl Planner<'_> {
     fn emit_adapter_method(
         &mut self,
         declaration: &mut String,
-        adapter_name: &str,
+        receiver: MethodReceiver<'_>,
         generic_context: &[(EcoString, Vec<Type>)],
         method: &AdapterMethod,
     ) {
         self.with_declaration_scope(|this| {
             this.set_type_params(generic_context);
-            let receiver_name = this.declare_adapter_method_binding("a".to_string());
+            let (receiver_type, receiver_name, wraps_inner) = match receiver {
+                MethodReceiver::Adapter(name) => (name.to_string(), "a".to_string(), true),
+                MethodReceiver::Itself(ty) => {
+                    let receiver_type = this.use_go_type(ty);
+                    let name =
+                        fresh_receiver_name(&receiver_type, |name| this.shadows_declaration(name));
+                    (receiver_type, name, false)
+                }
+            };
+            let receiver_name = this.declare_adapter_method_binding(receiver_name);
             let param_names: Vec<GoIdentifier> = (0..method.target.parameters.len())
                 .map(|i| this.declare_adapter_method_binding(format!("arg{}", i)))
                 .collect();
@@ -751,15 +920,15 @@ impl Planner<'_> {
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let go_method_name = this.method_go_name(&method.name, false);
+            let go_method_name = method.go_name.clone();
             let mut bindings = Vec::with_capacity(param_names.len() + 1);
             bindings.push(receiver_name.clone());
             bindings.extend(param_names);
-            let (go_ret, body) = this.build_adapter_body(method, &go_method_name, &bindings);
+            let (go_ret, body) = this.build_adapter_body(method, wraps_inner, &bindings);
             write_method_header(
                 declaration,
                 receiver_name.spelling(),
-                adapter_name,
+                &receiver_type,
                 &go_method_name,
                 &params_str,
                 &go_ret,
@@ -781,10 +950,10 @@ impl Planner<'_> {
     fn build_adapter_body(
         &mut self,
         method: &AdapterMethod,
-        go_method_name: &str,
+        wraps_inner: bool,
         parameters: &[GoIdentifier],
     ) -> (String, String) {
-        let (go_ret, mut statements) = self.plan_adapter_body(method, go_method_name, parameters);
+        let (go_ret, mut statements) = self.plan_adapter_body(method, wraps_inner, parameters);
         let shadowing = identify_body_locals(&mut statements, parameters, &mut self.scope);
         clean_up(&mut statements, &shadowing);
         let mut body = LoweredBlock { statements };
@@ -806,7 +975,7 @@ impl Planner<'_> {
     fn plan_adapter_body(
         &mut self,
         method: &AdapterMethod,
-        _go_method_name: &str,
+        wraps_inner: bool,
         bindings: &[GoIdentifier],
     ) -> (String, Vec<Statement>) {
         let (receiver, parameters) = bindings
@@ -833,14 +1002,12 @@ impl Planner<'_> {
             &method.source,
             &method.target,
         );
+        let mut target = GoExpression::identifier(receiver.clone());
+        if wraps_inner {
+            target = GoExpression::selector(target, "inner".to_string());
+        }
         let inner_call = GoExpression::call(
-            GoExpression::selector(
-                GoExpression::selector(
-                    GoExpression::identifier(receiver.clone()),
-                    "inner".to_string(),
-                ),
-                self.method_go_name(&method.source_name, false),
-            ),
+            GoExpression::selector(target, method.source_go_name.clone()),
             arguments,
         );
 
@@ -868,6 +1035,11 @@ impl Planner<'_> {
         }
         (go_ret, statements)
     }
+}
+
+enum MethodReceiver<'a> {
+    Adapter(&'a str),
+    Itself(&'a Type),
 }
 
 fn write_method_header(

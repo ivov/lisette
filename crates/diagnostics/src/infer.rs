@@ -3142,6 +3142,20 @@ pub fn unsupported_generic_go_interface(
         ))
 }
 
+pub fn unsupported_bound_argument(
+    interface_name: &str,
+    type_name: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Not supported yet")
+        .with_infer_code("unsupported_bound_argument")
+        .with_span_label(&span, "unsupported")
+        .with_help(format!(
+            "Lisette does not yet support using `{}` where a generic requires `{}`",
+            type_name, interface_name
+        ))
+}
+
 pub struct BoundParameterHint<'a> {
     pub generic: &'a str,
     pub parameter: Option<&'a FunctionParameter>,

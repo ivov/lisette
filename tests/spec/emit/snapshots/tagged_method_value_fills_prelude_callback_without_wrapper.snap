@@ -34,19 +34,23 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 type Getter[T any] interface {
-	Get() T
+	Get_() T
 }
 
 type Box struct {
 	n int
 }
 
-func (b Box) Get() lisette.Option[int] {
-	return lisette.MakeOptionSome[int](b.n)
+func (b Box) Get() (int, bool) {
+	return b.n, true
+}
+
+func (b Box) Get_() lisette.Option[int] {
+	return lisette.OptionFromCommaOk[int](b.Get())
 }
 
 func useGetter[G Getter[lisette.Option[int]]](g G) (int, bool) {
-	v := g.Get()
+	v := g.Get_()
 	if v.Tag == lisette.OptionSome {
 		return v.SomeVal, true
 	}
@@ -57,11 +61,11 @@ func main() {
 	b := Box{n: 1}
 	useGetter(b)
 	o := lisette.MakeOptionNone[int]()
-	o.OrElse(b.Get)
-	lisette.OptionAndThen(lisette.MakeOptionSome(b), Box.Get)
-	f := Box.Get
+	o.OrElse(b.Get_)
+	lisette.OptionAndThen(lisette.MakeOptionSome(b), Box.Get_)
+	f := Box.Get_
 	x := f(b)
-	g := b.Get
+	g := b.Get_
 	y := g()
 	_ = lisette.MakeTuple2[lisette.Option[int], lisette.Option[int]](x, y)
 }

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Not supported yet
+    ╭─[test.lis:9:16]
+  8 │   let s: Sink<Partial<int, error>> = Sink { out: Partial.Ok(0) }
+  9 │   let _ = push(s)
+    ·                ┬
+    ·                ╰── unsupported
+ 10 │ }
+    ╰────
+  help: Lisette does not yet support using `Sink` where a generic requires `Writer` · code: [infer.unsupported_bound_argument]

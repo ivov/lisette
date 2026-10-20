@@ -36,19 +36,23 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 type Getter[T any] interface {
-	get() T
+	get_() T
 }
 
 type Box struct {
 	n int
 }
 
-func (b Box) get() lisette.Result[int, error] {
-	return lisette.MakeResultOk[int, error](b.n)
+func (b Box) get() (int, error) {
+	return b.n, nil
+}
+
+func (b Box) get_() lisette.Result[int, error] {
+	return lisette.ResultFromPair[int](b.get())
 }
 
 func useGetter[G Getter[lisette.Result[int, error]]](g G) (int, error) {
-	v := g.get()
+	v := g.get_()
 	if v.Tag == lisette.ResultOk {
 		return v.OkVal, nil
 	}
@@ -66,6 +70,6 @@ func take(f func() lisette.Result[int, error]) (int, error) {
 func main() {
 	b := Box{n: 1}
 	useGetter(b)
-	g := b.get
+	g := b.get_
 	take(g)
 }

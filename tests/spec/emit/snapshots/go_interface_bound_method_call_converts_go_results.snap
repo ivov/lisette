@@ -1,0 +1,93 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:encoding/json"
+  import "go:io"
+  
+  interface Sized {
+    embed io.Writer
+    fn size() -> int
+  }
+  
+  struct Temp { c: int }
+  
+  impl Temp {
+    pub fn MarshalJSON(self) -> Result<Slice<byte>, error> {
+      Ok(f"{self.c}" as Slice<byte>)
+    }
+    pub fn Write(self, p: Slice<byte>) -> Partial<int, error> {
+      Partial.Ok(p.length())
+    }
+    fn size(self) -> int { self.c }
+  }
+  
+  fn encode<M: json.Marshaler>(m: M) -> Result<Slice<byte>, error> {
+    m.MarshalJSON()
+  }
+  
+  fn push<W: Sized>(w: W) -> int {
+    match w.Write("hello" as Slice<byte>) {
+      Partial.Ok(n) => n + w.size(),
+      _ => -1,
+    }
+  }
+  
+  fn main() {
+    let Ok(b) = encode(Temp { c: 3 }) else { panic("encode failed") }
+    if b as string != "3" { panic("wrong encoding") }
+    if push(Temp { c: 100 }) != 105 { panic("wrong write count") }
+  }
+---
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+)
+
+type Sized interface {
+	io.Writer
+	size() int
+}
+
+type Temp struct {
+	c int
+}
+
+func (t Temp) MarshalJSON() ([]byte, error) {
+	return ([]byte)(fmt.Sprint(t.c)), nil
+}
+
+func (t Temp) Write(p []byte) (int, error) {
+	return len(p), nil
+}
+
+func (t Temp) size() int {
+	return t.c
+}
+
+func encode[M json.Marshaler](m M) ([]byte, error) {
+	return m.MarshalJSON()
+}
+
+func push[W Sized](w W) int {
+	if n, err := w.Write(([]byte)("hello")); err == nil {
+		return n + w.size()
+	}
+	return -1
+}
+
+func main() {
+	b, err := encode(Temp{c: 3})
+	if err != nil {
+		panic("encode failed")
+	}
+	if string(b) != "3" {
+		panic("wrong encoding")
+	}
+	if push(Temp{c: 100}) != 105 {
+		panic("wrong write count")
+	}
+}

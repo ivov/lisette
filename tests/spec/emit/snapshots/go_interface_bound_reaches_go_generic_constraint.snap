@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:crypto/hkdf"
+  import "go:crypto/sha256"
+  import "go:hash"
+  
+  fn derive<H: hash.Hash>(h: fn() -> H, secret: Slice<byte>) -> Result<Slice<byte>, error> {
+    hkdf.Key(h, secret, Slice.new<byte>(), "info", 16)
+  }
+  
+  fn main() {
+    let Ok(key) = derive(sha256.New, "secret" as Slice<byte>) else { panic("derive failed") }
+    if key.length() != 16 { panic("wrong key length") }
+  }
+---
+package main
+
+import (
+	"crypto/hkdf"
+	"crypto/sha256"
+	"hash"
+)
+
+func derive[H hash.Hash](h func() H, secret []byte) ([]byte, error) {
+	return hkdf.Key(h, secret, []byte{}, "info", 16)
+}
+
+func main() {
+	key, err := derive(sha256.New, ([]byte)("secret"))
+	if err != nil {
+		panic("derive failed")
+	}
+	if len(key) != 16 {
+		panic("wrong key length")
+	}
+}

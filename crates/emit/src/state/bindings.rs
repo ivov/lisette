@@ -1,5 +1,6 @@
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::{GoExpression, Stability};
+use syntax::types::Type;
 
 #[derive(Clone, Debug)]
 pub(crate) struct InlineExpr {
@@ -43,7 +44,7 @@ pub(crate) struct TupleBinding {
 pub(crate) struct ComponentBinding {
     pub(crate) value: GoIdentifier,
     pub(crate) status: GoIdentifier,
-    pub(crate) payload_go_type: String,
+    pub(crate) payload_type: Type,
     pub(crate) kind: ComponentKind,
     pub(crate) shared_payload: bool,
 }

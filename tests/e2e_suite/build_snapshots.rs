@@ -8,31 +8,18 @@ use crate::harness::{
     run_gofmt_simplify, snapshots_dir, write_go_mod,
 };
 
-enum Check {
-    Compile,
-    Vet,
-}
-
 // Fixing these diagnostics requires separately reviewed snapshot changes.
-const KNOWN_FAILURES: &[(&str, Check, &str)] = &[
-    (
-        "go_method_option_comma_ok_wrapped",
-        Check::Compile,
-        "./main.go:6:2: \"time\" imported and not used",
-    ),
+const KNOWN_FAILURES: &[(&str, &str)] = &[
     (
         "go_exported_impl_method_kept_even_when_never_called",
-        Check::Vet,
         "main.go:7:17: method MarshalJSON() string should have signature MarshalJSON() ([]byte, error)",
     ),
     (
         "user_fmt_alias_preserved_alongside_generated_import",
-        Check::Vet,
         "main.go:22:2: result of fmt.Sprintf call not used",
     ),
     (
         "user_marshal_json_lowers_to_go_abi_shape",
-        Check::Vet,
         "main.go:12:17: method MarshalJSON() ([]uint8, error) should have signature MarshalJSON() ([]byte, error)",
     ),
 ];
@@ -102,16 +89,11 @@ fn build_snapshots_compile() {
         KNOWN_FAILURES.len(),
         "known snapshots exist"
     );
-    for (directory, (name, check, expected)) in known_failures {
-        let result = match check {
-            Check::Compile => run_go_test(&directory, "30s"),
-            Check::Vet => {
-                run_go_test(&directory, "30s")
-                    .unwrap_or_else(|out| panic!("{name} no longer compiles:\n{out}"));
-                run_go_vet(&directory)
-            }
-        };
-        let failure = result.expect_err("check now passes; remove its expected failure");
+    for (directory, (name, expected)) in known_failures {
+        run_go_test(&directory, "30s")
+            .unwrap_or_else(|out| panic!("{name} no longer compiles:\n{out}"));
+        let failure =
+            run_go_vet(&directory).expect_err("check now passes; remove its expected failure");
         let diagnostics: Vec<_> = failure
             .lines()
             .filter(|line| line.contains(".go:"))

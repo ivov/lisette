@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Not supported yet
+   ╭─[test.lis:5:16]
+ 4 │ fn main() {
+ 5 │   let _ = size(&bytes.Buffer {})
+   ·                ────────┬───────
+   ·                        ╰── unsupported
+ 6 │ }
+   ╰────
+  help: Lisette does not yet support using `Buffer` where a generic requires `Sizer` · code: [infer.unsupported_bound_argument]

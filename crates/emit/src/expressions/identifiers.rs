@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::calls::go_interop::build_tuple_literal;
 use crate::context::expression::ExpressionContext;
+use crate::names::go_name;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
 use syntax::ast::IdentifierResolution;
@@ -158,7 +159,10 @@ impl Planner<'_> {
             .facts
             .method(&owner_id, method)
             .is_some_and(|method| method.visibility.is_public());
-        let go_method = self.method_go_name(method, is_public);
+        let mut go_method = self.method_go_name(method, is_public);
+        if self.definition_selects_tagged_twin(symbol) {
+            go_method = go_name::tagged_twin(&go_method);
+        }
         let receiver_type = self.use_go_type(&receiver);
         Some(method_expression(
             receiver_type,

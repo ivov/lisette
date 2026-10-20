@@ -868,3 +868,17 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn unread_payload_type_does_not_import_its_package() {
+    let input = r#"
+import "go:net/http"
+import "go:time"
+
+fn main() {
+  let r: Result<time.Time, error> = http.ParseTime("Mon, 02 Jan 2006 15:04:05 GMT")
+  if !r.is_ok() { panic("parse failed") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

@@ -1560,3 +1560,134 @@ pub interface Box {
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/box", typedef)]);
 }
+
+#[test]
+fn go_interface_bound_reaches_go_generic_constraint() {
+    let input = r#"
+import "go:crypto/hkdf"
+import "go:crypto/sha256"
+import "go:hash"
+
+fn derive<H: hash.Hash>(h: fn() -> H, secret: Slice<byte>) -> Result<Slice<byte>, error> {
+  hkdf.Key(h, secret, Slice.new<byte>(), "info", 16)
+}
+
+fn main() {
+  let Ok(key) = derive(sha256.New, "secret" as Slice<byte>) else { panic("derive failed") }
+  if key.length() != 16 { panic("wrong key length") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_interface_bound_method_call_converts_go_results() {
+    let input = r#"
+import "go:encoding/json"
+import "go:io"
+
+interface Sized {
+  embed io.Writer
+  fn size() -> int
+}
+
+struct Temp { c: int }
+
+impl Temp {
+  pub fn MarshalJSON(self) -> Result<Slice<byte>, error> {
+    Ok(f"{self.c}" as Slice<byte>)
+  }
+  pub fn Write(self, p: Slice<byte>) -> Partial<int, error> {
+    Partial.Ok(p.length())
+  }
+  fn size(self) -> int { self.c }
+}
+
+fn encode<M: json.Marshaler>(m: M) -> Result<Slice<byte>, error> {
+  m.MarshalJSON()
+}
+
+fn push<W: Sized>(w: W) -> int {
+  match w.Write("hello" as Slice<byte>) {
+    Partial.Ok(n) => n + w.size(),
+    _ => -1,
+  }
+}
+
+fn main() {
+  let Ok(b) = encode(Temp { c: 3 }) else { panic("encode failed") }
+  if b as string != "3" { panic("wrong encoding") }
+  if push(Temp { c: 100 }) != 105 { panic("wrong write count") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_interface_method_keeps_go_method_of_same_name() {
+    let input = r#"
+import "go:encoding/json"
+
+pub interface Encoder<T> {
+  fn MarshalJSON() -> T
+}
+
+fn encode<T, E: Encoder<T>>(e: E, _hint: T) -> T {
+  e.MarshalJSON()
+}
+
+struct Other {}
+
+impl Other {
+  pub fn MarshalJSON(self) -> Result<Slice<byte>, error> { Ok("7" as Slice<byte>) }
+}
+
+struct Temp { pub c: int }
+
+impl Temp {
+  pub fn MarshalJSON(self) -> Result<Slice<byte>, error> {
+    Ok(f"\"{self.c}C\"" as Slice<byte>)
+  }
+}
+
+fn main() {
+  let Ok(b) = json.Marshal(Temp { c: 21 }) else { panic("marshal failed") }
+  if b as string != "\"21C\"" { panic("json.Marshal skipped MarshalJSON") }
+  let hint: Result<Slice<byte>, error> = Ok([])
+  let Ok(other) = encode(Other {}, hint) else { panic("encode failed") }
+  if other as string != "7" { panic("wrong generic result") }
+  let Ok(raw) = encode(Temp { c: 3 }, hint) else { panic("encode failed") }
+  if raw as string != "\"3C\"" { panic("wrong generic encoding") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_type_converts_to_generic_interface_through_tagged_twin_adapter() {
+    let input = r#"
+import "go:bytes"
+
+interface Sizer<T> {
+  fn Len() -> T
+}
+
+fn size<S: Sizer<int>>(s: S) -> int {
+  s.Len()
+}
+
+struct Fixed {}
+
+impl Fixed {
+  fn Len(self) -> int { 4 }
+}
+
+fn main() {
+  let b = bytes.NewBufferString("abc")
+  let s: Sizer<int> = b
+  if s.Len() != 3 { panic("wrong buffer length") }
+  if size(Fixed {}) != 4 { panic("wrong generic length") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

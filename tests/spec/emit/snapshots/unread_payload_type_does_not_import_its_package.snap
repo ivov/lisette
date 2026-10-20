@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:net/http"
+  import "go:time"
+  
+  fn main() {
+    let r: Result<time.Time, error> = http.ParseTime("Mon, 02 Jan 2006 15:04:05 GMT")
+    if !r.is_ok() { panic("parse failed") }
+  }
+---
+package main
+
+import "net/http"
+
+func main() {
+	_, err := http.ParseTime("Mon, 02 Jan 2006 15:04:05 GMT")
+	if err != nil {
+		panic("parse failed")
+	}
+}

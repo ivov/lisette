@@ -22,7 +22,7 @@ package main
 type Done = struct{}
 
 type Action[T any] interface {
-	Run() T
+	Run_() T
 }
 
 type Child interface {
@@ -38,8 +38,12 @@ func (c *Counter) Run() Done {
 	return struct{}{}
 }
 
+func (c *Counter) Run_() Done {
+	return c.Run()
+}
+
 func apply[A Child](a A) {
-	f := a.Run
+	f := a.Run_
 	f()
 	f()
 }
@@ -48,7 +52,7 @@ func main() {
 	n := 0
 	c := Counter{n: &n}
 	apply(&c)
-	f := c.Run
+	f := c.Run_
 	f()
 	if n != 3 {
 		panic("bound method value count")

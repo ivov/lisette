@@ -297,13 +297,7 @@ impl Planner<'_> {
         let directive = self
             .maybe_line_directive(&function_definition.name_span)
             .unwrap_or_default();
-        let return_ctx = if receiver_ty.is_some()
-            && self
-                .facts
-                .method_uses_tagged_return(function_definition.name)
-        {
-            ReturnContext::Tagged(function_definition.return_type.clone())
-        } else if receiver_ty.is_some() {
+        let return_ctx = if receiver_ty.is_some() {
             self.return_context_for_method(function_definition.return_type.clone())
         } else {
             self.return_context_for_type(function_definition.return_type.clone())
@@ -330,11 +324,9 @@ impl Planner<'_> {
             parts.push(self.emit_receiver_part(params_to_process, self_param));
         }
 
-        parts.push(self.pick_go_function_name(
-            function_definition,
-            receiver_ty.is_some(),
-            is_public,
-        ));
+        let go_name =
+            self.pick_go_function_name(function_definition, receiver_ty.is_some(), is_public);
+        parts.push(go_name.clone());
 
         let generics_str = self.resolved_generics_to_string(&signature_generics);
         if !generics_str.is_empty() {
@@ -367,11 +359,26 @@ impl Planner<'_> {
         self.scope.exit_isolated_function();
 
         let trimmed_body = body.trim_end();
-        if trimmed_body.is_empty() {
+        let mut function = if trimmed_body.is_empty() {
             format!("{}{} {{}}", directive, signature)
         } else {
             format!("{}{} {{\n{}\n}}", directive, signature, trimmed_body)
+        };
+        if receiver_ty.is_some()
+            && signature_generics.is_empty()
+            && self
+                .facts
+                .method_uses_tagged_return(function_definition.name)
+        {
+            let twin = self.emit_tagged_twin(
+                function_definition,
+                &go_name,
+                &generic_context[..signature_generics_start],
+            );
+            function.push_str("\n\n");
+            function.push_str(twin.trim_end());
         }
+        function
     }
 
     pub(crate) fn pick_go_function_name(

@@ -112,15 +112,19 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn rebuild_from_components(&self, components: &ComponentBinding) -> GoExpression {
+    pub(crate) fn rebuild_from_components(
+        &mut self,
+        components: &ComponentBinding,
+    ) -> GoExpression {
         let constructor = components
             .kind
             .whole_value_constructor()
             .expect("component binding has no whole-value constructor");
+        let payload_go_type = self.use_go_type(&components.payload_type);
         GoExpression::call(
             GoExpression::generated(
                 GeneratedPackage::Prelude,
-                format!("{constructor}[{}]", components.payload_go_type),
+                format!("{constructor}[{payload_go_type}]"),
             ),
             vec![
                 GoExpression::identifier(components.value.clone()),

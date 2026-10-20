@@ -48,7 +48,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 type Holder[T any] interface {
-	item() T
+	item_() T
 }
 
 type Box[U any] interface {
@@ -59,6 +59,10 @@ type IntHolder struct{}
 
 func (i IntHolder) item() int {
 	return 5
+}
+
+func (i IntHolder) item_() int {
+	return i.item()
 }
 
 type Wrap[A any, B Holder[A]] struct {

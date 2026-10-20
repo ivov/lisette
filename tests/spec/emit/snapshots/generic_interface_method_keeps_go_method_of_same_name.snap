@@ -1,0 +1,102 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:encoding/json"
+  
+  pub interface Encoder<T> {
+    fn MarshalJSON() -> T
+  }
+  
+  fn encode<T, E: Encoder<T>>(e: E, _hint: T) -> T {
+    e.MarshalJSON()
+  }
+  
+  struct Other {}
+  
+  impl Other {
+    pub fn MarshalJSON(self) -> Result<Slice<byte>, error> { Ok("7" as Slice<byte>) }
+  }
+  
+  struct Temp { pub c: int }
+  
+  impl Temp {
+    pub fn MarshalJSON(self) -> Result<Slice<byte>, error> {
+      Ok(f"\"{self.c}C\"" as Slice<byte>)
+    }
+  }
+  
+  fn main() {
+    let Ok(b) = json.Marshal(Temp { c: 21 }) else { panic("marshal failed") }
+    if b as string != "\"21C\"" { panic("json.Marshal skipped MarshalJSON") }
+    let hint: Result<Slice<byte>, error> = Ok([])
+    let Ok(other) = encode(Other {}, hint) else { panic("encode failed") }
+    if other as string != "7" { panic("wrong generic result") }
+    let Ok(raw) = encode(Temp { c: 3 }, hint) else { panic("encode failed") }
+    if raw as string != "\"3C\"" { panic("wrong generic encoding") }
+  }
+---
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Encoder[T any] interface {
+	MarshalJSON_() T
+}
+
+func encode[T any, E Encoder[T]](e E, _ T) T {
+	return e.MarshalJSON_()
+}
+
+type Other struct{}
+
+func (o Other) MarshalJSON() ([]byte, error) {
+	return ([]byte)("7"), nil
+}
+
+func (o Other) MarshalJSON_() lisette.Result[[]byte, error] {
+	return lisette.ResultFromPair[[]byte](o.MarshalJSON())
+}
+
+type Temp struct {
+	C int
+}
+
+func (t Temp) MarshalJSON() ([]byte, error) {
+	return ([]byte)(fmt.Sprintf("\"%dC\"", t.C)), nil
+}
+
+func (t Temp) MarshalJSON_() lisette.Result[[]byte, error] {
+	return lisette.ResultFromPair[[]byte](t.MarshalJSON())
+}
+
+func main() {
+	b, err := json.Marshal(Temp{C: 21})
+	if err != nil {
+		panic("marshal failed")
+	}
+	if string(b) != "\"21C\"" {
+		panic("json.Marshal skipped MarshalJSON")
+	}
+	hint := lisette.MakeResultOk[[]byte, error]([]byte{})
+	subject := encode(Other{}, hint)
+	if subject.Tag != lisette.ResultOk {
+		panic("encode failed")
+	}
+	other := subject.OkVal
+	if string(other) != "7" {
+		panic("wrong generic result")
+	}
+	subject_1 := encode(Temp{C: 3}, hint)
+	if subject_1.Tag != lisette.ResultOk {
+		panic("encode failed")
+	}
+	raw := subject_1.OkVal
+	if string(raw) != "\"3C\"" {
+		panic("wrong generic encoding")
+	}
+}

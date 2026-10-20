@@ -71,6 +71,7 @@ impl Planner<'_> {
         result_ty: &Type,
         is_exported: bool,
         is_pointer_receiver: bool,
+        tagged_twin: bool,
     ) -> Option<GoExpression> {
         let receiver = result_ty
             .as_function_type()?
@@ -79,10 +80,14 @@ impl Planner<'_> {
             .ty
             .strip_refs();
         let receiver_type = self.use_go_type(&receiver);
+        let mut go_method = self.method_go_name(member, is_exported);
+        if tagged_twin {
+            go_method = go_name::tagged_twin(&go_method);
+        }
         Some(method_expression(
             receiver_type,
             is_pointer_receiver,
-            self.method_go_name(member, is_exported),
+            go_method,
         ))
     }
 }

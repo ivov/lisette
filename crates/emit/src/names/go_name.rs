@@ -81,6 +81,11 @@ pub(crate) fn member_go_name(
     }
 }
 
+/// A source name never spells a trailing `_` that keyword escaping did not add.
+pub(crate) fn tagged_twin(go_name: &str) -> String {
+    format!("{go_name}_")
+}
+
 pub fn go_test_function_name(fn_name: &str) -> String {
     format!("Test{}", snake_to_camel(fn_name))
 }

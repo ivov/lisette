@@ -270,13 +270,10 @@ impl Planner<'_> {
     pub(super) fn lower_receiver_method_ufcs(
         &mut self,
         args: &[Expression],
-        method: &str,
-        is_public: bool,
+        go_method: String,
         spread: Option<&Expression>,
         call_plan: &CallPlan<'_>,
     ) -> ValuePlan {
-        let go_method = self.method_go_name(method, is_public);
-
         let args_ctx = CallArgsContext {
             plan: call_plan,
             spread,

@@ -40,15 +40,15 @@ type Done = struct{}
 type Completion = Done
 
 type Perform[T any] interface {
-	perform() T
+	perform_() T
 }
 
 type Plain interface {
-	perform() Completion
+	perform_() Completion
 }
 
 func invoke[T any, A Perform[T]](a A) T {
-	return a.perform()
+	return a.perform_()
 }
 
 type Worker struct {
@@ -64,8 +64,12 @@ func (w Worker) perform() Completion {
 	return *new(Completion)
 }
 
+func (w Worker) perform_() Completion {
+	return w.perform()
+}
+
 func throughInterface(a Plain) Completion {
-	a.perform()
+	a.perform_()
 	return *new(Completion)
 }
 
@@ -79,9 +83,9 @@ func main() {
 	normal := Worker{stop: false}
 	throughInterface(early)
 	throughInterface(normal)
-	throughCallback(early.perform)
+	throughCallback(early.perform_)
 	invoke[Completion, Worker](normal)
 	var iface Plain = early
-	iface.perform()
+	iface.perform_()
 	fmt.Println("done")
 }

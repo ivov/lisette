@@ -107,9 +107,86 @@ impl InferCtx<'_> {
         if self
             .satisfies_interface_with_methods(&resolved, &bound, span, &methods)
             .is_ok()
+            && self
+                .check_pointer_receivers(&resolved, &bound, span, parameter_hint)
+                .is_ok()
         {
-            let _ = self.check_pointer_receivers(&resolved, &bound, span, parameter_hint);
+            self.check_bound_method_shapes(&resolved, &bound, span);
         }
+    }
+
+    /// A type argument gets no adapter, so its methods need the Go shapes the bound requires.
+    fn check_bound_method_shapes(&mut self, ty: &Type, bound: &Type, span: &Span) {
+        let store = self.store;
+        let receiver = store.deep_resolve_alias(&ty.strip_refs().resolve_in(&self.env));
+        let Some(receiver_id) = receiver.get_qualified_id() else {
+            return;
+        };
+        let receiver_is_go = receiver_id.starts_with(GO_IMPORT_PREFIX);
+        let is_parameter = |ty: &Type| matches!(store.peel_alias(ty), Type::Parameter(_));
+        for requirement in interface_requirements(bound, |id| store.get_definition(id)) {
+            let declared_by_go = requirement
+                .declaring_interface
+                .starts_with(GO_IMPORT_PREFIX);
+            let unsupported = if receiver_is_go {
+                !declared_by_go
+                    && requirement
+                        .method
+                        .ty
+                        .unwrap_forall()
+                        .get_function_ret()
+                        .is_some_and(is_parameter)
+            } else {
+                declared_by_go && self.lacks_go_method_shape(&receiver, &requirement)
+            };
+            if unsupported {
+                let type_name = receiver
+                    .get_name()
+                    .map_or_else(|| receiver.to_string(), str::to_owned);
+                self.sink
+                    .push(diagnostics::infer::unsupported_bound_argument(
+                        unqualified_name(&requirement.declaring_interface),
+                        &type_name,
+                        *span,
+                    ));
+                return;
+            }
+        }
+    }
+
+    /// A slot declared as a bare type parameter never has the Go shape of a lowered type.
+    fn lacks_go_method_shape(&self, receiver: &Type, requirement: &InterfaceRequirement) -> bool {
+        let store = self.store;
+        let promotion::Resolution::Found(member) =
+            promotion::resolve_selector(store, receiver, &requirement.name)
+        else {
+            return false;
+        };
+        let Some(method) = store.get_method(&member.declaring_type, &requirement.name) else {
+            return false;
+        };
+        let (Some(declared), Some(go)) = (
+            method.ty.unwrap_forall().as_function_type(),
+            requirement.ty.as_function_type(),
+        ) else {
+            return false;
+        };
+        let is_parameter = |ty: &Type| matches!(store.peel_alias(ty), Type::Parameter(_));
+        let go_return = store.peel_alias(&go.return_type);
+        let return_differs = is_parameter(&declared.return_type)
+            && (go_return.is_result()
+                || go_return.is_option()
+                || go_return.is_partial()
+                || go_return.is_tuple());
+        return_differs
+            || declared
+                .params
+                .iter()
+                .skip(1)
+                .zip(&go.params)
+                .any(|(declared, go)| {
+                    is_parameter(&declared.ty) && store.peel_alias(&go.ty).is_option()
+                })
     }
 
     pub(super) fn satisfies_interface(
