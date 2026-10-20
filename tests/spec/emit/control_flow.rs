@@ -2380,6 +2380,90 @@ fn test() {
 }
 
 #[test]
+fn diverging_try_and_recover_tails_take_annotated_type() {
+    let input = r#"
+fn risky() -> Result<int, string> { Ok(1) }
+
+fn total() -> int {
+  let r: Result<int, string> = try {
+    let _ = risky()?;
+    panic("fatal")
+  };
+  let p: Result<int, PanicValue> = recover { panic("fatal") };
+  r.unwrap_or(0) + p.unwrap_or(0)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn try_and_recover_tails_convert_to_annotated_type() {
+    let input = r#"
+interface Named {
+  fn name() -> string
+}
+
+struct Cat {}
+
+impl Cat {
+  fn name(self) -> string { "cat" }
+}
+
+fn risky() -> Result<int, string> { Ok(1) }
+
+fn unit() {}
+
+fn test() {
+  let p: Result<(Unknown, int), PanicValue> = recover { (1, 2) };
+  let t: Result<(Unknown, int), string> = try {
+    let _ = risky()?;
+    (1, 2)
+  };
+  let n: Option<Named> = try {
+    let _ = Some(1)?;
+    Cat {}
+  };
+  let u: Result<Unknown, PanicValue> = recover { unit() };
+  let w: Result<Unknown, string> = try {
+    let _ = risky()?;
+    unit()
+  };
+  let _ = p;
+  let _ = t;
+  let Some(named) = n else { panic("no name") };
+  if named.name() != "cat" { panic("wrong name") }
+  let Ok(a) = u else { panic("recover failed") };
+  let Ok(b) = w else { panic("try failed") };
+  let Some(_) = assert_type<()>(a) else { panic("recover lost unit") };
+  let Some(_) = assert_type<()>(b) else { panic("try lost unit") };
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn diverging_try_and_recover_tails_take_aliased_return_type() {
+    let input = r#"
+type R = Result<int, string>
+type P = Result<int, PanicValue>
+
+fn risky() -> R { Ok(1) }
+
+fn attempt() -> R {
+  try {
+    let _ = risky()?;
+    panic("fatal")
+  }
+}
+
+fn guard() -> P {
+  recover { panic("fatal") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn try_block_task_as_statement() {
     let input = r#"
 fn risky() -> Result<int, string> { Ok(1) }

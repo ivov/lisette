@@ -90,56 +90,31 @@ func makeO(n int) F[lisette.Option[int]] {
 }
 
 func tryR(n int) (F[lisette.Option[int]], error) {
-	tryResult := func() lisette.Result[func(int) lisette.Option[int], error] {
-		if _, err := intResult(n); err != nil {
-			return lisette.MakeResultErr[func(int) lisette.Option[int], error](err)
+	if _, err := intResult(n); err != nil {
+		return *new(F[lisette.Option[int]]), err
+	}
+	cb := source
+	var adapted func(int) lisette.Option[int]
+	if cb != nil {
+		adapted = func(arg0 int) lisette.Option[int] {
+			return lisette.OptionFromCommaOk[int](cb(arg0))
 		}
-		cb := source
-		var adapted func(int) lisette.Option[int]
-		if cb != nil {
-			adapted = func(arg0 int) lisette.Option[int] {
-				return lisette.OptionFromCommaOk[int](cb(arg0))
-			}
-		}
-		return lisette.MakeResultOk[func(int) lisette.Option[int], error](adapted)
-	}()
-	var adapted_1 lisette.Result[F[lisette.Option[int]], error]
-	adapted_1.Tag = tryResult.Tag
-	if tryResult.Tag == lisette.ResultOk {
-		adapted_1.OkVal = tryResult.OkVal
 	}
-	if tryResult.Tag == lisette.ResultErr {
-		adapted_1.ErrVal = tryResult.ErrVal
-	}
-	if adapted_1.Tag == lisette.ResultOk {
-		return adapted_1.OkVal, nil
-	}
-	return *new(F[lisette.Option[int]]), adapted_1.ErrVal
+	return adapted, nil
 }
 
 func tryO(n int) F[lisette.Option[int]] {
-	tryResult := func() lisette.Option[func(int) lisette.Option[int]] {
-		if _, ok := source(n); !ok {
-			return lisette.MakeOptionNone[func(int) lisette.Option[int]]()
-		}
-		cb := source
-		var adapted func(int) lisette.Option[int]
-		if cb != nil {
-			adapted = func(arg0 int) lisette.Option[int] {
-				return lisette.OptionFromCommaOk[int](cb(arg0))
-			}
-		}
-		return lisette.MakeOptionSome[func(int) lisette.Option[int]](adapted)
-	}()
-	var adapted_1 lisette.Option[F[lisette.Option[int]]]
-	adapted_1.Tag = tryResult.Tag
-	if tryResult.Tag == lisette.OptionSome {
-		adapted_1.SomeVal = tryResult.SomeVal
+	if _, ok := source(n); !ok {
+		return nil
 	}
-	if adapted_1.Tag == lisette.OptionSome {
-		return adapted_1.SomeVal
+	cb := source
+	var adapted func(int) lisette.Option[int]
+	if cb != nil {
+		adapted = func(arg0 int) lisette.Option[int] {
+			return lisette.OptionFromCommaOk[int](cb(arg0))
+		}
 	}
-	return nil
+	return adapted
 }
 
 func main() {

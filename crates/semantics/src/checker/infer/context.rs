@@ -182,6 +182,9 @@ pub(super) enum ExpectationRole {
         return_annotation_span: Span,
     },
     MatchArm,
+    FallibleBlockTail {
+        keyword: &'static str,
+    },
 }
 
 impl Expectation {
@@ -217,6 +220,10 @@ impl Expectation {
             ExpectationRole::MatchArm => format!(
                 "Every `match` arm must produce the same type. This arm produces `{}`, but the `match` is expected to produce `{}`.",
                 actual_name, expected_name,
+            ),
+            ExpectationRole::FallibleBlockTail { keyword } => format!(
+                "The last expression of a `{}` block is its success value. It must have type `{}`, but it has type `{}`.",
+                keyword, expected_name, actual_name,
             ),
         }
     }

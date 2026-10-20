@@ -1,0 +1,46 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  type R = Result<int, string>
+  type P = Result<int, PanicValue>
+  
+  fn risky() -> R { Ok(1) }
+  
+  fn attempt() -> R {
+    try {
+      let _ = risky()?;
+      panic("fatal")
+    }
+  }
+  
+  fn guard() -> P {
+    recover { panic("fatal") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type R = lisette.Result[int, string]
+
+type P = lisette.Result[int, lisette.PanicValue]
+
+func risky() R {
+	return lisette.MakeResultOk[int, string](1)
+}
+
+func attempt() R {
+	check := risky()
+	if check.Tag != lisette.ResultOk {
+		return check
+	}
+	panic("fatal")
+}
+
+func guard() P {
+	recoverResult := lisette.RecoverBlock(func() int {
+		panic("fatal")
+	})
+	return recoverResult
+}

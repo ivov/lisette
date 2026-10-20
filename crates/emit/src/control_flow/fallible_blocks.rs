@@ -63,7 +63,7 @@ impl Planner<'_> {
         items: &'e [Expression],
         ty: &Type,
     ) -> Option<TryBlockPairPlan<'e>> {
-        let effective_ty = self.fallible_block_type(items, ty);
+        let effective_ty = self.facts.peel_alias(ty);
         let fallible = Fallible::from_type(&effective_ty)?;
         let body_ctx = self.return_context_for_type(effective_ty.clone());
         let shape = body_ctx.lowered_shape()?;
@@ -93,7 +93,7 @@ impl Planner<'_> {
         target_ty: &Type,
         result_var: GoIdentifier,
     ) -> ValuePlan {
-        let effective_ty = self.fallible_block_type(items, ty);
+        let effective_ty = self.facts.peel_alias(ty);
         let fallible = Fallible::from_type(&effective_ty)
             .expect("`try` block must have Result or Option type");
 
@@ -126,7 +126,7 @@ impl Planner<'_> {
         ty: &Type,
     ) -> Option<Vec<Statement>> {
         let return_ty = self.facts.peel_alias(self.return_ctx().ty()?);
-        let effective_ty = self.fallible_block_type(items, ty);
+        let effective_ty = self.facts.peel_alias(ty);
         if return_ty.demoted() != effective_ty.demoted() {
             return None;
         }
@@ -174,14 +174,22 @@ impl Planner<'_> {
         if final_expression.is_empty() {
             statements.extend(self.lower_try_unit_return(fallible));
         } else {
+            let final_expression = self.coerce_value(
+                &mut statements,
+                final_expression,
+                &last.get_type(),
+                fallible.ok_ty(),
+            );
             statements.extend(self.success_return(fallible, final_expression));
         }
         statements
     }
 
     fn lower_try_unit_return(&mut self, fallible: &Fallible) -> Vec<Statement> {
-        let unit_val = self.zero_value_expression(fallible.ok_ty());
-        self.success_return(fallible, unit_val)
+        let mut statements = Vec::new();
+        let unit_val = self.unit_value(&mut statements, fallible.ok_ty());
+        statements.extend(self.success_return(fallible, unit_val));
+        statements
     }
 
     /// `Err(...)?` and `None?` short-circuit directly into a return. `None`
@@ -228,7 +236,7 @@ impl Planner<'_> {
 
     /// `recover { ... }` → `result := lisette.RecoverBlock(func() T { ... })`.
     pub(crate) fn lower_recover_block(&mut self, items: &[Expression], ty: &Type) -> ValuePlan {
-        let effective_ty = self.fallible_block_type(items, ty);
+        let effective_ty = self.facts.peel_alias(ty);
         let fallible = Fallible::from_type(&effective_ty)
             .expect("recover block type must be Result<T, PanicValue>");
 
@@ -267,7 +275,7 @@ impl Planner<'_> {
     ) -> LoweredBlock {
         let Some((last, rest)) = items.split_last() else {
             return LoweredBlock {
-                statements: vec![self.lower_zero_return(fallible.ok_ty())],
+                statements: self.lower_unit_return(fallible.ok_ty()),
             };
         };
         let mut statements: Vec<Statement> = rest
@@ -285,43 +293,29 @@ impl Planner<'_> {
             return vec![self.lower_statement(last)];
         }
         if item_ty.is_unit() || item_ty.is_ignored() || item_ty.is_variable() {
-            return vec![
-                self.lower_statement(last),
-                self.lower_zero_return(fallible.ok_ty()),
-            ];
+            let mut statements = vec![self.lower_statement(last)];
+            statements.extend(self.lower_unit_return(fallible.ok_ty()));
+            return statements;
         }
         let (mut statements, expression) = self
             .lower_value(last, ExpressionContext::value())
             .into_parts();
+        let expression = self.coerce_value(&mut statements, expression, &item_ty, fallible.ok_ty());
         statements.push(plain_return(expression));
         statements
     }
 
-    /// Prefer the function's return type when the block's own ok type is a
-    /// type variable (a statement tail) or `Never` (a diverging tail), since
-    /// nothing else constrains it.
-    fn fallible_block_type(&self, items: &[Expression], ty: &Type) -> Type {
-        let ty = self.facts.peel_alias(ty);
-        let tail_is_never = items.last().is_some_and(|last| {
-            let t = last.get_type();
-            t.is_never() || last.diverges().is_some()
-        });
-        let needs_return_context = tail_is_never
-            || Fallible::from_type(&ty).is_some_and(|f| {
-                f.ok_ty().is_variable() || f.ok_ty().is_placeholder() || f.ok_ty().is_never()
-            });
-        if !needs_return_context {
-            return ty;
-        }
-        self.return_ctx()
-            .ty()
-            .filter(|return_ty| Fallible::from_type(return_ty).is_some())
-            .cloned()
-            .unwrap_or(ty)
+    fn lower_unit_return(&mut self, ok_ty: &Type) -> Vec<Statement> {
+        let mut statements = Vec::new();
+        let unit_val = self.unit_value(&mut statements, ok_ty);
+        statements.push(plain_return(unit_val));
+        statements
     }
 
-    /// A structured zero-value return for a `recover` block's inner type.
-    fn lower_zero_return(&mut self, ty: &Type) -> Statement {
-        plain_return(self.zero_value_expression(ty))
+    /// `()` converted to the block's ok type, which can be wider than unit, such as `Unknown`.
+    fn unit_value(&mut self, statements: &mut Vec<Statement>, ok_ty: &Type) -> GoExpression {
+        let unit_ty = Type::unit();
+        let unit_val = self.zero_value_expression(&unit_ty);
+        self.coerce_value(statements, unit_val, &unit_ty, ok_ty)
     }
 }
