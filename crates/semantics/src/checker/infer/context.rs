@@ -419,8 +419,12 @@ impl<'a> InferCtx<'a> {
             .filter(|expectation| expectation.span == *span)
     }
 
-    pub(super) fn with_dot_access_base<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
-        let previous = mem::replace(&mut self.traversal.dot_access_base, true);
+    pub(super) fn with_dot_access_base<T>(
+        &mut self,
+        is_base: bool,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let previous = mem::replace(&mut self.traversal.dot_access_base, is_base);
         let result = f(self);
         self.traversal.dot_access_base = previous;
         result

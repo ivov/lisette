@@ -12166,6 +12166,47 @@ fn main() {
 }
 
 #[test]
+fn infer_field_read_on_type() {
+    let input = r#"
+struct Point { pub x: int }
+
+fn main() {
+  let x = Point.x
+  let _ = x
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_field_read_on_go_tuple_struct_type() {
+    let input = r#"
+import "go:time"
+
+fn main() {
+  let nanos = time.Duration.0
+  let _ = nanos
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_argument_in_member_access_base() {
+    let input = r#"
+import "go:strings"
+
+fn identity<T>(value: T) -> T { value }
+
+fn main() {
+  let length = identity(strings.Builder).Len()
+  let _ = length
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_float_literal_int_cast() {
     let input = r#"
 fn main() {

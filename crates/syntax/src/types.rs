@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use ecow::EcoString;
 
-use crate::ast::Generic;
+use crate::ast::{Generic, VariantFields};
 use crate::program::{Definition, DefinitionBody};
 use fmt::Formatter;
 use std::fmt;
@@ -1888,6 +1888,42 @@ where
         Type::Function(f) => demotion_changes(&f.return_type, lookup),
         Type::Forall { body, .. } => demotion_changes(body, lookup),
         _ => false,
+    }
+}
+
+/// Whether a struct or enum declares a component that carries write permission.
+pub fn declares_writable_components<'d, F>(id: &str, lookup: &F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    match lookup(id).map(|definition| &definition.body) {
+        Some(DefinitionBody::Struct { fields, .. }) => fields
+            .as_slice()
+            .iter()
+            .any(|field| demotion_changes(&field.ty, lookup)),
+        Some(DefinitionBody::Enum { variants, .. }) => variants
+            .iter()
+            .flat_map(|variant| match &variant.fields {
+                VariantFields::Unit => [].as_slice(),
+                VariantFields::Tuple(fields) | VariantFields::Struct(fields) => fields,
+            })
+            .any(|field| demotion_changes(&field.ty, lookup)),
+        _ => false,
+    }
+}
+
+/// The pointee of a `mut Ref`, which is writable when its type declares writable components.
+pub fn writable_ref_pointee<'d, F>(pointee: &Type, lookup: &F) -> Type
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    match peel_alias(pointee, lookup) {
+        Type::Nominal {
+            id,
+            writable: false,
+            ..
+        } if declares_writable_components(id.as_str(), lookup) => pointee.clone().make_writable(),
+        _ => pointee.clone(),
     }
 }
 

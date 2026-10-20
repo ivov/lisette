@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Counter { counts: mut Slice<int> }
+  
+  impl Counter {
+    fn bump(self: mut Ref<Counter>) { self.counts[0] += 1 }
+  }
+  
+  struct Tally { embed mut Counter }
+  
+  fn bump_tally(tally: mut Ref<mut Tally>) {
+    tally.bump()
+  }
+  
+  fn main() {
+    let mut tally = Tally { Counter: Counter { counts: [0] } }
+    bump_tally(&tally)
+  }
+---
+package main
+
+type Counter struct {
+	counts []int
+}
+
+func (c *Counter) bump() {
+	c.counts[0]++
+}
+
+type Tally struct {
+	Counter
+}
+
+func bumpTally(tally *Tally) {
+	tally.bump()
+}
+
+func main() {
+	tally := Tally{Counter: Counter{counts: []int{0}}}
+	bumpTally(&tally)
+}

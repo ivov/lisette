@@ -49,6 +49,19 @@ impl InferCtx<'_> {
         expected_ty: &Type,
         is_subexpression: bool,
     ) -> Expression {
+        if self.is_dot_access_base()
+            && !matches!(
+                expression,
+                Expression::Identifier { .. }
+                    | Expression::DotAccess { .. }
+                    | Expression::Paren { .. }
+            )
+        {
+            return self.with_dot_access_base(false, |state| {
+                state.infer_expression_at(expression, expected_ty, is_subexpression)
+            });
+        }
+
         match expression {
             Expression::Literal { literal, span, .. } => {
                 self.infer_literal(literal, expected_ty, span)

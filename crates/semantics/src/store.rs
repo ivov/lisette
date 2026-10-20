@@ -3,7 +3,7 @@ use std::sync::Arc;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::StructKind;
-use syntax::ast::{EnumVariant, Literal, StructFieldDefinition, VariantFields};
+use syntax::ast::{EnumVariant, Literal, StructFieldDefinition};
 use syntax::program::{
     Definition, DefinitionBody, EqualityIndex, File, Interface, Method, Methods, Package,
     TestIndex, UninferredExports, method_for_type, methods_for_type, type_has_any_method,
@@ -430,20 +430,7 @@ impl Store {
     }
 
     pub fn nominal_declares_writable_components(&self, id: &str) -> bool {
-        match self.get_definition(id).map(|definition| &definition.body) {
-            Some(DefinitionBody::Struct { fields, .. }) => fields
-                .as_slice()
-                .iter()
-                .any(|field| self.demotion_changes(&field.ty)),
-            Some(DefinitionBody::Enum { variants, .. }) => variants
-                .iter()
-                .flat_map(|variant| match &variant.fields {
-                    VariantFields::Unit => [].as_slice(),
-                    VariantFields::Tuple(fields) | VariantFields::Struct(fields) => fields,
-                })
-                .any(|field| self.demotion_changes(&field.ty)),
-            _ => false,
-        }
+        types::declares_writable_components(id, &|id| self.get_definition(id))
     }
 
     /// The conversion path demotes a refused qualifier once the body exists.
@@ -467,15 +454,8 @@ impl Store {
                     .map(|arg| self.normalized_annotation_type(arg))
                     .collect();
                 if *kind == CompoundKind::Ref && *writable {
-                    if let Some(arg) = args.first_mut()
-                        && let Type::Nominal {
-                            id,
-                            writable: false,
-                            ..
-                        } = self.peel_alias(arg)
-                        && self.nominal_declares_writable_components(id.as_str())
-                    {
-                        *arg = arg.clone().make_writable();
+                    if let Some(arg) = args.first_mut() {
+                        *arg = types::writable_ref_pointee(arg, &|id| self.get_definition(id));
                     }
                 } else if kind.carries_write_permission()
                     && !writable
