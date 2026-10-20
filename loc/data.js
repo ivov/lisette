@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792530026105,
+  "lastUpdate": 1792534711591,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -46895,6 +46895,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/a43c32326fc71be011417eceb5c76e57a1a5d2fa"
         },
         "date": 1792530024169,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 150305,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39701,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28958,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19467,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15664,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9064,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2945,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b104b9a45af9cae66ea9240c94ae04e93930559f",
+          "message": "test: add nightly rewrite suite (#1563)",
+          "timestamp": "2026-10-21T00:18:04+02:00",
+          "tree_id": "6ca820e07d5d353c16fb4c5ee77e3e4174ebc069",
+          "url": "https://github.com/ivov/lisette/commit/b104b9a45af9cae66ea9240c94ae04e93930559f"
+        },
+        "date": 1792534708209,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
