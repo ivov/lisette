@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ Constant overflow
+   ╭─[test.lis:5:11]
+ 4 │ fn main() {
+ 5 │   let _ = math.MaxUint64
+   ·           ───────┬──────
+   ·                  ╰── constant `18446744073709551615` overflows `int`
+ 6 │ }
+   ╰────
+  help: This expression always evaluates to `18446744073709551615`, and `int` must be in range `-9223372036854775808` to `9223372036854775807` · code: [infer.constant_overflow]

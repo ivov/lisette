@@ -23,7 +23,7 @@ pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
         return;
     }
 
-    let Some(count) = right.fold_constant() else {
+    let Some(count) = right.fold_constant(&|name| ctx.store.constant_literal(name)) else {
         return;
     };
 

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::StructKind;
-use syntax::ast::{EnumVariant, StructFieldDefinition, VariantFields};
+use syntax::ast::{EnumVariant, Literal, StructFieldDefinition, VariantFields};
 use syntax::program::{
     Definition, DefinitionBody, EqualityIndex, File, Interface, Method, Methods, Package,
     TestIndex, UninferredExports, method_for_type, methods_for_type, type_has_any_method,
@@ -317,6 +317,14 @@ impl Store {
 
     pub fn underlying_simple_kind(&self, ty: &Type) -> Option<SimpleKind> {
         types::underlying_simple_kind(ty, |id| self.get_definition(id))
+    }
+
+    pub fn constant_literal(&self, qualified_name: &str) -> Option<Literal> {
+        Some(
+            self.get_definition(qualified_name)?
+                .const_value()?
+                .to_literal(),
+        )
     }
 
     pub fn underlying_numeric_type(&self, ty: &Type) -> Option<Type> {

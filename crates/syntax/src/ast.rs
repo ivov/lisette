@@ -2090,32 +2090,48 @@ impl Expression {
         }
     }
 
-    /// Literals only, because a named constant carries a Go type of its own.
-    pub fn fold_constant(&self) -> Option<Constant> {
+    /// Folds literals, and the named constants whose value `value_of` gives.
+    pub fn fold_constant(&self, value_of: &dyn Fn(&str) -> Option<Literal>) -> Option<Constant> {
+        self.fold_reading_names(value_of)
+            .map(|(constant, _)| constant)
+    }
+
+    fn fold_reading_names(
+        &self,
+        value_of: &dyn Fn(&str) -> Option<Literal>,
+    ) -> Option<(Constant, bool)> {
         match self.unwrap_parens() {
-            // Negative literal text occurs only in patterns, so bail rather than
-            // misread the magnitude.
-            Expression::Literal {
-                literal: Literal::Integer { value, text },
-                ..
-            } if !text.as_deref().is_some_and(|text| text.starts_with('-')) => {
-                Some(Constant::Integer(*value as i128))
+            Expression::Literal { literal, .. } => Some((fold_literal(literal)?, false)),
+            Expression::Identifier { resolution, .. } => {
+                Some((fold_literal(&value_of(resolution.definition()?)?)?, true))
             }
-            Expression::Literal {
-                literal: Literal::Char(text),
-                ..
-            } => rune_codepoint(text).map(|value| Constant::Integer(i128::from(value))),
+            Expression::DotAccess { resolution, .. } => {
+                Some((fold_literal(&value_of(resolution.definition()?)?)?, true))
+            }
             Expression::Unary {
                 operator,
                 expression,
                 ..
-            } => fold_unary(operator, expression.fold_constant()?),
+            } => {
+                let (operand, reads_name) = expression.fold_reading_names(value_of)?;
+                if reads_name && matches!(operator, UnaryOperator::BitwiseNot) {
+                    return Some((Constant::Unknown, true));
+                }
+                Some((fold_unary(operator, operand)?, reads_name))
+            }
             Expression::Binary {
                 operator,
                 left,
                 right,
                 ..
-            } => fold_binary(*operator, left.fold_constant()?, right.fold_constant()?),
+            } => {
+                let (left, left_reads_name) = left.fold_reading_names(value_of)?;
+                let (right, right_reads_name) = right.fold_reading_names(value_of)?;
+                Some((
+                    fold_binary(*operator, left, right)?,
+                    left_reads_name || right_reads_name,
+                ))
+            }
             _ => None,
         }
     }
@@ -2527,6 +2543,21 @@ pub enum Constant {
     Integer(i128),
     /// Constant, and past what `i128` holds, or divided by zero.
     Unknown,
+}
+
+fn fold_literal(literal: &Literal) -> Option<Constant> {
+    match literal {
+        Literal::Integer { value, text }
+            if text.as_deref().is_some_and(|text| text.starts_with('-')) =>
+        {
+            Some(Constant::Integer(-(value.wrapping_neg() as i128)))
+        }
+        Literal::Integer { value, .. } => Some(Constant::Integer(*value as i128)),
+        Literal::Char(text) => {
+            rune_codepoint(text).map(|value| Constant::Integer(i128::from(value)))
+        }
+        _ => None,
+    }
 }
 
 fn fold_unary(operator: &UnaryOperator, operand: Constant) -> Option<Constant> {

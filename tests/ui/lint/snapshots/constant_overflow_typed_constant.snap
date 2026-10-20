@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ Constant overflow
+   ╭─[test.lis:5:11]
+ 4 │ fn main() {
+ 5 │   let _ = LIMIT + 100
+   ·           ─────┬─────
+   ·                ╰── constant `300` overflows `uint8`
+ 6 │ }
+   ╰────
+  help: This expression always evaluates to `300`, and `uint8` must be in range `0` to `255` · code: [infer.constant_overflow]

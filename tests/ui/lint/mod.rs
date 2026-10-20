@@ -15985,8 +15985,8 @@ fn main() {
 }
 
 #[test]
-fn constant_cast_overflow_named_constant_no_warning() {
-    assert_no_lint_warnings!(
+fn constant_cast_overflow_named_constant() {
+    assert_lint_snapshot!(
         r#"
 const N = 300
 
@@ -16154,6 +16154,93 @@ fn constant_overflow_wide_intermediate_no_warning() {
         r#"
 fn main() {
   let _ = (9223372036854775807 * 9223372036854775807 * 4) / (9223372036854775807 * 9223372036854775807)
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_go_constant() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+
+fn main() {
+  let _ = math.MaxInt64 + 1
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_lone_go_constant() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+
+fn main() {
+  let _ = math.MaxUint64
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_typed_constant() {
+    assert_lint_snapshot!(
+        r#"
+const LIMIT: uint8 = 200
+
+fn main() {
+  let _ = LIMIT + 100
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_negative_constant_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:math"
+
+const OFFSET = -5
+
+fn main() {
+  let _ = math.MinInt64
+  let _ = OFFSET + 1
+  let _ = -OFFSET
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_bitwise_not_unsigned_constant_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:os"
+
+const MASK: uint8 = 1
+
+fn main() {
+  let mode = os.ModeDir | os.ModePerm
+  let _ = mode & ^os.ModePerm
+  let _ = ^MASK
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_go_constant_cast_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:math"
+
+fn main() {
+  let _ = math.MaxUint64 as uint64
+  let _ = math.MaxUint64 as float64
 }
 "#
     );
