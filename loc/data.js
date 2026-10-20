@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792522583182,
+  "lastUpdate": 1792527992005,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -46752,6 +46752,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 9050,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2945,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10050,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1e45bbdd885b55fb601d3428b3bd00773d782445",
+          "message": "fix: handle writes into Go pointer slice and array fields (#1569)",
+          "timestamp": "2026-10-20T22:26:07+02:00",
+          "tree_id": "a3113acb732499d37f6867c5cba678726b9bbaf1",
+          "url": "https://github.com/ivov/lisette/commit/1e45bbdd885b55fb601d3428b3bd00773d782445"
+        },
+        "date": 1792527989367,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 150258,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39701,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 28944,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19464,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15634,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9064,
             "unit": "lines"
           },
           {
