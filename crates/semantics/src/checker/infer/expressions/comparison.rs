@@ -474,7 +474,10 @@ fn interface_bound_guarantees_equals(store: &Store, bound: &Type, param_name: &s
     interface_requirements(bound, |id| store.get_definition(id))
         .into_iter()
         .any(|requirement| {
-            requirement.name == "equals" && requirement.ty.is_equals_bound_signature(param_name)
+            requirement.name == "equals"
+                && requirement
+                    .ty
+                    .is_equals_bound_signature(param_name, |ty| store.peel_alias(ty))
         })
 }
 

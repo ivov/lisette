@@ -1815,7 +1815,7 @@ fn main() {
 }
 "#,
     )
-    .assert_infer_code_once("needs_writable");
+    .assert_infer_code_once("immutable");
 }
 
 #[test]

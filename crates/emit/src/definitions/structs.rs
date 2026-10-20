@@ -282,9 +282,11 @@ impl Planner<'_> {
 
         let is_user_stringer = |method_name: &str| {
             methods.is_some_and(|methods| {
-                methods
-                    .get(method_name)
-                    .is_some_and(|method| method.ty.is_stringer_signature())
+                methods.get(method_name).is_some_and(|method| {
+                    method
+                        .ty
+                        .is_stringer_signature(|ty| self.facts.peel_alias(ty))
+                })
             }) && !self.facts.is_ufcs_method(&qualified, method_name)
         };
 
@@ -302,9 +304,11 @@ impl Planner<'_> {
             .and_then(type_methods);
         let has_signature = |method_name: &str| {
             methods.is_some_and(|methods| {
-                methods
-                    .get(method_name)
-                    .is_some_and(|method| method.ty.is_stringer_signature())
+                methods.get(method_name).is_some_and(|method| {
+                    method
+                        .ty
+                        .is_stringer_signature(|ty| self.facts.peel_alias(ty))
+                })
             }) && !self.facts.is_ufcs_method(&qualified, method_name)
         };
         (self.method_needs_export("debug_string") && has_signature("debug_string"))

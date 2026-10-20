@@ -1,0 +1,114 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  import "go:fmt"
+  
+  type Text = string
+  type Flag = bool
+  
+  #[display]
+  struct Point { x: int, y: int }
+  
+  impl Point {
+    fn to_string(self) -> Text { "p" }
+  }
+  
+  struct Cell { v: int, tags: Slice<string> }
+  
+  impl Cell {
+    fn equals(self, other: Cell) -> Flag { self.v == other.v }
+  }
+  
+  #[equality]
+  struct Row { cell: Cell }
+  
+  struct Tag { v: int }
+  
+  impl Tag {
+    pub fn string(self) -> Text { "tag" }
+  }
+  
+  fn main() {
+    if (Point { x: 1, y: 2 }).to_string() != "p" { panic("user to_string ignored") }
+    let a = Cell { v: 1, tags: ["a"] }
+    let b = Cell { v: 1, tags: ["b"] }
+    if ![a].equals([b]) { panic("user equals ignored") }
+    if !(Row { cell: a }).equals(Row { cell: b }) { panic("nested user equals ignored") }
+    if fmt.Sprint(Tag { v: 1 }) != "tag" { panic("user string ignored") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"slices"
+)
+
+type Text = string
+
+type Flag = bool
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}
+
+func (p Point) toString() Text {
+	return "p"
+}
+
+type Cell struct {
+	v    int
+	tags []string
+}
+
+func (c Cell) equals(other Cell) Flag {
+	return c.v == other.v
+}
+
+type Row struct {
+	cell Cell
+}
+
+func (r Row) equals(other Row) bool {
+	return r.cell.equals(other.cell)
+}
+
+type Tag struct {
+	v int
+}
+
+func (t Tag) String() Text {
+	return "tag"
+}
+
+func main() {
+	if (Point{
+		x: 1,
+		y: 2,
+	}).toString() != "p" {
+		panic("user to_string ignored")
+	}
+	a := Cell{
+		v:    1,
+		tags: []string{"a"},
+	}
+	b := Cell{
+		v:    1,
+		tags: []string{"b"},
+	}
+	if !slices.EqualFunc([]Cell{a}, []Cell{b}, func(a_1, b_1 Cell) bool { return a_1.equals(b_1) }) {
+		panic("user equals ignored")
+	}
+	if !(Row{cell: a}).equals(Row{cell: b}) {
+		panic("nested user equals ignored")
+	}
+	if fmt.Sprint(Tag{v: 1}) != "tag" {
+		panic("user string ignored")
+	}
+}

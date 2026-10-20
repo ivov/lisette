@@ -13965,13 +13965,13 @@ struct Outer { bad: Bad }
 #[test]
 fn equality_conflicting_user_equals() {
     let input = r#"
-type Flag = bool
+type Flag = int
 
 #[equality]
 struct Foo { value: int }
 
 impl Foo {
-  fn equals(self, other: Foo) -> Flag { true }
+  fn equals(self, other: Foo) -> Flag { 1 }
 }
 "#;
     assert_infer_error_snapshot!(input);

@@ -481,6 +481,7 @@ impl Store {
                     writable: *writable,
                 }
             }
+            Type::Nominal { .. } if self.peel_alias(ty).is_never() => Type::Never,
             Type::Nominal {
                 id,
                 params,
@@ -650,7 +651,7 @@ impl Store {
         ["string", "String"].iter().any(|name| {
             methods
                 .get(*name)
-                .is_some_and(|method| method.ty.is_stringer_signature())
+                .is_some_and(|method| method.ty.is_stringer_signature(|ty| self.peel_alias(ty)))
                 && !definition.is_ufcs_method(name)
         })
     }

@@ -1281,6 +1281,29 @@ fn test() -> string {
 }
 
 #[test]
+fn never_alias_call_diverges() {
+    let input = r#"
+type Early = Halt
+type Halt = Never
+
+fn die() -> Early { panic("dead") }
+
+fn pick(n: int) -> int {
+  match n {
+    0 => die(),
+    _ => n,
+  }
+}
+
+fn main() {
+  let x: int = if pick(2) > 0 { 1 } else { die() }
+  if x != 1 { panic("wrong branch") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn never_typed_let_shadowing_same_block_binding_takes_fresh_name() {
     let input = r#"
 fn fail(msg: string) -> Never { panic(msg) }
@@ -4394,6 +4417,26 @@ fn main() {
 }
 
 #[test]
+fn function_value_with_alias_parameter_fills_spelled_out_slot() {
+    let input = r#"
+type PairFn = fn(int) -> (int, int)
+
+fn invoke(f: PairFn) -> (int, int) { f(4) }
+
+fn first(f: PairFn) -> int { f(4).0 }
+
+fn main() {
+  let gs: Slice<fn(fn(int) -> (int, int)) -> (int, int)> = [invoke]
+  let (a, b) = gs[0](|x| (x, x + 1))
+  if a != 4 || b != 5 { panic("tuple") }
+  let hs: Slice<fn(fn(int) -> (int, int)) -> int> = [first]
+  if hs[0](|x| (x, x)) != 4 { panic("first") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn higher_callback_go_params_callback_commaok() {
     let input = r#"
 import "go:sort"
@@ -5084,6 +5127,38 @@ fn main() {
   let mut out = strings.Builder {}
   let Err(e) = parsed.Execute(&out, 0) else { panic("template swallowed the function error") }
   if !strings.Contains(e.Error(), "bad a") { panic("wrong error") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn result_alias_returns_through_go_callback_and_propagation() {
+    let input = r#"
+import "go:bufio"
+import "go:errors"
+import "go:strings"
+
+type SplitOut = Result<(int, Slice<byte>), error>
+type Done = Result<(), error>
+
+fn split(data: Slice<byte>, at_eof: bool) -> SplitOut {
+  let (n, token) = bufio.ScanWords(data, at_eof)?
+  Ok((n, token))
+}
+
+fn fail() -> Done {
+  Err(errors.New("boom"))?
+  Ok(())
+}
+
+fn main() {
+  let mut s = bufio.NewScanner(strings.NewReader("ab cd"))
+  s.Split(split)
+  let mut words = 0
+  while s.Scan() { words += 1 }
+  if words != 2 { panic("wrong word count") }
+  let Err(_) = fail() else { panic("fail succeeded") }
 }
 "#;
     assert_emit_snapshot!(input);
