@@ -21,13 +21,17 @@ description: |
 package main
 
 type Cloner[T any] interface {
-	Clone() T
+	Clone_() T
 }
 
 type Foo struct{}
 
 func (f Foo) Clone() Foo {
 	return Foo{}
+}
+
+func (f Foo) Clone_() Foo {
+	return f.Clone()
 }
 
 func squiggle[A Cloner[B], B any](_ A, _ B) {}

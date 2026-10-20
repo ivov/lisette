@@ -47,7 +47,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 type Holder[X any] interface {
-	h() X
+	h_() X
 }
 
 type Box[U any] interface {
@@ -66,6 +66,10 @@ type IntHolder struct{}
 
 func (i IntHolder) h() int {
 	return 1
+}
+
+func (i IntHolder) h_() int {
+	return i.h()
 }
 
 func consume[T any](box Box[lisette.Option[T]]) {

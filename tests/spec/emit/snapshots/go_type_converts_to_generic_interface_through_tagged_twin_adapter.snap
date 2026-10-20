@@ -1,0 +1,67 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  import "go:bytes"
+  
+  interface Sizer<T> {
+    fn Len() -> T
+  }
+  
+  fn size<S: Sizer<int>>(s: S) -> int {
+    s.Len()
+  }
+  
+  struct Fixed {}
+  
+  impl Fixed {
+    fn Len(self) -> int { 4 }
+  }
+  
+  fn main() {
+    let b = bytes.NewBufferString("abc")
+    let s: Sizer<int> = b
+    if s.Len() != 3 { panic("wrong buffer length") }
+    if size(Fixed {}) != 4 { panic("wrong generic length") }
+  }
+---
+package main
+
+import "bytes"
+
+type Sizer[T any] interface {
+	Len_() T
+}
+
+func size[S Sizer[int]](s S) int {
+	return s.Len_()
+}
+
+type Fixed struct{}
+
+func (f Fixed) Len() int {
+	return 4
+}
+
+func (f Fixed) Len_() int {
+	return f.Len()
+}
+
+func main() {
+	b := bytes.NewBufferString("abc")
+	var s Sizer[int] = _lisAdapter_Buffer_Sizer_0{inner: b}
+	if s.Len_() != 3 {
+		panic("wrong buffer length")
+	}
+	if size(Fixed{}) != 4 {
+		panic("wrong generic length")
+	}
+}
+
+type _lisAdapter_Buffer_Sizer_0 struct {
+	inner *bytes.Buffer
+}
+
+func (a _lisAdapter_Buffer_Sizer_0) Len_() int {
+	return a.inner.Len()
+}

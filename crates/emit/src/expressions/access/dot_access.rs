@@ -56,8 +56,10 @@ impl Planner<'_> {
             unreachable!("plan_dot_access requires a DotAccess expression");
         };
         let receiver_coercion = resolution.receiver_coercion();
+        let tagged_twin = self.selects_tagged_twin(dot_access);
 
-        if let Some(expression) = self.try_emit_pre_receiver_dot(member, result_ty, resolution, ctx)
+        if let Some(expression) =
+            self.try_emit_pre_receiver_dot(member, result_ty, resolution, tagged_twin, ctx)
         {
             return ValuePlan::computed(Vec::new(), expression);
         }
@@ -133,7 +135,10 @@ impl Planner<'_> {
             return ValuePlan::computed(setup, member_access).with_stability(stability);
         }
 
-        let field = self.dot_member_go_name(expression, &expression_ty, member, resolution);
+        let mut field = self.dot_member_go_name(expression, &expression_ty, member, resolution);
+        if tagged_twin {
+            field = go_name::tagged_twin(&field);
+        }
 
         if wrap_nullable
             && let Some(wrapped) = self.plan_nullable_field_access(
@@ -174,6 +179,7 @@ impl Planner<'_> {
         member: &str,
         result_ty: &Type,
         resolution: &DotAccessResolution,
+        tagged_twin: bool,
         ctx: ExpressionContext<'_>,
     ) -> Option<GoExpression> {
         match resolution {
@@ -192,6 +198,7 @@ impl Planner<'_> {
                 result_ty,
                 *is_exported,
                 *is_pointer_receiver,
+                tagged_twin,
             ),
             _ => None,
         }

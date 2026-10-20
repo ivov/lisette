@@ -5428,6 +5428,34 @@ fn main() {
 }
 
 #[test]
+fn infer_unsupported_bound_argument_go_shape() {
+    let input = r#"import "go:io"
+struct Sink<T> { out: T }
+impl<T> Sink<T> {
+  fn Write(self, _p: Slice<byte>) -> T { self.out }
+}
+fn push<W: io.Writer>(w: W) -> Partial<int, error> { w.Write([]) }
+fn main() {
+  let s: Sink<Partial<int, error>> = Sink { out: Partial.Ok(0) }
+  let _ = push(s)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unsupported_bound_argument_go_type() {
+    let input = r#"import "go:bytes"
+interface Sizer<T> { fn Len() -> T }
+fn size<S: Sizer<int>>(s: S) -> int { s.Len() }
+fn main() {
+  let _ = size(&bytes.Buffer {})
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_comma_ok_abi_mismatch() {
     let typedef = r#"
 pub interface Lookup {

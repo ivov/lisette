@@ -24,23 +24,31 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 type Box[U any] interface {
-	get() U
+	get_() U
 }
 
 type Bar[S any] struct {
 	x lisette.Option[S]
 }
 
-func (b Bar[S]) get() lisette.Option[S] {
-	return b.x
+func (b Bar[S]) get() (S, bool) {
+	v := b.x
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	return *new(S), false
+}
+
+func (b Bar[S]) get_() lisette.Option[S] {
+	return lisette.OptionFromCommaOk[S](b.get())
 }
 
 func read[T Box[lisette.Option[int]]](value T) int {
-	return value.get().UnwrapOr(0)
+	return value.get_().UnwrapOr(0)
 }
 
 func outer[T Box[lisette.Option[int]]](slot *T) int {
-	return (*slot).get().UnwrapOr(0)
+	return (*slot).get_().UnwrapOr(0)
 }
 
 func main() {

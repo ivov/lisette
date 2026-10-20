@@ -222,7 +222,6 @@ impl Planner<'_> {
                 FallibleComponentSource::Result(fuse)
             }
         };
-        let payload_go_type = self.use_go_type(&ty.ok_type());
         let slot = if demand.value != ValueDemand::StatusOnly {
             self.declare(go_identifier);
             CommaOkValueSlot::Named(go_identifier.clone())
@@ -248,7 +247,7 @@ impl Planner<'_> {
             ComponentBinding {
                 value: payload,
                 status,
-                payload_go_type,
+                payload_type: ty.ok_type(),
                 kind,
                 shared_payload: demand.defaults > 1,
             },

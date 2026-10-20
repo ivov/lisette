@@ -13,9 +13,9 @@ description: |
 package main
 
 type Mapper[A any, B any] interface {
-	mapValue(A) B
+	mapValue_(A) B
 }
 
 func applyMapper[M Mapper[int, string]](m M, val int) string {
-	return m.mapValue(val)
+	return m.mapValue_(val)
 }

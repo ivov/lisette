@@ -625,7 +625,11 @@ impl<'a> Planner<'a> {
             }
             CallableOrigin::Source(CallKind::ReceiverMethodUfcs { is_public }) => {
                 let method = extract_receiver_ufcs_method(function);
-                return self.lower_receiver_method_ufcs(args, &method, *is_public, spread, &plan);
+                let mut go_method = self.method_go_name(&method, *is_public);
+                if self.selects_tagged_twin(function) {
+                    go_method = go_name::tagged_twin(&go_method);
+                }
+                return self.lower_receiver_method_ufcs(args, go_method, spread, &plan);
             }
             CallableOrigin::GoInterop
             | CallableOrigin::Source(CallKind::Regular | CallKind::Unresolved) => {}

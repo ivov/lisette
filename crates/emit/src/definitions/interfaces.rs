@@ -81,7 +81,10 @@ impl Planner<'_> {
             self.use_go_type(&raw_return_ty)
         };
 
-        let method_name = self.method_go_name(func.name, is_public);
+        let mut method_name = self.method_go_name(func.name, is_public);
+        if self.facts.method_uses_tagged_return(func.name) {
+            method_name = go_name::tagged_twin(&method_name);
+        }
 
         if return_abi == CallableReturnAbi::Void {
             format!("{}({})", method_name, args.join(", "))

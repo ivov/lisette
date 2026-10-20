@@ -7,9 +7,7 @@ use crate::calls::go_interop::GoResultBridge;
 use crate::patterns::matching::prelude_constructor;
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::program::NativeTypeKind;
-use syntax::program::{
-    CallKind, Definition, DotAccessResolution, Method, Visibility, resolved_definition,
-};
+use syntax::program::{CallKind, Definition, Method, Visibility, resolved_definition};
 use syntax::types::{CompoundKind, FunctionParameter, Type};
 
 #[derive(Debug)]
@@ -381,7 +379,7 @@ impl<'a> Planner<'a> {
         {
             return Some(self.interface_method_return_abi(&method.source_name, method));
         }
-        if self.callee_uses_tagged_method_return(callee) {
+        if self.selects_tagged_twin(callee) {
             return Some(CallableReturnAbi::Value);
         }
         let classify_ty = declared_return.unwrap_or(f.return_type.as_ref());
@@ -393,45 +391,6 @@ impl<'a> Planner<'a> {
         }
         let origin = self.function_type_origin(&callee_ty, SlotOrigin::Lisette);
         Some(self.slot_return_abi(classify_ty, origin))
-    }
-
-    fn callee_uses_tagged_method_return(&self, callee: &Expression) -> bool {
-        let callee_definition = resolved_definition(callee);
-        if callee_definition.is_some_and(|id| {
-            id.starts_with("go:")
-                || id.starts_with("prelude.")
-                || id
-                    .rsplit_once('.')
-                    .is_some_and(|(owner, name)| self.facts.is_ufcs_method(owner, name))
-        }) {
-            return false;
-        }
-        let method_name = match callee.unwrap_parens() {
-            Expression::DotAccess {
-                expression: receiver,
-                member,
-                resolution,
-                ..
-            } if matches!(
-                resolution,
-                DotAccessResolution::InstanceMethod { .. }
-                    | DotAccessResolution::InstanceMethodValue { .. }
-            ) && NativeTypeKind::from_type(
-                &self.facts.strip_and_peel(&receiver.get_type()),
-            )
-            .is_none()
-                && !receiver_is_prelude_type(&receiver.get_type()) =>
-            {
-                Some(member.as_str())
-            }
-            Expression::Identifier { .. } => callee_definition.and_then(|id| {
-                let (owner, name) = id.rsplit_once('.')?;
-                self.facts.method(owner, name)?;
-                Some(name)
-            }),
-            _ => None,
-        };
-        method_name.is_some_and(|name| self.facts.method_uses_tagged_return(name))
     }
 
     /// Resolve a Go-interop call's strategy.
@@ -455,6 +414,11 @@ impl<'a> Planner<'a> {
     ) -> Option<LoweredReturnAbi> {
         if self.bound_dispatch_requirement(callee).is_some() {
             return None;
+        }
+        if let Some(requirement) = self.go_bound_requirement(callee) {
+            return self
+                .facts
+                .classify_go_return_type(return_ty, &requirement.method.go_hints);
         }
         let qualified_name = resolved_definition(callee)?;
         if !qualified_name.starts_with("go:") {
@@ -482,6 +446,7 @@ impl<'a> Planner<'a> {
             return false;
         }
         resolved_definition(expression).is_some_and(|definition| definition.starts_with("go:"))
+            || self.go_bound_requirement(expression).is_some()
             || self.is_go_named_function_type(&expression.get_type())
     }
 
