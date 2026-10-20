@@ -55,6 +55,10 @@ name = "e2e_suite"
 path = "e2e_suite.rs"
 
 [[test]]
+name = "rewrite_suite"
+path = "rewrite_suite.rs"
+
+[[test]]
 name = "embed_diff"
 path = "embed_diff.rs"
 

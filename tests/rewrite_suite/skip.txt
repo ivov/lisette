@@ -1,0 +1,2 @@
+# Variants pending a compiler fix. One variant name per line, with an inline
+# `#` reason. Remove a line when its fix lands.
