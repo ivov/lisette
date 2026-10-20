@@ -21,7 +21,10 @@ fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, _role: 
         (min_max::check, &[Call]),
         (cast_nan_to_int::check, &[Cast]),
         (constant_cast_overflow::check, &[Cast]),
-        (constant_overflow::check, &[Binary, Unary]),
+        (
+            constant_overflow::check,
+            &[Binary, Unary, Identifier, DotAccess]
+        ),
         (impossible_comparison::check, &[Binary]),
         (always_true_disjunction::check, &[Binary]),
         (empty_range::check, &[Range]),

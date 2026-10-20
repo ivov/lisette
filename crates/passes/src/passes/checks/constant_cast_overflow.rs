@@ -16,7 +16,7 @@ pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
         return;
     };
 
-    let Some(constant) = operand.fold_constant() else {
+    let Some(constant) = operand.fold_constant(&|name| ctx.store.constant_literal(name)) else {
         return;
     };
 

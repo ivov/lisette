@@ -8787,6 +8787,19 @@ fn main() {
 }
 
 #[test]
+fn infer_division_by_named_zero() {
+    let input = r#"
+const ZERO = 0
+
+fn main() {
+  let x = 10 / ZERO;
+  x
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_remainder_by_zero() {
     let input = r#"
 fn main() {

@@ -24,9 +24,12 @@ fn canonical_const_value(expression: &Expression) -> Option<ConstantValue> {
             expression,
             ..
         } => match canonical_const_value(expression)? {
-            ConstantValue::Integer { value, .. } => Some(ConstantValue::Integer {
+            ConstantValue::Integer { value, text } => Some(ConstantValue::Integer {
                 value: value.wrapping_neg(),
-                text: None,
+                text: match text {
+                    Some(negative) if negative.starts_with('-') => None,
+                    _ => Some(format!("-{value}")),
+                },
             }),
             ConstantValue::Float { value, .. } => Some(ConstantValue::Float {
                 value: -value,
