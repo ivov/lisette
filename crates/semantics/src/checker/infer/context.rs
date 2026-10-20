@@ -103,6 +103,7 @@ struct TraversalContext {
 pub(super) enum ValueSource {
     Place(String),
     Call(String),
+    GoFieldCopy(diagnostics::infer::WriteContext),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -733,6 +733,11 @@ pub enum WriteContext {
         source: String,
     },
     CallResult(String),
+    GoFieldCopy {
+        place: String,
+        /// `i` for a slice, `k` for a map.
+        index: &'static str,
+    },
     ReadOnlyOwner {
         owner: String,
         field: String,
@@ -794,6 +799,7 @@ pub fn needs_writable_remedy(
         Some(WriteContext::CallResult(callee)) => {
             format!("`{callee}` returns `{actual}`. Declare its return type `{expected}`")
         }
+        Some(WriteContext::GoFieldCopy { place, index }) => go_field_copy_help(&place, index),
         Some(WriteContext::LoopElement {
             binding,
             collection,
@@ -819,6 +825,13 @@ pub fn needs_writable_remedy(
         },
         _ => "Make the value writable where it is created, or pass a `.clone()`".to_string(),
     }
+}
+
+fn go_field_copy_help(place: &str, index: &str) -> String {
+    format!(
+        "Each read of `{place}` copies it out of a Go field, so a write to the copy \
+         does not reach the field. Write to `{place}[{index}]` directly"
+    )
 }
 
 pub fn read_only_construction(
@@ -932,6 +945,9 @@ pub fn write_through_read_only(
                         "`{field}` is declared writable, but `{owner}` is read-only, \
                          so its fields are too. {source}"
                     )
+                }
+                Some(WriteContext::GoFieldCopy { place, index }) => {
+                    go_field_copy_help(&place, index)
                 }
                 Some(WriteContext::CallResult(callee)) => format!(
                     "`{callee}` returns `{governing_type}`. \

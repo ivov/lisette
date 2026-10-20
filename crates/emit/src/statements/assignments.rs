@@ -78,35 +78,16 @@ impl Planner<'_> {
             return LoweredStatement::Body(raw_body(self.lower_discard_value(value)));
         }
 
-        let go_field_slot: Option<(Type, ValueLayout)> = match target {
-            Expression::DotAccess {
-                expression,
-                member,
-                ty,
-                resolution,
-                ..
-            } => self
-                .field_slot_layout(
-                    &expression.get_type(),
-                    resolution.declaring_type(),
-                    None,
-                    member,
-                    ty,
-                )
-                .map(|layout| (ty.clone(), layout)),
-            _ => None,
-        }
-        .or_else(|| {
-            self.go_physical_expression_layout(target)
-                .map(|layout| (target.get_type(), layout))
-        });
+        let go_field_slot = self
+            .go_place_layout(target)
+            .or_else(|| self.go_physical_expression_layout(target));
 
         // `target = value`. Stage RHS first (so the target capture knows
         // whether RHS produced setup), capture the target, then fold RHS
         // setup + coercion setup into the value plan in emission order.
         let literal_slot = go_field_slot
             .as_ref()
-            .and_then(|(_, layout)| self.lower_option_literal_into_layout(value, layout));
+            .and_then(|layout| self.lower_option_literal_into_layout(value, layout));
         let is_literal_slot = literal_slot.is_some();
         let origin = if go_field_slot.is_some() {
             SlotOrigin::Lisette
@@ -125,7 +106,7 @@ impl Planner<'_> {
             self.capture_assignment_target(target, PlaceOrdering::before(&right_hand_side));
         let coercion = if is_literal_slot {
             CoercionPlan::Identity
-        } else if let Some((_target_ty, target_layout)) = go_field_slot {
+        } else if let Some(target_layout) = go_field_slot {
             let source_layout = self.value_layout(&value.get_type(), SlotOrigin::Lisette);
             CoercionPlan::bridge(self, &source_layout, &target_layout)
         } else {
@@ -143,6 +124,35 @@ impl Planner<'_> {
                 value,
             }),
         )
+    }
+
+    /// The Go layout of a Go field, or of an element indexed out of one.
+    fn go_place_layout(&self, target: &Expression) -> Option<ValueLayout> {
+        match target.unwrap_parens() {
+            Expression::DotAccess {
+                expression,
+                member,
+                ty,
+                resolution,
+                ..
+            } => self.field_slot_layout(
+                &expression.get_type(),
+                resolution.declaring_type(),
+                None,
+                member,
+                ty,
+            ),
+            Expression::IndexedAccess { expression, .. } => {
+                match self.go_place_layout(expression)?.underlying() {
+                    ValueLayout::Slice { element, .. } | ValueLayout::Array { element, .. } => {
+                        Some(element.as_ref().clone())
+                    }
+                    ValueLayout::Map { value, .. } => Some(value.as_ref().clone()),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
     }
 
     fn lower_target_operands(&mut self, target: &Expression) -> Vec<Statement> {

@@ -2646,3 +2646,104 @@ fn main() {
     infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
         .assert_infer_code("interface_not_implemented");
 }
+
+const GO_POINTER_SLICE_TYPEDEF: &str = r#"
+pub type File
+
+pub struct Attr {
+  pub Files: mut Slice<Option<mut Ref<File>>>,
+  pub Chains: mut Slice<mut Slice<Option<mut Ref<File>>>>,
+}
+"#;
+
+#[test]
+fn go_pointer_slice_field_accepts_direct_writes() {
+    let input = r#"import "go:example.com/lib"
+
+fn reset(attr: mut Ref<lib.Attr>) {
+  attr.Files[0] = None
+  attr.Chains[0][0] = None
+  attr.Files = []
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", GO_POINTER_SLICE_TYPEDEF)])
+        .assert_no_errors();
+}
+
+#[test]
+fn go_pointer_slice_field_copy_write_refused() {
+    let input = r#"import "go:example.com/lib"
+
+fn reset(attr: mut Ref<lib.Attr>) {
+  let mut files = attr.Files
+  files[0] = None
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", GO_POINTER_SLICE_TYPEDEF)])
+        .assert_infer_code_once("write_through_read_only")
+        .assert_error_contains("Each read of `attr.Files` copies it out of a Go field");
+}
+
+#[test]
+fn go_pointer_slice_field_mut_argument_refused() {
+    let input = r#"import "go:example.com/lib"
+
+fn clear(files: mut Slice<Option<mut Ref<lib.File>>>) {
+  files[0] = None
+}
+
+fn reset(attr: mut Ref<lib.Attr>) {
+  clear(attr.Files)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", GO_POINTER_SLICE_TYPEDEF)])
+        .assert_infer_code_once("needs_writable")
+        .assert_error_contains("Write to `attr.Files[i]` directly");
+}
+
+#[test]
+fn go_pointer_slice_field_reference_write_refused() {
+    let input = r#"import "go:example.com/lib"
+
+fn reset(attr: mut Ref<lib.Attr>) {
+  let mut files = &attr.Files
+  files.*[0] = None
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", GO_POINTER_SLICE_TYPEDEF)])
+        .assert_infer_code_once("write_through_read_only")
+        .assert_error_contains("Each read of `attr.Files` copies it out of a Go field");
+}
+
+#[test]
+fn go_pointer_slice_promoted_field_copy_write_refused() {
+    let input = r#"import "go:example.com/lib"
+
+struct Wrapper {
+  embed mut lib.Attr
+}
+
+fn reset(wrapper: mut Ref<Wrapper>) {
+  wrapper.Files[0] = None
+  let mut files = wrapper.Files
+  files[0] = None
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", GO_POINTER_SLICE_TYPEDEF)])
+        .assert_infer_code_once("write_through_read_only")
+        .assert_error_contains("Each read of `wrapper.Files` copies it out of a Go field");
+}
+
+#[test]
+fn go_pointer_slice_field_inner_copy_write_refused() {
+    let input = r#"import "go:example.com/lib"
+
+fn reset(attr: mut Ref<lib.Attr>) {
+  let mut chain = attr.Chains[0]
+  chain[0] = None
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", GO_POINTER_SLICE_TYPEDEF)])
+        .assert_infer_code_once("write_through_read_only")
+        .assert_error_contains("Write to `attr.Chains[0][i]` directly");
+}
