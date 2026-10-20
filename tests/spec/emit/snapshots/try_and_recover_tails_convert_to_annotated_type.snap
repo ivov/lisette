@@ -1,0 +1,119 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  interface Named {
+    fn name() -> string
+  }
+  
+  struct Cat {}
+  
+  impl Cat {
+    fn name(self) -> string { "cat" }
+  }
+  
+  fn risky() -> Result<int, string> { Ok(1) }
+  
+  fn unit() {}
+  
+  fn test() {
+    let p: Result<(Unknown, int), PanicValue> = recover { (1, 2) };
+    let t: Result<(Unknown, int), string> = try {
+      let _ = risky()?;
+      (1, 2)
+    };
+    let n: Option<Named> = try {
+      let _ = Some(1)?;
+      Cat {}
+    };
+    let u: Result<Unknown, PanicValue> = recover { unit() };
+    let w: Result<Unknown, string> = try {
+      let _ = risky()?;
+      unit()
+    };
+    let _ = p;
+    let _ = t;
+    let Some(named) = n else { panic("no name") };
+    if named.name() != "cat" { panic("wrong name") }
+    let Ok(a) = u else { panic("recover failed") };
+    let Ok(b) = w else { panic("try failed") };
+    let Some(_) = assert_type<()>(a) else { panic("recover lost unit") };
+    let Some(_) = assert_type<()>(b) else { panic("try lost unit") };
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Named interface {
+	name() string
+}
+
+type Cat struct{}
+
+func (c Cat) name() string {
+	return "cat"
+}
+
+func risky() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](1)
+}
+
+func unit() {}
+
+func test() {
+	p := lisette.RecoverBlock(func() lisette.Tuple2[any, int] {
+		tup := lisette.MakeTuple2[int, int](1, 2)
+		return lisette.MakeTuple2[any, int](tup.First, tup.Second)
+	})
+	t := func() lisette.Result[lisette.Tuple2[any, int], string] {
+		check := risky()
+		if check.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[lisette.Tuple2[any, int], string](check.ErrVal)
+		}
+		tup_1 := lisette.MakeTuple2[int, int](1, 2)
+		return lisette.MakeResultOk[lisette.Tuple2[any, int], string](lisette.MakeTuple2[any, int](tup_1.First, tup_1.Second))
+	}()
+	n := func() lisette.Option[Named] {
+		check_1 := lisette.MakeOptionSome(1)
+		if check_1.Tag != lisette.OptionSome {
+			return lisette.MakeOptionNone[Named]()
+		}
+		return lisette.MakeOptionSome[Named](Cat{})
+	}()
+	u := lisette.RecoverBlock(func() any {
+		unit()
+		return struct{}{}
+	})
+	w := func() lisette.Result[any, string] {
+		check_2 := risky()
+		if check_2.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[any, string](check_2.ErrVal)
+		}
+		unit()
+		return lisette.MakeResultOk[any, string](struct{}{})
+	}()
+	_ = p
+	_ = t
+	if n.Tag != lisette.OptionSome {
+		panic("no name")
+	}
+	named := n.SomeVal
+	if named.name() != "cat" {
+		panic("wrong name")
+	}
+	if u.Tag != lisette.ResultOk {
+		panic("recover failed")
+	}
+	a := u.OkVal
+	if w.Tag != lisette.ResultOk {
+		panic("try failed")
+	}
+	b := w.OkVal
+	if _, ok := a.(struct{}); !ok {
+		panic("recover lost unit")
+	}
+	if _, ok := b.(struct{}); !ok {
+		panic("try lost unit")
+	}
+}

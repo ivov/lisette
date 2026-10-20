@@ -21,10 +21,10 @@ func risky() lisette.Result[int, string] {
 }
 
 func test() {
-	result := func() lisette.Result[struct{}, string] {
+	result := func() lisette.Result[int, string] {
 		check := risky()
 		if check.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[struct{}, string](check.ErrVal)
+			return check
 		}
 		for {
 			panic("unreachable")

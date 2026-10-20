@@ -8718,6 +8718,18 @@ fn test() {
 }
 
 #[test]
+fn infer_recover_block_annotation_mismatch() {
+    let input = r#"
+fn test() {
+  let result: Result<string, PanicValue> = recover {
+    42
+  };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn parse_duplicate_struct_field_in_definition() {
     let input = r#"
 struct S { x: int, x: string }

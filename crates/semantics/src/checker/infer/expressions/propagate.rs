@@ -4,6 +4,7 @@ use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
+use crate::checker::infer::context::{Expectation, ExpectationRole};
 use crate::checker::infer::unify::UnifyError;
 use crate::checker::infer::validation::always_fails;
 
@@ -250,6 +251,9 @@ impl InferCtx<'_> {
         let err_ty = self.new_type_var();
 
         let expected_resolved = self.resolve_carrier(expected_ty);
+        if expected_resolved.is_result() || expected_resolved.is_option() {
+            self.unify(&ok_ty, &expected_resolved.ok_type(), &try_keyword_span);
+        }
         if expected_resolved.is_result() {
             self.unify(&err_ty, &expected_resolved.err_type(), &try_keyword_span);
         }
@@ -263,7 +267,7 @@ impl InferCtx<'_> {
                 entry_loop_depth,
             });
             this.register_block_local_items(&items);
-            let new_items = this.infer_block_items(items, ok_ty.clone());
+            let new_items = this.infer_fallible_block_items(items, ok_ty.clone(), "try");
             let usage = this
                 .scopes
                 .current_try_block_context()
@@ -291,25 +295,14 @@ impl InferCtx<'_> {
             self.facts.add_always_failing_try_block(*propagate_span);
         }
 
-        let inner_ty = last_item.get_type();
-        let inner_ty = if inner_ty.is_ignored() {
-            self.type_unit()
-        } else {
-            inner_ty
-        };
+        self.fill_statement_tail(last_item, &ok_ty, &span);
 
         let block_ty = match usage {
-            TryUsage::Carrier(TryCarrier::Result) => {
-                self.unify(&ok_ty, &inner_ty, &span);
-                self.type_result(store, inner_ty, err_ty)
-            }
-            TryUsage::Carrier(TryCarrier::Option) => {
-                self.unify(&ok_ty, &inner_ty, &span);
-                self.type_option(store, inner_ty)
-            }
+            TryUsage::Carrier(TryCarrier::Result) => self.type_result(store, ok_ty, err_ty),
+            TryUsage::Carrier(TryCarrier::Option) => self.type_option(store, ok_ty),
             TryUsage::Unused | TryUsage::Unknown => {
                 let new_err_ty = self.new_type_var();
-                self.type_result(store, inner_ty, new_err_ty)
+                self.type_result(store, ok_ty, new_err_ty)
             }
         };
 
@@ -348,24 +341,28 @@ impl InferCtx<'_> {
             };
         }
 
+        let expected_resolved = self.resolve_carrier(expected_ty);
+        if expected_resolved.is_result() {
+            self.unify(
+                &inner_ty,
+                &expected_resolved.ok_type(),
+                &recover_keyword_span,
+            );
+        }
+
         let new_items = self.with_scope(|this| {
             let entry_loop_depth = this.loop_depth();
             this.scopes
                 .set_recover_block_context(RecoverBlockContext { entry_loop_depth });
             this.register_block_local_items(&items);
-            this.infer_block_items(items, inner_ty)
+            this.infer_fallible_block_items(items, inner_ty.clone(), "recover")
         });
 
         let last_item = new_items.last().expect("block must have at least one item");
-        let result_inner_ty = last_item.get_type();
-        let result_inner_ty = if result_inner_ty.is_ignored() {
-            self.type_unit()
-        } else {
-            result_inner_ty
-        };
+        self.fill_statement_tail(last_item, &inner_ty, &span);
 
         let panic_value_ty = self.type_panic_value(store);
-        let block_ty = self.type_result(store, result_inner_ty, panic_value_ty);
+        let block_ty = self.type_result(store, inner_ty, panic_value_ty);
 
         self.unify(expected_ty, &block_ty, &recover_keyword_span);
 
@@ -375,5 +372,30 @@ impl InferCtx<'_> {
             recover_keyword_span,
             span,
         }
+    }
+
+    fn fill_statement_tail(&mut self, last_item: &Expression, ok_ty: &Type, span: &Span) {
+        if last_item.get_type().is_ignored() {
+            let unit_ty = self.type_unit();
+            let _ = self.try_unify(ok_ty, &unit_ty, span);
+        }
+    }
+
+    fn infer_fallible_block_items(
+        &mut self,
+        items: Vec<Expression>,
+        ok_ty: Type,
+        keyword: &'static str,
+    ) -> Vec<Expression> {
+        let expectation = Expectation {
+            role: ExpectationRole::FallibleBlockTail { keyword },
+            span: items
+                .last()
+                .expect("block must have at least one item")
+                .get_span(),
+            expected_ty: ok_ty.clone(),
+            value_context: None,
+        };
+        self.with_expectation(expectation, |this| this.infer_block_items(items, ok_ty))
     }
 }
