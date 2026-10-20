@@ -322,7 +322,7 @@ impl InferCtx<'_> {
         let field = struct_fields.iter().find(|f| f.name == field_name)?;
 
         self.mark_component_grant(args.expression, args.expression_ty, &field.ty);
-        let field_type = self.granted_component_type(&field.ty, args.expression_ty);
+        let field_type = self.granted_field_type(&struct_name, &field.ty, args.expression_ty);
         let field_is_pub = field.visibility.is_public();
 
         self.facts.add_usage(*args.span, field.name_span);
@@ -385,7 +385,8 @@ impl InferCtx<'_> {
             return None;
         };
         self.mark_component_grant(args.expression, args.expression_ty, &field_ty);
-        let field_ty = self.granted_component_type(&field_ty, args.expression_ty);
+        let field_ty =
+            self.granted_field_type(&member.declaring_type, &field_ty, args.expression_ty);
 
         let declared_field = store
             .fields_of(member.declaring_type.as_str())

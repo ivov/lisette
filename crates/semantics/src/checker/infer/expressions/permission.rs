@@ -44,6 +44,15 @@ impl InferCtx<'_> {
             } => {
                 let governing = self.governing_index_type(base);
                 match governing {
+                    Some(governing)
+                        if self.go_place_declaration(base).is_some_and(|declared| {
+                            self.store.peel_alias(&declared).is_writable()
+                        }) =>
+                    {
+                        WriteTarget::Through {
+                            governing: governing.make_writable(),
+                        }
+                    }
                     Some(governing) => WriteTarget::Through { governing },
                     // An `Array` index writes the array's own memory.
                     None => self.classify_write_target(base),
@@ -140,6 +149,106 @@ impl InferCtx<'_> {
             declared.clone()
         } else {
             self.store.demoted(declared)
+        }
+    }
+
+    /// A struct field's granted type. `declaring` names the struct that declares the field.
+    pub(super) fn granted_field_type(
+        &self,
+        declaring: &str,
+        declared: &Type,
+        owner_ty: &Type,
+    ) -> Type {
+        let granted = self.granted_component_type(declared, owner_ty);
+        if declaring.starts_with("go:") {
+            self.demote_converted_containers(&granted)
+        } else {
+            granted
+        }
+    }
+
+    /// A Go field read converts `Option` elements, so its containers are read-only copies.
+    fn demote_converted_containers(&self, ty: &Type) -> Type {
+        match ty {
+            Type::Compound {
+                kind:
+                    kind @ (CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map),
+                args,
+                ..
+            } if args.iter().any(|arg| self.holds_option(arg)) => Type::Compound {
+                kind: *kind,
+                args: args
+                    .iter()
+                    .map(|arg| self.demote_converted_containers(arg))
+                    .collect(),
+                writable: false,
+            },
+            Type::Array { length, element } => Type::Array {
+                length: *length,
+                element: Box::new(self.demote_converted_containers(element)),
+            },
+            _ => ty.clone(),
+        }
+    }
+
+    fn holds_option(&self, ty: &Type) -> bool {
+        match self.store.peel_alias(ty) {
+            ty if ty.is_option() => true,
+            Type::Compound {
+                kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map,
+                args,
+                ..
+            } => args.iter().any(|arg| self.holds_option(arg)),
+            Type::Array { element, .. } => self.holds_option(&element),
+            _ => false,
+        }
+    }
+
+    /// The declared type of a place inside a Go field whose read converts.
+    fn go_place_declaration(&self, place: &Expression) -> Option<Type> {
+        match place.unwrap_parens() {
+            Expression::DotAccess {
+                expression: owner,
+                member,
+                resolution,
+                ..
+            } => {
+                let owner_ty = self.owner_value_type(owner)?;
+                let declaring = match resolution.declaring_type() {
+                    Some(declaring) => declaring.to_string(),
+                    None => self.owner_type(owner)?.get_qualified_id()?.to_string(),
+                };
+                if !declaring.starts_with("go:") {
+                    return None;
+                }
+                let field = self
+                    .store
+                    .fields_of(&declaring)?
+                    .iter()
+                    .find(|field| &field.name == member)?;
+                self.holds_option(&field.ty)
+                    .then(|| self.granted_component_type(&field.ty, &owner_ty))
+            }
+            Expression::IndexedAccess { expression, .. } => {
+                match self
+                    .store
+                    .peel_alias(&self.go_place_declaration(expression)?)
+                {
+                    Type::Compound {
+                        kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice,
+                        args,
+                        ..
+                    } => args.into_iter().next(),
+                    Type::Compound {
+                        kind: CompoundKind::Map,
+                        args,
+                        ..
+                    } => args.into_iter().nth(1),
+                    Type::Array { element, .. } => Some(*element),
+                    _ => None,
+                }
+            }
+            _ => None,
         }
     }
 
@@ -444,6 +553,9 @@ impl InferCtx<'_> {
     }
 
     pub(super) fn value_context(&self, value: &Expression) -> Option<WriteContext> {
+        if let Some(copy) = self.go_field_copy(value) {
+            return Some(copy);
+        }
         match value.unwrap_parens() {
             Expression::DotAccess {
                 expression: owner,
@@ -520,6 +632,7 @@ impl InferCtx<'_> {
                 source: source.clone(),
             }),
             ValueSource::Call(callee) => Some(WriteContext::CallResult(callee.clone())),
+            ValueSource::GoFieldCopy(copy) => Some(copy.clone()),
         }
     }
 
@@ -532,15 +645,36 @@ impl InferCtx<'_> {
             .find(|field| field.name == member || tuple_name.as_ref() == Some(&field.name))
     }
 
-    /// An argument is classified before it is inferred.
     fn owner_type(&self, owner: &Expression) -> Option<Type> {
+        Some(
+            self.store
+                .peel_alias(&self.owner_value_type(owner)?.strip_refs()),
+        )
+    }
+
+    /// An argument is classified before it is inferred.
+    fn owner_value_type(&self, owner: &Expression) -> Option<Type> {
         let from_tree = owner.get_type().resolve_in(&self.env);
         if !from_tree.is_uninferred() && !from_tree.is_error() {
-            return Some(self.store.peel_alias(&from_tree.strip_refs()));
+            return Some(from_tree);
         }
         let name = owner.unwrap_parens().get_var_name()?;
-        let declared = self.scopes.lookup_value(&name)?.resolve_in(&self.env);
-        Some(self.store.peel_alias(&declared.strip_refs()))
+        Some(self.scopes.lookup_value(&name)?.resolve_in(&self.env))
+    }
+
+    fn go_field_copy(&self, value: &Expression) -> Option<WriteContext> {
+        let place = match value.unwrap_parens() {
+            Expression::Reference { expression, .. } => expression.unwrap_parens(),
+            other => other,
+        };
+        let declared = self.store.peel_alias(&self.go_place_declaration(place)?);
+        declared.is_writable().then(|| WriteContext::GoFieldCopy {
+            place: super::aliasing::render_place(place),
+            index: match declared.as_compound() {
+                Some((CompoundKind::Map, _)) => "k",
+                _ => "i",
+            },
+        })
     }
 
     fn write_hop<'e>(&self, target: &'e Expression) -> Option<&'e Expression> {
@@ -716,11 +850,14 @@ impl InferCtx<'_> {
             .as_ref()?
         {
             ValueSource::Call(callee) => Some(callee.clone()),
-            ValueSource::Place(_) => None,
+            ValueSource::Place(_) | ValueSource::GoFieldCopy(_) => None,
         }
     }
 
     pub(super) fn value_source(&self, value: &Expression, name: &str) -> Option<ValueSource> {
+        if let Some(copy) = self.go_field_copy(value) {
+            return Some(ValueSource::GoFieldCopy(copy));
+        }
         match value.unwrap_parens() {
             call @ Expression::Call { .. } => {
                 let rendered = super::aliasing::render_place(call);

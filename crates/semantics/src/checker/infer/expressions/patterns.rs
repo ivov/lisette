@@ -789,7 +789,11 @@ impl InferCtx<'_> {
                             Type::Error
                         } else {
                             substitute(
-                                &self.granted_component_type(&field_definition.ty, &expected_ty),
+                                &self.granted_field_type(
+                                    &qualified_name,
+                                    &field_definition.ty,
+                                    &expected_ty,
+                                ),
                                 &map,
                             )
                         }

@@ -1895,6 +1895,30 @@ pub struct Container {
 }
 
 #[test]
+fn interop_index_write_into_go_pointer_slice_and_array_fields() {
+    let input = r#"
+import "go:os"
+import "go:regexp/syntax"
+
+fn main() {
+  let mut attr = os.ProcAttr { Dir: "", Env: [], Files: [Some(os.Stdin), None], Sys: None }
+  attr.Files[0] = None
+  attr.Files[1] = Some(os.Stderr)
+  let Ok(re) = syntax.Parse("a", syntax.Perl) else { panic("parse") }
+  let Ok(other) = syntax.Parse("b", syntax.Perl) else { panic("parse") }
+  re.Sub0[0] = Some(other)
+  if attr.Files[0].is_some() || attr.Files[1].is_none() { panic("slice field write lost") }
+  if re.Sub0[0].is_none() { panic("array field write lost") }
+  (re.Sub0)[0] = None
+  if re.Sub0[0].is_some() { panic("array field reset lost") }
+  (attr.Files)[1] = None
+  if attr.Files[1].is_some() { panic("parenthesized slice field write lost") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn interop_map_with_pointer_option_keys_bridges_go_field_round_trip() {
     let input = r#"
 import "go:example.com/maps"
