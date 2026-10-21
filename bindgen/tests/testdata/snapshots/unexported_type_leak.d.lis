@@ -24,6 +24,8 @@ pub const LevelInfo = 1
 
 pub const LevelWarn = 2
 
+#[go(read_only)]
 pub var AnyError: error
 
+#[go(read_only)]
 pub var DefaultTier: int

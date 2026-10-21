@@ -9,7 +9,7 @@ use syntax::types::CompoundKind;
 use syntax::types::Type;
 
 use super::super::addressability::{
-    check_is_non_addressable, check_non_addressable_assignment_target,
+    check_is_non_addressable, check_non_addressable_assignment_target, restricted_package_value,
 };
 use super::super::context::UseContext;
 use super::calls::phantom_type_params;
@@ -212,16 +212,20 @@ impl InferCtx<'_> {
         // Addressability and const diagnostics come before any qualifier mismatch.
         let mut not_addressable = false;
         if !is_already_ref {
+            let restricted = restricted_package_value(&new_expression, store);
+            let is_local_const = matches!(new_expression.unwrap_parens(), Expression::Identifier { resolution, .. }
+                if resolution.definition().is_some_and(|qname| self.is_const_name(store, qname)));
             if let Some(kind) = check_is_non_addressable(&new_expression, &self.env, self.store) {
                 self.sink
                     .push(diagnostics::infer::non_addressable_expression(kind, span));
                 not_addressable = true;
-            } else if let Expression::Identifier { resolution, .. } = &new_expression
-                && let Some(qname) = resolution.definition()
-                && self.is_const_name(store, qname)
-            {
+            } else if restricted == Some("constant") || is_local_const {
                 self.sink
                     .push(diagnostics::infer::non_addressable_const(span));
+                not_addressable = true;
+            } else if let Some(kind) = restricted {
+                self.sink
+                    .push(diagnostics::infer::non_addressable_expression(kind, span));
                 not_addressable = true;
             }
 

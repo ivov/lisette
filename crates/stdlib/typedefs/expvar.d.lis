@@ -49,6 +49,7 @@ pub struct KeyValue {
 }
 
 /// Map is a string-to-Var map variable that satisfies the [Var] interface.
+#[go(incomparable)]
 pub type Map
 
 /// String is a string variable, and satisfies the [Var] interface.

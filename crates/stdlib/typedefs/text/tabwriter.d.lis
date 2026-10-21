@@ -73,6 +73,7 @@ pub fn NewWriter(
 /// The Writer must buffer input internally, because proper spacing
 /// of one line may depend on the cells in future lines. Clients must
 /// call Flush when done calling [Writer.Write].
+#[go(incomparable)]
 pub type Writer
 
 /// Formatting can be controlled with these flags.

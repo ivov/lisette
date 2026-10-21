@@ -214,15 +214,24 @@ impl TaskState {
                 Expression::Enum { attributes, .. }
                 | Expression::Struct { attributes, .. }
                 | Expression::TypeAlias { attributes, .. }
+                | Expression::VariableDeclaration { attributes, .. }
                 | Expression::Function { attributes, .. } => {
                     check_go_hints(attributes, &self.sink);
                 }
-                Expression::ImplBlock {
-                    methods: functions, ..
-                }
-                | Expression::Interface {
+                Expression::Interface {
+                    attributes,
                     method_signatures: functions,
                     ..
+                } => {
+                    check_go_hints(attributes, &self.sink);
+                    for function in functions {
+                        if let Expression::Function { attributes, .. } = function {
+                            check_go_hints(attributes, &self.sink);
+                        }
+                    }
+                }
+                Expression::ImplBlock {
+                    methods: functions, ..
                 } => {
                     for function in functions {
                         if let Expression::Function { attributes, .. } = function {

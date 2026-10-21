@@ -1421,6 +1421,7 @@ pub enum Expression {
     },
     VariableDeclaration {
         doc: Option<String>,
+        attributes: Vec<Attribute>,
         name: EcoString,
         name_span: Span,
         annotation: Annotation,
@@ -1504,6 +1505,7 @@ pub enum Expression {
     },
     Interface {
         doc: Option<String>,
+        attributes: Vec<Attribute>,
         name: EcoString,
         name_span: Span,
         generics: Vec<Generic>,
@@ -2330,6 +2332,7 @@ impl Expression {
             },
             Expression::VariableDeclaration {
                 doc,
+                attributes,
                 name,
                 name_span,
                 annotation,
@@ -2338,6 +2341,7 @@ impl Expression {
                 ..
             } => Expression::VariableDeclaration {
                 doc,
+                attributes,
                 name,
                 name_span,
                 annotation,
@@ -2368,6 +2372,7 @@ impl Expression {
             },
             Expression::Interface {
                 doc,
+                attributes,
                 name,
                 name_span,
                 generics,
@@ -2377,6 +2382,7 @@ impl Expression {
                 ..
             } => Expression::Interface {
                 doc,
+                attributes,
                 name,
                 name_span,
                 generics,

@@ -132,7 +132,7 @@ impl TaskState {
         bound: &Annotation,
         span: &Span,
     ) -> Type {
-        let resolved = self.convert_bound_to_type(store, bound, span);
+        let resolved = store.peel_alias(&self.convert_bound_to_type(store, bound, span));
         if self.is_lis(store) && store.contains_unknown(&resolved) {
             self.sink
                 .push(diagnostics::infer::unknown_in_bound_position(

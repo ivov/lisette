@@ -71,6 +71,7 @@ pub fn QuoteMeta(s: string) -> string
 /// Regexp is the representation of a compiled regular expression.
 /// A Regexp is safe for concurrent use by multiple goroutines,
 /// except for configuration methods, such as [Regexp.Longest].
+#[go(incomparable)]
 pub type Regexp
 
 impl Regexp {

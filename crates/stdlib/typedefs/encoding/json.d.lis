@@ -283,12 +283,14 @@ pub fn Unmarshal<T>(data: Slice<byte>, v: mut Ref<T>) -> Result<(), error>
 pub fn Valid(data: Slice<byte>) -> bool
 
 /// A Decoder reads and decodes JSON values from an input stream.
+#[go(incomparable)]
 pub type Decoder
 
 /// A Delim is a JSON array or object delimiter, one of [ ] { or }.
 pub struct Delim(rune)
 
 /// An Encoder writes JSON values to an output stream.
+#[go(incomparable)]
 pub type Encoder
 
 /// Before Go 1.2, an InvalidUTF8Error was returned by [Marshal] when

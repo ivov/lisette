@@ -11,6 +11,7 @@ import "go:net/url"
 pub fn New(o: Option<Ref<Options>>) -> Result<mut Ref<Jar>, error>
 
 /// Jar implements the http.CookieJar interface from the net/http package.
+#[go(incomparable)]
 pub type Jar
 
 /// Options are the options for creating a new Jar.

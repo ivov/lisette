@@ -78,6 +78,7 @@ impl InferCtx<'_> {
         let store = self.store;
         let Expression::Interface {
             doc,
+            attributes,
             name,
             name_span,
             generics,
@@ -130,6 +131,7 @@ impl InferCtx<'_> {
 
         Expression::Interface {
             doc,
+            attributes,
             name,
             name_span,
             generics,

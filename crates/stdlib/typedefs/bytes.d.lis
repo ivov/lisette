@@ -355,6 +355,7 @@ pub fn TrimSuffix(s: Slice<byte>, suffix: Slice<byte>) -> Slice<byte>
 /// A Buffer is a variable-sized buffer of bytes with [Buffer.Read] and [Buffer.Write] methods.
 /// The zero value for Buffer is an empty buffer ready to use.
 #[go(zero_safe)]
+#[go(incomparable)]
 pub type Buffer
 
 /// A Reader implements the [io.Reader], [io.ReaderAt], [io.WriterTo], [io.Seeker],
@@ -363,6 +364,7 @@ pub type Buffer
 /// Unlike a [Buffer], a Reader is read-only and supports seeking.
 /// The zero value for Reader operates like a Reader of an empty slice.
 #[go(zero_safe)]
+#[go(incomparable)]
 pub type Reader
 
 /// MinRead is the minimum slice size passed to a [Buffer.Read] call by

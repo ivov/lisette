@@ -324,6 +324,7 @@ pub type Logger
 /// MultiHandler is a [Handler] that invokes all the given Handlers.
 /// Its Enabled method reports whether any of the handlers' Enabled methods return true.
 /// Its Handle, WithAttrs and WithGroup methods call the corresponding method on each of the enabled handlers.
+#[go(incomparable)]
 pub type MultiHandler
 
 /// A Record holds information about a log event.
@@ -332,6 +333,7 @@ pub type MultiHandler
 /// Call [NewRecord] to create a new Record.
 /// Use [Record.Clone] to create a copy with no shared state.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct Record {
   pub Time: mut time.Time,
   pub Message: string,
@@ -356,9 +358,11 @@ pub struct TextHandler {
 /// it can represent most small values without an allocation.
 /// The zero Value corresponds to nil.
 #[go(zero_safe)]
+#[go(incomparable)]
 pub type Value
 
 #[go(unexported)]
+#[go(incomparable)]
 pub type commonHandler
 
 /// Keys for "built-in" attributes.

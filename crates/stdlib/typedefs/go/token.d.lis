@@ -192,6 +192,7 @@ pub fn NewFileSet() -> mut Ref<FileSet>
 /// 
 /// Use [FileSet.AddFile] to create a File.
 /// A File may belong to more than one FileSet; see [FileSet.AddExistingFiles].
+#[go(incomparable)]
 pub type File
 
 /// A FileSet represents a set of source files.

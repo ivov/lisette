@@ -228,16 +228,19 @@ impl<'source> Parser<'source> {
 
         let doc = doc_with_span.map(|(text, _)| text);
 
-        if !matches!(self.current_token().kind, Enum | Struct | Function | Type)
-            && let Some(attribute) = attributes.first()
-        {
+        let misplaced = match self.current_token().kind {
+            Enum | Struct | Function | Type => None,
+            Interface | Var => attributes.iter().find(|attribute| attribute.name != "go"),
+            _ => attributes.first(),
+        };
+        if let Some(attribute) = misplaced {
             self.error_misplaced_attribute(attribute.span);
         }
 
         let expression = match self.current_token().kind {
             Enum => self.parse_enum_definition(doc, attributes),
             Struct => self.parse_struct_definition(doc, attributes),
-            Interface => self.parse_interface_definition(doc),
+            Interface => self.parse_interface_definition(doc, attributes),
             Function => {
                 // Only a top-level `#[test]` declaration may write a bare handle parameter.
                 let mode = if has_test_attribute(&attributes) {
@@ -249,7 +252,7 @@ impl<'source> Parser<'source> {
             }
             Impl => self.parse_impl_block(),
             Const => self.parse_const_definition(doc),
-            Var => self.parse_var_declaration(doc),
+            Var => self.parse_var_declaration(doc, attributes),
             Import => self.parse_import(),
             Type => self.parse_type_alias_with_doc(doc, attributes),
             Comment => {
@@ -312,7 +315,7 @@ impl<'source> Parser<'source> {
                     "misplaced",
                     "Move this interface definition to the top level of the file.",
                 );
-                self.parse_interface_definition(None)
+                self.parse_interface_definition(None, vec![])
             }
             Function => self.parse_function(None, vec![], ParamMode::Strict),
             Const => self.parse_const_definition(None),

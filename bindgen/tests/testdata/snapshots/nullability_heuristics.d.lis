@@ -49,6 +49,7 @@ pub fn Theta() -> mut Ref<Widget>
 
 pub fn Zeta() -> mut Ref<Widget>
 
+#[go(incomparable)]
 pub type Builder
 
 pub type Cursor
@@ -65,6 +66,7 @@ pub struct Result {
   pub Value: string,
 }
 
+#[go(incomparable)]
 pub type Store
 
 pub type TreeIterator

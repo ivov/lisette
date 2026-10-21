@@ -7,6 +7,7 @@ description: |
 [
     Interface {
         doc: None,
+        attributes: [],
         name: "Printable",
         name_span: Span {
             file_id: 0,

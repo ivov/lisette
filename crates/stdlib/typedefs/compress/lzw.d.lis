@@ -39,10 +39,12 @@ pub fn NewWriter(w: io.Writer, order: Order, litWidth: int) -> io.WriteCloser
 
 /// Reader is an [io.Reader] which can be used to read compressed data in the
 /// LZW format.
+#[go(incomparable)]
 pub type Reader
 
 /// Writer is an LZW compressor. It writes the compressed form of the data
 /// to an underlying writer (see [NewWriter]).
+#[go(incomparable)]
 pub type Writer
 
 impl Reader {

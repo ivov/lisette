@@ -89,6 +89,7 @@ pub struct WriteError {
 
 /// A Writer takes data written to it and writes the compressed
 /// form of that data to an underlying writer (see [NewWriter]).
+#[go(incomparable)]
 pub type Writer
 
 pub const BestCompression = 9

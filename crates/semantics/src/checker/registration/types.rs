@@ -389,7 +389,7 @@ impl TaskState {
         else {
             unreachable!("populate_struct called with non-Struct expression");
         };
-        let attributes = super::collect_struct_attributes(attributes);
+        let attributes = super::collect_struct_attributes(attributes, generics);
         let qualified_name = self.qualify_name(name);
         let struct_ty = store
             .get_type(&qualified_name)
@@ -601,6 +601,7 @@ impl TaskState {
         self.put_in_scope(generics);
         self.resolve_generic_bounds(&*store, generics, span);
         let generics = generics.clone();
+        let attributes = super::collect_struct_attributes(attributes, &generics);
 
         if annotation.is_opaque() {
             if self.is_lis(&*store) {
@@ -676,7 +677,7 @@ impl TaskState {
                         generics,
                         alias: AliasKind::Opaque(annotation.clone()),
                         methods: Default::default(),
-                        attributes: super::collect_struct_attributes(attributes),
+                        attributes,
                     },
                 },
             );
@@ -684,7 +685,7 @@ impl TaskState {
             return;
         }
 
-        let body_ty = self.convert_to_type(&*store, annotation, span);
+        let body_ty = self.convert_alias_target_to_type(&*store, annotation, span);
         let is_function_body = matches!(body_ty, Type::Function(_));
 
         let body_ty = if !is_function_body
@@ -744,7 +745,7 @@ impl TaskState {
                         target: body_ty,
                     },
                     methods: Default::default(),
-                    attributes: super::collect_struct_attributes(attributes),
+                    attributes,
                 },
             },
         );

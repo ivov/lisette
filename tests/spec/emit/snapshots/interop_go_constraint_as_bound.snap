@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:cmp"
+  
+  fn largest<T: cmp.Ordered>(a: T, b: T) -> T {
+    if a > b { a } else { b }
+  }
+  
+  fn main() {
+    let _ = largest(1, 2)
+    let _ = largest("a", "b")
+  }
+---
+package main
+
+import "cmp"
+
+func largest[T cmp.Ordered](a, b T) T {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func main() {
+	largest(1, 2)
+	largest("a", "b")
+}

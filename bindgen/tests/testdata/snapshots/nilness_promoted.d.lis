@@ -6,6 +6,7 @@
 import "go:github.com/ivov/lisette/bindgen/tests/testdata/fixtures/nilness_promoted/inner"
 
 #[go(hidden_embed)]
+#[go(incomparable)]
 pub struct Wrapper {
   pub Core: mut inner.Core,
 }

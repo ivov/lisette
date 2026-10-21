@@ -31,6 +31,7 @@ pub struct ParseError {
 /// not depend on which line-ending convention an input file uses.
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct Reader {
   pub Comma: rune,
   pub Comment: rune,

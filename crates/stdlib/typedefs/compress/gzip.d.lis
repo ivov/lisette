@@ -65,6 +65,7 @@ pub struct Header {
 /// marking the end of the data.
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct Reader {
   embed mut Header,
 }
@@ -73,6 +74,7 @@ pub struct Reader {
 /// Writes to a Writer are compressed and written to w.
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct Writer {
   embed mut Header,
 }

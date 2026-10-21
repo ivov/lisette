@@ -154,6 +154,7 @@ pub fn OpenFat(name: string) -> Result<mut Ref<FatFile>, error>
 
 /// A Dylib represents a Mach-O load dynamic library command.
 #[go(hidden_embed)]
+#[go(incomparable)]
 pub struct Dylib {
   pub LoadBytes: mut LoadBytes,
   pub Name: string,
@@ -174,6 +175,7 @@ pub struct DylibCmd {
 
 /// A Dysymtab represents a Mach-O dynamic symbol table command.
 #[go(hidden_embed)]
+#[go(incomparable)]
 pub struct Dysymtab {
   pub LoadBytes: mut LoadBytes,
   embed DysymtabCmd,
@@ -221,6 +223,7 @@ pub struct FatArchHeader {
 
 /// A FatFile is a Mach-O universal binary that contains at least one architecture.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct FatFile {
   pub Magic: uint32,
   pub Arches: mut Slice<mut FatArch>,
@@ -228,6 +231,7 @@ pub struct FatFile {
 
 /// A File represents an open Mach-O file.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct File {
   embed FileHeader,
   pub ByteOrder: Option<binary.ByteOrder>,
@@ -336,6 +340,7 @@ pub struct Reloc {
 
 /// A Rpath represents a Mach-O rpath command.
 #[go(hidden_embed)]
+#[go(incomparable)]
 pub struct Rpath {
   pub LoadBytes: mut LoadBytes,
   pub Path: string,
@@ -351,6 +356,7 @@ pub struct RpathCmd {
 #[go(hidden_embed)]
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct Section {
   embed SectionHeader,
   pub Relocs: mut Slice<Reloc>,
@@ -404,6 +410,7 @@ pub struct SectionHeader {
 #[go(hidden_embed)]
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct Segment {
   pub LoadBytes: mut LoadBytes,
   embed SegmentHeader,
@@ -466,6 +473,7 @@ pub struct Symbol {
 
 /// A Symtab represents a Mach-O symbol table command.
 #[go(hidden_embed)]
+#[go(incomparable)]
 pub struct Symtab {
   pub LoadBytes: mut LoadBytes,
   embed SymtabCmd,

@@ -52,6 +52,7 @@ pub struct Func {
 /// For the most part, LineTable's methods should be treated as an internal
 /// detail of the package; callers should use the methods on [Table] instead.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct LineTable {
   pub Data: mut Slice<byte>,
   pub PC: uint64,
@@ -88,6 +89,7 @@ pub struct Sym {
 /// symbols decoded from the program and provides methods to translate
 /// between symbols, names, and addresses.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct Table {
   pub Syms: mut Slice<mut Sym>,
   pub Funcs: mut Slice<mut Func>,

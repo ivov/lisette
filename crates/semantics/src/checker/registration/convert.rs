@@ -9,8 +9,8 @@ use syntax::ast::{Annotation, Span, StructFields, VariantFields};
 use syntax::display::annotation_to_string;
 use syntax::program::{AliasKind, ConstantValue, DefinitionBody};
 use syntax::types::{
-    FunctionParameter, SELF_TYPE_NAME, SimpleKind, Symbol, Type, build_named_substitution_map,
-    substitute, unqualified_name,
+    CompoundKind, FunctionParameter, SELF_TYPE_NAME, SimpleKind, Symbol, Type,
+    build_named_substitution_map, substitute, unqualified_name,
 };
 
 use crate::checker::TaskState;
@@ -56,6 +56,8 @@ fn constant_size_of(kind: SimpleKind, value: u64) -> Result<u64, ArraySizeError>
 enum TypePosition {
     Value,
     Bound,
+    /// The whole right side of a type alias, which may name a Go constraint.
+    AliasTarget,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -166,6 +168,27 @@ impl TaskState {
                 variadic_allowed: false,
                 type_argument_checks: TypeArgumentChecks::All,
                 position: TypePosition::Value,
+                read_only_wrapper: None,
+                is_impl_target: false,
+            },
+        );
+        store.normalized_annotation_type(&ty)
+    }
+
+    pub(crate) fn convert_alias_target_to_type(
+        &mut self,
+        store: &Store,
+        annotation: &Annotation,
+        span: &Span,
+    ) -> Type {
+        let ty = self.convert_to_type_mode(
+            store,
+            annotation,
+            span,
+            ConvertMode {
+                variadic_allowed: false,
+                type_argument_checks: TypeArgumentChecks::All,
+                position: TypePosition::AliasTarget,
                 read_only_wrapper: None,
                 is_impl_target: false,
             },
@@ -433,15 +456,27 @@ impl TaskState {
             type_name.len() as u32,
         );
 
-        if position == TypePosition::Value
-            && let Some(builtin) = BuiltinBound::from_qualified_id(&qualified_name)
-        {
-            self.sink
-                .push(diagnostics::infer::bound_only_in_value_position(
-                    builtin.label(),
-                    annotation_span,
-                ));
-            return Type::Error;
+        if position == TypePosition::Value {
+            let target = store.resolved_definition(&ty);
+            let builtin = BuiltinBound::from_qualified_id(&qualified_name).or_else(|| {
+                target
+                    .and_then(|definition| definition.ty.get_qualified_id())
+                    .and_then(BuiltinBound::from_qualified_id)
+            });
+            let bound_name = match builtin {
+                Some(builtin) => Some(builtin.label()),
+                None => target
+                    .is_some_and(|definition| definition.is_constraint())
+                    .then_some(type_name.as_str()),
+            };
+            if let Some(bound_name) = bound_name {
+                self.sink
+                    .push(diagnostics::infer::bound_only_in_value_position(
+                        bound_name,
+                        annotation_span,
+                    ));
+                return Type::Error;
+            }
         }
 
         let (generics, body) = match ty {
@@ -1151,7 +1186,7 @@ impl TaskState {
 }
 
 fn is_reserved_prelude_generic(name: &str) -> bool {
-    matches!(name, "Option" | "Result" | "Partial")
+    matches!(name, "Option" | "Result" | "Partial") || CompoundKind::from_name(name).is_some()
 }
 
 /// Whether `mut` on this annotation can ever permit a write.

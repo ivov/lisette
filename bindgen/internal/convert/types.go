@@ -91,6 +91,9 @@ func toLisetteRecursive(t types.Type, seen map[types.Type]bool, conv *Converter,
 
 	switch t := t.(type) {
 	case *types.Basic:
+		if t.Kind() == types.UnsafePointer && conv != nil {
+			return TypeResult{LisetteType: conv.unsafePointerType()}
+		}
 		return TypeResult{LisetteType: basicToLisette(t)}
 
 	case *types.Slice:
@@ -298,6 +301,11 @@ func namedToLisette(t *types.Named, seen map[types.Type]bool, conv *Converter, s
 	}
 
 	if !isExternal && !obj.Exported() {
+		if conv != nil {
+			if alias, ok := conv.aliases()[obj]; ok {
+				return TypeResult{LisetteType: SelfQualify(pkg.Name(), alias.Name(), 0)}
+			}
+		}
 		if conv != nil && !conv.hasReachableUnexportedType(t) {
 			return TypeResult{LisetteType: "Unknown"}
 		}
@@ -349,7 +357,12 @@ func namedToLisette(t *types.Named, seen map[types.Type]bool, conv *Converter, s
 	return TypeResult{LisetteType: SelfQualify(pkg.Name(), obj.Name(), 0)}
 }
 
-var preludeGenericArity = map[string]int{"Option": 1, "Result": 2, "Partial": 2}
+// preludeGenericArity lists the prelude generics that an own type of the same name and arity shadows.
+var preludeGenericArity = map[string]int{
+	"Option": 1, "Result": 2, "Partial": 2,
+	"Ref": 1, "Slice": 1, "EnumeratedSlice": 1, "Map": 2,
+	"Channel": 1, "Sender": 1, "Receiver": 1, "VarArgs": 1,
+}
 
 // builtinNameCollisions bind at every arity, so a package's own type of that name
 // always needs qualifying. Only `Array` (the checker's fixed-size `Array<T, N>`).

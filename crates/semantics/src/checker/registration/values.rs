@@ -270,6 +270,7 @@ impl TaskState {
             name,
             name_span,
             annotation,
+            attributes,
             span,
             visibility: syntactic_visibility,
             doc,
@@ -303,7 +304,7 @@ impl TaskState {
                 body: DefinitionBody::Value {
                     kind: ValueKind::Variable,
                     allowed_lints: vec![],
-                    go_hints: vec![],
+                    go_hints: extract_attribute_flags(attributes, "go"),
                     go_name: None,
                     go_type_param_recipe: None,
                     superseded_by: None,

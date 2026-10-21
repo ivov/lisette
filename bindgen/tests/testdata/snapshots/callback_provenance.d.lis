@@ -97,10 +97,13 @@ pub fn ThroughReader(data: mut Slice<byte>)
 
 pub fn Twice(data: Slice<byte>) -> (Seq<Slice<byte>>, Seq<Slice<byte>>)
 
+#[go(incomparable)]
 pub type Bin
 
+#[go(incomparable)]
 pub type Box
 
+#[go(incomparable)]
 pub type Crate
 
 pub struct Holder {
@@ -111,6 +114,7 @@ pub struct Node {
   pub Value: int,
 }
 
+#[go(incomparable)]
 pub type Registry
 
 pub type Seq<V> = fn(fn(V) -> bool) -> ()

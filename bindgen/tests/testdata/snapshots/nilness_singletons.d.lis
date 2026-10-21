@@ -11,6 +11,7 @@ pub fn Lazy() -> Option<mut Ref<Registry>>
 
 pub fn SharedRegistry() -> Option<mut Ref<Registry>>
 
+#[go(incomparable)]
 pub type Registry
 
 pub var Shared: mut Ref<Registry>

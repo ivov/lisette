@@ -9916,6 +9916,337 @@ fn main(h: pgtype.Holder) {
 }
 
 #[test]
+fn go_self_qualified_map_type_coexists_with_builtin() {
+    let ordered = r#"
+pub struct Map<K: Comparable, V> {
+  pub Keys: Slice<K>,
+  pub Values: Slice<V>,
+}
+
+pub struct Holder {
+  pub Index: ordered.Map<string, int>,
+  pub Counts: Map<string, int>,
+}
+
+impl<K: Comparable, V> ordered.Map<K, V> {
+  fn Len(self) -> int
+}
+"#;
+    let input = r#"
+import "go:example.com/ordered"
+
+fn main(h: ordered.Holder) {
+  let _ = h.Index.Len()
+  let _ = h.Index.Keys
+  let counts: Map<string, int> = h.Counts
+  let _ = counts["a"]
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/ordered", ordered)]).assert_no_errors();
+}
+
+const INCOMPARABLE_TYPEDEF: &str = r#"
+#[go(hidden_fields)]
+#[go(incomparable)]
+pub struct Buffer {
+  pub Size: int,
+}
+
+#[go(incomparable)]
+pub type Handle
+
+#[go(hidden_fields)]
+pub struct Point {
+  pub X: int,
+}
+
+#[go(hidden_fields)]
+#[go(comparable_if, "T")]
+pub struct Box<T> {
+  pub Label: string,
+}
+
+#[go(comparable_if, "T")]
+pub type Cell<T>
+
+pub type BufferAlias = Buffer
+
+#[go(unexported)]
+#[go(incomparable)]
+pub type hidden
+
+pub struct Public {
+  embed mut hidden,
+}
+"#;
+
+#[test]
+fn go_incomparable_struct_rejects_equality() {
+    let input = r#"
+import "go:example.com/buf"
+
+fn main(a: buf.Buffer, b: buf.Buffer) -> bool {
+  a == b
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/buf", INCOMPARABLE_TYPEDEF)])
+        .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn go_incomparable_opaque_type_rejects_equality() {
+    let input = r#"
+import "go:example.com/buf"
+
+fn main(a: buf.Handle, b: buf.Handle) -> bool {
+  a == b
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/buf", INCOMPARABLE_TYPEDEF)])
+        .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn go_incomparable_struct_field_rejects_equality() {
+    let input = r#"
+import "go:example.com/buf"
+
+struct Pair {
+  left: buf.Buffer,
+}
+
+fn main(a: Pair, b: Pair) -> bool {
+  a == b
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/buf", INCOMPARABLE_TYPEDEF)])
+        .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn go_incomparable_struct_fails_comparable_bound() {
+    let input = r#"
+import "go:example.com/buf"
+
+fn same<T: Comparable>(a: T, b: T) -> bool {
+  a == b
+}
+
+fn main(a: buf.Buffer, b: buf.Buffer) -> bool {
+  same(a, b)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/buf", INCOMPARABLE_TYPEDEF)])
+        .assert_infer_code("not_comparable_bound");
+}
+
+const CONSTRAINT_TYPEDEF: &str = r#"
+#[go(constraint)]
+pub interface Key {
+  fn Hash() -> uint64
+}
+
+#[go(constraint)]
+pub type Number
+
+pub type KeyAlias = Key
+
+#[go(constraint)]
+pub struct ErrorKey(error)
+"#;
+
+#[test]
+fn go_constraint_interface_rejected_as_value_type() {
+    let input = r#"
+import "go:example.com/keys"
+
+fn first(values: Slice<keys.Key>) -> Option<keys.Key> {
+  values.get(0)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/keys", CONSTRAINT_TYPEDEF)])
+        .assert_infer_code_count("bound_only_in_value_position", 2);
+}
+
+#[test]
+fn go_constraint_without_methods_rejected_as_value_type() {
+    let input = r#"
+import "go:example.com/keys"
+
+fn total(value: keys.Number) {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/keys", CONSTRAINT_TYPEDEF)])
+        .assert_infer_code("bound_only_in_value_position");
+}
+
+#[test]
+fn go_constraint_alias_and_newtype_rejected_as_value_types() {
+    let input = r#"
+import "go:example.com/keys"
+
+fn check(alias: keys.KeyAlias, error_key: keys.ErrorKey) {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/keys", CONSTRAINT_TYPEDEF)])
+        .assert_infer_code_count("bound_only_in_value_position", 2);
+}
+
+#[test]
+fn go_constraint_alias_allowed_in_typedef() {
+    let typedef = r#"
+import "go:cmp"
+
+pub type Ordered = cmp.Ordered
+
+pub fn Count() -> int
+"#;
+    let input = r#"
+import "go:example.com/sorting"
+
+fn smallest<T: sorting.Ordered>(a: T, b: T) -> T {
+  if a < b { a } else { b }
+}
+
+fn main() {
+  let _ = sorting.Count()
+  let _ = smallest(1, 2)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/sorting", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn go_constraint_alias_rejected_as_value_type() {
+    let typedef = r#"
+import "go:cmp"
+
+pub type Ordered = cmp.Ordered
+"#;
+    let input = r#"
+import "go:example.com/sorting"
+
+fn first(value: sorting.Ordered) {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/sorting", typedef)])
+        .assert_infer_code("bound_only_in_value_position");
+}
+
+#[test]
+fn go_constraint_interface_allowed_as_bound() {
+    let input = r#"
+import "go:example.com/keys"
+
+fn digest<T: keys.Key>(key: T) -> uint64 {
+  key.Hash()
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/keys", CONSTRAINT_TYPEDEF)])
+        .assert_no_errors();
+}
+
+#[test]
+fn go_incomparable_alias_and_opaque_embed_reject_equality() {
+    let input = r#"
+import "go:example.com/buf"
+
+fn main(a: buf.BufferAlias, b: buf.BufferAlias, index: Map<buf.Public, int>) -> bool {
+  a == b
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/buf", INCOMPARABLE_TYPEDEF)])
+        .assert_infer_code_count("type_mismatch", 1)
+        .assert_infer_code_count("non_comparable_map_key", 1);
+}
+
+#[test]
+fn go_struct_with_comparable_hidden_fields_allows_equality() {
+    let input = r#"
+import "go:example.com/buf"
+
+fn main(a: buf.Point, b: buf.Point) -> bool {
+  a == b
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/buf", INCOMPARABLE_TYPEDEF)])
+        .assert_no_errors();
+}
+
+#[test]
+fn go_generic_struct_with_comparable_argument_allows_equality() {
+    let input = r#"
+import "go:example.com/buf"
+
+fn main(a: buf.Box<int>, b: buf.Box<int>, c: buf.Cell<string>, d: buf.Cell<string>) -> bool {
+  a == b && c == d
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/buf", INCOMPARABLE_TYPEDEF)])
+        .assert_no_errors();
+}
+
+#[test]
+fn go_generic_struct_with_incomparable_argument_rejects_equality() {
+    let input = r#"
+import "go:example.com/buf"
+
+fn main(a: buf.Box<Slice<int>>, b: buf.Box<Slice<int>>) -> bool {
+  a == b
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/buf", INCOMPARABLE_TYPEDEF)])
+        .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn go_generic_opaque_type_with_incomparable_argument_rejects_equality() {
+    let input = r#"
+import "go:example.com/buf"
+
+fn main(a: buf.Cell<Map<string, int>>, b: buf.Cell<Map<string, int>>) -> bool {
+  a == b
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/buf", INCOMPARABLE_TYPEDEF)])
+        .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn go_generic_struct_with_incomparable_argument_fails_comparable_bound() {
+    let input = r#"
+import "go:example.com/buf"
+
+fn same<T: Comparable>(a: T, b: T) -> bool {
+  a == b
+}
+
+fn main(a: buf.Box<Slice<int>>, b: buf.Box<Slice<int>>) -> bool {
+  same(a, b)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/buf", INCOMPARABLE_TYPEDEF)])
+        .assert_infer_code("not_comparable_bound");
+}
+
+#[test]
+fn go_generic_struct_checks_argument_past_sixteen_parameters() {
+    let typedef = r#"
+#[go(hidden_fields)]
+#[go(comparable_if, "R")]
+pub struct Wide<A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R> {
+  pub Label: string,
+}
+"#;
+    let input = r#"
+import "go:example.com/wide"
+
+fn main(a: wide.Wide<int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, Slice<int>>, b: wide.Wide<int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, Slice<int>>) -> bool {
+  a == b
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/wide", typedef)])
+        .assert_infer_code("type_mismatch");
+}
+
+#[test]
 fn go_self_qualified_nongeneric_array_type_resolves() {
     let goty = r#"
 pub type Array

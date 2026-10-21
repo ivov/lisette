@@ -665,6 +665,7 @@ mod tests {
                         generics: vec![],
                         parents: parents.into_iter().map(nominal).collect(),
                         methods: method_map,
+                        attributes: Attributes::default(),
                     },
                 },
             )

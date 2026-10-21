@@ -366,6 +366,8 @@ impl<'a> Formatter<'a> {
             Expression::Function { attributes, .. }
             | Expression::Struct { attributes, .. }
             | Expression::Enum { attributes, .. }
+            | Expression::Interface { attributes, .. }
+            | Expression::VariableDeclaration { attributes, .. }
             | Expression::TypeAlias { attributes, .. } => attributes,
             _ => &[],
         }

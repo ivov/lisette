@@ -1287,6 +1287,119 @@ fn cannot_assign_to_tuple_literal_field() {
     .assert_infer_code("non_addressable_assignment");
 }
 
+const GO_CONSTANTS_TYPEDEF: &str = r#"
+pub interface Order {
+  fn Name() -> string
+}
+
+#[go(read_only)]
+pub var Big: Order
+
+pub const Limit: int = 3
+
+pub var Current: Order
+
+pub struct Mode(int)
+
+#[go(read_only)]
+pub var Fast: Mode
+"#;
+
+#[test]
+fn cannot_assign_to_go_package_constant() {
+    let input = r#"
+import "go:example.com/order"
+
+fn main() {
+  order.Limit = 4
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/order", GO_CONSTANTS_TYPEDEF)])
+        .assert_infer_code("non_addressable_assignment");
+}
+
+#[test]
+fn cannot_take_address_of_go_package_constant() {
+    let input = r#"
+import "go:example.com/order"
+
+fn main() {
+  let _ = &order.Limit
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/order", GO_CONSTANTS_TYPEDEF)])
+        .assert_infer_code("non_addressable_const");
+}
+
+#[test]
+fn cannot_take_address_of_parenthesized_constant() {
+    let input = r#"
+import "go:example.com/order"
+
+const LOCAL = 1
+
+fn main() {
+  let _ = &(order.Limit)
+  let _ = &(LOCAL)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/order", GO_CONSTANTS_TYPEDEF)])
+        .assert_infer_code_count("non_addressable_const", 2);
+}
+
+#[test]
+fn cannot_assign_to_read_only_go_variable() {
+    let input = r#"
+import "go:example.com/order"
+
+fn main() {
+  order.Big = order.Current
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/order", GO_CONSTANTS_TYPEDEF)])
+        .assert_infer_code("non_addressable_assignment");
+}
+
+#[test]
+fn cannot_take_address_of_read_only_go_variable() {
+    let input = r#"
+import "go:example.com/order"
+
+fn main() {
+  let _ = &(order.Fast)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/order", GO_CONSTANTS_TYPEDEF)])
+        .assert_infer_code("non_addressable_expression");
+}
+
+#[test]
+fn read_only_go_variable_is_not_a_constant() {
+    let input = r#"
+import "go:example.com/order"
+
+const BIG = order.Big
+
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/order", GO_CONSTANTS_TYPEDEF)])
+        .assert_infer_code("const_requires_simple_expression");
+}
+
+#[test]
+fn can_assign_to_go_package_variable() {
+    let input = r#"
+import "go:example.com/order"
+
+fn main() {
+  order.Current = order.Big
+  let _ = order.Big.Name()
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/order", GO_CONSTANTS_TYPEDEF)])
+        .assert_no_errors();
+}
+
 #[test]
 fn can_assign_to_field_on_ref_returning_call() {
     infer(

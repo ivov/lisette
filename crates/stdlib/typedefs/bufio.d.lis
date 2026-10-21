@@ -78,6 +78,7 @@ pub struct ReadWriter {
 /// A new Reader is created by calling [NewReader] or [NewReaderSize];
 /// alternatively the zero value of a Reader may be used after calling [Reset]
 /// on it.
+#[go(incomparable)]
 pub type Reader
 
 /// Scanner provides a convenient interface for reading data such as
@@ -95,6 +96,7 @@ pub type Reader
 /// advanced arbitrarily far past the last token. Programs that need more
 /// control over error handling or large tokens, or must run sequential scans
 /// on a reader, should use [bufio.Reader] instead.
+#[go(incomparable)]
 pub type Scanner
 
 /// SplitFunc is the signature of the split function used to tokenize the
@@ -129,6 +131,7 @@ pub type SplitFunc = fn(mut Slice<byte>, bool) -> Result<(int, Slice<byte>), err
 /// After all data has been written, the client should call the
 /// [Writer.Flush] method to guarantee all data has been forwarded to
 /// the underlying [io.Writer].
+#[go(incomparable)]
 pub type Writer
 
 pub const MaxScanTokenSize = 65536

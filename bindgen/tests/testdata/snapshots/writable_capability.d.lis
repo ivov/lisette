@@ -39,6 +39,7 @@ pub interface Getter {
 
 /// Hidden fields carry nothing once another field is emitted.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct Hidden {
   pub Text: Option<string>,
 }
@@ -64,6 +65,7 @@ pub struct HoldsGetterWrapper {
 }
 
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct HoldsHidden {
   // SKIPPED field "Inner": opaque-unexported-struct — underlying type "hiddenBuf" is unexported
   pub Text: Option<string>,
@@ -80,6 +82,7 @@ pub struct Mixed {
 }
 
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct MixedPool {
   // SKIPPED field "Conns": internal-package-ref — references type from internal package "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/writable_capability/internal/inner"
   pub Text: Option<string>,
@@ -104,6 +107,7 @@ pub struct NamedScalarWrapper {
 }
 
 /// A struct with no emitted field becomes an opaque type, where Go's view decides.
+#[go(incomparable)]
 pub type Opaque
 
 pub struct OpaqueWrapper {
@@ -112,6 +116,7 @@ pub struct OpaqueWrapper {
 }
 
 // SKIPPED field "Conns": internal-package-ref — references type from internal package "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/writable_capability/internal/inner"
+#[go(incomparable)]
 pub type Pool
 
 pub struct PoolWrapper {

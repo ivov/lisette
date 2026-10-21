@@ -156,6 +156,7 @@ overlay	darwin	amd64	runtime	runtime_darwin_amd64.d.lis
 overlay	darwin	arm64	runtime	runtime_darwin_arm64.d.lis
 overlay	windows	amd64	runtime	runtime_windows_amd64.d.lis
 overlay	windows	arm64	runtime	runtime_windows_arm64.d.lis
+common	runtime/cgo	runtime/cgo.d.lis
 common	runtime/coverage	runtime/coverage.d.lis
 common	runtime/debug	runtime/debug.d.lis
 common	runtime/metrics	runtime/metrics.d.lis

@@ -664,7 +664,11 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub(crate) fn parse_var_declaration(&mut self, doc: Option<string::String>) -> Expression {
+    pub(crate) fn parse_var_declaration(
+        &mut self,
+        doc: Option<string::String>,
+        attributes: Vec<Attribute>,
+    ) -> Expression {
         let start = self.current_token();
 
         self.ensure(Var);
@@ -689,6 +693,7 @@ impl<'source> Parser<'source> {
 
         Expression::VariableDeclaration {
             doc,
+            attributes,
             name,
             name_span,
             annotation,
@@ -781,7 +786,11 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub(crate) fn parse_interface_definition(&mut self, doc: Option<string::String>) -> Expression {
+    pub(crate) fn parse_interface_definition(
+        &mut self,
+        doc: Option<string::String>,
+        attributes: Vec<Attribute>,
+    ) -> Expression {
         let start = self.current_token();
 
         self.ensure(Interface);
@@ -864,6 +873,7 @@ impl<'source> Parser<'source> {
 
         Expression::Interface {
             doc,
+            attributes,
             name,
             name_span,
             generics,

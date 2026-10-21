@@ -3044,6 +3044,7 @@ pub struct DynamicVersionNeed {
 
 /// A File represents an open ELF file.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct File {
   embed FileHeader,
   pub Sections: mut Slice<Option<mut Ref<Section>>>,

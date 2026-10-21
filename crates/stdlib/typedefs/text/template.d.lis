@@ -114,6 +114,7 @@ pub struct Template {
 
 /// common holds the information shared by related templates.
 #[go(unexported)]
+#[go(incomparable)]
 pub type common
 
 impl ExecError {

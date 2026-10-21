@@ -35,6 +35,7 @@ pub interface File {
 
 /// A FileHeader describes a file part of a multipart request.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct FileHeader {
   pub Filename: string,
   pub Header: Option<mut textproto.MIMEHeader>,
@@ -54,6 +55,7 @@ pub struct Form {
 /// A Part represents a single part in a multipart body.
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct Part {
   pub Header: Option<mut textproto.MIMEHeader>,
 }
@@ -61,6 +63,7 @@ pub struct Part {
 /// Reader is an iterator over parts in a MIME multipart body.
 /// Reader's underlying parser consumes its input as needed. Seeking
 /// isn't supported.
+#[go(incomparable)]
 pub type Reader
 
 /// A Writer generates multipart messages.

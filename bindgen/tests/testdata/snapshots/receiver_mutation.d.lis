@@ -4,6 +4,7 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
+#[go(incomparable)]
 pub type Buffer
 
 pub type Counter

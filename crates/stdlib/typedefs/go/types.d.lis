@@ -725,6 +725,7 @@ pub type Chan
 /// It must be created with [NewChecker].
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct Checker {
   embed mut Ref<Info>,
   embed mut environment,
@@ -733,6 +734,7 @@ pub struct Checker {
 /// A Config specifies the configuration for type checking.
 /// The zero value for Config is a ready-to-use default configuration.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct Config {
   pub Context: Option<mut Ref<Context>>,
   pub GoVersion: string,
@@ -756,6 +758,7 @@ pub struct Const {
 /// 
 /// The use of a shared context does not guarantee that identical instances are
 /// deduplicated in all cases.
+#[go(incomparable)]
 pub type Context
 
 /// An Error describes a type-checking error; it implements the error interface.
@@ -836,6 +839,7 @@ pub struct Instance {
 }
 
 /// An Interface represents an interface type.
+#[go(incomparable)]
 pub type Interface
 
 /// A Label represents a declared label.
@@ -852,6 +856,7 @@ pub type Map
 /// a method is a [MethodVal] selection, and they are ordered by ascending m.Obj().Id().
 /// The zero value for a MethodSet is a ready-to-use empty method set.
 #[go(zero_safe)]
+#[go(incomparable)]
 pub type MethodSet
 
 /// A Named represents a named (defined) type.
@@ -866,6 +871,7 @@ pub type MethodSet
 /// Use [Named.Obj] to obtain the object S.
 /// 
 /// Before type aliases (Go 1.9), the spec called defined types "named types".
+#[go(incomparable)]
 pub type Named
 
 /// Nil represents the predeclared value nil.
@@ -908,6 +914,7 @@ pub interface Object {
 }
 
 /// A Package describes a Go package.
+#[go(incomparable)]
 pub type Package
 
 /// A PkgName represents an imported Go package.
@@ -937,6 +944,7 @@ pub type Qualifier = fn(mut Ref<Package>) -> string
 /// and looked up by name. The zero value for Scope is a ready-to-use
 /// empty scope.
 #[go(zero_safe)]
+#[go(incomparable)]
 pub type Scope
 
 /// A Selection describes a selector expression x.f.
@@ -954,6 +962,7 @@ pub type Scope
 /// 	p.x         FieldVal      T       x      int        {0}       true
 /// 	p.m         MethodVal     *T      m      func()     {1, 0}    true
 /// 	T.m         MethodExpr    T       m      func(T)    {1, 0}    false
+#[go(incomparable)]
 pub type Selection
 
 /// A Signature represents a (non-builtin) function or method type.
@@ -994,6 +1003,7 @@ pub struct StdSizes {
 }
 
 /// A Struct represents a struct type.
+#[go(incomparable)]
 pub type Struct
 
 /// A Term represents a term in a [Union].
@@ -1002,6 +1012,7 @@ pub type Term
 /// A Tuple represents an ordered list of variables; a nil *Tuple is a valid (empty) tuple.
 /// Tuples are used as components of signatures and to represent the type of multiple
 /// assignments; they are not first class types of Go.
+#[go(incomparable)]
 pub type Tuple
 
 /// A Type represents a type of Go.
@@ -1020,6 +1031,7 @@ pub struct TypeAndValue {
 }
 
 /// TypeList holds a list of types.
+#[go(incomparable)]
 pub type TypeList
 
 /// A TypeName is an [Object] that represents a type with a name:
@@ -1038,9 +1050,11 @@ pub struct TypeName {
 pub type TypeParam
 
 /// TypeParamList holds a list of type parameters.
+#[go(incomparable)]
 pub type TypeParamList
 
 /// A Union represents a union of terms embedded in an interface.
+#[go(incomparable)]
 pub type Union
 
 /// A Var represents a declared variable (including function parameters and results, and struct fields).
@@ -1052,6 +1066,7 @@ pub struct Var {
 /// An environment represents the environment within which an object is
 /// type-checked.
 #[go(unexported)]
+#[go(incomparable)]
 pub type environment
 
 /// An object implements the common parts of an Object.

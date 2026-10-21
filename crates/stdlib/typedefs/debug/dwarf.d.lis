@@ -515,6 +515,7 @@ pub struct ComplexType {
 
 /// Data represents the DWARF debugging information
 /// loaded from an executable file (for example, an ELF or Mach-O executable).
+#[go(incomparable)]
 pub type Data
 
 pub struct DecodeError {
@@ -625,6 +626,7 @@ pub struct LineFile {
 /// order of increasing PC and each [LineEntry] gives metadata for the
 /// instructions from that [LineEntry]'s PC to just before the next
 /// [LineEntry]'s PC. The last entry will have the [LineEntry.EndSequence] field set.
+#[go(incomparable)]
 pub type LineReader
 
 /// A LineReaderPos represents a position in a line table.
@@ -652,6 +654,7 @@ pub struct QualType {
 /// return successive entries from a pre-order traversal of the tree.
 /// If an entry has children, its Children field will be true, and the children
 /// follow, terminated by an [Entry] with [Tag] 0.
+#[go(incomparable)]
 pub type Reader
 
 /// A StructField represents a field in a struct, union, or C++ class type.

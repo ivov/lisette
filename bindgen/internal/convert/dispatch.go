@@ -63,6 +63,14 @@ type ConvertResult struct {
 	ZeroUnsafe bool
 	// A real Go field went unrepresented in Fields.
 	HasHiddenFields bool
+	// Go cannot compare the type for any type arguments.
+	Incomparable bool
+	// Go can compare the type only when these type arguments are comparable.
+	ComparableIf []string
+	// Go allows the interface only as a type constraint.
+	Constraint bool
+	// The var's Go type has no name in the bindings, so a write would not build.
+	ReadOnly bool
 }
 
 // HasReturn reports whether this function/method has a non-unit return type
@@ -174,6 +182,8 @@ type Converter struct {
 	shallowUnderlyingCache   map[token.Pos]types.Type     // lazily built; spec-level wrapped type by Named.Obj().Pos(). nil sentinels cached.
 	// Stand-ins for Go anonymous struct types, in first-seen order.
 	synth []syntheticStruct
+	// Computed on first use by aliases().
+	aliasedTypes map[*types.TypeName]*types.TypeName
 }
 
 func NewConverter(pkgPath string, pkg *packages.Package, cfg *config.Config, nilness *NilnessAnalysis, mutation *MutationAnalysis, divergence *DivergenceAnalysis) *Converter {
@@ -197,6 +207,34 @@ func (c *Converter) forkProbe() *Converter {
 	probe.externalPkgs = maps.Clone(c.externalPkgs)
 	probe.synth = slices.Clone(c.synth)
 	return &probe
+}
+
+// unsafePointerType renders `unsafe.Pointer`, an opaque type in the `unsafe` typedef.
+func (c *Converter) unsafePointerType() string {
+	if c.currentPkgPath == "unsafe" {
+		return "Pointer"
+	}
+	c.trackExternalPkg("unsafe", "unsafe")
+	return PkgRef("unsafe") + ".Pointer"
+}
+
+// aliases returns the unexported types of the package that an exported alias stands in for.
+func (c *Converter) aliases() map[*types.TypeName]*types.TypeName {
+	if c.aliasedTypes == nil {
+		c.aliasedTypes = map[*types.TypeName]*types.TypeName{}
+		if c.pkg != nil && c.pkg.Types != nil {
+			c.aliasedTypes = extract.AliasedTypes(c.pkg.Types)
+		}
+	}
+	return c.aliasedTypes
+}
+
+// declaredName is the bindings name of a type of this package: its exported alias, or its own name.
+func (c *Converter) declaredName(named *types.Named) string {
+	if alias, ok := c.aliases()[named.Obj()]; ok {
+		return alias.Name()
+	}
+	return named.Obj().Name()
 }
 
 func (c *Converter) trackExternalPkg(pkgPath, pkgName string) {

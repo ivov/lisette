@@ -3,6 +3,8 @@
 // Go: 1.26.7
 // Lisette: 0.12.1
 
+import "go:unsafe"
+
 /// Synthesized from a Go anonymous struct type.
 #[go(anon_struct)]
 pub struct AnonSizeMallocsFrees {
@@ -513,9 +515,9 @@ pub fn SetCPUProfileRate(hz: int)
 /// SetCgoTraceback should be called only once, ideally from an init function.
 pub fn SetCgoTraceback(
   version: int,
-  traceback: Unknown,
-  context: Unknown,
-  symbolizer: Unknown,
+  traceback: unsafe.Pointer,
+  context: unsafe.Pointer,
+  symbolizer: unsafe.Pointer,
 )
 
 /// SetDefaultGOMAXPROCS updates the GOMAXPROCS setting to the runtime
@@ -715,6 +717,7 @@ pub struct Frame {
 
 /// Frames may be used to get function/file/line information for a
 /// slice of PC values returned by [Callers].
+#[go(incomparable)]
 pub type Frames
 
 /// A Func represents a Go function in the running binary.
@@ -808,6 +811,7 @@ pub struct StackRecord {
 pub type TypeAssertionError
 
 #[go(unexported)]
+#[go(incomparable)]
 pub type pinner
 
 /// Compiler is the name of the compiler toolchain that built the

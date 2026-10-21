@@ -125,6 +125,7 @@ pub fn Verbose() -> bool
 /// affecting benchmark results.
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct B {
   embed mut common,
   pub N: int,
@@ -181,6 +182,7 @@ pub struct CoverBlock {
 /// that are allowed in the [F.Fuzz] function are [F.Failed] and [F.Name].
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct F {
   embed mut common,
 }
@@ -214,6 +216,7 @@ pub struct InternalTest {
 }
 
 /// M is a type passed to a TestMain function to run the actual tests.
+#[go(incomparable)]
 pub type M
 
 /// A PB is used by RunParallel for running parallel benchmarks.
@@ -230,6 +233,7 @@ pub type PB
 /// may be called simultaneously from multiple goroutines.
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct T {
   embed mut common,
 }
@@ -266,6 +270,7 @@ pub interface TB {
 /// common holds the elements common between T and B and
 /// captures common methods such as Errorf.
 #[go(unexported)]
+#[go(incomparable)]
 pub type common
 
 impl B {

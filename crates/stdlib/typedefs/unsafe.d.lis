@@ -3,6 +3,30 @@
 // Go: 1.26.7
 // Lisette: 0.12.1
 
+// SKIPPED: Add - unrepresentable-builtin
+// Go expands this builtin at compile time, so it has no function signature
+
+// SKIPPED: Alignof - unrepresentable-builtin
+// Go expands this builtin at compile time, so it has no function signature
+
+// SKIPPED: Offsetof - unrepresentable-builtin
+// Go expands this builtin at compile time, so it has no function signature
+
+// SKIPPED: Sizeof - unrepresentable-builtin
+// Go expands this builtin at compile time, so it has no function signature
+
+// SKIPPED: Slice - unrepresentable-builtin
+// Go expands this builtin at compile time, so it has no function signature
+
+// SKIPPED: SliceData - unrepresentable-builtin
+// Go expands this builtin at compile time, so it has no function signature
+
+// SKIPPED: String - unrepresentable-builtin
+// Go expands this builtin at compile time, so it has no function signature
+
+// SKIPPED: StringData - unrepresentable-builtin
+// Go expands this builtin at compile time, so it has no function signature
+
 // SKIPPED: Pointer - unrepresentable-builtin
-// Lisette has no untyped pointer type
+// Lisette has no untyped pointer type, so it passes the value through as an opaque type
 pub type Pointer

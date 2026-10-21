@@ -93,6 +93,7 @@ pub fn WithRegion(ctx: context.Context, regionType: string, fn_: fn() -> ())
 /// with a trace consumer using trace.Start.
 /// This restriction of only a single flight recorder may be removed
 /// in the future.
+#[go(incomparable)]
 pub type FlightRecorder
 
 pub struct FlightRecorderConfig {
