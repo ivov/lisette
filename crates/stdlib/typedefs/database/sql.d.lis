@@ -101,6 +101,7 @@ pub type ColumnType
 /// 
 /// After a call to [Conn.Close], all operations on the
 /// connection fail with [ErrConnDone].
+#[go(incomparable)]
 pub type Conn
 
 /// DB is a database handle representing a pool of zero or more
@@ -115,6 +116,7 @@ pub type Conn
 /// [Tx.Rollback] is called on the transaction, that transaction's
 /// connection is returned to [DB]'s idle connection pool. The pool size
 /// can be controlled with [DB.SetMaxIdleConns].
+#[go(incomparable)]
 pub type DB
 
 /// DBStats contains database statistics.
@@ -264,6 +266,7 @@ pub type Row
 
 /// Rows is the result of a query. Its cursor starts before the first row
 /// of the result set. Use [Rows.Next] to advance from row to row.
+#[go(incomparable)]
 pub type Rows
 
 /// Scanner is an interface used by [Rows.Scan].
@@ -280,6 +283,7 @@ pub interface Scanner {
 /// If a Stmt is prepared on a [DB], it will remain usable for the lifetime of the
 /// [DB]. When the Stmt needs to execute on a new underlying connection, it will
 /// prepare itself on the new connection automatically.
+#[go(incomparable)]
 pub type Stmt
 
 /// Tx is an in-progress database transaction.
@@ -292,6 +296,7 @@ pub type Stmt
 /// The statements prepared for a transaction by calling
 /// the transaction's [Tx.Prepare] or [Tx.Stmt] methods are closed
 /// by the call to [Tx.Commit] or [Tx.Rollback].
+#[go(incomparable)]
 pub type Tx
 
 /// TxOptions holds the transaction options to be used in [DB.BeginTx].

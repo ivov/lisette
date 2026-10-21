@@ -37,10 +37,14 @@ pub enum TypeAttribute {
     /// its constructor.
     ZeroUnsafe,
     HiddenFields,
+    /// Go type that Go cannot compare for a reason its rendering hides.
+    Incomparable,
+    /// Go interface that Go allows only as a type constraint.
+    Constraint,
 }
 
 impl TypeAttribute {
-    const fn mask(self) -> u8 {
+    const fn mask(self) -> u16 {
         match self {
             Self::Display => 1 << 0,
             Self::ClosedDomain => 1 << 1,
@@ -50,24 +54,40 @@ impl TypeAttribute {
             Self::ZeroSafe => 1 << 5,
             Self::ZeroUnsafe => 1 << 6,
             Self::HiddenFields => 1 << 7,
+            Self::Incomparable => 1 << 8,
+            Self::Constraint => 1 << 9,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Attributes(u8);
+pub struct Attributes {
+    flags: u16,
+    /// Type parameter positions whose arguments Go needs comparable to compare the type.
+    comparable_arguments: Vec<usize>,
+}
 
 impl Attributes {
     pub fn insert(&mut self, attribute: TypeAttribute) -> bool {
         let mask = attribute.mask();
-        let was_absent = self.0 & mask == 0;
-        self.0 |= mask;
+        let was_absent = self.flags & mask == 0;
+        self.flags |= mask;
         was_absent
     }
 
     pub fn contains(&self, attribute: &TypeAttribute) -> bool {
-        self.0 & attribute.mask() != 0
+        self.flags & attribute.mask() != 0
+    }
+
+    pub fn require_comparable_argument(&mut self, position: usize) {
+        if !self.comparable_arguments.contains(&position) {
+            self.comparable_arguments.push(position);
+        }
+    }
+
+    pub fn requires_comparable_argument(&self, position: usize) -> bool {
+        self.comparable_arguments.contains(&position)
     }
 }
 
@@ -368,6 +388,11 @@ impl Definition {
         )
     }
 
+    /// A Go var that the bindings type wider than Go, so Go rejects writes and `&`.
+    pub fn is_read_only(&self) -> bool {
+        self.is_variable() && self.go_hints().iter().any(|hint| hint == "read_only")
+    }
+
     pub fn is_variable(&self) -> bool {
         matches!(
             self.body,
@@ -432,6 +457,7 @@ impl Definition {
             DefinitionBody::Struct { attributes, .. }
             | DefinitionBody::Enum { attributes, .. }
             | DefinitionBody::TypeAlias { attributes, .. } => Some(attributes),
+            DefinitionBody::Interface { definition } => Some(&definition.attributes),
             _ => None,
         }
     }
@@ -474,6 +500,21 @@ impl Definition {
     pub fn has_hidden_embed(&self) -> bool {
         self.attributes()
             .is_some_and(|a| a.contains(&TypeAttribute::HiddenEmbed))
+    }
+
+    pub fn is_incomparable(&self) -> bool {
+        self.attributes()
+            .is_some_and(|a| a.contains(&TypeAttribute::Incomparable))
+    }
+
+    pub fn requires_comparable_argument(&self, position: usize) -> bool {
+        self.attributes()
+            .is_some_and(|a| a.requires_comparable_argument(position))
+    }
+
+    pub fn is_constraint(&self) -> bool {
+        self.attributes()
+            .is_some_and(|a| a.contains(&TypeAttribute::Constraint))
     }
 
     pub fn is_type_definition(&self) -> bool {
@@ -910,6 +951,7 @@ pub struct Interface {
     pub generics: Vec<Generic>,
     pub parents: Vec<Type>,
     pub methods: Methods,
+    pub attributes: Attributes,
 }
 
 #[cfg(test)]
@@ -1074,6 +1116,7 @@ mod tests {
                     generics: vec![],
                     parents,
                     methods,
+                    attributes: Attributes::default(),
                 },
             },
         }
@@ -1183,6 +1226,7 @@ mod tests {
                     generics: vec![generic("T")],
                     parents: vec![],
                     methods,
+                    attributes: Attributes::default(),
                 },
             },
         }

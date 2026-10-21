@@ -150,8 +150,11 @@ pub const MaxVarintLen32 = 5
 /// MaxVarintLenN is the maximum length of a varint-encoded N-bit integer.
 pub const MaxVarintLen64 = 10
 
+#[go(read_only)]
 pub var BigEndian: ByteOrder
 
+#[go(read_only)]
 pub var LittleEndian: ByteOrder
 
+#[go(read_only)]
 pub var NativeEndian: ByteOrder

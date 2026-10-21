@@ -4,6 +4,7 @@
 // Lisette: 0.12.1
 
 import "go:iter"
+import "go:unsafe"
 
 /// ChanDir represents a channel type's direction.
 pub struct ChanDir(int)
@@ -237,7 +238,7 @@ pub fn New(typ: Type) -> mut Value
 
 /// NewAt returns a Value representing a pointer to a value of the
 /// specified type, using p as that pointer.
-pub fn NewAt(typ: Type, p: Unknown) -> mut Value
+pub fn NewAt(typ: Type, p: unsafe.Pointer) -> mut Value
 
 /// PointerTo returns the pointer type with element t.
 /// For example, if t represents type Foo, PointerTo(t) represents *Foo.
@@ -266,7 +267,7 @@ pub fn Select(cases: Slice<SelectCase>) -> (int, mut Value, bool)
 /// data starts at p, with length and capacity equal to n.
 /// 
 /// This is like [unsafe.Slice].
-pub fn SliceAt(typ: Type, p: Unknown, n: int) -> mut Value
+pub fn SliceAt(typ: Type, p: unsafe.Pointer, n: int) -> mut Value
 
 /// SliceOf returns the slice type with element type t.
 /// For example, if t represents int, SliceOf(t) represents []int.
@@ -980,7 +981,7 @@ impl Value {
   /// It panics if v's Kind is not [UnsafePointer]
   /// or if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn SetPointer(self: mut Ref<Value>, x: Unknown)
+  fn SetPointer(self: mut Ref<Value>, x: unsafe.Pointer)
 
   /// SetString sets v's underlying value to x.
   /// It panics if v's Kind is not [String] or if [Value.CanSet] returns false.
@@ -1056,7 +1057,7 @@ impl Value {
   /// 
   /// If v's Kind is [String], the returned pointer is to the first
   /// element of the underlying bytes of string.
-  fn UnsafePointer(self) -> Unknown
+  fn UnsafePointer(self) -> unsafe.Pointer
 }
 
 impl ValueError {

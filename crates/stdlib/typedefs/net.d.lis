@@ -612,6 +612,7 @@ pub struct DNSError {
 /// 
 /// It is safe to call Dialer's methods concurrently.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct Dialer {
   pub Timeout: time.Duration,
   pub Deadline: mut time.Time,
@@ -712,6 +713,7 @@ pub struct KeepAliveConfig {
 
 /// ListenConfig contains options for listening to an address.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct ListenConfig {
   pub Control: Option<fn(string, string, syscall.RawConn) -> Result<(), error>>,
   pub KeepAlive: time.Duration,
@@ -774,6 +776,7 @@ pub struct ParseError {
 /// 
 /// A nil *Resolver is equivalent to a zero Resolver.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct Resolver {
   pub PreferGo: bool,
   pub StrictErrors: bool,
@@ -803,6 +806,7 @@ pub struct TCPConn {
 
 /// TCPListener is a TCP network listener. Clients should typically
 /// use variables of type [Listener] instead of assuming TCP.
+#[go(incomparable)]
 pub type TCPListener
 
 /// UDPAddr represents the address of a UDP end point.

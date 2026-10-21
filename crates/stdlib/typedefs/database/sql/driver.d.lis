@@ -402,8 +402,10 @@ pub interface Valuer {
   fn Value() -> Result<Value, error>
 }
 
+#[go(read_only)]
 pub var Bool: ValueConverter
 
+#[go(read_only)]
 pub var DefaultParameterConverter: ValueConverter
 
 /// ErrBadConn should be returned by a driver to signal to the [database/sql]
@@ -433,10 +435,13 @@ pub var ErrRemoveArgument: error
 /// documented.
 pub var ErrSkip: error
 
+#[go(read_only)]
 pub var Int32: ValueConverter
 
+#[go(read_only)]
 pub var ResultNoRows: Result
 
+#[go(read_only)]
 pub var String: ValueConverter
 
 impl NotNull {

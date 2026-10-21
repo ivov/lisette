@@ -290,6 +290,7 @@ func (e *Emitter) EmitSkipped(result convert.ConvertResult) {
 	fmt.Fprintf(&e.buf, "// %s\n", result.SkipReason.Message)
 
 	if result.SkipReason.EmitOpaqueType {
+		e.buf.WriteString(restrictionMarkers(result, false))
 		fmt.Fprintf(&e.buf, "pub type %s%s\n", result.Name, result.TypeParams.DeclBlock())
 		e.stats.types++
 	}
@@ -533,6 +534,7 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 
 func (e *Emitter) emitInterface(result convert.ConvertResult) {
 	var signature strings.Builder
+	signature.WriteString(restrictionMarkers(result, true))
 	signature.WriteString("pub interface ")
 	signature.WriteString(result.Name)
 	signature.WriteString(result.TypeParams.DeclBlock())
@@ -589,6 +591,7 @@ func (e *Emitter) emitStruct(result convert.ConvertResult) {
 		if result.ZeroSafe {
 			e.buf.WriteString("#[go(zero_safe)]\n")
 		}
+		e.buf.WriteString(restrictionMarkers(result, false))
 		fmt.Fprintf(&e.buf, "pub type %s%s\n\n", typeName, result.TypeParams.DeclBlock())
 		return
 	}
@@ -612,6 +615,7 @@ func (e *Emitter) emitStruct(result convert.ConvertResult) {
 	if result.ZeroUnsafe {
 		sig.WriteString("#[go(zero_unsafe)]\n")
 	}
+	sig.WriteString(restrictionMarkers(result, !result.HasHiddenFields && !result.HasHiddenEmbed))
 	sig.WriteString("pub struct ")
 	sig.WriteString(typeName)
 	sig.WriteString(result.TypeParams.DeclBlock())
@@ -657,6 +661,7 @@ func (e *Emitter) emitNewtypeOrAlias(result convert.ConvertResult) {
 	isFnType := strings.HasPrefix(result.LisetteType, "fn(")
 	isRecursiveFnAlias := isFnType && containsIdent(result.LisetteType, typeName)
 
+	sig.WriteString(restrictionMarkers(result, !isRecursiveFnAlias))
 	if isRecursiveFnAlias {
 		sig.WriteString("pub type ")
 		sig.WriteString(typeName)
@@ -686,6 +691,22 @@ func (e *Emitter) emitNewtypeOrAlias(result convert.ConvertResult) {
 	e.buf.WriteString("\n\n")
 }
 
+// restrictionMarkers tells the checker what Go forbids for a type, unless its visible shape shows it.
+func restrictionMarkers(result convert.ConvertResult, shapeVisible bool) string {
+	var markers strings.Builder
+	switch {
+	case shapeVisible:
+	case result.Incomparable:
+		markers.WriteString("#[go(incomparable)]\n")
+	case len(result.ComparableIf) > 0:
+		fmt.Fprintf(&markers, "#[go(comparable_if, %q)]\n", strings.Join(result.ComparableIf, ", "))
+	}
+	if result.Constraint {
+		markers.WriteString("#[go(constraint)]\n")
+	}
+	return markers.String()
+}
+
 func (e *Emitter) emitOpaqueType(result convert.ConvertResult) {
 	var signature strings.Builder
 	if result.UnexportedType {
@@ -697,6 +718,7 @@ func (e *Emitter) emitOpaqueType(result convert.ConvertResult) {
 	if result.ZeroSafe {
 		signature.WriteString("#[go(zero_safe)]\n")
 	}
+	signature.WriteString(restrictionMarkers(result, false))
 	signature.WriteString("pub type ")
 	signature.WriteString(result.Name)
 	signature.WriteString(result.TypeParams.DeclBlock())
@@ -755,6 +777,9 @@ func (e *Emitter) emitVariable(result convert.ConvertResult) {
 		writeSkipNote(&e.buf, "", "type-with", result.SkipNote)
 	}
 	e.emitDocWithIndent(result.Doc, "")
+	if result.ReadOnly {
+		e.buf.WriteString("#[go(read_only)]\n")
+	}
 	fmt.Fprintf(&e.buf, "pub var %s: %s\n\n", result.Name, result.LisetteType)
 }
 

@@ -534,6 +534,15 @@ impl Store {
         (current, behind_ref)
     }
 
+    /// The definition that a type names, after following aliases.
+    pub(crate) fn resolved_definition(&self, ty: &Type) -> Option<&Definition> {
+        let ty = match ty {
+            Type::Forall { body, .. } => body,
+            other => other,
+        };
+        self.get_definition(self.peel_alias(ty).get_qualified_id()?)
+    }
+
     pub fn deep_resolve_alias(&self, ty: &Type) -> Type {
         self.peel_alias(ty)
     }

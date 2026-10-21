@@ -627,6 +627,7 @@ pub struct Client {
 /// 
 /// Unlike a [Transport], a ClientConn represents a single connection.
 /// Most users should use a Transport rather than creating client connections directly.
+#[go(incomparable)]
 pub type ClientConn
 
 /// The CloseNotifier interface is implemented by ResponseWriters which
@@ -695,6 +696,7 @@ pub interface CookieJar {
 /// [Cross-Site Request Forgery (CSRF)]: https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF
 /// [safe methods]: https://developer.mozilla.org/en-US/docs/Glossary/Safe/HTTP
 #[go(zero_safe)]
+#[go(incomparable)]
 pub type CrossOriginProtection
 
 /// A Dir implements [FileSystem] using the native file system restricted to a
@@ -869,6 +871,7 @@ pub interface Pusher {
 /// usage. In addition to the notes on the fields below, see the
 /// documentation for [Request.Write] and [RoundTripper].
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct Request {
   pub Method: string,
   pub URL: Option<mut Ref<url.URL>>,
@@ -1059,11 +1062,13 @@ pub interface RoundTripper {
 ///   - When matching patterns to paths, in 1.22 each segment of the path is unescaped; in 1.21, the entire path is unescaped.
 ///     This change mostly affects how paths with %2F escapes adjacent to slashes are treated.
 ///     See https://go.dev/issue/21955 for details.
+#[go(incomparable)]
 pub type ServeMux
 
 /// A Server defines parameters for running an HTTP server.
 /// The zero value for Server is a valid configuration.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct Server {
   pub Addr: string,
   pub Handler: Option<Handler>,
@@ -1118,6 +1123,7 @@ pub struct Server {
 /// value is a zero-length slice, the request is treated as idempotent but the
 /// header is not sent on the wire.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct Transport {
   pub Proxy: Option<fn(mut Ref<Request>) -> Result<mut Ref<url.URL>, error>>,
   pub OnProxyConnectResponse: Option<fn(context.Context, mut Ref<url.URL>, mut Ref<Request>, mut Ref<Response>) -> Result<(), error>>,
@@ -1559,6 +1565,7 @@ pub var ErrWriteAfterFlush: error
 /// and Close always returns nil. It can be used in an outgoing client
 /// request to explicitly signal that a request has zero bytes.
 /// An alternative, however, is to simply set [Request.Body] to nil.
+#[go(read_only)]
 pub var NoBody: io.ReadCloser
 
 // SKIPPED: ServerContextKey - opaque-unexported-struct

@@ -3424,3 +3424,55 @@ pub fn Each(f: fn(Option<int>))
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/cb", typedef)]);
 }
+
+#[test]
+fn interop_read_only_go_variables_are_readable() {
+    let input = r#"
+import "go:encoding/binary"
+import "go:io"
+import "go:net/http"
+
+fn main() {
+  let order = binary.LittleEndian
+  let _ = order.Uint16([1, 0])
+  let body: io.ReadCloser = http.NoBody
+  let _ = body.Close()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_go_constraint_as_bound() {
+    let input = r#"
+import "go:cmp"
+
+fn largest<T: cmp.Ordered>(a: T, b: T) -> T {
+  if a > b { a } else { b }
+}
+
+fn main() {
+  let _ = largest(1, 2)
+  let _ = largest("a", "b")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_go_constraint_alias_as_bound() {
+    let input = r#"
+import "go:cmp"
+
+type Key = cmp.Ordered
+
+fn smallest<T: Key>(a: T, b: T) -> T {
+  if a < b { a } else { b }
+}
+
+fn main() {
+  let _ = smallest(1, 2)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

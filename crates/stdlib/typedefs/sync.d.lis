@@ -89,6 +89,7 @@ pub interface Locker {
 /// 
 /// [the Go memory model]: https://go.dev/ref/mem
 #[go(zero_safe)]
+#[go(incomparable)]
 pub type Map
 
 /// A Mutex is a mutual exclusion lock.
@@ -157,6 +158,7 @@ pub type Once
 /// 
 /// [the Go memory model]: https://go.dev/ref/mem
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct Pool {
   pub New: Option<fn() -> Unknown>,
 }

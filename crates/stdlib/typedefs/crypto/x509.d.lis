@@ -465,6 +465,7 @@ pub fn SetFallbackRoots(roots: Ref<CertPool>)
 pub fn SystemCertPool() -> Result<mut Ref<CertPool>, error>
 
 /// CertPool is a set of certificates.
+#[go(incomparable)]
 pub type CertPool
 
 /// A Certificate represents an X.509 certificate.
@@ -575,6 +576,7 @@ pub struct InsecureAlgorithmError(int)
 pub struct KeyUsage(int)
 
 /// An OID represents an ASN.1 OBJECT IDENTIFIER.
+#[go(incomparable)]
 pub type OID
 
 /// PolicyMapping represents a policy mapping entry in the policyMappings extension.
@@ -629,6 +631,7 @@ pub struct UnknownAuthorityError {
 
 /// VerifyOptions contains parameters for Certificate.Verify.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct VerifyOptions {
   pub DNSName: string,
   pub Intermediates: Option<mut Ref<CertPool>>,

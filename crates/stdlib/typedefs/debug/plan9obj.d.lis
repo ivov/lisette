@@ -14,6 +14,7 @@ pub fn Open(name: string) -> Result<mut Ref<File>, error>
 
 /// A File represents an open Plan 9 a.out file.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct File {
   embed FileHeader,
   pub Sections: mut Slice<Option<mut Ref<Section>>>,

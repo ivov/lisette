@@ -7,8 +7,12 @@ const KNOWN_GO_HINTS: &[&str] = &[
     "closed_domain",
     "collapsed_type_params",
     "comma_ok",
+    "comparable_if",
+    "constraint",
     "hidden_embed",
     "hidden_fields",
+    "incomparable",
+    "read_only",
     "sentinel_minus_one",
     "superseded_by",
     "unexported",
@@ -37,34 +41,26 @@ pub(super) fn extract_go_name(attributes: &[Attribute]) -> Option<String> {
 /// The recipe string from `#[go(collapsed_type_params, "...")]`. This is
 /// Go's full type-param in declaration order, each entry as a Lisette type.
 pub(super) fn extract_go_type_param_recipe(attributes: &[Attribute]) -> Option<String> {
-    attributes
-        .iter()
-        .filter(|a| a.name == "go")
-        .filter(|a| {
-            a.args
-                .iter()
-                .any(|arg| matches!(arg, AttributeArg::Flag(f) if f == "collapsed_type_params"))
-        })
-        .find_map(|a| {
-            a.args.iter().find_map(|arg| match arg {
-                AttributeArg::String(recipe) => Some(recipe.clone()),
-                _ => None,
-            })
-        })
+    extract_go_flag_string(attributes, "collapsed_type_params")
 }
 
 pub(super) fn extract_go_superseded_by(attributes: &[Attribute]) -> Option<String> {
+    extract_go_flag_string(attributes, "superseded_by")
+}
+
+/// The string argument of `#[go(<flag>, "...")]`.
+fn extract_go_flag_string(attributes: &[Attribute], flag: &str) -> Option<String> {
     attributes
         .iter()
         .filter(|a| a.name == "go")
         .filter(|a| {
             a.args
                 .iter()
-                .any(|arg| matches!(arg, AttributeArg::Flag(f) if f == "superseded_by"))
+                .any(|arg| matches!(arg, AttributeArg::Flag(f) if f == flag))
         })
         .find_map(|a| {
             a.args.iter().find_map(|arg| match arg {
-                AttributeArg::String(successor) => Some(successor.clone()),
+                AttributeArg::String(value) => Some(value.clone()),
                 _ => None,
             })
         })
@@ -110,6 +106,18 @@ pub(super) fn has_hidden_fields_attribute(attributes: &[Attribute]) -> bool {
         .any(|flag| flag == "hidden_fields")
 }
 
+pub(super) fn has_incomparable_attribute(attributes: &[Attribute]) -> bool {
+    extract_attribute_flags(attributes, "go")
+        .iter()
+        .any(|flag| flag == "incomparable")
+}
+
+pub(super) fn has_constraint_attribute(attributes: &[Attribute]) -> bool {
+    extract_attribute_flags(attributes, "go")
+        .iter()
+        .any(|flag| flag == "constraint")
+}
+
 pub(super) fn has_unexported_attribute(attributes: &[Attribute]) -> bool {
     extract_attribute_flags(attributes, "go")
         .iter()
@@ -120,6 +128,14 @@ pub(super) fn has_serialization_attribute(attributes: &[Attribute]) -> bool {
     attributes.iter().any(struct_attribute_forces_field_export)
 }
 
+pub(super) fn collect_interface_attributes(attributes: &[Attribute]) -> Attributes {
+    let mut map = Attributes::default();
+    if has_constraint_attribute(attributes) {
+        map.insert(TypeAttribute::Constraint);
+    }
+    map
+}
+
 pub(super) fn collect_enum_attributes(attributes: &[Attribute]) -> Attributes {
     let mut map = Attributes::default();
     if has_display_attribute(attributes) {
@@ -128,8 +144,18 @@ pub(super) fn collect_enum_attributes(attributes: &[Attribute]) -> Attributes {
     map
 }
 
-pub(super) fn collect_struct_attributes(attributes: &[Attribute]) -> Attributes {
+pub(super) fn collect_struct_attributes(
+    attributes: &[Attribute],
+    generics: &[Generic],
+) -> Attributes {
     let mut map = Attributes::default();
+    if let Some(names) = extract_go_flag_string(attributes, "comparable_if") {
+        for name in names.split(',').map(str::trim) {
+            if let Some(position) = generics.iter().position(|g| g.name == name) {
+                map.require_comparable_argument(position);
+            }
+        }
+    }
     if has_display_attribute(attributes) {
         map.insert(TypeAttribute::Display);
     }
@@ -153,6 +179,12 @@ pub(super) fn collect_struct_attributes(attributes: &[Attribute]) -> Attributes 
     }
     if has_hidden_fields_attribute(attributes) {
         map.insert(TypeAttribute::HiddenFields);
+    }
+    if has_incomparable_attribute(attributes) {
+        map.insert(TypeAttribute::Incomparable);
+    }
+    if has_constraint_attribute(attributes) {
+        map.insert(TypeAttribute::Constraint);
     }
     map
 }

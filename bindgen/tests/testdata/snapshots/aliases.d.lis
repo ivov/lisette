@@ -115,6 +115,7 @@ pub struct IntList(mut Slice<int>)
 
 /// ListBox exercises the non-struct embed rendering.
 #[go(hidden_embed)]
+#[go(incomparable)]
 pub struct ListBox {
   pub IntList: mut IntList,
 }

@@ -14,6 +14,7 @@ use syntax::program::{DefinitionBody, Visibility, interface_instances, interface
 use syntax::types::{CompoundKind, Type, substitute};
 
 const RECURSIVE_TYPES: &str = "recursive types";
+const GO_HIDDEN_FIELDS: &str = "Go types with incomparable hidden fields";
 
 fn dedup_sorted(mut names: Vec<String>) -> Vec<String> {
     names.sort_unstable();
@@ -83,6 +84,27 @@ fn check_not_comparable_impl(
 ) -> Option<&'static str> {
     let resolved = store.deep_resolve_alias(ty);
     let ty = &resolved;
+
+    if let Some(definition) = store.resolved_definition(ty) {
+        if definition.is_incomparable() {
+            return Some(GO_HIDDEN_FIELDS);
+        }
+        let arguments = ty.get_type_params().unwrap_or_default();
+        for (position, argument) in arguments.iter().enumerate() {
+            if definition.requires_comparable_argument(position)
+                && let Some(inner) = check_not_comparable_impl(
+                    env,
+                    store,
+                    &argument.resolve_in(env),
+                    visiting,
+                    definite_only,
+                    comparable_parameter,
+                )
+            {
+                return Some(nested_reason(inner, GO_HIDDEN_FIELDS));
+            }
+        }
+    }
 
     if is_opaque_go_handle(store, ty) {
         return (!definite_only).then_some("opaque Go handles");
@@ -643,6 +665,9 @@ impl InferCtx<'_> {
         let Some(name) = resolved.get_qualified_id() else {
             return false;
         };
+        if name.starts_with("go:") {
+            return false;
+        }
         let Some(definition) = self.store.get_definition(name) else {
             return false;
         };

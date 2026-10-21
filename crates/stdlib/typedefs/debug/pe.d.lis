@@ -47,6 +47,7 @@ pub struct DataDirectory {
 
 /// A File represents an open PE file.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct File {
   embed FileHeader,
   pub OptionalHeader: Unknown,
@@ -159,6 +160,7 @@ pub struct Reloc {
 #[go(hidden_embed)]
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct Section {
   embed SectionHeader,
   pub Relocs: mut Slice<Reloc>,

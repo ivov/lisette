@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:encoding/binary"
+  import "go:io"
+  import "go:net/http"
+  
+  fn main() {
+    let order = binary.LittleEndian
+    let _ = order.Uint16([1, 0])
+    let body: io.ReadCloser = http.NoBody
+    let _ = body.Close()
+  }
+---
+package main
+
+import (
+	"encoding/binary"
+	"net/http"
+)
+
+func main() {
+	order := binary.LittleEndian
+	order.Uint16([]byte{1, 0})
+	body := http.NoBody
+	body.Close()
+}

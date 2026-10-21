@@ -40,16 +40,23 @@ pub interface Renderer {
   fn Render() -> string
 }
 
+#[go(read_only)]
 pub var AnonParamSingleton: ()
 
+#[go(read_only)]
 pub var ArrowType: EntityType
 
+#[go(read_only)]
 pub var CyclicSingleton: Cyclic
 
+#[go(read_only)]
 pub var DefaultWidget: Drawable
 
+#[go(read_only)]
 pub var DefaultWriter: io.Writer
 
+#[go(read_only)]
 pub var NativeType: EntityType
 
+#[go(read_only)]
 pub var SnowballType: EntityType

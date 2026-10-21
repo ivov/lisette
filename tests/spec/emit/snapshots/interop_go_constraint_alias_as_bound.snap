@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:cmp"
+  
+  type Key = cmp.Ordered
+  
+  fn smallest<T: Key>(a: T, b: T) -> T {
+    if a < b { a } else { b }
+  }
+  
+  fn main() {
+    let _ = smallest(1, 2)
+  }
+---
+package main
+
+import "cmp"
+
+type Key = cmp.Ordered
+
+func smallest[T cmp.Ordered](a, b T) T {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func main() {
+	smallest(1, 2)
+}

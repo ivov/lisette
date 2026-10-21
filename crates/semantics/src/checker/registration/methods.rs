@@ -475,6 +475,7 @@ impl TaskState {
 
     pub(super) fn populate_interface(&mut self, store: &mut Store, expression: &mut Expression) {
         let Expression::Interface {
+            attributes,
             name: interface_name,
             name_span,
             generics,
@@ -608,6 +609,7 @@ impl TaskState {
             generics,
             parents: new_parents,
             methods,
+            attributes: super::collect_interface_attributes(attributes),
         };
 
         let package = self.current_package_mut(store);

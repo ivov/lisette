@@ -31,4 +31,5 @@ pub fn Or<T: Comparable>(vals: VarArgs<T>) -> T
 /// An operator such as == or < will always report false when
 /// comparing a NaN value with any other value, NaN or not.
 /// See the [Compare] function for a consistent way to compare NaN values.
+#[go(constraint)]
 pub type Ordered

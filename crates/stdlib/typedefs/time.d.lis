@@ -370,6 +370,7 @@ pub fn Until(t: Time) -> Duration
 /// Location is used to provide a time zone in a printed Time value and for
 /// calculations involving intervals that may cross daylight savings time
 /// boundaries.
+#[go(incomparable)]
 pub type Location
 
 /// ParseError describes a problem parsing a time string.

@@ -38,6 +38,7 @@ pub struct Mode(uint)
 /// a given text. It can be allocated as part of another data
 /// structure but must be initialized via [Scanner.Init] before use.
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct Scanner {
   pub ErrorCount: int,
 }

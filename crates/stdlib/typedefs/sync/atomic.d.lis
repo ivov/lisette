@@ -3,6 +3,8 @@
 // Go: 1.26.7
 // Lisette: 0.12.1
 
+import "go:unsafe"
+
 /// AddInt32 atomically adds delta to *addr and returns the new value.
 /// Consider using the more ergonomic and less error-prone [Int32.Add] instead.
 pub fn AddInt32(addr: mut Ref<int32>, delta: int32) -> int32
@@ -66,9 +68,9 @@ pub fn CompareAndSwapInt64(addr: mut Ref<int64>, old: int64, new: int64) -> bool
 /// CompareAndSwapPointer executes the compare-and-swap operation for a unsafe.Pointer value.
 /// Consider using the more ergonomic and less error-prone [Pointer.CompareAndSwap] instead.
 pub fn CompareAndSwapPointer(
-  addr: mut Ref<Unknown>,
-  old: Unknown,
-  new: Unknown,
+  addr: mut Ref<unsafe.Pointer>,
+  old: unsafe.Pointer,
+  new: unsafe.Pointer,
 ) -> bool
 
 /// CompareAndSwapUint32 executes the compare-and-swap operation for a uint32 value.
@@ -107,7 +109,7 @@ pub fn LoadInt64(addr: Ref<int64>) -> int64
 
 /// LoadPointer atomically loads *addr.
 /// Consider using the more ergonomic and less error-prone [Pointer.Load] instead.
-pub fn LoadPointer(addr: Ref<Unknown>) -> Unknown
+pub fn LoadPointer(addr: Ref<unsafe.Pointer>) -> unsafe.Pointer
 
 /// LoadUint32 atomically loads *addr.
 /// Consider using the more ergonomic and less error-prone [Uint32.Load] instead.
@@ -158,7 +160,7 @@ pub fn StoreInt64(addr: mut Ref<int64>, val: int64)
 
 /// StorePointer atomically stores val into *addr.
 /// Consider using the more ergonomic and less error-prone [Pointer.Store] instead.
-pub fn StorePointer(addr: mut Ref<Unknown>, val: Unknown)
+pub fn StorePointer(addr: mut Ref<unsafe.Pointer>, val: unsafe.Pointer)
 
 /// StoreUint32 atomically stores val into *addr.
 /// Consider using the more ergonomic and less error-prone [Uint32.Store] instead.
@@ -184,7 +186,10 @@ pub fn SwapInt64(addr: mut Ref<int64>, new: int64) -> int64
 
 /// SwapPointer atomically stores new into *addr and returns the previous *addr value.
 /// Consider using the more ergonomic and less error-prone [Pointer.Swap] instead.
-pub fn SwapPointer(addr: mut Ref<Unknown>, new: Unknown) -> Unknown
+pub fn SwapPointer(
+  addr: mut Ref<unsafe.Pointer>,
+  new: unsafe.Pointer,
+) -> unsafe.Pointer
 
 /// SwapUint32 atomically stores new into *addr and returns the previous *addr value.
 /// Consider using the more ergonomic and less error-prone [Uint32.Swap] instead.

@@ -46,6 +46,7 @@ pub fn TrimString(s: string) -> string
 /// see the documentation of those types for details.
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct Conn {
   embed mut Reader,
   embed mut Writer,
@@ -79,6 +80,7 @@ pub struct MIMEHeader(mut Map<string, mut Slice<string>>)
 /// 
 /// A pipelined server can use the same calls to ensure that
 /// responses computed in parallel are written in the correct order.
+#[go(incomparable)]
 pub type Pipeline
 
 /// A ProtocolError describes a protocol violation such
@@ -89,6 +91,7 @@ pub struct ProtocolError(string)
 /// or responses from a text protocol network connection.
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct Reader {
   pub R: Option<mut Ref<bufio.Reader>>,
 }

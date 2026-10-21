@@ -32,6 +32,7 @@ pub struct Host5 {
 }
 
 #[go(hidden_embed)]
+#[go(incomparable)]
 pub type Host6
 
 pub struct Inner {

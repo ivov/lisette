@@ -122,9 +122,9 @@ func LoadPackages(paths []string, targetGOOS, targetGOARCH string) ([]*packages.
 
 // LoadStdPackages loads the `std` pattern, dropping roots matched by skip.
 // Load errors fail the call only for kept roots: internal packages may not
-// type-check on every platform and are never converted.
+// type-check on every platform and are never converted. `std` leaves out runtime/cgo when cgo is off.
 func LoadStdPackages(targetGOOS, targetGOARCH string, skip func(string) bool) ([]*packages.Package, error) {
-	return loadCheckedPackages([]string{"std"}, targetGOOS, targetGOARCH, skip)
+	return loadCheckedPackages([]string{"std", "runtime/cgo"}, targetGOOS, targetGOARCH, skip)
 }
 
 func loadCheckedPackages(patterns []string, targetGOOS, targetGOARCH string, skip func(string) bool) ([]*packages.Package, error) {
@@ -169,6 +169,7 @@ func ExtractExports(pkg *packages.Package, embedFaithful func(*types.Var) bool) 
 	pkgScope := pkg.Types.Scope()
 	pkgNames := pkgScope.Names()
 	sealNames := sealMethodNames(pkgScope)
+	aliased := AliasedTypes(pkg.Types)
 
 	for _, name := range pkgNames {
 		obj := pkgScope.Lookup(name)
@@ -179,7 +180,7 @@ func ExtractExports(pkg *packages.Package, embedFaithful func(*types.Var) bool) 
 		doc := getDocForObject(docPkg, name)
 
 		switch o := obj.(type) {
-		case *types.Func:
+		case *types.Func, *types.Builtin:
 			exports = append(exports, SymbolExport{
 				Name:   name,
 				Kind:   ExportFunction,
@@ -200,6 +201,8 @@ func ExtractExports(pkg *packages.Package, embedFaithful func(*types.Var) bool) 
 			if named, ok := o.Type().(*types.Named); ok {
 				methodExports := extractMethods(named, pkg, docPkg, sealNames, embedFaithful)
 				exports = append(exports, methodExports...)
+			} else if named, ok := AliasTarget(o, aliased); ok {
+				exports = append(exports, extractMethods(named, pkg, docPkg, sealNames, embedFaithful)...)
 			}
 
 		case *types.Const:
@@ -243,6 +246,78 @@ func ExtractExports(pkg *packages.Package, embedFaithful func(*types.Var) bool) 
 	})
 
 	return exports
+}
+
+// AliasedTypes maps each unexported type that exactly one exported alias names to that alias.
+// An embedded type keeps its own name, because Go names the embedded field after it.
+func AliasedTypes(pkg *types.Package) map[*types.TypeName]*types.TypeName {
+	aliases := map[*types.TypeName]*types.TypeName{}
+	counts := map[*types.TypeName]int{}
+	scope := pkg.Scope()
+	embedded := embeddedTypes(scope)
+	for _, name := range scope.Names() {
+		alias, ok := scope.Lookup(name).(*types.TypeName)
+		if !ok || !alias.Exported() {
+			continue
+		}
+		t, ok := alias.Type().(*types.Alias)
+		if !ok || t.TypeParams().Len() > 0 {
+			continue
+		}
+		named, ok := t.Rhs().(*types.Named)
+		if !ok || named.Obj().Exported() || named.Obj().Pkg() != pkg || named.TypeParams().Len() > 0 || embedded[named.Obj()] {
+			continue
+		}
+		aliases[named.Obj()] = alias
+		counts[named.Obj()]++
+	}
+	for target, count := range counts {
+		if count > 1 {
+			delete(aliases, target)
+		}
+	}
+	return aliases
+}
+
+// embeddedTypes collects the types that some struct type of scope embeds.
+func embeddedTypes(scope *types.Scope) map[*types.TypeName]bool {
+	embedded := map[*types.TypeName]bool{}
+	for _, name := range scope.Names() {
+		tn, ok := scope.Lookup(name).(*types.TypeName)
+		if !ok {
+			continue
+		}
+		st, ok := tn.Type().Underlying().(*types.Struct)
+		if !ok {
+			continue
+		}
+		for field := range st.Fields() {
+			if !field.Embedded() {
+				continue
+			}
+			t := field.Type()
+			if ptr, ok := t.(*types.Pointer); ok {
+				t = ptr.Elem()
+			}
+			if named, ok := t.(*types.Named); ok {
+				embedded[named.Obj()] = true
+			}
+		}
+	}
+	return embedded
+}
+
+// AliasTarget returns the unexported type that the alias stands in for, if any.
+func AliasTarget(alias *types.TypeName, aliased map[*types.TypeName]*types.TypeName) (*types.Named, bool) {
+	t, ok := alias.Type().(*types.Alias)
+	if !ok {
+		return nil, false
+	}
+	named, ok := t.Rhs().(*types.Named)
+	if !ok || aliased[named.Obj()] != alias {
+		return nil, false
+	}
+	return named, true
 }
 
 // unexportedEmbedTargets returns the same-package unexported struct types reached

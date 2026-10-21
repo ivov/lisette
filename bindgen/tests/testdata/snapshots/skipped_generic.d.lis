@@ -10,6 +10,7 @@ pub interface Base {
 
 // SKIPPED: SliceFlag - collapsed-type-param
 // generic type with a shape-collapsed type parameter is not representable
+#[go(incomparable)]
 pub type SliceFlag<T, S, E>
 
 /// Dependent alias instantiating the skipped generic — this is the line that

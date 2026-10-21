@@ -105,6 +105,7 @@ pub type ErrNaN
 /// a new value using the [Float.Set] method; shallow copies
 /// of Floats are not supported and may lead to errors.
 #[go(zero_safe)]
+#[go(incomparable)]
 pub type Float
 
 /// An Int represents a signed multi-precision integer.
@@ -125,6 +126,7 @@ pub type Float
 /// is considered a security vulnerability might depend on the impact on the
 /// standard library.
 #[go(zero_safe)]
+#[go(incomparable)]
 pub type Int
 
 /// A Rat represents a quotient a/b of arbitrary precision.
@@ -137,6 +139,7 @@ pub type Int
 /// a new value using the [Rat.Set] method; shallow copies
 /// of Rats are not supported and may lead to errors.
 #[go(zero_safe)]
+#[go(incomparable)]
 pub type Rat
 
 /// A Word represents a single digit of a multi-precision unsigned integer.

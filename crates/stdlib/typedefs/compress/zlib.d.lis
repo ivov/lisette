@@ -62,6 +62,7 @@ pub interface Resetter {
 
 /// A Writer takes data written to it and writes the compressed
 /// form of that data to an underlying writer (see [NewWriter]).
+#[go(incomparable)]
 pub type Writer
 
 /// These constants are copied from the [flate] package, so that code that imports

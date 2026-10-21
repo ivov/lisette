@@ -142,8 +142,6 @@
           "Reader.ReadBytes",
           "Reader.ReadSlice",
           "Reader.ReadString",
-          "Scanner.Bytes",
-          "Scanner.Text",
           "Writer.WriteRune"
         ],
         "bytes": ["Buffer.ReadBytes", "Buffer.ReadString"],

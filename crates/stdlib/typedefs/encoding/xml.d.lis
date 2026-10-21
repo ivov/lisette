@@ -225,6 +225,7 @@ pub struct Comment(mut Slice<byte>)
 /// The parser assumes that its input is encoded in UTF-8.
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct Decoder {
   pub Strict: bool,
   pub AutoClose: mut Slice<string>,
@@ -238,6 +239,7 @@ pub struct Decoder {
 pub struct Directive(mut Slice<byte>)
 
 /// An Encoder writes XML data to an output stream.
+#[go(incomparable)]
 pub type Encoder
 
 /// An EndElement represents an XML end element.

@@ -212,6 +212,7 @@ pub struct URL(string)
 
 /// nameSpace is the data structure shared by all templates in an association.
 #[go(unexported)]
+#[go(incomparable)]
 pub type nameSpace
 
 impl Error {

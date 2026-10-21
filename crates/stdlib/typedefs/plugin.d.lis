@@ -9,6 +9,7 @@
 pub fn Open(path: string) -> Result<mut Ref<Plugin>, error>
 
 /// Plugin is a loaded Go plugin.
+#[go(incomparable)]
 pub type Plugin
 
 /// A Symbol is a pointer to a variable or function.

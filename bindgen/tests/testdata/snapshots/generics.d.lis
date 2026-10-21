@@ -85,6 +85,7 @@ pub struct ConstrainedPair<K: Comparable, V> {
   pub Value: V,
 }
 
+#[go(incomparable)]
 pub type Container<T>
 
 /// Generic struct field that binds a type parameter to a generic interface.
@@ -104,6 +105,7 @@ pub interface LoudGreeter {
 }
 
 /// Ordered constraint (type union)
+#[go(constraint)]
 pub type Ordered
 
 pub struct Pair<K, V> {

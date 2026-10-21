@@ -92,6 +92,10 @@ func freshTypeParamName(used map[string]bool) string {
 }
 
 func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.SymbolExport) {
+	if _, ok := symbolExport.Obj.(*types.Builtin); ok {
+		result.SkipReason = &SkipReason{Code: "unrepresentable-builtin", Message: "Go expands this builtin at compile time, so it has no function signature"}
+		return
+	}
 	signature, ok := symbolExport.GoType.(*types.Signature)
 	if !ok {
 		result.SkipReason = &SkipReason{Code: "invalid-signature", Message: "not a function signature"}
@@ -306,7 +310,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 
 	if symbolExport.ReceiverVariable != nil {
 		if symbolExport.IsPromoted {
-			typeName := symbolExport.BaseType.Obj().Name()
+			typeName := c.declaredName(symbolExport.BaseType)
 			typeParams := extractReceiverTypeParams(symbolExport.BaseType, c)
 			_, isPointerReceiver := symbolExport.ReceiverVariable.Type().(*types.Pointer)
 
@@ -328,12 +332,12 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 			var typeParams TypeParamSpecs
 			if pointer, ok := symbolExport.ReceiverVariable.Type().(*types.Pointer); ok {
 				isPointerReceiver = true
-				if named, ok := pointer.Elem().(*types.Named); ok {
-					typeName = named.Obj().Name()
+				if named, ok := types.Unalias(pointer.Elem()).(*types.Named); ok {
+					typeName = c.declaredName(named)
 					typeParams = extractReceiverTypeParams(named, c)
 				}
-			} else if named, ok := symbolExport.ReceiverVariable.Type().(*types.Named); ok {
-				typeName = named.Obj().Name()
+			} else if named, ok := types.Unalias(symbolExport.ReceiverVariable.Type()).(*types.Named); ok {
+				typeName = c.declaredName(named)
 				typeParams = extractReceiverTypeParams(named, c)
 			}
 
@@ -637,6 +641,11 @@ func isFluentMethod(fn *ast.FuncDecl, recvName string) bool {
 }
 
 func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport) {
+	if obj, ok := exp.Obj.(*types.TypeName); ok {
+		if named, ok := extract.AliasTarget(obj, c.aliases()); ok {
+			exp.GoType = named
+		}
+	}
 	if alias, ok := exp.GoType.(*types.Alias); ok {
 		if isGenericAlias(alias) {
 			result.SkipReason = &SkipReason{
@@ -663,7 +672,7 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 	if basic, ok := exp.GoType.(*types.Basic); ok && basic.Kind() == types.UnsafePointer {
 		result.SkipReason = &SkipReason{
 			Code:           "unrepresentable-builtin",
-			Message:        "Lisette has no untyped pointer type",
+			Message:        "Lisette has no untyped pointer type, so it passes the value through as an opaque type",
 			EmitOpaqueType: true,
 		}
 		return
@@ -674,6 +683,7 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		result.SkipReason = &SkipReason{Code: "not-named-type", Message: "expected named type"}
 		return
 	}
+	result.Incomparable, result.ComparableIf = comparability(named)
 
 	typeParams, substitutions, _, skip := collectTypeParams(named.TypeParams(), true, c)
 	if skip != nil {
@@ -706,6 +716,7 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		result.ZeroUnsafe = c.cfg.IsCuratedZeroUnsafe(c.currentPkgPath, result.Name)
 
 	case *types.Interface:
+		result.Constraint = !u.IsMethodSet()
 		if isErrorInterface(u) {
 			result.LisetteType = "error"
 		} else if u.Empty() {
@@ -717,7 +728,7 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		}
 
 	case *types.Basic:
-		result.LisetteType = basicToLisette(u)
+		result.LisetteType = ToLisette(u, c).LisetteType
 
 	default:
 		t := ToLisette(underlying, c)
@@ -1008,6 +1019,8 @@ func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExp
 		}
 	}
 
+	result.ReadOnly = c.hidesGoType(exp.GoType)
+
 	isNilable := isNilableGoType(exp.GoType)
 	forceNonNilable := c.cfg.IsNonNilableVar(c.currentPkgPath, result.Name) || c.cfg.IsNonNilableReturn(c.currentPkgPath, result.Name)
 	if !forceNonNilable && isNilable {
@@ -1016,6 +1029,67 @@ func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExp
 	if isNilable && !forceNonNilable {
 		result.LisetteType = optionOf(result.LisetteType)
 	}
+}
+
+// comparability reports whether Go never compares a type, or else which type parameters must be comparable.
+func comparability(named *types.Named) (incomparable bool, comparableIf []string) {
+	required := map[*types.TypeParam]bool{}
+	if !canCompare(named.Underlying(), required, map[*types.TypeParam]bool{}) {
+		return true, nil
+	}
+	for i := range named.TypeParams().Len() {
+		if param := named.TypeParams().At(i); required[param] {
+			comparableIf = append(comparableIf, param.Obj().Name())
+		}
+	}
+	return false, comparableIf
+}
+
+// canCompare records the type parameters that must be comparable. A shape can name itself, so it expands once.
+func canCompare(t types.Type, required, expanded map[*types.TypeParam]bool) bool {
+	switch t := types.Unalias(t).(type) {
+	case *types.TypeParam:
+		if types.Comparable(t) {
+			return true
+		}
+		if shape, ok := singleTildeTerm(t.Constraint()); ok {
+			if expanded[t] {
+				return true
+			}
+			expanded[t] = true
+			return canCompare(shape, required, expanded)
+		}
+		required[t] = true
+		return true
+	case *types.Named:
+		return canCompare(t.Underlying(), required, expanded)
+	case *types.Struct:
+		for field := range t.Fields() {
+			if !canCompare(field.Type(), required, expanded) {
+				return false
+			}
+		}
+		return true
+	case *types.Array:
+		return canCompare(t.Elem(), required, expanded)
+	case *types.Slice, *types.Map, *types.Signature:
+		return false
+	default:
+		return true
+	}
+}
+
+// hidesGoType reports whether t is an unexported type of this package with no exported alias.
+func (c *Converter) hidesGoType(t types.Type) bool {
+	if pointer, ok := t.(*types.Pointer); ok {
+		t = pointer.Elem()
+	}
+	named, ok := types.Unalias(t).(*types.Named)
+	if !ok || named.Obj().Exported() || named.Obj().Pkg() == nil || named.Obj().Pkg().Path() != c.currentPkgPath {
+		return false
+	}
+	_, aliased := c.aliases()[named.Obj()]
+	return !aliased
 }
 
 // convertStructFields reports whether any real Go field went unrepresented.

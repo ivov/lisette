@@ -42,11 +42,13 @@ pub struct CommonType {
 /// The Decoder does only basic sanity checking on decoded input sizes,
 /// and its limits are not configurable. Take caution when decoding gob data
 /// from untrusted sources.
+#[go(incomparable)]
 pub type Decoder
 
 /// An Encoder manages the transmission of type and data information to the
 /// other side of a connection.  It is safe for concurrent use by multiple
 /// goroutines.
+#[go(incomparable)]
 pub type Encoder
 
 /// GobDecoder is the interface describing data that provides its own

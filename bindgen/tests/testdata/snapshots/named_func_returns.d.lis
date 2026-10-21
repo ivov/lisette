@@ -12,6 +12,7 @@ pub fn WithDisabled() -> BindingOpt
 /// Factory functions that return BindingOpt must bind as BindingOpt, not Option<BindingOpt>.
 pub fn WithKeys(keys: VarArgs<string>) -> BindingOpt
 
+#[go(incomparable)]
 pub type Binding
 
 /// Option type for a binding, as in charm.land/bubbles/v2/key.

@@ -129,6 +129,7 @@ pub interface BufferPool {
 /// We should have deleted it before Go 1.
 /// 
 /// Deprecated: Use Client or Transport in package [net/http] instead.
+#[go(incomparable)]
 pub type ClientConn
 
 /// A ProxyRequest contains a request to be rewritten by a [ReverseProxy].
@@ -166,6 +167,7 @@ pub struct ReverseProxy {
 /// We should have deleted it before Go 1.
 /// 
 /// Deprecated: Use the Server in package [net/http] instead.
+#[go(incomparable)]
 pub type ServerConn
 
 pub var ErrClosed: mut Ref<http.ProtocolError>

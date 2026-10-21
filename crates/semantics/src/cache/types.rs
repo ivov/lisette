@@ -252,6 +252,7 @@ fn remap_interface(interface: &mut Interface, remap: &mut impl FnMut(&mut Span))
         generics,
         parents: _,
         methods,
+        attributes: _,
     } = interface;
     remap_generics(generics, remap);
     remap_methods(methods.values_mut(), remap);

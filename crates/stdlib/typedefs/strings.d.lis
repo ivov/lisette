@@ -336,6 +336,7 @@ pub fn TrimSuffix(s: string, suffix: string) -> string
 /// It minimizes memory copying. The zero value is ready to use.
 /// Do not copy a non-zero Builder.
 #[go(zero_safe)]
+#[go(incomparable)]
 pub type Builder
 
 /// A Reader implements the [io.Reader], [io.ReaderAt], [io.ByteReader], [io.ByteScanner],
@@ -347,6 +348,7 @@ pub type Reader
 
 /// Replacer replaces a list of strings with replacements.
 /// It is safe for concurrent use by multiple goroutines.
+#[go(incomparable)]
 pub type Replacer
 
 impl Builder {

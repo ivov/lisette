@@ -17,6 +17,7 @@ pub struct Controller {
 
 /// Filter is a self-referential function type — the classic Go middleware
 /// chain pattern (revel, negroni, chi, etc.).
+#[go(incomparable)]
 pub type Filter
 
 /// Sibling references with `Filter` as a substring must NOT trigger the

@@ -3,6 +3,8 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
+import "go:unsafe"
+
 /// Synthesized from a Go anonymous struct type.
 #[go(anon_struct)]
 pub struct AnonA {
@@ -34,12 +36,12 @@ pub fn Printf(format: string, args: VarArgs<Unknown>)
 
 /// Function type with unsafe return in struct field
 pub struct BadFactory {
-  pub Create: Option<fn() -> Unknown>,
+  pub Create: Option<fn() -> unsafe.Pointer>,
 }
 
 /// Function type with unsafe param in struct field - triggers signatureToLisette skip path
 pub struct BadHandler {
-  pub Process: Option<fn(Unknown) -> int>,
+  pub Process: Option<fn(unsafe.Pointer) -> int>,
 }
 
 /// Function type returning an anonymous struct with ok - synthesized into the Option path

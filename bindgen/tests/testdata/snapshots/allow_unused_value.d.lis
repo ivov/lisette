@@ -13,4 +13,5 @@ pub fn Register(path: string, h: fn() -> ()) -> mut Ref<HttpServer>
 
 pub fn VoidReturn(path: string)
 
+#[go(incomparable)]
 pub type HttpServer

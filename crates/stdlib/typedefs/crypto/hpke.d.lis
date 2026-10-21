@@ -310,6 +310,7 @@ pub struct Sender {
 }
 
 #[go(unexported)]
+#[go(incomparable)]
 pub type context
 
 impl Recipient {

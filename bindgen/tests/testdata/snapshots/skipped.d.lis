@@ -3,32 +3,36 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-pub fn BadUnsafeFunc(p: Unknown)
+import "go:unsafe"
+
+pub fn BadUnsafeFunc(p: unsafe.Pointer)
 
 pub fn MakeOpaqueFunc() -> OpaqueFunc
 
 pub fn SkippedMin<T: Ordered>(a: T, b: T) -> T
 
 /// Should be skipped: unsafe.Pointer
-pub fn UnsafeFunc(p: Unknown)
+pub fn UnsafeFunc(p: unsafe.Pointer)
 
 /// Should skip: function with unsafe.Pointer param
-pub fn UnsafeParam(p: Unknown) -> int
+pub fn UnsafeParam(p: unsafe.Pointer) -> int
 
 /// Should skip: function returning unsafe.Pointer
-pub fn UnsafeReturn() -> Unknown
+pub fn UnsafeReturn() -> unsafe.Pointer
 
 pub fn UseOpaqueFunc(fn_: OpaqueFunc)
 
 pub struct HasUnsafe {
-  pub Ptr: Unknown,
+  pub Ptr: unsafe.Pointer,
 }
 
 // SKIPPED: OpaqueFunc - opaque-unexported-struct
 // underlying type "hasPrivate" is unexported
+#[go(incomparable)]
 pub type OpaqueFunc
 
 /// Should be skipped: constrained generic (non-any)
+#[go(constraint)]
 pub type Ordered
 
 // SKIPPED field "Field": opaque-unexported-struct — underlying type "hasPrivate" is unexported
@@ -42,7 +46,7 @@ pub struct SafeStruct {
 
 /// Should skip: struct with unsafe field
 pub struct UnsafeStruct {
-  pub Ptr: Unknown,
+  pub Ptr: unsafe.Pointer,
   pub Val: int,
 }
 

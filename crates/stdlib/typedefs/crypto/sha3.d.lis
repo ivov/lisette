@@ -63,6 +63,7 @@ pub type SHA3
 
 /// SHAKE is an instance of a SHAKE extendable output function.
 /// The zero value is a usable SHAKE256 hash.
+#[go(incomparable)]
 pub type SHAKE
 
 impl SHA3 {

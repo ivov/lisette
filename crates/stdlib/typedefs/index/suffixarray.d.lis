@@ -11,6 +11,7 @@ import "go:regexp"
 pub fn New(data: Slice<byte>) -> mut Ref<Index>
 
 /// Index implements a suffix array for fast substring search.
+#[go(incomparable)]
 pub type Index
 
 impl Index {

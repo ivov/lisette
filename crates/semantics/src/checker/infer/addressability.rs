@@ -1,4 +1,5 @@
 use syntax::ast::{Expression, UnaryOperator};
+use syntax::program::DotAccessResolution;
 use syntax::types::peel_to_range_type;
 
 use crate::checker::EnvResolve;
@@ -75,6 +76,7 @@ pub(crate) fn check_non_addressable_assignment_target(
 ) -> Option<&'static str> {
     match expression.unwrap_parens() {
         Expression::Identifier { .. } => None,
+        target if let Some(kind) = restricted_package_value(target, store) => Some(kind),
         Expression::DotAccess { expression, .. } => {
             if matches!(expression.unwrap_parens(), Expression::Call { .. })
                 && expression.get_type().resolve_in(env).is_ref()
@@ -102,5 +104,31 @@ pub(crate) fn check_non_addressable_assignment_target(
         Expression::StructCall { .. } => Some("struct literal"),
         Expression::Tuple { .. } => Some("tuple literal"),
         _ => None,
+    }
+}
+
+/// Names a value of another package that Go cannot write or address, such as `os.DevNull`.
+pub(crate) fn restricted_package_value(
+    expression: &Expression,
+    store: &Store,
+) -> Option<&'static str> {
+    let Expression::DotAccess {
+        resolution:
+            DotAccessResolution::PackageMember {
+                definition: Some(definition),
+                ..
+            },
+        ..
+    } = expression.unwrap_parens()
+    else {
+        return None;
+    };
+    let definition = store.get_definition(definition)?;
+    if definition.is_const() {
+        Some("constant")
+    } else if definition.is_read_only() {
+        Some("read-only Go variable")
+    } else {
+        None
     }
 }

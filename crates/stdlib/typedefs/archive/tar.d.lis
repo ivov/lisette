@@ -118,6 +118,7 @@ pub type Reader
 /// Writer provides sequential writing of a tar archive.
 /// [Writer.WriteHeader] begins a new file with the provided [Header],
 /// and then Writer can be treated as an io.Writer to supply that file's data.
+#[go(incomparable)]
 pub type Writer
 
 pub const FormatGNU: Format = 8

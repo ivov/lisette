@@ -116,6 +116,7 @@ pub struct BreakNode {
 /// The periods are dropped from each ident.
 #[go(hidden_embed)]
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct ChainNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -126,6 +127,7 @@ pub struct ChainNode {
 /// CommandNode holds a command (a pipeline inside an evaluating action).
 #[go(hidden_embed)]
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct CommandNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -163,6 +165,7 @@ pub struct DotNode {
 /// The period is dropped from each ident.
 #[go(hidden_embed)]
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct FieldNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -186,6 +189,7 @@ pub struct IfNode {
 /// ListNode holds a sequence of nodes.
 #[go(hidden_embed)]
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct ListNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -240,6 +244,7 @@ pub struct NumberNode {
 /// PipeNode holds a pipeline with optional declaration
 #[go(hidden_embed)]
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct PipeNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -282,6 +287,7 @@ pub struct TemplateNode {
 /// TextNode holds plain text.
 #[go(hidden_embed)]
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct TextNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
@@ -291,6 +297,7 @@ pub struct TextNode {
 /// Tree is the representation of a single parsed template.
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
+#[go(incomparable)]
 pub struct Tree {
   pub Name: string,
   pub ParseName: string,
@@ -302,6 +309,7 @@ pub struct Tree {
 /// accesses. The dollar sign is part of the (first) name.
 #[go(hidden_embed)]
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct VariableNode {
   pub NodeType: NodeType,
   pub Pos: Pos,

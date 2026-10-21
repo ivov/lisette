@@ -60,6 +60,7 @@ pub fn WriteComparable<T: Comparable>(h: mut Ref<Hash>, x: T)
 /// If multiple goroutines must compute the same seeded hash,
 /// each can declare its own Hash and call SetSeed with a common Seed.
 #[go(zero_safe)]
+#[go(incomparable)]
 pub type Hash
 
 /// A Seed is a random value that selects the specific hash function

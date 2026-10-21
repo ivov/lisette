@@ -57,6 +57,7 @@ pub interface KeyExchanger {
 /// These keys can be parsed with [crypto/x509.ParsePKCS8PrivateKey] and encoded
 /// with [crypto/x509.MarshalPKCS8PrivateKey]. For NIST curves, they then need to
 /// be converted with [crypto/ecdsa.PrivateKey.ECDH] after parsing.
+#[go(incomparable)]
 pub type PrivateKey
 
 /// PublicKey is an ECDH public key, usually a peer's ECDH share sent over the wire.
@@ -64,6 +65,7 @@ pub type PrivateKey
 /// These keys can be parsed with [crypto/x509.ParsePKIXPublicKey] and encoded
 /// with [crypto/x509.MarshalPKIXPublicKey]. For NIST curves, they then need to
 /// be converted with [crypto/ecdsa.PublicKey.ECDH] after parsing.
+#[go(incomparable)]
 pub type PublicKey
 
 impl PrivateKey {

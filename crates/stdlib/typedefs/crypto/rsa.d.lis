@@ -298,6 +298,7 @@ pub struct PSSOptions {
 }
 
 #[go(hidden_fields)]
+#[go(incomparable)]
 pub struct PrecomputedValues {
   pub Dp: Option<mut Ref<big.Int>>,
   pub Dq: Option<mut Ref<big.Int>>,

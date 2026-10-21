@@ -616,6 +616,7 @@ pub struct SyscallError {
 /// can overwrite this data, which could cause the finalizer
 /// to close the wrong file descriptor.
 #[go(unexported)]
+#[go(incomparable)]
 pub type file
 
 /// DevNull is the name of the operating system's “null device.”

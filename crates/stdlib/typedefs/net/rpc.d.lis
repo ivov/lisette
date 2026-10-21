@@ -89,6 +89,7 @@ pub struct Call {
 /// There may be multiple outstanding Calls associated
 /// with a single Client, and a Client may be used by
 /// multiple goroutines simultaneously.
+#[go(incomparable)]
 pub type Client
 
 /// A ClientCodec implements writing of RPC requests and
@@ -128,6 +129,7 @@ pub struct Response {
 }
 
 /// Server represents an RPC Server.
+#[go(incomparable)]
 pub type Server
 
 /// A ServerCodec implements reading of RPC requests and writing of

@@ -12,9 +12,11 @@ pub type Box
 /// Clone/Copy return a new value — must not be marked even though the body
 /// returns the receiver name in some path; the Clone/Copy name exclusion catches
 /// the common case before AST inspection runs.
+#[go(incomparable)]
 pub type Cfg
 
 /// Self-return on pointer receiver: classic fluent setter shape.
+#[go(incomparable)]
 pub type Config
 
 /// Value receiver returning same type — must not be marked (immutable update).
@@ -30,10 +32,12 @@ pub struct Engine {
 /// Pointer receiver returning a *different* concrete type — must not be marked.
 pub type Group
 
+#[go(incomparable)]
 pub type Inner
 
 /// Copy-and-modify pattern (slog.Logger.With shape) — must not be marked.
 /// Body assigns to a local and returns the local.
+#[go(incomparable)]
 pub type Logger
 
 /// Interface self-return on a real fluent setter (mutates state, returns self).
@@ -44,6 +48,7 @@ pub interface Router {
   fn Post(path: string) -> Option<Router>
 }
 
+#[go(incomparable)]
 pub type Server
 
 /// Trivial single-statement return-self getter — must not be marked. This is
