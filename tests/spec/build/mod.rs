@@ -4192,6 +4192,53 @@ fn main() {
 }
 
 #[test]
+fn qualified_enum_variant_before_call_needs_no_temp() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "lib",
+        "access.lis",
+        r#"
+pub enum Access {
+  Read,
+  Write,
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "lib"
+
+enum Level {
+  Low,
+  High,
+}
+
+struct Command {
+  access: lib.Access,
+  level: Level,
+  name: string,
+}
+
+fn label() -> string {
+  "status"
+}
+
+fn main() {
+  let c = Command { access: lib.Access.Read, level: Level.Low, name: label() }
+  fmt.Println(c)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn go_struct_nullable_field_raw_temp_var_no_collision() {
     let mut fs = MockFileSystem::new();
 
