@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792694677351,
+  "lastUpdate": 1792695533965,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -47439,6 +47439,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 39701,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29096,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19468,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15750,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13987,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9064,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10247,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d1a1d068a380db766228929927800813d7974266",
+          "message": "feat: idiomatic Go for closures in nullable Go function fields (#1576)",
+          "timestamp": "2026-10-22T20:58:25+02:00",
+          "tree_id": "61ac87edd2496278198cd9bb465e88c19fcf2f62",
+          "url": "https://github.com/ivov/lisette/commit/d1a1d068a380db766228929927800813d7974266"
+        },
+        "date": 1792695531341,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 150752,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39709,
             "unit": "lines"
           },
           {
