@@ -41,7 +41,7 @@ func merge(base, extra []int) []int {
 		if len(extra) == 0 {
 			return slices.Clone(base)
 		}
-		return append(base[:len(base):len(base)], extra...)
+		return append(slices.Clip(base), extra...)
 	}()
 }
 
@@ -62,7 +62,7 @@ func main() {
 		if added == 0 {
 			return slices.Clone(a)
 		}
-		return slices.Grow(a[:len(a):len(a)], added)
+		return slices.Grow(slices.Clip(a), added)
 	}())
 	var from_block []int
 	from_block = slices.Clone(a)
@@ -73,7 +73,7 @@ func main() {
 		if len(added_1) == 0 {
 			return slices.Clone(a)
 		}
-		return append(a[:len(a):len(a)], added_1...)
+		return append(slices.Clip(a), added_1...)
 	}()
 	from_block = tmp
 	check(a, from_block)
@@ -83,7 +83,7 @@ func main() {
 		if added_2 == 0 {
 			return slices.Clone(a)
 		}
-		return slices.Grow(a[:len(a):len(a)], added_2)
+		return slices.Grow(slices.Clip(a), added_2)
 	}()
 	from_block = tmp_1
 	check(a, from_block)
@@ -93,7 +93,7 @@ func main() {
 		if len(added_3) == 0 {
 			return slices.Clone(a)
 		}
-		return append(a[:len(a):len(a)], added_3...)
+		return append(slices.Clip(a), added_3...)
 	}())
 	check(a, slices.Clone(a))
 	check(a, slices.Clone(a))

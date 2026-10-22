@@ -18,7 +18,10 @@ description: |
 ---
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 type Wrap []int
 
@@ -30,5 +33,5 @@ func get() *Wrap {
 
 func main() {
 	recv := ([]int)(*get())
-	_ = append(recv[:len(recv):len(recv)], 2)
+	_ = append(slices.Clip(recv), 2)
 }

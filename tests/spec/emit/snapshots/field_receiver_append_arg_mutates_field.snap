@@ -13,6 +13,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 type Holder struct {
 	slc []int
 }
@@ -24,6 +26,6 @@ func run() int {
 		return 7
 	}
 	arg := h.slc
-	ys := append(arg[:len(arg):len(arg)], bump())
+	ys := append(slices.Clip(arg), bump())
 	return ys[0]
 }

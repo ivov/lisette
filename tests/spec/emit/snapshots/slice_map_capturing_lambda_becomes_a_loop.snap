@@ -13,6 +13,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 func test(s []int, factor int) []int {
 	seen := 0
 	doubled := make([]int, len(s))
@@ -20,5 +22,5 @@ func test(s []int, factor int) []int {
 		seen++
 		doubled[i] = x * factor
 	}
-	return append(doubled[:len(doubled):len(doubled)], seen)
+	return append(slices.Clip(doubled), seen)
 }

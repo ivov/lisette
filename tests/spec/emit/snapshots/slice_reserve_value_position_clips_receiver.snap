@@ -12,6 +12,6 @@ package main
 import "slices"
 
 func test(source []int) []int {
-	grown := slices.Grow(source[:len(source):len(source)], 10)
+	grown := slices.Grow(slices.Clip(source), 10)
 	return grown
 }

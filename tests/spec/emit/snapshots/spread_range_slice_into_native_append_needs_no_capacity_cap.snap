@@ -42,7 +42,7 @@ func insertAt(out []int, pos, x int) []int {
 		if len(added) == 0 {
 			return slices.Clone(next)
 		}
-		return append(next[:len(next):len(next)], added...)
+		return append(slices.Clip(next), added...)
 	}()
 }
 
@@ -52,7 +52,7 @@ func middle(xs, ys []int) []int {
 		if len(added) == 0 {
 			return slices.Clone(xs)
 		}
-		return append(xs[:len(xs):len(xs)], added...)
+		return append(slices.Clip(xs), added...)
 	}()
 }
 

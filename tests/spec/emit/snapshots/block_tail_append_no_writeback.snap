@@ -9,8 +9,10 @@ description: |
 ---
 package main
 
+import "slices"
+
 func test(s []int) []int {
 	var x []int
-	x = append(s[:len(s):len(s)], 2)
+	x = append(slices.Clip(s), 2)
 	return x
 }

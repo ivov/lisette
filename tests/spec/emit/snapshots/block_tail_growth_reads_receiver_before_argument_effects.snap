@@ -77,7 +77,7 @@ func main() {
 			if added == 0 {
 				return slices.Clone(recv)
 			}
-			return slices.Grow(recv[:len(recv):len(recv)], added)
+			return slices.Grow(slices.Clip(recv), added)
 		}()
 		if calls != 1 || result[0] != 1 {
 			panic("reserve must read the receiver before evaluating the count once")
@@ -98,7 +98,7 @@ func main() {
 			if len(added_1) == 0 {
 				return slices.Clone(recv_1)
 			}
-			return append(recv_1[:len(recv_1):len(recv_1)], added_1...)
+			return append(slices.Clip(recv_1), added_1...)
 		}()
 		if calls != 1 || result[0] != 1 || len(result) != 2+len(extra) {
 			panic("append must read the receiver before evaluating the spread once")
@@ -117,7 +117,7 @@ func main() {
 			if added_2 == 0 {
 				return slices.Clone(recv_2)
 			}
-			return slices.Grow(recv_2[:len(recv_2):len(recv_2)], added_2)
+			return slices.Grow(slices.Clip(recv_2), added_2)
 		}()
 		if result[0] != "before" {
 			panic("reserve must read a package receiver before argument effects")

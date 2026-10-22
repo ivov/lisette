@@ -11,6 +11,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 func makeI() int {
 	return 0
 }
@@ -20,5 +22,5 @@ func main() {
 	base := outer
 	idx := makeI()
 	recv := outer[makeI()]
-	base[idx] = append(recv[:len(recv):len(recv)], 4)
+	base[idx] = append(slices.Clip(recv), 4)
 }

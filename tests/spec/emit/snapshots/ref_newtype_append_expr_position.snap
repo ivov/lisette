@@ -12,11 +12,13 @@ description: |
 ---
 package main
 
+import "slices"
+
 type Wrap []int
 
 func main() {
 	w := Wrap([]int{1})
 	r := &w
 	recv := ([]int)(*r)
-	_ = append(recv[:len(recv):len(recv)], 2)
+	_ = append(slices.Clip(recv), 2)
 }

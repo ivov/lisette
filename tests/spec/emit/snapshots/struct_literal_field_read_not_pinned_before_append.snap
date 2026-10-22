@@ -12,6 +12,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 type Suite struct {
 	name  string
 	cases []string
@@ -20,6 +22,6 @@ type Suite struct {
 func (s Suite) withCase(name string) Suite {
 	return Suite{
 		name:  s.name,
-		cases: append(s.cases[:len(s.cases):len(s.cases)], name),
+		cases: append(slices.Clip(s.cases), name),
 	}
 }

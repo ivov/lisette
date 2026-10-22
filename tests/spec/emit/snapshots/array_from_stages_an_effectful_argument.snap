@@ -12,8 +12,10 @@ description: |
 ---
 package main
 
+import "slices"
+
 func grow(seen []int) []int {
-	return append(seen[:len(seen):len(seen)], 1)
+	return append(slices.Clip(seen), 1)
 }
 
 func f(seen []int) ([1]int, bool) {

@@ -254,13 +254,12 @@ pub(crate) fn slice_growth_call(
         .expect("slice growth has an inline rule")
 }
 
-/// `receiver[:len(receiver):len(receiver)]`, so a later `append` cannot write through an alias.
+/// `slices.Clip(receiver)`, so a later `append` cannot write through an alias.
 pub(crate) fn clip_shared_capacity(receiver: GoExpression) -> GoExpression {
-    let length = GoExpression::read_only_call(
-        GoExpression::external_name("len".to_string()),
-        vec![receiver.clone()],
-    );
-    GoExpression::slice(receiver, None, Some(&length), Some(&length))
+    GoExpression::read_only_call(
+        GoExpression::generated(GeneratedPackage::Slices, "Clip"),
+        vec![receiver],
+    )
 }
 
 /// Natives that write no memory a sibling operand can read and run no caller code.

@@ -14,6 +14,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 type Holder struct {
 	slc []int
 }
@@ -27,6 +29,6 @@ func run() int {
 	hs := []Holder{{slc: []int{10}}, {slc: []int{20}}}
 	i := 0
 	recv := hs[i].slc
-	ys := append(recv[:len(recv):len(recv)], bump(&i))
+	ys := append(slices.Clip(recv), bump(&i))
 	return ys[0]
 }
