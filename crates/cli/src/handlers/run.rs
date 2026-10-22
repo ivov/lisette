@@ -7,6 +7,24 @@ use crate::handlers::project::FileTarget;
 use lisette::fs;
 use lisette::pipeline::ProjectKind;
 
+#[cfg(unix)]
+fn exec_binary(output_path: &Path, args: &[String], heading: &str) -> i32 {
+    use std::io::{self, Write};
+    use std::os::unix::process::CommandExt;
+
+    let _ = io::stdout().flush();
+    let _ = io::stderr().flush();
+
+    let e = Command::new(output_path).args(args).exec();
+    cli_error!(
+        heading,
+        format!("Failed to execute compiled binary: {}", e),
+        "Check that the binary was produced and is executable"
+    );
+    1
+}
+
+#[cfg(not(unix))]
 fn exec_binary(output_path: &Path, args: &[String], heading: &str) -> i32 {
     match Command::new(output_path).args(args).status() {
         Ok(status) => status.code().unwrap_or(1),
