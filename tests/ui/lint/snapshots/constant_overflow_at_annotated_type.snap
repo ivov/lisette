@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ Constant overflow
+   ╭─[test.lis:3:17]
+ 2 │ fn main() {
+ 3 │   let _: int8 = 300 + 300
+   ·                 ────┬────
+   ·                     ╰── constant `600` overflows `int8`
+ 4 │ }
+   ╰────
+  help: This expression always evaluates to `600`, and `int8` must be in range `-128` to `127` · code: [infer.constant_overflow]

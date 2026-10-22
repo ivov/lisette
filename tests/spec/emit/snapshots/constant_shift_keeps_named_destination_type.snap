@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/literals.rs
+description: |
+  
+  struct Tiny(int8)
+  
+  fn test() -> Tiny {
+    let x: Tiny = 1 << (1 + 1)
+    x
+  }
+---
+package main
+
+type Tiny int8
+
+func test() Tiny {
+	var x Tiny = 1 << (1 + 1)
+	return x
+}

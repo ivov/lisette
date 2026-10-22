@@ -443,6 +443,65 @@ fn slice_literal_adapts_negative_int8_elements() {
 }
 
 #[test]
+fn constant_expression_adapts_to_annotated_type() {
+    infer("{ let x: int8 = 1 + 1; x }").assert_type(int8_type());
+    infer("{ let x: int8 = -(1 + 1); x }").assert_type(int8_type());
+    infer("{ let x: int8 = ^0; x }").assert_type(int8_type());
+    infer("{ let x: int8 = 1 << 2; x }").assert_type(int8_type());
+}
+
+#[test]
+fn constant_expression_adapts_in_typed_positions() {
+    infer(
+        r#"{
+    let takes = |x: int8| -> int8 { x }
+    let returns = || -> int8 { 2 * 3 }
+    let s: Slice<int8> = [1 + 1, 2 - 1]
+    let _ = (s, returns())
+    takes(1 + 1)
+    }"#,
+    )
+    .assert_type(int8_type());
+}
+
+#[test]
+fn constant_expression_adapts_beside_typed_operand() {
+    infer("{ let n: int8 = 1; n + (1 + 1) }").assert_type(int8_type());
+    infer("{ let n: int8 = 1; n == 1 + 1 }").assert_type_bool();
+    infer("{ let n: int8 = 1; 1 + 1 == n }").assert_type_bool();
+    infer("{ let n: int8 = 1; 1 + 2 + n }").assert_type(int8_type());
+}
+
+#[test]
+fn constant_expression_skips_literal_range_checks() {
+    infer("{ let x: int8 = 200 - 100; x }").assert_no_errors();
+    infer("{ let x: int8 = -200 + 100; x }").assert_no_errors();
+    infer("{ let x: uint8 = -1 + 2; x }").assert_no_errors();
+}
+
+#[test]
+fn constant_expression_beside_shift_count_keeps_int() {
+    infer("{ let n: int8 = 1; (1 + 1) << n }").assert_type_int();
+    infer("{ let n: int8 = 1; n << (1 + 1) }").assert_type(int8_type());
+}
+
+#[test]
+fn shift_by_constant_count_keeps_constant_checks() {
+    infer("{ let x: int8 = 1 << 128; x }").assert_type_mismatch();
+    infer("{ let x: int8 = 1 << (8 as int); x }").assert_type_mismatch();
+}
+
+#[test]
+fn constant_expression_without_destination_is_int() {
+    infer("1 + 1").assert_type_int();
+}
+
+#[test]
+fn constant_expression_does_not_adapt_to_float() {
+    infer("{ let x: float64 = 1 / 2; x }").assert_type_mismatch();
+}
+
+#[test]
 fn custom_enum_variant_constructor_must_be_qualified() {
     infer(
         r#"{
