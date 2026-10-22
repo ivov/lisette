@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:errors"
+  import "go:net/http"
+  
+  fn check(req: Ref<http.Request>) -> Result<(), error> {
+    if req.Method == "" { return Err(errors.New("no method")) }
+    Ok(())
+  }
+  
+  fn main() {
+    let client = http.Client {
+      CheckRedirect: Some(|req, _| {
+        check(req)?
+        Ok(())
+      }),
+      ..
+    }
+    let _ = client
+  }
+---
+package main
+
+import (
+	"errors"
+	"net/http"
+)
+
+func check(req *http.Request) error {
+	if req.Method == "" {
+		return errors.New("no method")
+	}
+	return nil
+}
+
+func main() {
+	client := http.Client{CheckRedirect: func(req *http.Request, _ []*http.Request) error {
+		return check(req)
+	}}
+	_ = client
+}
