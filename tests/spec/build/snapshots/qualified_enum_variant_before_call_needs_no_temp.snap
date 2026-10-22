@@ -1,0 +1,71 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === lib/access.go ===
+package lib
+
+func MakeAccessRead() Access {
+	return Access{Tag: AccessRead}
+}
+
+func MakeAccessWrite() Access {
+	return Access{Tag: AccessWrite}
+}
+
+type AccessTag uint8
+
+const (
+	AccessRead AccessTag = iota
+	AccessWrite
+)
+
+type Access struct {
+	Tag AccessTag
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/lib"
+)
+
+func MakeLevelLow() Level {
+	return Level{Tag: LevelLow}
+}
+
+func MakeLevelHigh() Level {
+	return Level{Tag: LevelHigh}
+}
+
+type LevelTag uint8
+
+const (
+	LevelLow LevelTag = iota
+	LevelHigh
+)
+
+type Level struct {
+	Tag LevelTag
+}
+
+type Command struct {
+	access lib.Access
+	level  Level
+	name   string
+}
+
+func label() string {
+	return "status"
+}
+
+func main() {
+	c := Command{
+		access: lib.MakeAccessRead(),
+		level:  MakeLevelLow(),
+		name:   label(),
+	}
+	fmt.Println(c)
+}

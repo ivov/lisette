@@ -61,7 +61,11 @@ impl Planner<'_> {
         if let Some(expression) =
             self.try_emit_pre_receiver_dot(member, result_ty, resolution, tagged_twin, ctx)
         {
-            return ValuePlan::computed(Vec::new(), expression);
+            let plan = ValuePlan::computed(Vec::new(), expression);
+            if matches!(resolution, DotAccessResolution::EnumVariant { .. }) {
+                return plan.with_stability(Stability::Fixed);
+            }
+            return plan;
         }
 
         let expression_ty = expression.get_type();
