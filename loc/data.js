@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792686014487,
+  "lastUpdate": 1792694169525,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -47261,6 +47261,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 39701,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29096,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19468,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15750,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13987,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9064,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10247,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b30a9ca049a02e54a218c14ff76ee1053c7a3215",
+          "message": "fix: skip unused imports for omitted `None` fields in emitted Go (#1574)",
+          "timestamp": "2026-10-22T20:35:45+02:00",
+          "tree_id": "ad6fde6db5f155a988acd738cf9e74c950b40bda",
+          "url": "https://github.com/ivov/lisette/commit/b30a9ca049a02e54a218c14ff76ee1053c7a3215"
+        },
+        "date": 1792694166755,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 150740,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39697,
             "unit": "lines"
           },
           {
