@@ -4838,6 +4838,61 @@ fn main() {
 }
 
 #[test]
+fn omitted_none_field_does_not_import_its_type_package() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "out",
+        "out.lis",
+        r#"
+pub struct Out {
+  pub n: int,
+}
+"#,
+    );
+
+    fs.add_file(
+        "pb",
+        "errors.lis",
+        r#"
+import "go:net/http"
+import "out"
+
+pub struct E {
+  pub said: Option<out.Out>,
+  pub held: Option<Ref<out.Out>>,
+  pub client: Option<Ref<http.Client>>,
+}
+"#,
+    );
+
+    fs.add_file(
+        "pb",
+        "client.lis",
+        r#"
+pub fn make() -> E {
+  E { said: None, held: None, client: None }
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "pb"
+
+fn main() {
+  fmt.Println(pb.make())
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn script_check_ignores_sibling_files() {
     let mut fs = MockFileSystem::new();
 

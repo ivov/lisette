@@ -1,0 +1,46 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/pb"
+)
+
+func main() {
+	fmt.Println(pb.Make())
+}
+
+
+// === out/out.go ===
+package out
+
+type Out struct {
+	N int
+}
+
+
+// === pb/client.go ===
+package pb
+
+func Make() E {
+	return E{}
+}
+
+
+// === pb/errors.go ===
+package pb
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"github.com/user/myproject/out"
+	"net/http"
+)
+
+type E struct {
+	Said   lisette.Option[out.Out]
+	Held   lisette.Option[*out.Out]
+	Client lisette.Option[*http.Client]
+}

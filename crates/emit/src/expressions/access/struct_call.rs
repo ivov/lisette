@@ -80,27 +80,30 @@ impl Planner<'_> {
         let is_go_struct = self.is_go_abi_type(ty);
         let variant = ctx.enum_ctx.as_ref().map(|ctx| ctx.variant_name.as_str());
 
-        let field_slots: Vec<(Option<Type>, Option<ValueLayout>)> = field_assignments
+        let kept_fields: Vec<(&StructFieldAssignment, Option<Type>, Option<ValueLayout>)> =
+            field_assignments
+                .iter()
+                .filter_map(|f| {
+                    let field_ty = self.lookup_field_ty(ty, variant, &f.name);
+                    if self.omits_none_field(f, field_ty.as_ref(), &ctx, spread, is_go_struct) {
+                        return None;
+                    }
+                    let value_ty = f.value.get_type();
+                    let layout = self.field_slot_layout(
+                        ty,
+                        None,
+                        variant,
+                        &f.name,
+                        field_ty.as_ref().unwrap_or(&value_ty),
+                    );
+                    Some((f, field_ty, layout))
+                })
+                .collect();
+        let mut literal_slots = vec![false; kept_fields.len()];
+        let (stages, source_layouts): (Vec<ValuePlan>, Vec<ValueLayout>) = kept_fields
             .iter()
-            .map(|f| {
-                let field_ty = self.lookup_field_ty(ty, variant, &f.name);
-                let value_ty = f.value.get_type();
-                let layout = self.field_slot_layout(
-                    ty,
-                    None,
-                    variant,
-                    &f.name,
-                    field_ty.as_ref().unwrap_or(&value_ty),
-                );
-                (field_ty, layout)
-            })
-            .collect();
-        let mut literal_slots = vec![false; field_assignments.len()];
-        let (stages, source_layouts): (Vec<ValuePlan>, Vec<ValueLayout>) = field_assignments
-            .iter()
-            .zip(&field_slots)
             .zip(&mut literal_slots)
-            .map(|((f, (field_ty, layout)), literal_slot)| {
+            .map(|((f, field_ty, layout), literal_slot)| {
                 if let Some(layout) = layout
                     && let Some(literal) = self.lower_option_literal_into_layout(&f.value, layout)
                 {
@@ -126,23 +129,16 @@ impl Planner<'_> {
         let emitted_values = sequenced.values;
 
         let mut fields =
-            Vec::with_capacity(field_assignments.len() + usize::from(ctx.enum_ctx.is_some()));
+            Vec::with_capacity(kept_fields.len() + usize::from(ctx.enum_ctx.is_some()));
         for (
-            (
-                ((f, has_observable_evaluation), (mut value, source_layout)),
-                (field_ty, field_layout),
-            ),
+            (((f, field_ty, field_layout), has_observable_evaluation), (mut value, source_layout)),
             literal_slot,
-        ) in field_assignments
-            .iter()
+        ) in kept_fields
+            .into_iter()
             .zip(field_evaluations)
             .zip(emitted_values.into_iter().zip(source_layouts))
-            .zip(field_slots)
             .zip(literal_slots)
         {
-            if self.omits_none_field(f, field_ty.as_ref(), &ctx, spread, is_go_struct) {
-                continue;
-            }
             let field_name = self.resolve_struct_call_field_name(&f.name, &ctx);
             value = self.wrap_recursive_enum_field(&mut setup, value, f, &ctx);
             value = self.coerce_struct_field(
