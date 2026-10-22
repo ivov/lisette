@@ -10,9 +10,11 @@ description: |
 ---
 package main
 
+import "slices"
+
 func main() {
 	s := []int{1}
 	r := &s
 	recv := *r
-	_ = append(recv[:len(recv):len(recv)], 2)
+	_ = append(slices.Clip(recv), 2)
 }

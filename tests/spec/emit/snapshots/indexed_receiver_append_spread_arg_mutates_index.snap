@@ -32,7 +32,7 @@ func test() int {
 		if len(added) == 0 {
 			return slices.Clone(recv)
 		}
-		return append(recv[:len(recv):len(recv)], added...)
+		return append(slices.Clip(recv), added...)
 	}()
 	return ys[0]
 }

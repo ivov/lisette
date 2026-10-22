@@ -10,8 +10,10 @@ description: |
 ---
 package main
 
+import "slices"
+
 func main() {
 	items := []int{}
-	_ = append(items[:len(items):len(items)], 1)
+	_ = append(slices.Clip(items), 1)
 	_ = items
 }

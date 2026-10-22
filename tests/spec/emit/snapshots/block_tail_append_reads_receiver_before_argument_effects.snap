@@ -22,6 +22,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 type Holder struct {
 	slc []struct{}
 }
@@ -35,7 +37,7 @@ func main() {
 	var ys []struct{}
 	recv := h.slc
 	bump()
-	ys = append(recv[:len(recv):len(recv)], struct{}{})
+	ys = append(slices.Clip(recv), struct{}{})
 	if len(ys) != 1 {
 		panic("the receiver must be read before argument effects run")
 	}

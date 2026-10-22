@@ -15,6 +15,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 type Wrap []int
 
 func main() {
@@ -27,6 +29,6 @@ func main() {
 	}
 	ref := r
 	recv := ([]int)(*r)
-	*ref = Wrap(append(recv[:len(recv):len(recv)], 2))
+	*ref = Wrap(append(slices.Clip(recv), 2))
 	_ = w
 }

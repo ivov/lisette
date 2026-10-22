@@ -12,6 +12,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 type Items struct {
 	items []int
 }
@@ -22,5 +24,5 @@ func get() Items {
 
 func main() {
 	recv := get().items
-	_ = append(recv[:len(recv):len(recv)], 2)
+	_ = append(slices.Clip(recv), 2)
 }

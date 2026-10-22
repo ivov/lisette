@@ -13,6 +13,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 func mark() int {
 	return 2
 }
@@ -21,6 +23,6 @@ func test() {
 	xs := []int{1}
 	arg := mark()
 	defer func() {
-		_ = append(xs[:len(xs):len(xs)], arg)
+		_ = append(slices.Clip(xs), arg)
 	}()
 }

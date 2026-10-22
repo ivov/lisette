@@ -18,7 +18,10 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"slices"
+)
 
 func identity(s []int) []int {
 	return s
@@ -28,7 +31,7 @@ func main() {
 	base := []int{1, 2}
 	base = append(base, 3)
 	recv := identity(base)
-	u := append(recv[:len(recv):len(recv)], 7)
+	u := append(slices.Clip(recv), 7)
 	base[0] = 99
 	if lisette.SliceGet(u, 0).UnwrapOr(-1) != 1 {
 		panic("a call-produced receiver must not alias the argument")

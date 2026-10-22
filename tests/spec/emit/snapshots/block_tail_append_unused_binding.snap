@@ -8,6 +8,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 func test(s []int) {
-	_ = append(s[:len(s):len(s)], 2)
+	_ = append(slices.Clip(s), 2)
 }

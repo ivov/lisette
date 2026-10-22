@@ -61,7 +61,7 @@ func main() {
 			if added == 0 {
 				return slices.Clone(a)
 			}
-			return slices.Grow(a[:len(a):len(a)], added)
+			return slices.Grow(slices.Clip(a), added)
 		}()
 		if calls != 1 {
 			panic("a reserve count must be evaluated once")
@@ -79,7 +79,7 @@ func main() {
 			if len(added_1) == 0 {
 				return slices.Clone(a)
 			}
-			return append(a[:len(a):len(a)], added_1...)
+			return append(slices.Clip(a), added_1...)
 		}())
 		if calls != 2 {
 			panic("a spread operand must be evaluated once")

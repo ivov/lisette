@@ -13,7 +13,10 @@ description: |
 ---
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 func get() []int {
 	return []int{1}
@@ -26,5 +29,5 @@ func arg() int {
 
 func main() {
 	recv := get()
-	_ = append(recv[:len(recv):len(recv)], arg())
+	_ = append(slices.Clip(recv), arg())
 }

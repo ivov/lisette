@@ -12,6 +12,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 type Wrap []int
 
 func main() {
@@ -19,5 +21,5 @@ func main() {
 	m["a"] = Wrap([]int{})
 	base := m
 	recv := ([]int)(m["a"])
-	base["a"] = Wrap(append(recv[:len(recv):len(recv)], 1))
+	base["a"] = Wrap(append(slices.Clip(recv), 1))
 }

@@ -17,8 +17,10 @@ description: |
 ---
 package main
 
+import "slices"
+
 func grow(xs []int) ([]int, []int) {
-	return append(xs[:len(xs):len(xs)], 1), append(xs[:len(xs):len(xs)], 1)
+	return append(slices.Clip(xs), 1), append(slices.Clip(xs), 1)
 }
 
 func nonEmpty(xs, ys []int) bool {

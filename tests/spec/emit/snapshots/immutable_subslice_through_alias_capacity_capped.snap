@@ -14,12 +14,14 @@ description: |
 ---
 package main
 
+import "slices"
+
 type Numbers = []int
 
 func test() {
 	xs := []int{1, 2, 3}
 	view := xs[0:2:2]
-	grown := append(view[:len(view):len(view)], 9)
+	grown := append(slices.Clip(view), 9)
 	_ = grown
 	_ = xs
 }

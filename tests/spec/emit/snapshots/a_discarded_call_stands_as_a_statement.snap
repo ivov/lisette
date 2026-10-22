@@ -22,6 +22,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 type Meters int
 
 func bump(counter *int) int {
@@ -35,7 +37,7 @@ func test() {
 	_ = Meters(2)
 	xs := []int{1, 2}
 	_ = len(xs)
-	_ = append(xs[:len(xs):len(xs)], 3)
+	_ = append(slices.Clip(xs), 3)
 	if counter != 1 {
 		panic("the discarded call should still run once")
 	}

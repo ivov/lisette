@@ -13,6 +13,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 func bump(i *int) int {
 	*i = 1
 	return 99
@@ -22,6 +24,6 @@ func run() int {
 	xss := [][]int{{10}, {20}}
 	i := 0
 	recv := xss[i]
-	ys := append(recv[:len(recv):len(recv)], bump(&i))
+	ys := append(slices.Clip(recv), bump(&i))
 	return ys[0]
 }

@@ -17,13 +17,16 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"slices"
+)
 
 func main() {
 	base := []int{1, 2}
-	t := append(base[:len(base):len(base)], 3)
-	u1 := append(t[:len(t):len(t)], 7)
-	u2 := append(t[:len(t):len(t)], 8)
+	t := append(slices.Clip(base), 3)
+	u1 := append(slices.Clip(t), 7)
+	u2 := append(slices.Clip(t), 8)
 	if lisette.SliceGet(u1, 3).UnwrapOr(-1) != 7 {
 		panic("append results must not share a backing array")
 	}

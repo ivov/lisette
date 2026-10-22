@@ -15,6 +15,6 @@ func test(s, more []int) []int {
 		if len(more) == 0 {
 			return slices.Clone(s)
 		}
-		return append(s[:len(s):len(s)], more...)
+		return append(slices.Clip(s), more...)
 	}()
 }

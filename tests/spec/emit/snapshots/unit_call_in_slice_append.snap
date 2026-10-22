@@ -11,10 +11,12 @@ description: |
 ---
 package main
 
+import "slices"
+
 func noop() {}
 
 func test() {
 	xs := []struct{}{}
 	noop()
-	_ = append(xs[:len(xs):len(xs)], struct{}{})
+	_ = append(slices.Clip(xs), struct{}{})
 }

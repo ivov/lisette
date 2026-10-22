@@ -16,6 +16,8 @@ description: |
 ---
 package main
 
+import "slices"
+
 type Wrap []int
 
 func get() *Wrap {
@@ -26,6 +28,6 @@ func get() *Wrap {
 func main() {
 	var x []int
 	recv := ([]int)(*get())
-	x = append(recv[:len(recv):len(recv)], 2)
+	x = append(slices.Clip(recv), 2)
 	_ = x[0]
 }
