@@ -3426,6 +3426,31 @@ pub fn Each(f: fn(Option<int>))
 }
 
 #[test]
+fn closure_in_nullable_go_function_field_takes_go_signature() {
+    let input = r#"
+import "go:errors"
+import "go:net/http"
+
+fn check(req: Ref<http.Request>) -> Result<(), error> {
+  if req.Method == "" { return Err(errors.New("no method")) }
+  Ok(())
+}
+
+fn main() {
+  let client = http.Client {
+    CheckRedirect: Some(|req, _| {
+      check(req)?
+      Ok(())
+    }),
+    ..
+  }
+  let _ = client
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn interop_read_only_go_variables_are_readable() {
     let input = r#"
 import "go:encoding/binary"

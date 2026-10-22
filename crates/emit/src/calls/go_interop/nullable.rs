@@ -71,6 +71,15 @@ impl Planner<'_> {
         if spread.is_some() || prelude_constructor(callee) != Some(PreludeVariant::Some) {
             return None;
         }
+        if let LayoutBridge::UnwrapNullableOption { target_payload, .. } = &bridge
+            && matches!(inner.unwrap_parens(), Expression::Lambda { .. })
+        {
+            let ctx = ExpressionContext::value().with_function_slot_origin(SlotOrigin::GoField);
+            let emitted = self.emitted_value_layout(inner, ctx);
+            if CoercionPlan::bridge(self, &emitted, target_payload).is_identity() {
+                return Some(self.lower_composite_value(inner, ctx));
+            }
+        }
         let inner = self.lower_composite_value(inner, ExpressionContext::value());
         Some(inner.map_expression(|setup, value| {
             let value = if payload.is_identity() {
