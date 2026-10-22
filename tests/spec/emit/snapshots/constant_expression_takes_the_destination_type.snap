@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/literals.rs
+description: |
+  
+  fn takes(x: int8) -> int8 { x }
+  
+  fn id<T>(x: T) -> T { x }
+  
+  fn test() -> int8 {
+    let a: int8 = 200 - 100
+    let b: uint64 = 1 << 63
+    let c: int8 = -(1 + 1)
+    let d: int8 = id(1 + 1)
+    let e: Option<int8> = Some(2 * 3)
+    let mut n: int8 = 1
+    n += 1 + 1
+    let _ = (a, b, c, d, e)
+    takes(n + (1 + 1))
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func takes(x int8) int8 {
+	return x
+}
+
+func id[T any](x T) T {
+	return x
+}
+
+func test() int8 {
+	var a int8 = 200 - 100
+	var b uint64 = 1 << 63
+	var c int8 = -(1 + 1)
+	d := id(int8(1 + 1))
+	e := lisette.MakeOptionSome(int8(2 * 3))
+	var n int8 = 1
+	n += 1 + 1
+	_ = lisette.MakeTuple5[int8, uint64, int8, int8, lisette.Option[int8]](a, b, c, d, e)
+	return takes(n + (1 + 1))
+}

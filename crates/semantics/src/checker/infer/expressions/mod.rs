@@ -207,6 +207,12 @@ impl InferCtx<'_> {
                 }
             }
 
+            Expression::Binary { .. } | Expression::Unary { .. }
+                if self.adapts_as_constant(&expression, expected_ty) =>
+            {
+                self.infer_constant_operation(expression, expected_ty)
+            }
+
             Expression::Binary {
                 operator,
                 left,

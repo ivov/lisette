@@ -46,6 +46,10 @@ pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
         return;
     }
 
+    if left.fold_constant(&|_| None).is_some() {
+        return;
+    }
+
     if let Some(kind) = left.get_type().as_simple()
         && let Some(bit_width) = fixed_bit_width(kind)
         && amount >= i128::from(bit_width)

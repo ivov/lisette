@@ -37,14 +37,16 @@ impl InferCtx<'_> {
                 let resolved = expected_ty.resolve_in(&self.env);
                 let ty = if let Some(numeric) = numeric_adapt_target(&resolved, store) {
                     let is_pre_negated = text.as_deref().is_some_and(|t| t.starts_with('-'));
-                    if is_pre_negated {
-                        self.check_negative_magnitude_overflow(
-                            value.wrapping_neg(),
-                            &numeric,
-                            span,
-                        );
-                    } else if !self.is_inside_negation() {
-                        self.check_integer_literal_overflow(value, &numeric, span);
+                    if !self.is_inside_constant_expression() {
+                        if is_pre_negated {
+                            self.check_negative_magnitude_overflow(
+                                value.wrapping_neg(),
+                                &numeric,
+                                span,
+                            );
+                        } else if !self.is_inside_negation() {
+                            self.check_integer_literal_overflow(value, &numeric, span);
+                        }
                     }
                     resolved.clone()
                 } else {
@@ -118,7 +120,9 @@ impl InferCtx<'_> {
             Literal::Char(char) => {
                 let resolved = expected_ty.resolve_in(&self.env);
                 let ty = if let Some(numeric) = numeric_adapt_target(&resolved, store) {
-                    if let Some(codepoint) = rune_codepoint(&char) {
+                    if !self.is_inside_constant_expression()
+                        && let Some(codepoint) = rune_codepoint(&char)
+                    {
                         self.check_integer_literal_overflow(codepoint as u64, &numeric, span);
                     }
                     resolved.clone()

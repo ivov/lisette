@@ -454,7 +454,12 @@ fn is_casting_needed(
     left: &BinaryOperand,
     right: &BinaryOperand,
 ) -> Option<NumericBinaryEmitInfo> {
-    if !is_numeric_binary_op(operator) {
+    if !is_numeric_binary_op(operator)
+        || matches!(
+            operator,
+            BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight
+        )
+    {
         return None;
     }
 

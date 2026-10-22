@@ -17,6 +17,92 @@ fn test() -> byte {
 }
 
 #[test]
+fn constant_expression_takes_the_destination_type() {
+    let input = r#"
+fn takes(x: int8) -> int8 { x }
+
+fn id<T>(x: T) -> T { x }
+
+fn test() -> int8 {
+  let a: int8 = 200 - 100
+  let b: uint64 = 1 << 63
+  let c: int8 = -(1 + 1)
+  let d: int8 = id(1 + 1)
+  let e: Option<int8> = Some(2 * 3)
+  let mut n: int8 = 1
+  n += 1 + 1
+  let _ = (a, b, c, d, e)
+  takes(n + (1 + 1))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn constant_shift_keeps_named_destination_type() {
+    let input = r#"
+struct Tiny(int8)
+
+fn test() -> Tiny {
+  let x: Tiny = 1 << (1 + 1)
+  x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn constant_expression_values_at_destination_types() {
+    let input = r#"
+struct Tiny(int8)
+
+fn id<T>(x: T) -> T { x }
+
+fn takes(x: int8) -> int8 { x }
+
+fn narrow() -> int8 { 200 - 100 }
+
+fn test() {
+  let a: int8 = 200 - 100
+  let b: uint8 = -1 + 2
+  let c: uint64 = 1 << 63
+  let d: int8 = -(1 + 1)
+  let e: int8 = ^0
+  let f: int8 = ((200 - 100))
+  let g: int8 = 200 >> 1
+  let h: Tiny = 1 << (1 + 1)
+  let i: rune = 'a' + 1
+  let n: int8 = 1
+  let j = n + (1 + 1)
+  let k = (1 + 1) + n
+  let l = 1 + 2 + n
+  let m: int8 = id(1 + 1)
+  let o: Option<int8> = Some(2 * 3)
+  let mut p: int8 = 1
+  p += 1 + 1
+  let q = 1 + 1
+  let r: int = (1 + 1) << n
+  let s = n << (1 + 1)
+  if a != 100 || b != 1 || c != 9223372036854775808 || d != -2 || e != -1 || f != 100 || g != 100 {
+    panic("narrowing")
+  }
+  if i != 'b' || takes(j) != 3 || takes(k) != 3 || takes(l) != 4 || m != 2 || p != 3 || q != 2 {
+    panic("adaptation")
+  }
+  if 1 + 1 != n + 1 || n + 2 != 1 + 2 || takes(1 + 1) != 2 || narrow() != 100 || r != 4 || takes(s) != 4 {
+    panic("operands")
+  }
+  match o {
+    Some(6) => {},
+    _ => panic("option"),
+  }
+  let _ = h
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn integer_literal() {
     let input = r#"
 fn test() -> int {

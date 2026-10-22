@@ -1,0 +1,107 @@
+---
+source: tests/spec/emit/literals.rs
+description: |
+  
+  struct Tiny(int8)
+  
+  fn id<T>(x: T) -> T { x }
+  
+  fn takes(x: int8) -> int8 { x }
+  
+  fn narrow() -> int8 { 200 - 100 }
+  
+  fn test() {
+    let a: int8 = 200 - 100
+    let b: uint8 = -1 + 2
+    let c: uint64 = 1 << 63
+    let d: int8 = -(1 + 1)
+    let e: int8 = ^0
+    let f: int8 = ((200 - 100))
+    let g: int8 = 200 >> 1
+    let h: Tiny = 1 << (1 + 1)
+    let i: rune = 'a' + 1
+    let n: int8 = 1
+    let j = n + (1 + 1)
+    let k = (1 + 1) + n
+    let l = 1 + 2 + n
+    let m: int8 = id(1 + 1)
+    let o: Option<int8> = Some(2 * 3)
+    let mut p: int8 = 1
+    p += 1 + 1
+    let q = 1 + 1
+    let r: int = (1 + 1) << n
+    let s = n << (1 + 1)
+    if a != 100 || b != 1 || c != 9223372036854775808 || d != -2 || e != -1 || f != 100 || g != 100 {
+      panic("narrowing")
+    }
+    if i != 'b' || takes(j) != 3 || takes(k) != 3 || takes(l) != 4 || m != 2 || p != 3 || q != 2 {
+      panic("adaptation")
+    }
+    if 1 + 1 != n + 1 || n + 2 != 1 + 2 || takes(1 + 1) != 2 || narrow() != 100 || r != 4 || takes(s) != 4 {
+      panic("operands")
+    }
+    match o {
+      Some(6) => {},
+      _ => panic("option"),
+    }
+    let _ = h
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Tiny int8
+
+func id[T any](x T) T {
+	return x
+}
+
+func takes(x int8) int8 {
+	return x
+}
+
+func narrow() int8 {
+	return 200 - 100
+}
+
+func test() {
+	var a int8 = 200 - 100
+	var b uint8 = -1 + 2
+	var c uint64 = 1 << 63
+	var d int8 = -(1 + 1)
+	var e int8 = ^0
+	var f int8 = 200 - 100
+	var g int8 = 200 >> 1
+	var h Tiny = 1 << (1 + 1)
+	i := 'a' + 1
+	var n int8 = 1
+	j := n + (1 + 1)
+	k := 1 + 1 + n
+	l := 1 + 2 + n
+	m := id(int8(1 + 1))
+	o := lisette.MakeOptionSome(int8(2 * 3))
+	var p int8 = 1
+	p += 1 + 1
+	q := 1 + 1
+	r := (1 + 1) << n
+	s := n << (1 + 1)
+	if a != 100 || b != 1 || c != 9223372036854775808 || d != -2 || e != -1 || f != 100 || g != 100 {
+		panic("narrowing")
+	}
+	if i != 'b' || takes(j) != 3 || takes(k) != 3 || takes(l) != 4 || m != 2 || p != 3 || q != 2 {
+		panic("adaptation")
+	}
+	if 1+1 != n+1 || n+2 != 1+2 || takes(1+1) != 2 || narrow() != 100 || r != 4 || takes(s) != 4 {
+		panic("operands")
+	}
+	if o.Tag == lisette.OptionSome {
+		if o.SomeVal == 6 {
+		} else {
+			panic("option")
+		}
+	} else {
+		panic("option")
+	}
+	_ = h
+}

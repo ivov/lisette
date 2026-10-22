@@ -16114,6 +16114,44 @@ fn main() {
 }
 
 #[test]
+fn constant_overflow_at_annotated_type() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _: int8 = 300 + 300
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_negated_expression_at_unsigned_type() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _: uint8 = -(1 + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_at_annotated_type_checks_whole_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _: int8 = 200 - 100
+  let _: int8 = -127 - 1
+  let _: uint8 = -(1 - 2)
+  let _: uint8 = 'a' + 1
+  let _: int8 = 1 << 100 >> 98
+  let _: uint64 = 1 << 63
+}
+"#
+    );
+}
+
+#[test]
 fn constant_overflow_in_range_no_warning() {
     assert_no_lint_warnings!(
         r#"

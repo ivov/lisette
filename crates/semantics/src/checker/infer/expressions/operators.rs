@@ -45,6 +45,73 @@ impl NumericCompat {
 }
 
 impl InferCtx<'_> {
+    pub(super) fn adapts_as_constant(&self, expression: &Expression, expected_ty: &Type) -> bool {
+        let is_operation = match expression {
+            Expression::Binary { .. } => true,
+            // A negated literal keeps the range check that `-128` needs.
+            Expression::Unary {
+                operator: Negative,
+                expression: operand,
+                ..
+            } => !is_numeric_literal(operand),
+            Expression::Unary {
+                operator: BitwiseNot,
+                ..
+            } => true,
+            _ => false,
+        };
+        is_operation
+            && is_integer_adaptation_target(&expected_ty.resolve_in(&self.env), self.store)
+            && (self.is_inside_constant_expression() || folds_to_integer(expression))
+    }
+
+    pub(super) fn infer_constant_operation(
+        &mut self,
+        expression: Expression,
+        expected_ty: &Type,
+    ) -> Expression {
+        self.in_constant_expression(|this| match expression {
+            Expression::Binary {
+                operator,
+                left,
+                right,
+                span,
+                ..
+            } => {
+                let right_ty = if matches!(operator, ShiftLeft | ShiftRight) {
+                    this.new_type_var()
+                } else {
+                    expected_ty.clone()
+                };
+                let (left, right) = this.with_value_context(|this| {
+                    let left = this.infer_expression(*left, expected_ty);
+                    let right = this.infer_expression(*right, &right_ty);
+                    (left, right)
+                });
+                let left = InferredOperand::new(left, expected_ty.clone());
+                let right = InferredOperand::new(right, right_ty);
+                this.finish_binary(operator, left, right, expected_ty, span)
+                    .expression
+            }
+            Expression::Unary {
+                operator,
+                expression: operand,
+                span,
+                ..
+            } => {
+                let operand =
+                    this.with_value_context(|this| this.infer_expression(*operand, expected_ty));
+                Expression::Unary {
+                    operator,
+                    expression: operand.into(),
+                    ty: expected_ty.clone(),
+                    span,
+                }
+            }
+            _ => unreachable!("adapts_as_constant admits only unary and binary operations"),
+        })
+    }
+
     pub(super) fn infer_unary(
         &mut self,
         operator: UnaryOperator,
@@ -85,12 +152,14 @@ impl InferCtx<'_> {
                 if resolved.is_numeric() || self.store.underlying_numeric_type(&resolved).is_some()
                 {
                     let is_literal = is_numeric_literal(&new_expression);
-                    if resolved.is_unsigned_int() && !is_literal {
-                        let type_name = resolved.get_name().unwrap_or_default();
-                        self.sink
-                            .push(diagnostics::infer::cannot_negate_unsigned(type_name, span));
+                    if !self.is_inside_constant_expression() {
+                        if resolved.is_unsigned_int() && !is_literal {
+                            let type_name = resolved.get_name().unwrap_or_default();
+                            self.sink
+                                .push(diagnostics::infer::cannot_negate_unsigned(type_name, span));
+                        }
+                        self.check_negative_literal_overflow(&new_expression, &resolved, span);
                     }
-                    self.check_negative_literal_overflow(&new_expression, &resolved, span);
                     operand_expected_ty.clone()
                 } else {
                     if !resolved.is_error() {
@@ -154,20 +223,32 @@ impl InferCtx<'_> {
         if matches!(*left_operand, Expression::Binary { .. }) {
             let mut stack = vec![(operator, right_operand, span)];
             let mut current = *left_operand;
-            while let Expression::Binary {
-                operator: op,
-                left,
-                right,
-                span: s,
-                ..
-            } = current
+            while !folds_to_integer(&current)
+                && let Expression::Binary {
+                    operator: op,
+                    left,
+                    right,
+                    span: s,
+                    ..
+                } = current
             {
                 stack.push((op, right, s));
                 current = *left;
             }
-            let left_ty = self.new_type_var();
-            let left_inferred = self.infer_expression(current, &left_ty);
-            let mut left = InferredOperand::new(left_inferred, left_ty);
+            let mut left = if folds_to_integer(&current) {
+                let (op, right, s) = stack.pop().expect("a chain has an operation");
+                let result_ty = if stack.is_empty() {
+                    expected_ty.clone()
+                } else {
+                    self.new_type_var()
+                };
+                let inferred = self.infer_binary_impl(op, Box::new(current), right, &result_ty, s);
+                InferredOperand::new(inferred, result_ty)
+            } else {
+                let left_ty = self.new_type_var();
+                let left_inferred = self.infer_expression(current, &left_ty);
+                InferredOperand::new(left_inferred, left_ty)
+            };
             while let Some((op, right, s)) = stack.pop() {
                 let result_ty = if stack.is_empty() {
                     expected_ty.clone()
@@ -194,7 +275,7 @@ impl InferCtx<'_> {
     ) -> InferredOperand {
         let right_operand_ty = self.new_type_var();
 
-        let right_literal_kind = literal_kind(&right_operand);
+        let right_literal_kind = operand_literal_kind(operator, &right_operand);
         let is_right_literal = !matches!(right_literal_kind, LiteralKind::None);
 
         let new_right_operand = self.with_value_context(|s| {
@@ -228,8 +309,8 @@ impl InferCtx<'_> {
         //
         // Integer literals adapt when the target `is_numeric()` (int, float, etc.).
         // Float literals adapt only when the target `is_float()` (float32, float64).
-        let left_literal_kind = literal_kind(&left_operand);
-        let right_literal_kind = literal_kind(&right_operand);
+        let left_literal_kind = operand_literal_kind(operator, &left_operand);
+        let right_literal_kind = operand_literal_kind(operator, &right_operand);
         let is_left_literal = !matches!(left_literal_kind, LiteralKind::None);
         let is_right_literal = !matches!(right_literal_kind, LiteralKind::None);
 
@@ -930,9 +1011,23 @@ fn is_numeric_literal(expression: &Expression) -> bool {
     }
 }
 
+fn folds_to_integer(expression: &Expression) -> bool {
+    expression
+        .fold_constant(&|_| None)
+        .is_some_and(|constant| constant != Constant::Unknown)
+}
+
+fn is_integer_adaptation_target(ty: &Type, store: &Store) -> bool {
+    store
+        .literal_adaptation_target(ty)
+        .and_then(|target| store.underlying_simple_kind(&target))
+        .is_some_and(|kind| kind.integer_range().is_some())
+}
+
 /// Literal kinds for type adaptation purposes.
 enum LiteralKind {
     Integer,
+    IntegerExpression,
     Float,
     String,
     Boolean,
@@ -963,7 +1058,18 @@ fn literal_kind(expression: &Expression) -> LiteralKind {
             expression,
             ..
         } => literal_kind(expression),
+        Expression::Binary { .. } if folds_to_integer(expression) => LiteralKind::IntegerExpression,
         _ => LiteralKind::None,
+    }
+}
+
+/// Go never types a shifted value from its count.
+fn operand_literal_kind(operator: BinaryOperator, operand: &Expression) -> LiteralKind {
+    match literal_kind(operand) {
+        LiteralKind::IntegerExpression if matches!(operator, ShiftLeft | ShiftRight) => {
+            LiteralKind::None
+        }
+        kind => kind,
     }
 }
 
@@ -973,6 +1079,7 @@ fn literal_can_adapt_to(kind: &LiteralKind, target: &Type, store: &Store) -> boo
     };
     match kind {
         LiteralKind::Integer => store.literal_adaptation_target(target).is_some(),
+        LiteralKind::IntegerExpression => is_integer_adaptation_target(target, store),
         LiteralKind::Float => store
             .literal_adaptation_target(target)
             .is_some_and(|underlying| underlying.is_float()),

@@ -10072,6 +10072,30 @@ fn test() {
 }
 
 #[test]
+fn infer_expression_with_named_constant_keeps_constant_type() {
+    let input = r#"
+const N = 5
+
+fn test() {
+  let x: int8 = N + 1;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_shift_by_named_constant_keeps_constant_type() {
+    let input = r#"
+const SHIFT = 1 + 1
+
+fn test() {
+  let x: int8 = 1 << SHIFT;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_octal_char_literal_overflow_int8() {
     let input = r#"
 fn test() {
