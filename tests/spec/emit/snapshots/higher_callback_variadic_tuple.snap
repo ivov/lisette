@@ -24,16 +24,11 @@ func invoke(f func(int) lisette.Tuple2[int, int]) (int, int) {
 }
 
 func main() {
-	cb := invoke
-	var adapted func(func(int) lisette.Tuple2[int, int]) lisette.Tuple2[int, int]
-	if cb != nil {
-		adapted = func(arg0 func(int) lisette.Tuple2[int, int]) lisette.Tuple2[int, int] {
-			ret, ret_1 := cb(arg0)
-			tup := lisette.MakeTuple2(ret, ret_1)
-			return tup
-		}
-	}
-	f := first[lisette.Tuple2[int, int]]([]func(func(int) lisette.Tuple2[int, int]) lisette.Tuple2[int, int]{adapted}...)
+	f := first[lisette.Tuple2[int, int]]([]func(func(int) lisette.Tuple2[int, int]) lisette.Tuple2[int, int]{func(arg0 func(int) lisette.Tuple2[int, int]) lisette.Tuple2[int, int] {
+		ret, ret_1 := invoke(arg0)
+		tup := lisette.MakeTuple2(ret, ret_1)
+		return tup
+	}}...)
 	tmp := f(func(x int) lisette.Tuple2[int, int] {
 		return lisette.MakeTuple2[int, int](x, x+1)
 	})

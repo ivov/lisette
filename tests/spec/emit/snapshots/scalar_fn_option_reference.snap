@@ -29,18 +29,13 @@ func some[T any](x T) (T, bool) {
 
 func main() {
 	x := 3
-	cb := some[*int]
-	var adapted func(*int) lisette.Option[*int]
-	if cb != nil {
-		adapted = func(arg0 *int) lisette.Option[*int] {
-			ret, ret_1 := cb(arg0)
-			if ret_1 && ret != nil {
-				return lisette.MakeOptionSome[*int](ret)
-			}
-			return lisette.MakeOptionNone[*int]()
+	holder := Holder[*int, lisette.Option[*int]]{f: func(arg0 *int) lisette.Option[*int] {
+		ret, ret_1 := some[*int](arg0)
+		if ret_1 && ret != nil {
+			return lisette.MakeOptionSome[*int](ret)
 		}
-	}
-	holder := Holder[*int, lisette.Option[*int]]{f: adapted}
+		return lisette.MakeOptionNone[*int]()
+	}}
 	subject := holder.f(&x)
 	if subject.Tag != lisette.OptionSome {
 		panic("field call")
@@ -52,18 +47,13 @@ func main() {
 		panic("stored field")
 	}
 	b := subject_1.SomeVal
-	cb_1 := some[*int]
-	var adapted_1 func(*int) lisette.Option[*int]
-	if cb_1 != nil {
-		adapted_1 = func(arg0 *int) lisette.Option[*int] {
-			ret_2, ret_3 := cb_1(arg0)
-			if ret_3 && ret_2 != nil {
-				return lisette.MakeOptionSome[*int](ret_2)
-			}
-			return lisette.MakeOptionNone[*int]()
+	holder.f = func(arg0 *int) lisette.Option[*int] {
+		ret_2, ret_3 := some[*int](arg0)
+		if ret_3 && ret_2 != nil {
+			return lisette.MakeOptionSome[*int](ret_2)
 		}
+		return lisette.MakeOptionNone[*int]()
 	}
-	holder.f = adapted_1
 	subject_2 := holder.f(&x)
 	if subject_2.Tag != lisette.OptionSome {
 		panic("assigned field")

@@ -26,15 +26,10 @@ func call(f func() struct{}) {
 }
 
 func named() {
-	cb := die
-	var adapted func() struct{}
-	if cb != nil {
-		adapted = func() struct{} {
-			cb()
-			panic("unreachable")
-		}
-	}
-	call(adapted)
+	call(func() struct{} {
+		die()
+		panic("unreachable")
+	})
 }
 
 func lambda() {

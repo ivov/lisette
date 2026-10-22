@@ -65,56 +65,36 @@ func makeR(n int) (F[lisette.Option[int]], error) {
 	if _, err := intResult(n); err != nil {
 		return *new(F[lisette.Option[int]]), err
 	}
-	cb := source
-	var adapted func(int) lisette.Option[int]
-	if cb != nil {
-		adapted = func(arg0 int) lisette.Option[int] {
-			return lisette.OptionFromCommaOk[int](cb(arg0))
-		}
-	}
-	return adapted, nil
+	return func(arg0 int) lisette.Option[int] {
+		return lisette.OptionFromCommaOk[int](source(arg0))
+	}, nil
 }
 
 func makeO(n int) F[lisette.Option[int]] {
 	if _, ok := source(n); !ok {
 		return nil
 	}
-	cb := source
-	var adapted func(int) lisette.Option[int]
-	if cb != nil {
-		adapted = func(arg0 int) lisette.Option[int] {
-			return lisette.OptionFromCommaOk[int](cb(arg0))
-		}
+	return func(arg0 int) lisette.Option[int] {
+		return lisette.OptionFromCommaOk[int](source(arg0))
 	}
-	return adapted
 }
 
 func tryR(n int) (F[lisette.Option[int]], error) {
 	if _, err := intResult(n); err != nil {
 		return *new(F[lisette.Option[int]]), err
 	}
-	cb := source
-	var adapted func(int) lisette.Option[int]
-	if cb != nil {
-		adapted = func(arg0 int) lisette.Option[int] {
-			return lisette.OptionFromCommaOk[int](cb(arg0))
-		}
-	}
-	return adapted, nil
+	return func(arg0 int) lisette.Option[int] {
+		return lisette.OptionFromCommaOk[int](source(arg0))
+	}, nil
 }
 
 func tryO(n int) F[lisette.Option[int]] {
 	if _, ok := source(n); !ok {
 		return nil
 	}
-	cb := source
-	var adapted func(int) lisette.Option[int]
-	if cb != nil {
-		adapted = func(arg0 int) lisette.Option[int] {
-			return lisette.OptionFromCommaOk[int](cb(arg0))
-		}
+	return func(arg0 int) lisette.Option[int] {
+		return lisette.OptionFromCommaOk[int](source(arg0))
 	}
-	return adapted
 }
 
 func main() {

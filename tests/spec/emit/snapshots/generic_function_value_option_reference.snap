@@ -30,35 +30,25 @@ func consume(f func(*int) lisette.Option[*int], x *int) *int {
 
 func main() {
 	x := 3
-	cb := some[*int]
-	var adapted func(*int) lisette.Option[*int]
-	if cb != nil {
-		adapted = func(arg0 *int) lisette.Option[*int] {
-			ret, ret_1 := cb(arg0)
-			if ret_1 && ret != nil {
-				return lisette.MakeOptionSome[*int](ret)
-			}
-			return lisette.MakeOptionNone[*int]()
+	stored := func(arg0 *int) lisette.Option[*int] {
+		ret, ret_1 := some[*int](arg0)
+		if ret_1 && ret != nil {
+			return lisette.MakeOptionSome[*int](ret)
 		}
+		return lisette.MakeOptionNone[*int]()
 	}
-	stored := adapted
 	subject := stored(&x)
 	if subject.Tag != lisette.OptionSome {
 		panic("stored generic option")
 	}
 	first := subject.SomeVal
-	cb_1 := some[*int]
-	var adapted_1 func(*int) lisette.Option[*int]
-	if cb_1 != nil {
-		adapted_1 = func(arg0 *int) lisette.Option[*int] {
-			ret_2, ret_3 := cb_1(arg0)
-			if ret_3 && ret_2 != nil {
-				return lisette.MakeOptionSome[*int](ret_2)
-			}
-			return lisette.MakeOptionNone[*int]()
+	second := consume(func(arg0 *int) lisette.Option[*int] {
+		ret_2, ret_3 := some[*int](arg0)
+		if ret_3 && ret_2 != nil {
+			return lisette.MakeOptionSome[*int](ret_2)
 		}
-	}
-	second := consume(adapted_1, &x)
+		return lisette.MakeOptionNone[*int]()
+	}, &x)
 	if second == nil {
 		panic("generic option callback")
 	}

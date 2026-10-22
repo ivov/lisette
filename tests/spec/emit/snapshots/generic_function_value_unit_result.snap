@@ -23,24 +23,14 @@ func consume(f func(struct{}) lisette.Result[struct{}, error]) bool {
 }
 
 func main() {
-	cb := okay[struct{}]
-	var adapted func(struct{}) lisette.Result[struct{}, error]
-	if cb != nil {
-		adapted = func(arg0 struct{}) lisette.Result[struct{}, error] {
-			return lisette.ResultFromPair[struct{}](cb(arg0))
-		}
-	}
-	if !consume(adapted) {
+	if !consume(func(arg0 struct{}) lisette.Result[struct{}, error] {
+		return lisette.ResultFromPair[struct{}](okay[struct{}](arg0))
+	}) {
 		panic("generic callback unit result")
 	}
-	cb_1 := okay[struct{}]
-	var adapted_1 func(struct{}) lisette.Result[struct{}, error]
-	if cb_1 != nil {
-		adapted_1 = func(arg0 struct{}) lisette.Result[struct{}, error] {
-			return lisette.ResultFromPair[struct{}](cb_1(arg0))
-		}
+	stored := func(arg0 struct{}) lisette.Result[struct{}, error] {
+		return lisette.ResultFromPair[struct{}](okay[struct{}](arg0))
 	}
-	stored := adapted_1
 	if stored(struct{}{}).IsErr() {
 		panic("stored generic unit result")
 	}

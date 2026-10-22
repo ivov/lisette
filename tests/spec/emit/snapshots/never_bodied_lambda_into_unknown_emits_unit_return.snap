@@ -16,11 +16,7 @@ func test() {
 	cb := func() struct{} {
 		panic("boom")
 	}
-	var adapted func()
-	if cb != nil {
-		adapted = func() {
-			cb()
-		}
-	}
-	takeAny(adapted)
+	takeAny(func() {
+		cb()
+	})
 }

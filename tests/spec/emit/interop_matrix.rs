@@ -3451,6 +3451,31 @@ fn main() {
 }
 
 #[test]
+fn function_value_adapter_skips_nil_check_for_functions_and_closures() {
+    let input = r#"
+import "go:example.com/cb"
+
+fn show(v: Option<int>) {
+  let _ = v
+}
+
+fn pick() -> fn(Option<int>) {
+  show
+}
+
+fn main() {
+  cb.Each(show)
+  cb.Each(|v| { let _ = v })
+  cb.Each(pick())
+}
+"#;
+    let typedef = r#"
+pub fn Each(f: fn(Option<int>))
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/cb", typedef)]);
+}
+
+#[test]
 fn interop_read_only_go_variables_are_readable() {
     let input = r#"
 import "go:encoding/binary"

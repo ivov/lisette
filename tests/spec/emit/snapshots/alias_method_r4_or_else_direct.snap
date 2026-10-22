@@ -25,14 +25,9 @@ func source() (int, bool) {
 
 func inspect(input Maybe[lisette.Option[int]]) {
 	restored := input.OrElse(func() lisette.Option[func() lisette.Option[int]] {
-		cb := source
-		var adapted func() lisette.Option[int]
-		if cb != nil {
-			adapted = func() lisette.Option[int] {
-				return lisette.OptionFromCommaOk[int](cb())
-			}
-		}
-		return lisette.MakeOptionSome[func() lisette.Option[int]](adapted)
+		return lisette.MakeOptionSome[func() lisette.Option[int]](func() lisette.Option[int] {
+			return lisette.OptionFromCommaOk[int](source())
+		})
 	})
 	if restored.Tag == lisette.OptionSome {
 		if restored.SomeVal().UnwrapOr(0) != 43 {

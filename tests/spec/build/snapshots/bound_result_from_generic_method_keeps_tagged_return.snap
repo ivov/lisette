@@ -22,17 +22,12 @@ func Holder_Resolve[R any, E any](self Holder, f func(int) lisette.Result[R, E])
 }
 
 func main() {
-	cb := Resultant
-	var adapted func(int) lisette.Result[int, Face]
-	if cb != nil {
-		adapted = func(arg0 int) lisette.Result[int, Face] {
-			ret, ret_1 := cb(arg0)
-			if ret_1 != nil {
-				return lisette.MakeResultErr[int, Face](ret_1)
-			}
-			return lisette.MakeResultOk[int, Face](ret)
+	rez := Holder_Resolve(Holder{N: 4}, func(arg0 int) lisette.Result[int, Face] {
+		ret, ret_1 := Resultant(arg0)
+		if ret_1 != nil {
+			return lisette.MakeResultErr[int, Face](ret_1)
 		}
-	}
-	rez := Holder_Resolve(Holder{N: 4}, adapted)
+		return lisette.MakeResultOk[int, Face](ret)
+	})
 	_ = rez
 }

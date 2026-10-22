@@ -45,16 +45,11 @@ func main() {
 	}
 	third := subject.SomeVal.First.SomeVal
 	fourth := subject.SomeVal.Second.SomeVal
-	cb_1 := pair[lisette.Option[*int]]
-	var adapted func(lisette.Option[*int]) Pair[lisette.Option[*int]]
-	if cb_1 != nil {
-		adapted = func(arg0 lisette.Option[*int]) Pair[lisette.Option[*int]] {
-			ret_4, ret_5 := cb_1(arg0)
-			tup_2 := lisette.MakeTuple2(ret_4, ret_5)
-			return tup_2
-		}
+	stored := func(arg0 lisette.Option[*int]) Pair[lisette.Option[*int]] {
+		ret_4, ret_5 := pair[lisette.Option[*int]](arg0)
+		tup_2 := lisette.MakeTuple2(ret_4, ret_5)
+		return tup_2
 	}
-	stored := adapted
 	subject_1 := stored(lisette.MakeOptionSome(&x))
 	if !(subject_1.First.Tag == lisette.OptionSome && subject_1.Second.Tag == lisette.OptionSome) {
 		panic("generic stored alias")

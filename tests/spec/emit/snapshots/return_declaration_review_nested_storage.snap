@@ -63,40 +63,35 @@ func make_(n int) (F[lisette.Result[int, error]], lisette.Result[F[lisette.Resul
 	if n == 0 {
 		return nil, lisette.MakeResultErr[F[lisette.Result[int, error]], string]("none")
 	}
-	cb := source
-	var adapted func(int) lisette.Result[int, error]
-	if cb != nil {
-		adapted = func(arg0 int) lisette.Result[int, error] {
-			return lisette.ResultFromPair[int](cb(arg0))
-		}
-	}
-	src := lisette.MakeTuple2[lisette.Option[func(int) lisette.Result[int, error]], lisette.Result[func(int) lisette.Result[int, error], string]](lisette.MakeOptionSome(adapted), lisette.MakeResultOk[func(int) lisette.Result[int, error], string](func(x int) lisette.Result[int, error] {
+	src := lisette.MakeTuple2[lisette.Option[func(int) lisette.Result[int, error]], lisette.Result[func(int) lisette.Result[int, error], string]](lisette.MakeOptionSome(func(arg0 int) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](source(arg0))
+	}), lisette.MakeResultOk[func(int) lisette.Result[int, error], string](func(x int) lisette.Result[int, error] {
 		return lisette.ResultFromPair[int](source(x))
 	}))
-	var adapted_1 lisette.Tuple2[lisette.Option[F[lisette.Result[int, error]]], lisette.Result[F[lisette.Result[int, error]], string]]
+	var adapted lisette.Tuple2[lisette.Option[F[lisette.Result[int, error]]], lisette.Result[F[lisette.Result[int, error]], string]]
 	src_1 := src.First
-	var adapted_2 lisette.Option[F[lisette.Result[int, error]]]
-	adapted_2.Tag = src_1.Tag
+	var adapted_1 lisette.Option[F[lisette.Result[int, error]]]
+	adapted_1.Tag = src_1.Tag
 	if src_1.Tag == lisette.OptionSome {
-		adapted_2.SomeVal = src_1.SomeVal
+		adapted_1.SomeVal = src_1.SomeVal
 	}
-	adapted_1.First = adapted_2
+	adapted.First = adapted_1
 	src_2 := src.Second
-	var adapted_3 lisette.Result[F[lisette.Result[int, error]], string]
-	adapted_3.Tag = src_2.Tag
+	var adapted_2 lisette.Result[F[lisette.Result[int, error]], string]
+	adapted_2.Tag = src_2.Tag
 	if src_2.Tag == lisette.ResultOk {
-		adapted_3.OkVal = src_2.OkVal
+		adapted_2.OkVal = src_2.OkVal
 	}
 	if src_2.Tag == lisette.ResultErr {
-		adapted_3.ErrVal = src_2.ErrVal
+		adapted_2.ErrVal = src_2.ErrVal
 	}
-	adapted_1.Second = adapted_3
-	opt := adapted_1.First
+	adapted.Second = adapted_2
+	opt := adapted.First
 	var unwrap F[lisette.Result[int, error]]
 	if opt.Tag == lisette.OptionSome {
 		unwrap = opt.SomeVal
 	}
-	return unwrap, adapted_1.Second
+	return unwrap, adapted.Second
 }
 
 func forward(x Alias[lisette.Result[int, error]]) (F[lisette.Result[int, error]], lisette.Result[F[lisette.Result[int, error]], string]) {

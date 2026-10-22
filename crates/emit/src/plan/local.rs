@@ -71,6 +71,10 @@ impl GoIdentifier {
         }
     }
 
+    pub(crate) fn is_external(&self) -> bool {
+        matches!(self.target, IdentifierTarget::External)
+    }
+
     pub(crate) fn id(&self) -> Option<LocalId> {
         match self.target {
             IdentifierTarget::Local(id) => Some(id),

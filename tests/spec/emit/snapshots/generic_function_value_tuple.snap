@@ -22,32 +22,22 @@ func pair[T any](x T) (T, T) {
 
 func main() {
 	x := 3
-	cb := pair[lisette.Option[*int]]
-	var adapted func(lisette.Option[*int]) lisette.Tuple2[lisette.Option[*int], lisette.Option[*int]]
-	if cb != nil {
-		adapted = func(arg0 lisette.Option[*int]) lisette.Tuple2[lisette.Option[*int], lisette.Option[*int]] {
-			ret, ret_1 := cb(arg0)
-			tup := lisette.MakeTuple2(ret, ret_1)
-			return tup
-		}
+	stored := func(arg0 lisette.Option[*int]) lisette.Tuple2[lisette.Option[*int], lisette.Option[*int]] {
+		ret, ret_1 := pair[lisette.Option[*int]](arg0)
+		tup := lisette.MakeTuple2(ret, ret_1)
+		return tup
 	}
-	stored := adapted
 	subject := stored(lisette.MakeOptionSome(&x))
 	if !(subject.First.Tag == lisette.OptionSome && subject.Second.Tag == lisette.OptionSome) {
 		panic("stored generic tuple")
 	}
 	first := subject.First.SomeVal
 	second := subject.Second.SomeVal
-	cb_1 := pair[lisette.Option[*int]]
-	var adapted_1 func(lisette.Option[*int]) lisette.Tuple2[lisette.Option[*int], lisette.Option[*int]]
-	if cb_1 != nil {
-		adapted_1 = func(arg0 lisette.Option[*int]) lisette.Tuple2[lisette.Option[*int], lisette.Option[*int]] {
-			ret_2, ret_3 := cb_1(arg0)
-			tup_1 := lisette.MakeTuple2(ret_2, ret_3)
-			return tup_1
-		}
+	inferred := func(arg0 lisette.Option[*int]) lisette.Tuple2[lisette.Option[*int], lisette.Option[*int]] {
+		ret_2, ret_3 := pair[lisette.Option[*int]](arg0)
+		tup_1 := lisette.MakeTuple2(ret_2, ret_3)
+		return tup_1
 	}
-	inferred := adapted_1
 	subject_1 := lisette.OptionMap(lisette.MakeOptionSome(lisette.MakeOptionSome(&x)), inferred)
 	if !(subject_1.Tag == lisette.OptionSome && subject_1.SomeVal.First.Tag == lisette.OptionSome && subject_1.SomeVal.Second.Tag == lisette.OptionSome) {
 		panic("inferred generic tuple")
