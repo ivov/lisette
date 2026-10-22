@@ -19,14 +19,9 @@ func doubler(x int) (int, bool) {
 }
 
 func main() {
-	cb := doubler
-	var adapted func(int) lisette.Option[int]
-	if cb != nil {
-		adapted = func(arg0 int) lisette.Option[int] {
-			return lisette.OptionFromCommaOk[int](cb(arg0))
-		}
+	g := func(arg0 int) lisette.Option[int] {
+		return lisette.OptionFromCommaOk[int](doubler(arg0))
 	}
-	g := adapted
 	opt := lisette.MakeOptionSome(1)
 	r := lisette.OptionAndThen(opt, g)
 	_ = r

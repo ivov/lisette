@@ -1,0 +1,65 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/cb"
+  
+  fn show(v: Option<int>) {
+    let _ = v
+  }
+  
+  fn pick() -> fn(Option<int>) {
+    show
+  }
+  
+  fn main() {
+    cb.Each(show)
+    cb.Each(|v| { let _ = v })
+    cb.Each(pick())
+  }
+---
+package main
+
+import (
+	"example.com/cb"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func show(v lisette.Option[int]) {
+	_ = v
+}
+
+func pick() func(lisette.Option[int]) struct{} {
+	return func(arg0 lisette.Option[int]) struct{} {
+		show(arg0)
+		return struct{}{}
+	}
+}
+
+func main() {
+	cb_1 := func(arg0 lisette.Option[int]) struct{} {
+		show(arg0)
+		return struct{}{}
+	}
+	cb.Each(func(arg0 *int) {
+		option := lisette.OptionFromPointer[int](arg0)
+		cb_1(option)
+	})
+	cb_2 := func(v lisette.Option[int]) struct{} {
+		_ = v
+		return struct{}{}
+	}
+	cb.Each(func(arg0 *int) {
+		option_1 := lisette.OptionFromPointer[int](arg0)
+		cb_2(option_1)
+	})
+	cb_3 := pick()
+	var adapted func(*int)
+	if cb_3 != nil {
+		adapted = func(arg0 *int) {
+			option_2 := lisette.OptionFromPointer[int](arg0)
+			cb_3(option_2)
+		}
+	}
+	cb.Each(adapted)
+}

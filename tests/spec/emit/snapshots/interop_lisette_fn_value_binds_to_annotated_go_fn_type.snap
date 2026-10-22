@@ -40,26 +40,17 @@ func splitWords(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
 }
 
 func main() {
-	cb := splitWords
-	var adapted func([]byte, bool) lisette.Result[lisette.Tuple2[int, []byte], error]
-	if cb != nil {
-		adapted = func(arg0 []byte, arg1 bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
-			return lisette.ResultFromPair[lisette.Tuple2[int, []byte]](cb(arg0, arg1))
-		}
+	cb := func(arg0 []byte, arg1 bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
+		return lisette.ResultFromPair[lisette.Tuple2[int, []byte]](splitWords(arg0, arg1))
 	}
-	cb_1 := adapted
-	var adapted_1 func([]byte, bool) (int, []byte, error)
-	if cb_1 != nil {
-		adapted_1 = func(arg0 []byte, arg1 bool) (int, []byte, error) {
-			res := cb_1(arg0, arg1)
-			if res.Tag == lisette.ResultOk {
-				tup := res.OkVal
-				return tup.First, tup.Second, nil
-			}
-			return 0, nil, res.ErrVal
+	var annotated bufio.SplitFunc = func(arg0 []byte, arg1 bool) (int, []byte, error) {
+		res := cb(arg0, arg1)
+		if res.Tag == lisette.ResultOk {
+			tup := res.OkVal
+			return tup.First, tup.Second, nil
 		}
+		return 0, nil, res.ErrVal
 	}
-	var annotated bufio.SplitFunc = adapted_1
 	var forwarded bufio.SplitFunc = bufio.ScanWords
 	var literal bufio.SplitFunc = func(data []byte, at_eof bool) (int, []byte, error) {
 		return bufio.ScanWords(data, at_eof)

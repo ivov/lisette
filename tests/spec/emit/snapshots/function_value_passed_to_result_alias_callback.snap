@@ -36,27 +36,18 @@ func apply(f func(int) MyRes) (int, error) {
 }
 
 func main() {
-	cb := make_
-	var adapted func(int) lisette.Result[int, error]
-	if cb != nil {
-		adapted = func(arg0 int) lisette.Result[int, error] {
-			return lisette.ResultFromPair[int](cb(arg0))
-		}
+	cb := func(arg0 int) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](make_(arg0))
 	}
-	cb_1 := adapted
-	var adapted_1 func(int) MyRes
+	apply(func(arg0 int) MyRes {
+		return cb(arg0)
+	})
+	cb_1 := lisette.MakeResultOk[int, error]
+	var adapted func(int) MyRes
 	if cb_1 != nil {
-		adapted_1 = func(arg0 int) MyRes {
+		adapted = func(arg0 int) MyRes {
 			return cb_1(arg0)
 		}
 	}
-	apply(adapted_1)
-	cb_2 := lisette.MakeResultOk[int, error]
-	var adapted_2 func(int) MyRes
-	if cb_2 != nil {
-		adapted_2 = func(arg0 int) MyRes {
-			return cb_2(arg0)
-		}
-	}
-	apply(adapted_2)
+	apply(adapted)
 }

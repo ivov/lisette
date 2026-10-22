@@ -16,7 +16,9 @@ use crate::plan::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define, define_many,
     expression_statement,
 };
-use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, GoParameter, UnaryOp};
+use crate::plan::go_expression::{
+    BinaryOp, FunctionLiteralLayout, GoExpressionNode, GoParameter, UnaryOp,
+};
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::types::go_type::GoType;
@@ -131,7 +133,20 @@ impl Planner<'_> {
         source: &FunctionLayout,
         target: &FunctionLayout,
     ) -> GoExpression {
-        let function = self.hoist_tmp_value_statement(statements, "cb", value);
+        let names_package_function = match value.node() {
+            GoExpressionNode::Identifier(name) => name.is_external(),
+            GoExpressionNode::Instantiation { base, .. } => {
+                matches!(base.as_ref(), GoExpressionNode::Identifier(name) if name.is_external())
+            }
+            _ => false,
+        };
+        let never_nil = names_package_function
+            || matches!(value.node(), GoExpressionNode::FunctionLiteral { .. });
+        let callee = if names_package_function {
+            value
+        } else {
+            GoExpression::identifier(self.hoist_tmp_value_statement(statements, "cb", value))
+        };
         let mut body = Vec::new();
         let mut parameters = Vec::new();
         let mut names = Vec::new();
@@ -145,7 +160,7 @@ impl Planner<'_> {
             names.push(GoExpression::identifier(name));
         }
         let arguments = self.plan_bridged_arguments(&mut body, names, source, target);
-        let call = GoExpression::call(GoExpression::identifier(function.clone()), arguments);
+        let call = GoExpression::call(callee.clone(), arguments);
         self.plan_function_result_bridge(&mut body, call, source, target);
         let result = target
             .result_go_type(self)
@@ -157,6 +172,9 @@ impl Planner<'_> {
             LoweredBlock { statements: body },
             FunctionLiteralLayout::MultiLine,
         );
+        if never_nil {
+            return callback;
+        }
         let adapted = self.fresh_local(Some("adapted"));
         self.declare(&adapted);
         let go_type = target.go_type(self);
@@ -171,7 +189,7 @@ impl Planner<'_> {
         );
         statements.push(
             LoweredStatement::If(IfPlan::plain(
-                non_nil(GoExpression::identifier(function)),
+                non_nil(callee),
                 LoweredBlock {
                     statements: vec![assign(GoExpression::identifier(adapted.clone()), callback)],
                 },

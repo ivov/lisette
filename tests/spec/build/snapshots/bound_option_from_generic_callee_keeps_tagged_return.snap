@@ -22,16 +22,11 @@ func Resolve[T any, R any](a T, f func(T) lisette.Option[R]) (R, bool) {
 }
 
 func main() {
-	cb := Lookup
-	var adapted func(int) lisette.Option[Face]
-	if cb != nil {
-		adapted = func(arg0 int) lisette.Option[Face] {
-			raw := cb(arg0)
-			option := lisette.OptionFromNilable[Face](raw, lisette.IsNilInterface(raw))
-			return option
-		}
-	}
-	ret, ret_1 := Resolve(0, adapted)
+	ret, ret_1 := Resolve(0, func(arg0 int) lisette.Option[Face] {
+		raw := Lookup(arg0)
+		option := lisette.OptionFromNilable[Face](raw, lisette.IsNilInterface(raw))
+		return option
+	})
 	var rez lisette.Option[Face]
 	if ret_1 && !lisette.IsNilInterface(ret) {
 		rez = lisette.MakeOptionSome[Face](ret)

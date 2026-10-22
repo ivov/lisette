@@ -47,18 +47,14 @@ func main() {
 		}
 		return lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup)
 	}
-	var adapted func([]byte, bool) (int, []byte, error)
-	if cb != nil {
-		adapted = func(arg0 []byte, arg1 bool) (int, []byte, error) {
-			res := cb(arg0, arg1)
-			if res.Tag == lisette.ResultOk {
-				tup_1 := res.OkVal
-				return tup_1.First, tup_1.Second, nil
-			}
-			return 0, nil, res.ErrVal
+	callee(func(arg0 []byte, arg1 bool) (int, []byte, error) {
+		res := cb(arg0, arg1)
+		if res.Tag == lisette.ResultOk {
+			tup_1 := res.OkVal
+			return tup_1.First, tup_1.Second, nil
 		}
-	}
-	callee(adapted)
+		return 0, nil, res.ErrVal
+	})
 	count := 0
 	for forwarded.Scan() {
 		count++
@@ -83,18 +79,14 @@ func main() {
 		token := check.OkVal.Second
 		return lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](lisette.MakeTuple2[int, []byte](advance, token))
 	}
-	var adapted_1 func([]byte, bool) (int, []byte, error)
-	if cb_1 != nil {
-		adapted_1 = func(arg0 []byte, arg1 bool) (int, []byte, error) {
-			res_1 := cb_1(arg0, arg1)
-			if res_1.Tag == lisette.ResultOk {
-				tup_3 := res_1.OkVal
-				return tup_3.First, tup_3.Second, nil
-			}
-			return 0, nil, res_1.ErrVal
+	callee_1(func(arg0 []byte, arg1 bool) (int, []byte, error) {
+		res_1 := cb_1(arg0, arg1)
+		if res_1.Tag == lisette.ResultOk {
+			tup_3 := res_1.OkVal
+			return tup_3.First, tup_3.Second, nil
 		}
-	}
-	callee_1(adapted_1)
+		return 0, nil, res_1.ErrVal
+	})
 	words := 0
 	for rebuilt.Scan() {
 		words++

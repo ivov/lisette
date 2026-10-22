@@ -59,65 +59,45 @@ type Holder[T any] struct {
 }
 
 func free() int {
-	cb := die
-	var adapted func() struct{}
-	if cb != nil {
-		adapted = func() struct{} {
-			cb()
-			panic("unreachable")
-		}
+	cb := func() struct{} {
+		die()
+		panic("unreachable")
 	}
-	cb_1 := adapted
 	return apply(func() int {
-		cb_1()
+		cb()
 		panic("unreachable")
 	})
 }
 
 func ufcs(b Box) int {
-	cb := die
-	var adapted func() struct{}
-	if cb != nil {
-		adapted = func() struct{} {
-			cb()
-			panic("unreachable")
-		}
+	cb := func() struct{} {
+		die()
+		panic("unreachable")
 	}
-	cb_1 := adapted
 	return Box_Run(b, func() int {
-		cb_1()
+		cb()
 		panic("unreachable")
 	})
 }
 
 func enclosing[U any]() U {
-	cb := die
-	var adapted func() struct{}
-	if cb != nil {
-		adapted = func() struct{} {
-			cb()
-			panic("unreachable")
-		}
+	cb := func() struct{} {
+		die()
+		panic("unreachable")
 	}
-	cb_1 := adapted
 	return apply(func() U {
-		cb_1()
+		cb()
 		panic("unreachable")
 	})
 }
 
 func field() Holder[int] {
-	cb := die
-	var adapted func() struct{}
-	if cb != nil {
-		adapted = func() struct{} {
-			cb()
-			panic("unreachable")
-		}
+	cb := func() struct{} {
+		die()
+		panic("unreachable")
 	}
-	cb_1 := adapted
 	return Holder[int]{f: func() int {
-		cb_1()
+		cb()
 		panic("unreachable")
 	}}
 }

@@ -25,17 +25,12 @@ func run[T any](f func() T) int {
 }
 
 func test() int {
-	cb := die
-	var adapted func() struct{}
-	if cb != nil {
-		adapted = func() struct{} {
-			cb()
-			panic("unreachable")
-		}
+	cb := func() struct{} {
+		die()
+		panic("unreachable")
 	}
-	cb_1 := adapted
 	return run(func() struct{} {
-		cb_1()
+		cb()
 		return struct{}{}
 	})
 }

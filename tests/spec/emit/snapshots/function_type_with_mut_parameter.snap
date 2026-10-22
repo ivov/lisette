@@ -27,14 +27,8 @@ func bump(items []int) {
 
 func test() {
 	data := []int{0}
-	arg := data
-	cb := bump
-	var adapted func([]int) struct{}
-	if cb != nil {
-		adapted = func(arg0 []int) struct{} {
-			cb(arg0)
-			return struct{}{}
-		}
-	}
-	run(arg, adapted)
+	run(data, func(arg0 []int) struct{} {
+		bump(arg0)
+		return struct{}{}
+	})
 }

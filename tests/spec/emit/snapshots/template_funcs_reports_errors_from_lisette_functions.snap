@@ -30,26 +30,16 @@ func fail(s string) (string, error) {
 
 func main() {
 	funcs := make(map[string]any)
-	base := funcs
-	cb := fail
-	var adapted func(string) lisette.Result[string, error]
-	if cb != nil {
-		adapted = func(arg0 string) lisette.Result[string, error] {
-			return lisette.ResultFromPair[string](cb(arg0))
-		}
+	cb := func(arg0 string) lisette.Result[string, error] {
+		return lisette.ResultFromPair[string](fail(arg0))
 	}
-	cb_1 := adapted
-	var adapted_1 func(string) (string, error)
-	if cb_1 != nil {
-		adapted_1 = func(arg0 string) (string, error) {
-			res := cb_1(arg0)
-			if res.Tag == lisette.ResultOk {
-				return res.OkVal, nil
-			}
-			return "", res.ErrVal
+	funcs["fail"] = func(arg0 string) (string, error) {
+		res := cb(arg0)
+		if res.Tag == lisette.ResultOk {
+			return res.OkVal, nil
 		}
+		return "", res.ErrVal
 	}
-	base["fail"] = adapted_1
 	parsed, err := template.New("x").Funcs(template.FuncMap(funcs)).Parse("{{fail \"a\"}}")
 	if err != nil || parsed == nil {
 		panic("parse")

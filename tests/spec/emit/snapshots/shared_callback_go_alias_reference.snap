@@ -37,13 +37,9 @@ func main() {
 		calls += 10
 		return struct{}{}
 	}
-	var adapted func()
-	if cb != nil {
-		adapted = func() {
-			cb()
-		}
+	*forwarded = func() {
+		cb()
 	}
-	*forwarded = adapted
 	original()
 	if calls != 10 {
 		panic("Go alias reference identity")
