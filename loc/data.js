@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792696867318,
+  "lastUpdate": 1792697938524,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -47706,6 +47706,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 39734,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29213,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19471,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15750,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13987,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9064,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10247,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "25ef48ba8207c667d954330e841a2d9593f15e04",
+          "message": "feat: idiomatic Go for slice capacity clips before `append` (#1579)",
+          "timestamp": "2026-10-22T21:38:30+02:00",
+          "tree_id": "91818090897cc957a5020ebff8284d2ee38e8662",
+          "url": "https://github.com/ivov/lisette/commit/25ef48ba8207c667d954330e841a2d9593f15e04"
+        },
+        "date": 1792697936003,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 150896,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39733,
             "unit": "lines"
           },
           {
