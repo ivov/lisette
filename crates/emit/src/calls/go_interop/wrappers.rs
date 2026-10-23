@@ -12,6 +12,7 @@ use crate::control_flow::propagation::plain_return;
 use crate::is_order_sensitive;
 use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
+use crate::names::packages::PackageUse;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define, define_many,
     expression_statement,
@@ -118,6 +119,17 @@ fn packed_tuple_elements(slots: &[ValueLayout]) -> &[ValueLayout] {
         .expect("a payload bridged against a flattened one is a tuple")
 }
 
+/// Never nil in Go.
+fn names_package_function(node: &GoExpressionNode) -> bool {
+    match node {
+        GoExpressionNode::Identifier(name) => name.is_external(),
+        GoExpressionNode::Qualified { package, .. } => {
+            *package == PackageUse::generated(GeneratedPackage::Prelude)
+        }
+        _ => false,
+    }
+}
+
 fn names(names: &[GoIdentifier]) -> Vec<GoExpression> {
     names
         .iter()
@@ -134,11 +146,8 @@ impl Planner<'_> {
         target: &FunctionLayout,
     ) -> GoExpression {
         let names_package_function = match value.node() {
-            GoExpressionNode::Identifier(name) => name.is_external(),
-            GoExpressionNode::Instantiation { base, .. } => {
-                matches!(base.as_ref(), GoExpressionNode::Identifier(name) if name.is_external())
-            }
-            _ => false,
+            GoExpressionNode::Instantiation { base, .. } => names_package_function(base),
+            node => names_package_function(node),
         };
         let never_nil = names_package_function
             || matches!(value.node(), GoExpressionNode::FunctionLiteral { .. });

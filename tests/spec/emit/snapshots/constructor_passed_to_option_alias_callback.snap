@@ -27,12 +27,7 @@ func apply(f func(int) MyOpt) (int, bool) {
 }
 
 func main() {
-	cb := lisette.MakeOptionSome[int]
-	var adapted func(int) MyOpt
-	if cb != nil {
-		adapted = func(arg0 int) MyOpt {
-			return cb(arg0)
-		}
-	}
-	apply(adapted)
+	apply(func(arg0 int) MyOpt {
+		return lisette.MakeOptionSome[int](arg0)
+	})
 }
