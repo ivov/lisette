@@ -30,7 +30,5 @@ func test(p Point) string {
 			return "above"
 		}
 	}
-	{
-		return "below"
-	}
+	return "below"
 }

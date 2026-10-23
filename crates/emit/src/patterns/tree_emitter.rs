@@ -677,7 +677,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn walk_leaf(&mut self, statements: &mut Vec<Statement>, leaf: &ArmLeaf, ctx: &WalkCtx) {
         let wrap = ctx.leaf_scope_explicit();
         let arm_body = &*self.arms[leaf.arm_index].expression;
-        let lowered = self.with_optional_scope(wrap, |this| {
+        let (lowered, declares) = self.with_optional_scope(wrap, |this| {
             let mut lowered: Vec<Statement> = Vec::new();
             this.with_bindings(
                 &mut lowered,
@@ -687,9 +687,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     this.emit_arm_leaf(lowered, leaf.arm_index, ctx);
                 },
             );
-            lowered
+            (
+                lowered,
+                this.planner.scope.current_block_declared_nonempty(),
+            )
         });
-        if wrap {
+        if wrap && declares {
             statements.push(
                 LoweredStatement::Block(LoweredBlock {
                     statements: lowered,

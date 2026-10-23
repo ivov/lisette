@@ -38,9 +38,7 @@ match:
 				break match
 			}
 		}
-		{
-			panic("missing")
-		}
+		panic("missing")
 	}
 	if calls != 2 {
 		panic("callback")
