@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792777477651,
+  "lastUpdate": 1792777963672,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -48942,6 +48942,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/77c786b5b9bef58b09cd1106ec867816b9996fe4"
         },
         "date": 1792777475647,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 151213,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39897,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29253,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19480,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15793,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14013,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9099,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10247,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "692b269903511af20a040caf0695ea037c0770f6",
+          "message": "chore: rebuild playground (#1593)",
+          "timestamp": "2026-10-23T19:52:17+02:00",
+          "tree_id": "1bb8bb2755cdb043f7422700b20c4219e0b27dde",
+          "url": "https://github.com/ivov/lisette/commit/692b269903511af20a040caf0695ea037c0770f6"
+        },
+        "date": 1792777960479,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
