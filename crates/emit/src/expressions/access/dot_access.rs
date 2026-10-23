@@ -55,7 +55,10 @@ impl Planner<'_> {
         else {
             unreachable!("plan_dot_access requires a DotAccess expression");
         };
-        let receiver_coercion = resolution.receiver_coercion();
+        let receiver_coercion = resolution.receiver_coercion().filter(|coercion| {
+            *coercion != ReceiverCoercion::AutoAddress
+                || !self.has_go_value_receiver(&expression.get_type(), member)
+        });
         let tagged_twin = self.selects_tagged_twin(dot_access);
 
         if let Some(expression) =
@@ -454,6 +457,21 @@ impl Planner<'_> {
                 _ => base,
             }
         })
+    }
+
+    /// A Go method with a value receiver takes its receiver as is, so a call result needs no temp.
+    fn has_go_value_receiver(&self, receiver_ty: &Type, method: &str) -> bool {
+        let receiver_ty = self.facts.peel_alias(&receiver_ty.strip_refs());
+        receiver_ty
+            .get_qualified_id()
+            .filter(|owner| owner.starts_with("go:"))
+            .and_then(|owner| self.facts.method(owner, method))
+            .is_some_and(|method| {
+                method
+                    .go_hints
+                    .iter()
+                    .any(|hint| hint == "value_method_set")
+            })
     }
 
     fn package_member_is_fixed(&self, package: &str, member: &str) -> bool {
