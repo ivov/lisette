@@ -2942,6 +2942,127 @@ fn negative_paren_integer_literal_overflow() {
 }
 
 #[test]
+fn negative_paren_literal_at_signed_minimum_allowed() {
+    infer(
+        r#"
+    fn main() {
+      let x: int8 = -(128);
+      let _ = x;
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn negation_checks_literal_in_call_argument() {
+    infer(
+        r#"
+    fn f(x: int8) -> int8 { x }
+    fn main() {
+      let _ = -f(300);
+    }
+        "#,
+    )
+    .assert_infer_code("integer_literal_overflow");
+}
+
+#[test]
+fn negation_checks_literal_in_method_argument() {
+    infer(
+        r#"
+    struct S {}
+    impl S {
+      fn m(self, x: int8) -> int8 { x }
+    }
+    fn main() {
+      let s = S {};
+      let _ = -s.m(300);
+    }
+        "#,
+    )
+    .assert_infer_code("integer_literal_overflow");
+}
+
+#[test]
+fn negation_checks_literal_in_closure_argument() {
+    infer(
+        r#"
+    fn main() {
+      let g = |x: int8| x;
+      let _ = -g(300);
+    }
+        "#,
+    )
+    .assert_infer_code("integer_literal_overflow");
+}
+
+#[test]
+fn negation_checks_literal_in_unsigned_argument() {
+    infer(
+        r#"
+    fn u(x: uint8) -> int { x as int }
+    fn main() {
+      let _ = -u(256);
+    }
+        "#,
+    )
+    .assert_infer_code("integer_literal_overflow");
+}
+
+#[test]
+fn negation_checks_literal_in_struct_field() {
+    infer(
+        r#"
+    struct P { x: int8 }
+    fn main() {
+      let _ = -P { x: 300 }.x;
+    }
+        "#,
+    )
+    .assert_infer_code("integer_literal_overflow");
+}
+
+#[test]
+fn negation_checks_literal_in_slice_element() {
+    infer(
+        r#"
+    fn h(xs: Slice<int8>) -> int8 { xs[0] }
+    fn main() {
+      let _ = -h([300]);
+    }
+        "#,
+    )
+    .assert_infer_code("integer_literal_overflow");
+}
+
+#[test]
+fn negation_checks_literal_in_tuple_element() {
+    infer(
+        r#"
+    fn k(p: (int8, int8)) -> int8 { p.0 }
+    fn main() {
+      let _ = -k((300, 1));
+    }
+        "#,
+    )
+    .assert_infer_code("integer_literal_overflow");
+}
+
+#[test]
+fn negation_checks_literal_in_binary_operand() {
+    infer(
+        r#"
+    fn f(x: int8) -> int8 { x }
+    fn main() {
+      let _ = -(f(300) + 1);
+    }
+        "#,
+    )
+    .assert_infer_code("integer_literal_overflow");
+}
+
+#[test]
 fn negative_float_literal_overflow() {
     infer(
         r#"
