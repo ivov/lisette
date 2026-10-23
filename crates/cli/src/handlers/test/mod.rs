@@ -17,7 +17,6 @@ use report::{
 use std::path::Path;
 
 pub fn test(path: Option<String>, go_flags: Vec<String>, selection: TestSelection) -> i32 {
-    output::print_preview_notice("Test runner", false);
     let target = path.unwrap_or_else(|| ".".to_string());
     let root = project_root_for(Path::new(&target));
     with_locked_project(&root, stdlib::Target::host(), |prep| {
