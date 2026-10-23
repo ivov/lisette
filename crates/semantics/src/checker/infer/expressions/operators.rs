@@ -135,7 +135,7 @@ impl InferCtx<'_> {
             self.new_type_var()
         };
 
-        let new_expression = if operator == Negative {
+        let new_expression = if operator == Negative && is_numeric_literal(&operand) {
             self.in_negation(|this| {
                 this.with_value_context(|this| {
                     this.infer_expression(*operand, &operand_expected_ty)
