@@ -6,7 +6,7 @@ use crate::Planner;
 use crate::abi::callable::{CallableParamAbi, CallableReturnAbi, LoweredReturnAbi};
 use crate::abi::coercion::{CoercionPlan, LayoutBridge, resolve_layout_bridge};
 use crate::abi::layout::{SlotOrigin, ValueLayout};
-use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
+use crate::abi::transition::emit_fn_arg_shape_adapter;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::staging::SpreadSequenceOptions;
 use crate::names::generics::extract_type_mapping;
@@ -72,7 +72,6 @@ impl Planner<'_> {
         ctx: &CallArgsContext<'_, '_>,
     ) -> ValuePlan {
         let param = ctx.plan.resolved.abi.param(index);
-        let effective_param_ty = param.map(|param| &param.instantiated);
         let declared_param_ty = param.and_then(|param| param.declared.as_ref());
 
         let plan = ctx
@@ -82,12 +81,9 @@ impl Planner<'_> {
             .expect("CallPlan has one argument plan per argument");
 
         match plan {
-            ArgumentPlan::GoCallbackAdapter { source, target } => self.lower_callback_wrapper(
-                arg,
-                effective_param_ty.expect("GoCallbackAdapter requires effective_param_ty"),
-                source,
-                target,
-            ),
+            ArgumentPlan::GoCallbackAdapter { source, target } => {
+                self.lower_callback_wrapper(arg, source, target)
+            }
             ArgumentPlan::GoSlotBridge(bridge) => self.lower_go_slot_bridge(arg, bridge),
             ArgumentPlan::TaggedGoLowering(adapter) => {
                 let arg_ctx = self.direct_arg_emit_ctx(param, true);
@@ -349,16 +345,15 @@ impl Planner<'_> {
             return None;
         };
         let target = self.classify_slot_emission(&param_f.return_type, param.origin)?;
-        let source = self
-            .resolve_callable_value(arg)
-            .map_or(CallableReturnAbi::Value, |callee| callee.abi.result);
-        (source != CallableReturnAbi::Lowered(target.clone())).then_some((source, target))
+        let source = self.resolve_callable_value(arg)?.abi.result;
+        (matches!(source, CallableReturnAbi::Lowered(_))
+            && source != CallableReturnAbi::Lowered(target.clone()))
+        .then_some((source, target))
     }
 
     fn lower_callback_wrapper(
         &mut self,
         arg: &Expression,
-        effective_param_ty: &Type,
         source: &CallableReturnAbi,
         target: &LoweredReturnAbi,
     ) -> ValuePlan {
@@ -366,23 +361,14 @@ impl Planner<'_> {
             arg,
             ExpressionContext::value().with_forced_tagged_go_function(true),
         );
-        argument.map_expression(|setup, value| match source {
-            CallableReturnAbi::Value | CallableReturnAbi::Void => {
-                let param_fn_ty = self
-                    .facts
-                    .resolve_to_function_type(effective_param_ty.unwrap_forall())
-                    .expect("callback target resolves to a fn type");
-                emit_lisette_callback_wrapper(self, setup, value, &param_fn_ty, target)
-            }
-            CallableReturnAbi::Lowered(_) => {
-                let arg_fn_ty = self
-                    .facts
-                    .resolve_to_function_type(arg.get_type().unwrap_forall())
-                    .expect("callback source resolves to a fn type");
-                let target = CallableReturnAbi::Lowered(target.clone());
-                emit_fn_arg_shape_adapter(self, setup, value, &arg_fn_ty, source, &target)
-                    .expect("callback ABI transition has a function signature")
-            }
+        argument.map_expression(|setup, value| {
+            let arg_fn_ty = self
+                .facts
+                .resolve_to_function_type(arg.get_type().unwrap_forall())
+                .expect("callback source resolves to a fn type");
+            let target = CallableReturnAbi::Lowered(target.clone());
+            emit_fn_arg_shape_adapter(self, setup, value, &arg_fn_ty, source, &target)
+                .expect("callback ABI transition has a function signature")
         })
     }
 

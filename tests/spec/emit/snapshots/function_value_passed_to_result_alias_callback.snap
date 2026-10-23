@@ -42,12 +42,7 @@ func main() {
 	apply(func(arg0 int) MyRes {
 		return cb(arg0)
 	})
-	cb_1 := lisette.MakeResultOk[int, error]
-	var adapted func(int) MyRes
-	if cb_1 != nil {
-		adapted = func(arg0 int) MyRes {
-			return cb_1(arg0)
-		}
-	}
-	apply(adapted)
+	apply(func(arg0 int) MyRes {
+		return lisette.MakeResultOk[int, error](arg0)
+	})
 }

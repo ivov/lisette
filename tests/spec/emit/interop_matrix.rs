@@ -3426,6 +3426,43 @@ pub fn Each(f: fn(Option<int>))
 }
 
 #[test]
+fn function_value_in_go_function_slot_bridges_pointer_option_slots() {
+    let input = r#"
+import "go:example.com/cb"
+
+fn named() -> Result<Option<int>, error> {
+  Ok(Some(2))
+}
+
+fn pass(f: fn() -> Result<Option<int>, error>) {
+  cb.Run(f)
+}
+
+fn pick() -> fn() -> Result<Option<int>, error> {
+  named
+}
+
+fn main() {
+  let local = named
+  cb.Run(local)
+  pass(named)
+  cb.Run(pick())
+  cb.R {}.Run(local)
+}
+"#;
+    let typedef = r#"
+pub fn Run(f: fn() -> Result<Option<int>, error>)
+
+pub struct R {}
+
+impl R {
+  pub fn Run(self, f: fn() -> Result<Option<int>, error>)
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/cb", typedef)]);
+}
+
+#[test]
 fn closure_in_nullable_go_function_field_takes_go_signature() {
     let input = r#"
 import "go:errors"
