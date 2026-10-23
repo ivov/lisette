@@ -3981,6 +3981,46 @@ fn main() {
 }
 
 #[test]
+fn tail_propagate_of_another_ok_type_keeps_the_check() {
+    let input = r#"
+fn read(n: int) -> Result<string, string> {
+  if n > 0 { Ok("x") } else { Err("not positive") }
+}
+
+fn run(n: int) -> Result<(), string> {
+  read(n)?
+  Ok(())
+}
+
+fn main() {
+  let _ = run(1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tail_propagate_through_a_result_alias_returns_the_checked_value() {
+    let input = r#"
+type Outcome = Result<(), string>
+
+fn check(n: int) -> Result<(), string> {
+  if n > 0 { Ok(()) } else { Err("not positive") }
+}
+
+fn run(n: int) -> Outcome {
+  check(n)?
+  Ok(())
+}
+
+fn main() {
+  let _ = run(1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn propagate_of_the_return_type_through_an_alias_returns_the_checked_value() {
     let input = r#"
 type Outcome = Result<int, string>

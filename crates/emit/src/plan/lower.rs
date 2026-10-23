@@ -4,7 +4,7 @@ use crate::analyze::component_uses::component_demand;
 use crate::calls::bound_value::PairCondition;
 use crate::calls::predicates::strip_negations;
 use crate::context::expression::ExpressionContext;
-use crate::control_flow::propagation::plain_return;
+use crate::control_flow::propagation::{ForwardedTail, plain_return};
 use crate::control_flow::targets::legalize_source_loop;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
@@ -122,7 +122,7 @@ impl Planner<'_> {
         let mut statements: Vec<Statement> = Vec::with_capacity(rest.len() + 1);
         let forwarded = rest
             .split_last()
-            .and_then(|(check, rest)| Some((check, rest, self.forwarded_error_call(check, last)?)));
+            .and_then(|(check, rest)| Some((check, rest, self.forwarded_tail(check, last)?)));
         let lowered = forwarded.map_or(rest, |(_, rest, _)| rest);
         for (index, item) in lowered.iter().enumerate() {
             let region = rest[index + 1..].iter().chain(iter::once(last));
@@ -133,11 +133,17 @@ impl Planner<'_> {
                 return (statements, true);
             }
         }
-        if let Some((check, _, call)) = forwarded {
-            let (mut body, call) = self
-                .lower_call(call, None, ExpressionContext::value())
-                .into_parts();
-            body.push(plain_return(call));
+        if let Some((check, _, tail)) = forwarded {
+            let (mut body, value) = match tail {
+                ForwardedTail::ErrorCall(call) => {
+                    self.lower_call(call, None, ExpressionContext::value())
+                }
+                ForwardedTail::TaggedResult(result) => {
+                    self.lower_value(result, ExpressionContext::value())
+                }
+            }
+            .into_parts();
+            body.push(plain_return(value));
             statements.push(self.directed_at(
                 check,
                 LoweredStatement::Body(LoweredBlock { statements: body }),

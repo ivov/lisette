@@ -32,11 +32,7 @@ func run(n int) lisette.Result[struct{}, string] {
 	if check_1.Tag != lisette.ResultOk {
 		return check_1
 	}
-	check_2 := check(n + 1)
-	if check_2.Tag != lisette.ResultOk {
-		return check_2
-	}
-	return lisette.MakeResultOk[struct{}, string](struct{}{})
+	return check(n + 1)
 }
 
 func main() {
