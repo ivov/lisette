@@ -20,6 +20,8 @@ pub enum UnusedExpressionKind {
     Value,
     SliceGrow,
     SliceReserve,
+    Lambda,
+    ParameterlessLambda,
 }
 
 impl UnusedExpressionKind {
@@ -29,7 +31,11 @@ impl UnusedExpressionKind {
             Self::Result => "unused_result",
             Self::Option => "unused_option",
             Self::Partial => "unused_partial",
-            Self::Value | Self::SliceGrow | Self::SliceReserve => "unused_value",
+            Self::Value
+            | Self::SliceGrow
+            | Self::SliceReserve
+            | Self::Lambda
+            | Self::ParameterlessLambda => "unused_value",
         }
     }
 }
@@ -225,6 +231,18 @@ pub fn unused_expression(span: &Span, kind: UnusedExpressionKind) -> LisetteDiag
             "Unused `reserve()` output",
             "output is discarded",
             "`reserve()` outputs a new slice, leaving the original slice intact. Assign the output back `let s = s.reserve(...)` or discard the output with `let _ = s.reserve(...)`",
+        ),
+        UnusedExpressionKind::Lambda => (
+            "unused_value",
+            "Unused lambda",
+            "this lambda is discarded",
+            "Call this lambda or store it",
+        ),
+        UnusedExpressionKind::ParameterlessLambda => (
+            "unused_value",
+            "Unused lambda",
+            "this lambda is discarded",
+            "Call this lambda or store it. To continue an expression on the next line, put `||` at the end of the previous line",
         ),
     };
     LisetteDiagnostic::warn(msg)

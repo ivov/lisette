@@ -555,6 +555,15 @@ fn emit_unused_at_leaf(
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
     let span = leaf.get_span();
+    if let Expression::Lambda { params, .. } = leaf {
+        let kind = if params.is_empty() {
+            UnusedExpressionKind::ParameterlessLambda
+        } else {
+            UnusedExpressionKind::Lambda
+        };
+        facts.push(diagnostics::lint::unused_expression(&span, kind));
+        return;
+    }
     let is_literal = is_literal_or_negated_literal(leaf);
     let ty = leaf.get_type();
     let mut allowed_lints = callee_allowed_lints(leaf, package_id, store);

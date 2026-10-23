@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unused lambda
+   ╭─[test.lis:3:3]
+ 2 │ fn main() {
+ 3 │   |x: int| x + 1
+   ·   ───────┬──────
+   ·          ╰── this lambda is discarded
+ 4 │   let _ = 1
+   ╰────
+  help: Call this lambda or store it · code: [lint.unused_value]

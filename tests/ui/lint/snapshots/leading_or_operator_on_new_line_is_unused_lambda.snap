@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unused lambda
+   ╭─[test.lis:6:5]
+ 5 │   let ok = a
+ 6 │     || b
+   ·     ──┬─
+   ·       ╰── this lambda is discarded
+ 7 │   let _ = ok
+   ╰────
+  help: Call this lambda or store it. To continue an expression on the next line, put `||` at the end of the previous line · code: [lint.unused_value]
