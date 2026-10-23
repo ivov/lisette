@@ -31,6 +31,15 @@ pub(crate) fn plain_return(value: GoExpression) -> Statement {
     LoweredStatement::Return(vec![value]).into()
 }
 
+/// What `r?; Ok(())` at the end of a body returns in place of both items.
+#[derive(Clone, Copy)]
+pub(crate) enum ForwardedTail<'a> {
+    /// A Go call with a bare `error` result.
+    ErrorCall(&'a Expression),
+    /// A tagged `Result<(), E>`.
+    TaggedResult(&'a Expression),
+}
+
 #[derive(Clone, Copy)]
 enum PropagateTarget<'a> {
     Value,
@@ -540,12 +549,12 @@ impl Planner<'_> {
         Some((self.result_fuse_plan(receiver)?, map))
     }
 
-    /// `call()?; Ok(())` returns the call, unless a concrete error type would turn nil into non-nil.
-    pub(crate) fn forwarded_error_call<'a>(
+    /// `r?; Ok(())` at the end of a body returns `r` itself, when `r` has the shape of the return.
+    pub(crate) fn forwarded_tail<'a>(
         &self,
         check: &'a Expression,
         last: &Expression,
-    ) -> Option<&'a Expression> {
+    ) -> Option<ForwardedTail<'a>> {
         let Expression::Propagate {
             expression: inner, ..
         } = check.unwrap_parens()
@@ -565,10 +574,20 @@ impl Planner<'_> {
         {
             return None;
         }
-        let return_ctx = self.return_ctx();
-        if return_ctx.lowered_shape() != Some(LoweredReturnAbi::BareError)
-            || !self.is_error_interface(&self.facts.peel_alias(return_ctx.ty()?).err_type())
-        {
+        match self.return_ctx().lowered_shape() {
+            Some(LoweredReturnAbi::BareError) => self
+                .forwarded_error_call(inner)
+                .map(ForwardedTail::ErrorCall),
+            None => self
+                .forwarded_tagged_result(inner)
+                .map(ForwardedTail::TaggedResult),
+            Some(_) => None,
+        }
+    }
+
+    /// The call returns as is, unless a concrete error type would turn nil into non-nil.
+    fn forwarded_error_call<'a>(&self, inner: &'a Expression) -> Option<&'a Expression> {
+        if !self.is_error_interface(&self.facts.peel_alias(self.return_ctx().ty()?).err_type()) {
             return None;
         }
         let lowered = self.lowered_call(inner)?;
@@ -580,6 +599,16 @@ impl Planner<'_> {
             return None;
         }
         Some(lowered.call)
+    }
+
+    /// A tagged `Result<(), E>` returns as is when it has the return type of the function.
+    fn forwarded_tagged_result<'a>(&self, inner: &'a Expression) -> Option<&'a Expression> {
+        let return_ty = self.facts.peel_alias(self.return_ctx().ty()?);
+        let inner_ty = self.facts.peel_alias(&inner.get_type());
+        (return_ty.is_result()
+            && self.facts.peel_alias(&return_ty.ok_type()).is_unit()
+            && return_ty == inner_ty)
+            .then_some(inner)
     }
 
     fn is_error_interface(&self, ty: &Type) -> bool {
