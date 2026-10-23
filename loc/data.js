@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792775342034,
+  "lastUpdate": 1792775808667,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -48507,6 +48507,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 39897,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29253,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19471,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15793,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14013,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9081,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10247,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "65e9ecc33cbe7dfa91564eb6e6e3e18881451d1d",
+          "message": "fix: bridge function values passed to Go pointer option callbacks (#1588)",
+          "timestamp": "2026-10-23T19:16:21+02:00",
+          "tree_id": "189301052222ffeac410340f42756fc26711215a",
+          "url": "https://github.com/ivov/lisette/commit/65e9ecc33cbe7dfa91564eb6e6e3e18881451d1d"
+        },
+        "date": 1792775804913,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 151179,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39890,
             "unit": "lines"
           },
           {
