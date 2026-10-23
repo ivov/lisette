@@ -4056,6 +4056,56 @@ fn main() {
 }
 
 #[test]
+fn unused_const_naming_an_unused_function_not_emitted() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+fn helper() -> int {
+  1
+}
+
+const F = helper
+
+fn main() {}
+"#,
+    );
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn consts_used_from_another_module_are_emitted() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "limits",
+        "limits.lis",
+        r#"
+const STEP = 2
+
+pub const MAX = 10
+
+pub fn next(n: int) -> int {
+  n + STEP
+}
+"#,
+    );
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "limits"
+
+fn main() {
+  fmt.Println(limits.next(limits.MAX))
+}
+"#,
+    );
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn package_alias_used_in_type_references() {
     let mut fs = MockFileSystem::new();
 

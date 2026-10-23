@@ -1,0 +1,26 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === limits/limits.go ===
+package limits
+
+const Step int = 2
+
+const Max int = 10
+
+func Next(n int) int {
+	return n + Step
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/limits"
+)
+
+func main() {
+	fmt.Println(limits.Next(limits.Max))
+}

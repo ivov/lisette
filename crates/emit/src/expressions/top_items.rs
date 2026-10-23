@@ -97,10 +97,14 @@ impl Planner<'_> {
             Expression::Const {
                 doc,
                 identifier,
+                identifier_span,
                 expression,
                 ty,
                 ..
             } => {
+                if self.facts.is_unused(identifier_span) {
+                    return String::new();
+                }
                 let Some(expression) = expression.value() else {
                     return String::new();
                 };

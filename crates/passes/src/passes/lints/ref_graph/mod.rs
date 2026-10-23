@@ -163,7 +163,7 @@ fn run_ref_lints(
         if matches!(info.kind, ItemKind::Import { .. }) {
             unused_import_spans.insert(info.span);
         }
-        if info.kind == ItemKind::Function {
+        if matches!(info.kind, ItemKind::Function | ItemKind::Constant) {
             unused_definition_spans.push(info.span);
         }
         if !report_unused_items {
