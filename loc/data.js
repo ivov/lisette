@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792772864477,
+  "lastUpdate": 1792773601843,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -48062,6 +48062,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 39752,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29213,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19471,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15750,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13986,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9064,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10247,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "bca59cf802eed5a089f9d91f3892d159f4fd2219",
+          "message": "feat: idiomatic Go for or-patterns as `switch` cases (#1583)",
+          "timestamp": "2026-10-23T18:39:32+02:00",
+          "tree_id": "bf047a8a1717cbf8ac459f31a86e32b33dd1e4d5",
+          "url": "https://github.com/ivov/lisette/commit/bca59cf802eed5a089f9d91f3892d159f4fd2219"
+        },
+        "date": 1792773600466,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 151028,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39866,
             "unit": "lines"
           },
           {
