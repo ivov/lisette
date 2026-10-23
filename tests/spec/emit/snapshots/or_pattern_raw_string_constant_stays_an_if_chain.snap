@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  const RAW = r"\n"
+  
+  fn pick(s: string) -> int {
+    match s {
+      RAW | "\\n" => 10,
+      "b" => 20,
+      _ => 30,
+    }
+  }
+---
+package main
+
+const Raw = `\n`
+
+func pick(s string) int {
+	if s == Raw || s == "\\n" {
+		return 10
+	} else if s == "b" {
+		return 20
+	}
+	return 30
+}

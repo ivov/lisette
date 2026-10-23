@@ -1,0 +1,57 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  enum Shape { Circle(int), Square, Triangle, Line }
+  
+  fn name(s: Shape) -> string {
+    match s {
+      Circle(0) => "dot",
+      Circle(_) | Square => "round",
+      Triangle => "pointed",
+      _ => "other",
+    }
+  }
+---
+package main
+
+func MakeShapeCircle(arg0 int) Shape {
+	return Shape{Tag: ShapeCircle, Circle: arg0}
+}
+
+func MakeShapeSquare() Shape {
+	return Shape{Tag: ShapeSquare}
+}
+
+func MakeShapeTriangle() Shape {
+	return Shape{Tag: ShapeTriangle}
+}
+
+func MakeShapeLine() Shape {
+	return Shape{Tag: ShapeLine}
+}
+
+type ShapeTag uint8
+
+const (
+	ShapeCircle ShapeTag = iota
+	ShapeSquare
+	ShapeTriangle
+	ShapeLine
+)
+
+type Shape struct {
+	Tag    ShapeTag
+	Circle int
+}
+
+func name(s Shape) string {
+	if s.Tag == ShapeCircle && s.Circle == 0 {
+		return "dot"
+	} else if s.Tag == ShapeCircle || s.Tag == ShapeSquare {
+		return "round"
+	} else if s.Tag == ShapeTriangle {
+		return "pointed"
+	}
+	return "other"
+}

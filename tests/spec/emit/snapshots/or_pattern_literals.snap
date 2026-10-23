@@ -13,10 +13,12 @@ description: |
 package main
 
 func test(x int) string {
-	if x == 1 || x == 2 || x == 3 {
+	switch x {
+	case 1, 2, 3:
 		return "small"
-	} else if x == 4 || x == 5 || x == 6 {
+	case 4, 5, 6:
 		return "medium"
+	default:
+		return "large"
 	}
-	return "large"
 }

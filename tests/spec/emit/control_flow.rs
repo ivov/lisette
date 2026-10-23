@@ -1945,6 +1945,106 @@ fn test(c: Color) -> string {
 }
 
 #[test]
+fn or_pattern_enum_variants_share_a_switch_case() {
+    let input = r#"
+enum Shape { Circle, Square, Triangle, Line, Point }
+
+fn sides(s: Shape) -> int {
+  match s {
+    Circle | Point => 0,
+    Square | Triangle => 4,
+    Line => 1,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn or_pattern_label_in_another_arm_stays_an_if_chain() {
+    let input = r#"
+enum Shape { Circle(int), Square, Triangle, Line }
+
+fn name(s: Shape) -> string {
+  match s {
+    Circle(0) => "dot",
+    Circle(_) | Square => "round",
+    Triangle => "pointed",
+    _ => "other",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn or_pattern_constants_with_equal_values_stay_an_if_chain() {
+    let input = r#"
+const ONE = 1
+const ALSO_ONE = 3 - 2
+
+fn pick(x: int) -> int {
+  match x {
+    ONE | 2 => 10,
+    ALSO_ONE | 3 => 20,
+    _ => 30,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn constants_with_equal_values_stay_an_if_chain() {
+    let input = r#"
+const ONE = 1
+const ALSO_ONE = 3 - 2
+
+fn pick(x: int) -> int {
+  match x {
+    ONE => 10,
+    ALSO_ONE => 20,
+    2 => 25,
+    _ => 30,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn or_pattern_float_labels_stay_an_if_chain() {
+    let input = r#"
+const ONE = 1.0
+
+fn pick(x: float64) -> int {
+  match x {
+    ONE | 1 => 10,
+    2 => 20,
+    _ => 30,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn or_pattern_raw_string_constant_stays_an_if_chain() {
+    let input = r#"
+const RAW = r"\n"
+
+fn pick(s: string) -> int {
+  match s {
+    RAW | "\\n" => 10,
+    "b" => 20,
+    _ => 30,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn or_pattern_with_bindings() {
     let input = r#"
 enum E { A(int), B(int) }

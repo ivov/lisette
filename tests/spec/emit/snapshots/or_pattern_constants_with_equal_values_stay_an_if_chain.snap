@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  const ONE = 1
+  const ALSO_ONE = 3 - 2
+  
+  fn pick(x: int) -> int {
+    match x {
+      ONE | 2 => 10,
+      ALSO_ONE | 3 => 20,
+      _ => 30,
+    }
+  }
+---
+package main
+
+const One int = 1
+
+const AlsoOne int = 3 - 2
+
+func pick(x int) int {
+	if x == One || x == 2 {
+		return 10
+	} else if x == AlsoOne || x == 3 {
+		return 20
+	}
+	return 30
+}
