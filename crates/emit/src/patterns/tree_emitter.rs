@@ -1,3 +1,5 @@
+use std::iter;
+
 use crate::plan::bodies::GoUses;
 use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, UnaryOperator};
 use syntax::types::Type;
@@ -543,12 +545,15 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 let (cased, lifted) =
                     split_with_default_lift(&switch.branches, switch.fallback.as_deref());
                 for branch in cased {
-                    conditions.push(switch_branch_condition(
-                        &rendered_path,
-                        &switch.kind,
-                        &shape,
-                        &branch.label,
-                    ));
+                    conditions.push(
+                        iter::once(&branch.label)
+                            .chain(&branch.extra_labels)
+                            .map(|label| {
+                                switch_branch_condition(&rendered_path, &switch.kind, &shape, label)
+                            })
+                            .reduce(|left, right| GoExpression::binary(left, BinaryOp::Or, right))
+                            .expect("a switch branch has a label"),
+                    );
                     let flattened =
                         self.collect_flat_cases(&branch.decision, conditions, out, false);
                     conditions.pop();
@@ -935,14 +940,14 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let case_plans = regular
             .iter()
             .map(|branch| {
-                let established =
-                    GoExpression::binary(subject.clone(), BinaryOp::Eq, branch.label.clone());
-                self.lower_switch_case(
-                    vec![branch.label.clone()],
-                    Some(established),
-                    &branch.decision,
-                    place,
-                )
+                let established = branch.extra_labels.is_empty().then(|| {
+                    GoExpression::binary(subject.clone(), BinaryOp::Eq, branch.label.clone())
+                });
+                let labels = iter::once(&branch.label)
+                    .chain(&branch.extra_labels)
+                    .cloned()
+                    .collect();
+                self.lower_switch_case(labels, established, &branch.decision, place)
             })
             .collect();
         let default_block = self.lower_switch_default(default, place);

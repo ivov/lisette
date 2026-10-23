@@ -2,15 +2,17 @@ use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::plan::local::GoIdentifier;
 use crate::state::scope::ScopeState;
 use rustc_hash::FxHashMap as HashMap;
+use std::borrow::Cow;
 use std::slice;
 
 use syntax::ast::{
-    BindingId, ConstructorPatternResolution, MatchArm, Pattern, RecordPatternResolution,
+    BindingId, ConstructorPatternResolution, Literal, MatchArm, Pattern, RecordPatternResolution,
     RestPattern, SequencePatternResolution, StructFieldPattern,
 };
+use syntax::lex::{rune_codepoint, string_bytes};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::program::DefinitionBody;
-use syntax::types::{Type, unqualified_name};
+use syntax::types::{SimpleKind, Type, unqualified_name};
 
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
@@ -181,6 +183,8 @@ pub(crate) enum Check {
     Literal {
         path: AccessPath,
         go_literal: GoExpression,
+        /// The source value, when known. A named constant without a literal value has none.
+        value: Option<Literal>,
     },
     SliceLenEq {
         path: AccessPath,
@@ -251,7 +255,9 @@ impl Check {
                     tag_constant.clone(),
                 )
             }
-            Check::Literal { path, go_literal } => {
+            Check::Literal {
+                path, go_literal, ..
+            } => {
                 let rendered_path = path.render(subject);
                 match (boolean_literal(go_literal), negative) {
                     (Some(true), false) | (Some(false), true) => rendered_path,
@@ -351,6 +357,65 @@ impl Check {
             _ => None,
         }
     }
+
+    /// The checks that give one switch label each: this check, or one per or-pattern alternative.
+    fn switch_label_checks(&self) -> Option<Vec<&Check>> {
+        let Check::Or { alternatives } = self else {
+            return Some(vec![self]);
+        };
+        alternatives
+            .iter()
+            .map(|alternative| match alternative.as_slice() {
+                [check] if !matches!(check, Check::Or { .. }) => Some(check),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The switch labels this check tests, all on one path.
+    fn switch_labels(&self, kind: &SwitchKind) -> Option<(&AccessPath, Vec<&GoExpression>)> {
+        let checks = self.switch_label_checks()?;
+        let path = checks.first()?.path()?;
+        let labels = checks
+            .iter()
+            .map(|check| {
+                if check.path()? != path {
+                    return None;
+                }
+                match kind {
+                    SwitchKind::EnumTag => check.as_enum_tag(),
+                    SwitchKind::Value => check.as_literal(),
+                }
+            })
+            .collect::<Option<_>>()?;
+        Some((path, labels))
+    }
+
+    fn label_value(&self) -> Option<LabelValue<'_>> {
+        let Check::Literal {
+            value: Some(value), ..
+        } = self
+        else {
+            return None;
+        };
+        match value {
+            Literal::Integer { value, .. } => Some(LabelValue::Integer(*value)),
+            Literal::Char(text) => {
+                rune_codepoint(text).map(|code| LabelValue::Integer(code.into()))
+            }
+            Literal::Boolean(value) => Some(LabelValue::Boolean(*value)),
+            Literal::String { value, raw } => string_bytes(value, *raw).map(LabelValue::Bytes),
+            _ => None,
+        }
+    }
+}
+
+/// The Go constant value of a switch label, for finding duplicate `case` values.
+#[derive(PartialEq)]
+enum LabelValue<'a> {
+    Integer(u64),
+    Boolean(bool),
+    Bytes(Cow<'a, [u8]>),
 }
 
 pub(crate) fn tested_tuple_elements(checks: &[Check], arity: usize) -> Option<Vec<bool>> {
@@ -562,6 +627,8 @@ pub(crate) fn boolean_literal(expression: &GoExpression) -> Option<bool> {
 #[derive(Debug)]
 pub(crate) struct SwitchBranch<L> {
     pub label: L,
+    /// The other labels of an or-pattern case.
+    pub extra_labels: Vec<L>,
     pub decision: Decision,
 }
 
@@ -653,31 +720,36 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
             return None;
         }
         let (branches, fallback) = build_switch_branches(cases, fallback_arms, |arm| {
-            lift_root_assertion(&mut arm.checks, &mut arm.bindings).unwrap()
+            (
+                lift_root_assertion(&mut arm.checks, &mut arm.bindings).unwrap(),
+                Vec::new(),
+            )
         });
         return Some(Decision::TypeSwitch { branches, fallback });
     }
 
     let first_check = first_relevant.checks.first()?;
-    let path = first_check.path()?.clone();
-    let kind = if first_check.as_enum_tag().is_some() {
-        SwitchKind::EnumTag
-    } else if first_check.as_literal().is_some() {
-        SwitchKind::Value
-    } else {
-        return None;
-    };
+    let (kind, path) = [SwitchKind::EnumTag, SwitchKind::Value]
+        .into_iter()
+        .find_map(|kind| {
+            let path = first_check.switch_labels(&kind)?.0.clone();
+            Some((kind, path))
+        })?;
     validate_value_switch_arms(arms, &kind, &path)?;
 
     let (branches, fallback) = build_switch_branches(cases, fallback_arms, |arm| {
         let first = arm.checks.remove(0);
-        match kind {
-            SwitchKind::EnumTag => first.as_enum_tag(),
-            SwitchKind::Value => first.as_literal(),
-        }
-        .cloned()
-        .unwrap()
+        let mut labels = first.switch_labels(&kind).unwrap().1.into_iter().cloned();
+        (labels.next().unwrap(), labels.collect())
     });
+    // A two-way or-pattern match reads better as an `if` than as a one-case `switch`.
+    if branches
+        .iter()
+        .any(|branch| !branch.extra_labels.is_empty())
+        && branches.len() + usize::from(fallback.is_some()) < 3
+    {
+        return None;
+    }
     Some(Decision::Switch(ValueSwitch {
         path,
         kind,
@@ -691,6 +763,9 @@ fn validate_value_switch_arms(
     kind: &SwitchKind,
     switch_path: &AccessPath,
 ) -> Option<()> {
+    let mut alternatives = Vec::new();
+    let mut singles = Vec::new();
+    let mut values = Vec::new();
     for arm in arms {
         if arm.is_catchall() {
             continue;
@@ -700,46 +775,69 @@ fn validate_value_switch_arms(
         }
 
         let first = arm.checks.first()?;
-        match kind {
-            SwitchKind::EnumTag => {
-                first.as_enum_tag()?;
-            }
-            SwitchKind::Value => {
-                first.as_literal()?;
-                if arm.checks.len() != 1 {
-                    return None;
-                }
-            }
-        }
-        if first.path()? != switch_path {
+        let (path, labels) = first.switch_labels(kind)?;
+        if matches!(kind, SwitchKind::Value) && arm.checks.len() != 1 {
             return None;
         }
+        if path != switch_path {
+            return None;
+        }
+        if labels.len() > 1 {
+            alternatives.extend(labels);
+        } else {
+            singles.extend(labels);
+        }
+        if matches!(kind, SwitchKind::Value) {
+            values.extend(
+                first
+                    .switch_label_checks()?
+                    .iter()
+                    .map(|check| check.label_value()),
+            );
+        }
     }
-    Some(())
+    // Go rejects two `case` values that are equal constants, so every value must be known and distinct.
+    if values.len() > 1
+        && values
+            .iter()
+            .enumerate()
+            .any(|(index, value)| value.is_none() || values[index + 1..].contains(value))
+    {
+        return None;
+    }
+    // An or-pattern case shares no label with another arm, so it stays one Go case.
+    let shared = alternatives
+        .iter()
+        .enumerate()
+        .any(|(index, label)| alternatives[index + 1..].contains(label) || singles.contains(label));
+    (!shared).then_some(())
 }
 
 /// Go `switch` cases do not fall through to `default`, so fallback arms are spliced into fail-prone case bodies.
 fn build_switch_branches<L: PartialEq>(
     cases: &[ArmInfo],
     fallback_arms: &[ArmInfo],
-    take_label: impl Fn(&mut ArmInfo) -> L,
+    take_label: impl Fn(&mut ArmInfo) -> (L, Vec<L>),
 ) -> (Vec<SwitchBranch<L>>, Option<Box<Decision>>) {
-    let mut grouped: Vec<(L, Vec<ArmInfo>)> = Vec::new();
+    let mut grouped: Vec<(L, Vec<L>, Vec<ArmInfo>)> = Vec::new();
 
     for arm in cases {
         let mut inner_arm = arm.clone();
-        let case_label = take_label(&mut inner_arm);
+        let (case_label, extra_labels) = take_label(&mut inner_arm);
 
-        if let Some((_, arms)) = grouped.iter_mut().find(|(label, _)| label == &case_label) {
+        if let Some((_, _, arms)) = grouped
+            .iter_mut()
+            .find(|(label, _, _)| label == &case_label)
+        {
             arms.push(inner_arm);
         } else {
-            grouped.push((case_label, vec![inner_arm]));
+            grouped.push((case_label, extra_labels, vec![inner_arm]));
         }
     }
 
     let branches = grouped
         .into_iter()
-        .map(|(label, inner_arms)| {
+        .map(|(label, extra_labels, inner_arms)| {
             let any_inner_can_fail = inner_arms
                 .iter()
                 .any(|a| a.has_guard || !a.checks.is_empty());
@@ -750,7 +848,11 @@ fn build_switch_branches<L: PartialEq>(
             } else {
                 build_tree(inner_arms)
             };
-            SwitchBranch { label, decision }
+            SwitchBranch {
+                label,
+                extra_labels,
+                decision,
+            }
         })
         .collect();
 
@@ -850,6 +952,7 @@ fn collect_checks_and_bindings(
             collector.checks.push(Check::Literal {
                 path: path.clone(),
                 go_literal: GoExpression::literal(emit_pattern_literal(literal)),
+                value: exact_switch_value(planner, path_ty, literal),
             });
         }
 
@@ -1147,11 +1250,23 @@ fn collect_enum_variant_checks(
 
     // A const pattern is a value comparison against a named constant, emitted
     // as a Go `case` expression rather than an enum tag or newtype destructure.
-    if let ConstructorPatternResolution::Const { qualified_name }
-    | ConstructorPatternResolution::ConstValue { qualified_name, .. } = resolution
-    {
-        collect_const_pattern_check(planner, path, qualified_name, collector);
-        return;
+    match resolution {
+        ConstructorPatternResolution::Const { qualified_name } => {
+            collect_const_pattern_check(planner, path, qualified_name, None, collector);
+            return;
+        }
+        ConstructorPatternResolution::ConstValue {
+            qualified_name,
+            value,
+        } => {
+            // A constant's string value does not record whether it was raw, so its bytes are unknown.
+            let value = (!matches!(value, Literal::String { .. }))
+                .then(|| exact_switch_value(planner, path_ty, value))
+                .flatten();
+            collect_const_pattern_check(planner, path, qualified_name, value, collector);
+            return;
+        }
+        _ => {}
     }
 
     let ConstructorPatternResolution::EnumVariant {
@@ -1299,12 +1414,24 @@ fn collect_const_pattern_check(
     planner: &Planner,
     path: &AccessPath,
     qualified_name: &str,
+    value: Option<Literal>,
     collector: &mut PatternInfo,
 ) {
     collector.checks.push(Check::Literal {
         path: path.clone(),
         go_literal: planner.definition_reference(qualified_name),
+        value,
     });
+}
+
+/// The value of a switch label on an integer, `bool`, or `string` path, where Go compares it as written.
+/// On a float path, distinct values can round to one constant.
+fn exact_switch_value(planner: &Planner, path_ty: &Type, value: &Literal) -> Option<Literal> {
+    let kind = planner.facts.underlying_simple_kind(path_ty)?;
+    let exact = kind.is_signed_int()
+        || kind.is_unsigned_int()
+        || matches!(kind, SimpleKind::Bool | SimpleKind::String);
+    (exact && !matches!(value, Literal::Float { .. })).then(|| value.clone())
 }
 
 /// `true` when the variant is a foreign-package dotted name (e.g.
@@ -1331,6 +1458,7 @@ fn handle_foreign_variant_literal(
     collector.checks.push(Check::Literal {
         path: path.clone(),
         go_literal,
+        value: None,
     });
     true
 }
@@ -1745,7 +1873,7 @@ mod tests {
         try_build_switch,
     };
     use crate::abi::coercion::CoercionPlan;
-    use syntax::ast::BindingId;
+    use syntax::ast::{BindingId, Literal};
     use syntax::types::Type;
 
     fn binding(name: &str, id: u32, target: BindingTarget) -> PatternBinding {
@@ -1872,6 +2000,10 @@ mod tests {
         Some(Check::Literal {
             path: AccessPath::root(),
             go_literal: GoExpression::literal(text.to_string()),
+            value: text
+                .parse()
+                .ok()
+                .map(|value| Literal::Integer { value, text: None }),
         })
     }
 

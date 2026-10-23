@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  const ONE = 1.0
+  
+  fn pick(x: float64) -> int {
+    match x {
+      ONE | 1 => 10,
+      2 => 20,
+      _ => 30,
+    }
+  }
+---
+package main
+
+const One float64 = 1.0
+
+func pick(x float64) int {
+	if x == One || x == 1 {
+		return 10
+	} else if x == 2 {
+		return 20
+	}
+	return 30
+}
