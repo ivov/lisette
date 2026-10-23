@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Immutable variable
+    ╭─[test.lis:10:3]
+  9 │   let h = Holder { slot: None }
+ 10 │   h.touch()
+    ·   ───┬───
+    ·      ╰── `h` was declared without `mut`
+ 11 │ }
+    ╰────
+  help: Declare using `let mut h` to mark the variable mutable · code: [infer.immutable]

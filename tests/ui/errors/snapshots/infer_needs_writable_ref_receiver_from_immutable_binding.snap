@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing write permission
+    ╭─[test.lis:12:3]
+ 11 │   let c = make()
+ 12 │   c.bump()
+    ·   ───┬──
+    ·      ╰── expected `mut Ref<Counter>`, found `Ref<Counter>`
+ 13 │ }
+    ╰────
+  help: `mut Ref<Counter>` permits writes, `Ref<Counter>` does not. Declare `let mut c` · code: [infer.needs_writable]

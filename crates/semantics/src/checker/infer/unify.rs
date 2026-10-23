@@ -853,15 +853,17 @@ impl InferCtx<'_> {
             );
         }
 
-        if expected.wraps("Ref", actual) {
+        if expected.is_ref() && expected.inner().as_ref() == Some(actual) {
             return "Add `&` to create a reference".to_string();
         }
 
-        if actual.wraps("Ref", expected) {
-            return "Dereference with `*`".to_string();
+        if actual.is_ref() && actual.inner().as_ref() == Some(expected) {
+            return "Dereference with `.*`, e.g. `value.*`".to_string();
         }
 
-        if expected.wraps("Option", actual) {
+        if expected.wraps("Option", actual)
+            || self.option_of_interface_help_applies(expected, actual)
+        {
             return "Wrap the value: `Some(...)`".to_string();
         }
 
@@ -960,8 +962,10 @@ impl InferCtx<'_> {
             return widening;
         }
 
-        if let Some(expectation) = expectation {
-            return expectation.help(expected_name, actual_name);
+        if let Some(help) =
+            expectation.and_then(|expectation| expectation.help(expected_name, actual_name))
+        {
+            return help;
         }
 
         format!(
@@ -1010,6 +1014,16 @@ impl InferCtx<'_> {
                 "Copy the entries into a new `{expected_name}`, widening each value: `widened[key] = value as {expected_element}`"
             ),
         })
+    }
+
+    fn option_of_interface_help_applies(&self, expected: &Type, actual: &Type) -> bool {
+        expected.is_option()
+            && !actual.is_option()
+            && expected
+                .get_type_params()
+                .and_then(|params| params.first())
+                .is_some_and(|inner| self.store.is_interface(inner))
+            && self.widens_into_interface(actual)
     }
 
     fn widens_into_interface(&self, ty: &Type) -> bool {

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let v = vec![1, 2, 3]
+   ·           ──┬─
+   ·             ╰── Lisette has no macros
+ 4 │ }
+   ╰────
+  help: Use a slice literal, e.g. `[1, 2, 3]` · code: [parse.macro_call]

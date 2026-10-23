@@ -30,6 +30,8 @@ pub use names::go_name::PRELUDE_IMPORT_PATH;
 pub use names::go_name::go_test_function_name;
 pub use output::OutputFile;
 
+use std::path::PathBuf;
+
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
@@ -59,6 +61,8 @@ use types::go_type::GoType;
 #[derive(Clone, Debug)]
 pub struct EmitOptions {
     pub sourcemap: bool,
+    /// Base for relative paths in `//line` directives.
+    pub sourcemap_base: Option<PathBuf>,
     pub emit_tests: bool,
 }
 
@@ -367,10 +371,11 @@ impl<'a> Planner<'a> {
                 .files
                 .iter()
                 .map(|(file_id, file)| {
-                    (
-                        *file_id,
-                        LineIndex::from_source(file.display_path.clone(), &file.source),
-                    )
+                    let path = match &options.sourcemap_base {
+                        Some(base) => base.join(&file.display_path).display().to_string(),
+                        None => file.display_path.clone(),
+                    };
+                    (*file_id, LineIndex::from_source(path, &file.source))
                 })
                 .collect()
         });

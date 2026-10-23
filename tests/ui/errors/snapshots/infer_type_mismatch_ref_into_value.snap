@@ -1,0 +1,15 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:2:25]
+ 1 │ 
+ 2 │ fn test(r: Ref<int>) -> int {
+   ·                         ─┬─
+   ·                          ╰── return type declared here
+ 3 │   r
+   ·   ┬
+   ·   ╰── expected `int`, found `Ref<int>`
+ 4 │ }
+   ╰────
+  help: Dereference with `.*`, e.g. `value.*` · code: [infer.type_mismatch]

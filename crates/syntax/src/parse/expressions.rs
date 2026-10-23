@@ -272,12 +272,59 @@ impl<'source> Parser<'source> {
 
         self.ensure(Identifier);
 
+        if let Some(recovered) = self.try_macro_call(text, start.byte_offset) {
+            return recovered;
+        }
+
         Expression::Identifier {
             value: text.into(),
             ty: Type::uninferred(),
             span: self.span_from_offset(start.byte_offset),
             resolution: IdentifierResolution::Unresolved,
         }
+    }
+
+    /// Recovers `name!(...)` or `name![...]` as one error, not as `name` then `!(...)`.
+    pub(super) fn try_macro_call(&mut self, name: &str, start_offset: u32) -> Option<Expression> {
+        let bang = self.current_token();
+        let open = self.stream.peek_ahead(1);
+        let close = match open.kind {
+            LeftParen => RightParen,
+            LeftSquareBracket => RightSquareBracket,
+            _ => return None,
+        };
+        let name_end = start_offset + name.len() as u32;
+        if bang.kind != Bang
+            || bang.byte_offset != name_end
+            || open.byte_offset != bang.end_offset()
+        {
+            return None;
+        }
+
+        let help = match name {
+            "println" | "print" | "eprintln" | "eprint" => {
+                "Use `fmt.Println(...)` after `import \"go:fmt\"`. Interpolate with an f-string, e.g. `fmt.Println(f\"{x}\")`"
+            }
+            "format" => "Use an f-string, e.g. `f\"{x}\"`",
+            "vec" => "Use a slice literal, e.g. `[1, 2, 3]`",
+            "panic" => "Call the `panic` function, e.g. `panic(\"something went wrong\")`",
+            "assert" => "Remove the `!`. `assert` is a statement, e.g. `assert a == b`",
+            "assert_eq" | "assert_ne" => "Use the `assert` statement, e.g. `assert a == b`",
+            _ => "Lisette has no macros. Call a function instead",
+        };
+        let span = Span::new(self.file_id, start_offset, bang.end_offset() - start_offset);
+        if !self.too_many_errors() {
+            self.errors.push(
+                ParseError::new("Syntax error", span, "Lisette has no macros")
+                    .with_parse_code("macro_call")
+                    .with_help(help),
+            );
+        }
+
+        self.next();
+        self.consume_balanced(open.kind, close);
+
+        Some(Self::error_expression(self.span_from_offset(start_offset)))
     }
 
     pub(crate) fn parse_struct_call(&mut self, expression: Expression) -> Expression {
@@ -492,7 +539,7 @@ impl<'source> Parser<'source> {
             );
         }
 
-        self.consume_balanced_parens();
+        self.consume_balanced(LeftParen, RightParen);
 
         Some(Self::error_expression(
             self.span_from_offset(span.byte_offset),
@@ -569,20 +616,18 @@ impl<'source> Parser<'source> {
         commas
     }
 
-    fn consume_balanced_parens(&mut self) {
+    fn consume_balanced(&mut self, open: TokenKind, close: TokenKind) {
         let mut depth = 0usize;
         while !self.at_eof() {
             let kind = self.current_token().kind;
             self.next();
-            match kind {
-                LeftParen => depth += 1,
-                RightParen => {
-                    depth = depth.saturating_sub(1);
-                    if depth == 0 {
-                        break;
-                    }
+            if kind == open {
+                depth += 1;
+            } else if kind == close {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    break;
                 }
-                _ => {}
             }
         }
     }

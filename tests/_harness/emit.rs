@@ -58,6 +58,7 @@ fn emit_inner(
     };
     let options = EmitOptions {
         sourcemap: source_for_sourcemap.is_some(),
+        sourcemap_base: None,
         emit_tests: false,
     };
     let emitted_files = Planner::emit(&input, "myproject", "main", options)

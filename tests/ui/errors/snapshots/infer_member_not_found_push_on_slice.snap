@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Member not found
+   ╭─[test.lis:3:3]
+ 2 │ fn test(items: Slice<int>) {
+ 3 │   items.push(1)
+   ·   ─────┬────
+   ·        ╰── no member `push` on type `Slice<int>`
+ 4 │ }
+   ╰────
+  help: Use `append`, which returns the extended slice, e.g. `items = items.append(x)` · code: [infer.member_not_found]

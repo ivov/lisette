@@ -6,6 +6,7 @@ use syntax::program::{Definition, DefinitionBody, DotAccessResolution, ReceiverC
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute, unqualified_name};
 
 use super::super::addressability::check_is_non_addressable;
+use super::super::context::{Expectation, ExpectationRole};
 use crate::checker::infer::InferCtx;
 use crate::checker::promotion::{self, Resolution};
 
@@ -326,6 +327,7 @@ impl InferCtx<'_> {
         let actual_is_ref = actual_ty.is_ref();
 
         let mut coercion = None;
+        let mut reported_mutation = false;
 
         if self.store.parameter_grants_write(&receiver_ty) {
             self.mark_place_root_mutated(receiver_expression);
@@ -348,11 +350,17 @@ impl InferCtx<'_> {
                 } else {
                     coercion = Some(ReceiverCoercion::AutoAddress);
                     if receiver_ty.is_writable() {
-                        self.check_auto_address_mutation(receiver_expression, span);
+                        reported_mutation =
+                            self.check_auto_address_mutation(receiver_expression, span);
                     }
                 }
                 // Unify inner types: T with T (from Ref<T>)
                 if let Some(inner) = receiver_ty.inner() {
+                    let inner = if reported_mutation {
+                        self.store.demoted(&inner)
+                    } else {
+                        inner
+                    };
                     self.unify(&inner, &actual_ty, span);
                 }
             }
@@ -367,7 +375,16 @@ impl InferCtx<'_> {
             (true, true) => {
                 // Both are refs, normal unification (handles same depth)
                 // Note: Multi-level mismatches (Ref<Ref<T>> vs Ref<T>) will fail in unify
-                self.unify(&receiver_ty, &actual_ty, span);
+                let expectation = Expectation {
+                    role: ExpectationRole::Receiver,
+                    span: *span,
+                    expected_ty: receiver_ty.clone(),
+                    value_context: receiver_ty
+                        .is_writable()
+                        .then(|| self.initializer_context(receiver_expression))
+                        .flatten(),
+                };
+                self.with_expectation(expectation, |s| s.unify(&receiver_ty, &actual_ty, span));
             }
             (false, false) => {
                 // Neither is ref, normal unification
@@ -379,28 +396,35 @@ impl InferCtx<'_> {
     }
 
     /// An auto-addressed receiver of a writing method must permit the write.
-    fn check_auto_address_mutation(&mut self, receiver_expression: &Expression, span: &Span) {
+    fn check_auto_address_mutation(
+        &mut self,
+        receiver_expression: &Expression,
+        span: &Span,
+    ) -> bool {
         let store = self.store;
         if let Some(var_name) = receiver_expression.get_var_name() {
             if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
                 self.facts.mark_alias_mutated(binding_id);
             }
             if self.imports.namespace(&var_name).is_some() {
-                return;
+                return false;
             }
         }
         match self.classify_write_target(receiver_expression) {
             super::permission::WriteTarget::Through { governing } if !governing.is_writable() => {
                 self.report_write_through_read_only(receiver_expression, &governing, *span);
+                true
             }
             super::permission::WriteTarget::Binding { name } => {
                 if self.scopes.lookup_mutable(&name) {
                     self.record_loop_copy_write(&name, *span);
+                    false
                 } else {
                     self.report_disallowed_mutation(store, &name, *span, false, None);
+                    true
                 }
             }
-            _ => {}
+            _ => false,
         }
     }
 

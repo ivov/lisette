@@ -8,6 +8,7 @@ use crate::diagnostic::IndexedSource;
 use crate::graphical::{self, FrameReport, FrameSource, FrameTheme};
 use owo_colors::{OwoColorize, Style};
 use std::env;
+use std::io::{self, IsTerminal};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum OutputFormat {
@@ -38,6 +39,10 @@ impl Filter {
     }
 }
 
+fn use_color() -> bool {
+    env::var("NO_COLOR").is_err() && io::stderr().is_terminal()
+}
+
 fn format_time(elapsed: Duration) -> String {
     if elapsed.as_secs() >= 1 {
         format!("{:.2}s", elapsed.as_secs_f64())
@@ -56,7 +61,7 @@ pub fn print_summary(
     info: usize,
 ) {
     let time_string = format_time(elapsed);
-    let use_color = env::var("NO_COLOR").is_err();
+    let use_color = use_color();
     let time_display = if use_color {
         format!("({})", time_string).dimmed().to_string()
     } else {
@@ -303,7 +308,7 @@ pub fn render_all(
         eprintln!(); // Blank line before first diagnostic
     }
 
-    let use_color = env::var("NO_COLOR").is_err();
+    let use_color = use_color();
 
     render_group(&groups.errors, use_color, &mut sources);
     render_group(&groups.warnings, use_color, &mut sources);

@@ -90,6 +90,7 @@ pub fn compile_e2e_suite_test(
     };
     let options = EmitOptions {
         sourcemap: false,
+        sourcemap_base: None,
         emit_tests: false,
     };
     let mut emitted_files = Planner::emit(&input, GO_MODULE, "main", options)

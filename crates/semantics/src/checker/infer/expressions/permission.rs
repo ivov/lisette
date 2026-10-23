@@ -390,7 +390,7 @@ impl InferCtx<'_> {
         }
     }
 
-    fn initializer_context(&self, initializer: &Expression) -> Option<WriteContext> {
+    pub(super) fn initializer_context(&self, initializer: &Expression) -> Option<WriteContext> {
         let initializer = initializer.unwrap_parens();
         if let Expression::Identifier { value: name, .. } = initializer
             && let Some(binding_id) = self.scopes.lookup_binding_id(name)

@@ -3341,6 +3341,26 @@ fn a_script_receives_the_flags_the_compiler_also_knows() {
 }
 
 #[test]
+fn a_sourcemapped_script_panic_names_the_script_file() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path().canonicalize().unwrap();
+    let source = "fn main() {\n  let xs = [1]\n  let i = 3\n  let _ = xs[i]\n}\n";
+    fs::write(dir.join("crash.lis"), source).unwrap();
+
+    let output = lis_in(&dir, &["run", "--sourcemap", "crash.lis"]);
+
+    let expected = format!("{}:4", dir.join("crash.lis").display());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains(&expected),
+        "expected `{expected}` in the trace:\n{}",
+        combined(&output)
+    );
+}
+
+#[test]
 fn a_separator_after_a_script_reaches_the_program() {
     if !go_available() {
         return;

@@ -187,11 +187,12 @@ pub(super) enum ExpectationRole {
     FallibleBlockTail {
         keyword: &'static str,
     },
+    Receiver,
 }
 
 impl Expectation {
-    pub(super) fn help(&self, expected_name: &str, actual_name: &str) -> String {
-        match &self.role {
+    pub(super) fn help(&self, expected_name: &str, actual_name: &str) -> Option<String> {
+        let help = match &self.role {
             ExpectationRole::CallArgument {
                 callee_label,
                 index,
@@ -227,7 +228,9 @@ impl Expectation {
                 "The last expression of a `{}` block is its success value. It must have type `{}`, but it has type `{}`.",
                 keyword, expected_name, actual_name,
             ),
-        }
+            ExpectationRole::Receiver => return None,
+        };
+        Some(help)
     }
 }
 
