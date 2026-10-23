@@ -1,0 +1,56 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Box { n: int }
+  
+  impl Box {
+    fn put(self, s: string) {}
+  }
+  
+  fn mark(s: string) {
+    fmt.Println(s)
+  }
+  
+  fn make_box(_u: ()) -> Box {
+    fmt.Println("receiver")
+    Box { n: 1 }
+  }
+  
+  fn value(_u: ()) -> string { "v" }
+  
+  fn main() {
+    make_box(mark("receiver argument")).put(value(mark("method argument")))
+  }
+---
+package main
+
+import "fmt"
+
+type Box struct {
+	n int
+}
+
+func (b Box) put(_ string) {}
+
+func mark(s string) {
+	fmt.Println(s)
+}
+
+func makeBox(_ struct{}) Box {
+	fmt.Println("receiver")
+	return Box{n: 1}
+}
+
+func value(_ struct{}) string {
+	return "v"
+}
+
+func main() {
+	mark("receiver argument")
+	callee := makeBox(struct{}{}).put
+	mark("method argument")
+	callee(value(struct{}{}))
+}

@@ -339,8 +339,7 @@ impl<'a> Planner<'a> {
             .fold(Effects::default(), |effects, argument| {
                 effects.union(argument.effects())
             });
-        let callee_needs_pin = setup.is_empty()
-            && type_args_string.is_empty()
+        let callee_needs_pin = type_args_string.is_empty()
             && !pointer_receiver_on_value_local(function, &call_plan.resolved)
             && LaterStages::sequenced(
                 &args_setup,

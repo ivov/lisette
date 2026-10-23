@@ -1296,6 +1296,35 @@ fn main() {
 }
 
 #[test]
+fn callee_with_setup_evaluates_before_argument_setup() {
+    let input = r#"
+import "go:fmt"
+
+struct Box { n: int }
+
+impl Box {
+  fn put(self, s: string) {}
+}
+
+fn mark(s: string) {
+  fmt.Println(s)
+}
+
+fn make_box(_u: ()) -> Box {
+  fmt.Println("receiver")
+  Box { n: 1 }
+}
+
+fn value(_u: ()) -> string { "v" }
+
+fn main() {
+  make_box(mark("receiver argument")).put(value(mark("method argument")))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn chained_callee_call_arg_stays_inline() {
     let input = r#"
 struct O {}
@@ -2110,6 +2139,18 @@ impl Foo {
 
 fn test() {
   Foo {}.need_ref()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_value_receiver_call_receiver_needs_no_temp() {
+    let input = r#"
+import "go:net/http"
+
+fn handle(w: http.ResponseWriter) {
+  w.Header().Set("Cache-Control", "no-store")
 }
 "#;
     assert_emit_snapshot!(input);
