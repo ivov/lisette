@@ -2,6 +2,64 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.12.5](https://github.com/ivov/lisette/compare/lisette-v0.12.4...lisette-v0.12.5) - 2026-10-23
+
+### Features
+
+- feat: diagnostic for discarded lambdas [#1592](https://github.com/ivov/lisette/pull/1592) [`77c786b`](https://github.com/ivov/lisette/commit/77c786b5b9bef58b09cd1106ec867816b9996fe4)
+- feat: idiomatic Go for guarded match fallbacks [#1589](https://github.com/ivov/lisette/pull/1589) [`e884659`](https://github.com/ivov/lisette/commit/e88465902a663590d0aee1fed892a91233e8310e)
+- feat: idiomatic Go for tail propagation of tagged results [#1585](https://github.com/ivov/lisette/pull/1585) [`87b2466`](https://github.com/ivov/lisette/commit/87b24663d65d0782aa14b2251a5b716ddcb86226)
+- feat: idiomatic Go for or-patterns as `switch` cases [#1583](https://github.com/ivov/lisette/pull/1583) [`bca59cf`](https://github.com/ivov/lisette/commit/bca59cf802eed5a089f9d91f3892d159f4fd2219)
+- feat: idiomatic Go for call receivers of Go value-receiver methods [#1581](https://github.com/ivov/lisette/pull/1581) [`3ce3acb`](https://github.com/ivov/lisette/commit/3ce3acb037ee21d1e0a497dac6604a8d34736804)
+- feat: idiomatic Go for `Channel.split` bindings [#1580](https://github.com/ivov/lisette/pull/1580) [`29b6b85`](https://github.com/ivov/lisette/commit/29b6b85e3d262fdd7a3745d0158bc2ee014e0f2f)
+- feat: idiomatic Go for slice capacity clips before `append` [#1579](https://github.com/ivov/lisette/pull/1579) [`25ef48b`](https://github.com/ivov/lisette/commit/25ef48ba8207c667d954330e841a2d9593f15e04)
+- feat: idiomatic Go for adapted functions and closures [#1578](https://github.com/ivov/lisette/pull/1578) [`40e179a`](https://github.com/ivov/lisette/commit/40e179a062ca0b70bd6c46a4f23295aebac09983)
+- feat: adapt integer literal expressions to destination type [#1577](https://github.com/ivov/lisette/pull/1577) [`c9e35a7`](https://github.com/ivov/lisette/commit/c9e35a74af0fd1d3d1e406aa3eb04df015f6ac13)
+- feat: idiomatic Go for closures in nullable Go function fields [#1576](https://github.com/ivov/lisette/pull/1576) [`d1a1d06`](https://github.com/ivov/lisette/commit/d1a1d068a380db766228929927800813d7974266)
+- feat: idiomatic Go for enum variants named through their package [#1575](https://github.com/ivov/lisette/pull/1575) [`55bbbcd`](https://github.com/ivov/lisette/commit/55bbbcd322473fbef520558276233a35fab4278d)
+- feat: diagnostic for unreachable `Partial.Err` on Go calls [#1555](https://github.com/ivov/lisette/pull/1555) [`3b1f267`](https://github.com/ivov/lisette/commit/3b1f267a9748ecdaf4bca888613db6a1323a4623)
+
+### Fixes
+
+- fix: skip unused `const` that names a pruned function [#1591](https://github.com/ivov/lisette/pull/1591) [`6356e7f`](https://github.com/ivov/lisette/commit/6356e7f43fe23b2af3421834be00cbcf190255f2)
+- fix: reject overflowing literals inside negated expressions [#1590](https://github.com/ivov/lisette/pull/1590) [`6e02cbc`](https://github.com/ivov/lisette/commit/6e02cbcad81d964542c47071621884ee17401fed)
+- fix: bridge function values passed to Go pointer option callbacks [#1588](https://github.com/ivov/lisette/pull/1588) [`65e9ecc`](https://github.com/ivov/lisette/commit/65e9ecc33cbe7dfa91564eb6e6e3e18881451d1d)
+- fix: allow `panic` at end of lambda bodies [#1586](https://github.com/ivov/lisette/pull/1586) [`8e946e7`](https://github.com/ivov/lisette/commit/8e946e7c1480c50083bd700e2fccf588c20fdd59)
+- fix: UX papercuts in diagnostics, sourcemap paths, and `lis add` [#1584](https://github.com/ivov/lisette/pull/1584) [`73e3d40`](https://github.com/ivov/lisette/commit/73e3d405d093e11810553e0897721c1cb5e798a0)
+- fix: skip unused imports for omitted `None` fields in emitted Go [#1574](https://github.com/ivov/lisette/pull/1574) [`b30a9ca`](https://github.com/ivov/lisette/commit/b30a9ca049a02e54a218c14ff76ee1053c7a3215)
+- fix: stop program when `lis run` is stopped on unix [#1573](https://github.com/ivov/lisette/pull/1573) [`a7493c0`](https://github.com/ivov/lisette/commit/a7493c0b80d149f9bc8d34f36be87be777616611)
+- fix: include additional type metadata in Go bindings [#1572](https://github.com/ivov/lisette/pull/1572) [`bdbc6bf`](https://github.com/ivov/lisette/commit/bdbc6bff3b0b8031cf690593c955ec10a2795dae)
+- fix: resolve member access on Go types and writable embeds [#1571](https://github.com/ivov/lisette/pull/1571) [`c99eb83`](https://github.com/ivov/lisette/commit/c99eb8314959cea3f3feb21cc64787eaca38c7cd)
+- fix: detect overflow in arithmetic on named constants [#1570](https://github.com/ivov/lisette/pull/1570) [`a43c323`](https://github.com/ivov/lisette/commit/a43c32326fc71be011417eceb5c76e57a1a5d2fa)
+- fix: handle writes into Go pointer slice and array fields [#1569](https://github.com/ivov/lisette/pull/1569) [`1e45bbd`](https://github.com/ivov/lisette/commit/1e45bbdd885b55fb601d3428b3bd00773d782445)
+- fix: resolve type aliases in edge cases [#1568](https://github.com/ivov/lisette/pull/1568) [`e3d2ca7`](https://github.com/ivov/lisette/commit/e3d2ca76c0d1cdc9cbc2461579fa63611e7174de)
+- fix: keep declared type of `try` and `recover` blocks that panic [#1567](https://github.com/ivov/lisette/pull/1567) [`2c904bb`](https://github.com/ivov/lisette/commit/2c904bb5dabcb68c2791b2d68ad66372d8271299)
+- fix: preserve Go return types of methods named in generic interfaces [#1566](https://github.com/ivov/lisette/pull/1566) [`fba730c`](https://github.com/ivov/lisette/commit/fba730c5628e23c814fe686da2e52d9823144005)
+- fix: run interface conformance checks on `as` casts [#1565](https://github.com/ivov/lisette/pull/1565) [`c4b2b25`](https://github.com/ivov/lisette/commit/c4b2b25e92c17c5d76829cbd0e0cde1e60d12b3d)
+- fix: convert function in a block to annotated `let` type [#1564](https://github.com/ivov/lisette/pull/1564) [`8a3c52e`](https://github.com/ivov/lisette/commit/8a3c52ed7d339d1c5a95c3e3e0528a613ff94a69)
+- fix: resolve type aliases in unit checks and array widening [#1562](https://github.com/ivov/lisette/pull/1562) [`2c135db`](https://github.com/ivov/lisette/commit/2c135dbaec234f867eb7ac1bd0ea87bbbaff1d05)
+- fix: allow `fold` callback parameter to reuse a captured name [#1561](https://github.com/ivov/lisette/pull/1561) [`a74a860`](https://github.com/ivov/lisette/commit/a74a860e30c5c49e76b45f167a70a24cbbca2618)
+- fix: convert block and loop values to annotated `let` type [#1560](https://github.com/ivov/lisette/pull/1560) [`908db86`](https://github.com/ivov/lisette/commit/908db8608630f6b524e54e5643f1c3bb8604efaa)
+- fix: start diagnostic spans for index and `.*` at receiver [#1559](https://github.com/ivov/lisette/pull/1559) [`1e4e963`](https://github.com/ivov/lisette/commit/1e4e963169d0d3148d72534abf31e0fcc173aea7)
+- fix: iterate referenced collection in loops over a reference [#1558](https://github.com/ivov/lisette/pull/1558) [`c5db3dc`](https://github.com/ivov/lisette/commit/c5db3dc6c63f94549696af18b6d399646f5260d5)
+- fix: keep function value layouts through containers and `any` [#1553](https://github.com/ivov/lisette/pull/1553) [`e280484`](https://github.com/ivov/lisette/commit/e280484eefd6704751c223a87ad53581e740c427)
+- fix: prevent slice aliasing on zero growth [#1547](https://github.com/ivov/lisette/pull/1547) [`5fb831c`](https://github.com/ivov/lisette/commit/5fb831c39f95858ca9a179902cfcad876eaa52cc)
+- fix: separate struct field keys from locals [#1545](https://github.com/ivov/lisette/pull/1545) [`8155fce`](https://github.com/ivov/lisette/commit/8155fcef4402de86e0722b367fdcd8894c631aae)
+
+### Internals
+
+- chore: rebuild playground [#1593](https://github.com/ivov/lisette/pull/1593) [`692b269`](https://github.com/ivov/lisette/commit/692b269903511af20a040caf0695ea037c0770f6)
+- docs: replace inline favicon on home page with linked file [#1587](https://github.com/ivov/lisette/pull/1587) [`fec2910`](https://github.com/ivov/lisette/commit/fec2910c8e2376d58b1731c6cc6e644827984ebb)
+- chore: remove early preview notice from test runner [#1582](https://github.com/ivov/lisette/pull/1582) [`d6b5918`](https://github.com/ivov/lisette/commit/d6b59183c804f9ae19ed66147dec6d362f74ff44)
+- test: add nightly rewrite suite [#1563](https://github.com/ivov/lisette/pull/1563) [`b104b9a`](https://github.com/ivov/lisette/commit/b104b9a45af9cae66ea9240c94ae04e93930559f)
+- perf: format Go output in batches on macOS to speed up cold builds [#1557](https://github.com/ivov/lisette/pull/1557) [`9b85ec8`](https://github.com/ivov/lisette/commit/9b85ec82482e63e3ffe9c82431d0d02172ee44f0)
+- refactor: drop import lookup cache and type parameter indices [#1556](https://github.com/ivov/lisette/pull/1556) [`5839b1b`](https://github.com/ivov/lisette/commit/5839b1bdb621a0a110cadac07a5d1e1a8efb5ef9)
+- perf: compact collections for analysis facts and scopes [#1554](https://github.com/ivov/lisette/pull/1554) [`93cf76c`](https://github.com/ivov/lisette/commit/93cf76ca3fe9c52fcbf3c6bbb56448fcee051b5e)
+- refactor: track every emitted Go local by ID [#1552](https://github.com/ivov/lisette/pull/1552) [`9d1b463`](https://github.com/ivov/lisette/commit/9d1b46323b9279e6fcc3d2c2c6e3612db482ff43)
+- refactor: plan tagged function adapters from declared slot layouts [#1551](https://github.com/ivov/lisette/pull/1551) [`c918ffb`](https://github.com/ivov/lisette/commit/c918ffbb6abea5aa20a7963c31203c6d2a2278d3)
+- perf: build `cargo install lisette` with dist profile settings [#1550](https://github.com/ivov/lisette/pull/1550) [`bb8c0eb`](https://github.com/ivov/lisette/commit/bb8c0eb0270fb77c69b5df86949692814869b3c8)
+
+
 ## [0.12.4](https://github.com/ivov/lisette/compare/lisette-v0.12.3...lisette-v0.12.4) - 2026-10-11
 
 ### Features
