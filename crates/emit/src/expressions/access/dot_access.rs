@@ -466,7 +466,12 @@ impl Planner<'_> {
             .get_qualified_id()
             .filter(|owner| owner.starts_with("go:"))
             .and_then(|owner| self.facts.method(owner, method))
-            .is_some_and(|method| method.go_hints.iter().any(|hint| hint == "value_method_set"))
+            .is_some_and(|method| {
+                method
+                    .go_hints
+                    .iter()
+                    .any(|hint| hint == "value_method_set")
+            })
     }
 
     fn package_member_is_fixed(&self, package: &str, member: &str) -> bool {
