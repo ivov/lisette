@@ -2695,6 +2695,72 @@ fn panic_in_assignment_expression() {
 }
 
 #[test]
+fn panic_tail_in_bound_lambda_ok() {
+    infer(
+        r#"
+    fn test() {
+      let f = || -> bool {
+        panic("boom")
+      }
+      let _ = f
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn panic_tail_in_lambda_argument_ok() {
+    infer(
+        r#"
+    fn apply(f: fn() -> bool) -> bool { f() }
+
+    fn test() {
+      let _ = apply(|| { panic("boom") })
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn defer_and_task_tails_in_bound_lambdas_ok() {
+    infer(
+        r#"
+    fn work() {}
+
+    fn test() {
+      let spawn = || {
+        task work()
+      }
+      let cleanup = || {
+        defer work()
+      }
+      let _ = spawn
+      let _ = cleanup
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn panic_assigned_inside_lambda_errors() {
+    infer(
+        r#"
+    fn test() {
+      let f = || -> int {
+        let x: int = panic("boom")
+        x
+      }
+      let _ = f
+    }
+        "#,
+    )
+    .assert_infer_code("panic_in_expression_position");
+}
+
+#[test]
 fn match_value_arm_with_unit_arm_errors() {
     infer(
         r#"

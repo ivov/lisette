@@ -4,7 +4,7 @@ use syntax::types::{CompoundKind, FunctionParameter, Type};
 
 use crate::analysis::ProjectKind;
 use crate::checker::infer::InferCtx;
-use crate::checker::infer::context::{Expectation, ExpectationRole};
+use crate::checker::infer::context::{Expectation, ExpectationRole, UseContext};
 use crate::checker::registration::test_functions::normalize_test_params;
 use crate::prelude;
 use crate::store::ENTRY_PACKAGE_ID;
@@ -220,7 +220,9 @@ impl InferCtx<'_> {
                 return_ty.clone()
             };
             let new_body = this.without_enclosing_loop(|this| {
-                this.infer_function_body(body, &body_ty, &return_annotation, &return_ty, None)
+                this.with_use_context(UseContext::Statement, |this| {
+                    this.infer_function_body(body, &body_ty, &return_annotation, &return_ty, None)
+                })
             });
 
             this.check_deferred_map_key_bounds(store);
