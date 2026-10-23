@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792775221994,
+  "lastUpdate": 1792775342034,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -48408,6 +48408,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/8e946e7c1480c50083bd700e2fccf588c20fdd59"
         },
         "date": 1792775220076,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 151186,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39897,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29253,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19471,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15793,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14013,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9081,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10247,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fec2910c8e2376d58b1731c6cc6e644827984ebb",
+          "message": "docs: replace inline favicon on home page with linked file (#1587)",
+          "timestamp": "2026-10-23T19:08:37+02:00",
+          "tree_id": "aaf5c694e5810a6bf744203c0108b3549376c45b",
+          "url": "https://github.com/ivov/lisette/commit/fec2910c8e2376d58b1731c6cc6e644827984ebb"
+        },
+        "date": 1792775339244,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
