@@ -197,6 +197,37 @@ fn test() {
 }
 
 #[test]
+fn parse_rust_println_macro() {
+    let input = r#"
+fn test(v: Slice<int>) {
+  println!("{}", v.len())
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_rust_assert_macro() {
+    let input = r#"
+#[test]
+fn test() {
+  assert!(false)
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_rust_vec_macro() {
+    let input = r#"
+fn test() {
+  let v = vec![1, 2, 3]
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn infer_go_builtin_append() {
     let input = r#"
 fn test(items: Slice<int>) -> Slice<int> {
@@ -2771,6 +2802,107 @@ struct Url { Path: string }
 
 fn test(u: Option<Ref<Url>>) -> string {
   u.Path
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_mismatch_value_into_optional_interface_field() {
+    let input = r#"
+interface Named {
+  fn name() -> string
+}
+
+struct Dog {}
+
+impl Dog {
+  fn name(self) -> string { "rex" }
+}
+
+struct Owner { pet: Option<Named> }
+
+fn test() -> Owner {
+  Owner { pet: Dog {} }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_mismatch_value_into_ref() {
+    let input = r#"
+fn takes(x: Ref<int>) {}
+
+fn test() {
+  let a = 1
+  takes(a)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_mismatch_ref_into_value() {
+    let input = r#"
+fn test(r: Ref<int>) -> int {
+  r
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_needs_writable_ref_receiver_from_immutable_binding() {
+    let input = r#"
+struct Counter { n: int }
+
+impl Counter {
+  fn bump(self: mut Ref<Self>) { self.n += 1 }
+}
+
+fn make() -> mut Ref<Counter> { &Counter { n: 0 } }
+
+fn test() {
+  let c = make()
+  c.bump()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_immutable_receiver_with_writable_field_reports_once() {
+    let input = r#"
+struct Holder { slot: Option<mut Ref<int>> }
+
+impl Holder {
+  fn touch(self: mut Ref<Self>) {}
+}
+
+fn test() {
+  let h = Holder { slot: None }
+  h.touch()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_member_not_found_push_on_slice() {
+    let input = r#"
+fn test(items: Slice<int>) {
+  items.push(1)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_member_not_found_keys_on_map() {
+    let input = r#"
+fn test(m: Map<string, int>) {
+  let _ = m.keys()
 }
 "#;
     assert_infer_error_snapshot!(input);

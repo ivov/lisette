@@ -173,6 +173,7 @@ pub fn try_compile_project_files_with_tests(
         "main",
         EmitOptions {
             sourcemap,
+            sourcemap_base: None,
             emit_tests,
         },
     )

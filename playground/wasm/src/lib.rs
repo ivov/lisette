@@ -233,6 +233,7 @@ fn run_pipeline(
         "main",
         lisette_emit::EmitOptions {
             sourcemap: false,
+            sourcemap_base: None,
             emit_tests: false,
         },
     ) {

@@ -6,7 +6,7 @@ use stdlib::Target;
 
 use super::add::ParsedDependency;
 use super::reconciliation::{
-    ResolvedDependency, RootWrite, apply_graph_to_document, reconcile_root,
+    ReconciledRoot, ResolvedDependency, RootWrite, apply_graph_to_document, reconcile_root,
 };
 use super::script_edit::{
     read, refuse_project_file, save_unchanged, script_dir, third_party_imports, write_go_mod,
@@ -97,10 +97,11 @@ pub(super) fn run(file: &Path, dep_string: &str) -> i32 {
         requested_package,
         canonical_module: info.path,
     };
-    let graph = match reconcile_root(&resolved, &workspace, &HashMap::new(), &[]) {
-        Ok(graph) => graph,
-        Err(code) => return code,
-    };
+    let ReconciledRoot { graph, import_path } =
+        match reconcile_root(&resolved, &workspace, &HashMap::new(), &[]) {
+            Ok(reconciled) => reconciled,
+            Err(code) => return code,
+        };
 
     let upgraded = match apply_graph_to_document(
         &resolved.canonical_module,
@@ -145,6 +146,7 @@ pub(super) fn run(file: &Path, dep_string: &str) -> i32 {
         &graph,
         &upgraded_tuples,
         None,
+        import_path.as_deref(),
     );
     0
 }

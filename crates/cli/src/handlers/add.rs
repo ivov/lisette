@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 
 use super::project::MutationProject;
 use super::reconciliation::{
-    ReplacedRoot, ReplacedRootMode, ResolvedDependency, RootWrite, apply_graph_to_document,
-    declared_local_dirs, declared_replacements, open_manifest_document, reconcile_root,
-    save_manifest_document,
+    ReconciledRoot, ReplacedRoot, ReplacedRootMode, ResolvedDependency, RootWrite,
+    apply_graph_to_document, declared_local_dirs, declared_replacements, open_manifest_document,
+    reconcile_root, save_manifest_document,
 };
 use crate::go_cli;
 use crate::output::{print_add_success, print_preview_notice, print_progress, print_warning};
@@ -317,8 +317,11 @@ fn run_add_pipeline(plan: AddPlan) -> i32 {
     }
 
     let locals = declared_local_dirs(&replacements, &project.root);
-    let module_graph = match reconcile_root(resolved_dep, &workspace, &replacements, &locals) {
-        Ok(graph) => graph,
+    let ReconciledRoot {
+        graph: module_graph,
+        import_path,
+    } = match reconcile_root(resolved_dep, &workspace, &replacements, &locals) {
+        Ok(reconciled) => reconciled,
         Err(code) => return code,
     };
 
@@ -382,6 +385,7 @@ fn run_add_pipeline(plan: AddPlan) -> i32 {
         &module_graph,
         &upgraded_tuples,
         replacement_label,
+        import_path.as_deref(),
     );
 
     0

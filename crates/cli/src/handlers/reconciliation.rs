@@ -258,7 +258,7 @@ pub(crate) fn reconcile_declared_replacements(
             canonical_module: original.clone(),
         };
 
-        let graph = reconcile_root(&resolved, &workspace, &replacements, &locals)?;
+        let graph = reconcile_root(&resolved, &workspace, &replacements, &locals)?.graph;
         walked.push((original.clone(), replacement.clone(), graph));
     }
 
@@ -314,13 +314,19 @@ pub(crate) fn reconcile_root(
     workspace: &GoWorkspace,
     replacements: &HashMap<String, deps::ReplacementSource>,
     locals: &[(String, PathBuf)],
-) -> Result<GraphResult, i32> {
+) -> Result<ReconciledRoot, i32> {
     let mut graph = reconcile_module_graph(dep, workspace, locals)?;
-    let bindgenned = walk_typedef_cache(dep, workspace, &mut graph, replacements)?;
+    let (bindgenned, import_path) = walk_typedef_cache(dep, workspace, &mut graph, replacements)?;
     expand_unwalked_modules(workspace, &mut graph, locals)?;
     rebuild_drifted_cache_entries(workspace, &graph, &bindgenned, replacements);
     workspace.invalidate_warm_stamp();
-    Ok(graph)
+    Ok(ReconciledRoot { graph, import_path })
+}
+
+pub(crate) struct ReconciledRoot {
+    pub(crate) graph: GraphResult,
+    /// The one package the walk started from, or `None` when it started from several.
+    pub(crate) import_path: Option<String>,
 }
 
 fn handle_module_failure(
@@ -789,7 +795,7 @@ fn walk_typedef_cache(
     workspace: &GoWorkspace,
     module_graph: &mut GraphResult,
     replacements: &HashMap<String, deps::ReplacementSource>,
-) -> Result<Vec<BindgennedPackage>, i32> {
+) -> Result<(Vec<BindgennedPackage>, Option<String>), i32> {
     let mut visited: HashSet<PackageKey> = HashSet::new();
     let mut queue: Vec<QueuedPackage> = Vec::new();
     let mut bindgenned: Vec<BindgennedPackage> = Vec::new();
@@ -800,6 +806,10 @@ fn walk_typedef_cache(
         workspace,
         &mut queue,
     )?;
+    let import_path = match seed_packages.len() {
+        1 => seed_packages.iter().next().map(|key| key.package.clone()),
+        _ => None,
+    };
 
     while let Some(entry) = queue.pop() {
         if !visited.insert(entry.key()) {
@@ -856,7 +866,7 @@ fn walk_typedef_cache(
         }
     }
 
-    Ok(bindgenned)
+    Ok((bindgenned, import_path))
 }
 
 /// Where one typedef import sends the cache walk next, if anywhere.

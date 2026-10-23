@@ -215,6 +215,7 @@ fn emit_and_write(
         "main",
         EmitOptions {
             sourcemap: false,
+            sourcemap_base: None,
             emit_tests: false,
         },
     )

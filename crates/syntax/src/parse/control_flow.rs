@@ -229,6 +229,10 @@ impl<'source> Parser<'source> {
 
         self.ensure(Assert);
 
+        if let Some(recovered) = self.try_macro_call("assert", start.byte_offset) {
+            return recovered;
+        }
+
         let expression = self.parse_expression();
 
         Expression::Assert {

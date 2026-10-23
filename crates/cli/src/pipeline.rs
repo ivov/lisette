@@ -1,3 +1,5 @@
+use std::env;
+
 use rustc_hash::FxHashMap as HashMap;
 
 use deps::TypedefLocator;
@@ -52,10 +54,12 @@ impl CompileMode {
             Self::Check => None,
             Self::Emit { sourcemap } => Some(EmitOptions {
                 sourcemap,
+                sourcemap_base: sourcemap.then(|| env::current_dir().ok()).flatten(),
                 emit_tests: false,
             }),
             Self::Test => Some(EmitOptions {
                 sourcemap: false,
+                sourcemap_base: None,
                 emit_tests: true,
             }),
         }

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Member not found
+   ╭─[test.lis:3:11]
+ 2 │ fn test(m: Map<string, int>) {
+ 3 │   let _ = m.keys()
+   ·           ───┬──
+   ·              ╰── no member `keys` on type `Map<string, int>`
+ 4 │ }
+   ╰────
+  help: Use `maps.Keys(m)` from `import "go:maps"`, which returns an iterator. Wrap it in `slices.Collect(...)` or `slices.Sorted(...)` for a `Slice` · code: [infer.member_not_found]

@@ -1636,25 +1636,40 @@ pub fn member_not_found(
     }
 
     if let Some(hint) = unwrap_hint {
+        let (access, action) = if is_call_target {
+            (format!("{}(...)", field), format!("call `{}` on it", field))
+        } else {
+            (field.to_string(), format!("read `{}` from it", field))
+        };
         let (wrapper_name, pattern) = match hint.wrapper {
             UnwrapWrapper::Option => (
                 "Option",
-                format!(
-                    "match <expr> {{ Some(x) => x.{}(...), None => ... }}",
-                    field
-                ),
+                format!("match <expr> {{ Some(x) => x.{}, None => ... }}", access),
             ),
             UnwrapWrapper::Result => (
                 "Result",
-                format!(
-                    "match <expr> {{ Ok(x) => x.{}(...), Err(e) => ... }}",
-                    field
-                ),
+                format!("match <expr> {{ Ok(x) => x.{}, Err(e) => ... }}", access),
             ),
         };
         diagnostic = diagnostic.with_help(format!(
-            "Unwrap the `{}` to extract the `{}` value, then call `{}` on it, e.g. `{}`",
-            wrapper_name, hint.inner_ty, field, pattern
+            "Unwrap the `{}` to extract the `{}` value, then {}, e.g. `{}`",
+            wrapper_name, hint.inner_ty, action, pattern
+        ));
+        return diagnostic;
+    }
+
+    if ty.is_slice() && matches!(field, "push" | "push_back") {
+        diagnostic = diagnostic.with_help(
+            "Use `append`, which returns the extended slice, e.g. `items = items.append(x)`",
+        );
+        return diagnostic;
+    }
+
+    if ty.is_map() && matches!(field, "keys" | "values") {
+        let go_fn = if field == "keys" { "Keys" } else { "Values" };
+        diagnostic = diagnostic.with_help(format!(
+            "Use `maps.{go_fn}(m)` from `import \"go:maps\"`, which returns an iterator. \
+             Wrap it in `slices.Collect(...)` or `slices.Sorted(...)` for a `Slice`"
         ));
         return diagnostic;
     }

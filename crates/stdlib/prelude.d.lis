@@ -72,7 +72,7 @@ type bool
 type string
 
 impl string {
-  /// Returns the number of bytes in the string.
+  /// Returns the number of bytes in the string. To count runes, use `runes().length()`.
   ///
   /// Example:
   ///   // !callout-right `5`, since `é` is two bytes
@@ -114,14 +114,15 @@ impl string {
   ///   let is_lisette = "main.lis".ends_with(".lis")
   fn ends_with(self, suffix: string) -> bool
 
-  /// Returns the byte at index `i`.
+  /// Returns the byte at byte index `i`.
   ///
   /// Example:
   ///   // !callout-right `104`, the byte value of `h`
   ///   let first = "hello".byte_at(0)
   fn byte_at(self, i: int) -> byte
 
-  /// Returns the rune at index `i`.
+  /// Returns the rune at rune index `i`. The index counts runes, not bytes, so the last
+  /// valid index is `runes().length() - 1`, not `length() - 1`.
   ///
   /// Example:
   ///   // !callout-right `233`, the code point of `é`

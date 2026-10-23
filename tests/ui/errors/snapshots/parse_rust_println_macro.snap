@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:3:3]
+ 2 │ fn test(v: Slice<int>) {
+ 3 │   println!("{}", v.len())
+   ·   ────┬───
+   ·       ╰── Lisette has no macros
+ 4 │ }
+   ╰────
+  help: Use `fmt.Println(...)` after `import "go:fmt"`. Interpolate with an f-string, e.g. `fmt.Println(f"{x}")` · code: [parse.macro_call]

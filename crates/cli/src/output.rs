@@ -288,6 +288,7 @@ pub fn print_add_success(
     graph: &impl DependencyGraph,
     upgraded_directs: &[(&str, &str, &str)],
     replacement: Option<ReplacementLabel<'_>>,
+    import_path: Option<&str>,
 ) {
     eprintln!();
 
@@ -344,6 +345,16 @@ pub fn print_add_success(
     };
     printer.visited.insert(module_path.to_string());
     printer.print_children(module_path, "    ");
+
+    let Some(import_path) = import_path else {
+        return;
+    };
+    let import = format!("import \"go:{import_path}\"");
+    if colored {
+        eprintln!("    Import it with {}", import.bright_magenta());
+    } else {
+        eprintln!("    Import it with `{import}`");
+    }
 }
 
 struct TreePrinter<'a, G> {
