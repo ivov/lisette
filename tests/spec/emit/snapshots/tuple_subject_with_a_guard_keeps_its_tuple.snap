@@ -40,7 +40,5 @@ func test(start, b int) string {
 	if subject.First == 2 {
 		return "second"
 	}
-	{
-		return "none"
-	}
+	return "none"
 }

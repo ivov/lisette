@@ -77,6 +77,27 @@ fn main() {
 }
 
 #[test]
+fn guarded_match_fallback_that_declares_keeps_its_scope() {
+    let input = r#"
+fn read(option: Option<int>) -> int {
+  match option {
+    Some(n) if n > 0 => n,
+    _ => {
+      let doubled = 2 * 3
+      doubled + 1
+    },
+  }
+}
+
+fn main() {
+  if read(Some(4)) != 4 { panic("guard success must return the value") }
+  if read(None) != 7 { panic("fallback must return its own value") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn tuple_struct_pattern_in_match() {
     let input = r#"
 struct Pair(int, int)

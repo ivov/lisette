@@ -31,9 +31,7 @@ func read(option lisette.Option[int]) string {
 			return "positive"
 		}
 	}
-	{
-		return value
-	}
+	return value
 }
 
 func main() {

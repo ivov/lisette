@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  fn read(option: Option<int>) -> int {
+    match option {
+      Some(n) if n > 0 => n,
+      _ => {
+        let doubled = 2 * 3
+        doubled + 1
+      },
+    }
+  }
+  
+  fn main() {
+    if read(Some(4)) != 4 { panic("guard success must return the value") }
+    if read(None) != 7 { panic("fallback must return its own value") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func read(option lisette.Option[int]) int {
+	if option.Tag == lisette.OptionSome {
+		n := option.SomeVal
+		if n > 0 {
+			return n
+		}
+	}
+	{
+		doubled := 2 * 3
+		return doubled + 1
+	}
+}
+
+func main() {
+	if read(lisette.MakeOptionSome(4)) != 4 {
+		panic("guard success must return the value")
+	}
+	if read(lisette.MakeOptionNone[int]()) != 7 {
+		panic("fallback must return its own value")
+	}
+}

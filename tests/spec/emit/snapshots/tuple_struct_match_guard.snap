@@ -25,7 +25,5 @@ func test(p Point) int {
 			return x + p.F1
 		}
 	}
-	{
-		return p.F1
-	}
+	return p.F1
 }

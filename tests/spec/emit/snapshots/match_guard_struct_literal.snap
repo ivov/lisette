@@ -32,8 +32,6 @@ match:
 		}) {
 			break match
 		}
-		{
-			break match
-		}
+		break match
 	}
 }
