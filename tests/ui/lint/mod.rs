@@ -14946,6 +14946,33 @@ fn main() {
 }
 
 #[test]
+fn leading_or_operator_on_new_line_is_unused_lambda() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a = false
+  let b = true
+  let ok = a
+    || b
+  let _ = ok
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_lambda_with_params_is_unused_lambda() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  |x: int| x + 1
+  let _ = 1
+}
+"#
+    );
+}
+
+#[test]
 fn discarded_paren_call_returning_result_errors_as_unused_result() {
     assert_lint_snapshot!(
         r#"
