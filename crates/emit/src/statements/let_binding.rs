@@ -753,10 +753,14 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                 .scope
                 .bind_source(identifier, id.as_slice(), &go_name);
             self.planner.try_declare(&go_name);
-            statements.push(define(
-                local,
-                GoExpression::conversion(go_type, receiver.clone()),
-            ));
+            statements.push(
+                LoweredStatement::VarDecl {
+                    name: local,
+                    go_type,
+                    value: Some(receiver.clone()),
+                }
+                .into(),
+            );
         }
         Some(LoweredBlock { statements })
     }

@@ -15,8 +15,8 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func test() {
 	ch := make(chan int, 1)
-	tx := (chan<- int)(ch)
-	rx := (<-chan int)(ch)
+	var tx chan<- int = ch
+	var rx <-chan int = ch
 	lisette.SenderSend(tx, 42)
 	lisette.ReceiverReceive(rx)
 }

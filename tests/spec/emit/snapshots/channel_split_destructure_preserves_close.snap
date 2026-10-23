@@ -29,8 +29,8 @@ import (
 
 func test() {
 	ch := make(chan int, 2)
-	tx := (chan<- int)(ch)
-	rx := (<-chan int)(ch)
+	var tx chan<- int = ch
+	var rx <-chan int = ch
 	lisette.SenderSend(tx, 1)
 	lisette.SenderClose(tx)
 	total := 0

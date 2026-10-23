@@ -17,8 +17,8 @@ import lisette "github.com/ivov/lisette/prelude"
 type Inbox = chan int
 
 func drain(ch Inbox) {
-	tx := (chan<- int)(ch)
-	rx := (<-chan int)(ch)
+	var tx chan<- int = ch
+	var rx <-chan int = ch
 	lisette.SenderSend(tx, 42)
 	lisette.ReceiverReceive(rx)
 }

@@ -32,8 +32,8 @@ func makeJobs() chan int {
 
 func test() {
 	ch := makeJobs()
-	tx := (chan<- int)(ch)
-	rx := (<-chan int)(ch)
+	var tx chan<- int = ch
+	var rx <-chan int = ch
 	lisette.SenderSend(tx, 7)
 	subject := lisette.ReceiverReceive(rx)
 	if subject.Tag == lisette.OptionSome {

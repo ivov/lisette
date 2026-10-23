@@ -14,8 +14,8 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func drain(ch *chan int) {
 	ch_1 := *ch
-	tx := (chan<- int)(ch_1)
-	rx := (<-chan int)(ch_1)
+	var tx chan<- int = ch_1
+	var rx <-chan int = ch_1
 	lisette.SenderSend(tx, 42)
 	lisette.ReceiverReceive(rx)
 }
