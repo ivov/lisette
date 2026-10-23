@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792771869405,
+  "lastUpdate": 1792772864477,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -47993,6 +47993,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 13987,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9064,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10247,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d6b59183c804f9ae19ed66147dec6d362f74ff44",
+          "message": "chore: remove early preview notice from test runner (#1582)",
+          "timestamp": "2026-10-23T18:27:20+02:00",
+          "tree_id": "ffcc6bbc8dd027eff69745647bc8258343e5fd06",
+          "url": "https://github.com/ivov/lisette/commit/d6b59183c804f9ae19ed66147dec6d362f74ff44"
+        },
+        "date": 1792772862880,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 150914,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39752,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29213,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19471,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15750,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13986,
             "unit": "lines"
           },
           {
