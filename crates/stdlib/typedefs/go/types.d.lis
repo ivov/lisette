@@ -172,10 +172,10 @@ pub fn AssignableTo(v: Type, t: Type) -> bool
 /// untyped type rather than the respective context-specific type.
 pub fn CheckExpr(
   fset: Ref<token.FileSet>,
-  pkg: Ref<Package>,
+  pkg: Option<Ref<Package>>,
   pos: token.Pos,
   expr: ast.Expr,
-  info: Ref<Info>,
+  info: Option<Ref<Info>>,
 ) -> Result<(), error>
 
 /// Comparable reports whether values of type T are comparable.
@@ -210,7 +210,7 @@ pub fn Default(t: Option<Type>) -> Option<Type>
 /// type-checked.
 pub fn Eval(
   fset: mut Ref<token.FileSet>,
-  pkg: Ref<Package>,
+  pkg: Option<Ref<Package>>,
   pos: token.Pos,
   expr: string,
 ) -> Result<TypeAndValue, error>
@@ -279,7 +279,7 @@ pub fn Implements(v: Type, t: mut Ref<Interface>) -> bool
 /// count is incorrect; for *Named types, a panic may occur later inside the
 /// *Named API.
 pub fn Instantiate(
-  ctxt: Ref<Context>,
+  ctxt: Option<Ref<Context>>,
   orig: Type,
   targs: Slice<Type>,
   validate: bool,
@@ -370,7 +370,7 @@ pub fn MissingMethod(
 
 /// NewAlias creates a new Alias type with the given type name and rhs.
 /// If rhs is nil, the alias is incomplete.
-pub fn NewAlias(obj: mut Ref<TypeName>, rhs: Type) -> mut Ref<Alias>
+pub fn NewAlias(obj: mut Ref<TypeName>, rhs: Option<Type>) -> mut Ref<Alias>
 
 /// NewArray returns a new array type for the given element type and length.
 /// A negative length indicates an unknown length.
@@ -392,7 +392,7 @@ pub fn NewChecker(
 /// The remaining arguments set the attributes found with all Objects.
 pub fn NewConst(
   pos: token.Pos,
-  pkg: Ref<Package>,
+  pkg: Option<Ref<Package>>,
   name: string,
   typ: Type,
   val: constant.Value,
@@ -406,7 +406,7 @@ pub fn NewContext() -> mut Ref<Context>
 /// under which the field is accessible.
 pub fn NewField(
   pos: token.Pos,
-  pkg: Ref<Package>,
+  pkg: Option<Ref<Package>>,
   name: string,
   typ: Type,
   embedded: bool,
@@ -416,7 +416,7 @@ pub fn NewField(
 /// the function's type.
 pub fn NewFunc(
   pos: token.Pos,
-  pkg: Ref<Package>,
+  pkg: Option<Ref<Package>>,
   name: string,
   sig: Ref<Signature>,
 ) -> mut Ref<Func>
@@ -445,7 +445,7 @@ pub fn NewInterfaceType(
 /// NewLabel returns a new label.
 pub fn NewLabel(
   pos: token.Pos,
-  pkg: Ref<Package>,
+  pkg: Option<Ref<Package>>,
   name: string,
 ) -> mut Ref<Label>
 
@@ -461,7 +461,7 @@ pub fn NewMethodSet(t: Type) -> mut Ref<MethodSet>
 /// The underlying type must not be a *Named.
 pub fn NewNamed(
   obj: mut Ref<TypeName>,
-  underlying: Type,
+  underlying: Option<Type>,
   methods: Slice<Ref<Func>>,
 ) -> mut Ref<Named>
 
@@ -475,7 +475,7 @@ pub fn NewPackage(path: string, name: string) -> mut Ref<Package>
 /// is not of kind [ParamVar]: for example, [RecvVar] or [ResultVar].
 pub fn NewParam(
   pos: token.Pos,
-  pkg: Ref<Package>,
+  pkg: Option<Ref<Package>>,
   name: string,
   typ: Type,
 ) -> mut Ref<Var>
@@ -484,7 +484,7 @@ pub fn NewParam(
 /// The remaining arguments set the attributes found with all Objects.
 pub fn NewPkgName(
   pos: token.Pos,
-  pkg: Ref<Package>,
+  pkg: Option<Ref<Package>>,
   name: string,
   imported: Ref<Package>,
 ) -> mut Ref<PkgName>
@@ -495,7 +495,7 @@ pub fn NewPointer(elem: Type) -> mut Ref<Pointer>
 /// NewScope returns a new, empty scope contained in the given parent
 /// scope, if any. The comment is for debugging only.
 pub fn NewScope(
-  parent: mut Ref<Scope>,
+  parent: Option<mut Ref<Scope>>,
   pos: token.Pos,
   end: token.Pos,
   comment: string,
@@ -508,9 +508,9 @@ pub fn NewScope(
 /// 
 /// Deprecated: Use [NewSignatureType] instead which allows for type parameters.
 pub fn NewSignature(
-  recv: Ref<Var>,
-  params: Ref<Tuple>,
-  results: Ref<Tuple>,
+  recv: Option<Ref<Var>>,
+  params: Option<Ref<Tuple>>,
+  results: Option<Ref<Tuple>>,
   variadic: bool,
 ) -> mut Ref<Signature>
 
@@ -530,11 +530,11 @@ pub fn NewSignature(
 /// If recv is non-nil, typeParams must be empty. If recvTypeParams is
 /// non-empty, recv must be non-nil.
 pub fn NewSignatureType(
-  recv: Ref<Var>,
+  recv: Option<Ref<Var>>,
   recvTypeParams: Slice<Ref<TypeParam>>,
   typeParams: Slice<Ref<TypeParam>>,
-  params: Ref<Tuple>,
-  results: Ref<Tuple>,
+  params: Option<Ref<Tuple>>,
+  results: Option<Ref<Tuple>>,
   variadic: bool,
 ) -> mut Ref<Signature>
 
@@ -565,9 +565,9 @@ pub fn NewTuple(x: VarArgs<Ref<Var>>) -> Option<mut Ref<Tuple>>
 /// effect.
 pub fn NewTypeName(
   pos: token.Pos,
-  pkg: Ref<Package>,
+  pkg: Option<Ref<Package>>,
   name: string,
-  typ: Type,
+  typ: Option<Type>,
 ) -> mut Ref<TypeName>
 
 /// NewTypeParam returns a new TypeParam. Type parameters may be set on a Named
@@ -578,7 +578,7 @@ pub fn NewTypeName(
 /// constraint is non-nil, it must be fully defined.
 pub fn NewTypeParam(
   obj: mut Ref<TypeName>,
-  constraint: Type,
+  constraint: Option<Type>,
 ) -> mut Ref<TypeParam>
 
 /// NewUnion returns a new [Union] type with the given terms.
@@ -592,7 +592,7 @@ pub fn NewUnion(terms: Slice<Ref<Term>>) -> mut Ref<Union>
 /// if the desired Var is not of kind [PackageVar].
 pub fn NewVar(
   pos: token.Pos,
-  pkg: Ref<Package>,
+  pkg: Option<Ref<Package>>,
   name: string,
   typ: Type,
 ) -> mut Ref<Var>
@@ -1215,7 +1215,7 @@ impl Config {
     path: string,
     fset: Ref<token.FileSet>,
     files: Slice<Ref<ast.File>>,
-    info: Ref<Info>,
+    info: Option<Ref<Info>>,
   ) -> Partial<mut Ref<Package>, error>
 }
 

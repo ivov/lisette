@@ -59,7 +59,7 @@ pub fn PlainAuth(
 /// library.
 pub fn SendMail(
   addr: string,
-  a: Auth,
+  a: Option<Auth>,
   from: string,
   to: Slice<string>,
   msg: Slice<byte>,

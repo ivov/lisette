@@ -491,11 +491,7 @@ impl InferCtx<'_> {
                 params: params1,
                 ..
             },
-            Nominal {
-                id: symbol2,
-                params: params2,
-                ..
-            },
+            Nominal { id: symbol2, .. },
         ) = (t1, t2)
         else {
             unreachable!("try_coerce_or_satisfy_interface called with non-Constructor types")
@@ -509,8 +505,8 @@ impl InferCtx<'_> {
             return Err(UnifyError::TypeMismatch);
         }
 
-        // Allow Option<T> where a Go interface is expected: unwrap and unify
-        // the inner type with the interface directly.
+        // Allow a Go interface value where Option<T> is expected, as an implicit
+        // `Some`. The opposite direction would let `None` reach a non-nil slot.
         if symbol1 == "prelude.Option"
             && params1.len() == 1
             && symbol2.starts_with("go:")
@@ -518,14 +514,6 @@ impl InferCtx<'_> {
         {
             return self.try_unify(&params1[0], t2, span);
         }
-        if symbol2 == "prelude.Option"
-            && params2.len() == 1
-            && symbol1.starts_with("go:")
-            && store.get_interface(symbol1).is_some()
-        {
-            return self.try_unify(t1, &params2[0], span);
-        }
-
         self.try_satisfy_interface(t2, t1, span)
     }
 

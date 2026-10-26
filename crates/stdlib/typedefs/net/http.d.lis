@@ -176,7 +176,10 @@ pub fn Head(url: string) -> Result<mut Ref<Response>, error>
 /// The handler is typically nil, in which case [DefaultServeMux] is used.
 /// 
 /// ListenAndServe always returns a non-nil error.
-pub fn ListenAndServe(addr: string, handler: Handler) -> Result<(), error>
+pub fn ListenAndServe(
+  addr: string,
+  handler: Option<Handler>,
+) -> Result<(), error>
 
 /// ListenAndServeTLS acts identically to [ListenAndServe], except that it
 /// expects HTTPS connections. Additionally, files containing a certificate and
@@ -187,7 +190,7 @@ pub fn ListenAndServeTLS(
   addr: string,
   certFile: string,
   keyFile: string,
-  handler: Handler,
+  handler: Option<Handler>,
 ) -> Result<(), error>
 
 /// MaxBytesHandler returns a [Handler] that runs h with its [ResponseWriter] and [Request.Body] wrapped by a MaxBytesReader.
@@ -204,7 +207,7 @@ pub fn MaxBytesHandler(h: Handler, n: int64) -> Handler
 /// it tells the [ResponseWriter] to close the connection after the limit
 /// has been reached.
 pub fn MaxBytesReader(
-  w: ResponseWriter,
+  w: Option<ResponseWriter>,
   r: io.ReadCloser,
   n: int64,
 ) -> io.ReadCloser
@@ -247,7 +250,7 @@ pub fn NewFileTransportFS(fsys: fs.FS) -> RoundTripper
 pub fn NewRequest(
   method: string,
   url: string,
-  body: io.Reader,
+  body: Option<io.Reader>,
 ) -> Result<mut Ref<Request>, error>
 
 /// NewRequestWithContext returns a new [Request] given a method, URL, and
@@ -277,7 +280,7 @@ pub fn NewRequestWithContext(
   ctx: context.Context,
   method: string,
   url: string,
-  body: io.Reader,
+  body: Option<io.Reader>,
 ) -> Result<mut Ref<Request>, error>
 
 /// NewResponseController creates a [ResponseController] for a request.
@@ -347,7 +350,7 @@ pub fn ParseTime(text: string) -> Result<time.Time, error>
 pub fn Post(
   url: string,
   contentType: string,
-  body: io.Reader,
+  body: Option<io.Reader>,
 ) -> Result<mut Ref<Response>, error>
 
 /// PostForm issues a POST to the specified URL, with data's keys and
@@ -413,7 +416,7 @@ pub fn ReadRequest(b: Ref<bufio.Reader>) -> Result<mut Ref<Request>, error>
 /// pairs included in the response trailer.
 pub fn ReadResponse(
   r: Ref<bufio.Reader>,
-  req: Ref<Request>,
+  req: Option<Ref<Request>>,
 ) -> Result<mut Ref<Response>, error>
 
 /// Redirect replies to the request with a redirect to url,
@@ -449,7 +452,7 @@ pub fn RedirectHandler(url: string, code: int) -> Handler
 /// Config.NextProtos.
 /// 
 /// Serve always returns a non-nil error.
-pub fn Serve(l: net.Listener, handler: Handler) -> Result<(), error>
+pub fn Serve(l: net.Listener, handler: Option<Handler>) -> Result<(), error>
 
 /// ServeContent replies to the request using the content in the
 /// provided ReadSeeker. The main benefit of ServeContent over [io.Copy]
@@ -554,7 +557,7 @@ pub fn ServeFileFS(
 /// ServeTLS always returns a non-nil error.
 pub fn ServeTLS(
   l: net.Listener,
-  handler: Handler,
+  handler: Option<Handler>,
   certFile: string,
   keyFile: string,
 ) -> Result<(), error>
@@ -1680,7 +1683,7 @@ impl Client {
     self: Ref<Client>,
     url: string,
     contentType: string,
-    body: io.Reader,
+    body: Option<io.Reader>,
   ) -> Result<mut Ref<Response>, error>
 
   /// PostForm issues a POST to the specified URL,
@@ -1839,7 +1842,7 @@ impl CrossOriginProtection {
   /// or request handling, and applies to future requests.
   /// 
   /// Check does not call the error handler.
-  fn SetDenyHandler(self: Ref<CrossOriginProtection>, h: Handler)
+  fn SetDenyHandler(self: Ref<CrossOriginProtection>, h: Option<Handler>)
 }
 
 impl Dir {

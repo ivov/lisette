@@ -4,7 +4,6 @@ use syntax::types::Type;
 
 use crate::Planner;
 use crate::definitions::interface_adapter::AdapterPlan;
-use crate::names::go_name;
 use crate::plan::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign,
 };
@@ -376,18 +375,6 @@ pub(crate) fn resolve_layout_bridge(
                 payload: source_payload,
                 ..
             },
-            target,
-        ) if is_go_interface_slot(planner, target.logical_type()) => {
-            LayoutBridge::UnwrapNullableOption {
-                target_payload: Box::new(target.clone()),
-                payload: Box::new(resolve_layout_bridge(planner, source_payload, target)),
-            }
-        }
-        (
-            TaggedOption {
-                payload: source_payload,
-                ..
-            },
             TaggedOption {
                 payload: target_payload,
                 ..
@@ -594,13 +581,6 @@ fn aggregate_bridge(
             element: Box::new(element),
         }
     }
-}
-
-fn is_go_interface_slot(planner: &Planner<'_>, ty: &Type) -> bool {
-    planner
-        .facts
-        .as_interface(ty)
-        .is_some_and(|id| go_name::is_go_import(&id))
 }
 
 fn aggregate_rebuild(planner: &Planner<'_>, from: &Type, to: &Type) -> Option<CoercionPlan> {

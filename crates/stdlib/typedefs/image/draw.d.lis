@@ -29,7 +29,7 @@ pub fn DrawMask(
   r: image.Rectangle,
   src: image.Image,
   sp: image.Point,
-  mask: image.Image,
+  mask: Option<image.Image>,
   mp: image.Point,
   op: Op,
 )

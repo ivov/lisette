@@ -1612,6 +1612,20 @@ fn main() {
 }
 
 #[test]
+fn go_none_before_call_argument_stays_inline() {
+    let input = r#"
+import "go:fmt"
+import "go:go/types"
+import "go:strings"
+
+fn main() {
+  fmt.Println(types.Id(None, strings.ToUpper("x")))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn go_some_for_interface_parameter() {
     let input = r#"
 import "go:net/http"

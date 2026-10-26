@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  import "go:go/types"
+  import "go:strings"
+  
+  fn main() {
+    fmt.Println(types.Id(None, strings.ToUpper("x")))
+  }
+---
+package main
+
+import (
+	"fmt"
+	"go/types"
+	"strings"
+)
+
+func main() {
+	fmt.Println(types.Id(nil, strings.ToUpper("x")))
+}

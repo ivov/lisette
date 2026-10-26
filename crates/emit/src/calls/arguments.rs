@@ -414,7 +414,7 @@ impl Planner<'_> {
                 ValueLayout::NullableOption { .. } | ValueLayout::PointerOption { .. }
             )
         {
-            return ValuePlan::evaluated_literal(Vec::new(), "nil".to_string());
+            return ValuePlan::literal("nil".to_string());
         }
         if let Some(literal) = self.lower_option_literal_into_layout(argument, &plan.target) {
             return literal;

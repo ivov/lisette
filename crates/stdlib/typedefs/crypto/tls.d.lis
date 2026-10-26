@@ -163,7 +163,7 @@ pub fn Client(conn: net.Conn, config: Ref<Config>) -> mut Ref<Conn>
 pub fn Dial(
   network: string,
   addr: string,
-  config: Ref<Config>,
+  config: Option<Ref<Config>>,
 ) -> Result<mut Ref<Conn>, error>
 
 /// DialWithDialer connects to the given network address using dialer.Dial and
@@ -180,7 +180,7 @@ pub fn DialWithDialer(
   dialer: Ref<net.Dialer>,
   network: string,
   addr: string,
-  config: Ref<Config>,
+  config: Option<Ref<Config>>,
 ) -> Result<mut Ref<Conn>, error>
 
 /// InsecureCipherSuites returns a list of cipher suites currently implemented by

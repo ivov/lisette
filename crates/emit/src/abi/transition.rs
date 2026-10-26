@@ -716,7 +716,7 @@ fn lower_nullable_slot_value(
             .with_constructor_stability();
     }
     if prelude_constructor(expression) == Some(PreludeVariant::None) {
-        return ValuePlan::evaluated_literal(Vec::new(), "nil".to_string());
+        return ValuePlan::literal("nil".to_string());
     }
     let value = planner.lower_value(expression, ExpressionContext::value());
     let inner = planner.use_go_type(&slot_ty.ok_type());

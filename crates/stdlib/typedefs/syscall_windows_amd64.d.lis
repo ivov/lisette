@@ -1162,7 +1162,7 @@ pub fn Sendto(
   fd: Handle,
   p: Slice<byte>,
   flags: int,
-  to: Sockaddr,
+  to: Option<Sockaddr>,
 ) -> Result<(), error>
 
 pub fn SetCurrentDirectory(path: Ref<uint16>) -> Result<(), error>

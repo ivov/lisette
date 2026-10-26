@@ -3041,11 +3041,12 @@ fn main() {
 fn option_variable_into_nullable_go_parameter_keeps_the_tag_test() {
     let input = r#"
 import "go:fmt"
+import "go:io"
 import "go:net/http"
 import "go:os"
 
 fn main() {
-  let body = if os.Args.length() > 1 { Some(os.Stdin) } else { None }
+  let body: Option<io.Reader> = if os.Args.length() > 1 { Some(os.Stdin) } else { None }
   let req = http.NewRequest("POST", "https://example.com", body)
   fmt.Println(req.is_ok())
 }
