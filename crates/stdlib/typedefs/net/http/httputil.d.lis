@@ -72,7 +72,10 @@ pub fn NewChunkedWriter(w: io.Writer) -> io.WriteCloser
 /// We should have deleted it before Go 1.
 /// 
 /// Deprecated: Use the Client or Transport in package [net/http] instead.
-pub fn NewClientConn(c: net.Conn, r: Ref<bufio.Reader>) -> mut Ref<ClientConn>
+pub fn NewClientConn(
+  c: net.Conn,
+  r: Option<Ref<bufio.Reader>>,
+) -> mut Ref<ClientConn>
 
 /// NewProxyClientConn is an artifact of Go's early HTTP implementation.
 /// It is low-level, old, and unused by Go's current HTTP stack.
@@ -81,7 +84,7 @@ pub fn NewClientConn(c: net.Conn, r: Ref<bufio.Reader>) -> mut Ref<ClientConn>
 /// Deprecated: Use the Client or Transport in package [net/http] instead.
 pub fn NewProxyClientConn(
   c: net.Conn,
-  r: Ref<bufio.Reader>,
+  r: Option<Ref<bufio.Reader>>,
 ) -> mut Ref<ClientConn>
 
 /// NewServerConn is an artifact of Go's early HTTP implementation.
@@ -89,7 +92,10 @@ pub fn NewProxyClientConn(
 /// We should have deleted it before Go 1.
 /// 
 /// Deprecated: Use the Server in package [net/http] instead.
-pub fn NewServerConn(c: net.Conn, r: Ref<bufio.Reader>) -> mut Ref<ServerConn>
+pub fn NewServerConn(
+  c: net.Conn,
+  r: Option<Ref<bufio.Reader>>,
+) -> mut Ref<ServerConn>
 
 /// NewSingleHostReverseProxy returns a new [ReverseProxy] that routes
 /// URLs to the scheme, host, and base path provided in target. If the

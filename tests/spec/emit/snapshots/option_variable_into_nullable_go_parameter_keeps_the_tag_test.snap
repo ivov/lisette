@@ -3,11 +3,12 @@ source: tests/spec/emit/result_option_patterns.rs
 description: |
   
   import "go:fmt"
+  import "go:io"
   import "go:net/http"
   import "go:os"
   
   fn main() {
-    let body = if os.Args.length() > 1 { Some(os.Stdin) } else { None }
+    let body: Option<io.Reader> = if os.Args.length() > 1 { Some(os.Stdin) } else { None }
     let req = http.NewRequest("POST", "https://example.com", body)
     fmt.Println(req.is_ok())
   }
@@ -24,11 +25,11 @@ import (
 )
 
 func main() {
-	var body lisette.Option[*os.File]
+	var body lisette.Option[io.Reader]
 	if len(os.Args) > 1 {
-		body = lisette.MakeOptionSome[*os.File](os.Stdin)
+		body = lisette.MakeOptionSome[io.Reader](os.Stdin)
 	} else {
-		body = lisette.MakeOptionNone[*os.File]()
+		body = lisette.MakeOptionNone[io.Reader]()
 	}
 	var unwrap io.Reader
 	if body.Tag == lisette.OptionSome {

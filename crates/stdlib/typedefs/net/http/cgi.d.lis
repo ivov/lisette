@@ -23,7 +23,7 @@ pub fn RequestFromMap(
 /// request, if any. If there's no current CGI environment
 /// an error is returned. The provided handler may be nil to use
 /// [http.DefaultServeMux].
-pub fn Serve(handler: http.Handler) -> Result<(), error>
+pub fn Serve(handler: Option<http.Handler>) -> Result<(), error>
 
 /// Handler runs an executable in a subprocess with a CGI environment.
 pub struct Handler {

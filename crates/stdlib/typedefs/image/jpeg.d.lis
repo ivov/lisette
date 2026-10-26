@@ -18,7 +18,7 @@ pub fn DecodeConfig(r: io.Reader) -> Result<image.Config, error>
 pub fn Encode(
   w: io.Writer,
   m: image.Image,
-  o: Ref<Options>,
+  o: Option<Ref<Options>>,
 ) -> Result<(), error>
 
 /// A FormatError reports that the input is not a valid JPEG.

@@ -23,7 +23,7 @@ pub fn DecodeConfig(r: io.Reader) -> Result<image.Config, error>
 pub fn Encode(
   w: io.Writer,
   m: image.Image,
-  o: Ref<Options>,
+  o: Option<Ref<Options>>,
 ) -> Result<(), error>
 
 /// EncodeAll writes the images in g to w in GIF format with the

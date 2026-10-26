@@ -74,7 +74,7 @@ pub fn Dial(network: string, address: string) -> Result<Conn, error>
 /// local system is assumed.
 pub fn DialIP(
   network: string,
-  laddr: Ref<IPAddr>,
+  laddr: Option<Ref<IPAddr>>,
   raddr: Ref<IPAddr>,
 ) -> Result<mut Ref<IPConn>, error>
 
@@ -87,7 +87,7 @@ pub fn DialIP(
 /// local system is assumed.
 pub fn DialTCP(
   network: string,
-  laddr: mut Ref<TCPAddr>,
+  laddr: Option<mut Ref<TCPAddr>>,
   raddr: mut Ref<TCPAddr>,
 ) -> Result<mut Ref<TCPConn>, error>
 
@@ -116,7 +116,7 @@ pub fn DialTimeout(
 /// local system is assumed.
 pub fn DialUDP(
   network: string,
-  laddr: Ref<UDPAddr>,
+  laddr: Option<Ref<UDPAddr>>,
   raddr: Ref<UDPAddr>,
 ) -> Result<mut Ref<UDPConn>, error>
 
@@ -128,7 +128,7 @@ pub fn DialUDP(
 /// connection.
 pub fn DialUnix(
   network: string,
-  laddr: Ref<UnixAddr>,
+  laddr: Option<Ref<UnixAddr>>,
   raddr: Ref<UnixAddr>,
 ) -> Result<mut Ref<UnixConn>, error>
 
@@ -217,7 +217,7 @@ pub fn Listen(network: string, address: string) -> Result<Listener, error>
 /// except multicast IP addresses.
 pub fn ListenIP(
   network: string,
-  laddr: Ref<IPAddr>,
+  laddr: Option<Ref<IPAddr>>,
 ) -> Result<mut Ref<IPConn>, error>
 
 /// ListenMulticastUDP acts like [ListenPacket] for UDP networks but
@@ -242,7 +242,7 @@ pub fn ListenIP(
 /// to 0 under IPPROTO_IP, to disable loopback of multicast packets.
 pub fn ListenMulticastUDP(
   network: string,
-  ifi: Ref<Interface>,
+  ifi: Option<Ref<Interface>>,
   gaddr: Ref<UDPAddr>,
 ) -> Result<mut Ref<UDPConn>, error>
 
@@ -287,7 +287,7 @@ pub fn ListenPacket(
 /// chosen.
 pub fn ListenTCP(
   network: string,
-  laddr: Ref<TCPAddr>,
+  laddr: Option<Ref<TCPAddr>>,
 ) -> Result<mut Ref<TCPListener>, error>
 
 /// ListenUDP acts like [ListenPacket] for UDP networks.
@@ -301,7 +301,7 @@ pub fn ListenTCP(
 /// chosen.
 pub fn ListenUDP(
   network: string,
-  laddr: Ref<UDPAddr>,
+  laddr: Option<Ref<UDPAddr>>,
 ) -> Result<mut Ref<UDPConn>, error>
 
 /// ListenUnix acts like [Listen] for Unix networks.
@@ -1679,7 +1679,7 @@ impl UDPConn {
     self: Ref<UDPConn>,
     b: Slice<byte>,
     oob: Slice<byte>,
-    addr: Ref<UDPAddr>,
+    addr: Option<Ref<UDPAddr>>,
   ) -> Result<(int, int), error>
 
   /// WriteMsgUDPAddrPort is like [UDPConn.WriteMsgUDP] but takes a [netip.AddrPort] instead of a [UDPAddr].

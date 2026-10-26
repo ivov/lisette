@@ -3554,6 +3554,66 @@ fn go_servemux_satisfies_go_handler() {
 }
 
 #[test]
+fn none_rejected_for_go_interface_parameter() {
+    infer(
+        r#"
+    import "go:context"
+
+    fn main() {
+      let (_, cancel) = context.WithCancel(None)
+      cancel()
+    }
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn option_value_rejected_for_go_interface_parameter() {
+    infer(
+        r#"
+    import "go:io"
+    import "go:strings"
+
+    fn main() {
+      let reader: Option<mut Ref<strings.Reader>> = None
+      let _ = io.ReadAll(reader)
+    }
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn none_rejected_for_go_interface_return() {
+    infer(
+        r#"
+    import "go:context"
+
+    fn parent() -> context.Context {
+      None
+    }
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn none_and_some_accepted_for_nilable_go_interface_parameter() {
+    infer(
+        r#"
+    import "go:net/http"
+
+    fn main() {
+      let _ = http.ListenAndServe(":8080", None)
+      let _ = http.ListenAndServe(":8080", Some(http.NewServeMux()))
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn generic_static_method_infers_type_param_from_int() {
     infer(
         r#"

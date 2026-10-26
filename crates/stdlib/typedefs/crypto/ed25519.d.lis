@@ -16,7 +16,7 @@ import "go:io"
 /// The output of this function is deterministic, and equivalent to reading
 /// [SeedSize] bytes from random, and passing them to [NewKeyFromSeed].
 pub fn GenerateKey(
-  random: io.Reader,
+  random: Option<io.Reader>,
 ) -> Result<(mut PublicKey, mut PrivateKey), error>
 
 /// NewKeyFromSeed calculates a private key from a seed. It will panic if

@@ -180,6 +180,122 @@
       },
       "nilable_return": {
       },
+      "nilable_param": {
+        "crypto/ed25519": {
+          "GenerateKey": ["random"]
+        },
+        "crypto/rsa": {
+          "DecryptOAEP": ["random"],
+          "DecryptPKCS1v15": ["random"],
+          "DecryptPKCS1v15SessionKey": ["random"],
+          "SignPKCS1v15": ["random"],
+          "SignPSS": ["opts"],
+          "VerifyPSS": ["opts"]
+        },
+        "crypto/tls": {
+          "Dial": ["config"],
+          "DialWithDialer": ["config"]
+        },
+        "database/sql": {
+          "Conn.BeginTx": ["opts"],
+          "DB.BeginTx": ["opts"]
+        },
+        "go/ast": {
+          "Fprint": ["fset"],
+          "NewPackage": ["universe"],
+          "Print": ["fset"]
+        },
+        "go/types": {
+          "CheckExpr": ["pkg", "info"],
+          "Config.Check": ["info"],
+          "Eval": ["pkg"],
+          "Instantiate": ["ctxt"],
+          "NewAlias": ["rhs"],
+          "NewConst": ["pkg"],
+          "NewField": ["pkg"],
+          "NewFunc": ["pkg"],
+          "NewLabel": ["pkg"],
+          "NewNamed": ["underlying"],
+          "NewParam": ["pkg"],
+          "NewPkgName": ["pkg"],
+          "NewScope": ["parent"],
+          "NewSignature": ["recv", "params", "results"],
+          "NewSignatureType": ["recv", "params", "results"],
+          "NewTypeName": ["pkg", "typ"],
+          "NewTypeParam": ["constraint"],
+          "NewVar": ["pkg"]
+        },
+        "image/draw": {
+          "DrawMask": ["mask"]
+        },
+        "image/gif": {
+          "Encode": ["o"]
+        },
+        "image/jpeg": {
+          "Encode": ["o"]
+        },
+        "math/big": {
+          "Float.Int": ["z"],
+          "Float.Rat": ["z"],
+          "Int.Exp": ["m"],
+          "Int.GCD": ["x", "y"]
+        },
+        "net": {
+          "DialIP": ["laddr"],
+          "DialTCP": ["laddr"],
+          "DialUDP": ["laddr"],
+          "DialUnix": ["laddr"],
+          "ListenIP": ["laddr"],
+          "ListenMulticastUDP": ["ifi"],
+          "ListenTCP": ["laddr"],
+          "ListenUDP": ["laddr"],
+          "UDPConn.WriteMsgUDP": ["addr"]
+        },
+        "net/http": {
+          "Client.Post": ["body"],
+          "CrossOriginProtection.SetDenyHandler": ["h"],
+          "ListenAndServe": ["handler"],
+          "ListenAndServeTLS": ["handler"],
+          "MaxBytesReader": ["w"],
+          "NewRequest": ["body"],
+          "NewRequestWithContext": ["body"],
+          "Post": ["body"],
+          "ReadResponse": ["req"],
+          "Serve": ["handler"],
+          "ServeTLS": ["handler"]
+        },
+        "net/http/cgi": {
+          "Serve": ["handler"]
+        },
+        "net/http/fcgi": {
+          "Serve": ["l", "handler"]
+        },
+        "net/http/httptest": {
+          "NewRequest": ["body"],
+          "NewRequestWithContext": ["body"],
+          "NewServer": ["handler"],
+          "NewTLSServer": ["handler"],
+          "NewUnstartedServer": ["handler"]
+        },
+        "net/http/httputil": {
+          "NewClientConn": ["r"],
+          "NewProxyClientConn": ["r"],
+          "NewServerConn": ["r"]
+        },
+        "net/smtp": {
+          "SendMail": ["a"]
+        },
+        "syscall": {
+          "Sendmsg": ["to"],
+          "SendmsgN": ["to"],
+          "Sendto": ["to"],
+          "Wait4": ["rusage"]
+        },
+        "testing/quick": {
+          "Check": ["config"],
+          "CheckEqual": ["config"]
+        }
+      },
       "non_mutating_param": {
         "archive/zip": {
           "pooledFlateWriter.Write": ["p"]

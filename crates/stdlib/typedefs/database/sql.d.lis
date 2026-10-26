@@ -365,7 +365,7 @@ impl Conn {
   fn BeginTx(
     self: mut Ref<Conn>,
     ctx: context.Context,
-    opts: Ref<TxOptions>,
+    opts: Option<Ref<TxOptions>>,
   ) -> Result<mut Ref<Tx>, error>
 
   /// Close returns the connection to the connection pool.
@@ -456,7 +456,7 @@ impl DB {
   fn BeginTx(
     self: mut Ref<DB>,
     ctx: context.Context,
-    opts: Ref<TxOptions>,
+    opts: Option<Ref<TxOptions>>,
   ) -> Result<mut Ref<Tx>, error>
 
   /// Close closes the database and prevents new queries from starting.

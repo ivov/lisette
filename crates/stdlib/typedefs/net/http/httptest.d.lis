@@ -18,7 +18,7 @@ pub fn NewRecorder() -> mut Ref<ResponseRecorder>
 pub fn NewRequest(
   method: string,
   target: string,
-  body: io.Reader,
+  body: Option<io.Reader>,
 ) -> mut Ref<http.Request>
 
 /// NewRequestWithContext returns a new incoming server Request, suitable
@@ -48,16 +48,16 @@ pub fn NewRequestWithContext(
   ctx: context.Context,
   method: string,
   target: string,
-  body: io.Reader,
+  body: Option<io.Reader>,
 ) -> mut Ref<http.Request>
 
 /// NewServer starts and returns a new [Server].
 /// The caller should call Close when finished, to shut it down.
-pub fn NewServer(handler: http.Handler) -> mut Ref<Server>
+pub fn NewServer(handler: Option<http.Handler>) -> mut Ref<Server>
 
 /// NewTLSServer starts and returns a new [Server] using TLS.
 /// The caller should call Close when finished, to shut it down.
-pub fn NewTLSServer(handler: http.Handler) -> mut Ref<Server>
+pub fn NewTLSServer(handler: Option<http.Handler>) -> mut Ref<Server>
 
 /// NewUnstartedServer returns a new [Server] but doesn't start it.
 /// 
@@ -65,7 +65,7 @@ pub fn NewTLSServer(handler: http.Handler) -> mut Ref<Server>
 /// StartTLS.
 /// 
 /// The caller should call Close when finished, to shut it down.
-pub fn NewUnstartedServer(handler: http.Handler) -> mut Ref<Server>
+pub fn NewUnstartedServer(handler: Option<http.Handler>) -> mut Ref<Server>
 
 /// ResponseRecorder is an implementation of [http.ResponseWriter] that
 /// records its mutations for later inspection in tests.

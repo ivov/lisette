@@ -79,7 +79,7 @@ pub fn FilterPackage(pkg: Ref<Package>, f: Filter) -> bool
 /// struct fields are never printed.
 pub fn Fprint(
   w: io.Writer,
-  fset: Ref<token.FileSet>,
+  fset: Option<Ref<token.FileSet>>,
   x: Unknown,
   f: FieldFilter,
 ) -> Result<(), error>
@@ -159,7 +159,7 @@ pub fn NewPackage(
   fset: Ref<token.FileSet>,
   files: Map<string, Ref<File>>,
   importer: Importer,
-  universe: Ref<Scope>,
+  universe: Option<Ref<Scope>>,
 ) -> Result<mut Ref<Package>, error>
 
 /// NewScope creates a new scope nested in the outer scope.
@@ -221,7 +221,7 @@ pub fn PreorderStack(
 
 /// Print prints x to standard output, skipping nil fields.
 /// Print(fset, x) is the same as Fprint(os.Stdout, fset, x, NotNilFilter).
-pub fn Print(fset: Ref<token.FileSet>, x: Unknown) -> Result<(), error>
+pub fn Print(fset: Option<Ref<token.FileSet>>, x: Unknown) -> Result<(), error>
 
 /// SortImports sorts runs of consecutive import lines in import blocks in f.
 /// It also removes duplicate imports when it is possible to do so without data loss.

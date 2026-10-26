@@ -18,7 +18,10 @@ pub fn ProcessEnv(r: Ref<http.Request>) -> mut Map<string, string>
 /// to reply to them.
 /// If l is nil, Serve accepts connections from os.Stdin.
 /// If handler is nil, [http.DefaultServeMux] is used.
-pub fn Serve(l: net.Listener, handler: http.Handler) -> Result<(), error>
+pub fn Serve(
+  l: Option<net.Listener>,
+  handler: Option<http.Handler>,
+) -> Result<(), error>
 
 /// ErrConnClosed is returned by Read when a handler attempts to read the body of
 /// a request after the connection to the web server has been closed.

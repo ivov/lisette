@@ -20,7 +20,7 @@ import "go:math/big"
 /// [EncryptOAEP] for details.
 pub fn DecryptOAEP(
   hash: hash.Hash,
-  random: io.Reader,
+  random: Option<io.Reader>,
   priv: Ref<PrivateKey>,
   ciphertext: Slice<byte>,
   label: Slice<byte>,
@@ -38,7 +38,7 @@ pub fn DecryptOAEP(
 /// 
 /// [draft-irtf-cfrg-rsa-guidance-05]: https://www.ietf.org/archive/id/draft-irtf-cfrg-rsa-guidance-05.html#name-rationale
 pub fn DecryptPKCS1v15(
-  random: io.Reader,
+  random: Option<io.Reader>,
   priv: Ref<PrivateKey>,
   ciphertext: Slice<byte>,
 ) -> Result<mut Slice<byte>, error>
@@ -85,7 +85,7 @@ pub fn DecryptPKCS1v15(
 /// 
 /// [draft-irtf-cfrg-rsa-guidance-05]: https://www.ietf.org/archive/id/draft-irtf-cfrg-rsa-guidance-05.html#name-rationale
 pub fn DecryptPKCS1v15SessionKey(
-  random: io.Reader,
+  random: Option<io.Reader>,
   priv: Ref<PrivateKey>,
   ciphertext: Slice<byte>,
   key: mut Slice<byte>,
@@ -209,7 +209,7 @@ pub fn GenerateMultiPrimeKey(
 /// messages to signatures and identify the signed messages. As ever,
 /// signatures provide authenticity, not confidentiality.
 pub fn SignPKCS1v15(
-  random: io.Reader,
+  random: Option<io.Reader>,
   priv: Ref<PrivateKey>,
   hash: crypto.Hash,
   hashed: Slice<byte>,
@@ -229,7 +229,7 @@ pub fn SignPSS(
   priv: Ref<PrivateKey>,
   hash: crypto.Hash,
   digest: Slice<byte>,
-  opts: Ref<PSSOptions>,
+  opts: Option<Ref<PSSOptions>>,
 ) -> Result<mut Slice<byte>, error>
 
 /// VerifyPKCS1v15 verifies an RSA PKCS #1 v1.5 signature.
@@ -261,7 +261,7 @@ pub fn VerifyPSS(
   hash: crypto.Hash,
   digest: Slice<byte>,
   sig: Slice<byte>,
-  opts: Ref<PSSOptions>,
+  opts: Option<Ref<PSSOptions>>,
 ) -> Result<(), error>
 
 /// CRTValue contains the precomputed Chinese remainder theorem values.

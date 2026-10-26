@@ -1092,7 +1092,7 @@ pub fn Sendmsg(
   fd: int,
   p: Slice<byte>,
   oob: Slice<byte>,
-  to: Sockaddr,
+  to: Option<Sockaddr>,
   flags: int,
 ) -> Result<(), error>
 
@@ -1100,7 +1100,7 @@ pub fn SendmsgN(
   fd: int,
   p: Slice<byte>,
   oob: Slice<byte>,
-  to: Sockaddr,
+  to: Option<Sockaddr>,
   flags: int,
 ) -> Result<int, error>
 
@@ -1108,7 +1108,7 @@ pub fn Sendto(
   fd: int,
   p: Slice<byte>,
   flags: int,
-  to: Sockaddr,
+  to: Option<Sockaddr>,
 ) -> Result<(), error>
 
 /// Deprecated: Use golang.org/x/net/bpf instead.
@@ -1368,7 +1368,7 @@ pub fn Wait4(
   pid: int,
   wstatus: mut Ref<WaitStatus>,
   options: int,
-  rusage: Ref<Rusage>,
+  rusage: Option<Ref<Rusage>>,
 ) -> Result<int, error>
 
 pub fn Write(fd: int, p: Slice<byte>) -> Result<int, error>
