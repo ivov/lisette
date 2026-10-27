@@ -4451,11 +4451,25 @@ fn main() {
 }
 
 #[test]
-fn higher_callback_go_params_callback_commaok() {
+fn higher_callback_go_params_callback_tuple() {
     let input = r#"
 import "go:sort"
-fn give<T>(f:fn(int,fn(int)->int)->T)->fn(int,fn(int)->int)->T{f}
-fn main(){let mut calls=0;let f=give(sort.Find);let Some(n)=f(5,|i|{calls+=1;2-i}) else {panic("none")};if n!=2 || calls<1{panic("search")};if f(5,|_|1).is_some(){panic("missing")}}
+
+fn give<T>(f: fn(int, fn(int) -> int) -> T) -> fn(int, fn(int) -> int) -> T {
+  f
+}
+
+fn main() {
+  let mut calls = 0
+  let f = give(sort.Find)
+  let (n, found) = f(5, |i| {
+    calls += 1
+    2 - i
+  })
+  if n != 2 || !found || calls < 1 { panic("search") }
+  let (end, hit) = f(5, |_| 1)
+  if end != 5 || hit { panic("missing") }
+}
 "#;
     assert_emit_snapshot!(input);
 }

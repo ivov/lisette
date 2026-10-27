@@ -1022,7 +1022,7 @@ impl Value {
   /// If the receive delivers a value, x is the transferred value and ok is true.
   /// If the receive cannot finish without blocking, x is the zero Value and ok is false.
   /// If the channel is closed, x is the zero value for the channel's element type and ok is false.
-  fn TryRecv(self) -> Option<Value>
+  fn TryRecv(self) -> (Value, bool)
 
   /// TrySend attempts to send x on the channel v but will not block.
   /// It panics if v's Kind is not [Chan].

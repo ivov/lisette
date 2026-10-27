@@ -3757,6 +3757,71 @@ fn go_type_param_without_constraint_is_option() {
 }
 
 #[test]
+fn go_binary_search_keeps_insertion_position() {
+    infer(
+        r#"
+    import "go:slices"
+    import "go:sort"
+
+    fn main() {
+      let sorted = [10, 20, 30]
+      let (position, found): (int, bool) = slices.BinarySearch(sorted, 25)
+      let (custom, matched): (int, bool) = slices.BinarySearchFunc(sorted, 25, |e, t| e - t)
+      let (index, hit): (int, bool) = sort.Find(3, |i| 25 - sorted[i])
+      let _ = (position, found, custom)
+      let _ = (matched, index, hit)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn go_profile_keeps_record_count() {
+    infer(
+        r#"
+    import "go:runtime"
+
+    fn main() {
+      let (records, fits): (int, bool) = runtime.GoroutineProfile([])
+      let _ = (records, fits)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn go_missing_method_keeps_method_and_wrong_type() {
+    infer(
+        r#"
+    import "go:go/types"
+
+    fn check(v: types.Type, t: Ref<types.Interface>) {
+      let (method, wrong_type): (Option<Ref<types.Func>>, bool) = types.MissingMethod(v, t, true)
+      let _ = (method, wrong_type)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn go_try_recv_keeps_value_without_ok() {
+    infer(
+        r#"
+    import "go:reflect"
+
+    fn check(v: reflect.Value) {
+      let (value, ok): (reflect.Value, bool) = v.TryRecv()
+      let _ = (value, ok)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn generic_static_method_infers_type_param_from_int() {
     infer(
         r#"

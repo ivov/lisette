@@ -27,7 +27,7 @@
 /// 	} else {
 /// 	    fmt.Printf("%s not found, would insert at %d", target, i)
 /// 	}
-pub fn Find(n: int, cmp: fn(int) -> int) -> Option<int>
+pub fn Find(n: int, cmp: fn(int) -> int) -> (int, bool)
 
 /// Float64s sorts a slice of float64s in increasing order.
 /// Not-a-number (NaN) values are ordered before other values.
