@@ -12,9 +12,9 @@ repository.workspace = true
 doctest = false
 
 [dependencies]
-semantics = { package = "lisette-semantics", version = "=0.12.5", path = "../semantics" }
-syntax = { package = "lisette-syntax", version = "=0.12.5", path = "../syntax" }
-diagnostics = { package = "lisette-diagnostics", version = "=0.12.5", path = "../diagnostics" }
+semantics = { package = "lisette-semantics", version = "=0.13.0", path = "../semantics" }
+syntax = { package = "lisette-syntax", version = "=0.13.0", path = "../syntax" }
+diagnostics = { package = "lisette-diagnostics", version = "=0.13.0", path = "../diagnostics" }
 ecow.workspace = true
 rustc-hash.workspace = true
 rayon.workspace = true
