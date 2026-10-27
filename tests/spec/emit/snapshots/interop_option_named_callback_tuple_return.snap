@@ -1,0 +1,67 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/lib"
+  import "go:errors"
+  
+  fn lookup(path: string) -> Result<string, error> {
+    if path == "" {
+      return Err(errors.New("empty"))
+    }
+    Ok(path)
+  }
+  
+  fn pick(n: int) -> (Option<lib.Lookup>, int) {
+    (Some(lookup), n)
+  }
+  
+  fn main() {
+    let _ = lib.Take(pick)
+  }
+---
+package main
+
+import (
+	"errors"
+	"example.com/lib"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func lookup(path string) (string, error) {
+	if path == "" {
+		return "", errors.New("empty")
+	}
+	return path, nil
+}
+
+func pick(n int) (lib.Lookup, int) {
+	cb := func(arg0 string) lisette.Result[string, error] {
+		return lisette.ResultFromPair[string](lookup(arg0))
+	}
+	return func(arg0 string) (string, error) {
+		res := cb(arg0)
+		if res.Tag == lisette.ResultOk {
+			return res.OkVal, nil
+		}
+		return "", res.ErrVal
+	}, n
+}
+
+func main() {
+	cb := func(arg0 int) lisette.Tuple2[lisette.Option[lib.Lookup], int] {
+		ret, ret_1 := pick(arg0)
+		option := lisette.OptionFromNilable[lib.Lookup](ret, ret == nil)
+		tup := lisette.MakeTuple2(option, ret_1)
+		return tup
+	}
+	lib.Take(func(arg0 int) (lib.Lookup, int) {
+		res := cb(arg0)
+		opt := res.First
+		var unwrap lib.Lookup
+		if opt.Tag == lisette.OptionSome {
+			unwrap = opt.SomeVal
+		}
+		return unwrap, res.Second
+	})
+}

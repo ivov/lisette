@@ -1,0 +1,58 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/lib"
+  import "go:errors"
+  
+  fn lookup(path: string) -> Result<string, error> {
+    if path == "" {
+      return Err(errors.New("empty"))
+    }
+    Ok(path)
+  }
+  
+  fn main() {
+    let mut opts = lib.Opts { Lookup: Some(lookup) }
+    opts.Lookup = Some(lookup)
+    let _ = lib.Run(opts)
+  }
+---
+package main
+
+import (
+	"errors"
+	"example.com/lib"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func lookup(path string) (string, error) {
+	if path == "" {
+		return "", errors.New("empty")
+	}
+	return path, nil
+}
+
+func main() {
+	cb := func(arg0 string) lisette.Result[string, error] {
+		return lisette.ResultFromPair[string](lookup(arg0))
+	}
+	opts := lib.Opts{Lookup: func(arg0 string) (string, error) {
+		res := cb(arg0)
+		if res.Tag == lisette.ResultOk {
+			return res.OkVal, nil
+		}
+		return "", res.ErrVal
+	}}
+	cb_1 := func(arg0 string) lisette.Result[string, error] {
+		return lisette.ResultFromPair[string](lookup(arg0))
+	}
+	opts.Lookup = func(arg0 string) (string, error) {
+		res_1 := cb_1(arg0)
+		if res_1.Tag == lisette.ResultOk {
+			return res_1.OkVal, nil
+		}
+		return "", res_1.ErrVal
+	}
+	lib.Run(opts)
+}
