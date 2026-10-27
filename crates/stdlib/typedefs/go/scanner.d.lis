@@ -101,7 +101,7 @@ impl Scanner {
     self: mut Ref<Scanner>,
     file: Ref<token.File>,
     src: Slice<byte>,
-    err: ErrorHandler,
+    err: Option<ErrorHandler>,
     mode: Mode,
   )
 

@@ -1085,7 +1085,7 @@ pub fn UtimesNano(path: string, ts: Slice<Timespec>) -> Result<(), error>
 
 pub fn Wait4(
   pid: int,
-  wstatus: mut Ref<WaitStatus>,
+  wstatus: Option<mut Ref<WaitStatus>>,
   options: int,
   rusage: Option<Ref<Rusage>>,
 ) -> Result<int, error>

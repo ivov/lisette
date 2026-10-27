@@ -27,7 +27,7 @@ import "go:io/fs"
 pub fn ParseDir(
   fset: mut Ref<token.FileSet>,
   path: string,
-  filter: fn(fs.FileInfo) -> bool,
+  filter: Option<fn(fs.FileInfo) -> bool>,
   mode: Mode,
 ) -> Partial<Map<string, Ref<ast.Package>>, error>
 

@@ -599,7 +599,7 @@ pub fn NewVar(
 /// ObjectString returns the string form of obj.
 /// The Qualifier controls the printing of
 /// package-level objects, and may be nil.
-pub fn ObjectString(obj: Object, qf: Qualifier) -> string
+pub fn ObjectString(obj: Object, qf: Option<Qualifier>) -> string
 
 /// RelativeTo returns a [Qualifier] that fully qualifies members of
 /// all packages other than pkg.
@@ -620,7 +620,7 @@ pub fn Satisfies(v: Type, t: Ref<Interface>) -> bool
 /// 	"field (T) f int"
 /// 	"method (T) f(X) Y"
 /// 	"method expr (T) f(X) Y"
-pub fn SelectionString(s: Ref<Selection>, qf: Qualifier) -> string
+pub fn SelectionString(s: Ref<Selection>, qf: Option<Qualifier>) -> string
 
 /// SizesFor returns the Sizes used by a compiler for an architecture.
 /// The result is nil if a compiler/architecture pair is not known.
@@ -633,7 +633,7 @@ pub fn SizesFor(compiler: string, arch: string) -> Option<Sizes>
 /// TypeString returns the string representation of typ.
 /// The [Qualifier] controls the printing of
 /// package-level objects, and may be nil.
-pub fn TypeString(typ: Type, qf: Qualifier) -> string
+pub fn TypeString(typ: Type, qf: Option<Qualifier>) -> string
 
 /// Unalias returns t if it is not an alias type;
 /// otherwise it follows t's alias chain until it
@@ -653,13 +653,13 @@ pub fn WriteExpr(buf: mut Ref<bytes.Buffer>, x: ast.Expr)
 pub fn WriteSignature(
   buf: Ref<bytes.Buffer>,
   sig: Ref<Signature>,
-  qf: Qualifier,
+  qf: Option<Qualifier>,
 )
 
 /// WriteType writes the string representation of typ to buf.
 /// The [Qualifier] controls the printing of
 /// package-level objects, and may be nil.
-pub fn WriteType(buf: Ref<bytes.Buffer>, typ: Type, qf: Qualifier)
+pub fn WriteType(buf: Ref<bytes.Buffer>, typ: Type, qf: Option<Qualifier>)
 
 /// An Alias represents an alias type.
 /// 

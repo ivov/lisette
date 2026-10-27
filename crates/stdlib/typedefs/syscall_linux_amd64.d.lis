@@ -1319,7 +1319,7 @@ pub fn Tee(rfd: int, wfd: int, len: int, flags: int) -> Result<int64, error>
 
 pub fn Tgkill(tgid: int, tid: int, sig: Signal) -> Result<(), error>
 
-pub fn Time(t: mut Ref<Time_t>) -> Result<Time_t, error>
+pub fn Time(t: Option<mut Ref<Time_t>>) -> Result<Time_t, error>
 
 pub fn Times(tms: Ref<Tms>) -> Result<uintptr, error>
 
@@ -1364,7 +1364,7 @@ pub fn UtimesNano(path: string, ts: Slice<Timespec>) -> Result<(), error>
 
 pub fn Wait4(
   pid: int,
-  wstatus: mut Ref<WaitStatus>,
+  wstatus: Option<mut Ref<WaitStatus>>,
   options: int,
   rusage: Option<Ref<Rusage>>,
 ) -> Result<int, error>

@@ -3676,3 +3676,66 @@ pub fn Take(p: Picker) -> string
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
 }
+
+#[test]
+fn interop_option_callback_into_go_importer() {
+    let input = r#"
+import "go:errors"
+import "go:go/importer"
+import "go:go/token"
+import "go:io"
+import "go:strings"
+
+fn refuse(path: string) -> Result<io.ReadCloser, error> {
+  Err(errors.New("refused " + path))
+}
+
+fn main() {
+  let fset = token.NewFileSet()
+  let Some(custom) = importer.ForCompiler(fset, "gc", Some(refuse)) else {
+    panic("no gc importer")
+  }
+  match custom.Import("fmt") {
+    Ok(_) => panic("custom lookup was not used"),
+    Err(e) => {
+      if !strings.Contains(e.Error(), "refused fmt") {
+        panic(e.Error())
+      }
+    },
+  }
+  let Some(source) = importer.ForCompiler(fset, "source", None) else {
+    panic("no source importer")
+  }
+  let Ok(_) = source.Import("errors") else {
+    panic("source import")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_option_scalar_out_param_receives_write() {
+    let input = r#"
+import "go:os/exec"
+import "go:syscall"
+
+fn main() {
+  let mut cmd = exec.Command("sh", "-c", "exit 3")
+  let Ok(_) = cmd.Start() else {
+    panic("start")
+  }
+  let Some(process) = cmd.Process else {
+    panic("no process")
+  }
+  let mut status: syscall.WaitStatus = 0
+  let Ok(wpid) = syscall.Wait4(process.Pid, Some(&status), 0, None) else {
+    panic("wait")
+  }
+  if wpid != process.Pid || status.ExitStatus() != 3 {
+    panic("wait status")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

@@ -1,0 +1,90 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+assertion_line: 3714
+description: |
+  
+  import "go:errors"
+  import "go:go/importer"
+  import "go:go/token"
+  import "go:io"
+  import "go:strings"
+  
+  fn refuse(path: string) -> Result<io.ReadCloser, error> {
+    Err(errors.New("refused " + path))
+  }
+  
+  fn main() {
+    let fset = token.NewFileSet()
+    let Some(custom) = importer.ForCompiler(fset, "gc", Some(refuse)) else {
+      panic("no gc importer")
+    }
+    match custom.Import("fmt") {
+      Ok(_) => panic("custom lookup was not used"),
+      Err(e) => {
+        if !strings.Contains(e.Error(), "refused fmt") {
+          panic(e.Error())
+        }
+      },
+    }
+    let Some(source) = importer.ForCompiler(fset, "source", None) else {
+      panic("no source importer")
+    }
+    let Ok(_) = source.Import("errors") else {
+      panic("source import")
+    }
+  }
+---
+package main
+
+import (
+	"errors"
+	lisette "github.com/ivov/lisette/prelude"
+	"go/importer"
+	"go/token"
+	"io"
+	"strings"
+)
+
+func refuse(path string) (io.ReadCloser, error) {
+	return nil, errors.New("refused " + path)
+}
+
+func main() {
+	fset := token.NewFileSet()
+	cb := func(arg0 string) lisette.Result[io.ReadCloser, error] {
+		ret, ret_1 := refuse(arg0)
+		if ret_1 != nil {
+			return lisette.MakeResultErr[io.ReadCloser, error](ret_1)
+		} else if lisette.IsNilInterface(ret) {
+			return lisette.MakeResultErr[io.ReadCloser, error](errors.New("unexpected nil"))
+		}
+		return lisette.MakeResultOk[io.ReadCloser, error](ret)
+	}
+	custom := importer.ForCompiler(fset, "gc", func(arg0 string) (io.ReadCloser, error) {
+		res := cb(arg0)
+		if res.Tag == lisette.ResultOk {
+			return res.OkVal, nil
+		}
+		return nil, res.ErrVal
+	})
+	if lisette.IsNilInterface(custom) {
+		panic("no gc importer")
+	}
+	if ret_2, e := custom.Import("fmt"); e == nil && ret_2 != nil {
+		panic("custom lookup was not used")
+	} else {
+		if e == nil {
+			e = errors.New("unexpected nil")
+		}
+		if !strings.Contains(e.Error(), "refused fmt") {
+			panic(e.Error())
+		}
+	}
+	source := importer.ForCompiler(fset, "source", nil)
+	if lisette.IsNilInterface(source) {
+		panic("no source importer")
+	}
+	if ret_3, err := source.Import("errors"); err != nil || ret_3 == nil {
+		panic("source import")
+	}
+}
