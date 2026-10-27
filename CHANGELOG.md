@@ -2,6 +2,17 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.13.0](https://github.com/ivov/lisette/compare/lisette-v0.12.5...lisette-v0.13.0) - 2026-10-27
+
+### Fixes
+
+- fix!: sound Go bindings for nil in function and channel parameters [#1599](https://github.com/ivov/lisette/pull/1599) [`c244824`](https://github.com/ivov/lisette/commit/c2448245b30ed4d3536f0da26807a016076488b2)
+- fix: wrap callbacks in `Some` for named Go function types [#1598](https://github.com/ivov/lisette/pull/1598) [`acf49ac`](https://github.com/ivov/lisette/commit/acf49aca91625c0f54a1f4dad18af18998ee3d45)
+- fix!: sound Go bindings for values with a trailing bool [#1597](https://github.com/ivov/lisette/pull/1597) [`2cbd650`](https://github.com/ivov/lisette/commit/2cbd650f2fbdb1a630a958e9270620b5aaaf3dac)
+- fix!: sound Go bindings for nil in method results [#1596](https://github.com/ivov/lisette/pull/1596) [`52edcc1`](https://github.com/ivov/lisette/commit/52edcc1e2394009cfa1e48ab08bdc73153ce354e)
+- fix!: sound Go bindings for nil in interface parameters [#1594](https://github.com/ivov/lisette/pull/1594) [`5c47b35`](https://github.com/ivov/lisette/commit/5c47b3542891cd257844f58ce334afa57e7e810f)
+
+
 ## [0.12.5](https://github.com/ivov/lisette/compare/lisette-v0.12.4...lisette-v0.12.5) - 2026-10-23
 
 ### Features
