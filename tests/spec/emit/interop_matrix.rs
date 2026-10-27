@@ -3563,3 +3563,116 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn interop_option_named_callback_param() {
+    let input = r#"
+import "go:example.com/lib"
+import "go:errors"
+import "go:strconv"
+
+fn lookup(path: string) -> Result<string, error> {
+  if path == "" {
+    return Err(errors.New("empty"))
+  }
+  Ok(path)
+}
+
+fn find(key: string) -> Option<Ref<lib.Item>> {
+  if key == "" {
+    return None
+  }
+  Some(&lib.Item { Name: key })
+}
+
+fn split(s: string) -> (int, string) {
+  (s.length(), s)
+}
+
+fn main() {
+  let _ = lib.UseLookup(Some(lookup))
+  let _ = lib.UseLookup(Some(|p| Ok(p)))
+  let _ = lib.UseLookup(None)
+  let _ = lib.UseFind(Some(find))
+  let _ = lib.UseSplit(Some(split))
+  let _ = lib.UseAtoi(Some(strconv.Atoi))
+}
+"#;
+    let typedef = r#"
+pub type Lookup = fn(string) -> Result<string, error>
+pub type Find = fn(string) -> Option<Ref<Item>>
+pub type Split = fn(string) -> (int, string)
+pub type Atoi = fn(string) -> Result<int, error>
+
+pub struct Item {
+  pub Name: string,
+}
+
+pub fn UseLookup(lookup: Option<Lookup>) -> string
+pub fn UseFind(find: Option<Find>) -> string
+pub fn UseSplit(split: Option<Split>) -> string
+pub fn UseAtoi(atoi: Option<Atoi>) -> string
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
+}
+
+#[test]
+fn interop_option_named_callback_field() {
+    let input = r#"
+import "go:example.com/lib"
+import "go:errors"
+
+fn lookup(path: string) -> Result<string, error> {
+  if path == "" {
+    return Err(errors.New("empty"))
+  }
+  Ok(path)
+}
+
+fn main() {
+  let mut opts = lib.Opts { Lookup: Some(lookup) }
+  opts.Lookup = Some(lookup)
+  let _ = lib.Run(opts)
+}
+"#;
+    let typedef = r#"
+pub type Lookup = fn(string) -> Result<string, error>
+
+pub struct Opts {
+  pub Lookup: Option<Lookup>,
+}
+
+pub fn Run(opts: Opts) -> string
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
+}
+
+#[test]
+fn interop_option_named_callback_tuple_return() {
+    let input = r#"
+import "go:example.com/lib"
+import "go:errors"
+
+fn lookup(path: string) -> Result<string, error> {
+  if path == "" {
+    return Err(errors.New("empty"))
+  }
+  Ok(path)
+}
+
+fn pick(n: int) -> (Option<lib.Lookup>, int) {
+  (Some(lookup), n)
+}
+
+fn main() {
+  let _ = lib.Take(pick)
+}
+"#;
+    let typedef = r#"
+pub type Lookup = fn(string) -> Result<string, error>
+pub type Picker = fn(int) -> (Option<Lookup>, int)
+
+pub fn Take(p: Picker) -> string
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
+}

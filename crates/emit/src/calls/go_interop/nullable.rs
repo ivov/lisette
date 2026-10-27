@@ -80,7 +80,7 @@ impl Planner<'_> {
                 return Some(self.lower_composite_value(inner, ctx));
             }
         }
-        let inner = self.lower_composite_value(inner, ExpressionContext::value());
+        let inner = self.lower_nullable_payload(inner, &expression.get_type().ok_type());
         Some(inner.map_expression(|setup, value| {
             let value = if payload.is_identity() {
                 value
@@ -104,6 +104,26 @@ impl Planner<'_> {
             );
             GoExpression::address_of(GoExpression::identifier(copy))
         }))
+    }
+
+    /// The payload of `Some(e)`, lowered for a nullable Go slot.
+    pub(crate) fn lower_nullable_payload(
+        &mut self,
+        payload: &Expression,
+        payload_ty: &Type,
+    ) -> ValuePlan {
+        let origin = self.function_type_origin(payload_ty, SlotOrigin::Lisette);
+        if !origin.declared_by_go() {
+            return self.lower_composite_value(payload, ExpressionContext::value());
+        }
+        let slot = self.function_slot_bridge(payload, payload_ty);
+        let ctx = ExpressionContext::value().with_function_slot_origin(origin);
+        self.lower_composite_value(payload, ctx)
+            .map_expression(|setup, value| {
+                let (slot_setup, value) = slot.lower(self, value);
+                setup.extend(slot_setup);
+                value
+            })
     }
 
     /// Wrap a sentinel-call via `OptionFromCommaOk` with `raw != sentinel`.

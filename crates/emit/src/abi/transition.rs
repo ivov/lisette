@@ -712,7 +712,7 @@ fn lower_nullable_slot_value(
     {
         debug_assert_eq!(args.len(), 1, "Some(...) takes exactly one arg");
         return planner
-            .lower_composite_value(&args[0], ExpressionContext::value())
+            .lower_nullable_payload(&args[0], &slot_ty.ok_type())
             .with_constructor_stability();
     }
     if prelude_constructor(expression) == Some(PreludeVariant::None) {
