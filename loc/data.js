@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793123817921,
+  "lastUpdate": 1793127423370,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -49298,6 +49298,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/52edcc1e2394009cfa1e48ab08bdc73153ce354e"
         },
         "date": 1793123815967,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 151184,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39878,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29243,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19480,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15793,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14013,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9099,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10247,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2cbd650f2fbdb1a630a958e9270620b5aaaf3dac",
+          "message": "fix!: sound Go bindings for values with a trailing bool (#1597)",
+          "timestamp": "2026-10-27T19:56:36+01:00",
+          "tree_id": "b4dd77a13ee12e008f86ca8115ae636eafeae778",
+          "url": "https://github.com/ivov/lisette/commit/2cbd650f2fbdb1a630a958e9270620b5aaaf3dac"
+        },
+        "date": 1793127420139,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
