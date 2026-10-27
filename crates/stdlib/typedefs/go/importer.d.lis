@@ -21,7 +21,7 @@ pub fn Default() -> types.Importer
 /// 
 /// Deprecated: Use [ForCompiler], which populates a FileSet
 /// with the positions of objects created by the importer.
-pub fn For(compiler: string, lookup: Lookup) -> Option<types.Importer>
+pub fn For(compiler: string, lookup: Option<Lookup>) -> Option<types.Importer>
 
 /// ForCompiler returns an Importer for importing from installed packages
 /// for the compilers "gc" and "gccgo", or for importing directly
@@ -43,7 +43,7 @@ pub fn For(compiler: string, lookup: Lookup) -> Option<types.Importer>
 pub fn ForCompiler(
   fset: Ref<token.FileSet>,
   compiler: string,
-  lookup: Lookup,
+  lookup: Option<Lookup>,
 ) -> Option<types.Importer>
 
 /// A Lookup function returns a reader to access package data for

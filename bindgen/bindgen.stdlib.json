@@ -204,9 +204,19 @@
           "DB.BeginTx": ["opts"]
         },
         "go/ast": {
-          "Fprint": ["fset"],
-          "NewPackage": ["universe"],
+          "Fprint": ["fset", "f"],
+          "NewPackage": ["importer", "universe"],
           "Print": ["fset"]
+        },
+        "go/importer": {
+          "For": ["lookup"],
+          "ForCompiler": ["lookup"]
+        },
+        "go/parser": {
+          "ParseDir": ["filter"]
+        },
+        "go/scanner": {
+          "Scanner.Init": ["err"]
         },
         "go/types": {
           "CheckExpr": ["pkg", "info"],
@@ -226,7 +236,12 @@
           "NewSignatureType": ["recv", "params", "results"],
           "NewTypeName": ["pkg", "typ"],
           "NewTypeParam": ["constraint"],
-          "NewVar": ["pkg"]
+          "NewVar": ["pkg"],
+          "ObjectString": ["qf"],
+          "SelectionString": ["qf"],
+          "TypeString": ["qf"],
+          "WriteSignature": ["qf"],
+          "WriteType": ["qf"]
         },
         "image/draw": {
           "DrawMask": ["mask"]
@@ -256,6 +271,7 @@
         },
         "net/http": {
           "Client.Post": ["body"],
+          "ClientConn.SetStateHook": ["f"],
           "CrossOriginProtection.SetDenyHandler": ["h"],
           "ListenAndServe": ["handler"],
           "ListenAndServeTLS": ["handler"],
@@ -285,6 +301,9 @@
           "NewProxyClientConn": ["r"],
           "NewServerConn": ["r"]
         },
+        "net/rpc": {
+          "Client.Go": ["done"]
+        },
         "net/smtp": {
           "SendMail": ["a"]
         },
@@ -292,7 +311,8 @@
           "Sendmsg": ["to"],
           "SendmsgN": ["to"],
           "Sendto": ["to"],
-          "Wait4": ["rusage"]
+          "Time": ["t"],
+          "Wait4": ["wstatus", "rusage"]
         },
         "testing/quick": {
           "Check": ["config"],

@@ -1,0 +1,58 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+assertion_line: 3740
+description: |
+  
+  import "go:os/exec"
+  import "go:syscall"
+  
+  fn main() {
+    let mut cmd = exec.Command("sh", "-c", "exit 3")
+    let Ok(_) = cmd.Start() else {
+      panic("start")
+    }
+    let Some(process) = cmd.Process else {
+      panic("no process")
+    }
+    let mut status: syscall.WaitStatus = 0
+    let Ok(wpid) = syscall.Wait4(process.Pid, Some(&status), 0, None) else {
+      panic("wait")
+    }
+    if wpid != process.Pid || status.ExitStatus() != 3 {
+      panic("wait status")
+    }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"os/exec"
+	"syscall"
+)
+
+func main() {
+	cmd := exec.Command("sh", "-c", "exit 3")
+	ret := cmd.Start()
+	var result lisette.Result[struct{}, error]
+	if ret != nil {
+		result = lisette.MakeResultErr[struct{}, error](ret)
+	} else {
+		result = lisette.MakeResultOk[struct{}, error](struct{}{})
+	}
+	if result.Tag != lisette.ResultOk {
+		panic("start")
+	}
+	process := cmd.Process
+	if process == nil {
+		panic("no process")
+	}
+	var status syscall.WaitStatus = 0
+	wpid, err := syscall.Wait4(process.Pid, &status, 0, nil)
+	if err != nil {
+		panic("wait")
+	}
+	if wpid != process.Pid || status.ExitStatus() != 3 {
+		panic("wait status")
+	}
+}

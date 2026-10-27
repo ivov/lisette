@@ -136,7 +136,9 @@ func (a *ParameterNilability) Optional(fn *types.Func, index int) bool {
 		return false
 	}
 	param := sig.Params().At(index)
-	if !isNilableGoType(param.Type()) {
+	// Func and chan parameters become Option only by pin.
+	pinOnly := isFuncOrChanGoType(param.Type())
+	if !pinOnly && !isNilableGoType(param.Type()) {
 		return false
 	}
 	if sig.Variadic() && index == sig.Params().Len()-1 {
@@ -145,7 +147,7 @@ func (a *ParameterNilability) Optional(fn *types.Func, index int) bool {
 	if forced, decided := a.configOptional(fn, index); decided {
 		return forced
 	}
-	if a.hasDeclaredShape(fn) {
+	if pinOnly || a.hasDeclaredShape(fn) {
 		return false
 	}
 	verdict, _ := a.Function(fn)

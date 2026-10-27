@@ -3822,6 +3822,99 @@ fn go_try_recv_keeps_value_without_ok() {
 }
 
 #[test]
+fn go_nil_accepting_func_and_chan_params_take_option() {
+    infer(
+        r#"
+    import "go:bytes"
+    import "go:go/ast"
+    import "go:go/importer"
+    import "go:go/parser"
+    import "go:go/scanner"
+    import "go:go/token"
+    import "go:go/types"
+    import "go:net/http"
+    import "go:net/rpc"
+    import "go:os"
+
+    fn check(
+      t: types.Type,
+      obj: types.Object,
+      sel: Ref<types.Selection>,
+      sig: Ref<types.Signature>,
+      pkg: Ref<types.Package>,
+      file: Ref<token.File>,
+      files: Map<string, Ref<ast.File>>,
+      conn: mut Ref<http.ClientConn>,
+      client: mut Ref<rpc.Client>,
+    ) {
+      let mut buf = bytes.Buffer {}
+      let _ = types.TypeString(t, None)
+      let _ = types.TypeString(t, Some(types.RelativeTo(pkg)))
+      let _ = types.ObjectString(obj, None)
+      let _ = types.SelectionString(sel, None)
+      types.WriteType(&buf, t, None)
+      types.WriteSignature(&buf, sig, None)
+      let mut fset = token.NewFileSet()
+      let _ = ast.Fprint(os.Stdout, Some(fset), obj, None)
+      let _ = ast.NewPackage(fset, files, None, None)
+      let _ = importer.For("gc", None)
+      let _ = importer.ForCompiler(fset, "source", None)
+      let _ = parser.ParseDir(fset, ".", None, 0)
+      let mut s = scanner.Scanner { ErrorCount: 0 }
+      s.Init(file, [], None, 0)
+      conn.SetStateHook(None)
+      let _ = client.Go("S.M", 1, 2, None)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn go_nil_accepting_func_param_rejects_bare_value() {
+    infer(
+        r#"
+    import "go:go/types"
+
+    fn check(t: types.Type, pkg: Ref<types.Package>) {
+      let _ = types.TypeString(t, types.RelativeTo(pkg))
+    }
+        "#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn go_scalar_out_param_takes_option_of_writable_ref() {
+    infer(
+        r#"
+    import "go:syscall"
+
+    fn reap(pid: int) {
+      let mut status: syscall.WaitStatus = 0
+      let _ = syscall.Wait4(pid, Some(&status), 0, None)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn go_scalar_out_param_rejects_bare_ref() {
+    infer(
+        r#"
+    import "go:syscall"
+
+    fn reap(pid: int) {
+      let mut status: syscall.WaitStatus = 0
+      let _ = syscall.Wait4(pid, &status, 0, None)
+    }
+        "#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
 fn generic_static_method_infers_type_param_from_int() {
     infer(
         r#"

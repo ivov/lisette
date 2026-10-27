@@ -184,7 +184,7 @@ impl Client {
     serviceMethod: string,
     args: Unknown,
     reply: Unknown,
-    done: Channel<Ref<Call>>,
+    done: Option<Channel<Ref<Call>>>,
   ) -> mut Ref<Call>
 }
 

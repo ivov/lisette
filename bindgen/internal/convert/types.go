@@ -40,6 +40,9 @@ func ToLisetteNilable(t types.Type, conv *Converter) TypeResult {
 // convertParamType wraps a `*T` parameter in `Option<>` when it was proven to
 // accept nil, for Go APIs where nil means "use the default".
 func convertParamType(t types.Type, optional bool, conv *Converter, substitutions map[string]string) TypeResult {
+	if optional && isChanGoType(t) {
+		return wrapOption(toLisetteWithSubstitutions(t, conv, substitutions))
+	}
 	if optional {
 		return toLisetteNilableRecursive(t, make(map[types.Type]bool), conv, substitutions)
 	}
@@ -56,6 +59,16 @@ func isDemotableGoType(t types.Type) bool {
 		return true
 	}
 	return false
+}
+
+func isChanGoType(t types.Type) bool {
+	_, ok := types.Unalias(t).Underlying().(*types.Chan)
+	return ok
+}
+
+func isFuncOrChanGoType(t types.Type) bool {
+	_, ok := types.Unalias(t).Underlying().(*types.Signature)
+	return ok || isChanGoType(t)
 }
 
 // isNamedMap reports whether t is a named map type, such as url.Values.
@@ -400,6 +413,10 @@ func WritableFieldType(t types.Type, conv *Converter) TypeResult {
 
 // writableParamType renders a mutated parameter's type with `mut` at every writable layer.
 func writableParamType(t types.Type, optional bool, conv *Converter, substitutions map[string]string) TypeResult {
+	// Option<T> would pass a copy, so the write would not reach the caller.
+	if ptr, ok := types.Unalias(t).(*types.Pointer); ok && optional && isScalarType(ptr.Elem()) {
+		return wrapOption(writableRecursive(t, make(map[types.Type]bool), conv, substitutions, false))
+	}
 	if iface, ok := t.Underlying().(*types.Interface); ok && iface.Empty() {
 		rendered := writableBase(t, make(map[types.Type]bool), conv, substitutions, optional)
 		if rendered.SkipReason == nil {

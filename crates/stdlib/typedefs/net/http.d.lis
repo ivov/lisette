@@ -1772,7 +1772,10 @@ impl ClientConn {
   /// f is called when Available increases (more requests may be sent on the connection),
   /// InFlight decreases (existing requests complete), or Err begins returning non-nil
   /// (the connection is no longer usable).
-  fn SetStateHook(self: mut Ref<ClientConn>, f: fn(mut Ref<ClientConn>) -> ())
+  fn SetStateHook(
+    self: mut Ref<ClientConn>,
+    f: Option<fn(mut Ref<ClientConn>) -> ()>,
+  )
 }
 
 impl ConnState {

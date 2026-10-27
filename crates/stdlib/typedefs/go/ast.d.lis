@@ -81,7 +81,7 @@ pub fn Fprint(
   w: io.Writer,
   fset: Option<Ref<token.FileSet>>,
   x: Unknown,
-  f: FieldFilter,
+  f: Option<FieldFilter>,
 ) -> Result<(), error>
 
 /// Inspect traverses an AST in depth-first order: It starts by calling
@@ -158,7 +158,7 @@ pub fn NewObj(kind: ObjKind, name: string) -> mut Ref<Object>
 pub fn NewPackage(
   fset: Ref<token.FileSet>,
   files: Map<string, Ref<File>>,
-  importer: Importer,
+  importer: Option<Importer>,
   universe: Option<Ref<Scope>>,
 ) -> Result<mut Ref<Package>, error>
 
