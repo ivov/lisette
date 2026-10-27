@@ -641,7 +641,7 @@ pub fn TypeString(typ: Type, qf: Qualifier) -> string
 /// reaches a non-alias type which is then returned.
 /// Consequently, the result is never an alias type.
 /// Returns nil if the alias is incomplete.
-pub fn Unalias(t: Type) -> Type
+pub fn Unalias(t: Type) -> Option<Type>
 
 /// WriteExpr writes the (possibly shortened) string representation for x to buf.
 /// Shortened representations are suitable for user interfaces but may not
@@ -1116,7 +1116,7 @@ impl Alias {
 
   /// Rhs returns the type R on the right-hand side of an alias
   /// declaration "type A = R", which may be another alias.
-  fn Rhs(self: Ref<Alias>) -> Type
+  fn Rhs(self: Ref<Alias>) -> Option<Type>
 
   /// SetTypeParams sets the type parameters of the alias type a.
   /// The alias a must not have type arguments.
@@ -1137,7 +1137,7 @@ impl Alias {
   /// TypeParam, or Alias types.
   /// 
   /// [underlying type]: https://go.dev/ref/spec#Underlying_types.
-  fn Underlying(self: mut Ref<Alias>) -> Type
+  fn Underlying(self: mut Ref<Alias>) -> Option<Type>
 }
 
 impl ArgumentError {
@@ -1466,7 +1466,7 @@ impl Named {
   /// Alias types.
   /// 
   /// [underlying type]: https://go.dev/ref/spec#Underlying_types.
-  fn Underlying(self: mut Ref<Named>) -> Type
+  fn Underlying(self: mut Ref<Named>) -> Option<Type>
 }
 
 impl Nil {
@@ -1806,7 +1806,7 @@ impl TypeName {
 
 impl TypeParam {
   /// Constraint returns the type constraint specified for t.
-  fn Constraint(self: Ref<TypeParam>) -> Type
+  fn Constraint(self: Ref<TypeParam>) -> Option<Type>
 
   /// Index returns the index of the type param within its param list, or -1 if
   /// the type parameter has not yet been bound to a type.
@@ -1921,7 +1921,7 @@ impl object {
   fn String(self: Ref<object>) -> string
 
   /// Type returns the object's type.
-  fn Type(self: Ref<object>) -> Type
+  fn Type(self: Ref<object>) -> Option<Type>
 
   #[go(unexported, "go/types.order() uint32")]
   fn order(self: Ref<object>)

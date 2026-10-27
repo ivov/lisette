@@ -296,6 +296,11 @@
           "CheckEqual": ["config"]
         }
       },
+      "non_nilable_param": {
+        "go/types": {
+          "Unalias": ["t"]
+        }
+      },
       "non_mutating_param": {
         "archive/zip": {
           "pooledFlateWriter.Write": ["p"]
@@ -740,14 +745,14 @@
         "go/doc/comment": ["Parser.Parse"],
         "go/importer": ["Default"],
         "go/types": [
-          "Alias.Obj", "Alias.Origin", "Alias.Rhs", "Alias.Underlying",
+          "Alias.Obj", "Alias.Origin",
           "Array.Elem",
           "Chan.Elem",
           "Func.Origin", "Func.Signature",
           "Interface.EmbeddedType", "Interface.ExplicitMethod", "Interface.Method",
           "Map.Elem", "Map.Key",
           "MethodSet.At",
-          "Named.Method", "Named.Obj", "Named.Origin", "Named.Underlying",
+          "Named.Method", "Named.Obj", "Named.Origin",
           "Package.Scope",
           "PkgName.Imported",
           "Pointer.Elem",
@@ -758,11 +763,9 @@
           "Term.Type",
           "Tuple.At",
           "TypeList.At",
-          "TypeParam.Constraint", "TypeParam.Obj", "TypeParamList.At",
-          "Unalias",
+          "TypeParam.Obj", "TypeParamList.At",
           "Union.Term",
-          "Var.Origin",
-          "object.Type"
+          "Var.Origin"
         ],
         "image": [
           "Alpha.ColorModel", "Alpha16.ColorModel",
@@ -778,7 +781,7 @@
         "log": ["Logger.Writer", "Writer"],
         "log/slog": ["Logger.Handler"],
         "net": [
-          "conn.LocalAddr", "conn.RemoteAddr",
+          "conn.LocalAddr",
           "TCPListener.Addr",
           "UnixListener.Addr"
         ],
@@ -786,7 +789,7 @@
           "Request.Context",
           "StripPrefix"
         ],
-        "net/http/httptest": ["ResponseRecorder.Result", "Server.Client"],
+        "net/http/httptest": ["ResponseRecorder.Result"],
         "os/exec": ["CommandContext"],
         "reflect": [
           "FuncOf",
