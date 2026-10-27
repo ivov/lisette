@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793127423370,
+  "lastUpdate": 1793136408707,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -49397,6 +49397,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 39878,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29243,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19480,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15793,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14013,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9099,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10247,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "acf49aca91625c0f54a1f4dad18af18998ee3d45",
+          "message": "fix: wrap callbacks in `Some` for named Go function types (#1598)",
+          "timestamp": "2026-10-27T22:26:22+01:00",
+          "tree_id": "98c0edb201281859f4159a9626ad56c205859303",
+          "url": "https://github.com/ivov/lisette/commit/acf49aca91625c0f54a1f4dad18af18998ee3d45"
+        },
+        "date": 1793136404713,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 151202,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39896,
             "unit": "lines"
           },
           {
