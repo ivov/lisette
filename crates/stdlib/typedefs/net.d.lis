@@ -1877,7 +1877,7 @@ impl conn {
   /// RemoteAddr returns the remote network address.
   /// The Addr returned is shared by all invocations of RemoteAddr, so
   /// do not modify it.
-  fn RemoteAddr(self: Ref<conn>) -> Addr
+  fn RemoteAddr(self: Ref<conn>) -> Option<Addr>
 
   /// SetDeadline implements the Conn SetDeadline method.
   fn SetDeadline(self: Ref<conn>, t: time.Time) -> Result<(), error>

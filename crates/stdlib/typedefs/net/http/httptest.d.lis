@@ -152,7 +152,7 @@ impl Server {
   /// Use Server.URL as the base URL to send requests to the server.
   /// The returned client will also redirect any requests to "example.com"
   /// or its subdomains to the server.
-  fn Client(self: Ref<Server>) -> mut Ref<http.Client>
+  fn Client(self: Ref<Server>) -> Option<mut Ref<http.Client>>
 
   /// Close shuts down the server and blocks until all outstanding
   /// requests on this server have completed.

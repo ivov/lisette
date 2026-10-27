@@ -3614,6 +3614,149 @@ fn none_and_some_accepted_for_nilable_go_interface_parameter() {
 }
 
 #[test]
+fn go_unstarted_server_client_is_option() {
+    infer(
+        r#"
+    import "go:fmt"
+    import "go:net/http/httptest"
+
+    fn main() {
+      let server = httptest.NewUnstartedServer(None)
+      fmt.Println(server.Client().Timeout)
+    }
+        "#,
+    )
+    .assert_infer_code("member_not_found");
+}
+
+#[test]
+fn go_packet_listener_remote_addr_is_option() {
+    infer(
+        r#"
+    import "go:fmt"
+    import "go:net"
+
+    fn main() {
+      let Ok(conn) = net.ListenUDP("udp", None) else {
+        return
+      }
+      fmt.Println(conn.RemoteAddr().String())
+    }
+        "#,
+    )
+    .assert_infer_code("member_not_found");
+}
+
+#[test]
+fn go_type_name_without_type_is_option() {
+    infer(
+        r#"
+    import "go:fmt"
+    import "go:go/token"
+    import "go:go/types"
+
+    fn main() {
+      let name = types.NewTypeName(token.NoPos, None, "T", None)
+      fmt.Println(name.Type().String())
+    }
+        "#,
+    )
+    .assert_infer_code("member_not_found");
+}
+
+#[test]
+fn go_incomplete_alias_rhs_is_option() {
+    infer(
+        r#"
+    import "go:fmt"
+    import "go:go/token"
+    import "go:go/types"
+
+    fn main() {
+      let mut name = types.NewTypeName(token.NoPos, None, "A", None)
+      let alias = types.NewAlias(name, None)
+      fmt.Println(alias.Rhs().String())
+    }
+        "#,
+    )
+    .assert_infer_code("member_not_found");
+}
+
+#[test]
+fn go_unalias_of_incomplete_alias_is_option() {
+    infer(
+        r#"
+    import "go:fmt"
+    import "go:go/token"
+    import "go:go/types"
+
+    fn main() {
+      let mut name = types.NewTypeName(token.NoPos, None, "A", None)
+      let mut alias = types.NewAlias(name, None)
+      fmt.Println(types.Unalias(alias).String())
+    }
+        "#,
+    )
+    .assert_infer_code("member_not_found");
+}
+
+#[test]
+fn go_named_without_underlying_is_option() {
+    infer(
+        r#"
+    import "go:fmt"
+    import "go:go/token"
+    import "go:go/types"
+
+    fn main() {
+      let mut name = types.NewTypeName(token.NoPos, None, "N", None)
+      let mut named = types.NewNamed(name, None, [])
+      fmt.Println(named.Underlying().String())
+    }
+        "#,
+    )
+    .assert_infer_code("member_not_found");
+}
+
+#[test]
+fn go_alias_of_named_without_underlying_is_option() {
+    infer(
+        r#"
+    import "go:fmt"
+    import "go:go/token"
+    import "go:go/types"
+
+    fn main() {
+      let mut n_name = types.NewTypeName(token.NoPos, None, "N", None)
+      let mut named = types.NewNamed(n_name, None, [])
+      let mut a_name = types.NewTypeName(token.NoPos, None, "A", None)
+      let mut alias = types.NewAlias(a_name, Some(named))
+      fmt.Println(alias.Underlying().String())
+    }
+        "#,
+    )
+    .assert_infer_code("member_not_found");
+}
+
+#[test]
+fn go_type_param_without_constraint_is_option() {
+    infer(
+        r#"
+    import "go:fmt"
+    import "go:go/token"
+    import "go:go/types"
+
+    fn main() {
+      let mut name = types.NewTypeName(token.NoPos, None, "P", None)
+      let param = types.NewTypeParam(name, None)
+      fmt.Println(param.Constraint().String())
+    }
+        "#,
+    )
+    .assert_infer_code("member_not_found");
+}
+
+#[test]
 fn generic_static_method_infers_type_param_from_int() {
     infer(
         r#"
