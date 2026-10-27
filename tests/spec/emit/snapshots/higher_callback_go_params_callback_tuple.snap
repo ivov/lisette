@@ -1,0 +1,63 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:sort"
+  
+  fn give<T>(f: fn(int, fn(int) -> int) -> T) -> fn(int, fn(int) -> int) -> T {
+    f
+  }
+  
+  fn main() {
+    let mut calls = 0
+    let f = give(sort.Find)
+    let (n, found) = f(5, |i| {
+      calls += 1
+      2 - i
+    })
+    if n != 2 || !found || calls < 1 { panic("search") }
+    let (end, hit) = f(5, |_| 1)
+    if end != 5 || hit { panic("missing") }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"sort"
+)
+
+func give[T any](f func(int, func(int) int) T) func(int, func(int) int) T {
+	return f
+}
+
+func main() {
+	calls := 0
+	cb := sort.Find
+	var adapted func(int, func(int) int) lisette.Tuple2[int, bool]
+	if cb != nil {
+		adapted = func(arg0 int, arg1 func(int) int) lisette.Tuple2[int, bool] {
+			ret, ret_1 := cb(arg0, arg1)
+			tup := lisette.MakeTuple2(ret, ret_1)
+			return tup
+		}
+	}
+	f := give(adapted)
+	tmp := f(5, func(i int) int {
+		calls++
+		return 2 - i
+	})
+	n := tmp.First
+	found := tmp.Second
+	if n != 2 || !found || calls < 1 {
+		panic("search")
+	}
+	tmp_1 := f(5, func(_ int) int {
+		return 1
+	})
+	end := tmp_1.First
+	hit := tmp_1.Second
+	if end != 5 || hit {
+		panic("missing")
+	}
+}

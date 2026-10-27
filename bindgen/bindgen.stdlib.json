@@ -20,9 +20,12 @@
       "bool_as_flag": {
         "bytes": ["Cut"],
         "go/constant": ["Float32Val", "Float64Val", "Int64Val", "Uint64Val"],
-        "go/types": ["LookupFieldOrMethod"],
+        "go/types": ["LookupFieldOrMethod", "MissingMethod"],
         "math/big": ["Rat.Float32", "Rat.Float64", "Rat.FloatPrec"],
-        "reflect": ["Select"],
+        "reflect": ["Select", "Value.TryRecv"],
+        "runtime": ["BlockProfile", "GoroutineProfile", "MemProfile", "MutexProfile", "ThreadCreateProfile"],
+        "slices": ["BinarySearch", "BinarySearchFunc"],
+        "sort": ["Find"],
         "strings": ["Cut"]
       },
       "bit_flag_set": {

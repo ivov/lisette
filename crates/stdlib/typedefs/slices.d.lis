@@ -27,7 +27,7 @@ pub fn Backward<E>(s: Slice<E>) -> iter.Seq2<int, E>
 /// in the sort order; it also returns a bool saying whether the target is
 /// really found in the slice. The slice must be sorted in increasing order.
 #[go(collapsed_type_params, "Slice<E>, E")]
-pub fn BinarySearch<E: cmp.Ordered>(x: Slice<E>, target: E) -> Option<int>
+pub fn BinarySearch<E: cmp.Ordered>(x: Slice<E>, target: E) -> (int, bool)
 
 /// BinarySearchFunc works like [BinarySearch], but uses a custom comparison
 /// function. The slice must be sorted in increasing order, where "increasing"
@@ -41,7 +41,7 @@ pub fn BinarySearchFunc<E, T>(
   x: Slice<E>,
   target: T,
   cmp: fn(E, T) -> int,
-) -> Option<int>
+) -> (int, bool)
 
 /// Chunk returns an iterator over consecutive sub-slices of up to n elements of s.
 /// All but the last sub-slice will have size n.

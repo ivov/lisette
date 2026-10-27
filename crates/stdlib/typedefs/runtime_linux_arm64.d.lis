@@ -79,7 +79,7 @@ pub fn AddCleanup<T, S>(ptr: Ref<T>, cleanup: fn(S) -> (), arg: S) -> Cleanup
 /// Most clients should use the [runtime/pprof] package or
 /// the [testing] package's -test.blockprofile flag instead
 /// of calling BlockProfile directly.
-pub fn BlockProfile(p: mut Slice<BlockProfileRecord>) -> Option<int>
+pub fn BlockProfile(p: mut Slice<BlockProfileRecord>) -> (int, bool)
 
 /// Breakpoint executes a breakpoint trap.
 pub fn Breakpoint()
@@ -225,7 +225,7 @@ pub fn Goexit() -> Never
 /// 
 /// Most clients should use the [runtime/pprof] package instead
 /// of calling GoroutineProfile directly.
-pub fn GoroutineProfile(p: mut Slice<StackRecord>) -> Option<int>
+pub fn GoroutineProfile(p: mut Slice<StackRecord>) -> (int, bool)
 
 /// Gosched yields the processor, allowing other goroutines to run. It does not
 /// suspend the current goroutine, so execution resumes automatically.
@@ -297,7 +297,7 @@ pub fn LockOSThread()
 pub fn MemProfile(
   p: mut Slice<MemProfileRecord>,
   inuseZero: bool,
-) -> Option<int>
+) -> (int, bool)
 
 /// MutexProfile returns n, the number of records in the current mutex profile.
 /// If len(p) >= n, MutexProfile copies the profile into p and returns n, true.
@@ -305,7 +305,7 @@ pub fn MemProfile(
 /// 
 /// Most clients should use the [runtime/pprof] package
 /// instead of calling MutexProfile directly.
-pub fn MutexProfile(p: mut Slice<BlockProfileRecord>) -> Option<int>
+pub fn MutexProfile(p: mut Slice<BlockProfileRecord>) -> (int, bool)
 
 /// NumCPU returns the number of logical CPUs usable by the current process.
 /// 
@@ -656,7 +656,7 @@ pub fn StopTrace()
 /// 
 /// Most clients should use the runtime/pprof package instead
 /// of calling ThreadCreateProfile directly.
-pub fn ThreadCreateProfile(p: mut Slice<StackRecord>) -> Option<int>
+pub fn ThreadCreateProfile(p: mut Slice<StackRecord>) -> (int, bool)
 
 /// UnlockOSThread undoes an earlier call to LockOSThread.
 /// If this drops the number of active LockOSThread calls on the
