@@ -2,12 +2,6 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
-## Unreleased
-
-### Fixes
-
-- Avoid unused imports for zero-valued fields omitted by cross-package struct autofill ([#1600](https://github.com/ivov/lisette/issues/1600)).
-
 ## [0.12.5](https://github.com/ivov/lisette/compare/lisette-v0.12.4...lisette-v0.12.5) - 2026-10-23
 
 ### Features
