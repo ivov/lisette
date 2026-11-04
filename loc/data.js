@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793816596771,
+  "lastUpdate": 1793819257700,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -49664,6 +49664,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 39906,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29243,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19480,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15793,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14013,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9099,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10262,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e349727c91522b694ea1c6ed83796919a1ff0b1b",
+          "message": "refactor: derive type imports from final emit tree (#1603)",
+          "timestamp": "2026-11-04T20:07:13+01:00",
+          "tree_id": "d688ec9579e6dfd3add79e6bb832cca8b56faf5e",
+          "url": "https://github.com/ivov/lisette/commit/e349727c91522b694ea1c6ed83796919a1ff0b1b"
+        },
+        "date": 1793819256175,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 151314,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39993,
             "unit": "lines"
           },
           {
