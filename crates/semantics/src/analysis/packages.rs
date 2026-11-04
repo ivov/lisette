@@ -298,12 +298,20 @@ pub(super) fn infer_all_packages(
             .collect();
         // A non-empty list implies the lazy cache load was attempted.
         let needs_save = !all_go_packages.is_empty()
-            && go_cache_package_ids.as_ref().is_none_or(|ids| {
-                all_go_packages.len() != ids.len()
-                    || all_go_packages.iter().any(|id| !ids.contains(id))
-            });
+            && go_cache_package_ids
+                .as_ref()
+                .is_none_or(|ids| all_go_packages.iter().any(|id| !ids.contains(id)));
         if needs_save {
-            go_stdlib::save_go_stdlib_cache(store, &all_go_packages, input.locator.target());
+            let previous = input
+                .cache
+                .go_stdlib_mut()
+                .and_then(LazyGoStdlibCache::take_loaded);
+            go_stdlib::save_go_stdlib_cache(
+                store,
+                &all_go_packages,
+                previous,
+                input.locator.target(),
+            );
         }
     }
 
