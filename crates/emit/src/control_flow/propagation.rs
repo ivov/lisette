@@ -24,6 +24,7 @@ use crate::plan::go_expression::BinaryOp;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::state::scope::PairStatusKind;
+use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -147,12 +148,12 @@ impl Planner<'_> {
         fallible: &Fallible,
     ) {
         let inner_ty = fallible.ok_ty();
-        let zero = self.zero_value_expression(inner_ty);
+        let zero = self.zero_value(inner_ty);
         if self.is_declared(var_name.spelling()) {
             statements.push(assign(GoExpression::identifier(var_name.clone()), zero));
         } else {
             // Declared so the dead-path binding stays in scope for later references.
-            let go_ty = self.use_go_type(inner_ty);
+            let go_ty = self.go_type(inner_ty);
             statements.push(
                 LoweredStatement::VarDecl {
                     name: var_name.clone(),
@@ -345,7 +346,7 @@ impl Planner<'_> {
             }
         });
         let ok_value =
-            ok_value.unwrap_or_else(|| GoExpression::empty_composite("struct{}".to_string()));
+            ok_value.unwrap_or_else(|| GoExpression::empty_composite(GoType::new("struct{}")));
         let value = self.propagated_value(&mut statements, target, named, Some(ok_value));
         Some((statements, value))
     }
@@ -688,7 +689,7 @@ impl Planner<'_> {
             statements.push(if matches!(return_ctx, ReturnContext::Void(_)) {
                 LoweredStatement::Return(Vec::new()).into()
             } else {
-                plain_return(GoExpression::empty_composite("struct{}".to_string()))
+                plain_return(GoExpression::empty_composite(GoType::new("struct{}")))
             });
             return LoweredBlock { statements };
         }
@@ -851,7 +852,7 @@ impl Planner<'_> {
                 statements.push(transition::multi_value_return(
                     transition::lowered_ok_values(
                         shape,
-                        vec![GoExpression::empty_composite("struct{}".to_string())],
+                        vec![GoExpression::empty_composite(GoType::new("struct{}"))],
                     ),
                 ));
             }

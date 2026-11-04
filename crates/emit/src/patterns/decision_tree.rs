@@ -20,11 +20,11 @@ use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::calls::go_interop::NilGuard;
 use crate::control_flow::propagation::plain_return;
 use crate::names::generics;
-use crate::names::packages::PackageRequirements;
 use crate::patterns::binding_decls::emit_pattern_literal;
 use crate::plan::bodies::{LoweredBlock, define_many};
 use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, GoExpressionNode, UnaryOp};
 use crate::plan::values::GoExpression;
+use crate::types::go_type::GoType;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum PathSegment {
@@ -36,15 +36,15 @@ pub(crate) enum PathSegment {
     SliceFrom(usize),
     ArraySliceFrom {
         offset: usize,
-        go_type: String,
+        go_type: GoType,
     },
     /// `(*expression)`: auto-pointer deref for recursive enum fields.
     Deref,
     /// `GoType(expression)`: newtype cast to underlying Go type.
-    NewtypeCast(String),
+    NewtypeCast(GoType),
     /// `expression.(GoType)`: Go interface type assertion, inserted when a
     /// concrete pattern targets a Go interface.
-    AssertedAs(String),
+    AssertedAs(GoType),
 }
 
 fn element_index(segments: &[PathSegment]) -> usize {
@@ -202,7 +202,7 @@ pub(crate) enum Check {
     /// `switch x := x.(type)`.
     TypeAssert {
         path: AccessPath,
-        go_type: String,
+        go_type: GoType,
     },
 }
 
@@ -296,7 +296,7 @@ impl Check {
             Check::TypeAssert { path, go_type } if !negative => {
                 let ok = scope.new_local_identifier("ok");
                 GoExpression::immediate_call(
-                    "bool".to_string(),
+                    GoType::new("bool"),
                     LoweredBlock {
                         statements: vec![
                             define_many(
@@ -491,7 +491,6 @@ impl BindingTarget {
 pub(crate) struct PatternInfo {
     pub checks: Vec<Check>,
     pub bindings: Vec<PatternBinding>,
-    pub packages: PackageRequirements,
     pub requires_materialized_subject: bool,
 }
 
@@ -500,7 +499,6 @@ impl PatternInfo {
         Self {
             checks: Vec::new(),
             bindings: Vec::new(),
-            packages: PackageRequirements::default(),
             requires_materialized_subject: false,
         }
     }
@@ -534,7 +532,7 @@ pub(crate) enum Decision {
     Guard(GuardedLeaf),
     Switch(ValueSwitch),
     TypeSwitch {
-        branches: Vec<SwitchBranch<Vec<String>>>,
+        branches: Vec<SwitchBranch<Vec<GoType>>>,
         fallback: Option<Box<Decision>>,
     },
     Chain {
@@ -1107,11 +1105,10 @@ fn collect_slice_checks(
                     element: Box::new((*element_type).clone()),
                 };
                 let go_type = planner.go_type(&sub_ty);
-                collector.packages.extend(go_type.requirements());
                 (
                     PathSegment::ArraySliceFrom {
                         offset: prefix.len(),
-                        go_type: go_type.code,
+                        go_type,
                     },
                     sub_ty,
                 )
@@ -1163,9 +1160,6 @@ fn collect_or_pattern_checks(
             return;
         }
 
-        for alt in &alt_collectors {
-            collector.packages.extend(&alt.packages);
-        }
         collector.checks.push(Check::Or {
             alternatives: alt_collectors.into_iter().map(|c| c.checks).collect(),
         });
@@ -1217,9 +1211,7 @@ fn interface_assert_child_path(
     collector: &mut PatternInfo,
 ) -> Option<AccessPath> {
     planner.facts.as_interface(path_ty)?;
-    let go_type_result = planner.go_type(pattern_ty);
-    collector.packages.extend(go_type_result.requirements());
-    let go_type = go_type_result.code;
+    let go_type = planner.go_type(pattern_ty);
     collector.checks.push(Check::TypeAssert {
         path: path.clone(),
         go_type: go_type.clone(),
@@ -1474,8 +1466,7 @@ fn collect_newtype_checks(
         return;
     };
     let go_underlying = planner.go_type(&underlying_ty);
-    collector.packages.extend(go_underlying.requirements());
-    let field_path = path.push(PathSegment::NewtypeCast(go_underlying.code));
+    let field_path = path.push(PathSegment::NewtypeCast(go_underlying));
     if let Some(field) = variant.fields.first() {
         collect_checks_and_bindings(
             planner,
@@ -1735,7 +1726,6 @@ pub(super) fn compile_match_arms(
         };
         for alternative in alternatives {
             let info = collect_pattern_info(planner, alternative, subject_ty);
-            planner.require_packages(&info.packages);
             arm_infos.push(ArmInfo {
                 arm_index,
                 checks: info.checks,
@@ -1814,7 +1804,7 @@ fn root_assertion_position(checks: &[Check]) -> Option<usize> {
 pub(super) fn lift_root_assertion(
     checks: &mut Vec<Check>,
     bindings: &mut [PatternBinding],
-) -> Option<Vec<String>> {
+) -> Option<Vec<GoType>> {
     let position = root_assertion_position(checks)?;
     match checks.remove(position) {
         Check::TypeAssert { go_type, .. } => {
@@ -1828,7 +1818,7 @@ pub(super) fn lift_root_assertion(
             Some(vec![go_type])
         }
         Check::Or { alternatives } => {
-            let go_types: Vec<String> = alternatives
+            let go_types: Vec<GoType> = alternatives
                 .into_iter()
                 .map(|alt| match <[Check; 1]>::try_from(alt) {
                     Ok([Check::TypeAssert { go_type, .. }]) => go_type,
@@ -1869,7 +1859,7 @@ fn join_conditions(
 mod tests {
     use super::{
         AccessPath, ArmInfo, ArmLeaf, BindingTarget, ChainArm, ChainTail, Check, Decision,
-        GoExpression, GuardedLeaf, PatternBinding, build_chain, share_alternative_bindings,
+        GoExpression, GoType, GuardedLeaf, PatternBinding, build_chain, share_alternative_bindings,
         try_build_switch,
     };
     use crate::abi::coercion::CoercionPlan;
@@ -1992,7 +1982,7 @@ mod tests {
     fn type_assert(go_type: &str) -> Option<Check> {
         Some(Check::TypeAssert {
             path: AccessPath::root(),
-            go_type: go_type.into(),
+            go_type: GoType::new(go_type),
         })
     }
 
@@ -2017,7 +2007,7 @@ mod tests {
             panic!("expected a type switch");
         };
         let labels: Vec<_> = branches.iter().map(|branch| branch.label.clone()).collect();
-        assert_eq!(labels, vec![vec!["A".to_string()], vec!["B".to_string()]]);
+        assert_eq!(labels, vec![vec![GoType::new("A")], vec![GoType::new("B")]]);
         assert!(fallback.is_some());
     }
 

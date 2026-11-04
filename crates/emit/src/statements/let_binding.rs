@@ -24,6 +24,7 @@ use crate::plan::placement::{
 };
 use crate::plan::values::GoExpression;
 use crate::state::bindings::{ComponentBinding, ComponentKind, TupleBinding};
+use crate::types::go_type::GoType;
 use std::mem;
 use syntax::ast::{Binding, BindingId, Expression, LetMode, Pattern};
 use syntax::program::NativeTypeKind;
@@ -342,7 +343,7 @@ impl Planner<'_> {
             self.facts.is_interface_or_unknown(binding_ty) && *binding_ty != value.get_type();
         let mut statements = Vec::new();
         if widens_to_interface {
-            let var_ty = self.use_go_type(binding_ty);
+            let var_ty = self.go_type(binding_ty);
             statements.push(
                 LoweredStatement::VarDecl {
                     name: local.clone(),
@@ -392,10 +393,10 @@ impl Planner<'_> {
             self.try_declare(&go_identifier);
             go_identifier
         };
-        let unit = GoExpression::empty_composite("struct{}".to_string());
+        let unit = GoExpression::empty_composite(GoType::new("struct{}"));
         // An `Unknown` or interface binding keeps its type for later assignments.
         if needs_explicit_type_declaration(self, value, binding_ty) {
-            let go_type = self.use_go_type(binding_ty);
+            let go_type = self.go_type(binding_ty);
             statements.push(
                 LoweredStatement::VarDecl {
                     name: go_identifier,
@@ -446,7 +447,7 @@ impl Planner<'_> {
             && coercion_is_identity
             && !needs_explicit_type_declaration(self, value, binding_ty)
         {
-            let var_ty = self.use_go_type(binding_ty);
+            let var_ty = self.go_type(binding_ty);
             statements.push(
                 LoweredStatement::VarDecl {
                     name: go_identifier,
@@ -459,7 +460,7 @@ impl Planner<'_> {
         }
 
         if constant_needs_type || needs_explicit_type_declaration(self, value, binding_ty) {
-            let var_ty = self.use_go_type(binding_ty);
+            let var_ty = self.go_type(binding_ty);
             statements.push(
                 LoweredStatement::VarDecl {
                     name: go_identifier,
@@ -577,18 +578,18 @@ impl Planner<'_> {
 
         let var_ty = if has_contextual_ok_ty {
             if !needs_context(&peeled_binding) && !needs_context(&peeled_binding.ok_type()) {
-                self.use_go_type(binding_ty)
+                self.go_type(binding_ty)
             } else if let Some(ctx_ty) = return_ctx.ty().cloned() {
                 if Fallible::from_type(&ctx_ty).is_some() {
-                    self.use_go_type(&ctx_ty)
+                    self.go_type(&ctx_ty)
                 } else {
-                    self.use_go_type(&resolved_ty)
+                    self.go_type(&resolved_ty)
                 }
             } else {
-                self.use_go_type(&resolved_ty)
+                self.go_type(&resolved_ty)
             }
         } else {
-            self.use_go_type(&resolved_ty)
+            self.go_type(&resolved_ty)
         };
         Some(LoweredStatement::VarDecl {
             name: name.clone(),
@@ -624,7 +625,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                     &raw_go_name,
                     OuterBindings::MayShadow,
                 );
-                let var_ty = self.planner.use_go_type(&self.binding.ty);
+                let var_ty = self.planner.go_type(&self.binding.ty);
                 statements.push(
                     LoweredStatement::VarDecl {
                         name: go_identifier,
@@ -743,7 +744,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                     identifier,
                     *binding,
                     go_name,
-                    self.planner.use_go_type(&slot_ty),
+                    self.planner.go_type(&slot_ty),
                 ))
             })
             .collect();

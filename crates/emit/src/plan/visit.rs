@@ -328,6 +328,7 @@ mod tests {
     use crate::plan::values::GoExpression;
     use crate::state::package_state::PackageState;
     use crate::state::scope::ScopeState;
+    use crate::types::go_type::GoType;
 
     fn name(value: &str) -> GoExpression {
         GoExpression::name(value.to_string())
@@ -335,8 +336,8 @@ mod tests {
 
     fn function(parameter: &str, local: &str) -> GoExpression {
         GoExpression::function_literal(
-            vec![GoParameter::new(parameter, "int")],
-            "int".to_string(),
+            vec![GoParameter::new(parameter, GoType::new("int"))],
+            GoType::new("int"),
             LoweredBlock {
                 statements: vec![
                     define(local.to_string(), name(parameter)),

@@ -3,6 +3,7 @@ use crate::context::expression::ExpressionContext;
 use crate::expressions::identifiers::method_expression;
 use crate::names::go_name;
 use crate::plan::values::GoExpression;
+use crate::types::go_type::GoType;
 use syntax::program::DotAccessResolution;
 use syntax::types::Type;
 
@@ -34,7 +35,7 @@ impl Planner<'_> {
                 let type_args = if ret_params.len() > f.params.len() {
                     self.format_type_args(ret_params)
                 } else {
-                    String::new()
+                    GoType::default()
                 };
                 Some(GoExpression::instantiation(make_fn, type_args))
             }
@@ -79,7 +80,7 @@ impl Planner<'_> {
             .first()?
             .ty
             .strip_refs();
-        let receiver_type = self.use_go_type(&receiver);
+        let receiver_type = self.go_type(&receiver);
         let mut go_method = self.method_go_name(member, is_exported);
         if tagged_twin {
             go_method = go_name::tagged_twin(&go_method);

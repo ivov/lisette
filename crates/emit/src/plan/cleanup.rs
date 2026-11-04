@@ -752,6 +752,7 @@ mod tests {
     use crate::plan::local::LocalId;
     use crate::plan::visit::identify_body_locals;
     use crate::state::scope::ScopeState;
+    use crate::types::go_type::GoType;
 
     fn name(text: &str) -> GoExpression {
         GoExpression::name(text.to_string())
@@ -830,7 +831,7 @@ mod tests {
     fn name_uses_count_writes_inside_function_literals() {
         let closure = GoExpression::function_literal(
             Vec::new(),
-            String::new(),
+            GoType::default(),
             LoweredBlock {
                 statements: vec![assign(name("count"), literal("1"))],
             },
@@ -894,11 +895,11 @@ mod tests {
                 LocalId(id),
             )))
         };
-        let mut parameter = GoParameter::new("temp", "int");
+        let mut parameter = GoParameter::new("temp", GoType::new("int"));
         parameter.name.identify(LocalId(2));
         let closure = GoExpression::function_literal(
             vec![parameter],
-            "int".to_string(),
+            GoType::new("int"),
             LoweredBlock {
                 statements: vec![returned(outer(2))],
             },
@@ -1095,7 +1096,7 @@ mod tests {
         let mut statements = vec![
             LoweredStatement::VarDecl {
                 name: "value".to_string().into(),
-                go_type: "int".to_string(),
+                go_type: GoType::new("int"),
                 value: None,
             }
             .into(),

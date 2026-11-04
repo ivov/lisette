@@ -207,7 +207,7 @@ impl GoExpressionNode {
                 ..Effects::default()
             },
             Self::CompositeLiteral { go_type, .. } => {
-                let go_type = go_type.as_deref();
+                let go_type = go_type.as_ref().map(|go_type| go_type.code.as_str());
                 Effects {
                     may_panic: go_type.is_some_and(|ty| ty.starts_with("map[")),
                     creates_identity: go_type
@@ -216,7 +216,7 @@ impl GoExpressionNode {
                 }
             }
             Self::Conversion { go_type, .. }
-                if go_type.starts_with("*[") || go_type.starts_with('[') =>
+                if go_type.code.starts_with("*[") || go_type.code.starts_with('[') =>
             {
                 Effects {
                     may_panic: true,
@@ -272,6 +272,7 @@ mod tests {
     use crate::plan::go_expression::{CompositeLayout, FunctionLiteralLayout};
     use crate::plan::local::GoIdentifier;
     use crate::plan::values::GoExpression;
+    use crate::types::go_type::GoType;
 
     fn name(text: &str) -> GoExpressionNode {
         GoExpressionNode::Identifier(GoIdentifier::name(text.to_string()))
@@ -437,7 +438,7 @@ mod tests {
     fn a_function_literal_does_not_run_its_body() {
         let function = GoExpressionNode::FunctionLiteral {
             parameters: Vec::new(),
-            result: String::new(),
+            result: GoType::default(),
             body: LoweredBlock {
                 statements: vec![expression_statement(GoExpression::from_node(call(
                     "effect",
@@ -452,14 +453,14 @@ mod tests {
     #[test]
     fn new_slices_and_pointers_cannot_repeat() {
         let slice = GoExpressionNode::CompositeLiteral {
-            go_type: Some("[]int".to_string()),
+            go_type: Some(GoType::new("[]int")),
             elements: Vec::new(),
             layout: CompositeLayout::Inline { padded: true },
         };
         assert!(slice.effects().can_erase());
         assert!(!slice.effects().can_duplicate());
         let pointer = GoExpressionNode::AddressOf(Box::new(GoExpressionNode::CompositeLiteral {
-            go_type: Some("Point".to_string()),
+            go_type: Some(GoType::new("Point")),
             elements: Vec::new(),
             layout: CompositeLayout::Inline { padded: true },
         }));

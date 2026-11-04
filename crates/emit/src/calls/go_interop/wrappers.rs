@@ -164,17 +164,13 @@ impl Planner<'_> {
                 .scope
                 .helper_local(&format!("arg{index}"), &self.package);
             let target_type = target.go_type(self);
-            let target_type = self.use_rendered_go_type(target_type);
             parameters.push(GoParameter::new(name.clone(), target_type));
             names.push(GoExpression::identifier(name));
         }
         let arguments = self.plan_bridged_arguments(&mut body, names, source, target);
         let call = GoExpression::call(callee.clone(), arguments);
         self.plan_function_result_bridge(&mut body, call, source, target);
-        let result = target
-            .result_go_type(self)
-            .map(|result| self.use_rendered_go_type(result))
-            .unwrap_or_default();
+        let result = target.result_go_type(self).unwrap_or_default();
         let callback = GoExpression::function_literal(
             parameters,
             result,
@@ -187,7 +183,6 @@ impl Planner<'_> {
         let adapted = self.fresh_local(Some("adapted"));
         self.declare(&adapted);
         let go_type = target.go_type(self);
-        let go_type = self.use_rendered_go_type(go_type);
         statements.push(
             LoweredStatement::VarDecl {
                 name: adapted.clone(),
@@ -297,7 +292,6 @@ impl Planner<'_> {
                     let result = intermediate
                         .result_go_type(self)
                         .expect("a lowered result has a Go signature");
-                    let result = self.use_rendered_go_type(result);
                     let call = GoExpression::call(
                         GoExpression::function_literal(
                             Vec::new(),
@@ -328,7 +322,7 @@ impl Planner<'_> {
                         statements.push(if source.result_type.is_never() {
                             LoweredStatement::UnreachablePanic.into()
                         } else {
-                            plain_return(GoExpression::empty_composite("struct{}".to_string()))
+                            plain_return(GoExpression::empty_composite(GoType::new("struct{}")))
                         });
                     }
                     return;
@@ -483,7 +477,7 @@ impl Planner<'_> {
         &mut self,
         statements: &mut Vec<Statement>,
         target: WrapperTarget<'_>,
-        type_str: &str,
+        type_str: &GoType,
         name_hint: &'static str,
     ) -> (ResolvedSink, WrapperOutcome) {
         match target {
@@ -493,7 +487,7 @@ impl Planner<'_> {
                 statements.push(
                     LoweredStatement::VarDecl {
                         name: var.clone(),
-                        go_type: type_str.to_string(),
+                        go_type: type_str.clone(),
                         value: None,
                     }
                     .into(),
@@ -504,7 +498,7 @@ impl Planner<'_> {
                 statements.push(
                     LoweredStatement::VarDecl {
                         name: name.clone(),
-                        go_type: type_str.to_string(),
+                        go_type: type_str.clone(),
                         value: None,
                     }
                     .into(),
@@ -586,8 +580,8 @@ impl Planner<'_> {
             unreachable!("Partial wrapping requires a fallible layout")
         };
         let ok_ty = payload.logical_type();
-        let ok_ty_str = self.use_rendered_go_type(payload.go_type(self));
-        let err_ty_str = self.use_rendered_go_type(error.go_type(self));
+        let ok_ty_str = payload.go_type(self);
+        let err_ty_str = error.go_type(self);
 
         let mut statements = Vec::new();
         let (err_var, val_value) = self.push_go_returns(&mut statements, call, ok_ty, layout);
@@ -595,11 +589,13 @@ impl Planner<'_> {
         let val = || val_value.clone();
         let nil_check = self.partial_ok_nil_check(ok_ty, val());
 
-        let type_params = format!("[{}, {}]", ok_ty_str, err_ty_str);
-        let result_ty_str = self.use_rendered_go_type(GoType::stdlib(format!(
-            "{}.Partial{type_params}",
-            go_name::GO_STDLIB_PKG
-        )));
+        let type_params = GoType::type_arguments(&[ok_ty_str, err_ty_str]);
+        let mut result_ty_str = GoType::stdlib(format!(
+            "{}.Partial{}",
+            go_name::GO_STDLIB_PKG,
+            type_params.code
+        ));
+        result_ty_str.merge(&type_params);
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
 
@@ -719,10 +715,9 @@ impl Planner<'_> {
         let payload = result_layout
             .payload()
             .expect("Result layout has a payload");
-        let ok_ty_str = self.use_rendered_go_type(payload.go_type(self));
         Ok(prelude_call(
             "ResultFromPair",
-            format!("[{}]", ok_ty_str),
+            GoType::type_arguments(&[payload.go_type(self)]),
             vec![call],
         ))
     }
@@ -761,10 +756,8 @@ impl Planner<'_> {
         let err = || GoExpression::identifier(err_var.clone());
         let ok = || ok_value.clone();
 
-        let result_ty_str = self.use_rendered_go_type(result_layout.underlying().go_type(self));
-        let ok_ty_str = self.use_rendered_go_type(payload.go_type(self));
-        let err_ty_str = self.use_rendered_go_type(error.go_type(self));
-        let type_params = format!("[{ok_ty_str}, {err_ty_str}]");
+        let result_ty_str = result_layout.underlying().go_type(self);
+        let type_params = GoType::type_arguments(&[payload.go_type(self), error.go_type(self)]);
 
         let nil_guard = self.result_nil_guard(ok_ty);
 
@@ -858,10 +851,8 @@ impl Planner<'_> {
             unreachable!("unit Result wrapping requires a fallible layout")
         };
         let fallible = Fallible::from_type(fallible_type).expect("Result type expected");
-        let result_ty_str = self.use_rendered_go_type(result_layout.underlying().go_type(self));
-        let ok_type = self.use_rendered_go_type(payload.go_type(self));
-        let err_type = self.use_rendered_go_type(error.go_type(self));
-        let type_params = format!("[{ok_type}, {err_type}]");
+        let result_ty_str = result_layout.underlying().go_type(self);
+        let type_params = GoType::type_arguments(&[payload.go_type(self), error.go_type(self)]);
 
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
@@ -878,7 +869,7 @@ impl Planner<'_> {
             prelude_call(
                 fallible.ok_constructor(),
                 type_params,
-                vec![GoExpression::empty_composite("struct{}".to_string())],
+                vec![GoExpression::empty_composite(GoType::new("struct{}"))],
             )
         };
         let else_arm = ElseArm::from_body(leaf_block(&sink, ok_wrapper), false);
@@ -921,8 +912,7 @@ impl Planner<'_> {
         let last_index = params.len().saturating_sub(1);
         for (i, param) in params.iter().enumerate() {
             let name = self.scope.helper_local(&format!("arg{}", i), &self.package);
-            let ty_str = self.use_go_type(&param.ty);
-            param_strs.push(GoParameter::new(name.clone(), ty_str));
+            param_strs.push(GoParameter::new(name.clone(), self.go_type(&param.ty)));
             let argument = GoExpression::identifier(name);
             if i == last_index && param.ty.get_name() == Some("VarArgs") {
                 arguments.push(GoExpression::spread(argument));
@@ -1008,7 +998,7 @@ impl Planner<'_> {
             debug_assert!(outcome.is_none(), "Return target emits its own returns");
             statements.extend(body);
         }
-        let ret_ty_str = self.use_go_type(return_type);
+        let ret_ty_str = self.go_type(return_type);
         let callback = GoExpression::function_literal(
             param_strs,
             ret_ty_str,
@@ -1020,7 +1010,7 @@ impl Planner<'_> {
         }
         let adapted = self.fresh_local(Some("adapted"));
         self.declare(&adapted);
-        let go_type = self.use_rendered_go_type(target.go_type(self));
+        let go_type = target.go_type(self);
         setup.push(
             LoweredStatement::VarDecl {
                 name: adapted.clone(),
@@ -1054,10 +1044,11 @@ impl Planner<'_> {
 
         let ok_ty = return_type.ok_type();
         let err_ty = return_type.err_type();
-        let ret_ty_str = format!(
-            "({}, {})",
-            self.use_go_type(&ok_ty),
-            self.use_go_type(&err_ty)
+        let ok_go = self.go_type(&ok_ty);
+        let err_go = self.go_type(&err_ty);
+        let ret_ty_str = GoType::with_dependencies(
+            format!("({}, {})", ok_go.code, err_go.code),
+            [&ok_go, &err_go],
         );
         let arity = ok_ty.tuple_arity().expect("tuple ok type");
 
@@ -1088,7 +1079,7 @@ impl Planner<'_> {
             .wrapper_call_parts(setup, expression)
             .expect("expected function type");
 
-        let inner_ty_str = self.use_go_type(&return_type.ok_type());
+        let inner_ty_str = self.go_type(&return_type.ok_type());
         let ret_var = self.fresh_local(Some("ret"));
         self.declare(&ret_var);
         let ret = || GoExpression::identifier(ret_var.clone());
@@ -1107,7 +1098,7 @@ impl Planner<'_> {
 
         GoExpression::function_literal(
             param_strs,
-            format!("({}, bool)", inner_ty_str),
+            GoType::with_dependencies(format!("({}, bool)", inner_ty_str.code), [&inner_ty_str]),
             LoweredBlock { statements },
             FunctionLiteralLayout::MultiLine,
         )

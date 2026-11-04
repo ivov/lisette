@@ -4,6 +4,7 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
+use crate::types::go_type::GoType;
 use syntax::ast::IdentifierResolution;
 use syntax::types::FunctionParameter;
 use syntax::types::{SubstitutionMap, Type};
@@ -111,7 +112,7 @@ impl Planner<'_> {
         symbol: &str,
         instantiation: &SubstitutionMap,
         ctx: ExpressionContext<'_>,
-    ) -> Option<String> {
+    ) -> Option<GoType> {
         if ctx.is_callee() {
             return None;
         }
@@ -126,7 +127,7 @@ impl Planner<'_> {
         fn_params: &[FunctionParameter],
         ret_params: &[Type],
         ctx: ExpressionContext<'_>,
-    ) -> String {
+    ) -> GoType {
         let return_params_are_inferrable = ret_params.len() <= fn_params.len()
             && ret_params
                 .iter()
@@ -137,7 +138,7 @@ impl Planner<'_> {
         let inferred_at_call_site =
             ctx.is_callee() && return_params_are_inferrable && parameters_support_go_inference;
         if inferred_at_call_site {
-            String::new()
+            GoType::default()
         } else {
             self.format_type_args(ret_params)
         }
@@ -163,7 +164,7 @@ impl Planner<'_> {
         if self.definition_selects_tagged_twin(symbol) {
             go_method = go_name::tagged_twin(&go_method);
         }
-        let receiver_type = self.use_go_type(&receiver);
+        let receiver_type = self.go_type(&receiver);
         Some(method_expression(
             receiver_type,
             first.ty.is_ref(),
@@ -174,12 +175,12 @@ impl Planner<'_> {
 
 /// Go method expression on a type, `T.method` or `(*T).method`.
 pub(crate) fn method_expression(
-    receiver_type: String,
+    receiver_type: GoType,
     pointer_receiver: bool,
     go_method: String,
 ) -> GoExpression {
     let receiver = if pointer_receiver {
-        format!("(*{})", receiver_type)
+        GoType::with_dependencies(format!("(*{})", receiver_type.code), [&receiver_type])
     } else {
         receiver_type
     };

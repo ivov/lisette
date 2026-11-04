@@ -44,7 +44,7 @@ impl Planner<'_> {
             return None;
         }
         let peeled = self.facts.peel_alias(ty);
-        let go_ty = self.use_go_type(ty);
+        let go_ty = self.go_type(ty);
         let var = self.fresh_local(Some("e"));
         let parameters = vec![GoParameter::new(var.clone(), go_ty.clone())];
         let element = GoExpression::identifier(var);

@@ -23,6 +23,7 @@ use crate::plan::local::GoIdentifier;
 use crate::plan::placement::unreachable_panic_if_needed;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::InlineExpr;
+use crate::types::go_type::GoType;
 
 struct FlatCase<'d> {
     conditions: Vec<GoExpression>,
@@ -968,7 +969,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn lower_type_switch(
         &mut self,
         subject: GoExpression,
-        branches: &[SwitchBranch<Vec<String>>],
+        branches: &[SwitchBranch<Vec<GoType>>],
         fallback: Option<&Decision>,
         place: &PlacePlan,
     ) -> Vec<Statement> {

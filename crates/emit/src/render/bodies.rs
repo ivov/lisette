@@ -168,8 +168,8 @@ impl Renderer {
                 go_type,
                 value,
             } => match value {
-                Some(value) => write_line!(output, "var {} {} = {}", name, go_type, value),
-                None => write_line!(output, "var {} {}", name, go_type),
+                Some(value) => write_line!(output, "var {} {} = {}", name, go_type.code, value),
+                None => write_line!(output, "var {} {}", name, go_type.code),
             },
             LoweredStatement::Discard { arity, value } => {
                 write_line!(output, "{} = {}", vec!["_"; *arity].join(", "), value)
@@ -213,7 +213,13 @@ impl Renderer {
     fn render_const_declaration(&self, output: &mut String, plan: &ConstPlan) {
         match &plan.go_type {
             Some(go_type) => {
-                write_line!(output, "const {} {} = {}", plan.name, go_type, plan.value)
+                write_line!(
+                    output,
+                    "const {} {} = {}",
+                    plan.name,
+                    go_type.code,
+                    plan.value
+                )
             }
             None => write_line!(output, "const {} = {}", plan.name, plan.value),
         }

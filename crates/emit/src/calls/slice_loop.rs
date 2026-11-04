@@ -14,6 +14,7 @@ use crate::plan::bodies::{
     PlacePlan, Statement, assign, define,
 };
 use crate::plan::values::{CaptureBoundary, GoExpression};
+use crate::types::go_type::GoType;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SliceLoop {
@@ -460,13 +461,13 @@ impl Planner<'_> {
     ) {
         let declaration = match planned {
             PlannedLoop::Map { result, .. } => {
-                let element = self.first_type_argument_go_string(result_ty);
+                let element = self.first_type_argument_go_type(result_ty);
                 define(
                     result.clone(),
                     GoExpression::call(
                         name("make"),
                         vec![
-                            GoExpression::type_name(format!("[]{}", element)),
+                            GoExpression::type_name(GoType::slice_of(&element)),
                             GoExpression::call(name("len"), vec![source.clone()]),
                         ],
                     ),
@@ -474,21 +475,25 @@ impl Planner<'_> {
             }
             PlannedLoop::Filter { result } => LoweredStatement::VarDecl {
                 name: result.clone(),
-                go_type: format!("[]{}", self.first_type_argument_go_string(result_ty)),
+                go_type: GoType::slice_of(&self.first_type_argument_go_type(result_ty)),
                 value: None,
             }
             .into(),
             PlannedLoop::Fold { result, init, .. } => define(result.clone(), init.clone()),
             PlannedLoop::Find { result } => {
-                let payload = self.first_type_argument_go_string(result_ty);
+                let payload = self.first_type_argument_go_type(result_ty);
                 define(
                     result.clone(),
-                    prelude_call("MakeOptionNone", format!("[{}]", payload), Vec::new()),
+                    prelude_call(
+                        "MakeOptionNone",
+                        GoType::type_argument(&payload),
+                        Vec::new(),
+                    ),
                 )
             }
             PlannedLoop::FindInto(sink) => {
                 if let Some(value) = sink.value {
-                    let go_type = self.use_go_type(element_ty);
+                    let go_type = self.go_type(element_ty);
                     setup.push(
                         LoweredStatement::VarDecl {
                             name: value.clone(),
@@ -533,13 +538,13 @@ impl Planner<'_> {
                 GoExpression::call(name("append"), vec![local(result), local(element_name)]),
             )],
             PlannedLoop::Find { result } => {
-                let payload = self.use_go_type(element_ty);
+                let payload = self.go_type(element_ty);
                 vec![
                     assign(
                         local(result),
                         prelude_call(
                             "MakeOptionSome",
-                            format!("[{}]", payload),
+                            GoType::type_argument(&payload),
                             vec![local(element_name)],
                         ),
                     ),
@@ -588,10 +593,10 @@ impl Planner<'_> {
             .and_then(|params| params.first().cloned())
     }
 
-    fn first_type_argument_go_string(&mut self, ty: &Type) -> String {
+    fn first_type_argument_go_type(&self, ty: &Type) -> GoType {
         let argument = self
             .first_type_argument(ty)
             .expect("slice and option results carry a type argument");
-        self.use_go_type(&argument)
+        self.go_type(&argument)
     }
 }

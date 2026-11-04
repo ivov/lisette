@@ -19,6 +19,7 @@ use crate::plan::verify::verify_final_function_body;
 use crate::plan::verify::verify_local_scopes;
 use crate::plan::visit::{VisitorMut, identify_body_locals, visit_statements_mut};
 use crate::statements::testing::test_context_call;
+use crate::types::go_type::GoType;
 use crate::utils::{fresh_receiver_name, group_params};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::EcoString;
@@ -36,13 +37,13 @@ pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
 type ParamDestructure<'a> = (GoIdentifier, &'a Pattern, &'a Type);
 
 struct LoweredParams<'a> {
-    pairs: Vec<(GoIdentifier, String)>,
+    pairs: Vec<(GoIdentifier, GoType)>,
     destructures: Vec<ParamDestructure<'a>>,
     test_handle: Option<GoIdentifier>,
 }
 
 pub(crate) struct LambdaReturnInfo {
-    signature: Option<String>,
+    signature: Option<GoType>,
     ctx: ReturnContext,
 }
 
@@ -51,8 +52,8 @@ impl LambdaReturnInfo {
         self.signature.is_some()
     }
 
-    pub(crate) fn signature(&self) -> &str {
-        self.signature.as_deref().unwrap_or_default()
+    pub(crate) fn signature(&self) -> GoType {
+        self.signature.clone().unwrap_or_default()
     }
 }
 
@@ -193,17 +194,17 @@ impl Planner<'_> {
                 return_info.should_return() && ty.get_function_ret().is_some_and(Type::is_unit);
             if unit_result && !body.go_terminates() {
                 body.statements
-                    .push(plain_return(GoExpression::empty_composite(
-                        "struct{}".to_string(),
-                    )));
+                    .push(plain_return(GoExpression::empty_composite(GoType::new(
+                        "struct{}",
+                    ))));
             }
 
             GoExpression::function_literal(
                 param_pairs
                     .into_iter()
-                    .map(|(name, go_type)| GoParameter { name, go_type })
+                    .map(|(name, go_type)| GoParameter::new(name, go_type))
                     .collect(),
-                return_info.signature().trim_start().to_string(),
+                return_info.signature(),
                 body,
                 FunctionLiteralLayout::MultiLine,
             )
@@ -237,11 +238,10 @@ impl Planner<'_> {
         };
         let signature = if has_return {
             match return_ctx.lowered_shape() {
-                Some(shape) => Some(format!(
-                    " {}",
-                    self.render_callable_return_ty(&CallableReturnAbi::Lowered(shape), return_ty)
-                )),
-                None => Some(format!(" {}", self.use_go_type(return_ty))),
+                Some(shape) => Some(
+                    self.callable_return_go_type(&CallableReturnAbi::Lowered(shape), return_ty),
+                ),
+                None => Some(self.go_type(return_ty)),
             }
         } else {
             None
@@ -415,7 +415,7 @@ impl Planner<'_> {
             .collect();
         let rendered: Vec<(String, String)> = pairs
             .into_iter()
-            .map(|(name, go_type)| (name.to_string(), go_type))
+            .map(|(name, go_type)| (name.to_string(), self.use_rendered_go_type(go_type)))
             .collect();
         let params_string = format!("({})", group_params(&rendered));
 
@@ -549,7 +549,7 @@ impl Planner<'_> {
                     var.clone()
                 }
             };
-            lowered.pairs.push((name, self.use_go_type(&param.ty)));
+            lowered.pairs.push((name, self.go_type(&param.ty)));
         }
         lowered
     }

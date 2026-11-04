@@ -5,6 +5,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::Planner;
 use crate::names::go_name;
 use crate::state::scope::TypeParam;
+use crate::types::go_type::GoType;
 use syntax::EcoString;
 use syntax::ast::Generic;
 use syntax::types::{SubstitutionMap, Type};
@@ -34,7 +35,7 @@ impl Planner<'_> {
         &mut self,
         definition: Option<&str>,
         instantiation: Option<&SubstitutionMap>,
-    ) -> Option<String> {
+    ) -> Option<GoType> {
         let declaration = self.callable_declaration(definition?)?;
         let instantiation = instantiation?;
         match declaration.go_type_param_recipe() {
@@ -47,7 +48,7 @@ impl Planner<'_> {
         &mut self,
         definition_ty: &Type,
         mapping: &SubstitutionMap,
-    ) -> Option<String> {
+    ) -> Option<GoType> {
         let Type::Forall { vars, .. } = definition_ty else {
             return None;
         };
@@ -55,19 +56,16 @@ impl Planner<'_> {
             return None;
         }
 
-        let args: Vec<String> = vars
+        let args: Vec<GoType> = vars
             .iter()
-            .filter_map(|var| {
-                let concrete = mapping.get(var.as_str())?;
-                Some(self.use_go_type(concrete))
-            })
+            .filter_map(|var| Some(self.go_type(mapping.get(var.as_str())?)))
             .collect();
 
-        if args.len() != vars.len() || args.iter().any(|a| a.contains("interface{}")) {
+        if args.len() != vars.len() || args.iter().any(|a| a.code.contains("interface{}")) {
             return None;
         }
 
-        Some(format!("[{}]", args.join(", ")))
+        Some(GoType::type_arguments(&args))
     }
 
     /// Make `generics` the type parameters of the declaration being emitted.

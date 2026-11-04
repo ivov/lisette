@@ -44,8 +44,8 @@ use diagnostics::LisetteDiagnostic;
 use names::go_name::GeneratedPackage;
 use names::packages::{PackageRequirements, PackageUse};
 use plan::PackagePlan;
-use plan::bodies::{LoopId, LoweredBlock, Statement, define};
-use plan::go_expression::GoExpressionNode;
+use plan::bodies::{LoopId, LoweredBlock, LoweredStatement, Statement, define};
+use plan::go_expression::{GoExpressionNode, TreeVisitor};
 use plan::local::GoIdentifier;
 use plan::values::GoExpression;
 use state::adapter_registry::AdapterRegistry;
@@ -305,26 +305,32 @@ impl Planner<'_> {
     }
 
     fn collect_imports(&mut self, statements: &[Statement]) {
-        let namespace = &mut self.namespace;
+        let mut collector = ImportCollector(&mut self.namespace);
         for statement in statements {
-            statement
-                .kind
-                .visit_expressions(&mut |node| require_qualified(namespace, node));
+            statement.kind.walk(&mut collector);
         }
     }
 
     fn render_expression(&mut self, expression: &GoExpression) -> String {
-        let namespace = &mut self.namespace;
         expression
             .node()
-            .visit(&mut |node| require_qualified(namespace, node));
+            .walk(&mut ImportCollector(&mut self.namespace));
         expression.rendered()
     }
 }
 
-fn require_qualified(namespace: &mut FileNamespace, node: &GoExpressionNode) {
-    if let GoExpressionNode::Qualified { package, .. } = node {
-        namespace.require(package.clone());
+struct ImportCollector<'a>(&'a mut FileNamespace);
+
+impl TreeVisitor for ImportCollector<'_> {
+    fn expression(&mut self, node: &GoExpressionNode) {
+        if let GoExpressionNode::Qualified { package, .. } = node {
+            self.0.require(package.clone());
+        }
+        node.own_types(&mut |go_type| self.0.absorb(go_type.requirements()));
+    }
+
+    fn statement(&mut self, statement: &LoweredStatement) {
+        statement.own_types(&mut |go_type| self.0.absorb(go_type.requirements()));
     }
 }
 

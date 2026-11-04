@@ -20,6 +20,7 @@ use crate::plan::bodies::{
 use crate::plan::calls::TaggedArgumentAdapter;
 use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout};
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::parse::TUPLE_FIELDS;
 
@@ -167,12 +168,12 @@ fn lowered_payload_zeros(
                 if planner.facts.is_nullable_option(slot_ty) {
                     GoExpression::nil()
                 } else {
-                    planner.zero_value_expression(slot_ty)
+                    planner.zero_value(slot_ty)
                 }
             })
             .collect()
     } else {
-        vec![planner.zero_value_expression(payload_ty)]
+        vec![planner.zero_value(payload_ty)]
     }
 }
 
@@ -276,7 +277,7 @@ fn lowered_tuple_values(
         .map(|(i, slot_ty)| {
             let raw = field(tuple_value, TUPLE_FIELDS[i]);
             if planner.facts.is_nullable_option(slot_ty) {
-                let inner = planner.use_go_type(&slot_ty.ok_type());
+                let inner = planner.go_type(&slot_ty.ok_type());
                 planner.plan_option_projection(
                     &mut statements,
                     raw,
@@ -400,10 +401,8 @@ pub(crate) fn emit_lisette_callback_wrapper(
     ));
     GoExpression::function_literal(
         params_str,
-        planner.render_callable_return_ty(
-            &CallableReturnAbi::Lowered(target_abi.clone()),
-            return_type,
-        ),
+        planner
+            .callable_return_go_type(&CallableReturnAbi::Lowered(target_abi.clone()), return_type),
         LoweredBlock {
             statements: prelude,
         },
@@ -463,7 +462,7 @@ pub(crate) fn emit_unit_result_adapter(
     setup: &mut Vec<Statement>,
     fn_value: GoExpression,
     fn_type: &Type,
-    slot_result: Option<String>,
+    slot_result: Option<GoType>,
 ) -> GoExpression {
     let Some(params) = fn_type.get_function_params() else {
         return fn_value;
@@ -474,8 +473,8 @@ pub(crate) fn emit_unit_result_adapter(
     let (result, tail) = match slot_result {
         Some(result) => (result, LoweredStatement::UnreachablePanic.into()),
         None => (
-            "struct{}".to_string(),
-            plain_return(GoExpression::empty_composite("struct{}".to_string())),
+            GoType::new("struct{}"),
+            plain_return(GoExpression::empty_composite(GoType::new("struct{}"))),
         ),
     };
     GoExpression::function_literal(
@@ -505,7 +504,7 @@ pub(crate) fn lower_arg_to_tagged(
 
     let (inner_param_strs, inner_arguments) = planner.build_wrapper_params(inner_params);
     let inner_call = GoExpression::call(argument, inner_arguments);
-    let tagged_ret = planner.use_go_type(inner_ret);
+    let tagged_ret = planner.go_type(inner_ret);
 
     let (body, outcome) = planner.lower_abi_wrapping(
         inner_call,
@@ -662,7 +661,7 @@ fn emit_lowered_partial_tail(planner: &mut Planner, expression: &Expression) -> 
                     .into_parts();
                 statements.extend(setup);
                 let ok_ty = planner.facts.peel_alias(&return_ty).ok_type();
-                multi_value_return(vec![planner.zero_value_expression(&ok_ty), e])
+                multi_value_return(vec![planner.zero_value(&ok_ty), e])
             }
             PartialVariant::Both => {
                 let (setup_v, v) = planner
@@ -719,7 +718,7 @@ fn lower_nullable_slot_value(
         return ValuePlan::literal("nil".to_string());
     }
     let value = planner.lower_value(expression, ExpressionContext::value());
-    let inner = planner.use_go_type(&slot_ty.ok_type());
+    let inner = planner.go_type(&slot_ty.ok_type());
     value.map_expression(|setup, value| {
         planner.plan_option_projection(setup, value, &inner, &LayoutBridge::Identity, false)
     })

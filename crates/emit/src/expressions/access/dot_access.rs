@@ -408,7 +408,7 @@ impl Planner<'_> {
         base: &GoExpression,
     ) -> Option<GoExpression> {
         let field_ty = self.get_newtype_underlying(expression_ty)?;
-        let go_type = self.use_go_type(&field_ty);
+        let go_type = self.go_type(&field_ty);
         let operand = if expression_ty.is_ref() {
             GoExpression::dereference(base.clone())
         } else {

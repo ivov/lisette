@@ -10,6 +10,7 @@ use crate::plan::local::GoIdentifier;
 use crate::plan::values::{GoExpression, Stability};
 use crate::state::bindings::{BindingValue, InlineExpr};
 use crate::state::scope::ScopeState;
+use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 
 pub(crate) struct AssertedPattern {
@@ -50,10 +51,8 @@ pub(crate) fn apply_root_assertion(
     let PatternInfo {
         mut checks,
         mut bindings,
-        packages,
         ..
     } = info;
-    planner.require_packages(&packages);
     let subject = match lift_root_assertion(&mut checks, &mut bindings) {
         Some(go_types) if requires_asserted_subject(&checks, &bindings) => {
             let [go_type] = go_types.as_slice() else {
@@ -83,10 +82,8 @@ pub(crate) fn apply_refutable_root_assertion(
     let PatternInfo {
         mut checks,
         mut bindings,
-        packages,
         ..
     } = info;
-    planner.require_packages(&packages);
     let Some(go_types) = lift_root_assertion(&mut checks, &mut bindings) else {
         return AssertedPattern {
             subject: subject.clone(),
@@ -97,7 +94,7 @@ pub(crate) fn apply_refutable_root_assertion(
     };
     let needs_asserted = requires_asserted_subject(&checks, &bindings);
     let assertion_of =
-        |go_type: &String| GoExpression::type_assertion(subject.clone(), go_type.clone());
+        |go_type: &GoType| GoExpression::type_assertion(subject.clone(), go_type.clone());
     let (subject, ok_test) = match go_types.as_slice() {
         [go_type] => {
             let asserted_lhs = if needs_asserted {
@@ -190,7 +187,7 @@ pub(crate) fn tree_binding_statements(
 }
 
 pub(crate) fn bind_inline_unit(planner: &mut Planner, binding: &PatternBinding) {
-    let unit = GoExpression::empty_composite("struct{}".to_string());
+    let unit = GoExpression::empty_composite(GoType::new("struct{}"));
     planner.scope.bind_inline_expr(
         &binding.lisette_name,
         &binding.binding_ids,

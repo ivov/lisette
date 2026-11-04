@@ -1,10 +1,10 @@
 //! The Go expression tree behind `GoExpression`.
 
 use crate::names::packages::PackageUse;
-use crate::plan::bodies::LoweredBlock;
+use crate::plan::bodies::{LoweredBlock, LoweredStatement};
 use crate::plan::local::GoIdentifier;
 use crate::render::Renderer;
-use crate::types::go_type::render_conversion;
+use crate::types::go_type::{GoType, render_conversion};
 use crate::utils::group_params;
 use std::slice;
 use syntax::ast::BinaryOperator;
@@ -164,10 +164,10 @@ pub(crate) enum GoExpressionNode {
     },
     Literal(String),
     /// A Go type in operand position, such as the element type of `make`.
-    Type(String),
+    Type(GoType),
     CompositeLiteral {
         /// `None` inside an enclosing literal that already names the element type.
-        go_type: Option<String>,
+        go_type: Option<GoType>,
         elements: Vec<CompositeElement>,
         layout: CompositeLayout,
     },
@@ -180,7 +180,7 @@ pub(crate) enum GoExpressionNode {
     Instantiation {
         base: Box<GoExpressionNode>,
         /// Bracketed Go type list, `[T, U]`.
-        type_arguments: String,
+        type_arguments: GoType,
     },
     Selector {
         base: Box<GoExpressionNode>,
@@ -199,7 +199,7 @@ pub(crate) enum GoExpressionNode {
     },
     TypeAssertion {
         base: Box<GoExpressionNode>,
-        go_type: String,
+        go_type: GoType,
     },
     Unary {
         operator: UnaryOp,
@@ -213,14 +213,14 @@ pub(crate) enum GoExpressionNode {
         right: Box<GoExpressionNode>,
     },
     Conversion {
-        go_type: String,
+        go_type: GoType,
         operand: Box<GoExpressionNode>,
     },
     /// A variadic argument, `values...`.
     Spread(Box<GoExpressionNode>),
     FunctionLiteral {
         parameters: Vec<GoParameter>,
-        result: String,
+        result: GoType,
         body: LoweredBlock,
         layout: FunctionLiteralLayout,
     },
@@ -232,11 +232,11 @@ pub(crate) enum GoExpressionNode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GoParameter {
     pub(crate) name: GoIdentifier,
-    pub(crate) go_type: String,
+    pub(crate) go_type: GoType,
 }
 
 impl GoParameter {
-    pub(crate) fn new(name: impl Into<GoIdentifier>, go_type: impl Into<String>) -> Self {
+    pub(crate) fn new(name: impl Into<GoIdentifier>, go_type: impl Into<GoType>) -> Self {
         Self {
             name: name.into(),
             go_type: go_type.into(),
@@ -244,7 +244,7 @@ impl GoParameter {
     }
 
     fn pair(&self) -> (String, String) {
-        (self.name.to_string(), self.go_type.clone())
+        (self.name.to_string(), self.go_type.code.clone())
     }
 }
 
@@ -290,6 +290,21 @@ impl CompositeLayout {
     }
 }
 
+/// A walk over a lowered body. A closure visits only the expressions.
+pub(crate) trait TreeVisitor {
+    fn expression(&mut self, node: &GoExpressionNode);
+
+    fn statement(&mut self, _statement: &LoweredStatement) {}
+}
+
+pub(crate) struct Expressions<'a, F>(pub(crate) &'a mut F);
+
+impl<F: FnMut(&GoExpressionNode)> TreeVisitor for Expressions<'_, F> {
+    fn expression(&mut self, node: &GoExpressionNode) {
+        (self.0)(node)
+    }
+}
+
 pub(crate) fn verbatim_identifiers(source: &str) -> impl Iterator<Item = &str> {
     source
         .split(|character: char| !(character.is_alphanumeric() || character == '_'))
@@ -309,7 +324,7 @@ impl GoExpressionNode {
                 go_type: Some(go_type),
                 elements,
                 ..
-            } if go_type == "struct{}" && elements.is_empty()
+            } if go_type.code == "struct{}" && elements.is_empty()
         )
     }
 
@@ -341,11 +356,41 @@ impl GoExpressionNode {
     }
 
     pub(crate) fn visit(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
-        visit(self);
+        self.walk(&mut Expressions(visit));
+    }
+
+    /// The Go types this node spells itself, not those of its children.
+    pub(crate) fn own_types(&self, visit: &mut impl FnMut(&GoType)) {
+        match self {
+            Self::Type(go_type)
+            | Self::CompositeLiteral {
+                go_type: Some(go_type),
+                ..
+            }
+            | Self::TypeAssertion { go_type, .. }
+            | Self::Conversion { go_type, .. }
+            | Self::Instantiation {
+                type_arguments: go_type,
+                ..
+            } => visit(go_type),
+            Self::FunctionLiteral {
+                parameters, result, ..
+            } => {
+                for parameter in parameters {
+                    visit(&parameter.go_type);
+                }
+                visit(result);
+            }
+            _ => {}
+        }
+    }
+
+    pub(crate) fn walk(&self, visit: &mut impl TreeVisitor) {
+        visit.expression(self);
         if let Self::FunctionLiteral { body, .. } = self {
-            body.visit_expressions(visit);
+            body.walk(visit);
         } else {
-            self.visit_children(&mut |child| child.visit(visit));
+            self.visit_children(&mut |child| child.walk(visit));
         }
     }
 
@@ -543,7 +588,8 @@ impl GoExpressionNode {
     fn write(&self, output: &mut String, slot: Slot) {
         match self {
             Self::Identifier(text) => output.push_str(text.spelling()),
-            Self::Literal(text) | Self::Type(text) | Self::Verbatim(text) => output.push_str(text),
+            Self::Literal(text) | Self::Verbatim(text) => output.push_str(text),
+            Self::Type(go_type) => output.push_str(&go_type.code),
             Self::Qualified { package, name } => {
                 output.push_str(package.qualifier());
                 output.push('.');
@@ -556,7 +602,7 @@ impl GoExpressionNode {
                 layout,
             } => {
                 if let Some(go_type) = go_type {
-                    output.push_str(go_type);
+                    output.push_str(&go_type.code);
                 }
                 match layout {
                     _ if elements.is_empty() => output.push_str("{}"),
@@ -604,7 +650,7 @@ impl GoExpressionNode {
                 type_arguments,
             } => {
                 Self::write_child(base, slot.with(SlotKind::Postfix), output);
-                output.push_str(type_arguments);
+                output.push_str(&type_arguments.code);
             }
             Self::Selector { base, field, .. } => {
                 Self::write_child(base, slot.with(SlotKind::Postfix), output);
@@ -641,7 +687,7 @@ impl GoExpressionNode {
             Self::TypeAssertion { base, go_type } => {
                 Self::write_child(base, slot.with(SlotKind::Postfix), output);
                 output.push_str(".(");
-                output.push_str(go_type);
+                output.push_str(&go_type.code);
                 output.push(')');
             }
             Self::Unary { operator, operand } => {
@@ -670,7 +716,7 @@ impl GoExpressionNode {
                 Self::write_child(right, slot.with(SlotKind::Right(level)), output);
             }
             Self::Conversion { go_type, operand } => {
-                output.push_str(&render_conversion(go_type, &operand.print()));
+                output.push_str(&render_conversion(&go_type.code, &operand.print()));
             }
             Self::Spread(operand) => {
                 Self::write_child(operand, slot.with(SlotKind::Postfix), output);
@@ -687,9 +733,9 @@ impl GoExpressionNode {
                     parameters.iter().map(GoParameter::pair).collect();
                 output.push_str(&group_params(&pairs));
                 output.push(')');
-                if !result.is_empty() {
+                if !result.code.is_empty() {
                     output.push(' ');
-                    output.push_str(result);
+                    output.push_str(&result.code);
                 }
                 output.push_str(" {");
                 let lines: Vec<String> = body
@@ -800,7 +846,7 @@ mod tests {
 
     fn literal_struct(go_type: &str) -> GoExpressionNode {
         GoExpressionNode::CompositeLiteral {
-            go_type: Some(go_type.to_string()),
+            go_type: Some(GoType::new(go_type)),
             elements: Vec::new(),
             layout: CompositeLayout::Inline { padded: true },
         }
