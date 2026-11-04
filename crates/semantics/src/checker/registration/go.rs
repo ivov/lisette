@@ -1,4 +1,5 @@
 use super::*;
+use crate::analysis::GoPackageSources;
 use crate::diagnostics::ReplaceImporter;
 use std::mem;
 use syntax::ast::ImportAlias;
@@ -14,8 +15,9 @@ impl TaskState {
         package_id: &str,
         source: &str,
         cache_path: Option<PathBuf>,
-        locator: &TypedefLocator,
+        sources: &mut GoPackageSources,
     ) {
+        let locator = sources.locator;
         if store.has(package_id) {
             return;
         }
@@ -77,7 +79,7 @@ impl TaskState {
 
                 let import_package_id = format!("go:{}", go_pkg);
 
-                if store.has(&import_package_id) {
+                if store.has(&import_package_id) || sources.load_cached(store, &import_package_id) {
                     continue;
                 }
 
@@ -88,7 +90,7 @@ impl TaskState {
                             &import_package_id,
                             content.as_ref(),
                             origin.into_cache_path(),
-                            locator,
+                            sources,
                         );
                     }
                     other => {

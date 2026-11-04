@@ -204,6 +204,37 @@ impl LazyGoStdlibCache {
     }
 }
 
+pub struct GoPackageSources<'a> {
+    pub(crate) locator: &'a TypedefLocator,
+    stdlib_cache: Option<&'a mut LazyGoStdlibCache>,
+}
+
+impl<'a> GoPackageSources<'a> {
+    pub fn new(locator: &'a TypedefLocator) -> Self {
+        Self {
+            locator,
+            stdlib_cache: None,
+        }
+    }
+
+    pub(crate) fn load_cached(&mut self, store: &mut Store, package_id: &str) -> bool {
+        let go_pkg = package_id.strip_prefix("go:").unwrap_or(package_id);
+        if !deps::is_stdlib(go_pkg) {
+            return false;
+        }
+        let target = self.locator.target();
+        let Some(cache) = self
+            .stdlib_cache
+            .as_deref_mut()
+            .and_then(|cache| cache.get_or_load(target))
+        else {
+            return false;
+        };
+        load_cached_go_package(store, package_id, cache, target);
+        store.has(package_id)
+    }
+}
+
 pub struct InferenceOutput {
     pub dependencies: Option<DependencyGraph>,
     pub store: Store,

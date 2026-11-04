@@ -24,8 +24,6 @@ use std::mem;
 
 use std::path::PathBuf;
 
-use deps::TypedefLocator;
-
 use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use syntax::ast::{
     Annotation, Attribute, AttributeArg, Binding, EnumVariant, Expression, Generic, Span,

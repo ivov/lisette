@@ -1,6 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::LisetteDiagnostic;
+use semantics::GoPackageSources;
 use semantics::checker::TaskState;
 use semantics::store::Store;
 use std::mem;
@@ -39,7 +40,13 @@ pub(super) fn infer_test_file(
     let locator = deps::TypedefLocator::default();
 
     for (name, typedef) in extra_go_typedefs {
-        checker.parse_and_register_go_package(&mut store, name, typedef, None, &locator);
+        checker.parse_and_register_go_package(
+            &mut store,
+            name,
+            typedef,
+            None,
+            &mut GoPackageSources::new(&locator),
+        );
     }
 
     for item in &ast {
@@ -47,7 +54,13 @@ pub(super) fn infer_test_file(
             && let Some(go_pkg) = name.strip_prefix("go:")
             && let Some(typedef) = get_go_stdlib_typedef(go_pkg, Target::host())
         {
-            checker.parse_and_register_go_package(&mut store, name, typedef, None, &locator);
+            checker.parse_and_register_go_package(
+                &mut store,
+                name,
+                typedef,
+                None,
+                &mut GoPackageSources::new(&locator),
+            );
         }
     }
 

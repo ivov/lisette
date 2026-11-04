@@ -175,9 +175,11 @@ pub(super) fn infer_all_packages(
                 &mut checker,
                 store,
                 &package_id,
-                input.locator,
                 input.scope.script_unit(),
-                input.cache.go_stdlib_mut(),
+                &mut GoPackageSources {
+                    locator: input.locator,
+                    stdlib_cache: input.cache.go_stdlib_mut(),
+                },
             );
             continue;
         }
@@ -399,20 +401,15 @@ fn register_go_package(
     checker: &mut TaskState,
     store: &mut Store,
     package_id: &str,
-    locator: &TypedefLocator,
     script: Option<ScriptUnit>,
-    go_cache: Option<&mut LazyGoStdlibCache>,
+    sources: &mut GoPackageSources,
 ) {
     let go_pkg = package_id.strip_prefix("go:").unwrap_or(package_id);
-    if deps::is_stdlib(go_pkg)
-        && let Some(cache) = go_cache.and_then(|cache| cache.get_or_load(locator.target()))
-    {
-        load_cached_go_package(store, package_id, cache, locator.target());
-        if store.has(package_id) {
-            return;
-        }
+    if sources.load_cached(store, package_id) {
+        return;
     }
 
+    let locator = sources.locator;
     match locator.find_typedef_content(go_pkg) {
         deps::TypedefLocatorResult::Found { content, origin } => {
             checker.parse_and_register_go_package(
@@ -420,7 +417,7 @@ fn register_go_package(
                 package_id,
                 content.as_ref(),
                 origin.into_cache_path(),
-                locator,
+                sources,
             );
         }
         other => {

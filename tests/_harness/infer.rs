@@ -2,6 +2,7 @@ use diagnostics::{LisetteDiagnostic, LocalSink};
 use rustc_hash::FxHashMap as HashMap;
 use semantics::loader::Loader;
 use semantics::{
+    GoPackageSources,
     checker::TaskState,
     package_graph::Roots,
     package_graph::{PackageGraphOptions, build_package_graph},
@@ -125,7 +126,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
                         &package_id,
                         typedef,
                         None,
-                        &locator,
+                        &mut GoPackageSources::new(&locator),
                     );
                 }
                 continue;
