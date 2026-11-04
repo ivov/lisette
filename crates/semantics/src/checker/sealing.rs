@@ -1,5 +1,4 @@
-//! Method-set keys for Go unexported (sealing) methods, keyed by bindgen's
-//! `#[go(unexported, "<identity>")]` so structural satisfaction enforces the seal.
+//! Method-set keys for Go sealing methods, from bindgen's `#[go(unexported, "<identity>")]`.
 
 use ecow::EcoString;
 

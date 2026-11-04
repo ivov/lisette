@@ -9551,6 +9551,196 @@ fn main() {}
 }
 
 #[test]
+fn satisfy_internal_type_sealed_interface_via_go_implementer_ok() {
+    let lib = r#"
+pub interface Content {
+  #[go(unexported, "AttachContent(*example.com/lib/internal/surface.Conn)")]
+  fn AttachContent()
+  fn Title() -> string
+}
+pub fn Show(c: Option<Content>)
+"#;
+    let ui = r#"
+pub fn New() -> mut Ref<View>
+pub type View
+impl View {
+  #[go(unexported, "AttachContent(*example.com/lib/internal/surface.Conn)")]
+  fn AttachContent(self: mut Ref<View>)
+  fn Title(self: Ref<View>) -> string
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+import "go:example.com/lib/ui"
+fn main() {
+  let content: lib.Content = ui.New()
+  lib.Show(Some(content))
+}
+"#;
+    infer_with_go_typedefs(
+        input,
+        &[("go:example.com/lib", lib), ("go:example.com/lib/ui", ui)],
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn satisfy_internal_type_sealed_interface_via_plain_impl_rejected() {
+    let typedef = r#"
+pub interface Content {
+  #[go(unexported, "AttachContent(*example.com/lib/internal/surface.Conn)")]
+  fn AttachContent()
+  fn Title() -> string
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+struct Mine {}
+impl Mine {
+  fn AttachContent(self) {}
+  fn Title(self) -> string { "" }
+}
+fn as_content(m: Mine) -> lib.Content { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
+        .assert_infer_code("sealed_interface");
+}
+
+const INTERNAL_TYPE_SEALED_TYPEDEF: &str = r#"
+pub interface Content {
+  #[go(unexported, "AttachContent(*example.com/lib/internal/surface.Conn)")]
+  fn AttachContent()
+  fn Title() -> string
+}
+
+pub type View
+impl View {
+  #[go(unexported, "AttachContent(*example.com/lib/internal/surface.Conn)")]
+  fn AttachContent(self: mut Ref<View>)
+  fn Title(self: Ref<View>) -> string
+}
+
+pub interface Base {
+  fn AttachContent()
+}
+
+pub interface Other {
+  embed Base
+}
+
+pub type Spelled
+impl Spelled {
+  fn Attach_Content(self: Ref<Spelled>)
+}
+"#;
+
+#[test]
+fn satisfy_internal_type_sealed_interface_via_embedded_implementer_ok() {
+    let input = r#"
+import "go:example.com/lib"
+struct Mine { embed mut Ref<lib.View> }
+fn as_content(m: Mine) -> lib.Content { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(
+        input,
+        &[("go:example.com/lib", INTERNAL_TYPE_SEALED_TYPEDEF)],
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn internal_type_seal_shadowed_by_own_method_rejected() {
+    let input = r#"
+import "go:example.com/lib"
+struct Mine { embed mut Ref<lib.View> }
+impl Mine {
+  pub fn attach_content(self) {}
+}
+fn as_content(m: Mine) -> lib.Content { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(
+        input,
+        &[("go:example.com/lib", INTERNAL_TYPE_SEALED_TYPEDEF)],
+    )
+    .assert_infer_code("sealed_interface");
+}
+
+#[test]
+fn internal_type_seal_shadowed_by_own_field_rejected() {
+    let input = r#"
+import "go:example.com/lib"
+struct Mine {
+  embed mut Ref<lib.View>,
+  pub attach_content: int,
+}
+fn as_content(m: Mine) -> lib.Content { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(
+        input,
+        &[("go:example.com/lib", INTERNAL_TYPE_SEALED_TYPEDEF)],
+    )
+    .assert_infer_code("sealed_interface");
+}
+
+#[test]
+fn internal_type_seal_shadowed_by_inherited_interface_method_rejected() {
+    let input = r#"
+import "go:example.com/lib"
+struct Mine {
+  embed mut Ref<lib.View>,
+  embed lib.Other,
+}
+fn as_content(m: Mine) -> lib.Content { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(
+        input,
+        &[("go:example.com/lib", INTERNAL_TYPE_SEALED_TYPEDEF)],
+    )
+    .assert_infer_code("sealed_interface");
+}
+
+#[test]
+fn internal_type_seal_not_shadowed_by_free_function_method_ok() {
+    let input = r#"
+import "go:example.com/lib"
+struct Mine { embed mut Ref<lib.View> }
+impl Mine {
+  pub fn attach_content<T>(self, x: T) {}
+}
+fn as_content(m: Mine) -> lib.Content { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(
+        input,
+        &[("go:example.com/lib", INTERNAL_TYPE_SEALED_TYPEDEF)],
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn internal_type_seal_not_shadowed_by_underscored_go_method_ok() {
+    let input = r#"
+import "go:example.com/lib"
+struct Mine {
+  embed mut Ref<lib.View>,
+  embed lib.Spelled,
+}
+fn as_content(m: Mine) -> lib.Content { m }
+fn main() {}
+"#;
+    infer_with_go_typedefs(
+        input,
+        &[("go:example.com/lib", INTERNAL_TYPE_SEALED_TYPEDEF)],
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn embed_local_enum_rejected() {
     infer(
         r#"

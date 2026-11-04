@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                                        ╰── `Sealed` is sealed and cannot be implemented here
  7 │ fn main() {}
    ╰────
-  help: `Sealed` has an unexported method, so Go only lets types in its own package implement it. A Lisette type can satisfy `Sealed` only by embedding it (or by embedding an imported type that already implements it) · code: [infer.sealed_interface]
+  help: `Sealed` has a method that only Go code in its own module can declare. Satisfy `Sealed` by embedding it, or by embedding a Go type that implements it · code: [infer.sealed_interface]

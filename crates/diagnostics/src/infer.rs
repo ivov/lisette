@@ -2795,9 +2795,8 @@ pub fn sealed_interface_not_satisfiable(
         format!("`{interface_name}` is sealed and cannot be implemented here"),
     )
     .with_help(format!(
-        "`{interface_name}` has an unexported method, so Go only lets types in its own package \
-         implement it. A Lisette type can satisfy `{interface_name}` only by embedding it (or by \
-         embedding an imported type that already implements it)."
+        "`{interface_name}` has a method that only Go code in its own module can declare. Satisfy \
+         `{interface_name}` by embedding it, or by embedding a Go type that implements it."
     ))
 }
 
