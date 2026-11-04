@@ -70,7 +70,7 @@ fn scan_file_imports(path: PathBuf) -> Result<Vec<ScannedImport>, SourceScanErro
         Ok(s) => s,
         Err(e) => return Err(SourceScanError::Read { path, error: e }),
     };
-    let parse_result = Parser::lex_and_parse_file(&source, 0);
+    let parse_result = Parser::lex_and_parse_imports(&source, 0);
     if parse_result.has_errors() {
         return Err(SourceScanError::Parse {
             path,
@@ -114,7 +114,7 @@ mod tests {
 
     #[test]
     fn scan_reports_parse_error_naming_the_file() {
-        let project = project_src(&[("main.lis", "fn broken( {\n")]);
+        let project = project_src(&[("main.lis", "import broken\n")]);
 
         let Err(SourceScanError::Parse { path, .. }) =
             scan_source_imports(&project.path().join("src"))

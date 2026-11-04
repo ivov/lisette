@@ -121,6 +121,22 @@ impl<'source> Parser<'source> {
         Parser::with_file_id(lex_result.tokens, source, file_id).parse()
     }
 
+    pub fn lex_and_parse_imports(source: &str, file_id: u32) -> ParseResult {
+        let lex_result = lex::Lexer::new(source, file_id).lex();
+
+        if lex_result.failed() {
+            return ParseResult {
+                ast: vec![],
+                errors: lex_result.errors,
+                file_comment: None,
+                truncated: true,
+                status: FileParseStatus::Failed,
+            };
+        }
+
+        Parser::with_file_id(lex_result.tokens, source, file_id).parse_imports()
+    }
+
     fn with_file_id(
         tokens: Vec<Token<'source>>,
         source: &'source str,
@@ -179,6 +195,34 @@ impl<'source> Parser<'source> {
             errors: self.errors,
             file_comment,
             truncated,
+            status,
+        }
+    }
+
+    fn parse_imports(mut self) -> ParseResult {
+        let mut imports = vec![];
+
+        let shebang_end = self.consume_shebang();
+        let file_comment = self.collect_file_comments(shebang_end);
+        self.skip_comments();
+
+        while self.is(Import) && !self.too_many_errors() {
+            imports.push(self.parse_top_item());
+            self.advance_if(Semicolon);
+            self.skip_comments();
+        }
+
+        let status = if self.errors.is_empty() {
+            FileParseStatus::Clean
+        } else {
+            FileParseStatus::Recovered
+        };
+
+        ParseResult {
+            ast: imports,
+            errors: self.errors,
+            file_comment,
+            truncated: false,
             status,
         }
     }
