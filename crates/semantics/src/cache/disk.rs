@@ -27,6 +27,10 @@ pub(super) fn read<T: DeserializeOwned>(path: &Path) -> io::Result<T> {
 
 pub(super) fn write<T: Serialize>(path: &Path, value: &T) -> io::Result<()> {
     let bytes = bincode::serialize(value).map_err(io::Error::other)?;
+    write_bytes(path, &bytes)
+}
+
+pub(super) fn write_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -40,7 +44,13 @@ pub(super) fn write<T: Serialize>(path: &Path, value: &T) -> io::Result<()> {
 }
 
 pub(super) fn write_global<T: Serialize>(path: &Path, value: &T, legacy_prefix: &str) {
-    if write(path, value).is_ok()
+    if let Ok(bytes) = bincode::serialize(value) {
+        write_global_bytes(path, &bytes, legacy_prefix);
+    }
+}
+
+pub(super) fn write_global_bytes(path: &Path, bytes: &[u8], legacy_prefix: &str) {
+    if write_bytes(path, bytes).is_ok()
         && let Some(parent) = path.parent()
     {
         prune_legacy(parent, legacy_prefix);

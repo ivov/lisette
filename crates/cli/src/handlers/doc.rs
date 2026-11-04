@@ -1654,8 +1654,8 @@ fn collect_go_matches(target: Target, query_lower: &str) -> Vec<SearchMatch> {
     for package in get_go_stdlib_packages(target) {
         if let Some(ref cache) = go_cache {
             let package_id = format!("go:{}", package);
-            if let Some(package_cache) = cache.packages.get(&package_id)
-                && !has_go_package_matches(package_cache, query_lower)
+            if let Some(package_cache) = cache.decode(&package_id)
+                && !has_go_package_matches(&package_cache, query_lower)
             {
                 continue;
             }

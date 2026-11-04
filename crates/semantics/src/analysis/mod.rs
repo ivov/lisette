@@ -8,6 +8,7 @@ use rustc_hash::FxHashSet as HashSet;
 use entry::{compute_roots, find_unreachable_packages, load_sibling_files, register_entry_file};
 use packages::{PackageInferenceInput, infer_all_packages};
 
+use std::mem;
 use std::path::{Path, PathBuf};
 
 use diagnostics::{LisetteDiagnostic, LocalSink};
@@ -196,9 +197,16 @@ impl LazyGoStdlibCache {
         }
     }
 
+    fn take_loaded(&mut self) -> Option<go_stdlib::GoStdlibCache> {
+        match mem::replace(self, Self::Missing) {
+            Self::Loaded(cache) => Some(cache),
+            Self::Unloaded | Self::Missing => None,
+        }
+    }
+
     fn package_ids(&self) -> Option<HashSet<String>> {
         match self {
-            Self::Loaded(cache) => Some(cache.packages.keys().cloned().collect()),
+            Self::Loaded(cache) => Some(cache.package_ids().cloned().collect()),
             Self::Unloaded | Self::Missing => None,
         }
     }

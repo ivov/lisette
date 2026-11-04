@@ -1,4 +1,5 @@
 use rustc_hash::FxHashMap as HashMap;
+use std::ops::Range;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -12,12 +13,81 @@ use std::fs;
 use syntax::program::File;
 
 #[derive(Serialize, Deserialize)]
-pub struct GoStdlibCache {
+struct GoStdlibHeader {
     version: u32,
     content_hash: u64,
     compiler_version: u64,
-    pub packages: HashMap<String, GoPackageCache>,
+    block_ranges: HashMap<String, (usize, usize)>,
 }
+
+pub struct GoStdlibCache {
+    packages: HashMap<String, Range<usize>>,
+    bytes: Vec<u8>,
+}
+
+impl GoStdlibCache {
+    pub fn package_ids(&self) -> impl Iterator<Item = &String> {
+        self.packages.keys()
+    }
+
+    fn block(&self, package_id: &str) -> Option<&[u8]> {
+        let range = self.packages.get(package_id)?;
+        self.bytes.get(range.clone())
+    }
+
+    pub fn decode(&self, package_id: &str) -> Option<GoPackageCache> {
+        bincode::deserialize(self.block(package_id)?).ok()
+    }
+
+    fn from_bytes(bytes: Vec<u8>) -> Option<Self> {
+        let header_length = usize::try_from(u64::from_le_bytes(
+            bytes.get(..HEADER_LENGTH_SIZE)?.try_into().ok()?,
+        ))
+        .ok()?;
+        let blocks_start = HEADER_LENGTH_SIZE.checked_add(header_length)?;
+        let header: GoStdlibHeader =
+            bincode::deserialize(bytes.get(HEADER_LENGTH_SIZE..blocks_start)?).ok()?;
+        if header.version != CACHE_FORMAT_VERSION
+            || header.content_hash != GO_STDLIB_HASH
+            || header.compiler_version != COMPILER_VERSION_HASH
+        {
+            return None;
+        }
+        let packages = header
+            .block_ranges
+            .into_iter()
+            .map(|(package_id, (start, end))| {
+                (package_id, blocks_start + start..blocks_start + end)
+            })
+            .collect();
+        Some(Self { packages, bytes })
+    }
+
+    fn encode(blocks: &[(&str, &[u8])]) -> Option<Vec<u8>> {
+        let mut block_ranges = HashMap::default();
+        let mut offset = 0;
+        for (package_id, block) in blocks {
+            block_ranges.insert(package_id.to_string(), (offset, offset + block.len()));
+            offset += block.len();
+        }
+        let header = bincode::serialize(&GoStdlibHeader {
+            version: CACHE_FORMAT_VERSION,
+            content_hash: GO_STDLIB_HASH,
+            compiler_version: COMPILER_VERSION_HASH,
+            block_ranges,
+        })
+        .ok()?;
+        let mut bytes = Vec::with_capacity(HEADER_LENGTH_SIZE + header.len() + offset);
+        bytes.extend_from_slice(&(header.len() as u64).to_le_bytes());
+        bytes.extend_from_slice(&header);
+        for (_, block) in blocks {
+            bytes.extend_from_slice(block);
+        }
+        Some(bytes)
+    }
+}
+
+const HEADER_LENGTH_SIZE: usize = size_of::<u64>();
 
 #[derive(Serialize, Deserialize)]
 pub struct GoPackageCache {
@@ -36,27 +106,27 @@ fn cache_path(target: Target) -> Option<PathBuf> {
 
 pub fn try_load_go_stdlib_cache(target: Target) -> Option<GoStdlibCache> {
     let path = cache_path(target)?;
-    let cache: GoStdlibCache = disk::read(&path).ok()?;
-
-    if cache.version != CACHE_FORMAT_VERSION
-        || cache.content_hash != GO_STDLIB_HASH
-        || cache.compiler_version != COMPILER_VERSION_HASH
-    {
+    let bytes = fs::read(&path).ok()?;
+    let cache = GoStdlibCache::from_bytes(bytes);
+    if cache.is_none() {
         let _ = fs::remove_file(&path);
-        return None;
     }
-
-    Some(cache)
+    cache
 }
 
-pub(crate) fn save_go_stdlib_cache(store: &Store, go_package_ids: &[String], target: Target) {
+pub(crate) fn save_go_stdlib_cache(
+    store: &Store,
+    go_package_ids: &[String],
+    previous: Option<GoStdlibCache>,
+    target: Target,
+) {
     let Some(path) = cache_path(target) else {
         return;
     };
 
-    let mut packages = HashMap::default();
     // Go definitions don't reference files, so file_id_to_index is always empty.
     let empty_file_map = HashMap::default();
+    let mut encoded: Vec<(&str, Vec<u8>)> = Vec::with_capacity(go_package_ids.len());
     for package_id in go_package_ids {
         let Some(package) = store.get_package(package_id) else {
             continue;
@@ -74,23 +144,32 @@ pub(crate) fn save_go_stdlib_cache(store: &Store, go_package_ids: &[String], tar
 
         let go_imports = get_go_imports_from_source(package_id, target);
 
-        packages.insert(
-            package_id.clone(),
-            GoPackageCache {
-                definitions,
-                go_imports,
-            },
-        );
+        let Ok(block) = bincode::serialize(&GoPackageCache {
+            definitions,
+            go_imports,
+        }) else {
+            return;
+        };
+        encoded.push((package_id, block));
     }
 
-    let cache = GoStdlibCache {
-        version: CACHE_FORMAT_VERSION,
-        content_hash: GO_STDLIB_HASH,
-        compiler_version: COMPILER_VERSION_HASH,
-        packages,
-    };
+    let mut blocks: Vec<(&str, &[u8])> = encoded
+        .iter()
+        .map(|(package_id, block)| (*package_id, block.as_slice()))
+        .collect();
+    if let Some(previous) = &previous {
+        for package_id in previous.package_ids() {
+            if !go_package_ids.contains(package_id)
+                && let Some(block) = previous.block(package_id)
+            {
+                blocks.push((package_id, block));
+            }
+        }
+    }
 
-    disk::write_global(&path, &cache, "stdlib_defs");
+    if let Some(bytes) = GoStdlibCache::encode(&blocks) {
+        disk::write_global_bytes(&path, &bytes, "stdlib_defs");
+    }
 }
 
 /// Load a Go package and its transitive deps from cache, recursively.
@@ -104,7 +183,7 @@ pub(crate) fn load_cached_go_package(
         return;
     }
 
-    let Some(cached) = cache.packages.get(package_id) else {
+    let Some(cached) = cache.decode(package_id) else {
         return;
     };
 
@@ -117,7 +196,7 @@ pub(crate) fn load_cached_go_package(
         load_cached_go_package(store, dep, cache, target);
     }
 
-    register_cached_go_package(store, package_id, cached, target);
+    register_cached_go_package(store, package_id, &cached, target);
 }
 
 fn register_cached_go_package(
@@ -192,17 +271,14 @@ mod tests {
             definitions: Default::default(),
             go_imports: vec![import.to_string()],
         };
-        let cache = GoStdlibCache {
-            version: CACHE_FORMAT_VERSION,
-            content_hash: GO_STDLIB_HASH,
-            compiler_version: COMPILER_VERSION_HASH,
-            packages: [
-                ("go:example/a".to_string(), package("go:example/b")),
-                ("go:example/b".to_string(), package("go:example/a")),
-            ]
-            .into_iter()
-            .collect(),
-        };
+        let a = bincode::serialize(&package("go:example/b")).unwrap();
+        let b = bincode::serialize(&package("go:example/a")).unwrap();
+        let bytes = GoStdlibCache::encode(&[
+            ("go:example/a", a.as_slice()),
+            ("go:example/b", b.as_slice()),
+        ])
+        .unwrap();
+        let cache = GoStdlibCache::from_bytes(bytes).unwrap();
         let mut store = Store::new();
 
         load_cached_go_package(&mut store, "go:example/a", &cache, Target::host());
