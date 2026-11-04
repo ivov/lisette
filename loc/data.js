@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793829720050,
+  "lastUpdate": 1793829996540,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -50129,6 +50129,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 14013,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9098,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10332,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "618287f6250f5906ef1f8351dbeaeaf4f4ebe81a",
+          "message": "perf: free spent syntax trees on background thread after compile (#1608)",
+          "timestamp": "2026-11-04T23:06:12+01:00",
+          "tree_id": "cb4e6bee8da434b711c5a41b4c7de2da6538445e",
+          "url": "https://github.com/ivov/lisette/commit/618287f6250f5906ef1f8351dbeaeaf4f4ebe81a"
+        },
+        "date": 1793829994831,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 151618,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 40018,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29447,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19480,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15793,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14019,
             "unit": "lines"
           },
           {
