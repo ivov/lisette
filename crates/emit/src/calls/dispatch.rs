@@ -21,6 +21,7 @@ use crate::plan::go_expression::{
     BinaryOp, CompositeLayout, FunctionLiteralLayout, GoExpressionNode, GoParameter,
 };
 use crate::plan::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
+use crate::types::go_type::GoType;
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments, StructFields};
 use syntax::program::NativeTypeKind;
@@ -30,7 +31,7 @@ use syntax::program::{
 use syntax::types::{CompoundKind, FunctionParameter, Type, build_substitution_map, substitute};
 
 struct TupleStructTarget {
-    go_ty: String,
+    go_ty: GoType,
     field_tys: Vec<Type>,
     owner_type: Type,
 }
@@ -136,9 +137,9 @@ impl<'a> Planner<'a> {
         function: &Expression,
         type_args: ResolvedCallTypeArguments<'_>,
         call_ty: Option<&Type>,
-    ) -> String {
+    ) -> GoType {
         let element = self.resolve_element_lisette_type(function, type_args, call_ty);
-        self.use_go_type(&element)
+        self.go_type(&element)
     }
 
     fn resolve_element_lisette_type<'t>(
@@ -166,9 +167,9 @@ impl<'a> Planner<'a> {
         function: &Expression,
         type_args: ResolvedCallTypeArguments<'_>,
         call_ty: Option<&Type>,
-    ) -> (String, String) {
+    ) -> (GoType, GoType) {
         let (key, value) = self.resolve_map_lisette_types(function, type_args, call_ty);
-        (self.use_go_type(&key), self.use_go_type(&value))
+        (self.go_type(&key), self.go_type(&value))
     }
 
     fn resolve_map_lisette_types(
@@ -215,7 +216,10 @@ impl<'a> Planner<'a> {
                     Vec::new(),
                     GoExpression::call(
                         GoExpression::external_name("make".to_string()),
-                        vec![GoExpression::type_name(format!("chan {}", element))],
+                        vec![GoExpression::type_name(GoType::with_dependencies(
+                            format!("chan {}", element.code),
+                            [&element],
+                        ))],
                     ),
                 ))
             }
@@ -228,7 +232,10 @@ impl<'a> Planner<'a> {
                     GoExpression::call(
                         GoExpression::external_name("make".to_string()),
                         vec![
-                            GoExpression::type_name(format!("chan {}", element)),
+                            GoExpression::type_name(GoType::with_dependencies(
+                                format!("chan {}", element.code),
+                                [&element],
+                            )),
                             capacity,
                         ],
                     ),
@@ -241,7 +248,7 @@ impl<'a> Planner<'a> {
                     Vec::new(),
                     GoExpression::call(
                         GoExpression::external_name("make".to_string()),
-                        vec![GoExpression::type_name(format!("map[{}]{}", key, val))],
+                        vec![GoExpression::type_name(GoType::map_of(&key, &val))],
                     ),
                 ))
             }
@@ -251,7 +258,7 @@ impl<'a> Planner<'a> {
                     self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
                 Some(ValuePlan::computed(
                     Vec::new(),
-                    GoExpression::empty_composite(format!("[]{}", element)),
+                    GoExpression::empty_composite(GoType::slice_of(&element)),
                 ))
             }
             (NativeTypeKind::Slice, "make") => {
@@ -260,16 +267,16 @@ impl<'a> Planner<'a> {
                     ctx.resolved_type_args,
                     ctx.call_ty,
                 );
-                let element = self.use_go_type(&element_ty);
+                let element = self.go_type(&element_ty);
                 let (setup, length) = self.stage_size_argument(ctx);
                 let value = if self.element_go_zero_ok(&element_ty) {
                     GoExpression::call(
                         GoExpression::external_name("make".to_string()),
-                        vec![GoExpression::type_name(format!("[]{}", element)), length],
+                        vec![GoExpression::type_name(GoType::slice_of(&element)), length],
                     )
                 } else {
                     let zero = self.lisette_zero(&element_ty);
-                    let slice_type = format!("[]{element}");
+                    let slice_type = GoType::slice_of(&element);
                     let slice_name = self.scope.helper_local("s", &self.package);
                     let index_name = self.scope.helper_local("i", &self.package);
                     let slice = || GoExpression::identifier(slice_name.clone());
@@ -339,8 +346,9 @@ impl<'a> Planner<'a> {
         };
         let argument = ctx.args.first()?;
 
-        let element_go = self.use_go_type(&element);
-        let array_go = format!("[{length}]{element_go}");
+        let element_go = self.go_type(&element);
+        let array_go =
+            GoType::with_dependencies(format!("[{length}]{}", element_go.code), [&element_go]);
 
         let staged = self.plan_operand(argument, ExpressionContext::value());
         let (setup, source) = staged.into_parts();
@@ -352,9 +360,9 @@ impl<'a> Planner<'a> {
             GoExpression::function_literal(
                 vec![GoParameter::new(
                     slice_name.clone(),
-                    format!("[]{element_go}"),
+                    GoType::slice_of(&element_go),
                 )],
-                format!("({array_go}, bool)"),
+                GoType::with_dependencies(format!("({}, bool)", array_go.code), [&array_go]),
                 LoweredBlock {
                     statements: vec![
                         LoweredStatement::If(IfPlan::plain(
@@ -420,9 +428,8 @@ impl<'a> Planner<'a> {
         if !keys_checked_as_go_constants(&keys, &key_ty) {
             return None;
         }
-        let key_go_ty = self.use_go_type(&key_ty);
-        let value_go_ty = self.use_go_type(&value_ty);
-        let map_ty = format!("map[{}]{}", key_go_ty, value_go_ty);
+        let value_go_ty = self.go_type(&value_ty);
+        let map_ty = GoType::map_of(&self.go_type(&key_ty), &value_go_ty);
 
         if pairs.is_empty() {
             return Some(ValuePlan::computed(
@@ -580,7 +587,7 @@ impl<'a> Planner<'a> {
             CallableOrigin::Source(CallKind::Zero) => {
                 let ty = zero_call_type(function, resolved_type_args, call_ty);
                 let value = if self.is_plain_struct(&ty) {
-                    GoExpression::empty_composite(self.use_go_type(&ty))
+                    GoExpression::empty_composite(self.go_type(&ty))
                 } else {
                     self.lisette_zero(&ty)
                 };
@@ -686,7 +693,7 @@ impl<'a> Planner<'a> {
         function: &Expression,
         declared: Option<&Type>,
         arg_shape: CallArgShape,
-    ) -> Option<String> {
+    ) -> Option<GoType> {
         let Type::Forall { vars, body } = declared? else {
             return None;
         };
@@ -818,7 +825,7 @@ impl<'a> Planner<'a> {
                 .collect()
         };
 
-        let go_ty = self.use_go_type(&return_ty);
+        let go_ty = self.go_type(&return_ty);
         Some(TupleStructTarget {
             go_ty,
             field_tys,
@@ -841,11 +848,8 @@ impl<'a> Planner<'a> {
         // `any` holds a function in its direct Go form, so assert that form.
         let function_layouts = self.any_slot_function_layouts(&asserted);
         let target_ty = match &function_layouts {
-            Some((stored, _)) => {
-                let go_type = stored.go_type(self);
-                self.use_rendered_go_type(go_type)
-            }
-            None => self.use_go_type(&asserted),
+            Some((stored, _)) => stored.go_type(self),
+            None => self.go_type(&asserted),
         };
         let (mut setup, arguments) = match args.first() {
             Some(a) => {
@@ -859,7 +863,7 @@ impl<'a> Planner<'a> {
         let call = GoExpression::call(
             GoExpression::instantiation(
                 GoExpression::generated(GeneratedPackage::Prelude, "AssertType"),
-                format!("[{target_ty}]"),
+                GoType::type_arguments(&[target_ty]),
             ),
             arguments,
         );
@@ -910,7 +914,7 @@ impl<'a> Planner<'a> {
         }
     }
 
-    pub(crate) fn prelude_container_type_args(&mut self, ty: &Type) -> Option<String> {
+    pub(crate) fn prelude_container_type_args(&mut self, ty: &Type) -> Option<GoType> {
         if !is_prelude_container_type(ty) {
             return None;
         }

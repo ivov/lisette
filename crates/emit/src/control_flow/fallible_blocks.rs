@@ -27,7 +27,7 @@ pub(crate) struct TryBlockPairPlan<'e> {
 
 impl TryBlockPairPlan<'_> {
     pub(crate) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundValue {
-        let go_return = planner.render_callable_return_ty(
+        let go_return = planner.callable_return_go_type(
             &CallableReturnAbi::Lowered(self.shape.clone()),
             &self.effective_ty,
         );
@@ -242,7 +242,7 @@ impl Planner<'_> {
 
         let result_var = self.fresh_local(Some("recoverResult"));
         self.declare(&result_var);
-        let inner_ty_str = self.use_go_type(fallible.ok_ty());
+        let inner_ty_str = self.go_type(fallible.ok_ty());
 
         let body_return_ctx = if fallible.ok_ty().is_unit() {
             ReturnContext::Tagged(Type::unit())
@@ -315,7 +315,7 @@ impl Planner<'_> {
     /// `()` converted to the block's ok type, which can be wider than unit, such as `Unknown`.
     fn unit_value(&mut self, statements: &mut Vec<Statement>, ok_ty: &Type) -> GoExpression {
         let unit_ty = Type::unit();
-        let unit_val = self.zero_value_expression(&unit_ty);
+        let unit_val = self.zero_value(&unit_ty);
         self.coerce_value(statements, unit_val, &unit_ty, ok_ty)
     }
 }

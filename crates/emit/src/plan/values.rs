@@ -14,6 +14,7 @@ use crate::plan::go_expression::{
 use crate::plan::local::GoIdentifier;
 #[cfg(debug_assertions)]
 use crate::plan::verify::verify_final_function_body;
+use crate::types::go_type::GoType;
 use std::fmt::{self, Display, Formatter};
 use std::mem;
 use syntax::ast::Expression;
@@ -173,17 +174,17 @@ impl GoExpression {
         Self::new(GoExpressionNode::Literal(rendered))
     }
 
-    pub(crate) fn type_name(go_type: String) -> Self {
-        Self::new(GoExpressionNode::Type(go_type))
+    pub(crate) fn type_name(go_type: impl Into<GoType>) -> Self {
+        Self::new(GoExpressionNode::Type(go_type.into()))
     }
 
     pub(crate) fn composite(
-        go_type: Option<String>,
+        go_type: Option<impl Into<GoType>>,
         elements: Vec<(Option<GoExpression>, GoExpression)>,
         layout: CompositeLayout,
     ) -> Self {
         let node = GoExpressionNode::CompositeLiteral {
-            go_type,
+            go_type: go_type.map(Into::into),
             elements: elements
                 .into_iter()
                 .map(|(key, value)| CompositeElement {
@@ -198,12 +199,12 @@ impl GoExpression {
 
     /// `T{field: value, ...}`, whose keys name fields of `T`.
     pub(crate) fn struct_literal(
-        go_type: String,
+        go_type: impl Into<GoType>,
         fields: Vec<(String, GoExpression)>,
         layout: CompositeLayout,
     ) -> Self {
         let node = GoExpressionNode::CompositeLiteral {
-            go_type: Some(go_type),
+            go_type: Some(go_type.into()),
             elements: fields
                 .into_iter()
                 .map(|(name, value)| CompositeElement {
@@ -217,7 +218,7 @@ impl GoExpression {
     }
 
     /// `T{}` with no elements.
-    pub(crate) fn empty_composite(go_type: String) -> Self {
+    pub(crate) fn empty_composite(go_type: impl Into<GoType>) -> Self {
         Self::composite(
             Some(go_type),
             Vec::new(),
@@ -234,17 +235,18 @@ impl GoExpression {
     }
 
     /// Drop the type of a composite literal nested in a literal of `element_type`.
-    pub(crate) fn elide_composite_type(mut self, element_type: &str) -> Self {
+    pub(crate) fn elide_composite_type(mut self, element_type: &GoType) -> Self {
         if let GoExpressionNode::CompositeLiteral { go_type, .. } = &mut self.node
-            && go_type.as_deref() == Some(element_type)
+            && go_type.as_ref().map(|go_type| &go_type.code) == Some(&element_type.code)
         {
             *go_type = None;
         }
         self
     }
 
-    pub(crate) fn instantiation(base: GoExpression, type_arguments: String) -> Self {
-        if type_arguments.is_empty() {
+    pub(crate) fn instantiation(base: GoExpression, type_arguments: impl Into<GoType>) -> Self {
+        let type_arguments = type_arguments.into();
+        if type_arguments.code.is_empty() {
             return base;
         }
         let node = GoExpressionNode::Instantiation {
@@ -254,10 +256,10 @@ impl GoExpression {
         Self::new(node)
     }
 
-    pub(crate) fn type_assertion(base: GoExpression, go_type: String) -> Self {
+    pub(crate) fn type_assertion(base: GoExpression, go_type: impl Into<GoType>) -> Self {
         let node = GoExpressionNode::TypeAssertion {
             base: Box::new(base.node),
-            go_type,
+            go_type: go_type.into(),
         };
         Self::new(node)
     }
@@ -276,15 +278,16 @@ impl GoExpression {
 
     pub(crate) fn function_literal(
         parameters: Vec<GoParameter>,
-        result: String,
+        result: impl Into<GoType>,
         mut body: LoweredBlock,
         layout: FunctionLiteralLayout,
     ) -> Self {
-        if !result.is_empty() {
+        let result = result.into();
+        if !result.code.is_empty() {
             body.ensure_go_termination();
         }
         #[cfg(debug_assertions)]
-        verify_final_function_body(&mut body, !result.is_empty())
+        verify_final_function_body(&mut body, !result.code.is_empty())
             .unwrap_or_else(|error| panic!("{error}"));
         Self::new(GoExpressionNode::FunctionLiteral {
             parameters,
@@ -295,7 +298,7 @@ impl GoExpression {
     }
 
     pub(crate) fn immediate_call(
-        result: String,
+        result: impl Into<GoType>,
         body: LoweredBlock,
         layout: FunctionLiteralLayout,
     ) -> Self {
@@ -375,9 +378,9 @@ impl GoExpression {
         Self::new(node)
     }
 
-    pub(crate) fn conversion(go_type: String, value: GoExpression) -> Self {
+    pub(crate) fn conversion(go_type: impl Into<GoType>, value: GoExpression) -> Self {
         let node = GoExpressionNode::Conversion {
-            go_type,
+            go_type: go_type.into(),
             operand: Box::new(value.node),
         };
         Self::new(node)
@@ -766,7 +769,7 @@ impl ValuePlan {
         (self.setup, self.expression)
     }
 
-    pub(crate) fn conversion(mut self, go_type: String) -> Self {
+    pub(crate) fn conversion(mut self, go_type: impl Into<GoType>) -> Self {
         self.expression = GoExpression::conversion(go_type, self.expression);
         if !self.stability.is_stable_across_calls() {
             self.stability = Stability::Observable;

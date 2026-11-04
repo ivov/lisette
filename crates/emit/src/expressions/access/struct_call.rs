@@ -34,7 +34,7 @@ struct SpreadInput<'a> {
 struct StructCallContext<'a> {
     name: &'a str,
     ty: &'a Type,
-    go_type: String,
+    go_type: GoType,
     enum_ctx: Option<EnumCallContext>,
 }
 
@@ -321,10 +321,7 @@ impl Planner<'_> {
         if !layout_is_map(&layout) {
             return None;
         }
-        let go_type = layout.go_type(self);
-        Some(GoExpression::empty_composite(
-            self.use_rendered_go_type(go_type),
-        ))
+        Some(GoExpression::empty_composite(layout.go_type(self)))
     }
 
     /// Look up unspecified fields of a Lisette-defined struct or enum struct variant,
@@ -392,12 +389,12 @@ impl Planner<'_> {
             return None;
         }
         let underlying = self.get_newtype_underlying(ty)?;
-        let go_ty = self.use_go_type(ty);
+        let go_ty = self.go_type(ty);
         self.go_newtype_zero(go_ty, &underlying)
     }
 
     /// Zero for a Go named non-struct, in a form Go takes as an operand.
-    fn go_newtype_zero(&mut self, go_ty: String, underlying: &Type) -> Option<GoExpression> {
+    fn go_newtype_zero(&mut self, go_ty: GoType, underlying: &Type) -> Option<GoExpression> {
         let underlying = self.facts.peel_underlying(underlying);
         if underlying.is_map() || matches!(underlying, Type::Array { .. }) {
             return Some(GoExpression::empty_composite(go_ty));
@@ -415,7 +412,7 @@ impl Planner<'_> {
     }
 
     fn go_imported_zero(&mut self, ty: &Type, id: &str) -> GoExpression {
-        let go_ty = self.use_go_type(ty);
+        let go_ty = self.go_type(ty);
         let is_newtype = self.facts.definition(id).is_some_and(|d| d.is_newtype());
         if is_newtype {
             if let Some(underlying) = self.get_newtype_underlying(ty)
@@ -474,7 +471,7 @@ impl Planner<'_> {
                     SimpleKind::String => {
                         GoExpression::constant("\"\"".to_string(), ConstantKind::String)
                     }
-                    SimpleKind::Unit => GoExpression::empty_composite("struct{}".to_string()),
+                    SimpleKind::Unit => GoExpression::empty_composite(GoType::new("struct{}")),
                     // Go's `0` is an untyped *integer* constant, even for a float slot.
                     _ => GoExpression::constant("0".to_string(), ConstantKind::Int),
                 };
@@ -488,7 +485,7 @@ impl Planner<'_> {
                 ValueLayout::Slice { element, .. },
             ) => {
                 let element = element.go_type(self);
-                let go_type = format!("[]{}", self.use_rendered_go_type(element));
+                let go_type = GoType::with_dependencies(format!("[]{}", element.code), [&element]);
                 GoExpression::conversion(go_type, GoExpression::literal("nil".to_string()))
             }
             (
@@ -500,11 +497,12 @@ impl Planner<'_> {
             ) => {
                 let key = key.go_type(self);
                 let value = value.go_type(self);
-                let key = self.use_rendered_go_type(key);
-                let value = self.use_rendered_go_type(value);
-                GoExpression::empty_composite(format!("map[{key}]{value}"))
+                GoExpression::empty_composite(GoType::with_dependencies(
+                    format!("map[{}]{}", key.code, value.code),
+                    [&key, &value],
+                ))
             }
-            (Type::Compound { .. }, _) => GoExpression::empty_composite(self.use_go_type(ty)),
+            (Type::Compound { .. }, _) => GoExpression::empty_composite(self.go_type(ty)),
             (Type::Nominal { id, params, .. }, _) => {
                 return self.lisette_zero_nominal(ty, id.as_str(), params, omit_go_zero);
             }
@@ -524,13 +522,13 @@ impl Planner<'_> {
             ) => self.array_zero(*length, element.logical_type()),
             (Type::Parameter(name), _) => {
                 let go_name = self.generic_go_name(name);
-                dereferenced_new(go_name.to_string())
+                dereferenced_new(GoType::new(go_name.to_string()))
             }
             _ => {
                 if omit_go_zero && self.empty_composite_is_go_zero(ty) {
                     return None;
                 }
-                GoExpression::empty_composite(self.use_go_type(ty))
+                GoExpression::empty_composite(self.go_type(ty))
             }
         };
         Some(zero)
@@ -549,13 +547,13 @@ impl Planner<'_> {
             }
             let inner = params
                 .first()
-                .map(|a| self.use_go_type(a))
-                .unwrap_or_else(|| "any".to_string());
+                .map(|a| self.go_type(a))
+                .unwrap_or_else(|| GoType::new("any"));
             // `None` is the tag Go zero-initializes to.
             let zero = GoExpression::call(
                 GoExpression::instantiation(
                     GoExpression::generated(GeneratedPackage::Prelude, "MakeOptionNone"),
-                    format!("[{inner}]"),
+                    GoType::type_arguments(&[inner]),
                 ),
                 Vec::new(),
             );
@@ -568,7 +566,7 @@ impl Planner<'_> {
             return Some(self.go_imported_zero(ty, id));
         }
         if let Some(underlying) = self.get_newtype_underlying(ty) {
-            let go_ty = self.use_go_type(ty);
+            let go_ty = self.go_type(ty);
             let inner = self.lisette_zero(&underlying);
             return Some(GoExpression::conversion(go_ty, inner));
         }
@@ -591,8 +589,7 @@ impl Planner<'_> {
             if omit_go_zero && pairs.is_empty() && self.is_plain_struct(ty) {
                 return None;
             }
-            let go_ty = self.use_go_type(ty);
-            return Some(emit_struct_literal(&go_ty, pairs));
+            return Some(emit_struct_literal(&self.go_type(ty), pairs));
         }
         if let Some(underlying) = self.facts.underlying_type(ty) {
             return self.lisette_zero_expression(&underlying, omit_go_zero);
@@ -600,7 +597,7 @@ impl Planner<'_> {
         if omit_go_zero && self.empty_composite_is_go_zero(ty) {
             return None;
         }
-        Some(GoExpression::empty_composite(self.use_go_type(ty)))
+        Some(GoExpression::empty_composite(self.go_type(ty)))
     }
 
     fn empty_composite_is_go_zero(&self, ty: &Type) -> bool {
@@ -617,12 +614,12 @@ impl Planner<'_> {
     /// Array zero value, filling per index with `lisette_zero` when Go's own
     /// `[N]E{}` zero differs from Lisette's (e.g. `Option<T>`).
     pub(crate) fn array_zero(&mut self, len: u64, elem: &Type) -> GoExpression {
-        let elem_go = self.use_go_type(elem);
+        let elem_go = self.go_type(elem);
+        let array_type = GoType::with_dependencies(format!("[{len}]{}", elem_go.code), [&elem_go]);
         if len == 0 || self.element_go_zero_ok(elem) {
-            return GoExpression::empty_composite(format!("[{}]{}", len, elem_go));
+            return GoExpression::empty_composite(array_type);
         }
         let zero = self.lisette_zero(elem);
-        let array_type = format!("[{len}]{elem_go}");
         let array_name = self.scope.helper_local("arr", &self.package);
         let index_name = self.scope.helper_local("i", &self.package);
         let arr = || GoExpression::identifier(array_name.clone());
@@ -725,11 +722,11 @@ impl Planner<'_> {
         ty: &Type,
         is_prelude: bool,
         is_enum: bool,
-    ) -> String {
+    ) -> GoType {
         if let Type::Nominal { id, .. } = ty
             && let Some(go) = self.anon_struct_go_type(id)
         {
-            return self.use_rendered_go_type(go);
+            return go;
         }
 
         // For cross-package struct calls (including type aliases), use the original name
@@ -747,11 +744,11 @@ impl Planner<'_> {
                 && !self.facts.is_current_package(package)
             {
                 let type_args = if self.is_non_generic_alias_call(type_name, ty) {
-                    String::new()
+                    GoType::default()
                 } else if let Type::Nominal { params, .. } = ty {
                     self.format_type_args(params)
                 } else {
-                    String::new()
+                    GoType::default()
                 };
                 let canonical = self.canonical_package(package);
                 // `snake_to_camel` would fold `Stat_t` to `StatT`.
@@ -761,12 +758,14 @@ impl Planner<'_> {
                     go_name::snake_to_camel(type_name)
                 };
                 let package = self.package_use_for_package(&canonical);
-                let go_type = format!("{}.{}{}", package.qualifier(), member, type_args);
-                return self.use_rendered_go_type(GoType::with_package(go_type, package));
+                let code = format!("{}.{}{}", package.qualifier(), member, type_args.code);
+                let mut go_type = GoType::with_package(code, package);
+                go_type.merge(&type_args);
+                return go_type;
             }
         }
 
-        self.use_go_type(ty)
+        self.go_type(ty)
     }
 
     /// True when `type_name` (e.g., `StringFlag`) is a non-generic alias in the
@@ -912,7 +911,7 @@ impl Planner<'_> {
 }
 
 /// `*new(T)`, the zero of a Go named type with no literal form.
-fn dereferenced_new(go_type: String) -> GoExpression {
+fn dereferenced_new(go_type: GoType) -> GoExpression {
     GoExpression::dereference(GoExpression::call(
         GoExpression::external_name("new".to_string()),
         vec![GoExpression::type_name(go_type)],
@@ -969,11 +968,14 @@ fn unspecified_pairs<'a>(
         .collect()
 }
 
-pub(crate) fn emit_struct_literal(ty: &str, fields: Vec<(String, GoExpression)>) -> GoExpression {
+pub(crate) fn emit_struct_literal(
+    ty: &GoType,
+    fields: Vec<(String, GoExpression)>,
+) -> GoExpression {
     let layout = if fields.len() > 1 {
         CompositeLayout::MultiLine { indented: false }
     } else {
         CompositeLayout::Inline { padded: true }
     };
-    GoExpression::struct_literal(ty.to_string(), fields, layout)
+    GoExpression::struct_literal(ty.clone(), fields, layout)
 }

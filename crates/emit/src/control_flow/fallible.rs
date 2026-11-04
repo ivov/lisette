@@ -124,7 +124,7 @@ impl Fallible {
 
 pub(crate) fn prelude_call(
     callee: &str,
-    type_arguments: String,
+    type_arguments: GoType,
     arguments: Vec<GoExpression>,
 ) -> GoExpression {
     GoExpression::call(
@@ -224,23 +224,26 @@ impl Planner<'_> {
 }
 
 impl Planner<'_> {
-    /// `T` or `T, E`, the type arguments of a prelude `Option` or `Result`.
-    fn fallible_type_args(&mut self, ok_ty: &Type, err_ty: Option<&Type>) -> String {
-        let ok = self.use_go_type(ok_ty);
-        match err_ty {
-            Some(err_ty) => format!("{ok}, {}", self.use_go_type(err_ty)),
-            None => ok,
-        }
+    /// `[T]` or `[T, E]`, the type arguments of a prelude `Option` or `Result`.
+    fn fallible_type_args(&self, ok_ty: &Type, err_ty: Option<&Type>) -> GoType {
+        let arguments: Vec<GoType> = [Some(ok_ty), err_ty]
+            .into_iter()
+            .flatten()
+            .map(|ty| self.go_type(ty))
+            .collect();
+        GoType::type_arguments(&arguments)
     }
 
-    pub(crate) fn fallible_go_type(&mut self, fallible: &Fallible) -> String {
+    pub(crate) fn fallible_go_type(&self, fallible: &Fallible) -> GoType {
         let type_args = self.fallible_type_args(fallible.ok_ty(), fallible.err_ty());
-        let code = format!(
-            "{}.{}[{type_args}]",
+        let mut go_type = GoType::stdlib(format!(
+            "{}.{}{}",
             go_name::GO_STDLIB_PKG,
-            fallible.struct_name()
-        );
-        self.use_rendered_go_type(GoType::stdlib(code))
+            fallible.struct_name(),
+            type_args.code
+        ));
+        go_type.merge(&type_args);
+        go_type
     }
 
     pub(crate) fn fallible_call(
@@ -250,7 +253,7 @@ impl Planner<'_> {
         arguments: Vec<GoExpression>,
     ) -> GoExpression {
         let type_args = self.fallible_type_args(fallible.ok_ty(), fallible.err_ty());
-        prelude_call(constructor, format!("[{type_args}]"), arguments)
+        prelude_call(constructor, type_args, arguments)
     }
 
     pub(crate) fn fallible_success(
@@ -277,10 +280,6 @@ impl Planner<'_> {
         });
         let type_args = self.fallible_type_args(&ok_ty, err_ty.as_ref());
         let arguments = error.filter(|_| fallible.is_result()).into_iter().collect();
-        prelude_call(
-            fallible.err_constructor(),
-            format!("[{type_args}]"),
-            arguments,
-        )
+        prelude_call(fallible.err_constructor(), type_args, arguments)
     }
 }

@@ -21,6 +21,7 @@ use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::values::{CaptureBoundary, GoExpression, OperandForm, ValuePlan};
 use crate::state::bindings::BindingValue;
 use crate::statements::assignments::PlaceOrdering;
+use crate::types::go_type::GoType;
 use crate::types::go_type::returns_go_void;
 use crate::{Planner, ReturnContext};
 use syntax::ast::{Expression, IdentifierResolution, UnaryOperator};
@@ -167,7 +168,7 @@ impl Planner<'_> {
                     if !call.is_empty() {
                         setup.push(effect_statement(call));
                     }
-                    GoExpression::empty_composite("struct{}".to_string())
+                    GoExpression::empty_composite(GoType::new("struct{}"))
                 });
         }
         let ty = expression.get_type();
@@ -182,12 +183,7 @@ impl Planner<'_> {
             let slot_result = slot
                 .get_function_ret()
                 .is_some_and(|ret| !returns_go_void(ret))
-                .then(|| {
-                    self.lambda_return_info(slot, ctx)
-                        .signature()
-                        .trim_start()
-                        .to_string()
-                })
+                .then(|| self.lambda_return_info(slot, ctx).signature())
                 .filter(|result| !result.is_empty());
             return self
                 .lower_value(expression, ctx)
@@ -315,7 +311,7 @@ impl Planner<'_> {
             Expression::RawGo { text } => ValuePlan::verbatim(text.clone()),
             Expression::Unit { .. } => ValuePlan::computed(
                 Vec::new(),
-                GoExpression::empty_composite("struct{}".to_string()),
+                GoExpression::empty_composite(GoType::new("struct{}")),
             ),
             Expression::Lambda {
                 params, body, ty, ..
@@ -349,11 +345,14 @@ impl Planner<'_> {
                     self.build_assignment_plan(target, value, compound_operator.as_ref())
                         .into(),
                 ];
-                ValuePlan::computed(setup, GoExpression::empty_composite("struct{}".to_string()))
+                ValuePlan::computed(
+                    setup,
+                    GoExpression::empty_composite(GoType::new("struct{}")),
+                )
             }
             Expression::Assert { .. } => ValuePlan::computed(
                 vec![self.lower_assert_statement(expression).into()],
-                GoExpression::empty_composite("struct{}".to_string()),
+                GoExpression::empty_composite(GoType::new("struct{}")),
             ),
             _ => unreachable!(
                 "unexpected leaf expression in plan_operand: {:?}",
@@ -389,11 +388,8 @@ impl Planner<'_> {
         if slot_types.len() != arity {
             return callee;
         }
-        let rendered: Vec<String> = slot_types
-            .iter()
-            .map(|slot| self.use_go_type(slot))
-            .collect();
-        GoExpression::instantiation(callee, format!("[{}]", rendered.join(", ")))
+        let slots: Vec<GoType> = slot_types.iter().map(|slot| self.go_type(slot)).collect();
+        GoExpression::instantiation(callee, GoType::type_arguments(&slots))
     }
 
     pub(crate) fn plan_tuple_value(
@@ -465,7 +461,7 @@ impl Planner<'_> {
 
         let expression = expression.unwrap_parens();
         let inner = self.lower_value(expression, ctx);
-        let go_type = self.use_go_type(ty);
+        let go_type = self.go_type(ty);
 
         let function_bridge = self.function_slot_bridge(expression, ty);
         if !function_bridge.is_identity() {
@@ -510,7 +506,7 @@ impl Planner<'_> {
         self.go_type(&source).code == self.go_type(&target).code
     }
 
-    fn shift_pin_go_type(&mut self, expression: &Expression, target_ty: &Type) -> Option<String> {
+    fn shift_pin_go_type(&mut self, expression: &Expression, target_ty: &Type) -> Option<GoType> {
         let target_is_float = self
             .facts
             .underlying_simple_kind(target_ty)
@@ -522,7 +518,7 @@ impl Planner<'_> {
         self.facts
             .underlying_simple_kind(&source_ty)
             .is_some_and(|kind| kind.integer_range().is_some())
-            .then(|| self.use_go_type(&source_ty))
+            .then(|| self.go_type(&source_ty))
     }
 
     /// Plan a `&inner` reference, hoisting to a temp when the inner is
@@ -537,7 +533,7 @@ impl Planner<'_> {
                 let tmp = self.hoist_tmp_value_statement(
                     setup,
                     "ref",
-                    GoExpression::empty_composite("struct{}".to_string()),
+                    GoExpression::empty_composite(GoType::new("struct{}")),
                 );
                 GoExpression::address_of(GoExpression::identifier(tmp))
             });
@@ -599,7 +595,7 @@ impl Planner<'_> {
         _inclusive: bool,
         ty: &Type,
     ) -> ValuePlan {
-        let type_string = self.use_go_type(ty);
+        let type_string = self.go_type(ty);
 
         let mut stages: Vec<ValuePlan> = Vec::new();
         let has_start = start.is_some();
@@ -613,7 +609,7 @@ impl Planner<'_> {
         if stages.is_empty() {
             return ValuePlan::computed(
                 Vec::new(),
-                GoExpression::empty_composite("struct{}".to_string()),
+                GoExpression::empty_composite(GoType::new("struct{}")),
             );
         }
 
@@ -646,7 +642,7 @@ impl Planner<'_> {
         let statement_plan =
             |setup: Vec<Statement>| ValuePlan::computed(setup, GoExpression::empty());
         let immediate_call = |body: LoweredBlock| {
-            GoExpression::immediate_call(String::new(), body, FunctionLiteralLayout::MultiLine)
+            GoExpression::immediate_call(GoType::default(), body, FunctionLiteralLayout::MultiLine)
         };
 
         if let Expression::Block { .. } = expression {

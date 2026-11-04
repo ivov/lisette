@@ -1,9 +1,10 @@
 //! Lowered body IR: the typed vocabulary `plan::lower` produces and `render/`
 //! consumes.
 
-use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
+use crate::plan::go_expression::{BinaryOp, Expressions, GoExpressionNode, TreeVisitor};
 use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::values::GoExpression;
+use crate::types::go_type::GoType;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::types::Type;
 
@@ -232,7 +233,7 @@ pub(crate) enum LoweredStatement {
     /// `var name go_type` (with `= value` when `value` is set).
     VarDecl {
         name: GoIdentifier,
-        go_type: String,
+        go_type: GoType,
         value: Option<GoExpression>,
     },
     /// `_, _ = value`, one `_` per result.
@@ -252,7 +253,7 @@ pub(crate) enum LoweredStatement {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ConstPlan {
     pub(crate) name: GoIdentifier,
-    pub(crate) go_type: Option<String>,
+    pub(crate) go_type: Option<GoType>,
     pub(crate) value: GoExpression,
 }
 
@@ -537,9 +538,9 @@ impl ElseArm {
     }
 }
 
-fn visit_statements(statements: &[Statement], visit: &mut impl FnMut(&GoExpressionNode)) {
+fn walk_statements(statements: &[Statement], visit: &mut impl TreeVisitor) {
     for statement in statements {
-        statement.kind.visit_expressions(visit);
+        statement.kind.walk(visit);
     }
 }
 
@@ -600,17 +601,24 @@ impl GoUses {
     }
 
     pub(crate) fn extend(&mut self, statements: &[Statement]) {
-        visit_statements(statements, &mut |node| self.record(node));
+        walk_statements(
+            statements,
+            &mut Expressions(&mut |node: &GoExpressionNode| self.record(node)),
+        );
     }
 
     pub(crate) fn extend_cases(&mut self, cases: &[SwitchCasePlan]) {
         for case in cases {
-            case.visit_expressions(&mut |node| self.record(node));
+            case.walk(&mut Expressions(&mut |node: &GoExpressionNode| {
+                self.record(node)
+            }));
         }
     }
 
     pub(crate) fn extend_if(&mut self, plan: &IfPlan) {
-        plan.visit_expressions(&mut |node| self.record(node));
+        plan.walk(&mut Expressions(&mut |node: &GoExpressionNode| {
+            self.record(node)
+        }));
     }
 
     pub(crate) fn contains_identifier(&self, name: &GoIdentifier) -> bool {
@@ -638,7 +646,11 @@ impl GoUses {
 
 impl LoweredBlock {
     pub(crate) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
-        visit_statements(&self.statements, visit);
+        self.walk(&mut Expressions(visit));
+    }
+
+    pub(crate) fn walk(&self, visit: &mut impl TreeVisitor) {
+        walk_statements(&self.statements, visit);
     }
 
     pub(crate) fn ends_with_diverge(&self) -> bool {
@@ -690,66 +702,81 @@ impl LoweredStatement {
     }
 
     pub(crate) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
+        self.walk(&mut Expressions(visit));
+    }
+
+    /// The Go types this statement spells itself, not those of its expressions.
+    pub(crate) fn own_types(&self, visit: &mut impl FnMut(&GoType)) {
         match self {
-            LoweredStatement::If(plan) => plan.visit_expressions(visit),
+            LoweredStatement::VarDecl { go_type, .. }
+            | LoweredStatement::Const(ConstPlan {
+                go_type: Some(go_type),
+                ..
+            }) => visit(go_type),
+            _ => {}
+        }
+    }
+
+    pub(crate) fn walk(&self, visit: &mut impl TreeVisitor) {
+        visit.statement(self);
+        match self {
+            LoweredStatement::If(plan) => plan.walk(visit),
             LoweredStatement::Loop(plan) => {
                 match &plan.header {
                     LoopHeader::Infinite => {}
-                    LoopHeader::While(condition) => condition.node().visit(visit),
-                    LoopHeader::Range { iterable, .. } => iterable.node().visit(visit),
+                    LoopHeader::While(condition) => condition.node().walk(visit),
+                    LoopHeader::Range { iterable, .. } => iterable.node().walk(visit),
                     LoopHeader::Counted {
                         start, condition, ..
                     } => {
-                        start.node().visit(visit);
+                        start.node().walk(visit);
                         if let Some(condition) = condition {
-                            condition.node().visit(visit);
+                            condition.node().walk(visit);
                         }
                     }
                 }
-                plan.body.visit_expressions(visit);
+                plan.body.walk(visit);
             }
-            LoweredStatement::Block(body) | LoweredStatement::Body(body) => {
-                body.visit_expressions(visit)
-            }
+            LoweredStatement::Block(body) | LoweredStatement::Body(body) => body.walk(visit),
             LoweredStatement::Break(_)
             | LoweredStatement::Continue(_)
             | LoweredStatement::UnreachablePanic => {}
-            LoweredStatement::Const(plan) => plan.value.node().visit(visit),
+            LoweredStatement::Const(plan) => plan.value.node().walk(visit),
             LoweredStatement::Return(values) => {
                 for value in values {
-                    value.node().visit(visit);
+                    value.node().walk(visit);
                 }
             }
             LoweredStatement::Assign(form) => match form {
                 AssignForm::Compound { target, kind } => {
-                    target.node().visit(visit);
+                    target.node().walk(visit);
                     if let CompoundKind::OpAssign { rhs, .. } = kind {
-                        rhs.node().visit(visit);
+                        rhs.node().walk(visit);
                     }
                 }
                 AssignForm::Simple { target, value } => {
-                    target.node().visit(visit);
-                    value.node().visit(visit);
+                    target.node().walk(visit);
+                    value.node().walk(visit);
                 }
             },
-            LoweredStatement::Async { call, .. } => call.node().visit(visit),
+            LoweredStatement::Async { call, .. } => call.node().walk(visit),
             LoweredStatement::Select(plan) => {
                 for arm in &plan.arms {
                     match arm {
                         SelectArmPlan::Receive { channel, body, .. } => {
-                            channel.node().visit(visit);
-                            body.visit_expressions(visit);
+                            channel.node().walk(visit);
+                            body.walk(visit);
                         }
                         SelectArmPlan::Send {
                             channel,
                             value,
                             body,
                         } => {
-                            channel.node().visit(visit);
-                            value.node().visit(visit);
-                            body.visit_expressions(visit);
+                            channel.node().walk(visit);
+                            value.node().walk(visit);
+                            body.walk(visit);
                         }
-                        SelectArmPlan::Default { body } => body.visit_expressions(visit),
+                        SelectArmPlan::Default { body } => body.walk(visit),
                     }
                 }
             }
@@ -757,27 +784,27 @@ impl LoweredStatement {
                 match &plan.kind {
                     SwitchKind::Conditional => {}
                     SwitchKind::Value { subject } | SwitchKind::Type { subject, .. } => {
-                        subject.node().visit(visit)
+                        subject.node().walk(visit)
                     }
                 }
                 for case in &plan.cases {
-                    case.visit_expressions(visit);
+                    case.walk(visit);
                 }
                 if let Some(default) = &plan.default {
-                    default.visit_expressions(visit);
+                    default.walk(visit);
                 }
             }
-            LoweredStatement::Define(definition) => definition.value.node().visit(visit),
+            LoweredStatement::Define(definition) => definition.value.node().walk(visit),
             LoweredStatement::VarDecl { value, .. } => {
                 if let Some(value) = value {
-                    value.node().visit(visit);
+                    value.node().walk(visit);
                 }
             }
             LoweredStatement::Discard {
                 value: expression, ..
             }
             | LoweredStatement::ExpressionStatement { expression, .. } => {
-                expression.node().visit(visit)
+                expression.node().walk(visit)
             }
         }
     }
@@ -879,25 +906,25 @@ impl LoweredStatement {
 }
 
 impl SwitchCasePlan {
-    pub(super) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
+    pub(super) fn walk(&self, visit: &mut impl TreeVisitor) {
         for label in &self.labels {
-            label.node().visit(visit);
+            label.node().walk(visit);
         }
-        self.body.visit_expressions(visit);
+        self.body.walk(visit);
     }
 }
 
 impl IfPlan {
-    pub(super) fn visit_expressions(&self, visit: &mut impl FnMut(&GoExpressionNode)) {
+    pub(super) fn walk(&self, visit: &mut impl TreeVisitor) {
         if let Some(initializer) = &self.initializer {
-            initializer.value.node().visit(visit);
+            initializer.value.node().walk(visit);
         }
-        self.condition.node().visit(visit);
-        self.then_body.visit_expressions(visit);
+        self.condition.node().walk(visit);
+        self.then_body.walk(visit);
         match &self.else_arm {
             ElseArm::None => {}
-            ElseArm::ElseIf(plan) => plan.visit_expressions(visit),
-            ElseArm::Else { body, .. } => body.visit_expressions(visit),
+            ElseArm::ElseIf(plan) => plan.walk(visit),
+            ElseArm::Else { body, .. } => body.walk(visit),
         }
     }
 

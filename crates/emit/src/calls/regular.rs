@@ -14,6 +14,7 @@ use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{ConstantKind, GoExpression, SequencedValues, ValuePlan};
+use crate::types::go_type::GoType;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::program::resolved_instantiation;
 use syntax::types::Type;
@@ -42,9 +43,10 @@ fn builtin_constant(builtin: &str, values: &[GoExpression]) -> Option<ConstantKi
     }
 }
 
-fn go_builtin_conversion(type_args: &str) -> Option<String> {
-    let inner = type_args.strip_prefix('[')?.strip_suffix(']')?;
-    (!inner.is_empty() && !inner.contains(',')).then(|| inner.to_string())
+fn go_builtin_conversion(type_args: &GoType) -> Option<GoType> {
+    let inner = type_args.code.strip_prefix('[')?.strip_suffix(']')?;
+    (!inner.is_empty() && !inner.contains(','))
+        .then(|| GoType::with_dependencies(inner, [type_args]))
 }
 
 pub(super) fn receiver_type_binding(
@@ -305,7 +307,7 @@ impl<'a> Planner<'a> {
             .then(|| go_builtin_conversion(&type_args_string))
             .flatten();
         if builtin_conversion.is_some() {
-            type_args_string = String::new();
+            type_args_string = GoType::default();
         }
         if !type_args_string.is_empty() {
             callee = callee.without_instantiation();
@@ -451,7 +453,7 @@ impl<'a> Planner<'a> {
         all_type_params_inferrable(vars, &f.params, 0, arg_shape)
     }
 
-    fn resolve_call_type_args(&mut self, request: CallTypeArgsRequest<'_, '_>) -> String {
+    fn resolve_call_type_args(&mut self, request: CallTypeArgsRequest<'_, '_>) -> GoType {
         let CallTypeArgsRequest {
             function,
             callee,
@@ -461,13 +463,13 @@ impl<'a> Planner<'a> {
             ctx,
         } = request;
         if callee_curries_receiver(callee) {
-            return String::new();
+            return GoType::default();
         }
 
         let has_value_args = arg_shape.value_count > 0 || arg_shape.has_spread;
         if let Some(recipe) = self.callee_collapsed_recipe(callee) {
             if has_value_args && self.collapsed_callee_fully_inferable(callee, arg_shape) {
-                return String::new();
+                return GoType::default();
             }
             return resolved_instantiation(function)
                 .and_then(|instantiation| {

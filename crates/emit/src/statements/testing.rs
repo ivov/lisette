@@ -3,12 +3,21 @@ use crate::context::expression::ExpressionContext;
 use crate::definitions::functions::is_test_context_ty;
 use crate::expressions::{BinaryOperand, flip_comparison, flip_preserves_nan};
 use crate::names::go_name::{GeneratedPackage, testkit_qualifier};
+use crate::names::packages::PackageUse;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define, expression_statement,
 };
 use crate::plan::go_expression::{CompositeLayout, UnaryOp};
 use crate::plan::values::{GoExpression, OperandForm, ValuePlan};
+use crate::types::go_type::GoType;
 use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
+
+pub(crate) fn testkit_operand_type() -> GoType {
+    GoType::with_package(
+        format!("{}.Operand", testkit_qualifier()),
+        PackageUse::generated(GeneratedPackage::TestKit),
+    )
+}
 
 pub(crate) fn test_context_call(
     handle: GoExpression,
@@ -275,9 +284,9 @@ impl Planner<'_> {
         plan: &ValuePlan,
         literals: LiteralInlining,
         names_inline: bool,
-    ) -> Option<String> {
+    ) -> Option<GoType> {
         let expression_ty = expression.get_type();
-        let go_type = self.use_go_type(&expression_ty);
+        let go_type = self.go_type(&expression_ty);
         let inlines = plan.setup().is_empty()
             && match plan.expression().syntax_form() {
                 OperandForm::Name => names_inline && plan.expression().as_identifier().is_some(),
@@ -299,7 +308,7 @@ impl Planner<'_> {
         expression: &Expression,
         plan: ValuePlan,
         hint: &str,
-        temp_type: Option<String>,
+        temp_type: Option<GoType>,
         statements: &mut Vec<Statement>,
     ) -> AssertOperand {
         let constant = plan.expression().constant_kind();
@@ -388,10 +397,9 @@ enum LiteralInlining {
 }
 
 fn paired_operands(lhs: &GoExpression, rhs: &GoExpression) -> Vec<GoExpression> {
-    let test_kit = testkit_qualifier();
     let operand = |label: &str, value: &GoExpression| {
         GoExpression::struct_literal(
-            format!("{test_kit}.Operand"),
+            testkit_operand_type(),
             vec![
                 (
                     "Label".to_string(),

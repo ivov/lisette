@@ -9,6 +9,7 @@ use crate::plan::bodies::{
 };
 use crate::plan::go_expression::CompositeLayout;
 use crate::plan::values::GoExpression;
+use crate::types::go_type::GoType;
 
 use super::layout::{FunctionLayout, ValueLayout};
 
@@ -154,13 +155,13 @@ impl CoercionPlan {
             Self::WrapAsInterface(plan) => {
                 let adapter_name = planner.ensure_adapter_type(plan);
                 GoExpression::struct_literal(
-                    adapter_name,
+                    GoType::new(adapter_name),
                     vec![("inner".to_string(), value)],
                     CompositeLayout::Inline { padded: false },
                 )
             }
             Self::WrapNewtype { ty } => {
-                let type_name = planner.use_go_type(&ty);
+                let type_name = planner.go_type(&ty);
                 GoExpression::conversion(type_name, value)
             }
             Self::Layout(bridge) => planner.plan_layout_bridge(&mut statements, value, &bridge),
@@ -202,7 +203,7 @@ impl Planner<'_> {
         element: CoercionPlan,
     ) -> GoExpression {
         let source = self.stable_source(statements, "src", value);
-        let go_type = self.use_go_type(array_type);
+        let go_type = self.go_type(array_type);
         let output = self.fresh_local(Some("boxed"));
         self.declare(&output);
         statements.push(

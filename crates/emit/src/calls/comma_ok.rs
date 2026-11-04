@@ -12,6 +12,7 @@ use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::{BindingValue, ComponentBinding, ComponentKind};
 use crate::state::scope::PairStatusKind;
+use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::program::CallKind;
 use syntax::program::NativeTypeKind;
@@ -120,11 +121,11 @@ impl Planner<'_> {
             .kind
             .whole_value_constructor()
             .expect("component binding has no whole-value constructor");
-        let payload_go_type = self.use_go_type(&components.payload_type);
+        let payload_go_type = self.go_type(&components.payload_type);
         GoExpression::call(
-            GoExpression::generated(
-                GeneratedPackage::Prelude,
-                format!("{constructor}[{payload_go_type}]"),
+            GoExpression::instantiation(
+                GoExpression::generated(GeneratedPackage::Prelude, constructor),
+                GoType::type_argument(&payload_go_type),
             ),
             vec![
                 GoExpression::identifier(components.value.clone()),
@@ -329,7 +330,7 @@ impl Planner<'_> {
                     .lower_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
                 let target_ty = self.facts.peel_alias(&expression.get_type()).ok_type();
-                let target = self.use_go_type(&target_ty);
+                let target = self.go_type(&target_ty);
                 (setup, GoExpression::type_assertion(operand, target))
             }
         }

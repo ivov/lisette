@@ -42,7 +42,7 @@ impl PackageUse {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct PackageRequirements {
     uses: HashSet<PackageUse>,
 }

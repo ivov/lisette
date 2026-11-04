@@ -24,6 +24,7 @@ use crate::plan::local::GoIdentifier;
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::state::bindings::{ComponentBinding, ComponentKind};
 use crate::state::scope::PairStatusKind;
+use crate::types::go_type::GoType;
 use syntax::ast::{
     BindingId, ConstructorPatternResolution, Expression, Literal, MatchArm, Pattern,
 };
@@ -235,7 +236,7 @@ impl<'a> ArmBinding<'a> {
 }
 
 fn unit_value() -> GoExpression {
-    GoExpression::empty_composite("struct{}".to_string())
+    GoExpression::empty_composite(GoType::new("struct{}"))
 }
 
 struct ResultArm<'a> {

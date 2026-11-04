@@ -17,6 +17,7 @@ use crate::plan::local::GoIdentifier;
 use crate::plan::values::Stability;
 use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
 use crate::statements::assignments::{PlaceOrdering, is_lvalue_chain};
+use crate::types::go_type::GoType;
 use std::slice;
 use syntax::ast::Pattern;
 use syntax::ast::{Expression, Literal};
@@ -163,7 +164,7 @@ pub(crate) fn collapse_declared_temp(
     let declared = declared.clone();
     let value = match &filler.kind {
         LoweredStatement::Assign(AssignForm::Simple { target, value }) => {
-            if !infers_declared_type(go_type, value, value_has_declared_type)
+            if !infers_declared_type(&go_type.code, value, value_has_declared_type)
                 || target.as_identifier() != Some(name)
                 || value.effects().runs_code()
             {
@@ -172,7 +173,7 @@ pub(crate) fn collapse_declared_temp(
             value.clone()
         }
         LoweredStatement::If(plan) => {
-            if go_type != "bool" || plan.initializer.is_some() {
+            if go_type.code != "bool" || plan.initializer.is_some() {
                 return;
             }
             let ElseArm::Else {
@@ -221,7 +222,7 @@ fn infers_declared_type(
         GoExpressionNode::CompositeLiteral {
             go_type: Some(literal_type),
             ..
-        } => literal_type == go_type,
+        } => literal_type.code == go_type,
         GoExpressionNode::CompositeLiteral { go_type: None, .. }
         | GoExpressionNode::FunctionLiteral { .. }
         | GoExpressionNode::Verbatim(_) => false,
@@ -511,7 +512,7 @@ impl Planner<'_> {
                 target,
                 ValuePlan::computed(
                     Vec::new(),
-                    GoExpression::empty_composite("struct{}".to_string()),
+                    GoExpression::empty_composite(GoType::new("struct{}")),
                 ),
             )
             .into(),
@@ -866,7 +867,7 @@ impl Planner<'_> {
         ) {
             ValuePlan::computed(
                 vec![self.lower_statement(last)],
-                GoExpression::empty_composite("struct{}".to_string()),
+                GoExpression::empty_composite(GoType::new("struct{}")),
             )
         } else {
             self.lower_value(last, ExpressionContext::value())
@@ -928,7 +929,7 @@ impl Planner<'_> {
                 }
                 statements.push(assign(
                     target,
-                    GoExpression::empty_composite("struct{}".to_string()),
+                    GoExpression::empty_composite(GoType::new("struct{}")),
                 ));
             } else if !value.is_empty() {
                 let value = self.apply_type_coercion(

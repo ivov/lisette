@@ -58,7 +58,7 @@ impl Planner<'_> {
         let result_var = self.fresh_local(None);
         let declaration = LoweredStatement::VarDecl {
             name: result_var.clone(),
-            go_type: self.use_go_type(ty),
+            go_type: self.go_type(ty),
             value: None,
         }
         .into();
@@ -170,9 +170,7 @@ impl Planner<'_> {
             // physical signature must carry a value for a generic result slot.
             let mut block = self.lower_block_as_body(body);
             if !block.go_terminates() {
-                block
-                    .statements
-                    .push(plain_return(self.zero_value_expression(ty)));
+                block.statements.push(plain_return(self.zero_value(ty)));
             }
             return block;
         }
@@ -213,7 +211,7 @@ impl Planner<'_> {
             && let Some(return_ty) = return_ctx.ty().filter(|ty| !ty.is_unit())
         {
             let return_ty = return_ty.clone();
-            let zero = self.zero_value_expression(&return_ty);
+            let zero = self.zero_value(&return_ty);
             body.statements.push(plain_return(zero));
         }
 

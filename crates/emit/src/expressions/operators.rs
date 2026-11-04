@@ -7,6 +7,7 @@ use crate::names::go_name;
 use crate::plan::bodies::{LoweredBlock, Statement};
 use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, UnaryOp};
 use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
+use crate::types::go_type::GoType;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, UnaryOperator};
 use syntax::program::DefinitionBody;
 use syntax::types::Type;
@@ -151,10 +152,10 @@ impl Planner<'_> {
             );
         };
         if let Some(ty) = &casts.cast_left_to {
-            left = GoExpression::conversion(self.use_go_type(ty), left);
+            left = GoExpression::conversion(self.go_type(ty), left);
         }
         if let Some(ty) = &casts.cast_right_to {
-            right = GoExpression::conversion(self.use_go_type(ty), right);
+            right = GoExpression::conversion(self.go_type(ty), right);
         }
         ValuePlan::computed(setup, GoExpression::binary(left, operator.into(), right))
     }
@@ -177,7 +178,7 @@ impl Planner<'_> {
         } else {
             statements.push(plain_return(right_value));
             GoExpression::immediate_call(
-                "bool".to_string(),
+                GoType::new("bool"),
                 LoweredBlock { statements },
                 FunctionLiteralLayout::MultiLine,
             )

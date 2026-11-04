@@ -6,6 +6,7 @@ use crate::escape_reserved;
 use crate::names::go_name;
 use crate::plan::bodies::{ConstPlan, LoweredStatement, Statement};
 use crate::plan::values::GoExpression;
+use crate::types::go_type::GoType;
 use std::slice;
 use syntax::ast::{Expression, Generic};
 use syntax::types::{SimpleKind, Type};
@@ -73,13 +74,13 @@ impl Planner<'_> {
         // An untyped string or bool constant also assigns to named types.
         let go_type = (!is_const
             || !matches!(ty, Type::Simple(SimpleKind::String | SimpleKind::Bool)))
-        .then(|| self.use_go_type(ty));
+        .then(|| self.go_type(ty));
 
         // `is_go_constant_expression` admits only literals, identifiers, and
         // constexpr unary/binary, none of which carry setup statements.
         let raw_value = self.lower_value(expression, ExpressionContext::value());
         let value = if raw_value.is_empty() {
-            GoExpression::empty_composite("struct{}".to_string())
+            GoExpression::empty_composite(GoType::new("struct{}"))
         } else {
             raw_value.into_parts().1
         };

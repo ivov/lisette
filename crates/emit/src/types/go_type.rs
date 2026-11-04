@@ -28,7 +28,7 @@ pub(crate) fn render_conversion(go_type: &str, value: &str) -> String {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct GoType {
     pub(crate) code: String,
     requirements: PackageRequirements,
@@ -77,6 +77,38 @@ impl GoType {
 
     pub(crate) fn requirements(&self) -> &PackageRequirements {
         &self.requirements
+    }
+
+    /// A bracketed type argument list, `[A, B]`, or empty without arguments.
+    pub(crate) fn type_arguments(arguments: &[GoType]) -> Self {
+        if arguments.is_empty() {
+            return Self::default();
+        }
+        let codes: Vec<&str> = arguments
+            .iter()
+            .map(|argument| argument.code.as_str())
+            .collect();
+        Self::with_dependencies(format!("[{}]", codes.join(", ")), arguments)
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.code.is_empty()
+    }
+
+    pub(crate) fn type_argument(argument: &GoType) -> Self {
+        Self::type_arguments(slice::from_ref(argument))
+    }
+
+    pub(crate) fn slice_of(element: &GoType) -> Self {
+        Self::with_dependencies(format!("[]{}", element.code), [element])
+    }
+
+    pub(crate) fn map_of(key: &GoType, value: &GoType) -> Self {
+        Self::with_dependencies(format!("map[{}]{}", key.code, value.code), [key, value])
+    }
+
+    pub(crate) fn pointer_to(pointee: &GoType) -> Self {
+        Self::with_dependencies(format!("*{}", pointee.code), [pointee])
     }
 }
 
@@ -138,56 +170,55 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn format_type_args(&mut self, params: &[Type]) -> String {
+    pub(crate) fn format_type_args(&self, params: &[Type]) -> GoType {
         self.format_type_arg_iter(params)
     }
 
     pub(crate) fn format_resolved_type_args(
-        &mut self,
+        &self,
         params: ResolvedCallTypeArguments<'_>,
-    ) -> String {
+    ) -> GoType {
         self.format_type_arg_iter(params.iter())
     }
 
-    fn format_type_arg_iter<'t>(&mut self, params: impl IntoIterator<Item = &'t Type>) -> String {
-        let args: Vec<String> = params
+    fn format_type_arg_iter<'t>(&self, params: impl IntoIterator<Item = &'t Type>) -> GoType {
+        let args: Vec<GoType> = params
             .into_iter()
-            .map(|param| self.use_go_type(param))
+            .map(|param| self.go_type(param))
             .collect();
-        if args.is_empty() {
-            return String::new();
-        }
-        format!("[{}]", args.join(", "))
+        GoType::type_arguments(&args)
     }
 
     pub(crate) fn reconstruct_collapsed_type_args(
-        &mut self,
+        &self,
         recipe: &str,
         mapping: &SubstitutionMap,
-    ) -> Option<String> {
+    ) -> Option<GoType> {
         let mut parts = Vec::new();
         for entry in split_top_level_commas(recipe) {
             parts.push(self.render_recipe_entry(entry.trim(), mapping)?);
         }
-        (!parts.is_empty()).then(|| format!("[{}]", parts.join(", ")))
+        (!parts.is_empty()).then(|| GoType::type_arguments(&parts))
     }
 
-    fn render_recipe_entry(&mut self, entry: &str, mapping: &SubstitutionMap) -> Option<String> {
+    fn render_recipe_entry(&self, entry: &str, mapping: &SubstitutionMap) -> Option<GoType> {
         if let Some(elem) = entry
             .strip_prefix("Slice<")
             .and_then(|s| s.strip_suffix('>'))
         {
-            let ty = mapping.get(elem.trim())?;
-            return Some(format!("[]{}", self.use_go_type(ty)));
+            let element = self.go_type(mapping.get(elem.trim())?);
+            return Some(GoType::with_dependencies(
+                format!("[]{}", element.code),
+                [&element],
+            ));
         }
         if let Some(inner) = entry.strip_prefix("Map<").and_then(|s| s.strip_suffix('>')) {
             let (key, value) = inner.split_once(',')?;
-            let key_ty = mapping.get(key.trim())?;
-            let value_ty = mapping.get(value.trim())?;
-            return Some(format!(
-                "map[{}]{}",
-                self.use_go_type(key_ty),
-                self.use_go_type(value_ty)
+            let key = self.go_type(mapping.get(key.trim())?);
+            let value = self.go_type(mapping.get(value.trim())?);
+            return Some(GoType::with_dependencies(
+                format!("map[{}]{}", key.code, value.code),
+                [&key, &value],
             ));
         }
         if let Some(inner) = entry
@@ -195,10 +226,13 @@ impl Planner<'_> {
             .and_then(|s| s.strip_suffix('>'))
         {
             let (elem, length) = inner.rsplit_once(',')?;
-            let elem_ty = mapping.get(elem.trim())?;
-            return Some(format!("[{}]{}", length.trim(), self.use_go_type(elem_ty)));
+            let element = self.go_type(mapping.get(elem.trim())?);
+            return Some(GoType::with_dependencies(
+                format!("[{}]{}", length.trim(), element.code),
+                [&element],
+            ));
         }
-        Some(self.use_go_type(mapping.get(entry)?))
+        Some(self.go_type(mapping.get(entry)?))
     }
 
     fn emit_tuple_type(&self, elements: &[Type]) -> GoType {
@@ -351,46 +385,36 @@ impl Planner<'_> {
     /// Prepend the receiver's generic params to the explicit type args (for
     /// native-method and UFCS call sites).
     pub(crate) fn format_type_args_with_receiver(
-        &mut self,
+        &self,
         receiver_ty: &Type,
         type_args: ResolvedCallTypeArguments<'_>,
-    ) -> String {
-        let mut go_type_strs = Vec::new();
-        if let Some(params) = receiver_ty.get_type_params() {
-            let params = params.to_vec();
-            for param in &params {
-                go_type_strs.push(self.use_go_type(param));
-            }
-        }
-        for ta in type_args.iter() {
-            go_type_strs.push(self.use_go_type(ta));
-        }
-        if go_type_strs.is_empty() {
-            String::new()
-        } else {
-            format!("[{}]", go_type_strs.join(", "))
-        }
+    ) -> GoType {
+        let receiver_params = receiver_ty.get_type_params().unwrap_or_default();
+        let args: Vec<GoType> = receiver_params
+            .iter()
+            .chain(type_args.iter())
+            .map(|ty| self.go_type(ty))
+            .collect();
+        GoType::type_arguments(&args)
     }
 
-    pub(crate) fn zero_value(&self, ty: &Type) -> (GoExpression, PackageRequirements) {
-        let mut packages = PackageRequirements::default();
+    pub(crate) fn zero_value(&self, ty: &Type) -> GoExpression {
         if self.facts.is_interface(ty) {
-            return (GoExpression::literal("nil".to_string()), packages);
+            return GoExpression::literal("nil".to_string());
         }
 
         let go_ty = self.go_type(ty);
-        packages.extend(go_ty.requirements());
 
         let literal = |text: &str| GoExpression::literal(text.to_string());
-        let dereferenced_new = |code: &str| {
+        let dereferenced_new = |go_ty: &GoType| {
             GoExpression::dereference(GoExpression::call(
                 GoExpression::external_name("new".to_string()),
-                vec![GoExpression::type_name(code.to_string())],
+                vec![GoExpression::type_name(go_ty.clone())],
             ))
         };
 
         let layout = self.value_layout(ty, SlotOrigin::Lisette);
-        let value = match layout {
+        match layout {
             ValueLayout::Plain(Type::Simple(kind)) => match kind {
                 SimpleKind::Int
                 | SimpleKind::Int8
@@ -408,10 +432,10 @@ impl Planner<'_> {
                 SimpleKind::Float32 | SimpleKind::Float64 => literal("0.0"),
                 SimpleKind::Bool => literal("false"),
                 SimpleKind::String => literal("\"\""),
-                SimpleKind::Unit => GoExpression::empty_composite("struct{}".to_string()),
-                SimpleKind::Complex64 | SimpleKind::Complex128 => dereferenced_new(&go_ty.code),
+                SimpleKind::Unit => GoExpression::empty_composite(GoType::new("struct{}")),
+                SimpleKind::Complex64 | SimpleKind::Complex128 => dereferenced_new(&go_ty),
             },
-            ValueLayout::Array { .. } => GoExpression::empty_composite(go_ty.code),
+            ValueLayout::Array { .. } => GoExpression::empty_composite(go_ty),
             ValueLayout::Slice { .. }
             | ValueLayout::Map { .. }
             | ValueLayout::Function { .. }
@@ -428,7 +452,7 @@ impl Planner<'_> {
             }) => literal("nil"),
             ValueLayout::Tuple { .. }
             | ValueLayout::TaggedOption { .. }
-            | ValueLayout::Fallible { .. } => GoExpression::empty_composite(go_ty.code),
+            | ValueLayout::Fallible { .. } => GoExpression::empty_composite(go_ty),
             ValueLayout::Plain(Type::Nominal { id, .. })
                 if self
                     .facts
@@ -440,17 +464,10 @@ impl Planner<'_> {
                         )
                     }) =>
             {
-                GoExpression::empty_composite(go_ty.code)
+                GoExpression::empty_composite(go_ty)
             }
-            _ => dereferenced_new(&go_ty.code),
-        };
-        (value, packages)
-    }
-
-    pub(crate) fn zero_value_expression(&mut self, ty: &Type) -> GoExpression {
-        let (zero, packages) = self.zero_value(ty);
-        self.require_packages(&packages);
-        zero
+            _ => dereferenced_new(&go_ty),
+        }
     }
 
     /// Render a `#[go(anon_struct)]` stand-in as inline `struct{...}`: its name

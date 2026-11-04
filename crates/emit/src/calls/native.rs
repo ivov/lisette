@@ -13,6 +13,7 @@ use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, GoParameter, UnaryOp};
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::statements::assignments::lvalues_match;
+use crate::types::go_type::GoType;
 use crate::types::native;
 use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
 use syntax::program::{CallKind, DotAccessResolution, NativeTypeKind};
@@ -396,7 +397,7 @@ fn build_inline(
         InlineForm::Receiver => receiver.clone(),
         // A slice type needs no parentheses as a callee, unlike `Conversion`'s general form.
         InlineForm::Conversion(go_type) => GoExpression::call(
-            GoExpression::type_name(go_type.to_string()),
+            GoExpression::type_name(GoType::new(go_type.to_string())),
             vec![receiver.clone()],
         ),
         InlineForm::Index => {
@@ -606,7 +607,7 @@ impl Planner<'_> {
             );
             statements.push(plain_return(slice_growth_call(method, clipped, &arguments)));
             GoExpression::immediate_call(
-                this.use_go_type(result_ty),
+                this.go_type(result_ty),
                 LoweredBlock { statements },
                 FunctionLiteralLayout::MultiLine,
             )
@@ -1144,7 +1145,7 @@ impl Planner<'_> {
     }
 
     fn equality_closure(&mut self, ty: &Type, generics: &[Generic]) -> GoExpression {
-        let go_ty = self.use_go_type(ty);
+        let go_ty = self.go_type(ty);
         let a = self.fresh_local(Some("a"));
         let b = self.fresh_local(Some("b"));
         let body = self.equality_expression(
@@ -1168,7 +1169,7 @@ impl Planner<'_> {
         target: GoExpression,
         generics: &[Generic],
     ) -> GoExpression {
-        let go_ty = self.use_go_type(ty);
+        let go_ty = self.go_type(ty);
         let element = self.fresh_local(Some("e"));
         let body = self.equality_expression(
             GoExpression::identifier(element.clone()),
@@ -1192,7 +1193,7 @@ impl Planner<'_> {
 fn predicate_literal(parameters: Vec<GoParameter>, body: GoExpression) -> GoExpression {
     GoExpression::function_literal(
         parameters,
-        "bool".to_string(),
+        GoType::new("bool"),
         LoweredBlock {
             statements: vec![plain_return(body)],
         },

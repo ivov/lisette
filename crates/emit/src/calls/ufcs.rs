@@ -12,6 +12,7 @@ use crate::plan::bodies::Statement;
 use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::types::go_type::GoType;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::program::ReceiverCoercion;
 use syntax::program::{NativeTypeKind, resolved_instantiation};
@@ -30,7 +31,7 @@ impl Planner<'_> {
         callee: &ResolvedCallee<'_>,
         type_args: ResolvedCallTypeArguments<'_>,
         arg_shape: CallArgShape,
-    ) -> Option<String> {
+    ) -> Option<GoType> {
         let definition_ty = callee.declared_type()?;
 
         // A method with no type parameters lowers to a non-generic free function.
@@ -222,7 +223,7 @@ impl Planner<'_> {
         callee: &ResolvedCallee<'_>,
         receiver_ty: &Type,
         member: &str,
-        type_args_string: String,
+        type_args_string: GoType,
     ) -> GoExpression {
         let Type::Nominal {
             id: qualified_name, ..

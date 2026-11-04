@@ -12,6 +12,7 @@ use crate::plan::go_expression::GoExpressionNode;
 use crate::plan::values::{CaptureBoundary, GoExpression, SequencedValues, Stability, ValuePlan};
 #[cfg(debug_assertions)]
 use crate::plan::verify::verify_operand_order;
+use crate::types::go_type::GoType;
 use crate::utils::reads_value_member;
 use syntax::ast::{BindingId, Expression, IdentifierResolution, UnaryOperator};
 use syntax::types::Type;
@@ -107,7 +108,7 @@ impl Planner<'_> {
         {
             // Keep the source type when Go would default an untyped shift to int.
             if self.contains_untyped_constant_shift(source) {
-                value = value.conversion(self.use_go_type(&source.get_type()));
+                value = value.conversion(self.go_type(&source.get_type()));
             }
             self.pin_staged(&mut value, prefix);
         }
@@ -337,9 +338,9 @@ impl Planner<'_> {
         if let Some(combine) = combine
             && values.len() > combine.fixed_count
         {
-            let element_go = self.use_go_type(&combine.element_ty);
+            let element_go = self.go_type(&combine.element_ty);
             let leading = GoExpression::composite(
-                Some(format!("[]{element_go}")),
+                Some(GoType::slice_of(&element_go)),
                 values
                     .drain(combine.fixed_count..)
                     .map(|value| (None, value))

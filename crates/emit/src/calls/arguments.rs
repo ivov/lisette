@@ -18,6 +18,7 @@ use crate::plan::calls::{
     ArgumentPlan, ArgumentSlotBridge, ArgumentValueSource, CallPlan, CallableOrigin, ResolvedCallee,
 };
 use crate::plan::values::{CaptureBoundary, GoExpression, SequencedValues, ValuePlan};
+use crate::types::go_type::GoType;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -267,7 +268,6 @@ impl Planner<'_> {
         let source_variable = source.expression().clone();
 
         let target_element_ty = target_layout.go_type(self);
-        let target_element_ty = self.use_rendered_go_type(target_element_ty);
 
         let adapted = self.fresh_local(Some("adapted"));
         self.declare(&adapted);
@@ -295,7 +295,7 @@ impl Planner<'_> {
                 GoExpression::call(
                     GoExpression::external_name("make".to_string()),
                     vec![
-                        GoExpression::type_name(format!("[]{target_element_ty}")),
+                        GoExpression::type_name(GoType::slice_of(&target_element_ty)),
                         GoExpression::call(
                             GoExpression::external_name("len".to_string()),
                             vec![source_variable.clone()],

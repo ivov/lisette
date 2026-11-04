@@ -274,7 +274,7 @@ impl Planner<'_> {
         let mut statements = vec![
             LoweredStatement::VarDecl {
                 name: go_name.clone(),
-                go_type: self.use_go_type(&ty),
+                go_type: self.go_type(&ty),
                 value: None,
             }
             .into(),

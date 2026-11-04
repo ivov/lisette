@@ -6,6 +6,7 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
 use crate::plan::go_expression::{BinaryOp, CompositeLayout};
 use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
+use crate::types::go_type::GoType;
 use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::types::{SimpleKind, Type};
 
@@ -61,7 +62,7 @@ impl Planner<'_> {
         &mut self,
         constant: Option<ConstantKind>,
         slot_ty: &Type,
-    ) -> Option<String> {
+    ) -> Option<GoType> {
         let kind = constant?;
         if self.facts.is_interface_or_unknown(slot_ty) {
             return None;
@@ -75,7 +76,7 @@ impl Planner<'_> {
         if peeled.as_simple() == Some(kind.default_kind()) {
             return None;
         }
-        Some(self.use_go_type(slot_ty))
+        Some(self.go_type(slot_ty))
     }
 
     fn emit_slice_literal(&mut self, elements: &[Expression], ty: &Type) -> ValuePlan {
@@ -91,9 +92,10 @@ impl Planner<'_> {
                 "[]".to_string(),
             ),
         };
-        let element_ty = self.use_go_type(&element_lisette_ty);
+        let element_ty = self.go_type(&element_lisette_ty);
 
-        let go_type = format!("{}{}", type_prefix, element_ty);
+        let go_type =
+            GoType::with_dependencies(format!("{}{}", type_prefix, element_ty.code), [&element_ty]);
         if elements.is_empty() {
             return ValuePlan::computed(Vec::new(), GoExpression::empty_composite(go_type));
         }

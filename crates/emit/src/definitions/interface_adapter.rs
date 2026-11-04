@@ -13,6 +13,7 @@ use crate::plan::values::GoExpression;
 #[cfg(debug_assertions)]
 use crate::plan::verify::{verify_final_function_body, verify_local_scopes};
 use crate::plan::visit::identify_body_locals;
+use crate::types::go_type::GoType;
 use crate::utils::fresh_receiver_name;
 use crate::write_line;
 use ecow::EcoString;
@@ -389,21 +390,23 @@ impl Planner<'_> {
         })
     }
 
-    fn dynamic_method_interface(&mut self, method_name: &str, layout: &FunctionLayout) -> String {
-        let params = layout
+    fn dynamic_method_interface(&mut self, method_name: &str, layout: &FunctionLayout) -> GoType {
+        let params: Vec<GoType> = layout
             .parameters
             .iter()
-            .map(|parameter| {
-                let ty = parameter.go_type(self);
-                self.use_rendered_go_type(ty)
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-        let result = layout
-            .result_go_type(self)
-            .map(|ty| self.use_rendered_go_type(ty))
-            .unwrap_or_default();
-        format!("interface {{ {}({}) {} }}", method_name, params, result)
+            .map(|parameter| parameter.go_type(self))
+            .collect();
+        let result = layout.result_go_type(self).unwrap_or_default();
+        let param_codes: Vec<&str> = params.iter().map(|param| param.code.as_str()).collect();
+        GoType::with_dependencies(
+            format!(
+                "interface {{ {}({}) {} }}",
+                method_name,
+                param_codes.join(", "),
+                result.code
+            ),
+            params.iter().chain([&result]),
+        )
     }
 
     fn plan_dynamic_adapter_body(
@@ -414,7 +417,7 @@ impl Planner<'_> {
         parameters: &[GoIdentifier],
     ) -> Vec<Statement> {
         let inner = GoExpression::conversion(
-            "any".to_string(),
+            GoType::new("any"),
             GoExpression::selector(
                 GoExpression::identifier(receiver.clone()),
                 "inner".to_string(),
@@ -1021,7 +1024,7 @@ impl Planner<'_> {
         match method.ret {
             AdapterReturn::Discard { .. } => statements.push(expression_statement(inner_call)),
             AdapterReturn::ZeroFill => {
-                let zero = self.zero_value_expression(return_type);
+                let zero = self.zero_value(return_type);
                 statements.push(expression_statement(inner_call));
                 statements.push(plain_return(zero));
             }

@@ -11,7 +11,7 @@ use crate::Planner;
 use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::context::expression::ExpressionContext;
-use crate::names::go_name::{self, GeneratedPackage, testkit_qualifier};
+use crate::names::go_name::{self, GeneratedPackage};
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::binding_emit::{
     self, AssertedPattern, apply_refutable_root_assertion, apply_root_assertion,
@@ -32,7 +32,7 @@ use crate::plan::go_expression::CompositeLayout;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
-use crate::statements::testing::test_context_call;
+use crate::statements::testing::{test_context_call, testkit_operand_type};
 
 #[derive(Clone, Copy)]
 pub(crate) struct AnnotatedPattern<'a> {
@@ -632,11 +632,9 @@ impl Planner<'_> {
                     .current_test_handle()
                     .expect("let assert without a test handle should be rejected by semantics")
                     .clone();
-                self.require_testkit();
-                let testkit = testkit_qualifier();
                 let literal = |text: String| GoExpression::literal(text);
                 let operand = GoExpression::struct_literal(
-                    format!("{testkit}.Operand"),
+                    testkit_operand_type(),
                     vec![(
                         "Value".to_string(),
                         GoExpression::call(
@@ -831,7 +829,7 @@ impl Planner<'_> {
             };
             let go_name =
                 self.claim_declared_binding(&binding.lisette_name, &binding.binding_ids, preferred);
-            let go_type = self.use_go_type(ty);
+            let go_type = self.go_type(ty);
             statements.push(
                 LoweredStatement::VarDecl {
                     name: go_name,
