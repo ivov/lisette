@@ -266,9 +266,9 @@ pub fn WalkDir(root: string, fn_: fs.WalkDirFunc) -> Result<(), error>
 /// Readdirnames.
 pub type WalkFunc = fn(string, fs.FileInfo, error) -> Result<(), error>
 
-pub const ListSeparator = 59
+pub const ListSeparator: rune = 59
 
-pub const Separator = 92
+pub const Separator: rune = 92
 
 /// ErrBadPattern indicates a pattern was malformed.
 pub var ErrBadPattern: error

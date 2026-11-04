@@ -153,16 +153,16 @@ pub struct SpecialCase(mut Slice<CaseRange>)
 /// Indices into the Delta arrays inside CaseRanges for case mapping.
 pub const LowerCase = 1
 
-pub const MaxASCII = 127
+pub const MaxASCII: rune = 127
 
 /// Indices into the Delta arrays inside CaseRanges for case mapping.
 pub const MaxCase = 3
 
-pub const MaxLatin1 = 255
+pub const MaxLatin1: rune = 255
 
-pub const MaxRune = 1114111
+pub const MaxRune: rune = 1114111
 
-pub const ReplacementChar = 65533
+pub const ReplacementChar: rune = 65533
 
 /// Indices into the Delta arrays inside CaseRanges for case mapping.
 pub const TitleCase = 2
@@ -173,7 +173,7 @@ pub const UpperCase = 0
 /// If the Delta field of a [CaseRange] is UpperLower, it means
 /// this CaseRange represents a sequence of the form (say)
 /// [Upper] [Lower] [Upper] [Lower].
-pub const UpperLower = 1114112
+pub const UpperLower: rune = 1114112
 
 /// Version is the Unicode edition from which the tables are derived.
 pub const Version = "15.0.0"

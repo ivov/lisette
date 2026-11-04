@@ -370,6 +370,32 @@ fn main() {
 }
 
 #[test]
+fn go_constant_above_max_int_converts_to_its_type() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "go:math"
+
+const BELOW_MAX: uint64 = math.MaxUint64 - 1
+
+fn main() {
+  let big = math.MaxUint64
+  let max: uint = math.MaxUint
+  let complement = ^math.MaxUint64
+  let negative = (math.MinInt64 - 1) + 1
+  fmt.Println(big, max, complement, complement == 0, negative, BELOW_MAX)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn display_cross_package_to_string_exported() {
     let mut fs = MockFileSystem::new();
 

@@ -40,6 +40,9 @@
       "closed_domain": {
         "time": ["Weekday", "Month"]
       },
+      "uint_constant": {
+        "math": ["MaxUint"]
+      },
       "superseded_by": {
         "sort": {
           "Float64s": "slices.Sort",

@@ -130,46 +130,46 @@ pub const FormatUSTAR: Format = 2
 pub const FormatUnknown: Format = 0
 
 /// Type flags for Header.Typeflag.
-pub const TypeBlock = 52
+pub const TypeBlock: rune = 52
 
 /// Type flags for Header.Typeflag.
-pub const TypeChar = 51
+pub const TypeChar: rune = 51
 
 /// Type flags for Header.Typeflag.
-pub const TypeCont = 55
+pub const TypeCont: rune = 55
 
 /// Type flags for Header.Typeflag.
-pub const TypeDir = 53
+pub const TypeDir: rune = 53
 
 /// Type flags for Header.Typeflag.
-pub const TypeFifo = 54
+pub const TypeFifo: rune = 54
 
 /// Type flags for Header.Typeflag.
-pub const TypeGNULongLink = 75
+pub const TypeGNULongLink: rune = 75
 
 /// Type flags for Header.Typeflag.
-pub const TypeGNULongName = 76
+pub const TypeGNULongName: rune = 76
 
 /// Type flags for Header.Typeflag.
-pub const TypeGNUSparse = 83
+pub const TypeGNUSparse: rune = 83
 
 /// Type flags for Header.Typeflag.
-pub const TypeLink = 49
+pub const TypeLink: rune = 49
 
 /// Type flags for Header.Typeflag.
-pub const TypeReg = 48
+pub const TypeReg: rune = 48
 
 /// Type flags for Header.Typeflag.
-pub const TypeRegA = 0
+pub const TypeRegA: rune = 0
 
 /// Type flags for Header.Typeflag.
-pub const TypeSymlink = 50
+pub const TypeSymlink: rune = 50
 
 /// Type flags for Header.Typeflag.
-pub const TypeXGlobalHeader = 103
+pub const TypeXGlobalHeader: rune = 103
 
 /// Type flags for Header.Typeflag.
-pub const TypeXHeader = 120
+pub const TypeXHeader: rune = 120
 
 pub var ErrFieldTooLong: error
 

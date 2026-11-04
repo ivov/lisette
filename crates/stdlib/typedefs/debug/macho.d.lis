@@ -498,63 +498,63 @@ pub struct Thread {
   pub Data: mut Slice<uint32>,
 }
 
-pub const FlagAllModsBound = 0x1000
+pub const FlagAllModsBound: uint32 = 0x1000
 
-pub const FlagAllowStackExecution = 0x20000
+pub const FlagAllowStackExecution: uint32 = 0x20000
 
-pub const FlagAppExtensionSafe = 0x2000000
+pub const FlagAppExtensionSafe: uint32 = 0x2000000
 
-pub const FlagBindAtLoad = 0x8
+pub const FlagBindAtLoad: uint32 = 0x8
 
-pub const FlagBindsToWeak = 0x10000
+pub const FlagBindsToWeak: uint32 = 0x10000
 
-pub const FlagCanonical = 0x4000
+pub const FlagCanonical: uint32 = 0x4000
 
-pub const FlagDeadStrippableDylib = 0x400000
+pub const FlagDeadStrippableDylib: uint32 = 0x400000
 
-pub const FlagDyldLink = 0x4
+pub const FlagDyldLink: uint32 = 0x4
 
-pub const FlagForceFlat = 0x100
+pub const FlagForceFlat: uint32 = 0x100
 
-pub const FlagHasTLVDescriptors = 0x800000
+pub const FlagHasTLVDescriptors: uint32 = 0x800000
 
-pub const FlagIncrLink = 0x2
+pub const FlagIncrLink: uint32 = 0x2
 
-pub const FlagLazyInit = 0x40
+pub const FlagLazyInit: uint32 = 0x40
 
-pub const FlagNoFixPrebinding = 0x400
+pub const FlagNoFixPrebinding: uint32 = 0x400
 
-pub const FlagNoHeapExecution = 0x1000000
+pub const FlagNoHeapExecution: uint32 = 0x1000000
 
-pub const FlagNoMultiDefs = 0x200
+pub const FlagNoMultiDefs: uint32 = 0x200
 
-pub const FlagNoReexportedDylibs = 0x100000
+pub const FlagNoReexportedDylibs: uint32 = 0x100000
 
-pub const FlagNoUndefs = 0x1
+pub const FlagNoUndefs: uint32 = 0x1
 
-pub const FlagPIE = 0x200000
+pub const FlagPIE: uint32 = 0x200000
 
-pub const FlagPrebindable = 0x800
+pub const FlagPrebindable: uint32 = 0x800
 
-pub const FlagPrebound = 0x10
+pub const FlagPrebound: uint32 = 0x10
 
-pub const FlagRootSafe = 0x40000
+pub const FlagRootSafe: uint32 = 0x40000
 
-pub const FlagSetuidSafe = 0x80000
+pub const FlagSetuidSafe: uint32 = 0x80000
 
-pub const FlagSplitSegs = 0x20
+pub const FlagSplitSegs: uint32 = 0x20
 
-pub const FlagSubsectionsViaSymbols = 0x2000
+pub const FlagSubsectionsViaSymbols: uint32 = 0x2000
 
-pub const FlagTwoLevel = 0x80
+pub const FlagTwoLevel: uint32 = 0x80
 
-pub const FlagWeakDefines = 0x8000
+pub const FlagWeakDefines: uint32 = 0x8000
 
-pub const Magic32 = 0xfeedface
+pub const Magic32: uint32 = 0xfeedface
 
-pub const Magic64 = 0xfeedfacf
+pub const Magic64: uint32 = 0xfeedfacf
 
-pub const MagicFat = 0xcafebabe
+pub const MagicFat: uint32 = 0xcafebabe
 
 /// ErrNotFat is returned from [NewFatFile] or [OpenFat] when the file is not a
 /// universal binary but may be a thin binary, based on its magic number.

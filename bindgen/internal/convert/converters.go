@@ -977,6 +977,20 @@ func (c *Converter) convertConstant(result *ConvertResult, exp extract.SymbolExp
 		}
 	}
 
+	if basic, ok := types.Unalias(actualType).(*types.Basic); ok && basic.Info()&types.IsUntyped != 0 {
+		switch {
+		case basic.Kind() == types.UntypedRune:
+			result.LisetteType = "rune"
+			return
+		case basic.Kind() == types.UntypedInt && val != nil && !fitsInt64(val):
+			result.LisetteType = "uint64"
+			if c.cfg.IsUintConstant(c.currentPkgPath, result.Name) {
+				result.LisetteType = "uint"
+			}
+			return
+		}
+	}
+
 	t := ToLisette(actualType, c)
 	if t.SkipReason != nil {
 		// Const typed by an internal package stays referenceable as an opaque
@@ -2219,4 +2233,9 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 	}
 
 	return methods, true
+}
+
+func fitsInt64(val constant.Value) bool {
+	_, exact := constant.Int64Val(val)
+	return exact
 }

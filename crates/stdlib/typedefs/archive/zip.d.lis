@@ -118,10 +118,10 @@ pub struct Reader {
 pub type Writer
 
 /// Compression methods.
-pub const Deflate = 8
+pub const Deflate: uint16 = 8
 
 /// Compression methods.
-pub const Store = 0
+pub const Store: uint16 = 0
 
 pub var ErrAlgorithm: error
 

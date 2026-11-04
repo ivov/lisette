@@ -6228,6 +6228,20 @@ fn test() {
 }
 
 #[test]
+fn typed_go_constant_cast_to_int_keeps_the_conversion() {
+    let input = r#"
+import "go:crypto/tls"
+import "go:fmt"
+
+fn main() {
+  let n = tls.TLS_FALLBACK_SCSV as int
+  fmt.Println(n * 10)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn package_constants_and_functions_need_no_copy_before_a_call() {
     let input = r#"
 import "go:flag"

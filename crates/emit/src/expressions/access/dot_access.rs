@@ -1,7 +1,9 @@
 use crate::state::bindings::BindingValue;
 use syntax::ast::Expression;
 use syntax::parse;
-use syntax::program::{DefinitionBody, DotAccessResolution, ReceiverCoercion};
+use syntax::program::{
+    ConstantValue, DefinitionBody, DotAccessResolution, ReceiverCoercion, ValueKind,
+};
 use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::Planner;
@@ -172,6 +174,13 @@ impl Planner<'_> {
         };
         let expression =
             self.append_cross_package_type_args(selector, &expression_ty, resolution, ctx);
+        let expression = if let Some(package) = expression_ty.as_import_namespace()
+            && self.go_constant_exceeds_int(package, member, result_ty)
+        {
+            GoExpression::conversion(self.go_type(result_ty), expression)
+        } else {
+            expression
+        };
         let expression =
             if let Some((source, target)) = self.prelude_receiver_method_layouts(dot_access) {
                 self.plan_function_layout_bridge(&mut setup, expression, &source, &target)
@@ -471,6 +480,26 @@ impl Planner<'_> {
                     .go_hints
                     .iter()
                     .any(|hint| hint == "value_method_set")
+            })
+    }
+
+    /// A Go constant above `MaxInt64` has no Go default type, so Go needs the declared type.
+    fn go_constant_exceeds_int(&self, package: &str, member: &str, ty: &Type) -> bool {
+        // Only an unsigned constant can hold a value above `MaxInt64`.
+        if !ty.is_unsigned_int() || !go_name::is_go_import(package) {
+            return false;
+        }
+        let qualified_name = format!("{}.{}", package, member);
+        self.facts
+            .definition(qualified_name.as_str())
+            .is_some_and(|definition| {
+                matches!(
+                    &definition.body,
+                    DefinitionBody::Value {
+                        kind: ValueKind::Constant(ConstantValue::Integer { value, .. }),
+                        ..
+                    } if *value > i64::MAX as u64
+                )
             })
     }
 

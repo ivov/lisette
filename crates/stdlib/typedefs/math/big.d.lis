@@ -146,7 +146,7 @@ pub type Rat
 pub struct Word(uint)
 
 /// MaxBase is the largest number base accepted for string conversions.
-pub const MaxBase = 62
+pub const MaxBase: rune = 62
 
 /// Exponent and precision limits.
 pub const MaxExp = 2147483647

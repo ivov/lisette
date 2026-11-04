@@ -1,0 +1,20 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"math"
+)
+
+const BelowMax uint64 = uint64(math.MaxUint64) - 1
+
+func main() {
+	big := uint64(math.MaxUint64)
+	max_ := uint(math.MaxUint)
+	complement := ^uint64(math.MaxUint64)
+	negative := math.MinInt64 - 1 + 1
+	fmt.Println(big, max_, complement, complement == 0, negative, BelowMax)
+}

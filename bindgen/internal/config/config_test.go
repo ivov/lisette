@@ -104,6 +104,9 @@ func TestNilConfigAccessorsDoNotPanic(t *testing.T) {
 	if _, ok := cfg.SupersededBy("io", "Foo"); ok {
 		t.Error("SupersededBy")
 	}
+	if cfg.IsUintConstant("io", "Foo") {
+		t.Error("IsUintConstant")
+	}
 }
 
 func TestSupersededBy(t *testing.T) {

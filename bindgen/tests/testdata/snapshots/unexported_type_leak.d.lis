@@ -18,11 +18,11 @@ pub fn SetLevel(l: int)
 
 pub fn UseToken(t: uint64)
 
-pub const LevelDebug = 0
+pub const LevelDebug: int = 0
 
-pub const LevelInfo = 1
+pub const LevelInfo: int = 1
 
-pub const LevelWarn = 2
+pub const LevelWarn: int = 2
 
 #[go(read_only)]
 pub var AnyError: error

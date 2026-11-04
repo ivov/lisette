@@ -734,7 +734,7 @@ func (e *Emitter) emitConst(result convert.ConvertResult) {
 	e.emitDocWithIndent(result.Doc, "")
 
 	if result.ConstValue != "" {
-		if e.isInferredNamedType(result.LisetteType) {
+		if result.LisetteType != "" && result.LisetteType != "Unknown" {
 			fmt.Fprintf(&e.buf, "pub const %s: %s = %s\n\n", result.Name, result.LisetteType, result.ConstValue)
 		} else {
 			fmt.Fprintf(&e.buf, "pub const %s = %s\n\n", result.Name, result.ConstValue)
@@ -742,34 +742,6 @@ func (e *Emitter) emitConst(result convert.ConvertResult) {
 	} else {
 		fmt.Fprintf(&e.buf, "pub const %s: %s\n\n", result.Name, result.LisetteType)
 	}
-}
-
-func (e *Emitter) isInferredNamedType(typeStr string) bool {
-	basicTypes := map[string]bool{
-		"bool":       true,
-		"int":        true,
-		"int8":       true,
-		"int16":      true,
-		"int32":      true,
-		"int64":      true,
-		"uint":       true,
-		"uint8":      true,
-		"uint16":     true,
-		"uint32":     true,
-		"uint64":     true,
-		"uintptr":    true,
-		"float32":    true,
-		"float64":    true,
-		"complex64":  true,
-		"complex128": true,
-		"string":     true,
-		"byte":       true,
-		"rune":       true,
-		"error":      true,
-		"Unknown":    true,
-		"()":         true,
-	}
-	return !basicTypes[typeStr] && !strings.Contains(typeStr, "<")
 }
 
 func (e *Emitter) emitVariable(result convert.ConvertResult) {

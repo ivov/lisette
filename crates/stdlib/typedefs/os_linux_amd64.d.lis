@@ -729,54 +729,54 @@ pub const ModeType: fs.FileMode = 2401763328
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-pub const O_APPEND = 1024
+pub const O_APPEND: int = 1024
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-pub const O_CREATE = 64
+pub const O_CREATE: int = 64
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-pub const O_EXCL = 128
+pub const O_EXCL: int = 128
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-pub const O_RDONLY = 0
+pub const O_RDONLY: int = 0
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-pub const O_RDWR = 2
+pub const O_RDWR: int = 2
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-pub const O_SYNC = 1052672
+pub const O_SYNC: int = 1052672
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-pub const O_TRUNC = 512
+pub const O_TRUNC: int = 512
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-pub const O_WRONLY = 1
+pub const O_WRONLY: int = 1
 
-pub const PathListSeparator = 58
+pub const PathListSeparator: rune = 58
 
-pub const PathSeparator = 47
+pub const PathSeparator: rune = 47
 
 /// Seek whence values.
 /// 
 /// Deprecated: Use io.SeekStart, io.SeekCurrent, and io.SeekEnd.
-pub const SEEK_CUR = 1
+pub const SEEK_CUR: int = 1
 
 /// Seek whence values.
 /// 
 /// Deprecated: Use io.SeekStart, io.SeekCurrent, and io.SeekEnd.
-pub const SEEK_END = 2
+pub const SEEK_END: int = 2
 
 /// Seek whence values.
 /// 
 /// Deprecated: Use io.SeekStart, io.SeekCurrent, and io.SeekEnd.
-pub const SEEK_SET = 0
+pub const SEEK_SET: int = 0
 
 /// Args hold the command-line arguments, starting with the program name.
 pub var Args: mut Slice<string>
