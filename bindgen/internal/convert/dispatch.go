@@ -53,7 +53,7 @@ type ConvertResult struct {
 	// HasHiddenEmbed emits `#[go(hidden_embed)]` for a struct that looks flat but
 	// has an embed bindgen could not emit, so the resolver must refuse to embed it.
 	HasHiddenEmbed bool
-	SealId         string // non-empty for an unexported seal method: its seal identity
+	SealId         string // non-empty for a seal method: its seal identity
 	UnexportedType bool   // a Go unexported type emitted only as a faithful embed target
 	// Vouches for the zero value of a type with no visible fields, which is
 	// refused by default.
@@ -110,7 +110,7 @@ type InterfaceMethod struct {
 	ReturnType    string
 	CommaOk       bool
 	BuilderMethod bool
-	SealId        string // non-empty for a Go unexported method: its seal identity
+	SealId        string // non-empty for a seal method: its seal identity
 }
 
 // HasReturn reports whether this interface method has a non-unit return type.

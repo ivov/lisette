@@ -379,14 +379,10 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		}
 	}
 
-	// A seal is recorded by identity and receiver only; its params and return are
+	// A seal is recorded by identity and receiver only. Its params and return are
 	// unused and may be unrepresentable.
-	if symbolExport.Unexported {
-		pkgPath := ""
-		if symbolExport.Obj != nil && symbolExport.Obj.Pkg() != nil {
-			pkgPath = symbolExport.Obj.Pkg().Path()
-		}
-		result.SealId = sealIdentity(pkgPath, result.Name, signature)
+	if symbolExport.Unexported || c.sealedByInternalType(signature) {
+		result.SealId = sealIdentity(symbolExport.Obj, signature)
 		return
 	}
 
@@ -2128,14 +2124,14 @@ func sealQualifier(p *types.Package) string {
 	return p.Path()
 }
 
-// sealIdentity is an unexported method's package-qualified identity: declaring
-// package, name, and signature (receiver excluded). A seal and a method that
-// implements it share it; a different signature or package does not.
-func sealIdentity(pkgPath, name string, sig *types.Signature) string {
+// sealIdentity is a seal method's name and signature, with its package when the name is unexported.
+func sealIdentity(method types.Object, sig *types.Signature) string {
 	var b strings.Builder
-	b.WriteString(pkgPath)
-	b.WriteString(".")
-	b.WriteString(name)
+	if !method.Exported() {
+		b.WriteString(sealQualifier(method.Pkg()))
+		b.WriteString(".")
+	}
+	b.WriteString(method.Name())
 	b.WriteString("(")
 	if sig != nil {
 		params := sig.Params()
@@ -2163,10 +2159,94 @@ func sealIdentity(pkgPath, name string, sig *types.Signature) string {
 	return b.String()
 }
 
+// A type parameter or an anonymous unexported member has no exact identity, so such a signature is not sealed.
+func (c *Converter) sealedByInternalType(sig *types.Signature) bool {
+	return c.mentionsInternalType(sig) && !hasInexactSealIdentity(sig)
+}
+
+func (c *Converter) mentionsInternalType(t types.Type) bool {
+	return anyType(t, func(t types.Type) bool {
+		named, ok := t.(*types.Named)
+		if !ok {
+			return false
+		}
+		pkg := named.Obj().Pkg()
+		return pkg != nil && pkg.Path() != c.currentPkgPath && extract.IsInternalPackagePath(pkg.Path())
+	})
+}
+
+func hasInexactSealIdentity(t types.Type) bool {
+	return anyType(t, func(t types.Type) bool {
+		switch t := t.(type) {
+		case *types.TypeParam:
+			return true
+		case *types.Struct:
+			for field := range t.Fields() {
+				if !field.Exported() {
+					return true
+				}
+			}
+		case *types.Interface:
+			for method := range t.Methods() {
+				if !method.Exported() {
+					return true
+				}
+			}
+		}
+		return false
+	})
+}
+
+func anyType(t types.Type, pred func(types.Type) bool) bool {
+	t = types.Unalias(t)
+	if pred(t) {
+		return true
+	}
+	switch t := t.(type) {
+	case *types.Named:
+		for arg := range t.TypeArgs().Types() {
+			if anyType(arg, pred) {
+				return true
+			}
+		}
+	case *types.Pointer:
+		return anyType(t.Elem(), pred)
+	case *types.Slice:
+		return anyType(t.Elem(), pred)
+	case *types.Array:
+		return anyType(t.Elem(), pred)
+	case *types.Chan:
+		return anyType(t.Elem(), pred)
+	case *types.Map:
+		return anyType(t.Key(), pred) || anyType(t.Elem(), pred)
+	case *types.Signature:
+		return anyType(t.Params(), pred) || anyType(t.Results(), pred)
+	case *types.Tuple:
+		for v := range t.Variables() {
+			if anyType(v.Type(), pred) {
+				return true
+			}
+		}
+	case *types.Struct:
+		for field := range t.Fields() {
+			if anyType(field.Type(), pred) {
+				return true
+			}
+		}
+	case *types.Interface:
+		for method := range t.Methods() {
+			if anyType(method.Type(), pred) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // extractInterfaceMethods walks a Go interface's method set and converts each to
 // a Lisette InterfaceMethod. The second return value is false when an embedded
 // union or an unrepresentable exported param/return type is encountered.
-// Unexported methods are recorded by their seal identity only.
+// Seal methods are recorded by their seal identity only.
 func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeName string) ([]InterfaceMethod, bool) {
 	if _interface.NumEmbeddeds() > 0 {
 		for embedded := range _interface.EmbeddedTypes() {
@@ -2179,18 +2259,13 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 	var methods []InterfaceMethod
 
 	for method := range _interface.Methods() {
-		if !method.Exported() {
-			sig, _ := method.Type().(*types.Signature)
-			methods = append(methods, InterfaceMethod{
-				Name:   method.Name(),
-				SealId: sealIdentity(method.Pkg().Path(), method.Name(), sig),
-			})
-			continue
-		}
-
 		signature, ok := method.Type().(*types.Signature)
 		if !ok {
 			return nil, false
+		}
+		if !method.Exported() || c.sealedByInternalType(signature) {
+			methods = append(methods, InterfaceMethod{Name: method.Name(), SealId: sealIdentity(method, signature)})
+			continue
 		}
 
 		qualifiedName := typeName + "." + method.Name()

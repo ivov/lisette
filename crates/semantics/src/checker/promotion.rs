@@ -1,17 +1,19 @@
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
-use syntax::ast::{Generic, Visibility};
+use syntax::ast::{Generic, StructFieldDefinition, Visibility};
 use syntax::go_names;
 use syntax::program::{
     Definition, DefinitionBody, Method, Methods, method_for_type, methods_for_type,
 };
 use syntax::types::{
-    self, CompoundKind, Symbol, Type, build_named_substitution_map, build_substitution_map,
-    substitute,
+    self, CompoundKind, GO_IMPORT_PREFIX, Symbol, Type, build_named_substitution_map,
+    build_substitution_map, substitute,
 };
 
+use crate::checker::sealing::is_unexported_key;
 use crate::store::Store;
 
 #[derive(Clone, Debug)]
@@ -239,6 +241,9 @@ where
     if let [(entry, candidate)] = candidates.as_slice()
         && !entry.multiples
     {
+        if hidden_exported_seal(entries, entry.depth, name, candidate, lookup) {
+            return Resolution::NotFound;
+        }
         return Resolution::Found(build_member(outer, entry, candidate, lookup));
     }
 
@@ -249,6 +254,93 @@ where
     sources.sort();
     sources.dedup();
     Resolution::Ambiguous { sources }
+}
+
+/// Whether a member at the seal's depth or above emits the same Go name as this exported seal.
+fn hidden_exported_seal<'d, F>(
+    entries: &[Entry],
+    depth: usize,
+    name: &str,
+    candidate: &Candidate,
+    lookup: F,
+) -> bool
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
+    if !is_unexported_key(name) {
+        return false;
+    }
+    let MemberKind::Method(method) = &candidate.kind else {
+        return false;
+    };
+    let selector = method.source_name.as_str();
+    if !selector.starts_with(char::is_uppercase) {
+        return false;
+    }
+    entries
+        .iter()
+        .filter(|entry| entry.depth <= depth)
+        .any(|entry| declares_go_selector(&entry.ty, name, selector, lookup))
+}
+
+/// Whether `ty` declares a member other than `seal_key` that emits `selector` as its Go name.
+fn declares_go_selector<'d, F>(ty: &Type, seal_key: &str, selector: &str, lookup: F) -> bool
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
+    let Some(id) = ty.get_qualified_id() else {
+        return false;
+    };
+    let Some(definition) = lookup(id) else {
+        return false;
+    };
+    let go_import = id.starts_with(GO_IMPORT_PREFIX);
+    let claims = |key: &EcoString, method: &Method| {
+        key != seal_key && method_go_name(key, method, go_import) == selector
+    };
+    if definition.is_interface() {
+        return methods_for_type(ty, &Default::default(), lookup)
+            .iter()
+            .any(|(key, method)| claims(key, method));
+    }
+    let method_claims = definition.methods().is_some_and(|methods| {
+        methods
+            .iter()
+            .any(|(key, method)| !definition.is_ufcs_method(key) && claims(key, method))
+    });
+    if method_claims {
+        return true;
+    }
+    let forces_export = definition.is_serialized();
+    definition.fields().is_some_and(|fields| {
+        fields
+            .iter()
+            .any(|field| field_go_name(go_import, field, forces_export) == selector)
+    })
+}
+
+fn method_go_name(key: &str, method: &Method, go_import: bool) -> String {
+    if is_unexported_key(key) {
+        method.source_name.to_string()
+    } else if go_import {
+        key.to_string()
+    } else if method.visibility.is_public() {
+        go_names::snake_to_camel(key)
+    } else {
+        go_names::unexported_method_go_name(key)
+    }
+}
+
+fn field_go_name(
+    go_import: bool,
+    field: &StructFieldDefinition,
+    forces_export: bool,
+) -> Cow<'_, str> {
+    if go_import {
+        Cow::Borrowed(field.name.as_str())
+    } else {
+        go_names::struct_field_go_name(field, forces_export)
+    }
 }
 
 struct Candidate {
