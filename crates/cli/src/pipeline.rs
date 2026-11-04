@@ -1,4 +1,6 @@
 use std::env;
+use std::mem;
+use std::thread;
 
 use rustc_hash::FxHashMap as HashMap;
 
@@ -169,22 +171,25 @@ pub fn compile(
     let mut sources = Sources::default();
     let mut live_packages = Vec::new();
     let mut user_file_count = 0;
-    for (file_id, file) in analysis.emit_input.files {
+    let files = mem::take(&mut analysis.emit_input.files);
+    let mut spent_files = Vec::with_capacity(files.len());
+    for (file_id, mut file) in files {
         if !file.is_d_lis() {
             user_file_count += 1;
-            live_packages.push(file.package_id);
+            live_packages.push(mem::take(&mut file.package_id));
         }
         sources.insert(
             file_id,
             SourceInfo {
-                source: file.source,
-                filename: file.display_path,
+                source: mem::take(&mut file.source),
+                filename: mem::take(&mut file.display_path),
             },
         );
+        spent_files.push(file);
     }
     live_packages.sort_unstable();
     live_packages.dedup();
-    let test_index = analysis.emit_input.test_index;
+    let test_index = mem::take(&mut analysis.emit_input.test_index);
 
     let output = match emit_result {
         Some(Ok(output)) => output,
@@ -203,7 +208,8 @@ pub fn compile(
         None => Vec::new(),
     };
 
-    let emit_stamps = analysis.emit_stamps;
+    let emit_stamps = mem::take(&mut analysis.emit_stamps);
+    thread::spawn(move || drop((analysis, spent_files)));
 
     CompileResult {
         output,
