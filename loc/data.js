@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793138008952,
+  "lastUpdate": 1793816596771,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -49575,6 +49575,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 39896,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29243,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19480,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15793,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14013,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9099,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10262,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "rslnkrmt2552@gmail.com",
+            "name": "Muhammad Arslan",
+            "username": "cowgoesmeow"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "94242fc966e12a3fd1b2d82d4407898c845fa04d",
+          "message": "fix: avoid unused imports from omitted autofill fields (#1602)",
+          "timestamp": "2026-11-04T19:22:51+01:00",
+          "tree_id": "8031ace29e04a012468407cb457097c22d8c141a",
+          "url": "https://github.com/ivov/lisette/commit/94242fc966e12a3fd1b2d82d4407898c845fa04d"
+        },
+        "date": 1793816595157,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 151227,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 39906,
             "unit": "lines"
           },
           {
