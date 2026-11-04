@@ -1,0 +1,9 @@
+{
+  "overrides": {
+    "types": {
+      "uint_constant": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/constants": ["Pinned", "Small"]
+      }
+    }
+  }
+}

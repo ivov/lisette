@@ -13,6 +13,6 @@ pub struct Offset(uint)
 
 pub struct SpecPriority(int)
 
-pub const Focus = true
+pub const Focus: bool = true
 
-pub const Pending = false
+pub const Pending: bool = false

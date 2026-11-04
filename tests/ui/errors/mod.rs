@@ -3874,6 +3874,35 @@ fn test() {
 }
 
 #[test]
+fn infer_type_mismatch_typed_go_constant_as_int() {
+    let input = r#"
+import "go:crypto/tls"
+
+fn test() {
+  let n: int = tls.TLS_FALLBACK_SCSV
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_mismatch_untyped_go_rune_constant_as_int() {
+    let input = r#"
+import "go:unicode"
+
+fn takes(n: int) -> int {
+  n
+}
+
+fn test() {
+  let r = unicode.MaxRune
+  takes(r);
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_type_mismatch_span_stops_before_trailing_comment() {
     let input = r#"
 fn test() {

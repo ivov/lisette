@@ -31,13 +31,19 @@ pub const BinaryConst = 0b1010
 /// Numeric notation (hex, octal, binary)
 pub const BinaryLong = 0b11110000
 
+/// Basic types other than int
+pub const CipherSuite: uint16 = 0x1301
+
 /// Complex numbers
-pub const ComplexVal = 1 + 2i
+pub const ComplexVal: complex128 = 1 + 2i
 
 pub const DebugMode = true
 
 /// More typed constants
-pub const DefaultTTL = 3600
+pub const DefaultTTL: float64 = 3600
+
+/// Basic types other than int
+pub const Flags: uint32 = 0x200000
 
 /// Various typed constants
 pub const GB = 1073741824
@@ -51,6 +57,9 @@ pub const HexConst = 0xFF
 /// Numeric notation (hex, octal, binary)
 pub const HexLarge = 0xDEADBEEF
 
+/// Untyped runes and integers above MaxInt64
+pub const Huge: uint64 = 18446744073709551615
+
 pub const IntConst = 42
 
 /// Various typed constants
@@ -62,17 +71,20 @@ pub const LeadingZeroOctal = 0o644
 /// Various typed constants
 pub const MB = 1048576
 
+/// Untyped runes and integers above MaxInt64
+pub const MaxBase: rune = 36
+
 /// Various typed constants
-pub const MaxInt8 = 127
+pub const MaxInt8: int8 = 127
 
 /// More typed constants
-pub const MaxSize = 1048576
+pub const MaxSize: int64 = 1048576
 
 /// String constants
 pub const Message = "hello world"
 
 /// Various typed constants
-pub const MinInt16 = -32768
+pub const MinInt16: int16 = -32768
 
 pub const MinValue = -100
 
@@ -81,8 +93,20 @@ pub const Monday = 3
 /// Numeric notation (hex, octal, binary)
 pub const OctalConst = 0o755
 
+/// Basic types other than int
+pub const Padding: rune = 61
+
 /// Various typed constants
-pub const Pi = 3.14159265358979
+pub const Pi: float64 = 3.14159265358979
+
+/// Untyped runes and integers above MaxInt64
+pub const Pinned: uint = 18446744073709551615
+
+/// Untyped runes and integers above MaxInt64
+pub const Separator: rune = 47
+
+/// Untyped runes and integers above MaxInt64
+pub const Small = 1
 
 pub const StringConst = "hello"
 
@@ -90,7 +114,7 @@ pub const Sunday = 2
 
 pub const Tuesday = 4
 
-pub const TypedConst = 100
+pub const TypedConst: int = 100
 
 /// Various typed constants
 pub const UntypedBool = true

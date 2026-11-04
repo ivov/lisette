@@ -648,7 +648,7 @@ pub const MaxInt64 = 9223372036854775807
 pub const MaxInt8 = 127
 
 /// Integer limit values.
-pub const MaxUint = 18446744073709551615
+pub const MaxUint: uint = 18446744073709551615
 
 /// Integer limit values.
 pub const MaxUint16 = 65535
@@ -657,7 +657,7 @@ pub const MaxUint16 = 65535
 pub const MaxUint32 = 4294967295
 
 /// Integer limit values.
-pub const MaxUint64 = 18446744073709551615
+pub const MaxUint64: uint64 = 18446744073709551615
 
 /// Integer limit values.
 pub const MaxUint8 = 255

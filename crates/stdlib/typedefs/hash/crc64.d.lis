@@ -27,10 +27,10 @@ pub fn Update(crc: uint64, tab: Ref<Table>, p: Slice<byte>) -> uint64
 pub struct Table(Array<uint64, 256>)
 
 /// Predefined polynomials.
-pub const ECMA = 0xC96C5795D7870F42
+pub const ECMA: uint64 = 0xC96C5795D7870F42
 
 /// Predefined polynomials.
-pub const ISO = 0xD800000000000000
+pub const ISO: uint64 = 0xD800000000000000
 
 /// The size of a CRC-64 checksum in bytes.
 pub const Size = 8

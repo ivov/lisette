@@ -16238,13 +16238,26 @@ fn main() {
 }
 
 #[test]
-fn constant_overflow_lone_go_constant() {
-    assert_lint_snapshot!(
+fn constant_overflow_go_constant_above_max_int_no_warning() {
+    assert_no_lint_warnings!(
         r#"
 import "go:math"
 
 fn main() {
   let _ = math.MaxUint64
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_typed_go_constant() {
+    assert_lint_snapshot!(
+        r#"
+import "go:crypto/tls"
+
+fn main() {
+  let _ = tls.TLS_FALLBACK_SCSV * 10
 }
 "#
     );
@@ -16304,7 +16317,6 @@ fn constant_overflow_go_constant_cast_no_warning() {
 import "go:math"
 
 fn main() {
-  let _ = math.MaxUint64 as uint64
   let _ = math.MaxUint64 as float64
 }
 "#

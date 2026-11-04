@@ -85,3 +85,19 @@ const (
 	OffsetMid Offset = 0
 	OffsetMax Offset = 0x7FFF
 )
+
+// Basic types other than int
+const (
+	CipherSuite uint16 = 0x1301
+	Flags       uint32 = 0x200000
+	Padding     rune   = '='
+)
+
+// Untyped runes and integers above MaxInt64
+const (
+	Separator = '/'
+	MaxBase   = 10 + ('z' - 'a' + 1)
+	Huge      = 1<<64 - 1
+	Pinned    = 1<<64 - 1
+	Small     = 1
+)
