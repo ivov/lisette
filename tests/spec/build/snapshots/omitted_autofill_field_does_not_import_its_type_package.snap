@@ -1,0 +1,73 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === consumer/consumer.go ===
+package consumer
+
+import "github.com/user/myproject/model"
+
+func Make() model.Context {
+	return model.Context{Title: "example"}
+}
+
+
+// === foreign/foreign.go ===
+package foreign
+
+type Item struct {
+	Name string
+}
+
+type Indexed struct {
+	Entries map[string]int
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/consumer"
+	"github.com/user/myproject/retained"
+)
+
+func main() {
+	fmt.Println(consumer.Make(), retained.Make())
+}
+
+
+// === model/model.go ===
+package model
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"github.com/user/myproject/foreign"
+)
+
+type Context struct {
+	Title    string
+	Item     foreign.Item
+	Optional lisette.Option[foreign.Item]
+}
+
+type Retained struct {
+	Nested foreign.Indexed
+	Direct map[string]foreign.Item
+}
+
+
+// === retained/retained.go ===
+package retained
+
+import (
+	"github.com/user/myproject/foreign"
+	"github.com/user/myproject/model"
+)
+
+func Make() model.Retained {
+	return model.Retained{
+		Nested: foreign.Indexed{Entries: map[string]int{}},
+		Direct: map[string]foreign.Item{},
+	}
+}

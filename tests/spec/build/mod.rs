@@ -4990,6 +4990,79 @@ fn main() {
 }
 
 #[test]
+fn omitted_autofill_field_does_not_import_its_type_package() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "foreign",
+        "foreign.lis",
+        r#"
+pub struct Item { pub name: string }
+pub struct Indexed { pub entries: mut Map<string, int> }
+"#,
+    );
+
+    fs.add_file(
+        "model",
+        "model.lis",
+        r#"
+import "foreign"
+
+pub struct Context {
+  pub title: string,
+  pub item: foreign.Item,
+  pub optional: Option<foreign.Item>,
+}
+
+pub struct Retained {
+  pub nested: mut foreign.Indexed,
+  pub direct: mut Map<string, foreign.Item>,
+}
+"#,
+    );
+
+    fs.add_file(
+        "consumer",
+        "consumer.lis",
+        r#"
+import "model"
+
+pub fn make() -> model.Context {
+  model.Context { title: "example", .. }
+}
+"#,
+    );
+
+    fs.add_file(
+        "retained",
+        "retained.lis",
+        r#"
+import "model"
+
+pub fn make() -> mut model.Retained {
+  model.Retained { .. }
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "consumer"
+import "retained"
+
+fn main() {
+  fmt.Println(consumer.make(), retained.make())
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn script_check_ignores_sibling_files() {
     let mut fs = MockFileSystem::new();
 
