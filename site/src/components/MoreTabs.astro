@@ -1,0 +1,206 @@
+---
+/**
+ * Wraps one Starlight `<Tabs>` and shows only its first `visible` tabs. The other tabs go into
+ * a "More" menu at the end of the tab row. A menu item clicks its hidden tab, so Starlight
+ * still switches the panel and remembers the choice for its `syncKey`.
+ */
+interface Props {
+  visible: number;
+}
+
+const { visible } = Astro.props;
+---
+
+<more-tabs data-visible={visible}>
+  <slot />
+</more-tabs>
+
+<style is:global>
+  more-tabs {
+    display: block;
+  }
+
+  /* Starlight scrolls the tab row sideways, which would clip the menu. */
+  more-tabs .tablist-wrapper {
+    overflow: visible;
+  }
+
+  /* Starlight gives each tab `display: flex`, which wins over the `hidden` attribute. */
+  more-tabs .tab.in-menu {
+    display: none;
+  }
+
+  more-tabs .more-tab {
+    position: relative;
+  }
+
+  more-tabs .more-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.275rem 1.25rem;
+    line-height: var(--sl-line-height-headings);
+    font: inherit;
+    color: var(--sl-color-gray-3);
+    background: none;
+    border: 0;
+    box-shadow: 0 2px 0 var(--sl-color-gray-5);
+    cursor: pointer;
+  }
+
+  more-tabs .more-toggle:hover {
+    color: var(--sl-color-white);
+  }
+
+  more-tabs .more-toggle.is-selected {
+    color: var(--sl-color-white);
+    font-weight: 600;
+    box-shadow: 0 2px 0 color-mix(in oklab, var(--sl-color-text-accent) 65%, var(--sl-color-gray-5));
+  }
+
+  more-tabs .more-toggle svg {
+    width: 0.75em;
+    height: 0.75em;
+  }
+
+  more-tabs .more-menu {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    left: 0;
+    z-index: 10;
+    min-width: 100%;
+    margin: 0;
+    padding: 0.3rem;
+    list-style: none;
+    background: var(--sl-color-bg-nav);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    box-shadow: var(--sl-shadow-md);
+  }
+
+  more-tabs .more-menu[hidden] {
+    display: none;
+  }
+
+  more-tabs .more-menu button {
+    display: block;
+    width: 100%;
+    padding: 0.35rem 0.9rem;
+    font: inherit;
+    text-align: start;
+    white-space: nowrap;
+    color: var(--sl-color-gray-2);
+    background: none;
+    border: 0;
+    border-radius: 0.3rem;
+    cursor: pointer;
+  }
+
+  more-tabs .more-menu button:hover,
+  more-tabs .more-menu button:focus-visible {
+    color: var(--sl-color-white);
+    background: var(--sl-color-gray-6);
+    outline: none;
+  }
+
+  more-tabs .more-menu button[aria-checked="true"] {
+    color: var(--sl-color-white);
+    font-weight: 600;
+  }
+</style>
+
+<script>
+  const CHEVRON =
+    '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  class MoreTabs extends HTMLElement {
+    connectedCallback() {
+      const tablist = this.querySelector<HTMLUListElement>('[role="tablist"]');
+      if (!tablist) return;
+      const tabs = [...tablist.querySelectorAll<HTMLAnchorElement>('[role="tab"]')];
+      const visible = Number(this.dataset.visible);
+      const hidden = tabs.slice(visible);
+      if (hidden.length === 0) return;
+
+      for (const tab of hidden) tab.closest("li")!.classList.add("in-menu");
+
+      const item = document.createElement("li");
+      item.className = "more-tab";
+      item.setAttribute("role", "presentation");
+
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "more-toggle";
+      toggle.setAttribute("aria-haspopup", "menu");
+      toggle.setAttribute("aria-expanded", "false");
+
+      const menu = document.createElement("ul");
+      menu.className = "more-menu";
+      menu.setAttribute("role", "menu");
+      menu.hidden = true;
+
+      const choices = hidden.map((tab) => {
+        const li = document.createElement("li");
+        li.setAttribute("role", "presentation");
+        const choice = document.createElement("button");
+        choice.type = "button";
+        choice.setAttribute("role", "menuitemradio");
+        choice.textContent = tab.textContent!.trim();
+        choice.addEventListener("click", () => {
+          close();
+          tab.click();
+          toggle.focus();
+        });
+        li.append(choice);
+        menu.append(li);
+        return choice;
+      });
+
+      const open = () => {
+        menu.hidden = false;
+        toggle.setAttribute("aria-expanded", "true");
+        (choices.find((c) => c.getAttribute("aria-checked") === "true") ?? choices[0]).focus();
+      };
+      const close = () => {
+        menu.hidden = true;
+        toggle.setAttribute("aria-expanded", "false");
+      };
+
+      toggle.addEventListener("click", () => (menu.hidden ? open() : close()));
+      menu.addEventListener("keydown", (e) => {
+        const index = choices.indexOf(document.activeElement as HTMLButtonElement);
+        if (e.key === "Escape") {
+          close();
+          toggle.focus();
+        } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          const step = e.key === "ArrowDown" ? 1 : -1;
+          choices[(index + step + choices.length) % choices.length].focus();
+        }
+      });
+      document.addEventListener("click", (e) => {
+        if (!item.contains(e.target as Node)) close();
+      });
+
+      // Starlight switches tabs by setting `aria-selected`, so the toggle follows that attribute.
+      const render = () => {
+        const selected = hidden.findIndex((tab) => tab.getAttribute("aria-selected") === "true");
+        toggle.innerHTML = "";
+        toggle.append(selected === -1 ? "More" : choices[selected].textContent!);
+        toggle.insertAdjacentHTML("beforeend", CHEVRON);
+        toggle.classList.toggle("is-selected", selected !== -1);
+        choices.forEach((c, i) => c.setAttribute("aria-checked", String(i === selected)));
+      };
+      new MutationObserver(render).observe(tablist, {
+        subtree: true,
+        attributeFilter: ["aria-selected"],
+      });
+      render();
+
+      item.append(toggle, menu);
+      tablist.append(item);
+    }
+  }
+
+  customElements.define("more-tabs", MoreTabs);
+</script>

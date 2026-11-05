@@ -4,6 +4,7 @@ description: "Install Go, the Lisette compiler, and the IDE extension"
 ---
 
 import { CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+import MoreTabs from "../../../components/MoreTabs.astro";
 
 <Steps>
 
@@ -51,12 +52,16 @@ import { CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/com
 
 3. Install the Lisette IDE extension
 
+   <MoreTabs visible={4}>
    <Tabs syncKey="editor">
-     <TabItem label="VSCode  ·  Zed  ·  JetBrains">
-       Search for `Lisette` in the editor's extension marketplace
+     <TabItem label="Zed">
+       Install the [extension](https://zed.dev/extensions/lisette) from the Zed extension registry
+     </TabItem>
+     <TabItem label="VSCode">
+       Install the [extension](https://marketplace.visualstudio.com/items?itemName=ivov.lisette) from the VSCode marketplace
      </TabItem>
      <TabItem label="Neovim">
-       Add to your `lazy.nvim` config:
+       With `lazy.nvim`, add this plugin spec:
 
        ```lua
        {
@@ -69,6 +74,18 @@ import { CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/com
          end,
        }
        ```
+
+       Otherwise, clone the [Lisette repo](https://github.com/ivov/lisette) and add to your `init.lua`:
+
+       ```lua
+       vim.opt.rtp:prepend("/path/to/lisette/editors/nvim")
+       ```
+     </TabItem>
+     <TabItem label="JetBrains">
+       Install the [extension](https://plugins.jetbrains.com/plugin/31270-lisette) from the JetBrains Marketplace
+     </TabItem>
+     <TabItem label="Cursor">
+       Install the [extension](https://open-vsx.org/extension/ivov/lisette) from the Open VSX Registry
      </TabItem>
      <TabItem label="Helix">
        Add to your `languages.toml` config:
@@ -91,13 +108,21 @@ import { CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/com
 
        [[grammar]]
        name = "lisette"
-       source = { git = "https://github.com/ivov/lisette", rev = "dd62a38f70bbde085d4f23557305d455299f4774", subpath = "editors/tree-sitter-lisette" }
+
+       [grammar.source]
+       git = "https://github.com/ivov/lisette"
+       rev = "121e5eaddac4a0c7818ed4777cfdbdde2df0a786"
+       subpath = "editors/tree-sitter-lisette"
        ```
      </TabItem>
-     <TabItem label="Others">
-       Point the IDE's LSP client at `lis lsp` for `*.lis` files.
+     <TabItem label="Emacs">
+       Use the community [`lisette-ts-mode`](https://github.com/escherize/lisette-ts-mode) package
+     </TabItem>
+     <TabItem label="Sublime Text">
+       Configure the LSP client to run `lis lsp` for `*.lis` files.
      </TabItem>
    </Tabs>
+   </MoreTabs>
 
 </Steps>
 

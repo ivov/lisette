@@ -43,7 +43,11 @@
 
     [[grammar]]
     name = "lisette"
-    source = { git = "https://github.com/ivov/lisette", rev = "dd62a38f70bbde085d4f23557305d455299f4774", subpath = "editors/tree-sitter-lisette" }
+
+    [grammar.source]
+    git = "https://github.com/ivov/lisette"
+    rev = "121e5eaddac4a0c7818ed4777cfdbdde2df0a786"
+    subpath = "editors/tree-sitter-lisette"
     ```
 
 3. Fetch and build the tree-sitter grammar:

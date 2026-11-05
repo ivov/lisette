@@ -3,15 +3,9 @@ title: "Types"
 description: "Built-in types, annotations, parameters, aliases, conversion"
 ---
 
-## Built-in types
+These types are built into the language and need no import.
 
-These types come from the language itself, so they need no import.
-
-### Prelude types
-
-Each of these is declared in the [prelude](/docs/prelude/).
-
-| Type | Prelude section |
+| Type | See |
 | --- | --- |
 | `int` `int8` `int16` `int32` `int64` | [Numerics](/docs/prelude/numerics/) |
 | `uint` `uint8` `uint16` `uint32` `uint64` `uintptr` | [Numerics](/docs/prelude/numerics/) |
@@ -27,52 +21,36 @@ Each of these is declared in the [prelude](/docs/prelude/).
 | `Map<K, V>` | [Map](/docs/prelude/map/) |
 | `Ref<T>` | [Ref](/docs/prelude/ref/) |
 | `Never` | [Never](/docs/prelude/types/#never) |
-
-### Tuple
-
-Tuples hold 2 to 5 values, which may have different types. Access elements by position.
-
-```lisette
-let pair = (42, "hello")
-// !callout-right `42`
-let first = pair.0
-// !callout-right `"hello"`
-let second = pair.1
-
-let triple = (1, true, "three")
-// !callout-right `a` is `1`, `b` is `true`, `c` is `"three"`
-let (a, b, c) = triple
-```
-
-For more than 5 elements, use a [struct](/docs/structs/) with named fields.
-
-### Unit
-
-The implicit return type of functions that return no value. Written as `()`.
-
-```lisette
-// !callout-right implies `-> ()`
-fn greet(name: string) {
-  fmt.Println(f"hello, {name}")
-}
-```
+| `()` | [Unit](/docs/prelude/types/#unit) |
+| `(A, B)` | [Tuples](/docs/lexemes/#tuples) |
 
 ## Type annotations
 
-A type annotation names a type the compiler cannot work out on its own. Write it after `:` on a binding, parameter, or field, and after `->` for a return type.
+A type annotation states a type explicitly. Most types are inferred from the value. Annotations are placed after `:` on a binding or field.
 
 ```lisette
-// !callout-error-right error: element type cannot be inferred
-let empty = []
-// !callout-right annotation decides element type
+// !callout[/Slice<int>/] binding annotation
 let empty: Slice<int> = []
+
+struct Point {
+  // !callout[/float64/] field annotation
+  x: float64,
+  y: float64,
+}
 ```
 
-Most types are inferred from the value, so annotations are the exception.
+Return type annotations are placed after `->`.
+
+```lisette
+// !callout-above[/Point/] return type annotation
+fn origin() -> Point {
+  Point { x: 0.0, y: 0.0 }
+}
+```
 
 ## Type parameters
 
-A type parameter stands for a type supplied later, when the declaration is used. Functions, methods, structs, enums, and aliases all take type parameters, written in angle brackets after the name.
+A type parameter is a placeholder for a type. It is enclosed in angle brackets after the name of a function, method, struct, enum, or alias.
 
 ```lisette
 fn first<T>(xs: Slice<T>) -> Option<T>
@@ -80,18 +58,18 @@ struct Pair<A, B> { left: A, right: B }
 enum Tree<T> { Leaf(T), Node(Ref<Tree<T>>, Ref<Tree<T>>) }
 ```
 
-Supply them at the point of use, or leave them out where the context decides:
+Type arguments are given at the point of use, or inferred from the context.
 
 ```lisette
-// !callout-right supplied
+// !callout-right given
 let scores = Map.new<string, int>()
-// !callout-right inferred as `Slice<string>`
-let names = ["Alice", "Bob"]
+// !callout-right inferred from annotation
+let ages: Map<string, int> = Map.new()
 ```
 
 ### Bounds
 
-A type parameter can carry a bound `T: Constraint` that constrains which types may instantiate it. Any [interface](/docs/interfaces/) serves as a constraint, and the prelude [supplies](/docs/prelude/constraints/) three: `Comparable`, `Ordered` and `Zeroable`.
+A bound `T: Constraint` limits which types a type parameter accepts.
 
 ```lisette
 interface Display {
@@ -204,7 +182,7 @@ These types have a zero value:
 | `Array<T, N>` | `N` zero values of `T` |
 | enum with [default](/docs/attributes/#default) | default variant |
 
-A struct or tuple has a zero value if it only contains types with zero values:
+A struct or tuple has a zero value if all its component types have zero values.
 
 ```lisette
 // !callout-right zero value is `Point { x: 0, y: 0 }`

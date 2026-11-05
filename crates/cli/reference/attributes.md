@@ -32,19 +32,6 @@ type User struct {
 
 Serialization attributes accept options:
 
-| Option       | Effect                                 |
-| ------------ | -------------------------------------- |
-| `omitempty`  | Omit field if empty                    |
-| `!omitempty` | Include field if empty                 |
-| `omitzero`   | Omit field if it holds a zero value    |
-| `!omitzero`  | Include field if it holds a zero value |
-| `skip`       | Exclude field                          |
-| `snake_case` | Convert field name to snake_case       |
-| `camel_case` | Convert field name to camelCase        |
-| `string`     | Encode numbers as strings              |
-
-`omitempty` has no effect on a struct, enum, tuple, or `Array<T, N>` field with `N` greater than zero. None of them is one of Go's [empty values](https://pkg.go.dev/encoding/json#Marshal), so use `omitzero` for those.
-
 ```lisette
 #[json]
 struct Config {
@@ -62,6 +49,17 @@ struct Config {
 }
 ```
 
+| Option       | Effect                                 |
+| ------------ | -------------------------------------- |
+| `omitempty`  | Omit field if empty                    |
+| `!omitempty` | Include field if empty                 |
+| `omitzero`   | Omit field if it holds a zero value    |
+| `!omitzero`  | Include field if it holds a zero value |
+| `skip`       | Exclude field                          |
+| `snake_case` | Convert field name to snake_case       |
+| `camel_case` | Convert field name to camelCase        |
+| `string`     | Encode numbers as strings              |
+
 Struct-level options apply to all fields. A field-level option overrides them, and an explicit name overrides both:
 
 ```lisette
@@ -78,6 +76,8 @@ struct UserProfile {
   id: int,
 }
 ```
+
+`omitempty` does not omit a struct, enum, tuple, or non-empty `Array<T, N>` field, because Go never treats these as [empty](https://pkg.go.dev/encoding/json#Marshal). Use `omitzero` for these fields.
 
 ### Other serializers
 
@@ -147,7 +147,7 @@ type User struct {
 
 ### `#[iterate]`
 
-Add `#[iterate]` to an enum to synthesize a `variants()` associated function returning every variant, in declaration order:
+`#[iterate]` gives an enum an [associated function](/docs/methods/#associated-functions) `variants()`, which returns a `Slice` of all variants in declaration order:
 
 ```lisette
 #[iterate]
@@ -176,12 +176,10 @@ struct Point {
   y: int,
 }
 
-let p = Point { x: 1, y: 2 }
-
-// !callout-right prints `{1 2}`
-fmt.Println(p)
-// !callout-error-right error: `Point` has no display form
-fmt.Println(f"at {p}")
+fn log_position(p: Point) {
+  // !callout-right prints `{1 2}`
+  fmt.Println(p)
+}
 ```
 
 Add `#[display]` to render it as a readable string instead.
@@ -193,37 +191,33 @@ struct Point {
   y: int,
 }
 
-let p = Point { x: 1, y: 2 }
-
-// !callout-right prints `Point { x: 1, y: 2 }`
-fmt.Println(p)
+fn log_position(p: Point) {
+  // !callout-right prints `Point { x: 1, y: 2 }`
+  fmt.Println(p)
+}
 ```
 
 `#[display]` also gives the enum or struct a `to_string()` method.
 
 ```lisette
-interface Display {
-  fn to_string() -> string
+fn label(p: Point) -> string {
+  // !callout-right `"Point { x: 1, y: 2 }"`
+  p.to_string()
 }
-
-fn render(value: Display) -> string {
-  value.to_string()
-}
-
-// !callout-right `Point` satisfies `Display`
-render(Point { x: 1, y: 2 })
 ```
 
 ### `#[equality]`
 
-`==` and `!=` work on natively comparable types: primitives, arrays whose elements are comparable, and structs, enums, and tuples whose components are all comparable.
+`==` and `!=` work only on natively comparable types: primitives and on structs, enums, tuples, arrays whose components all support `==`.
 
 ```lisette
 struct User {
   name: string,
   age: int,
 }
+```
 
+```lisette
 let u1 = User { name: "Alice", age: 30 }
 let u2 = User { name: "Alice", age: 30 }
 
@@ -231,15 +225,17 @@ let u2 = User { name: "Alice", age: 30 }
 u1 == u2
 ```
 
-Other types are not natively comparable: slices, maps, functions, interfaces, and any array, struct, enum, or tuple that contains a non-comparable value.
+No other type supports `==` and `!=`.
 
 ```lisette
 struct Order {
   id: int,
-  // !callout-right not natively comparable
+  // !callout-right does not support `==`
   tags: Slice<string>,
 }
+```
 
+```lisette
 let o1 = Order { id: 1, tags: ["a"] }
 let o2 = Order { id: 1, tags: ["a"] }
 
@@ -247,7 +243,7 @@ let o2 = Order { id: 1, tags: ["a"] }
 o1 == o2
 ```
 
-For maps and slices, use the built-in `equals()` method:
+Maps and slices have a built-in `equals()` method, which compares structurally, i.e. slices are compared element by element and maps are compared key by key.
 
 ```lisette
 let a = [1, 2, 3]
@@ -257,7 +253,7 @@ let b = [1, 2, 3]
 a.equals(b)
 ```
 
-To enable comparison on types that are not natively comparable and do not have a built-in `equals()` method, mark them with the `#[equality]` attribute. This will auto-generate an `equals()` method to compare the type structurally.
+To enable comparison on types that are not natively comparable and do not have a built-in `equals()` method, mark them with the `#[equality]` attribute. The attribute generates an `equals()` method that compares the type structurally.
 
 ```lisette
 #[equality]
@@ -265,7 +261,9 @@ struct Order {
   id: int,
   tags: Slice<string>,
 }
+```
 
+```lisette
 let a = Order { id: 1, tags: ["a"] }
 let b = Order { id: 1, tags: ["a"] }
 
@@ -273,11 +271,11 @@ let b = Order { id: 1, tags: ["a"] }
 a.equals(b)
 ```
 
-The auto-generated `equals()` method compares by these rules:
+The generated `equals()` method compares each field by these rules:
 
-- `==` for comparable fields
-- `.equals()` for slice and map fields
-- the field type's own `equals` for nested `#[equality]` types
+- `==` for fields that support `==`
+- `equals()` for slice and map fields
+- the field type's own `equals()` for nested `#[equality]` types
 
 If you need a custom comparator, write an `equals` method yourself:
 
@@ -292,7 +290,9 @@ impl Fraction {
     self.numerator * other.denominator == other.numerator * self.denominator
   }
 }
+```
 
+```lisette
 let a = Fraction { numerator: 1, denominator: 2 }
 let b = Fraction { numerator: 2, denominator: 4 }
 
@@ -300,35 +300,18 @@ let b = Fraction { numerator: 2, denominator: 4 }
 a.equals(b)
 ```
 
-`#[equality]` works on generic structs and enums, as long as the type parameter is bound by `Comparable` or `Ordered`.
+`#[equality]` works on generic structs and enums, as long as the type parameter is bound by `Comparable`, `Ordered`, or an interface that declares `equals()`.
 
 ```lisette
 #[equality]
 struct Cart<T: Comparable> {
   items: Slice<T>
 }
-
-let a = Cart { items: [1, 2, 3] }
-let b = Cart { items: [1, 2, 3] }
-
-// !callout-right `true`
-a.equals(b)
 ```
 
-The bound can also be a custom interface instead, as long as the interface declares an `equals` method.
-
 ```lisette
-interface Equatable<T> {
-  fn equals(other: T) -> bool
-}
-
-#[equality]
-struct Batch<T: Equatable<T>> {
-  item: T
-}
-
-let a = Batch { item: Order { id: 1, tags: ["a"] } }
-let b = Batch { item: Order { id: 1, tags: ["a"] } }
+let a = Cart { items: [1, 2, 3] }
+let b = Cart { items: [1, 2, 3] }
 
 // !callout-right `true`
 a.equals(b)
@@ -388,7 +371,7 @@ let initial = zero<Status>()
 
 ## `#[allow]`
 
-`#[allow(lint)]` on a function silences that lint.
+`#[allow(lint)]` silences a lint. Where to place it depends on the lint. To silence several lints, list them: `#[allow(unused_struct_field, unused_type)]`.
 
 For most lints, place the attribute on the function whose code is flagged:
 
@@ -403,7 +386,7 @@ fn describe(ready: bool) -> string {
 }
 ```
 
-For unused-value lints (`unused_result`, `unused_option`, `unused_literal`, `unused_value`), place `#[allow]` on the function whose result is ignored, so every call to it stops warning.
+For unused-value lints (`unused_result`, `unused_option`, `unused_literal`, `unused_value`), place `#[allow]` on the function whose result is ignored, so every call to it stops warning. An `#[allow]` on the calling function has no effect.
 
 ```lisette
 import "go:os"
@@ -426,6 +409,7 @@ For the unused-item lints (`unused_function`, `unused_type`, `unused_struct_fiel
 #[allow(unused_enum_variant)]
 enum Direction {
   North,
+  // !callout-right silences the lint for `South`
   South,
 }
 

@@ -25,7 +25,7 @@ Neovim language support for [Lisette](https://github.com/ivov/lisette). Requires
     lis version # -> lisette 0.2.1 (go 1.25.10)
     ```
 
-2. Add to your `lazy.nvim` config:
+2. With `lazy.nvim`, add this plugin spec:
 
     ```lua
     {
@@ -37,6 +37,12 @@ Neovim language support for [Lisette](https://github.com/ivov/lisette). Requires
         dofile(plugin.dir .. "/editors/nvim/plugin/lisette.lua")
       end,
     }
+    ```
+
+    Otherwise, clone this repo and add its `editors/nvim` folder to the `runtimepath` in your `init.lua`:
+
+    ```lua
+    vim.opt.rtp:prepend("/path/to/lisette/editors/nvim")
     ```
 
 ## Development

@@ -7,11 +7,12 @@ Lisette speaks the Language Server Protocol, with extensions for multiple IDEs:
 
 | Editor | Install |
 | --- | --- |
-| VS Code | Search for "Lisette" in the [VSCode marketplace](https://marketplace.visualstudio.com/items?itemName=ivov.lisette) |
-| Zed | Search for "Lisette" in the extensions panel |
-| JetBrains | Search for "Lisette" in Settings → Plugins → Marketplace |
+| VSCode | [Lisette extension](https://marketplace.visualstudio.com/items?itemName=ivov.lisette) in the VSCode marketplace |
+| Zed | [Lisette extension](https://zed.dev/extensions/lisette) in the Zed extension registry |
+| JetBrains | [Lisette extension](https://plugins.jetbrains.com/plugin/31270-lisette) in the JetBrains Marketplace |
 | Neovim | Install [this plugin](https://github.com/ivov/lisette/tree/main/editors/nvim#installation) |
 | Helix | Add [this config](https://github.com/ivov/lisette/tree/main/editors/helix#installation) to `languages.toml` |
+| Emacs | Use the community [`lisette-ts-mode`](https://github.com/escherize/lisette-ts-mode) package |
 
 For all IDEs, ensure the `lis` binary is on your `PATH` first.
 

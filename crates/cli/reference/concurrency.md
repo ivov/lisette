@@ -28,14 +28,13 @@ let ch = Channel.new<int>()
 task {
   let value = heavy_computation()
   ch.send(value)
+  ch.close()
 }
 
-// !callout-right `value` sent by `task`
+// !callout-right `v` is the value sent by `task`
 if let Some(v) = ch.receive() {
   fmt.Println(v)
 }
-
-ch.close()
 ```
 
 You can split a channel into sender and receiver:
@@ -64,7 +63,7 @@ task {
 }
 
 // !callout-right blocks until `task` signals completion
-done.receive()
+let _ = done.receive()
 ```
 
 A `Channel` can be iterated until closed:
