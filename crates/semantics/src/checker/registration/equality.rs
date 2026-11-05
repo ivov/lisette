@@ -18,6 +18,17 @@ use syntax::program::Method;
 use syntax::program::MethodOrigin;
 use syntax::types;
 
+fn first_parameter(ty: &Type, is_unbound: &dyn Fn(&str) -> bool) -> Option<EcoString> {
+    if let Type::Parameter(name) = ty
+        && is_unbound(name)
+    {
+        return Some(name.clone());
+    }
+    ty.children()
+        .into_iter()
+        .find_map(|child| first_parameter(child, is_unbound))
+}
+
 fn equals_visibility(store: &Store, id: &str) -> Option<String> {
     match store.get_method(id, "equals") {
         Some(method) if method.visibility.is_public() => None,
@@ -213,12 +224,20 @@ impl TaskState {
                     &|name| param_is_equatable(&this.scopes, &this.env, store, name),
                     &|name| param_is_comparable(&this.scopes, &this.env, name),
                 );
-                if let Some(reason) = reason {
-                    this.sink
-                        .push(diagnostics::attribute::cannot_derive_equality(
-                            type_name, field_name, field_span, reason,
-                        ));
-                }
+                let Some(reason) = reason else { continue };
+                let unbound = first_parameter(field_ty, &|name| {
+                    !param_is_equatable(&this.scopes, &this.env, store, name)
+                        && !param_is_comparable(&this.scopes, &this.env, name)
+                });
+                let diagnostic = match unbound {
+                    Some(parameter) => diagnostics::attribute::cannot_derive_equality_unbound(
+                        type_name, field_name, field_span, &parameter,
+                    ),
+                    None => diagnostics::attribute::cannot_derive_equality(
+                        type_name, field_name, field_span, reason,
+                    ),
+                };
+                this.sink.push(diagnostic);
             }
         });
     }

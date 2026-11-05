@@ -401,6 +401,15 @@ pub fn name_not_found(
             .with_help(help);
     }
 
+    if variable_name == "_" {
+        return LisetteDiagnostic::error("Cannot read `_`")
+            .with_resolve_code("underscore_read")
+            .with_span_label(&span, "`_` discards a value")
+            .with_help(
+                "`_` binds nothing, so it cannot be read. Bind the value to a name to use it",
+            );
+    }
+
     if let Some(hint) = go_builtin_hint(variable_name) {
         return LisetteDiagnostic::error("Name not found")
             .with_resolve_code("name_not_found")
@@ -732,6 +741,7 @@ pub enum WriteContext {
         binding: String,
         source: String,
     },
+    ReadOnlyAnnotation(String),
     CallResult(String),
     GoFieldCopy {
         place: String,
@@ -796,6 +806,9 @@ pub fn needs_writable_remedy(
             "`{binding}` shares storage with `{source}`, which is read-only. \
              Make `{source}` writable, or pass a `.clone()`"
         ),
+        Some(WriteContext::ReadOnlyAnnotation(binding)) => {
+            format!("`{binding}` is declared as `{actual}`. Declare it as `{expected}`")
+        }
         Some(WriteContext::CallResult(callee)) => {
             format!("`{callee}` returns `{actual}`. Declare its return type `{expected}`")
         }
@@ -929,6 +942,10 @@ pub fn write_through_read_only(
                 Some(WriteContext::AliasOf { binding, source }) => format!(
                     "`{binding}` shares storage with `{source}`, which is read-only. \
                      Make `{source}` writable, or write to a `.clone()` for an independent copy"
+                ),
+                Some(WriteContext::ReadOnlyAnnotation(binding)) => format!(
+                    "`{binding}` is declared as `{governing_type}`. \
+                     Declare it as `mut {governing_type}` to write through it"
                 ),
                 Some(WriteContext::ReadOnlyOwner {
                     owner,
@@ -3194,26 +3211,34 @@ pub struct BoundParameterHint<'a> {
 pub fn pointer_receiver_interface_mismatch(
     interface_name: &str,
     type_name: &str,
-    methods: &[String],
+    methods: &[(String, bool)],
     span: Span,
     parameter_hint: Option<BoundParameterHint<'_>>,
 ) -> LisetteDiagnostic {
-    let methods_str = methods
+    let receiver = |writable: bool| {
+        if writable {
+            format!("mut Ref<{type_name}>")
+        } else {
+            format!("Ref<{type_name}>")
+        }
+    };
+    let takes = methods
         .iter()
-        .map(|m| format!("`{}.{}`", type_name, m))
+        .map(|(method, writable)| {
+            format!(
+                "`{type_name}.{method}` takes `self: {}`",
+                receiver(*writable)
+            )
+        })
         .collect::<Vec<_>>()
         .join(", ");
-    let mutates = if methods.len() == 1 {
-        format!("{} mutates through `self: Ref<{}>`", methods_str, type_name)
-    } else {
-        format!("{} mutate through `self: Ref<{}>`", methods_str, type_name)
-    };
+    let reference = receiver(methods.iter().any(|(_, writable)| *writable));
     let help = match parameter_hint {
         Some(BoundParameterHint {
             generic,
             parameter: Some(parameter),
         }) => format!(
-            "`{generic}: {interface_name}` requires `{generic}` itself to implement `{interface_name}`. For a helper that only calls interface methods, change `{name}: {ty}` to `{name}: {generic}` so `{generic}` can be `Ref<{type_name}>` and keep passing the reference.",
+            "`{generic}: {interface_name}` requires `{generic}` itself to implement `{interface_name}`. For a helper that only calls interface methods, change `{name}: {ty}` to `{name}: {generic}` so `{generic}` can be `{reference}` and keep passing the reference.",
             name = parameter.name.as_deref().unwrap_or("_"),
             ty = parameter.ty,
         ),
@@ -3221,11 +3246,10 @@ pub fn pointer_receiver_interface_mismatch(
             generic,
             parameter: None,
         }) => format!(
-            "`{generic}: {interface_name}` requires `{generic}` itself to implement `{interface_name}`. To use the reference implementation, `{generic}` must be `Ref<{type_name}>`. For a helper that only calls interface methods, change a `Ref<{generic}>` or `mut Ref<{generic}>` parameter to `{generic}` and pass the reference."
+            "`{generic}: {interface_name}` requires `{generic}` itself to implement `{interface_name}`. To use the reference implementation, `{generic}` must be `{reference}`. For a helper that only calls interface methods, change a `Ref<{generic}>` or `mut Ref<{generic}>` parameter to `{generic}` and pass the reference."
         ),
         None => format!(
-            "{}, so `{}` is satisfied by a `Ref<{}>`, not a value. Take a reference with `&` (for example `&{} {{ ... }}`).",
-            mutates, interface_name, type_name, type_name
+            "{takes}, so `{interface_name}` is satisfied by a `{reference}`, not a value. Take a reference with `&` (for example `&{type_name} {{ ... }}`).",
         ),
     };
     LisetteDiagnostic::error("Interface not implemented")

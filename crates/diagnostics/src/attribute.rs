@@ -246,6 +246,20 @@ pub fn cannot_derive_equality(
         ))
 }
 
+pub fn cannot_derive_equality_unbound(
+    type_name: &str,
+    field_name: &str,
+    field_span: &Span,
+    parameter: &str,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot derive equality")
+        .with_attribute_code("cannot_derive_equality")
+        .with_span_label(field_span, format!("`{field_name}` cannot be compared"))
+        .with_help(format!(
+            "`{parameter}` has no bound that supports comparison. Bound `{parameter}` by `Comparable`, `Ordered`, or an interface that declares `equals`, or give `{type_name}` a hand-written `equals` method"
+        ))
+}
+
 pub fn iterate_variants_conflict(
     attribute_span: &Span,
     existing_span: Option<&Span>,

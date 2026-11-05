@@ -127,6 +127,7 @@ impl LetMutability {
 pub(super) struct LetInference {
     pub(super) mutability: LetMutability,
     pub(super) source: Option<ValueSource>,
+    pub(super) annotated: bool,
 }
 
 pub(super) struct LoopElementInference {

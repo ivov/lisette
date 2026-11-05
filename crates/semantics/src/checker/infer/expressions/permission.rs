@@ -620,17 +620,22 @@ impl InferCtx<'_> {
         if kind.is_param() && !self.store.peel_alias(declared).is_writable() {
             return Some(WriteContext::Parameter(name.to_string()));
         }
-        match self
-            .binding_inference
-            .get(&binding_id)?
-            .as_let()?
-            .source
-            .as_ref()?
-        {
-            ValueSource::Place(source) => Some(WriteContext::AliasOf {
-                binding: name.to_string(),
-                source: source.clone(),
-            }),
+        let inference = self.binding_inference.get(&binding_id)?.as_let()?;
+        match inference.source.as_ref()? {
+            ValueSource::Place(source) => {
+                let source_writable = self.scopes.lookup_value(source).is_some_and(|ty| {
+                    self.store
+                        .peel_alias(&ty.resolve_in(&self.env))
+                        .is_writable()
+                });
+                if inference.annotated && source_writable {
+                    return Some(WriteContext::ReadOnlyAnnotation(name.to_string()));
+                }
+                Some(WriteContext::AliasOf {
+                    binding: name.to_string(),
+                    source: source.clone(),
+                })
+            }
             ValueSource::Call(callee) => Some(WriteContext::CallResult(callee.clone())),
             ValueSource::GoFieldCopy(copy) => Some(copy.clone()),
         }

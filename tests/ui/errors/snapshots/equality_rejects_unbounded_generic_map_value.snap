@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot derive equality
+   ╭─[test.lis:4:3]
+ 3 │ struct Index<K: Comparable, V> {
+ 4 │   entries: Map<K, V>,
+   ·   ───┬───
+   ·      ╰── `entries` cannot be compared
+ 5 │ }
+   ╰────
+  help: `V` has no bound that supports comparison. Bound `V` by `Comparable`, `Ordered`, or an interface that declares `equals`, or give `Index` a hand-written `equals` method · code: [attribute.cannot_derive_equality]

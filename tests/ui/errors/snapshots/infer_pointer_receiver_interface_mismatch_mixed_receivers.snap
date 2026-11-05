@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Interface not implemented
+    ╭─[test.lis:17:10]
+ 16 │ fn test() -> int {
+ 17 │   report(Cache { entries: [] })
+    ·          ──────────┬──────────
+    ·                    ╰── `Cache` does not implement `Store`
+ 18 │ }
+    ╰────
+  help: `Cache.clear` takes `self: mut Ref<Cache>`, `Cache.size` takes `self: Ref<Cache>`, so `Store` is satisfied by a `mut Ref<Cache>`, not a value. Take a reference with `&` (for example `&Cache { ... }`) · code: [infer.interface_not_implemented]

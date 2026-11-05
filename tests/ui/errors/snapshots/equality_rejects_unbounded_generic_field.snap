@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·     ╰── `value` cannot be compared
  5 │ }
    ╰────
-  help: `#[equality]` cannot compare type parameters. Give `Box` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field · code: [attribute.cannot_derive_equality]
+  help: `T` has no bound that supports comparison. Bound `T` by `Comparable`, `Ordered`, or an interface that declares `equals`, or give `Box` a hand-written `equals` method · code: [attribute.cannot_derive_equality]

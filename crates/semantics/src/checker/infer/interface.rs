@@ -396,7 +396,6 @@ impl InferCtx<'_> {
             .reference_receiver_conformance(ty, &interface_ty)
             .into_iter()
             .filter(|(_, writes_through_receiver)| !value_is_ref || *writes_through_receiver)
-            .map(|(impl_name, _)| impl_name)
             .collect::<Vec<_>>();
 
         if ptr_methods.is_empty() {
@@ -409,10 +408,14 @@ impl InferCtx<'_> {
             let pointee_name = pointee
                 .get_name()
                 .map_or_else(|| pointee.to_string(), str::to_owned);
+            let names = ptr_methods
+                .into_iter()
+                .map(|(impl_name, _)| impl_name)
+                .collect::<Vec<_>>();
             diagnostics::infer::interface_needs_writable_receiver(
                 unqualified_name(interface_qualified_id),
                 &pointee_name,
-                &ptr_methods,
+                &names,
                 *span,
             )
         } else {
