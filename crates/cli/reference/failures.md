@@ -5,7 +5,7 @@ description: "? propagation, error context, try blocks, custom errors, partial r
 
 ## `?` for propagation
 
-On a `Result`, `?` unwraps `Ok` on success, and force-returns `Err` on failure:
+On a `Result`, `?` unwraps `Ok` on success, and returns early with `Err` on failure:
 
 ```lisette
 fn read_config(path: string) -> Result<Config, error> {
@@ -27,7 +27,7 @@ fn read_config(path: string) -> Result<Config, error> {
 }
 ```
 
-On an `Option`, `?` unwraps `Some` when present, and force-returns `None` when absent:
+On an `Option`, `?` unwraps `Some` when present, and returns early with `None` when absent:
 
 ```lisette
 fn get_name(id: int) -> Option<string> {
@@ -60,24 +60,36 @@ fn read_config(path: string) -> Result<Config, error> {
 }
 ```
 
-An `Ok` passes through untouched. If `os.ReadFile` fails, `?` propagates the wrapped error, which reads `reading config file: open /etc/app.conf: no such file or directory`. The original is preserved, so `errors.Is` and `errors.As` still match against it.
+An `Ok` passes through unchanged. An `Err` keeps the original error inside, so `errors.Is` and `errors.As` still match it:
+
+```lisette
+fn start() {
+  let Err(err) = read_config("/etc/app.conf") else { return }
+  // !callout[/(?<=\()err/] prints `reading config file: open /etc/app.conf: no such file or directory`
+  fmt.Println(err)
+  // !callout-right prints `true`
+  fmt.Println(errors.Is(err, fs.ErrNotExist))
+}
+```
 
 ## `try` blocks
 
 A `try` block groups fallible calls and evaluates to a `Result`. Inside it, `?` returns from the block rather than from the function:
 
 ```lisette
-fn load_config() -> Config {
+fn load_config(path: string) -> Config {
   let result = try {
     // !callout-right failure propagates to `result`
-    let path = env.get("CONFIG_PATH")?
-    let file = fs.read(path)?
-    parse_toml(file)?
+    let file = os.ReadFile(path)?
+    parse_config(file)?
   }
 
   match result {
     Ok(config) => config,
-    Err(_) => Config.default(),
+    Err(err) => {
+      fmt.Println(f"using default config: {err}")
+      Config { .. }
+    },
   }
 }
 ```
@@ -121,15 +133,21 @@ fn process(input: Input) -> Result<Input, error> {
 Where a Go function returns a value alongside an error, the result is a [`Partial<T, E>`](/docs/prelude/partial/). Handle its three cases with `match`:
 
 ```lisette
-match reader.Read(buf) {
-  Partial.Ok(n) => process(buf[..n]),
-  Partial.Err(err) => return Err(err),
-  // !callout-right read bytes, then reached EOF
-  Partial.Both(n, err) => {
-    process(buf[..n])
-    if errors.Is(err, io.EOF) { return Ok(()) }
-    return Err(err)
-  },
+fn count_bytes(reader: io.Reader) -> Result<int, error> {
+  let mut buf = Slice.make<byte>(4)
+  let mut total = 0
+  loop {
+    match reader.Read(buf) {
+      Partial.Ok(n) => total += n,
+      Partial.Err(err) => return Err(err),
+      // !callout-right read bytes, then reached EOF
+      Partial.Both(n, err) => {
+        total += n
+        if errors.Is(err, io.EOF) { return Ok(total) }
+        return Err(err)
+      },
+    }
+  }
 }
 ```
 

@@ -12,14 +12,15 @@ A keyword is a word reserved by the language for its own syntax.
 | Keyword | Purpose |
 | --- | --- |
 | `let` | Binds a value to a name inside a function |
-| `mut` | Marks a binding or a parameter as mutable |
-| `const` | Defines a compile-time constant of a primitive type |
-| `fn` | Defines a function or a method |
-| `struct` | Defines a record type with fields |
+| `mut` | Marks a mutable binding or writable type |
+| `const` | Defines a compile-time constant |
+| `fn` | Defines a function or method |
+| `struct` | Defines a type with fields |
 | `enum` | Defines a type with variants |
 | `interface` | Defines a set of methods a type can satisfy |
-| `impl` | Contains methods implemented by a type |
-| `type` | Defines a named type or a type alias |
+| `impl` | Defines methods on a type |
+| `type` | Defines a type or type alias |
+| `as` | Converts between types, or names a pattern |
 
 ### Control flow
 
@@ -27,13 +28,13 @@ A keyword is a word reserved by the language for its own syntax.
 | --- | --- |
 | `if` | Takes a branch when a condition holds |
 | `else` | Takes the remaining branch |
-| `match` | Selects a branch by pattern |
+| `match` | Selects a branch by pattern matching |
 | `for` | Iterates over values |
 | `in` | Names what a `for` loop iterates |
 | `while` | Repeats while a condition holds |
 | `loop` | Repeats until a `break` |
 | `break` | Exits the enclosing loop |
-| `continue` | Starts the next iteration of the loop |
+| `continue` | Skips to the next iteration |
 | `return` | Exits the enclosing function |
 
 ### Failure handling
@@ -58,70 +59,81 @@ A keyword is a word reserved by the language for its own syntax.
 | --- | --- |
 | `import` | Brings a package into scope |
 | `pub` | Makes an item visible outside its package |
-| `as` | Converts between types, or names a pattern |
 
 ## Identifiers
 
-An identifier is a name given to a declaration, such as a variable, a function, or a type. It starts with a letter or underscore, followed by any number of letters, digits, or underscores. Identifiers are case-sensitive.
+An identifier is a name given to a declaration. It starts with a letter or underscore, followed by any number of letters, digits, or underscores. Identifiers are case-sensitive.
 
 ```plaintext
-// !callout-right variables, functions, parameters
+// !callout-right variable, function, parameter
 foo
-// !callout-right types, type parameters
+// !callout-right type, type parameter
 Point
-// !callout-right constants
+// !callout-right constant
 MAX_SIZE
 // !callout-right discarded
 _count
 ```
 
-The bare underscore `_` is a wildcard pattern, not a usable identifier.
+A lone `_` is not an identifier. It discards a value, and later code cannot read it.
 
 ## Literals
 
 ### Numerics
 
-Integer literals have type `int`.
+Integer literals are of type `int`.
 
 ```lisette
-let decimal = 42
-let with_separators = 1_000_000
-let hex = 0xFF
-let octal = 0o755
-let binary = 0b1010_0001
+let count = 42
 ```
 
 Underscore separators improve readability. They cannot be leading, trailing, or consecutive.
 
 ```lisette
-// !callout-right leading, parses as identifier
-_1000
-// !callout-error-right error: trailing
-1000_
-// !callout-error-right error: consecutive
-1__000
-// !callout-ok-right
+// !callout-ok-right separator
 1_000
+// !callout-right identifier
+_1000
+// !callout-error-right error: trailing underscore
+1000_
+// !callout-error-right error: consecutive underscores
+1__000
 ```
 
-Hex, octal, and binary literals use prefixes `0x`, `0o`, and `0b` (case-insensitive). Legacy leading-zero octal (`0755`) is not allowed. Use the `0o` prefix (`0o755`) instead.
+Hex, octal, and binary literals use prefixes `0x`, `0o`, and `0b`. Leading-zero octal is not allowed.
 
-Float literals have type `float64`. A decimal point requires digits on both sides. Exponent notation uses `e` with an optional sign.
+```lisette
+let hex = 0xFF
+let octal = 0o755
+let binary = 0b1010_0001
+// !callout-error-right error: leading zero
+let octal = 0755
+```
+
+Float literals are of type `float64`. A decimal point requires digits on both sides.
 
 ```lisette
 let pi = 3.14159
 let half = 0.5
-let sci = 1.5e-3
 ```
 
-An `i` suffix on a decimal numeric literal creates an imaginary value, for use with `complex64` and `complex128`. Only decimal literals support the `i` suffix.
+Exponent notation uses `e` with an optional sign.
 
 ```lisette
-let im = 4i
-let im_float = 3.14i
+let small = 1.5e-3
+let large = 6.02e23
+```
+
+An `i` suffix on a decimal literal creates an imaginary value, for use with `complex64` and `complex128`.
+
+```lisette
+let unit = 1i
+let point = 3 + 4i
 ```
 
 ### Booleans
+
+Boolean literals are of type `bool`.
 
 ```lisette
 let yes = true
@@ -130,7 +142,7 @@ let no = false
 
 ### Strings
 
-String literals are enclosed in double quotes and may span multiple lines. Type: `string`. 
+String literals are of type `string`. They are enclosed in double quotes and may be multiline.
 
 ```lisette
 let greeting = "Hello, world!"
@@ -141,21 +153,30 @@ a very long
 multiline string."
 ```
 
-A newline between the opening and closing `"` is preserved in the value as a `\n` byte. Source-code indentation inside a multi-line string is part of the value.
+A newline between the opening and closing `"` is preserved in the value as a `\n` byte. Source-code indentation inside a multiline string is part of the value.
 
 Escape sequences:
 
-| Sequence | Meaning         |
-| -------- | --------------- |
-| `\\`     | Backslash       |
-| `\"`     | Double quote    |
-| `\n`     | Newline         |
-| `\r`     | Carriage return |
-| `\t`     | Tab             |
+| Sequence     | Meaning                              |
+| ------------ | ------------------------------------ |
+| `\\`         | Backslash                            |
+| `\"`         | Double quote                         |
+| `\n`         | Newline                              |
+| `\r`         | Carriage return                      |
+| `\t`         | Tab                                  |
+| `\0`         | Null                                 |
+| `\a`         | Alert                                |
+| `\b`         | Backspace                            |
+| `\f`         | Form feed                            |
+| `\v`         | Vertical tab                         |
+| `\xHH`       | Hex value, two digits                |
+| `\ooo`       | Octal value, three digits            |
+| `\u{HEX}`    | Unicode code point, any hex digits   |
+| `\UHHHHHHHH` | Unicode code point, eight hex digits |
 
 #### Raw strings
 
-A raw string literal begins with `r"` and ends with `"`. Inside, every character is literal, i.e. backslashes are not escapes. A raw string may span multiple lines.
+Raw strings begin with `r"` and treat backslashes as plain characters.
 
 ```lisette
 let pattern = r"([a-zA-Z])(\d)"
@@ -164,25 +185,27 @@ let block = r"line one
 line two"
 ```
 
-Raw strings cannot contain a double quote. Escape it as `\"` in a regular string instead.
+Raw strings cannot contain `"`. For text with quotes, use a regular string with `\"`.
 
 #### Format strings
 
-A format string begins with `f"` and can contain interpolated expressions in `{}`. The text portions follow the same multi-line rules as regular strings. Interpolation expressions inside `{}` must remain on a single line.
+Format strings begin with `f"` and accept interpolations in `{}`.
 
 ```lisette
-let name = "Alice"
-let age = 30
-let msg = f"Hello, {name}! You are {age} years old."
-let multiline = f"name: {name}
-age: {age}"
+let greeting = f"Hello, {user.name}! You have {user.unread} new messages."
+let total = f"Total: {price * quantity}"
 ```
 
 Use `{{` and `}}` to escape braces.
 
+```lisette
+// !callout-right `{name} is Alice`
+let text = f"{{name}} is {user.name}"
+```
+
 ### Runes
 
-Rune literals are enclosed in single quotes.
+Runes are enclosed in single quotes.
 
 ```lisette
 let c = 'a'
@@ -190,20 +213,38 @@ let newline = '\n'
 let null = '\0'
 ```
 
-Escape sequences: `\\`, `\'`, `\n`, `\r`, `\t`, `\0`.
+Runes use the same escape sequences, with `\'` in place of `\"`.
 
 ### Slices and arrays
 
-In a bracketed sequence of values, all elements must have the same type. This sequence is a `Slice` by default, or an `Array` when an array type is expected.
+Slice literals are of type `Slice`. An annotation or a parameter can declare them as `Array` instead. They are enclosed in square brackets, and all elements must have the same type.
 
 ```lisette
 // !callout-right inferred as `Slice<int>`
 let nums = [1, 2, 3]
-// !callout-right inferred type overridden
-let address: Array<byte, 4> = [127, 0, 0, 1]
-// !callout-right empty requires annotation
+// !callout-right annotated as `Array<int, 2>`
+let pair: Array<int, 2> = [1, 2]
+// !callout-right ambiguous, requires annotation
 let empty: Slice<int> = []
 ```
+
+### Tuples
+
+Tuple literals are of type `(A, B, ...)`, with one type per element. They are enclosed in round brackets and hold two to five elements, accessed by position.
+
+```lisette
+let pair = (42, "hello")
+// !callout-right `42`
+let first = pair.0
+// !callout-right `"hello"`
+let second = pair.1
+
+let triple = (1, true, "three")
+// !callout-right `a` is `1`, `b` is `true`, `c` is `"three"`
+let (a, b, c) = triple
+```
+
+For more than five elements, use a [struct](/docs/structs/) with named fields.
 
 ## Trivia
 
@@ -212,7 +253,7 @@ let empty: Slice<int> = []
 Line comments start with `//` and extend to the end of the line.
 
 ```lisette
-let x = 42 // a comment
+let timeout = 30 // seconds
 ```
 
 Doc comments start with `///` and document the item that follows.
@@ -224,7 +265,7 @@ fn add(a: int, b: int) -> int {
 }
 ```
 
-File comments start with `//!` and document the file itself. They form one contiguous block at the top of the file. Nothing but a shebang may come before it, and its content is emitted at the top of the generated Go file.
+File comments start with `//!` at the top of the file. They are preserved at the top of the generated Go file.
 
 ```lisette
 //! Copyright 2026 Acme Corp.
@@ -235,21 +276,24 @@ import "strings"
 
 ### Shebang
 
-At the very start of a file, a `#!` plus an interpreter is a shebang line, which makes a [script](/docs/scripts/) directly executable on Unix.
+A shebang starts with `#!` at the top of the file and makes the file directly runnable.
 
 ```lisette
 #!/usr/bin/env -S lis run
 
 import "go:fmt"
+import "go:os"
 
 fn main() {
-  fmt.Println("hi")
+  fmt.Println(f"Hello, {os.Args[1]}!")
 }
 ```
 
 ```sh
-chmod +x greet.lis && ./greet.lis
+chmod +x greet.lis && ./greet.lis alice
 ```
+
+📚 See [Scripts](/docs/scripts/)
 
 ### Semicolons
 

@@ -7,7 +7,7 @@ A pattern tests a value's shape and names the parts inside it.
 
 ## Match expressions
 
-`match` runs the first arm whose pattern fits the value, and evaluates to what that arm returns.
+`match` checks a value against each arm in order. The first arm that matches runs, and its result becomes the value of the `match`.
 
 ```lisette
 fn describe(n: int) -> string {
@@ -21,18 +21,18 @@ fn describe(n: int) -> string {
 
 ## Exhaustiveness
 
-Patterns must cover all possible values:
+A `match` must cover every possible value. The compiler rejects a `match` that misses a case:
 
 ```lisette
 enum Color { Red, Green, Blue }
 
-match color {
-  Color.Red => "red",
-  Color.Green => "green",
+fn name(color: Color) -> string {
+  match color {
+    Color.Red => "red",
+    Color.Green => "green",
+  }
 }
 ```
-
-The compiler enforces exhaustiveness:
 
 ```ansi wrap
   [31m✕[0m [95mmatch[39m[1m[31m is not exhaustive[39m[0m
@@ -53,18 +53,33 @@ The compiler enforces exhaustiveness:
 Integer, boolean, string, and rune literals match exact values:
 
 ```lisette
-match status {
-  "ok" => 200,
-  "missing" => 404,
-  _ => 500,
+fn http_code(status: string) -> int {
+  match status {
+    "ok" => 200,
+    "missing" => 404,
+    _ => 500,
+  }
 }
 ```
 
 ```lisette
-match letter {
-  'a' => "letter a",
-  'b' => "letter b",
-  _ => "other",
+fn answer(key: rune) -> string {
+  match key {
+    'y' => "yes",
+    'n' => "no",
+    _ => "unknown",
+  }
+}
+```
+
+Float literals cannot be patterns. Use a guard instead:
+
+```lisette
+fn level(ratio: float64) -> string {
+  match ratio {
+    r if r < 0.5 => "low",
+    _ => "high",
+  }
 }
 ```
 
@@ -73,20 +88,24 @@ match letter {
 An identifier binds the matched value to a name:
 
 ```lisette
-match opt {
-  // !callout-right `n` is the value inside `Some`
-  Some(n) => n * 2,
-  None => 0,
+fn print_age(ages: Map<string, int>, name: string) {
+  match ages.get(name) {
+    // !callout[/age/] value inside `Some`
+    Some(age) => fmt.Println(f"{name} is {age}"),
+    None => fmt.Println(f"{name} not found"),
+  }
 }
 ```
 
 `_` matches any value without binding:
 
 ```lisette
-match opt {
-  // !callout-right `_` discards the value inside `Some`
-  Some(_) => "has value",
-  None => "empty",
+fn listen(input: string) {
+  match strconv.Atoi(input) {
+    Ok(port) => fmt.Println(f"listening on {port}"),
+    // !callout[/_/] discards error
+    Err(_) => fmt.Println(f"invalid port: {input}"),
+  }
 }
 ```
 
@@ -95,13 +114,13 @@ match opt {
 Tuple patterns destructure by position:
 
 ```lisette
-let pair = (10, 20)
-
-match pair {
-  (0, 0) => "origin",
-  (x, 0) => f"on x-axis at {x}",
-  (0, y) => f"on y-axis at {y}",
-  (x, y) => f"at ({x}, {y})",
+fn locate(pair: (int, int)) -> string {
+  match pair {
+    (0, 0) => "origin",
+    (x, 0) => f"on x-axis at {x}",
+    (0, y) => f"on y-axis at {y}",
+    (x, y) => f"at ({x}, {y})",
+  }
 }
 ```
 
@@ -115,12 +134,12 @@ struct Point {
   y: int,
 }
 
-let point = Point { x: 10, y: 0 }
-
-match point {
-  Point { x: 0, y: 0 } => "origin",
-  Point { x, y: 0 } => f"on x-axis at {x}",
-  Point { x, y } => f"at ({x}, {y})",
+fn locate(point: Point) -> string {
+  match point {
+    Point { x: 0, y: 0 } => "origin",
+    Point { x, y: 0 } => f"on x-axis at {x}",
+    Point { x, y } => f"at ({x}, {y})",
+  }
 }
 ```
 
@@ -133,16 +152,12 @@ struct User {
   age: int,
 }
 
-let user = User {
-  name: "Alice",
-  email: "alice@example.com",
-  age: 30,
-}
-
-match user {
-  User { name: "", .. } => "hello, stranger",
-  // !callout[/\.\./] `..` ignores `email` and `age`
-  User { name, .. } => f"hello, {name}",
+fn greet(user: User) -> string {
+  match user {
+    // !callout[/\.\./] ignores `email` and `age`
+    User { name: "", .. } => "hello, stranger",
+    _ => f"hello, {user.name}",
+  }
 }
 ```
 
@@ -157,23 +172,25 @@ enum Message {
   Move { x: int, y: int },
 }
 
-let msg = Message.Write("hello")
-
-match msg {
-  Message.Ready => "ready",
-  Message.Write(text) => f"writing: {text}",
-  Message.Move { x, y } => f"moving to ({x}, {y})",
+fn describe(msg: Message) -> string {
+  match msg {
+    Message.Ready => "ready",
+    Message.Write(text) => f"writing: {text}",
+    Message.Move { x, y } => f"moving to ({x}, {y})",
+  }
 }
 ```
 
 Inside a `match` arm, the enum qualifier can be omitted:
 
 ```lisette
-match msg {
-  // !callout `Message.` qualifier omitted
-  Ready => "ready",
-  Write(text) => f"writing: {text}",
-  Move { x, y } => f"moving to ({x}, {y})",
+fn describe(msg: Message) -> string {
+  match msg {
+    // !callout `Message.` qualifier omitted
+    Ready => "ready",
+    Write(text) => f"writing: {text}",
+    Move { x, y } => f"moving to ({x}, {y})",
+  }
 }
 ```
 
@@ -182,26 +199,38 @@ match msg {
 Bracketed patterns match slice and array elements:
 
 ```lisette
-let items = [1, 2, 3]
-
-match items {
-  [] => "empty",
-  [n] => f"single: {n}",
-  [first, second] => f"pair: {first}, {second}",
-  // !callout[/\.\.rest/] `rest` is `[2, 3]`
-  [first, ..rest] => f"first is {first}, {rest.length()} more",
+fn summarize(items: Slice<int>) -> string {
+  match items {
+    [] => "empty",
+    [n] => f"single: {n}",
+    [first, second] => f"pair: {first}, {second}",
+    // !callout[/\.\.rest/] `rest` is `Slice<int>`
+    [first, ..rest] => f"first is {first}, {rest.length()} more",
+  }
 }
 ```
 
-The rest pattern `..rest` captures remaining elements as a `Slice` when matching a slice, or as an `Array` when matching an array. It must appear last. Elements after `..` are not allowed.
+The rest pattern `..rest` captures the remaining elements. On a slice it gives a `Slice`, and on an array an `Array`. The rest pattern must come last:
+
+```lisette
+fn last(items: Slice<int>) -> int {
+  match items {
+    // !callout-error-right error: elements after rest pattern are not supported
+    [..rest, last] => last,
+    _ => 0,
+  }
+}
+```
 
 Use `..` without an identifier to ignore the rest:
 
 ```lisette
-match items {
-  // !callout[/\.\./] `..` discards all remaining elements
-  [first, ..] => first,
-  [] => 0,
+fn first_or_zero(items: Slice<int>) -> int {
+  match items {
+    // !callout[/\.\./] discards all remaining elements
+    [first, ..] => first,
+    [] => 0,
+  }
 }
 ```
 
@@ -210,9 +239,11 @@ match items {
 Use `|` to match multiple patterns in one arm:
 
 ```lisette
-match direction {
-  North | South => "north-south",
-  East | West => "east-west",
+fn axis(direction: Direction) -> string {
+  match direction {
+    North | South => "north-south",
+    East | West => "east-west",
+  }
 }
 ```
 
@@ -224,9 +255,11 @@ enum Event {
   KeyUp(rune),
 }
 
-match event {
-  // !callout[/(?<=\{)key/] `key` is `rune`
-  KeyDown(key) | KeyUp(key) => f"key: {key}",
+fn describe(event: Event) -> string {
+  match event {
+    // !callout[/(?<=\{)key/] `key` is `rune`
+    KeyDown(key) | KeyUp(key) => f"key: {key}",
+  }
 }
 ```
 
@@ -235,15 +268,11 @@ match event {
 Use `as` to capture the entire matched value:
 
 ```lisette
-let mut history = Slice.new<Message>()
-
-match msg {
-  Ready => "ready",
-  Write(text) => text,
-  // !callout-above[/(?<=as )moved/] `moved` is `Move` itself
-  Move { x, .. } as moved => {
-    history = history.append(moved)
-    f"moved to {x}"
+fn track(history: Slice<Message>, msg: Message) -> Slice<Message> {
+  match msg {
+    // !callout-above[/(?<=as )moved/] `moved` is the whole `Message`
+    Move { .. } as moved => history.append(moved),
+    _ => history,
   }
 }
 ```
@@ -251,8 +280,10 @@ match msg {
 For an arm with alternatives, place `as` on each one:
 
 ```lisette
-match event {
-  KeyDown(key) as pressed | KeyUp(key) as pressed => record(pressed, key),
+fn tag(event: Event) -> (rune, Event) {
+  match event {
+    KeyDown(key) as pressed | KeyUp(key) as pressed => (key, pressed),
+  }
 }
 ```
 
@@ -261,19 +292,24 @@ match event {
 Add `if` after a pattern to require an additional condition:
 
 ```lisette
-match opt {
-  Some(n) if n > 0 => "positive",
-  Some(_) => "non-positive",
-  None => "empty",
+fn sign(opt: Option<int>) -> string {
+  match opt {
+    Some(n) if n > 0 => "positive",
+    Some(_) => "non-positive",
+    None => "empty",
+  }
 }
 ```
 
-A guard can use a value captured with `as`:
+A guard and `as` can appear in the same arm:
 
 ```lisette
-match opt {
-  Some(Point { x, .. }) as point if x > 0 => transform(point),
-  _ => default,
+fn positive(opt: Option<int>) -> Option<int> {
+  match opt {
+    // !callout-above[/found/] `found` is the whole `Option<int>`
+    Some(n) as found if n > 0 => found,
+    _ => None,
+  }
 }
 ```
 
@@ -281,21 +317,24 @@ Guards do not count toward exhaustiveness. If all arms have guards, a wildcard o
 
 ## `let else`
 
-A plain [`let`](/docs/bindings/#destructuring) needs a pattern that always matches. `Some(n)` might not, so use `let else`. The `else` branch runs when the match fails, and must `return`, `break`, or `continue`.
+`let else` binds a pattern that can fail to match. When the pattern does not match, the `else` branch runs. The `else` branch must `return`, `break`, `continue`, or `panic`.
 
 ```lisette
-fn double_or_zero(opt: Option<int>) -> int {
-  let Some(n) = opt else { return 0 }
-  n * 2
+fn greet(names: Map<int, string>, id: int) -> string {
+  let Some(name) = names.get(id) else { return "unknown user" }
+  f"hello, {name}"
 }
 ```
 
 A slice pattern that constrains the length can fail, because a slice has no fixed length:
 
 ```lisette
-fn first_two(items: Slice<int>) -> int {
-  let [first, second, ..] = items else { return 0 }
-  first + second
+fn run(args: Slice<string>) {
+  let [_, command, ..] = args else {
+    fmt.Println("usage: tool <command>")
+    return
+  }
+  fmt.Println(f"running {command}")
 }
 ```
 

@@ -81,20 +81,22 @@ fn sort(items: mut Slice<int>)
 A writable value fits a read-only parameter, but never the reverse.
 
 ```lisette
-let mut nums = [3, 1, 2]
-// !callout-ok-right permission matches
-sort(nums)
+let mut scores = [3, 1, 2]
+let frozen = [3, 1, 2]
 
-let nums = [3, 1, 2]
-// !callout-error-right error: `nums` was declared without `mut`
-sort(nums)
+// !callout-ok-right writable value, read-only parameter
+let sum = total(scores)
+// !callout-ok-right writable value, writable parameter
+sort(scores)
+// !callout-error-right error: `frozen` was declared without `mut`
+sort(frozen)
 ```
 
-Parameters themselves are immutable. To write to one, reassign it with `let mut`.
+Parameters are read-only. To change one, copy it into a `let mut` binding with the same name.
 
 ```lisette
 fn digits(n: int) -> int {
-  // !callout-right reassignment
+  // !callout-right mutable copy of `n`
   let mut n = n
   let mut count = 1
   while n >= 10 {
@@ -110,36 +112,47 @@ fn digits(n: int) -> int {
 Lambdas are anonymous inline functions.
 
 ```lisette
-let double = |x: int| x * 2
-let sum = |a: int, b: int| a + b
-let produce_int = || 42
+let is_even = |n: int| n % 2 == 0
+let full_name = |first: string, last: string| f"{first} {last}"
+let timestamp = || time.Now().Unix()
 ```
 
 Lambda parameter types can be omitted when inferable:
 
 ```lisette
-let doubled = [1, 2, 3].map(|x| x * 2)
+fn passing(scores: Slice<int>) -> Slice<int> {
+  // !callout[/(?<=\|)s(?=\|)/] `s` is `int`
+  scores.filter(|s| s >= 50)
+}
 ```
 
 A block body allows multiple statements:
 
 ```lisette
-let process = |x: int| {
-  let y = x * 2
-  y + 1
+let describe = |n: int| {
+  let kind = if n % 2 == 0 { "even" } else { "odd" }
+  f"{n} is {kind}"
 }
 ```
 
-Lambdas can capture variables from the enclosing scope:
+Lambdas can capture variables from the enclosing scope. A write inside the lambda changes the outer variable:
 
 ```lisette
-let multiplier = 3
-let scale = |x: int| x * multiplier
+let mut calls = 0
+let log = |message: string| {
+  fmt.Println(message)
+  calls += 1
+}
+
+log("start")
+log("stop")
+// !callout-right `2`
+calls
 ```
 
 ## Iterators
 
-A `for` loop accepts any function returning Go's [`iter.Seq<T>`](https://pkg.go.dev/iter#Seq). To write one, return a lambda that takes a `yield` function. Call `yield` once per element, and return as soon as `yield` gives back `false`:
+A `for` loop accepts any Go [`iter.Seq<T>`](https://pkg.go.dev/iter#Seq) or [`iter.Seq2<K, V>`](https://pkg.go.dev/iter#Seq2) value. To write one, return a lambda that takes a `yield` function. Call `yield` once per element, and return as soon as `yield` gives back `false`:
 
 ```lisette
 import "go:iter"

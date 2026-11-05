@@ -5,18 +5,20 @@ description: "Blocks, if else, for, while, loop, break, continue, return, defer"
 
 ## Blocks
 
-A block is a sequence of expressions inside braces `{ ... }`. The last expression is the block's value. Bindings inside are not visible outside.
+A block is a sequence of expressions inside braces. The last expression is the block's value. Bindings inside a block are not visible outside of it.
 
 ```lisette
 let value = {
-  let a = 10
-  let b = 20
-  // !callout-right `value` is `30`
+  let a = 1
+  let b = 2
+  // !callout-right `value` is `3`
   a + b
 }
 ```
 
 ## `if else`
+
+`if` runs a block when a condition is `true`. An optional `else` runs a block when the condition is `false`.
 
 ```lisette
 if count > 0 {
@@ -30,52 +32,55 @@ if count > 10 {
 }
 ```
 
-When both branches are present, `if else` returns a value. Both branches must produce the same type.
+With an `else`, `if` returns the value of the branch that runs. All branches must have the same type.
 
 ```lisette
-let label = if count > 10 { "large" } else { "small" }
+let score = get_score()
 
-let clamped = if n > max {
-  max
-} else if n < min {
-  min
+let result = if score >= 50 { "pass" } else { "fail" }
+
+let grade = if score >= 90 {
+  "A"
+} else if score >= 80 {
+  "B"
 } else {
-  n
+  "C"
 }
 ```
 
-An `if` without `else` has type `()`.
+## `if let`
 
-### `if let`
-
-Runs the body when a [pattern](/docs/pattern-matching/) matches. Most commonly used with `Option`.
+Runs the body when a [pattern](/docs/pattern-matching/) matches. Typically used with `Option`.
 
 ```lisette
-if let Some(x) = opt {
-  fmt.Println(x)
+let mut ages = Map.new<string, int>()
+ages["Alice"] = 30
+
+if let Some(age) = ages.get("Alice") {
+  fmt.Println(f"Alice is {age}")
 }
 ```
 
-With `else`, it works as an expression:
+With an `else`, `if let` returns the value of the branch that runs:
 
 ```lisette
-let value = if let Some(x) = opt {
-  x
+let message = if let Some(age) = ages.get("Bob") {
+  f"Bob is {age}"
 } else {
-  0
+  "Bob's age is unknown"
 }
 ```
 
 ## `for`
 
-Iterates over a collection or range, for its side effects.
+Iterates over a collection or range.
 
 ```lisette
-// !callout-above[/item/] an immutable copy of each element
+// !callout-above[/item/] immutable copy of each element
 for item in items {
   fmt.Println(item)
 }
-// !callout-above[/item/] a mutable copy of each element
+// !callout-above[/item/] mutable copy of each element
 for mut item in items {
   item *= 2
   fmt.Println(item)
@@ -97,7 +102,7 @@ for i in 0..items.length() {
 }
 ```
 
-If the element is a slice, map or ref, `for mut` allows writing through it.
+`for mut` makes a `Slice`, `Map`, or `Ref` element writable, so a write through it changes the original.
 
 ```lisette
 let mut rows = [[1, 2], [3, 4]]
@@ -121,21 +126,7 @@ Supported iterables:
 | `iter.Seq<T>`                                   | `T`          |
 | `iter.Seq2<K, V>`                               | `(K, V)`     |
 
-📚 See [Functions](/docs/functions/#iterators) for writing an iterator
-
-To iterate over a [string](/docs/prelude/strings/), pick a unit:
-
-```lisette
-for r in s.runes() {
-  fmt.Println(r)
-}
-
-for b in s.bytes() {
-  fmt.Println(b)
-}
-```
-
-Maps require destructuring into key and value:
+A loop over a `Map` must bind each entry as a `(key, value)` pair:
 
 ```lisette
 for (name, age) in ages {
@@ -143,7 +134,7 @@ for (name, age) in ages {
 }
 ```
 
-Use `enumerate()` for indexed iteration over a slice:
+[`enumerate()`](/docs/prelude/slice/#sliceenumerate) pairs each element of a `Slice` with its index:
 
 ```lisette
 for (i, item) in items.enumerate() {
@@ -151,19 +142,9 @@ for (i, item) in items.enumerate() {
 }
 ```
 
-Open-ended ranges `start..` loop until a `break`:
-
-```lisette
-for i in 0.. {
-  if i >= 10 {
-    break
-  }
-}
-```
-
 ## `while`
 
-Repeats while a condition is `true`, for its side effects.
+Repeats while a condition is `true`.
 
 ```lisette
 let mut total = 0
@@ -172,7 +153,7 @@ while total < 10 {
 }
 ```
 
-### `while let`
+## `while let`
 
 Repeats as many times as a pattern matches.
 
@@ -186,7 +167,7 @@ while let Some(item) = items.get(i) {
 
 ## `loop`
 
-An infinite loop. Exit with `break`.
+Loops forever. Exit with `break`.
 
 ```lisette
 let mut n = 0
@@ -198,7 +179,7 @@ loop {
 }
 ```
 
-A `loop` has no exit other than `break`, which can carry a value, so a `loop` evaluates to the value carried by `break`.
+`break` can carry a value, which becomes the value of the `loop`.
 
 ```lisette
 let mut n = 0
@@ -249,12 +230,12 @@ fn find(items: Slice<int>, target: int) -> Option<int> {
 
 ## `defer`
 
-Schedules an expression to run when the enclosing function returns, no matter how it returns.
+Schedules an expression to run whenever the enclosing function returns.
 
 ```lisette
 fn file_size(path: string) -> Result<int64, error> {
   let file = os.Open(path)?
-  // !callout-right runs on function exit, whether `file.Stat()` succeeds or fails
+  // !callout-right runs whether `file.Stat()` succeeds or fails
   defer file.Close()
   let info = file.Stat()?
   Ok(info.Size())

@@ -28,9 +28,10 @@ let p = Point { x: 10, y: 20 }
 let sum = p.x + p.y
 ```
 
-To write a field, assign to it through a mutable binding:
+To write to a field, assign to it. The binding must be mutable:
 
 ```lisette
+// !callout-right `Point`
 let mut p = Point { x: 10, y: 20 }
 p.x = 50
 ```
@@ -38,10 +39,16 @@ p.x = 50
 When a field name matches a binding in scope, the field value can be omitted:
 
 ```lisette
-let x = 10
-let y = 20
-// !callout-right `x: 10`, `y: 20`
-let p = Point { x, y }
+struct User {
+  name: string,
+  email: string,
+  active: bool,
+}
+
+fn new_user(name: string, email: string) -> User {
+  // !callout-right same as `name: name, email: email`
+  User { name, email, active: true }
+}
 ```
 
 To copy field values from one instance to another, use `..` followed by the source instance. Explicit fields take precedence:
@@ -63,35 +70,45 @@ let q = Point { .. }
 
 ## Write permission in fields
 
-Each field declares its own write permission.
+Each field declares its own write permission. A field whose type has `mut` is writable. A field without `mut` is read-only.
 
 ```lisette
 struct Index {
-  // !callout-right writable, through a writable `Index`
   counts: mut Map<string, int>,
-  // !callout-right read-only
   tags: Slice<string>,
 }
 ```
 
-A field is writable only through a writable struct.
+In a writable struct, `mut` fields accept writes:
 
 ```lisette
-let mut first = Index {
+// !callout-above[/index/] writable struct
+let mut index = Index {
+  // !callout-right writable field
   counts: Map.new<string, int>(),
-  tags: ["lisette"],
+  // !callout-right read-only field
+  tags: ["draft"],
 }
-// !callout-ok-right writable struct, writable field
-first.counts["hits"] = 1
-// !callout-error-right error: `first.tags` is read-only
-first.tags[0] = "go"
 
-let second = Index {
+// !callout-ok-right allowed: `index` and `counts` are both `mut`
+index.counts["hits"] = 1
+// !callout-error-right error: `tags` has no `mut`
+index.tags[0] = "final"
+```
+
+In a read-only struct, no field accepts writes:
+
+```lisette
+// !callout-above[/snapshot/] read-only struct
+let snapshot = Index {
+  // !callout-right read-only field, because struct is read-only
   counts: Map.new<string, int>(),
-  tags: ["lisette"],
+  // !callout-right read-only field
+  tags: ["draft"],
 }
-// !callout-error-right error: `second` was declared without `mut`
-second.counts["hits"] = 1
+
+// !callout-error-right error: `snapshot` is not `mut`
+snapshot.counts["hits"] = 1
 ```
 
 ## Tuple structs
@@ -121,23 +138,20 @@ let b = red.2
 
 ## Generic structs
 
-Structs accept type parameters:
+A [type parameter](/docs/types/#type-parameters) lets one struct hold fields of any type. Lisette infers the type from the field values:
 
 ```lisette
-struct Pair<T> {
-  first: T,
-  second: T,
-}
+struct Pair<T> { first: T, second: T }
 
 // !callout-right `Pair<int>`
-let numbers = Pair { first: 1, second: 2 }
+let nums = Pair { first: 1, second: 2 }
 // !callout-right `Pair<string>`
 let names = Pair { first: "alice", second: "bob" }
 ```
 
 ## Embedding
 
-A struct can embed another struct. This composes the embedded struct's methods and fields into the host struct:
+A struct can embed another struct. The fields and methods of the embedded struct are then available directly on the host struct:
 
 ```lisette
 struct Logger {
@@ -148,9 +162,9 @@ impl Logger {
   pub fn log(self) -> string { self.prefix }
 }
 
-// !callout-right host struct
+// !callout-above[/Server/] host struct
 struct Server {
-  // !callout-right embedding
+  // !callout-right embedded struct
   embed Logger,
   pub port: int,
 }
@@ -159,7 +173,7 @@ let l = Logger { prefix: "[api]" }
 let s = Server { Logger: l, port: 8080 }
 
 // !callout-right host reads embedded field
-let _ = s.prefix
+s.prefix
 // !callout-right host calls embedded method
-let _ = s.log()
+s.log()
 ```

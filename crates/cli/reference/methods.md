@@ -63,7 +63,7 @@ A `Ref` receiver reads the original:
 
 ```lisette
 impl Rectangle {
-  // !callout-above[/Ref/] read-only pointer to `Rectangle` instance
+  // !callout-above[/Ref/] read-only reference to `Rectangle` instance
   fn perimeter(self: Ref<Rectangle>) -> float64 {
     2.0 * (self.width + self.height)
   }
@@ -74,7 +74,7 @@ A `mut Ref` receiver writes to the original:
 
 ```lisette
 impl Rectangle {
-  // !callout-above[/Ref/] writable pointer to `Rectangle` instance
+  // !callout-above[/Ref/] writable reference to `Rectangle` instance
   fn scale(self: mut Ref<Rectangle>, factor: float64) {
     self.width *= factor
     self.height *= factor
@@ -141,21 +141,24 @@ let squared = Rectangle.square(5.0)
 A method can define type parameters of its own:
 
 ```lisette
-// !callout-right `T` is the type inside `Option`
-impl<T> Option<T> {
+struct Response<T> {
+  status: int,
+  body: T,
+}
+
+// !callout-right `T` is the type of `body`
+impl<T> Response<T> {
   // !callout-right `U` is what `f` turns `T` into
-  fn map<U>(self, f: fn(T) -> U) -> Option<U> {
-    match self {
-      Some(value) => Some(f(value)),
-      None => None,
-    }
+  fn map_body<U>(self, f: fn(T) -> U) -> Response<U> {
+    Response { status: self.status, body: f(self.body) }
   }
 }
 ```
 
 ```lisette
-let count = Some(42)
-// !callout-right `Option<string>`
-let label = count.map(|n| f"{n}")
+fn body_length(response: Response<string>) -> Response<int> {
+  // !callout-right `Response<int>`
+  response.map_body(|body| body.length())
+}
 ```
 

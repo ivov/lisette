@@ -14,6 +14,7 @@ struct Rectangle {
   width: int,
   height: int,
 }
+
 // !callout-above[/Rectangle/] `Rectangle` implements `area()` so it satisfies `Shape`
 impl Rectangle {
   fn area(self) -> int {
@@ -41,6 +42,7 @@ interface Reader {
 interface Writer {
   fn write(buf: Slice<byte>) -> Result<int, error>
 }
+
 // !callout-above[/ReadWriter/] satisfied only by a type with both `read()` and `write()`
 interface ReadWriter {
   embed Reader
@@ -61,7 +63,8 @@ struct Counter {
   current: int,
   end: int,
 }
-// !callout-above[/Counter/] satisfies `Iterator<T>`
+
+// !callout-above[/Counter/] `Ref<Counter>` satisfies `Iterator<int>`
 impl Counter {
   fn next(self: mut Ref<Counter>) -> Option<int> {
     if self.current >= self.end {
@@ -91,8 +94,8 @@ impl<T> Box<T> {
   fn get(self) -> T { self.value }
 }
 
-fn take_box(box: Box<Animal>) {
-  let _ = box.get()
+fn open(box: Box<Animal>) -> string {
+  box.get().speak()
 }
 
 struct Cat {}
@@ -105,7 +108,7 @@ impl Cat {
 
 let cat_box = Box { value: Cat {} }
 // !callout-error-right error: expected `Box<Animal>`, found `Box<Cat>`
-take_box(cat_box)
+open(cat_box)
 ```
 
 ## Mixed collections

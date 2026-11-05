@@ -5,7 +5,7 @@ description: "Precedence, value, access, expression and assignment operators"
 
 ## Precedence
 
-Precedence decides how an expression groups when it mixes operators, from lowest to highest:
+Precedence decides how an expression groups when it mixes operators. From lowest to highest:
 
 | Precedence | Operators                      | Description                                     |
 | ---------- | ------------------------------ | ----------------------------------------------- |
@@ -37,12 +37,22 @@ a + b |> f
 
 ### Arithmetic
 
-`+`, `-`, `*`, `/`, `%` require both operands to be the same numeric type. An untyped numeric literal adapts to the other operand, and unary `-` negates a number.
+`+`, `*`, `/`, `%` require both operands to be the same numeric type. Unary `-` negates a number. An untyped numeric literal adapts to the other operand.
+
+```lisette
+let size: int64 = 4
+let ratio: float64 = 1.5
+// !callout[/next/] `int64`
+let next = size + 1
+// !callout[/double/] `float64`
+let double = ratio * 2
+```
 
 `+` also concatenates strings:
 
 ```lisette
-let greeting = "hello" + ", " + "world"
+// !callout-right `"hello, world"`
+"hello" + ", " + "world"
 ```
 
 ### Comparison
@@ -51,49 +61,60 @@ let greeting = "hello" + ", " + "world"
 
 ```lisette
 // !callout-right `true`
-let same = 2 == 2
+2 == 2
 // !callout-right `true`, compared byte by byte
-let ordered = "apple" < "banana"
+"apple" < "banana"
 ```
 
 ### Logical
 
-`&&` and `||` short-circuit: the right operand is not evaluated if the left determines the result. `!` negates. All require `bool` operands.
+`&&` is `true` when both operands are `true`, `||` is `true` when at least one is, and `!` negates. All require `bool` operands. `&&` and `||` short-circuit, i.e. if the left operand already determines the result, the right operand is not evaluated.
 
 ```lisette
-if is_valid && count > 0 {
-  process()
+let items = [3, 0, 7]
+let i = 5
+// !callout-right `false`, so `items[i]` is skipped
+if i < items.length() && items[i] > 0 {
+  fmt.Println(items[i])
 }
 ```
 
 ### Bitwise
 
-`&`, `|`, `^`, and `&^` operate on integer values. Shifts (`<<`, `>>`) require an integer left operand and any integer right operand. The result has the left operand's type.
+`&` (and), `|` (or), `^` (xor), and `&^` (and-not) combine two integers bit by bit. Both operands must have the same integer type. Unary `^` flips every bit. `<<` and `>>` shift the left operand by the right operand, which can be any integer type. The result has the left operand's type.
 
 ```lisette
-let mask = 0b1111
 let value = 0b1010
-
-let masked = value & mask
-let toggled = value ^ mask
-let shifted = value << 2
-let inverted = ^value
+// !callout-right `0b0010`
+value & 0b0110
+// !callout-right `0b1111`
+value | 0b0101
+// !callout-right `0b1100`
+value ^ 0b0110
+// !callout-right `0b1000`
+value &^ 0b0010
+// !callout-right `0b101000`
+value << 2
+// !callout-right `0b0101`
+value >> 1
+// !callout-right `-11`
+^value
 ```
 
 ## Access operators
 
-### Indexed access
+### Indexing
 
-Arrays and slices support integer indexing:
+Slices and arrays support integer indexing:
 
 ```lisette
-let nums = [10, 20, 30]
-// !callout-right `10`
-let first = nums[0]
+let scores = [90, 85, 77]
+let rgb: Array<int, 3> = [255, 128, 0]
 
-let fixed: Array<int, 3> = [10, 20, 30]
-// !callout-right `20`
-let second = fixed[1]
+// !callout-right `90`
+scores[0]
+// !callout-right `128`
+rgb[1]
 ```
 
 Maps support key indexing:
@@ -101,21 +122,29 @@ Maps support key indexing:
 ```lisette
 let mut ages = Map.new<string, int>()
 ages["Alice"] = 20
+
 // !callout-right `20`
-let age = ages["Alice"]
+ages["Alice"]
 ```
 
-Bracket access on an array or slice panics if the index is out of bounds. Bracket access on maps returns the zero value if the key is missing. If the map's value type has no zero value (e.g. `Ref<T>`), bracket reads are rejected at compile time.
-
-For access that cannot panic, use [`.get()`](/docs/prelude/slice/#sliceget), which returns an `Option<T>`.
-
-Range indexing is available only on slices. To range-index an array, first copy its elements into a slice:
+Indexing a slice or array panics if the index is out of bounds. Indexing a map returns the zero value if the key is missing. For access that cannot panic, use [`.get()`](/docs/prelude/slice/#sliceget), which returns an `Option<T>`.
 
 ```lisette
-let tail = fixed.to_slice()[1..]
+let scores = [90, 85, 77]
+let ages = Map.new<string, int>()
+
+// !callout-error-right panic: index out of range
+scores[5]
+// !callout-right `0`
+ages["Bob"]
+
+// !callout-right `None`
+scores.get(5)
 ```
 
 ### Range
+
+A range is a span of values from a start to an end. One bound can be left out.
 
 | Syntax        | Type                  | Description               |
 | ------------- | --------------------- | ------------------------- |
@@ -125,7 +154,7 @@ let tail = fixed.to_slice()[1..]
 | `..end`       | `RangeTo<T>`          | Exclusive, no lower bound |
 | `..=end`      | `RangeToInclusive<T>` | Inclusive, no lower bound |
 
-The `..` and `..=` operators build these values, which drive a [`for` loop](/docs/control-flow/#for) or index a slice:
+A range can drive a [`for` loop](/docs/control-flow/#for) or index a slice:
 
 ```lisette
 // !callout-right elements at indices `1, 2, 3`
@@ -136,20 +165,22 @@ Slice sub-slicing is [safe by default](/docs/intro/safety/#sub-slicing). The res
 
 ### Ref and deref
 
-`&expr` points at a value instead of copying it, giving a [`Ref<T>`](/docs/references/) that several places can hold at once. `ref.*` dereferences it, reading back the value it points at.
+`&` creates a [`Ref<T>`](/docs/references/) that points at a value instead of copying it. `.*` reads the value back.
 
 ```lisette
-let x = 42
-let r = &x
+let count = 42
+// !callout-right `Ref<int>`
+let ref = &count
+
 // !callout-right `42`
-let value = r.*
+let value = ref.*
 ```
 
 ## Expression operators
 
 ### Pipeline
 
-The pipeline operator `|>` passes the left side as the first argument to the function on the right.
+`|>` passes the value on its left as the first argument of the function on its right.
 
 ```lisette
 // !callout-right same as `f(x)`
@@ -182,8 +213,6 @@ The `as` operator [converts](/docs/types/#type-conversion) between numeric types
 
 ## Assignment operators
 
-### Simple assignment
-
 `=` assigns to a mutable target.
 
 ```lisette
@@ -191,14 +220,14 @@ let mut name = "Alice"
 name = "Bob"
 ```
 
-### Compound assignment
-
 `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `&^=`, `<<=`, `>>=` combine an operation with an assignment.
 
 ```lisette
 let mut count = 0
-count += 1
+let mut total = 10
 
-let mut total = 10.0
-total *= 1.5
+// !callout-right `count` is `1`
+count += 1
+// !callout-right `total` is `20`
+total *= 2
 ```

@@ -3,11 +3,11 @@ title: "References"
 description: "Referencing, dereferencing, mutation, implicit & and .*"
 ---
 
-[`Ref<T>`](/docs/prelude/ref/) is a reference to a value of type `T`, equivalent to a [Go pointer](https://go.dev/ref/spec#Pointer_types) but guaranteed non-nil.
+[`Ref<T>`](/docs/prelude/ref/) points to a value of type `T`. It compiles to a [Go pointer](https://go.dev/ref/spec#Pointer_types) `*T` but is never nil.
 
 ## Referencing
 
-Use `&` to take a reference to anything that has an address, such as a variable, a field, or an element. Literals, map values, and `const` bindings have none.
+`&` takes a reference to a value that has an address: a variable, a field, or an element.
 
 ```lisette
 let user = User { name: "Alice", tags: ["admin"] }
@@ -20,9 +20,23 @@ let name_ref = &user.name
 let tag_ref = &user.tags[0]
 ```
 
+Literals, map values, and constants have no address.
+
+```lisette
+const LIMIT = 10
+let ages = Map.new<string, int>()
+
+// !callout-error-right error: cannot take address of literal
+let a = &42
+// !callout-error-right error: cannot take address of map index expression
+let b = &ages["Bob"]
+// !callout-error-right error: `const` bindings are not addressable
+let c = &LIMIT
+```
+
 ## Dereferencing
 
-Use `.*` to follow a reference back to the pointee:
+`.*` reads the value that a reference points to:
 
 ```lisette
 // !callout-right `"Alice"`
@@ -33,7 +47,7 @@ let tag = tag_ref.*
 
 ## Mutation
 
-Only a `mut Ref<T>` can be written to:
+Only a `mut Ref<T>` accepts writes. To get one, take `&` of a writable value:
 
 ```lisette
 fn bump(n: mut Ref<int>) {
@@ -41,19 +55,17 @@ fn bump(n: mut Ref<int>) {
 }
 
 let mut count = 1
+let total = 1
+
 // !callout-ok-right `&count` is a `mut Ref<int>`
 bump(&count)
-
-let total = 1
 // !callout-error-right error: expected `mut Ref<int>`, found `Ref<int>`
 bump(&total)
 ```
 
-Refs only grant what the place they point to allows. `&x` is a `mut Ref<T>` if `x` allows writes, else a plain `Ref<T>`.
-
 ## Implicit `&` and `.*` in method calls
 
-When calling [methods](/docs/methods/), Lisette auto-adds `&` or `.*` as needed.
+In a [method](/docs/methods/) call, Lisette auto-adds `&` or `.*` to the receiver as needed:
 
 ```lisette
 struct Rectangle {
@@ -72,10 +84,10 @@ impl Rectangle {
 }
 
 let mut rect = Rectangle { width: 10.0, height: 5.0 }
-let shape = &rect
+let rect_ref = &rect
 
-// !callout-right same as `shape.*.area()`
-let a = shape.area()
+// !callout-right same as `rect_ref.*.area()`
+rect_ref.area()
 // !callout-right same as `(&rect).scale(2.0)`
 rect.scale(2.0)
 ```

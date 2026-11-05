@@ -42,7 +42,7 @@ let c = Shape.Circle { radius: 5.0 }
 let r = Shape.Rectangle { width: 10.0, height: 20.0 }
 ```
 
-Variants can be mixed in a single enum:
+An enum can mix variants with no data, tuple variants, and struct variants:
 
 ```lisette
 enum Event {
@@ -62,8 +62,7 @@ enum Cache<T> {
   Miss,
 }
 
-let found = Cache.Hit("hello")
+// !callout-right `Cache<string>`
+let address = Cache.Hit("93.184.216.34")
 ```
-
-`Option`, `Result`, and `Partial` in the [prelude](/docs/prelude/) are generic enums.
 

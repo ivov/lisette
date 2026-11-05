@@ -87,7 +87,7 @@ b[0] = 99
 
 // !callout-right independent storage
 let mut c = a.clone()
-// !callout-ok-right write permitted, `a` untouched
+// !callout-ok-right write allowed, `a` unchanged
 c[0] = 99
 ```
 
