@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793830318224,
+  "lastUpdate": 1793914469836,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -50277,6 +50277,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/121e5eaddac4a0c7818ed4777cfdbdde2df0a786"
         },
         "date": 1793830315895,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 151654,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 40018,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29447,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19480,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15829,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14019,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9098,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10332,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "bb86cba882f7c69074414991cc4ff9af955cb59a",
+          "message": "docs: tighten prose in intro and language reference (#1611)",
+          "timestamp": "2026-11-05T22:34:05+01:00",
+          "tree_id": "723f1ab1dbdc61c6e1bf8d3f2e6f8a3c7bf781ae",
+          "url": "https://github.com/ivov/lisette/commit/bb86cba882f7c69074414991cc4ff9af955cb59a"
+        },
+        "date": 1793914468483,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
