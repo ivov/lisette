@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Interface not implemented
+    ╭─[test.lis:27:9]
+ 26 │ fn test() -> int {
+ 27 │   drain(Counter { current: 0, end: 3 })
+    ·         ───────────────┬──────────────
+    ·                        ╰── `Counter` does not implement `Iterator`
+ 28 │ }
+    ╰────
+  help: `Counter.next` takes `self: mut Ref<Counter>`, so `Iterator` is satisfied by a `mut Ref<Counter>`, not a value. Take a reference with `&` (for example `&Counter { ... }`) · code: [infer.interface_not_implemented]

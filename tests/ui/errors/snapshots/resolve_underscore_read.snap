@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot read `_`
+   ╭─[test.lis:4:3]
+ 3 │   let _ = 1
+ 4 │   _
+   ·   ┬
+   ·   ╰── `_` discards a value
+ 5 │ }
+   ╰────
+  help: `_` binds nothing, so it cannot be read. Bind the value to a name to use it · code: [resolve.underscore_read]

@@ -16,6 +16,17 @@ use syntax::parse::ParseResult;
 use semantics::store::ENTRY_PACKAGE_ID;
 
 #[test]
+fn resolve_underscore_read() {
+    let input = r#"
+fn test() -> int {
+  let _ = 1
+  _
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_nil_not_supported() {
     let input = r#"
 fn test() -> Option<int> {
@@ -5331,6 +5342,64 @@ fn use_writer(w: Writer) -> int {
 
 fn test() {
   use_writer(File { path: "test.txt" })
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_pointer_receiver_interface_mismatch_writable_receiver() {
+    let input = r#"
+interface Iterator<T> {
+  fn next() -> Option<T>
+}
+
+struct Counter { current: int, end: int }
+
+impl Counter {
+  fn next(self: mut Ref<Counter>) -> Option<int> {
+    if self.current >= self.end {
+      return None
+    }
+    self.current += 1
+    Some(self.current)
+  }
+}
+
+fn drain(it: Iterator<int>) -> int {
+  let mut sum = 0
+  while let Some(n) = it.next() {
+    sum += n
+  }
+  sum
+}
+
+fn test() -> int {
+  drain(Counter { current: 0, end: 3 })
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_pointer_receiver_interface_mismatch_mixed_receivers() {
+    let input = r#"
+interface Store {
+  fn size() -> int
+  fn clear()
+}
+
+struct Cache { entries: Slice<int> }
+
+impl Cache {
+  fn size(self: Ref<Cache>) -> int { self.entries.length() }
+  fn clear(self: mut Ref<Cache>) { self.entries = [] }
+}
+
+fn report(s: Store) -> int { s.size() }
+
+fn test() -> int {
+  report(Cache { entries: [] })
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -14055,6 +14124,40 @@ struct Box<T> {
 }
 
 #[test]
+fn equality_rejects_unbounded_generic_slice_field() {
+    let input = r#"
+#[equality]
+struct Cart<T> {
+  items: Slice<T>,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_unbounded_generic_map_value() {
+    let input = r#"
+#[equality]
+struct Index<K: Comparable, V> {
+  entries: Map<K, V>,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_rejects_unbounded_generic_enum_payload() {
+    let input = r#"
+#[equality]
+enum Slot<T> {
+  Empty,
+  Filled(T),
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn equality_rejects_nested_noncomparable_struct() {
     let input = r#"
 struct Inner {
@@ -16315,6 +16418,34 @@ fn main() {
   let source = ["b", "a"]
   let copy = source
   sort.Strings(copy)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_read_only_annotation_over_writable_source() {
+    let input = r#"
+fn test() {
+  let mut scores = [90, 85, 77]
+  scores[0] = 100
+  let view: Slice<int> = scores
+  view[0] = 1
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_read_only_annotation_argument_over_writable_source() {
+    let input = r#"
+import "go:sort"
+
+fn main() {
+  let mut names = ["b", "a"]
+  names[0] = "c"
+  let view: Slice<string> = names
+  sort.Strings(view)
 }
 "#;
     assert_infer_error_snapshot!(input);

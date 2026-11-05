@@ -213,7 +213,11 @@ impl InferCtx<'_> {
             let source = self.value_source(new_value.unwrap_parens(), &name);
             self.binding_inference.insert(
                 binding_id,
-                BindingInference::Let(LetInference { mutability, source }),
+                BindingInference::Let(LetInference {
+                    mutability,
+                    source,
+                    annotated: has_annotation,
+                }),
             );
         }
 

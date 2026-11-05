@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·              ╰── `Hits` does not implement `Counter`
  25 │ }
     ╰────
-  help: `Hits.increment` mutates through `self: Ref<Hits>`, so `Counter` is satisfied by a `Ref<Hits>`, not a value. Take a reference with `&` (for example `&Hits { ... }`) · code: [infer.interface_not_implemented]
+  help: `Hits.increment` takes `self: mut Ref<Hits>`, so `Counter` is satisfied by a `mut Ref<Hits>`, not a value. Take a reference with `&` (for example `&Hits { ... }`) · code: [infer.interface_not_implemented]

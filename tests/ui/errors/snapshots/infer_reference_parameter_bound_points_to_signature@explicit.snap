@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·                 ╰── `Hits` does not implement `Counter`
  25 │ }
     ╰────
-  help: `T: Counter` requires `T` itself to implement `Counter`. To use the reference implementation, `T` must be `Ref<Hits>`. For a helper that only calls interface methods, change a `Ref<T>` or `mut Ref<T>` parameter to `T` and pass the reference · code: [infer.interface_not_implemented]
+  help: `T: Counter` requires `T` itself to implement `Counter`. To use the reference implementation, `T` must be `mut Ref<Hits>`. For a helper that only calls interface methods, change a `Ref<T>` or `mut Ref<T>` parameter to `T` and pass the reference · code: [infer.interface_not_implemented]
