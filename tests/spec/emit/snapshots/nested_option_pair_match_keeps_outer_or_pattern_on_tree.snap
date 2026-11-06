@@ -23,9 +23,9 @@ func pick(n int) (int, bool) {
 }
 
 func test() int {
-	option := lisette.OptionFromCommaOk[int](pick(3))
-	if option.Tag == lisette.OptionSome && option.SomeVal == 0 || option.Tag == lisette.OptionNone {
+	subject := lisette.OptionFromCommaOk[int](pick(3))
+	if subject.Tag == lisette.OptionSome && subject.SomeVal == 0 || subject.Tag == lisette.OptionNone {
 		return 0
 	}
-	return option.SomeVal
+	return subject.SomeVal
 }

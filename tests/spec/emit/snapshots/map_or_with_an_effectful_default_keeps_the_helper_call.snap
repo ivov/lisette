@@ -28,8 +28,7 @@ func fallback() int {
 }
 
 func homeLength() int {
-	option := lisette.OptionFromCommaOk[string](os.LookupEnv("HOME"))
-	return lisette.OptionMapOr(option, fallback(), func(home string) int {
+	return lisette.OptionMapOr(lisette.OptionFromCommaOk[string](os.LookupEnv("HOME")), fallback(), func(home string) int {
 		return len(home)
 	})
 }

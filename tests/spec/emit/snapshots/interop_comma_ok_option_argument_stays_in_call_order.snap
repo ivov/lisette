@@ -1,0 +1,68 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:os"
+  
+  struct Seen { before: string, value: string, after: string }
+  
+  fn show(o: Option<string>) -> string { o.unwrap_or("unset") }
+  
+  fn set(key: string, value: string) -> string {
+    let _ = os.Setenv(key, value)
+    value
+  }
+  
+  fn read(key: string) -> Seen {
+    Seen { before: set(key, "v1"), value: show(os.LookupEnv(key)), after: set(key, "v2") }
+  }
+  
+  fn test() {
+    let seen = read("LISETTE_COMMA_OK_ORDER")
+    if seen.before != "v1" { panic("the first call should run first") }
+    if seen.value != "v1" { panic("the lookup should see the first write only") }
+    if seen.after != "v2" { panic("the last call should run last") }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"os"
+)
+
+type Seen struct {
+	before string
+	value  string
+	after  string
+}
+
+func show(o lisette.Option[string]) string {
+	return o.UnwrapOr("unset")
+}
+
+func set(key, value string) string {
+	os.Setenv(key, value)
+	return value
+}
+
+func read(key string) Seen {
+	return Seen{
+		before: set(key, "v1"),
+		value:  show(lisette.OptionFromCommaOk[string](os.LookupEnv(key))),
+		after:  set(key, "v2"),
+	}
+}
+
+func test() {
+	seen := read("LISETTE_COMMA_OK_ORDER")
+	if seen.before != "v1" {
+		panic("the first call should run first")
+	}
+	if seen.value != "v1" {
+		panic("the lookup should see the first write only")
+	}
+	if seen.after != "v2" {
+		panic("the last call should run last")
+	}
+}

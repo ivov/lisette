@@ -24,9 +24,9 @@ func pick(n int) (int, bool) {
 }
 
 func test() string {
-	option := lisette.OptionFromCommaOk[int](pick(3))
-	if option.Tag == lisette.OptionSome {
-		if option.SomeVal > 2 {
+	subject := lisette.OptionFromCommaOk[int](pick(3))
+	if subject.Tag == lisette.OptionSome {
+		if subject.SomeVal > 2 {
 			return "big"
 		}
 		return "small"

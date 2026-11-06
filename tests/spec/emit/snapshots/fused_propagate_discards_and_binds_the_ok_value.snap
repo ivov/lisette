@@ -90,8 +90,7 @@ func callTargets(s string) (int, error) {
 
 func test() {
 	db := map[int]string{1: "a", 2: "b", 3: "c"}
-	option := lisette.OptionFromCommaOk[string](optionTargets(db))
-	if option != lisette.MakeOptionSome("c") {
+	if lisette.OptionFromCommaOk[string](optionTargets(db)) != lisette.MakeOptionSome("c") {
 		panic("every key is present")
 	}
 	ret, err := mappedTargets(db, "4")

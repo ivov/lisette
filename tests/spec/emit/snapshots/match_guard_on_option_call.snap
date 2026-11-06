@@ -21,9 +21,9 @@ func getOption() (int, bool) {
 }
 
 func test() int {
-	option := lisette.OptionFromCommaOk[int](getOption())
-	if option.Tag == lisette.OptionSome {
-		x := option.SomeVal
+	subject := lisette.OptionFromCommaOk[int](getOption())
+	if subject.Tag == lisette.OptionSome {
+		x := subject.SomeVal
 		if x > 0 {
 			return x
 		}
