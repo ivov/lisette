@@ -6,7 +6,7 @@ description: |
   import "go:io/fs"
   
   fn main() {
-    let walker: filepath.WalkFunc = |_path: string, _info: fs.FileInfo, _err: error| -> Result<(), error> {
+    let walker: filepath.WalkFunc = |_path: string, _info: Option<fs.FileInfo>, _err: Option<error>| -> Result<(), error> {
       Ok(())
     }
     let _ = filepath.Walk("/tmp", walker)
@@ -15,13 +15,19 @@ description: |
 package main
 
 import (
+	lisette "github.com/ivov/lisette/prelude"
 	"io/fs"
 	"path/filepath"
 )
 
 func main() {
-	var walker filepath.WalkFunc = func(_ string, _ fs.FileInfo, _ error) error {
+	cb := func(_ string, _ lisette.Option[fs.FileInfo], _ lisette.Option[error]) error {
 		return nil
+	}
+	var walker filepath.WalkFunc = func(arg0 string, arg1 fs.FileInfo, arg2 error) error {
+		option := lisette.OptionFromNilable[fs.FileInfo](arg1, lisette.IsNilInterface(arg1))
+		option_1 := lisette.OptionFromNilable[error](arg2, lisette.IsNilInterface(arg2))
+		return cb(arg0, option, option_1)
 	}
 	filepath.Walk("/tmp", filepath.WalkFunc(walker))
 }

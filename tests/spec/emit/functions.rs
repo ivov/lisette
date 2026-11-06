@@ -2145,7 +2145,7 @@ import "go:path/filepath"
 import "go:io/fs"
 
 fn main() {
-  let walker: filepath.WalkFunc = |_path: string, _info: fs.FileInfo, _err: error| -> Result<(), error> {
+  let walker: filepath.WalkFunc = |_path: string, _info: Option<fs.FileInfo>, _err: Option<error>| -> Result<(), error> {
     Ok(())
   }
   let _ = filepath.Walk("/tmp", walker)

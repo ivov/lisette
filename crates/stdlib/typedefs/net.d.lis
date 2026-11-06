@@ -595,7 +595,7 @@ pub struct DNSConfigError {
 
 /// DNSError represents a DNS lookup error.
 pub struct DNSError {
-  pub UnwrapErr: error,
+  pub UnwrapErr: Option<error>,
   pub Err: string,
   pub Name: string,
   pub Server: string,

@@ -53,6 +53,9 @@ type TypeOverrides struct {
 	// (e.g. `nil` means "use the default"), so they should be `Option<Ref<T>>`
 	// instead of `Ref<T>`.
 	NilableParam map[string]map[string][]string `json:"nilable_param"`
+	// NilableCallbackParam does the same for the parameters of a function
+	// type, by name or position, keyed by the symbol that holds the type.
+	NilableCallbackParam map[string]map[string][]string `json:"nilable_callback_param"`
 	// NonNilableParam cancels a wrong inference, keeping a parameter `Ref<T>`
 	// when the analysis proved it accepts nil.
 	NonNilableParam map[string]map[string][]string `json:"non_nilable_param"`
@@ -300,6 +303,13 @@ func (c *Config) NilableParams(pkg, name string) []string {
 	return nestedParams(c.Overrides.Types.NilableParam, pkg, name)
 }
 
+func (c *Config) NilableCallbackParams(pkg, name string) []string {
+	if c == nil {
+		return nil
+	}
+	return nestedParams(c.Overrides.Types.NilableCallbackParam, pkg, name)
+}
+
 // NonNilableParams returns the list of parameter names that must stay `Ref<>`
 // for the given function or method, cancelling an inference, or nil if none
 // are configured.
@@ -333,6 +343,7 @@ func (c *Config) HasDirectError(pkg, name string) bool {
 // HasNilableError returns true if the given function returns error as an
 // optional value (e.g., errors.Unwrap), where nil means "absent" rather than
 // "success". These should return `Option<error>` instead of `Result<(), error>`.
+// A "Type.Field" key makes an error field `Option<error>`.
 func (c *Config) HasNilableError(pkg, name string) bool {
 	if c == nil {
 		return false

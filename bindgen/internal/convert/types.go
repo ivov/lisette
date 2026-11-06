@@ -3,6 +3,8 @@ package convert
 import (
 	"fmt"
 	"go/types"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/ivov/lisette/bindgen/internal/extract"
@@ -265,10 +267,19 @@ func signatureToLisette(signature *types.Signature, seen map[types.Type]bool, co
 	var params []string
 
 	param := signature.Params()
-	for param := range param.Variables() {
+	var nilable []string
+	if conv != nil && !conv.inSignature {
+		nilable = conv.cfg.NilableCallbackParams(conv.currentPkgPath, conv.symbolKey)
+		conv.inSignature = true
+		defer func() { conv.inSignature = false }()
+	}
+	for i, param := range slices.Collect(param.Variables()) {
 		paramType := writableRecursive(param.Type(), seen, conv, substitutions, false)
 		if paramType.SkipReason != nil {
 			return paramType
+		}
+		if slices.Contains(nilable, param.Name()) || slices.Contains(nilable, strconv.Itoa(i)) {
+			paramType.LisetteType = optionOf(paramType.LisetteType)
 		}
 		params = append(params, paramType.LisetteType)
 	}

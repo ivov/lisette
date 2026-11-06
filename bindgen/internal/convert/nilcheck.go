@@ -130,15 +130,10 @@ func (c *Converter) isProvenNonNilExprSimple(expr ast.Expr) bool {
 	}
 	if calleeObj != nil {
 		if facts, ok := c.nilness.Function(calleeObj); ok && facts.HasBody {
-			switch facts.Single {
-			case ReturnProvenNonNil:
-				return true
-			case ReturnHasNilPath:
-				return false
-			}
+			return facts.Single == ReturnProvenNonNil
 		}
 	}
-	return looksLikeConstructor(calleeName)
+	return false
 }
 
 // isAssignedNonNilInInit checks if a package-level variable is assigned a non-nil value in an init() function.

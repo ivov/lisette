@@ -89,7 +89,7 @@ pub struct Cmd {
   pub SysProcAttr: Option<mut Ref<syscall.SysProcAttr>>,
   pub Process: Option<mut Ref<os.Process>>,
   pub ProcessState: Option<mut Ref<os.ProcessState>>,
-  pub Err: error,
+  pub Err: Option<error>,
   pub Cancel: Option<fn() -> Result<(), error>>,
   pub WaitDelay: time.Duration,
 }

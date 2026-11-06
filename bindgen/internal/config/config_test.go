@@ -77,6 +77,9 @@ func TestNilConfigAccessorsDoNotPanic(t *testing.T) {
 	if cfg.NilableParams("io", "Foo") != nil {
 		t.Error("NilableParams")
 	}
+	if cfg.NilableCallbackParams("io", "Foo") != nil {
+		t.Error("NilableCallbackParams")
+	}
 	if cfg.IsPartialResult("io", "Foo") {
 		t.Error("IsPartialResult")
 	}

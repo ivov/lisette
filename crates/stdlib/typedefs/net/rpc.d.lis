@@ -81,7 +81,7 @@ pub struct Call {
   pub ServiceMethod: string,
   pub Args: Unknown,
   pub Reply: Unknown,
-  pub Error: error,
+  pub Error: Option<error>,
   pub Done: Channel<Ref<Call>>,
 }
 

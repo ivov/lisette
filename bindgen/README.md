@@ -123,7 +123,7 @@ Interface methods and function types have no body to read, so they stay tuples u
 | Pointer in struct field       | `Option<Ref<T>>` |
 | Pointer in container element  | `Option<Ref<T>>` |
 
-For pointer and interface return types, bindgen runs an [SSA nilability analysis](internal/convert/nilness.go) over the whole loaded program: a return proven non-nil on every path emits `Ref<T>`, a witnessed nil path emits `Option<Ref<T>>`, and an inconclusive body falls back to constructor-name heuristics and config overrides.
+For pointer and interface return types, bindgen runs an [SSA nilability analysis](internal/convert/nilness.go) over the whole loaded program: a return proven non-nil on every path emits `Ref<T>`, a witnessed nil path emits `Option<Ref<T>>`, and an inconclusive body emits `Option<Ref<T>>`, unless a config override pins it.
 
 ```go
 func Open(name string) (*File, error)  // non-nil on success (typical case)
@@ -219,10 +219,13 @@ Bindgen accepts a config file with per-package overrides:
         "errors": ["New"],
       },
 
-      // Return `Option<error>` instead of `Result<(), error>`
-      // e.g. `errors.Unwrap` returns `Option<error>`
+      // Return `Option<error>` instead of `Result<(), error>`, or type an
+      // error field as `Option<error>`
+      // e.g. `errors.Unwrap` returns `Option<error>`, and `exec.Cmd.Err` is nil
+      // when the lookup succeeds
       "nilable_error": {
         "errors": ["Unwrap"],
+        "os/exec": ["Cmd.Err"],
       },
 
       // Map `(T, error)` to `Partial<T, error>` instead of `Result<T, error>`
@@ -267,6 +270,19 @@ Bindgen accepts a config file with per-package overrides:
       "nilable_param": {
         "go.mongodb.org/mongo-driver/v2/mongo": {
           "Client.Ping": ["rp"],
+        },
+      },
+
+      // Force a parameter of a function type to `Option`, by name or position,
+      // when Go passes nil to it. Key by the type, field or "Function.param"
+      // e.g. `fs.WalkDirFunc` gets a nil `d` and `err`, and `ast.Inspect`
+      // calls `f(nil)`
+      "nilable_callback_param": {
+        "io/fs": {
+          "WalkDirFunc": ["d", "err"],
+        },
+        "go/ast": {
+          "Inspect.f": ["0"],
         },
       },
 
