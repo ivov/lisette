@@ -6027,6 +6027,45 @@ fn main() {
 }
 
 #[test]
+fn format_strings_stay_inline_before_later_calls() {
+    let input = r#"
+import "go:time"
+
+struct Box { n: int }
+struct Card { a: string, b: string, c: string }
+
+fn bump(b: mut Ref<Box>) -> string {
+  b.n += 10
+  f"bumped{b.n}"
+}
+
+fn read_then_bump(b: mut Ref<Box>) -> Card {
+  Card { a: f"{b.n}-x", b: "", c: bump(b) }
+}
+
+fn solo_then_bump(b: mut Ref<Box>) -> Card {
+  Card { a: f"{b.n}", b: "", c: bump(b) }
+}
+
+fn duration_then_bump(d: time.Duration, b: mut Ref<Box>) -> Card {
+  Card { a: f"{d}", b: "", c: bump(b) }
+}
+
+fn test() {
+  let mut b = Box { n: 1 }
+  let card = read_then_bump(&b)
+  if card.a != "1-x" { panic("the f-string should read before the later call") }
+  if card.c != "bumped11" { panic("the later call should run once") }
+  let solo = solo_then_bump(&b)
+  if solo.a != "11" { panic("a solo f-string should read before the later call") }
+  let timed = duration_then_bump(time.Second, &b)
+  if timed.a != "1s" { panic("a Go named type should format with its String method") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn byte_at_on_ref_receiver_is_parenthesized() {
     let input = r#"
 fn first(r: Ref<string>) -> byte {

@@ -205,7 +205,7 @@ impl Planner<'_> {
         if let ([FormatStringPart::Expression(_)], [_]) = (parts, args.as_slice())
             && format_string != "%c"
         {
-            return ValuePlan::observable_call(
+            return ValuePlan::plain_call(
                 setup,
                 GoExpression::read_only_call(
                     GoExpression::generated(GeneratedPackage::Fmt, "Sprint"),
@@ -215,7 +215,7 @@ impl Planner<'_> {
         }
         let mut arguments = vec![GoExpression::literal(format!("\"{}\"", format_string))];
         arguments.extend(args);
-        ValuePlan::observable_call(
+        ValuePlan::plain_call(
             setup,
             GoExpression::read_only_call(
                 GoExpression::generated(GeneratedPackage::Fmt, "Sprintf"),
