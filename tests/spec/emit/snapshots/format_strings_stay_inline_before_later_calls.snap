@@ -1,0 +1,101 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:time"
+  
+  struct Box { n: int }
+  struct Card { a: string, b: string, c: string }
+  
+  fn bump(b: mut Ref<Box>) -> string {
+    b.n += 10
+    f"bumped{b.n}"
+  }
+  
+  fn read_then_bump(b: mut Ref<Box>) -> Card {
+    Card { a: f"{b.n}-x", b: "", c: bump(b) }
+  }
+  
+  fn solo_then_bump(b: mut Ref<Box>) -> Card {
+    Card { a: f"{b.n}", b: "", c: bump(b) }
+  }
+  
+  fn duration_then_bump(d: time.Duration, b: mut Ref<Box>) -> Card {
+    Card { a: f"{d}", b: "", c: bump(b) }
+  }
+  
+  fn test() {
+    let mut b = Box { n: 1 }
+    let card = read_then_bump(&b)
+    if card.a != "1-x" { panic("the f-string should read before the later call") }
+    if card.c != "bumped11" { panic("the later call should run once") }
+    let solo = solo_then_bump(&b)
+    if solo.a != "11" { panic("a solo f-string should read before the later call") }
+    let timed = duration_then_bump(time.Second, &b)
+    if timed.a != "1s" { panic("a Go named type should format with its String method") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+type Box struct {
+	n int
+}
+
+type Card struct {
+	a string
+	b string
+	c string
+}
+
+func bump(b *Box) string {
+	b.n += 10
+	return fmt.Sprintf("bumped%d", b.n)
+}
+
+func readThenBump(b *Box) Card {
+	return Card{
+		a: fmt.Sprintf("%d-x", b.n),
+		b: "",
+		c: bump(b),
+	}
+}
+
+func soloThenBump(b *Box) Card {
+	return Card{
+		a: fmt.Sprint(b.n),
+		b: "",
+		c: bump(b),
+	}
+}
+
+func durationThenBump(d time.Duration, b *Box) Card {
+	return Card{
+		a: fmt.Sprint(d),
+		b: "",
+		c: bump(b),
+	}
+}
+
+func test() {
+	b := Box{n: 1}
+	card := readThenBump(&b)
+	if card.a != "1-x" {
+		panic("the f-string should read before the later call")
+	}
+	if card.c != "bumped11" {
+		panic("the later call should run once")
+	}
+	solo := soloThenBump(&b)
+	if solo.a != "11" {
+		panic("a solo f-string should read before the later call")
+	}
+	timed := durationThenBump(time.Second, &b)
+	if timed.a != "1s" {
+		panic("a Go named type should format with its String method")
+	}
+}
