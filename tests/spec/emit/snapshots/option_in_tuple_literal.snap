@@ -33,7 +33,5 @@ func maybeString(s string) (string, bool) {
 }
 
 func test() {
-	option := lisette.OptionFromCommaOk[int](maybeInt(5))
-	option_1 := lisette.OptionFromCommaOk[string](maybeString("hello"))
-	_ = lisette.MakeTuple2[lisette.Option[int], lisette.Option[string]](option, option_1)
+	_ = lisette.MakeTuple2[lisette.Option[int], lisette.Option[string]](lisette.OptionFromCommaOk[int](maybeInt(5)), lisette.OptionFromCommaOk[string](maybeString("hello")))
 }

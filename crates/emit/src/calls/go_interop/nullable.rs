@@ -154,6 +154,32 @@ impl Planner<'_> {
         (statements, outcome)
     }
 
+    /// `OptionFromCommaOk(call)`, when the comma-ok pair needs no bridge,
+    /// nil check, or tuple rebuild.
+    pub(crate) fn option_from_comma_ok(
+        &mut self,
+        call: GoExpression,
+        option_layout: &ValueLayout,
+        layout: PayloadLayout,
+        payload_bridge: Option<&LayoutBridge>,
+    ) -> Result<GoExpression, GoExpression> {
+        let option_ty = option_layout.underlying().logical_type();
+        let payload = option_layout
+            .payload()
+            .expect("Option wrapping requires a payload layout");
+        if payload_bridge.is_some()
+            || self.facts.is_nullable_option(option_ty)
+            || (layout.is_flattened() && payload.logical_type().tuple_arity().is_some())
+        {
+            return Err(call);
+        }
+        Ok(prelude_call(
+            "OptionFromCommaOk",
+            GoType::type_argument(&payload.go_type(self)),
+            vec![call],
+        ))
+    }
+
     /// Wrap a comma-ok-returning call into a tagged `Option`. A `Flattened`
     /// tuple inner type comes from a Go-imported `(T1, ..., Tn, bool)`; a
     /// `Packed` one from a Lisette `(Tuple_n[...], bool)`.
@@ -166,6 +192,14 @@ impl Planner<'_> {
         target: WrapperTarget<'_>,
     ) -> (Vec<Statement>, WrapperOutcome) {
         let mut statements = Vec::new();
+        let call = match self.option_from_comma_ok(call, option_layout, layout, payload_bridge) {
+            Ok(value) => {
+                let outcome =
+                    self.push_simple_wrapper_value(&mut statements, target, "option", value);
+                return (statements, outcome);
+            }
+            Err(call) => call,
+        };
 
         let option_ty = option_layout.underlying().logical_type();
         let payload = option_layout
@@ -174,21 +208,6 @@ impl Planner<'_> {
         let inner_ty = payload.logical_type();
         let inner_ty_str = payload.go_type(self);
         let inner_tuple_arity = inner_ty.tuple_arity();
-        let needs_nilable_validation = self.facts.is_nullable_option(option_ty);
-
-        let needs_complex = payload_bridge.is_some()
-            || needs_nilable_validation
-            || (layout.is_flattened() && inner_tuple_arity.is_some());
-
-        if !needs_complex {
-            let value = prelude_call(
-                "OptionFromCommaOk",
-                GoType::type_argument(&inner_ty_str),
-                vec![call],
-            );
-            let outcome = self.push_simple_wrapper_value(&mut statements, target, "option", value);
-            return (statements, outcome);
-        }
 
         let fallible = Fallible::from_type(option_ty).expect("Option type expected");
 

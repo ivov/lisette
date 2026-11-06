@@ -20,12 +20,12 @@ func maybe() (int, bool) {
 }
 
 func main() {
-	option := lisette.OptionFromCommaOk[int](maybe())
+	subject := lisette.OptionFromCommaOk[int](maybe())
 	var x int
-	if option.Tag == lisette.OptionSome {
-		x = option.SomeVal
-	} else if option.Tag == lisette.OptionSome {
-		x = option.SomeVal
+	if subject.Tag == lisette.OptionSome {
+		x = subject.SomeVal
+	} else if subject.Tag == lisette.OptionSome {
+		x = subject.SomeVal
 	} else {
 		return
 	}

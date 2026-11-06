@@ -19,9 +19,7 @@ func second(event Event) (timer.Time, bool) {
 
 func main() {
 	event := MakeEventAt(timer.Now())
-	option := lisette.OptionFromCommaOk[timer.Time](first(event))
-	option_1 := lisette.OptionFromCommaOk[timer.Time](second(event))
-	fmt.Println(option, option_1)
+	fmt.Println(lisette.OptionFromCommaOk[timer.Time](first(event)), lisette.OptionFromCommaOk[timer.Time](second(event)))
 }
 
 

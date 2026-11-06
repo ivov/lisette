@@ -217,6 +217,34 @@ fn main() {
 }
 
 #[test]
+fn interop_comma_ok_option_argument_stays_in_call_order() {
+    let input = r#"
+import "go:os"
+
+struct Seen { before: string, value: string, after: string }
+
+fn show(o: Option<string>) -> string { o.unwrap_or("unset") }
+
+fn set(key: string, value: string) -> string {
+  let _ = os.Setenv(key, value)
+  value
+}
+
+fn read(key: string) -> Seen {
+  Seen { before: set(key, "v1"), value: show(os.LookupEnv(key)), after: set(key, "v2") }
+}
+
+fn test() {
+  let seen = read("LISETTE_COMMA_OK_ORDER")
+  if seen.before != "v1" { panic("the first call should run first") }
+  if seen.value != "v1" { panic("the lookup should see the first write only") }
+  if seen.after != "v2" { panic("the last call should run last") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn interop_comma_ok_return_pos() {
     let input = r#"
 import "go:os"

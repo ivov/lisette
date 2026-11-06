@@ -30,6 +30,5 @@ func getOpt(b bool) (int, bool) {
 }
 
 func test() {
-	option := lisette.OptionFromCommaOk[int](getOpt(true))
-	_ = Wrapper{opt: option}
+	_ = Wrapper{opt: lisette.OptionFromCommaOk[int](getOpt(true))}
 }

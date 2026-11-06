@@ -37,6 +37,12 @@ impl Planner<'_> {
                     let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
                     self.result_from_pair(call, &layout, payload, None)
                 }
+                CallableReturnAbi::Lowered(LoweredReturnAbi::Option(
+                    OptionReturnAbi::CommaOk { payload },
+                )) if !bridged => {
+                    let layout = self.value_layout(result_ty, SlotOrigin::Lisette);
+                    self.option_from_comma_ok(call, &layout, payload, None)
+                }
                 _ => Err(call),
             };
             let (wrap, value) = match shortcut {
