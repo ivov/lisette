@@ -361,6 +361,7 @@ fn retired_covers_receiver(target: &Expression, receiver: &Expression) -> bool {
 }
 
 fn build_inline(
+    native_type: &NativeTypeKind,
     form: InlineForm,
     package: InlinePackage,
     receiver: &GoExpression,
@@ -385,6 +386,13 @@ fn build_inline(
         }
         InlineForm::IsEmpty => {
             let operator = if negated { BinaryOp::Ne } else { BinaryOp::Eq };
+            if matches!(native_type, NativeTypeKind::String) {
+                return GoExpression::binary(
+                    receiver.clone(),
+                    operator,
+                    GoExpression::literal("\"\"".to_string()),
+                );
+            }
             GoExpression::binary(
                 GoExpression::call(
                     GoExpression::external_name("len".to_string()),
@@ -440,6 +448,7 @@ pub(super) fn try_inline_native_method(
         return None;
     }
     Some(build_inline(
+        native_type,
         rule.form,
         rule.package,
         receiver,

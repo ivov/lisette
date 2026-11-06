@@ -58,7 +58,7 @@ func main() {
 	value := lisette.OptionAndThen(arg_1, tagged_1)
 	absent := lisette.MakeOptionNone[string]()
 	rendered := fmt.Sprint(value, absent)
-	if value.UnwrapOr("bad") != "7" || len(rendered) == 0 {
+	if value.UnwrapOr("bad") != "7" || rendered == "" {
 		panic("variadic options")
 	}
 	ch := make(chan lisette.Option[string], 2)

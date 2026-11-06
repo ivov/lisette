@@ -1724,6 +1724,21 @@ fn test(s: string) -> bool {
 }
 
 #[test]
+fn string_is_empty_on_a_concatenation() {
+    let input = r#"
+fn joined_is_empty(a: string, b: string) -> bool {
+  (a + b).is_empty()
+}
+
+fn test() {
+  if joined_is_empty("a", "") { panic("a non-empty concatenation is not empty") }
+  if !joined_is_empty("", "") { panic("an empty concatenation is empty") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_is_empty_negated() {
     let input = r#"
 fn test(s: Slice<int>) -> bool {

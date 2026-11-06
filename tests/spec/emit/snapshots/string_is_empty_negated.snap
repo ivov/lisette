@@ -9,5 +9,5 @@ description: |
 package main
 
 func test(s string) bool {
-	return len(s) != 0
+	return s != ""
 }
