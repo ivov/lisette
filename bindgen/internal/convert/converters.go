@@ -390,6 +390,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	if result.Receiver != nil && result.Receiver.BaseTypeName != "" {
 		qualifiedName = result.Receiver.BaseTypeName + "." + result.Name
 	}
+	c.symbolKey = qualifiedName
 	if result.Receiver != nil && c.cfg.MutatesReceiver(c.currentPkgPath, qualifiedName) {
 		result.Receiver.Mutable = true
 		result.Receiver.ProvenReadOnly = false
@@ -704,7 +705,7 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 
 	switch u := underlying.(type) {
 	case *types.Struct:
-		fields, hasHidden := convertStructFields(u, c)
+		fields, hasHidden := convertStructFields(u, result.Name, c)
 		result.Fields = fields
 		result.HasHiddenEmbed = structHasHiddenEmbed(u, result.Fields)
 		result.HasHiddenFields = hasHidden
@@ -1103,10 +1104,12 @@ func (c *Converter) hidesGoType(t types.Type) bool {
 }
 
 // convertStructFields reports whether any real Go field went unrepresented.
-func convertStructFields(s *types.Struct, c *Converter) ([]StructField, bool) {
+func convertStructFields(s *types.Struct, typeName string, c *Converter) ([]StructField, bool) {
 	var fields []StructField
 	hasHidden := false
+	defer func() { c.symbolKey = typeName }()
 	for field := range s.Fields() {
+		c.symbolKey = typeName + "." + field.Name()
 		if !field.Exported() {
 			if field.Embedded() && c.EmbedIsFaithful(field) {
 				fields = append(fields, embeddedStructField(field, c))
@@ -2272,6 +2275,7 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 
 	var methods []InterfaceMethod
 
+	defer func(key string) { c.symbolKey = key }(c.symbolKey)
 	for method := range _interface.Methods() {
 		signature, ok := method.Type().(*types.Signature)
 		if !ok {
@@ -2283,6 +2287,7 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 		}
 
 		qualifiedName := typeName + "." + method.Name()
+		c.symbolKey = qualifiedName
 		params, skip := c.convertParams(signature, method, qualifiedName, method.Name(), nil, false, nil)
 		if skip != nil {
 			return nil, false

@@ -10,6 +10,9 @@ import (
 //go:embed bindgen.external.json
 var defaultCfgJSON []byte
 
+//go:embed bindgen.stdlib.json
+var stdlibCfgJSON []byte
+
 func main() {
 	if len(os.Args) < 2 {
 		cli.PrintUsage()
@@ -18,9 +21,9 @@ func main() {
 
 	switch os.Args[1] {
 	case "pkg":
-		cli.RunPkg(os.Args[2:], defaultCfgJSON)
+		cli.RunPkg(os.Args[2:], defaultCfgJSON, stdlibCfgJSON)
 	case "pkgs":
-		cli.RunPkgs(os.Args[2:], defaultCfgJSON)
+		cli.RunPkgs(os.Args[2:], defaultCfgJSON, stdlibCfgJSON)
 	case "stdlib":
 		cli.RunStd(os.Args[2:], defaultCfgJSON)
 	default:

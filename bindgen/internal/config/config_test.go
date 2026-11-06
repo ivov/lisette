@@ -65,6 +65,9 @@ func TestNilConfigAccessorsDoNotPanic(t *testing.T) {
 	if cfg.HasBoolAsFlag("io", "Foo") {
 		t.Error("HasBoolAsFlag")
 	}
+	if cfg.HasBoolAsPresence("io", "Foo") {
+		t.Error("HasBoolAsPresence")
+	}
 	if cfg.MutatingParams("io", "Foo") != nil {
 		t.Error("MutatingParams")
 	}
@@ -169,5 +172,24 @@ func TestViewOverridesDistinguishEmptyFromAbsent(t *testing.T) {
 	}
 	if _, ok := cfg.ViewOverrides("os", "Aliasing"); ok {
 		t.Error("wrong package: expected no entry")
+	}
+}
+
+func TestInheritBoolAsPresenceKeepsOwnPackages(t *testing.T) {
+	cfg := Config{Overrides: Overrides{Types: TypeOverrides{
+		BoolAsPresence: map[string][]string{"context": {"Own.Get"}},
+	}}}
+	stdlib := []byte(`{"overrides": {"types": {"bool_as_presence": {
+		"context": ["Context.Deadline"],
+		"os": ["LookupEnv"]
+	}}}}`)
+	if err := cfg.InheritBoolAsPresence(stdlib); err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.HasBoolAsPresence("os", "LookupEnv") {
+		t.Error("os.LookupEnv: expected inherited pin")
+	}
+	if !cfg.HasBoolAsPresence("context", "Own.Get") || cfg.HasBoolAsPresence("context", "Context.Deadline") {
+		t.Error("context: expected own pins only")
 	}
 }

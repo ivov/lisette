@@ -292,7 +292,7 @@ impl Map {
 
   /// LoadAndDelete deletes the value for a key, returning the previous value if any.
   /// The loaded result reports whether the key was present.
-  fn LoadAndDelete(self: mut Ref<Map>, key: Unknown) -> (Unknown, bool)
+  fn LoadAndDelete(self: mut Ref<Map>, key: Unknown) -> Option<Unknown>
 
   /// LoadOrStore returns the existing value for the key if present.
   /// Otherwise, it stores and returns the given value.

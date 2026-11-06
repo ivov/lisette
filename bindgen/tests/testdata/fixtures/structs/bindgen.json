@@ -1,0 +1,11 @@
+{
+  "overrides": {
+    "types": {
+      "bool_as_presence": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/structs": [
+          "Handler.Lookup"
+        ]
+      }
+    }
+  }
+}

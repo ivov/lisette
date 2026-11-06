@@ -28,6 +28,31 @@
         "sort": ["Find"],
         "strings": ["Cut"]
       },
+      "bool_as_presence": {
+        "bytes": ["CutPrefix", "CutSuffix"],
+        "context": ["Context.Deadline"],
+        "crypto/tls": ["ClientSessionCache.Get"],
+        "database/sql": ["ColumnType.DecimalSize", "ColumnType.Length", "ColumnType.Nullable"],
+        "database/sql/driver": [
+          "RowsColumnTypeLength.ColumnTypeLength",
+          "RowsColumnTypeNullable.ColumnTypeNullable",
+          "RowsColumnTypePrecisionScale.ColumnTypePrecisionScale"
+        ],
+        "errors": ["AsType"],
+        "fmt": ["ScanState.Width", "State.Precision", "State.Width"],
+        "go/build": ["Context.HasSubdir"],
+        "go/doc/comment": ["Parser.LookupPackage"],
+        "iter": ["Pull", "Pull2"],
+        "math/big": ["Rat.SetString"],
+        "net/smtp": ["Client.TLSConnectionState"],
+        "net/url": ["Userinfo.Password"],
+        "os": ["LookupEnv"],
+        "reflect": ["Type.FieldByName", "Type.FieldByNameFunc", "Type.MethodByName", "Value.Recv"],
+        "runtime": ["Caller"],
+        "strings": ["CutPrefix", "CutSuffix"],
+        "syscall": ["Getenv"],
+        "testing": ["T.Deadline"]
+      },
       "bit_flag_set": {
         "debug/elf": ["DynamicVersionFlag", "ProgFlag", "SectionFlag"],
         "go/ast": ["ChanDir", "MergeMode"],

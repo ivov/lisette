@@ -47,7 +47,7 @@ type Manifest struct {
 	Errors []ManifestError `json:"errors"`
 }
 
-func RunPkgs(args []string, defaultCfgJSON []byte) {
+func RunPkgs(args []string, defaultCfgJSON, stdlibCfgJSON []byte) {
 	fs := flag.NewFlagSet("pkgs", flag.ExitOnError)
 	configPath := fs.String("config", "", "path to bindgen config file")
 	versionOverride := fs.String("version", "", "override Lisette version in generated headers")
@@ -69,6 +69,9 @@ func RunPkgs(args []string, defaultCfgJSON []byte) {
 	}
 
 	cfg, err := config.LoadConfig(*configPath, defaultCfgJSON)
+	if err == nil {
+		err = cfg.InheritBoolAsPresence(stdlibCfgJSON)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bindgen: failed to load config: %v\n", err)
 		os.Exit(1)
