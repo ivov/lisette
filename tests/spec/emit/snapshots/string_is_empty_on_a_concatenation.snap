@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn joined_is_empty(a: string, b: string) -> bool {
+    (a + b).is_empty()
+  }
+  
+  fn test() {
+    if joined_is_empty("a", "") { panic("a non-empty concatenation is not empty") }
+    if !joined_is_empty("", "") { panic("an empty concatenation is empty") }
+  }
+---
+package main
+
+func joinedIsEmpty(a, b string) bool {
+	return a+b == ""
+}
+
+func test() {
+	if joinedIsEmpty("a", "") {
+		panic("a non-empty concatenation is not empty")
+	}
+	if !joinedIsEmpty("", "") {
+		panic("an empty concatenation is empty")
+	}
+}
