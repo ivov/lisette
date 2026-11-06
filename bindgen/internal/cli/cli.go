@@ -47,7 +47,7 @@ func PrintUsage() {
 	fmt.Fprintf(os.Stderr, "  stdlib -outdir <dir>  Generate bindings for all Go stdlib packages\n")
 }
 
-func RunPkg(args []string, defaultCfgJSON []byte) {
+func RunPkg(args []string, defaultCfgJSON, stdlibCfgJSON []byte) {
 	fs := flag.NewFlagSet("pkg", flag.ExitOnError)
 	configPath := fs.String("config", "", "path to bindgen config file")
 	targetFlag := fs.String("target", "", "GOOS/GOARCH to type-check against (default: host)")
@@ -72,6 +72,9 @@ func RunPkg(args []string, defaultCfgJSON []byte) {
 	_ = fs.Parse(fs.Args()[1:])
 
 	cfg, err := config.LoadConfig(*configPath, defaultCfgJSON)
+	if err == nil {
+		err = cfg.InheritBoolAsPresence(stdlibCfgJSON)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bindgen: failed to load config: %v\n", err)
 		os.Exit(1)

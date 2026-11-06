@@ -31,6 +31,7 @@ type TypeOverrides struct {
 	NonNilableReturn map[string][]string            `json:"non_nilable_return"`
 	NonNilableVar    map[string][]string            `json:"non_nilable_var"`
 	BoolAsFlag       map[string][]string            `json:"bool_as_flag"`
+	BoolAsPresence   map[string][]string            `json:"bool_as_presence"`
 	DirectError      map[string][]string            `json:"direct_error"`
 	NilableError     map[string][]string            `json:"nilable_error"`
 	NeverReturn      map[string][]string            `json:"never_return"`
@@ -104,6 +105,25 @@ func LoadConfig(configPath string, defaultData []byte) (Config, error) {
 		return Config{}, err
 	}
 	return cfg, nil
+}
+
+// InheritBoolAsPresence adds the stdlib pins to a third-party config, so that
+// a third-party type that implements e.g. context.Context keeps its shape.
+func (c *Config) InheritBoolAsPresence(data []byte) error {
+	var other Config
+	if err := json.Unmarshal(data, &other); err != nil {
+		return err
+	}
+	for pkg, names := range other.Overrides.Types.BoolAsPresence {
+		if _, ok := c.Overrides.Types.BoolAsPresence[pkg]; ok {
+			continue
+		}
+		if c.Overrides.Types.BoolAsPresence == nil {
+			c.Overrides.Types.BoolAsPresence = make(map[string][]string)
+		}
+		c.Overrides.Types.BoolAsPresence[pkg] = names
+	}
+	return nil
 }
 
 // matchKind selects how a configured name list is matched against a query name.
@@ -215,6 +235,13 @@ func (c *Config) HasBoolAsFlag(pkg, name string) bool {
 		return false
 	}
 	return matchField(c.Overrides.Types.BoolAsFlag, pkg, name, matchExact)
+}
+
+func (c *Config) HasBoolAsPresence(pkg, name string) bool {
+	if c == nil {
+		return false
+	}
+	return matchField(c.Overrides.Types.BoolAsPresence, pkg, name, matchExact)
 }
 
 // MutatingParams returns the list of parameter names that are mutated by the

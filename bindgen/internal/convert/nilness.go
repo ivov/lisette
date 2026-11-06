@@ -46,6 +46,8 @@ type NilnessAnalysis struct {
 	globalFacts  map[*ssa.Global]nilness
 
 	params *ParameterNilability
+
+	presence map[*types.Func]bool
 }
 
 // NewNilnessAnalysis returns (nil, nil) when no root package is well-typed.
@@ -75,6 +77,7 @@ func NewNilnessAnalysis(roots []*packages.Package, cfg *config.Config) (analysis
 		staticRecovers: make(map[*ssa.Function]bool),
 		inProgress:     make(map[*ssa.Function]bool),
 		globalFacts:    make(map[*ssa.Global]nilness),
+		presence:       make(map[*types.Func]bool),
 	}
 
 	sorted := make([]*packages.Package, len(wellTyped))
@@ -107,8 +110,13 @@ func NewNilnessAnalysis(roots []*packages.Package, cfg *config.Config) (analysis
 	}
 
 	analysis.params = newParameterNilability(analysis, bound, sorted)
+	presence := &presenceAnalysis{
+		proofs:     make(map[*ssa.Function]bool),
+		inProgress: make(map[*ssa.Function]bool),
+	}
 	for _, fn := range bound {
 		analysis.record(fn)
+		analysis.recordPresence(fn, presence)
 	}
 
 	return analysis, nil

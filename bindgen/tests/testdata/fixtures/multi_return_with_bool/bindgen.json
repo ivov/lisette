@@ -3,7 +3,18 @@
     "types": {
       "bool_as_flag": {
         "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/multi_return_with_bool": [
-          "Cut3"
+          "Cut3",
+          "Flags.Read"
+        ]
+      },
+      "bool_as_presence": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/multi_return_with_bool": [
+          "Flags.Read",
+          "Iterate",
+          "Options.Lookup",
+          "Pinned",
+          "Reader.Next",
+          "Source.Peek"
         ]
       }
     }

@@ -169,6 +169,7 @@ type Converter struct {
 	nilness                  *NilnessAnalysis             // nil falls back to name heuristics
 	mutation                 *MutationAnalysis            // nil falls back to the curated map and name heuristics
 	divergence               *DivergenceAnalysis          // nil falls back to the curated never_return map
+	symbolKey                string                       // config key for function types, which have none
 	uniformPointerTypes      map[string]bool              // lazily computed; types with 10+ single-pointer-return methods
 	manyToOneTypes           map[string]bool              // lazily computed; return types with 10+ free functions
 	majorityPointerTypes     map[string]bool              // lazily computed; types where ≥20 methods return same *T (>90%)
@@ -320,6 +321,7 @@ func (c *Converter) convert(symbolExport extract.SymbolExport) ConvertResult {
 	}
 
 	synthCheckpoint := c.synthMark()
+	c.symbolKey = symbolExport.Name
 
 	switch symbolExport.Kind {
 	case extract.ExportFunction:

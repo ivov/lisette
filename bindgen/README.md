@@ -91,25 +91,27 @@ When `error` is the sole return type, it typically maps to `Result<(), error>`. 
 
 ### Comma-ok pattern
 
-In Go's `(T, bool)` return type, when `bool` signals presence, `(T, bool)` maps to `Option<T>`:
+In Go's `(T, bool)` return type, when `bool` signals presence, `(T, bool)` maps to `Option<T>`. Bindgen reads the function body to check this: each `return` that gives `false` must also give the zero value of `T`.
 
 ```go
 func (m *Map) Load(key any) (value any, ok bool)
 ```
 
 ```rs
-fn Load(self: Ref<Map>, key: Unknown) -> Option<Unknown>
+fn Load(self: mut Ref<Map>, key: Unknown) -> Option<Unknown>
 ```
 
-When `bool` acts as a flag, `(T, bool)` is preserved as a tuple:
+When bindgen cannot prove it, `(T, bool)` is preserved as a tuple, so no value is lost:
 
 ```go
-func (m *Map) LoadAndDelete(key any) (value any, loaded bool)
+func (m *Map) LoadOrStore(key, value any) (actual any, loaded bool)
 ```
 
 ```rs
-fn LoadAndDelete(self: Ref<Map>, key: Unknown) -> (Unknown, bool)
+fn LoadOrStore(self: mut Ref<Map>, key: Unknown, value: Unknown) -> (Unknown, bool)
 ```
+
+Interface methods and function types have no body to read, so they stay tuples unless the `bool_as_presence` override lists them. A method that implements an interface method from its own package or a direct import uses the same mapping, so its type still implements the interface.
 
 ### Pointers
 
@@ -234,6 +236,15 @@ Bindgen accepts a config file with per-package overrides:
       // e.g. `math/big.Rat.Float32` returns `(float32, bool)`
       "bool_as_flag": {
         "math/big": ["Rat.Float32", "Rat.Float64"],
+      },
+
+      // Turn `(T, bool)` into `Option<T>` when bindgen cannot prove
+      // that `bool` signals presence
+      // e.g. `os.LookupEnv` returns `Option<string>`
+      // e.g. `iter.Pull` returns a `next` function that returns `Option<V>`
+      "bool_as_presence": {
+        "os": ["LookupEnv"],
+        "iter": ["Pull"],
       },
 
       // Mark parameter as mutable

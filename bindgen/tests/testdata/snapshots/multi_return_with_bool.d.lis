@@ -3,12 +3,103 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-/// 3-tuple ending in bool collapses to Option<(T, U)> by default.
+/// A value with a false bool stays a tuple.
+pub fn Clamp(n: int) -> (int, bool)
+
+/// 3-tuple ending in bool collapses to Option<(T, U)> when every false return gives zero values.
 pub fn Collapse3() -> Option<(int, string)>
 
 /// 3-tuple where the trailing bool is metadata, not presence — opted out
 /// via bool_as_flag.
 pub fn Cut3() -> (string, string, bool)
 
+/// A generic zero value collapses to Option<T>.
+pub fn First<T>(s: Slice<T>) -> Option<T>
+
+/// A nilable value forwarded from a function value stays Option.
+pub fn Forward() -> (Option<mut Ref<Item>>, bool)
+
+/// A forwarded map lookup collapses to Option<T>.
+pub fn Get(key: string) -> Option<int>
+
+/// A forwarded call to a presence function collapses to Option<T>.
+pub fn GetTwice(key: string) -> Option<int>
+
+/// A pinned symbol collapses the function types inside it.
+pub fn Iterate() -> Option<fn() -> Option<int>>
+
 /// 2-tuple comma-ok collapses to Option<T>.
 pub fn Lookup(key: string) -> Option<int>
+
+/// Named results with a bare return collapse to Option<T>.
+pub fn Named(key: string) -> Option<int>
+
+/// A nil value with a true bool stays a tuple.
+pub fn NilPresent() -> (Option<mut Ref<Item>>, bool)
+
+/// A pinned bool the analysis cannot follow collapses to Option<T>.
+pub fn Pinned(key: string) -> Option<int>
+
+/// A forwarded bool that is not the callee's last result stays a tuple.
+pub fn Prefix() -> (int, bool)
+
+/// A defined bool type stays a tuple.
+pub fn ReadStatus() -> (int, Status)
+
+/// A bool the analysis cannot follow stays a tuple.
+pub fn Unknown(key: string) -> (int, bool)
+
+pub type Cursor
+
+pub interface Finder {
+  fn Find() -> (Option<mut Ref<Item>>, bool)
+}
+
+pub struct Flags {
+  pub Read: Option<fn() -> (int, bool)>,
+}
+
+pub type Handler = fn() -> int
+
+pub type HandlerAlias = Handler
+
+pub interface Handlers {
+  fn Aliased() -> (Option<Handler>, bool)
+  fn Bare() -> (Option<fn() -> int>, bool)
+  fn Named() -> (Option<Handler>, bool)
+}
+
+pub struct Item {
+  pub N: int,
+}
+
+pub struct Options {
+  pub Resolve: Option<fn(string) -> (string, bool)>,
+  pub Lookup: Option<fn(string) -> Option<string>>,
+}
+
+pub interface Reader {
+  fn Next() -> Option<fn() -> Option<int>>
+}
+
+pub interface Source {
+  fn Next() -> (int, bool)
+  fn Peek() -> Option<int>
+}
+
+#[go(incomparable)]
+pub type Stack<T>
+
+pub struct Status(bool)
+
+impl Cursor {
+  /// A method follows the interface method it implements, so it stays a tuple.
+  fn Next(self) -> (int, bool)
+  /// A method follows the pinned interface method it implements, so it collapses to Option<T>.
+  fn Peek(self) -> Option<int>
+}
+
+impl<T> Stack<T> {
+  /// A method on a generic type collapses to Option<T>.
+  fn Pop(self: mut Ref<Stack<T>>) -> Option<T>
+}

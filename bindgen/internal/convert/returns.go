@@ -154,8 +154,8 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 	}
 
 	// (T, bool) -> Option<T> when bool indicates presence/success
-	if isBoolType(last.Type()) {
-		if shouldConvertToOption(last.Name(), conv, qualifiedName) {
+	if types.Identical(last.Type(), types.Typ[types.Bool]) {
+		if shouldConvertToOption(conv, obj, qualifiedName) {
 			nilable := results.Len() == 2 && isDemotableGoType(results.At(0).Type())
 			inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, obj, qualifiedName, substitutions, nil)
 			innerType := inner.LisetteType
@@ -172,7 +172,28 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 	}
 
 	demoted := nilWitnessDemotions(conv, obj, results, 0, results.Len(), qualifiedName, false)
+	if isBoolType(last.Type()) {
+		demoted = unprovenDemotions(conv, results, qualifiedName, demoted)
+	}
 	return collectReturnTypes(results, 0, results.Len(), seen, conv, obj, qualifiedName, substitutions, demoted)
+}
+
+// unprovenDemotions: no fact proves a value next to a trailing bool non-nil,
+// so a nilable one stays Option.
+func unprovenDemotions(conv *Converter, results *types.Tuple, qualifiedName string, demoted map[int]bool) map[int]bool {
+	if conv.cfg.IsNonNilableReturn(conv.currentPkgPath, qualifiedName) {
+		return demoted
+	}
+	for i := 0; i < results.Len()-1; i++ {
+		t := results.At(i).Type()
+		if _, isFunction := t.Underlying().(*types.Signature); isFunction || isDemotableGoType(t) {
+			if demoted == nil {
+				demoted = make(map[int]bool)
+			}
+			demoted[i] = true
+		}
+	}
+	return demoted
 }
 
 // nilWitnessDemotions: result indices demoted to Option by a witnessed nil
@@ -210,22 +231,64 @@ func nilWitnessDemotions(conv *Converter, obj types.Object, results *types.Tuple
 }
 
 // shouldConvertToOption determines if a (T, bool) return should become Option<T>.
-func shouldConvertToOption(boolName string, conv *Converter, qualifiedName string) bool {
-	if conv.cfg.HasBoolAsFlag(conv.currentPkgPath, qualifiedName) {
+func shouldConvertToOption(conv *Converter, obj types.Object, qualifiedName string) bool {
+	key := qualifiedName
+	if obj == nil {
+		key = conv.symbolKey
+	}
+	if conv.cfg.HasBoolAsFlag(conv.currentPkgPath, key) {
 		return false
 	}
-
-	switch boolName {
-	case "ok", "found", "present", "exists", "valid":
+	if conv.cfg.HasBoolAsPresence(conv.currentPkgPath, key) {
 		return true
 	}
-
-	switch boolName {
-	case "exact", "complete", "more", "loaded", "overflow", "underflow":
+	fn, ok := obj.(*types.Func)
+	if !ok {
 		return false
 	}
+	if presence, ok := conv.contractPresence(fn); ok {
+		return presence
+	}
+	return conv.nilness.ReportsPresence(fn)
+}
 
-	return true
+// contractPresence: an interface method is Option only when pinned, and a
+// method that implements one takes its shape, so the two still conform.
+func (c *Converter) contractPresence(fn *types.Func) (bool, bool) {
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok || sig.Recv() == nil {
+		return false, false
+	}
+	if types.IsInterface(sig.Recv().Type()) {
+		return c.pinnedPresence(fn), true
+	}
+	recv := sig.Recv().Type()
+	if _, isPointer := recv.(*types.Pointer); !isPointer {
+		recv = types.NewPointer(recv)
+	}
+	found, presence := false, true
+	for _, named := range c.collectInterfaceCandidates() {
+		iface := named.Underlying().(*types.Interface)
+		if !types.Implements(recv, iface) {
+			continue
+		}
+		for method := range iface.Methods() {
+			if method.Name() == fn.Name() {
+				found = true
+				presence = presence && c.pinnedPresence(method)
+			}
+		}
+	}
+	return presence, found
+}
+
+func (c *Converter) pinnedPresence(method *types.Func) bool {
+	named, ok := types.Unalias(method.Type().(*types.Signature).Recv().Type()).(*types.Named)
+	if !ok || method.Pkg() == nil {
+		return false
+	}
+	key := named.Obj().Name() + "." + method.Name()
+	return c.cfg.HasBoolAsPresence(method.Pkg().Path(), key) && !c.cfg.HasBoolAsFlag(method.Pkg().Path(), key)
 }
 
 // maxReturnTupleArity mirrors MAX_TUPLE_ARITY in
