@@ -357,7 +357,7 @@ impl PrivateKey {
     rand: io.Reader,
     ciphertext: Slice<byte>,
     opts: crypto.DecrypterOpts,
-  ) -> Result<Slice<byte>, error>
+  ) -> Result<mut Slice<byte>, error>
 
   /// Equal reports whether priv and x have equivalent values. It ignores
   /// Precomputed values.

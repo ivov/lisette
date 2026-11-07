@@ -1592,7 +1592,7 @@ impl Scope {
   ) -> (Option<mut Ref<Scope>>, Option<Object>)
 
   /// Names returns the scope's element names in sorted order.
-  fn Names(self: Ref<Scope>) -> Slice<string>
+  fn Names(self: Ref<Scope>) -> mut Slice<string>
 
   /// NumChildren returns the number of scopes nested in s.
   fn NumChildren(self: Ref<Scope>) -> int

@@ -22,7 +22,11 @@ pub fn GenerateKey(
 /// 
 /// Deprecated: for ECDH, use the crypto/ecdh package. This function returns an
 /// encoding equivalent to that of PublicKey.Bytes in crypto/ecdh.
-pub fn Marshal(curve: Curve, x: Ref<big.Int>, y: Ref<big.Int>) -> Slice<byte>
+pub fn Marshal(
+  curve: Curve,
+  x: Ref<big.Int>,
+  y: Ref<big.Int>,
+) -> mut Slice<byte>
 
 /// MarshalCompressed converts a point on the curve into the compressed form
 /// specified in SEC 1, Version 2.0, Section 2.3.3. If the point is not on the
@@ -31,7 +35,7 @@ pub fn MarshalCompressed(
   curve: Curve,
   x: Ref<big.Int>,
   y: Ref<big.Int>,
-) -> Slice<byte>
+) -> mut Slice<byte>
 
 /// P224 returns a [Curve] which implements NIST P-224 (FIPS 186-3, section D.2.2),
 /// also known as secp224r1. The CurveParams.Name of this [Curve] is "P-224".

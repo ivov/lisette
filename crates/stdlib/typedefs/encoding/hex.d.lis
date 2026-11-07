@@ -32,7 +32,7 @@ pub fn Decode(dst: mut Slice<byte>, src: Slice<byte>) -> Partial<int, error>
 /// characters and that src has even length.
 /// If the input is malformed, DecodeString returns
 /// the bytes decoded before the error.
-pub fn DecodeString(s: string) -> Partial<Slice<byte>, error>
+pub fn DecodeString(s: string) -> Partial<mut Slice<byte>, error>
 
 /// DecodedLen returns the length of a decoding of x source bytes.
 /// Specifically, it returns x / 2.

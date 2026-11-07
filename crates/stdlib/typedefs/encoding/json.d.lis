@@ -189,7 +189,7 @@ pub fn MarshalIndent(
   v: Unknown,
   prefix: string,
   indent: string,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>
 
 /// NewDecoder returns a new decoder that reads from r.
 /// 

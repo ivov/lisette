@@ -112,7 +112,7 @@ impl SHAKE {
   fn BlockSize(self: mut Ref<SHAKE>) -> int
 
   /// MarshalBinary implements [encoding.BinaryMarshaler].
-  fn MarshalBinary(self: mut Ref<SHAKE>) -> Result<Slice<byte>, error>
+  fn MarshalBinary(self: mut Ref<SHAKE>) -> Result<mut Slice<byte>, error>
 
   /// Read squeezes more output from the XOF.
   /// 

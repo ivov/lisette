@@ -182,7 +182,6 @@ crypto/ecdsa.ParseRawPrivateKey (opaque r0): r0<-curve r0<-data
 crypto/ecdsa.ParseUncompressedPublicKey (opaque r0): r0<-curve r0<-data
 crypto/ecdsa.PrivateKey.Public: r0<-recv
 crypto/ecdsa.PrivateKey.Sign (opaque r0 r1) (shared r1): r0<-digest r0<-opts r0<-random r0<-recv r1<-digest r1<-opts r1<-random r1<-recv
-crypto/ecdsa.PublicKey.Bytes (opaque r0): r0<-recv
 crypto/ecdsa.Sign (opaque r0 r1 r2) (shared r2): r0<-hash r0<-priv r0<-rand r1<-hash r1<-priv r1<-rand r2<-hash r2<-priv r2<-rand
 crypto/ecdsa.SignASN1 (opaque r0 r1) (shared r1): r0<-hash r0<-priv r0<-r r1<-hash r1<-priv r1<-r
 crypto/ed25519.GenerateKey (shared r2): 
@@ -192,8 +191,6 @@ crypto/elliptic.CurveParams.Params: r0<-recv
 crypto/elliptic.CurveParams.ScalarBaseMult (opaque r0 r1): r0<-k r0<-recv r1<-k r1<-recv
 crypto/elliptic.CurveParams.ScalarMult (opaque r0 r1): r0<-Bx r0<-By r0<-k r0<-recv r1<-Bx r1<-By r1<-k r1<-recv
 crypto/elliptic.GenerateKey (shared r3): 
-crypto/elliptic.Marshal (opaque r0): r0<-curve r0<-x r0<-y
-crypto/elliptic.MarshalCompressed (opaque r0): r0<-curve r0<-x r0<-y
 crypto/elliptic.P224 (shared r0): 
 crypto/elliptic.P256 (shared r0): 
 crypto/elliptic.P384 (shared r0): 
@@ -236,7 +233,7 @@ crypto/rsa.EncryptOAEPWithOptions (shared r1):
 crypto/rsa.EncryptPKCS1v15 (shared r1): 
 crypto/rsa.GenerateKey (opaque r0) (shared r1): r0<-random
 crypto/rsa.GenerateMultiPrimeKey (opaque r0) (shared r1): r0<-random
-crypto/rsa.PrivateKey.Decrypt (opaque r0) (shared r1): r0<-ciphertext r0<-opts r0<-rand r0<-recv
+crypto/rsa.PrivateKey.Decrypt (shared r1): 
 crypto/rsa.PrivateKey.Public: r0<-recv
 crypto/rsa.PrivateKey.Sign (shared r1): 
 crypto/rsa.SignPKCS1v15 (shared r1): 
@@ -248,7 +245,6 @@ crypto/sha3.NewCSHAKE256 (opaque r0): r0<-N r0<-S
 crypto/sha3.SHA3.AppendBinary: r0<-p
 crypto/sha3.SHA3.Sum: r0<-b
 crypto/sha3.SHAKE.AppendBinary: r0<-p
-crypto/sha3.SHAKE.MarshalBinary (opaque r0): r0<-recv
 crypto/tls.CertificateRequestInfo.Context: r0<-recv
 crypto/tls.CertificateRequestInfo.SupportsCertificate (opaque r0): r0<-c r0<-recv
 crypto/tls.CertificateVerificationError.Unwrap: r0<-recv
@@ -305,15 +301,14 @@ crypto/x509.CreateCertificate (opaque r1) (shared r1): r1<-parent r1<-priv r1<-p
 crypto/x509.CreateCertificateRequest (shared r1): 
 crypto/x509.CreateRevocationList (shared r1): 
 crypto/x509.DecryptPEMBlock (shared r1): 
-crypto/x509.ExtKeyUsage.OID (opaque r0): 
 crypto/x509.MarshalPKCS8PrivateKey: r1<-[key]
 crypto/x509.MarshalPKIXPublicKey: r1<-[pub]
 crypto/x509.OID.AppendBinary: r0<-b
 crypto/x509.OID.AppendText: r0<-b
 crypto/x509.OID.UnmarshalBinary (shared r0): 
 crypto/x509.OID.UnmarshalText (shared r0): 
-crypto/x509.OIDFromASN1OID (opaque r0) (shared r1): r0<-asn1OID
-crypto/x509.OIDFromInts (opaque r0) (shared r1): r0<-oid
+crypto/x509.OIDFromASN1OID (shared r1): 
+crypto/x509.OIDFromInts (shared r1): 
 crypto/x509.ParseCertificate (opaque r0 r1) (shared r0): r0<-der r1<-der
 crypto/x509.ParseCertificateRequest (opaque r0) (shared r0): r0<-asn1Data
 crypto/x509.ParseCertificates (opaque r0 r1) (shared r0): r0<-der r1<-der
@@ -468,7 +463,6 @@ encoding/base32.NewDecoder: r0<-[r]
 encoding/base32.NewEncoder: r0<-[w]
 encoding/base64.Encoding.AppendDecode: r0<-dst
 encoding/base64.Encoding.AppendEncode: r0<-dst
-encoding/base64.Encoding.DecodeString (opaque r0): 
 encoding/base64.NewDecoder: r0<-[r]
 encoding/base64.NewEncoder: r0<-[w]
 encoding/binary.Append: r0<-buf
@@ -496,7 +490,7 @@ encoding/gob.NewEncoder (opaque r0): r0<-w
 encoding/hex.AppendDecode (shared r1): r0<-dst
 encoding/hex.AppendEncode: r0<-dst
 encoding/hex.Decode (shared r1): 
-encoding/hex.DecodeString (opaque r0) (shared r1): 
+encoding/hex.DecodeString (shared r1): 
 encoding/hex.Dumper: r0<-[w]
 encoding/hex.NewDecoder: r0<-[r]
 encoding/hex.NewEncoder: r0<-[w]
@@ -710,7 +704,6 @@ go/types.Scope.Innermost: r0<-recv
 go/types.Scope.Insert (opaque r0) (shared r0): r0<-obj r0<-recv
 go/types.Scope.Lookup (opaque r0) (shared r0): r0<-recv
 go/types.Scope.LookupParent (opaque r0 r1) (shared r1): r0<-recv r1<-recv
-go/types.Scope.Names (opaque r0): r0<-recv
 go/types.Scope.Parent: r0<-recv
 go/types.Selection.Index: r0<-recv
 go/types.Selection.Obj: r0<-recv
@@ -906,7 +899,6 @@ math/big.Float.Add: r0<-recv
 math/big.Float.Append: r0<-buf
 math/big.Float.AppendText: r0<-b
 math/big.Float.Copy: r0<-recv
-math/big.Float.GobEncode (opaque r0): r0<-recv
 math/big.Float.Int (opaque r0): r0<-recv r0<-z
 math/big.Float.Mul: r0<-recv
 math/big.Float.Neg: r0<-recv
@@ -936,15 +928,12 @@ math/big.Int.Append: r0<-buf
 math/big.Int.AppendText: r0<-b
 math/big.Int.Binomial: r0<-recv
 math/big.Int.Bits: r0<-recv
-math/big.Int.Bytes (opaque r0): r0<-recv
 math/big.Int.Div: r0<-recv
 math/big.Int.DivMod: r0<-recv r1<-m
 math/big.Int.Exp: r0<-recv
 math/big.Int.FillBytes: r0<-buf
 math/big.Int.GCD: r0<-recv
-math/big.Int.GobEncode (opaque r0): r0<-recv
 math/big.Int.Lsh: r0<-recv
-math/big.Int.MarshalJSON (opaque r0): r0<-recv
 math/big.Int.Mod: r0<-recv
 math/big.Int.ModInverse: r0<-recv
 math/big.Int.ModSqrt: r0<-recv
@@ -978,7 +967,6 @@ math/big.Rat.Abs: r0<-recv
 math/big.Rat.Add: r0<-recv
 math/big.Rat.AppendText: r0<-b
 math/big.Rat.Denom: r0<-recv
-math/big.Rat.GobEncode (opaque r0): r0<-recv
 math/big.Rat.Inv: r0<-recv
 math/big.Rat.Mul: r0<-recv
 math/big.Rat.Neg: r0<-recv
@@ -1242,15 +1230,12 @@ net/mail.ReadMessage (opaque r0 r1) (shared r1): r0<-r r1<-r
 net/netip.Addr.AppendBinary: r0<-b
 net/netip.Addr.AppendText: r0<-b
 net/netip.Addr.AppendTo: r0<-b
-net/netip.Addr.MarshalBinary (opaque r0): 
 net/netip.AddrPort.AppendBinary: r0<-b
 net/netip.AddrPort.AppendText: r0<-b
 net/netip.AddrPort.AppendTo: r0<-b
-net/netip.AddrPort.MarshalBinary (opaque r0): 
 net/netip.Prefix.AppendBinary: r0<-b
 net/netip.Prefix.AppendText: r0<-b
 net/netip.Prefix.AppendTo: r0<-b
-net/netip.Prefix.MarshalBinary (opaque r0): 
 net/rpc.Client.Call (opaque r0): r0<-args r0<-recv r0<-reply
 net/rpc.Client.Close (shared r0): 
 net/rpc.Client.Go (opaque r0): r0<-args r0<-recv r0<-reply
@@ -1418,7 +1403,6 @@ regexp.Regexp.FindSubmatch: r0<-[b]
 regexp.Regexp.SubexpNames: r0<-recv
 regexp/syntax.Compile (opaque r0): r0<-re
 regexp/syntax.Parse (opaque r0): 
-regexp/syntax.Regexp.CapNames (opaque r0): r0<-recv
 regexp/syntax.Regexp.Simplify (opaque r0): r0<-recv
 runtime.CallersFrames: r0<-[callers]
 runtime.Frames.Next: r0<-[recv]

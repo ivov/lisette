@@ -1288,7 +1288,7 @@ pub fn StringToSid(s: string) -> Result<mut Ref<SID>, error>
 /// function panics instead of returning an error.
 /// 
 /// Deprecated: Use [UTF16FromString] instead.
-pub fn StringToUTF16(s: string) -> Slice<uint16>
+pub fn StringToUTF16(s: string) -> mut Slice<uint16>
 
 /// StringToUTF16Ptr returns pointer to the UTF-16 encoding of
 /// the UTF-8 string s, with a terminating NUL added. If s
@@ -1439,7 +1439,7 @@ pub fn TransmitFile(
 /// s, with a terminating NUL added. If s contains a NUL byte at any
 /// location, it returns (nil, [EINVAL]). Unpaired surrogates
 /// are encoded using WTF-8.
-pub fn UTF16FromString(s: string) -> Result<Slice<uint16>, error>
+pub fn UTF16FromString(s: string) -> Result<mut Slice<uint16>, error>
 
 /// UTF16PtrFromString returns pointer to the UTF-16 encoding of
 /// the UTF-8 string s, with a terminating NUL added. If s

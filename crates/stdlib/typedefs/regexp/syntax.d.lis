@@ -259,7 +259,7 @@ impl Prog {
 
 impl Regexp {
   /// CapNames walks the regexp to find the names of capturing groups.
-  fn CapNames(self: Ref<Regexp>) -> Slice<string>
+  fn CapNames(self: Ref<Regexp>) -> mut Slice<string>
 
   /// Equal reports whether x and y have identical structure.
   fn Equal(self: Ref<Regexp>, y: Option<Ref<Regexp>>) -> bool
