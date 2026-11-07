@@ -51,26 +51,11 @@ func refuse(path string) (io.ReadCloser, error) {
 
 func main() {
 	fset := token.NewFileSet()
-	cb := func(arg0 string) lisette.Result[io.ReadCloser, error] {
-		ret, ret_1 := refuse(arg0)
-		if ret_1 != nil {
-			return lisette.MakeResultErr[io.ReadCloser, error](ret_1)
-		} else if lisette.IsNilInterface(ret) {
-			return lisette.MakeResultErr[io.ReadCloser, error](errors.New("unexpected nil"))
-		}
-		return lisette.MakeResultOk[io.ReadCloser, error](ret)
-	}
-	custom := importer.ForCompiler(fset, "gc", func(arg0 string) (io.ReadCloser, error) {
-		res := cb(arg0)
-		if res.Tag == lisette.ResultOk {
-			return res.OkVal, nil
-		}
-		return nil, res.ErrVal
-	})
+	custom := importer.ForCompiler(fset, "gc", refuse)
 	if lisette.IsNilInterface(custom) {
 		panic("no gc importer")
 	}
-	if ret_2, e := custom.Import("fmt"); e == nil && ret_2 != nil {
+	if ret, e := custom.Import("fmt"); e == nil && ret != nil {
 		panic("custom lookup was not used")
 	} else {
 		if e == nil {
@@ -84,7 +69,7 @@ func main() {
 	if lisette.IsNilInterface(source) {
 		panic("no source importer")
 	}
-	if ret_3, err := source.Import("errors"); err != nil || ret_3 == nil {
+	if ret_1, err := source.Import("errors"); err != nil || ret_1 == nil {
 		panic("source import")
 	}
 }

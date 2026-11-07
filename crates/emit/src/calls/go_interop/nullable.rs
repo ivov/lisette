@@ -72,13 +72,22 @@ impl Planner<'_> {
         if spread.is_some() || prelude_constructor(callee) != Some(PreludeVariant::Some) {
             return None;
         }
-        if let LayoutBridge::UnwrapNullableOption { target_payload, .. } = &bridge
-            && matches!(inner.unwrap_parens(), Expression::Lambda { .. })
-        {
+        if let LayoutBridge::UnwrapNullableOption { target_payload, .. } = &bridge {
             let ctx = ExpressionContext::value().with_function_slot_origin(SlotOrigin::GoField);
-            let emitted = self.emitted_value_layout(inner, ctx);
-            if CoercionPlan::bridge(self, &emitted, target_payload).is_identity() {
-                return Some(self.lower_composite_value(inner, ctx));
+            let value = self.peel_go_slot_alias_cast(inner, ctx);
+            let emitted = self.emitted_value_layout(value, ctx);
+            let direct = CoercionPlan::bridge(self, &emitted, target_payload);
+            if matches!(value.unwrap_parens(), Expression::Lambda { .. }) && direct.is_identity() {
+                return Some(self.lower_composite_value(value, ctx));
+            }
+            if self.go_slot_declaration_layout(value, ctx).is_some() {
+                return Some(self.lower_composite_value(value, ctx).map_expression(
+                    |setup, value| {
+                        let (bridge_setup, value) = direct.lower(self, value);
+                        setup.extend(bridge_setup);
+                        value
+                    },
+                ));
             }
         }
         let inner = self.lower_nullable_payload(inner, &expression.get_type().ok_type());

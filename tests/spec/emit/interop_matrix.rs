@@ -3767,3 +3767,37 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn interop_named_fn_passes_to_go_fn_slot_directly() {
+    let input = r#"
+import "go:flag"
+import "go:strings"
+
+type Visit = fn(mut Ref<flag.Flag>) -> ()
+
+fn reset(f: mut Ref<flag.Flag>) {
+  if let Some(v) = f.Value { let _ = v.Set(f.DefValue) }
+}
+
+fn bump(f: mut Ref<flag.Flag>) {
+  if let Some(v) = f.Value { let _ = v.Set("7") }
+}
+
+fn is_comma(r: rune) -> bool {
+  r == ','
+}
+
+fn test() {
+  let mut fs = flag.NewFlagSet("demo", flag.ContinueOnError)
+  let n = fs.Int("n", 1, "count")
+  fs.VisitAll(bump)
+  if n.* != 7 { panic("the named function should run for each flag") }
+  fs.VisitAll(reset as Visit)
+  if n.* != 1 { panic("the cast function should run for each flag") }
+  let parts = strings.FieldsFunc("a,b,,c", is_comma)
+  if parts.length() != 3 { panic("the predicate should split on commas") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

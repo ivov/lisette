@@ -39,6 +39,7 @@ impl Planner<'_> {
         expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
+        let expression = self.peel_go_slot_alias_cast(expression, ctx);
         if self.is_go_callable(expression)
             && let Some(callee) = self.resolve_callable_value(expression)
             && matches!(callee.origin, CallableOrigin::GoInterop)
@@ -120,7 +121,11 @@ impl Planner<'_> {
         expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> Option<FunctionValueAdapter> {
-        if ctx.is_callee() || ctx.forces_tagged_go_function() || is_closure_literal(expression) {
+        if ctx.is_callee()
+            || ctx.forces_tagged_go_function()
+            || is_closure_literal(expression)
+            || self.go_slot_declaration_layout(expression, ctx).is_some()
+        {
             return None;
         }
         let callee = self.resolve_callable_value(expression)?;
