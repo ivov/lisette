@@ -18,34 +18,31 @@ let value = {
 
 ## `if else`
 
-`if` runs a block when a condition is `true`. An optional `else` runs a block when the condition is `false`.
+`if` runs a block when a condition is `true`.
 
 ```lisette
-if count > 0 {
-  fmt.Println("has items")
-}
-
-if count > 10 {
-  fmt.Println("large")
-} else {
-  fmt.Println("small")
+if attempts >= 3 {
+  locked = true
 }
 ```
 
-With an `else`, `if` returns the value of the branch that runs. All branches must have the same type.
+An optional `else` runs a block when the condition is `false`.
 
 ```lisette
-let score = get_score()
-
-let result = if score >= 50 { "pass" } else { "fail" }
-
-let grade = if score >= 90 {
-  "A"
-} else if score >= 80 {
-  "B"
+if balance >= price {
+  balance -= price
 } else {
-  "C"
+  declined += 1
 }
+```
+
+An `if` with an `else` produces the value of the branch that runs. Every branch must produce the same type.
+
+```lisette
+// !callout-center[/result/] `string`
+// !callout-center[/"pass"/] `string`
+// !callout-center[/"fail"/] `string`
+let result = if get_score() >= 80 { "pass" } else { "fail" }
 ```
 
 ## `if let`

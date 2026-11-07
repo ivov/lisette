@@ -140,7 +140,7 @@ fn count_bytes(reader: io.Reader) -> Result<int, error> {
     match reader.Read(buf) {
       Partial.Ok(n) => total += n,
       Partial.Err(err) => return Err(err),
-      // !callout-right read bytes, then reached EOF
+      // !callout-right read `n` bytes, then hit `err`
       Partial.Both(n, err) => {
         total += n
         if errors.Is(err, io.EOF) { return Ok(total) }

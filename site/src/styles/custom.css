@@ -270,14 +270,14 @@ body:has(a[aria-current="page"][href*="/prelude/"])
   margin-top: 0;
 }
 
-body:has(a[aria-current="page"]:is([href*="/prelude/"], [href*="/typedefs"], [href*="/intro/safety"], [href*="/attributes"]))
+body:has(a[aria-current="page"]:is([href*="/prelude/"], [href*="/typedefs"], [href*="/intro/safety"], [href*="/attributes"], [href*="/enums"], [href*="/functions"], [href*="/interfaces"]))
   .sl-markdown-content
   .expressive-code
   + .expressive-code {
   margin-top: 0;
 }
 
-body:has(a[aria-current="page"]:is([href*="/prelude/"], [href*="/typedefs"], [href*="/intro/safety"], [href*="/attributes"]))
+body:has(a[aria-current="page"]:is([href*="/prelude/"], [href*="/typedefs"], [href*="/intro/safety"], [href*="/attributes"], [href*="/enums"], [href*="/functions"], [href*="/interfaces"]))
   .sl-markdown-content
   .expressive-code:has(+ .expressive-code)
   pre {
@@ -285,7 +285,7 @@ body:has(a[aria-current="page"]:is([href*="/prelude/"], [href*="/typedefs"], [hr
   border-end-end-radius: 0;
 }
 
-body:has(a[aria-current="page"]:is([href*="/prelude/"], [href*="/typedefs"], [href*="/intro/safety"], [href*="/attributes"]))
+body:has(a[aria-current="page"]:is([href*="/prelude/"], [href*="/typedefs"], [href*="/intro/safety"], [href*="/attributes"], [href*="/enums"], [href*="/functions"], [href*="/interfaces"]))
   .sl-markdown-content
   .expressive-code
   + .expressive-code

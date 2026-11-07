@@ -90,7 +90,7 @@ A value receiver may omit the type:
 
 ```lisette
 impl Rectangle {
-  // !callout-above[/self/] same as `self: Rectangle`
+  // !callout-above[/self/] short for `self: Rectangle`
   fn area(self) -> float64 {
     self.width * self.height
   }
@@ -146,9 +146,8 @@ struct Response<T> {
   body: T,
 }
 
-// !callout-right `T` is the type of `body`
 impl<T> Response<T> {
-  // !callout-right `U` is what `f` turns `T` into
+  // !callout-above[/(?<=map_body<)U/] `U` is what `f` turns `T` into
   fn map_body<U>(self, f: fn(T) -> U) -> Response<U> {
     Response { status: self.status, body: f(self.body) }
   }
@@ -157,7 +156,7 @@ impl<T> Response<T> {
 
 ```lisette
 fn body_length(response: Response<string>) -> Response<int> {
-  // !callout-right `Response<int>`
+  // !callout-right `U` is `int`
   response.map_body(|body| body.length())
 }
 ```
