@@ -3479,6 +3479,24 @@ pub fn invalid_pipeline_target(span: Span) -> LisetteDiagnostic {
         .with_help("Pipeline only supports functions (not lambdas)")
 }
 
+pub fn repeated_pipeline_placeholder(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Repeated `_` in pipeline")
+        .with_parse_code("repeated_pipeline_placeholder")
+        .with_span_label(&span, "second `_`")
+        .with_help(
+            "A pipeline passes one value, so `_` can appear only once. To use the value more than once, bind it with `let`",
+        )
+}
+
+pub fn misplaced_pipeline_placeholder(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Misplaced `_` in pipeline")
+        .with_parse_code("misplaced_pipeline_placeholder")
+        .with_span_label(&span, "not a direct argument")
+        .with_help(
+            "`_` marks where the piped value goes, so it must be a direct argument of the call after `|>`, as in `x |> f(a, _)`",
+        )
+}
+
 fn operator_verb(operator: &BinaryOperator) -> &'static str {
     match operator {
         BinaryOperator::Addition => "add",

@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+pub fn f() -> string {
+  f"{["a", "b"] |> concat(_...)}"
+}
+
+fn concat(parts: VarArgs<string>) -> string { "" }
+=== fixed ===
+pub fn f() -> string {
+  (["a", "b"] |> concat(_...))
+}
+
+fn concat(parts: VarArgs<string>) -> string { "" }

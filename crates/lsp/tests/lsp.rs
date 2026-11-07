@@ -15992,3 +15992,49 @@ fn signature_help_ignores_commas_in_lambda_parameters() {
     );
     client.shutdown();
 }
+
+#[test]
+fn signature_help_counts_pipeline_placeholder_slot() {
+    let line = "fn main() { let _ = 9 |> f(1, _, 3) }";
+    assert_eq!(active_parameter_at(line, "f("), Some(0));
+    assert_eq!(active_parameter_at(line, "f(1,"), Some(1));
+    assert_eq!(active_parameter_at(line, "_,"), Some(2));
+    assert_eq!(active_parameter_at(line, "3"), Some(2));
+}
+
+#[test]
+fn signature_help_counts_first_slot_placeholder() {
+    let line = "fn main() { let _ = 9 |> f(_, 2, 3) }";
+    assert_eq!(active_parameter_at(line, "f(_"), Some(0));
+    assert_eq!(active_parameter_at(line, "f(_,"), Some(1));
+}
+
+#[test]
+fn signature_help_counts_placeholder_in_grouped_targets() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+fn f<A, B>(a: A, b: B, c: int) -> int { c }
+fn g(a: int, b: int, c: int) -> int { a }
+fn maker(x: int, y: int) -> fn(int, int, int) -> int { g }
+fn main() {
+  let _ = 9 |> (f<int, string>(_, \"a\", 3))
+  let _ = 9 |> (maker(1, 2)(_, 3, 4))
+  let _ = 2 |> (3 |> g(_, 4))
+  let _ = 9 |> (g(_, 2, 3) // target
+  )
+  let _ = 9 |> g(1, // a, b
+    _, 3)
+}";
+    client.open(TEST_URI, source);
+    assert_eq!(active_parameter_in(&mut client, source, 4, ">(_"), Some(0));
+    assert_eq!(active_parameter_in(&mut client, source, 5, ")(_"), Some(0));
+    assert_eq!(active_parameter_in(&mut client, source, 6, "g(_,"), Some(2));
+    assert_eq!(active_parameter_in(&mut client, source, 7, "g(_"), Some(0));
+    assert_eq!(active_parameter_in(&mut client, source, 7, "2,"), Some(2));
+    assert_eq!(
+        active_parameter_in(&mut client, source, 10, "    _"),
+        Some(1)
+    );
+    client.shutdown();
+}

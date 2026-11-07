@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Misplaced `_` in pipeline
+   ╭─[test.lis:5:9]
+ 4 │ fn test() -> int {
+ 5 │   1 |> (_ |> add(2))
+   ·         ┬
+   ·         ╰── not a direct argument
+ 6 │ }
+   ╰────
+  help: `_` marks where the piped value goes, so it must be a direct argument of the call after `|>`, as in `x |> f(a, _)` · code: [parse.misplaced_pipeline_placeholder]

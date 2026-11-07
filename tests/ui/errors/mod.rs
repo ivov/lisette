@@ -1485,6 +1485,53 @@ fn infer_pipeline_with_binary() {
 }
 
 #[test]
+fn infer_pipeline_repeated_placeholder() {
+    let input = r#"
+fn add(a: int, b: int) -> int { a + b }
+
+fn test() -> int {
+  1 |> add(_, _)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_pipeline_nested_placeholder() {
+    let input = r#"
+fn add(a: int, b: int) -> int { a + b }
+fn id(a: int) -> int { a }
+
+fn test() -> int {
+  1 |> add(id(_), 2)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_pipeline_placeholder_as_target() {
+    let input = r#"
+fn test() -> int {
+  1 |> _
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_pipeline_placeholder_in_parenthesized_pipeline_value() {
+    let input = r#"
+fn add(a: int, b: int) -> int { a + b }
+
+fn test() -> int {
+  1 |> (_ |> add(2))
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_enum_variant_arity_mismatch() {
     let input = r#"
 fn test() {

@@ -1444,6 +1444,20 @@ fn test() -> int {
 }
 
 #[test]
+fn pipeline_with_placeholder() {
+    let input = r#"
+import "go:strings"
+import "go:path"
+
+fn test() -> string {
+  let joined = "-" |> strings.Join(["a", "b"], _)
+  ["x", joined] |> path.Join(_...)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn init_function_escaped() {
     let input = r#"
 fn init() -> int {

@@ -112,18 +112,25 @@ fn active_parameter(
         return piped;
     };
 
-    let slot = tokens[open + 1..close]
-        .iter()
-        .filter(|token| {
-            let at = call_span.byte_offset + token.byte_offset;
-            token.kind == TokenKind::Comma
-                && at < offset
-                && !written
-                    .iter()
-                    .any(|span| span.byte_offset <= at && at < span.end())
-        })
-        .count() as u32;
-    piped + slot
+    let mut slot = 0;
+    let mut has_placeholder = false;
+    let gaps = tokens[open + 1..=close].windows(2).filter(|pair| {
+        let at = call_span.byte_offset + pair[0].byte_offset;
+        !written
+            .iter()
+            .any(|span| span.byte_offset <= at && at < span.end())
+    });
+    for pair in gaps {
+        let [token, next] = pair else { continue };
+        match token.kind {
+            TokenKind::Comma if call_span.byte_offset + token.byte_offset < offset => slot += 1,
+            TokenKind::Identifier if token.text == "_" && next.kind != TokenKind::Ellipsis => {
+                has_placeholder = true;
+            }
+            _ => {}
+        }
+    }
+    piped.saturating_sub(u32::from(has_placeholder)) + slot
 }
 
 fn argument_list(tokens: &[Token<'_>], callee_end: u32) -> Option<(usize, usize)> {

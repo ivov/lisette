@@ -191,6 +191,15 @@ x |> f(y)
 x |> f(y, z)
 ```
 
+To pass the value on the left in another position, mark that position with `_`:
+
+```lisette
+// !callout-right same as `f(y, x)`
+x |> f(y, _)
+// !callout-right same as `f(y, x, z)`
+x |> f(y, _, z)
+```
+
 Chains read top to bottom:
 
 ```lisette

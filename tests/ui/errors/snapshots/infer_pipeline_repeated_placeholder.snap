@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Repeated `_` in pipeline
+   ╭─[test.lis:5:15]
+ 4 │ fn test() -> int {
+ 5 │   1 |> add(_, _)
+   ·               ┬
+   ·               ╰── second `_`
+ 6 │ }
+   ╰────
+  help: A pipeline passes one value, so `_` can appear only once. To use the value more than once, bind it with `let` · code: [parse.repeated_pipeline_placeholder]

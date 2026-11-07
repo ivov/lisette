@@ -77,6 +77,18 @@ fn pipeline_go_stdlib_with_args() {
 }
 
 #[test]
+fn pipeline_go_stdlib_with_placeholder() {
+  let result = "-" |> strings.Join(["a", "b"], _)
+  assert result == "a-b"
+}
+
+#[test]
+fn pipeline_go_stdlib_with_spread_placeholder() {
+  let result = ["a", "b"] |> path.Join(_...)
+  assert result == "a/b"
+}
+
+#[test]
 fn go_fn_value_as_prelude_map_arg() {
   let ys = ["a", "b"].map(strings.ToUpper)
   assert ys.equals(["A", "B"])
