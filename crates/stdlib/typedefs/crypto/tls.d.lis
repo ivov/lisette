@@ -462,7 +462,7 @@ pub struct QUICEvent {
   pub Data: mut Slice<byte>,
   pub Suite: uint16,
   pub SessionState: Option<mut Ref<SessionState>>,
-  pub Err: error,
+  pub Err: Option<error>,
 }
 
 pub struct QUICSessionTicketOptions {

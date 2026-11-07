@@ -93,7 +93,7 @@ pub fn Fprint(
 /// returns an iterator over the sequence of nodes, or [PreorderStack],
 /// which (like [Inspect]) provides control over descent into subtrees,
 /// but additionally reports the stack of enclosing nodes.
-pub fn Inspect(node: Node, f: fn(Node) -> bool)
+pub fn Inspect(node: Node, f: fn(Option<Node>) -> bool)
 
 /// IsExported reports whether name starts with an upper-case letter.
 pub fn IsExported(name: string) -> bool

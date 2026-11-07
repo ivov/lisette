@@ -127,9 +127,8 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	returnType := c.applyReturnType(result, signature, symbolExport.Obj, result.Name, substitutions)
 
 	c.resolveNilability(result, signature, returnType, nilabilityDecision{
-		obj:               symbolExport.Obj,
-		lookups:           []configKey{{c.currentPkgPath, result.Name}},
-		nameIsConstructor: looksLikeConstructor(result.Name),
+		obj:     symbolExport.Obj,
+		lookups: []configKey{{c.currentPkgPath, result.Name}},
 		heuristicNonNil: func(isSinglePointerReturn bool) bool {
 			if looksLikeConstructor(result.Name) {
 				return true
@@ -180,8 +179,10 @@ func (c *Converter) convertParams(sig *types.Signature, obj types.Object, lookup
 	params := sig.Params()
 	names := paramNames(sig)
 	var out []FunctionParameter
+	defer func(key string) { c.symbolKey = key }(c.symbolKey)
 	for i := 0; i < params.Len(); i++ {
 		param := params.At(i)
+		c.symbolKey = lookupName + "." + param.Name()
 		isVariadicTail := sig.Variadic() && i == params.Len()-1
 		name := names[i]
 
@@ -247,9 +248,6 @@ type nilabilityDecision struct {
 	lookups []configKey
 	// heuristicNonNil: kind-specific rules, used only when there is no body to analyze.
 	heuristicNonNil func(isSinglePointerReturn bool) bool
-	// nameIsConstructor: the only heuristic trusted over an inconclusive body, since
-	// weaker shape heuristics misfire on real nil-returning delegators like big.Int.Exp.
-	nameIsConstructor bool
 }
 
 // resolveNilability wraps the return in Option<> unless body proof, a name
@@ -270,12 +268,7 @@ func (c *Converter) resolveNilability(result *ConvertResult, sig *types.Signatur
 	forceNonNilable := false
 	if isSingleNilableReturn {
 		if facts, ok := c.nilness.Function(d.obj); ok && facts.HasBody {
-			switch facts.Single {
-			case ReturnProvenNonNil:
-				forceNonNilable = true
-			case ReturnUnknown:
-				forceNonNilable = d.nameIsConstructor
-			}
+			forceNonNilable = facts.Single == ReturnProvenNonNil
 		} else {
 			forceNonNilable = d.heuristicNonNil(isSinglePointerReturn)
 		}
@@ -418,9 +411,8 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		lookups = append(lookups, configKey{symbolExport.OriginalPkgPath, symbolExport.OriginalTypeName + "." + result.Name})
 	}
 	c.resolveNilability(result, signature, returnType, nilabilityDecision{
-		obj:               symbolExport.Obj,
-		lookups:           lookups,
-		nameIsConstructor: looksLikeConstructor(result.Name),
+		obj:     symbolExport.Obj,
+		lookups: lookups,
 		heuristicNonNil: func(isSinglePointerReturn bool) bool {
 			if looksLikeConstructor(result.Name) {
 				return true
@@ -1130,6 +1122,9 @@ func convertStructFields(s *types.Struct, typeName string, c *Converter) ([]Stru
 			})
 			hasHidden = true
 			continue
+		}
+		if isErrorType(field.Type()) && c.cfg.HasNilableError(c.currentPkgPath, c.symbolKey) {
+			fieldType.LisetteType = optionOf(fieldType.LisetteType)
 		}
 		fields = append(fields, StructField{
 			Name: field.Name(),

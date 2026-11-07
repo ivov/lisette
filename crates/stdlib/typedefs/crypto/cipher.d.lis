@@ -148,7 +148,7 @@ pub struct StreamReader {
 pub struct StreamWriter {
   pub S: Option<Stream>,
   pub W: Option<io.Writer>,
-  pub Err: error,
+  pub Err: Option<error>,
 }
 
 impl StreamReader {

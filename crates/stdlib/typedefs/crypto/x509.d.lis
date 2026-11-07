@@ -617,7 +617,7 @@ pub struct RevocationListEntry {
 
 /// SystemRootsError results when we fail to load the system root certificates.
 pub struct SystemRootsError {
-  pub Err: error,
+  pub Err: Option<error>,
 }
 
 #[go(zero_safe)]

@@ -36,16 +36,16 @@ pub fn WithClientTrace(
 pub struct ClientTrace {
   pub GetConn: Option<fn(string) -> ()>,
   pub GotConn: Option<fn(GotConnInfo) -> ()>,
-  pub PutIdleConn: Option<fn(error) -> ()>,
+  pub PutIdleConn: Option<fn(Option<error>) -> ()>,
   pub GotFirstResponseByte: Option<fn() -> ()>,
   pub Got100Continue: Option<fn() -> ()>,
   pub Got1xxResponse: Option<fn(int, mut textproto.MIMEHeader) -> Result<(), error>>,
   pub DNSStart: Option<fn(DNSStartInfo) -> ()>,
   pub DNSDone: Option<fn(mut DNSDoneInfo) -> ()>,
   pub ConnectStart: Option<fn(string, string) -> ()>,
-  pub ConnectDone: Option<fn(string, string, error) -> ()>,
+  pub ConnectDone: Option<fn(string, string, Option<error>) -> ()>,
   pub TLSHandshakeStart: Option<fn() -> ()>,
-  pub TLSHandshakeDone: Option<fn(mut tls.ConnectionState, error) -> ()>,
+  pub TLSHandshakeDone: Option<fn(mut tls.ConnectionState, Option<error>) -> ()>,
   pub WroteHeaderField: Option<fn(string, mut Slice<string>) -> ()>,
   pub WroteHeaders: Option<fn() -> ()>,
   pub Wait100Continue: Option<fn() -> ()>,
@@ -55,7 +55,7 @@ pub struct ClientTrace {
 /// DNSDoneInfo contains information about the results of a DNS lookup.
 pub struct DNSDoneInfo {
   pub Addrs: mut Slice<mut net.IPAddr>,
-  pub Err: error,
+  pub Err: Option<error>,
   pub Coalesced: bool,
 }
 
@@ -76,5 +76,5 @@ pub struct GotConnInfo {
 /// WroteRequestInfo contains information provided to the WroteRequest
 /// hook.
 pub struct WroteRequestInfo {
-  pub Err: error,
+  pub Err: Option<error>,
 }

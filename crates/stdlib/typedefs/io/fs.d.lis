@@ -274,7 +274,7 @@ pub interface SubFS {
 ///     files and directories respectively.
 ///   - If a directory read fails, the function is called a second time
 ///     for that directory to report the error.
-pub type WalkDirFunc = fn(string, DirEntry, error) -> Result<(), error>
+pub type WalkDirFunc = fn(string, Option<DirEntry>, Option<error>) -> Result<(), error>
 
 pub const ModeAppend: FileMode = 1073741824
 

@@ -1,0 +1,11 @@
+{
+  "overrides": {
+    "types": {
+      "non_nilable_return": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/nilness_constructor_name": [
+          "NewAccount"
+        ]
+      }
+    }
+  }
+}

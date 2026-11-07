@@ -1,0 +1,21 @@
+{
+  "overrides": {
+    "types": {
+      "nilable_error": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/nilable_pins": ["Job.Err"]
+      },
+      "nilable_return": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/nilable_pins": ["Env"]
+      },
+      "nilable_callback_param": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/nilable_pins": {
+          "Each.f": ["0"],
+          "Nested.f": ["0"],
+          "Hooks.Done": ["1"],
+          "Hooks.Walk": ["0"],
+          "Visit": ["item", "err"]
+        }
+      }
+    }
+  }
+}

@@ -144,8 +144,9 @@
       "nilable_error": {
         "bufio": ["Scanner.Err"],
         "context": ["Cause", "Context.Err"],
-        "crypto/tls": ["CertificateVerificationError.Unwrap"],
-        "crypto/x509": ["SystemRootsError.Unwrap"],
+        "crypto/cipher": ["StreamWriter.Err"],
+        "crypto/tls": ["CertificateVerificationError.Unwrap", "QUICEvent.Err"],
+        "crypto/x509": ["SystemRootsError.Err", "SystemRootsError.Unwrap"],
         "database/sql": ["Row.Err", "Rows.Err"],
         "encoding/csv": ["ParseError.Unwrap"],
         "encoding/json": ["MarshalerError.Unwrap"],
@@ -153,10 +154,12 @@
         "go/scanner": ["ErrorList.Err"],
         "go/types": ["ArgumentError.Unwrap"],
         "io/fs": ["PathError.Unwrap"],
-        "net": ["DNSConfigError.Unwrap", "DNSError.Unwrap", "OpError.Unwrap"],
+        "net": ["DNSConfigError.Unwrap", "DNSError.Unwrap", "DNSError.UnwrapErr", "OpError.Unwrap"],
+        "net/http/httptrace": ["DNSDoneInfo.Err", "WroteRequestInfo.Err"],
+        "net/rpc": ["Call.Error"],
         "net/url": ["Error.Unwrap"],
         "os": ["LinkError.Unwrap", "NewSyscallError", "SyscallError.Unwrap"],
-        "os/exec": ["Error.Unwrap"],
+        "os/exec": ["Cmd.Err", "Error.Unwrap"],
         "strconv": ["NumError.Unwrap"],
         "text/template": ["ExecError.Unwrap"]
       },
@@ -210,6 +213,23 @@
         "strings": ["Replacer.WriteString"]
       },
       "nilable_return": {
+        "net/http/fcgi": ["ProcessEnv"]
+      },
+      "nilable_callback_param": {
+        "go/ast": {
+          "Inspect.f": ["0"]
+        },
+        "io/fs": {
+          "WalkDirFunc": ["d", "err"]
+        },
+        "net/http/httptrace": {
+          "ClientTrace.ConnectDone": ["err"],
+          "ClientTrace.PutIdleConn": ["err"],
+          "ClientTrace.TLSHandshakeDone": ["1"]
+        },
+        "path/filepath": {
+          "WalkFunc": ["info", "err"]
+        }
       },
       "nilable_param": {
         "crypto/ed25519": {
@@ -780,13 +800,20 @@
         "net/http": ["ResponseWriter.Header"]
       },
       "non_nilable_return": {
+        "bufio": ["NewReader", "NewReaderSize", "NewWriter", "NewWriterSize"],
         "compress/gzip": ["NewWriter"],
         "compress/zlib": ["NewWriter"],
         "container/ring": ["Ring.Move", "Ring.Next", "Ring.Prev"],
         "context": ["AfterFunc"],
+        "crypto": ["Hash.New"],
+        "crypto/cipher": ["NewCBCDecrypter", "NewCBCEncrypter", "NewCTR"],
         "crypto/ecdh": ["PrivateKey.Curve", "PrivateKey.PublicKey", "PublicKey.Curve"],
         "crypto/elliptic": ["Curve.Params"],
+        "crypto/sha1": ["New"],
+        "crypto/sha256": ["New", "New224"],
+        "crypto/sha512": ["New", "New384"],
         "debug/dwarf": ["Reader.ByteOrder"],
+        "encoding/xml": ["NewTokenDecoder"],
         "flag": ["FlagSet.Output"],
         "go/build/constraint": ["Parse"],
         "go/constant": [
@@ -818,6 +845,8 @@
           "Union.Term",
           "Var.Origin"
         ],
+        "hash/crc32": ["MakeTable"],
+        "html/template": ["Must"],
         "image": [
           "Alpha.ColorModel", "Alpha16.ColorModel",
           "CMYK.ColorModel",
@@ -830,7 +859,7 @@
         ],
         "image/jpeg": ["Decode"],
         "log": ["Logger.Writer", "Writer"],
-        "log/slog": ["Logger.Handler"],
+        "log/slog": ["Default", "Logger.Handler", "With"],
         "net": [
           "conn.LocalAddr",
           "TCPListener.Addr",
@@ -849,8 +878,9 @@
         "regexp/syntax": ["Parse"],
         "sync": ["OnceFunc", "OnceValue", "OnceValues"],
         "testing": ["common.Context"],
+        "text/template": ["Must"],
         "text/template/parse": ["Tree.Parse"],
-        "time": ["AfterFunc", "FixedZone", "Time.Location"]
+        "time": ["AfterFunc", "FixedZone", "NewTicker", "NewTimer", "Time.Location"]
       },
       "non_nilable_var": {
         "crypto/rand": ["Reader"],

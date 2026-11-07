@@ -264,7 +264,7 @@ pub fn WalkDir(root: string, fn_: fs.WalkDirFunc) -> Result<(), error>
 /// function with path set to the directory's path, info, set to an
 /// [fs.FileInfo] describing the directory, and err set to the error from
 /// Readdirnames.
-pub type WalkFunc = fn(string, fs.FileInfo, error) -> Result<(), error>
+pub type WalkFunc = fn(string, Option<fs.FileInfo>, Option<error>) -> Result<(), error>
 
 pub const ListSeparator: rune = 58
 
