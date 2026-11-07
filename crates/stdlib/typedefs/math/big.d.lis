@@ -246,7 +246,7 @@ impl Float {
   /// GobEncode implements the [encoding/gob.GobEncoder] interface.
   /// The [Float] value and all its attributes (precision,
   /// rounding mode, accuracy) are marshaled.
-  fn GobEncode(self: Ref<Float>) -> Result<Slice<byte>, error>
+  fn GobEncode(self: Ref<Float>) -> Result<mut Slice<byte>, error>
 
   /// Int returns the result of truncating x towards zero;
   /// or nil if x is an infinity.
@@ -613,7 +613,7 @@ impl Int {
   /// Bytes returns the absolute value of x as a big-endian byte slice.
   /// 
   /// To use a fixed length slice, or a preallocated one, use [Int.FillBytes].
-  fn Bytes(self: Ref<Int>) -> Slice<byte>
+  fn Bytes(self: Ref<Int>) -> mut Slice<byte>
 
   /// Cmp compares x and y and returns:
   ///   - -1 if x < y;
@@ -715,7 +715,7 @@ impl Int {
   fn GobDecode(self: mut Ref<Int>, buf: Slice<byte>) -> Result<(), error>
 
   /// GobEncode implements the [encoding/gob.GobEncoder] interface.
-  fn GobEncode(self: Ref<Int>) -> Result<Slice<byte>, error>
+  fn GobEncode(self: Ref<Int>) -> Result<mut Slice<byte>, error>
 
   /// Int64 returns the int64 representation of x.
   /// If x cannot be represented in an int64, the result is undefined.
@@ -732,7 +732,7 @@ impl Int {
   fn Lsh(self: mut Ref<Int>, x: Ref<Int>, n: uint) -> mut Ref<Int>
 
   /// MarshalJSON implements the [encoding/json.Marshaler] interface.
-  fn MarshalJSON(self: Ref<Int>) -> Result<Slice<byte>, error>
+  fn MarshalJSON(self: Ref<Int>) -> Result<mut Slice<byte>, error>
 
   /// MarshalText implements the [encoding.TextMarshaler] interface.
   fn MarshalText(self: Ref<Int>) -> Result<mut Slice<byte>, error>
@@ -1021,7 +1021,7 @@ impl Rat {
   fn GobDecode(self: mut Ref<Rat>, buf: Slice<byte>) -> Result<(), error>
 
   /// GobEncode implements the [encoding/gob.GobEncoder] interface.
-  fn GobEncode(self: Ref<Rat>) -> Result<Slice<byte>, error>
+  fn GobEncode(self: Ref<Rat>) -> Result<mut Slice<byte>, error>
 
   /// Inv sets z to 1/x and returns z.
   /// If x == 0, Inv panics.

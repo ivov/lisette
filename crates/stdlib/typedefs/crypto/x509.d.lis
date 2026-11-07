@@ -340,10 +340,10 @@ pub fn MarshalPKIXPublicKey(pub_: Unknown) -> Result<mut Slice<byte>, error>
 pub fn NewCertPool() -> mut Ref<CertPool>
 
 /// OIDFromASN1OID creates a new OID using asn1OID.
-pub fn OIDFromASN1OID(asn1OID: asn1.ObjectIdentifier) -> Result<OID, error>
+pub fn OIDFromASN1OID(asn1OID: asn1.ObjectIdentifier) -> Result<mut OID, error>
 
 /// OIDFromInts creates a new OID using ints, each integer is a separate component.
-pub fn OIDFromInts(oid: Slice<uint64>) -> Result<OID, error>
+pub fn OIDFromInts(oid: Slice<uint64>) -> Result<mut OID, error>
 
 /// ParseCRL parses a CRL from the given bytes. It's often the case that PEM
 /// encoded CRLs will appear where they should be DER encoded, so this function
@@ -816,7 +816,7 @@ impl ConstraintViolationError {
 
 impl ExtKeyUsage {
   /// OID returns the ASN.1 object identifier of the EKU.
-  fn OID(self) -> OID
+  fn OID(self) -> mut OID
 
   fn String(self) -> string
 }

@@ -200,7 +200,7 @@ impl PublicKey {
   /// 
   /// Note that public keys are more commonly encoded in DER (or PEM) format, which
   /// can be generated with [crypto/x509.MarshalPKIXPublicKey] (and [encoding/pem]).
-  fn Bytes(self: Ref<PublicKey>) -> Result<Slice<byte>, error>
+  fn Bytes(self: Ref<PublicKey>) -> Result<mut Slice<byte>, error>
 
   /// Double returns 2*(x,y).
   /// 

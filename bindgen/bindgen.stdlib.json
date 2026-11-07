@@ -783,20 +783,67 @@
         ]
       },
       "returns_view_of": {
+        "crypto/ecdsa": {
+          "PublicKey.Bytes": []
+        },
+        "crypto/elliptic": {
+          "Marshal": [],
+          "MarshalCompressed": []
+        },
+        "crypto/rsa": {
+          "PrivateKey.Decrypt": []
+        },
+        "crypto/sha3": {
+          "SHAKE.MarshalBinary": []
+        },
+        "crypto/x509": {
+          "ExtKeyUsage.OID": [],
+          "OIDFromASN1OID": [],
+          "OIDFromInts": []
+        },
+        "encoding/base64": {
+          "Encoding.DecodeString": []
+        },
+        "encoding/hex": {
+          "DecodeString": []
+        },
+        "go/types": {
+          "Scope.Names": []
+        },
         "io/ioutil": {
           "ReadDir": []
         },
         "maps": {
           "Clone": ["0:[m]"]
         },
+        "math/big": {
+          "Float.GobEncode": [],
+          "Int.Bytes": [],
+          "Int.GobEncode": [],
+          "Int.MarshalJSON": [],
+          "Rat.GobEncode": []
+        },
         "net": {
           "Interfaces": []
         },
         "net/http/httptest": {
           "ResponseRecorder.Header": ["0:recv"]
+        },
+        "net/netip": {
+          "Addr.MarshalBinary": [],
+          "AddrPort.MarshalBinary": [],
+          "Prefix.MarshalBinary": []
+        },
+        "regexp/syntax": {
+          "Regexp.CapNames": []
+        },
+        "syscall": {
+          "StringToUTF16": [],
+          "UTF16FromString": []
         }
       },
       "writable_return": {
+        "encoding/json": ["MarshalIndent"],
         "net/http": ["ResponseWriter.Header"]
       },
       "non_nilable_return": {

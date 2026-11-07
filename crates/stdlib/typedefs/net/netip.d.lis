@@ -205,7 +205,7 @@ impl Addr {
   /// It returns a zero-length slice for the zero [Addr],
   /// the 4-byte form for an IPv4 address,
   /// and the 16-byte form with zone appended for an IPv6 address.
-  fn MarshalBinary(self) -> Result<Slice<byte>, error>
+  fn MarshalBinary(self) -> Result<mut Slice<byte>, error>
 
   /// MarshalText implements the [encoding.TextMarshaler] interface,
   /// The encoding is the same as returned by [Addr.String], with one exception:
@@ -302,7 +302,7 @@ impl AddrPort {
   /// MarshalBinary implements the [encoding.BinaryMarshaler] interface.
   /// It returns [Addr.MarshalBinary] with an additional two bytes appended
   /// containing the port in little-endian.
-  fn MarshalBinary(self) -> Result<Slice<byte>, error>
+  fn MarshalBinary(self) -> Result<mut Slice<byte>, error>
 
   /// MarshalText implements the [encoding.TextMarshaler] interface. The
   /// encoding is the same as returned by [AddrPort.String], with one exception: if
@@ -380,7 +380,7 @@ impl Prefix {
   /// MarshalBinary implements the [encoding.BinaryMarshaler] interface.
   /// It returns [Addr.MarshalBinary] with an additional byte appended
   /// containing the prefix bits.
-  fn MarshalBinary(self) -> Result<Slice<byte>, error>
+  fn MarshalBinary(self) -> Result<mut Slice<byte>, error>
 
   /// MarshalText implements the [encoding.TextMarshaler] interface,
   /// The encoding is the same as returned by [Prefix.String], with one exception:
