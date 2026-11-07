@@ -1807,7 +1807,10 @@ impl CrossOriginProtection {
   /// 
   /// AddInsecureBypassPattern can be called concurrently with other methods or
   /// request handling, and applies to future requests.
-  fn AddInsecureBypassPattern(self: Ref<CrossOriginProtection>, pattern: string)
+  fn AddInsecureBypassPattern(
+    self: mut Ref<CrossOriginProtection>,
+    pattern: string,
+  )
 
   /// AddTrustedOrigin allows all requests with an [Origin] header
   /// which exactly matches the given value.
@@ -1845,7 +1848,7 @@ impl CrossOriginProtection {
   /// or request handling, and applies to future requests.
   /// 
   /// Check does not call the error handler.
-  fn SetDenyHandler(self: Ref<CrossOriginProtection>, h: Option<Handler>)
+  fn SetDenyHandler(self: mut Ref<CrossOriginProtection>, h: Option<Handler>)
 }
 
 impl Dir {
@@ -2434,7 +2437,11 @@ impl Transport {
   /// If rt.RoundTrip returns [ErrSkipAltProtocol], the Transport will
   /// handle the [Transport.RoundTrip] itself for that one request, as if the
   /// protocol were not registered.
-  fn RegisterProtocol(self: Ref<Transport>, scheme: string, rt: RoundTripper)
+  fn RegisterProtocol(
+    self: mut Ref<Transport>,
+    scheme: string,
+    rt: RoundTripper,
+  )
 
   /// RoundTrip implements the [RoundTripper] interface.
   /// 

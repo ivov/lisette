@@ -495,13 +495,16 @@ impl LevelVar {
   fn MarshalText(self: Ref<LevelVar>) -> Result<mut Slice<byte>, error>
 
   /// Set sets v's level to l.
-  fn Set(self: Ref<LevelVar>, l: Level)
+  fn Set(self: mut Ref<LevelVar>, l: Level)
 
   fn String(self: Ref<LevelVar>) -> string
 
   /// UnmarshalText implements [encoding.TextUnmarshaler]
   /// by calling [Level.UnmarshalText].
-  fn UnmarshalText(self: Ref<LevelVar>, data: Slice<byte>) -> Result<(), error>
+  fn UnmarshalText(
+    self: mut Ref<LevelVar>,
+    data: Slice<byte>,
+  ) -> Result<(), error>
 }
 
 impl Logger {

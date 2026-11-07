@@ -1081,7 +1081,7 @@ impl Process {
   /// Wait releases any resources associated with the Process.
   /// On most operating systems, the Process must be a child
   /// of the current process or an error will be returned.
-  fn Wait(self: Ref<Process>) -> Result<mut Ref<ProcessState>, error>
+  fn Wait(self: mut Ref<Process>) -> Result<mut Ref<ProcessState>, error>
 
   /// WithHandle calls a supplied function f with a valid process handle
   /// as an argument. The handle is guaranteed to refer to process p

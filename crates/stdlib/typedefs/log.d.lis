@@ -256,13 +256,13 @@ impl Logger {
 
   /// SetFlags sets the output flags for the logger.
   /// The flag bits are [Ldate], [Ltime], and so on.
-  fn SetFlags(self: Ref<Logger>, flag: int)
+  fn SetFlags(self: mut Ref<Logger>, flag: int)
 
   /// SetOutput sets the output destination for the logger.
   fn SetOutput(self: mut Ref<Logger>, w: io.Writer)
 
   /// SetPrefix sets the output prefix for the logger.
-  fn SetPrefix(self: Ref<Logger>, prefix: string)
+  fn SetPrefix(self: mut Ref<Logger>, prefix: string)
 
   /// Writer returns the output destination for the logger.
   fn Writer(self: Ref<Logger>) -> io.Writer

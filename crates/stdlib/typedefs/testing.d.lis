@@ -488,7 +488,7 @@ impl T {
   /// 
   /// Run may be called simultaneously from multiple goroutines, but all such calls
   /// must return before the outer test function for t returns.
-  fn Run(self: Ref<T>, name: string, f: fn(mut Ref<T>) -> ()) -> bool
+  fn Run(self: mut Ref<T>, name: string, f: fn(mut Ref<T>) -> ()) -> bool
 
   /// Setenv calls os.Setenv(key, value) and uses Cleanup to
   /// restore the environment variable to its original value

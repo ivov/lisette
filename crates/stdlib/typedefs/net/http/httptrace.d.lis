@@ -20,7 +20,7 @@ pub fn ContextClientTrace(ctx: context.Context) -> Option<mut Ref<ClientTrace>>
 /// be called first.
 pub fn WithClientTrace(
   ctx: context.Context,
-  trace: Ref<ClientTrace>,
+  trace: mut Ref<ClientTrace>,
 ) -> context.Context
 
 /// ClientTrace is a set of hooks to run at various stages of an outgoing

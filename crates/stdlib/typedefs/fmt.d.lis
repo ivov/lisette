@@ -68,7 +68,7 @@ pub fn Fprintln(w: io.Writer, a: VarArgs<Unknown>) -> Result<int, error>
 /// values into successive arguments. Newlines count as space. It
 /// returns the number of items successfully scanned. If that is less
 /// than the number of arguments, err will report why.
-pub fn Fscan(r: io.Reader, a: VarArgs<Unknown>) -> Result<int, error>
+pub fn Fscan(r: io.Reader, a: VarArgs<mut Unknown>) -> Result<int, error>
 
 /// Fscanf scans text read from r, storing successive space-separated
 /// values into successive arguments as determined by the format. It
@@ -77,12 +77,12 @@ pub fn Fscan(r: io.Reader, a: VarArgs<Unknown>) -> Result<int, error>
 pub fn Fscanf(
   r: io.Reader,
   format: string,
-  a: VarArgs<Unknown>,
+  a: VarArgs<mut Unknown>,
 ) -> Result<int, error>
 
 /// Fscanln is similar to [Fscan], but stops scanning at a newline and
 /// after the final item there must be a newline or EOF.
-pub fn Fscanln(r: io.Reader, a: VarArgs<Unknown>) -> Result<int, error>
+pub fn Fscanln(r: io.Reader, a: VarArgs<mut Unknown>) -> Result<int, error>
 
 /// Print formats using the default formats for its operands and writes to standard output.
 /// Spaces are added between operands when neither is a string.
@@ -105,7 +105,7 @@ pub fn Println(a: VarArgs<Unknown>) -> Result<int, error>
 /// space-separated values into successive arguments. Newlines count
 /// as space. It returns the number of items successfully scanned.
 /// If that is less than the number of arguments, err will report why.
-pub fn Scan(a: VarArgs<Unknown>) -> Result<int, error>
+pub fn Scan(a: VarArgs<mut Unknown>) -> Result<int, error>
 
 /// Scanf scans text read from standard input, storing successive
 /// space-separated values into successive arguments as determined by
@@ -114,11 +114,11 @@ pub fn Scan(a: VarArgs<Unknown>) -> Result<int, error>
 /// Newlines in the input must match newlines in the format.
 /// The one exception: the verb %c always scans the next rune in the
 /// input, even if it is a space (or tab etc.) or newline.
-pub fn Scanf(format: string, a: VarArgs<Unknown>) -> Result<int, error>
+pub fn Scanf(format: string, a: VarArgs<mut Unknown>) -> Result<int, error>
 
 /// Scanln is similar to [Scan], but stops scanning at a newline and
 /// after the final item there must be a newline or EOF.
-pub fn Scanln(a: VarArgs<Unknown>) -> Result<int, error>
+pub fn Scanln(a: VarArgs<mut Unknown>) -> Result<int, error>
 
 /// Sprint formats using the default formats for its operands and returns the resulting string.
 /// Spaces are added between operands when neither is a string.
@@ -135,7 +135,7 @@ pub fn Sprintln(a: VarArgs<Unknown>) -> string
 /// values into successive arguments. Newlines count as space. It
 /// returns the number of items successfully scanned. If that is less
 /// than the number of arguments, err will report why.
-pub fn Sscan(str: string, a: VarArgs<Unknown>) -> Result<int, error>
+pub fn Sscan(str: string, a: VarArgs<mut Unknown>) -> Result<int, error>
 
 /// Sscanf scans the argument string, storing successive space-separated
 /// values into successive arguments as determined by the format. It
@@ -144,12 +144,12 @@ pub fn Sscan(str: string, a: VarArgs<Unknown>) -> Result<int, error>
 pub fn Sscanf(
   str: string,
   format: string,
-  a: VarArgs<Unknown>,
+  a: VarArgs<mut Unknown>,
 ) -> Result<int, error>
 
 /// Sscanln is similar to [Sscan], but stops scanning at a newline and
 /// after the final item there must be a newline or EOF.
-pub fn Sscanln(str: string, a: VarArgs<Unknown>) -> Result<int, error>
+pub fn Sscanln(str: string, a: VarArgs<mut Unknown>) -> Result<int, error>
 
 /// Formatter is implemented by any value that has a Format method.
 /// The implementation controls how [State] and rune are interpreted,

@@ -3863,7 +3863,8 @@ fn go_nil_accepting_func_and_chan_params_take_option() {
       let mut s = scanner.Scanner { ErrorCount: 0 }
       s.Init(file, [], None, 0)
       conn.SetStateHook(None)
-      let _ = client.Go("S.M", 1, 2, None)
+      let mut reply = 0
+      let _ = client.Go("S.M", 1, &reply, None)
     }
         "#,
     )

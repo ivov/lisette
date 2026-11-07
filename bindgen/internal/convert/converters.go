@@ -210,7 +210,13 @@ func (c *Converter) convertParams(sig *types.Signature, obj types.Object, lookup
 			}
 			typeStr = writable.LisetteType
 		}
-		if isVariadicTail {
+		if isVariadicTail && slices.Contains(mutParams, name) && !slices.Contains(nonMutParams, name) {
+			elem := writableParamType(param.Type().(*types.Slice).Elem(), false, c, substitutions)
+			if elem.SkipReason != nil {
+				return nil, elem.SkipReason
+			}
+			typeStr = varArgsOf(elem.LisetteType)
+		} else if isVariadicTail {
 			typeStr = sliceToVarArgs(typeStr)
 		}
 		if override, ok := paramOverrides[i]; ok {

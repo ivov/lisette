@@ -100,13 +100,13 @@ pub fn MarshalWithParams(
 /// 
 /// Other ASN.1 types are not supported; if it encounters them,
 /// Unmarshal returns a parse error.
-pub fn Unmarshal(b: Slice<byte>, val: Unknown) -> Result<Slice<byte>, error>
+pub fn Unmarshal(b: Slice<byte>, val: mut Unknown) -> Result<Slice<byte>, error>
 
 /// UnmarshalWithParams allows field parameters to be specified for the
 /// top-level element. The form of the params is the same as the field tags.
 pub fn UnmarshalWithParams(
   b: Slice<byte>,
-  val: Unknown,
+  val: mut Unknown,
   params: string,
 ) -> Result<Slice<byte>, error>
 

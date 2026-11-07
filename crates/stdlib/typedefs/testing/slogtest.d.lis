@@ -11,7 +11,7 @@ import "go:testing"
 /// get an instance of the handler under test, then runs the test case, then
 /// calls result to get the result. If the test case fails, it calls t.Error.
 pub fn Run(
-  t: Ref<testing.T>,
+  t: mut Ref<testing.T>,
   newHandler: fn(mut Ref<testing.T>) -> slog.Handler,
   result: fn(mut Ref<testing.T>) -> Map<string, Unknown>,
 )

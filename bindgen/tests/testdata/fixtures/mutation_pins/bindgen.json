@@ -1,0 +1,29 @@
+{
+  "overrides": {
+    "types": {
+      "mutates_param": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/mutation_pins": {
+          "Fill": ["buf"],
+          "Scan": ["a"]
+        }
+      },
+      "non_mutating_param": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/mutation_pins": {
+          "Peek": ["buf"]
+        }
+      },
+      "mutates_receiver": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/mutation_pins": ["Box.Put", "Gauge.Set"],
+        "sync": ["Mutex.Lock", "Mutex.Unlock"]
+      },
+      "non_mutating_receiver": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/mutation_pins": [
+          "Cache.Lookup",
+          "Copier.Copy",
+          "Memo.A",
+          "Tally.A"
+        ]
+      }
+    }
+  }
+}
