@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:strings"
+  import "go:path"
+  
+  fn test() -> string {
+    let joined = "-" |> strings.Join(["a", "b"], _)
+    ["x", joined] |> path.Join(_...)
+  }
+---
+package main
+
+import (
+	"path"
+	"strings"
+)
+
+func test() string {
+	joined := strings.Join([]string{"a", "b"}, "-")
+	return path.Join([]string{"x", joined}...)
+}

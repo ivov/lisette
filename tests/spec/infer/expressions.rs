@@ -675,6 +675,99 @@ fn pipeline_in_function() {
 }
 
 #[test]
+fn pipeline_placeholder_passes_value_in_its_position() {
+    infer(
+        r#"{
+    let label = |prefix: string, count: int| -> string { prefix };
+    5 |> label("items", _)
+  }"#,
+    )
+    .assert_type_string();
+}
+
+#[test]
+fn pipeline_placeholder_in_middle_position() {
+    infer(
+        r#"{
+    let pick = |a: string, b: int, c: bool| -> int { b };
+    5 |> pick("x", _, true)
+  }"#,
+    )
+    .assert_type_int();
+}
+
+#[test]
+fn pipeline_placeholder_after_prepended_step() {
+    infer(
+        r#"{
+    let add = |x: int, y: int| -> int { x + y };
+    let label = |prefix: string, count: int| -> string { prefix };
+    5 |> add(1) |> label("items", _)
+  }"#,
+    )
+    .assert_type_string();
+}
+
+#[test]
+fn pipeline_placeholder_in_spread_position() {
+    infer(
+        r#"{
+    let count = |label: string, items: VarArgs<int>| -> int { items.length() };
+    [1, 2] |> count("n", _...)
+  }"#,
+    )
+    .assert_type_int();
+}
+
+#[test]
+fn pipeline_placeholder_in_argument_pipeline_belongs_to_it() {
+    infer(
+        r#"{
+    let label = |prefix: string, count: int| -> string { prefix };
+    let size = |text: string, extra: int| -> int { extra };
+    1 |> size("a" |> label(_, 2), _)
+  }"#,
+    )
+    .assert_type_int();
+}
+
+#[test]
+fn pipeline_placeholder_errors_report_once() {
+    for step in [
+        "5 |> add(_, _)",
+        "5 |> add(id(_), 1)",
+        "5 |> _",
+        "5 |> (_ |> add(1))",
+        "5 |> (3 |> add(_, _))",
+    ] {
+        infer(&format!(
+            r#"{{
+    let add = |x: int, y: int| -> int {{ x + y }};
+    let id = |x: int| -> int {{ x }};
+    {step}
+  }}"#
+        ))
+        .assert_error_count(1);
+    }
+}
+
+#[test]
+fn failed_pipeline_binding_accepts_any_later_use() {
+    for step in ["5 |> add(_, _)", "5 |> |x| x"] {
+        infer(&format!(
+            r#"{{
+    let add = |x: int, y: int| -> int {{ x + y }};
+    let s = {step};
+    let a: string = s;
+    let b: int = s;
+    b
+  }}"#
+        ))
+        .assert_error_count(1);
+    }
+}
+
+#[test]
 fn simple_chained_field_access() {
     infer(
         r#"{

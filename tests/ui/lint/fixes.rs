@@ -1097,6 +1097,32 @@ fn maybe(n: int) -> Option<int> { Some(n) }
 }
 
 #[test]
+fn redundant_closure_call_spread_placeholder_pipeline_has_no_fix() {
+    assert_no_fix!(
+        r#"
+pub fn f() -> int {
+  (|| { [1, 2] |> total(_...) })().unwrap_or(0)
+}
+
+fn total(items: VarArgs<int>) -> Option<int> { Some(items.length()) }
+"#
+    );
+}
+
+#[test]
+fn fix_expression_only_fstring_parenthesizes_spread_placeholder_pipeline() {
+    assert_fix_snapshot!(
+        r#"
+pub fn f() -> string {
+  f"{["a", "b"] |> concat(_...)}"
+}
+
+fn concat(parts: VarArgs<string>) -> string { "" }
+"#
+    );
+}
+
+#[test]
 fn fix_expression_only_fstring_parenthesizes_pipeline() {
     assert_fix_snapshot!(
         r#"

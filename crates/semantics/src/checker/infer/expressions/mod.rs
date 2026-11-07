@@ -194,17 +194,7 @@ impl InferCtx<'_> {
                 ..
             } => {
                 let lowered = self.lower_pipeline(*left, *right, span);
-                if matches!(
-                    &lowered,
-                    Expression::Unit {
-                        ty: Type::Error,
-                        ..
-                    }
-                ) {
-                    lowered
-                } else {
-                    self.infer_expression_at(lowered, expected_ty, is_subexpression)
-                }
+                self.infer_expression_at(lowered, expected_ty, is_subexpression)
             }
 
             Expression::Binary { .. } | Expression::Unary { .. }
@@ -376,6 +366,21 @@ impl InferCtx<'_> {
             span,
         };
         let right = Self::unwrap_parens_owned(right);
+        if matches!(
+            right,
+            Expression::Identifier { .. }
+                | Expression::DotAccess { .. }
+                | Expression::Call { .. }
+                | Expression::Binary {
+                    operator: BinaryOperator::Pipeline,
+                    ..
+                }
+        ) && let Some(stray) = stray_placeholder_in_target(&right)
+        {
+            self.sink
+                .push(diagnostics::infer::misplaced_pipeline_placeholder(stray));
+            return error;
+        }
         let right = match right {
             Expression::Binary {
                 operator: BinaryOperator::Pipeline,
@@ -403,13 +408,32 @@ impl InferCtx<'_> {
             Expression::Call {
                 expression,
                 mut args,
-                spread,
+                mut spread,
                 type_arguments,
                 ty,
                 call_kind,
                 ..
             } => {
-                args.insert(0, left);
+                let (has_placeholder, repeated) = {
+                    let mut placeholders = args
+                        .iter()
+                        .chain(spread.as_deref())
+                        .filter(|arg| is_placeholder(arg))
+                        .map(Expression::get_span);
+                    (placeholders.next().is_some(), placeholders.next())
+                };
+                if let Some(repeated) = repeated {
+                    self.sink
+                        .push(diagnostics::infer::repeated_pipeline_placeholder(repeated));
+                    return error;
+                }
+                if !has_placeholder {
+                    args.insert(0, left);
+                } else if let Some(slot) = args.iter_mut().find(|arg| is_placeholder(arg)) {
+                    *slot = left;
+                } else {
+                    spread = Some(Box::new(left));
+                }
                 Expression::Call {
                     expression,
                     args,
@@ -454,5 +478,42 @@ impl InferCtx<'_> {
             self.sink
                 .push(diagnostics::infer::control_flow_in_expression(kind, span));
         }
+    }
+}
+
+fn is_placeholder(expression: &Expression) -> bool {
+    matches!(expression, Expression::Identifier { value, .. } if value == "_")
+}
+
+fn stray_placeholder(expression: &Expression) -> Option<Span> {
+    match expression {
+        Expression::Identifier { span, .. } if is_placeholder(expression) => Some(*span),
+        Expression::Binary {
+            operator: BinaryOperator::Pipeline,
+            left,
+            right,
+            ..
+        } => stray_placeholder(left).or_else(|| stray_placeholder_in_target(right.unwrap_parens())),
+        _ => expression
+            .children()
+            .into_iter()
+            .find_map(stray_placeholder),
+    }
+}
+
+fn stray_placeholder_in_target(target: &Expression) -> Option<Span> {
+    match target {
+        Expression::Call {
+            expression,
+            args,
+            spread,
+            ..
+        } => stray_placeholder(expression).or_else(|| {
+            args.iter()
+                .chain(spread.as_deref())
+                .filter(|arg| !is_placeholder(arg))
+                .find_map(stray_placeholder)
+        }),
+        other => stray_placeholder(other),
     }
 }

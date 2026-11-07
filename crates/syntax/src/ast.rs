@@ -2079,6 +2079,7 @@ impl Expression {
         let Expression::Call {
             expression: callee,
             args,
+            spread,
             ..
         } = self
         else {
@@ -2086,6 +2087,7 @@ impl Expression {
         };
         let callee_start = callee.get_span().byte_offset;
         args.iter()
+            .chain(spread.as_deref())
             .any(|arg| arg.get_span().byte_offset < callee_start)
     }
 
