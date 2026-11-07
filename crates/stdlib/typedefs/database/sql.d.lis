@@ -713,7 +713,7 @@ impl Row {
   /// If more than one row matches the query,
   /// Scan uses the first row and discards the rest. If no row matches
   /// the query, Scan returns [ErrNoRows].
-  fn Scan(self: Ref<Row>, dest: VarArgs<Unknown>) -> Result<(), error>
+  fn Scan(self: Ref<Row>, dest: VarArgs<mut Unknown>) -> Result<(), error>
 }
 
 impl Rows {
@@ -816,7 +816,7 @@ impl Rows {
   /// 
   /// If any of the first arguments implementing [Scanner] returns an error,
   /// that error will be wrapped in the returned error.
-  fn Scan(self: mut Ref<Rows>, dest: VarArgs<Unknown>) -> Result<(), error>
+  fn Scan(self: mut Ref<Rows>, dest: VarArgs<mut Unknown>) -> Result<(), error>
 }
 
 impl Stmt {

@@ -2747,3 +2747,51 @@ fn reset(attr: mut Ref<lib.Attr>) {
         .assert_infer_code_once("write_through_read_only")
         .assert_error_contains("Write to `attr.Chains[0][i]` directly");
 }
+
+#[test]
+fn go_scan_into_read_only_variable_refused() {
+    infer(
+        r#"import "go:fmt"
+fn main() {
+  let x = 0
+  let _ = fmt.Sscan("42", &x)
+}"#,
+    )
+    .assert_infer_code_once("needs_writable");
+}
+
+#[test]
+fn go_scan_into_writable_variable_accepted() {
+    infer(
+        r#"import "go:fmt"
+fn main() {
+  let mut x = 0
+  let _ = fmt.Sscan("42", &x)
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn go_errors_as_into_read_only_target_refused() {
+    infer(
+        r#"import "go:errors"
+import "go:os"
+fn check(err: error) -> bool {
+  let target: Ref<os.PathError> = &os.PathError { Op: "", Path: "", Err: err }
+  errors.As(err, &target)
+}"#,
+    )
+    .assert_infer_code_once("needs_writable");
+}
+
+#[test]
+fn go_logger_set_prefix_through_read_only_ref_refused() {
+    infer(
+        r#"import "go:log"
+fn configure(l: Ref<log.Logger>) {
+  l.SetPrefix("app: ")
+}"#,
+    )
+    .assert_infer_code_once("needs_writable");
+}

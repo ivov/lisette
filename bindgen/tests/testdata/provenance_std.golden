@@ -190,7 +190,7 @@ crypto/elliptic.CurveParams.Double (opaque r0 r1): r0<-recv r0<-x1 r0<-y1 r1<-re
 crypto/elliptic.CurveParams.Params: r0<-recv
 crypto/elliptic.CurveParams.ScalarBaseMult (opaque r0 r1): r0<-k r0<-recv r1<-k r1<-recv
 crypto/elliptic.CurveParams.ScalarMult (opaque r0 r1): r0<-Bx r0<-By r0<-k r0<-recv r1<-Bx r1<-By r1<-k r1<-recv
-crypto/elliptic.GenerateKey (shared r3): 
+crypto/elliptic.GenerateKey (opaque r0) (shared r3): r0<-curve r0<-rand
 crypto/elliptic.P224 (shared r0): 
 crypto/elliptic.P256 (shared r0): 
 crypto/elliptic.P384 (shared r0): 
@@ -255,7 +255,7 @@ crypto/tls.ClientHelloInfo.SupportsCertificate (opaque r0) (shared r0): r0<-c r0
 crypto/tls.ClientSessionState.ResumptionState: r0<-recv r1<-recv
 crypto/tls.Config.Clone: r0<-[recv]
 crypto/tls.Config.DecryptTicket (opaque r0) (shared r0): r0<-cs r0<-identity r0<-recv
-crypto/tls.Config.EncryptTicket (opaque r1) (shared r1): r1<-cs r1<-recv r1<-ss
+crypto/tls.Config.EncryptTicket (opaque r0 r1) (shared r1): r0<-cs r0<-recv r0<-ss r1<-cs r1<-recv r1<-ss
 crypto/tls.Conn.Close (shared r0): r0<-[recv]
 crypto/tls.Conn.CloseWrite (shared r0): r0<-recv
 crypto/tls.Conn.ConnectionState (opaque r0): r0<-recv
@@ -309,13 +309,16 @@ crypto/x509.OID.UnmarshalBinary (shared r0):
 crypto/x509.OID.UnmarshalText (shared r0): 
 crypto/x509.OIDFromASN1OID (shared r1): 
 crypto/x509.OIDFromInts (shared r1): 
+crypto/x509.ParseCRL (opaque r0): r0<-crlBytes
 crypto/x509.ParseCertificate (opaque r0 r1) (shared r0): r0<-der r1<-der
 crypto/x509.ParseCertificateRequest (opaque r0) (shared r0): r0<-asn1Data
 crypto/x509.ParseCertificates (opaque r0 r1) (shared r0): r0<-der r1<-der
+crypto/x509.ParseDERCRL (opaque r0): r0<-derBytes
 crypto/x509.ParseECPrivateKey (opaque r0) (shared r0): r0<-der
 crypto/x509.ParseOID (opaque r0) (shared r1): 
 crypto/x509.ParsePKCS1PrivateKey (opaque r0): r0<-der
-crypto/x509.ParsePKCS8PrivateKey (opaque r0) (shared r0): r0<-der
+crypto/x509.ParsePKCS1PublicKey (opaque r0): r0<-der
+crypto/x509.ParsePKCS8PrivateKey (opaque r0 r1) (shared r0): r0<-der r1<-der
 crypto/x509.ParsePKIXPublicKey (opaque r0) (shared r0): r0<-derBytes
 crypto/x509.ParseRevocationList (opaque r0): r0<-der
 crypto/x509.RevocationList.CheckSignatureFrom (shared r0): r0<-[parent]
@@ -414,7 +417,7 @@ debug/elf.File.Symbols (shared r1):
 debug/elf.NewFile (opaque r0) (shared r1): r0<-r
 debug/elf.Open (opaque r0) (shared r1): 
 debug/elf.Prog.Open: r0<-[recv]
-debug/elf.Section.Data (shared r1): 
+debug/elf.Section.Data (opaque r0) (shared r1): r0<-recv
 debug/elf.Section.Open (opaque r0): r0<-recv
 debug/gosym.NewLineTable: r0<-[data]
 debug/gosym.NewTable (opaque r0): r0<-pcln r0<-symtab

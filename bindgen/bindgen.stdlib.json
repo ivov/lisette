@@ -457,6 +457,10 @@
           "OID.AppendBinary": ["b"],
           "OID.AppendText": ["b"]
         },
+        "database/sql": {
+          "Row.Scan": ["dest"],
+          "Rows.Scan": ["dest"]
+        },
         "database/sql/driver": {
           "Rows.Next": ["dest"],
           "RowsColumnTypeDatabaseTypeName.Next": ["dest"],
@@ -473,6 +477,10 @@
         "encoding/ascii85": {
           "Encode": ["dst"],
           "Decode": ["dst"]
+        },
+        "encoding/asn1": {
+          "Unmarshal": ["val"],
+          "UnmarshalWithParams": ["val"]
         },
         "encoding/base32": {
           "Encoding.AppendDecode": ["dst"],
@@ -506,11 +514,23 @@
           "Decode": ["dst"],
           "Encode": ["dst"]
         },
+        "errors": {
+          "As": ["target"]
+        },
         "fmt": {
           "Append": ["b"],
           "Appendf": ["b"],
           "Appendln": ["b"],
-          "ScanState.Read": ["buf"]
+          "Fscan": ["a"],
+          "Fscanf": ["a"],
+          "Fscanln": ["a"],
+          "Scan": ["a"],
+          "ScanState.Read": ["buf"],
+          "Scanf": ["a"],
+          "Scanln": ["a"],
+          "Sscan": ["a"],
+          "Sscanf": ["a"],
+          "Sscanln": ["a"]
         },
         "hash": {
           "Cloner.Sum": ["b"],
@@ -600,6 +620,9 @@
           "File.Read": ["p"],
           "Handler.ServeHTTP": ["request"]
         },
+        "net/http/httptrace": {
+          "WithClientTrace": ["trace"]
+        },
         "net/netip": {
           "Addr.AppendBinary": ["b"],
           "Addr.AppendText": ["b"],
@@ -610,6 +633,10 @@
           "Prefix.AppendBinary": ["b"],
           "Prefix.AppendText": ["b"],
           "Prefix.AppendTo": ["b"]
+        },
+        "net/rpc": {
+          "Client.Call": ["reply"],
+          "Client.Go": ["reply"]
         },
         "net/url": {
           "URL.AppendBinary": ["b"]
@@ -782,6 +809,17 @@
           "Value.Swap"
         ]
       },
+      "non_mutating_receiver": {
+        "go/token": ["FileSet.File", "FileSet.Position", "FileSet.PositionFor"],
+        "net": ["UnixListener.Close"],
+        "syscall": [
+          "LazyDLL.Handle",
+          "LazyDLL.Load",
+          "LazyProc.Addr",
+          "LazyProc.Call",
+          "LazyProc.Find"
+        ]
+      },
       "returns_view_of": {
         "crypto/ecdsa": {
           "PublicKey.Bytes": []
@@ -843,6 +881,9 @@
         }
       },
       "writable_return": {
+        "crypto/elliptic": ["GenerateKey"],
+        "crypto/tls": ["Config.EncryptTicket"],
+        "debug/elf": ["Section.Data"],
         "encoding/json": ["MarshalIndent"],
         "net/http": ["ResponseWriter.Header"]
       },

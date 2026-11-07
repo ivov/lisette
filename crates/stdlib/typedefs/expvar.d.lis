@@ -62,10 +62,10 @@ pub interface Var {
 
 impl Float {
   /// Add adds delta to v.
-  fn Add(self: Ref<Float>, delta: float64)
+  fn Add(self: mut Ref<Float>, delta: float64)
 
   /// Set sets v to value.
-  fn Set(self: Ref<Float>, value: float64)
+  fn Set(self: mut Ref<Float>, value: float64)
 
   fn String(self: Ref<Float>) -> string
 
@@ -79,9 +79,9 @@ impl Func {
 }
 
 impl Int {
-  fn Add(self: Ref<Int>, delta: int64)
+  fn Add(self: mut Ref<Int>, delta: int64)
 
-  fn Set(self: Ref<Int>, value: int64)
+  fn Set(self: mut Ref<Int>, value: int64)
 
   fn String(self: Ref<Int>) -> string
 
@@ -115,7 +115,7 @@ impl Map {
 }
 
 impl String {
-  fn Set(self: Ref<String>, value: string)
+  fn Set(self: mut Ref<String>, value: string)
 
   /// String implements the [Var] interface. To get the unquoted string
   /// use [String.Value].

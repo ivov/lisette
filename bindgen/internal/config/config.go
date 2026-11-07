@@ -42,6 +42,8 @@ type TypeOverrides struct {
 	NonMutatingParam map[string]map[string][]string `json:"non_mutating_param"`
 	// MutatesReceiver curates receiver writes the SSA walk cannot see, as "Type.Method".
 	MutatesReceiver map[string][]string `json:"mutates_receiver"`
+	// NonMutatingReceiver curates receivers that do not write, as "Type.Method".
+	NonMutatingReceiver map[string][]string `json:"non_mutating_receiver"`
 	// ReturnsViewOf curates view aliasing the SSA result walk cannot see:
 	// "<result>:<param>" for whole-value sharing, "<result>:[<param>]" for
 	// element-level, "recv" for the receiver, an empty list for fresh.
@@ -270,6 +272,14 @@ func (c *Config) MutatesReceiver(pkg, name string) bool {
 		return false
 	}
 	return matchField(c.Overrides.Types.MutatesReceiver, pkg, name, matchExact)
+}
+
+// NonMutatingReceiver returns true if the "Type.Method" is curated as not writing through its receiver.
+func (c *Config) NonMutatingReceiver(pkg, name string) bool {
+	if c == nil {
+		return false
+	}
+	return matchField(c.Overrides.Types.NonMutatingReceiver, pkg, name, matchExact)
 }
 
 // ViewOverrides returns the curated view-aliasing entries, and whether an

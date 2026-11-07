@@ -109,6 +109,7 @@ func (v *ResultView) setParam(index, paramCount int, depth ViewDepth) {
 // since `generate_std` converts packages concurrently.
 type MutationAnalysis struct {
 	program    *ssa.Program
+	cfg        *config.Config
 	verdicts   map[*types.Func]FunctionMutation
 	views      map[*types.Func]FunctionViews
 	summaries  map[*ssa.Function]*mutationSummary
@@ -129,6 +130,8 @@ type mutationSummary struct {
 	freeVarStores map[int]*captureStores
 	// callbacks: calls of this function's own parameters, for the caller to resolve.
 	callbacks map[callbackKey]*callbackFact
+	// readOnly: parameters pinned as not written.
+	readOnly map[int]bool
 }
 
 func (m *mutationSummary) captureStoresFor(index int) *captureStores {
@@ -346,6 +349,7 @@ func NewMutationAnalysis(nilness *NilnessAnalysis, roots []*packages.Package) (a
 	}()
 	analysis = &MutationAnalysis{
 		program:    nilness.program,
+		cfg:        nilness.cfg,
 		verdicts:   make(map[*types.Func]FunctionMutation),
 		views:      make(map[*types.Func]FunctionViews),
 		summaries:  make(map[*ssa.Function]*mutationSummary),
@@ -678,6 +682,7 @@ func (a *MutationAnalysis) summarize(fn *ssa.Function) *mutationSummary {
 		return s
 	}
 	summary := &mutationSummary{params: map[int]reachMode{}, freeVars: map[int]reachMode{}}
+	a.applyPins(fn, summary)
 	a.summaries[fn] = summary
 	a.walk(fn, summary)
 	return summary
@@ -701,6 +706,38 @@ func (a *MutationAnalysis) walk(fn *ssa.Function, summary *mutationSummary) {
 			a.recordCaptureStores(body, instruction, summary)
 			a.recordWrites(body, instruction, summary)
 		}
+	}
+}
+
+// applyPins puts the config pins into the summary, so callers inherit them.
+func (a *MutationAnalysis) applyPins(fn *ssa.Function, summary *mutationSummary) {
+	obj, ok := fn.Object().(*types.Func)
+	if !ok || a.cfg == nil || obj.Pkg() == nil {
+		return
+	}
+	obj = obj.Origin()
+	sig := obj.Type().(*types.Signature)
+	pkg, key := obj.Pkg().Path(), qualifiedFunctionName(obj)
+	pin := func(index int, readOnly, written bool) {
+		if readOnly {
+			if summary.readOnly == nil {
+				summary.readOnly = map[int]bool{}
+			}
+			summary.readOnly[index] = true
+		} else if written {
+			summary.params[index] |= reachDirect
+		}
+	}
+	// a bound method value captures its receiver
+	offset := 0
+	if sig.Recv() != nil && len(fn.FreeVars) == 0 {
+		offset = 1
+		pin(0, a.cfg.NonMutatingReceiver(pkg, key), a.cfg.MutatesReceiver(pkg, key))
+	}
+	mutating := a.cfg.MutatingParams(pkg, key)
+	nonMutating := a.cfg.NonMutatingParams(pkg, key)
+	for index, name := range paramNames(sig) {
+		pin(index+offset, slices.Contains(nonMutating, name), slices.Contains(mutating, name))
 	}
 }
 
@@ -807,6 +844,9 @@ func (a *MutationAnalysis) recordCallWrites(fn *ssa.Function, common *ssa.CallCo
 		a.recordCallbackCall(fn, common, summary)
 		return
 	}
+	if isLockCall(callee) {
+		return
+	}
 	inner := a.summarize(callee)
 	for index, mode := range inner.params {
 		if index < len(common.Args) {
@@ -814,6 +854,25 @@ func (a *MutationAnalysis) recordCallWrites(fn *ssa.Function, common *ssa.CallCo
 		}
 	}
 	a.resolveCalleeCallbacks(fn, common, inner, summary)
+}
+
+func isLockCall(callee *ssa.Function) bool {
+	obj, ok := callee.Object().(*types.Func)
+	if !ok || obj.Pkg() == nil {
+		return false
+	}
+	switch obj.Pkg().Path() {
+	case "sync", "internal/sync":
+	default:
+		return false
+	}
+	switch qualifiedFunctionName(obj) {
+	case "Mutex.Lock", "Mutex.TryLock", "Mutex.Unlock",
+		"RWMutex.Lock", "RWMutex.TryLock", "RWMutex.Unlock",
+		"RWMutex.RLock", "RWMutex.TryRLock", "RWMutex.RUnlock":
+		return true
+	}
+	return false
 }
 
 func isReceiverMutationAxiom(method *types.Func) bool {
@@ -1929,7 +1988,9 @@ func markRootsSeen(fn *ssa.Function, value ssa.Value, summary *mutationSummary, 
 	case *ssa.Parameter:
 		for index, param := range fn.Params {
 			if param == typed {
-				summary.params[index] |= modeFor(throughLoad)
+				if !summary.readOnly[index] {
+					summary.params[index] |= modeFor(throughLoad)
+				}
 				return
 			}
 		}
