@@ -23,7 +23,6 @@ func pick(n int) (int, bool) {
 func test() string {
 	if _, ok := pick(3); ok {
 		return "found"
-	} else {
-		return "missing"
 	}
+	return "missing"
 }

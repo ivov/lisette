@@ -26,13 +26,13 @@ func first[T any](xs []T, keep func(T) bool) (T, bool) {
 }
 
 func test() {
-	if v, ok := first([]int{1, 2, 3}, func(x int) bool {
+	v, ok := first([]int{1, 2, 3}, func(x int) bool {
 		return x > 1
-	}); ok {
-		if v != 2 {
-			panic("wrong element")
-		}
-	} else {
+	})
+	if !ok {
 		panic("expected a hit")
+	}
+	if v != 2 {
+		panic("wrong element")
 	}
 }

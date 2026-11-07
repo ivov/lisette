@@ -19,7 +19,6 @@ func first(xs []int) int {
 		return ([3]int)(s), true
 	}(xs); ok {
 		return a[0]
-	} else {
-		return 0
 	}
+	return 0
 }

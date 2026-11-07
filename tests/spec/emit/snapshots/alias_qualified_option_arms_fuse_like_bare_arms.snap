@@ -25,9 +25,8 @@ type Opt = lisette.Option[int]
 func matched(m map[string]int) int {
 	if n, ok := m["a"]; ok {
 		return n + 1
-	} else {
-		return 0
 	}
+	return 0
 }
 
 func letElse(m map[string]int) int {

@@ -57,6 +57,11 @@ fn visit_definition(definition: &mut Definition, visitor: &mut impl VisitorMut) 
 }
 
 fn visit_if(plan: &mut IfPlan, visitor: &mut impl VisitorMut) {
+    visit_if_link(plan, visitor, 1);
+}
+
+/// An inlined else renders after the whole chain, so it leaves each header scope.
+fn visit_if_link(plan: &mut IfPlan, visitor: &mut impl VisitorMut, open: usize) {
     visitor.enter_scope();
     if let Some(initializer) = &mut plan.initializer {
         visit_definition(initializer, visitor);
@@ -67,7 +72,7 @@ fn visit_if(plan: &mut IfPlan, visitor: &mut impl VisitorMut) {
     visitor.exit_scope();
     match &mut plan.else_arm {
         ElseArm::None => {}
-        ElseArm::ElseIf(plan) => visit_if(plan, visitor),
+        ElseArm::ElseIf(plan) => return visit_if_link(plan, visitor, open + 1),
         ElseArm::Else {
             body,
             inline: false,
@@ -77,12 +82,16 @@ fn visit_if(plan: &mut IfPlan, visitor: &mut impl VisitorMut) {
             visitor.exit_scope();
         }
         ElseArm::Else { body, inline: true } => {
-            visitor.exit_scope();
+            for _ in 0..open {
+                visitor.exit_scope();
+            }
             visit_statements_mut(&mut body.statements, visitor);
             return;
         }
     }
-    visitor.exit_scope();
+    for _ in 0..open {
+        visitor.exit_scope();
+    }
 }
 
 fn visit_case(case: &mut SwitchCasePlan, visitor: &mut impl VisitorMut) {

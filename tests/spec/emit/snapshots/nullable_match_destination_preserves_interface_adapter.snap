@@ -60,11 +60,11 @@ func maybeBar(bar *Bar[*Thing]) *Bar[*Thing] {
 func main() {
 	bar := Bar[*Thing]{x: lisette.MakeOptionSome(&Thing{})}
 	var opt Opt
-	if found := maybeBar(&bar); found != nil {
-		opt = _lisAdapter_Bar_Opt_0{inner: found}
-	} else {
+	found := maybeBar(&bar)
+	if found == nil {
 		return
 	}
+	opt = _lisAdapter_Bar_Opt_0{inner: found}
 	if thing := opt.find(); thing != nil {
 		_ = thing
 	}

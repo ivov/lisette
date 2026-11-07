@@ -35,15 +35,15 @@ func add(s, t string) (int, error) {
 		if err_1 != nil {
 			return 0, err_1
 		}
-		if err == nil {
-			return r + y, nil
+		if err != nil {
+			return 0, err
 		}
+		return r + y, nil
+	}
+	if err != nil {
 		return 0, err
 	}
-	if err == nil {
-		return r, nil
-	}
-	return 0, err
+	return r, nil
 }
 
 func test() {

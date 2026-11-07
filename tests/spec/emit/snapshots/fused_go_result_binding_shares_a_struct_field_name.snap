@@ -39,12 +39,12 @@ func compile(name string) (Target, error) {
 	if ready.Tag == lisette.ResultErr {
 		return Target{}, ready.ErrVal
 	}
-	if value, error_ := strconv.Atoi(name); error_ == nil {
-		return Target{
-			name:  name,
-			value: value,
-		}, nil
-	} else {
+	value, error_ := strconv.Atoi(name)
+	if error_ != nil {
 		return Target{}, error_
 	}
+	return Target{
+		name:  name,
+		value: value,
+	}, nil
 }

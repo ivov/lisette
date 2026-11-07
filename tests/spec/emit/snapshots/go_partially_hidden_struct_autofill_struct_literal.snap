@@ -20,7 +20,6 @@ func test() int {
 	r := ring.Ring{Value: 1}
 	if n, ok := r.Value.(int); ok {
 		return n
-	} else {
-		return 0
 	}
+	return 0
 }

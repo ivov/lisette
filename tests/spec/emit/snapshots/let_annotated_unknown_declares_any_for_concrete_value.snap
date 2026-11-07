@@ -30,9 +30,8 @@ func identity(value int) int {
 func describe(value any) string {
 	if text, ok := value.(string); ok {
 		return text
-	} else {
-		return ""
 	}
+	return ""
 }
 
 func test() {

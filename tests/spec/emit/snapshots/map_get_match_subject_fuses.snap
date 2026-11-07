@@ -18,8 +18,7 @@ import "fmt"
 func test(m map[string]int, key string) int {
 	if v, ok := m[key]; ok {
 		return v
-	} else {
-		fmt.Print("missing\n")
-		return 0
 	}
+	fmt.Print("missing\n")
+	return 0
 }

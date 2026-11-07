@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn check<t>(value: t, text: string, enter: bool) -> t {
+    if enter {
+      match strconv.Atoi(text) {
+        Ok(t) => { if t != 4 { panic("number") } },
+        Err(_) => { return value },
+      }
+      let later = || -> t { value }
+      return later()
+    }
+    value
+  }
+  
+  fn test() {
+    if check(7, "4", true) != 7 || check(8, "x", true) != 8 { panic("the nested generic header should stay in place") }
+  }
+---
+package main
+
+import "strconv"
+
+func check[t any](value t, text string, enter bool) t {
+	if enter {
+		if t, err := strconv.Atoi(text); err == nil {
+			if t != 4 {
+				panic("number")
+			}
+		} else {
+			return value
+		}
+		later := func() t {
+			return value
+		}
+		return later()
+	}
+	return value
+}
+
+func test() {
+	if check(7, "4", true) != 7 || check(8, "x", true) != 8 {
+		panic("the nested generic header should stay in place")
+	}
+}

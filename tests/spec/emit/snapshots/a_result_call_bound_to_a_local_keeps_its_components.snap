@@ -33,10 +33,10 @@ import "strconv"
 
 func parse(text string) int {
 	parsed, err := strconv.Atoi(text)
-	if err == nil {
-		return parsed
+	if err != nil {
+		return -1
 	}
-	return -1
+	return parsed
 }
 
 func parseOrDefault(text string) int {

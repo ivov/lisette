@@ -20,7 +20,6 @@ func test() string {
 	b := pem.Block{Type: "X"}
 	if headers := b.Headers; headers != nil {
 		return headers["key"]
-	} else {
-		return ""
 	}
+	return ""
 }

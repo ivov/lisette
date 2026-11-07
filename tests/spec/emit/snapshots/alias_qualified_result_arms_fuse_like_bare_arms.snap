@@ -28,11 +28,11 @@ import (
 type Res = lisette.Result[int, error]
 
 func matched(text string) int {
-	if n, err := strconv.Atoi(text); err == nil {
-		return n + 1
-	} else {
+	n, err := strconv.Atoi(text)
+	if err != nil {
 		return 0
 	}
+	return n + 1
 }
 
 func letElse(text string) int {

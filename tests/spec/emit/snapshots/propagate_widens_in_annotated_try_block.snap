@@ -84,9 +84,8 @@ func test() {
 	}()
 	if err == nil {
 		panic("expected error")
-	} else {
-		if err.Error() != "b failed" {
-			panic("wrong try block error")
-		}
+	}
+	if err.Error() != "b failed" {
+		panic("wrong try block error")
 	}
 }

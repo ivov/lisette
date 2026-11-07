@@ -29,11 +29,11 @@ func attempt(ok bool) (int, error) {
 }
 
 func read(ok bool) int {
-	if n, err := attempt(ok); err == nil {
-		return n
-	} else {
+	n, err := attempt(ok)
+	if err != nil {
 		return 0
 	}
+	return n
 }
 
 func test() {

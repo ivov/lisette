@@ -1,11 +1,13 @@
 //! Rewrites of a lowered body that the tree makes safe to decide.
 
+use std::mem;
+
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::names::go_name;
 use crate::plan::bodies::{
-    AssignForm, CompoundKind, Definition, ElseArm, LoopTransfer, LoweredBlock, LoweredStatement,
-    SelectArmPlan, Statement, SwitchKind, for_each_statements_mut,
+    AssignForm, CompoundKind, Definition, ElseArm, IfPlan, LoopTransfer, LoweredBlock,
+    LoweredStatement, SelectArmPlan, Statement, SwitchKind, for_each_statements_mut,
 };
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp, verbatim_identifiers};
@@ -13,7 +15,7 @@ use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::source_reuse::reuse_dead_copy_sources;
 use crate::plan::values::GoExpression;
 use crate::plan::visit::{VisitorMut, visit_statements_mut};
-use crate::state::scope::ScopeState;
+use crate::state::scope::{ScopeState, TypeParam};
 
 pub(crate) fn clean_up(
     statements: &mut Vec<Statement>,
@@ -30,6 +32,7 @@ pub(crate) fn clean_up(
     return_found_elements_directly(statements);
     // Declaration removal and return rewriting can make an else safe to inline.
     unwrap_terminal_else(statements);
+    unwrap_scoped_terminal_else(statements, parameters, scope);
 }
 
 fn return_found_elements_directly(statements: &mut Vec<Statement>) {
@@ -255,6 +258,287 @@ fn declares_no_names(body: &LoweredBlock) -> bool {
                 | LoweredStatement::If(_)
         )
     })
+}
+
+fn unwrap_scoped_terminal_else(
+    statements: &mut Vec<Statement>,
+    parameters: &[GoIdentifier],
+    scope: &ScopeState,
+) {
+    let mut skipped = 0;
+    let mut original: Option<Resolution> = None;
+    'candidates: loop {
+        // A flip alone keeps every scope, so the flipped body is the baseline.
+        let mut flipped = statements.clone();
+        let Some(flips) = rewrite_nth_scoped_terminal_else(
+            &mut flipped,
+            skipped,
+            Rewrite::Flip,
+            scope.type_params(),
+        ) else {
+            return;
+        };
+        let baseline = if flips {
+            Resolution::of(&mut flipped, parameters)
+        } else {
+            original
+                .get_or_insert_with(|| Resolution::of(statements, parameters))
+                .clone()
+        };
+        for hoist in [false, true] {
+            let mut rewritten = statements.clone();
+            rewrite_nth_scoped_terminal_else(
+                &mut rewritten,
+                skipped,
+                Rewrite::Inline { hoist },
+                scope.type_params(),
+            );
+            if Resolution::of(&mut rewritten, parameters) == baseline {
+                *statements = rewritten;
+                original = None;
+                continue 'candidates;
+            }
+        }
+        skipped += 1;
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Rewrite {
+    Flip,
+    Inline { hoist: bool },
+}
+
+fn rewrite_nth_scoped_terminal_else(
+    statements: &mut Vec<Statement>,
+    target: usize,
+    rewrite: Rewrite,
+    type_params: &[TypeParam],
+) -> Option<bool> {
+    let mut seen = 0;
+    let mut found = None;
+    for_each_statements_mut(statements, &mut |block| {
+        if found.is_some() {
+            return;
+        }
+        for index in 0..block.len() {
+            let LoweredStatement::If(plan) = &mut block[index].kind else {
+                continue;
+            };
+            let flips = flips_to_early_exit(plan);
+            if !flips && !has_scoped_terminal_else(plan) {
+                continue;
+            }
+            if seen < target {
+                seen += 1;
+                continue;
+            }
+            found = Some(flips);
+            if flips {
+                flip_branches(plan);
+            }
+            let Rewrite::Inline { hoist } = rewrite else {
+                return;
+            };
+            inline_terminal_else(plan);
+            let shadows_a_type_param = plan.initializer.as_ref().is_some_and(|definition| {
+                definition.names.iter().any(|name| {
+                    type_params
+                        .iter()
+                        .any(|param| param.go_name == name.spelling())
+                })
+            });
+            if hoist
+                && !shadows_a_type_param
+                && let Some(definition) = plan.initializer.take()
+            {
+                let line = block[index].line.take();
+                block.insert(
+                    index,
+                    Statement {
+                        line,
+                        kind: LoweredStatement::Define(definition),
+                    },
+                );
+            }
+            return;
+        }
+    });
+    found
+}
+
+fn has_scoped_terminal_else(plan: &IfPlan) -> bool {
+    let outer_initializer = plan.initializer.is_some();
+    let mut plan = plan;
+    let mut first = true;
+    loop {
+        if !plan.then_body.ends_with_diverge() || (!first && plan.initializer.is_some()) {
+            return false;
+        }
+        first = false;
+        match &plan.else_arm {
+            ElseArm::ElseIf(inner) => plan = inner,
+            ElseArm::Else {
+                body,
+                inline: false,
+            } => return outer_initializer || !declares_no_names(body),
+            ElseArm::Else { inline: true, .. } | ElseArm::None => return false,
+        }
+    }
+}
+
+fn flips_to_early_exit(plan: &IfPlan) -> bool {
+    let ElseArm::Else {
+        body,
+        inline: false,
+    } = &plan.else_arm
+    else {
+        return false;
+    };
+    plan.initializer.is_some()
+        && !plan.then_body.ends_with_diverge()
+        && !plan.then_body.renders_empty()
+        && body.ends_with_diverge()
+        && negated(plan.condition.node()).is_some()
+}
+
+fn flip_branches(plan: &mut IfPlan) {
+    let condition = negated(plan.condition.node()).expect("a flipped condition negates");
+    plan.condition = GoExpression::from_node(condition);
+    let ElseArm::Else { body, .. } = &mut plan.else_arm else {
+        unreachable!("a flipped if has an else");
+    };
+    mem::swap(&mut plan.then_body, body);
+}
+
+fn negated(node: &GoExpressionNode) -> Option<GoExpressionNode> {
+    match node {
+        GoExpressionNode::Binary {
+            operator,
+            left,
+            right,
+        } => {
+            let (operator, left, right) = match operator {
+                BinaryOp::Eq => (BinaryOp::Ne, (**left).clone(), (**right).clone()),
+                BinaryOp::Ne => (BinaryOp::Eq, (**left).clone(), (**right).clone()),
+                BinaryOp::And => (BinaryOp::Or, negated(left)?, negated(right)?),
+                BinaryOp::Or => (BinaryOp::And, negated(left)?, negated(right)?),
+                _ => return None,
+            };
+            Some(GoExpressionNode::Binary {
+                operator,
+                left: Box::new(left),
+                right: Box::new(right),
+            })
+        }
+        GoExpressionNode::Unary {
+            operator: UnaryOp::Not,
+            operand,
+        } => Some((**operand).clone()),
+        GoExpressionNode::Identifier(_) | GoExpressionNode::Call { .. } => {
+            Some(GoExpressionNode::Unary {
+                operator: UnaryOp::Not,
+                operand: Box::new(node.clone()),
+            })
+        }
+        _ => None,
+    }
+}
+
+fn inline_terminal_else(plan: &mut IfPlan) {
+    let mut arm = &mut plan.else_arm;
+    loop {
+        match arm {
+            ElseArm::ElseIf(inner) => arm = &mut inner.else_arm,
+            ElseArm::Else { inline, .. } => {
+                *inline = true;
+                return;
+            }
+            ElseArm::None => unreachable!("scoped terminal else ends in an else"),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct Resolution {
+    reads: Vec<Option<usize>>,
+    reuses: Vec<usize>,
+}
+
+struct Resolve {
+    frames: Vec<HashMap<String, usize>>,
+    bindings: usize,
+    resolution: Resolution,
+}
+
+impl Resolution {
+    fn of(statements: &mut Vec<Statement>, parameters: &[GoIdentifier]) -> Self {
+        let mut resolve = Resolve {
+            frames: vec![HashMap::default()],
+            bindings: 0,
+            resolution: Resolution {
+                reads: Vec::new(),
+                reuses: Vec::new(),
+            },
+        };
+        for parameter in parameters {
+            resolve.bind(parameter.spelling());
+        }
+        visit_statements_mut(statements, &mut resolve);
+        resolve.resolution
+    }
+}
+
+impl Resolve {
+    fn bind(&mut self, spelling: &str) {
+        if spelling == "_" {
+            return;
+        }
+        let frame = self.frames.last_mut().expect("a local scope exists");
+        if let Some(existing) = frame.get(spelling) {
+            self.resolution.reuses.push(*existing);
+            return;
+        }
+        frame.insert(spelling.to_string(), self.bindings);
+        self.bindings += 1;
+    }
+
+    fn read(&mut self, spelling: &str) {
+        let binding = self
+            .frames
+            .iter()
+            .rev()
+            .find_map(|frame| frame.get(spelling).copied());
+        self.resolution.reads.push(binding);
+    }
+}
+
+impl VisitorMut for Resolve {
+    fn expression(&mut self, node: &mut GoExpressionNode) {
+        match node {
+            GoExpressionNode::Identifier(name) => self.read(name.spelling()),
+            GoExpressionNode::Verbatim(source) => {
+                // Raw Go can declare any name it mentions.
+                for spelling in verbatim_identifiers(source) {
+                    self.read(spelling);
+                    self.bind(spelling);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn local_binding(&mut self, name: &mut GoIdentifier) {
+        self.bind(name.spelling());
+    }
+
+    fn enter_scope(&mut self) {
+        self.frames.push(HashMap::default());
+    }
+
+    fn exit_scope(&mut self) {
+        self.frames.pop().expect("a local scope exists");
+    }
 }
 
 fn inline_return_aliases(statements: &mut Vec<Statement>) {
@@ -797,7 +1081,41 @@ mod tests {
     }
 
     #[test]
-    fn terminal_else_keeps_initializer_bindings_in_scope() {
+    fn terminal_else_reading_the_initializer_moves_it_before_the_if() {
+        let mut statements = vec![returning_if(
+            Some(Definition::single("value".to_string(), name("source"))),
+            vec![returned(name("value"))],
+        )];
+        clean_up(
+            &mut statements,
+            &HashSet::default(),
+            &[],
+            &ScopeState::new(),
+        );
+        let [hoisted, guard] = statements.as_slice() else {
+            panic!("expected a definition and an if");
+        };
+        assert_eq!(
+            hoisted.kind,
+            LoweredStatement::Define(Definition::single("value".to_string(), name("source")))
+        );
+        let LoweredStatement::If(plan) = &guard.kind else {
+            panic!("expected if");
+        };
+        assert!(plan.initializer.is_none());
+        assert!(matches!(plan.else_arm, ElseArm::Else { inline: true, .. }));
+        let once = statements.clone();
+        clean_up(
+            &mut statements,
+            &HashSet::default(),
+            &[],
+            &ScopeState::new(),
+        );
+        assert_eq!(statements, once);
+    }
+
+    #[test]
+    fn terminal_else_keeps_an_initializer_whose_name_a_parameter_holds() {
         let mut statements = vec![returning_if(
             Some(Definition::single("value".to_string(), name("source"))),
             vec![returned(name("value"))],
@@ -806,9 +1124,22 @@ mod tests {
         clean_up(
             &mut statements,
             &HashSet::default(),
-            &[],
+            &[GoIdentifier::name("value".to_string())],
             &ScopeState::new(),
         );
+        assert_eq!(statements, original);
+    }
+
+    #[test]
+    fn terminal_else_keeps_an_initializer_whose_name_a_later_statement_reads() {
+        let mut statements = vec![
+            returning_if(
+                Some(Definition::single("value".to_string(), name("source"))),
+                vec![discard(name("value"))],
+            ),
+            returned(name("value")),
+        ];
+        let original = statements.clone();
         clean_up(
             &mut statements,
             &HashSet::default(),

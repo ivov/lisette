@@ -25,11 +25,11 @@ import (
 
 func test(name string) {
 	var label string
-	if f, err := os.Open(name); err == nil && f != nil {
-		label = f.Name()
-	} else {
+	f, err := os.Open(name)
+	if err != nil || f == nil {
 		fmt.Println("cannot open")
 		return
 	}
+	label = f.Name()
 	fmt.Println(label)
 }

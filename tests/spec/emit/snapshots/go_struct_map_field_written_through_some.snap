@@ -27,7 +27,6 @@ func test() string {
 	}
 	if h := b.Headers; h != nil {
 		return h["key"]
-	} else {
-		return ""
 	}
+	return ""
 }

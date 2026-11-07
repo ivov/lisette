@@ -74,9 +74,8 @@ func tail(c Cache) *Entry {
 func matched(c Cache) int {
 	if e, ok := c.Get("a"); ok && e != nil {
 		return e.V
-	} else {
-		return 0
 	}
+	return 0
 }
 
 func main() {

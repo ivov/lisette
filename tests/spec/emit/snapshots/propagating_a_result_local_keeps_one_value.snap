@@ -34,11 +34,11 @@ func parse(text string) (int, error) {
 }
 
 func test() {
-	if n, err := parse("41"); err == nil {
-		if n != 42 {
-			panic("a parsed number should gain one")
-		}
-	} else {
+	n, err := parse("41")
+	if err != nil {
 		panic("expected a parsed number")
+	}
+	if n != 42 {
+		panic("a parsed number should gain one")
 	}
 }

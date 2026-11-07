@@ -69,12 +69,12 @@ func overALaterBinding(flag bool) string {
 }
 
 func test() {
-	if n, err := parseTwice("1", "2"); err == nil {
-		if n != 3 {
-			panic("one plus two is three")
-		}
-	} else {
+	n, err := parseTwice("1", "2")
+	if err != nil {
 		panic("expected two parsed numbers")
+	}
+	if n != 3 {
+		panic("one plus two is three")
 	}
 	if n, err := besideAUserName("1"); err == nil {
 		if n != 8 {

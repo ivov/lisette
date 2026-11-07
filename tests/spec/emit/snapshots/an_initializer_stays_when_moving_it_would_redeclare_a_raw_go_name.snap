@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn parse(text: string) -> int {
+    @rawgo("0; var n int; var err error; _ = n; _ = err")
+    match strconv.Atoi(text) {
+      Ok(n) => n,
+      Err(_) => 0,
+    }
+  }
+  
+  fn test() {
+    if parse("4") != 4 || parse("x") != 0 { panic("the header should stay in place") }
+  }
+---
+package main
+
+import "strconv"
+
+func parse(text string) int {
+	_ = 0
+	var n int
+	var err error
+	_ = n
+	_ = err
+	if n, err := strconv.Atoi(text); err != nil {
+		return 0
+	} else {
+		return n
+	}
+}
+
+func test() {
+	if parse("4") != 4 || parse("x") != 0 {
+		panic("the header should stay in place")
+	}
+}

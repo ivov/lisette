@@ -69,10 +69,10 @@ func offset(text string) (int, error) {
 		}
 		return n + err, nil
 	}()
-	if err_3 == nil {
-		return got, nil
+	if err_3 != nil {
+		return err, nil
 	}
-	return err, nil
+	return got, nil
 }
 
 func test() {

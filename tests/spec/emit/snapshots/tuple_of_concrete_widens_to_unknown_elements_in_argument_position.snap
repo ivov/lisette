@@ -22,9 +22,8 @@ import lisette "github.com/ivov/lisette/prelude"
 func describe(pair lisette.Tuple2[int, any]) string {
 	if text, ok := pair.Second.(string); ok {
 		return text
-	} else {
-		return ""
 	}
+	return ""
 }
 
 func test() {
