@@ -62,14 +62,13 @@ func main() {
 	lisette.ChannelSend(ch, 3)
 	left_2 := total
 	var tmp int
-	ch_1 := ch
 	for {
 		select {
-		case subject, ok := <-ch_1:
+		case subject, ok := <-ch:
 			if ok {
 				tmp = subject + f()
 			} else {
-				ch_1 = nil
+				ch = nil
 				continue
 			}
 		default:

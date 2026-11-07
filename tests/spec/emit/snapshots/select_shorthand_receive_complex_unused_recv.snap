@@ -23,14 +23,13 @@ type P struct {
 func test() {
 	ch := make(chan P, 1)
 	lisette.ChannelSend(ch, P{v: 1})
-	ch_1 := ch
 	for {
 		select {
-		case recv, ok := <-ch_1:
+		case recv, ok := <-ch:
 			if ok {
 				_ = recv
 			} else {
-				ch_1 = nil
+				ch = nil
 				continue
 			}
 		default:

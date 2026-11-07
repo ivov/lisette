@@ -55,9 +55,8 @@ func tweak(c Config) Config {
 }
 
 func withTags(c Config) Config {
-	copy_1 := c
-	copy_1.tags = slices.Clone(c.tags)
-	return copy_1
+	c.tags = slices.Clone(c.tags)
+	return c
 }
 
 func rebound(start Config) Config {

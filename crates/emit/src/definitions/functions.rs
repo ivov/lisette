@@ -71,7 +71,7 @@ impl Planner<'_> {
         prefix.append(&mut lowered.statements);
         lowered.statements = prefix;
         let shadowing = identify_body_locals(&mut lowered.statements, parameters, &mut self.scope);
-        clean_up(&mut lowered.statements, &shadowing);
+        clean_up(&mut lowered.statements, &shadowing, parameters, &self.scope);
         if should_return {
             lowered.ensure_go_termination();
         }

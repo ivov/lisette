@@ -859,6 +859,9 @@ impl Planner<'_> {
 
         let (mut statements, base_value) = base_staged.into_parts();
         let tmp = self.hoist_tmp_value_statement(&mut statements, "copy", base_value);
+        if let Some(id) = tmp.id() {
+            self.scope.mark_struct_update_copy(id);
+        }
 
         for (name, value) in fields {
             statements.push(assign(

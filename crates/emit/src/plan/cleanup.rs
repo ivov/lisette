@@ -10,11 +10,19 @@ use crate::plan::bodies::{
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp, verbatim_identifiers};
 use crate::plan::local::{GoIdentifier, LocalId};
+use crate::plan::source_reuse::reuse_dead_copy_sources;
 use crate::plan::values::GoExpression;
 use crate::plan::visit::{VisitorMut, visit_statements_mut};
+use crate::state::scope::ScopeState;
 
-pub(crate) fn clean_up(statements: &mut Vec<Statement>, shadowing: &HashSet<LocalId>) {
+pub(crate) fn clean_up(
+    statements: &mut Vec<Statement>,
+    shadowing: &HashSet<LocalId>,
+    parameters: &[GoIdentifier],
+    scope: &ScopeState,
+) {
     // Later deletions can expose earlier rules, so another sweep changes emitted Go.
+    reuse_dead_copy_sources(statements, parameters, scope);
     inline_name_aliases(statements);
     inline_return_aliases(statements);
     drop_unread_temps(statements, shadowing);
@@ -795,8 +803,18 @@ mod tests {
             vec![returned(name("value"))],
         )];
         let original = statements.clone();
-        clean_up(&mut statements, &HashSet::default());
-        clean_up(&mut statements, &HashSet::default());
+        clean_up(
+            &mut statements,
+            &HashSet::default(),
+            &[],
+            &ScopeState::new(),
+        );
+        clean_up(
+            &mut statements,
+            &HashSet::default(),
+            &[],
+            &ScopeState::new(),
+        );
         assert_eq!(statements, original);
     }
 
@@ -809,7 +827,12 @@ mod tests {
                 returned(name("value")),
             ],
         )];
-        clean_up(&mut statements, &HashSet::default());
+        clean_up(
+            &mut statements,
+            &HashSet::default(),
+            &[],
+            &ScopeState::new(),
+        );
         let LoweredStatement::If(plan) = &statements[0].kind else {
             panic!("expected if");
         };
@@ -823,7 +846,12 @@ mod tests {
             }
         );
         let once = statements.clone();
-        clean_up(&mut statements, &HashSet::default());
+        clean_up(
+            &mut statements,
+            &HashSet::default(),
+            &[],
+            &ScopeState::new(),
+        );
         assert_eq!(statements, once);
     }
 
@@ -1032,7 +1060,12 @@ mod tests {
             discard(GoExpression::identifier(second.clone())),
             returned(GoExpression::identifier(first.clone())),
         ]);
-        clean_up(&mut statements, &HashSet::default());
+        clean_up(
+            &mut statements,
+            &HashSet::default(),
+            &[],
+            &ScopeState::new(),
+        );
         assert_eq!(
             statements,
             identified(vec![
@@ -1043,7 +1076,12 @@ mod tests {
                 returned(GoExpression::identifier(first.clone()))
             ])
         );
-        clean_up(&mut statements, &HashSet::default());
+        clean_up(
+            &mut statements,
+            &HashSet::default(),
+            &[],
+            &ScopeState::new(),
+        );
         assert_eq!(
             statements,
             identified(vec![returned(GoExpression::external_name(

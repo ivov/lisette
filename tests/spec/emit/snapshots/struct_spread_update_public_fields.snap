@@ -21,7 +21,6 @@ func test() Point {
 		X: 1,
 		Y: 2,
 	}
-	copy_1 := p
-	copy_1.X = 10
-	return copy_1
+	p.X = 10
+	return p
 }

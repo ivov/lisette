@@ -32,14 +32,13 @@ func main() {
 	} else {
 		ch = ch2
 	}
-	ch_1 := ch
 	for {
 		select {
-		case v, ok := <-ch_1:
+		case v, ok := <-ch:
 			if ok {
 				_ = v
 			} else {
-				ch_1 = nil
+				ch = nil
 				continue
 			}
 		}

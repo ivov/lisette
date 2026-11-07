@@ -11,7 +11,6 @@ description: |
 package main
 
 func test(s []int, extra int, more []int) []int {
-	s_1 := s
-	s_1 = append(s_1, append([]int{extra}, more...)...)
-	return s_1
+	s = append(s, append([]int{extra}, more...)...)
+	return s
 }

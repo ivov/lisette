@@ -1,0 +1,71 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct P { a: int, b: int }
+  
+  fn bump(copy: int, o: P) -> P {
+    let step = copy
+    let mut copy = o
+    copy.a = step
+    copy
+  }
+  
+  fn own_field(p: P) -> P { P { a: p.a + 1, ..p } }
+  
+  fn swap(p: P) -> P { P { a: p.b, b: p.a, ..p } }
+  
+  fn test() {
+    let o = P { a: 1, b: 2 }
+    let bumped = bump(2, o)
+    if bumped.a != 2 || o.a != 1 { panic("the copy should change, not the original") }
+    let own = own_field(o)
+    if own.a != 2 || own.b != 2 { panic("the update should read the old field") }
+    let swapped = swap(o)
+    if swapped.a != 2 || swapped.b != 1 { panic("the swap should read both old fields") }
+  }
+---
+package main
+
+type P struct {
+	a int
+	b int
+}
+
+func bump(copy_ int, o P) P {
+	step := copy_
+	copy_1 := o
+	copy_1.a = step
+	return copy_1
+}
+
+func ownField(p P) P {
+	p.a = p.a + 1
+	return p
+}
+
+func swap(p P) P {
+	copy_1 := p
+	copy_1.a = p.b
+	copy_1.b = p.a
+	return copy_1
+}
+
+func test() {
+	o := P{
+		a: 1,
+		b: 2,
+	}
+	bumped := bump(2, o)
+	if bumped.a != 2 || o.a != 1 {
+		panic("the copy should change, not the original")
+	}
+	own := ownField(o)
+	if own.a != 2 || own.b != 2 {
+		panic("the update should read the old field")
+	}
+	swapped := swap(o)
+	if swapped.a != 2 || swapped.b != 1 {
+		panic("the swap should read both old fields")
+	}
+}

@@ -1843,6 +1843,54 @@ fn test() {
 }
 
 #[test]
+fn rebinding_a_dead_parameter_writes_the_parameter() {
+    let input = r#"
+struct P { a: int }
+
+impl P {
+  fn ptr(self: Ref<P>) -> Ref<P> { self }
+}
+
+fn top(names: Slice<string>) -> Slice<string> {
+  let mut names = names
+  names = names.append("t")
+  names
+}
+
+fn local(n: int) -> int {
+  let total = n * 2
+  let mut total = total
+  total += 1
+  total
+}
+
+fn closure_before(names: Slice<string>) -> int {
+  let count = || names.length()
+  let mut names = names
+  names = names.append("x")
+  count() + names.length()
+}
+
+fn address_before(p: P) -> int {
+  let r = p.ptr()
+  let mut p = p
+  p.a = 99
+  r.a + p.a
+}
+
+fn nested(n: int) -> int {
+  if n > 0 {
+    let mut n = n
+    n += 100
+    let _ = n
+  }
+  n
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn parameter_shadows_go_builtin() {
     let input = r#"
 fn test(len: int) -> int {

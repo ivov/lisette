@@ -23,8 +23,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func bump(n int) bool {
-	n_1 := n
-	n_1++
+	n++
 	return true
 }
 

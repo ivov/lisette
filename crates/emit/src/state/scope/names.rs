@@ -9,6 +9,7 @@ use crate::state::package_state::PackageState;
 pub(super) struct LocalNames {
     issued: HashSet<String>,
     generated: HashMap<LocalId, String>,
+    struct_update_copies: HashSet<LocalId>,
 }
 
 impl ScopeState {
@@ -23,6 +24,18 @@ impl ScopeState {
         let id = self.new_local_id();
         self.names.generated.insert(id, base);
         GoIdentifier::local(candidate, id)
+    }
+
+    pub(crate) fn generated_base(&self, id: LocalId) -> Option<&str> {
+        self.names.generated.get(&id).map(String::as_str)
+    }
+
+    pub(crate) fn mark_struct_update_copy(&mut self, id: LocalId) {
+        self.names.struct_update_copies.insert(id);
+    }
+
+    pub(crate) fn is_struct_update_copy(&self, id: LocalId) -> bool {
+        self.names.struct_update_copies.contains(&id)
     }
 
     pub(crate) fn fresh_binding_go_name(&mut self, hint: &str, package: &PackageState) -> String {

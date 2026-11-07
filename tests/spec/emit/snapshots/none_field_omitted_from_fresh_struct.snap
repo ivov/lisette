@@ -51,9 +51,8 @@ func fresh(name string) Person {
 }
 
 func clear_(person Person) Person {
-	copy_1 := person
-	copy_1.email = lisette.MakeOptionNone[string]()
-	return copy_1
+	person.email = lisette.MakeOptionNone[string]()
+	return person
 }
 
 func lookup(log chan int) (string, bool) {

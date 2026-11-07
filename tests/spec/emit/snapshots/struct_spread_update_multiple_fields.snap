@@ -23,8 +23,7 @@ func test() Config {
 		port:    8080,
 		timeout: 30,
 	}
-	copy_1 := default_config
-	copy_1.port = 9000
-	copy_1.timeout = 60
-	return copy_1
+	default_config.port = 9000
+	default_config.timeout = 60
+	return default_config
 }

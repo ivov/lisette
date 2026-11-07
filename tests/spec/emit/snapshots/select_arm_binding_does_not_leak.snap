@@ -33,14 +33,13 @@ func main() {
 	x_1 := 200
 	ch := make(chan int, 1)
 	lisette.ChannelSend(ch, 99)
-	ch_1 := ch
 	for {
 		select {
-		case x, ok := <-ch_1:
+		case x, ok := <-ch:
 			if ok {
 				fmt.Println(x)
 			} else {
-				ch_1 = nil
+				ch = nil
 				continue
 			}
 		default:
