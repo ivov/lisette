@@ -10,7 +10,7 @@ use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, Statement, directed_first, with_setup,
 };
-use crate::plan::go_expression::UnaryOp;
+use crate::plan::go_expression::{BinaryOp, UnaryOp};
 use crate::plan::local::GoIdentifier;
 use crate::plan::placement::{
     ElidableTail, collapse_declared_temp, requires_temp_var, try_elide_tail_let,
@@ -18,7 +18,7 @@ use crate::plan::placement::{
 use crate::plan::values::{GoExpression, ValuePlan};
 use std::iter;
 use std::slice;
-use syntax::ast::{Expression, IfLetAlternative, Literal, MatchArm, Pattern, Span};
+use syntax::ast::{BinaryOperator, Expression, IfLetAlternative, Literal, MatchArm, Pattern, Span};
 use syntax::types::Type;
 
 fn if_let_match_arms(
@@ -48,6 +48,62 @@ fn if_let_match_arms(
             expression: Box::new(alternative.clone()),
         },
     ]
+}
+
+pub(crate) struct Guard {
+    setup: Vec<Statement>,
+    condition: PairCondition,
+    then_body: LoweredBlock,
+}
+
+impl Guard {
+    fn into_if(self) -> IfPlan {
+        IfPlan {
+            initializer: self.condition.initializer,
+            condition: self.condition.condition,
+            then_body: self.then_body,
+            else_arm: ElseArm::None,
+        }
+    }
+
+    pub(crate) fn into_statement(self) -> LoweredStatement {
+        let Guard {
+            setup,
+            condition,
+            then_body,
+        } = self;
+        let guard = Guard {
+            setup: Vec::new(),
+            condition,
+            then_body,
+        };
+        with_setup(setup, LoweredStatement::If(guard.into_if()))
+    }
+}
+
+fn collect_conjuncts<'e>(condition: &'e Expression, conjuncts: &mut Vec<&'e Expression>) {
+    if let Expression::Binary {
+        operator: BinaryOperator::And,
+        left,
+        right,
+        ..
+    } = condition.unwrap_parens()
+    {
+        collect_conjuncts(left, conjuncts);
+        collect_conjuncts(right, conjuncts);
+    } else {
+        conjuncts.push(condition);
+    }
+}
+
+pub(crate) fn is_conjunction(condition: &Expression) -> bool {
+    matches!(
+        condition.unwrap_parens(),
+        Expression::Binary {
+            operator: BinaryOperator::And,
+            ..
+        }
+    )
 }
 
 impl Planner<'_> {
@@ -441,6 +497,51 @@ impl Planner<'_> {
         )
     }
 
+    pub(crate) fn lower_conjunction_guard(
+        &mut self,
+        condition: &Expression,
+        body: impl FnOnce(&mut Self) -> LoweredBlock,
+    ) -> Guard {
+        let mut conjuncts = Vec::new();
+        collect_conjuncts(condition, &mut conjuncts);
+        let mut levels: Vec<(Vec<Statement>, PairCondition)> = Vec::new();
+        for conjunct in conjuncts {
+            let (setup, next) = self.lower_if_condition(conjunct);
+            if setup.is_empty()
+                && next.initializer.is_none()
+                && let Some((outer_setup, current)) = levels.pop()
+            {
+                let condition =
+                    GoExpression::binary(current.condition, BinaryOp::And, next.condition);
+                let merged = PairCondition {
+                    initializer: current.initializer,
+                    condition,
+                };
+                levels.push((outer_setup, merged));
+            } else {
+                levels.push((setup, next));
+                self.enter_scope();
+            }
+        }
+        let mut then_body = body(self);
+        let mut levels = levels.into_iter().rev().peekable();
+        loop {
+            let (setup, condition) = levels.next().expect("a conjunction has a first operand");
+            self.exit_scope();
+            let guard = Guard {
+                setup,
+                condition,
+                then_body,
+            };
+            if levels.peek().is_none() {
+                return guard;
+            }
+            then_body = LoweredBlock {
+                statements: vec![guard.into_statement().into()],
+            };
+        }
+    }
+
     fn lower_while(&mut self, condition: &Expression, body: &Expression) -> LoopPlan {
         self.with_loop(GoExpression::external_name("_".to_string()), None, |this| {
             let (target, negated) = strip_negations(condition);
@@ -718,6 +819,14 @@ impl Planner<'_> {
         alternative: Option<&Expression>,
         place: &PlacePlan,
     ) -> LoweredStatement {
+        if alternative.is_none() && is_conjunction(condition) {
+            return self
+                .lower_conjunction_guard(condition, |this| {
+                    this.with_scope(|this| this.lower_block_to_place(consequence, place))
+                })
+                .into_statement();
+        }
+
         let (condition_setup, condition) = self.lower_if_condition(condition);
 
         let then_body = self.with_scope(|this| this.lower_block_to_place(consequence, place));
@@ -753,6 +862,23 @@ impl Planner<'_> {
             ..
         } = alternative
         {
+            if next_alternative.is_none() && is_conjunction(condition) {
+                return self.with_scope(|this| {
+                    let guard = this.lower_conjunction_guard(condition, |this| {
+                        this.with_scope(|this| this.lower_block_to_place(consequence, place))
+                    });
+                    if guard.setup.is_empty() {
+                        ElseArm::ElseIf(Box::new(guard.into_if()))
+                    } else {
+                        ElseArm::Else {
+                            body: LoweredBlock {
+                                statements: vec![guard.into_statement().into()],
+                            },
+                            inline: false,
+                        }
+                    }
+                });
+            }
             let (condition_setup, condition) = self.lower_if_condition(condition);
 
             // Go has no else-if with setup, so the setup and its `if` nest in `} else { ... }`.

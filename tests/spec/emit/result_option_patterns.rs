@@ -2667,7 +2667,7 @@ fn main() {
 }
 
 #[test]
-fn is_ok_under_logical_and_stays_an_expression() {
+fn is_ok_under_logical_and_nests_the_if() {
     let input = r#"
 import "go:fmt"
 import "go:strconv"
@@ -5451,6 +5451,46 @@ fn compile(name: string) -> Result<Target, error> {
       }
     },
   }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn option_test_after_logical_and_nests_the_if() {
+    let input = r#"
+struct Field { name: string, required: bool }
+
+fn missing(fields: Slice<Field>, values: Map<string, string>) -> Slice<string> {
+  let mut names = []
+  for field in fields {
+    if field.required && values.get(field.name).is_none() {
+      names = names.append(field.name)
+    }
+  }
+  names
+}
+
+fn label(values: Map<string, string>, strict: bool) -> string {
+  if strict && values.get("mode").is_some() {
+    "set"
+  } else {
+    "unset"
+  }
+}
+
+fn test() {
+  let fields = [
+    Field { name: "host", required: true },
+    Field { name: "port", required: true },
+    Field { name: "tag", required: false },
+  ]
+  let values = Map.from([("host", "localhost")])
+  let names = missing(fields, values)
+  if names.length() != 1 || names[0] != "port" { panic("only port should be missing") }
+  if label(values, true) != "unset" { panic("mode is not set") }
+  if label(Map.from([("mode", "fast")]), true) != "set" { panic("mode is set") }
+  if label(Map.from([("mode", "fast")]), false) != "unset" { panic("strict is false") }
 }
 "#;
     assert_emit_snapshot!(input);

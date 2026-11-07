@@ -1,0 +1,97 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct Field { name: string, required: bool }
+  
+  fn missing(fields: Slice<Field>, values: Map<string, string>) -> Slice<string> {
+    let mut names = []
+    for field in fields {
+      if field.required && values.get(field.name).is_none() {
+        names = names.append(field.name)
+      }
+    }
+    names
+  }
+  
+  fn label(values: Map<string, string>, strict: bool) -> string {
+    if strict && values.get("mode").is_some() {
+      "set"
+    } else {
+      "unset"
+    }
+  }
+  
+  fn test() {
+    let fields = [
+      Field { name: "host", required: true },
+      Field { name: "port", required: true },
+      Field { name: "tag", required: false },
+    ]
+    let values = Map.from([("host", "localhost")])
+    let names = missing(fields, values)
+    if names.length() != 1 || names[0] != "port" { panic("only port should be missing") }
+    if label(values, true) != "unset" { panic("mode is not set") }
+    if label(Map.from([("mode", "fast")]), true) != "set" { panic("mode is set") }
+    if label(Map.from([("mode", "fast")]), false) != "unset" { panic("strict is false") }
+  }
+---
+package main
+
+type Field struct {
+	name     string
+	required bool
+}
+
+func missing(fields []Field, values map[string]string) []string {
+	names := []string{}
+	for _, field := range fields {
+		if field.required {
+			if _, ok := values[field.name]; !ok {
+				names = append(names, field.name)
+			}
+		}
+	}
+	return names
+}
+
+func label(values map[string]string, strict bool) string {
+	if strict && func() bool {
+		_, ok := values["mode"]
+		return ok
+	}() {
+		return "set"
+	}
+	return "unset"
+}
+
+func test() {
+	fields := []Field{
+		{
+			name:     "host",
+			required: true,
+		},
+		{
+			name:     "port",
+			required: true,
+		},
+		{
+			name:     "tag",
+			required: false,
+		},
+	}
+	values := map[string]string{"host": "localhost"}
+	names := missing(fields, values)
+	if len(names) != 1 || names[0] != "port" {
+		panic("only port should be missing")
+	}
+	if label(values, true) != "unset" {
+		panic("mode is not set")
+	}
+	if label(map[string]string{"mode": "fast"}, true) != "set" {
+		panic("mode is set")
+	}
+	if label(map[string]string{"mode": "fast"}, false) != "unset" {
+		panic("strict is false")
+	}
+}
