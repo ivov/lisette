@@ -23,7 +23,6 @@ package main
 import (
 	"errors"
 	"example.com/lib"
-	lisette "github.com/ivov/lisette/prelude"
 )
 
 func lookup(path string) (string, error) {
@@ -34,25 +33,7 @@ func lookup(path string) (string, error) {
 }
 
 func main() {
-	cb := func(arg0 string) lisette.Result[string, error] {
-		return lisette.ResultFromPair[string](lookup(arg0))
-	}
-	opts := lib.Opts{Lookup: func(arg0 string) (string, error) {
-		res := cb(arg0)
-		if res.Tag == lisette.ResultOk {
-			return res.OkVal, nil
-		}
-		return "", res.ErrVal
-	}}
-	cb_1 := func(arg0 string) lisette.Result[string, error] {
-		return lisette.ResultFromPair[string](lookup(arg0))
-	}
-	opts.Lookup = func(arg0 string) (string, error) {
-		res_1 := cb_1(arg0)
-		if res_1.Tag == lisette.ResultOk {
-			return res_1.OkVal, nil
-		}
-		return "", res_1.ErrVal
-	}
+	opts := lib.Opts{Lookup: lookup}
+	opts.Lookup = lookup
 	lib.Run(opts)
 }

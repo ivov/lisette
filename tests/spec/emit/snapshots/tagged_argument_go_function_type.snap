@@ -46,16 +46,9 @@ func split(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
 }
 
 func count(n int) (int, bool) {
-	cb := func(arg0 []byte, arg1 bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
-		return lisette.ResultFromPair[lisette.Tuple2[int, []byte]](split(arg0, arg1))
-	}
 	var splitter bufio.SplitFunc = func(arg0 []byte, arg1 bool) (int, []byte, error) {
-		res := cb(arg0, arg1)
-		if res.Tag == lisette.ResultOk {
-			tup := res.OkVal
-			return tup.First, tup.Second, nil
-		}
-		return 0, nil, res.ErrVal
+		ret, ret_1 := split(arg0, arg1)
+		return ret.First, ret.Second, ret_1
 	}
 	scanner := bufio.NewScanner(strings.NewReader("one two"))
 	scanner.Split(bufio.SplitFunc(splitter))

@@ -36,16 +36,7 @@ func lookup(path string) (string, error) {
 }
 
 func pick(n int) (lib.Lookup, int) {
-	cb := func(arg0 string) lisette.Result[string, error] {
-		return lisette.ResultFromPair[string](lookup(arg0))
-	}
-	return func(arg0 string) (string, error) {
-		res := cb(arg0)
-		if res.Tag == lisette.ResultOk {
-			return res.OkVal, nil
-		}
-		return "", res.ErrVal
-	}, n
+	return lookup, n
 }
 
 func main() {

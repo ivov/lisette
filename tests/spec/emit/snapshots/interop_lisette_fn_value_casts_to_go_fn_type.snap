@@ -36,16 +36,9 @@ func splitWords(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
 }
 
 func main() {
-	cb := func(arg0 []byte, arg1 bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
-		return lisette.ResultFromPair[lisette.Tuple2[int, []byte]](splitWords(arg0, arg1))
-	}
 	_ = bufio.SplitFunc(func(arg0 []byte, arg1 bool) (int, []byte, error) {
-		res := cb(arg0, arg1)
-		if res.Tag == lisette.ResultOk {
-			tup := res.OkVal
-			return tup.First, tup.Second, nil
-		}
-		return 0, nil, res.ErrVal
+		ret, ret_1 := splitWords(arg0, arg1)
+		return ret.First, ret.Second, ret_1
 	})
 	_ = bufio.SplitFunc(bufio.ScanWords)
 }

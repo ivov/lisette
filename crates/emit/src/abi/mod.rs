@@ -8,10 +8,11 @@ use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::names::go_name::PRELUDE_ERROR_ID;
+use crate::plan::calls::CallableOrigin;
 use crate::types::go_type::GoType;
 use callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use coercion::CoercionPlan;
-use layout::{SlotOrigin, ValueLayout};
+use layout::{FunctionLayout, SlotOrigin, ValueLayout};
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -111,8 +112,15 @@ impl Planner<'_> {
         value: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> ValueLayout {
+        let value = self.peel_go_slot_alias_cast(value, ctx);
         let ty = value.get_type();
         let slot_origin = ctx.function_slot_origin();
+        if let Some(layout) = self.go_slot_declaration_layout(value, ctx) {
+            return ValueLayout::Function {
+                function_type: ty,
+                layout,
+            };
+        }
         let origin = if self.is_go_callable(value) {
             slot_origin
         } else {
@@ -136,6 +144,55 @@ impl Planner<'_> {
         ValueLayout::Function {
             function_type,
             layout: self.function_layout(layout.parameters, &result, return_abi, None),
+        }
+    }
+
+    pub(crate) fn go_slot_declaration_layout(
+        &self,
+        value: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> Option<FunctionLayout> {
+        if !ctx.function_slot_origin().declared_by_go()
+            || ctx.is_callee()
+            || ctx.forces_tagged_go_function()
+            || ctx.result_fills_type_parameter()
+            || is_closure_literal(value)
+            || self.is_go_callable(value)
+        {
+            return None;
+        }
+        let callee = self.resolve_callable_value(value)?;
+        if callee.is_prelude_dispatch || matches!(callee.origin, CallableOrigin::GoInterop) {
+            return None;
+        }
+        Some(callee.abi.function_layout(self))
+    }
+
+    pub(crate) fn peel_go_slot_alias_cast<'e>(
+        &self,
+        value: &'e Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> &'e Expression {
+        let Expression::Cast {
+            expression: inner,
+            ty,
+            ..
+        } = value.unwrap_parens()
+        else {
+            return value;
+        };
+        if !ctx.function_slot_origin().declared_by_go() || self.is_go_named_function_type(ty) {
+            return value;
+        }
+        let Some(target) = self.facts.resolve_to_function_type(ty) else {
+            return value;
+        };
+        let inner_ty = inner.get_type();
+        match self.facts.resolve_to_function_type(&inner_ty) {
+            Some(source) if source == target && !self.is_go_named_function_type(&inner_ty) => {
+                self.peel_go_slot_alias_cast(inner, ctx)
+            }
+            _ => value,
         }
     }
 

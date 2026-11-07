@@ -1,0 +1,74 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:flag"
+  import "go:strings"
+  
+  type Visit = fn(mut Ref<flag.Flag>) -> ()
+  
+  fn reset(f: mut Ref<flag.Flag>) {
+    if let Some(v) = f.Value { let _ = v.Set(f.DefValue) }
+  }
+  
+  fn bump(f: mut Ref<flag.Flag>) {
+    if let Some(v) = f.Value { let _ = v.Set("7") }
+  }
+  
+  fn is_comma(r: rune) -> bool {
+    r == ','
+  }
+  
+  fn test() {
+    let mut fs = flag.NewFlagSet("demo", flag.ContinueOnError)
+    let n = fs.Int("n", 1, "count")
+    fs.VisitAll(bump)
+    if n.* != 7 { panic("the named function should run for each flag") }
+    fs.VisitAll(reset as Visit)
+    if n.* != 1 { panic("the cast function should run for each flag") }
+    let parts = strings.FieldsFunc("a,b,,c", is_comma)
+    if parts.length() != 3 { panic("the predicate should split on commas") }
+  }
+---
+package main
+
+import (
+	"flag"
+	lisette "github.com/ivov/lisette/prelude"
+	"strings"
+)
+
+type Visit func(*flag.Flag) struct{}
+
+func reset(f *flag.Flag) {
+	if v := f.Value; !lisette.IsNilInterface(v) {
+		v.Set(f.DefValue)
+	}
+}
+
+func bump(f *flag.Flag) {
+	if v := f.Value; !lisette.IsNilInterface(v) {
+		v.Set("7")
+	}
+}
+
+func isComma(r rune) bool {
+	return r == ','
+}
+
+func test() {
+	fs := flag.NewFlagSet("demo", flag.ContinueOnError)
+	n := fs.Int("n", 1, "count")
+	fs.VisitAll(bump)
+	if *n != 7 {
+		panic("the named function should run for each flag")
+	}
+	fs.VisitAll(reset)
+	if *n != 1 {
+		panic("the cast function should run for each flag")
+	}
+	parts := strings.FieldsFunc("a,b,,c", isComma)
+	if len(parts) != 3 {
+		panic("the predicate should split on commas")
+	}
+}
