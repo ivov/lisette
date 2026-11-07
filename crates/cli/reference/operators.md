@@ -73,7 +73,7 @@ let double = ratio * 2
 ```lisette
 let items = [3, 0, 7]
 let i = 5
-// !callout-right `false`, so `items[i]` is skipped
+// !callout[/</] `false`, so `items[i] > 0` is skipped
 if i < items.length() && items[i] > 0 {
   fmt.Println(items[i])
 }

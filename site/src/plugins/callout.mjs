@@ -38,8 +38,10 @@ const literalClass = (code) => {
 // A number must stand alone, or the digits ending a name such as `int64` would paint as a literal.
 const NESTED = /("[^"]*"|'[^']*'|(?<![\w.])-?\d[\d_]*(?:\.\d+)?(?!\w))/;
 
-const codeNodes = (part) => {
+// Printed output reads as one value, so a `prints` label paints it whole, as a string or a value.
+const codeNodes = (part, printed) => {
   const kind = literalClass(part);
+  if (printed) return [h("code", { class: kind === "callout-string" ? kind : "callout-value" }, part)];
   if (kind) return [h("code", { class: kind }, part)];
   const pieces = part.split(NESTED).filter((piece) => piece !== "");
   if (pieces.length < 2) return [h("code", {}, part)];
@@ -52,7 +54,7 @@ const codeNodes = (part) => {
 const inlineCode = (text) =>
   text
     .split(/`([^`]+)`/)
-    .flatMap((part, index) => (index % 2 === 0 ? [part] : codeNodes(part)))
+    .flatMap((part, index) => (index % 2 === 0 ? [part] : codeNodes(part, text.startsWith("prints "))))
     .filter((part) => part !== "");
 
 const breakLines = (node) => {
@@ -179,6 +181,14 @@ const collect = (texts) => {
 const styles = `
   .ec-line.callout-line .code {
     padding-block: 0.35rem;
+  }
+  /* Boxes in a shared row overlap in one grid cell, so each margin counts from the line start. */
+  .ec-line.callout-shared .code {
+    display: grid;
+    justify-items: start;
+  }
+  .ec-line.callout-shared .callout {
+    grid-area: 1 / 1;
   }
   .callout {
     --callout-notch: 0.5rem;
@@ -320,20 +330,30 @@ export const callout = () =>
         const code = select("code", renderData.blockAst);
         if (!code) return;
 
+        // Callouts on one side of one line share a row, so each box sits on the line it names.
+        const rows = [];
+        for (const stacked of callouts.filter((entry) => !entry.right)) {
+          const row = rows.find(
+            (entry) => entry.lineIndex === stacked.lineIndex && entry.above === stacked.above,
+          );
+          if (row) row.boxes.push(stacked);
+          else rows.push({ lineIndex: stacked.lineIndex, above: stacked.above, boxes: [stacked] });
+        }
+
         // Splice from the bottom up so the positions of the lines above stay valid.
-        for (const stacked of callouts.filter((entry) => !entry.right).reverse()) {
+        for (const row of rows.reverse()) {
           const positions = code.children.flatMap((child, position) =>
             child.type === "element" ? [position] : [],
           );
-          const after = positions[stacked.lineIndex];
+          const after = positions[row.lineIndex];
           if (after === undefined) continue;
           const { lineAst, codeWrapper } = renderEmptyLine();
           lineAst.properties.className = [lineAst.properties.className ?? []]
             .flat()
-            .concat("callout-line");
-          codeWrapper.children.push(box(stacked));
+            .concat("callout-line", row.boxes.length > 1 ? ["callout-shared"] : []);
+          codeWrapper.children.push(...row.boxes.map(box));
           // An `-above` box takes the marker's own place, so it sits before the line it names.
-          code.children.splice(stacked.above ? after : after + 1, 0, lineAst);
+          code.children.splice(row.above ? after : after + 1, 0, lineAst);
         }
       },
     },

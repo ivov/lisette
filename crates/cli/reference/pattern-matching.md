@@ -1,6 +1,6 @@
 ---
 title: "Pattern matching"
-description: "match, exhaustiveness, patterns, alternative patterns, as bindings, guards, let else"
+description: "match, exhaustiveness, patterns, or-patterns, as bindings, guards, let else"
 ---
 
 A pattern tests a value's shape and names the parts inside it.
@@ -72,17 +72,6 @@ fn answer(key: rune) -> string {
 }
 ```
 
-Float literals cannot be patterns. Use a guard instead:
-
-```lisette
-fn level(ratio: float64) -> string {
-  match ratio {
-    r if r < 0.5 => "low",
-    _ => "high",
-  }
-}
-```
-
 ### Bindings
 
 An identifier binds the matched value to a name:
@@ -97,13 +86,13 @@ fn print_age(ages: Map<string, int>, name: string) {
 }
 ```
 
-`_` matches any value without binding:
+`_` matches any value without binding it:
 
 ```lisette
 fn listen(input: string) {
   match strconv.Atoi(input) {
     Ok(port) => fmt.Println(f"listening on {port}"),
-    // !callout[/_/] discards error
+    // !callout[/_/] matches any error without binding it
     Err(_) => fmt.Println(f"invalid port: {input}"),
   }
 }
@@ -186,7 +175,7 @@ Inside a `match` arm, the enum qualifier can be omitted:
 ```lisette
 fn describe(msg: Message) -> string {
   match msg {
-    // !callout `Message.` qualifier omitted
+    // !callout short for `Message.Ready`
     Ready => "ready",
     Write(text) => f"writing: {text}",
     Move { x, y } => f"moving to ({x}, {y})",
@@ -204,7 +193,7 @@ fn summarize(items: Slice<int>) -> string {
     [] => "empty",
     [n] => f"single: {n}",
     [first, second] => f"pair: {first}, {second}",
-    // !callout[/\.\.rest/] `rest` is `Slice<int>`
+    // !callout-center[/\.\.rest/] `Slice<int>`
     [first, ..rest] => f"first is {first}, {rest.length()} more",
   }
 }
@@ -215,7 +204,7 @@ The rest pattern `..rest` captures the remaining elements. On a slice it gives a
 ```lisette
 fn last(items: Slice<int>) -> int {
   match items {
-    // !callout-error-right error: elements after rest pattern are not supported
+    // !callout-error[/last/] error: elements after rest pattern are not supported
     [..rest, last] => last,
     _ => 0,
   }
@@ -227,16 +216,16 @@ Use `..` without an identifier to ignore the rest:
 ```lisette
 fn first_or_zero(items: Slice<int>) -> int {
   match items {
-    // !callout[/\.\./] discards all remaining elements
+    // !callout[/\.\./] ignores all remaining elements
     [first, ..] => first,
     [] => 0,
   }
 }
 ```
 
-## Alternative patterns
+## Or-patterns
 
-Use `|` to match multiple patterns in one arm:
+An or-pattern uses `|` to join several alternatives in one arm:
 
 ```lisette
 fn axis(direction: Direction) -> string {
@@ -257,7 +246,7 @@ enum Event {
 
 fn describe(event: Event) -> string {
   match event {
-    // !callout[/(?<=\{)key/] `key` is `rune`
+    // !callout-center[/(?<=\{)key/] `rune`
     KeyDown(key) | KeyUp(key) => f"key: {key}",
   }
 }
@@ -270,7 +259,7 @@ Use `as` to capture the entire matched value:
 ```lisette
 fn track(history: Slice<Message>, msg: Message) -> Slice<Message> {
   match msg {
-    // !callout-above[/(?<=as )moved/] `moved` is the whole `Message`
+    // !callout-center[/(?<=as )moved/] `Message`
     Move { .. } as moved => history.append(moved),
     _ => history,
   }
@@ -282,6 +271,8 @@ For an arm with alternatives, place `as` on each one:
 ```lisette
 fn tag(event: Event) -> (rune, Event) {
   match event {
+    // !callout-center[/(?<=KeyDown\(key\) as )pressed/] `Event`
+    // !callout-center[/(?<=KeyUp\(key\) as )pressed/] `Event`
     KeyDown(key) as pressed | KeyUp(key) as pressed => (key, pressed),
   }
 }
@@ -306,7 +297,7 @@ A guard and `as` can appear in the same arm:
 ```lisette
 fn positive(opt: Option<int>) -> Option<int> {
   match opt {
-    // !callout-above[/found/] `found` is the whole `Option<int>`
+    // !callout-center[/found/] `Option<int>`
     Some(n) as found if n > 0 => found,
     _ => None,
   }

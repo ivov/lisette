@@ -208,11 +208,16 @@ fn label(p: Point) -> string {
 
 ### `#[equality]`
 
-`==` and `!=` work only on natively comparable types: primitives and on structs, enums, tuples, arrays whose components all support `==`.
+`==` and `!=` work only on [`Comparable`](/docs/prelude/constraints/#comparable) types:
+
+- primitives
+- structs, enums, tuples, and arrays whose components are all `Comparable`
 
 ```lisette
 struct User {
+  // !callout-right `Comparable`
   name: string,
+  // !callout-right `Comparable`
   age: int,
 }
 ```
@@ -225,12 +230,26 @@ let u2 = User { name: "Alice", age: 30 }
 u1 == u2
 ```
 
-No other type supports `==` and `!=`.
+Maps and slices are not `Comparable`. Instead, they have a built-in `equals()` method, which compares structurally:
+
+- slices are compared element by element
+- maps are compared by keys and values
+
+```lisette
+let s1 = [1, 2, 3]
+let s2 = [1, 2, 3]
+
+// !callout-right `true`
+s1.equals(s2)
+```
+
+A struct with a field that is not `Comparable` is not `Comparable` either:
 
 ```lisette
 struct Order {
+  // !callout-right `Comparable`
   id: int,
-  // !callout-right does not support `==`
+  // !callout-right not `Comparable`
   tags: Slice<string>,
 }
 ```
@@ -243,17 +262,7 @@ let o2 = Order { id: 1, tags: ["a"] }
 o1 == o2
 ```
 
-Maps and slices have a built-in `equals()` method, which compares structurally, i.e. slices are compared element by element and maps are compared key by key.
-
-```lisette
-let a = [1, 2, 3]
-let b = [1, 2, 3]
-
-// !callout-right `true`
-a.equals(b)
-```
-
-To enable comparison on types that are not natively comparable and do not have a built-in `equals()` method, mark them with the `#[equality]` attribute. The attribute generates an `equals()` method that compares the type structurally.
+To compare a struct or enum that is not `Comparable`, mark it with `#[equality]`. This attribute generates an `equals()` method that compares structurally, like the built-in one on maps and slices.
 
 ```lisette
 #[equality]
@@ -264,11 +273,11 @@ struct Order {
 ```
 
 ```lisette
-let a = Order { id: 1, tags: ["a"] }
-let b = Order { id: 1, tags: ["a"] }
+let o1 = Order { id: 1, tags: ["a"] }
+let o2 = Order { id: 1, tags: ["a"] }
 
 // !callout-right `true`
-a.equals(b)
+o1.equals(o2)
 ```
 
 The generated `equals()` method compares each field by these rules:
@@ -293,11 +302,11 @@ impl Fraction {
 ```
 
 ```lisette
-let a = Fraction { numerator: 1, denominator: 2 }
-let b = Fraction { numerator: 2, denominator: 4 }
+let f1 = Fraction { numerator: 1, denominator: 2 }
+let f2 = Fraction { numerator: 2, denominator: 4 }
 
 // !callout-right `true`
-a.equals(b)
+f1.equals(f2)
 ```
 
 `#[equality]` works on generic structs and enums, as long as the type parameter is bound by `Comparable`, `Ordered`, or an interface that declares `equals()`.
@@ -310,11 +319,11 @@ struct Cart<T: Comparable> {
 ```
 
 ```lisette
-let a = Cart { items: [1, 2, 3] }
-let b = Cart { items: [1, 2, 3] }
+let c1 = Cart { items: [1, 2, 3] }
+let c2 = Cart { items: [1, 2, 3] }
 
 // !callout-right `true`
-a.equals(b)
+c1.equals(c2)
 ```
 
 ## `#[default]`

@@ -48,7 +48,8 @@ const { visible } = Astro.props;
     cursor: pointer;
   }
 
-  more-tabs .more-toggle:hover {
+  more-tabs .more-toggle:hover,
+  more-tabs .more-toggle[aria-expanded="true"] {
     color: var(--sl-color-white);
   }
 
@@ -61,21 +62,31 @@ const { visible } = Astro.props;
   more-tabs .more-toggle svg {
     width: 0.75em;
     height: 0.75em;
+    transition: transform 0.15s;
   }
 
+  more-tabs .more-toggle[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+
+  /* The menu hangs from the tab row's bottom line, in the page color, so it reads as part of the row. */
   more-tabs .more-menu {
     position: absolute;
-    top: calc(100% + 0.4rem);
+    top: calc(100% + 2px);
     left: 0;
     z-index: 10;
     min-width: 100%;
     margin: 0;
-    padding: 0.3rem;
+    padding: 0.25rem 0;
     list-style: none;
-    background: var(--sl-color-bg-nav);
+    background: var(--sl-color-bg);
     border: 1px solid var(--sl-color-gray-5);
-    border-radius: 0.5rem;
-    box-shadow: var(--sl-shadow-md);
+    border-top: 0;
+    border-radius: 0 0 0.4rem 0.4rem;
+    /* The first shadow paints the page color past the left edge, so text the menu cuts fades out. */
+    box-shadow:
+      -0.75rem 0 0.75rem -0.25rem var(--sl-color-bg),
+      0 0.4rem 1rem rgb(0 0 0 / 0.22);
   }
 
   more-tabs .more-menu[hidden] {
@@ -85,14 +96,15 @@ const { visible } = Astro.props;
   more-tabs .more-menu button {
     display: block;
     width: 100%;
-    padding: 0.35rem 0.9rem;
+    padding: 0.3rem 1.25rem;
     font: inherit;
+    line-height: var(--sl-line-height-headings);
     text-align: start;
     white-space: nowrap;
-    color: var(--sl-color-gray-2);
+    color: var(--sl-color-gray-3);
     background: none;
     border: 0;
-    border-radius: 0.3rem;
+    box-shadow: inset 2px 0 0 transparent;
     cursor: pointer;
   }
 
@@ -106,6 +118,7 @@ const { visible } = Astro.props;
   more-tabs .more-menu button[aria-checked="true"] {
     color: var(--sl-color-white);
     font-weight: 600;
+    box-shadow: inset 2px 0 0 color-mix(in oklab, var(--sl-color-text-accent) 65%, var(--sl-color-gray-5));
   }
 </style>
 

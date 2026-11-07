@@ -61,8 +61,10 @@ enum Cache<T> {
   Hit(T),
   Miss,
 }
+```
 
-// !callout-right `Cache<string>`
+```lisette
+// !callout-center[/address/] `Cache<string>`
 let address = Cache.Hit("93.184.216.34")
 ```
 

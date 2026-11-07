@@ -27,9 +27,9 @@ Example output:
 
 `lis add` will:
 
-1. download the Go module to `~/go/pkg/mod`,
-2. generate [typedefs](/docs/typedefs/) at `target/.lisette/typedefs`, and
-3. declare the module and its transitives in the `lisette.toml` manifest.
+- download the Go module to `~/go/pkg/mod`
+- generate [typedefs](/docs/typedefs/) at `target/.lisette/typedefs`
+- declare the module and its transitives in the `lisette.toml` manifest
 
 ```toml
 [dependencies.go]

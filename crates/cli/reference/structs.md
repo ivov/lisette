@@ -9,9 +9,7 @@ A struct groups named fields into one type.
 
 ```lisette
 struct Point {
-  // !callout-right field `x`, type `int`
   x: int,
-  // !callout-right field `y`, type `int`
   y: int,
 }
 ```
@@ -24,14 +22,14 @@ To instantiate a struct, provide all fields by name. To read a field, use dot no
 
 ```lisette
 let p = Point { x: 10, y: 20 }
-// !callout-right `30`
+// !callout[/sum/] `30`
 let sum = p.x + p.y
 ```
 
 To write to a field, assign to it. The binding must be mutable:
 
 ```lisette
-// !callout-right `Point`
+// !callout[/mut/] required by `p.x = 50`
 let mut p = Point { x: 10, y: 20 }
 p.x = 50
 ```
