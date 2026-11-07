@@ -19,12 +19,11 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func test(opt lisette.Option[int]) int {
 	current := opt
-	current_1 := current
 	clear_ := func() bool {
-		current_1 = lisette.MakeOptionNone[int]()
+		current = lisette.MakeOptionNone[int]()
 		return false
 	}
-	subject := current_1
+	subject := current
 	if subject.Tag == lisette.OptionSome {
 		{
 			x := subject.SomeVal

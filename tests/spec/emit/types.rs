@@ -1942,6 +1942,49 @@ fn main() {
 }
 
 #[test]
+fn struct_update_writes_a_dead_base_in_place() {
+    let input = r#"
+struct P { a: int, b: int, c: int }
+
+impl P {
+  fn ptr(self: Ref<P>) -> Ref<P> { self }
+}
+
+fn own_field(p: P) -> P { P { a: p.a + 1, ..p } }
+
+fn later_field(p: P) -> P { P { a: p.b, b: 50, ..p } }
+
+fn swap(p: P) -> P { P { a: p.b, b: p.a, ..p } }
+
+fn whole_after_a_write(p: P, f: fn(P) -> int) -> P { P { a: 10, b: f(p), ..p } }
+
+fn read_after(p: P) -> int {
+  let q = P { a: 5, ..p }
+  q.a + p.a
+}
+
+fn address_before(p: P) -> P {
+  let r = p.ptr()
+  let q = P { a: r.a + 1, ..p }
+  q
+}
+
+fn per_element(ps: Slice<P>) -> Slice<P> {
+  let mut out: Slice<P> = []
+  for p in ps {
+    out = out.append(P { b: p.b + 1, ..p })
+  }
+  out
+}
+
+fn captured(p: P) -> fn(int) -> P {
+  |x: int| P { b: x, ..p }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn struct_update_copies_the_base_once() {
     let input = r#"
 struct Config { debug: bool, port: int, tags: Slice<string> }
@@ -7712,6 +7755,75 @@ fn main() {
   let g = b.get
   let y = g()
   let _ = (x, y)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn a_user_local_named_copy_is_not_a_struct_update_copy() {
+    let input = r#"
+struct P { a: int, b: int }
+
+fn bump(copy: int, o: P) -> P {
+  let step = copy
+  let mut copy = o
+  copy.a = step
+  copy
+}
+
+fn own_field(p: P) -> P { P { a: p.a + 1, ..p } }
+
+fn swap(p: P) -> P { P { a: p.b, b: p.a, ..p } }
+
+fn test() {
+  let o = P { a: 1, b: 2 }
+  let bumped = bump(2, o)
+  if bumped.a != 2 || o.a != 1 { panic("the copy should change, not the original") }
+  let own = own_field(o)
+  if own.a != 2 || own.b != 2 { panic("the update should read the old field") }
+  let swapped = swap(o)
+  if swapped.a != 2 || swapped.b != 1 { panic("the swap should read both old fields") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn a_method_value_through_a_path_keeps_the_copy() {
+    let input = r#"
+struct Cell { a: int }
+
+impl Cell {
+  fn get(self: Ref<Cell>) -> int { self.a }
+}
+
+struct P { cell: Cell, b: int }
+
+struct Q { cell: Cell, get: fn() -> int }
+
+fn saved(p: P) -> (fn() -> int, P) {
+  let get = p.cell.get
+  (get, P { cell: Cell { a: 9 }, ..p })
+}
+
+fn in_update(q: Q) -> Q {
+  Q { get: q.cell.get, cell: Cell { a: 9 }, ..q }
+}
+
+fn through_index(xs: Array<Cell, 1>) -> int {
+  let get = xs[0].get
+  let mut xs = xs
+  xs[0] = Cell { a: 9 }
+  get() + xs[0].a
+}
+
+fn test() {
+  let (get, p) = saved(P { cell: Cell { a: 1 }, b: 0 })
+  if get() != 1 || p.cell.a != 9 { panic("the saved method value should read the old cell") }
+  let q = in_update(Q { cell: Cell { a: 1 }, get: || 0 })
+  if q.get() != 1 { panic("the method value in the update should read the old cell") }
+  if through_index([Cell { a: 1 }]) != 10 { panic("the method value should read the old element") }
 }
 "#;
     assert_emit_snapshot!(input);

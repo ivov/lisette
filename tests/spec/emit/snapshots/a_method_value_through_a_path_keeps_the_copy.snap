@@ -1,0 +1,100 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Cell { a: int }
+  
+  impl Cell {
+    fn get(self: Ref<Cell>) -> int { self.a }
+  }
+  
+  struct P { cell: Cell, b: int }
+  
+  struct Q { cell: Cell, get: fn() -> int }
+  
+  fn saved(p: P) -> (fn() -> int, P) {
+    let get = p.cell.get
+    (get, P { cell: Cell { a: 9 }, ..p })
+  }
+  
+  fn in_update(q: Q) -> Q {
+    Q { get: q.cell.get, cell: Cell { a: 9 }, ..q }
+  }
+  
+  fn through_index(xs: Array<Cell, 1>) -> int {
+    let get = xs[0].get
+    let mut xs = xs
+    xs[0] = Cell { a: 9 }
+    get() + xs[0].a
+  }
+  
+  fn test() {
+    let (get, p) = saved(P { cell: Cell { a: 1 }, b: 0 })
+    if get() != 1 || p.cell.a != 9 { panic("the saved method value should read the old cell") }
+    let q = in_update(Q { cell: Cell { a: 1 }, get: || 0 })
+    if q.get() != 1 { panic("the method value in the update should read the old cell") }
+    if through_index([Cell { a: 1 }]) != 10 { panic("the method value should read the old element") }
+  }
+---
+package main
+
+type Cell struct {
+	a int
+}
+
+func (c *Cell) get() int {
+	return c.a
+}
+
+type P struct {
+	cell Cell
+	b    int
+}
+
+type Q struct {
+	cell Cell
+	get  func() int
+}
+
+func saved(p P) (func() int, P) {
+	get := p.cell.get
+	copy_1 := p
+	copy_1.cell = Cell{a: 9}
+	return get, copy_1
+}
+
+func inUpdate(q Q) Q {
+	copy_1 := q
+	copy_1.get = q.cell.get
+	copy_1.cell = Cell{a: 9}
+	return copy_1
+}
+
+func throughIndex(xs [1]Cell) int {
+	get := xs[0].get
+	xs_1 := xs
+	xs_1[0] = Cell{a: 9}
+	return get() + xs_1[0].a
+}
+
+func test() {
+	get, p := saved(P{
+		cell: Cell{a: 1},
+		b:    0,
+	})
+	if get() != 1 || p.cell.a != 9 {
+		panic("the saved method value should read the old cell")
+	}
+	q := inUpdate(Q{
+		cell: Cell{a: 1},
+		get: func() int {
+			return 0
+		},
+	})
+	if q.get() != 1 {
+		panic("the method value in the update should read the old cell")
+	}
+	if throughIndex([1]Cell{{a: 1}}) != 10 {
+		panic("the method value should read the old element")
+	}
+}

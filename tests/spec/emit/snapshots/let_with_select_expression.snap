@@ -16,14 +16,13 @@ package main
 func test() int {
 	ch := make(chan int)
 	var result int
-	ch_1 := ch
 	for {
 		select {
-		case v, ok := <-ch_1:
+		case v, ok := <-ch:
 			if ok {
 				result = v
 			} else {
-				ch_1 = nil
+				ch = nil
 				continue
 			}
 		default:

@@ -1,0 +1,108 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct P { a: int, b: int, c: int }
+  
+  impl P {
+    fn ptr(self: Ref<P>) -> Ref<P> { self }
+  }
+  
+  fn own_field(p: P) -> P { P { a: p.a + 1, ..p } }
+  
+  fn later_field(p: P) -> P { P { a: p.b, b: 50, ..p } }
+  
+  fn swap(p: P) -> P { P { a: p.b, b: p.a, ..p } }
+  
+  fn whole_after_a_write(p: P, f: fn(P) -> int) -> P { P { a: 10, b: f(p), ..p } }
+  
+  fn read_after(p: P) -> int {
+    let q = P { a: 5, ..p }
+    q.a + p.a
+  }
+  
+  fn address_before(p: P) -> P {
+    let r = p.ptr()
+    let q = P { a: r.a + 1, ..p }
+    q
+  }
+  
+  fn per_element(ps: Slice<P>) -> Slice<P> {
+    let mut out: Slice<P> = []
+    for p in ps {
+      out = out.append(P { b: p.b + 1, ..p })
+    }
+    out
+  }
+  
+  fn captured(p: P) -> fn(int) -> P {
+    |x: int| P { b: x, ..p }
+  }
+---
+package main
+
+type P struct {
+	a int
+	b int
+	c int
+}
+
+func (p *P) ptr() *P {
+	return p
+}
+
+func ownField(p P) P {
+	p.a = p.a + 1
+	return p
+}
+
+func laterField(p P) P {
+	p.a = p.b
+	p.b = 50
+	return p
+}
+
+func swap(p P) P {
+	copy_1 := p
+	copy_1.a = p.b
+	copy_1.b = p.a
+	return copy_1
+}
+
+func wholeAfterAWrite(p P, f func(P) int) P {
+	copy_1 := p
+	copy_1.a = 10
+	copy_1.b = f(p)
+	return copy_1
+}
+
+func readAfter(p P) int {
+	q := p
+	q.a = 5
+	return q.a + p.a
+}
+
+func addressBefore(p P) P {
+	r := p.ptr()
+	q := p
+	q.a = r.a + 1
+	return q
+}
+
+func perElement(ps []P) []P {
+	out := []P{}
+	for _, p := range ps {
+		arg := out
+		p.b = p.b + 1
+		out = append(arg, p)
+	}
+	return out
+}
+
+func captured(p P) func(int) P {
+	return func(x int) P {
+		copy_1 := p
+		copy_1.b = x
+		return copy_1
+	}
+}

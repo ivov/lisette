@@ -61,17 +61,16 @@ func main() {
 		cb_1 := apply(adapted, []byte{65, 66})
 		ch := make(chan int, 1)
 		lisette.ChannelSend(ch, cb_1)
-		ch_1 := ch
 		for {
 			select {
-			case ret, ok := <-ch_1:
+			case ret, ok := <-ch:
 				if ok {
 					read := func() int {
 						return ret
 					}
 					return read()
 				}
-				ch_1 = nil
+				ch = nil
 				continue
 			default:
 				return 0

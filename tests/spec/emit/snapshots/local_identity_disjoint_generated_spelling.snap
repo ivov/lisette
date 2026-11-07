@@ -50,17 +50,16 @@ func main() {
 	lisette.ChannelSend(ch, 5)
 	left := total
 	var tmp int
-	ch_1 := ch
 	for {
 		select {
-		case value_1, ok := <-ch_1:
+		case value_1, ok := <-ch:
 			if ok {
 				g := func() int {
 					return value_1 + f()
 				}
 				tmp = g()
 			} else {
-				ch_1 = nil
+				ch = nil
 				continue
 			}
 		default:

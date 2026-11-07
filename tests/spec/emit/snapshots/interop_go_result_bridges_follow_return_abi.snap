@@ -81,8 +81,7 @@ func tupleReturn() ([]lisette.Option[int], int) {
 		}
 	}
 	tup := lisette.MakeTuple2(wrapped, ret_1)
-	tup_1 := tup
-	return tup_1.First, tup_1.Second
+	return tup.First, tup.Second
 }
 
 func maybeValue() ([]lisette.Option[int], bool) {

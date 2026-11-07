@@ -958,7 +958,7 @@ impl Planner<'_> {
     ) -> (String, String) {
         let (go_ret, mut statements) = self.plan_adapter_body(method, wraps_inner, parameters);
         let shadowing = identify_body_locals(&mut statements, parameters, &mut self.scope);
-        clean_up(&mut statements, &shadowing);
+        clean_up(&mut statements, &shadowing, parameters, &self.scope);
         let mut body = LoweredBlock { statements };
         if !go_ret.is_empty() {
             body.ensure_go_termination();
