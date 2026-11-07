@@ -1133,7 +1133,7 @@ net.conn.SetReadDeadline (shared r0): r0<-[recv]
 net.conn.SetWriteBuffer (shared r0): r0<-[recv]
 net.conn.SetWriteDeadline (shared r0): r0<-[recv]
 net.conn.Write (shared r1): r1<-[recv]
-net/http.AllowQuerySemicolons: r0<-[h]
+net/http.AllowQuerySemicolons (opaque r0): r0<-h
 net/http.Client.Do (shared r1): r1<-[recv]
 net/http.Client.Get (shared r1): r1<-[recv]
 net/http.Client.Head (shared r1): r1<-[recv]
@@ -1150,7 +1150,7 @@ net/http.Head (shared r1):
 net/http.Header.Values: r0<-recv
 net/http.ListenAndServe (opaque r0) (shared r0): r0<-handler
 net/http.ListenAndServeTLS (opaque r0) (shared r0): r0<-handler
-net/http.MaxBytesHandler: r0<-[h]
+net/http.MaxBytesHandler (opaque r0): r0<-h
 net/http.MaxBytesReader: r0<-[r] r0<-[w]
 net/http.NewFileTransport: r0<-[fs]
 net/http.NewFileTransportFS: r0<-[fsys]

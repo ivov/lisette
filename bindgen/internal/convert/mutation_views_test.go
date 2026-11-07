@@ -387,6 +387,41 @@ func ReadByCallee(a, b []byte) [][]byte {
 	assertResultView(t, views, sig, 0, "[a]")
 }
 
+func TestViewsMarkInterfaceWrittenLocalsOpaque(t *testing.T) {
+	analysis, pkg := analyzeSource(t, `
+type Filler interface{ Fill(dst [][]byte, v []byte) }
+type Encoder interface{ Encode(dst []byte) }
+
+type Plain struct{ N int }
+type Pointers interface{ Fill(dst []*Plain, p *Plain) }
+
+func FilledByInterface(f Filler, s []byte) [][]byte {
+	out := make([][]byte, 1)
+	f.Fill(out, s)
+	return out
+}
+
+func PointersByInterface(f Pointers, p *Plain, n int) []*Plain {
+	out := make([]*Plain, n)
+	f.Fill(out, p)
+	return out
+}
+
+func EncodedByInterface(e Encoder, n int) []byte {
+	out := make([]byte, n)
+	e.Encode(out)
+	return out
+}
+`)
+	views, _ := functionViews(t, analysis, pkg, "FilledByInterface")
+	assertOpaque(t, views, 0, true)
+	views, _ = functionViews(t, analysis, pkg, "PointersByInterface")
+	assertOpaque(t, views, 0, true)
+	views, sig := functionViews(t, analysis, pkg, "EncodedByInterface")
+	assertResultView(t, views, sig, 0)
+	assertOpaque(t, views, 0, false)
+}
+
 // Byte copies carry no storage.
 func TestViewsFollowCopyStoresIntoLocals(t *testing.T) {
 	analysis, pkg := analyzeSource(t, `
