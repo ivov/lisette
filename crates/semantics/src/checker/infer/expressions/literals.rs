@@ -275,14 +275,7 @@ fn fstring_inner_needs_parens(expression: &Expression) -> bool {
         | Expression::IndexedAccess { .. }
         | Expression::Paren { .. }
         | Expression::Propagate { .. } => false,
-        // A `|>` pipeline lowers to a `Call` with its piped arg before the callee.
-        Expression::Call {
-            expression: callee,
-            args,
-            ..
-        } => !args
-            .iter()
-            .all(|arg| arg.get_span().byte_offset >= callee.get_span().byte_offset),
+        Expression::Call { .. } => expression.is_piped_call(),
         _ => true,
     }
 }

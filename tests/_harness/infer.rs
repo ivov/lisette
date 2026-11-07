@@ -307,6 +307,16 @@ impl InferResult {
         self
     }
 
+    pub fn assert_error_count(self, expected: usize) -> Self {
+        assert_eq!(
+            self.errors.len(),
+            expected,
+            "Full errors:\n{}",
+            format_errors(&self.errors)
+        );
+        self
+    }
+
     pub fn assert_resolve_code(self, code: &str) -> Self {
         self.assert_code(&format!("resolve.{}", code))
     }

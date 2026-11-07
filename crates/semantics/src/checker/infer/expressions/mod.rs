@@ -371,6 +371,10 @@ impl InferCtx<'_> {
         right: Expression,
         span: Span,
     ) -> Expression {
+        let error = Expression::Unit {
+            ty: Type::Error,
+            span,
+        };
         let right = Self::unwrap_parens_owned(right);
         let right = match right {
             Expression::Binary {
@@ -384,6 +388,9 @@ impl InferCtx<'_> {
         };
 
         match right {
+            Expression::Unit {
+                ty: Type::Error, ..
+            } => error,
             Expression::Identifier { .. } | Expression::DotAccess { .. } => Expression::Call {
                 expression: Box::new(right),
                 args: vec![left],
@@ -395,19 +402,17 @@ impl InferCtx<'_> {
             },
             Expression::Call {
                 expression,
-                args,
+                mut args,
                 spread,
                 type_arguments,
                 ty,
                 call_kind,
                 ..
             } => {
-                let mut new_args = Vec::with_capacity(args.len() + 1);
-                new_args.push(left);
-                new_args.extend(args);
+                args.insert(0, left);
                 Expression::Call {
                     expression,
-                    args: new_args,
+                    args,
                     spread,
                     type_arguments,
                     ty,
@@ -421,19 +426,13 @@ impl InferCtx<'_> {
             } => {
                 self.sink
                     .push(diagnostics::infer::propagate_in_pipeline(propagate_span));
-                Expression::Unit {
-                    ty: Type::Error,
-                    span,
-                }
+                error
             }
             other => {
                 self.sink.push(diagnostics::infer::invalid_pipeline_target(
                     other.get_span(),
                 ));
-                Expression::Unit {
-                    ty: Type::Error,
-                    span,
-                }
+                error
             }
         }
     }
