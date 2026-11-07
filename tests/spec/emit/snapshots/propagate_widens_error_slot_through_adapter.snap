@@ -67,17 +67,17 @@ func widen() (int, Failing[lisette.Result[int, error]]) {
 }
 
 func main() {
-	if _, f := widen(); f == nil {
+	_, f := widen()
+	if f == nil {
 		panic("expected error")
-	} else {
-		subject := f.get()
-		if subject.Tag == lisette.ResultOk {
-			if subject.OkVal != 1 {
-				panic("wrong adapted value")
-			}
-		} else {
-			panic("expected ok from get")
+	}
+	subject := f.get()
+	if subject.Tag == lisette.ResultOk {
+		if subject.OkVal != 1 {
+			panic("wrong adapted value")
 		}
+	} else {
+		panic("expected ok from get")
 	}
 }
 

@@ -38,9 +38,8 @@ func fallible() (int, error) {
 func describe(value any) string {
 	if text, ok := value.(string); ok {
 		return text
-	} else {
-		return ""
 	}
+	return ""
 }
 
 func run() (string, error) {

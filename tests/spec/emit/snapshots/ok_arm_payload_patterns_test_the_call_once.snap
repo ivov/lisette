@@ -65,13 +65,13 @@ func pair(a string) (lisette.Tuple2[int, int], error) {
 func sum(a string) int {
 	if ret, err := pair(a); err == nil {
 		return ret.First + ret.Second
-	} else {
-		return -1
 	}
+	return -1
 }
 
 func describe(s string) string {
-	if ret, e := strconv.Atoi(s); e == nil {
+	ret, e := strconv.Atoi(s)
+	if e == nil {
 		if ret == 1 {
 			return "one"
 		}
@@ -79,9 +79,8 @@ func describe(s string) string {
 			return "many"
 		}
 		return "few"
-	} else {
-		return e.Error()
 	}
+	return e.Error()
 }
 
 func firstOrZero(a string) int {

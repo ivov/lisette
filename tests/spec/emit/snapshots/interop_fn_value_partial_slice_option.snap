@@ -28,28 +28,26 @@ func main() {
 		if ret_1 != nil {
 			if ret == nil {
 				return lisette.MakePartialErr[[]lisette.Option[string], error](ret_1)
-			} else {
-				wrapped := make([]lisette.Option[string], len(ret))
-				for i, v := range ret {
-					if v != nil {
-						wrapped[i] = lisette.MakeOptionSome[string](*v)
-					} else {
-						wrapped[i] = lisette.MakeOptionNone[string]()
-					}
-				}
-				return lisette.MakePartialBoth[[]lisette.Option[string], error](wrapped, ret_1)
 			}
-		} else {
-			wrapped_1 := make([]lisette.Option[string], len(ret))
-			for i_1, v_1 := range ret {
-				if v_1 != nil {
-					wrapped_1[i_1] = lisette.MakeOptionSome[string](*v_1)
+			wrapped := make([]lisette.Option[string], len(ret))
+			for i, v := range ret {
+				if v != nil {
+					wrapped[i] = lisette.MakeOptionSome[string](*v)
 				} else {
-					wrapped_1[i_1] = lisette.MakeOptionNone[string]()
+					wrapped[i] = lisette.MakeOptionNone[string]()
 				}
 			}
-			return lisette.MakePartialOk[[]lisette.Option[string], error](wrapped_1)
+			return lisette.MakePartialBoth[[]lisette.Option[string], error](wrapped, ret_1)
 		}
+		wrapped_1 := make([]lisette.Option[string], len(ret))
+		for i_1, v_1 := range ret {
+			if v_1 != nil {
+				wrapped_1[i_1] = lisette.MakeOptionSome[string](*v_1)
+			} else {
+				wrapped_1[i_1] = lisette.MakeOptionNone[string]()
+			}
+		}
+		return lisette.MakePartialOk[[]lisette.Option[string], error](wrapped_1)
 	}
 	subject := f()
 	switch subject.Tag {

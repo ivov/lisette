@@ -804,6 +804,12 @@ impl Planner<'_> {
 
         let plan = if then_body.renders_empty() && !else_body.renders_empty() {
             pair_if(err_condition, else_body, ElseArm::None)
+        } else if else_body.ends_with_diverge() && then_body.ends_with_diverge() {
+            pair_if(
+                err_condition,
+                else_body,
+                ElseArm::from_body(then_body, false),
+            )
         } else {
             pair_if(
                 ok_condition,

@@ -4479,7 +4479,7 @@ fn test() {
 }
 
 #[test]
-fn a_terminal_else_keeps_its_block_when_an_initializer_binds_names() {
+fn an_initializer_moves_out_when_the_code_after_the_if_reads_its_names() {
     let input = r#"
 import "go:errors"
 
@@ -4531,7 +4531,7 @@ fn test() {
 }
 
 #[test]
-fn a_terminal_else_keeps_its_block_when_an_earlier_initializer_binds_names() {
+fn an_earlier_initializer_moves_out_when_the_code_after_the_if_reads_its_names() {
     let input = r#"
 import "go:io"
 import "go:strings"
@@ -4636,6 +4636,108 @@ fn main() {
     }
   } else { 2 }
   fmt.Println(v)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn an_error_branch_that_returns_comes_first_and_the_rest_dedents() {
+    let input = r#"
+import "go:strconv"
+
+fn double(s: string) -> Result<int, error> {
+  match strconv.Atoi(s) {
+    Ok(n) => {
+      let doubled = n * 2
+      Ok(doubled)
+    },
+    Err(e) => Err(e),
+  }
+}
+
+fn or_zero(s: string) -> int {
+  let mut total = 0
+  match strconv.Atoi(s) {
+    Ok(n) => { total = n },
+    Err(_) => { return 0 },
+  }
+  total + 1
+}
+
+fn test() {
+  match double("21") {
+    Ok(n) => if n != 42 { panic("21 should double to 42") },
+    Err(_) => panic("21 should parse"),
+  }
+  if double("x").is_ok() { panic("x should not parse") }
+  if or_zero("4") != 5 { panic("4 should add one") }
+  if or_zero("x") != 0 { panic("x should return zero") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn an_initializer_stays_when_moving_it_would_redeclare_a_type_parameter() {
+    let input = r#"
+import "go:strconv"
+
+fn check<t>(value: t, text: string) -> t {
+  match strconv.Atoi(text) {
+    Ok(t) => { if t != 4 { panic("number") } },
+    Err(_) => { return value },
+  }
+  let later = || -> t { value }
+  later()
+}
+
+fn test() {
+  if check(7, "4") != 7 || check(8, "x") != 8 { panic("the generic header should stay in place") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn an_initializer_stays_when_moving_it_would_shadow_a_type_parameter() {
+    let input = r#"
+import "go:strconv"
+
+fn check<t>(value: t, text: string, enter: bool) -> t {
+  if enter {
+    match strconv.Atoi(text) {
+      Ok(t) => { if t != 4 { panic("number") } },
+      Err(_) => { return value },
+    }
+    let later = || -> t { value }
+    return later()
+  }
+  value
+}
+
+fn test() {
+  if check(7, "4", true) != 7 || check(8, "x", true) != 8 { panic("the nested generic header should stay in place") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn an_initializer_stays_when_moving_it_would_redeclare_a_raw_go_name() {
+    let input = r#"
+import "go:strconv"
+
+fn parse(text: string) -> int {
+  @rawgo("0; var n int; var err error; _ = n; _ = err")
+  match strconv.Atoi(text) {
+    Ok(n) => n,
+    Err(_) => 0,
+  }
+}
+
+fn test() {
+  if parse("4") != 4 || parse("x") != 0 { panic("the header should stay in place") }
 }
 "#;
     assert_emit_snapshot!(input);

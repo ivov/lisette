@@ -9,9 +9,8 @@ import "strings"
 func find(haystack, needle string) int {
 	if i := strings.Index(haystack, needle); i != -1 {
 		return i
-	} else {
-		return -2
 	}
+	return -2
 }
 
 func main() {

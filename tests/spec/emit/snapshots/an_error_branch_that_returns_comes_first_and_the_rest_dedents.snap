@@ -1,0 +1,76 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn double(s: string) -> Result<int, error> {
+    match strconv.Atoi(s) {
+      Ok(n) => {
+        let doubled = n * 2
+        Ok(doubled)
+      },
+      Err(e) => Err(e),
+    }
+  }
+  
+  fn or_zero(s: string) -> int {
+    let mut total = 0
+    match strconv.Atoi(s) {
+      Ok(n) => { total = n },
+      Err(_) => { return 0 },
+    }
+    total + 1
+  }
+  
+  fn test() {
+    match double("21") {
+      Ok(n) => if n != 42 { panic("21 should double to 42") },
+      Err(_) => panic("21 should parse"),
+    }
+    if double("x").is_ok() { panic("x should not parse") }
+    if or_zero("4") != 5 { panic("4 should add one") }
+    if or_zero("x") != 0 { panic("x should return zero") }
+  }
+---
+package main
+
+import "strconv"
+
+func double(s string) (int, error) {
+	n, e := strconv.Atoi(s)
+	if e != nil {
+		return 0, e
+	}
+	doubled := n * 2
+	return doubled, nil
+}
+
+func orZero(s string) int {
+	total := 0
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	total = n
+	return total + 1
+}
+
+func test() {
+	n, err := double("21")
+	if err != nil {
+		panic("21 should parse")
+	}
+	if n != 42 {
+		panic("21 should double to 42")
+	}
+	if _, err := double("x"); err == nil {
+		panic("x should not parse")
+	}
+	if orZero("4") != 5 {
+		panic("4 should add one")
+	}
+	if orZero("x") != 0 {
+		panic("x should return zero")
+	}
+}

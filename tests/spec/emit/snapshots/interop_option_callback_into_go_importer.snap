@@ -55,15 +55,15 @@ func main() {
 	if lisette.IsNilInterface(custom) {
 		panic("no gc importer")
 	}
-	if ret, e := custom.Import("fmt"); e == nil && ret != nil {
+	ret, e := custom.Import("fmt")
+	if e == nil && ret != nil {
 		panic("custom lookup was not used")
-	} else {
-		if e == nil {
-			e = errors.New("unexpected nil")
-		}
-		if !strings.Contains(e.Error(), "refused fmt") {
-			panic(e.Error())
-		}
+	}
+	if e == nil {
+		e = errors.New("unexpected nil")
+	}
+	if !strings.Contains(e.Error(), "refused fmt") {
+		panic(e.Error())
 	}
 	source := importer.ForCompiler(fset, "source", nil)
 	if lisette.IsNilInterface(source) {

@@ -40,13 +40,13 @@ func main() {
 	f := func() int {
 		n_1, err_1 := strconv.Atoi("7")
 		n()
-		if err_1 == nil {
-			read := func() int {
-				return n_1 + err
-			}
-			return read()
+		if err_1 != nil {
+			return 0
 		}
-		return 0
+		read := func() int {
+			return n_1 + err
+		}
+		return read()
 	}
 	total := 0
 	for _, ret := range []int{1, 2} {

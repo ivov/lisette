@@ -66,18 +66,18 @@ func load(name string) (string, error) {
 }
 
 func test() {
-	if _, e := load(""); e == nil {
+	_, e := load("")
+	if e == nil {
 		panic("expected error")
-	} else {
-		if e.Error() != "name: required" {
-			panic("wrong widened error")
-		}
 	}
-	if v, err := load("ada"); err == nil {
-		if v != "ada" {
-			panic("wrong ok value")
-		}
-	} else {
+	if e.Error() != "name: required" {
+		panic("wrong widened error")
+	}
+	v, err := load("ada")
+	if err != nil {
 		panic("expected ok")
+	}
+	if v != "ada" {
+		panic("wrong ok value")
 	}
 }

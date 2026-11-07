@@ -28,21 +28,21 @@ import (
 )
 
 func readAll(r io.Reader) (string, error) {
-	if data, e := io.ReadAll(r); e == nil {
+	data, e := io.ReadAll(r)
+	if e == nil {
 		return string(data), nil
 	} else if data == nil {
 		return "", e
-	} else {
-		return "", e
 	}
+	return "", e
 }
 
 func test() {
-	if text, err := readAll(strings.NewReader("hi")); err == nil {
-		if text != "hi" {
-			panic("a reader should return its text")
-		}
-	} else {
+	text, err := readAll(strings.NewReader("hi"))
+	if err != nil {
 		panic("a reader should not fail")
+	}
+	if text != "hi" {
+		panic("a reader should return its text")
 	}
 }

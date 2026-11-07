@@ -30,9 +30,9 @@ type Res = lisette.Result[int, error]
 
 func parse(text string) int {
 	_, err := strconv.Atoi(text)
-	if err == nil {
-		return 1
+	if err != nil {
+		fmt.Println(err)
+		return 0
 	}
-	fmt.Println(err)
-	return 0
+	return 1
 }

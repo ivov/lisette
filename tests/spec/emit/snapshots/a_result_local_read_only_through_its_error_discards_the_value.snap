@@ -25,18 +25,18 @@ import "strconv"
 
 func describe(text string) string {
 	_, err := strconv.Atoi(text)
-	if err == nil {
-		return "number"
+	if err != nil {
+		return err.Error()
 	}
-	return err.Error()
+	return "number"
 }
 
 func failure(text string) string {
 	_, err := strconv.Atoi(text)
-	if err == nil {
-		return ""
+	if err != nil {
+		return err.Error()
 	}
-	return err.Error()
+	return ""
 }
 
 func test() {

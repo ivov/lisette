@@ -60,12 +60,12 @@ func named(users []User, wanted string) (User, bool) {
 }
 
 func test() {
-	if v, ok := firstEven([]int{1, 4, 6}); ok {
-		if v != 4 {
-			panic("the first even number is four")
-		}
-	} else {
+	v, ok := firstEven([]int{1, 4, 6})
+	if !ok {
 		panic("expected a hit")
+	}
+	if v != 4 {
+		panic("the first even number is four")
 	}
 	if _, ok := firstEven([]int{1, 3}); ok {
 		panic("expected no hit")
