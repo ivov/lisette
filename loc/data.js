@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794052360567,
+  "lastUpdate": 1794052377464,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -51088,6 +51088,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 40240,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29478,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19480,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15829,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14019,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9134,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10599,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "583672bebb0aa00b20df655ce2958923f69ff978",
+          "message": "fix: stop double-wrapping callbacks typed as aliases of Go fn types (#1622)",
+          "timestamp": "2026-11-07T12:52:29+01:00",
+          "tree_id": "ed9269c510b1c5966cd9a656abb64fc5ac190b7e",
+          "url": "https://github.com/ivov/lisette/commit/583672bebb0aa00b20df655ce2958923f69ff978"
+        },
+        "date": 1794052375407,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 152212,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 40242,
             "unit": "lines"
           },
           {
