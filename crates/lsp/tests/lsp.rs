@@ -15887,3 +15887,108 @@ fn cached_dependency_keeps_diagnostics_fixes_and_local_hover_when_opened() {
     assert!(hover_content(&client.hover(&uri, 2, 4).unwrap()).contains("int"));
     client.shutdown();
 }
+
+fn active_parameter_at(source_line: &str, marker: &str) -> Option<u32> {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        &format!("fn f(a: int, b: int, c: int, d: int) -> int {{ a }}\n{source_line}"),
+    );
+    let column = source_line.find(marker).unwrap() + marker.len();
+    let help = client.signature_help(TEST_URI, 1, column as u32);
+    client.shutdown();
+    help.and_then(|help| help.active_parameter)
+}
+
+fn active_parameter_in(
+    client: &mut TestClient,
+    source: &str,
+    line: u32,
+    marker: &str,
+) -> Option<u32> {
+    let text = source.lines().nth(line as usize).unwrap();
+    let column = text.find(marker).unwrap() + marker.len();
+    client
+        .signature_help(TEST_URI, line, column as u32)
+        .and_then(|help| help.active_parameter)
+}
+
+#[test]
+fn signature_help_keeps_parameter_until_comma() {
+    let line = "fn main() { let _ = f(1, 2, 3, 4) }";
+    assert_eq!(active_parameter_at(line, "f(1"), Some(0));
+    assert_eq!(active_parameter_at(line, "f(1,"), Some(1));
+}
+
+#[test]
+fn signature_help_counts_pipeline_value_as_first_argument() {
+    let line = "fn main() { let _ = 9 |> f(1, 2, 3) }";
+    assert_eq!(active_parameter_at(line, "f("), Some(1));
+    assert_eq!(active_parameter_at(line, "f(1,"), Some(2));
+}
+
+#[test]
+fn signature_help_counts_values_piped_into_a_pipeline_target() {
+    let line = "fn main() { let _ = 2 |> (3 |> f(4)) }";
+    assert_eq!(active_parameter_at(line, "f("), Some(2));
+}
+
+#[test]
+fn signature_help_skips_parentheses_around_pipeline_target() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "\
+fn f<A, B>(a: A, b: B, c: int) -> int { c }
+fn g(a: int, b: int, c: int) -> int { a }
+fn maker(x: int, y: int) -> fn(int, int, int) -> int { g }
+fn h(a: int, b: int, c: int, d: int) -> int { a }
+fn pair(x: int, y: int) -> int { x }
+fn main() {
+  let _ = 9 |> (f<int, string>(\"a\", 3))
+  let _ = 9 |> (maker(1, 2)(3, 4))
+  let _ = 2 |> (pair(3, 4) |> h(5, 6))
+  let _ = 9 |> (g(2, 3) // target
+  )
+}";
+    client.open(TEST_URI, source);
+    assert_eq!(active_parameter_in(&mut client, source, 6, ">("), Some(1));
+    assert_eq!(active_parameter_in(&mut client, source, 7, ")("), Some(1));
+    assert_eq!(active_parameter_in(&mut client, source, 8, "h(5"), Some(2));
+    assert_eq!(active_parameter_in(&mut client, source, 8, "h(5,"), Some(3));
+    assert_eq!(active_parameter_in(&mut client, source, 9, "g("), Some(1));
+    assert_eq!(active_parameter_in(&mut client, source, 9, "2,"), Some(2));
+    client.shutdown();
+}
+
+#[test]
+fn signature_help_ignores_commas_in_strings() {
+    let line = "fn main() { let _ = 9 |> f(1, \"x,y\".length(), 3) }";
+    assert_eq!(active_parameter_at(line, "\"x,"), Some(2));
+}
+
+#[test]
+fn signature_help_ignores_commas_in_comments() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn f(a: int, b: int, c: int) -> int { a }\nfn main() {\n  let _ = 9 |> f(1, // a, b\n    2, 3)\n}";
+    client.open(TEST_URI, source);
+    assert_eq!(
+        active_parameter_in(&mut client, source, 3, "    2"),
+        Some(2)
+    );
+    client.shutdown();
+}
+
+#[test]
+fn signature_help_ignores_commas_in_lambda_parameters() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let source = "fn g(h: fn(int, int) -> int, n: int) -> int { n }\nfn main() { let _ = g(|a, b| a + b, 1) }";
+    client.open(TEST_URI, source);
+    assert_eq!(
+        active_parameter_in(&mut client, source, 1, "g(|a, b|"),
+        Some(0)
+    );
+    client.shutdown();
+}

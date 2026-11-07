@@ -710,7 +710,7 @@ impl Backend {
         let file = cursor.document.file;
         let offset = cursor.offset;
 
-        Ok(signature_help::handle(&file.items, offset))
+        Ok(signature_help::handle(&file.items, &file.source, offset))
     }
 
     fn shutdown(&self) -> Result<()> {

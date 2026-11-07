@@ -2075,6 +2075,20 @@ impl Expression {
         }
     }
 
+    pub fn is_piped_call(&self) -> bool {
+        let Expression::Call {
+            expression: callee,
+            args,
+            ..
+        } = self
+        else {
+            return false;
+        };
+        let callee_start = callee.get_span().byte_offset;
+        args.iter()
+            .any(|arg| arg.get_span().byte_offset < callee_start)
+    }
+
     pub fn binding_id(&self) -> Option<BindingId> {
         match self.unwrap_parens() {
             Expression::Identifier { resolution, .. } => resolution.binding_id(),

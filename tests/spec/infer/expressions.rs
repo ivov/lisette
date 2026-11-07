@@ -524,6 +524,17 @@ fn pipeline_is_absent_from_inferred_ast() {
 }
 
 #[test]
+fn pipeline_with_invalid_parenthesized_pipeline_target_reports_once() {
+    infer(
+        r#"{
+    let x = 1;
+    x |> (3 |> 7)
+  }"#,
+    )
+    .assert_error_count(1);
+}
+
+#[test]
 fn pipeline_chained_with_partial_application() {
     infer(
         r#"{
