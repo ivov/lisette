@@ -2155,6 +2155,24 @@ fn main() {
 }
 
 #[test]
+fn go_callback_bound_to_alias_of_go_fn_type() {
+    let input = r#"
+import "go:path/filepath"
+import "go:io/fs"
+
+type Walker = filepath.WalkFunc
+
+fn main() {
+  let walker: Walker = |_path: string, _info: Option<fs.FileInfo>, _err: Option<error>| -> Result<(), error> {
+    Ok(())
+  }
+  let _ = filepath.Walk("/tmp", walker)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn unit_call_as_function_argument() {
     let input = r#"
 fn noop() {}
@@ -4480,6 +4498,28 @@ fn higher_callback_go_params_callback_named_error() {
 import "go:path/filepath"
 fn give<T>(f:fn(string,filepath.WalkFunc)->T)->fn(string,filepath.WalkFunc)->T{f}
 fn main(){let mut calls=0;let f=give(filepath.Walk);let cb:filepath.WalkFunc=|_,_,_|{calls+=1;Ok(())};if f("/__lisette_nonexistent_callback_review__",cb).is_err(){panic("walk")};if calls!=1{panic("calls")}}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn higher_callback_go_params_callback_alias_of_go_fn_type() {
+    let input = r#"
+import "go:path/filepath"
+
+type Walker = filepath.WalkFunc
+
+fn give<T>(
+  f: fn(string, filepath.WalkFunc) -> T,
+) -> fn(string, filepath.WalkFunc) -> T {
+  f
+}
+
+fn main() {
+  let walk = give(filepath.Walk)
+  let cb: Walker = |_, _, _| Ok(())
+  let _ = walk("/tmp", cb)
+}
 "#;
     assert_emit_snapshot!(input);
 }

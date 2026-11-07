@@ -447,7 +447,9 @@ impl<'a> Planner<'a> {
         }
         resolved_definition(expression).is_some_and(|definition| definition.starts_with("go:"))
             || self.go_bound_requirement(expression).is_some()
-            || self.is_go_named_function_type(&expression.get_type())
+            || self
+                .function_type_origin(&expression.get_type(), SlotOrigin::Lisette)
+                .declared_by_go()
     }
 
     pub(crate) fn call_target_is_go(&self, expression: &Expression) -> bool {

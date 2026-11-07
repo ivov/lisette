@@ -1,0 +1,57 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:path/filepath"
+  
+  type Walker = filepath.WalkFunc
+  
+  fn give<T>(
+    f: fn(string, filepath.WalkFunc) -> T,
+  ) -> fn(string, filepath.WalkFunc) -> T {
+    f
+  }
+  
+  fn main() {
+    let walk = give(filepath.Walk)
+    let cb: Walker = |_, _, _| Ok(())
+    let _ = walk("/tmp", cb)
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"io/fs"
+	"path/filepath"
+)
+
+type Walker filepath.WalkFunc
+
+func give[T any](f func(string, filepath.WalkFunc) T) func(string, filepath.WalkFunc) T {
+	return f
+}
+
+func main() {
+	cb_1 := filepath.Walk
+	var adapted func(string, filepath.WalkFunc) lisette.Result[struct{}, error]
+	if cb_1 != nil {
+		adapted = func(arg0 string, arg1 filepath.WalkFunc) lisette.Result[struct{}, error] {
+			ret := cb_1(arg0, arg1)
+			if ret != nil {
+				return lisette.MakeResultErr[struct{}, error](ret)
+			}
+			return lisette.MakeResultOk[struct{}, error](struct{}{})
+		}
+	}
+	walk := give(adapted)
+	cb_2 := func(_ string, _ lisette.Option[fs.FileInfo], _ lisette.Option[error]) error {
+		return nil
+	}
+	var cb Walker = func(arg0 string, arg1 fs.FileInfo, arg2 error) error {
+		option := lisette.OptionFromNilable[fs.FileInfo](arg1, lisette.IsNilInterface(arg1))
+		option_1 := lisette.OptionFromNilable[error](arg2, lisette.IsNilInterface(arg2))
+		return cb_2(arg0, option, option_1)
+	}
+	walk("/tmp", filepath.WalkFunc(cb))
+}

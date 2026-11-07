@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:path/filepath"
+  import "go:io/fs"
+  
+  type Walker = filepath.WalkFunc
+  
+  fn main() {
+    let walker: Walker = |_path: string, _info: Option<fs.FileInfo>, _err: Option<error>| -> Result<(), error> {
+      Ok(())
+    }
+    let _ = filepath.Walk("/tmp", walker)
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"io/fs"
+	"path/filepath"
+)
+
+type Walker filepath.WalkFunc
+
+func main() {
+	cb := func(_ string, _ lisette.Option[fs.FileInfo], _ lisette.Option[error]) error {
+		return nil
+	}
+	var walker Walker = func(arg0 string, arg1 fs.FileInfo, arg2 error) error {
+		option := lisette.OptionFromNilable[fs.FileInfo](arg1, lisette.IsNilInterface(arg1))
+		option_1 := lisette.OptionFromNilable[error](arg2, lisette.IsNilInterface(arg2))
+		return cb(arg0, option, option_1)
+	}
+	filepath.Walk("/tmp", filepath.WalkFunc(walker))
+}
