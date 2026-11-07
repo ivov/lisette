@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794056382911,
+  "lastUpdate": 1794059367175,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -51405,6 +51405,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "bindgen",
             "value": 10599,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9ea4b8e8a87f901663a34ef5cf4b6bee260a3bf5",
+          "message": "fix!: sound Go bindings for writes through arguments and receivers (#1625)",
+          "timestamp": "2026-11-07T14:49:03+01:00",
+          "tree_id": "b4f0c2f12cb8d09938d255d61d19232143c9d28a",
+          "url": "https://github.com/ivov/lisette/commit/9ea4b8e8a87f901663a34ef5cf4b6bee260a3bf5"
+        },
+        "date": 1794059365250,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 152805,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 40766,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29478,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19480,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15829,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14019,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9134,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7383,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10668,
             "unit": "lines"
           },
           {
