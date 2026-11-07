@@ -21,10 +21,9 @@ import (
 
 func main() {
 	ready := true
-	if ready && func() bool {
-		_, err := strconv.Atoi("1")
-		return err == nil
-	}() {
-		fmt.Println("both")
+	if ready {
+		if _, err := strconv.Atoi("1"); err == nil {
+			fmt.Println("both")
+		}
 	}
 }

@@ -13,6 +13,7 @@ use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, Statement, assign, define,
 };
+use crate::plan::lower::is_conjunction;
 use crate::plan::values::{CaptureBoundary, GoExpression};
 use crate::types::go_type::GoType;
 
@@ -565,11 +566,15 @@ impl Planner<'_> {
             }
         };
 
-        let plan = self.lower_value(body, ExpressionContext::value());
-        let (mut statements, condition) = plan.into_parts();
         let then_body = LoweredBlock {
             statements: then_body,
         };
+        if is_conjunction(body) {
+            let guard = self.lower_conjunction_guard(body, |_| then_body);
+            return vec![guard.into_statement().into()];
+        }
+        let plan = self.lower_value(body, ExpressionContext::value());
+        let (mut statements, condition) = plan.into_parts();
         statements
             .push(LoweredStatement::If(IfPlan::plain(condition, then_body, ElseArm::None)).into());
         statements
