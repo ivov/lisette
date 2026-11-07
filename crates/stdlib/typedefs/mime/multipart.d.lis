@@ -85,7 +85,7 @@ impl Form {
 
 impl Part {
   #[allow(unused_result)]
-  fn Close(self: Ref<Part>) -> Result<(), error>
+  fn Close(self: mut Ref<Part>) -> Result<(), error>
 
   /// FileName returns the filename parameter of the [Part]'s Content-Disposition
   /// header. If not empty, the filename is passed through filepath.Base (which is
@@ -98,7 +98,7 @@ impl Part {
 
   /// Read reads the body of a part, after its headers and before the
   /// next part (if any) begins.
-  fn Read(self: Ref<Part>, d: mut Slice<byte>) -> Partial<int, error>
+  fn Read(self: mut Ref<Part>, d: mut Slice<byte>) -> Partial<int, error>
 }
 
 impl Reader {

@@ -2795,3 +2795,50 @@ fn configure(l: Ref<log.Logger>) {
     )
     .assert_infer_code_once("needs_writable");
 }
+
+#[test]
+fn go_multipart_part_close_through_read_only_ref_refused() {
+    infer(
+        r#"import "go:mime/multipart"
+fn finish(p: Ref<multipart.Part>) {
+  let _ = p.Close()
+}"#,
+    )
+    .assert_infer_code_once("needs_writable");
+}
+
+#[test]
+fn go_rpc_codec_body_into_read_only_variable_refused() {
+    infer(
+        r#"import "go:net/rpc"
+fn read(codec: rpc.ClientCodec) {
+  let reply = 0
+  let _ = codec.ReadResponseBody(&reply)
+}"#,
+    )
+    .assert_infer_code_once("needs_writable");
+}
+
+#[test]
+fn go_rpc_codec_body_into_writable_variable_accepted() {
+    infer(
+        r#"import "go:net/rpc"
+fn read(codec: rpc.ClientCodec) {
+  let mut reply = 0
+  let _ = codec.ReadResponseBody(&reply)
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn go_multipart_part_read_through_read_only_ref_refused() {
+    infer(
+        r#"import "go:mime/multipart"
+fn drain(part: Ref<multipart.Part>) {
+  let mut buf = [0 as byte, 0, 0, 0]
+  let _ = part.Read(buf)
+}"#,
+    )
+    .assert_infer_code_once("needs_writable");
+}

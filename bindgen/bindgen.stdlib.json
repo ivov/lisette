@@ -636,7 +636,9 @@
         },
         "net/rpc": {
           "Client.Call": ["reply"],
-          "Client.Go": ["reply"]
+          "Client.Go": ["reply"],
+          "ClientCodec.ReadResponseBody": ["any"],
+          "ServerCodec.ReadRequestBody": ["any"]
         },
         "net/url": {
           "URL.AppendBinary": ["b"]
@@ -746,6 +748,7 @@
         }
       },
       "mutates_receiver": {
+        "mime/multipart": ["Part.Close", "Part.Read"],
         "sync": [
           "Cond.Broadcast",
           "Cond.Signal",

@@ -837,6 +837,11 @@ func (a *MutationAnalysis) recordCallWrites(fn *ssa.Function, common *ssa.CallCo
 		if isReceiverMutationAxiom(common.Method) {
 			markRoots(fn, common.Value, summary)
 		}
+		for index, written := range a.invokeWrites(common) {
+			if written && index < len(common.Args) {
+				markRoots(fn, common.Args[index], summary)
+			}
+		}
 		return
 	}
 	callee := common.StaticCallee()
@@ -854,6 +859,34 @@ func (a *MutationAnalysis) recordCallWrites(fn *ssa.Function, common *ssa.CallCo
 		}
 	}
 	a.resolveCalleeCallbacks(fn, common, inner, summary)
+}
+
+// invokeWrites reads the pins and the name rule of the method on the called
+// interface. Implementer facts come only after the summaries.
+func (a *MutationAnalysis) invokeWrites(common *ssa.CallCommon) []bool {
+	method := common.Method
+	sig := method.Type().(*types.Signature)
+	var mutating, nonMutating []string
+	pkg, key := method.Pkg(), qualifiedFunctionName(method)
+	if named, ok := types.Unalias(common.Value.Type()).(*types.Named); ok {
+		pkg, key = named.Obj().Pkg(), named.Obj().Name()+"."+method.Name()
+	}
+	if pkg != nil {
+		mutating = a.cfg.MutatingParams(pkg.Path(), key)
+		nonMutating = a.cfg.NonMutatingParams(pkg.Path(), key)
+	}
+	names := paramNames(sig)
+	written := make([]bool, len(names))
+	for index, name := range names {
+		param := sig.Params().At(index)
+		if sig.Variadic() && index == len(names)-1 {
+			written[index] = slices.Contains(mutating, name) && !slices.Contains(nonMutating, name)
+			continue
+		}
+		naming := paramNaming{emitted: name, goName: param.Name()}
+		written[index] = isMutableParam(false, mutating, nonMutating, naming, param.Type(), method.Name())
+	}
+	return written
 }
 
 func isLockCall(callee *ssa.Function) bool {
@@ -1659,6 +1692,39 @@ func (a *MutationAnalysis) collectCallStores(call *ssa.Call, v ssa.Value, path [
 	}
 }
 
+func contentHoldsReferences(t types.Type) bool {
+	switch underlying := t.Underlying().(type) {
+	case *types.Slice:
+		return holdsReferences(underlying.Elem(), map[types.Type]bool{})
+	case *types.Pointer:
+		return holdsReferences(underlying.Elem(), map[types.Type]bool{})
+	case *types.Map:
+		return holdsReferences(underlying.Elem(), map[types.Type]bool{})
+	}
+	return true
+}
+
+func holdsReferences(t types.Type, seen map[types.Type]bool) bool {
+	if seen[t] {
+		return false
+	}
+	seen[t] = true
+	switch underlying := t.Underlying().(type) {
+	case *types.Basic:
+		return underlying.Kind() == types.UnsafePointer
+	case *types.Array:
+		return holdsReferences(underlying.Elem(), seen)
+	case *types.Struct:
+		for i := range underlying.NumFields() {
+			if holdsReferences(underlying.Field(i).Type(), seen) {
+				return true
+			}
+		}
+		return false
+	}
+	return true
+}
+
 func isUnsafePointerType(t types.Type) bool {
 	basic, ok := t.Underlying().(*types.Basic)
 	return ok && basic.Kind() == types.UnsafePointer
@@ -1768,6 +1834,16 @@ func (a *MutationAnalysis) collectClosureStores(closure *ssa.MakeClosure, v ssa.
 // calleeWritesArgument counts a bodyless callee as a possible writer.
 func (a *MutationAnalysis) calleeWritesArgument(common *ssa.CallCommon, v ssa.Value) bool {
 	if common.IsInvoke() {
+		// a write of plain values cannot put foreign storage in v
+		if !contentHoldsReferences(v.Type()) {
+			return false
+		}
+		written := a.invokeWrites(common)
+		for i, argument := range common.Args {
+			if argument == v && i < len(written) && written[i] {
+				return true
+			}
+		}
 		return false
 	}
 	callee := common.StaticCallee()

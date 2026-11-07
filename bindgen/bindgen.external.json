@@ -145,6 +145,11 @@
             "buf"
           ]
         },
+        "github.com/go-chi/chi/v5": {
+          "ChainHandler.ServeHTTP": [
+            "r"
+          ]
+        },
         "github.com/gobwas/ws": {
           "Cipher": [
             "payload"
@@ -163,6 +168,12 @@
             "argsbuf"
           ]
         }
+      },
+      "mutates_receiver": {
+        "github.com/sirupsen/logrus": [
+          "Entry.Bytes",
+          "Entry.String"
+        ]
       },
       "nilable_error": {
         "github.com/gin-gonic/gin": [
