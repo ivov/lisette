@@ -32,7 +32,7 @@ jobs:
 
       - name: Cache cargo-fuzz binary
         id: cache-cargo-fuzz
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # ratchet:actions/cache@v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-fuzz
           key: cargo-fuzz-0.13.1
@@ -42,14 +42,14 @@ jobs:
         run: cargo install cargo-fuzz --version 0.13.1 --locked
 
       - name: Restore corpus
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # ratchet:actions/cache/restore@v5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache/restore@v6
         with:
           path: fuzz/corpus/${{ matrix.target }}
           key: fuzz-corpus-${{ matrix.target }}
           restore-keys: |
             fuzz-corpus-${{ matrix.target }}-
 
-      - uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # ratchet:extractions/setup-just@v3
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # ratchet:extractions/setup-just@v4
 
       - name: Minimize corpus
         run: cargo +nightly fuzz cmin ${{ matrix.target }} -- -rss_limit_mb=2048
@@ -59,7 +59,7 @@ jobs:
 
       - name: Save corpus
         if: always()
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # ratchet:actions/cache/save@v5
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # ratchet:actions/cache/save@v6
         with:
           path: fuzz/corpus/${{ matrix.target }}
           key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
