@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794140099273,
+  "lastUpdate": 1794140153055,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -52285,6 +52285,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "deps",
             "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10738,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6e03add94d9755777532e759c0d739284a755e44",
+          "message": "chore: deny `clippy::map_err_ignore` (#1635)",
+          "timestamp": "2026-11-08T13:14:45+01:00",
+          "tree_id": "bd5888a474c68a73681ff5ff0a10b13dc255c073",
+          "url": "https://github.com/ivov/lisette/commit/6e03add94d9755777532e759c0d739284a755e44"
+        },
+        "date": 1794140150600,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 153839,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 41047,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29959,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19474,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15852,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14039,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9172,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7484,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
             "unit": "lines"
           },
           {
