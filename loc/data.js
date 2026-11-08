@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794138503544,
+  "lastUpdate": 1794139955861,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -52102,6 +52102,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "format",
             "value": 2947,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1882,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10738,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1981bd48ca596d10c5ed9fceb76da2c78043fa6e",
+          "message": "fix: UX papercuts in diagnostics, number literals, and formatting (#1633)",
+          "timestamp": "2026-11-08T13:10:00+01:00",
+          "tree_id": "6f6471a93e4d63acb777d80d15adb5f55e8fac76",
+          "url": "https://github.com/ivov/lisette/commit/1981bd48ca596d10c5ed9fceb76da2c78043fa6e"
+        },
+        "date": 1794139953194,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 153789,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 41047,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 29951,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19474,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15852,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14019,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9172,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7472,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
             "unit": "lines"
           },
           {
