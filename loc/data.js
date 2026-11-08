@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794153926695,
+  "lastUpdate": 1794168888430,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -52448,6 +52448,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 9172,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7484,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10738,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "68652fb208c418cedc53151b79855ce5b961d61b",
+          "message": "refactor: propagate error types through inference (#1637)",
+          "timestamp": "2026-11-08T21:14:26+01:00",
+          "tree_id": "8c20627e9f1d6e1a3d4ffc86a0f235710c567367",
+          "url": "https://github.com/ivov/lisette/commit/68652fb208c418cedc53151b79855ce5b961d61b"
+        },
+        "date": 1794168886847,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 154321,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 41045,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30278,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19585,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15852,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14039,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9226,
             "unit": "lines"
           },
           {
