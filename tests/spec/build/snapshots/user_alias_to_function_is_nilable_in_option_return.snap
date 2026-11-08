@@ -9,7 +9,7 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-type Callback func() int
+type Callback = func() int
 
 func maybeGet() Callback {
 	return func() int {

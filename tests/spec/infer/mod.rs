@@ -4,6 +4,7 @@ pub use crate::_harness::{
     int16_type, ref_type, slice_type, string_type, tuple_type, unit_type,
 };
 
+mod alias_transparency;
 mod arrays;
 mod basics;
 mod control_flow;

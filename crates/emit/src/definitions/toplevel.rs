@@ -45,12 +45,10 @@ impl Planner<'_> {
 
         let generics_string = self.generics_to_string(generics);
 
-        let separator = if is_fn_alias { " " } else { " = " };
         format!(
-            "type {}{}{}{}",
+            "type {}{} = {}",
             go_name::escape_type_name(name),
             generics_string,
-            separator,
             ty_string
         )
     }

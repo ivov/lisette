@@ -6,4 +6,4 @@ description: |
 ---
 package main
 
-type Cb func() any
+type Cb = func() any

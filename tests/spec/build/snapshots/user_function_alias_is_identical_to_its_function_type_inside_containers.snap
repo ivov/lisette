@@ -1,0 +1,32 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+type Handler = func(int) string
+
+func countFns(fs []func(int) string) int {
+	return len(fs)
+}
+
+func countHandlers(hs []Handler) int {
+	return len(hs)
+}
+
+func lookup(routes map[string]func(int) string) int {
+	return len(routes)
+}
+
+func main() {
+	var h Handler = func(n int) string {
+		return fmt.Sprint(n)
+	}
+	hs := []Handler{h}
+	fs := []func(int) string{h}
+	routes := make(map[string]Handler)
+	routes["a"] = h
+	fmt.Println(countFns(hs), countHandlers(fs), lookup(routes))
+}

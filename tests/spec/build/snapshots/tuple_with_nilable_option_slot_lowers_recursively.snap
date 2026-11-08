@@ -6,7 +6,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-type Cmd func() int
+type Cmd = func() int
 
 func produce() (int, Cmd) {
 	return 42, func() int {

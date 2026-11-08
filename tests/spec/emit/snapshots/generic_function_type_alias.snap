@@ -14,7 +14,7 @@ description: |
 ---
 package main
 
-type Transform[T any] func(T) T
+type Transform[T any] = func(T) T
 
 func applyTransform[T any](val T, f Transform[T]) T {
 	return f(val)

@@ -6572,6 +6572,38 @@ fn main() {
 }
 
 #[test]
+fn user_function_alias_is_identical_to_its_function_type_inside_containers() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+
+type Handler = fn(int) -> string
+
+fn count_fns(fs: Slice<fn(int) -> string>) -> int { fs.length() }
+
+fn count_handlers(hs: Slice<Handler>) -> int { hs.length() }
+
+fn lookup(routes: Map<string, fn(int) -> string>) -> int { routes.length() }
+
+fn main() {
+  let h: Handler = |n| f"{n}"
+  let hs: Slice<Handler> = [h]
+  let fs: Slice<fn(int) -> string> = [h]
+  let mut routes = Map.new<string, Handler>()
+  routes["a"] = h
+  fmt.Println(count_fns(hs), count_handlers(fs), lookup(routes))
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn user_read_lowers_partial_to_io_reader() {
     let mut fs = MockFileSystem::new();
 

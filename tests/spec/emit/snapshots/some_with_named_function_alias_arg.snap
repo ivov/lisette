@@ -21,7 +21,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-type Handler func(int) int
+type Handler = func(int) int
 
 func double(x int) int {
 	return x * 2

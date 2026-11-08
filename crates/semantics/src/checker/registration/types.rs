@@ -686,11 +686,7 @@ impl TaskState {
         }
 
         let body_ty = self.convert_alias_target_to_type(&*store, annotation, span);
-        let is_function_body = matches!(body_ty, Type::Function(_));
-
-        let body_ty = if !is_function_body
-            && self.is_alias_body_circular(&*store, &body_ty, &qualified_name)
-        {
+        let body_ty = if self.is_alias_body_circular(&*store, &body_ty, &qualified_name) {
             self.sink
                 .push(diagnostics::infer::circular_type_alias(name, *span));
             Type::Error
