@@ -33,19 +33,19 @@ impl InferCtx<'_> {
         }
     }
 
-    /// Validates that a float literal fits within the target float type.
+    /// Validates that a float literal fits within the target type.
     pub(crate) fn check_float_literal_overflow(
         &mut self,
         value: f64,
         target_ty: &Type,
         span: Span,
     ) {
-        if target_ty.get_name() == Some("float32") && value.is_finite() {
-            let f32_val = value as f32;
-            if f32_val.is_infinite() {
-                self.sink
-                    .push(diagnostics::infer::float_literal_overflow("float32", span));
-            }
+        let Some(name @ ("float32" | "complex64")) = target_ty.get_name() else {
+            return;
+        };
+        if value.is_finite() && (value as f32).is_infinite() {
+            self.sink
+                .push(diagnostics::infer::float_literal_overflow(name, span));
         }
     }
 

@@ -11,6 +11,6 @@ description: |-
 fn test() {
   x
     |> foo()
-    |> // comment before bar
-    bar()
+    // comment before bar
+    |> bar()
 }

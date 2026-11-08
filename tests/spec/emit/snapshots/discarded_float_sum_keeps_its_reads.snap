@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn test() {
+    let a: float64 = 1
+    let x = a + a
+    let _ = x
+  }
+---
+package main
+
+func test() {
+	var a float64 = 1
+	x := a + a
+	_ = x
+}

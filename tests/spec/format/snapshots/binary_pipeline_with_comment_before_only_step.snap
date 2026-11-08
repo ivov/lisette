@@ -1,0 +1,14 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  fn test() {
+    x
+      // comment before foo
+      |> foo()
+  }
+---
+fn test() {
+  x
+    // comment before foo
+    |> foo()
+}

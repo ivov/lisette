@@ -973,6 +973,13 @@ pub enum NumericFamily {
     SignedInt,
     UnsignedInt,
     Float,
+    Complex,
+}
+
+impl NumericFamily {
+    pub fn is_integer(self) -> bool {
+        matches!(self, Self::SignedInt | Self::UnsignedInt)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1175,6 +1182,8 @@ impl SimpleKind {
             Some(NumericFamily::UnsignedInt)
         } else if self.is_float() {
             Some(NumericFamily::Float)
+        } else if self.is_complex() {
+            Some(NumericFamily::Complex)
         } else {
             None
         }

@@ -1,6 +1,8 @@
 use crate::checker::EnvResolve;
 use syntax::ast::{Expression, IdentifierResolution, Span, StructFields};
-use syntax::program::{CallKind, Definition, DefinitionBody, DotAccessResolution, NativeTypeKind};
+use syntax::program::{
+    CallKind, Definition, DefinitionBody, DotAccessResolution, NativeTypeKind, ValueKind,
+};
 use syntax::types::{FunctionParameter, Symbol, Type, peel_to_range_type};
 
 use crate::checker::infer::InferCtx;
@@ -279,7 +281,14 @@ impl InferCtx<'_> {
     ) {
         let places: Vec<Option<String>> = args
             .iter()
-            .map(|arg| super::aliasing::place_key(arg.unwrap_parens()))
+            .map(|arg| {
+                let arg = arg.unwrap_parens();
+                if self.names_no_storage(arg) {
+                    None
+                } else {
+                    super::aliasing::place_key(arg)
+                }
+            })
             .collect();
 
         let parameter_at = |i: usize| {
@@ -344,6 +353,38 @@ impl InferCtx<'_> {
                     ));
             }
         }
+    }
+
+    fn names_no_storage(&self, arg: &Expression) -> bool {
+        let definition = match arg {
+            Expression::Identifier {
+                resolution: IdentifierResolution::Definition { name, .. },
+                ..
+            } => Some(name.as_str()),
+            Expression::DotAccess {
+                resolution:
+                    DotAccessResolution::EnumVariant { .. }
+                    | DotAccessResolution::StaticMethod { .. }
+                    | DotAccessResolution::InstanceMethodValue { .. },
+                ..
+            } => return true,
+            Expression::DotAccess {
+                resolution: DotAccessResolution::PackageMember { definition, .. },
+                ..
+            } => definition.as_ref().map(Symbol::as_str),
+            _ => None,
+        };
+        definition.is_some_and(|name| {
+            !matches!(
+                self.store
+                    .get_definition(name)
+                    .map(|definition| &definition.body),
+                Some(DefinitionBody::Value {
+                    kind: ValueKind::Variable,
+                    ..
+                })
+            )
+        })
     }
 
     /// Verify the substring arg is a range type over `int`; emit a `Range<int>` mismatch otherwise.

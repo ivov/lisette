@@ -114,6 +114,31 @@ fn binary_pipeline_with_comment() {
 }
 
 #[test]
+fn binary_pipeline_with_comment_before_only_step() {
+    assert_format_snapshot!(
+        r#"fn test() {
+  x
+    // comment before foo
+    |> foo()
+}"#
+    );
+}
+
+#[test]
+fn binary_pipeline_with_end_of_line_comment() {
+    assert_format_snapshot!(
+        r#"fn test() {
+  x
+    |> foo() // after foo
+    // first line
+    // second line
+    |> bar()
+    |> baz() // after baz
+}"#
+    );
+}
+
+#[test]
 fn call_no_args() {
     assert_format_snapshot!("fn test() { foo() }");
 }

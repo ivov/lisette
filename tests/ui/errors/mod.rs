@@ -27,6 +27,39 @@ fn test() -> int {
 }
 
 #[test]
+fn resolve_underscore_assignment() {
+    let input = r#"
+fn f() -> int { 1 }
+
+fn test() {
+  _ = f()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn resolve_underscore_compound_assignment() {
+    let input = r#"
+fn test() {
+  _ += 1
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn underscore_assignment_reports_one_error() {
+    for target in ["_ = f()", "_ += 1", "_.n = 1", "_[0] = 1", "_.* = 1"] {
+        let input =
+            format!("struct P {{ n: int }}\nfn f() -> int {{ 1 }}\nfn test() {{\n  {target}\n}}\n");
+        infer(&input)
+            .assert_error_count(1)
+            .assert_resolve_code("underscore_assignment");
+    }
+}
+
+#[test]
 fn infer_nil_not_supported() {
     let input = r#"
 fn test() -> Option<int> {

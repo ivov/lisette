@@ -418,6 +418,10 @@ impl InferCtx<'_> {
         compound_operator: Option<BinaryOperator>,
         span: Span,
     ) -> Expression {
+        if target.get_var_name().as_deref() == Some("_") {
+            return self.infer_underscore_assignment(target, value, compound_operator, span);
+        }
+
         let store = self.store;
         let target_ty = self.new_type_var();
         // Prevent simple assignment targets from being marked as "used" in the lint system.
@@ -517,6 +521,34 @@ impl InferCtx<'_> {
             self.unify(&target_ty, &value_ty, &span);
         }
 
+        Expression::Assignment {
+            target: new_target.into(),
+            value: new_value.into(),
+            compound_operator,
+            span,
+        }
+    }
+
+    fn infer_underscore_assignment(
+        &mut self,
+        target: Box<Expression>,
+        value: Box<Expression>,
+        compound_operator: Option<BinaryOperator>,
+        span: Span,
+    ) -> Expression {
+        let is_discard = compound_operator.is_none() && is_placeholder_identifier(&target);
+        self.sink.push(diagnostics::infer::underscore_assignment(
+            target.get_span(),
+            is_discard,
+        ));
+        let target_ty = self.new_type_var();
+        let new_target = self.without_diagnostics(|state| {
+            state.with_use_context(UseContext::AssignmentTarget, |state| {
+                state.infer_expression(*target, &target_ty)
+            })
+        });
+        let value_ty = self.new_type_var();
+        let new_value = self.with_value_context(|state| state.infer_expression(*value, &value_ty));
         Expression::Assignment {
             target: new_target.into(),
             value: new_value.into(),
@@ -833,4 +865,8 @@ impl InferCtx<'_> {
             .any(|field| field.name == name)
             .then(|| format!("self.{name}"))
     }
+}
+
+fn is_placeholder_identifier(expression: &Expression) -> bool {
+    matches!(expression, Expression::Identifier { value, .. } if value == "_")
 }

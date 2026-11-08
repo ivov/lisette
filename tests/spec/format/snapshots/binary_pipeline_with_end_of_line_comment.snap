@@ -1,0 +1,20 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  fn test() {
+    x
+      |> foo() // after foo
+      // first line
+      // second line
+      |> bar()
+      |> baz() // after baz
+  }
+---
+fn test() {
+  x
+    |> foo() // after foo
+    // first line
+    // second line
+    |> bar()
+    |> baz() // after baz
+}

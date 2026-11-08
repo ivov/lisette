@@ -118,6 +118,24 @@ fn complex_multiplication() {
   assert (3 + 4i) * 2i == -8 + 6i
 }
 
+type Phase = complex64
+
+#[test]
+fn named_complex_arithmetic() {
+  let a: Phase = 1 + 2i
+  let b: Phase = 3 - 1i
+  assert a + b == 4 + 1i
+  assert a * 2 - b == -1 + 5i
+}
+
+#[test]
+fn complex64_arithmetic() {
+  let c: complex64 = 3 + 4i
+  let scale: float32 = 2
+  assert c * 2 == 6 + 8i
+  assert scale * 1i == 2i
+}
+
 #[test]
 fn imaginary_addition() {
   assert 4i + 4i == 8i

@@ -616,7 +616,14 @@ impl<'a> Formatter<'a> {
         segments.push(current);
         segments.reverse();
 
-        if segments.len() == 2 {
+        let has_comments_between_steps = segments.windows(2).any(|pair| {
+            let from = pair[0].get_span().end();
+            let to = pair[1].get_span().byte_offset;
+            let gap = Span::new(pair[0].get_span().file_id, from, to.saturating_sub(from));
+            self.comments.has_comments_in_range(gap)
+        });
+
+        if segments.len() == 2 && !has_comments_between_steps {
             return self
                 .expression(segments[0])
                 .append(flex_break("", " "))
@@ -626,17 +633,29 @@ impl<'a> Formatter<'a> {
                 .group();
         }
 
-        let docs: Vec<_> = segments
-            .iter()
-            .enumerate()
-            .map(|(i, seg)| {
-                if i == 0 {
-                    self.expression(seg)
-                } else {
-                    Document::Newline.append("|> ").append(self.expression(seg))
+        let mut docs = Vec::new();
+        for (i, seg) in segments.iter().enumerate() {
+            if i > 0 {
+                docs.push(Document::Newline);
+                if let Some(leading) = self
+                    .comments
+                    .take_comments_before(seg.get_span().byte_offset)
+                {
+                    docs.push(leading);
+                    docs.push(Document::Newline);
                 }
-            })
-            .collect();
+                docs.push(Document::str("|> "));
+            }
+            docs.push(self.expression(seg));
+            if let Some(next) = segments.get(i + 1)
+                && let Some(trailing) = self
+                    .comments
+                    .take_trailing_comments_after(seg.get_span().end(), next.get_span().byte_offset)
+            {
+                docs.push(Document::str(" "));
+                docs.push(trailing);
+            }
+        }
 
         concat(docs).nest(INDENT_WIDTH)
     }
