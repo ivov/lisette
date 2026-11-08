@@ -64,8 +64,10 @@ impl InferCtx<'_> {
 
             Literal::Float { value, text } => {
                 let resolved = expected_ty.resolve_in(&self.env);
-                let ty = if numeric_adapt_target(&resolved, store).is_some_and(|n| n.is_float()) {
-                    self.check_float_literal_overflow(value, &resolved, span);
+                let ty = if let Some(numeric) = numeric_adapt_target(&resolved, store)
+                    && (numeric.is_float() || numeric.is_complex())
+                {
+                    self.check_float_literal_overflow(value, &numeric, span);
                     resolved.clone()
                 } else {
                     let float_ty = self.type_float();
@@ -81,12 +83,21 @@ impl InferCtx<'_> {
             }
 
             Literal::Imaginary(coef) => {
-                let complex_ty = self.type_complex128();
-                self.unify(expected_ty, &complex_ty, &span);
+                let resolved = expected_ty.resolve_in(&self.env);
+                let ty = if let Some(numeric) = numeric_adapt_target(&resolved, store)
+                    && numeric.is_complex()
+                {
+                    self.check_float_literal_overflow(coef, &numeric, span);
+                    resolved.clone()
+                } else {
+                    let complex_ty = self.type_complex128();
+                    self.unify(expected_ty, &complex_ty, &span);
+                    complex_ty
+                };
 
                 Expression::Literal {
                     literal: Literal::Imaginary(coef),
-                    ty: complex_ty,
+                    ty,
                     span,
                 }
             }

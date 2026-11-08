@@ -2893,6 +2893,257 @@ fn complex_division_by_zero_rejected() {
     .assert_infer_code("division_by_zero");
 }
 
+#[test]
+fn float_and_imaginary_literals_take_a_complex64_annotation() {
+    infer(
+        r#"
+    type Phase = complex64
+    fn main() {
+      let a: complex64 = 3 + 4i
+      let b: complex64 = 1i
+      let c: complex64 = 1.5
+      let d: complex64 = -1i
+      let e: complex64 = (1 + 2i) * 3i - 1.5
+      let f: Phase = 1i
+      let _ = (a, b, c)
+      let _ = (d, e, f)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn float_literal_arithmetic_takes_a_float32_annotation() {
+    infer(
+        r#"
+    fn main() {
+      let a: float32 = 1.5 + 2.5
+      let b: float32 = (1.5 + 2.5) * 2.0
+      let c: float32 = 1 + 2.5
+      let _ = (a, b, c)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mixed_literal_arithmetic_without_an_annotation_is_still_rejected() {
+    infer(
+        r#"
+    fn main() {
+      let x = 1 + 2.5
+      let _ = x
+    }
+        "#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn complex64_operands_give_complex64() {
+    infer(
+        r#"
+    fn add(a: complex64, b: complex64) -> complex64 { a + b }
+    fn mul(a: complex64, b: complex64) -> complex64 { a * b }
+    fn main() {
+      let c: complex64 = 3 + 4i
+      let _ = (add(1, 2), mul(1, 2))
+      let _ = (c * 2 == 6 + 8i, 6 + 8i == c, (6 + 8i) * 2 + c - 1i)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn complex_operands_of_different_widths_are_rejected() {
+    infer(
+        r#"
+    fn mix(a: complex64, b: complex128) -> complex128 { a + b }
+    fn main() {
+      let _ = mix(1, 2)
+    }
+        "#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn float_plus_imaginary_literal_is_rejected() {
+    infer(
+        r#"
+    fn shift(x: float64) -> complex128 { x + 2i }
+    fn main() {
+      let _ = shift(1.5)
+    }
+        "#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn float32_times_imaginary_literal_gives_complex64() {
+    infer(
+        r#"
+    fn scale(x: float32) -> complex64 { x * 2i }
+    fn main() {
+      let _ = scale(1.5)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn literal_expression_overflows_float32_as_a_whole() {
+    for source in [
+        "let x: float32 = 3e38 + 3e38",
+        "let x: complex64 = 3e38i + 3e38i",
+        "let x: complex64 = (3e38 + 3e38i) * 2",
+    ] {
+        infer(&format!("fn main() {{\n  {source}\n  let _ = x\n}}\n"))
+            .assert_error_count(1)
+            .assert_infer_code("float_literal_overflow");
+    }
+}
+
+#[test]
+fn literal_expression_divides_integer_literals_with_truncation() {
+    infer(
+        r#"
+    fn main() {
+      let x: float32 = 1 / 2 * 3e38 * 3
+      let _ = x
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn literal_expression_divides_float_literals_exactly() {
+    infer(
+        r#"
+    fn main() {
+      let x: float32 = 1.0 / 2 * 3e38 * 3
+      let _ = x
+    }
+        "#,
+    )
+    .assert_infer_code("float_literal_overflow");
+}
+
+#[test]
+fn float32_times_imaginary_literal_checks_the_coefficient() {
+    infer(
+        r#"
+    fn scale(x: float32) -> complex64 { x * 1e40i }
+    fn main() {
+      let _ = scale(1)
+    }
+        "#,
+    )
+    .assert_infer_code("float_literal_overflow");
+}
+
+#[test]
+fn rune_literal_joins_a_complex_literal() {
+    infer(
+        r#"
+    fn main() {
+      let a = 'a' + 1i
+      let b: complex64 = 'a' + 1i
+      let _ = (a, b)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn named_complex_types_support_arithmetic() {
+    infer(
+        r#"
+    type Phase = complex64
+    fn f(a: Phase, b: Phase) -> Phase { a - b * a / b + 1i }
+    fn main() {
+      let _ = f(1, 2) == f(2, 1)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn named_complex_types_are_not_ordered() {
+    infer(
+        r#"
+    type Phase = complex64
+    fn f(a: Phase, b: Phase) -> bool { a < b }
+    fn main() {
+      let _ = f(1, 2)
+    }
+        "#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn bitwise_operator_on_named_float_is_rejected() {
+    infer(
+        r#"
+    type Hz = float32
+    fn f(a: Hz, b: Hz) -> Hz { a & b }
+    fn main() {
+      let _ = f(1, 2)
+    }
+        "#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn remainder_on_named_float_is_rejected() {
+    infer(
+        r#"
+    type Hz = float32
+    fn f(a: Hz, b: Hz) -> Hz { a % b }
+    fn main() {
+      let _ = f(1, 2)
+    }
+        "#,
+    )
+    .assert_infer_code("float_modulo");
+}
+
+#[test]
+fn remainder_on_complex_is_rejected() {
+    infer(
+        r#"
+    fn f(a: complex64, b: complex64) -> complex64 { a % b }
+    fn main() {
+      let _ = f(1, 2)
+    }
+        "#,
+    )
+    .assert_infer_code("float_modulo");
+}
+
+#[test]
+fn imaginary_literal_overflows_complex64() {
+    infer(
+        r#"
+    fn main() {
+      let c: complex64 = 1e300i
+      let _ = c
+    }
+        "#,
+    )
+    .assert_infer_code("float_literal_overflow");
+}
+
 fn assert_not_sibling_flagged(source: &str) {
     let mut fs = MockFileSystem::new();
     fs.add_file("main", "main.lis", source);

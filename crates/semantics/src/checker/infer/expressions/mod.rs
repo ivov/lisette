@@ -27,6 +27,7 @@ use syntax::program::CallKind;
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
+use crate::checker::infer::context::UseContext;
 
 impl InferCtx<'_> {
     /// Infer an expression nested inside another expression.
@@ -192,10 +193,10 @@ impl InferCtx<'_> {
                 right,
                 span,
                 ..
-            } => {
-                let lowered = self.lower_pipeline(*left, *right, span);
-                self.infer_expression_at(lowered, expected_ty, is_subexpression)
-            }
+            } => match self.lower_pipeline(*left, *right, span) {
+                Ok(lowered) => self.infer_expression_at(lowered, expected_ty, is_subexpression),
+                Err(rejected) => self.infer_rejected_pipeline(rejected, expected_ty, span),
+            },
 
             Expression::Binary { .. } | Expression::Unary { .. }
                 if self.adapts_as_constant(&expression, expected_ty) =>
@@ -320,7 +321,12 @@ impl InferCtx<'_> {
         }
     }
 
-    fn lower_pipeline(&mut self, left: Expression, right: Expression, span: Span) -> Expression {
+    fn lower_pipeline(
+        &mut self,
+        left: Expression,
+        right: Expression,
+        span: Span,
+    ) -> Result<Expression, RejectedPipeline> {
         let mut segments = vec![(right, span)];
         let mut current = left;
         while let Expression::Binary {
@@ -335,22 +341,15 @@ impl InferCtx<'_> {
             current = *left;
         }
 
-        let mut lowered = current;
+        let mut lowered = Ok(current);
         while let Some((right, span)) = segments.pop() {
-            if matches!(
-                &lowered,
-                Expression::Unit {
-                    ty: Type::Error,
-                    ..
+            lowered = match lowered {
+                Ok(left) => self.lower_pipeline_step(left, right, span),
+                Err(mut rejected) => {
+                    rejected.extend(pipeline_target_parts(right));
+                    Err(rejected)
                 }
-            ) {
-                lowered = Expression::Unit {
-                    ty: Type::Error,
-                    span,
-                };
-                continue;
-            }
-            lowered = self.lower_pipeline_step(lowered, right, span);
+            };
         }
         lowered
     }
@@ -360,11 +359,7 @@ impl InferCtx<'_> {
         left: Expression,
         right: Expression,
         span: Span,
-    ) -> Expression {
-        let error = Expression::Unit {
-            ty: Type::Error,
-            span,
-        };
+    ) -> Result<Expression, RejectedPipeline> {
         let right = Self::unwrap_parens_owned(right);
         if matches!(
             right,
@@ -379,24 +374,24 @@ impl InferCtx<'_> {
         {
             self.sink
                 .push(diagnostics::infer::misplaced_pipeline_placeholder(stray));
-            return error;
+            return Err(rejected_step(left, pipeline_target_parts(right)));
         }
         let right = match right {
             Expression::Binary {
                 operator: BinaryOperator::Pipeline,
-                left,
-                right,
+                left: inner_left,
+                right: inner_right,
                 span,
                 ..
-            } => self.lower_pipeline(*left, *right, span),
+            } => match self.lower_pipeline(*inner_left, *inner_right, span) {
+                Ok(lowered) => lowered,
+                Err(rejected) => return Err(rejected_step(left, rejected)),
+            },
             other => other,
         };
 
         match right {
-            Expression::Unit {
-                ty: Type::Error, ..
-            } => error,
-            Expression::Identifier { .. } | Expression::DotAccess { .. } => Expression::Call {
+            Expression::Identifier { .. } | Expression::DotAccess { .. } => Ok(Expression::Call {
                 expression: Box::new(right),
                 args: vec![left],
                 spread: None,
@@ -404,7 +399,7 @@ impl InferCtx<'_> {
                 ty: Type::uninferred(),
                 span,
                 call_kind: CallKind::Unresolved,
-            },
+            }),
             Expression::Call {
                 expression,
                 mut args,
@@ -425,7 +420,7 @@ impl InferCtx<'_> {
                 if let Some(repeated) = repeated {
                     self.sink
                         .push(diagnostics::infer::repeated_pipeline_placeholder(repeated));
-                    return error;
+                    return Err(rejected_step(left, pipeline_target_parts(*expression)));
                 }
                 if !has_placeholder {
                     args.insert(0, left);
@@ -434,7 +429,7 @@ impl InferCtx<'_> {
                 } else {
                     spread = Some(Box::new(left));
                 }
-                Expression::Call {
+                Ok(Expression::Call {
                     expression,
                     args,
                     spread,
@@ -442,7 +437,7 @@ impl InferCtx<'_> {
                     ty,
                     span,
                     call_kind,
-                }
+                })
             }
             Expression::Propagate {
                 span: propagate_span,
@@ -450,14 +445,43 @@ impl InferCtx<'_> {
             } => {
                 self.sink
                     .push(diagnostics::infer::propagate_in_pipeline(propagate_span));
-                error
+                Err(rejected_step(left, pipeline_target_parts(right)))
             }
             other => {
                 self.sink.push(diagnostics::infer::invalid_pipeline_target(
                     other.get_span(),
                 ));
-                error
+                Err(rejected_step(left, Vec::new()))
             }
+        }
+    }
+
+    fn infer_rejected_pipeline(
+        &mut self,
+        rejected: RejectedPipeline,
+        expected_ty: &Type,
+        span: Span,
+    ) -> Expression {
+        let elements = rejected
+            .into_iter()
+            .map(|part| {
+                let ty = self.new_type_var();
+                match part {
+                    PipelinePart::Value(value) => {
+                        self.with_value_context(|state| state.infer_expression(value, &ty))
+                    }
+                    PipelinePart::Callee(callee) => self
+                        .with_use_context(UseContext::Callee, |state| {
+                            state.infer_expression(callee, &ty)
+                        }),
+                }
+            })
+            .collect();
+        self.unify(expected_ty, &Type::Error, &span);
+        Expression::Tuple {
+            elements,
+            ty: Type::Error,
+            span,
         }
     }
 
@@ -483,6 +507,63 @@ impl InferCtx<'_> {
 
 fn is_placeholder(expression: &Expression) -> bool {
     matches!(expression, Expression::Identifier { value, .. } if value == "_")
+}
+
+enum PipelinePart {
+    Value(Expression),
+    Callee(Expression),
+}
+
+type RejectedPipeline = Vec<PipelinePart>;
+
+fn rejected_step(left: Expression, target_parts: RejectedPipeline) -> RejectedPipeline {
+    let mut parts = Vec::new();
+    if stray_placeholder(&left).is_none() {
+        parts.push(PipelinePart::Value(left));
+    }
+    parts.extend(target_parts);
+    parts
+}
+
+fn pipeline_target_parts(target: Expression) -> RejectedPipeline {
+    let callee = match target {
+        Expression::Paren { expression, .. } | Expression::Propagate { expression, .. } => {
+            return pipeline_target_parts(*expression);
+        }
+        Expression::Binary {
+            operator: BinaryOperator::Pipeline,
+            left,
+            right,
+            ..
+        } => {
+            let mut parts = pipeline_target_parts_of_value(*left);
+            parts.extend(pipeline_target_parts(*right));
+            return parts;
+        }
+        Expression::Call { expression, .. } => *expression,
+        callee @ (Expression::Identifier { .. } | Expression::DotAccess { .. }) => callee,
+        _ => return Vec::new(),
+    };
+    if stray_placeholder(&callee).is_some() {
+        return Vec::new();
+    }
+    vec![PipelinePart::Callee(callee)]
+}
+
+fn pipeline_target_parts_of_value(value: Expression) -> RejectedPipeline {
+    match value {
+        Expression::Binary {
+            operator: BinaryOperator::Pipeline,
+            left,
+            right,
+            ..
+        } => {
+            let mut parts = pipeline_target_parts_of_value(*left);
+            parts.extend(pipeline_target_parts(*right));
+            parts
+        }
+        value => rejected_step(value, Vec::new()),
+    }
 }
 
 fn stray_placeholder(expression: &Expression) -> Option<Span> {

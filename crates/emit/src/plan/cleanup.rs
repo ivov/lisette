@@ -972,7 +972,12 @@ fn drop_unread_temps(statements: &mut Vec<Statement>, shadowing: &HashSet<LocalI
                         sources.push(source.clone());
                     }
                 });
-                if unread && sources.iter().all(|source| uses.value_reads(source) > 1) {
+                let read_elsewhere = |source: &GoIdentifier| {
+                    let reads_in_value =
+                        sources.iter().filter(|s| s.refers_to_same(source)).count();
+                    uses.value_reads(source) > reads_in_value
+                };
+                if unread && sources.iter().all(read_elsewhere) {
                     dropped = Some(name.clone());
                 }
             }
@@ -1357,6 +1362,27 @@ mod tests {
         assert_eq!(statements, expected);
         drop_unread_temps(&mut statements, &HashSet::default());
         assert_eq!(statements, expected);
+    }
+
+    #[test]
+    fn unread_temp_pass_keeps_a_value_that_reads_its_source_twice() {
+        let first = GoIdentifier::local("first".into(), LocalId(0));
+        let second = GoIdentifier::local("second".into(), LocalId(1));
+        let mut statements = identified(vec![
+            define(first.clone(), literal("1")),
+            define(
+                second.clone(),
+                GoExpression::binary(
+                    GoExpression::identifier(first.clone()),
+                    BinaryOp::Add,
+                    GoExpression::identifier(first.clone()),
+                ),
+            ),
+            discard(GoExpression::identifier(second.clone())),
+        ]);
+        let original = statements.clone();
+        drop_unread_temps(&mut statements, &HashSet::default());
+        assert_eq!(statements, original);
     }
 
     #[test]

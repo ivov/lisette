@@ -47,6 +47,25 @@ fn hover_shows_function_type() {
 }
 
 #[test]
+fn hover_on_callee_of_rejected_pipeline_step() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn id(a: int) -> int { a } fn main() { let _ = 1 |> id? }",
+    );
+
+    let hover = client.hover(TEST_URI, 0, 52);
+    assert!(hover.is_some());
+
+    let content = hover_content(&hover.unwrap());
+    assert!(content.contains("int"));
+    assert!(content.contains("->"));
+
+    client.shutdown();
+}
+
+#[test]
 fn hover_shows_variable_type() {
     let mut client = TestClient::new();
     client.initialize();

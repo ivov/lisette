@@ -4808,6 +4808,18 @@ fn test() -> int {
 }
 
 #[test]
+fn discarded_float_sum_keeps_its_reads() {
+    let input = r#"
+fn test() {
+  let a: float64 = 1
+  let x = a + a
+  let _ = x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn local_binding_complex_not_hijacked() {
     let input = r#"
 fn test() -> complex128 {

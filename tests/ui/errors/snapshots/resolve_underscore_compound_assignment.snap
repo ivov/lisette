@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot assign to `_`
+   ╭─[test.lis:3:3]
+ 2 │ fn test() {
+ 3 │   _ += 1
+   ·   ┬
+   ·   ╰── `_` binds nothing
+ 4 │ }
+   ╰────
+  help: Bind the value to a name, then change that name · code: [resolve.underscore_assignment]

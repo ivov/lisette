@@ -406,6 +406,21 @@ fn main() {
 }
 
 #[test]
+fn none_arguments_do_not_alias() {
+    infer(
+        r#"struct Box { n: int }
+fn fill(a: Option<mut Ref<Box>>, b: Option<Ref<Box>>) {
+  let _ = (a, b)
+}
+fn main() {
+  fill(None, None)
+  fill(Option.None, Option.None)
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn identical_place_aliased_argument_refused() {
     infer(
         r#"fn touch(a: mut Slice<int>, b: Slice<int>) {

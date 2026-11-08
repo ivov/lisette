@@ -1011,6 +1011,18 @@ pub enum MutationHint<'a> {
     WritingCallee(&'a str),
 }
 
+pub fn underscore_assignment(span: Span, is_discard: bool) -> LisetteDiagnostic {
+    let help = if is_discard {
+        "To discard a value, write `let _ =` instead of `_ =`"
+    } else {
+        "Bind the value to a name, then change that name"
+    };
+    LisetteDiagnostic::error("Cannot assign to `_`")
+        .with_resolve_code("underscore_assignment")
+        .with_span_label(&span, "`_` binds nothing")
+        .with_help(help)
+}
+
 pub fn disallowed_mutation(
     variable_name: &str,
     span: Span,
@@ -4086,7 +4098,12 @@ pub fn float_literal_overflow(target_ty: &str, span: Span) -> LisetteDiagnostic 
         .with_infer_code("float_literal_overflow")
         .with_span_label(&span, format!("value overflows `{}`", target_ty))
         .with_help(format!(
-            "Use `float64` for larger values, or ensure the value fits in `{}`",
+            "Use `{}` for larger values, or ensure the value fits in `{}`",
+            if target_ty == "complex64" {
+                "complex128"
+            } else {
+                "float64"
+            },
             target_ty
         ))
 }
@@ -4350,11 +4367,17 @@ pub fn ref_to_interface_does_not_implement(
         )
 }
 
-pub fn float_modulo_not_supported(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Invalid operation")
-        .with_infer_code("float_modulo")
-        .with_span_label(&span, "`%` is not supported on floating-point types")
-        .with_help("Use `math.Mod(x, y)` for floating-point modulo")
+pub fn modulo_not_supported(is_complex: bool, span: Span) -> LisetteDiagnostic {
+    let diagnostic = LisetteDiagnostic::error("Invalid operation").with_infer_code("float_modulo");
+    if is_complex {
+        diagnostic
+            .with_span_label(&span, "`%` is not supported on complex types")
+            .with_help("Use `%` only on integer types")
+    } else {
+        diagnostic
+            .with_span_label(&span, "`%` is not supported on floating-point types")
+            .with_help("Use `math.Mod(x, y)` for floating-point modulo")
+    }
 }
 
 pub fn recursive_type(type_name: &str, span: Span) -> LisetteDiagnostic {

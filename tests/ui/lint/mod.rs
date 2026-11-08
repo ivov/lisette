@@ -4,6 +4,7 @@ mod unreachable_partial_err;
 use crate::_harness::build::compile_check;
 use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::formatting::format_result_diagnostic_for_snapshot;
+use crate::_harness::infer::infer;
 use crate::_harness::lint::lint;
 use crate::{assert_diagnostic_count, assert_lint_snapshot, assert_no_lint_warnings};
 use semantics::store::ENTRY_PACKAGE_ID;
@@ -46,6 +47,46 @@ fn main() {
 }
 "#
     );
+}
+
+#[test]
+fn unused_function_silent_for_nested_pipeline_after_rejected_step() {
+    let source = r#"
+fn id(a: int) -> int { a }
+fn add(a: int, b: int) -> int { a + b }
+fn main() { let _ = 1 |> id? |> (2 |> add) }
+"#;
+    let result = infer(source);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.code_str() == Some("parse.propagate_in_pipeline"))
+    );
+    assert_no_lint_warnings!(source);
+}
+
+#[test]
+fn unused_function_silent_for_rejected_pipeline_steps() {
+    for chain in [
+        "1 |> id? |> twice |> add(1)",
+        "1 |> add(_, _) |> id |> twice",
+        "1 |> add(2, _ + 1) |> id |> twice",
+        "1 |> (2 |> twice?) |> id |> add(1)",
+        "1 |> 5 |> id |> twice |> add(1)",
+        "1 |> id? |> (2 |> add) |> twice",
+    ] {
+        assert_no_lint_warnings!(&format!(
+            r#"
+fn id(a: int) -> int {{ a }}
+fn twice(a: int) -> int {{ a * 2 }}
+fn add(a: int, b: int) -> int {{ a + b }}
+fn main() {{
+  let _ = {chain}
+}}
+"#
+        ));
+    }
 }
 
 #[test]
