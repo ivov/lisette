@@ -176,7 +176,7 @@ pub fn self_type_not_supported(span: Span) -> LisetteDiagnostic {
         .with_help(
             "`Self` is only allowed inside an `impl` block. \
              Use a type parameter instead, e.g. \
-             `interface Comparable<T> { fn compare(other: T) -> int }`",
+             `interface Ranked<T> { fn compare(other: T) -> int }`",
         )
 }
 
@@ -1311,10 +1311,21 @@ pub fn generics_arity_mismatch(
 
     LisetteDiagnostic::error("Wrong type argument count")
         .with_infer_code("type_arg_count_mismatch")
-        .with_span_label(
-            &generics_span,
-            format!("expected `<{}>`, found `<{}>`", expected_str, actual_str),
-        )
+        .with_span_label(&generics_span, {
+            if actual_types.iter().any(Type::is_error) {
+                let noun = if actual_count == 1 {
+                    "type argument"
+                } else {
+                    "type arguments"
+                };
+                format!(
+                    "expected `<{}>`, found {} {}",
+                    expected_str, actual_count, noun
+                )
+            } else {
+                format!("expected `<{}>`, found `<{}>`", expected_str, actual_str)
+            }
+        })
         .with_help(format!(
             "This type expects {} {} but received {} {}",
             expected_count, expected_word, actual_count, actual_word
@@ -2491,6 +2502,13 @@ pub fn none_pattern_in_select_receive(span: Span) -> LisetteDiagnostic {
         .with_help(
             "To detect channel close, use `match ch.receive() { Some(v) => ..., None => ... }`",
         )
+}
+
+pub fn select_match_missing_arms(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid select match")
+        .with_infer_code("select_match_missing_arms")
+        .with_span_label(&span, "missing `Some` and `None` arms")
+        .with_help("Add a `Some(v) => ...` arm to handle received values and a `None => ...` arm to handle channel close, or simplify to `let Some(v) = ch.receive() => ...`")
 }
 
 pub fn select_match_missing_some_arm(span: Span) -> LisetteDiagnostic {

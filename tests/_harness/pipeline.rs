@@ -177,7 +177,7 @@ impl CompiledTest {
                 .expect("inferred test file must remain in the store")
                 .items
                 .clone();
-            if !checker.failed() {
+            {
                 passes::run(
                     &store,
                     &checker.facts,

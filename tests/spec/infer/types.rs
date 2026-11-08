@@ -1216,7 +1216,8 @@ fn match_pattern_binding_immutable() {
     infer(
         r#"{
     match Some(42) {
-      Some(x) => { x = 10; }
+      Some(x) => { x = 10; },
+      None => {}
     }
   }"#,
     )
@@ -1849,7 +1850,7 @@ fn main() {
 }
 "#,
     )
-    .assert_infer_code("interface_not_implemented");
+    .assert_infer_code("specialized_impl_cannot_satisfy_interface");
 }
 
 #[test]
@@ -2393,7 +2394,7 @@ fn impl_bound_is_enforced_on_method_call() {
     }
         "#,
     )
-    .assert_infer_code("interface_not_implemented");
+    .assert_infer_code_count("interface_not_implemented", 2);
 }
 
 #[test]
@@ -3362,7 +3363,9 @@ fn name(n: int) -> string {
 }
 "#;
     fs.add_file("main", "main.lis", source);
-    infer_package("main", fs).assert_infer_code("arg_count_mismatch");
+    infer_package("main", fs)
+        .assert_infer_code("arg_count_mismatch")
+        .assert_infer_code("type_mismatch");
 }
 
 #[test]
@@ -5257,7 +5260,7 @@ fn map_with_slice_key_rejected() {
     infer(
         r#"
     fn main() {
-      let mut m: Map<Slice<int>, string> = {};
+      let m: Map<Slice<int>, string> = Map.new();
     }
         "#,
     )
@@ -5269,7 +5272,7 @@ fn map_with_function_key_rejected() {
     infer(
         r#"
     fn main() {
-      let mut m: Map<fn(int) -> int, string> = {};
+      let m: Map<fn(int) -> int, string> = Map.new();
     }
         "#,
     )
@@ -5283,7 +5286,7 @@ fn map_with_array_of_non_comparable_element_key_rejected() {
     infer(
         r#"
     fn main() {
-      let mut m: Map<Array<Slice<int>, 2>, string> = {};
+      let m: Map<Array<Slice<int>, 2>, string> = Map.new();
     }
         "#,
     )
@@ -6191,7 +6194,7 @@ fn transforming_interface_cycle_with_bound_check_terminates() {
     infer(
         r#"
 interface Required {
-  fn required(self)
+  fn required()
 }
 
 interface A<T> {
@@ -6207,7 +6210,8 @@ interface Holder<T: Required> {}
 interface Uses<T: Holder<U>, U: A<int>> {}
 "#,
     )
-    .assert_infer_code("interface_cycle");
+    .assert_infer_code("interface_cycle")
+    .assert_infer_code("missing_transitive_bound");
 }
 
 #[test]
@@ -6215,7 +6219,7 @@ fn concrete_generic_argument_must_satisfy_user_interface_bound() {
     infer(
         r#"
 interface Shower {
-  fn show(self) -> string
+  fn show() -> string
 }
 
 interface Need<T: Shower> {}
@@ -6332,7 +6336,7 @@ fn interface_method_conflict_rejected() {
       fn name() -> int
     }
 
-    interface Both {
+    interface HasBoth {
       embed HasName
       embed HasNameInt
     }
@@ -7179,6 +7183,21 @@ fn use_bound<T: Speaker>(slot: Ref<T>) {{ {body} }}
         );
         infer(&source).assert_no_errors();
     }
+}
+
+#[test]
+fn bounded_callback_accepts_an_argument_inferred_after_it() {
+    infer(
+        r#"
+interface Speaker { fn speak() -> string }
+struct Loud {}
+impl Loud { fn speak(self) -> string { "hi" } }
+fn bounded<T: Speaker>(slot: Ref<T>) { let _ = slot.speak() }
+fn apply<T>(f: fn(Ref<T>), slot: Ref<T>) { f(slot) }
+fn main() { let value = Loud {}; apply(bounded, &value) }
+"#,
+    )
+    .assert_no_errors();
 }
 
 #[test]
@@ -8393,7 +8412,7 @@ struct S { embed Ref<Greeter> }
 fn main() {}
 "#,
     )
-    .assert_infer_code("embed_pointer_to_interface");
+    .assert_infer_code("ref_of_interface");
 }
 
 #[test]
@@ -8682,7 +8701,7 @@ fn main() {}
 fn embedded_specialized_impl_method_cannot_satisfy_interface() {
     infer(
         r#"
-interface OnlyInt { fn only_int() -> int }
+pub interface OnlyInt { fn only_int() -> int }
 pub struct Box<T> { pub value: T }
 impl Box<int> { pub fn only_int(self) -> int { self.value } }
 struct Outer { embed Box<int> }
@@ -9790,7 +9809,8 @@ struct S { embed A }
 fn main() {}
 "#,
     )
-    .assert_infer_code("embed_defined_type");
+    .assert_infer_code("embed_defined_type")
+    .assert_infer_code("recursive_type");
 }
 
 #[test]
@@ -11034,7 +11054,9 @@ fn integer_in_type_position_is_rejected() {
 
 #[test]
 fn integer_in_type_position_not_duplicated_in_annotation() {
-    infer(r#"{ let x: Slice<int, 3> = [] }"#).assert_infer_code_once("integer_in_type_position");
+    infer(r#"{ let x: Slice<int, 3> = [] }"#)
+        .assert_infer_code_once("integer_in_type_position")
+        .assert_infer_code_once("type_arg_count_mismatch");
 }
 
 #[test]
@@ -11047,7 +11069,8 @@ fn main() {
 }
 "#,
     )
-    .assert_infer_code_once("integer_in_type_position");
+    .assert_infer_code_once("integer_in_type_position")
+    .assert_infer_code_once("type_arg_count_mismatch");
 }
 
 #[test]

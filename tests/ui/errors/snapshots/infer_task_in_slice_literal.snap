@@ -10,3 +10,13 @@ source: tests/ui/errors/mod.rs
  6 │ }
    ╰────
   help: Move `task` to its own statement · code: [infer.task_in_expression_position]
+
+  ✕ Invalid `task`
+   ╭─[test.lis:5:24]
+ 4 │ fn f() {
+ 5 │   let arr = [task a(), task b()];
+   ·                        ────┬───
+   ·                            ╰── produces no value
+ 6 │ }
+   ╰────
+  help: Move `task` to its own statement · code: [infer.task_in_expression_position]

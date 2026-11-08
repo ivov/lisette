@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  4 │   select {
  5 │     match ch.receive() {},
    ·           ──────┬─────
-   ·                 ╰── missing `Some` arm
- 6 │     _ => println("timeout"),
+   ·                 ╰── missing `Some` and `None` arms
+ 6 │     _ => {},
    ╰────
-  help: `None` only handles channel close. Add a `Some(v) => ...` arm to handle received values · code: [infer.select_match_missing_some_arm]
+  help: Add a `Some(v) => ...` arm to handle received values and a `None => ...` arm to handle channel close, or simplify to `let Some(v) = ch.receive() => ...` · code: [infer.select_match_missing_arms]

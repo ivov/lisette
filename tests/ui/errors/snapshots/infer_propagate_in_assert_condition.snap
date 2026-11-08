@@ -10,3 +10,13 @@ source: tests/ui/errors/mod.rs
  8 │   Ok(())
    ╰────
   help: Bind the result first: `let val = expression?; assert val` · code: [infer.propagate_in_assert]
+
+  ✕ `assert` outside a test
+   ╭─[test.lis:7:3]
+ 6 │ fn run() -> Result<(), string> {
+ 7 │   assert check("x")?
+   ·   ─────────┬────────
+   ·            ╰── no test context is in scope here
+ 8 │   Ok(())
+   ╰────
+  help: `assert` is only valid inside a `#[test]` function or a function that takes a `t: TestContext` parameter · code: [infer.assert_without_test_context]

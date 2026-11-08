@@ -289,6 +289,7 @@ impl InferCtx<'_> {
         target: ResolvedStruct,
         expected_ty: &Type,
     ) -> Expression {
+        let declared_ty = expected_ty.resolve_in(&self.env);
         let StructLiteral {
             name: struct_name,
             fields: field_assignments,
@@ -327,11 +328,12 @@ impl InferCtx<'_> {
                 .is_some_and(|(prefix, _)| self.imports.namespace(prefix).is_some());
         let is_go_imported = qualified_name.starts_with("go:");
 
-        if is_go_imported
+        let denies_zero = is_go_imported
             && !matches!(new_spread, StructSpread::From(_))
-            && let Some(def) = store.get_definition(&qualified_name)
-            && zero::go_struct_denies_zero(def, &struct_fields)
-        {
+            && store
+                .get_definition(&qualified_name)
+                .is_some_and(|def| zero::go_struct_denies_zero(def, &struct_fields));
+        if denies_zero {
             self.sink.push(diagnostics::infer::hidden_state_no_zero(
                 &struct_call_ty,
                 span,
@@ -363,7 +365,9 @@ impl InferCtx<'_> {
             },
         );
 
-        if let StructSpread::Autofill { span: spread_span } = &new_spread {
+        if let StructSpread::Autofill { span: spread_span } = &new_spread
+            && !denies_zero
+        {
             self.check_autofill_fields(
                 &struct_name,
                 struct_fields
@@ -429,7 +433,12 @@ impl InferCtx<'_> {
         let final_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
         self.unify(&final_expected, &struct_call_ty, &span);
 
-        self.register_construction_obligations(&struct_name, &struct_call_ty, span);
+        self.register_construction_obligations_against(
+            &struct_name,
+            &struct_call_ty,
+            Some(&declared_ty),
+            span,
+        );
 
         Expression::StructCall {
             name: struct_name,
@@ -486,6 +495,7 @@ impl InferCtx<'_> {
         target: ResolvedVariant,
         expected_ty: &Type,
     ) -> Expression {
+        let declared_ty = expected_ty.resolve_in(&self.env);
         let StructLiteral {
             name: variant_name,
             fields: field_assignments,
@@ -549,7 +559,12 @@ impl InferCtx<'_> {
 
         if let Type::Nominal { id, .. } = &resolved_enum {
             let enum_id = id.as_str();
-            self.register_construction_obligations(enum_id, &enum_ty, span);
+            self.register_construction_obligations_against(
+                enum_id,
+                &enum_ty,
+                Some(&declared_ty),
+                span,
+            );
         }
 
         self.mark_writable_initializer_uses(

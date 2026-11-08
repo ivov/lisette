@@ -99,9 +99,8 @@ macro_rules! assert_infer_error_snapshot {
         if result.errors.is_empty() {
             panic!("Expected errors but inference succeeded");
         }
-
-        let output = $crate::_harness::formatting::format_diagnostic_for_snapshot(
-            &result.errors[0],
+        let output = $crate::_harness::infer::format_errors_for_snapshot(
+            &result.errors,
             $source,
             "test.lis",
         );
@@ -121,9 +120,8 @@ macro_rules! assert_multipackage_infer_error_snapshot {
         if $result.errors.is_empty() {
             panic!("Expected errors but inference succeeded");
         }
-
-        let output = $crate::_harness::formatting::format_diagnostic_for_snapshot(
-            &$result.errors[0],
+        let output = $crate::_harness::infer::format_errors_for_snapshot(
+            &$result.errors,
             $source,
             "main.lis",
         );

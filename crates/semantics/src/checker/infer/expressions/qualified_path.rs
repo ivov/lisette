@@ -15,6 +15,18 @@ impl InferCtx<'_> {
         expected_ty: &Type,
     ) -> Expression {
         let store = self.store;
+        if let Expression::Identifier { value, .. } = expression.unwrap_parens()
+            && self.imports.is_failed(value)
+            && self.scopes.lookup_binding_id(value).is_none()
+        {
+            return Expression::DotAccess {
+                expression,
+                member,
+                ty: Type::Error,
+                span,
+                resolution: DotAccessResolution::Unresolved,
+            };
+        }
         {
             let mut inner = &*expression;
             while let Expression::Paren { expression: e, .. } = inner {

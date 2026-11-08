@@ -23,6 +23,7 @@ fn extract_type_definitions(source: &str) -> (String, String) {
     let mut rest = String::new();
     let mut in_def = false;
     let mut brace_depth: i32 = 0;
+    let mut rest_depth: i32 = 0;
 
     for line in source.lines() {
         let trimmed = line.trim();
@@ -43,7 +44,8 @@ fn extract_type_definitions(source: &str) -> (String, String) {
             continue;
         }
 
-        if trimmed.starts_with("enum ") || trimmed.starts_with("struct ") {
+        let is_helper_function = rest_depth == 0 && trimmed.starts_with("fn ");
+        if trimmed.starts_with("enum ") || trimmed.starts_with("struct ") || is_helper_function {
             brace_depth = 0;
             for ch in line.chars() {
                 match ch {
@@ -60,6 +62,13 @@ fn extract_type_definitions(source: &str) -> (String, String) {
             continue;
         }
 
+        for ch in line.chars() {
+            match ch {
+                '{' => rest_depth += 1,
+                '}' => rest_depth -= 1,
+                _ => {}
+            }
+        }
         rest.push_str(line);
         rest.push('\n');
     }

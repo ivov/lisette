@@ -6,9 +6,16 @@ use crate::facts::{GenericBoundObligation, GenericBoundOrigin};
 use crate::generics::{AppliedGenericBound, bound_requires_evidence, type_obligations};
 
 impl InferCtx<'_> {
-    pub(super) fn defer_function_bound(&mut self, bound: &Bound, name: Option<&str>, span: Span) {
+    pub(super) fn defer_function_bound(
+        &mut self,
+        bound: &Bound,
+        name: Option<&str>,
+        is_call: bool,
+        span: Span,
+    ) {
         let origin = GenericBoundOrigin::FunctionReference {
             name: name.unwrap_or("function").into(),
+            is_call,
         };
         self.register_generic_bound_obligation(applied_function_bound(bound), &origin, span);
     }
@@ -19,6 +26,26 @@ impl InferCtx<'_> {
         constructed_ty: &Type,
         span: Span,
     ) {
+        self.register_construction_obligations_against(written_name, constructed_ty, None, span);
+    }
+
+    pub(crate) fn register_construction_obligations_against(
+        &mut self,
+        written_name: &str,
+        constructed_ty: &Type,
+        declared_ty: Option<&Type>,
+        span: Span,
+    ) {
+        if let Some(declared) = declared_ty {
+            let declared = self.store.deep_resolve_alias(declared);
+            let constructed = self.store.deep_resolve_alias(constructed_ty);
+            if declared.get_qualified_id().is_some()
+                && declared.get_qualified_id() == constructed.get_qualified_id()
+                && !declared.has_unbound_variables()
+            {
+                return;
+            }
+        }
         let has_equals_method = constructed_ty
             .get_qualified_id()
             .is_some_and(|id| self.store.definition_has_equals_method(id));
@@ -40,6 +67,7 @@ impl InferCtx<'_> {
     ) {
         let origin = GenericBoundOrigin::FunctionReference {
             name: unqualified_name(written_name).into(),
+            is_call: false,
         };
         for bound in function_ty.get_bounds() {
             self.register_generic_bound_obligation(applied_function_bound(bound), &origin, span);

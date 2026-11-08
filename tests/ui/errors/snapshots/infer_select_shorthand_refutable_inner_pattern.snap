@@ -4,9 +4,9 @@ source: tests/ui/errors/mod.rs
   ✕ Refutable pattern in select receive
    ╭─[test.lis:5:14]
  4 │   select {
- 5 │     let Some(1) = ch.receive() => println("one"),
+ 5 │     let Some(1) = ch.receive() => {},
    ·              ┬
    ·              ╰── may not match all received values
- 6 │     _ => println("timeout"),
+ 6 │     _ => {},
    ╰────
   help: Select receive requires an irrefutable binding like `Some(v)` or `Some(_)`. Use a regular `match` inside the arm body to filter values · code: [infer.select_receive_refutable_pattern]

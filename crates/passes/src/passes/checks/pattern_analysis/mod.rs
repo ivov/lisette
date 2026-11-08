@@ -34,7 +34,7 @@ use normalize::normalize_arm;
 pub struct PatternAnalysisContext<'a, 'sink> {
     pub store: &'a Store,
     cache: InhabitanceCache,
-    or_pattern_error_spans: &'a HashSet<Span>,
+    pattern_error_spans: &'a HashSet<Span>,
     sink: &'sink LocalSink,
     lint_sink: Option<&'sink LocalSink>,
 }
@@ -42,14 +42,14 @@ pub struct PatternAnalysisContext<'a, 'sink> {
 impl<'a, 'sink> PatternAnalysisContext<'a, 'sink> {
     pub fn new(
         store: &'a Store,
-        or_pattern_error_spans: &'a HashSet<Span>,
+        pattern_error_spans: &'a HashSet<Span>,
         sink: &'sink LocalSink,
         lint_sink: Option<&'sink LocalSink>,
     ) -> Self {
         Self {
             store,
             cache: InhabitanceCache::new(),
-            or_pattern_error_spans,
+            pattern_error_spans,
             sink,
             lint_sink,
         }
@@ -118,7 +118,12 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
         } => {
             check(value, ctx);
 
-            if let Some(else_expression) = mode.else_block() {
+            if is_rejected(value) || has_rejected_pattern(&binding.pattern, ctx.pattern_error_spans)
+            {
+                if let Some(else_expression) = mode.else_block() {
+                    check(else_expression, ctx);
+                }
+            } else if let Some(else_expression) = mode.else_block() {
                 check(else_expression, ctx);
 
                 if is_pattern_irrefutable(&binding.pattern, ctx.store) {
@@ -141,7 +146,9 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
             ..
         } => {
             check(scrutinee, ctx);
-            check_if_let(pattern, alternative, ctx);
+            if !is_rejected(scrutinee) && !has_rejected_pattern(pattern, ctx.pattern_error_spans) {
+                check_if_let(pattern, alternative, ctx);
+            }
             check(consequence, ctx);
             if let Some(alternative) = alternative.expression() {
                 check(alternative, ctx);
@@ -156,12 +163,44 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
         } => {
             check(subject, ctx);
 
+            if is_rejected(subject) {
+                for a in arms {
+                    check(&a.expression, ctx);
+                    if let Some(guard) = &a.guard {
+                        check(guard, ctx);
+                    }
+                }
+                return;
+            }
+
             if !is_inhabited(&subject.get_type(), ctx.store, &mut ctx.cache) {
                 return;
             }
 
             let mut unions = HashMap::default();
             let norm_ctx = ctx.normalize_context_for_match(subject.get_type());
+
+            let rejected_spans = ctx.pattern_error_spans;
+            if arms
+                .iter()
+                .any(|arm| has_rejected_pattern(&arm.pattern, rejected_spans))
+            {
+                check_redundancy_with_guards(
+                    arms,
+                    rejected_spans,
+                    &mut unions,
+                    &norm_ctx,
+                    &mut ctx.cache,
+                    sink,
+                );
+                for a in arms {
+                    check(&a.expression, ctx);
+                    if let Some(guard) = &a.guard {
+                        check(guard, ctx);
+                    }
+                }
+                return;
+            }
 
             let unguarded_rows: Vec<Row> = arms
                 .iter()
@@ -185,7 +224,14 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
                 return;
             }
 
-            if !check_redundancy_with_guards(arms, &mut unions, &norm_ctx, &mut ctx.cache, sink) {
+            if !check_redundancy_with_guards(
+                arms,
+                rejected_spans,
+                &mut unions,
+                &norm_ctx,
+                &mut ctx.cache,
+                sink,
+            ) {
                 return;
             }
 
@@ -215,7 +261,10 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
             check(scrutinee, ctx);
             check(body, ctx);
 
-            if is_pattern_irrefutable(pattern, ctx.store) {
+            if !is_rejected(scrutinee)
+                && !has_rejected_pattern(pattern, ctx.pattern_error_spans)
+                && is_pattern_irrefutable(pattern, ctx.store)
+            {
                 sink.push(diagnostics::pattern::irrefutable_while_let(
                     pattern.get_span(),
                 ));
@@ -278,6 +327,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
 
 fn check_redundancy_with_guards(
     arms: &[MatchArm],
+    rejected_spans: &HashSet<Span>,
     unions: &mut UnionTable,
     norm_ctx: &NormalizationContext,
     cache: &mut InhabitanceCache,
@@ -287,9 +337,26 @@ fn check_redundancy_with_guards(
     let mut found_redundant = false;
 
     for (index, arm) in arms.iter().enumerate() {
-        let current_rows = normalize_arm(arm, unions, norm_ctx, cache);
+        if rejected_spans.contains(&arm.pattern.get_span()) {
+            continue;
+        }
+        let alternatives: Vec<&Pattern> = match &arm.pattern {
+            Pattern::Or { patterns, .. } => patterns.iter().collect(),
+            pattern => vec![pattern],
+        };
+        let valid_alternatives: Vec<&Pattern> = alternatives
+            .iter()
+            .copied()
+            .filter(|pattern| !has_rejected_pattern(pattern, rejected_spans))
+            .collect();
+        let has_rejected_alternative = valid_alternatives.len() < alternatives.len();
+        let current_rows: Vec<Row> = valid_alternatives
+            .iter()
+            .map(|pattern| vec![normalize_pattern(pattern, unions, norm_ctx, cache)])
+            .collect();
 
         let mut current_arm_rows: Vec<Row> = vec![];
+        let mut redundant_alternatives = Vec::new();
 
         for (alt_index, current_row) in current_rows.iter().enumerate() {
             let mut previous_rows: Vec<Row> =
@@ -297,11 +364,8 @@ fn check_redundancy_with_guards(
             previous_rows.extend(current_arm_rows.iter().cloned());
 
             if !is_useful(&previous_rows, current_row, unions) {
-                let span = if let Pattern::Or { patterns, .. } = &arm.pattern {
-                    patterns
-                        .get(alt_index)
-                        .map(|p| p.get_span())
-                        .unwrap_or_else(|| arm.pattern.get_span())
+                let span = if matches!(arm.pattern, Pattern::Or { .. }) {
+                    valid_alternatives[alt_index].get_span()
                 } else {
                     arm.pattern.get_span()
                 };
@@ -341,11 +405,30 @@ fn check_redundancy_with_guards(
                     format!("arm #{} is unreachable", index + 1)
                 };
 
-                sink.push(diagnostics::pattern::redundant_arm(span, label, help));
+                redundant_alternatives.push((span, label, help, covered_by_same_arm));
                 found_redundant = true;
             }
 
             current_arm_rows.push(current_row.clone());
+        }
+
+        let whole_arm_redundant = !has_rejected_alternative
+            && current_rows.len() > 1
+            && redundant_alternatives.len() == current_rows.len()
+            && redundant_alternatives
+                .iter()
+                .all(|(_, _, _, covered_by_same_arm)| !covered_by_same_arm);
+        if whole_arm_redundant {
+            let (_, label, help, _) = redundant_alternatives.swap_remove(0);
+            sink.push(diagnostics::pattern::redundant_arm(
+                arm.pattern.get_span(),
+                label,
+                help,
+            ));
+        } else {
+            for (span, label, help, _) in redundant_alternatives {
+                sink.push(diagnostics::pattern::redundant_arm(span, label, help));
+            }
         }
 
         if !arm.has_guard() {
@@ -358,15 +441,40 @@ fn check_redundancy_with_guards(
     !found_redundant
 }
 
+fn is_rejected(value: &Expression) -> bool {
+    value.get_type().is_error()
+}
+
+fn has_rejected_pattern(pattern: &Pattern, rejected_spans: &HashSet<Span>) -> bool {
+    if rejected_spans.contains(&pattern.get_span()) {
+        return true;
+    }
+    match pattern {
+        Pattern::EnumVariant {
+            fields: patterns, ..
+        }
+        | Pattern::Tuple {
+            elements: patterns, ..
+        }
+        | Pattern::Or { patterns, .. }
+        | Pattern::Slice {
+            prefix: patterns, ..
+        } => patterns
+            .iter()
+            .any(|pattern| has_rejected_pattern(pattern, rejected_spans)),
+        Pattern::Struct { fields, .. } => fields
+            .iter()
+            .any(|field| has_rejected_pattern(&field.value, rejected_spans)),
+        Pattern::AsBinding { pattern, .. } => has_rejected_pattern(pattern, rejected_spans),
+        _ => false,
+    }
+}
+
 fn check_if_let(
     pattern: &Pattern,
     alternative: &IfLetAlternative,
     ctx: &mut PatternAnalysisContext,
 ) {
-    if ctx.or_pattern_error_spans.contains(&pattern.get_span()) {
-        return;
-    }
-
     if is_pattern_irrefutable(pattern, ctx.store) {
         ctx.add_issue(pattern.get_span(), IssueKind::RedundantIfLet);
 
@@ -386,7 +494,11 @@ fn check_if_let(
 }
 
 fn check_refutability(pattern: &Pattern, ctx: &mut PatternAnalysisContext) -> bool {
-    if matches!(pattern, Pattern::Or { .. }) {
+    let mut innermost = pattern;
+    while let Pattern::AsBinding { pattern, .. } = innermost {
+        innermost = pattern;
+    }
+    if matches!(innermost, Pattern::Or { .. } | Pattern::Literal { .. }) {
         return true;
     }
 

@@ -3,6 +3,7 @@ use crate::checker::infer::BuiltinBound;
 use crate::checker::infer::expressions::comparison::{
     check_never_comparable, check_never_comparable_with_bounds, check_not_comparable_with_bounds,
 };
+use std::iter;
 use std::mem;
 use syntax::EcoString;
 use syntax::ast::{Annotation, Span, StructFields, VariantFields};
@@ -527,7 +528,13 @@ impl TaskState {
         let resolved_ty = if generics.is_empty() && concrete_args.is_empty() {
             body
         } else {
-            let map = build_named_substitution_map(&generics, &concrete_args);
+            let filled: Vec<Type> = concrete_args
+                .iter()
+                .cloned()
+                .chain(iter::repeat(Type::Error))
+                .take(generics.len())
+                .collect();
+            let map = build_named_substitution_map(&generics, &filled);
             substitute(&body, &map)
         };
 
@@ -899,7 +906,13 @@ impl TaskState {
             })
             .collect();
 
-        let map = build_named_substitution_map(generics, args.iter().map(|(_, ty)| ty));
+        let filled: Vec<Type> = args
+            .iter()
+            .map(|(_, ty)| ty.clone())
+            .chain(iter::repeat(Type::Error))
+            .take(generics.len())
+            .collect();
+        let map = build_named_substitution_map(generics, &filled);
 
         (substitute(body, &map), args)
     }

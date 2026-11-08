@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·              ╰── disallowed
  6 │   c.value
    ╰────
-  help: `Self` is only allowed inside an `impl` block. Use a type parameter instead, e.g. `interface Comparable<T> { fn compare(other: T) -> int }` · code: [resolve.self_type_not_supported]
+  help: `Self` is only allowed inside an `impl` block. Use a type parameter instead, e.g. `interface Ranked<T> { fn compare(other: T) -> int }` · code: [resolve.self_type_not_supported]

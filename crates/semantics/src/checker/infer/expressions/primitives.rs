@@ -309,7 +309,11 @@ impl InferCtx<'_> {
                     .is_none(),
                 _ => false,
             };
-            if names_a_type && !self.is_callee_context() && !self.is_dot_access_base() {
+            if names_a_type
+                && !self.is_callee_context()
+                && !self.is_dot_access_base()
+                && !self.is_inside_rejected_go_builtin_args()
+            {
                 self.sink
                     .push(diagnostics::infer::type_used_as_value(&value, span));
             }

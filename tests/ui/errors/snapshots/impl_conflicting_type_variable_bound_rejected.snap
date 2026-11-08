@@ -10,3 +10,16 @@ source: tests/ui/errors/mod.rs
  7 │   fn label(self) -> string {
    ╰────
   help: Declare this bound on `Box`, or remove it from the `impl` · code: [infer.impl_bound_strengthens_type]
+
+  ✕ Type mismatch
+   ╭─[test.lis:7:21]
+ 6 │ impl<T: Parent<string>> Box<T> {
+ 7 │   fn label(self) -> string {
+   ·                     ───┬──
+   ·                        ╰── return type declared here
+ 8 │     self.value.p()
+   ·     ───────┬──────
+   ·            ╰── expected `string`, found `T`
+ 9 │   }
+   ╰────
+  help: `label` declares return type `string`, but this tail expression has type `T`. Change the value, or declare `-> T` · code: [infer.type_mismatch]

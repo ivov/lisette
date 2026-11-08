@@ -1,5 +1,5 @@
 use crate::checker::EnvResolve;
-use syntax::ast::{Expression, IdentifierResolution, Span, StructFields};
+use syntax::ast::{Expression, IdentifierResolution, StructFields};
 use syntax::program::{
     CallKind, Definition, DefinitionBody, DotAccessResolution, NativeTypeKind, ValueKind,
 };
@@ -228,13 +228,7 @@ impl InferCtx<'_> {
         }
     }
 
-    /// `Map.delete` and `Slice.copy_from` modify the receiver in place, so it
-    /// needs `mut`. `append` is pure (it returns a new slice and needs no
-    /// `mut`): growing in place is the reassignment `s = s.append(x)`, checked
-    /// as an ordinary assignment, including the rejection of writing back to a
-    /// non-addressable map-value field.
-    pub(super) fn check_native_mutating_call(&mut self, callee: &Expression, span: &Span) {
-        let store = self.store;
+    pub(super) fn mark_native_mutating_call(&mut self, callee: &Expression) {
         let Expression::DotAccess {
             expression: receiver,
             member,
@@ -257,18 +251,6 @@ impl InferCtx<'_> {
             && let Some(binding_id) = self.scopes.lookup_binding_id(&var_name)
         {
             self.facts.mark_alias_mutated(binding_id);
-        }
-        // The write goes through the receiver handle, so its type must be writable.
-        let governing = store.peel_alias(&receiver_ty);
-        if !governing.is_writable() && !governing.is_error() {
-            let receiver_place = super::aliasing::render_place(receiver);
-            self.sink.push(diagnostics::infer::write_through_read_only(
-                &receiver_place,
-                &receiver_place,
-                &governing.to_string(),
-                *span,
-                None,
-            ));
         }
     }
 
@@ -322,6 +304,7 @@ impl InferCtx<'_> {
             })
             .collect();
 
+        let mut reported_places: Vec<&str> = Vec::new();
         for (i, arg) in args.iter().enumerate() {
             let writable_position = writable_positions[i];
             let Some(place) = places[i].as_deref() else {
@@ -345,7 +328,8 @@ impl InferCtx<'_> {
                     .iter()
                     .enumerate()
                     .any(|(j, other)| j != i && other.as_deref() == Some(place));
-            if aliases_receiver || aliases_argument {
+            if (aliases_receiver || aliases_argument) && !reported_places.contains(&place) {
+                reported_places.push(place);
                 self.sink
                     .push(diagnostics::infer::aliased_writable_argument(
                         place,

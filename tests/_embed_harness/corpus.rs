@@ -283,7 +283,7 @@ pub fn reject_cases() -> Vec<RejectCase> {
         RejectCase {
             name: "pointer_to_interface",
             source: "interface I {\n  fn m() -> int\n}\nstruct Outer {\n  embed Ref<I>,\n}\n",
-            code: "infer.embed_pointer_to_interface",
+            code: "infer.ref_of_interface",
             permanent: true,
         },
         RejectCase {

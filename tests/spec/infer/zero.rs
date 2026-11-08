@@ -106,7 +106,8 @@ fn zero_of_enum_is_rejected() {
 #[test]
 fn a_bad_type_argument_does_not_cascade_a_zero_error() {
     infer("fn f() { let _ = zero<Array<3, int>>() }")
-        .assert_infer_code_count("not_zeroable_bound", 0);
+        .assert_infer_code_count("not_zeroable_bound", 0)
+        .assert_infer_code("integer_in_type_position");
 }
 
 #[test]
@@ -148,9 +149,7 @@ fn zero_rejection_reaches_through_a_map_field() {
 
 #[test]
 fn zero_without_a_type_argument_is_rejected() {
-    infer("fn f() { let _ = zero() }")
-        .assert_infer_code_count("missing_type_argument", 1)
-        .assert_infer_code_count("unconstrained_type_param", 1);
+    infer("fn f() { let _ = zero() }").assert_infer_code("unconstrained_type_param");
 }
 
 #[test]

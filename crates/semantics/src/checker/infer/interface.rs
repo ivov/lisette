@@ -19,6 +19,7 @@ struct ConformanceTraversal<'a> {
     span: Span,
     adapter_capable: bool,
     violations: Vec<InterfaceViolation>,
+    reported_violations: usize,
 }
 
 impl ConformanceTraversal<'_> {
@@ -95,6 +96,9 @@ impl InferCtx<'_> {
         }
         let store = self.store;
         let resolved = store.peel_alias(&ty.resolve_in(&self.env));
+        if resolved.contains_error() || bound.contains_error() {
+            return;
+        }
         let methods = if resolved.is_ref()
             && resolved
                 .inner()
@@ -227,6 +231,9 @@ impl InferCtx<'_> {
         };
         let requirements =
             interface_requirements(&interface_ty, |id| self.store.get_definition(id));
+        if self.has_conflicting_requirements(&requirements) {
+            return Err(vec![]);
+        }
         let requires_methods = !requirements.is_empty();
         let resolved = ty.resolve_in(&self.env);
         let (core, behind_ref) = self.store.peel_refs_and_aliases(&resolved);
@@ -249,16 +256,17 @@ impl InferCtx<'_> {
             .unwrap_or_else(|| ty.to_string());
         let pair = (type_id, interface_qualified_id.to_string());
 
-        let Some(violations) = self.with_satisfaction_check(pair, |this| {
+        let Some((violations, reported_violations)) = self.with_satisfaction_check(pair, |this| {
             let adapter_capable = this.adapter_capable_receiver(ty, interface_qualified_id);
             let mut check = ConformanceTraversal {
                 receiver: ty,
                 span: *span,
                 adapter_capable,
                 violations: Vec::new(),
+                reported_violations: 0,
             };
             this.collect_interface_violations(&mut check, &requirements, methods);
-            check.violations
+            (check.violations, check.reported_violations)
         }) else {
             return Ok(());
         };
@@ -267,6 +275,11 @@ impl InferCtx<'_> {
 
         if violations.is_empty() && !(builtin_receiver && requires_methods) {
             return Ok(());
+        }
+
+        let violation_count: usize = violations.iter().map(|v| v.methods.len()).sum();
+        if violation_count > 0 && violation_count == reported_violations {
+            return Err(violations);
         }
 
         let resolved = ty.resolve_in(&self.env);
@@ -299,52 +312,55 @@ impl InferCtx<'_> {
         } else {
             None
         };
-        if let Some(wrapper) = wrapper {
-            self.sink
-                .push(diagnostics::infer::wrapper_does_not_implement_interface(
-                    unqualified_name(interface_qualified_id),
-                    wrapper,
-                    &resolved,
-                    *span,
-                ));
+        let type_name = resolved
+            .get_name()
+            .map_or_else(|| resolved.to_string(), str::to_owned);
+        let diagnostic = if let Some(wrapper) = wrapper {
+            diagnostics::infer::wrapper_does_not_implement_interface(
+                unqualified_name(interface_qualified_id),
+                wrapper,
+                &resolved,
+                *span,
+            )
         } else if builtin_receiver {
-            let type_name = resolved
-                .get_name()
-                .map_or_else(|| resolved.to_string(), str::to_owned);
-            self.sink
-                .push(diagnostics::infer::builtin_type_cannot_implement_interface(
-                    unqualified_name(interface_qualified_id),
-                    &type_name,
-                    *span,
-                ));
+            diagnostics::infer::builtin_type_cannot_implement_interface(
+                unqualified_name(interface_qualified_id),
+                &type_name,
+                *span,
+            )
         } else if blocked_by_type_parameter_permission(&violations) {
-            let type_name = resolved
-                .get_name()
-                .map_or_else(|| resolved.to_string(), str::to_owned);
-            self.sink
-                .push(diagnostics::infer::unsupported_generic_go_interface(
-                    unqualified_name(interface_qualified_id),
-                    &type_name,
-                    *span,
-                ));
+            diagnostics::infer::unsupported_generic_go_interface(
+                unqualified_name(interface_qualified_id),
+                &type_name,
+                *span,
+            )
         } else {
-            let type_name = resolved
-                .get_name()
-                .map_or_else(|| resolved.to_string(), str::to_owned);
             let foreign_package = resolved
                 .get_qualified_id()
                 .filter(|id| id.starts_with("go:"))
                 .and_then(|id| id.rsplit_once('.').map(|(package, _)| package));
-            self.sink
-                .push(diagnostics::infer::interface_not_implemented(
-                    unqualified_name(interface_qualified_id),
-                    &type_name,
-                    &violations,
-                    foreign_package,
-                    *span,
-                ));
-        }
+            diagnostics::infer::interface_not_implemented(
+                unqualified_name(interface_qualified_id),
+                &type_name,
+                &violations,
+                foreign_package,
+                *span,
+            )
+        };
+        self.sink.push(diagnostic);
         Err(violations)
+    }
+
+    fn has_conflicting_requirements(&self, requirements: &[InterfaceRequirement]) -> bool {
+        requirements.iter().enumerate().any(|(i, requirement)| {
+            requirements[..i]
+                .iter()
+                .filter(|earlier| earlier.name == requirement.name)
+                .any(|earlier| {
+                    self.store.normalized_annotation_type(&earlier.ty)
+                        != self.store.normalized_annotation_type(&requirement.ty)
+                })
+        })
     }
 
     fn with_satisfaction_check<T>(
@@ -674,6 +690,7 @@ impl InferCtx<'_> {
                                 span,
                             ),
                         );
+                        check.reported_violations += 1;
                     }
                     check.push_violation(
                         interface_qualified_id,

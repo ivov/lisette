@@ -1,3 +1,4 @@
+use crate::checker::EnvResolve;
 pub mod aliasing;
 pub mod bindings;
 mod branches;
@@ -50,6 +51,20 @@ impl InferCtx<'_> {
         expected_ty: &Type,
         is_subexpression: bool,
     ) -> Expression {
+        let inferred = self.infer_expression_kind(expression, expected_ty, is_subexpression);
+        // Poison what a failed expression feeds, so later uses stay silent.
+        if inferred.get_type().resolve_in(&self.env).is_error() {
+            self.unify(expected_ty, &Type::Error, &inferred.get_span());
+        }
+        inferred
+    }
+
+    fn infer_expression_kind(
+        &mut self,
+        expression: Expression,
+        expected_ty: &Type,
+        is_subexpression: bool,
+    ) -> Expression {
         if self.is_dot_access_base()
             && !matches!(
                 expression,
@@ -95,8 +110,12 @@ impl InferCtx<'_> {
             } => {
                 let is_panic =
                     matches!(&**callee, Expression::Identifier { value, .. } if value == "panic");
+                let checkpoint = self.sink.checkpoint();
                 let result = self.infer_function_call(expression, expected_ty);
-                if is_subexpression && is_panic {
+                let reported_panic_position = self
+                    .sink
+                    .has_code_since(checkpoint, "infer.panic_in_expression_position");
+                if is_subexpression && is_panic && !reported_panic_position {
                     self.sink
                         .push(diagnostics::infer::never_call_in_expression(span));
                 }

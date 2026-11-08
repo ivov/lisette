@@ -19,7 +19,7 @@ fn array_index_returns_element() {
 fn cannot_assign_to_array_element_through_map_base() {
     infer(
         r#"{
-    let mut m: Map<string, Array<int, 3>> = Map.new()
+    let mut m: mut Map<string, Array<int, 3>> = Map.new()
     m["a"] = Array.new()
     m["a"][0] = 9
   }"#,
@@ -91,7 +91,7 @@ fn arrays_of_different_lengths_do_not_unify() {
 
 #[test]
 fn array_element_type_mismatch() {
-    infer(r#"let xs: Array<int, 2> = ["a", "b"]; xs"#).assert_infer_code("type_mismatch");
+    infer(r#"let xs: Array<int, 2> = ["a", "b"]; xs"#).assert_infer_code_count("type_mismatch", 2);
 }
 
 #[test]
@@ -275,12 +275,15 @@ fn array_from_rejects_spread() {
 #[test]
 fn array_from_spread_does_not_also_count_arguments() {
     infer("Array.from<int, 3>([1, 2, 3]...)")
-        .assert_infer_code_count("array_from_takes_one_argument", 0);
+        .assert_infer_code_count("array_from_takes_one_argument", 0)
+        .assert_infer_code("spread_on_non_variadic");
 }
 
 #[test]
 fn array_from_still_resolves_names_inside_a_rejected_spread() {
-    infer("Array.from<int, 3>(missing...)").assert_resolve_code("name_not_found");
+    infer("Array.from<int, 3>(missing...)")
+        .assert_resolve_code("name_not_found")
+        .assert_infer_code("spread_on_non_variadic");
 }
 
 #[test]

@@ -15,6 +15,7 @@ use super::super::context::{Expectation, ExpectationRole, UseContext};
 use super::permission::{ConstructionGrant, MissingSupply};
 use super::struct_call::same_nominal;
 use crate::checker::infer::InferCtx;
+use crate::checker::infer::unify::BoundSite;
 use crate::checker::scopes::DeferredMapKeyCheck;
 use crate::zero::MapZero;
 
@@ -125,7 +126,10 @@ impl InferCtx<'_> {
             unreachable!("infer_function_call called with non-Call expression");
         };
         let type_args = type_arguments.into_annotations();
-        let callee_path = expression.unwrap_parens().as_dotted_path();
+        let callee_path = expression.unwrap_parens().as_dotted_path().filter(|path| {
+            path.split_once('.')
+                .is_none_or(|(prefix, _)| !self.imports.is_failed(prefix))
+        });
 
         // `Array.new` and `Array.from` have no prelude signature (no const
         // generics), so resolve them inline.
@@ -231,10 +235,16 @@ impl InferCtx<'_> {
         } else if call_kind == CallKind::TupleStructConstructor {
             let adjusted = self.tuple_struct_expected_parameters(&parameters, &args);
             self.infer_call_arguments(args, &adjusted, variadic_start, &callee_expression)
+        } else if self.is_rejected_go_type_builtin(&callee_expression) {
+            self.in_rejected_go_builtin_args(|s| {
+                s.infer_call_arguments(args, &parameters, variadic_start, &callee_expression)
+            })
         } else {
             self.infer_call_arguments(args, &parameters, variadic_start, &callee_expression)
         };
-        self.check_call_arity(&parameters, &new_args, &callee_expression, &span);
+        if spread.is_none() || variadic.is_some() {
+            self.check_call_arity(&parameters, &new_args, &callee_expression, &span);
+        }
         self.check_aliased_writable_arguments(
             &new_args,
             &parameters,
@@ -329,7 +339,7 @@ impl InferCtx<'_> {
             self.scopes.defer_map_key_check(check);
         }
 
-        self.check_native_mutating_call(&callee_expression, &span);
+        self.mark_native_mutating_call(&callee_expression);
         self.check_native_equality_ufcs(&callee_expression, &new_args);
 
         // Nothing below unifies, so one resolution answers both checks on the callee.
@@ -881,7 +891,7 @@ impl InferCtx<'_> {
     ) -> (Type, CallTypeArguments) {
         let store = self.store;
         let Type::Forall { vars, body } = forall_ty else {
-            if !type_args.is_empty() {
+            if !type_args.is_empty() && !forall_ty.resolve_in(&self.env).is_error() {
                 self.sink.push(diagnostics::infer::type_args_on_non_generic(
                     type_args.len(),
                     *span,
@@ -938,18 +948,21 @@ impl InferCtx<'_> {
             instantiated
         };
 
+        let resolved_types = resolved_args
+            .iter()
+            .map(|(_, ty)| ty.clone())
+            .collect::<Vec<_>>();
         if !is_full_arity && !is_method_only_arity {
             let vars_as_str: Vec<String> = vars.iter().map(|s| s.to_string()).collect();
-            let resolved_types = resolved_args
-                .iter()
-                .map(|(_, ty)| ty.clone())
-                .collect::<Vec<_>>();
             self.sink.push(diagnostics::infer::generics_arity_mismatch(
                 &vars_as_str,
                 type_args,
                 &resolved_types,
                 *span,
             ));
+            // A wrong count gives no reliable mapping from arguments to parameters.
+            let map: SubstitutionMap = vars.iter().map(|var| (var.clone(), Type::Error)).collect();
+            instantiated = substitute(body, &map);
         }
 
         if let Expression::DotAccess { expression, .. } = callee_expression {
@@ -1143,21 +1156,21 @@ impl InferCtx<'_> {
             type_arguments,
             span,
         } = call;
-        if let Some(spread_expr) = spread {
-            self.sink
-                .push(diagnostics::infer::spread_on_non_variadic(span));
-            self.with_value_context(|s| s.infer_expression(*spread_expr, &Type::Error));
-        }
-
-        if args.len() != 1 {
-            let Type::Nominal { id, .. } = &named_ty else {
-                unreachable!("type_conversion_underlying only fires for Constructor callees")
-            };
-            self.sink.push(diagnostics::infer::type_conversion_arity(
-                unqualified_name(id),
-                args.len(),
-                span,
-            ));
+        if spread.is_some() || args.len() != 1 {
+            if let Some(spread_expr) = spread {
+                self.sink
+                    .push(diagnostics::infer::spread_on_non_variadic(span));
+                self.with_value_context(|s| s.infer_expression(*spread_expr, &Type::Error));
+            } else {
+                let Type::Nominal { id, .. } = &named_ty else {
+                    unreachable!("type_conversion_underlying only fires for Constructor callees")
+                };
+                self.sink.push(diagnostics::infer::type_conversion_arity(
+                    unqualified_name(id),
+                    args.len(),
+                    span,
+                ));
+            }
             let new_args: Vec<Expression> = args
                 .into_iter()
                 .map(|arg| self.with_value_context(|s| s.infer_expression(arg, &Type::Error)))
@@ -1188,6 +1201,11 @@ impl InferCtx<'_> {
             span,
             call_kind: CallKind::Regular,
         }
+    }
+
+    fn is_rejected_go_type_builtin(&self, callee: &Expression) -> bool {
+        matches!(callee, Expression::Identifier { value, .. } if matches!(value.as_str(), "new" | "make"))
+            && callee.get_type().resolve_in(&self.env).is_error()
     }
 
     fn infer_call_arguments(
@@ -1367,7 +1385,12 @@ impl InferCtx<'_> {
                     })
                 })
             });
-            self.check_bound(bound, &span, callee_name, parameter_hint);
+            self.check_bound(
+                bound,
+                &span,
+                BoundSite::Call { callee_name },
+                parameter_hint,
+            );
         }
     }
 }

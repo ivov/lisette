@@ -10,6 +10,7 @@ use semantics::{
 use std::collections;
 use std::mem;
 use std::path::PathBuf;
+use std::thread;
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::program::File;
 use syntax::types;
@@ -24,6 +25,7 @@ use super::new_test_store;
 
 use super::builders::*;
 use super::filesystem::MockFileSystem;
+use super::formatting::format_diagnostic_for_snapshot;
 use super::pipeline::TestPipeline;
 pub fn checker_errors(raw_source: &str, typedefs: &[(&str, &str)]) -> Vec<LisetteDiagnostic> {
     let mut pipeline = TestPipeline::new(raw_source);
@@ -39,11 +41,7 @@ pub fn infer(raw_source: &str) -> InferResult {
         .compile()
         .run_inference();
 
-    InferResult {
-        ast: result.ast,
-        errors: result.errors,
-        definitions: result.definitions,
-    }
+    InferResult::new(result.ast, result.errors, result.definitions)
 }
 
 pub fn infer_with_go_typedefs(raw_source: &str, typedefs: &[(&str, &str)]) -> InferResult {
@@ -53,11 +51,7 @@ pub fn infer_with_go_typedefs(raw_source: &str, typedefs: &[(&str, &str)]) -> In
     }
     let result = pipeline.compile().run_inference();
 
-    InferResult {
-        ast: result.ast,
-        errors: result.errors,
-        definitions: result.definitions,
-    }
+    InferResult::new(result.ast, result.errors, result.definitions)
 }
 
 pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
@@ -105,11 +99,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
         .collect();
 
     if sink.has_errors() {
-        return InferResult {
-            ast: vec![],
-            errors: sink.into_diagnostics(),
-            definitions: HashMap::default(),
-        };
+        return InferResult::new(vec![], sink.into_diagnostics(), HashMap::default());
     }
 
     let ast = {
@@ -154,7 +144,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
             .flat_map(|f| f.items.clone())
             .collect();
 
-        if !checker.failed() {
+        {
             passes::run(
                 &store,
                 &checker.facts,
@@ -175,20 +165,99 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
         .map(|(name, definition)| (name.clone(), definition.clone()))
         .collect();
 
-    InferResult {
-        ast,
-        errors: sink.into_diagnostics(),
-        definitions,
-    }
+    InferResult::new(ast, sink.into_diagnostics(), definitions)
+}
+
+pub fn format_errors_for_snapshot(
+    diagnostics: &[LisetteDiagnostic],
+    source: &str,
+    filename: &str,
+) -> String {
+    let errors: Vec<&LisetteDiagnostic> = diagnostics.iter().filter(|e| e.is_error()).collect();
+    let shown = if errors.is_empty() {
+        vec![&diagnostics[0]]
+    } else {
+        errors
+    };
+    shown
+        .into_iter()
+        .map(|diagnostic| format_diagnostic_for_snapshot(diagnostic, source, filename))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 pub struct InferResult {
     pub ast: Vec<Expression>,
     pub errors: Vec<LisetteDiagnostic>,
     definitions: HashMap<Symbol, Definition>,
+    claims: ErrorClaims,
+}
+
+#[derive(Default)]
+struct ErrorClaims {
+    unclaimed: Option<Vec<String>>,
+}
+
+impl ErrorClaims {
+    fn arm(&mut self, errors: &[LisetteDiagnostic]) {
+        if self.unclaimed.is_none() {
+            self.unclaimed = Some(errors.iter().map(|e| format!("{:?}", e)).collect());
+        }
+    }
+
+    fn claim(
+        &mut self,
+        errors: &[LisetteDiagnostic],
+        matches: impl Fn(&LisetteDiagnostic) -> bool,
+        limit: usize,
+    ) {
+        self.arm(errors);
+        let unclaimed = self.unclaimed.as_mut().expect("claims are armed");
+        let mut claimed = 0;
+        for error in errors.iter().filter(|e| matches(e)) {
+            if claimed == limit {
+                break;
+            }
+            let rendered = format!("{:?}", error);
+            if let Some(index) = unclaimed.iter().position(|u| *u == rendered) {
+                unclaimed.remove(index);
+                claimed += 1;
+            }
+        }
+    }
+}
+
+impl Drop for ErrorClaims {
+    fn drop(&mut self) {
+        if thread::panicking() {
+            return;
+        }
+        if let Some(unclaimed) = &self.unclaimed
+            && !unclaimed.is_empty()
+        {
+            panic!(
+                "The test did not expect {} error(s):\n{}",
+                unclaimed.len(),
+                unclaimed.join("\n---\n")
+            );
+        }
+    }
 }
 
 impl InferResult {
+    pub(crate) fn new(
+        ast: Vec<Expression>,
+        errors: Vec<LisetteDiagnostic>,
+        definitions: HashMap<Symbol, Definition>,
+    ) -> Self {
+        Self {
+            ast,
+            errors,
+            definitions,
+            claims: ErrorClaims::default(),
+        }
+    }
+
     pub fn assert_type(self, expected: Type) -> Self {
         ensure_no_errors(&self.errors);
 
@@ -307,7 +376,8 @@ impl InferResult {
         self
     }
 
-    pub fn assert_error_count(self, expected: usize) -> Self {
+    pub fn assert_error_count(mut self, expected: usize) -> Self {
+        self.claims.claim(&self.errors, |_| true, usize::MAX);
         assert_eq!(
             self.errors.len(),
             expected,
@@ -325,7 +395,7 @@ impl InferResult {
         self.assert_code(&format!("infer.{}", code))
     }
 
-    fn assert_code(self, expected_code: &str) -> Self {
+    fn assert_code(mut self, expected_code: &str) -> Self {
         if self.errors.is_empty() {
             panic!("Expected errors, but inference succeeded");
         }
@@ -350,6 +420,8 @@ impl InferResult {
             );
         }
 
+        self.claims
+            .claim(&self.errors, |err| err.code_str() == Some(expected_code), 1);
         self
     }
 
@@ -361,11 +433,15 @@ impl InferResult {
         self.assert_code_count(&format!("infer.{}", code), 1)
     }
 
+    pub fn assert_resolve_code_count(self, code: &str, count: usize) -> Self {
+        self.assert_code_count(&format!("resolve.{}", code), count)
+    }
+
     pub fn assert_infer_code_count(self, code: &str, count: usize) -> Self {
         self.assert_code_count(&format!("infer.{}", code), count)
     }
 
-    fn assert_code_count(self, expected_code: &str, expected: usize) -> Self {
+    fn assert_code_count(mut self, expected_code: &str, expected: usize) -> Self {
         let count = self
             .errors
             .iter()
@@ -382,6 +458,11 @@ impl InferResult {
                 expected, expected_code, count, actual_codes
             );
         }
+        self.claims.claim(
+            &self.errors,
+            |err| err.code_str() == Some(expected_code),
+            expected,
+        );
         self
     }
 
@@ -405,7 +486,7 @@ impl InferResult {
         self.assert_error_contains("redundant")
     }
 
-    pub fn assert_error_contains(self, needle: &str) -> Self {
+    pub fn assert_error_contains(mut self, needle: &str) -> Self {
         if self.errors.is_empty() {
             panic!("Expected errors, but inference succeeded");
         }
@@ -422,6 +503,13 @@ impl InferResult {
             );
         }
 
+        let contains = |err: &LisetteDiagnostic| {
+            format!("{:?}", err)
+                .as_bytes()
+                .windows(needle.len())
+                .any(|w| w.eq_ignore_ascii_case(needle.as_bytes()))
+        };
+        self.claims.claim(&self.errors, contains, 1);
         self
     }
 

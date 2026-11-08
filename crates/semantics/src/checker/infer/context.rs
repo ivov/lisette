@@ -88,6 +88,7 @@ impl LoopFrames {
 struct TraversalContext {
     loops: LoopFrames,
     in_negation: bool,
+    in_rejected_go_builtin_args: bool,
     in_constant_expression: bool,
     in_invariant_position: bool,
     /// Below a writable layer and in nominal arguments, stores flow back at the actual type.
@@ -352,6 +353,10 @@ impl<'a> InferCtx<'a> {
         self.traversal.loops.is_inside_defer()
     }
 
+    pub(super) fn is_inside_rejected_go_builtin_args(&self) -> bool {
+        self.traversal.in_rejected_go_builtin_args
+    }
+
     pub(super) fn is_inside_negation(&self) -> bool {
         self.traversal.in_negation
     }
@@ -524,6 +529,13 @@ impl<'a> InferCtx<'a> {
         self.traversal.loops.enter_boundary(true);
         let result = f(self);
         self.traversal.loops.exit_boundary();
+        result
+    }
+
+    pub(super) fn in_rejected_go_builtin_args<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let previous = mem::replace(&mut self.traversal.in_rejected_go_builtin_args, true);
+        let result = f(self);
+        self.traversal.in_rejected_go_builtin_args = previous;
         result
     }
 

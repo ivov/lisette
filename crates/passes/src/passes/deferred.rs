@@ -15,19 +15,20 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
     let mut report_vars = |ty: &Type, package_id: &str| {
         collected.clear();
         ty.collect_unbound_variables(&mut collected);
-        reported_vars.extend(collected.iter().map(|v| (package_id.to_string(), *v)));
-    };
-    for check in &checks.generic_calls {
-        if check.ty.has_unbound_variables() {
-            sink.push(diagnostics::infer::cannot_infer_type_argument(check.span));
-            report_vars(&check.ty, &check.package_id);
+        let mut is_new = false;
+        for var in &collected {
+            is_new |= reported_vars.insert((package_id.to_string(), *var));
         }
-    }
+        is_new
+    };
     for obligation in &checks.generic_bounds {
-        if obligation.argument.has_unbound_variables() {
+        if obligation.argument.has_unbound_variables()
+            && report_vars(&obligation.argument, &obligation.package_id)
+        {
             let required_name = bound_display_name(store, &obligation.required);
             let diagnostic = match &obligation.origin {
-                GenericBoundOrigin::FunctionReference { name } => {
+                GenericBoundOrigin::FunctionReference { is_call: true, .. } => continue,
+                GenericBoundOrigin::FunctionReference { name, .. } => {
                     diagnostics::infer::cannot_infer_bounded_function_reference(
                         name,
                         &obligation.param_name,
@@ -45,16 +46,20 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
                 }
             };
             sink.push(diagnostic);
-            report_vars(&obligation.argument, &obligation.package_id);
+        }
+    }
+
+    for check in &checks.generic_calls {
+        if check.ty.has_unbound_variables() && report_vars(&check.ty, &check.package_id) {
+            sink.push(diagnostics::infer::cannot_infer_type_argument(check.span));
         }
     }
     for check in &checks.empty_collections {
-        if check.ty.has_unbound_variables() {
+        if check.ty.has_unbound_variables() && report_vars(&check.ty, &check.package_id) {
             sink.push(diagnostics::infer::uninferred_binding(
                 &check.name,
                 check.span,
             ));
-            report_vars(&check.ty, &check.package_id);
         }
     }
     let mut reported_literal_spans = HashSet::default();

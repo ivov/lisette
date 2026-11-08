@@ -63,7 +63,7 @@ pub(crate) fn run_all(
 
     let work = source_file_work(store);
 
-    let or_spans = &facts.or_pattern_error_spans;
+    let or_spans = &facts.pattern_error_spans;
 
     if work.len() < PARALLEL_THRESHOLD {
         let mut pattern_ctx = pattern_analysis::Context::new(

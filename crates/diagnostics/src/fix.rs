@@ -1,7 +1,7 @@
 use std::iter;
 use syntax::ast::Span;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Edit {
     span: Span,
@@ -34,7 +34,7 @@ impl Edit {
 
 /// An applicable fix for one diagnostic, carrying one or more edits that are
 /// applied together as a unit.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Fix {
     message: String,

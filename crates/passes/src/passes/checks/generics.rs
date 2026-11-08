@@ -149,9 +149,12 @@ fn check_constrained_return_type(
         {
             continue;
         }
-        let available = generics
-            .iter()
-            .find(|generic| generic.name == *param_name)
+        let own_generic = generics.iter().find(|generic| generic.name == *param_name);
+        let in_interface = enclosing.is_some_and(|context| context.receiver.is_none());
+        if own_generic.is_none() && in_interface {
+            continue;
+        }
+        let available = own_generic
             .map(|generic| {
                 generic
                     .resolved_bounds()

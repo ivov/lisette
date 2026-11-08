@@ -488,7 +488,7 @@ fn constant_expression_beside_shift_count_keeps_int() {
 #[test]
 fn shift_by_constant_count_keeps_constant_checks() {
     infer("{ let x: int8 = 1 << 128; x }").assert_type_mismatch();
-    infer("{ let x: int8 = 1 << (8 as int); x }").assert_type_mismatch();
+    infer("{ let x: int8 = 1 << (8 as uint8); x }").assert_type_mismatch();
 }
 
 #[test]

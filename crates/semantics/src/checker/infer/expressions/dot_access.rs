@@ -82,7 +82,7 @@ impl InferCtx<'_> {
             expected_ty,
         };
 
-        if resolved_expression_ty.is_error() {
+        if args.deref_ty.is_error() {
             self.unify(expected_ty, &Type::Error, &span);
             return args.build_dot_access(Type::Error, DotAccessResolution::Unresolved);
         }
@@ -94,8 +94,12 @@ impl InferCtx<'_> {
             return args.build_dot_access(Type::Error, DotAccessResolution::Unresolved);
         }
 
-        let resolved = self
-            .as_struct_field(&args)
+        let calls_method_that_shadows_field =
+            self.is_callee_context() && self.method_shadows_struct_field(&args);
+        let resolved = calls_method_that_shadows_field
+            .then(|| self.as_instance_method(&args))
+            .flatten()
+            .or_else(|| self.as_struct_field(&args))
             .or_else(|| self.as_promoted_field(&args))
             .or_else(|| self.as_tuple_element(&args))
             .or_else(|| self.as_package_member(&args))
@@ -286,6 +290,23 @@ impl InferCtx<'_> {
         }
 
         self.method_of_type(store, &deref_ty, member).is_some()
+    }
+
+    fn method_shadows_struct_field(&self, args: &DotAccessResolutionArgs) -> bool {
+        let store = self.store;
+        let resolved = store.peel_alias(&args.deref_ty);
+        let Type::Nominal { id, .. } = &resolved else {
+            return false;
+        };
+        let Some(Definition {
+            body: DefinitionBody::Struct { fields, .. },
+            ..
+        }) = store.get_definition(id)
+        else {
+            return false;
+        };
+        fields.iter().any(|field| field.name == args.member_name)
+            && store.get_method(id, args.member_name).is_some()
     }
 
     fn as_struct_field(&mut self, args: &DotAccessResolutionArgs) -> Option<Expression> {
