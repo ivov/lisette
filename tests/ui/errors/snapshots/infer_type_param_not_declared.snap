@@ -7,6 +7,6 @@ source: tests/ui/errors/mod.rs
  6 │ impl Container<T> {
    ·                ┬
    ·                ╰── not declared by this `impl`
- 7 │   fn get(self) -> T {}
+ 7 │   fn get(self) -> T { self.value }
    ╰────
   help: Declare the type parameter: `impl<T> Container<T>` · code: [resolve.type_not_found]

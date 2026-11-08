@@ -427,7 +427,7 @@ pub(crate) fn check_not_equatable(
         ),
         Some((CompoundKind::Map, args)) => {
             if map_key_not_comparable(env, store, args.first()?, comparable_param) {
-                return Some("a map with a non-comparable key");
+                return None;
             }
             check_not_equatable(
                 env,

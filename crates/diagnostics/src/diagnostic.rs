@@ -8,7 +8,7 @@ use std::error::Error;
 use syntax::ParseError;
 use syntax::ast::Span;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum Severity {
     Error,
@@ -75,7 +75,7 @@ fn combine_help_and_note(help: Option<&str>, note: Option<&str>, has_code: bool)
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct Label {
     span: Span,
@@ -150,7 +150,7 @@ where
     result
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[must_use]
 pub struct LisetteDiagnostic {
@@ -193,6 +193,13 @@ fn style_code(code: &str, prefix: &str, use_color: bool) -> String {
 }
 
 impl LisetteDiagnostic {
+    pub fn reports_same_as(&self, other: &LisetteDiagnostic) -> bool {
+        self.severity == other.severity
+            && self.code == other.code
+            && self.message == other.message
+            && self.labels == other.labels
+    }
+
     pub fn try_map_spans(&self, mut map: impl FnMut(Span) -> Option<Span>) -> Option<Self> {
         let mut diagnostic = self.clone();
         for label in &mut diagnostic.labels {

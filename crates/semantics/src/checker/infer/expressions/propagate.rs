@@ -20,15 +20,23 @@ impl InferCtx<'_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
-        if self.scopes.lookup_recover_block_context().is_some()
-            && self.scopes.lookup_try_block_context().is_none()
-        {
+        let in_recover_block = self.scopes.lookup_recover_block_context().is_some()
+            && self.scopes.lookup_try_block_context().is_none();
+        if in_recover_block {
             self.sink
                 .push(diagnostics::infer::recover_cannot_use_question_mark(span));
         }
 
         let tried_ty = self.new_type_var();
         let new_expression = self.infer_expression(*expression, &tried_ty);
+        if in_recover_block {
+            let ty = self.propagate_as_error(expected_ty, span);
+            return Expression::Propagate {
+                expression: new_expression.into(),
+                ty,
+                span,
+            };
+        }
         let resolved_tried_ty = self.resolve_carrier(&new_expression.get_type());
 
         if resolved_tried_ty.is_partial() {

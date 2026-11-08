@@ -589,7 +589,7 @@ impl InferCtx<'_> {
             self.check_bound(
                 bound,
                 span,
-                None,
+                BoundSite::FunctionValue,
                 Some(diagnostics::infer::BoundParameterHint {
                     generic: &bound.param_name,
                     parameter: None,
@@ -610,19 +610,7 @@ impl InferCtx<'_> {
     }
 
     fn bounds_equivalent(&self, bounds1: &[Bound], bounds2: &[Bound]) -> bool {
-        // When one side has no bounds (concrete function type) and the other
-        // has bounds whose generics are all resolved to concrete types, the
-        // bounds are satisfied by instantiation.
-        let all_resolved = |bounds: &[Bound]| {
-            bounds
-                .iter()
-                .all(|b| !b.generic.resolve_in(&self.env).is_variable())
-        };
-
-        if bounds1.is_empty() && all_resolved(bounds2) {
-            return true;
-        }
-        if bounds2.is_empty() && all_resolved(bounds1) {
+        if bounds1.is_empty() || bounds2.is_empty() {
             return true;
         }
 
@@ -646,23 +634,32 @@ impl InferCtx<'_> {
         &mut self,
         bound: &Bound,
         span: &Span,
-        callee_name: Option<&str>,
+        site: BoundSite<'_>,
         parameter_hint: Option<diagnostics::infer::BoundParameterHint<'_>>,
     ) {
         let resolved_ty = self
             .store
             .deep_resolve_alias(&bound.generic.resolve_in(&self.env));
         if resolved_ty.is_variable() {
-            self.defer_function_bound(bound, callee_name, *span);
+            match site {
+                BoundSite::Call { callee_name } => {
+                    self.defer_function_bound(bound, callee_name, true, *span)
+                }
+                BoundSite::FunctionValue => self.defer_function_bound(bound, None, false, *span),
+            }
             return;
         }
         let required = self
             .store
             .deep_resolve_alias(&bound.ty.resolve_in(&self.env));
-        if self.dispatch_builtin_bound(&required, &resolved_ty, span) == Dispatched::Handled {
+        if resolved_ty.contains_error() || required.contains_error() {
             return;
         }
-        self.check_concrete_bound_with_hint(&resolved_ty, &required, span, parameter_hint);
+        let checkpoint = self.sink.checkpoint();
+        if self.dispatch_builtin_bound(&required, &resolved_ty, span) != Dispatched::Handled {
+            self.check_concrete_bound_with_hint(&resolved_ty, &required, span, parameter_hint);
+        }
+        self.sink.drop_reports_repeated_since(checkpoint);
     }
 
     /// Built-in bound recognition; falls through to the interface path on miss.
@@ -1176,4 +1173,10 @@ fn simple_kinds_are_go_aliases(a: SimpleKind, b: SimpleKind) -> bool {
             | (SimpleKind::Rune, SimpleKind::Int32)
             | (SimpleKind::Int32, SimpleKind::Rune)
     )
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum BoundSite<'a> {
+    Call { callee_name: Option<&'a str> },
+    FunctionValue,
 }

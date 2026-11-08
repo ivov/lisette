@@ -1823,7 +1823,8 @@ fn unknown_in_const_annotation_nested_disallowed() {
     const XS: Slice<Unknown> = [];
         "#,
     )
-    .assert_infer_code("unknown_in_const_annotation");
+    .assert_infer_code("unknown_in_const_annotation")
+    .assert_infer_code("const_disallows_composite");
 }
 
 #[test]
@@ -2563,7 +2564,7 @@ fn invariance_map_rejects_covariant_value() {
     }
 
     fn main() {
-      let files: Map<string, File> = {};
+      let files: Map<string, File> = Map.new();
       use_writer_map(files);
     }
         "#,
@@ -2797,7 +2798,8 @@ fn function_types_different_bounds_do_not_unify() {
     }
         "#,
     )
-    .assert_type_mismatch();
+    .assert_type_mismatch()
+    .assert_infer_code("cannot_infer_bounded_function_reference");
 }
 
 #[test]
@@ -3441,4 +3443,33 @@ fn self_referential_fbound_rejects_mismatched_type() {
         "#,
     )
     .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn equals_on_a_map_with_an_inferred_non_comparable_key_reports_the_key_once() {
+    infer(
+        r#"
+        fn main() {
+          let mut m = Map.new()
+          m[[1]] = 1
+          let _ = m.equals(m)
+        }
+        "#,
+    )
+    .assert_infer_code("non_comparable_map_key");
+}
+
+#[test]
+fn equals_on_a_map_from_a_rejected_bound_reports_the_bound_once() {
+    infer(
+        r#"
+        fn make<K: Comparable, V>() -> Map<K, V> { Map.new<K, V>() }
+
+        fn main() {
+          let m = make<Slice<int>, int>()
+          let _ = m.equals(m)
+        }
+        "#,
+    )
+    .assert_infer_code("not_comparable_bound");
 }

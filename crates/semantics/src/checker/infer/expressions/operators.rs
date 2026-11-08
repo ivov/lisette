@@ -148,6 +148,7 @@ impl InferCtx<'_> {
         };
         let operand_span = new_expression.get_span();
 
+        let checkpoint = self.sink.checkpoint();
         let expression_ty = match operator {
             Negative => {
                 let resolved = operand_expected_ty.resolve_in(&self.env);
@@ -202,6 +203,11 @@ impl InferCtx<'_> {
                 self.unify(&ref_ty, &operand_expected_ty, &span);
                 inner_ty
             }
+        };
+        let expression_ty = if self.sink.has_changed_since(checkpoint) {
+            Type::Error
+        } else {
+            expression_ty
         };
 
         self.unify(expected_ty, &expression_ty, &span);
@@ -468,9 +474,12 @@ impl InferCtx<'_> {
                 span,
             )
         });
-        if reported {
+        let expression_ty = if reported {
             self.facts.type_error_spans.insert(span);
-        }
+            Type::Error
+        } else {
+            expression_ty
+        };
 
         self.unify(expected_ty, &expression_ty, &span);
 
@@ -497,6 +506,7 @@ impl InferCtx<'_> {
         let right_span = &operands.right.span;
         let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
         let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
+        let same_operand_types = resolved_left_operand == resolved_right_operand;
         match operator {
             Equal | NotEqual => {
                 if !self.report_named_type_boundary(
@@ -557,7 +567,9 @@ impl InferCtx<'_> {
                     self.type_bool()
                 } else {
                     self.ensure_orderable(left_operand_ty, left_span);
-                    self.ensure_orderable(right_operand_ty, right_span);
+                    if !same_operand_types {
+                        self.ensure_orderable(right_operand_ty, right_span);
+                    }
                     self.unify_binary_operands(operator, left_operand_ty, right_operand_ty, &span);
                     self.type_bool()
                 }
@@ -584,8 +596,14 @@ impl InferCtx<'_> {
                     let numeric_ok = if !is_string_like(&resolved_left_operand)
                         && !is_string_like(&resolved_right_operand)
                     {
-                        self.ensure_numeric_for_binary(operator, left_operand_ty, left_span)
-                            & self.ensure_numeric_for_binary(operator, right_operand_ty, right_span)
+                        let left_ok =
+                            self.ensure_numeric_for_binary(operator, left_operand_ty, left_span);
+                        if same_operand_types {
+                            left_ok
+                        } else {
+                            self.ensure_numeric_for_binary(operator, right_operand_ty, right_span)
+                                && left_ok
+                        }
                     } else {
                         true
                     };
@@ -637,8 +655,11 @@ impl InferCtx<'_> {
                 } else {
                     let left_ok =
                         self.ensure_numeric_for_binary(operator, left_operand_ty, left_span);
-                    let right_ok =
-                        self.ensure_numeric_for_binary(operator, right_operand_ty, right_span);
+                    let right_ok = if same_operand_types {
+                        left_ok
+                    } else {
+                        self.ensure_numeric_for_binary(operator, right_operand_ty, right_span)
+                    };
                     if left_ok && right_ok {
                         self.unify_binary_operands(
                             operator,
@@ -662,8 +683,11 @@ impl InferCtx<'_> {
                 } else {
                     let left_ok =
                         self.ensure_integer_for_binary(operator, left_operand_ty, left_span);
-                    let right_ok =
-                        self.ensure_integer_for_binary(operator, right_operand_ty, right_span);
+                    let right_ok = if same_operand_types {
+                        left_ok
+                    } else {
+                        self.ensure_integer_for_binary(operator, right_operand_ty, right_span)
+                    };
                     if left_ok && right_ok {
                         self.unify_binary_operands(
                             operator,
@@ -714,7 +738,7 @@ impl InferCtx<'_> {
         // Type variables (unresolved inference vars) are allowed, they'll be resolved later.
         // But type parameters (generic T without bounds) should be rejected:
         // Go requires `constraints.Ordered` for arithmetic on type params.
-        if matches!(resolved_ty, Type::Var { .. } | Type::Error) {
+        if matches!(resolved_ty, Type::Var { .. } | Type::Error | Type::Never) {
             return true;
         }
         if matches!(resolved_ty, Type::Parameter(_)) {
@@ -740,7 +764,7 @@ impl InferCtx<'_> {
         span: &Span,
     ) -> bool {
         let resolved_ty = self.env.resolve(ty);
-        if matches!(resolved_ty, Type::Var { .. } | Type::Error) {
+        if matches!(resolved_ty, Type::Var { .. } | Type::Error | Type::Never) {
             return true;
         }
         if !is_integer_type(&resolved_ty, &self.env, self.store) {

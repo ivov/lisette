@@ -10,3 +10,13 @@ source: tests/ui/errors/mod.rs
  6 │   u.name
    ╰────
   help: Did you mean `name`? · code: [infer.member_not_found]
+
+  ✕ Member not found
+   ╭─[test.lis:5:11]
+ 4 │ fn test() -> string {
+ 5 │   let u = User { nam: "a", naem: "b", age: 1 }
+   ·           ──────────────────┬─────────────────
+   ·                             ╰── no member `naem` on type `User`
+ 6 │   u.name
+   ╰────
+  help: Did you mean `name`? · code: [infer.member_not_found]

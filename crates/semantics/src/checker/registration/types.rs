@@ -72,6 +72,7 @@ impl TaskState {
             self.sink.push(diagnostics::infer::duplicate_definition(
                 "enum", name, *name_span,
             ));
+            return;
         }
 
         let package = self.current_package_mut(store);
@@ -435,6 +436,7 @@ impl TaskState {
             self.sink.push(diagnostics::infer::duplicate_definition(
                 "struct", name, *name_span,
             ));
+            return;
         }
 
         self.current_package_mut(store).definitions.insert(
@@ -501,9 +503,12 @@ impl TaskState {
                     self.sink
                         .push(diagnostics::embed::nested_ref(&display, span));
                 }
+                // A written `Ref<I>` already reports `ref_of_interface`.
                 Some(inner) if store.is_interface(&inner) => {
-                    self.sink
-                        .push(diagnostics::embed::pointer_to_interface(&display, span));
+                    if !ty.is_ref() {
+                        self.sink
+                            .push(diagnostics::embed::pointer_to_interface(&display, span));
+                    }
                 }
                 Some(inner) if is_pointer_backed_newtype(store, &inner) => {
                     self.sink
@@ -664,6 +669,7 @@ impl TaskState {
                     name,
                     *name_span,
                 ));
+                return;
             }
 
             self.current_package_mut(store).definitions.insert(
@@ -725,6 +731,7 @@ impl TaskState {
                 name,
                 *name_span,
             ));
+            return;
         }
 
         self.current_package_mut(store).definitions.insert(

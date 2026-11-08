@@ -32,6 +32,19 @@ impl InferCtx<'_> {
         kind: BindingKind,
         is_struct_field: bool,
     ) -> Pattern {
+        if expected_ty.resolve_in(&self.env).is_error() {
+            return self.infer_pattern_on_error(pattern, kind, is_struct_field);
+        }
+        self.infer_pattern_kind(pattern, expected_ty, kind, is_struct_field)
+    }
+
+    fn infer_pattern_kind(
+        &mut self,
+        pattern: Pattern,
+        expected_ty: Type,
+        kind: BindingKind,
+        is_struct_field: bool,
+    ) -> Pattern {
         let store = self.store;
         match pattern {
             Pattern::Identifier {
@@ -188,6 +201,97 @@ impl InferCtx<'_> {
                     span,
                     binding: Some(binding),
                 }
+            }
+        }
+    }
+
+    fn infer_pattern_on_error(
+        &mut self,
+        pattern: Pattern,
+        kind: BindingKind,
+        is_struct_field: bool,
+    ) -> Pattern {
+        let store = self.store;
+        match pattern {
+            Pattern::EnumVariant { ref identifier, .. } if identifier.contains('.') => {
+                self.infer_pattern_kind(pattern, Type::Error, kind, is_struct_field)
+            }
+            Pattern::EnumVariant {
+                ref identifier,
+                ref fields,
+                span,
+                ..
+            } if self.lookup_type(store, identifier).is_none()
+                && !self.some_enum_has_variant(identifier) =>
+            {
+                self.reject_non_constructor_pattern(identifier, &Type::Error, span, kind, fields)
+            }
+            Pattern::Struct { ref identifier, .. }
+                if identifier.contains('.')
+                    || self.lookup_qualified_name(store, identifier).is_some() =>
+            {
+                self.infer_pattern_kind(pattern, Type::Error, kind, is_struct_field)
+            }
+            Pattern::Struct {
+                ref identifier,
+                ref fields,
+                span,
+                ..
+            } if !self.some_enum_has_variant(identifier) => {
+                self.unresolved_struct_pattern(identifier, fields, span, kind)
+            }
+            Pattern::EnumVariant { fields, span, .. } => {
+                for field in fields {
+                    self.infer_pattern_inner(field, Type::Error, kind, false);
+                }
+                self.rejected_pattern(span)
+            }
+            Pattern::Struct { fields, span, .. } => {
+                for field in fields {
+                    let is_shorthand = matches!(
+                        &field.value,
+                        Pattern::Identifier { identifier, .. } if identifier == &field.name
+                    );
+                    self.infer_pattern_inner(field.value, Type::Error, kind, is_shorthand);
+                }
+                self.rejected_pattern(span)
+            }
+            Pattern::Tuple { elements, span } => {
+                let elements = elements
+                    .into_iter()
+                    .map(|element| self.infer_pattern_inner(element, Type::Error, kind, false))
+                    .collect();
+                Pattern::Tuple { elements, span }
+            }
+            Pattern::Or { patterns, span } => {
+                self.infer_or_pattern(patterns, span, Type::Error, kind)
+            }
+            Pattern::Slice {
+                prefix, rest, span, ..
+            } => {
+                for element in prefix {
+                    self.infer_pattern_inner(element, Type::Error, kind, false);
+                }
+                if let RestPattern::Bind { name, span, .. } = rest {
+                    self.bind_name_in_scope(
+                        name.to_string(),
+                        span,
+                        Type::Error,
+                        kind,
+                        BindingOrigin::Name {
+                            in_typedef: false,
+                            shorthand_field: false,
+                        },
+                    );
+                }
+                self.rejected_pattern(span)
+            }
+            Pattern::Identifier { .. }
+            | Pattern::AsBinding { .. }
+            | Pattern::Literal { .. }
+            | Pattern::WildCard { .. }
+            | Pattern::Unit { .. } => {
+                self.infer_pattern_kind(pattern, Type::Error, kind, is_struct_field)
             }
         }
     }
@@ -389,7 +493,7 @@ impl InferCtx<'_> {
             ty
         } else if let Some(value_ty) = self.lookup_type(store, &identifier) {
             if matches!(self.instantiate(&value_ty).0, Type::Error) {
-                return Pattern::WildCard { span };
+                return self.rejected_pattern(span);
             }
             let Some(ty) =
                 self.resolve_pattern_constructor(&identifier, &expected_ty, is_bare_name)
@@ -469,7 +573,7 @@ impl InferCtx<'_> {
                     variant_name: identifier.clone(),
                 }
             }
-            _ => return Pattern::WildCard { span },
+            _ => return self.rejected_pattern(span),
         };
 
         Pattern::EnumVariant {
@@ -556,11 +660,11 @@ impl InferCtx<'_> {
         kind: BindingKind,
         fields: &[Pattern],
     ) -> Pattern {
+        for field in fields {
+            self.infer_pattern_inner(field.clone(), Type::Error, kind, false);
+        }
         if self.may_name_uninferred_export(self.store, identifier) {
-            for field in fields {
-                self.infer_pattern_inner(field.clone(), Type::Error, kind, false);
-            }
-            return Pattern::WildCard { span };
+            return self.rejected_pattern(span);
         }
 
         if is_bare_constructor_name(identifier, fields, kind) {
@@ -576,7 +680,7 @@ impl InferCtx<'_> {
                     kind.is_match_arm(),
                 ));
         }
-        Pattern::WildCard { span }
+        self.rejected_pattern(span)
     }
 
     fn try_infer_const_pattern(
@@ -627,7 +731,7 @@ impl InferCtx<'_> {
             } else {
                 diagnostics::infer::const_pattern_outside_match_arm(identifier, span)
             });
-            return Some(Pattern::WildCard { span });
+            return Some(self.rejected_pattern(span));
         }
 
         let outside_match_arm = !kind.is_match_arm();
@@ -637,7 +741,7 @@ impl InferCtx<'_> {
                     identifier, span,
                 ));
             if !kind.is_pattern_position() {
-                return Some(Pattern::WildCard { span });
+                return Some(self.rejected_pattern(span));
             }
         }
 
@@ -684,7 +788,6 @@ impl InferCtx<'_> {
         if !self.may_name_uninferred_export(self.store, identifier) {
             self.sink
                 .push(diagnostics::infer::struct_not_found(identifier, span));
-            return Pattern::WildCard { span };
         }
 
         for field in fields {
@@ -694,7 +797,24 @@ impl InferCtx<'_> {
             );
             self.infer_pattern_inner(field.value.clone(), Type::Error, kind, is_shorthand);
         }
+        self.rejected_pattern(span)
+    }
+
+    fn rejected_pattern(&mut self, span: Span) -> Pattern {
+        self.facts.pattern_error_spans.insert(span);
         Pattern::WildCard { span }
+    }
+
+    fn some_enum_has_variant(&self, name: &str) -> bool {
+        self.store.packages.values().any(|package| {
+            package.definitions.values().any(|definition| {
+                matches!(
+                    &definition.body,
+                    DefinitionBody::Enum { variants, .. }
+                        if variants.iter().any(|variant| variant.name == name)
+                )
+            })
+        })
     }
 
     fn infer_struct_pattern(
@@ -842,7 +962,7 @@ impl InferCtx<'_> {
             Type::Nominal { id, .. } => RecordPatternResolution::Struct {
                 struct_name: id.into(),
             },
-            _ => return Pattern::WildCard { span },
+            _ => return self.rejected_pattern(span),
         };
 
         Pattern::Struct {
@@ -887,6 +1007,7 @@ impl InferCtx<'_> {
             .collect();
 
         let mut inferred = vec![first];
+        let mut only_in_later_alternatives: Vec<(String, Span)> = Vec::new();
 
         for pattern in patterns.iter().skip(1) {
             let alt = self.with_temporary_bindings(|this| {
@@ -916,7 +1037,13 @@ impl InferCtx<'_> {
                                 &missing_in_alt,
                                 &missing_in_first,
                             ));
-                        this.facts.or_pattern_error_spans.insert(span);
+                        this.facts.pattern_error_spans.insert(span);
+                        only_in_later_alternatives.extend(
+                            alt_bindings
+                                .iter()
+                                .filter(|(name, _)| missing_in_first.contains(&name.as_str()))
+                                .cloned(),
+                        );
                     } else {
                         this.check_or_pattern_binding_types(&alt_bindings, &first_binding_types);
                     }
@@ -926,6 +1053,22 @@ impl InferCtx<'_> {
             let mut alt = alt;
             clear_bindings(&mut alt);
             inferred.push(alt);
+        }
+
+        let mut bound_late: HashSet<String> = HashSet::default();
+        for (name, name_span) in only_in_later_alternatives {
+            if bound_late.insert(name.clone()) {
+                self.bind_name_in_scope(
+                    name,
+                    name_span,
+                    Type::Error,
+                    kind,
+                    BindingOrigin::Name {
+                        in_typedef: false,
+                        shorthand_field: false,
+                    },
+                );
+            }
         }
 
         Pattern::Or {

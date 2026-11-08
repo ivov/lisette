@@ -7,6 +7,6 @@ source: tests/ui/errors/mod.rs
  4 │     n as m => m,
    ·     ───┬──
    ·        ╰── `n` already binds this value
- 5 │     _ => 0,
+ 5 │   }
    ╰────
   help: Use `m` directly, or rename `n` to `m` · code: [infer.redundant_as_binding]

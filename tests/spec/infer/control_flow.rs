@@ -911,7 +911,7 @@ fn match_in_expression_position_unifies_with_expected() {
     }
         "#,
     )
-    .assert_type_mismatch();
+    .assert_infer_code_count("type_mismatch", 2);
 }
 
 #[test]
@@ -1479,7 +1479,7 @@ fn match_on_undefined_enum_variant() {
     }
   }"#,
     )
-    .assert_resolve_code("name_not_found");
+    .assert_resolve_code("variant_not_found");
 }
 
 #[test]
@@ -1488,6 +1488,7 @@ fn match_pattern_wrong_arity() {
         r#"{
     match Some(42) {
       Some(x, y) => x,
+      None => 0,
     }
   }"#,
     )
@@ -1505,7 +1506,8 @@ fn match_struct_pattern_missing_field() {
     }
   }"#,
     )
-    .assert_infer_code("member_not_found");
+    .assert_infer_code("member_not_found")
+    .assert_infer_code("pattern_missing_fields");
 }
 
 #[test]
@@ -1573,10 +1575,10 @@ fn non_generic_type_with_params() {
 fn select_receive_from_non_channel_should_fail() {
     infer(
         r#"
-    fn test() -> int {
+    fn test() {
       let x = 42;
       select {
-        let y = x => y,
+        let Some(y) = x => { let _ = y },
       }
     }
         "#,

@@ -1310,7 +1310,9 @@ fn cannot_take_address_of_binary_expression() {
 
 #[test]
 fn cannot_take_address_of_conditional() {
-    infer("&(if true { 1 } else { 2 })").assert_infer_code("non_addressable_expression");
+    infer("&(if true { 1 } else { 2 })")
+        .assert_infer_code("non_addressable_expression")
+        .assert_infer_code("complex_sub_expression");
 }
 
 #[test]
@@ -1734,7 +1736,7 @@ fn cannot_delete_from_immutable_map() {
     m.delete("a")
   }"#,
     )
-    .assert_infer_code("write_through_read_only");
+    .assert_infer_code("needs_writable");
 }
 
 #[test]
@@ -1756,7 +1758,7 @@ fn cannot_copy_into_immutable_slice() {
     dst.copy_from([1, 2, 3])
   }"#,
     )
-    .assert_infer_code("write_through_read_only");
+    .assert_infer_code("needs_writable");
 }
 
 #[test]

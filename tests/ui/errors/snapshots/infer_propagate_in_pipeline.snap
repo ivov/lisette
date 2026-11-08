@@ -2,9 +2,10 @@
 source: tests/ui/errors/mod.rs
 ---
   ✕ Invalid `?` in pipeline
-   ╭─[test.lis:1:18]
- 1 │ fn test() { x |> validate? |> transform; }
-   ·                  ────┬────
-   ·                      ╰── propagate operator used here
+   ╭─[test.lis:4:50]
+ 3 │ fn transform(x: int) -> int { x }
+ 4 │ fn test(x: int) -> Result<int, string> { Ok(x |> validate? |> transform) }
+   ·                                                  ────┬────
+   ·                                                      ╰── propagate operator used here
    ╰────
   help: Extract the `?` operation to a `let` binding: `let result = (... |> parse)?` · code: [parse.propagate_in_pipeline]

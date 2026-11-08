@@ -12,6 +12,7 @@ mod equality;
 mod expressions;
 mod functions;
 mod opaque_handle;
+mod poisoning;
 mod post_inference;
 mod recover;
 mod refutability;

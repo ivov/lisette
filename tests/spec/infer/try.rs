@@ -174,11 +174,11 @@ fn propagate_result_type_mismatch_error() {
         r#"
     fn process() -> Result<int, bool> {
       let r: Result<int, string> = Result.Ok(42);
-      r?
+      Ok(r?)
     }
         "#,
     )
-    .assert_type_mismatch();
+    .assert_infer_code("cannot_propagate_error");
 }
 
 #[test]

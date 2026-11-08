@@ -9,13 +9,7 @@ impl InferCtx<'_> {
     pub(crate) fn check_select_match_arms(&mut self, match_arms: &[MatchArm], receive_span: Span) {
         if match_arms.is_empty() {
             self.sink
-                .push(diagnostics::infer::select_match_missing_some_arm(
-                    receive_span,
-                ));
-            self.sink
-                .push(diagnostics::infer::select_match_missing_none_arm(
-                    receive_span,
-                ));
+                .push(diagnostics::infer::select_match_missing_arms(receive_span));
             return;
         }
 

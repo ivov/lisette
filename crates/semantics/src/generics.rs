@@ -341,6 +341,7 @@ mod tests {
                 available_bounds: vec![],
                 origin: GenericBoundOrigin::FunctionReference {
                     name: "identity".into(),
+                    is_call: false,
                 },
             });
         FreezeFolder::new(&worker.env, &store).freeze_facts(&mut worker.facts);

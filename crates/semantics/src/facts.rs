@@ -47,8 +47,8 @@ pub struct Facts {
 
     pub(crate) deferred: DeferredChecks,
 
-    /// Suppresses contradictory lints from or-patterns whose binding sets disagree.
-    pub or_pattern_error_spans: HashSet<Span>,
+    /// Patterns the checker rejected. Pattern checks skip them.
+    pub pattern_error_spans: HashSet<Span>,
 
     /// Spans of binary expressions the checker rejected, so lints can skip them.
     pub type_error_spans: HashSet<Span>,
@@ -158,6 +158,7 @@ pub enum GenericBoundOrigin {
     },
     FunctionReference {
         name: EcoString,
+        is_call: bool,
     },
 }
 
@@ -203,7 +204,7 @@ impl Facts {
             expression_only_fstrings: Vec::new(),
             unprefixed_fstrings: Vec::new(),
             deferred: DeferredChecks::default(),
-            or_pattern_error_spans: HashSet::default(),
+            pattern_error_spans: HashSet::default(),
             type_error_spans: HashSet::default(),
             function_spans: Vec::new(),
             usages: UsageFacts::default(),
@@ -360,7 +361,7 @@ impl Facts {
             expression_only_fstrings,
             unprefixed_fstrings,
             deferred,
-            or_pattern_error_spans,
+            pattern_error_spans,
             type_error_spans,
             function_spans,
             usages,
@@ -376,7 +377,7 @@ impl Facts {
             .extend(expression_only_fstrings);
         self.unprefixed_fstrings.extend(unprefixed_fstrings);
         self.deferred.merge(deferred);
-        self.or_pattern_error_spans.extend(or_pattern_error_spans);
+        self.pattern_error_spans.extend(pattern_error_spans);
         self.type_error_spans.extend(type_error_spans);
         self.function_spans.extend(function_spans);
 
@@ -573,17 +574,17 @@ mod tests {
     }
 
     #[test]
-    fn merge_deduplicates_or_pattern_error_spans() {
+    fn merge_deduplicates_pattern_error_spans() {
         let allocator = Arc::new(BindingIdAllocator::new());
         let mut a = Facts::new(allocator.clone());
         let mut b = Facts::new(allocator);
 
-        a.or_pattern_error_spans.insert(span(0));
-        b.or_pattern_error_spans.insert(span(0));
-        b.or_pattern_error_spans.insert(span(1));
+        a.pattern_error_spans.insert(span(0));
+        b.pattern_error_spans.insert(span(0));
+        b.pattern_error_spans.insert(span(1));
 
         a.merge(b);
-        assert_eq!(a.or_pattern_error_spans.len(), 2);
+        assert_eq!(a.pattern_error_spans.len(), 2);
     }
 
     #[test]

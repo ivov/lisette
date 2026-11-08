@@ -72,7 +72,7 @@ pub fn lisette_answers(scenario: &Scenario) -> LisetteAnswers {
         .collect();
     let mut attributed = vec![false; errors.len()];
 
-    let questions = rendered
+    let questions: Vec<LisetteAnswer> = rendered
         .spans
         .iter()
         .map(|span| match span {
@@ -86,11 +86,17 @@ pub fn lisette_answers(scenario: &Scenario) -> LisetteAnswers {
         })
         .collect();
 
-    let unattributed = errors
+    let unattributed: Vec<String> = errors
         .iter()
         .zip(&attributed)
         .filter(|(_, done)| !**done)
         .map(|((_, code), _)| code.clone())
+        .collect();
+
+    // A declaration error rejects the whole program, so no question resolves.
+    let questions = questions
+        .into_iter()
+        .map(|answer| reject_with_declaration_errors(answer, &unattributed))
         .collect();
 
     LisetteAnswers {
@@ -184,6 +190,22 @@ fn codes_in(
         }
     }
     codes
+}
+
+fn reject_with_declaration_errors(answer: LisetteAnswer, unattributed: &[String]) -> LisetteAnswer {
+    let reject = |outcome: Outcome| match outcome {
+        Outcome::Resolves if !unattributed.is_empty() => Outcome::Rejects {
+            codes: unattributed.to_vec(),
+        },
+        other => other,
+    };
+    match answer {
+        LisetteAnswer::Selector(outcome) => LisetteAnswer::Selector(reject(outcome)),
+        LisetteAnswer::Satisfies { value, pointer } => LisetteAnswer::Satisfies {
+            value: reject(value),
+            pointer: reject(pointer),
+        },
+    }
 }
 
 fn outcome(codes: Vec<String>) -> Outcome {

@@ -10,3 +10,13 @@ source: tests/ui/errors/mod.rs
  6 │ }
    ╰────
   help: Move `defer` to its own statement · code: [infer.defer_in_expression_position]
+
+  ✕ Complex expression used as sub-expression
+   ╭─[test.lis:5:11]
+ 4 │ fn f() {
+ 5 │   consume({ defer cleanup() });
+   ·           ─────────┬─────────
+   ·                    ╰── expected simple expression
+ 6 │ }
+   ╰────
+  help: Hoist to a `let` binding · code: [infer.complex_sub_expression]

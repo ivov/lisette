@@ -10,3 +10,13 @@ source: tests/ui/errors/mod.rs
  6 │   u.name
    ╰────
   help: Did you mean `name`? · code: [infer.member_not_found]
+
+  ✕ Struct `User` is missing fields
+   ╭─[test.lis:5:11]
+ 4 │ fn test() -> string {
+ 5 │   let u = User { name: "a", nam: "x" }
+   ·           ──┬─
+   ·             ╰── missing fields: age
+ 6 │   u.name
+   ╰────
+  help: Initialize all fields, or add `..` to autofill the rest · code: [infer.missing_struct_fields]

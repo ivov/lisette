@@ -409,7 +409,6 @@ fn cycle_still_reports_names_the_dropped_package_never_declared() {
         codes,
         vec![
             "resolve.import_cycle",
-            "resolve.name_not_found",
             "resolve.not_found_in_package",
             "resolve.struct_not_found",
             "resolve.type_not_found",

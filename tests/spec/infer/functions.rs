@@ -1249,7 +1249,9 @@ fn imported_type_not_found() {
         "#,
     );
 
-    infer_package("main", fs).assert_resolve_code("struct_not_found");
+    infer_package("main", fs)
+        .assert_resolve_code("struct_not_found")
+        .assert_resolve_code("type_not_found");
 }
 
 #[test]
@@ -1278,7 +1280,9 @@ fn private_type_not_accessible_cross_package() {
         "#,
     );
 
-    infer_package("main", fs).assert_resolve_code("struct_not_found");
+    infer_package("main", fs)
+        .assert_resolve_code("struct_not_found")
+        .assert_resolve_code("type_not_found");
 }
 
 #[test]
@@ -1311,7 +1315,9 @@ fn private_enum_variant_not_accessible_cross_package() {
         "#,
     );
 
-    infer_package("main", fs).assert_resolve_code("type_not_found");
+    infer_package("main", fs)
+        .assert_resolve_code("type_not_found")
+        .assert_resolve_code_count("variant_not_found", 2);
 }
 
 #[test]

@@ -559,7 +559,7 @@ fn main() {
     r.Method = "POST"
   })
   let mut rec = httptest.NewRecorder()
-  let req = httptest.NewRequest("GET", "/", bytes.NewBufferString(""))
+  let req = httptest.NewRequest("GET", "/", Some(bytes.NewBufferString("")))
   h.ServeHTTP(rec, req)
 }"#,
     )
@@ -578,7 +578,7 @@ fn main() {
     ..,
   }
   let mut rec = httptest.NewRecorder()
-  let req = httptest.NewRequest("GET", "/", bytes.NewBufferString(""))
+  let req = httptest.NewRequest("GET", "/", Some(bytes.NewBufferString("")))
   proxy.ServeHTTP(rec, req)
 }"#,
     )
@@ -934,7 +934,8 @@ fn main() {
   let _ = xs.copy_from(xs)
 }"#,
     )
-    .assert_infer_code("aliased_writable_argument");
+    .assert_infer_code("aliased_writable_argument")
+    .assert_infer_code("complex_sub_expression");
 }
 
 #[test]
@@ -2087,7 +2088,8 @@ fn fn_element_of_read_only_slice_write_refused() {
   fs[0]()[0] = 9
 }"#,
     )
-    .assert_infer_code("write_through_read_only");
+    .assert_infer_code("write_through_read_only")
+    .assert_infer_code("mut_without_effect");
 }
 
 #[test]
@@ -2454,6 +2456,7 @@ fn make(rocks: mut Ref<Slice<mut Ref<Rock>>>) -> mut Ref<Beam> {
 }"#,
     )
     .assert_infer_code_once("needs_writable")
+    .assert_infer_code("mut_without_effect")
     .assert_error_contains("`rocks` is declared `mut Ref<mut Slice<mut Ref<Rock>>>`")
     .assert_error_contains("Declare the parameter `rocks` as `mut Ref<mut Slice<mut Ref<Rock>>>`");
 }

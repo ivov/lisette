@@ -466,7 +466,6 @@ fn infer_redundant_as_identifier() {
 fn test(x: int) -> int {
   match x {
     n as m => m,
-    _ => 0,
   }
 }
 "#;
@@ -1495,25 +1494,29 @@ fn test() {
 
 #[test]
 fn infer_propagate_in_pipeline() {
-    let input = "fn test() { x |> validate? |> transform; }";
+    let input = r#"
+fn validate(x: int) -> Result<int, string> { Ok(x) }
+fn transform(x: int) -> int { x }
+fn test(x: int) -> Result<int, string> { Ok(x |> validate? |> transform) }
+"#;
     assert_infer_error_snapshot!(input);
 }
 
 #[test]
 fn infer_pipeline_with_literal() {
-    let input = "fn test() { x |> 5; }";
+    let input = "fn test(x: int) { x |> 5; }";
     assert_infer_error_snapshot!(input);
 }
 
 #[test]
 fn infer_pipeline_with_lambda() {
-    let input = "fn test() { x |> |y| y * 2; }";
+    let input = "fn test(x: int) { x |> |y| y * 2; }";
     assert_infer_error_snapshot!(input);
 }
 
 #[test]
 fn infer_pipeline_with_binary() {
-    let input = "fn test() { x |> 1 + 2; }";
+    let input = "fn test(x: int) { x |> 1 + 2; }";
     assert_infer_error_snapshot!(input);
 }
 
@@ -7597,7 +7600,7 @@ fn main() {
 fn infer_duplicate_binding_in_slice_pattern() {
     let input = r#"
 fn main() {
-  let [x, x] = [1, 2];
+  match [1, 2] { [x, x] => {}, _ => {} }
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -7629,7 +7632,7 @@ fn main() {
 fn infer_duplicate_binding_in_slice_rest_pattern() {
     let input = r#"
 fn main() {
-  let [x, ..x] = [1, 2, 3];
+  match [1, 2, 3] { [x, ..x] => {}, _ => {} }
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -8535,7 +8538,7 @@ fn run(l: sync.Locker) {
 }
 
 fn main() {
-  let mu = sync.Mutex {}
+  let mut mu = sync.Mutex {}
   run(&mu)
 }
 "#;
@@ -9276,7 +9279,7 @@ struct Container<T> {
 }
 
 impl Container<T> {
-  fn get(self) -> T {}
+  fn get(self) -> T { self.value }
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -10659,10 +10662,10 @@ fn test() {
   let ch = Channel.new<int>();
   select {
     match ch.receive() {
-      Some(1) => println("one"),
-      None => println("closed"),
+      Some(1) => {},
+      None => {},
     },
-    _ => println("timeout"),
+    _ => {},
   }
 }
 "#;
@@ -10675,8 +10678,8 @@ fn infer_select_shorthand_refutable_inner_pattern() {
 fn test() {
   let ch = Channel.new<int>();
   select {
-    let Some(1) = ch.receive() => println("one"),
-    _ => println("timeout"),
+    let Some(1) = ch.receive() => {},
+    _ => {},
   }
 }
 "#;
@@ -10690,7 +10693,7 @@ fn test() {
   let ch = Channel.new<int>();
   select {
     match ch.receive() {},
-    _ => println("timeout"),
+    _ => {},
   }
 }
 "#;
@@ -11819,6 +11822,8 @@ fn main() {
 #[test]
 fn infer_method_shadows_struct_field() {
     let input = r#"
+import "go:fmt"
+
 struct Dog {
   name: string,
 }
@@ -11840,6 +11845,8 @@ fn main() {
 #[test]
 fn infer_method_shadows_enum_field() {
     let input = r#"
+import "go:fmt"
+
 enum Event<T> {
   Created { id: int, data: T },
   Updated { id: int, old_data: T, new_data: T },
@@ -12183,7 +12190,7 @@ impl Wrapper<string> {
 #[test]
 fn infer_self_type_in_interface() {
     let input = r#"
-interface Comparable {
+interface Ranked {
   fn compare(other: Self) -> int
 }
 "#;

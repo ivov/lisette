@@ -455,6 +455,9 @@ impl TaskState {
             if reserved {
                 self.sink
                     .push(diagnostics::infer::reserved_import_alias(&effective, span));
+                self.imports
+                    .prefixed
+                    .insert(effective, PrefixedImport::Failed);
                 continue;
             }
 

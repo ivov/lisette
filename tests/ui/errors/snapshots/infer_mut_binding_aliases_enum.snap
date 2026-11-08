@@ -10,3 +10,13 @@ source: tests/ui/errors/mod.rs
  6 │   if let Holder.Tags(tags) = h {
    ╰────
   help: `mut Slice<string>` permits writes, `Slice<string>` does not. Declare the parameter `a` as `mut Slice<string>` · code: [infer.needs_writable]
+
+  ✕ Cannot write to `tags[0]`
+   ╭─[test.lis:7:5]
+ 6 │   if let Holder.Tags(tags) = h {
+ 7 │     tags[0] = "y"
+   ·     ──────┬──────
+   ·           ╰── `tags` is read-only
+ 8 │   }
+   ╰────
+  help: Make it `mut Slice<string>` where it is created, or write to a `.clone()` for an independent copy · code: [infer.write_through_read_only]
