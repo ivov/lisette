@@ -248,8 +248,14 @@ impl AnalysisLoader {
                 let Some(name) = files.keys().next() else {
                     continue;
                 };
-                let uri = Url::from_file_path(directory.join(name))
-                    .map_err(|_| io::Error::other("Cannot identify a project source file"))?;
+                let path = directory.join(name);
+                let uri = Url::from_file_path(&path).map_err(|error| {
+                    io::Error::other(format!(
+                        "Cannot identify the project source file `{}`: {}",
+                        path.display(),
+                        error
+                    ))
+                })?;
                 let (package_id, _, external_test) = uri_to_package_file(&self.config, &uri)
                     .ok_or_else(|| io::Error::other("Cannot identify a project package"))?;
                 let has_tests = files.keys().any(|name| name.ends_with(".test.lis"));
@@ -442,10 +448,12 @@ fn capture_directory(
                 capture_directory(&path, captured, ancestors)?;
             }
         } else if path.extension().is_some_and(|extension| extension == "lis") {
-            let name = entry
-                .file_name()
-                .into_string()
-                .map_err(|_| io::Error::other("Source filename is not valid UTF-8"))?;
+            let name = entry.file_name().into_string().map_err(|name| {
+                io::Error::other(format!(
+                    "Source filename `{}` is not valid UTF-8",
+                    name.to_string_lossy()
+                ))
+            })?;
             if captured
                 .get(directory)
                 .is_some_and(|files| files.contains_key(&name))

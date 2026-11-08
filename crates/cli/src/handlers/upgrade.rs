@@ -334,6 +334,10 @@ fn load_record(path: &Path, windows: bool) -> Result<InstallRecord, RecordError>
 }
 
 fn parse_record(text: &str, windows: bool) -> Result<InstallRecord, RecordError> {
+    #[expect(
+        clippy::map_err_ignore,
+        reason = "any parse failure means the user must reinstall, so the detail does not change the advice"
+    )]
     let file: RecordFile = serde_json::from_str(text).map_err(|_| RecordError::Unreadable)?;
     let install_prefix = PathBuf::from(file.install_prefix);
     let executable = recorded_executable(&install_prefix, windows);

@@ -163,6 +163,10 @@ impl SharedState {
             let current = self.workspace().snapshot(&key);
             let current =
                 current.filter(|snapshot| snapshot_matches(&loader, &config, &key, snapshot));
+            #[expect(
+                clippy::map_err_ignore,
+                reason = "the error holds package diagnostics, and `incomplete_search` tells the user to fix them"
+            )]
             let snapshot = match current {
                 Some(snapshot) => snapshot,
                 None => self

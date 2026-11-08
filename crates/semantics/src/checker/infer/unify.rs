@@ -517,6 +517,10 @@ impl InferCtx<'_> {
         self.try_satisfy_interface(t2, t1, span)
     }
 
+    #[expect(
+        clippy::map_err_ignore,
+        reason = "`conforms_to_interface` already pushed a diagnostic for each violation"
+    )]
     fn try_satisfy_interface(
         &mut self,
         actual: &Type,

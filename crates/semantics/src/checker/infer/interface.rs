@@ -850,6 +850,10 @@ impl InferCtx<'_> {
 
         let candidate_ty = site.ty.strip_refs().resolve_in(&self.env);
         let mut resolved_impl_method = None;
+        #[expect(
+            clippy::map_err_ignore,
+            reason = "a speculative unification needs only which part failed, not why"
+        )]
         let sig_match = self.in_invariant_position(|ctx| {
             ctx.speculatively(|this| {
                 if let Some(receiver) = &receiver_to_pin {

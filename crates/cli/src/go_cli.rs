@@ -298,11 +298,18 @@ fn resolve_local_module_dir(
         };
         project_root.join(declared)
     };
-    let dir = joined.canonicalize().map_err(|_| {
-        format!(
-            "local module `{}` is declared at `{}`, but that directory does not exist",
-            module_path, declared_path
-        )
+    let dir = joined.canonicalize().map_err(|error| {
+        if error.kind() == io::ErrorKind::NotFound {
+            format!(
+                "local module `{}` is declared at `{}`, but that directory does not exist",
+                module_path, declared_path
+            )
+        } else {
+            format!(
+                "local module `{}` is declared at `{}`, but that directory cannot be read: {}",
+                module_path, declared_path, error
+            )
+        }
     })?;
     if !dir.join("go.mod").exists() {
         return Err(format!(
@@ -838,14 +845,14 @@ fn run_go_test(
         .current_dir(build_dir)
         .stdout(Stdio::piped());
 
-    let spawn_error = || {
+    let spawn_error = |error: io::Error| {
         toolchain_failure().unwrap_or_else(|| GoCliError {
-            message: "Failed to execute `go test`".to_string(),
+            message: format!("Failed to execute `go test`: {}", error),
             hint: "Check Go installation with `go version`",
         })
     };
 
-    let mut child = cmd.spawn().map_err(|_| spawn_error())?;
+    let mut child = cmd.spawn().map_err(spawn_error)?;
 
     let mut events = Vec::new();
     if let Some(stdout) = child.stdout.take() {
@@ -856,7 +863,7 @@ fn run_go_test(
         }
     }
 
-    let status = child.wait().map_err(|_| spawn_error())?;
+    let status = child.wait().map_err(spawn_error)?;
 
     Ok(TestRun {
         events,
