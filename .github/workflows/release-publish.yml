@@ -38,7 +38,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-      - uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37 # ratchet:taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # ratchet:taiki-e/install-action@v2
         if: steps.release.outputs.releases_created == 'true'
         with:
           tool: git-cliff@2.13.1

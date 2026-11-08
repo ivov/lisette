@@ -343,9 +343,9 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           cache: 'false'
-      - uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37 # ratchet:taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # ratchet:taiki-e/install-action@v2
         with:
-          tool: cargo-shear@1.6.0
+          tool: cargo-shear@1.14.0
       - run: cargo shear
 
   deny:
@@ -358,7 +358,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           cache: 'false'
-      - uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37 # ratchet:taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # ratchet:taiki-e/install-action@v2
         with:
           tool: cargo-deny@0.19.0
       - run: cargo deny check
