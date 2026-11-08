@@ -22,7 +22,7 @@ func MakeEventEmpty[T any]() Event[T] {
 	return Event[T]{Tag: EventEmpty}
 }
 
-type Callback[T any] func() T
+type Callback[T any] = func() T
 
 type EventTag uint8
 

@@ -1155,7 +1155,7 @@ fn circular_type_alias_growing_argument_as_map_key() {
 }
 
 #[test]
-fn circular_type_alias_mutual_function_allowed() {
+fn circular_type_alias_mutual_function() {
     infer(
         r#"
     type A = fn(B) -> ()
@@ -1166,7 +1166,7 @@ fn circular_type_alias_mutual_function_allowed() {
     }
         "#,
     )
-    .assert_no_errors();
+    .assert_circular_type();
 }
 
 #[test]

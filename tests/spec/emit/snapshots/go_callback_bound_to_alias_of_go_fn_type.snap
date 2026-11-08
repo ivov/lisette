@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 )
 
-type Walker filepath.WalkFunc
+type Walker = filepath.WalkFunc
 
 func main() {
 	cb := func(_ string, _ lisette.Option[fs.FileInfo], _ lisette.Option[error]) error {

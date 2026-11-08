@@ -19,9 +19,9 @@ package main
 
 import "context"
 
-type Cancel context.CancelFunc
+type Cancel = context.CancelFunc
 
-type Second Cancel
+type Second = Cancel
 
 func view(f *Second) *context.CancelFunc {
 	return (*context.CancelFunc)(f)

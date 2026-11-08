@@ -10,7 +10,7 @@ description: |
 ---
 package main
 
-type Handler func(int) struct{}
+type Handler = func(int) struct{}
 
 func test(h Handler) func(int) struct{} {
 	return (func(int) struct{})(h)

@@ -20,7 +20,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-type PairFn func(int) lisette.Tuple2[int, int]
+type PairFn = func(int) lisette.Tuple2[int, int]
 
 func invoke(f PairFn) (int, int) {
 	tup := f(4)

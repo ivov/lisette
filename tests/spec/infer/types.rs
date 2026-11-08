@@ -11825,3 +11825,81 @@ fn run() {
     infer_with_go_typedefs(input, &[("go:gopkg.in/yaml.v3", typedef)])
         .assert_error_contains("gopkg.in/yaml.v3.Decoder");
 }
+
+#[test]
+fn write_permission_check_expands_nested_uses_of_one_generic_alias() {
+    infer(
+        r#"
+type Nested<T> = (int, T)
+type Writable = mut Ref<int>
+
+fn take(value: Unknown) {
+  let _ = assert_type<Nested<Nested<fn() -> Writable>>>(value)
+}
+"#,
+    )
+    .assert_infer_code("needs_writable");
+}
+
+#[test]
+fn generic_function_alias_that_recurses_with_other_arguments_is_circular() {
+    infer(
+        r#"
+type G<T> = fn() -> Option<G<Slice<T>>>
+
+fn test(g: G<int>) -> G<int> { g }
+"#,
+    )
+    .assert_circular_type();
+}
+
+#[test]
+fn mutually_recursive_generic_aliases_with_other_arguments_are_circular() {
+    infer(
+        r#"
+type B<T> = Option<A<Slice<T>>>
+type A<T> = fn() -> B<T>
+
+fn test(a: A<int>) -> A<int> { a }
+"#,
+    )
+    .assert_circular_type();
+}
+
+#[test]
+fn mutually_recursive_generic_function_aliases_with_same_arguments_are_circular() {
+    infer(
+        r#"
+type Step<T> = fn(T) -> Option<Walk<T>>
+type Walk<T> = fn(T) -> Option<Step<T>>
+
+fn test(s: Step<int>) -> Option<Walk<int>> { s(1) }
+"#,
+    )
+    .assert_circular_type();
+}
+
+#[test]
+fn recursive_function_alias_is_circular() {
+    infer(
+        r#"
+type State = fn(int) -> Option<State>
+
+fn stop(_n: int) -> Option<State> { None }
+"#,
+    )
+    .assert_circular_type();
+}
+
+#[test]
+fn function_alias_over_nested_uses_of_a_generic_alias_checks() {
+    infer(
+        r#"
+type Items<T> = Slice<T>
+type MatrixFactory<T> = fn() -> Items<Items<T>>
+
+fn test(make: MatrixFactory<int>) -> int { make()[0][0] }
+"#,
+    )
+    .assert_no_errors();
+}

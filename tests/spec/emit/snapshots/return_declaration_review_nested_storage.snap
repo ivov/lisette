@@ -36,7 +36,7 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-type F[T any] func(int) T
+type F[T any] = func(int) T
 
 type Nested[T any] = lisette.Tuple2[lisette.Option[F[T]], lisette.Result[F[T], string]]
 
