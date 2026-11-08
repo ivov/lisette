@@ -1,3 +1,4 @@
+use std::io;
 use std::path::{Path, PathBuf};
 
 use super::project::MutationProject;
@@ -181,12 +182,20 @@ fn setup_project_local(path_arg: &str) -> Result<AddPlan, i32> {
         1
     })?;
     let requested = invocation_dir.join(path_arg);
-    let module_dir = requested.canonicalize().map_err(|_| {
-        cli_error!(
-            "Local module not found",
-            format!("`{}` is not a directory", path_arg),
-            "Pass the root directory of a Go module, e.g. `lis add --path ../auth`"
-        );
+    let module_dir = requested.canonicalize().map_err(|error| {
+        if error.kind() == io::ErrorKind::NotFound {
+            cli_error!(
+                "Local module not found",
+                format!("`{}` is not a directory", path_arg),
+                "Pass the root directory of a Go module, e.g. `lis add --path ../auth`"
+            );
+        } else {
+            cli_error!(
+                "Local module not readable",
+                format!("cannot read `{}`: {}", path_arg, error),
+                "Check the permissions of the module directory"
+            );
+        }
         1
     })?;
     if !module_dir.is_dir() {

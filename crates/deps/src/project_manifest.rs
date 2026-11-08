@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::module_path;
@@ -195,8 +196,17 @@ pub fn find_project_root(start: &Path) -> Option<PathBuf> {
 pub fn parse_manifest(project_root: &Path) -> Result<Manifest, String> {
     let project_toml_path = project_root.join("lisette.toml");
 
-    let bytes = fs::read(&project_toml_path)
-        .map_err(|_| format!("No `lisette.toml` manifest in `{}`", project_root.display()))?;
+    let bytes = fs::read(&project_toml_path).map_err(|error| {
+        if error.kind() == io::ErrorKind::NotFound {
+            format!("No `lisette.toml` manifest in `{}`", project_root.display())
+        } else {
+            format!(
+                "Cannot read `lisette.toml` manifest in `{}`: {}",
+                project_root.display(),
+                error
+            )
+        }
+    })?;
     let content =
         strip_bom_to_str(&bytes).map_err(|e| format!("Invalid `lisette.toml` manifest: {}", e))?;
 

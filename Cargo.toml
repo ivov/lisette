@@ -30,6 +30,7 @@ too_many_arguments = "forbid"
 result_large_err = "forbid"
 large_enum_variant = "forbid"
 absolute_paths = "deny"
+map_err_ignore = "deny"
 
 [workspace.lints.rust]
 unused_qualifications = "deny"
