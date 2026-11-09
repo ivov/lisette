@@ -52,6 +52,11 @@
           "Group.Do"
         ]
       },
+      "bool_as_presence": {
+        "github.com/enquora-net/capp-parse": [
+          "CSTNode.ChildByFieldName"
+        ]
+      },
       "direct_error": {
         "github.com/Azure/azure-sdk-for-go/sdk/azidentity": [
           "NewCredentialUnavailableError"
