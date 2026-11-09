@@ -2,6 +2,59 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.13.0](https://github.com/ivov/lisette/compare/lisette-v0.12.5...lisette-v0.13.0) - 2026-11-09
+
+### Features
+
+- feat: add `_` placeholder to choose position of piped value [#1628](https://github.com/ivov/lisette/pull/1628) [`79e2c00`](https://github.com/ivov/lisette/commit/79e2c005dfedf9f5780dace9e0129b2219fc9f11)
+- feat: idiomatic Go for `if` and `match` branches that exit early [#1626](https://github.com/ivov/lisette/pull/1626) [`dfda91a`](https://github.com/ivov/lisette/commit/dfda91ac74722f1b4646fa56679a981160b0d1d2)
+- feat: idiomatic Go for struct updates and rebinds [#1624](https://github.com/ivov/lisette/pull/1624) [`fd4d035`](https://github.com/ivov/lisette/commit/fd4d0356d49d4f796627503b2f8e2842448ff2c3)
+- feat: idiomatic Go for `&&` in `if` conditions without an `else` [#1621](https://github.com/ivov/lisette/pull/1621) [`abf7d40`](https://github.com/ivov/lisette/commit/abf7d40a2a019204e025c2a889288812498cadf5)
+- feat: idiomatic Go for named functions passed as Go callbacks [#1619](https://github.com/ivov/lisette/pull/1619) [`4e13fbc`](https://github.com/ivov/lisette/commit/4e13fbc00b3215bf7c933484cabf3dc3c0187983)
+- feat: idiomatic Go for f-strings in fields and call arguments [#1617](https://github.com/ivov/lisette/pull/1617) [`90cec46`](https://github.com/ivov/lisette/commit/90cec46c80e411da0593afea575ce77cd4786dfb)
+- feat: idiomatic Go for comma-ok calls used as `Option` values [#1616](https://github.com/ivov/lisette/pull/1616) [`60ea1b4`](https://github.com/ivov/lisette/commit/60ea1b462161c685f691312e21a0db10a5fb662d)
+- feat: idiomatic Go for `is_empty` on strings [#1615](https://github.com/ivov/lisette/pull/1615) [`c486c93`](https://github.com/ivov/lisette/commit/c486c933369a85136c202955117e0d6931a381f5)
+
+### Fixes
+
+- fix!: sound Go bindings for nil visitor nodes and proxy URLs [#1640](https://github.com/ivov/lisette/pull/1640) [`5f76363`](https://github.com/ivov/lisette/commit/5f76363e7fed5e28e30f716500828808cd47ca65)
+- fix: reject bool ordering and field reads through nested refs [#1639](https://github.com/ivov/lisette/pull/1639) [`8253008`](https://github.com/ivov/lisette/commit/8253008a6b4e890df61fad565072ae55a3c6c0ef)
+- fix!: align function alias semantics with Go [#1636](https://github.com/ivov/lisette/pull/1636) [`480274f`](https://github.com/ivov/lisette/commit/480274fa45ce21417532060a334dd67f2713e491)
+- fix: UX papercuts in diagnostics, number literals, and formatting [#1633](https://github.com/ivov/lisette/pull/1633) [`1981bd4`](https://github.com/ivov/lisette/commit/1981bd48ca596d10c5ed9fceb76da2c78043fa6e)
+- fix!: sound Go bindings for writes through interface method calls [#1630](https://github.com/ivov/lisette/pull/1630) [`3329f32`](https://github.com/ivov/lisette/commit/3329f32f0b6d21ea9c939497b35e56eb8f6c6225)
+- fix!: sound Go bindings for writes through arguments and receivers [#1625](https://github.com/ivov/lisette/pull/1625) [`9ea4b8e`](https://github.com/ivov/lisette/commit/9ea4b8e8a87f901663a34ef5cf4b6bee260a3bf5)
+- fix: allow writes to fresh slices from stdlib functions [#1623](https://github.com/ivov/lisette/pull/1623) [`5110f33`](https://github.com/ivov/lisette/commit/5110f335e8dcfd13ef2eded34bb7b1792481b399)
+- fix: stop double-wrapping callbacks typed as aliases of Go fn types [#1622](https://github.com/ivov/lisette/pull/1622) [`583672b`](https://github.com/ivov/lisette/commit/583672bebb0aa00b20df655ce2958923f69ff978)
+- fix!: sound Go bindings for unproven nilness [#1618](https://github.com/ivov/lisette/pull/1618) [`1440a83`](https://github.com/ivov/lisette/commit/1440a83916218f481e8873019c89265a41260522)
+- fix!: sound Go bindings for trailing bools in third-party modules [#1614](https://github.com/ivov/lisette/pull/1614) [`ea1dfb7`](https://github.com/ivov/lisette/commit/ea1dfb786f9487e4b7573352d557b24b53d771d9)
+- fix: satisfy Go interfaces whose methods name internal package types [#1605](https://github.com/ivov/lisette/pull/1605) [`e592964`](https://github.com/ivov/lisette/commit/e592964090ed637104820824fbcc165719623ba8)
+- fix!: sound Go bindings for constant types [#1604](https://github.com/ivov/lisette/pull/1604) [`044673d`](https://github.com/ivov/lisette/commit/044673d26b2fc7a07ad0cc3e8496d0c3c48ccd6a)
+- fix: avoid unused imports from omitted autofill fields [#1602](https://github.com/ivov/lisette/pull/1602) [`94242fc`](https://github.com/ivov/lisette/commit/94242fc966e12a3fd1b2d82d4407898c845fa04d)
+- fix!: sound Go bindings for nil in function and channel parameters [#1599](https://github.com/ivov/lisette/pull/1599) [`c244824`](https://github.com/ivov/lisette/commit/c2448245b30ed4d3536f0da26807a016076488b2)
+- fix: wrap callbacks in `Some` for named Go function types [#1598](https://github.com/ivov/lisette/pull/1598) [`acf49ac`](https://github.com/ivov/lisette/commit/acf49aca91625c0f54a1f4dad18af18998ee3d45)
+- fix!: sound Go bindings for values with a trailing bool [#1597](https://github.com/ivov/lisette/pull/1597) [`2cbd650`](https://github.com/ivov/lisette/commit/2cbd650f2fbdb1a630a958e9270620b5aaaf3dac)
+- fix!: sound Go bindings for nil in method results [#1596](https://github.com/ivov/lisette/pull/1596) [`52edcc1`](https://github.com/ivov/lisette/commit/52edcc1e2394009cfa1e48ab08bdc73153ce354e)
+- fix!: sound Go bindings for nil in interface parameters [#1594](https://github.com/ivov/lisette/pull/1594) [`5c47b35`](https://github.com/ivov/lisette/commit/5c47b3542891cd257844f58ce334afa57e7e810f)
+
+### Internals
+
+- chore: add helptext for `Option` use on `(T, bool)` values [#1642](https://github.com/ivov/lisette/pull/1642) [`a7eb2cf`](https://github.com/ivov/lisette/commit/a7eb2cf8736e26ed85468a5ecd1009e7c73c45b0)
+- chore: pin `CSTNode.ChildByFieldName` in `capp-parse` to `Option` [#1641](https://github.com/ivov/lisette/pull/1641) [`7bd01a0`](https://github.com/ivov/lisette/commit/7bd01a0d53829e23d7024414d381c069e4d695c2)
+- refactor: propagate error types through inference [#1637](https://github.com/ivov/lisette/pull/1637) [`68652fb`](https://github.com/ivov/lisette/commit/68652fb208c418cedc53151b79855ce5b961d61b)
+- chore: deny `clippy::map_err_ignore` [#1635](https://github.com/ivov/lisette/pull/1635) [`6e03add`](https://github.com/ivov/lisette/commit/6e03add94d9755777532e759c0d739284a755e44)
+- chore: bump `actions/cache` and `setup-just` [#1634](https://github.com/ivov/lisette/pull/1634) [`f2e6455`](https://github.com/ivov/lisette/commit/f2e64552789d2a2cc73acfd041cb4bf14e117105)
+- chore: bump `cargo-shear` and `install-action` [#1631](https://github.com/ivov/lisette/pull/1631) [`c13daee`](https://github.com/ivov/lisette/commit/c13daee795ef253e0cc1347e56f0af99ee8c55e4)
+- docs: polish reference examples and callouts [#1629](https://github.com/ivov/lisette/pull/1629) [`451447c`](https://github.com/ivov/lisette/commit/451447c895a0b83c837a3a2bb1861ad40b26e23c)
+- refactor: locate signature help parameter by source tokens [#1627](https://github.com/ivov/lisette/pull/1627) [`a9a6845`](https://github.com/ivov/lisette/commit/a9a68450e1f4feffcdb88c196834ffc4f6deaf81)
+- chore: refine helptext in diagnostics [#1612](https://github.com/ivov/lisette/pull/1612) [`2036dbe`](https://github.com/ivov/lisette/commit/2036dbeb07aafcb70b82e20979e6fd2bb2cae759)
+- docs: tighten prose in intro and language reference [#1611](https://github.com/ivov/lisette/pull/1611) [`bb86cba`](https://github.com/ivov/lisette/commit/bb86cba882f7c69074414991cc4ff9af955cb59a)
+- perf: parse only imports when scanning sources for typedefs [#1609](https://github.com/ivov/lisette/pull/1609) [`121e5ea`](https://github.com/ivov/lisette/commit/121e5eaddac4a0c7818ed4777cfdbdde2df0a786)
+- perf: free spent syntax trees on background thread after compile [#1608](https://github.com/ivov/lisette/pull/1608) [`618287f`](https://github.com/ivov/lisette/commit/618287f6250f5906ef1f8351dbeaeaf4f4ebe81a)
+- perf: keep stdlib cache across projects and decode it per package [#1607](https://github.com/ivov/lisette/pull/1607) [`f1e79a8`](https://github.com/ivov/lisette/commit/f1e79a8929a42a773e158abba11d554507ad82ec)
+- perf: reuse stdlib cache for Go imports of third-party typedefs [#1606](https://github.com/ivov/lisette/pull/1606) [`c805f85`](https://github.com/ivov/lisette/commit/c805f85c41d2359afaddb5ce216f41553409506b)
+- refactor: derive type imports from final emit tree [#1603](https://github.com/ivov/lisette/pull/1603) [`e349727`](https://github.com/ivov/lisette/commit/e349727c91522b694ea1c6ed83796919a1ff0b1b)
+
+
 ## [0.12.5](https://github.com/ivov/lisette/compare/lisette-v0.12.4...lisette-v0.12.5) - 2026-10-23
 
 ### Features
