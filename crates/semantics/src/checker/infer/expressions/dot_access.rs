@@ -116,6 +116,18 @@ impl InferCtx<'_> {
                     args.expression.get_span(),
                 ));
             }
+            let extra_refs = resolved_expression_ty.ref_depth().saturating_sub(1);
+            if extra_refs > 0
+                && matches!(&expression, Expression::DotAccess { resolution, .. } if resolution.is_field_read())
+            {
+                self.sink
+                    .push(diagnostics::infer::field_read_through_nested_ref(
+                        args.expression.as_dotted_path().as_deref(),
+                        extra_refs,
+                        &member,
+                        span,
+                    ));
+            }
             if matches!(member.as_str(), "append" | "reserve")
                 && resolved_expression_ty.is_ref()
                 && args.deref_ty.is_slice()

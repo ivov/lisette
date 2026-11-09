@@ -839,11 +839,11 @@ fn main() {
 }
 
 #[test]
-fn auto_deref_innermost_hop_governs() {
+fn deref_innermost_hop_governs() {
     infer(
         r#"struct S3 { x: int }
 fn poke(r: mut Ref<Ref<S3>>) {
-  r.x = 1
+  r.*.x = 1
 }"#,
     )
     .assert_infer_code("write_through_read_only");

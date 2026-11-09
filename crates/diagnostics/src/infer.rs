@@ -1832,7 +1832,7 @@ pub fn not_orderable(ty: &Type, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Type mismatch")
         .with_infer_code("type_mismatch")
         .with_span_label(&span, format!("expected orderable, found `{}`", ty))
-        .with_help("Use comparison operators only with numeric, string, or boolean types")
+        .with_help("Use comparison operators only with numeric or string types")
 }
 
 pub fn param_needs_ordered_bound(param: &str, span: Span) -> LisetteDiagnostic {
@@ -3658,6 +3658,22 @@ pub fn ref_slice_growth(method: &str, span: Span) -> LisetteDiagnostic {
         .with_infer_code("ref_slice_growth")
         .with_span_label(&span, "dereference the ref first")
         .with_help(format!("Use `r.*.{method}(...)` to deref first"))
+}
+
+pub fn field_read_through_nested_ref(
+    receiver: Option<&str>,
+    extra_refs: usize,
+    member: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    let receiver = receiver.unwrap_or("value");
+    let derefs = ".*".repeat(extra_refs);
+    LisetteDiagnostic::error("Field access through nested reference")
+        .with_infer_code("field_through_nested_ref")
+        .with_span_label(&span, format!("`{member}` is behind more than one reference"))
+        .with_help(format!(
+            "Go follows only one reference to reach a field. Dereference the extra references first: `{receiver}{derefs}.{member}`"
+        ))
 }
 
 pub fn map_field_chain_assignment(span: Span) -> LisetteDiagnostic {

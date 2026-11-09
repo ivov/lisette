@@ -1999,7 +1999,7 @@ where
     matches!(
         underlying_simple_kind(ty, lookup),
         Some(kind) if kind.is_ordered() || kind == SimpleKind::String
-    ) || ty.is_boolean()
+    )
 }
 
 /// True for Go's `cmp.Ordered` set: ints, floats, strings, parameters, and
@@ -2086,6 +2086,13 @@ impl Type {
         match self.unwrap_forall() {
             Type::Function(f) => Some(f),
             _ => None,
+        }
+    }
+
+    pub fn ref_depth(&self) -> usize {
+        match self.is_ref().then(|| self.inner()).flatten() {
+            Some(inner) => 1 + inner.ref_depth(),
+            None => 0,
         }
     }
 

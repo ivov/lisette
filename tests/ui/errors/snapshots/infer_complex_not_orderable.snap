@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·   ╰── expected orderable, found `complex64`
  4 │ }
    ╰────
-  help: Use comparison operators only with numeric, string, or boolean types · code: [infer.type_mismatch]
+  help: Use comparison operators only with numeric or string types · code: [infer.type_mismatch]

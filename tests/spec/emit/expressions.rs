@@ -414,6 +414,32 @@ fn test() -> Action {
 }
 
 #[test]
+fn deref_of_nested_ref_keeps_one_dereference() {
+    let input = r#"
+struct P { a: int }
+
+impl P {
+  fn get(self: Ref<P>) -> int { self.a }
+}
+
+fn borrow<U>(value: U) -> Ref<U> { &value }
+
+fn read(x: Ref<Ref<P>>) -> int { x.*.a + x.*.get() }
+
+fn write(x: mut Ref<mut Ref<P>>) { x.*.a = 4 }
+
+fn main() {
+  let p = P { a: 3 }
+  if read(borrow(&p)) != 6 {
+    panic("read through a nested reference")
+  }
+  let _ = write
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn deref_field_access() {
     let input = r#"
 struct Counter { value: int }

@@ -566,11 +566,17 @@ impl InferCtx<'_> {
                 {
                     self.type_bool()
                 } else {
-                    self.ensure_orderable(left_operand_ty, left_span);
-                    if !same_operand_types {
-                        self.ensure_orderable(right_operand_ty, right_span);
+                    let (_, mismatched) = self.tracking_diagnostics(|this| {
+                        this.unify_binary_operands(
+                            operator,
+                            left_operand_ty,
+                            right_operand_ty,
+                            &span,
+                        );
+                    });
+                    if !mismatched {
+                        self.ensure_orderable(left_operand_ty, left_span);
                     }
-                    self.unify_binary_operands(operator, left_operand_ty, right_operand_ty, &span);
                     self.type_bool()
                 }
             }

@@ -1,0 +1,54 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct P { a: int }
+  
+  impl P {
+    fn get(self: Ref<P>) -> int { self.a }
+  }
+  
+  fn borrow<U>(value: U) -> Ref<U> { &value }
+  
+  fn read(x: Ref<Ref<P>>) -> int { x.*.a + x.*.get() }
+  
+  fn write(x: mut Ref<mut Ref<P>>) { x.*.a = 4 }
+  
+  fn main() {
+    let p = P { a: 3 }
+    if read(borrow(&p)) != 6 {
+      panic("read through a nested reference")
+    }
+    let _ = write
+  }
+---
+package main
+
+type P struct {
+	a int
+}
+
+func (p *P) get() int {
+	return p.a
+}
+
+func borrow[U any](value U) *U {
+	return &value
+}
+
+func read(x **P) int {
+	left := (*x).a
+	return left + (*x).get()
+}
+
+func write(x **P) {
+	(*x).a = 4
+}
+
+func main() {
+	p := P{a: 3}
+	if read(borrow(&p)) != 6 {
+		panic("read through a nested reference")
+	}
+	_ = write
+}

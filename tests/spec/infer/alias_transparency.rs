@@ -66,12 +66,6 @@ const OPERATIONS: &[&str] = &[
     "let _: int = x",
 ];
 
-/// The direct form is wrongly accepted here, because Go rejects it.
-const KNOWN_DIRECT_ACCEPTS: &[(&str, &str, &str)] = &[
-    ("bool", "T", "let _ = x < x"),
-    ("Ref<P>", "Ref<T>", "let _ = x.a"),
-];
-
 fn program(declaration: &str, parameter_ty: &str, operation: &str) -> String {
     format!("{PRELUDE}\n{declaration}\nfn test(x: {parameter_ty}) {{\n  {operation}\n}}\n")
 }
@@ -96,9 +90,6 @@ fn an_alias_checks_like_the_type_it_names() {
             let aliased = wrapper.replace('T', "Alias");
             let declaration = format!("type Alias = {ty}");
             for operation in OPERATIONS {
-                if KNOWN_DIRECT_ACCEPTS.contains(&(ty, wrapper, operation)) {
-                    continue;
-                }
                 let expected = error_codes(&program(&declaration, &direct, operation));
                 let found = error_codes(&program(&declaration, &aliased, operation));
                 if expected.is_empty() != found.is_empty() {
