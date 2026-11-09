@@ -5,7 +5,17 @@
         "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/nilable_pins": ["Job.Err"]
       },
       "nilable_return": {
-        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/nilable_pins": ["Env"]
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/nilable_pins": ["Env", "Find"]
+      },
+      "nilable_callback_return": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/nilable_pins": ["Hooks.Resolve", "Hooks.Factory", "Fixed"]
+      },
+      "nilable_param": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/nilable_pins": {
+          "Walker.Visit": ["node"],
+          "Sink.Take": ["item"],
+          "Consumer.Use": ["x"]
+        }
       },
       "nilable_callback_param": {
         "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/nilable_pins": {

@@ -181,7 +181,7 @@ func TestViewOverridesDistinguishEmptyFromAbsent(t *testing.T) {
 	}
 }
 
-func TestInheritBoolAsPresenceKeepsOwnPackages(t *testing.T) {
+func TestInheritStdlibContractsKeepsOwnPackages(t *testing.T) {
 	cfg := Config{Overrides: Overrides{Types: TypeOverrides{
 		BoolAsPresence: map[string][]string{"context": {"Own.Get"}},
 	}}}
@@ -189,7 +189,7 @@ func TestInheritBoolAsPresenceKeepsOwnPackages(t *testing.T) {
 		"context": ["Context.Deadline"],
 		"os": ["LookupEnv"]
 	}}}}`)
-	if err := cfg.InheritBoolAsPresence(stdlib); err != nil {
+	if err := cfg.InheritStdlibContracts(stdlib); err != nil {
 		t.Fatal(err)
 	}
 	if !cfg.HasBoolAsPresence("os", "LookupEnv") {
@@ -197,5 +197,18 @@ func TestInheritBoolAsPresenceKeepsOwnPackages(t *testing.T) {
 	}
 	if !cfg.HasBoolAsPresence("context", "Own.Get") || cfg.HasBoolAsPresence("context", "Context.Deadline") {
 		t.Error("context: expected own pins only")
+	}
+}
+
+func TestInheritStdlibContractsAddsNilableParams(t *testing.T) {
+	cfg := Config{}
+	stdlib := []byte(`{"overrides": {"types": {"nilable_param": {
+		"go/ast": {"Visitor.Visit": ["node"]}
+	}}}}`)
+	if err := cfg.InheritStdlibContracts(stdlib); err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.NilableParams("go/ast", "Visitor.Visit"); len(got) != 1 || got[0] != "node" {
+		t.Errorf("go/ast Visitor.Visit: expected inherited pin, got %v", got)
 	}
 }

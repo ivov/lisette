@@ -392,13 +392,13 @@ pub fn PostForm(
 /// a port number), then a nil URL and nil error will be returned.
 pub fn ProxyFromEnvironment(
   req: Ref<Request>,
-) -> Result<mut Ref<url.URL>, error>
+) -> Result<Option<mut Ref<url.URL>>, error>
 
 /// ProxyURL returns a proxy function (for use in a [Transport])
 /// that always returns the same URL.
 pub fn ProxyURL(
   fixedURL: Ref<url.URL>,
-) -> Option<fn(mut Ref<Request>) -> Result<mut Ref<url.URL>, error>>
+) -> Option<fn(mut Ref<Request>) -> Result<Option<mut Ref<url.URL>>, error>>
 
 /// ReadRequest reads and parses an incoming request from b.
 /// 
@@ -1128,7 +1128,7 @@ pub struct Server {
 #[go(hidden_fields)]
 #[go(incomparable)]
 pub struct Transport {
-  pub Proxy: Option<fn(mut Ref<Request>) -> Result<mut Ref<url.URL>, error>>,
+  pub Proxy: Option<fn(mut Ref<Request>) -> Result<Option<mut Ref<url.URL>>, error>>,
   pub OnProxyConnectResponse: Option<fn(context.Context, mut Ref<url.URL>, mut Ref<Request>, mut Ref<Response>) -> Result<(), error>>,
   pub DialContext: Option<fn(context.Context, string, string) -> Result<net.Conn, error>>,
   pub Dial: Option<fn(string, string) -> Result<net.Conn, error>>,

@@ -9,12 +9,29 @@ pub fn Each(items: Slice<Ref<Item>>, f: fn(Option<mut Ref<Item>>) -> bool)
 /// A pinned map result is Option.
 pub fn Env(key: string) -> Option<Map<string, string>>
 
+/// A pinned (T, error) result makes only T Option.
+pub fn Find(key: string) -> Result<Option<mut Ref<Item>>, error>
+
+/// A pinned function result makes the value of its (T, error) result Option.
+pub fn Fixed(item: Ref<Item>) -> Option<fn(string) -> Result<Option<mut Ref<Item>>, error>>
+
 /// The pin does not reach the function type in a result.
 pub fn Nested(f: fn(Option<mut Ref<Item>>) -> Option<fn(int) -> int>) -> int
+
+pub struct Box<T> {
+  pub V: T,
+}
+
+/// A pinned method of a generic interface.
+pub interface Consumer<T> {
+  fn Use(x: Option<Ref<T>>)
+}
 
 pub struct Hooks {
   pub Done: Option<fn(string, Option<error>) -> ()>,
   pub Walk: Option<fn(Option<mut Ref<Item>>, fn(mut Ref<Item>) -> ()) -> ()>,
+  pub Resolve: Option<fn(string) -> Result<Option<mut Ref<Item>>, error>>,
+  pub Factory: Option<fn() -> Option<fn() -> Result<mut Ref<Item>, error>>>,
 }
 
 pub struct Item {
@@ -26,5 +43,54 @@ pub struct Job {
   pub Cause: error,
 }
 
+pub type Lookalike
+
+pub interface Node {
+  fn Pos() -> int
+}
+
+pub type Part
+
+/// A method that implements a pinned interface method takes the same pin.
+pub type Printer
+
+/// A pinned interface method next to a second method.
+pub interface Sink {
+  fn Flush()
+  fn Take(item: Option<Ref<Item>>)
+}
+
 /// A pinned named function type makes its pinned parameters Option.
 pub type Visit = fn(string, Option<mut Ref<Item>>, Option<error>) -> Result<(), error>
+
+/// A pinned interface method parameter is Option.
+pub interface Walker {
+  fn Visit(node: Option<Node>) -> Option<Walker>
+}
+
+pub struct Whole {
+  embed Part,
+}
+
+impl<T> Box<T> {
+  /// A method of a generic type takes no pin.
+  fn Use(self, x: Ref<T>)
+}
+
+impl Lookalike {
+  /// A method with the shape of a pinned interface method takes no pin when its type does not implement the interface.
+  fn Take(self, item: Ref<Item>)
+}
+
+impl Part {
+  /// A method that only an embedding type supplies to a pinned interface takes no pin.
+  fn Take(self, item: Ref<Item>)
+}
+
+impl Printer {
+  fn Visit(self, n: Option<Node>) -> Walker
+}
+
+impl Whole {
+  fn Flush(self)
+}

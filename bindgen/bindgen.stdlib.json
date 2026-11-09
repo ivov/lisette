@@ -43,12 +43,13 @@
         "go/build": ["Context.HasSubdir"],
         "go/doc/comment": ["Parser.LookupPackage"],
         "iter": ["Pull", "Pull2"],
-        "math/big": ["Rat.SetString"],
+        "math/big": ["Float.SetString", "Int.SetString", "Rat.SetString"],
         "net/smtp": ["Client.TLSConnectionState"],
         "net/url": ["Userinfo.Password"],
         "os": ["LookupEnv"],
         "reflect": ["Type.FieldByName", "Type.FieldByNameFunc", "Type.MethodByName", "Value.Recv"],
         "runtime": ["Caller"],
+        "runtime/debug": ["ReadBuildInfo"],
         "strings": ["CutPrefix", "CutSuffix"],
         "syscall": ["Getenv"],
         "testing": ["T.Deadline"]
@@ -213,6 +214,7 @@
         "strings": ["Replacer.WriteString"]
       },
       "nilable_return": {
+        "net/http": ["ProxyFromEnvironment"],
         "net/http/fcgi": ["ProcessEnv"]
       },
       "nilable_callback_param": {
@@ -230,6 +232,9 @@
         "path/filepath": {
           "WalkFunc": ["info", "err"]
         }
+      },
+      "nilable_callback_return": {
+        "net/http": ["ProxyURL", "Transport.Proxy"]
       },
       "nilable_param": {
         "crypto/ed25519": {
@@ -254,7 +259,8 @@
         "go/ast": {
           "Fprint": ["fset", "f"],
           "NewPackage": ["importer", "universe"],
-          "Print": ["fset"]
+          "Print": ["fset"],
+          "Visitor.Visit": ["node"]
         },
         "go/importer": {
           "For": ["lookup"],

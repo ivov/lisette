@@ -91,7 +91,7 @@ When `error` is the sole return type, it typically maps to `Result<(), error>`. 
 
 ### Comma-ok pattern
 
-In Go's `(T, bool)` return type, when `bool` signals presence, `(T, bool)` maps to `Option<T>`. Bindgen reads the function body to check this: each `return` that gives `false` must also give the zero value of `T`.
+In Go's `(T, bool)` return type, when `bool` signals presence, `(T, bool)` maps to `Option<T>`. Bindgen reads the function body to check this: each `return` that gives `false` must also give the zero value of `T`. When `T` can be nil, each `return` that can give `true` must also give a value that is not nil, because `Some` cannot hold nil. Otherwise the result maps to `(Option<T>, bool)`.
 
 ```go
 func (m *Map) Load(key any) (value any, ok bool)
@@ -201,7 +201,8 @@ Bindgen accepts a config file with per-package overrides:
     // Override type mapping decisions
     "types": {
       // Turn `Ref<T>` into `Option<Ref<T>>` when the analysis cannot see
-      // the nil path itself
+      // the nil path itself. On a `(T, error)` result, only `T` becomes
+      // `Option`.
       "nilable_return": {
         "example.com/pkg": ["NewHandle"],
       },
@@ -242,7 +243,8 @@ Bindgen accepts a config file with per-package overrides:
       },
 
       // Turn `(T, bool)` into `Option<T>` when bindgen cannot prove
-      // that `bool` signals presence
+      // that `bool` signals presence, or that a true `bool` gives a value
+      // that is not nil
       // e.g. `os.LookupEnv` returns `Option<string>`
       // e.g. `iter.Pull` returns a `next` function that returns `Option<V>`
       "bool_as_presence": {
@@ -284,6 +286,14 @@ Bindgen accepts a config file with per-package overrides:
         "go/ast": {
           "Inspect.f": ["0"],
         },
+      },
+
+      // The same as `nilable_return` for the result of a function type,
+      // keyed by the symbol that holds the type
+      // e.g. the `Transport.Proxy` field returns a nil URL and a nil error
+      // for "no proxy"
+      "nilable_callback_return": {
+        "net/http": ["Transport.Proxy"],
       },
 
       // Keep `Ref<T>` parameter when inference wrongly proved it accepts nil

@@ -1,0 +1,65 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:go/ast"
+  
+  struct Counter { nodes: int, ends: int }
+  
+  impl Counter {
+    fn Visit(self: mut Ref<Counter>, node: Option<ast.Node>) -> Option<ast.Visitor> {
+      match node {
+        Some(_) => self.nodes += 1,
+        None => self.ends += 1,
+      }
+      Some(self)
+    }
+  }
+  
+  fn main() {
+    let mut counter = Counter { nodes: 0, ends: 0 }
+    ast.Walk(&counter, ast.NewIdent("x"))
+    if counter.nodes != 1 || counter.ends != 1 { panic("visitor did not see the end of the children") }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"go/ast"
+)
+
+type Counter struct {
+	nodes int
+	ends  int
+}
+
+func (c *Counter) Visit(node lisette.Option[ast.Node]) ast.Visitor {
+	if node.Tag == lisette.OptionSome {
+		c.nodes++
+	} else {
+		c.ends++
+	}
+	return _lisAdapter_Counter_Visitor_0{inner: c}
+}
+
+func main() {
+	counter := Counter{
+		nodes: 0,
+		ends:  0,
+	}
+	arg := _lisAdapter_Counter_Visitor_0{inner: &counter}
+	ast.Walk(arg, ast.NewIdent("x"))
+	if counter.nodes != 1 || counter.ends != 1 {
+		panic("visitor did not see the end of the children")
+	}
+}
+
+type _lisAdapter_Counter_Visitor_0 struct {
+	inner *Counter
+}
+
+func (a _lisAdapter_Counter_Visitor_0) Visit(arg0 ast.Node) ast.Visitor {
+	option := lisette.OptionFromNilable[ast.Node](arg0, lisette.IsNilInterface(arg0))
+	return a.inner.Visit(option)
+}

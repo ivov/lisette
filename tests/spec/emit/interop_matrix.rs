@@ -3801,3 +3801,79 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn interop_function_field_read_bridges_nullable_result_payload() {
+    let input = r#"
+import "go:example.com/ext"
+
+fn resolve(t: ext.Transport) -> Result<Option<Ref<ext.Proxy>>, error> {
+  let Some(proxy) = t.Proxy else {
+    return Ok(None)
+  }
+  proxy(1)
+}
+"#;
+    let typedef = r#"
+pub struct Proxy {}
+
+pub struct Transport {
+  pub Proxy: Option<fn(int) -> Result<Option<Ref<Proxy>>, error>>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/ext", typedef)]);
+}
+
+#[test]
+fn interop_ast_visitor_receives_none_after_children() {
+    let input = r#"
+import "go:go/ast"
+
+struct Counter { nodes: int, ends: int }
+
+impl Counter {
+  fn Visit(self: mut Ref<Counter>, node: Option<ast.Node>) -> Option<ast.Visitor> {
+    match node {
+      Some(_) => self.nodes += 1,
+      None => self.ends += 1,
+    }
+    Some(self)
+  }
+}
+
+fn main() {
+  let mut counter = Counter { nodes: 0, ends: 0 }
+  ast.Walk(&counter, ast.NewIdent("x"))
+  if counter.nodes != 1 || counter.ends != 1 { panic("visitor did not see the end of the children") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_proxy_callback_bridges_optional_url() {
+    let input = r#"
+import "go:net/http"
+import "go:net/url"
+
+fn main() {
+  let Ok(req) = http.NewRequest("GET", "http://localhost", None) else { panic("request") }
+  let Ok(None) = http.ProxyFromEnvironment(req) else { panic("localhost is never proxied") }
+
+  let env = http.Transport { Proxy: Some(http.ProxyFromEnvironment), .. }
+  let Some(proxy) = env.Proxy else { panic("no environment callback") }
+  let Ok(None) = proxy(req) else { panic("environment callback found a proxy") }
+
+  let none = http.Transport { Proxy: Some(|_| Ok(None)), .. }
+  let Some(proxy) = none.Proxy else { panic("no closure callback") }
+  let Ok(None) = proxy(req) else { panic("closure callback lost None") }
+
+  let Ok(u) = url.Parse("http://proxy.example:8080") else { panic("url") }
+  let fixed = http.Transport { Proxy: http.ProxyURL(u), .. }
+  let Some(proxy) = fixed.Proxy else { panic("no fixed callback") }
+  let Ok(Some(found)) = proxy(req) else { panic("fixed callback lost the url") }
+  if found.String() != "http://proxy.example:8080" { panic("fixed callback changed the url") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

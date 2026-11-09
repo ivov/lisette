@@ -268,7 +268,8 @@ func signatureToLisette(signature *types.Signature, seen map[types.Type]bool, co
 
 	param := signature.Params()
 	var nilable []string
-	if conv != nil && !conv.inSignature {
+	top := conv != nil && !conv.inSignature
+	if top {
 		nilable = conv.cfg.NilableCallbackParams(conv.currentPkgPath, conv.symbolKey)
 		conv.inSignature = true
 		defer func() { conv.inSignature = false }()
@@ -291,6 +292,9 @@ func signatureToLisette(signature *types.Signature, seen map[types.Type]bool, co
 
 	returnType := "()"
 	if signature.Results().Len() > 0 {
+		if top {
+			conv.nilableCallbackReturn = conv.cfg.IsNilableCallbackReturn(conv.currentPkgPath, conv.symbolKey)
+		}
 		ret := returnsToLisetteRecursive(signature, seen, conv, nil, "", substitutions)
 		if ret.SkipReason != nil {
 			return ret

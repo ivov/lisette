@@ -1,0 +1,50 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/ext"
+  
+  fn resolve(t: ext.Transport) -> Result<Option<Ref<ext.Proxy>>, error> {
+    let Some(proxy) = t.Proxy else {
+      return Ok(None)
+    }
+    proxy(1)
+  }
+---
+package main
+
+import (
+	"example.com/ext"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func resolve(t ext.Transport) (lisette.Option[*ext.Proxy], error) {
+	raw := t.Proxy
+	var option lisette.Option[func(int) lisette.Result[lisette.Option[*ext.Proxy], error]]
+	if raw != nil {
+		cb := raw
+		var adapted func(int) lisette.Result[lisette.Option[*ext.Proxy], error]
+		if cb != nil {
+			adapted = func(arg0 int) lisette.Result[lisette.Option[*ext.Proxy], error] {
+				ret, ret_1 := cb(arg0)
+				if ret_1 != nil {
+					return lisette.MakeResultErr[lisette.Option[*ext.Proxy], error](ret_1)
+				}
+				option_1 := lisette.OptionFromNilable[*ext.Proxy](ret, ret == nil)
+				return lisette.MakeResultOk[lisette.Option[*ext.Proxy], error](option_1)
+			}
+		}
+		option = lisette.MakeOptionSome[func(int) lisette.Result[lisette.Option[*ext.Proxy], error]](adapted)
+	} else {
+		option = lisette.MakeOptionNone[func(int) lisette.Result[lisette.Option[*ext.Proxy], error]]()
+	}
+	if option.Tag != lisette.OptionSome {
+		return lisette.MakeOptionNone[*ext.Proxy](), nil
+	}
+	proxy := option.SomeVal
+	v := proxy(1)
+	if v.Tag == lisette.ResultOk {
+		return v.OkVal, nil
+	}
+	return lisette.Option[*ext.Proxy]{}, v.ErrVal
+}
