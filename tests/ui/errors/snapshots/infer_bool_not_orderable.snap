@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:4:37]
+ 3 │ 
+ 4 │ fn less(x: bool, y: bool) -> bool { x < y }
+   ·                                     ┬
+   ·                                     ╰── expected orderable, found `bool`
+ 5 │ 
+   ╰────
+  help: Use comparison operators only with numeric or string types · code: [infer.type_mismatch]

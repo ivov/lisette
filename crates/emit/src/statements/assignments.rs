@@ -294,7 +294,10 @@ impl Planner<'_> {
                     let field = self.dot_member_go_name(base, &expression_ty, member, resolution);
                     return GoExpression::qualified(self.package_use_for_package(package), field);
                 }
-                let base_value = if let Some(inner) = base.deref_inner() {
+                let elided_deref = base
+                    .deref_inner()
+                    .filter(|inner| !self.points_to_ref(&inner.get_type()));
+                let base_value = if let Some(inner) = elided_deref {
                     self.place_operand(setup, inner, "ref", ordering)
                 } else if reads_through_reference(base) || !is_place_expression(base) {
                     self.place_operand(setup, base, "ref", ordering)

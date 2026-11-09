@@ -171,13 +171,13 @@ fn bool_inequality() {
 }
 
 #[test]
-fn bool_less_than() {
-    infer("false < true").assert_type_bool();
+fn bool_less_than_is_rejected() {
+    infer("false < true").assert_type_mismatch();
 }
 
 #[test]
-fn bool_greater_than() {
-    infer("true > false").assert_type_bool();
+fn bool_greater_than_is_rejected() {
+    infer("true > false").assert_type_mismatch();
 }
 
 #[test]
@@ -1886,6 +1886,42 @@ fn auto_deref_nested_field() {
       let outer_ref: Ref<Outer> = &outer;
       outer_ref.inner.get_value()
     }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn field_read_through_nested_ref_rejected() {
+    infer(
+        r#"
+    struct P { a: int }
+
+    fn field(x: Ref<Ref<P>>) -> int { x.a }
+        "#,
+    )
+    .assert_infer_code("field_through_nested_ref");
+}
+
+#[test]
+fn tuple_element_through_nested_ref_rejected() {
+    infer(
+        r#"
+    fn first(x: Ref<Ref<Ref<(int, string)>>>) -> int { x.0 }
+        "#,
+    )
+    .assert_infer_code("field_through_nested_ref");
+}
+
+#[test]
+fn field_read_after_deref_of_nested_ref_allowed() {
+    infer(
+        r#"
+    struct P { a: int }
+
+    fn field(x: Ref<Ref<P>>) -> int { x.*.a }
+
+    fn element(x: Ref<Ref<Ref<(int, string)>>>) -> int { x.*.*.0 }
         "#,
     )
     .assert_no_errors();

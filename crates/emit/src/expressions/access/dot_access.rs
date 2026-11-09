@@ -441,12 +441,15 @@ impl Planner<'_> {
         coercion: Option<ReceiverCoercion>,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        let (staged, had_explicit_deref) = if let Some(inner) = expression.deref_inner() {
+        let elided_deref = expression
+            .deref_inner()
+            .filter(|inner| !self.points_to_ref(&inner.get_type()));
+        let (staged, had_explicit_deref) = if let Some(inner) = elided_deref {
             (self.plan_operand(inner, ctx), true)
         } else {
             (self.plan_operand(expression, ctx), false)
         };
-        let receiver = expression.deref_inner().unwrap_or(expression);
+        let receiver = elided_deref.unwrap_or(expression);
         let needs_deref = matches!(
             receiver.get_type().as_compound(),
             Some((CompoundKind::Ref, [Type::Parameter(_), ..]))
@@ -466,6 +469,15 @@ impl Planner<'_> {
                 _ => base,
             }
         })
+    }
+
+    /// Go follows only one pointer in a selector.
+    pub(crate) fn points_to_ref(&self, ty: &Type) -> bool {
+        let peeled = self.facts.peel_alias(ty);
+        peeled.is_ref()
+            && peeled
+                .inner()
+                .is_some_and(|inner| self.facts.peel_alias(&inner).is_ref())
     }
 
     /// A Go method with a value receiver takes its receiver as is, so a call result needs no temp.

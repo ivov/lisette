@@ -2750,6 +2750,36 @@ fn test() {
 }
 
 #[test]
+fn infer_bool_not_orderable() {
+    let input = r#"
+import "go:fmt"
+
+fn less(x: bool, y: bool) -> bool { x < y }
+
+fn main() {
+  fmt.Println(less(false, true))
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_field_read_through_nested_ref() {
+    let input = r#"
+import "go:fmt"
+
+struct P { a: int }
+
+fn field(x: Ref<Ref<P>>) -> int { x.a }
+
+fn main() {
+  fmt.Println(field)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_complex_not_orderable() {
     let input = r#"
 fn test(a: complex64, b: complex64) -> bool {
