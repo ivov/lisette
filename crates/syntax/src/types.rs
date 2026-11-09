@@ -1313,6 +1313,18 @@ impl Type {
         self.has_qualified_id("prelude.Partial")
     }
 
+    pub fn is_value_and_bool(&self) -> bool {
+        matches!(self, Type::Tuple(elements) if elements.len() == 2 && elements[1].is_boolean())
+    }
+
+    pub fn option_of(inner: Type) -> Type {
+        Type::Nominal {
+            id: Symbol::from_parts("prelude", "Option"),
+            params: vec![inner],
+            writable: false,
+        }
+    }
+
     fn has_qualified_id(&self, qualified_id: &str) -> bool {
         matches!(self, Type::Nominal { id, .. } if id.as_str() == qualified_id)
     }

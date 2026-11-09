@@ -1183,6 +1183,35 @@ pub fn enum_variant_constructor_not_found(
         .with_help(help)
 }
 
+const VALUE_AND_BOOL_HELP: &str = "A value and a `bool` form a tuple, not an `Option`. \
+                                   Destructure it with `let (value, ok) = ...`";
+
+pub fn option_pattern_on_value_and_bool(ty: &Type, variant: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Variant not found")
+        .with_resolve_code("variant_not_found")
+        .with_span_label(
+            &span,
+            format!(
+                "`{}` is an `Option` variant, but the value is `{}`",
+                variant, ty
+            ),
+        )
+        .with_help(VALUE_AND_BOOL_HELP)
+}
+
+pub fn option_member_on_value_and_bool(ty: &Type, member: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Member not found")
+        .with_infer_code("member_not_found")
+        .with_span_label(
+            &span,
+            format!(
+                "`{}` is an `Option` method, but the value is `{}`",
+                member, ty
+            ),
+        )
+        .with_help(VALUE_AND_BOOL_HELP)
+}
+
 pub fn const_pattern_not_eligible(name: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Pattern target is not a matchable value")
         .with_infer_code("const_pattern_not_eligible")

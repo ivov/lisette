@@ -177,6 +177,18 @@ impl InferCtx<'_> {
         }
 
         let display_ty = self.store.peel_alias(&resolved_expression_ty);
+        if let Type::Tuple(elements) = &display_ty
+            && display_ty.is_value_and_bool()
+            && self.has_member(&Type::option_of(elements[0].clone()), &member)
+        {
+            self.sink
+                .push(diagnostics::infer::option_member_on_value_and_bool(
+                    &display_ty,
+                    &member,
+                    span,
+                ));
+            return args.build_dot_access(Type::Error, DotAccessResolution::Unresolved);
+        }
         let available_members = self.get_available_member_names(&resolved_expression_ty);
         let unwrap_hint = self.compute_unwrap_hint(&display_ty, &member);
         self.sink.push(diagnostics::infer::member_not_found(
