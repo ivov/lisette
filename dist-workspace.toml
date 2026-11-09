@@ -21,4 +21,5 @@ install-updater = false
 features = ["self-upgrade"]
 
 [dist.github-custom-runners]
-x86_64-apple-darwin = "macos-14"
+x86_64-apple-darwin = "macos-15"
+aarch64-apple-darwin = "macos-15"
