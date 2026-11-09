@@ -667,7 +667,15 @@ impl InferCtx<'_> {
             return self.rejected_pattern(span);
         }
 
-        if is_bare_constructor_name(identifier, fields, kind) {
+        let resolved_ty = expected_ty.resolve_in(&self.env);
+        if matches!(identifier, "Some" | "None") && resolved_ty.is_value_and_bool() {
+            self.sink
+                .push(diagnostics::infer::option_pattern_on_value_and_bool(
+                    &resolved_ty,
+                    identifier,
+                    span,
+                ));
+        } else if is_bare_constructor_name(identifier, fields, kind) {
             self.sink
                 .push(diagnostics::infer::uppercase_binding(span, identifier));
         } else {

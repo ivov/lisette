@@ -16746,3 +16746,46 @@ fn f() {
 "#;
     assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn infer_option_pattern_on_value_and_bool() {
+    let input = r#"
+fn find() -> (int, bool) { (3, true) }
+
+fn test() -> int {
+  match find() {
+    Some(value) => value,
+    None => -1,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_option_let_else_on_go_value_and_bool() {
+    let input = r#"
+import "go:slices"
+
+fn test() -> int {
+  let Some(position) = slices.BinarySearch([10, 20, 30], 25) else {
+    return -1
+  }
+  position
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_option_member_on_value_and_bool() {
+    let input = r#"
+fn find() -> (int, bool) { (3, true) }
+
+fn test() -> bool {
+  let _ = find().map(|value| value * 2)
+  find().is_some()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}

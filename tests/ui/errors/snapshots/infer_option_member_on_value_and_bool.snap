@@ -1,0 +1,22 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Member not found
+   ╭─[test.lis:5:11]
+ 4 │ fn test() -> bool {
+ 5 │   let _ = find().map(|value| value * 2)
+   ·           ─────┬────
+   ·                ╰── `map` is an `Option` method, but the value is `(int, bool)`
+ 6 │   find().is_some()
+   ╰────
+  help: A value and a `bool` form a tuple, not an `Option`. Destructure it with `let (value, ok) = ...` · code: [infer.member_not_found]
+
+  ✕ Member not found
+   ╭─[test.lis:6:3]
+ 5 │   let _ = find().map(|value| value * 2)
+ 6 │   find().is_some()
+   ·   ───────┬──────
+   ·          ╰── `is_some` is an `Option` method, but the value is `(int, bool)`
+ 7 │ }
+   ╰────
+  help: A value and a `bool` form a tuple, not an `Option`. Destructure it with `let (value, ok) = ...` · code: [infer.member_not_found]
