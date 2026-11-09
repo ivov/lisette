@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794265821045,
+  "lastUpdate": 1794266980395,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -52947,6 +52947,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/fb02a6bc103034d8c3e16890958e01b2ad3778a8"
         },
         "date": 1794265819082,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 154628,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 41091,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30314,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19585,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15868,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14039,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9267,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7484,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10906,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 925,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "dc7e22b3b8a214baf9d368049b78b927a47cbbb8",
+          "message": "chore: move macOS release builds to `macos-15` (#1643)",
+          "timestamp": "2026-11-10T00:29:17+01:00",
+          "tree_id": "f305edb04b8d3b5a930df66154759f5b1bfeacd5",
+          "url": "https://github.com/ivov/lisette/commit/dc7e22b3b8a214baf9d368049b78b927a47cbbb8"
+        },
+        "date": 1794266978911,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
