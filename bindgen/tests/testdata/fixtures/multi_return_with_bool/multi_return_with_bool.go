@@ -105,6 +105,29 @@ type Item struct{ N int }
 // A nil value with a true bool stays a tuple.
 func NilPresent() (*Item, bool) { return nil, true }
 
+var items = map[string]*Item{"placeholder": nil}
+
+// A map lookup that can give a nil value with a true bool stays a tuple.
+func GetItem(key string) (*Item, bool) {
+	item, ok := items[key]
+	return item, ok
+}
+
+// A nil check before the true bool collapses to Option<T>.
+func GetPresentItem(key string) (*Item, bool) {
+	item, ok := items[key]
+	if !ok || item == nil {
+		return nil, false
+	}
+	return item, true
+}
+
+// A pinned nilable value with a true bool collapses to Option<T>.
+func PinnedItem(key string) (*Item, bool) {
+	item, ok := items[key]
+	return item, ok
+}
+
 type Finder interface {
 	// A nilable value next to a bool with no body stays Option.
 	Find() (*Item, bool)
@@ -139,4 +162,44 @@ type Handlers interface {
 	Aliased() (HandlerAlias, bool)
 	// A bare function value next to a bool with no body stays Option.
 	Bare() (func() int, bool)
+}
+
+type Shape interface{ Area() int }
+
+type Square struct{}
+
+func (*Square) Area() int { return 1 }
+
+// An interface that holds a nil pointer with a true bool stays a tuple.
+func TypedNil() (Shape, bool) {
+	var s *Square
+	return s, true
+}
+
+// A value set with its true bool on one branch collapses to Option<T>.
+func Guarded(flag bool) (*Item, bool) {
+	var item *Item
+	ok := false
+	if flag {
+		item = &Item{1}
+		ok = true
+	}
+	return item, ok
+}
+
+type ItemSource interface {
+	Lookup(key string) (*Item, bool)
+}
+
+type MapSource struct{}
+
+// A method follows the pinned interface method it implements, so it collapses to Option<T>.
+func (MapSource) Lookup(key string) (*Item, bool) { return GetItem(key) }
+
+// A nil check cannot prove that an interface holds no nil pointer, so the value stays a tuple.
+func GuardShape(s Shape) (Shape, bool) {
+	if s == nil {
+		return nil, false
+	}
+	return s, true
 }

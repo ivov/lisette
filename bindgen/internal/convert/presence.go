@@ -5,6 +5,7 @@ import (
 	"go/constant"
 	"go/token"
 	"go/types"
+	"slices"
 
 	"golang.org/x/tools/go/ssa"
 )
@@ -148,6 +149,11 @@ func isZeroValue(value ssa.Value) bool {
 	return false
 }
 
+func isFalseConstant(value ssa.Value) bool {
+	c, ok := value.(*ssa.Const)
+	return ok && c.Value != nil && c.Value.Kind() == constant.Bool && !constant.BoolVal(c.Value)
+}
+
 func isNilConstant(value ssa.Value) bool {
 	c, ok := value.(*ssa.Const)
 	return ok && c.IsNil()
@@ -161,6 +167,62 @@ func isZeroConstant(value constant.Value) bool {
 		return constant.StringVal(value) == ""
 	case constant.Int, constant.Float, constant.Complex:
 		return constant.Sign(value) == 0
+	}
+	return false
+}
+
+func (a *NilnessAnalysis) presentWhenTrue(values []ssa.Value, flag ssa.Value, stack, axioms []nilnessFact, seen map[*ssa.Phi]bool) bool {
+	if isFalseConstant(flag) {
+		return true
+	}
+	if phi, ok := flag.(*ssa.Phi); ok {
+		if seen[phi] {
+			return false
+		}
+		seen[phi] = true
+		for i, edge := range phi.Edges {
+			edgeStack := stack
+			if fact, ok := edgeFact(phi.Block().Preds[i], phi.Block()); ok {
+				edgeStack = append(slices.Clip(stack), fact)
+			}
+			edgeValues := make([]ssa.Value, len(values))
+			for j, value := range values {
+				edgeValues[j] = value
+				if valuePhi, ok := value.(*ssa.Phi); ok && valuePhi.Block() == phi.Block() {
+					edgeValues[j] = valuePhi.Edges[i]
+				}
+			}
+			if !a.presentWhenTrue(edgeValues, edge, edgeStack, axioms, seen) {
+				return false
+			}
+		}
+		return true
+	}
+	for _, value := range values {
+		if isDemotableGoType(value.Type()) && !a.present(value, stack, axioms) {
+			return false
+		}
+	}
+	return true
+}
+
+// present: emit reads an interface that holds a nil pointer as None.
+func (a *NilnessAnalysis) present(value ssa.Value, stack, axioms []nilnessFact) bool {
+	value = resolveSpill(value)
+	if !types.IsInterface(value.Type()) {
+		return a.eval(value, stack, make(map[ssa.Value]bool)).n == nilnessNonNil
+	}
+	switch typed := value.(type) {
+	case *ssa.MakeInterface:
+		switch typed.X.Type().Underlying().(type) {
+		case *types.Pointer, *types.Map, *types.Chan, *types.Signature:
+			return a.eval(typed.X, stack, make(map[ssa.Value]bool)).n == nilnessNonNil
+		}
+		return true
+	case *ssa.Parameter:
+		return slices.ContainsFunc(axioms, func(fact nilnessFact) bool {
+			return fact.value == typed && fact.n == nilnessNonNil
+		})
 	}
 	return false
 }

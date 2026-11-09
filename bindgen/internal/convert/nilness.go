@@ -28,6 +28,8 @@ type FunctionNilness struct {
 	NilWithNilError []bool
 	// NilWitness[i]: some site returns result i nil.
 	NilWitness []bool
+	// NilWhenPresent: some site can return a nil value with a true bool.
+	NilWhenPresent bool
 }
 
 // Precomputed at construction, read-only afterwards.
@@ -199,10 +201,12 @@ func (a *NilnessAnalysis) analyze(fn *ssa.Function, withdrawn []bool) FunctionNi
 		NilWitness:      make([]bool, resultCount),
 	}
 	lastIsError := resultCount >= 2 && isErrorType(results.At(resultCount-1).Type())
+	lastIsBool := resultCount >= 2 && isBoolType(results.At(resultCount-1).Type())
 
 	merged := nilnessValue{n: nilnessNonNil}
 
-	sawReturn := a.walkReturnSites(body, a.boundaryAxioms(body, withdrawn), func(ret *ssa.Return, dominating []nilnessFact, values []nilnessValue) {
+	axioms := a.boundaryAxioms(body, withdrawn)
+	sawReturn := a.walkReturnSites(body, axioms, func(ret *ssa.Return, dominating []nilnessFact, values []nilnessValue) {
 		// NilWithNilError needs a provable (nil, nil): a bare inherited
 		// witness is usually a lost error correlation.
 		for i := range values {
@@ -220,6 +224,9 @@ func (a *NilnessAnalysis) analyze(fn *ssa.Function, withdrawn []bool) FunctionNi
 					facts.NilWitness[i] = true
 				}
 			}
+		}
+		if lastIsBool && !a.presentWhenTrue(ret.Results[:resultCount-1], ret.Results[resultCount-1], dominating, axioms, make(map[*ssa.Phi]bool)) {
+			facts.NilWhenPresent = true
 		}
 		if resultCount == 1 {
 			merged = meetNilness(merged, values[0])

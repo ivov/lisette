@@ -11926,3 +11926,42 @@ fn test(make: MatrixFactory<int>) -> int { make()[0][0] }
     )
     .assert_no_errors();
 }
+
+#[test]
+fn go_ast_visitor_rejects_bare_node() {
+    infer(
+        r#"
+    import "go:go/ast"
+
+    struct Printer {}
+
+    impl Printer {
+      fn Visit(self, node: ast.Node) -> Option<ast.Visitor> {
+        Some(self)
+      }
+    }
+
+    fn walk() {
+      ast.Walk(Printer {}, ast.NewIdent("x"))
+    }
+        "#,
+    )
+    .assert_infer_code_count("interface_not_implemented", 2);
+}
+
+#[test]
+fn go_proxy_from_environment_rejects_bare_url() {
+    infer(
+        r#"
+    import "go:net/http"
+
+    fn proxy(req: mut Ref<http.Request>) -> string {
+      match http.ProxyFromEnvironment(req) {
+        Ok(u) => u.String(),
+        Err(e) => e.Error(),
+      }
+    }
+        "#,
+    )
+    .assert_infer_code("member_not_found");
+}

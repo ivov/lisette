@@ -22,8 +22,22 @@ pub fn Forward() -> (Option<mut Ref<Item>>, bool)
 /// A forwarded map lookup collapses to Option<T>.
 pub fn Get(key: string) -> Option<int>
 
+/// A map lookup that can give a nil value with a true bool stays a tuple.
+pub fn GetItem(key: string) -> (Option<mut Ref<Item>>, bool)
+
+/// A nil check before the true bool collapses to Option<T>.
+#[go(comma_ok)]
+pub fn GetPresentItem(key: string) -> Option<mut Ref<Item>>
+
 /// A forwarded call to a presence function collapses to Option<T>.
 pub fn GetTwice(key: string) -> Option<int>
+
+/// A nil check cannot prove that an interface holds no nil pointer, so the value stays a tuple.
+pub fn GuardShape(s: Option<Shape>) -> (Option<Shape>, bool)
+
+/// A value set with its true bool on one branch collapses to Option<T>.
+#[go(comma_ok)]
+pub fn Guarded(flag: bool) -> Option<mut Ref<Item>>
 
 /// A pinned symbol collapses the function types inside it.
 pub fn Iterate() -> Option<fn() -> Option<int>>
@@ -40,11 +54,18 @@ pub fn NilPresent() -> (Option<mut Ref<Item>>, bool)
 /// A pinned bool the analysis cannot follow collapses to Option<T>.
 pub fn Pinned(key: string) -> Option<int>
 
+/// A pinned nilable value with a true bool collapses to Option<T>.
+#[go(comma_ok)]
+pub fn PinnedItem(key: string) -> Option<mut Ref<Item>>
+
 /// A forwarded bool that is not the callee's last result stays a tuple.
 pub fn Prefix() -> (int, bool)
 
 /// A defined bool type stays a tuple.
 pub fn ReadStatus() -> (int, Status)
+
+/// An interface that holds a nil pointer with a true bool stays a tuple.
+pub fn TypedNil() -> (Option<Shape>, bool)
 
 /// A bool the analysis cannot follow stays a tuple.
 pub fn Unknown(key: string) -> (int, bool)
@@ -73,6 +94,13 @@ pub struct Item {
   pub N: int,
 }
 
+pub interface ItemSource {
+  #[go(comma_ok)]
+  fn Lookup(key: string) -> Option<mut Ref<Item>>
+}
+
+pub type MapSource
+
 pub struct Options {
   pub Resolve: Option<fn(string) -> (string, bool)>,
   pub Lookup: Option<fn(string) -> Option<string>>,
@@ -82,10 +110,16 @@ pub interface Reader {
   fn Next() -> Option<fn() -> Option<int>>
 }
 
+pub interface Shape {
+  fn Area() -> int
+}
+
 pub interface Source {
   fn Next() -> (int, bool)
   fn Peek() -> Option<int>
 }
+
+pub type Square
 
 #[go(incomparable)]
 pub type Stack<T>
@@ -97,6 +131,16 @@ impl Cursor {
   fn Next(self) -> (int, bool)
   /// A method follows the pinned interface method it implements, so it collapses to Option<T>.
   fn Peek(self) -> Option<int>
+}
+
+impl MapSource {
+  /// A method follows the pinned interface method it implements, so it collapses to Option<T>.
+  #[go(comma_ok)]
+  fn Lookup(self, key: string) -> Option<mut Ref<Item>>
+}
+
+impl Square {
+  fn Area(self: Ref<Square>) -> int
 }
 
 impl<T> Stack<T> {

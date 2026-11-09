@@ -10,9 +10,11 @@
       "bool_as_presence": {
         "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/multi_return_with_bool": [
           "Flags.Read",
+          "ItemSource.Lookup",
           "Iterate",
           "Options.Lookup",
           "Pinned",
+          "PinnedItem",
           "Reader.Next",
           "Source.Peek"
         ]

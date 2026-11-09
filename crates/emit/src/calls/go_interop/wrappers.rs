@@ -227,6 +227,30 @@ impl Planner<'_> {
             .collect()
     }
 
+    fn fallible_payload_bridge(
+        &self,
+        source: &FunctionLayout,
+        target: &FunctionLayout,
+    ) -> Option<super::GoResultBridge> {
+        if target.return_abi != CallableReturnAbi::Value
+            || !matches!(
+                source.return_abi.lowered(),
+                Some(LoweredReturnAbi::Result { .. } | LoweredReturnAbi::Partial { .. })
+            )
+        {
+            return None;
+        }
+        let [source_payload] = source.results.as_slice() else {
+            return None;
+        };
+        let target_payload = target.results.first()?.payload()?;
+        let value = resolve_layout_bridge(self, source_payload, target_payload);
+        (!value.is_identity()).then_some(super::GoResultBridge::Payload {
+            value,
+            error: LayoutBridge::Identity,
+        })
+    }
+
     pub(crate) fn plan_function_result_bridge(
         &mut self,
         statements: &mut Vec<Statement>,
@@ -271,6 +295,17 @@ impl Planner<'_> {
             let raw = self.hoist_tmp_value_statement(statements, "raw", call);
             let value = self.plan_layout_bridge(statements, GoExpression::identifier(raw), &bridge);
             statements.push(plain_return(value));
+            return;
+        }
+        if let Some(bridge) = self.fallible_payload_bridge(source, target) {
+            let (body, _) = self.lower_abi_wrapping(
+                call,
+                &source.return_abi,
+                &source.result_type,
+                Some(bridge),
+                WrapperTarget::Return,
+            );
+            statements.extend(body);
             return;
         }
         if !source.return_abi.same_logical_contract(&target.return_abi) {

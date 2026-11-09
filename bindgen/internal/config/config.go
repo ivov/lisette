@@ -58,6 +58,8 @@ type TypeOverrides struct {
 	// NilableCallbackParam does the same for the parameters of a function
 	// type, by name or position, keyed by the symbol that holds the type.
 	NilableCallbackParam map[string]map[string][]string `json:"nilable_callback_param"`
+	// NilableCallbackReturn does the same as NilableReturn for a function type.
+	NilableCallbackReturn map[string][]string `json:"nilable_callback_return"`
 	// NonNilableParam cancels a wrong inference, keeping a parameter `Ref<T>`
 	// when the analysis proved it accepts nil.
 	NonNilableParam map[string]map[string][]string `json:"non_nilable_param"`
@@ -112,23 +114,27 @@ func LoadConfig(configPath string, defaultData []byte) (Config, error) {
 	return cfg, nil
 }
 
-// InheritBoolAsPresence adds the stdlib pins to a third-party config, so that
-// a third-party type that implements e.g. context.Context keeps its shape.
-func (c *Config) InheritBoolAsPresence(data []byte) error {
+// InheritStdlibContracts adds the stdlib interface pins to a third-party config.
+func (c *Config) InheritStdlibContracts(data []byte) error {
 	var other Config
 	if err := json.Unmarshal(data, &other); err != nil {
 		return err
 	}
-	for pkg, names := range other.Overrides.Types.BoolAsPresence {
-		if _, ok := c.Overrides.Types.BoolAsPresence[pkg]; ok {
+	inheritPackages(&c.Overrides.Types.BoolAsPresence, other.Overrides.Types.BoolAsPresence)
+	inheritPackages(&c.Overrides.Types.NilableParam, other.Overrides.Types.NilableParam)
+	return nil
+}
+
+func inheritPackages[V any](own *map[string]V, stdlib map[string]V) {
+	for pkg, entry := range stdlib {
+		if _, ok := (*own)[pkg]; ok {
 			continue
 		}
-		if c.Overrides.Types.BoolAsPresence == nil {
-			c.Overrides.Types.BoolAsPresence = make(map[string][]string)
+		if *own == nil {
+			*own = make(map[string]V)
 		}
-		c.Overrides.Types.BoolAsPresence[pkg] = names
+		(*own)[pkg] = entry
 	}
-	return nil
 }
 
 // matchKind selects how a configured name list is matched against a query name.
@@ -318,6 +324,13 @@ func (c *Config) NilableCallbackParams(pkg, name string) []string {
 		return nil
 	}
 	return nestedParams(c.Overrides.Types.NilableCallbackParam, pkg, name)
+}
+
+func (c *Config) IsNilableCallbackReturn(pkg, name string) bool {
+	if c == nil {
+		return false
+	}
+	return matchField(c.Overrides.Types.NilableCallbackReturn, pkg, name, matchExact)
 }
 
 // NonNilableParams returns the list of parameter names that must stay `Ref<>`

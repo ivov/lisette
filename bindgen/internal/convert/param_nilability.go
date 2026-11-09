@@ -35,6 +35,7 @@ type ParameterNilability struct {
 type declaredShapes struct {
 	methods   map[string][]*types.Signature // by method name
 	funcTypes []*types.Signature            // e.g. http.HandlerFunc
+	pinned    []*types.Named                // interfaces with a nilable_param pin
 }
 
 func newParameterNilability(nilness *NilnessAnalysis, bound []*types.Func, pkgs []*packages.Package) *ParameterNilability {
@@ -42,7 +43,7 @@ func newParameterNilability(nilness *NilnessAnalysis, bound []*types.Func, pkgs 
 		nilness:  nilness,
 		cfg:      nilness.cfg,
 		verdicts: make(map[*types.Func]FunctionParamNilability),
-		shapes:   indexDeclaredShapes(pkgs),
+		shapes:   indexDeclaredShapes(pkgs, nilness.cfg),
 	}
 	for _, fn := range bound {
 		analysis.record(fn)
@@ -52,7 +53,7 @@ func newParameterNilability(nilness *NilnessAnalysis, bound []*types.Func, pkgs 
 
 // indexDeclaredShapes walks the roots and everything they import, since the
 // shape is usually declared in another package.
-func indexDeclaredShapes(pkgs []*packages.Package) declaredShapes {
+func indexDeclaredShapes(pkgs []*packages.Package, cfg *config.Config) declaredShapes {
 	out := declaredShapes{methods: make(map[string][]*types.Signature)}
 	seen := make(map[string]bool)
 
@@ -71,10 +72,15 @@ func indexDeclaredShapes(pkgs []*packages.Package) declaredShapes {
 			}
 			switch underlying := obj.Type().Underlying().(type) {
 			case *types.Interface:
+				pinned := false
 				for method := range underlying.Methods() {
 					if sig, ok := method.Type().(*types.Signature); ok {
 						out.methods[method.Name()] = append(out.methods[method.Name()], sig)
+						pinned = pinned || len(pinnedIndices(cfg, method)) > 0
 					}
+				}
+				if named, ok := obj.Type().(*types.Named); ok && pinned {
+					out.pinned = append(out.pinned, named)
 				}
 			case *types.Signature:
 				out.funcTypes = append(out.funcTypes, underlying)
@@ -88,6 +94,54 @@ func indexDeclaredShapes(pkgs []*packages.Package) declaredShapes {
 		visit(pkg)
 	}
 	return out
+}
+
+func pinnedIndices(cfg *config.Config, method *types.Func) []int {
+	sig, ok := method.Type().(*types.Signature)
+	if !ok || sig.Recv() == nil || method.Pkg() == nil {
+		return nil
+	}
+	named, ok := types.Unalias(sig.Recv().Type()).(*types.Named)
+	if !ok {
+		return nil
+	}
+	names := cfg.NilableParams(method.Pkg().Path(), named.Obj().Name()+"."+method.Name())
+	var indices []int
+	for index := range sig.Params().Len() {
+		if name := sig.Params().At(index).Name(); name != "" && slices.Contains(names, name) {
+			indices = append(indices, index)
+		}
+	}
+	return indices
+}
+
+// inheritsPin: only the declaring type counts, so embedding and generic types
+// need their own pins.
+func (a *ParameterNilability) inheritsPin(fn *types.Func, index int) bool {
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok || sig.Recv() == nil || len(a.shapes.pinned) == 0 {
+		return false
+	}
+	receiver := types.Unalias(sig.Recv().Type())
+	if pointer, ok := receiver.(*types.Pointer); ok {
+		receiver = types.Unalias(pointer.Elem())
+	}
+	named, ok := receiver.(*types.Named)
+	if !ok || named.TypeParams().Len() > 0 || types.IsInterface(named) {
+		return false
+	}
+	for _, pinned := range a.shapes.pinned {
+		iface, ok := pinned.Underlying().(*types.Interface)
+		if !ok || pinned.TypeParams().Len() > 0 || !types.Implements(types.NewPointer(named), iface) {
+			continue
+		}
+		for method := range iface.Methods() {
+			if method.Name() == fn.Name() && slices.Contains(pinnedIndices(a.cfg, method), index) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // hasDeclaredShape tests signature identity rather than `types.Implements` on
@@ -174,7 +228,7 @@ func (a *ParameterNilability) configOptional(fn *types.Func, index int) (optiona
 	if cfg.IsNonNilableReturn(pkg, key) {
 		return false, true
 	}
-	if name != "" && slices.Contains(cfg.NilableParams(pkg, key), name) {
+	if name != "" && slices.Contains(cfg.NilableParams(pkg, key), name) || a.inheritsPin(fn, index) {
 		return true, true
 	}
 	return false, false

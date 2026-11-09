@@ -70,7 +70,7 @@ func RunPkgs(args []string, defaultCfgJSON, stdlibCfgJSON []byte) {
 
 	cfg, err := config.LoadConfig(*configPath, defaultCfgJSON)
 	if err == nil {
-		err = cfg.InheritBoolAsPresence(stdlibCfgJSON)
+		err = cfg.InheritStdlibContracts(stdlibCfgJSON)
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bindgen: failed to load config: %v\n", err)

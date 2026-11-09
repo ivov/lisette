@@ -76,6 +76,11 @@ func maybeWrapNilableFunction(t types.Type, lisetteType string, conv *Converter,
 
 func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]bool, conv *Converter, obj types.Object, qualifiedName string, substitutions map[string]string) TypeResult {
 	results := signature.Results()
+	callbackPinned := false
+	if obj == nil && conv != nil {
+		callbackPinned = conv.nilableCallbackReturn
+		conv.nilableCallbackReturn = false
+	}
 
 	if results.Len() == 0 {
 		if fn, ok := obj.(*types.Func); ok && isBuiltinDivergenceAxiom(fn) {
@@ -137,6 +142,10 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 		if !partial {
 			demoted = nilWitnessDemotions(conv, obj, results, 0, results.Len()-1, qualifiedName, true)
 		}
+		pinned := !partial && (callbackPinned || obj != nil && conv.cfg.ShouldWrapNilableReturn(conv.currentPkgPath, qualifiedName))
+		if pinned {
+			demoted = demoteNilableSlots(results, results.Len()-1, demoted)
+		}
 		inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, obj, qualifiedName, substitutions, demoted)
 		innerType := inner.LisetteType
 		if inner.SkipReason != nil {
@@ -149,14 +158,14 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 		return TypeResult{
 			LisetteType:          wrapped,
 			SkipReason:           inner.SkipReason,
-			NilableReturnApplied: inner.NilableReturnApplied,
+			NilableReturnApplied: inner.NilableReturnApplied || pinned,
 		}
 	}
 
 	// (T, bool) -> Option<T> when bool indicates presence/success
 	if types.Identical(last.Type(), types.Typ[types.Bool]) {
-		if shouldConvertToOption(conv, obj, qualifiedName) {
-			nilable := results.Len() == 2 && isDemotableGoType(results.At(0).Type())
+		nilable := results.Len() == 2 && isDemotableGoType(results.At(0).Type())
+		if shouldConvertToOption(conv, obj, qualifiedName) && (!nilable || !nilWhenPresent(conv, obj, qualifiedName)) {
 			inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, obj, qualifiedName, substitutions, nil)
 			innerType := inner.LisetteType
 			if inner.SkipReason != nil {
@@ -176,6 +185,26 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 		demoted = unprovenDemotions(conv, results, qualifiedName, demoted)
 	}
 	return collectReturnTypes(results, 0, results.Len(), seen, conv, obj, qualifiedName, substitutions, demoted)
+}
+
+func demoteNilableSlots(results *types.Tuple, end int, demoted map[int]bool) map[int]bool {
+	for i := 0; i < end; i++ {
+		if isDemotableGoType(results.At(i).Type()) {
+			if demoted == nil {
+				demoted = make(map[int]bool)
+			}
+			demoted[i] = true
+		}
+	}
+	return demoted
+}
+
+func nilWhenPresent(conv *Converter, obj types.Object, qualifiedName string) bool {
+	if presencePinned(conv, obj, qualifiedName) {
+		return false
+	}
+	facts, ok := conv.nilness.Function(obj)
+	return ok && facts.HasBody && facts.NilWhenPresent
 }
 
 // unprovenDemotions: no fact proves a value next to a trailing bool non-nil,
@@ -280,6 +309,18 @@ func (c *Converter) contractPresence(fn *types.Func) (bool, bool) {
 		}
 	}
 	return presence, found
+}
+
+func presencePinned(conv *Converter, obj types.Object, qualifiedName string) bool {
+	if conv.cfg.HasBoolAsPresence(conv.currentPkgPath, qualifiedName) {
+		return true
+	}
+	fn, ok := obj.(*types.Func)
+	if !ok {
+		return false
+	}
+	presence, found := conv.contractPresence(fn)
+	return found && presence
 }
 
 func (c *Converter) pinnedPresence(method *types.Func) bool {

@@ -171,6 +171,7 @@ type Converter struct {
 	divergence               *DivergenceAnalysis          // nil falls back to the curated never_return map
 	symbolKey                string                       // config key for function types, which have none
 	inSignature              bool                         // set while a function type converts; nested ones read no callback pins
+	nilableCallbackReturn    bool                         // set while a pinned function type converts its result
 	uniformPointerTypes      map[string]bool              // lazily computed; types with 10+ single-pointer-return methods
 	manyToOneTypes           map[string]bool              // lazily computed; return types with 10+ free functions
 	majorityPointerTypes     map[string]bool              // lazily computed; types where ≥20 methods return same *T (>90%)
