@@ -6,8 +6,9 @@ package main
 
 import (
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"go/ast"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func main() {

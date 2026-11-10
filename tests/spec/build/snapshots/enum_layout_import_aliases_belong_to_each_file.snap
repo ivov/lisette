@@ -6,8 +6,9 @@ package main
 
 import (
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	timer "time"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func second(event Event) (timer.Time, bool) {

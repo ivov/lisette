@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-assertion_line: 3714
 description: |
   
   import "go:errors"
@@ -38,11 +37,12 @@ package main
 
 import (
 	"errors"
-	lisette "github.com/ivov/lisette/prelude"
 	"go/importer"
 	"go/token"
 	"io"
 	"strings"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func refuse(path string) (io.ReadCloser, error) {

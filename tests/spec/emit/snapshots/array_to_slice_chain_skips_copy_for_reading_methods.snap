@@ -20,9 +20,10 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"slices"
 	"strings"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func reads(arr [3]int) (bool, bool, lisette.Option[int], int, bool) {

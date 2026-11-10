@@ -17,8 +17,9 @@ package main
 
 import (
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func test(name string) {

@@ -25,8 +25,9 @@ package main
 
 import (
 	"crypto/x509"
-	lisette "github.com/ivov/lisette/prelude"
 	"net/url"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 type URLs = []lisette.Option[*url.URL]

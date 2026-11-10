@@ -34,9 +34,10 @@ package main
 import (
 	"errors"
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"text/template"
 	"text/template/parse"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func root(t *template.Template) (*parse.ListNode, error) {

@@ -24,8 +24,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 const File = "nums.json"

@@ -28,6 +28,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/user/myproject/consumer"
 	"github.com/user/myproject/retained"
 )

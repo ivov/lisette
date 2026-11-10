@@ -19,8 +19,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"strings"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func main() {

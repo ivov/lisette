@@ -19,8 +19,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func apply(f func(string) lisette.Option[string], key string) string {

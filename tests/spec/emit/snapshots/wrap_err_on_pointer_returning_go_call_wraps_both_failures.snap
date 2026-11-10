@@ -19,8 +19,9 @@ package main
 import (
 	"errors"
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func open(path string) (*os.File, error) {

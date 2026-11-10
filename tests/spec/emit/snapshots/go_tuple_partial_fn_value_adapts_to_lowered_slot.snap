@@ -15,8 +15,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"mime"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func useFn(f func(string) lisette.Partial[lisette.Tuple2[string, map[string]string], error]) {

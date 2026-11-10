@@ -13,8 +13,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"unicode"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func main() {

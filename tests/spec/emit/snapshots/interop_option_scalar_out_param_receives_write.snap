@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-assertion_line: 3740
 description: |
   
   import "go:os/exec"
@@ -26,9 +25,10 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"os/exec"
 	"syscall"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func main() {

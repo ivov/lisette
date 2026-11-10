@@ -29,9 +29,10 @@ package main
 import (
 	"errors"
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"io/fs"
 	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 const File = "tasks.json"
