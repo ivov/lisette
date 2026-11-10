@@ -1,0 +1,97 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  import "go:strconv"
+  
+  fn logged(e: string) -> string {
+    fmt.Println("logged:", e)
+    e
+  }
+  
+  fn load(ok: bool) -> Result<int, string> {
+    if ok { Ok(1) } else { Err("boom") }
+  }
+  
+  fn wildcard(ok: bool) -> Result<int, string> {
+    let n = load(ok).map_err(logged).map_err(|_| "failed")?
+    Ok(n)
+  }
+  
+  fn unread(ok: bool) -> Result<int, string> {
+    let n = load(ok).map_err(logged).map_err(|_e| "failed")?
+    Ok(n)
+  }
+  
+  fn go_call(s: string) -> Result<int, string> {
+    let n = strconv.Atoi(s).map_err(|e| logged(e.Error())).map_err(|_| "not a number")?
+    Ok(n)
+  }
+  
+  fn test() {
+    if wildcard(false) != Err("failed") { panic("the last mapper should win") }
+    if unread(false) != Err("failed") { panic("an unread parameter should not bind") }
+    if go_call("x") != Err("not a number") { panic("a word should fail") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func logged(e string) string {
+	fmt.Println("logged:", e)
+	return e
+}
+
+func load(ok bool) lisette.Result[int, string] {
+	if ok {
+		return lisette.MakeResultOk[int, string](1)
+	}
+	return lisette.MakeResultErr[int, string]("boom")
+}
+
+func wildcard(ok bool) lisette.Result[int, string] {
+	check := load(ok)
+	if check.Tag != lisette.ResultOk {
+		logged(check.ErrVal)
+		return lisette.MakeResultErr[int, string]("failed")
+	}
+	n := check.OkVal
+	return lisette.MakeResultOk[int, string](n)
+}
+
+func unread(ok bool) lisette.Result[int, string] {
+	check := load(ok)
+	if check.Tag != lisette.ResultOk {
+		logged(check.ErrVal)
+		return lisette.MakeResultErr[int, string]("failed")
+	}
+	n := check.OkVal
+	return lisette.MakeResultOk[int, string](n)
+}
+
+func goCall(s string) lisette.Result[int, string] {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		logged(err.Error())
+		return lisette.MakeResultErr[int, string]("not a number")
+	}
+	return lisette.MakeResultOk[int, string](n)
+}
+
+func test() {
+	if wildcard(false) != lisette.MakeResultErr[int, string]("failed") {
+		panic("the last mapper should win")
+	}
+	if unread(false) != lisette.MakeResultErr[int, string]("failed") {
+		panic("an unread parameter should not bind")
+	}
+	if goCall("x") != lisette.MakeResultErr[int, string]("not a number") {
+		panic("a word should fail")
+	}
+}

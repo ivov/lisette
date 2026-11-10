@@ -5031,6 +5031,151 @@ fn test() {
 }
 
 #[test]
+fn map_err_propagate_on_tagged_results_maps_the_error_on_failure() {
+    let input = r#"
+import "go:strconv"
+
+enum Failure {
+  Io(string),
+  Parse(error),
+}
+
+fn failed(message: string) -> string {
+  f"failed: {message}"
+}
+
+fn load(ok: bool) -> Result<(int, string), string> {
+  if ok { Ok((1, "one")) } else { Err("boom") }
+}
+
+fn named(ok: bool) -> Result<int, string> {
+  let (n, _) = load(ok).map_err(failed)?
+  Ok(n)
+}
+
+fn variant(ok: bool) -> Result<int, Failure> {
+  let (n, _) = load(ok).map_err(Failure.Io)?
+  Ok(n)
+}
+
+fn lambda(ok: bool) -> Result<int, string> {
+  let (n, _) = load(ok).map_err(|e| f"loading: {e}")?
+  Ok(n)
+}
+
+fn chained(ok: bool) -> Result<int, string> {
+  let (n, _) = load(ok).map_err(|e| f"loading: {e}").map_err(failed)?
+  Ok(n)
+}
+
+fn local(ok: bool) -> Result<int, string> {
+  let result = load(ok)
+  let (n, _) = result.map_err(failed)?
+  Ok(n)
+}
+
+fn discarded(ok: bool) -> Result<(), string> {
+  let _ = load(ok).map_err(failed)?
+  Ok(())
+}
+
+fn go_call(s: string) -> Result<int, Failure> {
+  let n = strconv.Atoi(s).map_err(Failure.Parse)?
+  Ok(n)
+}
+
+fn test() {
+  if named(true).unwrap_or(0) != 1 { panic("an ok result should pass") }
+  if named(false) != Err("failed: boom") { panic("a named mapper should run") }
+  if variant(false).is_ok() { panic("a variant mapper should fail") }
+  if lambda(false) != Err("loading: boom") { panic("a lambda mapper should run") }
+  if chained(false) != Err("failed: loading: boom") { panic("chained mappers should run in order") }
+  if local(false) != Err("failed: boom") { panic("a local result should map") }
+  if discarded(false).is_ok() { panic("a discarded result should fail") }
+  if go_call("x").is_ok() { panic("a word should fail") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_err_propagate_keeps_the_prelude_call_for_a_field_or_bound_method() {
+    let input = r#"
+struct Handler {
+  map: fn(string) -> string,
+  label: string,
+}
+
+impl Handler {
+  fn load(self: mut Ref<Handler>, ok: bool) -> Result<int, string> {
+    self.map = |e: string| f"replaced {e}"
+    if ok { Ok(1) } else { Err("boom") }
+  }
+
+  fn describe(self, e: string) -> string {
+    f"{self.label}: {e}"
+  }
+
+  fn through_field(self: mut Ref<Handler>, ok: bool) -> Result<int, string> {
+    let n = self.load(ok).map_err(self.map)?
+    Ok(n)
+  }
+
+  fn through_method(self: mut Ref<Handler>, ok: bool) -> Result<int, string> {
+    let n = self.load(ok).map_err(self.describe)?
+    Ok(n)
+  }
+}
+
+fn test() {
+  let mut h = Handler { map: |e: string| f"original {e}", label: "h" }
+  if h.through_field(false) != Err("replaced boom") { panic("the field is read after the call") }
+  if h.through_method(false) != Err("h: boom") { panic("the method should run") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_err_propagate_runs_a_mapper_whose_result_the_next_mapper_ignores() {
+    let input = r#"
+import "go:fmt"
+import "go:strconv"
+
+fn logged(e: string) -> string {
+  fmt.Println("logged:", e)
+  e
+}
+
+fn load(ok: bool) -> Result<int, string> {
+  if ok { Ok(1) } else { Err("boom") }
+}
+
+fn wildcard(ok: bool) -> Result<int, string> {
+  let n = load(ok).map_err(logged).map_err(|_| "failed")?
+  Ok(n)
+}
+
+fn unread(ok: bool) -> Result<int, string> {
+  let n = load(ok).map_err(logged).map_err(|_e| "failed")?
+  Ok(n)
+}
+
+fn go_call(s: string) -> Result<int, string> {
+  let n = strconv.Atoi(s).map_err(|e| logged(e.Error())).map_err(|_| "not a number")?
+  Ok(n)
+}
+
+fn test() {
+  if wildcard(false) != Err("failed") { panic("the last mapper should win") }
+  if unread(false) != Err("failed") { panic("an unread parameter should not bind") }
+  if go_call("x") != Err("not a number") { panic("a word should fail") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn ok_or_propagate_tests_the_source_in_place() {
     let input = r#"
 import "go:errors"
