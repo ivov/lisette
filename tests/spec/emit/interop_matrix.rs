@@ -3851,6 +3851,34 @@ fn main() {
 }
 
 #[test]
+fn interop_ast_visitor_adapter_peels_aliased_parameter() {
+    let input = r#"
+import "go:go/ast"
+
+type MaybeNode = Option<ast.Node>
+
+struct Counter { nodes: int, ends: int }
+
+impl Counter {
+  fn Visit(self: mut Ref<Counter>, node: MaybeNode) -> Option<ast.Visitor> {
+    match node {
+      Some(_) => self.nodes += 1,
+      None => self.ends += 1,
+    }
+    Some(self)
+  }
+}
+
+fn main() {
+  let mut counter = Counter { nodes: 0, ends: 0 }
+  ast.Walk(&counter, ast.NewIdent("x"))
+  if counter.nodes != 1 || counter.ends != 1 { panic("visitor did not see the end of the children") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn interop_proxy_callback_bridges_optional_url() {
     let input = r#"
 import "go:net/http"
