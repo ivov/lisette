@@ -19,7 +19,8 @@ impl Planner<'_> {
                 }
                 let is_public = matches!(visibility, Visibility::Public);
                 let function = item.function_definition_view();
-                let doc_comment = emit_doc(doc);
+                let go_name = self.pick_go_function_name(function, false, is_public);
+                let doc_comment = emit_item_doc(doc, name, &go_name);
                 let qualified_name = self.facts.qualified_current(name);
 
                 if self.facts.is_test(&qualified_name) {
@@ -37,7 +38,7 @@ impl Planner<'_> {
                 fields,
                 ..
             } => {
-                let doc_comment = emit_doc(doc);
+                let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
                 let code = self.emit_struct_definition(name, generics, fields, attributes);
                 format!("{}{}", doc_comment, code)
             }
@@ -48,7 +49,7 @@ impl Planner<'_> {
                 generics,
                 ..
             } => {
-                let doc_comment = emit_doc(doc);
+                let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
                 let code = self
                     .emit_enum(name, generics, attributes)
                     .unwrap_or_default();
@@ -68,7 +69,7 @@ impl Planner<'_> {
                 {
                     return String::new();
                 }
-                let doc_comment = emit_doc(doc);
+                let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
                 let code = self.emit_type_alias(name, generics, ty);
                 format!("{}{}", doc_comment, code)
             }
@@ -81,7 +82,7 @@ impl Planner<'_> {
                 visibility,
                 ..
             } => {
-                let doc_comment = emit_doc(doc);
+                let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
                 let is_public = matches!(visibility, Visibility::Public);
                 let code =
                     self.emit_interface(name, method_signatures, parents, generics, is_public);
@@ -108,8 +109,12 @@ impl Planner<'_> {
                 let Some(expression) = expression.value() else {
                     return String::new();
                 };
-                let doc_comment = emit_doc(doc);
                 let code = self.emit_const(identifier, expression, ty);
+                let go_name = self
+                    .scope
+                    .bound_go_identifier(identifier)
+                    .expect("`emit_const` binds the identifier");
+                let doc_comment = emit_item_doc(doc, identifier, go_name.spelling());
                 format!("{}{}", doc_comment, code)
             }
             _ => String::new(),
@@ -190,20 +195,34 @@ impl Planner<'_> {
 }
 
 pub(crate) fn emit_doc(doc: &Option<String>) -> String {
-    match doc {
-        Some(text) => {
-            let lines: Vec<String> = text
-                .split('\n')
-                .map(|line| {
-                    if line.is_empty() {
-                        "//".to_string()
-                    } else {
-                        format!("// {}", line)
-                    }
-                })
-                .collect();
-            format!("{}\n", lines.join("\n"))
-        }
-        None => String::new(),
+    doc.as_deref().map_or_else(String::new, doc_lines)
+}
+
+pub(crate) fn emit_item_doc(doc: &Option<String>, lisette_name: &str, go_name: &str) -> String {
+    let Some(text) = doc else {
+        return String::new();
+    };
+    let first_word = text
+        .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+        .next()
+        .unwrap_or_default();
+    if first_word == lisette_name && lisette_name != go_name {
+        doc_lines(&format!("{go_name}{}", &text[first_word.len()..]))
+    } else {
+        doc_lines(text)
     }
+}
+
+fn doc_lines(text: &str) -> String {
+    let lines: Vec<String> = text
+        .split('\n')
+        .map(|line| {
+            if line.is_empty() {
+                "//".to_string()
+            } else {
+                format!("// {}", line)
+            }
+        })
+        .collect();
+    format!("{}\n", lines.join("\n"))
 }

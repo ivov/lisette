@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
-use syntax::go_names::ENUM_TAG_FIELD;
+use syntax::ast::StructFieldDefinition;
+use syntax::go_names::{ENUM_TAG_FIELD, struct_field_go_name};
 use syntax::types::Type;
 
 use crate::names::packages::PackageUse;
@@ -70,10 +71,10 @@ pub(crate) fn member_go_name(
     owner: &Type,
     member: &str,
     is_exported: bool,
-    is_embedded: bool,
+    embedded: Option<&StructFieldDefinition>,
 ) -> String {
-    if is_embedded {
-        escape_keyword(member).into_owned()
+    if let Some(field) = embedded {
+        struct_field_go_name(field, false).into_owned()
     } else if is_exported {
         exported_member(owner, member)
     } else {

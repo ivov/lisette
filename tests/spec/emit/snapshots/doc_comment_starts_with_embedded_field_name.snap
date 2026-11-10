@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct len { items: int }
+  
+  struct Outer {
+    /// len holds the items.
+    embed len,
+  }
+  
+  fn items(outer: Outer) -> int {
+    let inner = outer.len
+    inner.items
+  }
+---
+package main
+
+type len_ struct {
+	items int
+}
+
+type Outer struct {
+	// len_ holds the items.
+	len_
+}
+
+func items(outer Outer) int {
+	inner := outer.len_
+	return inner.items
+}

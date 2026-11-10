@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::expressions::top_items::emit_doc;
+use crate::expressions::top_items::emit_item_doc;
 use syntax::ast::{Expression, FunctionDefinitionView, Generic, Pattern, Visibility};
 use syntax::types::{Type, type_args_match_params};
 
@@ -61,7 +61,7 @@ impl Planner<'_> {
         let should_export = is_public || self.method_needs_export(function.name);
         let is_free_function = !has_self || is_ufcs;
 
-        let code = if is_free_function {
+        let (go_name, code) = if is_free_function {
             let free_name = self
                 .free_method_base_name(ctx.receiver_name, function.name, is_public)
                 .into();
@@ -77,15 +77,21 @@ impl Planner<'_> {
                 generics,
                 ..function
             };
-            self.emit_function(free_function, None, false, owner)
+            (
+                self.pick_go_function_name(free_function, false, false),
+                self.emit_function(free_function, None, false, owner),
+            )
         } else {
-            self.emit_function(function, Some(ctx.ty), should_export, None)
+            (
+                self.pick_go_function_name(function, true, should_export),
+                self.emit_function(function, Some(ctx.ty), should_export, None),
+            )
         };
 
         if code.is_empty() {
             return None;
         }
-        let method_doc_comment = emit_doc(doc);
+        let method_doc_comment = emit_item_doc(doc, function.name, &go_name);
         Some(format!("{}{}", method_doc_comment, code))
     }
 

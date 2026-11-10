@@ -197,9 +197,22 @@ pub fn struct_field_go_name(
     if struct_field_is_exported(field, struct_forces_export) {
         Cow::Owned(escape_keyword(&snake_to_camel(&field.name)).into_owned())
     } else if field.is_embedded() {
-        escape_keyword(&field.name)
+        embedded_field_go_name(field)
     } else {
         Cow::Owned(escape_keyword(&snake_to_lower_camel(&field.name)).into_owned())
+    }
+}
+
+fn embedded_field_go_name(field: &StructFieldDefinition) -> Cow<'_, str> {
+    let declared_in_lisette = field
+        .ty
+        .strip_refs()
+        .get_qualified_id()
+        .is_some_and(|id| !id.starts_with("prelude.") && !id.starts_with(GO_IMPORT_PREFIX));
+    if declared_in_lisette {
+        escape_type_name(&field.name)
+    } else {
+        escape_keyword(&field.name)
     }
 }
 

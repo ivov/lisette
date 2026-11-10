@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  /// len counts items.
+  struct len { items: int }
+---
+package main
+
+// len_ counts items.
+type len_ struct {
+	items int
+}

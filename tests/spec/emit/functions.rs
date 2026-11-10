@@ -1433,6 +1433,18 @@ pub fn greet(name: string) -> string {
 }
 
 #[test]
+fn doc_comment_starts_with_function_name() {
+    let input = r#"
+/// find_user returns the user id.
+pub fn find_user() -> int { 1 }
+
+/// finder keeps its spelling.
+pub fn find() -> int { 2 }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn pipeline_with_builtin_slice_length() {
     let input = r#"
 fn test() -> int {

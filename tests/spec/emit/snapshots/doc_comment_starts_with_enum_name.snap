@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  /// cap is a size class.
+  enum cap { Small, Large }
+---
+package main
+
+func Makecap_Small() cap_ {
+	return cap_{Tag: capSmall}
+}
+
+func Makecap_Large() cap_ {
+	return cap_{Tag: capLarge}
+}
+
+// cap_ is a size class.
+type capTag uint8
+
+const (
+	capSmall capTag = iota
+	capLarge
+)
+
+type cap_ struct {
+	Tag capTag
+}

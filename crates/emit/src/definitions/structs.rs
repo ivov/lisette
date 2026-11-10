@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
 use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
-use crate::expressions::top_items::emit_doc;
+use crate::expressions::top_items::emit_item_doc;
 use crate::names::go_name::{self, GeneratedPackage, prelude_qualifier};
 use crate::names::packages::PackageRequirements;
 use crate::plan::local::GoIdentifier;
@@ -208,10 +208,15 @@ impl Planner<'_> {
         struct_attrs: &[Attribute],
     ) -> (String, StringerField) {
         if f.is_embedded() {
-            let field_with_doc = format!("{}{}", emit_doc(&f.doc), self.use_go_type(&f.ty));
+            let go_name = struct_field_go_name(f, struct_attrs);
+            let field_with_doc = format!(
+                "{}{}",
+                emit_item_doc(&f.doc, &f.name, &go_name),
+                self.use_go_type(&f.ty)
+            );
             let stringer_field = StringerField {
                 source_name: f.name.to_string(),
-                go_name: struct_field_go_name(f, struct_attrs),
+                go_name,
                 is_function: is_raw_function_type(&f.ty),
             };
             return (field_with_doc, stringer_field);
@@ -229,7 +234,11 @@ impl Planner<'_> {
             format!("{} {}", field_name, self.use_go_type(&f.ty))
         };
 
-        let field_with_doc = format!("{}{}", emit_doc(&f.doc), field_definition);
+        let field_with_doc = format!(
+            "{}{}",
+            emit_item_doc(&f.doc, &f.name, &field_name),
+            field_definition
+        );
 
         let stringer_field = StringerField {
             source_name: f.name.to_string(),
