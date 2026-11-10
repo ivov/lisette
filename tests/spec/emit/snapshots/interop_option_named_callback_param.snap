@@ -37,8 +37,9 @@ package main
 
 import (
 	"errors"
-	"example.com/lib"
 	"strconv"
+
+	"example.com/lib"
 )
 
 func lookup(path string) (string, error) {

@@ -30,9 +30,10 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"net/http"
 	"net/url"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func hasUser(u url.URL) bool {

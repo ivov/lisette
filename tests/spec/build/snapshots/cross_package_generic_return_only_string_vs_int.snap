@@ -51,6 +51,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/user/myproject/lib"
 )
 

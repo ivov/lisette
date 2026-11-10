@@ -10,8 +10,9 @@ package main
 
 import (
 	"errors"
-	lisette "github.com/ivov/lisette/prelude"
 	"net/http/cookiejar"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func give[T any](f func(lisette.Option[*cookiejar.Options]) T) func(lisette.Option[*cookiejar.Options]) T {

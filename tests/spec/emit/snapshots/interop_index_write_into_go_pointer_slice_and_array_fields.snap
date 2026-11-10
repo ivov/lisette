@@ -23,9 +23,10 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"os"
 	"regexp/syntax"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func main() {

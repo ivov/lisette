@@ -42,8 +42,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func lookup(m map[string]int, key string) string {

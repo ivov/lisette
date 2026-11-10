@@ -22,8 +22,9 @@ description: |
 package main
 
 import (
-	"example.com/aws"
 	"fmt"
+
+	"example.com/aws"
 	lisette "github.com/ivov/lisette/prelude"
 )
 

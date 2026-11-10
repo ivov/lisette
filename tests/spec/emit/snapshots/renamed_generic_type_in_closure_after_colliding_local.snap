@@ -25,8 +25,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	sc "strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func make_[sc_2 any](x sc_2) func() sc_2 {

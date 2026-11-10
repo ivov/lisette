@@ -5,8 +5,9 @@ source: tests/spec/build/mod.rs
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"io"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 type Reader1 struct{}

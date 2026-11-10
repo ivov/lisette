@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/user/myproject/pb"
 )
 
@@ -34,9 +35,10 @@ func Make() E {
 package pb
 
 import (
+	"net/http"
+
 	lisette "github.com/ivov/lisette/prelude"
 	"github.com/user/myproject/out"
-	"net/http"
 )
 
 type E struct {

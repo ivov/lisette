@@ -27,8 +27,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"go/ast"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 type MaybeNode = lisette.Option[ast.Node]

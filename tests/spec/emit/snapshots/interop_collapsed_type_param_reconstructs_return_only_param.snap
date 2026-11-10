@@ -13,8 +13,9 @@ description: |
 package main
 
 import (
-	"example.com/pick"
 	"fmt"
+
+	"example.com/pick"
 )
 
 func main() {

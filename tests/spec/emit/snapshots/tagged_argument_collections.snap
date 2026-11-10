@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/functions.rs
-assertion_line: 3839
 description: |
   
   import "go:mime/multipart"
@@ -25,8 +24,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"mime/multipart"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func file(n int) *multipart.FileHeader {

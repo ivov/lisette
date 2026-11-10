@@ -6,6 +6,7 @@ package logic
 
 import (
 	"fmt"
+
 	"github.com/user/myproject/models"
 )
 
@@ -26,6 +27,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/user/myproject/logic"
 	"github.com/user/myproject/models"
 )

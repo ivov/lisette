@@ -19,9 +19,10 @@ package main
 
 import (
 	"errors"
-	lisette "github.com/ivov/lisette/prelude"
 	"strings"
 	"text/template"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func fail(s string) (string, error) {

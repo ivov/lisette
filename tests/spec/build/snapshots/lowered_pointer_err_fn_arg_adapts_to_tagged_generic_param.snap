@@ -5,8 +5,9 @@ source: tests/spec/build/mod.rs
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func Parser(arg int) (int, *strconv.NumError) {

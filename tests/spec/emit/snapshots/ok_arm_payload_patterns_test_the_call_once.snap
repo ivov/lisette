@@ -47,8 +47,9 @@ package main
 
 import (
 	"errors"
-	lisette "github.com/ivov/lisette/prelude"
 	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func pair(a string) (lisette.Tuple2[int, int], error) {

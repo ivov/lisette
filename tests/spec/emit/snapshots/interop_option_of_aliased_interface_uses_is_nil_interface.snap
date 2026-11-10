@@ -15,8 +15,9 @@ description: |
 package main
 
 import (
-	"example.com/evts"
 	"fmt"
+
+	"example.com/evts"
 	lisette "github.com/ivov/lisette/prelude"
 )
 

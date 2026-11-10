@@ -33,8 +33,9 @@ package main
 import (
 	"bufio"
 	"errors"
-	lisette "github.com/ivov/lisette/prelude"
 	"strings"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 type SplitOut = lisette.Result[lisette.Tuple2[int, []byte], error]

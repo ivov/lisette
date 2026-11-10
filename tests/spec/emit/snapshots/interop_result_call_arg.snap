@@ -19,8 +19,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func apply(f func(string) lisette.Result[int, error], s string) (int, error) {

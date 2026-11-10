@@ -16,8 +16,9 @@ package main
 
 import (
 	"fmt"
-	foo "github.com/user/myproject/http"
 	"net/http"
+
+	foo "github.com/user/myproject/http"
 )
 
 func main() {
