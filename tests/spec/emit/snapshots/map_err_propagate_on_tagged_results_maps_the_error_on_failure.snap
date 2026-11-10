@@ -1,0 +1,193 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  enum Failure {
+    Io(string),
+    Parse(error),
+  }
+  
+  fn failed(message: string) -> string {
+    f"failed: {message}"
+  }
+  
+  fn load(ok: bool) -> Result<(int, string), string> {
+    if ok { Ok((1, "one")) } else { Err("boom") }
+  }
+  
+  fn named(ok: bool) -> Result<int, string> {
+    let (n, _) = load(ok).map_err(failed)?
+    Ok(n)
+  }
+  
+  fn variant(ok: bool) -> Result<int, Failure> {
+    let (n, _) = load(ok).map_err(Failure.Io)?
+    Ok(n)
+  }
+  
+  fn lambda(ok: bool) -> Result<int, string> {
+    let (n, _) = load(ok).map_err(|e| f"loading: {e}")?
+    Ok(n)
+  }
+  
+  fn chained(ok: bool) -> Result<int, string> {
+    let (n, _) = load(ok).map_err(|e| f"loading: {e}").map_err(failed)?
+    Ok(n)
+  }
+  
+  fn local(ok: bool) -> Result<int, string> {
+    let result = load(ok)
+    let (n, _) = result.map_err(failed)?
+    Ok(n)
+  }
+  
+  fn discarded(ok: bool) -> Result<(), string> {
+    let _ = load(ok).map_err(failed)?
+    Ok(())
+  }
+  
+  fn go_call(s: string) -> Result<int, Failure> {
+    let n = strconv.Atoi(s).map_err(Failure.Parse)?
+    Ok(n)
+  }
+  
+  fn test() {
+    if named(true).unwrap_or(0) != 1 { panic("an ok result should pass") }
+    if named(false) != Err("failed: boom") { panic("a named mapper should run") }
+    if variant(false).is_ok() { panic("a variant mapper should fail") }
+    if lambda(false) != Err("loading: boom") { panic("a lambda mapper should run") }
+    if chained(false) != Err("failed: loading: boom") { panic("chained mappers should run in order") }
+    if local(false) != Err("failed: boom") { panic("a local result should map") }
+    if discarded(false).is_ok() { panic("a discarded result should fail") }
+    if go_call("x").is_ok() { panic("a word should fail") }
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func MakeFailureIo(arg0 string) Failure {
+	return Failure{Tag: FailureIo, Io: arg0}
+}
+
+func MakeFailureParse(arg0 error) Failure {
+	return Failure{Tag: FailureParse, Parse: arg0}
+}
+
+type FailureTag uint8
+
+const (
+	FailureIo FailureTag = iota
+	FailureParse
+)
+
+type Failure struct {
+	Tag   FailureTag
+	Io    string
+	Parse error
+}
+
+func failed(message string) string {
+	return "failed: " + message
+}
+
+func load(ok bool) lisette.Result[lisette.Tuple2[int, string], string] {
+	if ok {
+		return lisette.MakeResultOk[lisette.Tuple2[int, string], string](lisette.MakeTuple2[int, string](1, "one"))
+	}
+	return lisette.MakeResultErr[lisette.Tuple2[int, string], string]("boom")
+}
+
+func named(ok bool) lisette.Result[int, string] {
+	check := load(ok)
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](failed(check.ErrVal))
+	}
+	n := check.OkVal.First
+	return lisette.MakeResultOk[int, string](n)
+}
+
+func variant(ok bool) lisette.Result[int, Failure] {
+	check := load(ok)
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, Failure](MakeFailureIo(check.ErrVal))
+	}
+	n := check.OkVal.First
+	return lisette.MakeResultOk[int, Failure](n)
+}
+
+func lambda(ok bool) lisette.Result[int, string] {
+	check := load(ok)
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string]("loading: " + check.ErrVal)
+	}
+	n := check.OkVal.First
+	return lisette.MakeResultOk[int, string](n)
+}
+
+func chained(ok bool) lisette.Result[int, string] {
+	check := load(ok)
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](failed("loading: " + check.ErrVal))
+	}
+	n := check.OkVal.First
+	return lisette.MakeResultOk[int, string](n)
+}
+
+func local(ok bool) lisette.Result[int, string] {
+	result := load(ok)
+	if result.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](failed(result.ErrVal))
+	}
+	tmp := result.OkVal
+	n := tmp.First
+	return lisette.MakeResultOk[int, string](n)
+}
+
+func discarded(ok bool) lisette.Result[struct{}, string] {
+	check := load(ok)
+	if check.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[struct{}, string](failed(check.ErrVal))
+	}
+	return lisette.MakeResultOk[struct{}, string](struct{}{})
+}
+
+func goCall(s string) lisette.Result[int, Failure] {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return lisette.MakeResultErr[int, Failure](MakeFailureParse(err))
+	}
+	return lisette.MakeResultOk[int, Failure](n)
+}
+
+func test() {
+	if named(true).UnwrapOr(0) != 1 {
+		panic("an ok result should pass")
+	}
+	if named(false) != lisette.MakeResultErr[int, string]("failed: boom") {
+		panic("a named mapper should run")
+	}
+	if variant(false).IsOk() {
+		panic("a variant mapper should fail")
+	}
+	if lambda(false) != lisette.MakeResultErr[int, string]("loading: boom") {
+		panic("a lambda mapper should run")
+	}
+	if chained(false) != lisette.MakeResultErr[int, string]("failed: loading: boom") {
+		panic("chained mappers should run in order")
+	}
+	if local(false) != lisette.MakeResultErr[int, string]("failed: boom") {
+		panic("a local result should map")
+	}
+	if discarded(false).IsOk() {
+		panic("a discarded result should fail")
+	}
+	if goCall("x").IsOk() {
+		panic("a word should fail")
+	}
+}

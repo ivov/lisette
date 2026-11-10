@@ -1,0 +1,91 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct Handler {
+    map: fn(string) -> string,
+    label: string,
+  }
+  
+  impl Handler {
+    fn load(self: mut Ref<Handler>, ok: bool) -> Result<int, string> {
+      self.map = |e: string| f"replaced {e}"
+      if ok { Ok(1) } else { Err("boom") }
+    }
+  
+    fn describe(self, e: string) -> string {
+      f"{self.label}: {e}"
+    }
+  
+    fn through_field(self: mut Ref<Handler>, ok: bool) -> Result<int, string> {
+      let n = self.load(ok).map_err(self.map)?
+      Ok(n)
+    }
+  
+    fn through_method(self: mut Ref<Handler>, ok: bool) -> Result<int, string> {
+      let n = self.load(ok).map_err(self.describe)?
+      Ok(n)
+    }
+  }
+  
+  fn test() {
+    let mut h = Handler { map: |e: string| f"original {e}", label: "h" }
+    if h.through_field(false) != Err("replaced boom") { panic("the field is read after the call") }
+    if h.through_method(false) != Err("h: boom") { panic("the method should run") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Handler struct {
+	map_  func(string) string
+	label string
+}
+
+func (h *Handler) load(ok bool) lisette.Result[int, string] {
+	h.map_ = func(e string) string {
+		return "replaced " + e
+	}
+	if ok {
+		return lisette.MakeResultOk[int, string](1)
+	}
+	return lisette.MakeResultErr[int, string]("boom")
+}
+
+func (h Handler) describe(e string) string {
+	return h.label + ": " + e
+}
+
+func (h *Handler) throughField(ok bool) lisette.Result[int, string] {
+	check := lisette.ResultMapErr(h.load(ok), h.map_)
+	if check.Tag != lisette.ResultOk {
+		return check
+	}
+	n := check.OkVal
+	return lisette.MakeResultOk[int, string](n)
+}
+
+func (h *Handler) throughMethod(ok bool) lisette.Result[int, string] {
+	check := lisette.ResultMapErr(h.load(ok), h.describe)
+	if check.Tag != lisette.ResultOk {
+		return check
+	}
+	n := check.OkVal
+	return lisette.MakeResultOk[int, string](n)
+}
+
+func test() {
+	h := Handler{
+		map_: func(e string) string {
+			return "original " + e
+		},
+		label: "h",
+	}
+	if h.throughField(false) != lisette.MakeResultErr[int, string]("replaced boom") {
+		panic("the field is read after the call")
+	}
+	if h.throughMethod(false) != lisette.MakeResultErr[int, string]("h: boom") {
+		panic("the method should run")
+	}
+}

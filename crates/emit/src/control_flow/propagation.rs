@@ -4,6 +4,7 @@ use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition;
+use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate_ids};
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::calls::go_interop::{
     GoResultBridge, LoweredCall, is_nil, non_nil, unexpected_nil_error,
@@ -14,18 +15,20 @@ use crate::control_flow::fallible::{ConstructorKind, Fallible};
 use crate::definitions::functions::is_go_never;
 use crate::names::go_name::{GeneratedPackage, PRELUDE_ERROR_ID};
 use crate::patterns::matching::{
-    OptionFusePlan, PreludeVariant, ResultFusePlan, prelude_constructor,
+    FusedName, OptionFusePlan, PreludeVariant, ResultFusePlan, prelude_constructor,
 };
 use crate::plan::bodies::{
     Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, assign,
-    define,
+    define, effect_statement,
 };
-use crate::plan::go_expression::BinaryOp;
+use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
 use crate::plan::local::GoIdentifier;
-use crate::plan::values::GoExpression;
+use crate::plan::values::{GoExpression, Stability};
+use crate::state::bindings::InlineExpr;
 use crate::state::scope::PairStatusKind;
 use crate::types::go_type::GoType;
 use syntax::ast::Expression;
+use syntax::program::DotAccessResolution;
 use syntax::types::Type;
 
 pub(crate) fn plain_return(value: GoExpression) -> Statement {
@@ -39,6 +42,39 @@ pub(crate) enum ForwardedTail<'a> {
     ErrorCall(&'a Expression),
     /// A tagged `Result<(), E>`.
     TaggedResult(&'a Expression),
+}
+
+/// The `f` of `map_err(f)` when the error it builds can wait for the failure branch.
+pub(crate) enum ErrorMapper<'a> {
+    Lambda(MapLambda<'a>),
+    Function(&'a Expression),
+}
+
+impl ErrorMapper<'_> {
+    fn reads_error(&self) -> bool {
+        match self {
+            ErrorMapper::Lambda(lambda) => lambda.param.is_some(),
+            ErrorMapper::Function(_) => true,
+        }
+    }
+}
+
+/// A Go function name, perhaps qualified or instantiated, as opposed to an adapter literal.
+fn names_function(node: &GoExpressionNode) -> bool {
+    match node {
+        GoExpressionNode::Identifier(_) | GoExpressionNode::Qualified { .. } => true,
+        GoExpressionNode::Instantiation { base, .. } => names_function(base),
+        GoExpressionNode::Selector { base, .. } => {
+            matches!(base.as_ref(), GoExpressionNode::Type(_)) || names_function(base)
+        }
+        _ => false,
+    }
+}
+
+fn run_unread_error(setup: &mut Vec<Statement>, error: &GoExpression) {
+    if !error.effects().can_erase() {
+        setup.push(effect_statement(error.clone()));
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -112,6 +148,10 @@ impl Planner<'_> {
             return fused;
         }
         if let Some(fused) = self.try_lower_fused_option_propagate(expression, &fallible, target) {
+            return fused;
+        }
+        if let Some(fused) = self.try_lower_tagged_map_err_propagate(expression, &fallible, target)
+        {
             return fused;
         }
 
@@ -411,15 +451,15 @@ impl Planner<'_> {
             return None;
         }
         enum Mapped<'a> {
-            MapErr(ResultFusePlan<'a>, MapLambda<'a>),
+            MapErr(ResultFusePlan<'a>, Vec<ErrorMapper<'a>>),
             OkOr(OptionFusePlan<'a>, &'a Expression),
             OkOrElse(OptionFusePlan<'a>, MapLambda<'a>),
         }
-        let mapped = if let Some((fuse, map)) = self.map_err_call(expression) {
+        let mapped = if let Some((fuse, mappers)) = self.map_err_call(expression) {
             if !fuse.carries_payload() && !matches!(target, PropagateTarget::Discard) {
                 return None;
             }
-            Mapped::MapErr(fuse, map)
+            Mapped::MapErr(fuse, mappers)
         } else if let Some((receiver, [error])) = self.prelude_method_call(expression, "ok_or") {
             Mapped::OkOr(self.option_fuse_plan(receiver)?, error)
         } else if let Some((receiver, [function])) =
@@ -440,13 +480,13 @@ impl Planner<'_> {
 
         let (mut statements, failure, payload, late_binding, mut failure_setup, error) =
             match mapped {
-                Mapped::MapErr(fuse, map) => {
+                Mapped::MapErr(fuse, mappers) => {
                     let has_nil_guard = fuse.has_nil_guard();
                     let pair = fuse.bind(self, slot, None);
                     let failure = pair.failure_condition();
                     let status = pair.status_identifier().clone();
                     let mut failure_setup = Vec::new();
-                    if has_nil_guard && map.param.is_some() {
+                    if has_nil_guard && mappers[0].reads_error() {
                         failure_setup.push(
                             LoweredStatement::If(IfPlan::plain(
                                 is_nil(GoExpression::identifier(status.clone())),
@@ -461,18 +501,12 @@ impl Planner<'_> {
                             .into(),
                         );
                     }
-                    let (body_setup, error) = self.with_binding_frame(|this| {
-                        if let Some(param) = map.param {
-                            this.scope.bind_identifier(
-                                param.name,
-                                param.binding.as_slice(),
-                                status.clone(),
-                            );
-                        }
-                        this.lower_composite_value(map.body, ExpressionContext::value())
-                            .into_parts()
-                    });
-                    failure_setup.extend(body_setup);
+                    let error = self.apply_error_mappers(
+                        &mut failure_setup,
+                        &mappers,
+                        GoExpression::identifier(status),
+                        Some(Stability::Fixed),
+                    );
                     let payload = pair.payload();
                     (
                         pair.statements,
@@ -538,16 +572,218 @@ impl Planner<'_> {
         Some((statements, value))
     }
 
-    /// `call.map_err(|e| ..)` on a call whose Go result can be tested in place.
+    /// `call.map_err(f)`, perhaps chained, on a call whose Go result can be tested in place.
     fn map_err_call<'a>(
         &self,
         expression: &'a Expression,
-    ) -> Option<(ResultFusePlan<'a>, MapLambda<'a>)> {
-        let (receiver, [function]) = self.prelude_method_call(expression, "map_err")? else {
+    ) -> Option<(ResultFusePlan<'a>, Vec<ErrorMapper<'a>>)> {
+        let (receiver, mappers) = self.error_mapper_chain(expression)?;
+        Some((self.result_fuse_plan(receiver)?, mappers))
+    }
+
+    /// The source under `source.map_err(f).map_err(g)`, with the mappers in the order they run.
+    fn error_mapper_chain<'a>(
+        &self,
+        expression: &'a Expression,
+    ) -> Option<(&'a Expression, Vec<ErrorMapper<'a>>)> {
+        let mut mappers = Vec::new();
+        let mut source = expression;
+        while let Some((receiver, [function])) = self.prelude_method_call(source, "map_err") {
+            let Some(mapper) = self.error_mapper(function) else {
+                break;
+            };
+            mappers.push(mapper);
+            source = receiver;
+        }
+        if mappers.is_empty() {
+            return None;
+        }
+        mappers.reverse();
+        Some((source, mappers))
+    }
+
+    /// A mapper that can run in the failure branch alone: a plain lambda or a safe name.
+    fn error_mapper<'a>(&self, function: &'a Expression) -> Option<ErrorMapper<'a>> {
+        if let Some(lambda) = map_lambda(function) {
+            return Some(ErrorMapper::Lambda(lambda));
+        }
+        let named = match function.unwrap_parens() {
+            Expression::Identifier { .. } => true,
+            Expression::DotAccess { resolution, .. } => matches!(
+                resolution,
+                DotAccessResolution::PackageMember { .. }
+                    | DotAccessResolution::EnumVariant { .. }
+                    | DotAccessResolution::StaticMethod { .. }
+                    | DotAccessResolution::InstanceMethodValue { .. }
+            ),
+            _ => false,
+        };
+        (named && !self.callee_lowers_to_type_construction(function))
+            .then_some(ErrorMapper::Function(function))
+    }
+
+    /// Run `mappers` on `error` in turn, with their setup in `setup`.
+    fn apply_error_mappers(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        mappers: &[ErrorMapper<'_>],
+        error: GoExpression,
+        stability: Option<Stability>,
+    ) -> GoExpression {
+        let mut error = error;
+        let mut stability = stability;
+        for mapper in mappers {
+            error = match mapper {
+                ErrorMapper::Function(function) => {
+                    let (function_setup, function) = self
+                        .lower_composite_value(function, ExpressionContext::value())
+                        .into_parts();
+                    setup.extend(function_setup);
+                    let function = if names_function(function.node()) {
+                        function
+                    } else {
+                        GoExpression::identifier(
+                            self.hoist_tmp_value_statement(setup, "cb", function),
+                        )
+                    };
+                    GoExpression::call(function, vec![error])
+                }
+                ErrorMapper::Lambda(lambda) => {
+                    let (body_setup, body) = self.with_binding_frame(|this| {
+                        let mut lambda_setup = Vec::new();
+                        if let Some(param) = lambda.param {
+                            this.bind_mapped_error(
+                                &mut lambda_setup,
+                                param,
+                                lambda.body,
+                                &error,
+                                stability,
+                            );
+                        } else {
+                            run_unread_error(&mut lambda_setup, &error);
+                        }
+                        let (body_setup, body) = this
+                            .lower_composite_value(lambda.body, ExpressionContext::value())
+                            .into_parts();
+                        lambda_setup.extend(body_setup);
+                        (lambda_setup, body)
+                    });
+                    setup.extend(body_setup);
+                    body
+                }
+            };
+            stability = None;
+        }
+        error
+    }
+
+    /// Bind a lambda parameter to `error` in place when that is sound, else through a local.
+    fn bind_mapped_error(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        param: FusedName<'_>,
+        body: &Expression,
+        error: &GoExpression,
+        stability: Option<Stability>,
+    ) {
+        let ids = param.binding.as_slice();
+        let uses = analyze_inline_candidate_ids(ids, &[body]);
+        if uses == InlineDecision::Unused {
+            run_unread_error(setup, error);
+            return;
+        }
+        if let (Some(name), Some(Stability::Fixed)) = (error.as_identifier(), stability) {
+            self.scope.bind_identifier(param.name, ids, name.clone());
+            return;
+        }
+        let read_once = uses != InlineDecision::Keep;
+        if let Some(stability) = stability
+            && read_once
+            && stability.is_fixed()
+            && error.effects().can_duplicate()
+        {
+            self.scope
+                .bind_inline_expr(param.name, ids, InlineExpr::new(error.clone(), stability));
+            return;
+        }
+        let name = self.hoist_tmp_value_statement(setup, param.name, error.clone());
+        self.scope.bind_identifier(param.name, ids, name);
+    }
+
+    /// Test `source.map_err(f)?` on a tagged `Result` in place, so `f` runs on failure only.
+    fn try_lower_tagged_map_err_propagate(
+        &mut self,
+        expression: &Expression,
+        fallible: &Fallible,
+        target: PropagateTarget<'_>,
+    ) -> Option<(Vec<Statement>, Option<GoExpression>)> {
+        if !fallible.is_result() {
+            return None;
+        }
+        let (receiver, mappers) = self.error_mapper_chain(expression)?;
+        let receiver_ty = receiver.get_type();
+        if !self.facts.peel_alias(&receiver_ty).is_result() {
+            return None;
+        }
+        let plan = self.plan_operand(receiver, ExpressionContext::value());
+        let local = matches!(receiver.unwrap_parens(), Expression::Identifier { .. })
+            && plan.effects().can_duplicate();
+        let staged = self.plan_rests_in_stable_name(&plan);
+        let (mut statements, value) = plan.into_parts();
+        let (check, stability) = if staged {
+            (value, Stability::Fixed)
+        } else if local {
+            let stability = self.path_read_stability(&value);
+            (value, stability)
+        } else {
+            let check = self.hoist_tmp_value_statement(&mut statements, "check", value);
+            (GoExpression::identifier(check), Stability::Fixed)
+        };
+
+        let source_layout = self.value_layout(&receiver_ty, SlotOrigin::Lisette);
+        let ValueLayout::Fallible {
+            error: error_layout,
+            ..
+        } = source_layout.underlying()
+        else {
             return None;
         };
-        let map = map_lambda(function)?;
-        Some((self.result_fuse_plan(receiver)?, map))
+        let mut failure_setup = Vec::new();
+        let error_target = self.value_layout(error_layout.logical_type(), SlotOrigin::Lisette);
+        let (error_setup, error) = CoercionPlan::bridge(self, error_layout, &error_target).lower(
+            self,
+            GoExpression::value_field(check.clone(), "ErrVal".to_string()),
+        );
+        failure_setup.extend(error_setup);
+        let error = self.apply_error_mappers(&mut failure_setup, &mappers, error, Some(stability));
+        let (values_setup, failure_values) = self.propagate_failure_values(fallible, error);
+        failure_setup.extend(values_setup);
+        statements.push(
+            transition::tag_check(
+                GoExpression::binary(
+                    GoExpression::value_field(check.clone(), "Tag".to_string()),
+                    BinaryOp::Ne,
+                    GoExpression::generated(GeneratedPackage::Prelude, fallible.success_tag()),
+                ),
+                failure_setup,
+                failure_values,
+            )
+            .into(),
+        );
+
+        let ok_access = GoExpression::value_field(check, fallible.ok_field().to_string());
+        let target_layout = self.value_layout(fallible.ok_ty(), SlotOrigin::Lisette);
+        let coercion = CoercionPlan::bridge(
+            self,
+            source_layout
+                .payload()
+                .expect("propagation requires a payload layout"),
+            &target_layout,
+        );
+        let (setup, ok_access) = coercion.lower(self, ok_access);
+        statements.extend(setup);
+        let value = self.propagated_value(&mut statements, target, None, Some(ok_access));
+        Some((statements, value))
     }
 
     /// `r?; Ok(())` at the end of a body returns `r` itself, when `r` has the shape of the return.
