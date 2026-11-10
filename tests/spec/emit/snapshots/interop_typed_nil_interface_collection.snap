@@ -27,9 +27,10 @@ package main
 
 import (
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"go/ast"
 	"go/token"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func main() {

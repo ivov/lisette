@@ -23,8 +23,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"sort"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func give[T any](f func(int, func(int) int) T) func(int, func(int) int) T {

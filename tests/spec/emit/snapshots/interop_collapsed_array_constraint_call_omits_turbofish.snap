@@ -13,8 +13,9 @@ description: |
 package main
 
 import (
-	"example.com/arr"
 	"fmt"
+
+	"example.com/arr"
 )
 
 func main() {

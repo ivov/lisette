@@ -21,8 +21,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func consume(result lisette.Result[int, error]) int {

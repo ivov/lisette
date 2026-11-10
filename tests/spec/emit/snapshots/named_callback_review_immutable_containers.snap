@@ -28,9 +28,10 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"go/ast"
 	"go/doc"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func option(value lisette.Option[ast.Filter]) doc.Filter {

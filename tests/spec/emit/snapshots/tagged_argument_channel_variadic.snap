@@ -27,8 +27,9 @@ package main
 
 import (
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"time"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func channel(n int) <-chan time.Time {

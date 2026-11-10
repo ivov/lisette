@@ -26,8 +26,9 @@ package main
 
 import (
 	"bufio"
-	lisette "github.com/ivov/lisette/prelude"
 	"strings"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func split(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {

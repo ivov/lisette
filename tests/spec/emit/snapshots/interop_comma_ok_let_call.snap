@@ -16,8 +16,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"os"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func main() {

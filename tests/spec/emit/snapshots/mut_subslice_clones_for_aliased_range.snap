@@ -12,8 +12,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"slices"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 type Prefix = lisette.Range[int]

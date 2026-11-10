@@ -20,8 +20,9 @@ description: |
 package main
 
 import (
-	"example.com/migrate"
 	"fmt"
+
+	"example.com/migrate"
 	lisette "github.com/ivov/lisette/prelude"
 )
 

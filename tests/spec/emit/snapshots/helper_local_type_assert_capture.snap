@@ -23,8 +23,9 @@ package main
 
 import (
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"time"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func inspect(pair lisette.Tuple2[fmt.Stringer, int]) int {

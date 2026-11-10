@@ -39,8 +39,9 @@ package main
 import (
 	"errors"
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func optionTargets(db map[int]string) (string, bool) {

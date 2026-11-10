@@ -13,8 +13,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"slices"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func at(xs [3]int, i int) (int, bool) {

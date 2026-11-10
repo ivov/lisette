@@ -17,6 +17,7 @@ package main
 
 import (
 	"errors"
+
 	"example.com/promoted"
 	lisette "github.com/ivov/lisette/prelude"
 )

@@ -15,8 +15,9 @@ description: |
 package main
 
 import (
-	"example.com/aws"
 	"fmt"
+
+	"example.com/aws"
 )
 
 func main() {

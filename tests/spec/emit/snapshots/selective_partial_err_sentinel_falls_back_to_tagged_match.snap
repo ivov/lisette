@@ -15,9 +15,10 @@ description: |
 package main
 
 import (
+	"io"
+
 	"example.com/aws"
 	lisette "github.com/ivov/lisette/prelude"
-	"io"
 )
 
 func main() {

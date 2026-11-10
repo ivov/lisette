@@ -26,8 +26,9 @@ package main
 
 import (
 	"crypto/x509"
-	lisette "github.com/ivov/lisette/prelude"
 	"net/url"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 type Cert = x509.Certificate

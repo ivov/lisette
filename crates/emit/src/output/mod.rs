@@ -15,10 +15,19 @@ pub struct OutputFile {
     pub(crate) file_comment: Option<String>,
 }
 
+/// Sorted by group, then path: the order the import block renders.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct OutputImport {
+    pub group: ImportGroup,
     pub path: String,
     pub qualifier: Option<String>,
+}
+
+/// The standard library first, then a blank line, then the other imports.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum ImportGroup {
+    Standard,
+    Other,
 }
 
 impl OutputFile {
@@ -52,8 +61,14 @@ impl OutputFile {
             }
             entries => {
                 output.collect("import (");
-                for entry in entries {
-                    output.collect(format_import(&entry.path, entry.qualifier.as_deref()));
+                let groups = entries.chunk_by(|left, right| left.group == right.group);
+                for (index, group) in groups.enumerate() {
+                    if index > 0 {
+                        output.collect("");
+                    }
+                    for entry in group {
+                        output.collect(format_import(&entry.path, entry.qualifier.as_deref()));
+                    }
                 }
                 output.collect(")");
             }

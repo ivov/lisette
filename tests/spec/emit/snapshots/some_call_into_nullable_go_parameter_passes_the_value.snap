@@ -16,9 +16,10 @@ package main
 import (
 	"errors"
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"net/http"
 	"strings"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func main() {

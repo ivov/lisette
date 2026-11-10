@@ -28,8 +28,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"io"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 type Answer = lisette.Partial[int, error]

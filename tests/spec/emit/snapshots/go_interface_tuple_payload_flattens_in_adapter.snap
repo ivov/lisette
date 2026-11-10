@@ -28,9 +28,10 @@ package main
 import (
 	"bufio"
 	"errors"
-	lisette "github.com/ivov/lisette/prelude"
 	"net"
 	"net/http"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 type Conn struct{}

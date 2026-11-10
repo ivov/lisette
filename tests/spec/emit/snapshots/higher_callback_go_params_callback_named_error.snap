@@ -9,9 +9,10 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"io/fs"
 	"path/filepath"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func give[T any](f func(string, filepath.WalkFunc) T) func(string, filepath.WalkFunc) T {

@@ -1,0 +1,79 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  import "go:fmt"
+  import "go:go/ast"
+  type MaybeNode = Option<ast.Node>
+  type Maker = fn() -> MaybeNode
+  fn make() -> MaybeNode { None }
+  fn main() {
+    let maker: Maker = make
+    let stored: Unknown = maker
+    if fmt.Sprintf("%T", stored) != "func() ast.Node" { panic("stored signature") }
+    let Some(back) = assert_type<Maker>(stored) else { panic("assert") }
+    let None = back() else { panic("call after assert") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"go/ast"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type MaybeNode = lisette.Option[ast.Node]
+
+type Maker = func() MaybeNode
+
+func make_() ast.Node {
+	return nil
+}
+
+func main() {
+	var maker Maker = func() MaybeNode {
+		raw := make_()
+		option := lisette.OptionFromNilable[ast.Node](raw, lisette.IsNilInterface(raw))
+		return option
+	}
+	cb := maker
+	var adapted func() ast.Node
+	if cb != nil {
+		adapted = func() ast.Node {
+			res := cb()
+			if res.Tag == lisette.OptionSome {
+				return res.SomeVal
+			}
+			return nil
+		}
+	}
+	var stored any = adapted
+	if fmt.Sprintf("%T", stored) != "func() ast.Node" {
+		panic("stored signature")
+	}
+	src := lisette.AssertType[func() ast.Node](stored)
+	var adapted2 lisette.Option[Maker]
+	adapted2.Tag = src.Tag
+	if src.Tag == lisette.OptionSome {
+		cb2 := src.SomeVal
+		var adapted3 func() MaybeNode
+		if cb2 != nil {
+			adapted3 = func() MaybeNode {
+				raw2 := cb2()
+				option2 := lisette.OptionFromNilable[ast.Node](raw2, lisette.IsNilInterface(raw2))
+				return option2
+			}
+		}
+		adapted2.SomeVal = adapted3
+	}
+	if adapted2.Tag != lisette.OptionSome {
+		panic("assert")
+	}
+	back := adapted2.SomeVal
+	subject := back()
+	if subject.Tag != lisette.OptionNone {
+		panic("call after assert")
+	}
+}

@@ -16,8 +16,9 @@ description: |
 package main
 
 import (
-	"example.com/lib"
 	"fmt"
+
+	"example.com/lib"
 )
 
 type D struct {

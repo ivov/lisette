@@ -10,8 +10,9 @@ package main
 
 import (
 	"crypto/tls"
-	lisette "github.com/ivov/lisette/prelude"
 	"time"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func main() {

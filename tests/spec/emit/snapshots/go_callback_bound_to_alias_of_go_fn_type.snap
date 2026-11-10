@@ -17,9 +17,10 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"io/fs"
 	"path/filepath"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 type Walker = filepath.WalkFunc

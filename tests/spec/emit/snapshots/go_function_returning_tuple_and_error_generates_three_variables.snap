@@ -21,8 +21,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"net"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func main() {

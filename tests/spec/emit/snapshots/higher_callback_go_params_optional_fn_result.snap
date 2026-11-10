@@ -9,8 +9,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"reflect"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func give[T any](f func(any) T) func(any) T {

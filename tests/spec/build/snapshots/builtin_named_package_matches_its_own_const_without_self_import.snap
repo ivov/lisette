@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+
 	print_ "github.com/user/myproject/print"
 )
 

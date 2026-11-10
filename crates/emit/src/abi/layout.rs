@@ -656,20 +656,29 @@ impl Planner<'_> {
         // Immutable containers preserve each declared function slot. Reference and
         // collection storage requires a shared representation, not a copied bridge.
         match &mut layout {
-            ValueLayout::TaggedOption { payload, .. }
-            | ValueLayout::NullableOption { payload, .. }
-            | ValueLayout::PointerOption { payload, .. }
-                if is_prelude_container_type(&declaration) =>
-            {
+            ValueLayout::TaggedOption {
+                option_type: ty,
+                payload,
+            }
+            | ValueLayout::NullableOption {
+                option_type: ty,
+                payload,
+            }
+            | ValueLayout::PointerOption {
+                option_type: ty,
+                payload,
+            } if is_prelude_container_type(&declaration) => {
                 **payload = self.value_layout_with_declaration(
                     &ty.ok_type(),
                     origin.nested(),
                     &declaration.ok_type(),
                 );
             }
-            ValueLayout::Fallible { payload, error, .. }
-                if is_prelude_container_type(&declaration) =>
-            {
+            ValueLayout::Fallible {
+                fallible_type: ty,
+                payload,
+                error,
+            } if is_prelude_container_type(&declaration) => {
                 **payload = self.value_layout_with_declaration(
                     &ty.ok_type(),
                     origin.nested(),
@@ -792,18 +801,28 @@ impl Planner<'_> {
         let origin = self.function_type_origin(ty, origin);
         let resolved = self.facts.peel_alias(ty);
         if resolved != *ty {
-            let underlying = if alias_declaration.is_none()
-                && let Some(declared) = self.facts.alias_declaration(ty)
-            {
-                self.value_layout_with_declaration(&resolved, origin, declared)
+            let value_declaration = if alias_declaration.is_none() {
+                self.facts.alias_declaration(ty)
             } else {
-                self.value_layout_resolved(
-                    resolved,
+                None
+            };
+            let build = |origin| match value_declaration {
+                Some(declared) => self.value_layout_with_declaration(&resolved, origin, declared),
+                None => self.value_layout_resolved(
+                    resolved.clone(),
                     origin,
                     resolved_declaration.as_ref(),
                     alias_return,
-                )
+                ),
             };
+            let underlying = build(origin);
+            let declared_origin = self.function_type_origin(ty, SlotOrigin::Lisette);
+            if origin != declared_origin
+                && !self.is_go_named_function_type(ty)
+                && !underlying.same_representation(&build(declared_origin))
+            {
+                return underlying;
+            }
             return ValueLayout::Named {
                 named_type: ty.clone(),
                 underlying: Box::new(underlying),

@@ -5196,6 +5196,25 @@ fn main() {
 }
 
 #[test]
+fn function_alias_in_unknown_slot_asserts_its_go_signature() {
+    let input = r#"
+import "go:fmt"
+import "go:go/ast"
+type MaybeNode = Option<ast.Node>
+type Maker = fn() -> MaybeNode
+fn make() -> MaybeNode { None }
+fn main() {
+  let maker: Maker = make
+  let stored: Unknown = maker
+  if fmt.Sprintf("%T", stored) != "func() ast.Node" { panic("stored signature") }
+  let Some(back) = assert_type<Maker>(stored) else { panic("assert") }
+  let None = back() else { panic("call after assert") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn template_funcs_reports_errors_from_lisette_functions() {
     let input = r#"
 import "go:errors"

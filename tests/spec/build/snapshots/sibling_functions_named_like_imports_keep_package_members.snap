@@ -20,6 +20,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/user/myproject/other"
 )
 
@@ -32,8 +33,9 @@ func main() {
 package other
 
 import (
-	alpha_pkg "github.com/user/myproject/alpha"
 	time_pkg "time"
+
+	alpha_pkg "github.com/user/myproject/alpha"
 )
 
 func Run() int {

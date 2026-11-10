@@ -24,9 +24,10 @@ package main
 
 import (
 	"errors"
-	lisette "github.com/ivov/lisette/prelude"
 	"os"
 	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func openAndCheck(path, n string) (int, error) {

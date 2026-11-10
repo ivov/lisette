@@ -17,8 +17,9 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"path"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func useSplit(f func(string) lisette.Tuple2[string, string], p string) string {

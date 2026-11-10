@@ -13,9 +13,10 @@ description: |
 package main
 
 import (
-	lisette "github.com/ivov/lisette/prelude"
 	"iter"
 	"slices"
+
+	lisette "github.com/ivov/lisette/prelude"
 )
 
 func main() {

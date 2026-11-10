@@ -7,12 +7,13 @@ use syntax::program::{File, FileImport};
 
 use crate::names::packages::PackageRequirements;
 
-use super::OutputImport;
+use super::{ImportGroup, OutputImport};
 
 /// Source imports resolved once during the plan phase. Keeping each import as
 /// one record avoids synchronizing separate lookup and emission collections.
 #[derive(Default)]
 pub(crate) struct ImportPlan {
+    go_module: String,
     imports: Vec<PlannedImport>,
 }
 
@@ -58,7 +59,10 @@ impl ImportPlan {
             });
         }
 
-        Self { imports }
+        Self {
+            go_module: go_module.to_string(),
+            imports,
+        }
     }
 
     pub(crate) fn import_qualifier(&self, package: &str) -> Option<&str> {
@@ -92,17 +96,23 @@ impl ImportPlan {
         self,
         requirements: &PackageRequirements,
     ) -> (Vec<OutputImport>, Vec<LisetteDiagnostic>) {
+        let group = |path: &str| import_group(path, &self.go_module);
         let blank_imports = self
             .imports
             .iter()
             .filter(|import| import.qualifier.is_none())
             .map(|import| OutputImport {
+                group: group(&import.path),
                 path: import.path.clone(),
                 qualifier: None,
             });
-        let used_packages = requirements.iter().map(|package| OutputImport {
-            path: package.package().path().to_string(),
-            qualifier: Some(package.qualifier().to_string()),
+        let used_packages = requirements.iter().map(|package| {
+            let path = package.package().path();
+            OutputImport {
+                group: group(path),
+                path: path.to_string(),
+                qualifier: Some(package.qualifier().to_string()),
+            }
         });
         let mut entries: Vec<OutputImport> = blank_imports.chain(used_packages).collect();
         entries.sort();
@@ -167,6 +177,21 @@ fn import_go_path(import: &FileImport, go_module: &str) -> String {
         .strip_prefix(go_name::GO_IMPORT_PREFIX)
         .map(|s| s.to_string())
         .unwrap_or_else(|| format!("{}/{}", go_module, import.name))
+}
+
+/// The `goimports` rule: a standard library path has no dot in its first
+/// segment. The module's own packages can have that shape too, so they go
+/// with the other imports.
+fn import_group(path: &str, go_module: &str) -> ImportGroup {
+    let first_segment = path.split('/').next().unwrap_or(path);
+    let in_module = path
+        .strip_prefix(go_module)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'));
+    if first_segment.contains('.') || in_module {
+        ImportGroup::Other
+    } else {
+        ImportGroup::Standard
+    }
 }
 
 /// Renders one import spec, or a blank import for `None`.
@@ -270,9 +295,36 @@ import "three"
 
     fn imported(path: &str, qualifier: Option<&str>) -> OutputImport {
         OutputImport {
+            group: import_group(path, "module"),
             path: path.to_string(),
             qualifier: qualifier.map(str::to_string),
         }
+    }
+
+    #[test]
+    fn standard_imports_come_before_module_and_other_imports() {
+        let imports = imports_for(
+            "",
+            &[
+                ("module/store", "store"),
+                ("github.com/ivov/lisette/prelude", "lisette"),
+                ("net/http", "http"),
+                ("fmt", "fmt"),
+            ],
+        );
+        let groups: Vec<_> = imports
+            .iter()
+            .map(|import| (import.group, import.path.as_str()))
+            .collect();
+        assert_eq!(
+            groups,
+            vec![
+                (ImportGroup::Standard, "fmt"),
+                (ImportGroup::Standard, "net/http"),
+                (ImportGroup::Other, "github.com/ivov/lisette/prelude"),
+                (ImportGroup::Other, "module/store"),
+            ]
+        );
     }
 
     #[test]
