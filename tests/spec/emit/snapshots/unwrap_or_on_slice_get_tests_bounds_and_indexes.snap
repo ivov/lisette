@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn pick(xs: Slice<int>, i: int) -> int {
+    let v = xs.get(i).unwrap_or(-1)
+    v * 2
+  }
+  
+  fn second(names: Slice<string>) -> string {
+    names.get(1).unwrap_or("")
+  }
+  
+  fn first(xs: Array<int, 3>) -> int {
+    xs.get(0).unwrap_or(0)
+  }
+---
+package main
+
+func pick(xs []int, i int) int {
+	v := -1
+	if i >= 0 && i < len(xs) {
+		v = xs[i]
+	}
+	return v * 2
+}
+
+func second(names []string) string {
+	ret := ""
+	if len(names) > 1 {
+		ret = names[1]
+	}
+	return ret
+}
+
+func first(xs [3]int) int {
+	ret := 0
+	if len(xs) > 0 {
+		ret = xs[0]
+	}
+	return ret
+}

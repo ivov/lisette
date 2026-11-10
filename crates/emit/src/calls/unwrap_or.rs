@@ -1,17 +1,19 @@
+use super::NativeMethodCall;
 use crate::Planner;
+use crate::abi::layout::SlotOrigin;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::context::expression::ExpressionContext;
 use crate::patterns::matching::{
     FusedName, OptionArms, OptionFusePlan, ResultFusePlan, field_binding,
 };
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, define,
+    ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, assign, define,
 };
 use crate::plan::local::GoIdentifier;
 use crate::plan::placement::collapse_declared_temp;
-use crate::plan::placement::simple_assign;
 use crate::plan::values::{GoExpression, ValuePlan};
-use syntax::ast::{Expression, Literal};
+use crate::statements::let_binding::needs_explicit_type_declaration;
+use syntax::ast::{BinaryOperator, Expression, Literal};
 use syntax::types::Type;
 
 /// `call.unwrap_or(default)`, `call.map_or(default, |v| ..)`, or `call.map(|v| ..).unwrap_or(default)`.
@@ -55,6 +57,27 @@ fn is_literal_default(default: &Expression) -> bool {
         | Literal::Char(_) => true,
         Literal::Slice(items) => items.iter().all(is_literal_default),
         Literal::Imaginary(_) | Literal::FormatString(_) => false,
+    }
+}
+
+/// Reads and constants only, so the default can run before the bounds test.
+fn runs_no_code(expression: &Expression) -> bool {
+    match expression {
+        Expression::Literal {
+            literal: Literal::FormatString(_),
+            ..
+        } => false,
+        Expression::Literal { .. }
+        | Expression::Identifier { .. }
+        | Expression::Paren { .. }
+        | Expression::Unary { .. }
+        | Expression::DotAccess { .. }
+        | Expression::StructCall { .. } => expression.children().into_iter().all(runs_no_code),
+        Expression::Binary { operator, .. } => {
+            *operator != BinaryOperator::Pipeline
+                && expression.children().into_iter().all(runs_no_code)
+        }
+        _ => false,
     }
 }
 
@@ -150,7 +173,10 @@ impl Planner<'_> {
         }
         let fuse = if receiver_ty.is_option() {
             let fuse = self.option_fuse_plan(receiver)?;
-            if matches!(fuse, OptionFusePlan::Index { .. }) {
+            if matches!(fuse, OptionFusePlan::Index { .. })
+                && map.is_none()
+                && !runs_no_code(default)
+            {
                 return None;
             }
             FusedCall::Option(fuse)
@@ -188,32 +214,98 @@ impl Planner<'_> {
         &mut self,
         fuse: FusedCall<'_>,
         default: &Expression,
+        ty: &Type,
         slot: CommaOkValueSlot,
     ) -> (Vec<Statement>, GoIdentifier) {
         let mut bound = match fuse {
             FusedCall::Result(fuse) => fuse.bind(self, slot, None),
+            FusedCall::Option(OptionFusePlan::Index { call }) => {
+                return self.lower_defaulted_index_into_slot(&call, default, ty, slot);
+            }
             FusedCall::Option(fuse) => fuse.bind(self, slot),
         };
         let value = bound.writable_payload(self);
         let failure = bound.failure_condition();
         let mut statements = bound.statements;
         let literal_default = is_literal_default(default);
-        let value_plan = self.lower_value(default, ExpressionContext::value());
-        let default = if literal_default {
+        let origin = self.function_type_origin(ty, SlotOrigin::Lisette);
+        let value_plan = self.lower_value(
+            default,
+            ExpressionContext::value().with_function_slot_origin(origin),
+        );
+        let value_plan = if literal_default {
             value_plan
         } else {
             self.eager_operand(default, value_plan, "default")
         };
-        let (default_setup, default) = default.split_setup();
+        let (default_setup, default_value) = value_plan.into_parts();
         statements.extend(default_setup);
+        let default_value =
+            self.apply_type_coercion(&mut statements, Some(ty), default, default_value);
         statements.push(
             LoweredStatement::If(IfPlan {
                 initializer: failure.initializer,
                 condition: failure.condition,
                 then_body: LoweredBlock {
-                    statements: vec![
-                        simple_assign(&GoExpression::identifier(value.clone()), default).into(),
-                    ],
+                    statements: vec![assign(
+                        GoExpression::identifier(value.clone()),
+                        default_value,
+                    )],
+                },
+                else_arm: ElseArm::None,
+            })
+            .into(),
+        );
+        (statements, value)
+    }
+
+    /// `x := default` then `if i >= 0 && i < len(xs) { x = xs[i] }`.
+    fn lower_defaulted_index_into_slot(
+        &mut self,
+        call: &NativeMethodCall<'_>,
+        default: &Expression,
+        ty: &Type,
+        slot: CommaOkValueSlot,
+    ) -> (Vec<Statement>, GoIdentifier) {
+        let (mut statements, index) = self.lower_bounds_checked_index(call);
+        let value = match slot {
+            CommaOkValueSlot::Named(name) => name,
+            _ => self.fresh_pair_identifier(),
+        };
+        let origin = self.function_type_origin(ty, SlotOrigin::Lisette);
+        let plan = self.lower_value(
+            default,
+            ExpressionContext::value().with_function_slot_origin(origin),
+        );
+        let coercion = self.value_slot_coercion(default, ty);
+        let typed = (coercion.is_identity()
+            && self
+                .constant_needs_go_type(plan.expression().constant_kind(), ty)
+                .is_some())
+            || needs_explicit_type_declaration(self, default, ty);
+        let (setup, default) = plan.into_parts();
+        statements.extend(setup);
+        let (coercion_setup, default) = coercion.lower(self, default);
+        statements.extend(coercion_setup);
+        statements.push(if typed {
+            LoweredStatement::VarDecl {
+                name: value.clone(),
+                go_type: self.go_type(ty),
+                value: Some(default),
+            }
+            .into()
+        } else {
+            define(value.clone(), default)
+        });
+        statements.push(
+            LoweredStatement::If(IfPlan {
+                initializer: None,
+                condition: index.in_bounds,
+                then_body: LoweredBlock {
+                    statements: vec![assign(
+                        GoExpression::identifier(value.clone()),
+                        index.element,
+                    )],
                 },
                 else_arm: ElseArm::None,
             })
@@ -260,17 +352,17 @@ impl Planner<'_> {
             return Some(statements);
         }
         self.declare(go_name.spelling());
+        let ty = value.get_type();
         let Some(map) = call.map else {
             let slot = CommaOkValueSlot::Named(go_name.clone());
             return Some(
-                self.lower_default_into_slot(call.fuse, call.default, slot)
+                self.lower_default_into_slot(call.fuse, call.default, &ty, slot)
                     .0,
             );
         };
         let FusedCall::Option(fuse) = call.fuse else {
             unreachable!("a mapped chain is recognized on Option receivers only");
         };
-        let ty = value.get_type();
         let mut statements = vec![
             LoweredStatement::VarDecl {
                 name: go_name.clone(),
@@ -291,15 +383,15 @@ impl Planner<'_> {
         if let Some((setup, read)) = self.zero_defaulted_map_read(&call, &expression.get_type()) {
             return Some(ValuePlan::computed(setup, read));
         }
+        let ty = expression.get_type();
         let Some(map) = call.map else {
             let (statements, value) =
-                self.lower_default_into_slot(call.fuse, call.default, CommaOkValueSlot::Temp);
+                self.lower_default_into_slot(call.fuse, call.default, &ty, CommaOkValueSlot::Temp);
             return Some(ValuePlan::captured(statements, value));
         };
         let FusedCall::Option(fuse) = call.fuse else {
             unreachable!("a mapped chain is recognized on Option receivers only");
         };
-        let ty = expression.get_type();
         let (result_var, declaration) = self.operand_temp_declaration(&ty);
         let mut statements = vec![declaration];
         statements.extend(self.lower_mapped_default_into(

@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn fallback() -> int {
+    fmt.Println("fallback ran")
+    0
+  }
+  
+  fn pick(xs: Slice<int>, i: int) -> int {
+    xs.get(i).unwrap_or(fallback())
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func fallback() int {
+	fmt.Println("fallback ran")
+	return 0
+}
+
+func pick(xs []int, i int) int {
+	return lisette.SliceGet(xs, i).UnwrapOr(fallback())
+}

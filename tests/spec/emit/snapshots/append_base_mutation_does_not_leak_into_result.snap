@@ -14,18 +14,18 @@ description: |
 ---
 package main
 
-import (
-	"slices"
-
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "slices"
 
 func main() {
 	t := []int{1, 2}
 	t = append(t, 3)
 	u := append(slices.Clip(t), 7)
 	t[0] = 99
-	if lisette.SliceGet(u, 0).UnwrapOr(-1) != 1 {
+	ret := -1
+	if len(u) > 0 {
+		ret = u[0]
+	}
+	if ret != 1 {
 		panic("mutating the base must not write through to an append result")
 	}
 }

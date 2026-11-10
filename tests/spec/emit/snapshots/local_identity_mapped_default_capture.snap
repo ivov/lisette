@@ -21,14 +21,17 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func main() {
 	target := 7
 	f := func() int {
-		target2 := lisette.OptionMap(lisette.SliceGet([]int{1}, 0), func(ret int) int {
-			return ret + target
-		}).UnwrapOr(0)
+		var target2 int
+		recv := []int{1}
+		if len(recv) > 0 {
+			ret := recv[0]
+			target2 = ret + target
+		} else {
+			target2 = 0
+		}
 		read := func() int {
 			return target2
 		}
