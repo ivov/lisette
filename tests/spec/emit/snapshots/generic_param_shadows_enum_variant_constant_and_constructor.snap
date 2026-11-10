@@ -55,7 +55,7 @@ type Wrap struct {
 	Partial int
 }
 
-func describe[WrapFull_2 any](w Wrap, _ WrapFull_2) int {
+func describe[WrapFull2 any](w Wrap, _ WrapFull2) int {
 	switch w.Tag {
 	case WrapEmpty:
 		return 0
@@ -66,7 +66,7 @@ func describe[WrapFull_2 any](w Wrap, _ WrapFull_2) int {
 	}
 }
 
-func build[MakeWrapFull_2 any](_ MakeWrapFull_2) int {
+func build[MakeWrapFull2 any](_ MakeWrapFull2) int {
 	subject := MakeWrapFull(7)
 	if subject.Tag == WrapFull {
 		return subject.Full

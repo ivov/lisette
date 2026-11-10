@@ -23,8 +23,8 @@ func pair[T any](x T) (T, T) {
 func main() {
 	x := 3
 	stored := func(arg0 lisette.Option[*int]) lisette.Tuple2[lisette.Option[*int], lisette.Option[*int]] {
-		ret, ret_1 := pair[lisette.Option[*int]](arg0)
-		tup := lisette.MakeTuple2(ret, ret_1)
+		ret, ret2 := pair[lisette.Option[*int]](arg0)
+		tup := lisette.MakeTuple2(ret, ret2)
 		return tup
 	}
 	subject := stored(lisette.MakeOptionSome(&x))
@@ -34,16 +34,16 @@ func main() {
 	first := subject.First.SomeVal
 	second := subject.Second.SomeVal
 	inferred := func(arg0 lisette.Option[*int]) lisette.Tuple2[lisette.Option[*int], lisette.Option[*int]] {
-		ret_2, ret_3 := pair[lisette.Option[*int]](arg0)
-		tup_1 := lisette.MakeTuple2(ret_2, ret_3)
-		return tup_1
+		ret3, ret4 := pair[lisette.Option[*int]](arg0)
+		tup2 := lisette.MakeTuple2(ret3, ret4)
+		return tup2
 	}
-	subject_1 := lisette.OptionMap(lisette.MakeOptionSome(lisette.MakeOptionSome(&x)), inferred)
-	if !(subject_1.Tag == lisette.OptionSome && subject_1.SomeVal.First.Tag == lisette.OptionSome && subject_1.SomeVal.Second.Tag == lisette.OptionSome) {
+	subject2 := lisette.OptionMap(lisette.MakeOptionSome(lisette.MakeOptionSome(&x)), inferred)
+	if !(subject2.Tag == lisette.OptionSome && subject2.SomeVal.First.Tag == lisette.OptionSome && subject2.SomeVal.Second.Tag == lisette.OptionSome) {
 		panic("inferred generic tuple")
 	}
-	third := subject_1.SomeVal.First.SomeVal
-	fourth := subject_1.SomeVal.Second.SomeVal
+	third := subject2.SomeVal.First.SomeVal
+	fourth := subject2.SomeVal.Second.SomeVal
 	if first != &x || second != &x || third != &x || fourth != &x {
 		panic("generic tuple payloads")
 	}

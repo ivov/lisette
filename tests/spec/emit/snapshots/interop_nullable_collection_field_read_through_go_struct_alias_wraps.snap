@@ -54,11 +54,11 @@ func main() {
 	}
 	raw := cert.URIs
 	wrapped := make([]lisette.Option[*url.URL], len(raw))
-	for i_1, v_1 := range raw {
-		if v_1 != nil {
-			wrapped[i_1] = lisette.MakeOptionSome[*url.URL](v_1)
+	for i2, v2 := range raw {
+		if v2 != nil {
+			wrapped[i2] = lisette.MakeOptionSome[*url.URL](v2)
 		} else {
-			wrapped[i_1] = lisette.MakeOptionNone[*url.URL]()
+			wrapped[i2] = lisette.MakeOptionNone[*url.URL]()
 		}
 	}
 	urls := wrapped

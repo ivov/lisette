@@ -26,8 +26,8 @@ func main() {
 	var v int
 	if i > 0 {
 		if len(xs) > 0 {
-			v_2 := xs[0]
-			v = v_2 + 1
+			v3 := xs[0]
+			v = v3 + 1
 		} else {
 			v = 0
 		}

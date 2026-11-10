@@ -9250,8 +9250,8 @@ fn renamed_test_handle_param_is_the_assert_target() {
         .to_go();
 
     assert!(
-        go.contains("func checks(handle_1 testkit.TestContext)")
-            && go.contains("handle_1.FailAssert("),
+        go.contains("func checks(handle2 testkit.TestContext)")
+            && go.contains("handle2.FailAssert("),
         "a handle renamed away from a package function must be the assert target, got:\n{go}"
     );
     assert!(

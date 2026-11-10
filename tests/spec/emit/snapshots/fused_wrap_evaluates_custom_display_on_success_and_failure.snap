@@ -77,8 +77,8 @@ func main() {
 	if good != 1 || seen != 1 {
 		panic("success skipped display")
 	}
-	_, err_1 := parse("bad", label)
-	bad := err_1 == nil
+	_, err2 := parse("bad", label)
+	bad := err2 == nil
 	if bad || seen != 2 {
 		panic("failure skipped display")
 	}

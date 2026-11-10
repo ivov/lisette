@@ -17,13 +17,13 @@ func test() {
 	var tmp int
 	for {
 		x := 0
-		var tmp_1 int
+		var tmp2 int
 		if true {
 			tmp = 1
 			break
 		}
-		tmp_1 = 1
-		x = tmp_1
+		tmp2 = 1
+		x = tmp2
 		_ = x
 	}
 	_ = tmp

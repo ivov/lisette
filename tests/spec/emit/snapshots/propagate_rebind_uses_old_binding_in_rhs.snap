@@ -27,9 +27,9 @@ func parse(s string) (int, error) {
 
 func process() (int, error) {
 	x := 42
-	x_1, err := parse(fmt.Sprint(x))
+	x2, err := parse(fmt.Sprint(x))
 	if err != nil {
 		return 0, err
 	}
-	return x_1 + 1, nil
+	return x2 + 1, nil
 }

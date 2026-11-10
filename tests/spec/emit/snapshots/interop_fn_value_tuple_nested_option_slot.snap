@@ -34,7 +34,7 @@ func main() {
 	var adapted func() lisette.Tuple2[lisette.Option[[]lisette.Option[string]], int]
 	if cb != nil {
 		adapted = func() lisette.Tuple2[lisette.Option[[]lisette.Option[string]], int] {
-			ret, ret_1 := cb()
+			ret, ret2 := cb()
 			var option lisette.Option[[]lisette.Option[string]]
 			if ret != nil {
 				src := *ret
@@ -50,7 +50,7 @@ func main() {
 			} else {
 				option = lisette.MakeOptionNone[[]lisette.Option[string]]()
 			}
-			tup := lisette.MakeTuple2(option, ret_1)
+			tup := lisette.MakeTuple2(option, ret2)
 			return tup
 		}
 	}

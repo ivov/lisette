@@ -21,10 +21,10 @@ func n() int {
 
 func seven() int {
 	ret, err := strconv.Atoi("bad")
-	default_1 := n()
+	default2 := n()
 	if err != nil {
-		ret = default_1
+		ret = default2
 	}
-	n_1 := ret
-	return n_1
+	n2 := ret
+	return n2
 }

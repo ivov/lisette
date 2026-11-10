@@ -21,9 +21,9 @@ func Holder_Resolve[R any, E any](_ Holder, default_ R, _ ...func(int) lisette.R
 
 func main() {
 	fns := []func(int) lisette.Result[int, Face]{func(arg0 int) lisette.Result[int, Face] {
-		ret, ret_1 := Resultant(arg0)
-		if ret_1 != nil {
-			return lisette.MakeResultErr[int, Face](ret_1)
+		ret, ret2 := Resultant(arg0)
+		if ret2 != nil {
+			return lisette.MakeResultErr[int, Face](ret2)
 		}
 		return lisette.MakeResultOk[int, Face](ret)
 	}}

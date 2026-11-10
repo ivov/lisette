@@ -55,10 +55,10 @@ func run() error {
 		a: ret,
 		b: i,
 	}
-	ret_1, err_1 := bump(&i)
-	if err_1 != nil {
-		return err_1
+	ret2, err2 := bump(&i)
+	if err2 != nil {
+		return err2
 	}
-	Cell_add[int](ref, ret_1)
+	Cell_add[int](ref, ret2)
 	return nil
 }

@@ -24,9 +24,9 @@ func x() int {
 	return 1
 }
 
-func f(x_2 int) int {
-	x_1.Println(x_2)
-	return x_2
+func f(x2 int) int {
+	x_1.Println(x2)
+	return x2
 }
 
 func main() {

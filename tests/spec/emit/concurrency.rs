@@ -1246,8 +1246,8 @@ fn main() -> int {
     let Some(v) = get_ch().receive() => v,
     _ => 0,
   }
-  let tmp_1 = result + 1
-  tmp_1
+  let tmp2 = result + 1
+  tmp2
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1309,8 +1309,8 @@ fn main() {
     _ => { let _ = 1 },
   }
 
-  let ref_1 = 2
-  let _ = ref_1
+  let ref2 = 2
+  let _ = ref2
 }
 "#;
     assert_emit_snapshot!(input);

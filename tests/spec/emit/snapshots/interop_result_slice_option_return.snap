@@ -28,10 +28,10 @@ import (
 )
 
 func main() {
-	ret, ret_1 := aws.Make()
+	ret, ret2 := aws.Make()
 	var result lisette.Result[[]lisette.Option[string], error]
-	if ret_1 != nil {
-		result = lisette.MakeResultErr[[]lisette.Option[string], error](ret_1)
+	if ret2 != nil {
+		result = lisette.MakeResultErr[[]lisette.Option[string], error](ret2)
 	} else {
 		wrapped := make([]lisette.Option[string], len(ret))
 		for i, v := range ret {

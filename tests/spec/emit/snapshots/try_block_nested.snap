@@ -49,11 +49,11 @@ func test() int {
 		} else {
 			inner_val = 0
 		}
-		check_1 := riskyB()
-		if check_1.Tag != lisette.ResultOk {
-			return check_1
+		check2 := riskyB()
+		if check2.Tag != lisette.ResultOk {
+			return check2
 		}
-		return lisette.MakeResultOk[int, string](inner_val + check_1.OkVal)
+		return lisette.MakeResultOk[int, string](inner_val + check2.OkVal)
 	}()
 	if outer.Tag == lisette.ResultOk {
 		return outer.OkVal

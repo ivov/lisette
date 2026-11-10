@@ -17,9 +17,9 @@ description: |
   
   fn main() {
     let v = make_box().inc()
-    let ref_1 = 7
+    let ref2 = 7
     let _ = v
-    let _ = ref_1
+    let _ = ref2
   }
 ---
 package main

@@ -2515,8 +2515,8 @@ fn declare_result_var_tracked_as_declared() {
     let input = r#"
 fn main() {
   let _ = if true { 1 } else { 2 }
-  let tmp_1 = 3
-  let _ = tmp_1
+  let tmp2 = 3
+  let _ = tmp2
 }
 "#;
     assert_emit_snapshot!(input);
@@ -3066,8 +3066,8 @@ fn make_box() -> Box {
 
 fn main() {
   let r = &make_box()
-  let ref_1 = 3
-  fmt.Println(r.*.x, ref_1)
+  let ref2 = 3
+  fmt.Println(r.*.x, ref2)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -3101,9 +3101,9 @@ import "go:strconv"
 
 fn main() {
   let n = strconv.Atoi("42")
-  let ret_1 = 7
+  let ret2 = 7
   fmt.Println(n)
-  fmt.Println(ret_1)
+  fmt.Println(ret2)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -3147,9 +3147,9 @@ fn make_box() -> Box {
 
 fn main() {
   let v = make_box().inc()
-  let ref_1 = 7
+  let ref2 = 7
   let _ = v
-  let _ = ref_1
+  let _ = ref2
 }
 "#;
     assert_emit_snapshot!(input);
@@ -3256,11 +3256,11 @@ fn complex_pattern_temp_no_collision() {
     let input = r#"
 fn main() {
   let (a, (b, c)) = (1, (2, 3));
-  let tmp_1 = 7;
+  let tmp2 = 7;
   let _ = a;
   let _ = b;
   let _ = c;
-  let _ = tmp_1;
+  let _ = tmp2;
 }
 "#;
     assert_emit_snapshot!(input);

@@ -3,8 +3,8 @@ source: tests/spec/emit/result_option_patterns.rs
 description: |
   
   fn foo() -> Option<int> {
-    let tmp_1 = 7;
-    let _ = tmp_1;
+    let tmp2 = 7;
+    let _ = tmp2;
     return if true { Some(1) } else { None };
   }
   

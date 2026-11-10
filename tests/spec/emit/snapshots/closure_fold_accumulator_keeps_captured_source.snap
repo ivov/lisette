@@ -13,11 +13,11 @@ package main
 func main() {
 	x := 7
 	f := func() int {
-		x_1 := 0
+		x2 := 0
 		for _, y := range []int{x} {
-			x_1 += y
+			x2 += y
 		}
-		return x_1
+		return x2
 	}
 	if f() != 7 {
 		panic("captured source")

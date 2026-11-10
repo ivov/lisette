@@ -115,8 +115,13 @@ pub(crate) fn fresh_suffixed(base: &str, taken: impl Fn(&str) -> bool) -> String
     if !taken(base) {
         return base.to_string();
     }
+    let separator = if base.ends_with(|c: char| c.is_ascii_digit()) {
+        "_"
+    } else {
+        ""
+    };
     (2..)
-        .map(|n| format!("{base}_{n}"))
+        .map(|n| format!("{base}{separator}{n}"))
         .find(|candidate| !taken(candidate))
         .expect("freshening counter is unbounded")
 }

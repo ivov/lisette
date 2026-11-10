@@ -55,18 +55,18 @@ func items() []int {
 }
 
 func status() (int, error) {
-	count, err_1 := strconv.Atoi("2")
-	if err_1 != nil {
-		return 0, err_1
+	count, err2 := strconv.Atoi("2")
+	if err2 != nil {
+		return 0, err2
 	}
 	return count + err(), nil
 }
 
 func armAfterMessage() {
-	n_1, e := strconv.Atoi("2")
+	n2, e := strconv.Atoi("2")
 	msg := n()
 	if e == nil {
-		fmt.Println(n_1)
+		fmt.Println(n2)
 	} else {
 		e = fmt.Errorf("%s: %w", msg, e)
 		fmt.Println(e)
@@ -74,25 +74,25 @@ func armAfterMessage() {
 }
 
 func armInOtherArm() {
-	if n_1, err := strconv.Atoi("bad"); err == nil {
-		fmt.Println(n_1)
+	if n2, err := strconv.Atoi("bad"); err == nil {
+		fmt.Println(n2)
 	} else {
 		fmt.Println(n())
 	}
 }
 
 func findArm() {
-	var items_1 int
+	var items2 int
 	found := false
 	for _, x := range items() {
 		if x > 1 {
-			items_1 = x
+			items2 = x
 			found = true
 			break
 		}
 	}
 	if found {
-		fmt.Println(items_1)
+		fmt.Println(items2)
 	} else {
 		fmt.Println("none")
 	}

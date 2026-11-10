@@ -63,17 +63,17 @@ func laterField(p P) P {
 }
 
 func swap(p P) P {
-	copy_1 := p
-	copy_1.a = p.b
-	copy_1.b = p.a
-	return copy_1
+	copy2 := p
+	copy2.a = p.b
+	copy2.b = p.a
+	return copy2
 }
 
 func wholeAfterAWrite(p P, f func(P) int) P {
-	copy_1 := p
-	copy_1.a = 10
-	copy_1.b = f(p)
-	return copy_1
+	copy2 := p
+	copy2.a = 10
+	copy2.b = f(p)
+	return copy2
 }
 
 func readAfter(p P) int {
@@ -101,8 +101,8 @@ func perElement(ps []P) []P {
 
 func captured(p P) func(int) P {
 	return func(x int) P {
-		copy_1 := p
-		copy_1.b = x
-		return copy_1
+		copy2 := p
+		copy2.b = x
+		return copy2
 	}
 }

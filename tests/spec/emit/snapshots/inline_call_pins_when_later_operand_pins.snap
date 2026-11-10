@@ -22,8 +22,8 @@ func run() int {
 		x += 7
 		return v
 	}
-	v_1 := setx()
-	v_2 := x
-	r := []int{v_1, v_2, bump(5)}
+	v2 := setx()
+	v3 := x
+	r := []int{v2, v3, bump(5)}
 	return r[0] + r[1] + r[2]
 }

@@ -54,13 +54,13 @@ func run() (string, error) {
 }
 
 func test() {
-	var text_1 string
+	var text2 string
 	if text, err := run(); err == nil {
-		text_1 = text
+		text2 = text
 	} else {
-		text_1 = ""
+		text2 = ""
 	}
-	if text_1 != "two" {
+	if text2 != "two" {
 		panic("propagated Unknown binding was declared at the concrete type")
 	}
 }

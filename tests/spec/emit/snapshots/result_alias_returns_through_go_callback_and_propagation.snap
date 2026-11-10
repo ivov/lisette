@@ -42,11 +42,11 @@ type SplitOut = lisette.Result[lisette.Tuple2[int, []byte], error]
 type Done = lisette.Result[struct{}, error]
 
 func split(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
-	ret, ret_1, ret_2 := bufio.ScanWords(data, at_eof)
-	tup := lisette.MakeTuple2(ret, ret_1)
+	ret, ret2, ret3 := bufio.ScanWords(data, at_eof)
+	tup := lisette.MakeTuple2(ret, ret2)
 	var result lisette.Result[lisette.Tuple2[int, []byte], error]
-	if ret_2 != nil {
-		result = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_2)
+	if ret3 != nil {
+		result = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret3)
 	} else {
 		result = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup)
 	}
@@ -66,8 +66,8 @@ func fail() error {
 func main() {
 	s := bufio.NewScanner(strings.NewReader("ab cd"))
 	s.Split(func(arg0 []byte, arg1 bool) (int, []byte, error) {
-		ret, ret_1 := split(arg0, arg1)
-		return ret.First, ret.Second, ret_1
+		ret, ret2 := split(arg0, arg1)
+		return ret.First, ret.Second, ret2
 	})
 	words := 0
 	for s.Scan() {
@@ -76,10 +76,10 @@ func main() {
 	if words != 2 {
 		panic("wrong word count")
 	}
-	ret_2 := fail()
+	ret3 := fail()
 	var result lisette.Result[struct{}, error]
-	if ret_2 != nil {
-		result = lisette.MakeResultErr[struct{}, error](ret_2)
+	if ret3 != nil {
+		result = lisette.MakeResultErr[struct{}, error](ret3)
 	} else {
 		result = lisette.MakeResultOk[struct{}, error](struct{}{})
 	}

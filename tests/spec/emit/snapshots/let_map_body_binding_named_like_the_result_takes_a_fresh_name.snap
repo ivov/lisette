@@ -20,8 +20,8 @@ package main
 func doubled(xs []int) []int {
 	n := make([]int, len(xs))
 	for i, y := range xs {
-		n_1 := y * 2
-		n[i] = n_1 + 1
+		n2 := y * 2
+		n[i] = n2 + 1
 	}
 	return n
 }

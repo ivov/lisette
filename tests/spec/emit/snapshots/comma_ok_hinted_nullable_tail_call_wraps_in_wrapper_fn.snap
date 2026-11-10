@@ -20,9 +20,9 @@ import (
 )
 
 func buildInfo() *info.BuildInfo {
-	ret, ret_1 := info.Read()
+	ret, ret2 := info.Read()
 	var option lisette.Option[*info.BuildInfo]
-	if ret_1 && ret != nil {
+	if ret2 && ret != nil {
 		option = lisette.MakeOptionSome[*info.BuildInfo](ret)
 	} else {
 		option = lisette.MakeOptionNone[*info.BuildInfo]()

@@ -37,7 +37,7 @@ func makeBase() Point {
 
 func main() {
 	field := makeX()
-	copy_1 := makeBase()
-	copy_1.x = field
-	_ = copy_1
+	copy2 := makeBase()
+	copy2.x = field
+	_ = copy2
 }

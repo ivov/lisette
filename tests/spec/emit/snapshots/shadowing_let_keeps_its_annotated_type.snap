@@ -28,8 +28,8 @@ func test() {
 	if x != 1 {
 		panic("outer binding was clobbered")
 	}
-	var x_1 int64 = 5
-	if take(x_1) != 5 {
+	var x2 int64 = 5
+	if take(x2) != 5 {
 		panic("shadowing binding lost its annotated type")
 	}
 }

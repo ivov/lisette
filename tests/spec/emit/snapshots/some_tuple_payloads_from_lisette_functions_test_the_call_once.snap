@@ -62,9 +62,9 @@ func name(s string) (string, bool) {
 
 func fallback(s string) int {
 	pair, ok := split(s)
-	default_1 := lisette.MakeTuple2[string, int]("none", 0)
+	default2 := lisette.MakeTuple2[string, int]("none", 0)
 	if !ok {
-		pair = default_1
+		pair = default2
 	}
 	return pair.Second
 }

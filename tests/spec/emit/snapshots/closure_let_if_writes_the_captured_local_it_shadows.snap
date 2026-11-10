@@ -22,14 +22,14 @@ package main
 func run(start int) int {
 	total := start
 	f := func(c bool) int {
-		var total_1 int
+		var total2 int
 		if c {
 			total++
-			total_1 = total
+			total2 = total
 		} else {
-			total_1 = 0
+			total2 = 0
 		}
-		return total_1 * 2
+		return total2 * 2
 	}
 	r := f(true)
 	return r + total

@@ -24,10 +24,10 @@ import (
 
 func main() {
 	f := func() lisette.Partial[[]lisette.Option[string], error] {
-		ret, ret_1 := aws.Read()
-		if ret_1 != nil {
+		ret, ret2 := aws.Read()
+		if ret2 != nil {
 			if ret == nil {
-				return lisette.MakePartialErr[[]lisette.Option[string], error](ret_1)
+				return lisette.MakePartialErr[[]lisette.Option[string], error](ret2)
 			}
 			wrapped := make([]lisette.Option[string], len(ret))
 			for i, v := range ret {
@@ -37,17 +37,17 @@ func main() {
 					wrapped[i] = lisette.MakeOptionNone[string]()
 				}
 			}
-			return lisette.MakePartialBoth[[]lisette.Option[string], error](wrapped, ret_1)
+			return lisette.MakePartialBoth[[]lisette.Option[string], error](wrapped, ret2)
 		}
-		wrapped_1 := make([]lisette.Option[string], len(ret))
-		for i_1, v_1 := range ret {
-			if v_1 != nil {
-				wrapped_1[i_1] = lisette.MakeOptionSome[string](*v_1)
+		wrapped2 := make([]lisette.Option[string], len(ret))
+		for i2, v2 := range ret {
+			if v2 != nil {
+				wrapped2[i2] = lisette.MakeOptionSome[string](*v2)
 			} else {
-				wrapped_1[i_1] = lisette.MakeOptionNone[string]()
+				wrapped2[i2] = lisette.MakeOptionNone[string]()
 			}
 		}
-		return lisette.MakePartialOk[[]lisette.Option[string], error](wrapped_1)
+		return lisette.MakePartialOk[[]lisette.Option[string], error](wrapped2)
 	}
 	subject := f()
 	switch subject.Tag {

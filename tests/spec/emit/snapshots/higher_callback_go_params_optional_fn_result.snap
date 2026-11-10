@@ -20,17 +20,17 @@ func give[T any](f func(any) T) func(any) T {
 func main() {
 	xs := []int{1, 2}
 	cb := reflect.Swapper
-	var adapted_1 func(any) lisette.Option[func(int, int) struct{}]
+	var adapted2 func(any) lisette.Option[func(int, int) struct{}]
 	if cb != nil {
-		adapted_1 = func(arg0 any) lisette.Option[func(int, int) struct{}] {
+		adapted2 = func(arg0 any) lisette.Option[func(int, int) struct{}] {
 			raw := cb(arg0)
 			var option lisette.Option[func(int, int) struct{}]
 			if raw != nil {
-				cb_1 := raw
+				cb2 := raw
 				var adapted func(int, int) struct{}
-				if cb_1 != nil {
+				if cb2 != nil {
 					adapted = func(arg0, arg1 int) struct{} {
-						cb_1(arg0, arg1)
+						cb2(arg0, arg1)
 						return struct{}{}
 					}
 				}
@@ -41,7 +41,7 @@ func main() {
 			return option
 		}
 	}
-	f := give(adapted_1)
+	f := give(adapted2)
 	subject := f(xs)
 	if subject.Tag != lisette.OptionSome {
 		panic("none")

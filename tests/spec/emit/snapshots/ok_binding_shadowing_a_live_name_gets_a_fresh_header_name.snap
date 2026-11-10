@@ -22,8 +22,8 @@ import (
 
 func main() {
 	n := 1
-	if n_1, err := strconv.Atoi("2"); err == nil {
-		fmt.Println(n_1)
+	if n2, err := strconv.Atoi("2"); err == nil {
+		fmt.Println(n2)
 	} else {
 		fmt.Println(n)
 	}

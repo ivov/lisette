@@ -52,13 +52,13 @@ func six() int {
 		a = 0
 	}
 	var b int
-	n_1, e_1 := strconv.Atoi("2")
-	msg_1 := message()
-	if e_1 == nil {
-		b = n_1
+	n2, e2 := strconv.Atoi("2")
+	msg2 := message()
+	if e2 == nil {
+		b = n2
 	} else {
-		e_1 = fmt.Errorf("%s: %w", msg_1, e_1)
-		fmt.Println(e_1)
+		e2 = fmt.Errorf("%s: %w", msg2, e2)
+		fmt.Println(e2)
 		b = 0
 	}
 	return a + b

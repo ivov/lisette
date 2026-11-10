@@ -27,10 +27,10 @@ import (
 func main() {
 	reader := strings.NewReader("hello world")
 	buffer := make([]byte, 8)
-	ret, ret_1 := reader.Read(buffer)
+	ret, ret2 := reader.Read(buffer)
 	var result lisette.Partial[int, error]
-	if ret_1 != nil {
-		result = lisette.MakePartialBoth[int, error](ret, ret_1)
+	if ret2 != nil {
+		result = lisette.MakePartialBoth[int, error](ret, ret2)
 	} else {
 		result = lisette.MakePartialOk[int, error](ret)
 	}

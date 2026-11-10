@@ -32,14 +32,14 @@ func f() lisette.Result[int, string] {
 	if check.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[int, string](check.ErrVal)
 	}
-	ch_1 := check.OkVal
+	ch2 := check.OkVal
 	for {
 		select {
-		case v, ok := <-ch_1:
+		case v, ok := <-ch2:
 			if ok {
 				x = v
 			} else {
-				ch_1 = nil
+				ch2 = nil
 				continue
 			}
 		default:

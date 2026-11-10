@@ -23,8 +23,8 @@ import (
 
 func makeSplitter() func(string) lisette.Tuple2[string, string] {
 	return func(arg0 string) lisette.Tuple2[string, string] {
-		ret, ret_1 := path.Split(arg0)
-		tup := lisette.MakeTuple2(ret, ret_1)
+		ret, ret2 := path.Split(arg0)
+		tup := lisette.MakeTuple2(ret, ret2)
 		return tup
 	}
 }

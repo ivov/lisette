@@ -26,12 +26,12 @@ func resolve(t ext.Transport) (lisette.Option[*ext.Proxy], error) {
 		var adapted func(int) lisette.Result[lisette.Option[*ext.Proxy], error]
 		if cb != nil {
 			adapted = func(arg0 int) lisette.Result[lisette.Option[*ext.Proxy], error] {
-				ret, ret_1 := cb(arg0)
-				if ret_1 != nil {
-					return lisette.MakeResultErr[lisette.Option[*ext.Proxy], error](ret_1)
+				ret, ret2 := cb(arg0)
+				if ret2 != nil {
+					return lisette.MakeResultErr[lisette.Option[*ext.Proxy], error](ret2)
 				}
-				option_1 := lisette.OptionFromNilable[*ext.Proxy](ret, ret == nil)
-				return lisette.MakeResultOk[lisette.Option[*ext.Proxy], error](option_1)
+				option2 := lisette.OptionFromNilable[*ext.Proxy](ret, ret == nil)
+				return lisette.MakeResultOk[lisette.Option[*ext.Proxy], error](option2)
 			}
 		}
 		option = lisette.MakeOptionSome[func(int) lisette.Result[lisette.Option[*ext.Proxy], error]](adapted)

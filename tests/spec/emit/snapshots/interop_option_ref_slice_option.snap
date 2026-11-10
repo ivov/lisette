@@ -37,18 +37,18 @@ func main() {
 		option = lisette.MakeOptionNone[*[]lisette.Option[string]]()
 	}
 	if option.Tag == lisette.OptionSome {
-		src_1 := option.SomeVal
-		src_2 := *src_1
-		unwrapped := make([]*string, len(src_2))
-		for i_1, v_1 := range src_2 {
-			if v_1.Tag == lisette.OptionSome {
-				unwrapped[i_1] = &v_1.SomeVal
+		src2 := option.SomeVal
+		src3 := *src2
+		unwrapped := make([]*string, len(src3))
+		for i2, v2 := range src3 {
+			if v2.Tag == lisette.OptionSome {
+				unwrapped[i2] = &v2.SomeVal
 			} else {
-				unwrapped[i_1] = nil
+				unwrapped[i2] = nil
 			}
 		}
-		ref_1 := &unwrapped
-		aws.Use(ref_1)
+		ref2 := &unwrapped
+		aws.Use(ref2)
 	} else {
 		aws.Use(nil)
 	}

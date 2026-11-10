@@ -30,8 +30,8 @@ func run(m map[string]int) {
 		fmt.Println(ok)
 		return
 	}
-	v, ok_1 := m["a"]
-	if !ok_1 {
+	v, ok2 := m["a"]
+	if !ok2 {
 		return
 	}
 	fmt.Println(parsed, v)

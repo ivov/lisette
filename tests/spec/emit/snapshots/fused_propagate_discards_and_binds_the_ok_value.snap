@@ -67,9 +67,9 @@ func mappedTargets(db map[int]string, s string) (int, error) {
 	if !ok {
 		return 0, failure
 	}
-	n, err_1 := strconv.Atoi(s)
-	if err_1 != nil {
-		return 0, fmt.Errorf("third: %w", err_1)
+	n, err2 := strconv.Atoi(s)
+	if err2 != nil {
+		return 0, fmt.Errorf("third: %w", err2)
 	}
 	return n, nil
 }

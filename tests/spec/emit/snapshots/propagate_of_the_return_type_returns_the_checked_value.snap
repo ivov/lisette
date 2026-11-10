@@ -28,9 +28,9 @@ func check(n int) lisette.Result[struct{}, string] {
 }
 
 func run(n int) lisette.Result[struct{}, string] {
-	check_1 := check(n)
-	if check_1.Tag != lisette.ResultOk {
-		return check_1
+	check2 := check(n)
+	if check2.Tag != lisette.ResultOk {
+		return check2
 	}
 	return check(n + 1)
 }

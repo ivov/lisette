@@ -35,9 +35,9 @@ import "strconv"
 
 func sum(s, t string) int {
 	r, err := strconv.Atoi(s)
-	q, err_1 := strconv.Atoi(t)
+	q, err2 := strconv.Atoi(t)
 	var a int
-	if err_1 == nil {
+	if err2 == nil {
 		a = q
 	} else {
 		a = 0

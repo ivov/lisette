@@ -75,11 +75,11 @@ func test() {
 			return 0, check.ErrVal
 		}
 		a := check.OkVal
-		check_1 := doB(false)
-		if check_1.Tag != lisette.ResultOk {
-			return 0, check_1.ErrVal
+		check2 := doB(false)
+		if check2.Tag != lisette.ResultOk {
+			return 0, check2.ErrVal
 		}
-		b := check_1.OkVal
+		b := check2.OkVal
 		return a + b, nil
 	}()
 	if err == nil {

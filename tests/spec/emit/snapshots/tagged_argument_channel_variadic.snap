@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/functions.rs
-assertion_line: 3866
 description: |
   
   import "go:fmt"
@@ -50,12 +49,12 @@ func main() {
 	if lisette.OptionAndThen(arg, tagged).IsSome() {
 		panic("nil channel")
 	}
-	arg_1 := lisette.MakeOptionSome(7)
-	cb_1 := label
-	tagged_1 := func(arg0 int) lisette.Option[string] {
-		return lisette.OptionFromCommaOk[string](cb_1(arg0))
+	arg2 := lisette.MakeOptionSome(7)
+	cb2 := label
+	tagged2 := func(arg0 int) lisette.Option[string] {
+		return lisette.OptionFromCommaOk[string](cb2(arg0))
 	}
-	value := lisette.OptionAndThen(arg_1, tagged_1)
+	value := lisette.OptionAndThen(arg2, tagged2)
 	absent := lisette.MakeOptionNone[string]()
 	rendered := fmt.Sprint(value, absent)
 	if value.UnwrapOr("bad") != "7" || rendered == "" {

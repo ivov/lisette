@@ -30,7 +30,7 @@ import (
 func main() {
 	x := 100
 	fmt.Println(x)
-	x_1 := 200
+	x2 := 200
 	ch := make(chan int, 1)
 	lisette.ChannelSend(ch, 99)
 	for {
@@ -47,5 +47,5 @@ func main() {
 		}
 		break
 	}
-	fmt.Println(x_1)
+	fmt.Println(x2)
 }

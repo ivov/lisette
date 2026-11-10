@@ -1571,8 +1571,8 @@ import "go:fmt"
 
 fn foo() -> Result<int, string> {
   let x = Ok(1)?
-  let check_1 = 7
-  fmt.Println(check_1)
+  let check2 = 7
+  fmt.Println(check2)
   Ok(x)
 }
 
@@ -1588,8 +1588,8 @@ fn propagation_result_temp_var_no_collision() {
     let input = r#"
 fn foo() -> Result<int, string> {
   let y = Ok(1)? + 1
-  let result_2 = 7
-  let _ = result_2
+  let result3 = 7
+  let _ = result3
   Ok(y)
 }
 
@@ -1649,8 +1649,8 @@ fn test() -> Option<()> {
 fn wrapped_return_temp_no_collision() {
     let input = r#"
 fn foo() -> Option<int> {
-  let tmp_1 = 7;
-  let _ = tmp_1;
+  let tmp2 = 7;
+  let _ = tmp2;
   return if true { Some(1) } else { None };
 }
 

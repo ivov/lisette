@@ -36,13 +36,13 @@ type Item struct {
 func main() {
 	subject := 7
 	f := func() int {
-		subject_1 := Item{value: lisette.MakeOptionSome(subject + 1)}.value
-		if subject_1.Tag != lisette.OptionSome {
+		subject2 := Item{value: lisette.MakeOptionSome(subject + 1)}.value
+		if subject2.Tag != lisette.OptionSome {
 			return subject
 		}
-		subject_2 := subject_1.SomeVal
+		subject3 := subject2.SomeVal
 		g := func() int {
-			return subject_2
+			return subject3
 		}
 		return g()
 	}
@@ -50,9 +50,9 @@ func main() {
 	total := 0
 	for {
 		if pending.Tag == lisette.OptionSome {
-			left_1 := total
+			left2 := total
 			left := pending.SomeVal
-			total = left_1 + (left + f())
+			total = left2 + (left + f())
 			pending = lisette.MakeOptionNone[int]()
 		} else {
 			break
@@ -60,7 +60,7 @@ func main() {
 	}
 	ch := make(chan int, 1)
 	lisette.ChannelSend(ch, 3)
-	left_2 := total
+	left3 := total
 	var tmp int
 	for {
 		select {
@@ -76,7 +76,7 @@ func main() {
 		}
 		break
 	}
-	total = left_2 + tmp
+	total = left3 + tmp
 	if total != 21 || subject != 7 {
 		panic("subject temp identity")
 	}

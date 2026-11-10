@@ -36,11 +36,11 @@ type IntList struct {
 
 func (i IntList) display() string {
 	s := "["
-	for _, i_1 := range i.items {
+	for _, i2 := range i.items {
 		if s != "[" {
 			s += ", "
 		}
-		s += fmt.Sprint(i_1)
+		s += fmt.Sprint(i2)
 	}
 	return s + "]"
 }

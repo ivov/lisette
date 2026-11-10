@@ -15,10 +15,10 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func test() {
 	recoverResult := lisette.RecoverBlock(func() int {
-		recoverResult_1 := lisette.RecoverBlock(func() int {
+		recoverResult2 := lisette.RecoverBlock(func() int {
 			return 1
 		})
-		_ = recoverResult_1
+		_ = recoverResult2
 		return 2
 	})
 	_ = recoverResult

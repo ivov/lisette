@@ -37,8 +37,8 @@ func main() {
 	var adapted func(int, func(int) int) lisette.Tuple2[int, bool]
 	if cb != nil {
 		adapted = func(arg0 int, arg1 func(int) int) lisette.Tuple2[int, bool] {
-			ret, ret_1 := cb(arg0, arg1)
-			tup := lisette.MakeTuple2(ret, ret_1)
+			ret, ret2 := cb(arg0, arg1)
+			tup := lisette.MakeTuple2(ret, ret2)
 			return tup
 		}
 	}
@@ -52,11 +52,11 @@ func main() {
 	if n != 2 || !found || calls < 1 {
 		panic("search")
 	}
-	tmp_1 := f(5, func(_ int) int {
+	tmp2 := f(5, func(_ int) int {
 		return 1
 	})
-	end := tmp_1.First
-	hit := tmp_1.Second
+	end := tmp2.First
+	hit := tmp2.Second
 	if end != 5 || hit {
 		panic("missing")
 	}

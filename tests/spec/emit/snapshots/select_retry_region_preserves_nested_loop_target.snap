@@ -38,10 +38,10 @@ func main() {
 	total := 0
 loop_1:
 	for {
-		ch_1 := ch
+		ch2 := ch
 		for {
 			select {
-			case _, ok := <-ch_1:
+			case _, ok := <-ch2:
 				if ok {
 					for i := range 2 {
 						if i == 0 {
@@ -51,7 +51,7 @@ loop_1:
 					}
 					break loop_1
 				}
-				ch_1 = nil
+				ch2 = nil
 				continue
 			default:
 				break loop_1

@@ -27,9 +27,9 @@ func main() {
 	var w int
 	for {
 		if i >= 0 && i < len(xs) {
-			w_2 := xs[i]
-			if w_2 > 2 {
-				w = w_2
+			w3 := xs[i]
+			if w3 > 2 {
+				w = w3
 				break
 			}
 		} else {

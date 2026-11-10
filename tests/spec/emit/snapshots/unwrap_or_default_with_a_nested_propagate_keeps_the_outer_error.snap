@@ -14,12 +14,12 @@ import "strconv"
 
 func one() (int, error) {
 	ret, err := strconv.Atoi("bad")
-	ret_1, err_1 := strconv.Atoi("7")
-	if err_1 != nil {
-		return 0, err_1
+	ret2, err2 := strconv.Atoi("7")
+	if err2 != nil {
+		return 0, err2
 	}
 	if err != nil {
-		ret = ret_1
+		ret = ret2
 	}
 	return ret, nil
 }

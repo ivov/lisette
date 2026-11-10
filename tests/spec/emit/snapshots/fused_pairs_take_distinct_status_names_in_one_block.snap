@@ -24,8 +24,8 @@ func run(path string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	n, err_1 := strconv.Atoi(os.Getenv("N"))
-	if err_1 != nil {
+	n, err2 := strconv.Atoi(os.Getenv("N"))
+	if err2 != nil {
 		return len(text), nil
 	}
 	if err := os.Remove(path); err != nil {

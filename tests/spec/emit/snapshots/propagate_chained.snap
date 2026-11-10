@@ -34,10 +34,10 @@ func test() lisette.Result[int, string] {
 		return check
 	}
 	x := check.OkVal
-	check_1 := second()
-	if check_1.Tag != lisette.ResultOk {
-		return check_1
+	check2 := second()
+	if check2.Tag != lisette.ResultOk {
+		return check2
 	}
-	y := check_1.OkVal
+	y := check2.OkVal
 	return lisette.MakeResultOk[int, string](x + y)
 }

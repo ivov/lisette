@@ -46,8 +46,8 @@ func main() {
 		return lisette.ResultFromPair[int](strconv.Atoi(arg0))
 	}
 	m["a"] = entry
-	h, ok_1 := m["a"]
-	if !ok_1 {
+	h, ok2 := m["a"]
+	if !ok2 {
 		return
 	}
 	r := h.f("1")

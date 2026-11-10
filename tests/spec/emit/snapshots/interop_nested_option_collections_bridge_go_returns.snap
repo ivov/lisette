@@ -28,18 +28,18 @@ func main() {
 			wrapped[i] = lisette.MakeOptionNone[int]()
 		}
 	}
-	ret, ret_1 := nested.MaybeValues()
+	ret, ret2 := nested.MaybeValues()
 	var maybe_values lisette.Option[[]lisette.Option[int]]
-	if ret_1 {
-		wrapped_1 := make([]lisette.Option[int], len(ret))
-		for i_1, v_1 := range ret {
-			if v_1 != nil {
-				wrapped_1[i_1] = lisette.MakeOptionSome[int](*v_1)
+	if ret2 {
+		wrapped2 := make([]lisette.Option[int], len(ret))
+		for i2, v2 := range ret {
+			if v2 != nil {
+				wrapped2[i2] = lisette.MakeOptionSome[int](*v2)
 			} else {
-				wrapped_1[i_1] = lisette.MakeOptionNone[int]()
+				wrapped2[i2] = lisette.MakeOptionNone[int]()
 			}
 		}
-		maybe_values = lisette.MakeOptionSome[[]lisette.Option[int]](wrapped_1)
+		maybe_values = lisette.MakeOptionSome[[]lisette.Option[int]](wrapped2)
 	} else {
 		maybe_values = lisette.MakeOptionNone[[]lisette.Option[int]]()
 	}

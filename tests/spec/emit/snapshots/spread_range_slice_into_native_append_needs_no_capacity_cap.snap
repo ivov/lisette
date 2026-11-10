@@ -1,22 +1,22 @@
 ---
 source: tests/spec/emit/functions.rs
 description: |
-
+  
   fn total(xs: VarArgs<int>) -> int {
     xs.fold(0, |acc, x| acc + x)
   }
-
+  
   fn insert_at(out: Slice<int>, pos: int, x: int) -> Slice<int> {
     let mut next: Slice<int> = []
     next = next.append(out[..pos]...)
     next = next.append(x)
     next.append(out[pos..]...)
   }
-
+  
   fn middle(xs: Slice<int>, ys: Slice<int>) -> Slice<int> {
     xs.append(ys[1..=2]...)
   }
-
+  
   fn sum_tail(ys: Slice<int>) -> int {
     total(ys[1..]...)
   }
@@ -57,6 +57,6 @@ func middle(xs, ys []int) []int {
 }
 
 func sumTail(ys []int) int {
-	len_1 := len(ys)
-	return total(ys[1:len_1:len_1]...)
+	len2 := len(ys)
+	return total(ys[1:len2:len2]...)
 }

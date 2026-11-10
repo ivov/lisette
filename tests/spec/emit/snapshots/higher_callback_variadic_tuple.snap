@@ -25,8 +25,8 @@ func invoke(f func(int) lisette.Tuple2[int, int]) (int, int) {
 
 func main() {
 	f := first[lisette.Tuple2[int, int]]([]func(func(int) lisette.Tuple2[int, int]) lisette.Tuple2[int, int]{func(arg0 func(int) lisette.Tuple2[int, int]) lisette.Tuple2[int, int] {
-		ret, ret_1 := invoke(arg0)
-		tup := lisette.MakeTuple2(ret, ret_1)
+		ret, ret2 := invoke(arg0)
+		tup := lisette.MakeTuple2(ret, ret2)
 		return tup
 	}}...)
 	tmp := f(func(x int) lisette.Tuple2[int, int] {

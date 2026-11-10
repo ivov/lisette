@@ -28,8 +28,8 @@ import lisette "github.com/ivov/lisette/prelude"
 func main() {
 	value := 7
 	f := func() int {
-		value_2 := value + 1
-		return value_2
+		value2 := value + 1
+		return value2
 	}
 	next := lisette.MakeOptionSome(3)
 	total := 0
@@ -37,8 +37,8 @@ func main() {
 		if next.Tag == lisette.OptionSome {
 			value_1 := next.SomeVal
 			g := func() int {
-				value_1_1 := value_1 + 1
-				return value_1_1 + f()
+				value_1_2 := value_1 + 1
+				return value_1_2 + f()
 			}
 			total += g()
 			next = lisette.MakeOptionNone[int]()

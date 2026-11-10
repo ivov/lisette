@@ -170,15 +170,15 @@ func main() {
 	}
 	check(passed_22)
 	var passed_23 bool
-	subject_2 := partialForward(2)
-	if subject_2.Tag == lisette.PartialBoth {
-		passed_23 = subject_2.OkVal == 2
+	subject3 := partialForward(2)
+	if subject3.Tag == lisette.PartialBoth {
+		passed_23 = subject3.OkVal == 2
 	} else {
 		passed_23 = false
 	}
 	check(passed_23)
-	ret, ret_1 := pair(8)
-	option := lisette.OptionFromNilable[*int](ret_1, ret_1 == nil)
+	ret, ret2 := pair(8)
+	option := lisette.OptionFromNilable[*int](ret2, ret2 == nil)
 	tup := lisette.MakeTuple2(ret, option)
 	n := tup.First
 	m := tup.Second

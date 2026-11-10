@@ -26,8 +26,8 @@ func main() {
 	}
 	var walker filepath.WalkFunc = func(arg0 string, arg1 fs.FileInfo, arg2 error) error {
 		option := lisette.OptionFromNilable[fs.FileInfo](arg1, lisette.IsNilInterface(arg1))
-		option_1 := lisette.OptionFromNilable[error](arg2, lisette.IsNilInterface(arg2))
-		return cb(arg0, option, option_1)
+		option2 := lisette.OptionFromNilable[error](arg2, lisette.IsNilInterface(arg2))
+		return cb(arg0, option, option2)
 	}
 	filepath.Walk("/tmp", filepath.WalkFunc(walker))
 }

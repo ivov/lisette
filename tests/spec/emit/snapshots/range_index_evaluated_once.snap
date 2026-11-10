@@ -32,7 +32,7 @@ func makeRange() lisette.Range[int] {
 
 func main() {
 	items := []int{0, 1, 2, 3, 4}
-	range_1 := makeRange()
-	sub := items[range_1.Start:range_1.End:range_1.End]
+	range2 := makeRange()
+	sub := items[range2.Start:range2.End:range2.End]
 	fmt.Println(len(sub))
 }

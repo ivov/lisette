@@ -17,8 +17,8 @@ func some[T any](value T) (T, bool) {
 func adapt[arg0 any](seed arg0) (arg0, bool) {
 	arg := lisette.MakeOptionSome(seed)
 	cb := some[arg0]
-	tagged := func(arg0_1 arg0) lisette.Option[arg0] {
-		return lisette.OptionFromCommaOk[arg0](cb(arg0_1))
+	tagged := func(arg0_2 arg0) lisette.Option[arg0] {
+		return lisette.OptionFromCommaOk[arg0](cb(arg0_2))
 	}
 	v := lisette.OptionAndThen(arg, tagged)
 	if v.Tag == lisette.OptionSome {

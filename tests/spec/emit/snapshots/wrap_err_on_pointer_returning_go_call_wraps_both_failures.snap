@@ -35,10 +35,10 @@ func open(path string) (*os.File, error) {
 }
 
 func main() {
-	ret, ret_1 := open("missing.txt")
+	ret, ret2 := open("missing.txt")
 	var result lisette.Result[*os.File, error]
-	if ret_1 != nil {
-		result = lisette.MakeResultErr[*os.File, error](ret_1)
+	if ret2 != nil {
+		result = lisette.MakeResultErr[*os.File, error](ret2)
 	} else if ret == nil {
 		result = lisette.MakeResultErr[*os.File, error](errors.New("unexpected nil"))
 	} else {

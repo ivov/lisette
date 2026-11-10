@@ -25,11 +25,11 @@ import (
 )
 
 func splitWords(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
-	ret, ret_1, ret_2 := bufio.ScanWords(data, at_eof)
-	tup := lisette.MakeTuple2(ret, ret_1)
+	ret, ret2, ret3 := bufio.ScanWords(data, at_eof)
+	tup := lisette.MakeTuple2(ret, ret2)
 	var result lisette.Result[lisette.Tuple2[int, []byte], error]
-	if ret_2 != nil {
-		result = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_2)
+	if ret3 != nil {
+		result = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret3)
 	} else {
 		result = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup)
 	}
@@ -41,8 +41,8 @@ func splitWords(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
 
 func main() {
 	var annotated bufio.SplitFunc = func(arg0 []byte, arg1 bool) (int, []byte, error) {
-		ret, ret_1 := splitWords(arg0, arg1)
-		return ret.First, ret.Second, ret_1
+		ret, ret2 := splitWords(arg0, arg1)
+		return ret.First, ret.Second, ret2
 	}
 	var forwarded bufio.SplitFunc = bufio.ScanWords
 	var literal bufio.SplitFunc = func(data []byte, at_eof bool) (int, []byte, error) {

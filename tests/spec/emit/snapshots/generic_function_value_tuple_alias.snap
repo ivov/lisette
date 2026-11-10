@@ -25,8 +25,8 @@ func pair[T any](x T) (T, T) {
 
 func main() {
 	x := 3
-	ret, ret_1 := pair(lisette.MakeOptionSome(&x))
-	tup := lisette.MakeTuple2(ret, ret_1)
+	ret, ret2 := pair(lisette.MakeOptionSome(&x))
+	tup := lisette.MakeTuple2(ret, ret2)
 	if !(tup.First.Tag == lisette.OptionSome && tup.Second.Tag == lisette.OptionSome) {
 		panic("generic tuple alias")
 	}
@@ -35,9 +35,9 @@ func main() {
 	arg := lisette.MakeOptionSome(lisette.MakeOptionSome(&x))
 	cb := pair[lisette.Option[*int]]
 	tagged := func(arg0 lisette.Option[*int]) Pair[lisette.Option[*int]] {
-		ret_2, ret_3 := cb(arg0)
-		tup_1 := lisette.MakeTuple2(ret_2, ret_3)
-		return tup_1
+		ret3, ret4 := cb(arg0)
+		tup2 := lisette.MakeTuple2(ret3, ret4)
+		return tup2
 	}
 	subject := lisette.OptionMap(arg, tagged)
 	if !(subject.Tag == lisette.OptionSome && subject.SomeVal.First.Tag == lisette.OptionSome && subject.SomeVal.Second.Tag == lisette.OptionSome) {
@@ -46,16 +46,16 @@ func main() {
 	third := subject.SomeVal.First.SomeVal
 	fourth := subject.SomeVal.Second.SomeVal
 	stored := func(arg0 lisette.Option[*int]) Pair[lisette.Option[*int]] {
-		ret_4, ret_5 := pair[lisette.Option[*int]](arg0)
-		tup_2 := lisette.MakeTuple2(ret_4, ret_5)
-		return tup_2
+		ret5, ret6 := pair[lisette.Option[*int]](arg0)
+		tup3 := lisette.MakeTuple2(ret5, ret6)
+		return tup3
 	}
-	subject_1 := stored(lisette.MakeOptionSome(&x))
-	if !(subject_1.First.Tag == lisette.OptionSome && subject_1.Second.Tag == lisette.OptionSome) {
+	subject2 := stored(lisette.MakeOptionSome(&x))
+	if !(subject2.First.Tag == lisette.OptionSome && subject2.Second.Tag == lisette.OptionSome) {
 		panic("generic stored alias")
 	}
-	fifth := subject_1.First.SomeVal
-	sixth := subject_1.Second.SomeVal
+	fifth := subject2.First.SomeVal
+	sixth := subject2.Second.SomeVal
 	if first != &x || second != &x || third != &x || fourth != &x || fifth != &x || sixth != &x {
 		panic("generic alias payloads")
 	}

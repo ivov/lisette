@@ -37,10 +37,10 @@ func main() {
 	if err != nil || req == nil {
 		panic("request")
 	}
-	ret, ret_1 := http.ProxyFromEnvironment(req)
+	ret, ret2 := http.ProxyFromEnvironment(req)
 	var result lisette.Result[lisette.Option[*url.URL], error]
-	if ret_1 != nil {
-		result = lisette.MakeResultErr[lisette.Option[*url.URL], error](ret_1)
+	if ret2 != nil {
+		result = lisette.MakeResultErr[lisette.Option[*url.URL], error](ret2)
 	} else {
 		option := lisette.OptionFromNilable[*url.URL](ret, ret == nil)
 		result = lisette.MakeResultOk[lisette.Option[*url.URL], error](option)
@@ -49,15 +49,15 @@ func main() {
 		panic("localhost is never proxied")
 	}
 	cb := func(arg0 *http.Request) lisette.Result[lisette.Option[*url.URL], error] {
-		ret_2, ret_3 := http.ProxyFromEnvironment(arg0)
-		if ret_3 != nil {
-			return lisette.MakeResultErr[lisette.Option[*url.URL], error](ret_3)
+		ret3, ret4 := http.ProxyFromEnvironment(arg0)
+		if ret4 != nil {
+			return lisette.MakeResultErr[lisette.Option[*url.URL], error](ret4)
 		}
-		option_1 := lisette.OptionFromNilable[*url.URL](ret_2, ret_2 == nil)
-		return lisette.MakeResultOk[lisette.Option[*url.URL], error](option_1)
+		option2 := lisette.OptionFromNilable[*url.URL](ret3, ret3 == nil)
+		return lisette.MakeResultOk[lisette.Option[*url.URL], error](option2)
 	}
 	env := http.Transport{Proxy: func(arg0 *http.Request) (*url.URL, error) {
-		ret_4, ret_5 := func() (lisette.Option[*url.URL], error) {
+		ret5, ret6 := func() (lisette.Option[*url.URL], error) {
 			res := cb(arg0)
 			if res.Tag == lisette.ResultOk {
 				return res.OkVal, nil
@@ -65,156 +65,156 @@ func main() {
 			return lisette.Option[*url.URL]{}, res.ErrVal
 		}()
 		var unwrap *url.URL
-		if ret_4.Tag == lisette.OptionSome {
-			unwrap = ret_4.SomeVal
+		if ret5.Tag == lisette.OptionSome {
+			unwrap = ret5.SomeVal
 		}
-		return unwrap, ret_5
+		return unwrap, ret6
 	}}
 	raw := env.Proxy
-	var option_2 lisette.Option[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]
+	var option3 lisette.Option[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]
 	if raw != nil {
-		cb_1 := raw
+		cb2 := raw
 		var adapted func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]
-		if cb_1 != nil {
+		if cb2 != nil {
 			adapted = func(arg0 *http.Request) lisette.Result[lisette.Option[*url.URL], error] {
-				ret_6, ret_7 := cb_1(arg0)
-				if ret_7 != nil {
-					return lisette.MakeResultErr[lisette.Option[*url.URL], error](ret_7)
+				ret7, ret8 := cb2(arg0)
+				if ret8 != nil {
+					return lisette.MakeResultErr[lisette.Option[*url.URL], error](ret8)
 				}
-				option_3 := lisette.OptionFromNilable[*url.URL](ret_6, ret_6 == nil)
-				return lisette.MakeResultOk[lisette.Option[*url.URL], error](option_3)
+				option4 := lisette.OptionFromNilable[*url.URL](ret7, ret7 == nil)
+				return lisette.MakeResultOk[lisette.Option[*url.URL], error](option4)
 			}
 		}
-		option_2 = lisette.MakeOptionSome[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]](adapted)
+		option3 = lisette.MakeOptionSome[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]](adapted)
 	} else {
-		option_2 = lisette.MakeOptionNone[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]()
+		option3 = lisette.MakeOptionNone[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]()
 	}
-	if option_2.Tag != lisette.OptionSome {
+	if option3.Tag != lisette.OptionSome {
 		panic("no environment callback")
 	}
-	proxy := option_2.SomeVal
+	proxy := option3.SomeVal
 	subject := proxy(req)
 	if !(subject.Tag == lisette.ResultOk && subject.OkVal.Tag == lisette.OptionNone) {
 		panic("environment callback found a proxy")
 	}
-	cb_2 := func(_ *http.Request) lisette.Result[lisette.Option[*url.URL], error] {
+	cb3 := func(_ *http.Request) lisette.Result[lisette.Option[*url.URL], error] {
 		return lisette.MakeResultOk[lisette.Option[*url.URL], error](lisette.MakeOptionNone[*url.URL]())
 	}
 	none := http.Transport{Proxy: func(arg0 *http.Request) (*url.URL, error) {
-		ret_8, ret_9 := func() (lisette.Option[*url.URL], error) {
-			res_1 := cb_2(arg0)
-			if res_1.Tag == lisette.ResultOk {
-				return res_1.OkVal, nil
+		ret9, ret10 := func() (lisette.Option[*url.URL], error) {
+			res2 := cb3(arg0)
+			if res2.Tag == lisette.ResultOk {
+				return res2.OkVal, nil
 			}
-			return lisette.Option[*url.URL]{}, res_1.ErrVal
+			return lisette.Option[*url.URL]{}, res2.ErrVal
 		}()
-		var unwrap_1 *url.URL
-		if ret_8.Tag == lisette.OptionSome {
-			unwrap_1 = ret_8.SomeVal
+		var unwrap2 *url.URL
+		if ret9.Tag == lisette.OptionSome {
+			unwrap2 = ret9.SomeVal
 		}
-		return unwrap_1, ret_9
+		return unwrap2, ret10
 	}}
-	raw_1 := none.Proxy
-	var option_4 lisette.Option[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]
-	if raw_1 != nil {
-		cb_3 := raw_1
-		var adapted_1 func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]
-		if cb_3 != nil {
-			adapted_1 = func(arg0 *http.Request) lisette.Result[lisette.Option[*url.URL], error] {
-				ret_10, ret_11 := cb_3(arg0)
-				if ret_11 != nil {
-					return lisette.MakeResultErr[lisette.Option[*url.URL], error](ret_11)
+	raw2 := none.Proxy
+	var option5 lisette.Option[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]
+	if raw2 != nil {
+		cb4 := raw2
+		var adapted2 func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]
+		if cb4 != nil {
+			adapted2 = func(arg0 *http.Request) lisette.Result[lisette.Option[*url.URL], error] {
+				ret11, ret12 := cb4(arg0)
+				if ret12 != nil {
+					return lisette.MakeResultErr[lisette.Option[*url.URL], error](ret12)
 				}
-				option_5 := lisette.OptionFromNilable[*url.URL](ret_10, ret_10 == nil)
-				return lisette.MakeResultOk[lisette.Option[*url.URL], error](option_5)
+				option6 := lisette.OptionFromNilable[*url.URL](ret11, ret11 == nil)
+				return lisette.MakeResultOk[lisette.Option[*url.URL], error](option6)
 			}
 		}
-		option_4 = lisette.MakeOptionSome[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]](adapted_1)
+		option5 = lisette.MakeOptionSome[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]](adapted2)
 	} else {
-		option_4 = lisette.MakeOptionNone[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]()
+		option5 = lisette.MakeOptionNone[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]()
 	}
-	if option_4.Tag != lisette.OptionSome {
+	if option5.Tag != lisette.OptionSome {
 		panic("no closure callback")
 	}
-	proxy_1 := option_4.SomeVal
-	subject_1 := proxy_1(req)
-	if !(subject_1.Tag == lisette.ResultOk && subject_1.OkVal.Tag == lisette.OptionNone) {
+	proxy2 := option5.SomeVal
+	subject2 := proxy2(req)
+	if !(subject2.Tag == lisette.ResultOk && subject2.OkVal.Tag == lisette.OptionNone) {
 		panic("closure callback lost None")
 	}
-	u, err_1 := url.Parse("http://proxy.example:8080")
-	if err_1 != nil || u == nil {
+	u, err2 := url.Parse("http://proxy.example:8080")
+	if err2 != nil || u == nil {
 		panic("url")
 	}
-	raw_2 := http.ProxyURL(u)
-	var option_6 lisette.Option[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]
-	if raw_2 != nil {
-		cb_4 := raw_2
-		var adapted_2 func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]
-		if cb_4 != nil {
-			adapted_2 = func(arg0 *http.Request) lisette.Result[lisette.Option[*url.URL], error] {
-				ret_12, ret_13 := cb_4(arg0)
-				if ret_13 != nil {
-					return lisette.MakeResultErr[lisette.Option[*url.URL], error](ret_13)
+	raw3 := http.ProxyURL(u)
+	var option7 lisette.Option[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]
+	if raw3 != nil {
+		cb5 := raw3
+		var adapted3 func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]
+		if cb5 != nil {
+			adapted3 = func(arg0 *http.Request) lisette.Result[lisette.Option[*url.URL], error] {
+				ret13, ret14 := cb5(arg0)
+				if ret14 != nil {
+					return lisette.MakeResultErr[lisette.Option[*url.URL], error](ret14)
 				}
-				option_7 := lisette.OptionFromNilable[*url.URL](ret_12, ret_12 == nil)
-				return lisette.MakeResultOk[lisette.Option[*url.URL], error](option_7)
+				option8 := lisette.OptionFromNilable[*url.URL](ret13, ret13 == nil)
+				return lisette.MakeResultOk[lisette.Option[*url.URL], error](option8)
 			}
 		}
-		option_6 = lisette.MakeOptionSome[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]](adapted_2)
+		option7 = lisette.MakeOptionSome[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]](adapted3)
 	} else {
-		option_6 = lisette.MakeOptionNone[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]()
+		option7 = lisette.MakeOptionNone[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]()
 	}
-	var unwrap_2 func(*http.Request) (*url.URL, error)
-	if option_6.Tag == lisette.OptionSome {
-		cb_5 := option_6.SomeVal
-		var adapted_3 func(*http.Request) (*url.URL, error)
-		if cb_5 != nil {
-			adapted_3 = func(arg0 *http.Request) (*url.URL, error) {
-				ret_14, ret_15 := func() (lisette.Option[*url.URL], error) {
-					res_2 := cb_5(arg0)
-					if res_2.Tag == lisette.ResultOk {
-						return res_2.OkVal, nil
+	var unwrap3 func(*http.Request) (*url.URL, error)
+	if option7.Tag == lisette.OptionSome {
+		cb6 := option7.SomeVal
+		var adapted4 func(*http.Request) (*url.URL, error)
+		if cb6 != nil {
+			adapted4 = func(arg0 *http.Request) (*url.URL, error) {
+				ret15, ret16 := func() (lisette.Option[*url.URL], error) {
+					res3 := cb6(arg0)
+					if res3.Tag == lisette.ResultOk {
+						return res3.OkVal, nil
 					}
-					return lisette.Option[*url.URL]{}, res_2.ErrVal
+					return lisette.Option[*url.URL]{}, res3.ErrVal
 				}()
-				var unwrap_3 *url.URL
-				if ret_14.Tag == lisette.OptionSome {
-					unwrap_3 = ret_14.SomeVal
+				var unwrap4 *url.URL
+				if ret15.Tag == lisette.OptionSome {
+					unwrap4 = ret15.SomeVal
 				}
-				return unwrap_3, ret_15
+				return unwrap4, ret16
 			}
 		}
-		unwrap_2 = adapted_3
+		unwrap3 = adapted4
 	}
-	fixed := http.Transport{Proxy: unwrap_2}
-	raw_3 := fixed.Proxy
-	var option_8 lisette.Option[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]
-	if raw_3 != nil {
-		cb_6 := raw_3
-		var adapted_4 func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]
-		if cb_6 != nil {
-			adapted_4 = func(arg0 *http.Request) lisette.Result[lisette.Option[*url.URL], error] {
-				ret_16, ret_17 := cb_6(arg0)
-				if ret_17 != nil {
-					return lisette.MakeResultErr[lisette.Option[*url.URL], error](ret_17)
+	fixed := http.Transport{Proxy: unwrap3}
+	raw4 := fixed.Proxy
+	var option9 lisette.Option[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]
+	if raw4 != nil {
+		cb7 := raw4
+		var adapted5 func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]
+		if cb7 != nil {
+			adapted5 = func(arg0 *http.Request) lisette.Result[lisette.Option[*url.URL], error] {
+				ret17, ret18 := cb7(arg0)
+				if ret18 != nil {
+					return lisette.MakeResultErr[lisette.Option[*url.URL], error](ret18)
 				}
-				option_9 := lisette.OptionFromNilable[*url.URL](ret_16, ret_16 == nil)
-				return lisette.MakeResultOk[lisette.Option[*url.URL], error](option_9)
+				option10 := lisette.OptionFromNilable[*url.URL](ret17, ret17 == nil)
+				return lisette.MakeResultOk[lisette.Option[*url.URL], error](option10)
 			}
 		}
-		option_8 = lisette.MakeOptionSome[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]](adapted_4)
+		option9 = lisette.MakeOptionSome[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]](adapted5)
 	} else {
-		option_8 = lisette.MakeOptionNone[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]()
+		option9 = lisette.MakeOptionNone[func(*http.Request) lisette.Result[lisette.Option[*url.URL], error]]()
 	}
-	if option_8.Tag != lisette.OptionSome {
+	if option9.Tag != lisette.OptionSome {
 		panic("no fixed callback")
 	}
-	proxy_2 := option_8.SomeVal
-	subject_2 := proxy_2(req)
-	if !(subject_2.Tag == lisette.ResultOk && subject_2.OkVal.Tag == lisette.OptionSome) {
+	proxy3 := option9.SomeVal
+	subject3 := proxy3(req)
+	if !(subject3.Tag == lisette.ResultOk && subject3.OkVal.Tag == lisette.OptionSome) {
 		panic("fixed callback lost the url")
 	}
-	found := subject_2.OkVal.SomeVal
+	found := subject3.OkVal.SomeVal
 	if found.String() != "http://proxy.example:8080" {
 		panic("fixed callback changed the url")
 	}

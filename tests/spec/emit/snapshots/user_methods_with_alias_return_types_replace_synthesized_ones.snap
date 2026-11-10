@@ -102,7 +102,7 @@ func main() {
 		v:    1,
 		tags: []string{"b"},
 	}
-	if !slices.EqualFunc([]Cell{a}, []Cell{b}, func(a_1, b_1 Cell) bool { return a_1.equals(b_1) }) {
+	if !slices.EqualFunc([]Cell{a}, []Cell{b}, func(a2, b2 Cell) bool { return a2.equals(b2) }) {
 		panic("user equals ignored")
 	}
 	if !(Row{cell: a}).equals(Row{cell: b}) {

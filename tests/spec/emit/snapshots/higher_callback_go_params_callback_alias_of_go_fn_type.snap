@@ -33,11 +33,11 @@ func give[T any](f func(string, filepath.WalkFunc) T) func(string, filepath.Walk
 }
 
 func main() {
-	cb_1 := filepath.Walk
+	cb2 := filepath.Walk
 	var adapted func(string, filepath.WalkFunc) lisette.Result[struct{}, error]
-	if cb_1 != nil {
+	if cb2 != nil {
 		adapted = func(arg0 string, arg1 filepath.WalkFunc) lisette.Result[struct{}, error] {
-			ret := cb_1(arg0, arg1)
+			ret := cb2(arg0, arg1)
 			if ret != nil {
 				return lisette.MakeResultErr[struct{}, error](ret)
 			}
@@ -45,13 +45,13 @@ func main() {
 		}
 	}
 	walk := give(adapted)
-	cb_2 := func(_ string, _ lisette.Option[fs.FileInfo], _ lisette.Option[error]) error {
+	cb3 := func(_ string, _ lisette.Option[fs.FileInfo], _ lisette.Option[error]) error {
 		return nil
 	}
 	var cb Walker = func(arg0 string, arg1 fs.FileInfo, arg2 error) error {
 		option := lisette.OptionFromNilable[fs.FileInfo](arg1, lisette.IsNilInterface(arg1))
-		option_1 := lisette.OptionFromNilable[error](arg2, lisette.IsNilInterface(arg2))
-		return cb_2(arg0, option, option_1)
+		option2 := lisette.OptionFromNilable[error](arg2, lisette.IsNilInterface(arg2))
+		return cb3(arg0, option, option2)
 	}
 	walk("/tmp", filepath.WalkFunc(cb))
 }

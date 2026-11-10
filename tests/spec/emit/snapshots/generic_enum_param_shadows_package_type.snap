@@ -21,12 +21,12 @@ description: |
 ---
 package main
 
-func MakeWrapEmpty[T_2 any]() Wrap[T_2] {
-	return Wrap[T_2]{Tag: WrapEmpty}
+func MakeWrapEmpty[T2 any]() Wrap[T2] {
+	return Wrap[T2]{Tag: WrapEmpty}
 }
 
-func MakeWrapFull[T_2 any](arg0 T_2) Wrap[T_2] {
-	return Wrap[T_2]{Tag: WrapFull, Full: arg0}
+func MakeWrapFull[T2 any](arg0 T2) Wrap[T2] {
+	return Wrap[T2]{Tag: WrapFull, Full: arg0}
 }
 
 type T struct {
@@ -40,9 +40,9 @@ const (
 	WrapFull
 )
 
-type Wrap[T_2 any] struct {
+type Wrap[T2 any] struct {
 	Tag  WrapTag
-	Full T_2
+	Full T2
 }
 
 func test() int {

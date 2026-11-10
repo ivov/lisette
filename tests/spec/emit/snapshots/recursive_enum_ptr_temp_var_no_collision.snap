@@ -47,14 +47,14 @@ func main() {
 		Tag:   NodeLeaf,
 		Value: 1,
 	}
-	ptr_2 := Node{
+	ptr2 := Node{
 		Tag:   NodeLeaf,
 		Value: 2,
 	}
 	n := Node{
 		Tag:   NodeBranch,
 		Left:  &ptr,
-		Right: &ptr_2,
+		Right: &ptr2,
 	}
 	ptr_1 := 3
 	fmt.Println(n)

@@ -9,6 +9,6 @@ description: |
 package main
 
 func test(arr []int) []int {
-	len_1 := len(arr)
-	return arr[:len_1:len_1]
+	len2 := len(arr)
+	return arr[:len2:len2]
 }

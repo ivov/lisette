@@ -49,12 +49,12 @@ func pair(value lisette.Tuple2[ast.Filter, lisette.Option[ast.Filter]]) (doc.Fil
 	var adapted lisette.Tuple2[doc.Filter, lisette.Option[doc.Filter]]
 	adapted.First = doc.Filter(value.First)
 	src := value.Second
-	var adapted_1 lisette.Option[doc.Filter]
-	adapted_1.Tag = src.Tag
+	var adapted2 lisette.Option[doc.Filter]
+	adapted2.Tag = src.Tag
 	if src.Tag == lisette.OptionSome {
-		adapted_1.SomeVal = doc.Filter(src.SomeVal)
+		adapted2.SomeVal = doc.Filter(src.SomeVal)
 	}
-	adapted.Second = adapted_1
+	adapted.Second = adapted2
 	opt := adapted.Second
 	var unwrap doc.Filter
 	if opt.Tag == lisette.OptionSome {
@@ -93,9 +93,9 @@ func main() {
 	if ret := option(lisette.MakeOptionNone[ast.Filter]()); ret != nil {
 		panic("none became some")
 	}
-	ret_1, ret_2 := pair(lisette.MakeTuple2[ast.Filter, lisette.Option[ast.Filter]](callback, lisette.MakeOptionSome[ast.Filter](ast.Filter(callback))))
-	option_1 := lisette.OptionFromNilable[doc.Filter](ret_2, ret_2 == nil)
-	converted := lisette.MakeTuple2(ret_1, option_1)
+	ret2, ret3 := pair(lisette.MakeTuple2[ast.Filter, lisette.Option[ast.Filter]](callback, lisette.MakeOptionSome[ast.Filter](ast.Filter(callback))))
+	option2 := lisette.OptionFromNilable[doc.Filter](ret3, ret3 == nil)
+	converted := lisette.MakeTuple2(ret2, option2)
 	if !converted.First("ok") {
 		panic("tuple callback changed")
 	}
@@ -114,11 +114,11 @@ func main() {
 	if !h("ok") {
 		panic("result callback changed")
 	}
-	subject_1 := fallible(lisette.MakeResultErr[ast.Filter, string]("sentinel"))
-	if subject_1.Tag != lisette.ResultErr {
+	subject2 := fallible(lisette.MakeResultErr[ast.Filter, string]("sentinel"))
+	if subject2.Tag != lisette.ResultErr {
 		panic("err became ok")
 	}
-	message := subject_1.ErrVal
+	message := subject2.ErrVal
 	if message != "sentinel" || hits != 4 {
 		panic("effects or error changed")
 	}

@@ -37,11 +37,11 @@ func main() {
 	var option lisette.Option[map[string]lisette.Option[*ast.Object]]
 	if raw != nil {
 		wrapped := make(map[string]lisette.Option[*ast.Object], len(raw))
-		for i_1, v_1 := range raw {
-			if v_1 != nil {
-				wrapped[i_1] = lisette.MakeOptionSome[*ast.Object](v_1)
+		for i2, v2 := range raw {
+			if v2 != nil {
+				wrapped[i2] = lisette.MakeOptionSome[*ast.Object](v2)
 			} else {
-				wrapped[i_1] = lisette.MakeOptionNone[*ast.Object]()
+				wrapped[i2] = lisette.MakeOptionNone[*ast.Object]()
 			}
 		}
 		option = lisette.MakeOptionSome[map[string]lisette.Option[*ast.Object]](wrapped)

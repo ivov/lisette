@@ -13,11 +13,11 @@ description: |
 package main
 
 func test() int {
-	var x_1 int
+	var x2 int
 	for {
 		x := 1
-		x_1 = x
+		x2 = x
 		break
 	}
-	return x_1
+	return x2
 }

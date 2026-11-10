@@ -22,9 +22,9 @@ import "strconv"
 
 func shifted(sh uint64) uint64 {
 	ret, err := strconv.ParseUint("bad", 10, 64)
-	default_1 := uint64(1 << sh)
+	default2 := uint64(1 << sh)
 	if err != nil {
-		ret = default_1
+		ret = default2
 	}
 	return ret
 }

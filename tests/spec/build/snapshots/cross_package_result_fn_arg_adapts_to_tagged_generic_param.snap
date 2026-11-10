@@ -14,9 +14,9 @@ func main() {
 	var adapted func(int) lisette.Result[int, resolver.Face]
 	if cb != nil {
 		adapted = func(arg0 int) lisette.Result[int, resolver.Face] {
-			ret, ret_1 := cb(arg0)
-			if ret_1 != nil {
-				return lisette.MakeResultErr[int, resolver.Face](ret_1)
+			ret, ret2 := cb(arg0)
+			if ret2 != nil {
+				return lisette.MakeResultErr[int, resolver.Face](ret2)
 			}
 			return lisette.MakeResultOk[int, resolver.Face](ret)
 		}

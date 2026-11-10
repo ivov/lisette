@@ -40,11 +40,11 @@ func main() {
 		panic("expected an explicit empty literal to encode as [], got " + encoded)
 	}
 	payload := Payload{Items: []int{}}
-	ret_1, err_1 := json.Marshal(payload)
-	if err_1 != nil {
-		ret_1 = []byte{}
+	ret2, err2 := json.Marshal(payload)
+	if err2 != nil {
+		ret2 = []byte{}
 	}
-	wrapped := string(ret_1)
+	wrapped := string(ret2)
 	if wrapped != "{\"Items\":[]}" {
 		panic("expected an empty slice field to encode as [], got " + wrapped)
 	}

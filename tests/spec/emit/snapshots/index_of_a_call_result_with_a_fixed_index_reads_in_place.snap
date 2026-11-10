@@ -52,8 +52,8 @@ func moving(s string) string {
 	}
 	base := parts(s)
 	x := base[i]
-	base_1 := parts(s)
-	return x + base_1[bump()]
+	base2 := parts(s)
+	return x + base2[bump()]
 }
 
 func splitAt(s string, a, b int) string {

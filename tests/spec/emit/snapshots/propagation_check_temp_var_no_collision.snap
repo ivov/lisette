@@ -6,8 +6,8 @@ description: |
   
   fn foo() -> Result<int, string> {
     let x = Ok(1)?
-    let check_1 = 7
-    fmt.Println(check_1)
+    let check2 = 7
+    fmt.Println(check2)
     Ok(x)
   }
   
@@ -28,8 +28,8 @@ func foo() lisette.Result[int, string] {
 		return check
 	}
 	x := check.OkVal
-	check_1 := 7
-	fmt.Println(check_1)
+	check2 := 7
+	fmt.Println(check2)
 	return lisette.MakeResultOk[int, string](x)
 }
 

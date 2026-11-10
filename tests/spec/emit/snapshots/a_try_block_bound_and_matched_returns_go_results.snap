@@ -58,18 +58,18 @@ func total(texts []string) int {
 }
 
 func offset(text string) (int, error) {
-	err, err_1 := strconv.Atoi("1")
-	if err_1 != nil {
-		return 0, err_1
+	err, err2 := strconv.Atoi("1")
+	if err2 != nil {
+		return 0, err2
 	}
-	got, err_3 := func() (int, error) {
-		n, err_2 := strconv.Atoi(text)
-		if err_2 != nil {
-			return 0, err_2
+	got, err4 := func() (int, error) {
+		n, err3 := strconv.Atoi(text)
+		if err3 != nil {
+			return 0, err3
 		}
 		return n + err, nil
 	}()
-	if err_3 != nil {
+	if err4 != nil {
 		return err, nil
 	}
 	return got, nil

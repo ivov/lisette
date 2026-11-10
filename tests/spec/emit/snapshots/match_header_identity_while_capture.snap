@@ -36,9 +36,9 @@ func main() {
 	}
 	f := func() int {
 		if value(ch, subject+1) == 8 {
-			subject_2 := read() + 1
+			subject3 := read() + 1
 			g := func() int {
-				return subject_2
+				return subject3
 			}
 			return g()
 		}
@@ -48,9 +48,9 @@ func main() {
 	total := 0
 	for {
 		if pending.Tag == lisette.OptionSome {
-			left_1 := total
+			left2 := total
 			left := pending.SomeVal
-			total = left_1 + (left + f())
+			total = left2 + (left + f())
 			pending = lisette.MakeOptionNone[int]()
 		} else {
 			break

@@ -79,9 +79,9 @@ func failed[T any, E any](r lisette.Result[T, E]) bool {
 
 func both(a, b string) bool {
 	arg := lisette.ResultFromPair[int](strconv.Atoi(a))
-	arg_1 := lisette.ResultFromPair[int](strconv.Atoi(b))
+	arg2 := lisette.ResultFromPair[int](strconv.Atoi(b))
 	if arg.Tag == lisette.ResultOk {
-		if arg_1.Tag == lisette.ResultOk {
+		if arg2.Tag == lisette.ResultOk {
 			return true
 		}
 		return false
@@ -96,26 +96,26 @@ func test() {
 	if !both("1", "2") || both("1", "x") {
 		panic("both texts should parse")
 	}
-	ret, ret_1 := coded(-1)
+	ret, ret2 := coded(-1)
 	var result lisette.Result[int, *CodeError]
-	if ret_1 != nil {
-		result = lisette.MakeResultErr[int, *CodeError](ret_1)
+	if ret2 != nil {
+		result = lisette.MakeResultErr[int, *CodeError](ret2)
 	} else {
 		result = lisette.MakeResultOk[int, *CodeError](ret)
 	}
 	if !failed(result) {
 		panic("a negative code should fail")
 	}
-	ret_2, ret_3 := os.Open("/nonexistent")
-	var result_1 lisette.Result[*os.File, error]
-	if ret_3 != nil {
-		result_1 = lisette.MakeResultErr[*os.File, error](ret_3)
-	} else if ret_2 == nil {
-		result_1 = lisette.MakeResultErr[*os.File, error](errors.New("unexpected nil"))
+	ret3, ret4 := os.Open("/nonexistent")
+	var result2 lisette.Result[*os.File, error]
+	if ret4 != nil {
+		result2 = lisette.MakeResultErr[*os.File, error](ret4)
+	} else if ret3 == nil {
+		result2 = lisette.MakeResultErr[*os.File, error](errors.New("unexpected nil"))
 	} else {
-		result_1 = lisette.MakeResultOk[*os.File, error](ret_2)
+		result2 = lisette.MakeResultOk[*os.File, error](ret3)
 	}
-	if !failed(result_1) {
+	if !failed(result2) {
 		panic("a missing file should not open")
 	}
 }

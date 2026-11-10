@@ -49,11 +49,11 @@ func main() {
 	}
 	raw := lit.Elts
 	wrapped := make([]lisette.Option[ast.Expr], len(raw))
-	for i_1, v_1 := range raw {
-		if !lisette.IsNilInterface(v_1) {
-			wrapped[i_1] = lisette.MakeOptionSome[ast.Expr](v_1)
+	for i2, v2 := range raw {
+		if !lisette.IsNilInterface(v2) {
+			wrapped[i2] = lisette.MakeOptionSome[ast.Expr](v2)
 		} else {
-			wrapped[i_1] = lisette.MakeOptionNone[ast.Expr]()
+			wrapped[i2] = lisette.MakeOptionNone[ast.Expr]()
 		}
 	}
 	elts := wrapped

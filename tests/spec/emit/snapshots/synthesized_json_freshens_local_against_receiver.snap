@@ -59,13 +59,13 @@ func (v *Vault) UnmarshalJSON(data []byte) error {
 			if err := json.Unmarshal(val, &inner); err != nil {
 				return err
 			}
-			if v_2, ok := inner["a"]; ok {
-				if err := json.Unmarshal(v_2, &v.A); err != nil {
+			if v2, ok := inner["a"]; ok {
+				if err := json.Unmarshal(v2, &v.A); err != nil {
 					return err
 				}
 			}
-			if v_2, ok := inner["b"]; ok {
-				if err := json.Unmarshal(v_2, &v.B); err != nil {
+			if v2, ok := inner["b"]; ok {
+				if err := json.Unmarshal(v2, &v.B); err != nil {
 					return err
 				}
 			}

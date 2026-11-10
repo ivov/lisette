@@ -31,9 +31,9 @@ import (
 
 func main() {
 	f := func() lisette.Result[[]lisette.Option[string], error] {
-		ret, ret_1 := aws.Make()
-		if ret_1 != nil {
-			return lisette.MakeResultErr[[]lisette.Option[string], error](ret_1)
+		ret, ret2 := aws.Make()
+		if ret2 != nil {
+			return lisette.MakeResultErr[[]lisette.Option[string], error](ret2)
 		}
 		wrapped := make([]lisette.Option[string], len(ret))
 		for i, v := range ret {

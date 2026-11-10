@@ -42,11 +42,11 @@ func makeT() T {
 	return T{v: 7}
 }
 
-type Box[T_2 any] struct {
-	item T_2
+type Box[T2 any] struct {
+	item T2
 }
 
-func (b Box[T_2]) probe() int {
+func (b Box[T2]) probe() int {
 	opt := lisette.MakeOptionNone[T]()
 	opt = lisette.MakeOptionSome(makeT())
 	if opt.Tag == lisette.OptionSome {

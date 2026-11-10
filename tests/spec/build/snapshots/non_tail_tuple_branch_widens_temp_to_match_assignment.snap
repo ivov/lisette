@@ -27,11 +27,11 @@ func pick(flag bool) (io.Reader, int) {
 		tup := lisette.MakeTuple2[Reader1, int](Reader1{}, 1)
 		result = lisette.MakeTuple2[io.Reader, int](tup.First, tup.Second)
 	} else {
-		tup_1 := lisette.MakeTuple2[Reader2, int](Reader2{}, 2)
-		result = lisette.MakeTuple2[io.Reader, int](tup_1.First, tup_1.Second)
+		tup2 := lisette.MakeTuple2[Reader2, int](Reader2{}, 2)
+		result = lisette.MakeTuple2[io.Reader, int](tup2.First, tup2.Second)
 	}
-	tup_2 := result
-	return tup_2.First, tup_2.Second
+	tup3 := result
+	return tup3.First, tup3.Second
 }
 
 func main() {

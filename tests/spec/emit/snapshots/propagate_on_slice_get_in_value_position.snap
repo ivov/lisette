@@ -20,8 +20,8 @@ func sumEnds(xs []int) (int, bool) {
 	if len(xs) <= 1 {
 		return 0, false
 	}
-	elem_1 := xs[1]
-	return elem + elem_1, true
+	elem2 := xs[1]
+	return elem + elem2, true
 }
 
 func main() {

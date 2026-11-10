@@ -22,8 +22,8 @@ func pair(ch chan int) (struct{}, lisette.Tuple2[int, struct{}]) {
 
 func main() {
 	ch := make(chan int, 3)
-	ret, ret_1 := pair(ch)
-	tup := lisette.MakeTuple2(ret, ret_1)
+	ret, ret2 := pair(ch)
+	tup := lisette.MakeTuple2(ret, ret2)
 	_ = tup
 	lisette.ChannelSend(ch, 9)
 	if lisette.ChannelReceive(ch).UnwrapOr(0) != 7 {

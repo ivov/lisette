@@ -48,8 +48,8 @@ func test() {
 		panic("get evaluated an operand twice")
 	}
 	base := counted(&base_calls, []int{1, 2, 3})
-	len_1 := len(base)
-	tail := base[1:len_1:len_1]
+	len2 := len(base)
+	tail := base[1:len2:len2]
 	if len(tail) != 2 || base_calls != 2 {
 		panic("slicing evaluated its base twice")
 	}

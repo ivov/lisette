@@ -71,12 +71,12 @@ func test() {
 		if check.Tag != lisette.ResultOk {
 			return lisette.MakeResultErr[lisette.Tuple2[any, int], string](check.ErrVal)
 		}
-		tup_1 := lisette.MakeTuple2[int, int](1, 2)
-		return lisette.MakeResultOk[lisette.Tuple2[any, int], string](lisette.MakeTuple2[any, int](tup_1.First, tup_1.Second))
+		tup2 := lisette.MakeTuple2[int, int](1, 2)
+		return lisette.MakeResultOk[lisette.Tuple2[any, int], string](lisette.MakeTuple2[any, int](tup2.First, tup2.Second))
 	}()
 	n := func() lisette.Option[Named] {
-		check_1 := lisette.MakeOptionSome(1)
-		if check_1.Tag != lisette.OptionSome {
+		check2 := lisette.MakeOptionSome(1)
+		if check2.Tag != lisette.OptionSome {
 			return lisette.MakeOptionNone[Named]()
 		}
 		return lisette.MakeOptionSome[Named](Cat{})
@@ -86,9 +86,9 @@ func test() {
 		return struct{}{}
 	})
 	w := func() lisette.Result[any, string] {
-		check_2 := risky()
-		if check_2.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[any, string](check_2.ErrVal)
+		check3 := risky()
+		if check3.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[any, string](check3.ErrVal)
 		}
 		unit()
 		return lisette.MakeResultOk[any, string](struct{}{})

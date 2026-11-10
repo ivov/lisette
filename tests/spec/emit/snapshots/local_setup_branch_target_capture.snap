@@ -25,14 +25,14 @@ import lisette "github.com/ivov/lisette/prelude"
 func main() {
 	result := 7
 	f := func() int {
-		var result_1 int
+		var result2 int
 		if result > 0 {
-			result_1 = 3
+			result2 = 3
 		} else {
-			result_1 = 4
+			result2 = 4
 		}
 		read := func() int {
-			return result_1
+			return result2
 		}
 		flag := read() == 3
 		if flag {
@@ -41,9 +41,9 @@ func main() {
 		return 0
 	}
 	total := 0
-	for _, result_2 := range []lisette.Option[int]{lisette.MakeOptionSome(2), lisette.MakeOptionNone[int]()} {
-		if result_2.Tag == lisette.OptionSome {
-			total += result_2.SomeVal + f()
+	for _, result3 := range []lisette.Option[int]{lisette.MakeOptionSome(2), lisette.MakeOptionNone[int]()} {
+		if result3.Tag == lisette.OptionSome {
+			total += result3.SomeVal + f()
 		} else {
 			total += f()
 		}

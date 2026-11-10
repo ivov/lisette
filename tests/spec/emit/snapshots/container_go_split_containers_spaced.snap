@@ -22,27 +22,27 @@ func main() {
 	s := []bufio.SplitFunc{bufio.ScanWords}
 	a := [1]bufio.SplitFunc{bufio.ScanWords}
 	m := map[string]bufio.SplitFunc{"f": bufio.ScanWords}
-	tup_1 := lisette.MakeTuple2[func([]byte, bool) lisette.Result[lisette.Tuple2[int, []byte], error], int](func(arg0 []byte, arg1 bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
-		ret, ret_1, ret_2 := bufio.ScanWords(arg0, arg1)
-		tup := lisette.MakeTuple2(ret, ret_1)
-		if ret_2 != nil {
-			return lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_2)
+	tup2 := lisette.MakeTuple2[func([]byte, bool) lisette.Result[lisette.Tuple2[int, []byte], error], int](func(arg0 []byte, arg1 bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
+		ret, ret2, ret3 := bufio.ScanWords(arg0, arg1)
+		tup := lisette.MakeTuple2(ret, ret2)
+		if ret3 != nil {
+			return lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret3)
 		}
 		return lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup)
 	}, 1)
-	cb := tup_1.First
+	cb := tup2.First
 	var adapted func([]byte, bool) (int, []byte, error)
 	if cb != nil {
 		adapted = func(arg0 []byte, arg1 bool) (int, []byte, error) {
 			res := cb(arg0, arg1)
 			if res.Tag == lisette.ResultOk {
-				tup_2 := res.OkVal
-				return tup_2.First, tup_2.Second, nil
+				tup3 := res.OkVal
+				return tup3.First, tup3.Second, nil
 			}
 			return 0, nil, res.ErrVal
 		}
 	}
-	t := lisette.MakeTuple2[bufio.SplitFunc, int](adapted, tup_1.Second)
+	t := lisette.MakeTuple2[bufio.SplitFunc, int](adapted, tup2.Second)
 	p := Pair{
 		F0: bufio.ScanWords,
 		F1: 1,
@@ -52,13 +52,13 @@ func main() {
 		panic("map")
 	}
 	for _, f := range []bufio.SplitFunc{s[0], a[0], mf, t.First, p.F0} {
-		ret_3, ret_4, ret_5 := f([]byte{65, 32}, true)
-		tup_3 := lisette.MakeTuple2(ret_3, ret_4)
+		ret4, ret5, ret6 := f([]byte{65, 32}, true)
+		tup4 := lisette.MakeTuple2(ret4, ret5)
 		var result lisette.Result[lisette.Tuple2[int, []byte], error]
-		if ret_5 != nil {
-			result = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret_5)
+		if ret6 != nil {
+			result = lisette.MakeResultErr[lisette.Tuple2[int, []byte], error](ret6)
 		} else {
-			result = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup_3)
+			result = lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup4)
 		}
 		if result.Tag != lisette.ResultOk {
 			panic("split")

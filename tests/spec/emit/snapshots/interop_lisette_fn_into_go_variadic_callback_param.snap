@@ -25,16 +25,16 @@ func main() {
 		return 0, res.ErrVal
 	})
 	aws.UseMany(func(arg0 int) (int, error) {
-		res_1 := lisette.MakeResultOk[int, error](arg0)
-		if res_1.Tag == lisette.ResultOk {
-			return res_1.OkVal, nil
+		res2 := lisette.MakeResultOk[int, error](arg0)
+		if res2.Tag == lisette.ResultOk {
+			return res2.OkVal, nil
 		}
-		return 0, res_1.ErrVal
+		return 0, res2.ErrVal
 	}, func(arg0 int) (int, error) {
-		res_2 := lisette.MakeResultOk[int, error](arg0)
-		if res_2.Tag == lisette.ResultOk {
-			return res_2.OkVal, nil
+		res3 := lisette.MakeResultOk[int, error](arg0)
+		if res3.Tag == lisette.ResultOk {
+			return res3.OkVal, nil
 		}
-		return 0, res_2.ErrVal
+		return 0, res3.ErrVal
 	})
 }

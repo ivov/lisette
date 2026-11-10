@@ -22,8 +22,8 @@ import (
 
 func main() {
 	f := func(arg0 *flag.Flag) lisette.Tuple2[string, string] {
-		ret, ret_1 := flag.UnquoteUsage(arg0)
-		tup := lisette.MakeTuple2(ret, ret_1)
+		ret, ret2 := flag.UnquoteUsage(arg0)
+		tup := lisette.MakeTuple2(ret, ret2)
 		return tup
 	}
 	raw := flag.Lookup("verbose")

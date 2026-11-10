@@ -34,9 +34,9 @@ type P struct {
 
 func bump(copy_ int, o P) P {
 	step := copy_
-	copy_1 := o
-	copy_1.a = step
-	return copy_1
+	copy2 := o
+	copy2.a = step
+	return copy2
 }
 
 func ownField(p P) P {
@@ -45,10 +45,10 @@ func ownField(p P) P {
 }
 
 func swap(p P) P {
-	copy_1 := p
-	copy_1.a = p.b
-	copy_1.b = p.a
-	return copy_1
+	copy2 := p
+	copy2.a = p.b
+	copy2.b = p.a
+	return copy2
 }
 
 func test() {

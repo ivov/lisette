@@ -30,8 +30,8 @@ func some[T any](x T) (T, bool) {
 func main() {
 	x := 3
 	holder := Holder[*int, lisette.Option[*int]]{f: func(arg0 *int) lisette.Option[*int] {
-		ret, ret_1 := some[*int](arg0)
-		if ret_1 && ret != nil {
+		ret, ret2 := some[*int](arg0)
+		if ret2 && ret != nil {
 			return lisette.MakeOptionSome[*int](ret)
 		}
 		return lisette.MakeOptionNone[*int]()
@@ -42,23 +42,23 @@ func main() {
 	}
 	a := subject.SomeVal
 	stored := holder.f
-	subject_1 := stored(&x)
-	if subject_1.Tag != lisette.OptionSome {
+	subject2 := stored(&x)
+	if subject2.Tag != lisette.OptionSome {
 		panic("stored field")
 	}
-	b := subject_1.SomeVal
+	b := subject2.SomeVal
 	holder.f = func(arg0 *int) lisette.Option[*int] {
-		ret_2, ret_3 := some[*int](arg0)
-		if ret_3 && ret_2 != nil {
-			return lisette.MakeOptionSome[*int](ret_2)
+		ret3, ret4 := some[*int](arg0)
+		if ret4 && ret3 != nil {
+			return lisette.MakeOptionSome[*int](ret3)
 		}
 		return lisette.MakeOptionNone[*int]()
 	}
-	subject_2 := holder.f(&x)
-	if subject_2.Tag != lisette.OptionSome {
+	subject3 := holder.f(&x)
+	if subject3.Tag != lisette.OptionSome {
 		panic("assigned field")
 	}
-	c := subject_2.SomeVal
+	c := subject3.SomeVal
 	if a != &x || b != &x || c != &x {
 		panic("field payloads")
 	}

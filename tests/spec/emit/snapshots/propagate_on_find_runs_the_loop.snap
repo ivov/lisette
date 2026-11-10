@@ -16,9 +16,9 @@ package main
 func firstBig(xs []int) (int, bool) {
 	var x int
 	found := false
-	for _, x_1 := range xs {
-		if x_1 > 2 {
-			x = x_1
+	for _, x2 := range xs {
+		if x2 > 2 {
+			x = x2
 			found = true
 			break
 		}

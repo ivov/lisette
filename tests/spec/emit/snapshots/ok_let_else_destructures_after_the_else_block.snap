@@ -41,9 +41,9 @@ func total(a string) int {
 	if err != nil {
 		return x
 	}
-	x_1 := ret.First
+	x2 := ret.First
 	y := ret.Second
-	return x_1 + y
+	return x2 + y
 }
 
 func test() {

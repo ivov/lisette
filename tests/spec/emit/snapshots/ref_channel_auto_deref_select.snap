@@ -21,14 +21,14 @@ func main() {
 	lisette.ChannelSend(ch, 42)
 	r := &ch
 	var tmp int
-	ch_1 := *r
+	ch2 := *r
 	for {
 		select {
-		case v, ok := <-ch_1:
+		case v, ok := <-ch2:
 			if ok {
 				tmp = v
 			} else {
-				ch_1 = nil
+				ch2 = nil
 				continue
 			}
 		default:

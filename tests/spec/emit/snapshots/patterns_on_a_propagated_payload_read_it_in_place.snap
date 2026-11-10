@@ -72,10 +72,10 @@ func found(name string) lisette.Result[int, string] {
 
 func shadowed() lisette.Result[string, string] {
 	check := "outer"
-	check_1 := load()
-	if check_1.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[string, string](check_1.ErrVal)
+	check2 := load()
+	if check2.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[string, string](check2.ErrVal)
 	}
-	cfg := check_1.OkVal.First
+	cfg := check2.OkVal.First
 	return lisette.MakeResultOk[string, string](cfg.url + check)
 }

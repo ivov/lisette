@@ -23,9 +23,9 @@ import lisette "github.com/ivov/lisette/prelude"
 func read(option lisette.Option[int]) string {
 	value := "outer"
 	if option.Tag == lisette.OptionSome {
-		value_1 := option.SomeVal
-		if value_1 > 0 {
-			if value_1 == 7 {
+		value2 := option.SomeVal
+		if value2 > 0 {
+			if value2 == 7 {
 				return "seven"
 			}
 			return "positive"

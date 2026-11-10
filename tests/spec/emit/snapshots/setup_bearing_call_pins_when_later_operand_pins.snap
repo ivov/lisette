@@ -29,8 +29,8 @@ func run() int {
 		return v
 	}
 	arg := x
-	v_1 := foo(arg, setx())
-	v_2 := x
-	r := []int{v_1, v_2, bump(5)}
+	v2 := foo(arg, setx())
+	v3 := x
+	r := []int{v2, v3, bump(5)}
 	return r[0] + r[1] + r[2]
 }

@@ -90,8 +90,8 @@ type _lisAdapter_Bar_Box_0[T comparable] struct {
 }
 
 func (a _lisAdapter_Bar_Box_0[T]) get() lisette.Option[Foo[T]] {
-	ret, ret_1 := a.inner.get()
-	if ret_1 && !lisette.IsNilInterface(ret) {
+	ret, ret2 := a.inner.get()
+	if ret2 && !lisette.IsNilInterface(ret) {
 		return lisette.MakeOptionSome[Foo[T]](ret)
 	}
 	return lisette.MakeOptionNone[Foo[T]]()

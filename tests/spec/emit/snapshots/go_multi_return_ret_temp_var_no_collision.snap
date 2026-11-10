@@ -7,9 +7,9 @@ description: |
   
   fn main() {
     let n = strconv.Atoi("42")
-    let ret_1 = 7
+    let ret2 = 7
     fmt.Println(n)
-    fmt.Println(ret_1)
+    fmt.Println(ret2)
   }
 ---
 package main
@@ -22,7 +22,7 @@ import (
 
 func main() {
 	n := lisette.ResultFromPair[int](strconv.Atoi("42"))
-	ret_1 := 7
+	ret2 := 7
 	fmt.Println(n)
-	fmt.Println(ret_1)
+	fmt.Println(ret2)
 }

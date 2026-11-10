@@ -15,9 +15,9 @@ func run() {
 	dst := []int{0, 0, 0}
 	src := []int{1, 2, 3}
 	arg := dst
-	arg_1 := src
+	arg2 := src
 	defer func() {
-		_ = copy(arg, arg_1)
+		_ = copy(arg, arg2)
 	}()
 	src = []int{9, 9, 9}
 }

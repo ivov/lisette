@@ -44,8 +44,8 @@ func test() {
 		tup := lisette.MakeTuple2[Boom, int](Boom{}, 1)
 		pair = lisette.MakeTuple2[error, int](tup.First, tup.Second)
 	} else {
-		tup_1 := lisette.MakeTuple2[Boom, int](Boom{}, 2)
-		pair = lisette.MakeTuple2[error, int](tup_1.First, tup_1.Second)
+		tup2 := lisette.MakeTuple2[Boom, int](Boom{}, 2)
+		pair = lisette.MakeTuple2[error, int](tup2.First, tup2.Second)
 	}
 	if describe(pair) != "boom" {
 		panic("match arm lost its interface elements")

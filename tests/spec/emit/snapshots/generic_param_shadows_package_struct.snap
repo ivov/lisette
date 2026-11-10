@@ -35,7 +35,7 @@ func makeT() T {
 	return T{v: 7}
 }
 
-func f[T_2 any](_ T_2) int {
+func f[T2 any](_ T2) int {
 	opt := lisette.MakeOptionNone[T]()
 	opt = lisette.MakeOptionSome(makeT())
 	if opt.Tag == lisette.OptionSome {

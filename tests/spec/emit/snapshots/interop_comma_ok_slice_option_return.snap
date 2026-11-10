@@ -28,9 +28,9 @@ import (
 )
 
 func main() {
-	ret, ret_1 := aws.Fetch()
+	ret, ret2 := aws.Fetch()
 	var option lisette.Option[[]lisette.Option[string]]
-	if ret_1 {
+	if ret2 {
 		wrapped := make([]lisette.Option[string], len(ret))
 		for i, v := range ret {
 			if v != nil {

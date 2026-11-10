@@ -58,11 +58,11 @@ func test() {
 	if _, err := lookup(db, 2); err == nil {
 		panic("a missing key should fail")
 	}
-	ret_1, err_1 := first([]int{7})
-	if err_1 != nil {
-		ret_1 = 0
+	ret2, err2 := first([]int{7})
+	if err2 != nil {
+		ret2 = 0
 	}
-	if ret_1 != 7 {
+	if ret2 != 7 {
 		panic("a first element should be found")
 	}
 	if _, err := first([]int{}); err == nil {

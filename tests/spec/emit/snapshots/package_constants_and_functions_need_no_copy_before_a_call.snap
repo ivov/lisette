@@ -69,11 +69,11 @@ func test() {
 	flag.Usage = func() {
 		cb()
 	}
-	cb_1 := flag.Usage
+	cb2 := flag.Usage
 	var adapted func() struct{}
-	if cb_1 != nil {
+	if cb2 != nil {
 		adapted = func() struct{} {
-			cb_1()
+			cb2()
 			return struct{}{}
 		}
 	}

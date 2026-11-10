@@ -17,13 +17,13 @@ func areaOrNeg(s shapes.Shape) int {
 	var w int
 	var h int
 	asserted, ok := s.(shapes.Rect)
-	asserted_1, ok_1 := s.(shapes.Box)
+	asserted2, ok2 := s.(shapes.Box)
 	if ok {
 		w = asserted.W
 		h = asserted.H
-	} else if ok_1 {
-		w = asserted_1.Width
-		h = asserted_1.Height
+	} else if ok2 {
+		w = asserted2.Width
+		h = asserted2.Height
 	} else {
 		return -1
 	}

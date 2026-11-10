@@ -31,8 +31,8 @@ func test() {
 	ch := make(chan int, 1)
 	lisette.ChannelSend(ch, 42)
 	select {
-	case val, ok_1 := <-ch:
-		if ok_1 {
+	case val, ok2 := <-ch:
+		if ok2 {
 			fmt.Printf("received: %d\n", val)
 			fmt.Println("ok is: " + ok)
 		} else {

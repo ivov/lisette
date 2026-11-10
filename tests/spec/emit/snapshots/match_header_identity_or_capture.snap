@@ -59,36 +59,36 @@ func main() {
 	subject := 7
 	ch := make(chan int, 3)
 	f := func() int {
-		subject_1 := value(ch, subject)
-		switch subject_1.Tag {
+		subject2 := value(ch, subject)
+		switch subject2.Tag {
 		case ItemA:
-			subject_2 := subject_1.A
+			subject3 := subject2.A
 			read := func() int {
-				return subject_2
+				return subject3
 			}
-			subject_3 := lisette.MakeOptionSome(read() + 1)
-			if subject_3.Tag != lisette.OptionSome {
+			subject4 := lisette.MakeOptionSome(read() + 1)
+			if subject4.Tag != lisette.OptionSome {
 				return read()
 			}
-			subject := subject_3.SomeVal
-			subject_4 := lisette.MakeOptionSome(subject + 1)
-			if subject_4.Tag == lisette.OptionSome {
-				return subject_4.SomeVal
+			subject := subject4.SomeVal
+			subject5 := lisette.MakeOptionSome(subject + 1)
+			if subject5.Tag == lisette.OptionSome {
+				return subject5.SomeVal
 			}
 			return read()
 		case ItemB:
-			subject_5 := subject_1.B
+			subject6 := subject2.B
 			read := func() int {
-				return subject_5
+				return subject6
 			}
-			subject_6 := lisette.MakeOptionSome(read() + 1)
-			if subject_6.Tag != lisette.OptionSome {
+			subject7 := lisette.MakeOptionSome(read() + 1)
+			if subject7.Tag != lisette.OptionSome {
 				return read()
 			}
-			subject := subject_6.SomeVal
-			subject_7 := lisette.MakeOptionSome(subject + 1)
-			if subject_7.Tag == lisette.OptionSome {
-				return subject_7.SomeVal
+			subject := subject7.SomeVal
+			subject8 := lisette.MakeOptionSome(subject + 1)
+			if subject8.Tag == lisette.OptionSome {
+				return subject8.SomeVal
 			}
 			return read()
 		default:

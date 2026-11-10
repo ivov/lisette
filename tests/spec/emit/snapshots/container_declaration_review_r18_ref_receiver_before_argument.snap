@@ -53,11 +53,11 @@ func main() {
 		panic("outer")
 	}
 	f := a.SomeVal
-	subject_1 := f()
-	if subject_1.Tag != lisette.OptionSome {
+	subject2 := f()
+	if subject2.Tag != lisette.OptionSome {
 		panic("inner")
 	}
-	g := subject_1.SomeVal
+	g := subject2.SomeVal
 	verify(g() == 751)
 }
 

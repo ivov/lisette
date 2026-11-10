@@ -24,9 +24,9 @@ func bump(i *int) int {
 
 func main() {
 	i := 0
-	range_1 := i
+	range2 := i
 	r := lisette.Range[int]{
-		Start: range_1,
+		Start: range2,
 		End:   bump(&i),
 	}
 	_ = r
