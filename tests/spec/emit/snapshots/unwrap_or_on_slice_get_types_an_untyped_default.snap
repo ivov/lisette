@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn weight(xs: Slice<float64>, i: int) -> float64 {
+    xs.get(i).unwrap_or(0)
+  }
+  
+  fn wide(xs: Slice<int64>, i: int) -> int64 {
+    let v = xs.get(i).unwrap_or(-1)
+    v + 1
+  }
+---
+package main
+
+func weight(xs []float64, i int) float64 {
+	var ret float64 = 0
+	if i >= 0 && i < len(xs) {
+		ret = xs[i]
+	}
+	return ret
+}
+
+func wide(xs []int64, i int) int64 {
+	var v int64 = -1
+	if i >= 0 && i < len(xs) {
+		v = xs[i]
+	}
+	return v + 1
+}

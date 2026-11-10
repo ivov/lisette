@@ -1,0 +1,55 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Label { text: string }
+  
+  impl Label {
+    pub fn string(self) -> string { self.text }
+  }
+  
+  fn first(xs: Slice<Unknown>) -> Unknown {
+    xs.get(0).unwrap_or(0)
+  }
+  
+  fn named(stringers: Slice<fmt.Stringer>) -> fmt.Stringer {
+    stringers.get(0).unwrap_or(Label { text: "fallback" })
+  }
+  
+  fn main() {
+    fmt.Println(first(["present"]), named([]).String())
+  }
+---
+package main
+
+import "fmt"
+
+type Label struct {
+	text string
+}
+
+func (l Label) String() string {
+	return l.text
+}
+
+func first(xs []any) any {
+	var ret any = 0
+	if len(xs) > 0 {
+		ret = xs[0]
+	}
+	return ret
+}
+
+func named(stringers []fmt.Stringer) fmt.Stringer {
+	var ret fmt.Stringer = Label{text: "fallback"}
+	if len(stringers) > 0 {
+		ret = stringers[0]
+	}
+	return ret
+}
+
+func main() {
+	fmt.Println(first([]any{"present"}), named([]fmt.Stringer{}).String())
+}

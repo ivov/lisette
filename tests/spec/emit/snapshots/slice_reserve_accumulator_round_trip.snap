@@ -23,11 +23,7 @@ description: |
 ---
 package main
 
-import (
-	"slices"
-
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "slices"
 
 func main() {
 	acc := slices.Grow([]int{}, 64)
@@ -43,7 +39,11 @@ func main() {
 	if cap(acc) != start {
 		panic("expected appends within reserved capacity not to reallocate")
 	}
-	if lisette.SliceGet(acc, 1).UnwrapOr(-1) != 2 {
+	ret := -1
+	if len(acc) > 1 {
+		ret = acc[1]
+	}
+	if ret != 2 {
 		panic("expected appended elements to be readable")
 	}
 }

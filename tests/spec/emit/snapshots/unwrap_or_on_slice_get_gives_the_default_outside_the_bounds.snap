@@ -1,0 +1,75 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  fn main() {
+    let xs = [10, 20, 30]
+    let below = -1
+    let past = 3
+    let last = 2
+    let fallback = -1
+    if xs.get(below).unwrap_or(fallback) != -1 { panic("negative index") }
+    if xs.get(past).unwrap_or(fallback) != -1 { panic("past the end") }
+    if xs.get(last).unwrap_or(fallback) != 30 { panic("in bounds") }
+    let points: Slice<Point> = []
+    if points.get(0).unwrap_or(Point { x: 4, y: 5 }).x != 4 { panic("empty slice") }
+    let weights: Slice<float64> = [1.5]
+    if weights.get(1).unwrap_or(0) != 0.0 { panic("typed default") }
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func main() {
+	xs := []int{10, 20, 30}
+	below := -1
+	past := 3
+	last := 2
+	fallback := -1
+	ret := fallback
+	if below >= 0 && below < len(xs) {
+		ret = xs[below]
+	}
+	if ret != -1 {
+		panic("negative index")
+	}
+	ret2 := fallback
+	if past >= 0 && past < len(xs) {
+		ret2 = xs[past]
+	}
+	if ret2 != -1 {
+		panic("past the end")
+	}
+	ret3 := fallback
+	if last >= 0 && last < len(xs) {
+		ret3 = xs[last]
+	}
+	if ret3 != 30 {
+		panic("in bounds")
+	}
+	points := []Point{}
+	ret4 := Point{
+		x: 4,
+		y: 5,
+	}
+	if len(points) > 0 {
+		ret4 = points[0]
+	}
+	if ret4.x != 4 {
+		panic("empty slice")
+	}
+	weights := []float64{1.5}
+	var ret5 float64 = 0
+	if len(weights) > 1 {
+		ret5 = weights[1]
+	}
+	if ret5 != 0.0 {
+		panic("typed default")
+	}
+}

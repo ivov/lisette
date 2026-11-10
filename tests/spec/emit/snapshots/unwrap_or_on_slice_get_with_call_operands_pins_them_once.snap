@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn xs() -> Slice<int> { [1, 2] }
+  fn idx() -> int { 1 }
+  
+  fn run() -> int {
+    xs().get(idx()).unwrap_or(0)
+  }
+---
+package main
+
+func xs() []int {
+	return []int{1, 2}
+}
+
+func idx() int {
+	return 1
+}
+
+func run() int {
+	recv := xs()
+	idx2 := idx()
+	ret := 0
+	if idx2 >= 0 && idx2 < len(recv) {
+		ret = recv[idx2]
+	}
+	return ret
+}

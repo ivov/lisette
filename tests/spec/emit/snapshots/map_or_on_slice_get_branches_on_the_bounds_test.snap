@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn doubled(xs: Slice<int>, i: int) -> int {
+    xs.get(i).map_or(0, |v| v * 2)
+  }
+  
+  fn next(xs: Slice<int>, i: int) -> int {
+    xs.get(i).map(|v| v + 1).unwrap_or(0)
+  }
+---
+package main
+
+func doubled(xs []int, i int) int {
+	var tmp int
+	if i >= 0 && i < len(xs) {
+		v := xs[i]
+		tmp = v * 2
+	} else {
+		tmp = 0
+	}
+	return tmp
+}
+
+func next(xs []int, i int) int {
+	var tmp int
+	if i >= 0 && i < len(xs) {
+		v := xs[i]
+		tmp = v + 1
+	} else {
+		tmp = 0
+	}
+	return tmp
+}

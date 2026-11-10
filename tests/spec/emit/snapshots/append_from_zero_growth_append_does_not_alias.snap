@@ -17,21 +17,25 @@ description: |
 ---
 package main
 
-import (
-	"slices"
-
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "slices"
 
 func main() {
 	s := []int{1, 2}
 	s = append(s, 3)
 	u1 := append(slices.Clone(s), 7)
 	u2 := append(slices.Clone(s), 8)
-	if lisette.SliceGet(u1, 3).UnwrapOr(-1) != 7 {
+	ret := -1
+	if len(u1) > 3 {
+		ret = u1[3]
+	}
+	if ret != 7 {
 		panic("zero-growth append chains must not share storage")
 	}
-	if lisette.SliceGet(u2, 3).UnwrapOr(-1) != 8 {
+	ret2 := -1
+	if len(u2) > 3 {
+		ret2 = u2[3]
+	}
+	if ret2 != 8 {
 		panic("zero-growth append chains must not share storage")
 	}
 }

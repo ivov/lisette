@@ -1,0 +1,121 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  struct Thing { n: int }
+  interface Opt { fn find() -> Option<Ref<Thing>> }
+  
+  struct Holder<T> { value: Option<T> }
+  impl<T> Holder<T> {
+    fn find(self) -> Option<T> { self.value }
+  }
+  
+  fn seven() -> Option<int> { Some(7) }
+  
+  fn main() {
+    let xs: Slice<Unknown> = []
+    let value = xs.get(0).unwrap_or(seven)
+    match assert_type<fn() -> Option<int>>(value) {
+      Some(f) => fmt.Println(f().unwrap_or(0)),
+      None => panic("wrong function type"),
+    }
+    let opts: Slice<Opt> = []
+    let fallback: Holder<Ref<Thing>> = Holder { value: None }
+    let chosen = opts.get(0).unwrap_or(fallback)
+    fmt.Println(chosen.find().is_none())
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Thing struct {
+	n int
+}
+
+type Opt interface {
+	find() *Thing
+}
+
+type Holder[T any] struct {
+	value lisette.Option[T]
+}
+
+func (h Holder[T]) find() (T, bool) {
+	v := h.value
+	if v.Tag == lisette.OptionSome {
+		return v.SomeVal, true
+	}
+	return *new(T), false
+}
+
+func seven() (int, bool) {
+	return 7, true
+}
+
+func main() {
+	xs := []any{}
+	cb := func() lisette.Option[int] {
+		return lisette.OptionFromCommaOk[int](seven())
+	}
+	var value any = func() (int, bool) {
+		res := cb()
+		if res.Tag == lisette.OptionSome {
+			return res.SomeVal, true
+		}
+		return 0, false
+	}
+	if len(xs) > 0 {
+		value = xs[0]
+	}
+	src := lisette.AssertType[func() (int, bool)](value)
+	var adapted lisette.Option[func() lisette.Option[int]]
+	adapted.Tag = src.Tag
+	if src.Tag == lisette.OptionSome {
+		cb2 := src.SomeVal
+		var adapted2 func() lisette.Option[int]
+		if cb2 != nil {
+			adapted2 = func() lisette.Option[int] {
+				return lisette.OptionFromCommaOk[int](cb2())
+			}
+		}
+		adapted.SomeVal = adapted2
+	}
+	if adapted.Tag == lisette.OptionSome {
+		fmt.Println(adapted.SomeVal().UnwrapOr(0))
+	} else {
+		panic("wrong function type")
+	}
+	opts := []Opt{}
+	fallback := Holder[*Thing]{}
+	var chosen Opt = _lisAdapter_Holder_Opt_0{inner: fallback}
+	if len(opts) > 0 {
+		chosen = opts[0]
+	}
+	ret := chosen.find()
+	fmt.Println(ret == nil)
+}
+
+type _lisAdapter_Holder_Opt_0 struct {
+	inner Holder[*Thing]
+}
+
+func (a _lisAdapter_Holder_Opt_0) find() *Thing {
+	ret, ret2 := a.inner.find()
+	var option lisette.Option[*Thing]
+	if ret2 && ret != nil {
+		option = lisette.MakeOptionSome[*Thing](ret)
+	} else {
+		option = lisette.MakeOptionNone[*Thing]()
+	}
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal
+	}
+	return nil
+}

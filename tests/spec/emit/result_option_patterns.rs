@@ -3559,6 +3559,195 @@ fn negative(xs: Slice<int>) -> int {
 }
 
 #[test]
+fn unwrap_or_on_slice_get_tests_bounds_and_indexes() {
+    let input = r#"
+fn pick(xs: Slice<int>, i: int) -> int {
+  let v = xs.get(i).unwrap_or(-1)
+  v * 2
+}
+
+fn second(names: Slice<string>) -> string {
+  names.get(1).unwrap_or("")
+}
+
+fn first(xs: Array<int, 3>) -> int {
+  xs.get(0).unwrap_or(0)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unwrap_or_on_slice_get_types_an_untyped_default() {
+    let input = r#"
+fn weight(xs: Slice<float64>, i: int) -> float64 {
+  xs.get(i).unwrap_or(0)
+}
+
+fn wide(xs: Slice<int64>, i: int) -> int64 {
+  let v = xs.get(i).unwrap_or(-1)
+  v + 1
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unwrap_or_on_slice_get_types_a_default_for_an_interface_element() {
+    let input = r#"
+import "go:fmt"
+
+struct Label { text: string }
+
+impl Label {
+  pub fn string(self) -> string { self.text }
+}
+
+fn first(xs: Slice<Unknown>) -> Unknown {
+  xs.get(0).unwrap_or(0)
+}
+
+fn named(stringers: Slice<fmt.Stringer>) -> fmt.Stringer {
+  stringers.get(0).unwrap_or(Label { text: "fallback" })
+}
+
+fn main() {
+  fmt.Println(first(["present"]), named([]).String())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unwrap_or_on_slice_get_bridges_the_default_into_the_slot() {
+    let input = r#"
+import "go:fmt"
+
+struct Thing { n: int }
+interface Opt { fn find() -> Option<Ref<Thing>> }
+
+struct Holder<T> { value: Option<T> }
+impl<T> Holder<T> {
+  fn find(self) -> Option<T> { self.value }
+}
+
+fn seven() -> Option<int> { Some(7) }
+
+fn main() {
+  let xs: Slice<Unknown> = []
+  let value = xs.get(0).unwrap_or(seven)
+  match assert_type<fn() -> Option<int>>(value) {
+    Some(f) => fmt.Println(f().unwrap_or(0)),
+    None => panic("wrong function type"),
+  }
+  let opts: Slice<Opt> = []
+  let fallback: Holder<Ref<Thing>> = Holder { value: None }
+  let chosen = opts.get(0).unwrap_or(fallback)
+  fmt.Println(chosen.find().is_none())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unwrap_or_on_map_get_bridges_the_default_into_the_slot() {
+    let input = r#"
+import "go:fmt"
+
+struct Thing { n: int }
+interface Opt { fn find() -> Option<Ref<Thing>> }
+
+struct Holder<T> { value: Option<T> }
+impl<T> Holder<T> {
+  fn find(self) -> Option<T> { self.value }
+}
+
+fn seven() -> Option<int> { Some(7) }
+
+fn main() {
+  let m = Map.new<string, Unknown>()
+  let value = m.get("k").unwrap_or(seven)
+  match assert_type<fn() -> Option<int>>(value) {
+    Some(f) => fmt.Println(f().unwrap_or(0)),
+    None => panic("wrong function type"),
+  }
+  let opts = Map.new<string, Opt>()
+  let fallback: Holder<Ref<Thing>> = Holder { value: None }
+  let chosen = opts.get("k").unwrap_or(fallback)
+  fmt.Println(chosen.find().is_none())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unwrap_or_on_slice_get_with_call_operands_pins_them_once() {
+    let input = r#"
+fn xs() -> Slice<int> { [1, 2] }
+fn idx() -> int { 1 }
+
+fn run() -> int {
+  xs().get(idx()).unwrap_or(0)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unwrap_or_on_slice_get_with_an_effectful_default_keeps_the_helper() {
+    let input = r#"
+import "go:fmt"
+
+fn fallback() -> int {
+  fmt.Println("fallback ran")
+  0
+}
+
+fn pick(xs: Slice<int>, i: int) -> int {
+  xs.get(i).unwrap_or(fallback())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_or_on_slice_get_branches_on_the_bounds_test() {
+    let input = r#"
+fn doubled(xs: Slice<int>, i: int) -> int {
+  xs.get(i).map_or(0, |v| v * 2)
+}
+
+fn next(xs: Slice<int>, i: int) -> int {
+  xs.get(i).map(|v| v + 1).unwrap_or(0)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unwrap_or_on_slice_get_gives_the_default_outside_the_bounds() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn main() {
+  let xs = [10, 20, 30]
+  let below = -1
+  let past = 3
+  let last = 2
+  let fallback = -1
+  if xs.get(below).unwrap_or(fallback) != -1 { panic("negative index") }
+  if xs.get(past).unwrap_or(fallback) != -1 { panic("past the end") }
+  if xs.get(last).unwrap_or(fallback) != 30 { panic("in bounds") }
+  let points: Slice<Point> = []
+  if points.get(0).unwrap_or(Point { x: 4, y: 5 }).x != 4 { panic("empty slice") }
+  let weights: Slice<float64> = [1.5]
+  if weights.get(1).unwrap_or(0) != 0.0 { panic("typed default") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn adjacent_find_matches_take_distinct_payload_names() {
     let input = r#"
 import "go:fmt"

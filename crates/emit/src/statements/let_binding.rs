@@ -45,7 +45,7 @@ enum FallibleComponentSource<'a> {
     Result(ResultFusePlan<'a>),
 }
 
-fn needs_explicit_type_declaration(
+pub(crate) fn needs_explicit_type_declaration(
     planner: &Planner,
     value: &Expression,
     binding_ty: &Type,
