@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Counter { count: int }
+  
+  impl Counter {
+    /// new_counter builds a counter at zero.
+    fn new_counter() -> Counter { Counter { count: 0 } }
+  
+    /// get_count returns the count.
+    pub fn get_count(self) -> int { self.count }
+  }
+---
+package main
+
+type Counter struct {
+	count int
+}
+
+// Counter_newCounter builds a counter at zero.
+func Counter_newCounter() Counter {
+	return Counter{count: 0}
+}
+
+// GetCount returns the count.
+func (c Counter) GetCount() int {
+	return c.count
+}

@@ -2,7 +2,7 @@ use crate::Planner;
 use crate::control_flow::fallible;
 use crate::names::go_name;
 use crate::plan::values::GoExpression;
-use syntax::ast::{Generic, Pattern, RestPattern, StructFields};
+use syntax::ast::{Generic, Pattern, RestPattern, StructFieldDefinition, StructFields};
 use syntax::go_names;
 use syntax::program::{Definition, DefinitionBody, interface_requirements};
 use syntax::types;
@@ -34,17 +34,18 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn field_is_embedded(&self, struct_ty: &Type, field_name: &str) -> bool {
-        let Some(resolved) = self.resolve_nominal(struct_ty) else {
-            return false;
+    pub(crate) fn embedded_field(
+        &self,
+        struct_ty: &Type,
+        field_name: &str,
+    ) -> Option<&StructFieldDefinition> {
+        let resolved = self.resolve_nominal(struct_ty)?;
+        let DefinitionBody::Struct { fields, .. } = &resolved.definition.body else {
+            return None;
         };
-        matches!(
-            &resolved.definition.body,
-            DefinitionBody::Struct { fields, .. }
-                if fields
-                    .iter()
-                    .any(|f| f.name == field_name && f.is_embedded())
-        )
+        fields
+            .iter()
+            .find(|f| f.name == field_name && f.is_embedded())
     }
 
     pub(crate) fn field_is_public(&self, struct_ty: &Type, field_name: &str) -> bool {
@@ -110,7 +111,7 @@ impl Planner<'_> {
             ty,
             field,
             semantic_exported || self.struct_field_is_exported(ty, field),
-            self.field_is_embedded(ty, field),
+            self.embedded_field(ty, field),
         )
     }
 

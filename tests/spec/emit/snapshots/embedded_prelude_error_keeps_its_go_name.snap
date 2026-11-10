@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Wrapped { embed error }
+  
+  fn message(w: Wrapped) -> string {
+    let inner = w.error
+    inner.Error()
+  }
+---
+package main
+
+type Wrapped struct {
+	error
+}
+
+func message(w Wrapped) string {
+	inner := w.error
+	return inner.Error()
+}

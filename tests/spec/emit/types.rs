@@ -145,6 +145,19 @@ fn read(o: Outer) -> int {
 }
 
 #[test]
+fn embedded_prelude_error_keeps_its_go_name() {
+    let input = r#"
+struct Wrapped { embed error }
+
+fn message(w: Wrapped) -> string {
+  let inner = w.error
+  inner.Error()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn embedded_field_untagged_under_struct_json() {
     let input = r#"
 struct inner { x: int }
@@ -2429,6 +2442,80 @@ impl Counter {
     Counter { count: 0 }
   }
 }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn doc_comment_starts_with_const_name() {
+    let input = r#"
+/// MAX_RETRIES is the retry limit.
+pub const MAX_RETRIES: int = 3
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn doc_comment_starts_with_method_name() {
+    let input = r#"
+struct Counter { count: int }
+
+impl Counter {
+  /// new_counter builds a counter at zero.
+  fn new_counter() -> Counter { Counter { count: 0 } }
+
+  /// get_count returns the count.
+  pub fn get_count(self) -> int { self.count }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn doc_comment_starts_with_struct_name() {
+    let input = r#"
+/// len counts items.
+struct len { items: int }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn doc_comment_starts_with_field_name() {
+    let input = r#"
+struct User {
+  /// user_id is the key.
+  pub user_id: string,
+  /// created_at is the creation time.
+  created_at: int,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn doc_comment_starts_with_embedded_field_name() {
+    let input = r#"
+struct len { items: int }
+
+struct Outer {
+  /// len holds the items.
+  embed len,
+}
+
+fn items(outer: Outer) -> int {
+  let inner = outer.len
+  inner.items
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn doc_comment_starts_with_enum_name() {
+    let input = r#"
+/// cap is a size class.
+enum cap { Small, Large }
 "#;
     assert_emit_snapshot!(input);
 }

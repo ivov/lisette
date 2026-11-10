@@ -1,5 +1,5 @@
 use crate::state::bindings::BindingValue;
-use syntax::ast::Expression;
+use syntax::ast::{Expression, StructFieldDefinition};
 use syntax::parse;
 use syntax::program::{
     ConstantValue, DefinitionBody, DotAccessResolution, ReceiverCoercion, ValueKind,
@@ -250,9 +250,9 @@ impl Planner<'_> {
     ) -> String {
         let canonical_ty = self.facts.strip_and_peel(expression_ty);
         let is_exported = self.resolve_is_exported(expression, &canonical_ty, member, resolution);
-        let is_embedded = self.field_is_embedded(expression_ty, member);
+        let embedded = self.embedded_field(expression_ty, member);
         self.try_resolve_cross_package_const(expression_ty, member)
-            .unwrap_or_else(|| go_field_name(&canonical_ty, member, is_exported, is_embedded))
+            .unwrap_or_else(|| go_field_name(&canonical_ty, member, is_exported, embedded))
     }
 
     pub(crate) fn try_emit_tuple_member_dot(
@@ -560,7 +560,7 @@ fn go_field_name(
     expression_ty: &Type,
     member: &str,
     is_exported: bool,
-    is_embedded: bool,
+    embedded: Option<&StructFieldDefinition>,
 ) -> String {
     if expression_ty
         .as_import_namespace()
@@ -569,7 +569,7 @@ fn go_field_name(
         return member.to_string();
     }
 
-    go_name::member_go_name(expression_ty, member, is_exported, is_embedded)
+    go_name::member_go_name(expression_ty, member, is_exported, embedded)
 }
 
 /// Whether the type resolves to a prelude-package declaration. Shared with

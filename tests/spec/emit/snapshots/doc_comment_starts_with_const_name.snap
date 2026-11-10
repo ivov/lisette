@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  /// MAX_RETRIES is the retry limit.
+  pub const MAX_RETRIES: int = 3
+---
+package main
+
+// MaxRetries is the retry limit.
+const MaxRetries int = 3

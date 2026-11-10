@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct User {
+    /// user_id is the key.
+    pub user_id: string,
+    /// created_at is the creation time.
+    created_at: int,
+  }
+---
+package main
+
+type User struct {
+	// UserId is the key.
+	UserId string
+	// createdAt is the creation time.
+	createdAt int
+}

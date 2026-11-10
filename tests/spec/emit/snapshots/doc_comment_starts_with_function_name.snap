@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  /// find_user returns the user id.
+  pub fn find_user() -> int { 1 }
+  
+  /// finder keeps its spelling.
+  pub fn find() -> int { 2 }
+---
+package main
+
+// FindUser returns the user id.
+func FindUser() int {
+	return 1
+}
+
+// finder keeps its spelling.
+func Find() int {
+	return 2
+}
