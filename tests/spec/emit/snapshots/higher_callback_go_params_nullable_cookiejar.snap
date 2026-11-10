@@ -28,9 +28,9 @@ func main() {
 			if arg0.Tag == lisette.OptionSome {
 				unwrap = arg0.SomeVal
 			}
-			ret, ret_1 := cb(unwrap)
-			if ret_1 != nil {
-				return lisette.MakeResultErr[*cookiejar.Jar, error](ret_1)
+			ret, ret2 := cb(unwrap)
+			if ret2 != nil {
+				return lisette.MakeResultErr[*cookiejar.Jar, error](ret2)
 			} else if ret == nil {
 				return lisette.MakeResultErr[*cookiejar.Jar, error](errors.New("unexpected nil"))
 			}

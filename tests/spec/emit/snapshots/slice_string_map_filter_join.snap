@@ -18,11 +18,11 @@ func test(items []string) string {
 	for i, s := range items {
 		result[i] = s + "!"
 	}
-	var result_1 []string
+	var result2 []string
 	for _, s := range result {
 		if len(s) > 2 {
-			result_1 = append(result_1, s)
+			result2 = append(result2, s)
 		}
 	}
-	return strings.Join(result_1, ", ")
+	return strings.Join(result2, ", ")
 }

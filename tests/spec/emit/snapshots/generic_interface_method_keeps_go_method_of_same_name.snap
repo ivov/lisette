@@ -92,11 +92,11 @@ func main() {
 	if string(other) != "7" {
 		panic("wrong generic result")
 	}
-	subject_1 := encode(Temp{C: 3}, hint)
-	if subject_1.Tag != lisette.ResultOk {
+	subject2 := encode(Temp{C: 3}, hint)
+	if subject2.Tag != lisette.ResultOk {
 		panic("encode failed")
 	}
-	raw := subject_1.OkVal
+	raw := subject2.OkVal
 	if string(raw) != "\"3C\"" {
 		panic("wrong generic encoding")
 	}

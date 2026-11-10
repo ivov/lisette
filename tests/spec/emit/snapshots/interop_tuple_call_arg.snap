@@ -34,8 +34,8 @@ func main() {
 	var adapted func(string) lisette.Tuple2[string, string]
 	if cb != nil {
 		adapted = func(arg0 string) lisette.Tuple2[string, string] {
-			ret, ret_1 := cb(arg0)
-			tup := lisette.MakeTuple2(ret, ret_1)
+			ret, ret2 := cb(arg0)
+			tup := lisette.MakeTuple2(ret, ret2)
 			return tup
 		}
 	}

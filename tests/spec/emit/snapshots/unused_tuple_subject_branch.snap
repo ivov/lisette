@@ -26,13 +26,13 @@ func pair(ch chan int) (int, int) {
 func choose(ch chan int, flag bool) {
 	var tmp lisette.Tuple2[int, int]
 	if flag {
-		ret, ret_1 := pair(ch)
-		tup := lisette.MakeTuple2(ret, ret_1)
+		ret, ret2 := pair(ch)
+		tup := lisette.MakeTuple2(ret, ret2)
 		tmp = tup
 	} else {
-		ret_2, ret_3 := pair(ch)
-		tup_1 := lisette.MakeTuple2(ret_2, ret_3)
-		tmp = tup_1
+		ret3, ret4 := pair(ch)
+		tup2 := lisette.MakeTuple2(ret3, ret4)
+		tmp = tup2
 	}
 	_ = tmp
 }

@@ -49,7 +49,7 @@ impl Planner<'_> {
 
     /// Record emitted Go names of private functions that differ from their source spelling.
     pub(crate) fn collect_escape_remap(&mut self, files: &[&File]) {
-        let entries: Vec<(&str, String, String)> = files
+        let entries: Vec<(&str, String)> = files
             .iter()
             .flat_map(|f| &f.items)
             .filter_map(|item| match item {
@@ -58,9 +58,9 @@ impl Planner<'_> {
                     visibility: Visibility::Private,
                     ..
                 } => {
-                    let base = go_name::snake_to_lower_camel(name);
-                    let natural = go_name::escape_reserved(&base).into_owned();
-                    Some((name.as_str(), base, natural))
+                    let natural =
+                        go_name::escape_reserved(&go_name::snake_to_lower_camel(name)).into_owned();
+                    Some((name.as_str(), natural))
                 }
                 _ => None,
             })
@@ -68,11 +68,11 @@ impl Planner<'_> {
 
         let mut taken: HashSet<String> = entries
             .iter()
-            .filter(|(name, _, natural)| *name == natural)
-            .map(|(_, _, natural)| natural.clone())
+            .filter(|(name, natural)| *name == natural)
+            .map(|(_, natural)| natural.clone())
             .collect();
 
-        for (name, base, natural) in &entries {
+        for (name, natural) in &entries {
             if *name == natural {
                 continue;
             }
@@ -81,10 +81,7 @@ impl Planner<'_> {
                     .record_escape_remap((*name).to_string(), natural.clone());
                 continue;
             }
-            let fresh = (2..)
-                .map(|n| format!("{}_{}", base, n))
-                .find(|c| !taken.contains(c))
-                .expect("freshening counter is unbounded");
+            let fresh = go_name::fresh_suffixed(natural, |candidate| taken.contains(candidate));
             taken.insert(fresh.clone());
             self.package.record_escape_remap((*name).to_string(), fresh);
         }

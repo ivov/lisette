@@ -16,11 +16,11 @@ import (
 )
 
 func load() (lisette.Tuple2[string, int], error) {
-	ret, ret_1, ret_2 := multi.Load()
-	tup := lisette.MakeTuple2(ret, ret_1)
+	ret, ret2, ret3 := multi.Load()
+	tup := lisette.MakeTuple2(ret, ret2)
 	var result lisette.Result[lisette.Tuple2[string, int], error]
-	if ret_2 != nil {
-		result = lisette.MakeResultErr[lisette.Tuple2[string, int], error](ret_2)
+	if ret3 != nil {
+		result = lisette.MakeResultErr[lisette.Tuple2[string, int], error](ret3)
 	} else {
 		result = lisette.MakeResultOk[lisette.Tuple2[string, int], error](tup)
 	}

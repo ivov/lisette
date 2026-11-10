@@ -14,8 +14,8 @@ package main
 
 func test() int {
 	f := func(x int) int {
-		x_1 := x + 10
-		return x_1
+		x2 := x + 10
+		return x2
 	}
 	return f(1)
 }

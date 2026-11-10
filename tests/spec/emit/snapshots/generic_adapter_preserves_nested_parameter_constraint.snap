@@ -66,8 +66,8 @@ type _lisAdapter_Bar_Box_0[K comparable, V any] struct {
 }
 
 func (a _lisAdapter_Bar_Box_0[K, V]) get() lisette.Option[map[K]V] {
-	ret, ret_1 := a.inner.get()
-	if ret_1 && ret != nil {
+	ret, ret2 := a.inner.get()
+	if ret2 && ret != nil {
 		return lisette.MakeOptionSome[map[K]V](ret)
 	}
 	return lisette.MakeOptionNone[map[K]V]()

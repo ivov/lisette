@@ -22,8 +22,8 @@ func test(x int) string {
 	switch {
 	case x < 10:
 		n := x
-		result_1 := n * n
-		result = fmt.Sprintf("small(%d)", result_1)
+		result2 := n * n
+		result = fmt.Sprintf("small(%d)", result2)
 	default:
 		result = "other"
 	}

@@ -27,10 +27,10 @@ func pair(n int) (int, int) {
 }
 
 func main() {
-	ret, ret_1 := pair(3)
-	p := lisette.MakeTuple2(ret, ret_1)
-	ret_2, ret_3 := pair(4)
-	tup := lisette.MakeTuple2(ret_2, ret_3)
+	ret, ret2 := pair(3)
+	p := lisette.MakeTuple2(ret, ret2)
+	ret3, ret4 := pair(4)
+	tup := lisette.MakeTuple2(ret3, ret4)
 	p = tup
 	fmt.Println(p.First)
 }

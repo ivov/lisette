@@ -30,11 +30,11 @@ match:
 			out = 1
 			break match
 		}
-		check_1 := check(0)
-		if check_1.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[int, string](check_1.ErrVal)
+		check2 := check(0)
+		if check2.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[int, string](check2.ErrVal)
 		}
-		if check_1.OkVal {
+		if check2.OkVal {
 			out = 2
 			break match
 		}

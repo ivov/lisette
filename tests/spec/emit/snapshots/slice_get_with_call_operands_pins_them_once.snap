@@ -22,10 +22,10 @@ func idx() int {
 
 func run() int {
 	recv := xs()
-	idx_1 := idx()
-	if idx_1 < 0 || idx_1 >= len(recv) {
+	idx2 := idx()
+	if idx2 < 0 || idx2 >= len(recv) {
 		return 0
 	}
-	v := recv[idx_1]
+	v := recv[idx2]
 	return v
 }

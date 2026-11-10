@@ -26,8 +26,8 @@ func find(n int) int {
 	for {
 		i++
 		if i > n {
-			r_1 := i * 10
-			r = r_1
+			r2 := i * 10
+			r = r2
 			break
 		}
 	}

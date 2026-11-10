@@ -5,9 +5,9 @@ description: |
   import "go:encoding/pem"
   
   fn apply(f: fn(Slice<byte>) -> (Option<Ref<pem.Block>>, Slice<byte>), data: Slice<byte>) -> int {
-    let (ret, ret_1) = f(data)
+    let (ret, ret2) = f(data)
     if ret.is_some() { panic("unexpected PEM") }
-    let read = || ret_1.length()
+    let read = || ret2.length()
     read()
   }
   
@@ -36,12 +36,12 @@ import (
 func apply(f func([]byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte], data []byte) int {
 	tmp := f(data)
 	ret := tmp.First
-	ret_1 := tmp.Second
+	ret2 := tmp.Second
 	if ret.IsSome() {
 		panic("unexpected PEM")
 	}
 	read := func() int {
-		return len(ret_1)
+		return len(ret2)
 	}
 	return read()
 }
@@ -49,19 +49,19 @@ func apply(f func([]byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte], da
 func main() {
 	cb := 11
 	f := func() int {
-		cb_2 := pem.Decode
+		cb3 := pem.Decode
 		var adapted func([]byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte]
-		if cb_2 != nil {
+		if cb3 != nil {
 			adapted = func(arg0 []byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte] {
-				ret, ret_1 := cb_2(arg0)
+				ret, ret2 := cb3(arg0)
 				option := lisette.OptionFromNilable[*pem.Block](ret, ret == nil)
-				tup := lisette.MakeTuple2(option, ret_1)
+				tup := lisette.MakeTuple2(option, ret2)
 				return tup
 			}
 		}
-		cb_1 := apply(adapted, []byte{65, 66})
+		cb2 := apply(adapted, []byte{65, 66})
 		ch := make(chan int, 1)
-		lisette.ChannelSend(ch, cb_1)
+		lisette.ChannelSend(ch, cb2)
 		for {
 			select {
 			case ret, ok := <-ch:

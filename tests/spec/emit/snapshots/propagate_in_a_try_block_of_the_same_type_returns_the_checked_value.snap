@@ -33,11 +33,11 @@ func main() {
 			return check
 		}
 		a := check.OkVal
-		check_1 := risky(2)
-		if check_1.Tag != lisette.ResultOk {
-			return check_1
+		check2 := risky(2)
+		if check2.Tag != lisette.ResultOk {
+			return check2
 		}
-		b := check_1.OkVal
+		b := check2.OkVal
 		return lisette.MakeResultOk[int, string](a + b)
 	}()
 	_ = total

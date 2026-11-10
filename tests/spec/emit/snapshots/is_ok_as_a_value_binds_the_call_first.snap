@@ -23,7 +23,7 @@ func main() {
 	raw := "8080"
 	_, err := strconv.Atoi(raw)
 	succeeded := err == nil
-	_, err_1 := strconv.Atoi(raw)
-	failed := err_1 != nil
+	_, err2 := strconv.Atoi(raw)
+	failed := err2 != nil
 	fmt.Println(succeeded, failed)
 }

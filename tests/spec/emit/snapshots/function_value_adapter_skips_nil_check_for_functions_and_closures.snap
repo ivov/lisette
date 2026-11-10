@@ -37,28 +37,28 @@ func pick() func(lisette.Option[int]) struct{} {
 }
 
 func main() {
-	cb_1 := func(arg0 lisette.Option[int]) struct{} {
+	cb2 := func(arg0 lisette.Option[int]) struct{} {
 		show(arg0)
 		return struct{}{}
 	}
 	cb.Each(func(arg0 *int) {
 		option := lisette.OptionFromPointer[int](arg0)
-		cb_1(option)
+		cb2(option)
 	})
-	cb_2 := func(v lisette.Option[int]) struct{} {
+	cb3 := func(v lisette.Option[int]) struct{} {
 		_ = v
 		return struct{}{}
 	}
 	cb.Each(func(arg0 *int) {
-		option_1 := lisette.OptionFromPointer[int](arg0)
-		cb_2(option_1)
+		option2 := lisette.OptionFromPointer[int](arg0)
+		cb3(option2)
 	})
-	cb_3 := pick()
+	cb4 := pick()
 	var adapted func(*int)
-	if cb_3 != nil {
+	if cb4 != nil {
 		adapted = func(arg0 *int) {
-			option_2 := lisette.OptionFromPointer[int](arg0)
-			cb_3(option_2)
+			option3 := lisette.OptionFromPointer[int](arg0)
+			cb4(option3)
 		}
 	}
 	cb.Each(adapted)

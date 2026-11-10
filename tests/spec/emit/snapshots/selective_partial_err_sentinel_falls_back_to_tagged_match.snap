@@ -22,13 +22,13 @@ import (
 )
 
 func main() {
-	ret, ret_1 := aws.Read()
+	ret, ret2 := aws.Read()
 	var result lisette.Partial[[]byte, error]
-	if ret_1 != nil {
+	if ret2 != nil {
 		if ret == nil {
-			result = lisette.MakePartialErr[[]byte, error](ret_1)
+			result = lisette.MakePartialErr[[]byte, error](ret2)
 		} else {
-			result = lisette.MakePartialBoth[[]byte, error](ret, ret_1)
+			result = lisette.MakePartialBoth[[]byte, error](ret, ret2)
 		}
 	} else {
 		result = lisette.MakePartialOk[[]byte, error](ret)

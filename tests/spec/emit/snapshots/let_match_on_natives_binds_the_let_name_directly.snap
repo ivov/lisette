@@ -38,9 +38,9 @@ func lookup(m map[string]int, k string) int {
 func firstEven(nums []int) int {
 	var n int
 	found := false
-	for _, n_1 := range nums {
-		if n_1%2 == 0 {
-			n = n_1
+	for _, n2 := range nums {
+		if n2%2 == 0 {
+			n = n2
 			found = true
 			break
 		}

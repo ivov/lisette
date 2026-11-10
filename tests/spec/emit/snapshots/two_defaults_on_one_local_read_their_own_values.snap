@@ -32,24 +32,24 @@ func test() {
 	if !ok {
 		ret = 1
 	}
-	ret_1 := v
+	ret2 := v
 	if !ok {
-		ret_1 = 2
+		ret2 = 2
 	}
-	total := ret + ret_1
+	total := ret + ret2
 	if total != 3 {
 		panic(fmt.Sprintf("two defaults on a lookup gave %d", total))
 	}
 	r, err := strconv.Atoi("bad")
-	ret_2 := r
+	ret3 := r
 	if err != nil {
-		ret_2 = 7
+		ret3 = 7
 	}
-	ret_3 := r
+	ret4 := r
 	if err != nil {
-		ret_3 = 8
+		ret4 = 8
 	}
-	pair := lisette.MakeTuple2[int, int](ret_2, ret_3)
+	pair := lisette.MakeTuple2[int, int](ret3, ret4)
 	if pair.First != 7 || pair.Second != 8 {
 		panic("two defaults on a result read one payload")
 	}

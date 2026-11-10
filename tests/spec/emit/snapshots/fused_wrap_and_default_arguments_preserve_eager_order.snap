@@ -39,9 +39,9 @@ func choose(raw string) int {
 	}
 	n, err := strconv.Atoi(raw)
 	message()
-	default_1 := fallback()
+	default2 := fallback()
 	if err != nil {
-		n = default_1
+		n = default2
 	}
 	if trace != "message;default;" {
 		panic(trace)

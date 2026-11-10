@@ -22,14 +22,14 @@ func getChannel(ch *chan int) *chan int {
 }
 
 func test(ch *chan int) {
-	ch_1 := *getChannel(ch)
+	ch2 := *getChannel(ch)
 	for {
 		select {
-		case v, ok := <-ch_1:
+		case v, ok := <-ch2:
 			if ok {
 				_ = v
 			} else {
-				ch_1 = nil
+				ch2 = nil
 				continue
 			}
 		default:

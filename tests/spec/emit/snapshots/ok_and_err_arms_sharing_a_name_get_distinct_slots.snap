@@ -20,9 +20,9 @@ import (
 )
 
 func main() {
-	if x, x_1 := strconv.Atoi("2"); x_1 == nil {
+	if x, x2 := strconv.Atoi("2"); x2 == nil {
 		fmt.Println(x)
 	} else {
-		fmt.Println(x_1)
+		fmt.Println(x2)
 	}
 }

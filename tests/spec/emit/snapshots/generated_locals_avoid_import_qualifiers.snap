@@ -32,24 +32,24 @@ import (
 )
 
 func qualifiedCall(s string) {
-	for i_1 := 0; i_1 < len(s); i_1++ {
-		b := s[i_1]
+	for i2 := 0; i2 < len(s); i2++ {
+		b := s[i2]
 		fmt.Println(i.ToUpper("x"), b)
 	}
 }
 
 func qualifiedType(s string) {
-	for i_1 := 0; i_1 < len(s); i_1++ {
-		b := s[i_1]
+	for i2 := 0; i2 < len(s); i2++ {
+		b := s[i2]
 		xs := []i.Builder{}
 		fmt.Println(xs, b)
 	}
 }
 
 func mapped(xs []int) {
-	result_1 := make([]int, len(xs))
-	for i_1, x := range xs {
-		result_1[i_1] = x + 1
+	result2 := make([]int, len(xs))
+	for i2, x := range xs {
+		result2[i2] = x + 1
 	}
-	fmt.Println(result_1, result.Itoa(1))
+	fmt.Println(result2, result.Itoa(1))
 }

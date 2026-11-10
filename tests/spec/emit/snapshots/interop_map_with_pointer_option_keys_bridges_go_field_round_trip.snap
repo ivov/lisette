@@ -35,8 +35,8 @@ func main() {
 	container := maps.Container{Values: unwrapped}
 	raw := container.Values
 	wrapped := make(map[lisette.Option[int]]string, len(raw))
-	for i_1, v_1 := range raw {
-		option := lisette.OptionFromPointer[int](i_1)
-		wrapped[option] = v_1
+	for i2, v2 := range raw {
+		option := lisette.OptionFromPointer[int](i2)
+		wrapped[option] = v2
 	}
 }

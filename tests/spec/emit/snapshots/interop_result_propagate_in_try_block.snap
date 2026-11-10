@@ -28,9 +28,9 @@ func sumParsed(a, b string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	y, err_1 := strconv.Atoi(b)
-	if err_1 != nil {
-		return 0, err_1
+	y, err2 := strconv.Atoi(b)
+	if err2 != nil {
+		return 0, err2
 	}
 	return x + y, nil
 }

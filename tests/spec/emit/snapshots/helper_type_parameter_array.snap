@@ -16,11 +16,11 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func count[arr any](_ arr) int {
 	values := func() [2]lisette.Option[arr] {
-		var arr_1 [2]lisette.Option[arr]
-		for i := range arr_1 {
-			arr_1[i] = lisette.MakeOptionNone[arr]()
+		var arr2 [2]lisette.Option[arr]
+		for i := range arr2 {
+			arr2[i] = lisette.MakeOptionNone[arr]()
 		}
-		return arr_1
+		return arr2
 	}()
 	count := 0
 	for _, value := range values {

@@ -14,13 +14,13 @@ package main
 func test() {
 	var tmp int
 	for {
-		var tmp_1 int
+		var tmp2 int
 		if true {
 			tmp = 1
 			break
 		}
-		tmp_1 = 1
-		_ = tmp_1
+		tmp2 = 1
+		_ = tmp2
 	}
 	_ = tmp
 }

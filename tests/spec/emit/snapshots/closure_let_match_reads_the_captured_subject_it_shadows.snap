@@ -19,13 +19,13 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func run(x lisette.Option[int]) int {
 	f := func(k int) int {
-		var x_1 int
+		var x2 int
 		if x.Tag == lisette.OptionSome {
-			x_1 = x.SomeVal + k
+			x2 = x.SomeVal + k
 		} else {
-			x_1 = 0
+			x2 = 0
 		}
-		return x_1 * 2
+		return x2 * 2
 	}
 	return f(1)
 }

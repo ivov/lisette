@@ -49,8 +49,8 @@ func len_() string {
 }
 
 func directLet() int {
-	getItems_1 := 5
-	return getItems_1 + len(getItems())
+	getItems2 := 5
+	return getItems2 + len(getItems())
 }
 
 func filteredLet() int {
@@ -60,20 +60,20 @@ func filteredLet() int {
 			result = append(result, x)
 		}
 	}
-	getItems_1 := result
-	return len(getItems_1) + len(getItems())
+	getItems2 := result
+	return len(getItems2) + len(getItems())
 }
 
-func parameter(getItems_1 int) int {
-	tmp := lisette.MakeTuple2[int, int](getItems_1, 2)
+func parameter(getItems2 int) int {
+	tmp := lisette.MakeTuple2[int, int](getItems2, 2)
 	first := tmp.First
 	rest := tmp.Second
 	return first + rest + len(getItems())
 }
 
 func armInOtherArm() {
-	if len__1, err := strconv.Atoi("bad"); err == nil {
-		fmt.Println(len__1)
+	if len_2, err := strconv.Atoi("bad"); err == nil {
+		fmt.Println(len_2)
 	} else {
 		fmt.Println(len_())
 	}

@@ -20,7 +20,7 @@ func fail(msg string) {
 func test(n int) {
 	x := n + 1
 	_ = x
-	var x_1 int
+	var x2 int
 	fail("boom")
-	_ = x_1
+	_ = x2
 }

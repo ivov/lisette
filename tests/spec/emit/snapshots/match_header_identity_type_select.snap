@@ -42,20 +42,20 @@ func main() {
 	ch := make(chan int, 1)
 	lisette.ChannelSend(ch, 2)
 	f := func() int {
-		switch subject_1 := value(effects).(type) {
+		switch subject2 := value(effects).(type) {
 		case time.Duration:
-			subject_2 := int64(subject_1)
+			subject3 := int64(subject2)
 			read := func() int {
-				return int(subject_2)
+				return int(subject3)
 			}
-			ch_1 := ch
+			ch2 := ch
 			for {
 				select {
-				case subject, ok := <-ch_1:
+				case subject, ok := <-ch2:
 					if ok {
 						return subject + read()
 					}
-					ch_1 = nil
+					ch2 = nil
 					continue
 				default:
 					return 0

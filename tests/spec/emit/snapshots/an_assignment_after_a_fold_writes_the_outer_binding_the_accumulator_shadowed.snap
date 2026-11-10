@@ -17,11 +17,11 @@ package main
 
 func reassigned(xs []int) int {
 	acc := 10
-	acc_1 := 0
+	acc2 := 0
 	for _, x := range xs {
-		acc_1 += x
+		acc2 += x
 	}
-	total := 2 * acc_1
+	total := 2 * acc2
 	acc = 5
 	return total + acc
 }

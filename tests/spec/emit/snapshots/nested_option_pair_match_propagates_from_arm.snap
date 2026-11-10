@@ -71,11 +71,11 @@ func test() {
 	} else {
 		panic("unexpected error")
 	}
-	subject_1 := run(0)
-	if subject_1.Tag == lisette.ResultOk {
+	subject2 := run(0)
+	if subject2.Tag == lisette.ResultOk {
 		panic("expected an error")
 	}
-	if subject_1.ErrVal != "not positive" {
+	if subject2.ErrVal != "not positive" {
 		panic("wrong error")
 	}
 }

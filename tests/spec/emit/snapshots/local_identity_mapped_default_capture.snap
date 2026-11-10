@@ -26,21 +26,21 @@ import lisette "github.com/ivov/lisette/prelude"
 func main() {
 	target := 7
 	f := func() int {
-		target_1 := lisette.OptionMap(lisette.SliceGet([]int{1}, 0), func(ret int) int {
+		target2 := lisette.OptionMap(lisette.SliceGet([]int{1}, 0), func(ret int) int {
 			return ret + target
 		}).UnwrapOr(0)
 		read := func() int {
-			return target_1
+			return target2
 		}
 		return read()
 	}
 	total := 0
-	for _, target_2 := range []int{2, 3} {
+	for _, target3 := range []int{2, 3} {
 		left := total
 		var tmp int
 		switch {
-		case target_2 > 0:
-			value := target_2
+		case target3 > 0:
+			value := target3
 			read := func() int {
 				return value
 			}

@@ -17,7 +17,7 @@ func makeItems() []int {
 
 func test() int {
 	base := makeItems()
-	len_1 := len(base)
-	ys := base[1:len_1:len_1]
+	len2 := len(base)
+	ys := base[1:len2:len2]
 	return len(ys)
 }

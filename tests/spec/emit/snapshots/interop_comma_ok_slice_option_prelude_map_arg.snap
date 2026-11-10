@@ -20,8 +20,8 @@ import (
 func main() {
 	keys := []string{"k"}
 	out := lisette.SliceMap(keys, func(arg0 string) lisette.Option[[]lisette.Option[string]] {
-		ret, ret_1 := aws.Fetch(arg0)
-		if ret_1 {
+		ret, ret2 := aws.Fetch(arg0)
+		if ret2 {
 			wrapped := make([]lisette.Option[string], len(ret))
 			for i, v := range ret {
 				if v != nil {

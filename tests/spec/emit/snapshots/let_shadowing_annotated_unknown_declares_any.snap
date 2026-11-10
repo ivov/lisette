@@ -37,9 +37,9 @@ func describe(value any) string {
 
 func test() {
 	value := 1
-	var value_1 any = identity(value)
-	value_1 = "two"
-	if describe(value_1) != "two" {
+	var value2 any = identity(value)
+	value2 = "two"
+	if describe(value2) != "two" {
 		panic("shadowing Unknown binding was declared at the concrete type")
 	}
 }

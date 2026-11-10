@@ -2,6 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::go_names::is_go_reserved_word;
 
 use super::ScopeState;
+use crate::names::go_name;
 use crate::plan::local::{GoIdentifier, LocalId};
 use crate::state::package_state::PackageState;
 
@@ -19,7 +20,7 @@ impl ScopeState {
         package: &PackageState,
     ) -> GoIdentifier {
         let base = hint.unwrap_or("tmp").to_string();
-        let candidate = self.free_name_from(&base, |name| self.is_go_name_taken(name, package));
+        let candidate = go_name::fresh_suffixed(&base, |name| self.is_go_name_taken(name, package));
         self.names.issued.insert(candidate.clone());
         let id = self.new_local_id();
         self.names.generated.insert(id, base);
@@ -39,28 +40,18 @@ impl ScopeState {
     }
 
     pub(crate) fn fresh_binding_go_name(&mut self, hint: &str, package: &PackageState) -> String {
-        let candidate = self.free_name_from(hint, |name| self.is_go_name_taken(name, package));
+        let candidate = go_name::fresh_suffixed(hint, |name| self.is_go_name_taken(name, package));
         self.names.issued.insert(candidate.clone());
         candidate
     }
 
     pub(crate) fn helper_local(&mut self, hint: &str, package: &PackageState) -> GoIdentifier {
-        let name = self.free_name_from(hint, |name| {
+        let name = go_name::fresh_suffixed(hint, |name| {
             is_go_reserved_word(name)
                 || self.declares_type_param(name)
                 || package.is_package_block_name(name)
         });
         self.new_local_identifier(name)
-    }
-
-    fn free_name_from(&self, base: &str, taken: impl Fn(&str) -> bool) -> String {
-        let mut candidate = base.to_string();
-        let mut suffix = 0;
-        while taken(&candidate) {
-            suffix += 1;
-            candidate = format!("{base}_{suffix}");
-        }
-        candidate
     }
 
     pub(crate) fn reserve_go_name(&mut self, go_name: &str) {
@@ -91,7 +82,7 @@ impl ScopeState {
             if pinned.contains(current) {
                 continue;
             }
-            let name = self.free_name_from(base, |candidate| {
+            let name = go_name::fresh_suffixed(base, |candidate| {
                 taken.contains(candidate)
                     || is_go_reserved_word(candidate)
                     || self.has_binding_for_go_name(candidate)
@@ -129,7 +120,7 @@ mod tests {
         let no_package = PackageState::default();
         scope.bind_source("value", &[], "tmp");
 
-        assert_eq!(scope.fresh_go_name(None, &no_package).spelling(), "tmp_1");
+        assert_eq!(scope.fresh_go_name(None, &no_package).spelling(), "tmp2");
     }
 
     #[test]
@@ -143,7 +134,7 @@ mod tests {
         );
         assert_eq!(
             scope.fresh_go_name(Some("value"), &no_package).spelling(),
-            "value_1"
+            "value2"
         );
         assert_eq!(
             scope.fresh_go_name(Some("other"), &no_package).spelling(),
@@ -158,11 +149,11 @@ mod tests {
 
         assert_eq!(
             scope.fresh_go_name(Some("range"), &no_package).spelling(),
-            "range_1"
+            "range2"
         );
         assert_eq!(
             scope.fresh_go_name(Some("len"), &no_package).spelling(),
-            "len_1"
+            "len2"
         );
     }
 
@@ -172,7 +163,7 @@ mod tests {
         let no_package = PackageState::default();
         scope.reserve_go_name("value");
         let generated = scope.fresh_go_name(Some("value"), &no_package);
-        assert_eq!(generated.spelling(), "value_1");
+        assert_eq!(generated.spelling(), "value2");
         let present = HashMap::from_iter([(generated.id().unwrap(), generated.to_string())]);
         let pinned = HashSet::from_iter([generated.to_string()]);
         assert!(
@@ -193,10 +184,10 @@ mod tests {
 
         assert_eq!(
             scope.fresh_go_name(Some("value"), &package).spelling(),
-            "value_1"
+            "value2"
         );
         assert_eq!(scope.names.generated.len(), 1);
-        assert_eq!(scope.fresh_binding_go_name("x", &package), "x_1");
+        assert_eq!(scope.fresh_binding_go_name("x", &package), "x2");
     }
 
     #[test]
@@ -206,7 +197,7 @@ mod tests {
         package
             .record_package_block_names(HashSet::default(), HashSet::from_iter(["i".to_string()]));
         let generated = scope.fresh_go_name(Some("i"), &package);
-        assert_eq!(generated.spelling(), "i_1");
+        assert_eq!(generated.spelling(), "i2");
         let present = HashMap::from_iter([(generated.id().unwrap(), generated.to_string())]);
         assert!(
             scope
@@ -234,7 +225,7 @@ mod tests {
 
         assert_eq!(
             scope.fresh_go_name(Some("value"), &no_package).spelling(),
-            "value_1"
+            "value2"
         );
         assert_eq!(
             scope.fresh_go_name(Some("tmp"), &no_package).spelling(),
@@ -248,7 +239,7 @@ mod tests {
         let package = PackageState::default();
         scope.reserve_go_name("value");
         let retired = scope.fresh_go_name(Some("value"), &package);
-        let generated = scope.fresh_go_name(Some("value_1"), &package);
+        let generated = scope.fresh_go_name(Some("value2"), &package);
         let source = scope.new_local_identifier(retired.spelling());
         assert_ne!(source.id(), retired.id());
         let present = HashMap::from_iter([
@@ -269,7 +260,7 @@ mod tests {
         scope.reserve_go_name("tmp");
         let first = scope.fresh_go_name(None, &no_package);
         let second = scope.fresh_go_name(None, &no_package);
-        assert_eq!((first.spelling(), second.spelling()), ("tmp_1", "tmp_2"));
+        assert_eq!((first.spelling(), second.spelling()), ("tmp2", "tmp3"));
         let first_id = first.id().unwrap();
         let present = HashMap::from_iter([
             (first.id().unwrap(), first.to_string()),

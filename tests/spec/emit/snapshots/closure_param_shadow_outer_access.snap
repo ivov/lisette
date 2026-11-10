@@ -18,8 +18,8 @@ import "fmt"
 
 func test() string {
 	x := "outer"
-	f := func(x_1 int) string {
-		x := x_1 * 2
+	f := func(x2 int) string {
+		x := x2 * 2
 		return fmt.Sprintf("doubled: %d", x)
 	}
 	result := f(5)

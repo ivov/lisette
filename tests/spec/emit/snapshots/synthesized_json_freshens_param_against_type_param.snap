@@ -54,9 +54,9 @@ func (b Box[data]) MarshalJSON() ([]byte, error) {
 	}
 }
 
-func (b *Box[data]) UnmarshalJSON(data_2 []byte) error {
+func (b *Box[data]) UnmarshalJSON(data2 []byte) error {
 	var name string
-	if err := json.Unmarshal(data_2, &name); err == nil {
+	if err := json.Unmarshal(data2, &name); err == nil {
 		switch name {
 		case "Empty":
 			b.Tag = BoxEmpty
@@ -66,7 +66,7 @@ func (b *Box[data]) UnmarshalJSON(data_2 []byte) error {
 		}
 	}
 	var obj map[string]json.RawMessage
-	if err := json.Unmarshal(data_2, &obj); err != nil {
+	if err := json.Unmarshal(data2, &obj); err != nil {
 		return errors.New("invalid Box JSON")
 	}
 	for key, val := range obj {

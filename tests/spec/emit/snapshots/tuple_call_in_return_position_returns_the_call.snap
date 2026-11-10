@@ -84,7 +84,7 @@ func dogPair() (Dog, int) {
 }
 
 func namedPair() (Named, int) {
-	ret, ret_1 := dogPair()
-	tup := lisette.MakeTuple2(ret, ret_1)
+	ret, ret2 := dogPair()
+	tup := lisette.MakeTuple2(ret, ret2)
 	return tup.First, tup.Second
 }

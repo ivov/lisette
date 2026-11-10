@@ -565,11 +565,11 @@ mod tests {
         let mut statements = vec![
             LoweredStatement::Return(vec![
                 GoExpression::from_node(GoExpressionNode::Identifier(GoIdentifier::local(
-                    "tmp_1".to_string(),
+                    "tmp2".to_string(),
                     LocalId(1),
                 ))),
                 GoExpression::from_node(GoExpressionNode::Identifier(GoIdentifier::local(
-                    "tmp_1".to_string(),
+                    "tmp2".to_string(),
                     LocalId(2),
                 ))),
             ])
@@ -581,7 +581,7 @@ mod tests {
             panic!("expected return");
         };
         assert_eq!(values[0].rendered(), "tmp");
-        assert_eq!(values[1].rendered(), "tmp_1");
+        assert_eq!(values[1].rendered(), "tmp2");
     }
 
     #[test]
@@ -589,8 +589,8 @@ mod tests {
         use rustc_hash::FxHashMap as HashMap;
 
         let mut statements = vec![
-            define("tmp_1".to_string(), GoExpression::literal("1".to_string())),
-            define("tmp_1".to_string(), GoExpression::literal("2".to_string())),
+            define("tmp2".to_string(), GoExpression::literal("1".to_string())),
+            define("tmp2".to_string(), GoExpression::literal("2".to_string())),
         ];
         for (statement, id) in statements.iter_mut().zip([LocalId(1), LocalId(2)]) {
             let LoweredStatement::Define(definition) = &mut statement.kind else {
@@ -609,7 +609,7 @@ mod tests {
             panic!("expected two definitions");
         };
         assert_eq!(first.names[0].spelling(), "tmp");
-        assert_eq!(second.names[0].spelling(), "tmp_1");
+        assert_eq!(second.names[0].spelling(), "tmp2");
     }
 
     #[test]

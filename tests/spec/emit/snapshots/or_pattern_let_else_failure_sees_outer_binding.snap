@@ -48,16 +48,16 @@ type E struct {
 
 func read(e E) int {
 	value := 40
-	var value_1 int
+	var value2 int
 	if e.Tag == EA {
-		value_1 = e.A
+		value2 = e.A
 	} else if e.Tag == EB {
-		value_1 = e.B
+		value2 = e.B
 	} else {
 		fallback := value + 2
 		return fallback
 	}
-	return value_1
+	return value2
 }
 
 func main() {

@@ -27,11 +27,11 @@ import (
 )
 
 func main() {
-	ret, ret_1, ret_2 := net.SplitHostPort("localhost:8080")
-	tup := lisette.MakeTuple2(ret, ret_1)
+	ret, ret2, ret3 := net.SplitHostPort("localhost:8080")
+	tup := lisette.MakeTuple2(ret, ret2)
 	var result lisette.Result[lisette.Tuple2[string, string], error]
-	if ret_2 != nil {
-		result = lisette.MakeResultErr[lisette.Tuple2[string, string], error](ret_2)
+	if ret3 != nil {
+		result = lisette.MakeResultErr[lisette.Tuple2[string, string], error](ret3)
 	} else {
 		result = lisette.MakeResultOk[lisette.Tuple2[string, string], error](tup)
 	}

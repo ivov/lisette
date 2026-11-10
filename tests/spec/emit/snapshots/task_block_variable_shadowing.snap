@@ -23,8 +23,8 @@ func main() {
 	x := 1
 	fmt.Println(x)
 	go func() {
-		x_1 := 2
-		fmt.Println(x_1)
+		x2 := 2
+		fmt.Println(x2)
 		x := 3
 		fmt.Println(x)
 	}()

@@ -31,8 +31,8 @@ func consume(f func(*int) lisette.Option[*int], x *int) *int {
 func main() {
 	x := 3
 	stored := func(arg0 *int) lisette.Option[*int] {
-		ret, ret_1 := some[*int](arg0)
-		if ret_1 && ret != nil {
+		ret, ret2 := some[*int](arg0)
+		if ret2 && ret != nil {
 			return lisette.MakeOptionSome[*int](ret)
 		}
 		return lisette.MakeOptionNone[*int]()
@@ -43,9 +43,9 @@ func main() {
 	}
 	first := subject.SomeVal
 	second := consume(func(arg0 *int) lisette.Option[*int] {
-		ret_2, ret_3 := some[*int](arg0)
-		if ret_3 && ret_2 != nil {
-			return lisette.MakeOptionSome[*int](ret_2)
+		ret3, ret4 := some[*int](arg0)
+		if ret4 && ret3 != nil {
+			return lisette.MakeOptionSome[*int](ret3)
 		}
 		return lisette.MakeOptionNone[*int]()
 	}, &x)

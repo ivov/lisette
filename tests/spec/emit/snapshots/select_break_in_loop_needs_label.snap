@@ -32,15 +32,15 @@ func main() {
 	lisette.ChannelSend(ch, "hello")
 loop_1:
 	for {
-		ch_1 := ch
+		ch2 := ch
 		for {
 			select {
-			case msg, ok := <-ch_1:
+			case msg, ok := <-ch2:
 				if ok {
 					fmt.Println(msg)
 					break loop_1
 				}
-				ch_1 = nil
+				ch2 = nil
 				continue
 			default:
 				break loop_1

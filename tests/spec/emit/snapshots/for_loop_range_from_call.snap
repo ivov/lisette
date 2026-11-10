@@ -25,8 +25,8 @@ func getRange() lisette.Range[int] {
 
 func test() int {
 	sum := 0
-	range_1 := getRange()
-	for i := range_1.Start; i < range_1.End; i++ {
+	range2 := getRange()
+	for i := range2.Start; i < range2.End; i++ {
 		sum += i
 	}
 	return sum

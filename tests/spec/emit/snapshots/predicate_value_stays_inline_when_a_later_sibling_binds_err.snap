@@ -29,9 +29,9 @@ func pick(flag bool, n int) int {
 
 func run() (int, error) {
 	_, err := first()
-	ret, err_1 := second()
-	if err_1 != nil {
-		return 0, err_1
+	ret, err2 := second()
+	if err2 != nil {
+		return 0, err2
 	}
 	return pick(err == nil, ret), nil
 }

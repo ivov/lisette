@@ -38,12 +38,12 @@ loop_1:
 		if i == 1 {
 			lisette.ChannelSend(ch, 7)
 		}
-		ch_1 := ch
+		ch2 := ch
 		for {
 			select {
-			case _, ok := <-ch_1:
+			case _, ok := <-ch2:
 				if !ok {
-					ch_1 = nil
+					ch2 = nil
 					continue
 				}
 			default:

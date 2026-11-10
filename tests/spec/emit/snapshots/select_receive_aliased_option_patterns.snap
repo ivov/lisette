@@ -36,14 +36,14 @@ func test() {
 	ch := make(chan int, 2)
 	lisette.ChannelSend(ch, 41)
 	lisette.ChannelSend(ch, 42)
-	ch_1 := ch
+	ch2 := ch
 	for {
 		select {
-		case first, ok := <-ch_1:
+		case first, ok := <-ch2:
 			if ok {
 				fmt.Println(first)
 			} else {
-				ch_1 = nil
+				ch2 = nil
 				continue
 			}
 		default:

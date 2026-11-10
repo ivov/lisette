@@ -22,8 +22,8 @@ func sum(xs **[]int, rs **lisette.Range[int]) int {
 	for _, v := range **xs {
 		total += v
 	}
-	range_1 := **rs
-	for v := range_1.Start; v < range_1.End; v++ {
+	range2 := **rs
+	for v := range2.Start; v < range2.End; v++ {
 		total += v
 	}
 	return total

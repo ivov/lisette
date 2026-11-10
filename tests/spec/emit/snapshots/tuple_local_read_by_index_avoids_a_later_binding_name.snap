@@ -23,7 +23,7 @@ func pair(n int) (int, int) {
 }
 
 func main() {
-	p0_1, _ := pair(3)
+	p0_2, _ := pair(3)
 	p0 := 99
-	fmt.Println(p0_1 + p0)
+	fmt.Println(p0_2 + p0)
 }

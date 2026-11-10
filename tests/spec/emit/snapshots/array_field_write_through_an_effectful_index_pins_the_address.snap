@@ -28,7 +28,7 @@ func main() {
 	buffer := Buffer{data: [4]int{}}
 	base := &buffer.data
 	base[next()] = 7
-	base_1 := &buffer.data
-	base_1[next()]++
+	base2 := &buffer.data
+	base2[next()]++
 	_ = buffer
 }

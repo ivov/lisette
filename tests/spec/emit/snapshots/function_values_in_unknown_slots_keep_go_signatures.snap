@@ -58,37 +58,37 @@ func main() {
 		}
 		return "", res.ErrVal
 	}
-	cb_1 := func(arg0 string) lisette.Option[int] {
+	cb2 := func(arg0 string) lisette.Option[int] {
 		return lisette.OptionFromCommaOk[int](find(arg0))
 	}
-	cb_2 := func() struct{} {
+	cb3 := func() struct{} {
 		unit()
 		return struct{}{}
 	}
 	values := []any{
 		func(arg0 string) (int, bool) {
-			res_1 := cb_1(arg0)
-			if res_1.Tag == lisette.OptionSome {
-				return res_1.SomeVal, true
+			res2 := cb2(arg0)
+			if res2.Tag == lisette.OptionSome {
+				return res2.SomeVal, true
 			}
 			return 0, false
 		},
 		func() {
-			cb_2()
+			cb3()
 		},
 	}
 	if kind(stored) != "func(string) (string, error)" {
 		panic("let binding")
 	}
-	cb_3 := lambda
+	cb4 := lambda
 	var adapted func(string) (int, error)
-	if cb_3 != nil {
+	if cb4 != nil {
 		adapted = func(arg0 string) (int, error) {
-			res_2 := cb_3(arg0)
-			if res_2.Tag == lisette.ResultOk {
-				return res_2.OkVal, nil
+			res3 := cb4(arg0)
+			if res3.Tag == lisette.ResultOk {
+				return res3.OkVal, nil
 			}
-			return 0, res_2.ErrVal
+			return 0, res3.ErrVal
 		}
 	}
 	if kind(adapted) != "func(string) (int, error)" {
@@ -101,22 +101,22 @@ func main() {
 		panic("unit result")
 	}
 	src := lisette.AssertType[func(string) (string, error)](stored)
-	var adapted_1 lisette.Option[func(string) lisette.Result[string, error]]
-	adapted_1.Tag = src.Tag
+	var adapted2 lisette.Option[func(string) lisette.Result[string, error]]
+	adapted2.Tag = src.Tag
 	if src.Tag == lisette.OptionSome {
-		cb_4 := src.SomeVal
-		var adapted_2 func(string) lisette.Result[string, error]
-		if cb_4 != nil {
-			adapted_2 = func(arg0 string) lisette.Result[string, error] {
-				return lisette.ResultFromPair[string](cb_4(arg0))
+		cb5 := src.SomeVal
+		var adapted3 func(string) lisette.Result[string, error]
+		if cb5 != nil {
+			adapted3 = func(arg0 string) lisette.Result[string, error] {
+				return lisette.ResultFromPair[string](cb5(arg0))
 			}
 		}
-		adapted_1.SomeVal = adapted_2
+		adapted2.SomeVal = adapted3
 	}
-	if adapted_1.Tag != lisette.OptionSome {
+	if adapted2.Tag != lisette.OptionSome {
 		panic("assert")
 	}
-	f := adapted_1.SomeVal
+	f := adapted2.SomeVal
 	subject := f("x")
 	if subject.Tag != lisette.ResultErr {
 		panic("call after assert")

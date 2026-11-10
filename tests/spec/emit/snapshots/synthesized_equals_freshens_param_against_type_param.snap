@@ -17,8 +17,8 @@ type Box[other comparable] struct {
 	Item other
 }
 
-func (b Box[other]) equals(other_2 Box[other]) bool {
-	return b.Item == other_2.Item
+func (b Box[other]) equals(other2 Box[other]) bool {
+	return b.Item == other2.Item
 }
 
 func test() bool {

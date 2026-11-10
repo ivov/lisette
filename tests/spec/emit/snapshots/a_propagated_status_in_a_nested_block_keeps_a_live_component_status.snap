@@ -31,9 +31,9 @@ import "strconv"
 func add(s, t string) (int, error) {
 	r, err := strconv.Atoi(s)
 	if t != "" {
-		y, err_1 := strconv.Atoi(t)
-		if err_1 != nil {
-			return 0, err_1
+		y, err2 := strconv.Atoi(t)
+		if err2 != nil {
+			return 0, err2
 		}
 		if err != nil {
 			return 0, err

@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	ret, ret_1, ret_2 := strings.Cut("hello-world", "-")
-	result := lisette.MakeTuple3(ret, ret_1, ret_2)
+	ret, ret2, ret3 := strings.Cut("hello-world", "-")
+	result := lisette.MakeTuple3(ret, ret2, ret3)
 	fmt.Println(result)
 }

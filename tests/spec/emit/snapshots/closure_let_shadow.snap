@@ -18,8 +18,8 @@ import "fmt"
 func test() string {
 	f := func() string {
 		x := 1
-		x_1 := fmt.Sprintf("was %d", x)
-		return x_1
+		x2 := fmt.Sprintf("was %d", x)
+		return x2
 	}
 	return f()
 }

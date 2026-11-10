@@ -27,8 +27,8 @@ import (
 func main() {
 	bytes, err := os.ReadFile("tasks.json")
 	if err != nil {
-		bytes_1 := []byte(err.Error())
-		fmt.Println(len(bytes_1))
+		bytes2 := []byte(err.Error())
+		fmt.Println(len(bytes2))
 		return
 	}
 	fmt.Println(len(bytes))

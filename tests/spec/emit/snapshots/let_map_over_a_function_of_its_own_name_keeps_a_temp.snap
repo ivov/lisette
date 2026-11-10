@@ -22,6 +22,6 @@ func three() int {
 			result = append(result, x)
 		}
 	}
-	items_1 := result
-	return len(items_1)
+	items2 := result
+	return len(items2)
 }

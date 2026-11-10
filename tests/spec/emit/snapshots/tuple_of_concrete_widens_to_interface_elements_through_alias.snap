@@ -53,8 +53,8 @@ func test() {
 	if pair.First.Error() != "boom" || func() bool {
 		var boxed Rows
 		for i := range concrete {
-			tup_1 := concrete[i]
-			boxed[i] = lisette.MakeTuple2[error, int](tup_1.First, tup_1.Second)
+			tup2 := concrete[i]
+			boxed[i] = lisette.MakeTuple2[error, int](tup2.First, tup2.Second)
 		}
 		return first(boxed) != "boom"
 	}() {

@@ -20,11 +20,11 @@ func main() {
 	x := 7
 	f := func() int {
 		g := func() int {
-			x_1 := 0
+			x2 := 0
 			for _, y := range []int{x, x + 1} {
-				x_1 += y
+				x2 += y
 			}
-			return x_1
+			return x2
 		}
 		return g() + x
 	}

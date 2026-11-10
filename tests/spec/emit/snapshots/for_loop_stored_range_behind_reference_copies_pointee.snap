@@ -24,8 +24,8 @@ func main() {
 	}
 	r := &x
 	n := 0
-	range_1 := *r
-	for i := range_1.Start; i < range_1.End; i++ {
+	range2 := *r
+	for i := range2.Start; i < range2.End; i++ {
 		n += i
 		r.End = 10
 	}

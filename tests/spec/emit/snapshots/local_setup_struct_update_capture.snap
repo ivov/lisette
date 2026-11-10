@@ -34,16 +34,16 @@ func main() {
 		return out.value
 	}
 	f := func() int {
-		out_1 := out
-		out_1.value = read() + 1
-		read_1 := func() int {
-			return out_1.value + out_1.marker
+		out2 := out
+		out2.value = read() + 1
+		read2 := func() int {
+			return out2.value + out2.marker
 		}
-		return read_1()
+		return read2()
 	}
 	total := 0
-	for _, out_2 := range []int{1, 2} {
-		total += f() + out_2
+	for _, out3 := range []int{1, 2} {
+		total += f() + out3
 	}
 	if total != 25 || read() != 7 {
 		panic("updated temp identity")

@@ -37,6 +37,6 @@ type Expr struct {
 
 func test() Expr {
 	ref := MakeExprNum(1)
-	ref_1 := MakeExprNum(2)
-	return MakeExprAdd(&ref, &ref_1)
+	ref2 := MakeExprNum(2)
+	return MakeExprAdd(&ref, &ref2)
 }

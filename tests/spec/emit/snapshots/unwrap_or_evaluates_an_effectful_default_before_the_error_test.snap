@@ -28,9 +28,9 @@ func fallback() int {
 
 func one() int {
 	ret, err := strconv.Atoi("1")
-	default_1 := fallback()
+	default2 := fallback()
 	if err != nil {
-		ret = default_1
+		ret = default2
 	}
 	return ret
 }

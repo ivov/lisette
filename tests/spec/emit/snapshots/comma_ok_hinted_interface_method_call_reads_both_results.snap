@@ -44,9 +44,9 @@ type Cache interface {
 }
 
 func bound(c Cache) *Entry {
-	ret, ret_1 := c.Get("a")
+	ret, ret2 := c.Get("a")
 	var e lisette.Option[*Entry]
-	if ret_1 && ret != nil {
+	if ret2 && ret != nil {
 		e = lisette.MakeOptionSome[*Entry](ret)
 	} else {
 		e = lisette.MakeOptionNone[*Entry]()
@@ -58,9 +58,9 @@ func bound(c Cache) *Entry {
 }
 
 func tail(c Cache) *Entry {
-	ret, ret_1 := c.Get("a")
+	ret, ret2 := c.Get("a")
 	var option lisette.Option[*Entry]
-	if ret_1 && ret != nil {
+	if ret2 && ret != nil {
 		option = lisette.MakeOptionSome[*Entry](ret)
 	} else {
 		option = lisette.MakeOptionNone[*Entry]()

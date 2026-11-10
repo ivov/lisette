@@ -6,8 +6,8 @@ description: |
   
   fn make<sc>(x: sc) -> fn() -> sc {
     || -> sc {
-      let sc_2 = 1
-      let _ = sc.Itoa(sc_2)
+      let sc2 = 1
+      let _ = sc.Itoa(sc2)
       let mut opt = None
       opt = Some(x)
       match opt {
@@ -30,11 +30,11 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func make_[sc_2 any](x sc_2) func() sc_2 {
-	return func() sc_2 {
-		sc_2_1 := 1
-		sc.Itoa(sc_2_1)
-		opt := lisette.MakeOptionNone[sc_2]()
+func make_[sc2 any](x sc2) func() sc2 {
+	return func() sc2 {
+		sc2_2 := 1
+		sc.Itoa(sc2_2)
+		opt := lisette.MakeOptionNone[sc2]()
 		opt = lisette.MakeOptionSome(x)
 		if opt.Tag == lisette.OptionSome {
 			return opt.SomeVal

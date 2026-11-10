@@ -26,54 +26,54 @@ func configure(conf *ext.Config) {
 	adapted := make([]func(ext.Config) lisette.Result[ext.Listener, error], len(raw))
 	for i, v := range raw {
 		cb := v
-		var adapted_1 func(ext.Config) lisette.Result[ext.Listener, error]
+		var adapted2 func(ext.Config) lisette.Result[ext.Listener, error]
 		if cb != nil {
-			adapted_1 = func(arg0 ext.Config) lisette.Result[ext.Listener, error] {
-				ret, ret_1 := cb(arg0)
-				if ret_1 != nil {
-					return lisette.MakeResultErr[ext.Listener, error](ret_1)
+			adapted2 = func(arg0 ext.Config) lisette.Result[ext.Listener, error] {
+				ret, ret2 := cb(arg0)
+				if ret2 != nil {
+					return lisette.MakeResultErr[ext.Listener, error](ret2)
 				} else if lisette.IsNilInterface(ret) {
 					return lisette.MakeResultErr[ext.Listener, error](errors.New("unexpected nil"))
 				}
 				return lisette.MakeResultOk[ext.Listener, error](ret)
 			}
 		}
-		adapted[i] = adapted_1
+		adapted[i] = adapted2
 	}
-	adapted_2 := make([]func(ext.Config) (ext.Listener, error), len(adapted))
-	for i_1, v_1 := range adapted {
-		cb_1 := v_1
-		var adapted_3 func(ext.Config) (ext.Listener, error)
-		if cb_1 != nil {
-			adapted_3 = func(arg0 ext.Config) (ext.Listener, error) {
-				res := cb_1(arg0)
+	adapted3 := make([]func(ext.Config) (ext.Listener, error), len(adapted))
+	for i2, v2 := range adapted {
+		cb2 := v2
+		var adapted4 func(ext.Config) (ext.Listener, error)
+		if cb2 != nil {
+			adapted4 = func(arg0 ext.Config) (ext.Listener, error) {
+				res := cb2(arg0)
 				if res.Tag == lisette.ResultOk {
 					return res.OkVal, nil
 				}
 				return nil, res.ErrVal
 			}
 		}
-		adapted_2[i_1] = adapted_3
+		adapted3[i2] = adapted4
 	}
-	src := ext.WrapListeners(adapted_2)
-	adapted_4 := make([]func(ext.Config) lisette.Result[ext.Listener, error], len(src))
-	for i_2, v_2 := range src {
-		cb_2 := v_2
-		var adapted_5 func(ext.Config) lisette.Result[ext.Listener, error]
-		if cb_2 != nil {
-			adapted_5 = func(arg0 ext.Config) lisette.Result[ext.Listener, error] {
-				ret_2, ret_3 := cb_2(arg0)
-				if ret_3 != nil {
-					return lisette.MakeResultErr[ext.Listener, error](ret_3)
-				} else if lisette.IsNilInterface(ret_2) {
+	src := ext.WrapListeners(adapted3)
+	adapted5 := make([]func(ext.Config) lisette.Result[ext.Listener, error], len(src))
+	for i3, v3 := range src {
+		cb3 := v3
+		var adapted6 func(ext.Config) lisette.Result[ext.Listener, error]
+		if cb3 != nil {
+			adapted6 = func(arg0 ext.Config) lisette.Result[ext.Listener, error] {
+				ret3, ret4 := cb3(arg0)
+				if ret4 != nil {
+					return lisette.MakeResultErr[ext.Listener, error](ret4)
+				} else if lisette.IsNilInterface(ret3) {
 					return lisette.MakeResultErr[ext.Listener, error](errors.New("unexpected nil"))
 				}
-				return lisette.MakeResultOk[ext.Listener, error](ret_2)
+				return lisette.MakeResultOk[ext.Listener, error](ret3)
 			}
 		}
-		adapted_4[i_2] = adapted_5
+		adapted5[i3] = adapted6
 	}
-	for _, listener := range adapted_4 {
+	for _, listener := range adapted5 {
 		wrapped = append(wrapped, lisette.MakeOptionSome(listener))
 	}
 }

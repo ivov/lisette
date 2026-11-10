@@ -22,15 +22,15 @@ func main() {
 	fmt.Println(rest[0])
 	subject := []int{1, 2}
 	var x int
-	var rest_1 []int
+	var rest2 []int
 	if len(subject) >= 1 {
 		x = subject[0]
-		rest_1 = subject[1:]
+		rest2 = subject[1:]
 	} else if len(subject) >= 1 {
 		x = subject[0]
-		rest_1 = subject[1:]
+		rest2 = subject[1:]
 	} else {
 		return
 	}
-	fmt.Println(x, rest_1[0])
+	fmt.Println(x, rest2[0])
 }

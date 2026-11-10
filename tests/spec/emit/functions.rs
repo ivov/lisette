@@ -2905,8 +2905,8 @@ fn renamed_generic_freshens_colliding_value_param() {
     let input = r#"
 import sc "go:strconv"
 
-fn label<sc>(sc_2: int, _tag: sc) -> string {
-  sc.Itoa(sc_2)
+fn label<sc>(sc2: int, _tag: sc) -> string {
+  sc.Itoa(sc2)
 }
 
 fn test() -> string {
@@ -2922,8 +2922,8 @@ fn renamed_generic_freshens_colliding_local() {
 import sc "go:strconv"
 
 fn label<sc>(_tag: sc) -> string {
-  let sc_2 = 9
-  sc.Itoa(sc_2)
+  let sc2 = 9
+  sc.Itoa(sc2)
 }
 
 fn test() -> string {
@@ -2940,8 +2940,8 @@ import sc "go:strconv"
 
 fn make<sc>(x: sc) -> fn() -> sc {
   || -> sc {
-    let sc_2 = 1
-    let _ = sc.Itoa(sc_2)
+    let sc2 = 1
+    let _ = sc.Itoa(sc2)
     let mut opt = None
     opt = Some(x)
     match opt {
@@ -3744,9 +3744,9 @@ fn generated_identity_tuple_callback() {
 import "go:encoding/pem"
 
 fn apply(f: fn(Slice<byte>) -> (Option<Ref<pem.Block>>, Slice<byte>), data: Slice<byte>) -> int {
-  let (ret, ret_1) = f(data)
+  let (ret, ret2) = f(data)
   if ret.is_some() { panic("unexpected PEM") }
-  let read = || ret_1.length()
+  let read = || ret2.length()
   read()
 }
 

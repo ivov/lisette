@@ -30,17 +30,17 @@ func main() {
 	var w int
 loop_1:
 	for {
-		ch_1 := ch
+		ch2 := ch
 		for {
 			select {
-			case w_1, ok := <-ch_1:
+			case w2, ok := <-ch2:
 				if ok {
-					if w_1 > 2 {
-						w = w_1
+					if w2 > 2 {
+						w = w2
 						break loop_1
 					}
 				} else {
-					ch_1 = nil
+					ch2 = nil
 					continue
 				}
 			default:

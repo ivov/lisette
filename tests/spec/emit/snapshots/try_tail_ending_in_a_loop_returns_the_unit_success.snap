@@ -31,9 +31,9 @@ func check(n int) lisette.Result[struct{}, string] {
 
 func checkAll(xs []int) lisette.Result[struct{}, string] {
 	for _, x := range xs {
-		check_1 := check(x)
-		if check_1.Tag != lisette.ResultOk {
-			return check_1
+		check2 := check(x)
+		if check2.Tag != lisette.ResultOk {
+			return check2
 		}
 	}
 	return lisette.MakeResultOk[struct{}, string](struct{}{})

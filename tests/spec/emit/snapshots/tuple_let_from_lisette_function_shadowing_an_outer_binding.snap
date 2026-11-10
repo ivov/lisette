@@ -24,6 +24,6 @@ func pair(n int) (int, int) {
 
 func main() {
 	a := 5
-	a_1, b := pair(a)
-	fmt.Println(a_1, b)
+	a2, b := pair(a)
+	fmt.Println(a2, b)
 }

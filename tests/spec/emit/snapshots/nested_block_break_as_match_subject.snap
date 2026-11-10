@@ -17,14 +17,14 @@ package main
 func test() {
 	var tmp int
 	for {
-		var tmp_1 int
+		var tmp2 int
 		{
 			{
 				tmp = 1
 				break
 			}
 		}
-		_ = tmp_1
+		_ = tmp2
 	}
 	_ = tmp
 }

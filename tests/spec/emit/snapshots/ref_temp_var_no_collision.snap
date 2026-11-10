@@ -12,8 +12,8 @@ description: |
   
   fn main() {
     let r = &make_box()
-    let ref_1 = 3
-    fmt.Println(r.*.x, ref_1)
+    let ref2 = 3
+    fmt.Println(r.*.x, ref2)
   }
 ---
 package main
@@ -31,6 +31,6 @@ func makeBox() Box {
 func main() {
 	ref := makeBox()
 	r := &ref
-	ref_1 := 3
-	fmt.Println(r.x, ref_1)
+	ref2 := 3
+	fmt.Println(r.x, ref2)
 }

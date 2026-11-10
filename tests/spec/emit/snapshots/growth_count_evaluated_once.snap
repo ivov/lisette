@@ -1,14 +1,14 @@
 ---
 source: tests/spec/emit/prelude.rs
 description: |
-
+  
   fn check(calls: int, result: mut Slice<int>) -> mut Slice<int> {
     if calls != 1 {
       panic("a spread operand must not reorder an earlier read")
     }
     result
   }
-
+  
   fn main() {
     for n in [0, 2] {
       let mut calls = 0
@@ -74,12 +74,12 @@ func main() {
 			return []int{7}
 		}
 		arg := calls
-		added_1 := extra()
+		added2 := extra()
 		appended := check(arg, func() []int {
-			if len(added_1) == 0 {
+			if len(added2) == 0 {
 				return slices.Clone(a)
 			}
-			return append(slices.Clip(a), added_1...)
+			return append(slices.Clip(a), added2...)
 		}())
 		if calls != 2 {
 			panic("a spread operand must be evaluated once")

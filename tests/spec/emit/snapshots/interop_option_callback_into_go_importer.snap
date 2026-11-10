@@ -69,7 +69,7 @@ func main() {
 	if lisette.IsNilInterface(source) {
 		panic("no source importer")
 	}
-	if ret_1, err := source.Import("errors"); err != nil || ret_1 == nil {
+	if ret2, err := source.Import("errors"); err != nil || ret2 == nil {
 		panic("source import")
 	}
 }

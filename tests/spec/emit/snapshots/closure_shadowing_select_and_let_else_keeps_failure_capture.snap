@@ -60,17 +60,17 @@ func main() {
 	lisette.ChannelSend(ch, 4)
 	f := func() int {
 		var selected int
-		ch_1 := ch
+		ch2 := ch
 		for {
 			select {
-			case x, ok := <-ch_1:
+			case x, ok := <-ch2:
 				if ok {
 					read := func() int {
 						return x
 					}
 					selected = read()
 				} else {
-					ch_1 = nil
+					ch2 = nil
 					continue
 				}
 			default:
@@ -79,15 +79,15 @@ func main() {
 			break
 		}
 		subject := MakeChoiceEmpty()
-		var x_1 int
+		var x2 int
 		if subject.Tag == ChoiceA {
-			x_1 = subject.A
+			x2 = subject.A
 		} else if subject.Tag == ChoiceB {
-			x_1 = subject.B
+			x2 = subject.B
 		} else {
 			return selected + x
 		}
-		return x_1
+		return x2
 	}
 	if f() != 17 {
 		panic("failure capture")

@@ -14,13 +14,13 @@ package main
 
 func run(x int) int {
 	f := func(c bool) int {
-		var x_1 int
+		var x2 int
 		if c {
-			x_1 = x + 1
+			x2 = x + 1
 		} else {
-			x_1 = 0
+			x2 = 0
 		}
-		return x_1 * 2
+		return x2 * 2
 	}
 	return f(true)
 }

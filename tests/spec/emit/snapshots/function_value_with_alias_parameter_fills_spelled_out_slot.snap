@@ -33,8 +33,8 @@ func first(f PairFn) int {
 
 func main() {
 	cb := func(arg0 PairFn) lisette.Tuple2[int, int] {
-		ret, ret_1 := invoke(arg0)
-		tup := lisette.MakeTuple2(ret, ret_1)
+		ret, ret2 := invoke(arg0)
+		tup := lisette.MakeTuple2(ret, ret2)
 		return tup
 	}
 	gs := []func(func(int) lisette.Tuple2[int, int]) lisette.Tuple2[int, int]{func(arg0 func(int) lisette.Tuple2[int, int]) lisette.Tuple2[int, int] {

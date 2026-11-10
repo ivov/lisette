@@ -70,23 +70,23 @@ func make_(n int) (F[lisette.Result[int, error]], lisette.Result[F[lisette.Resul
 		return lisette.ResultFromPair[int](source(x))
 	}))
 	var adapted lisette.Tuple2[lisette.Option[F[lisette.Result[int, error]]], lisette.Result[F[lisette.Result[int, error]], string]]
-	src_1 := src.First
-	var adapted_1 lisette.Option[F[lisette.Result[int, error]]]
-	adapted_1.Tag = src_1.Tag
-	if src_1.Tag == lisette.OptionSome {
-		adapted_1.SomeVal = src_1.SomeVal
+	src2 := src.First
+	var adapted2 lisette.Option[F[lisette.Result[int, error]]]
+	adapted2.Tag = src2.Tag
+	if src2.Tag == lisette.OptionSome {
+		adapted2.SomeVal = src2.SomeVal
 	}
-	adapted.First = adapted_1
-	src_2 := src.Second
-	var adapted_2 lisette.Result[F[lisette.Result[int, error]], string]
-	adapted_2.Tag = src_2.Tag
-	if src_2.Tag == lisette.ResultOk {
-		adapted_2.OkVal = src_2.OkVal
+	adapted.First = adapted2
+	src3 := src.Second
+	var adapted3 lisette.Result[F[lisette.Result[int, error]], string]
+	adapted3.Tag = src3.Tag
+	if src3.Tag == lisette.ResultOk {
+		adapted3.OkVal = src3.OkVal
 	}
-	if src_2.Tag == lisette.ResultErr {
-		adapted_2.ErrVal = src_2.ErrVal
+	if src3.Tag == lisette.ResultErr {
+		adapted3.ErrVal = src3.ErrVal
 	}
-	adapted.Second = adapted_2
+	adapted.Second = adapted3
 	opt := adapted.First
 	var unwrap F[lisette.Result[int, error]]
 	if opt.Tag == lisette.OptionSome {
@@ -116,9 +116,9 @@ func boxed(b Box[lisette.Result[int, error]]) (F[lisette.Result[int, error]], li
 }
 
 func main() {
-	ret, ret_1 := make_(0)
+	ret, ret2 := make_(0)
 	option := lisette.OptionFromNilable[F[lisette.Result[int, error]]](ret, ret == nil)
-	empty := lisette.MakeTuple2(option, ret_1)
+	empty := lisette.MakeTuple2(option, ret2)
 	none := empty.First
 	err := empty.Second
 	if none.Tag != lisette.OptionNone {
@@ -129,18 +129,18 @@ func main() {
 	}
 	text := err.ErrVal
 	check(text == "none")
-	ret_2, ret_3 := make_(1)
-	option_1 := lisette.OptionFromNilable[F[lisette.Result[int, error]]](ret_2, ret_2 == nil)
-	pair := lisette.MakeTuple2(option_1, ret_3)
+	ret3, ret4 := make_(1)
+	option2 := lisette.OptionFromNilable[F[lisette.Result[int, error]]](ret3, ret3 == nil)
+	pair := lisette.MakeTuple2(option2, ret4)
 	stored := Box[lisette.Result[int, error]]{value: pair}
-	ret_4, ret_5 := boxed(stored)
-	option_2 := lisette.OptionFromNilable[F[lisette.Result[int, error]]](ret_4, ret_4 == nil)
-	tup := lisette.MakeTuple2(option_2, ret_5)
-	ret_6, ret_7 := forward(tup)
-	option_3 := lisette.OptionFromNilable[F[lisette.Result[int, error]]](ret_6, ret_6 == nil)
-	tup_3 := lisette.MakeTuple2(option_3, ret_7)
-	o := tup_3.First
-	r := tup_3.Second
+	ret5, ret6 := boxed(stored)
+	option3 := lisette.OptionFromNilable[F[lisette.Result[int, error]]](ret5, ret5 == nil)
+	tup := lisette.MakeTuple2(option3, ret6)
+	ret7, ret8 := forward(tup)
+	option4 := lisette.OptionFromNilable[F[lisette.Result[int, error]]](ret7, ret7 == nil)
+	tup4 := lisette.MakeTuple2(option4, ret8)
+	o := tup4.First
+	r := tup4.Second
 	if o.Tag != lisette.OptionSome {
 		panic("missing f")
 	}

@@ -35,8 +35,8 @@ func run() lisette.Result[int, string] {
 	if check.Tag != lisette.ResultOk {
 		return check
 	}
-	n_1 := check.OkVal
-	return lisette.MakeResultOk[int, string](n_1)
+	n2 := check.OkVal
+	return lisette.MakeResultOk[int, string](n2)
 }
 
 func main() {

@@ -20,9 +20,9 @@ func Resolve[T any, R any, E any](a T, f func(T) lisette.Result[R, E]) lisette.R
 
 func main() {
 	Resolve(0, func(arg0 int) lisette.Result[int, *strconv.NumError] {
-		ret, ret_1 := Parser(arg0)
-		if ret_1 != nil {
-			return lisette.MakeResultErr[int, *strconv.NumError](ret_1)
+		ret, ret2 := Parser(arg0)
+		if ret2 != nil {
+			return lisette.MakeResultErr[int, *strconv.NumError](ret2)
 		}
 		return lisette.MakeResultOk[int, *strconv.NumError](ret)
 	})

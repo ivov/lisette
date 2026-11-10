@@ -37,8 +37,8 @@ package main
 func add(m map[string]int) int {
 	opt, ok := m["a"]
 	if ok {
-		f := func(opt_1 int) int {
-			return opt + opt_1
+		f := func(opt2 int) int {
+			return opt + opt2
 		}
 		return f(100)
 	}
@@ -49,8 +49,8 @@ func local(m map[string]int) int {
 	opt, ok := m["a"]
 	if ok {
 		f := func() int {
-			opt_1 := 100
-			return opt + opt_1
+			opt2 := 100
+			return opt + opt2
 		}
 		return f()
 	}

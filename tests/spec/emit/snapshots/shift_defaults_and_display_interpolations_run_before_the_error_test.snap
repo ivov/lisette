@@ -25,10 +25,10 @@ func three(d time.Duration, sh int) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("%s: %w", msg, err)
 	}
-	b, err_1 := strconv.Atoi("2")
-	default_1 := int(1 << sh)
-	if err_1 != nil {
-		b = default_1
+	b, err2 := strconv.Atoi("2")
+	default2 := int(1 << sh)
+	if err2 != nil {
+		b = default2
 	}
 	return a + b, nil
 }

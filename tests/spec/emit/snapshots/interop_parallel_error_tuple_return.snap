@@ -27,10 +27,10 @@ import (
 )
 
 func main() {
-	ret, ret_1 := migrate.Close()
+	ret, ret2 := migrate.Close()
 	option := lisette.OptionFromNilable[error](ret, lisette.IsNilInterface(ret))
-	option_1 := lisette.OptionFromNilable[error](ret_1, lisette.IsNilInterface(ret_1))
-	tup := lisette.MakeTuple2(option, option_1)
+	option2 := lisette.OptionFromNilable[error](ret2, lisette.IsNilInterface(ret2))
+	tup := lisette.MakeTuple2(option, option2)
 	src := tup.First
 	db := tup.Second
 	if src.Tag == lisette.OptionSome {

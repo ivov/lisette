@@ -48,16 +48,16 @@ type E struct {
 func test() {
 	x := 5
 	e := MakeEC()
-	var x_1 int
+	var x2 int
 	if e.Tag == EA {
-		x_1 = e.A
+		x2 = e.A
 	} else if e.Tag == EB {
-		x_1 = e.B
+		x2 = e.B
 	} else {
 		if x != 5 {
 			panic("shadow")
 		}
 		return
 	}
-	_ = x_1
+	_ = x2
 }

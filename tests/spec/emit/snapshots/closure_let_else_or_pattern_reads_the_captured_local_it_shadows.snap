@@ -42,15 +42,15 @@ type E struct {
 
 func run(x int, e E) int {
 	f := func() int {
-		var x_1 int
+		var x2 int
 		if e.Tag == EA {
-			x_1 = e.A
+			x2 = e.A
 		} else if e.Tag == EB {
-			x_1 = e.B
+			x2 = e.B
 		} else {
 			return x
 		}
-		return x_1
+		return x2
 	}
 	return f()
 }

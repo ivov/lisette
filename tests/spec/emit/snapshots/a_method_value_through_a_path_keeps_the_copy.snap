@@ -58,23 +58,23 @@ type Q struct {
 
 func saved(p P) (func() int, P) {
 	get := p.cell.get
-	copy_1 := p
-	copy_1.cell = Cell{a: 9}
-	return get, copy_1
+	copy2 := p
+	copy2.cell = Cell{a: 9}
+	return get, copy2
 }
 
 func inUpdate(q Q) Q {
-	copy_1 := q
-	copy_1.get = q.cell.get
-	copy_1.cell = Cell{a: 9}
-	return copy_1
+	copy2 := q
+	copy2.get = q.cell.get
+	copy2.cell = Cell{a: 9}
+	return copy2
 }
 
 func throughIndex(xs [1]Cell) int {
 	get := xs[0].get
-	xs_1 := xs
-	xs_1[0] = Cell{a: 9}
-	return get() + xs_1[0].a
+	xs2 := xs
+	xs2[0] = Cell{a: 9}
+	return get() + xs2[0].a
 }
 
 func test() {

@@ -4,8 +4,8 @@ description: |
   
   fn foo() -> Result<int, string> {
     let y = Ok(1)? + 1
-    let result_2 = 7
-    let _ = result_2
+    let result3 = 7
+    let _ = result3
     Ok(y)
   }
   

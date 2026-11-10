@@ -24,9 +24,9 @@ import "strconv"
 
 func add(s, t string) (int, error) {
 	r, err := strconv.Atoi(s)
-	k, err_1 := strconv.Atoi(t)
-	if err_1 != nil {
-		return 0, err_1
+	k, err2 := strconv.Atoi(t)
+	if err2 != nil {
+		return 0, err2
 	}
 	n := r
 	if err != nil {

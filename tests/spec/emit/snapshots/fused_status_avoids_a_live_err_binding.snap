@@ -21,9 +21,9 @@ import (
 
 func run() (int, error) {
 	err := errors.New("outer")
-	n, err_1 := strconv.Atoi("1")
-	if err_1 != nil {
-		return 0, err_1
+	n, err2 := strconv.Atoi("1")
+	if err2 != nil {
+		return 0, err2
 	}
 	if n == 0 {
 		return 0, err

@@ -69,23 +69,23 @@ func closureBefore(names []string) int {
 	count := func() int {
 		return len(names)
 	}
-	names_1 := names
-	names_1 = append(names_1, "x")
-	return count() + len(names_1)
+	names2 := names
+	names2 = append(names2, "x")
+	return count() + len(names2)
 }
 
 func addressBefore(p P) int {
 	r := p.ptr()
-	p_1 := p
-	p_1.a = 99
-	return r.a + p_1.a
+	p2 := p
+	p2.a = 99
+	return r.a + p2.a
 }
 
 func nested(n int) int {
 	if n > 0 {
-		n_1 := n
-		n_1 += 100
-		_ = n_1
+		n2 := n
+		n2 += 100
+		_ = n2
 	}
 	return n
 }

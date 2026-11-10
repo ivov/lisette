@@ -52,16 +52,16 @@ func choose(item Choice) int {
 	read := func() int {
 		return value
 	}
-	var value_1 int
+	var value2 int
 	if item.Tag == ChoiceA {
-		value_1 = item.A
+		value2 = item.A
 	} else if item.Tag == ChoiceB {
-		value_1 = item.B
+		value2 = item.B
 	} else {
 		return read() + 2
 	}
 	f := func() int {
-		subject := MakeChoiceB(value_1 + 1)
+		subject := MakeChoiceB(value2 + 1)
 		var value int
 		if subject.Tag == ChoiceA {
 			value = subject.A

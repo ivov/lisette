@@ -71,16 +71,16 @@ func test() {
 		boxed[i] = concrete[i]
 	}
 	assigned = boxed
-	var boxed_1 Errs
-	for i_1 := range concrete {
-		boxed_1[i_1] = concrete[i_1]
+	var boxed2 Errs
+	for i2 := range concrete {
+		boxed2[i2] = concrete[i2]
 	}
-	held := Holder{errs: boxed_1}
-	var boxed_2 Errs
-	for i_2 := range concrete {
-		boxed_2[i_2] = concrete[i_2]
+	held := Holder{errs: boxed2}
+	var boxed3 Errs
+	for i3 := range concrete {
+		boxed3[i3] = concrete[i3]
 	}
-	if first(boxed_2) != "boom" || first(assigned) != "boom" || first(held.errs) != "boom" {
+	if first(boxed3) != "boom" || first(assigned) != "boom" || first(held.errs) != "boom" {
 		panic("aliased array lost its interface elements")
 	}
 }

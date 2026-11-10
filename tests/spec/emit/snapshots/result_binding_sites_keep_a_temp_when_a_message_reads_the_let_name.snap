@@ -32,22 +32,22 @@ func n() string {
 }
 
 func letElse() {
-	n_1, err := strconv.Atoi("2")
+	n2, err := strconv.Atoi("2")
 	n()
 	if err != nil {
 		return
 	}
-	fmt.Println(n_1)
+	fmt.Println(n2)
 }
 
 func letMatch() {
-	var n_1 int
+	var n2 int
 	x, err := strconv.Atoi("2")
 	n()
 	if err == nil {
-		n_1 = x
+		n2 = x
 	} else {
 		return
 	}
-	fmt.Println(n_1)
+	fmt.Println(n2)
 }

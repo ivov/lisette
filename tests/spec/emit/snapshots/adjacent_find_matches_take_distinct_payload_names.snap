@@ -31,17 +31,17 @@ func five(xs []int) int {
 	if found {
 		fmt.Println(x)
 	}
-	var x_1 int
-	found_1 := false
+	var x2 int
+	found2 := false
 	for _, n := range xs {
 		if n > 2 {
-			x_1 = n
-			found_1 = true
+			x2 = n
+			found2 = true
 			break
 		}
 	}
-	if found_1 {
-		fmt.Println(x_1)
+	if found2 {
+		fmt.Println(x2)
 	}
 	return 0
 }

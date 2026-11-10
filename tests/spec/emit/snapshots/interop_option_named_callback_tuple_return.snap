@@ -42,9 +42,9 @@ func pick(n int) (lib.Lookup, int) {
 
 func main() {
 	cb := func(arg0 int) lisette.Tuple2[lisette.Option[lib.Lookup], int] {
-		ret, ret_1 := pick(arg0)
+		ret, ret2 := pick(arg0)
 		option := lisette.OptionFromNilable[lib.Lookup](ret, ret == nil)
-		tup := lisette.MakeTuple2(option, ret_1)
+		tup := lisette.MakeTuple2(option, ret2)
 		return tup
 	}
 	lib.Take(func(arg0 int) (lib.Lookup, int) {

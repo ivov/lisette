@@ -37,13 +37,13 @@ func main() {
 	raw := container.Values
 	var option lisette.Option[[]lisette.Option[int]]
 	if raw != nil {
-		src_1 := *raw
-		wrapped := make([]lisette.Option[int], len(src_1))
-		for i_1, v_1 := range src_1 {
-			if v_1 != nil {
-				wrapped[i_1] = lisette.MakeOptionSome[int](*v_1)
+		src2 := *raw
+		wrapped := make([]lisette.Option[int], len(src2))
+		for i2, v2 := range src2 {
+			if v2 != nil {
+				wrapped[i2] = lisette.MakeOptionSome[int](*v2)
 			} else {
-				wrapped[i_1] = lisette.MakeOptionNone[int]()
+				wrapped[i2] = lisette.MakeOptionNone[int]()
 			}
 		}
 		option = lisette.MakeOptionSome[[]lisette.Option[int]](wrapped)

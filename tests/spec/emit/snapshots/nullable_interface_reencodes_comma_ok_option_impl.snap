@@ -70,9 +70,9 @@ type _lisAdapter_Bar_Opt_0 struct {
 }
 
 func (a _lisAdapter_Bar_Opt_0) find() *Thing {
-	ret, ret_1 := a.inner.find()
+	ret, ret2 := a.inner.find()
 	var option lisette.Option[*Thing]
-	if ret_1 && ret != nil {
+	if ret2 && ret != nil {
 		option = lisette.MakeOptionSome[*Thing](ret)
 	} else {
 		option = lisette.MakeOptionNone[*Thing]()

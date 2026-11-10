@@ -73,11 +73,11 @@ func test() {
 	} else {
 		panic("expected ok")
 	}
-	subject_1 := parsed[1]
-	if subject_1.Tag == lisette.ResultOk {
+	subject2 := parsed[1]
+	if subject2.Tag == lisette.ResultOk {
 		panic("expected error")
 	}
-	if subject_1.ErrVal.Error() != "bad: x" {
+	if subject2.ErrVal.Error() != "bad: x" {
 		panic("wrong lambda error")
 	}
 }

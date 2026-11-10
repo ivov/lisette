@@ -18,13 +18,13 @@ func test() int {
 	n := 0
 	var tmp int
 	for {
-		var tmp_1 int
+		var tmp2 int
 		if n == 5 {
 			tmp = n
 			break
 		}
-		tmp_1 = n + 1
-		n = tmp_1
+		tmp2 = n + 1
+		n = tmp2
 	}
 	return tmp
 }

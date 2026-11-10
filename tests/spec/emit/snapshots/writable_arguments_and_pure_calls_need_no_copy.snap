@@ -89,11 +89,11 @@ func evensTimesTen(xs []int) []int {
 			result = append(result, x)
 		}
 	}
-	result_1 := make([]int, len(result))
+	result2 := make([]int, len(result))
 	for i, x := range result {
-		result_1[i] = x * 10
+		result2[i] = x * 10
 	}
-	return result_1
+	return result2
 }
 
 type Stack struct {

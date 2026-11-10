@@ -13,10 +13,10 @@ description: |
 package main
 
 func test() int {
-	var result_1 int
+	var result2 int
 	{
 		result := 42
-		result_1 = result * 2
+		result2 = result * 2
 	}
-	return result_1
+	return result2
 }

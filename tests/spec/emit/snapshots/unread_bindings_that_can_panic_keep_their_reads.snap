@@ -25,7 +25,7 @@ description: |
     let _ = shifted
     a + count
   }
-
+  
   fn test() {
     if recover { index_past_end([1, 2], 5) }.is_ok() { panic("an index past the end should panic") }
     if recover { divide_by_zero(7, 0) }.is_ok() { panic("a division by zero should panic") }
@@ -68,22 +68,22 @@ func test() {
 	if recoverResult.IsOk() {
 		panic("an index past the end should panic")
 	}
-	recoverResult_1 := lisette.RecoverBlock(func() int {
+	recoverResult2 := lisette.RecoverBlock(func() int {
 		return divideByZero(7, 0)
 	})
-	if recoverResult_1.IsOk() {
+	if recoverResult2.IsOk() {
 		panic("a division by zero should panic")
 	}
-	recoverResult_2 := lisette.RecoverBlock(func() int {
+	recoverResult3 := lisette.RecoverBlock(func() int {
 		return slicePastEnd([]int{1, 2})
 	})
-	if recoverResult_2.IsOk() {
+	if recoverResult3.IsOk() {
 		panic("a slice past the end should panic")
 	}
-	recoverResult_3 := lisette.RecoverBlock(func() int {
+	recoverResult4 := lisette.RecoverBlock(func() int {
 		return shiftByNegativeCount(1, -1)
 	})
-	if recoverResult_3.IsOk() {
+	if recoverResult4.IsOk() {
 		panic("a negative shift count should panic")
 	}
 }

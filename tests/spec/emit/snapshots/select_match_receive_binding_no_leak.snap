@@ -37,7 +37,7 @@ import (
 func main() {
 	x := 1
 	fmt.Println(x)
-	x_1 := 2
+	x2 := 2
 	ch := make(chan int)
 	go func() {
 		lisette.ChannelSend(ch, 1)
@@ -48,6 +48,6 @@ func main() {
 			fmt.Println(recv)
 		}
 	default:
-		fmt.Println(x_1)
+		fmt.Println(x2)
 	}
 }

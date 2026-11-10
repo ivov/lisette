@@ -54,24 +54,24 @@ func main() {
 		panic("stored signature")
 	}
 	src := lisette.AssertType[func() ast.Node](stored)
-	var adapted_1 lisette.Option[Maker]
-	adapted_1.Tag = src.Tag
+	var adapted2 lisette.Option[Maker]
+	adapted2.Tag = src.Tag
 	if src.Tag == lisette.OptionSome {
-		cb_1 := src.SomeVal
-		var adapted_2 func() MaybeNode
-		if cb_1 != nil {
-			adapted_2 = func() MaybeNode {
-				raw_1 := cb_1()
-				option_1 := lisette.OptionFromNilable[ast.Node](raw_1, lisette.IsNilInterface(raw_1))
-				return option_1
+		cb2 := src.SomeVal
+		var adapted3 func() MaybeNode
+		if cb2 != nil {
+			adapted3 = func() MaybeNode {
+				raw2 := cb2()
+				option2 := lisette.OptionFromNilable[ast.Node](raw2, lisette.IsNilInterface(raw2))
+				return option2
 			}
 		}
-		adapted_1.SomeVal = adapted_2
+		adapted2.SomeVal = adapted3
 	}
-	if adapted_1.Tag != lisette.OptionSome {
+	if adapted2.Tag != lisette.OptionSome {
 		panic("assert")
 	}
-	back := adapted_1.SomeVal
+	back := adapted2.SomeVal
 	subject := back()
 	if subject.Tag != lisette.OptionNone {
 		panic("call after assert")

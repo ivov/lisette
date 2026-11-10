@@ -23,10 +23,10 @@ func n() int {
 }
 
 func four() (int, error) {
-	n_1, err := strconv.Atoi("bad")
+	n2, err := strconv.Atoi("bad")
 	fmtarg := n()
 	if err != nil {
 		return 0, fmt.Errorf("%d: %w", fmtarg, err)
 	}
-	return n_1, nil
+	return n2, nil
 }

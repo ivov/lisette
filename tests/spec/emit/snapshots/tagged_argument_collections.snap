@@ -53,32 +53,32 @@ func main() {
 	}
 	unwrapped := make(map[string][]*multipart.FileHeader, len(files))
 	for i, v := range files {
-		unwrapped_1 := make([]*multipart.FileHeader, len(v))
-		for i_1, v_1 := range v {
-			if v_1.Tag == lisette.OptionSome {
-				unwrapped_1[i_1] = v_1.SomeVal
+		unwrapped2 := make([]*multipart.FileHeader, len(v))
+		for i2, v2 := range v {
+			if v2.Tag == lisette.OptionSome {
+				unwrapped2[i2] = v2.SomeVal
 			}
 		}
-		unwrapped[i] = unwrapped_1
+		unwrapped[i] = unwrapped2
 	}
 	form := multipart.Form{
 		Value: nil,
 		File:  unwrapped,
 	}
-	raw_1 := form.File
+	raw2 := form.File
 	var option lisette.Option[map[string][]lisette.Option[*multipart.FileHeader]]
-	if raw_1 != nil {
-		wrapped := make(map[string][]lisette.Option[*multipart.FileHeader], len(raw_1))
-		for i_2, v_2 := range raw_1 {
-			wrapped_1 := make([]lisette.Option[*multipart.FileHeader], len(v_2))
-			for i_3, v_3 := range v_2 {
-				if v_3 != nil {
-					wrapped_1[i_3] = lisette.MakeOptionSome[*multipart.FileHeader](v_3)
+	if raw2 != nil {
+		wrapped := make(map[string][]lisette.Option[*multipart.FileHeader], len(raw2))
+		for i3, v3 := range raw2 {
+			wrapped2 := make([]lisette.Option[*multipart.FileHeader], len(v3))
+			for i4, v4 := range v3 {
+				if v4 != nil {
+					wrapped2[i4] = lisette.MakeOptionSome[*multipart.FileHeader](v4)
 				} else {
-					wrapped_1[i_3] = lisette.MakeOptionNone[*multipart.FileHeader]()
+					wrapped2[i4] = lisette.MakeOptionNone[*multipart.FileHeader]()
 				}
 			}
-			wrapped[i_2] = wrapped_1
+			wrapped[i3] = wrapped2
 		}
 		option = lisette.MakeOptionSome[map[string][]lisette.Option[*multipart.FileHeader]](wrapped)
 	} else {

@@ -11,8 +11,8 @@ description: |
       let Some(v) = get_ch().receive() => v,
       _ => 0,
     }
-    let tmp_1 = result + 1
-    tmp_1
+    let tmp2 = result + 1
+    tmp2
   }
 ---
 package main
@@ -38,6 +38,6 @@ func main() int {
 		}
 		break
 	}
-	tmp_1 := result + 1
-	return tmp_1
+	tmp2 := result + 1
+	return tmp2
 }

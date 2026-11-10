@@ -5,8 +5,8 @@ description: |
   import sc "go:strconv"
   
   fn label<sc>(_tag: sc) -> string {
-    let sc_2 = 9
-    sc.Itoa(sc_2)
+    let sc2 = 9
+    sc.Itoa(sc2)
   }
   
   fn test() -> string {
@@ -17,9 +17,9 @@ package main
 
 import sc "strconv"
 
-func label[sc_2 any](_ sc_2) string {
-	sc_2_1 := 9
-	return sc.Itoa(sc_2_1)
+func label[sc2 any](_ sc2) string {
+	sc2_2 := 9
+	return sc.Itoa(sc2_2)
 }
 
 func test() string {

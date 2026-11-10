@@ -24,9 +24,9 @@ func handle(e events.Event) (int, bool) {
 		if x > 100 {
 			return x * 10, true
 		}
-		x_1 := e.X
-		if x_1 > 0 {
-			return x_1, true
+		x2 := e.X
+		if x2 > 0 {
+			return x2, true
 		}
 		return -e.X, true
 	default:

@@ -79,9 +79,9 @@ func shadowed(base Config) int {
 	out := base
 	var tmp int
 	{
-		out_1 := base
-		out_1.port = out.port + 1
-		tmp = out_1.port
+		out2 := base
+		out2.port = out.port + 1
+		tmp = out2.port
 	}
 	return tmp
 }

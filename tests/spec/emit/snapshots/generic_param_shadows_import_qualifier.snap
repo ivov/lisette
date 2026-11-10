@@ -16,7 +16,7 @@ package main
 
 import sc "strconv"
 
-func label[sc_2 any](_ sc_2) string {
+func label[sc2 any](_ sc2) string {
 	return sc.Itoa(5)
 }
 

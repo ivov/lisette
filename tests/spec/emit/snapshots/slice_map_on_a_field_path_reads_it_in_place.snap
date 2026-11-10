@@ -45,9 +45,9 @@ func namesThroughRef(card *Card) []string {
 }
 
 func shadowed(card Card) []string {
-	card_1 := make([]string, len(card.labels))
+	card2 := make([]string, len(card.labels))
 	for i, l := range card.labels {
-		card_1[i] = l.name + "!"
+		card2[i] = l.name + "!"
 	}
-	return card_1
+	return card2
 }

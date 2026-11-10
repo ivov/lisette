@@ -14,8 +14,8 @@ description: |
       _ => { let _ = 1 },
     }
   
-    let ref_1 = 2
-    let _ = ref_1
+    let ref2 = 2
+    let _ = ref2
   }
 ---
 package main

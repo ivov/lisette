@@ -36,10 +36,10 @@ func main() {
 	if body.Tag == lisette.OptionSome {
 		unwrap = body.SomeVal
 	}
-	ret, ret_1 := http.NewRequest("POST", "https://example.com", unwrap)
+	ret, ret2 := http.NewRequest("POST", "https://example.com", unwrap)
 	var req lisette.Result[*http.Request, error]
-	if ret_1 != nil {
-		req = lisette.MakeResultErr[*http.Request, error](ret_1)
+	if ret2 != nil {
+		req = lisette.MakeResultErr[*http.Request, error](ret2)
 	} else if ret == nil {
 		req = lisette.MakeResultErr[*http.Request, error](errors.New("unexpected nil"))
 	} else {

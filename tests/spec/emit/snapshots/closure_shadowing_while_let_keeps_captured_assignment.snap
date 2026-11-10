@@ -27,9 +27,9 @@ func main() {
 		next := lisette.MakeOptionSome(2)
 		for {
 			if next.Tag == lisette.OptionSome {
-				x_1 := next.SomeVal
+				x2 := next.SomeVal
 				read := func() int {
-					return x_1
+					return x2
 				}
 				next = lisette.MakeOptionNone[int]()
 				if read() != 2 {

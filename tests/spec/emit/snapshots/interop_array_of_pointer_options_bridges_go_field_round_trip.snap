@@ -31,11 +31,11 @@ func main() {
 	container := arrays.Container{Values: unwrapped}
 	raw := container.Values
 	var wrapped [2]lisette.Option[int]
-	for i_1, v_1 := range raw {
-		if v_1 != nil {
-			wrapped[i_1] = lisette.MakeOptionSome[int](*v_1)
+	for i2, v2 := range raw {
+		if v2 != nil {
+			wrapped[i2] = lisette.MakeOptionSome[int](*v2)
 		} else {
-			wrapped[i_1] = lisette.MakeOptionNone[int]()
+			wrapped[i2] = lisette.MakeOptionNone[int]()
 		}
 	}
 }

@@ -14,8 +14,8 @@ package main
 
 func test() int {
 	i := 100
-	for i_1 := range 3 {
-		_ = i_1
+	for i2 := range 3 {
+		_ = i2
 	}
 	return i
 }

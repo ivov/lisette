@@ -1,18 +1,18 @@
 ---
 source: tests/spec/emit/prelude.rs
 description: |
-
+  
   fn merge(base: Slice<int>, extra: Slice<int>) -> mut Slice<int> {
     base.append(extra...)
   }
-
+  
   fn check(base: Slice<int>, copied: mut Slice<int>) {
     copied[0] = 99
     if base[0] != 1 {
       panic("zero growth must not write through to its receiver")
     }
   }
-
+  
   fn main() {
     let a = [1, 2]
     check(a, merge(a, []))
@@ -68,32 +68,32 @@ func main() {
 	from_block = slices.Clone(a)
 	check(a, from_block)
 	var tmp []int
-	added_1 := []int{}
+	added2 := []int{}
 	tmp = func() []int {
-		if len(added_1) == 0 {
+		if len(added2) == 0 {
 			return slices.Clone(a)
 		}
-		return append(slices.Clip(a), added_1...)
+		return append(slices.Clip(a), added2...)
 	}()
 	from_block = tmp
 	check(a, from_block)
-	var tmp_1 []int
-	added_2 := 1 - 1
-	tmp_1 = func() []int {
-		if added_2 == 0 {
+	var tmp2 []int
+	added3 := 1 - 1
+	tmp2 = func() []int {
+		if added3 == 0 {
 			return slices.Clone(a)
 		}
-		return slices.Grow(slices.Clip(a), added_2)
+		return slices.Grow(slices.Clip(a), added3)
 	}()
-	from_block = tmp_1
+	from_block = tmp2
 	check(a, from_block)
 	check(a, slices.Clone(a))
-	added_3 := []int{}
+	added4 := []int{}
 	check(a, func() []int {
-		if len(added_3) == 0 {
+		if len(added4) == 0 {
 			return slices.Clone(a)
 		}
-		return append(slices.Clip(a), added_3...)
+		return append(slices.Clip(a), added4...)
 	}())
 	check(a, slices.Clone(a))
 	check(a, slices.Clone(a))

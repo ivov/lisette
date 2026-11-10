@@ -11,12 +11,12 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test(s []int) (lisette.Tuple2[int, int], bool) {
-	v_1 := lisette.EnumeratedSliceFind(s, func(arg lisette.Tuple2[int, int]) bool {
+	v2 := lisette.EnumeratedSliceFind(s, func(arg lisette.Tuple2[int, int]) bool {
 		v := arg.Second
 		return v > 10
 	})
-	if v_1.Tag == lisette.OptionSome {
-		return v_1.SomeVal, true
+	if v2.Tag == lisette.OptionSome {
+		return v2.SomeVal, true
 	}
 	return lisette.Tuple2[int, int]{}, false
 }
