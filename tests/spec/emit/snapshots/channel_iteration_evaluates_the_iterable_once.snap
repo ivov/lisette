@@ -43,11 +43,8 @@ func makeJobs(log chan int) chan int {
 func test() {
 	log := make(chan int, 4)
 	total := 0
-	ch := makeJobs(log)
-	if ch != nil {
-		for v := range ch {
-			total += v
-		}
+	for v := range makeJobs(log) {
+		total += v
 	}
 	if total != 7 {
 		panic(fmt.Sprintf("expected 7, got %d", total))

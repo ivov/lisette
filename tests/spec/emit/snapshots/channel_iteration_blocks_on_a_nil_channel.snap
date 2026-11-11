@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  import "go:context"
+  import "go:time"
+  
+  fn test() {
+    let started = Channel.buffered<bool>(1)
+    let ended = Channel.buffered<bool>(1)
+    task {
+      started.send(true)
+      for _ in context.Background().Done() {}
+      ended.send(true)
+    }
+    let _ = started.receive()
+    time.Sleep(100 * time.Millisecond)
+    select {
+      ended.receive() => panic("a nil channel must block the loop, as in Go"),
+      _ => {},
+    }
+  }
+---
+package main
+
+import (
+	"context"
+	"time"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test() {
+	started := make(chan bool, 1)
+	ended := make(chan bool, 1)
+	go func() {
+		lisette.ChannelSend(started, true)
+		for range context.Background().Done() {
+		}
+		lisette.ChannelSend(ended, true)
+	}()
+	lisette.ChannelReceive(started)
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-ended:
+		panic("a nil channel must block the loop, as in Go")
+	default:
+	}
+}

@@ -4,8 +4,7 @@ use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
-    ElseArm, IfOrigin, IfPlan, LoopHeader, LoweredBlock, LoweredStatement, Statement, define,
-    discard, with_setup,
+    LoopHeader, LoweredBlock, LoweredStatement, Statement, define, discard, with_setup,
 };
 use crate::plan::go_expression::BinaryOp;
 use crate::plan::local::GoIdentifier;
@@ -61,9 +60,7 @@ impl Planner<'_> {
                 ForShape::Iterate {
                     yields,
                     simple_pattern,
-                } => {
-                    return this.lower_iterate_for(binding, iterable, yields, simple_pattern, body);
-                }
+                } => this.lower_iterate_for(binding, iterable, yields, simple_pattern, body),
             };
             with_setup(
                 prologue,
@@ -209,14 +206,10 @@ impl Planner<'_> {
     fn capture_iterable_operand(
         &mut self,
         iterable: &Expression,
-        is_channel: bool,
     ) -> (Vec<Statement>, GoExpression) {
         let mut prologue = Vec::new();
         let iter_raw = self.capture_operand_into(&mut prologue, iterable);
-        let mut iter_expression = self.dereference_refs(&iterable.get_type(), iter_raw);
-        if is_channel {
-            iter_expression = self.stable_source(&mut prologue, "ch", iter_expression);
-        }
+        let iter_expression = self.dereference_refs(&iterable.get_type(), iter_raw);
         (prologue, iter_expression)
     }
 
@@ -237,16 +230,8 @@ impl Planner<'_> {
         yields: RangeYield,
         simple_pattern: bool,
         body: &Expression,
-    ) -> LoweredStatement {
-        let is_channel = matches!(yields, RangeYield::Channel);
-        let (prologue, iter_expression) = self.capture_iterable_operand(iterable, is_channel);
-        let nil_guard = is_channel.then(|| {
-            GoExpression::binary(
-                iter_expression.clone(),
-                BinaryOp::Ne,
-                GoExpression::literal("nil".to_string()),
-            )
-        });
+    ) -> (Vec<Statement>, LoopHeader, LoweredBlock) {
+        let (prologue, iter_expression) = self.capture_iterable_operand(iterable);
 
         let (header, lowered_body) = self.with_scope(|this| {
             if !simple_pattern {
@@ -254,33 +239,12 @@ impl Planner<'_> {
             }
             let loop_var = this.bind_loop_pattern(&binding.pattern, None);
             let header = match yields {
-                RangeYield::Channel | RangeYield::Single => {
-                    range_header(Some(&loop_var), None, iter_expression)
-                }
+                RangeYield::Single => range_header(Some(&loop_var), None, iter_expression),
                 RangeYield::Pair => range_header(None, Some(&loop_var), iter_expression),
             };
             (header, this.lower_block_as_body(body))
         });
-
-        let Some(condition) = nil_guard else {
-            return with_setup(
-                prologue,
-                LoweredStatement::Loop(self.build_source_loop(header, lowered_body)),
-            );
-        };
-        let plan = self.build_source_loop(header, lowered_body);
-        with_setup(
-            prologue,
-            LoweredStatement::If(IfPlan {
-                initializer: None,
-                condition,
-                then_body: LoweredBlock {
-                    statements: vec![LoweredStatement::Loop(plan).into()],
-                },
-                else_arm: ElseArm::None,
-                origin: IfOrigin::User,
-            }),
-        )
+        (prologue, header, lowered_body)
     }
 
     /// `for (k, v) in map`. Simple identifier/wildcard pairs bind directly
@@ -298,7 +262,7 @@ impl Planner<'_> {
         let first = &elements[0];
         let second = &elements[1];
 
-        let (prologue, iter_expression) = self.capture_iterable_operand(iterable, false);
+        let (prologue, iter_expression) = self.capture_iterable_operand(iterable);
 
         let first_is_simple =
             matches!(first, Pattern::Identifier { .. } | Pattern::WildCard { .. });
@@ -417,9 +381,7 @@ impl Planner<'_> {
         let item_var = self.fresh_local(Some("item"));
         let item_identifier = item_var.clone();
         let header = match yields {
-            RangeYield::Channel | RangeYield::Single => {
-                range_header(Some(&item_identifier), None, iter_expression)
-            }
+            RangeYield::Single => range_header(Some(&item_identifier), None, iter_expression),
             RangeYield::Pair => range_header(None, Some(&item_identifier), iter_expression),
         };
         let mut bindings = self.lower_irrefutable_pattern_site(
@@ -557,9 +519,7 @@ impl Planner<'_> {
         let is_channel = self.native_shape(&iterable_ty).is_some_and(|shape| {
             matches!(shape, NativeTypeKind::Channel | NativeTypeKind::Receiver)
         });
-        let yields = if is_channel {
-            RangeYield::Channel
-        } else if self.iter_seq_arity(&iterable_ty) == Some(1) {
+        let yields = if is_channel || self.iter_seq_arity(&iterable_ty) == Some(1) {
             RangeYield::Single
         } else {
             RangeYield::Pair
@@ -633,7 +593,6 @@ enum ForShape<'a> {
 
 #[derive(Clone, Copy)]
 enum RangeYield {
-    Channel,
     Single,
     Pair,
 }

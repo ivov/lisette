@@ -536,17 +536,169 @@ fn test(rx: Receiver<int>) {
 }
 
 #[test]
-fn channel_iteration_skips_a_nil_channel() {
+fn channel_iteration_blocks_on_a_nil_channel() {
     let input = r#"
 import "go:context"
+import "go:time"
 
 fn test() {
-  let mut seen = 0
-  for _ in context.Background().Done() {
-    seen += 1
+  let started = Channel.buffered<bool>(1)
+  let ended = Channel.buffered<bool>(1)
+  task {
+    started.send(true)
+    for _ in context.Background().Done() {}
+    ended.send(true)
   }
-  if seen != 0 {
-    panic("a nil channel must not yield values")
+  let _ = started.receive()
+  time.Sleep(100 * time.Millisecond)
+  select {
+    ended.receive() => panic("a nil channel must block the loop, as in Go"),
+    _ => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn receive_blocks_on_background_done() {
+    let input = r#"
+import "go:context"
+import "go:time"
+
+fn test() {
+  let started = Channel.buffered<bool>(1)
+  let ended = Channel.buffered<bool>(1)
+  task {
+    started.send(true)
+    let _ = context.Background().Done().receive()
+    ended.send(true)
+  }
+  let _ = started.receive()
+  time.Sleep(100 * time.Millisecond)
+  select {
+    ended.receive() => panic("Background().Done() can never deliver, so receive must block"),
+    _ => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn receive_blocks_on_todo_done() {
+    let input = r#"
+import "go:context"
+import "go:time"
+
+fn test() {
+  let started = Channel.buffered<bool>(1)
+  let ended = Channel.buffered<bool>(1)
+  task {
+    started.send(true)
+    let _ = context.TODO().Done().receive()
+    ended.send(true)
+  }
+  let _ = started.receive()
+  time.Sleep(100 * time.Millisecond)
+  select {
+    ended.receive() => panic("TODO().Done() can never deliver, so receive must block"),
+    _ => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn receive_blocks_on_without_cancel_done() {
+    let input = r#"
+import "go:context"
+import "go:time"
+
+fn test() {
+  let started = Channel.buffered<bool>(1)
+  let ended = Channel.buffered<bool>(1)
+  task {
+    started.send(true)
+    let _ = context.WithoutCancel(context.Background()).Done().receive()
+    ended.send(true)
+  }
+  let _ = started.receive()
+  time.Sleep(100 * time.Millisecond)
+  select {
+    ended.receive() => panic("WithoutCancel(...).Done() can never deliver, so receive must block"),
+    _ => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn receive_blocks_on_with_value_done() {
+    let input = r#"
+import "go:context"
+import "go:time"
+
+fn test() {
+  let started = Channel.buffered<bool>(1)
+  let ended = Channel.buffered<bool>(1)
+  task {
+    started.send(true)
+    let _ = context.WithValue(context.Background(), "key", "value").Done().receive()
+    ended.send(true)
+  }
+  let _ = started.receive()
+  time.Sleep(100 * time.Millisecond)
+  select {
+    ended.receive() => panic("WithValue(Background(), ...).Done() can never deliver, so receive must block"),
+    _ => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn receive_blocks_on_after_func_timer_channel() {
+    let input = r#"
+import "go:time"
+
+fn test() {
+  let started = Channel.buffered<bool>(1)
+  let ended = Channel.buffered<bool>(1)
+  task {
+    started.send(true)
+    let _ = time.AfterFunc(time.Hour, || {}).C.receive()
+    ended.send(true)
+  }
+  let _ = started.receive()
+  time.Sleep(100 * time.Millisecond)
+  select {
+    ended.receive() => panic("the C of an AfterFunc timer is nil, so receive must block"),
+    _ => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn select_arm_on_background_done_is_never_ready() {
+    let input = r#"
+import "go:context"
+import "go:time"
+
+fn test() {
+  let done = context.Background().Done()
+  let limit = time.After(100 * time.Millisecond)
+  select {
+    match done.receive() {
+      Some(_) => panic("Background().Done() can never deliver"),
+      None => panic("Background().Done() is never closed"),
+    },
+    limit.receive() => {},
   }
 }
 "#;

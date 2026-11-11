@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/nilchan"
+  
+  fn main() {
+    let box = nilchan.Empty()
+    let _ = box.Tx.send(1)
+    let _ = box.Ch.receive()
+    for _ in box.Rx {}
+  }
+---
+package main
+
+import (
+	"example.com/nilchan"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	box := nilchan.Empty()
+	lisette.SenderSend(box.Tx, 1)
+	lisette.ChannelReceive(box.Ch)
+	for range box.Rx {
+	}
+}

@@ -34,10 +34,8 @@ func test() {
 		lisette.ChannelClose(ch)
 	}()
 	total := 0
-	if ch != nil {
-		for v := range ch {
-			total += v
-		}
+	for v := range ch {
+		total += v
 	}
 	if total != 3 {
 		panic(fmt.Sprintf("expected 3, got %d", total))

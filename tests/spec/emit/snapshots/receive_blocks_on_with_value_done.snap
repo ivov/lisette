@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  import "go:context"
+  import "go:time"
+  
+  fn test() {
+    let started = Channel.buffered<bool>(1)
+    let ended = Channel.buffered<bool>(1)
+    task {
+      started.send(true)
+      let _ = context.WithValue(context.Background(), "key", "value").Done().receive()
+      ended.send(true)
+    }
+    let _ = started.receive()
+    time.Sleep(100 * time.Millisecond)
+    select {
+      ended.receive() => panic("WithValue(Background(), ...).Done() can never deliver, so receive must block"),
+      _ => {},
+    }
+  }
+---
+package main
+
+import (
+	"context"
+	"time"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test() {
+	started := make(chan bool, 1)
+	ended := make(chan bool, 1)
+	go func() {
+		lisette.ChannelSend(started, true)
+		lisette.ReceiverReceive(context.WithValue(context.Background(), "key", "value").Done())
+		lisette.ChannelSend(ended, true)
+	}()
+	lisette.ChannelReceive(started)
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-ended:
+		panic("WithValue(Background(), ...).Done() can never deliver, so receive must block")
+	default:
+	}
+}

@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  import "go:context"
+  import "go:time"
+  
+  fn test() {
+    let done = context.Background().Done()
+    let limit = time.After(100 * time.Millisecond)
+    select {
+      match done.receive() {
+        Some(_) => panic("Background().Done() can never deliver"),
+        None => panic("Background().Done() is never closed"),
+      },
+      limit.receive() => {},
+    }
+  }
+---
+package main
+
+import (
+	"context"
+	"time"
+)
+
+func test() {
+	done := context.Background().Done()
+	limit := time.After(100 * time.Millisecond)
+	select {
+	case _, ok := <-done:
+		if ok {
+			panic("Background().Done() can never deliver")
+		}
+		panic("Background().Done() is never closed")
+	case <-limit:
+	}
+}

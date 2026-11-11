@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  import "go:time"
+  
+  fn test() {
+    let started = Channel.buffered<bool>(1)
+    let ended = Channel.buffered<bool>(1)
+    task {
+      started.send(true)
+      let _ = time.AfterFunc(time.Hour, || {}).C.receive()
+      ended.send(true)
+    }
+    let _ = started.receive()
+    time.Sleep(100 * time.Millisecond)
+    select {
+      ended.receive() => panic("the C of an AfterFunc timer is nil, so receive must block"),
+      _ => {},
+    }
+  }
+---
+package main
+
+import (
+	"time"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test() {
+	started := make(chan bool, 1)
+	ended := make(chan bool, 1)
+	go func() {
+		lisette.ChannelSend(started, true)
+		lisette.ReceiverReceive(time.AfterFunc(time.Hour, func() {
+		}).C)
+		lisette.ChannelSend(ended, true)
+	}()
+	lisette.ChannelReceive(started)
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-ended:
+		panic("the C of an AfterFunc timer is nil, so receive must block")
+	default:
+	}
+}

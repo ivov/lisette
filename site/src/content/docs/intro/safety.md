@@ -562,7 +562,7 @@ In Lisette, a `Channel` has no zero value.
 [2m  help: [0m[2mBindings must be initialized[0m[2m · code: [0m[2m[parse.missing_initializer][0m
 ```
 
-A Go channel that may be nil arrives as an `Option`. Inside a `select`, a nil channel keeps its Go meaning, i.e. that arm is never ready.
+A Go channel becomes an `Option` where Lisette can prove it may be nil, e.g. `time.Tick`. Otherwise a nil channel waits forever, as in Go, e.g. `context.Background().Done()`.
 
 📚 See [Channels](/docs/prelude/channels/)
 
