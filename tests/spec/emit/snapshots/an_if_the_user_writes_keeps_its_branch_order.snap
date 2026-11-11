@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn keep_or_zero(keep: bool, n: int) -> int {
+    let mut total = 0
+    if keep {
+      total = n
+    } else {
+      return 0
+    }
+    total + 1
+  }
+  
+  fn test() {
+    if keep_or_zero(true, 4) != 5 || keep_or_zero(false, 4) != 0 { panic("keep_or_zero") }
+  }
+---
+package main
+
+func keepOrZero(keep bool, n int) int {
+	total := 0
+	if keep {
+		total = n
+	} else {
+		return 0
+	}
+	return total + 1
+}
+
+func test() {
+	if keepOrZero(true, 4) != 5 || keepOrZero(false, 4) != 0 {
+		panic("keep_or_zero")
+	}
+}

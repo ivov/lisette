@@ -331,7 +331,7 @@ pub(crate) fn identify_body_locals(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plan::bodies::{LoweredBlock, define, rename_generated_locals};
+    use crate::plan::bodies::{IfOrigin, LoweredBlock, define, rename_generated_locals};
     use crate::plan::go_expression::{FunctionLiteralLayout, GoParameter};
     use crate::plan::local::{GoIdentifier, LocalId};
     use crate::plan::values::GoExpression;
@@ -652,7 +652,9 @@ mod tests {
                         statements: Vec::new(),
                     },
                     else_arm: ElseArm::None,
+                    origin: IfOrigin::User,
                 })),
+                origin: IfOrigin::User,
             })
             .into(),
         ];

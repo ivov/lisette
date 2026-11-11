@@ -66,12 +66,11 @@ func test() {
 		return lisette.MakeResultOk[int, error](n)
 	})
 	subject := parsed[0]
-	if subject.Tag == lisette.ResultOk {
-		if subject.OkVal != 3 {
-			panic("wrong parsed length")
-		}
-	} else {
+	if subject.Tag == lisette.ResultErr {
 		panic("expected ok")
+	}
+	if subject.OkVal != 3 {
+		panic("wrong parsed length")
 	}
 	subject2 := parsed[1]
 	if subject2.Tag == lisette.ResultOk {

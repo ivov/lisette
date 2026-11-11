@@ -7,8 +7,8 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::{ForwardedTail, plain_return};
 use crate::control_flow::targets::legalize_source_loop;
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
-    PlacePlan, Statement, directed_first, with_setup,
+    ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
+    LoweredStatement, PlacePlan, Statement, directed_first, with_setup,
 };
 use crate::plan::go_expression::{BinaryOp, UnaryOp};
 use crate::plan::local::GoIdentifier;
@@ -63,6 +63,7 @@ impl Guard {
             condition: self.condition.condition,
             then_body: self.then_body,
             else_arm: ElseArm::None,
+            origin: IfOrigin::User,
         }
     }
 
@@ -841,6 +842,7 @@ impl Planner<'_> {
                 condition: condition.condition,
                 then_body,
                 else_arm,
+                origin: IfOrigin::User,
             }),
         )
     }
@@ -898,6 +900,7 @@ impl Planner<'_> {
                             condition: condition.condition,
                             then_body,
                             else_arm: inner,
+                            origin: IfOrigin::User,
                         })
                         .into(),
                     );
@@ -920,6 +923,7 @@ impl Planner<'_> {
                     condition: condition.condition,
                     then_body,
                     else_arm: inner,
+                    origin: IfOrigin::User,
                 }))
             }
         } else if preceding_diverges {

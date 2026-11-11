@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn sum_or_zero(opt: Option<int>) -> int {
+    let mut total = 0
+    match opt {
+      Some(x) => {
+        let doubled = x * 2
+        total = doubled + x
+      },
+      None => return 0,
+    }
+    let doubled = total * 2
+    doubled + 1
+  }
+  
+  fn test() {
+    if sum_or_zero(Some(3)) != 19 || sum_or_zero(None) != 0 { panic("sum_or_zero") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func sumOrZero(opt lisette.Option[int]) int {
+	total := 0
+	if opt.Tag == lisette.OptionSome {
+		x := opt.SomeVal
+		doubled := x * 2
+		total = doubled + x
+	} else {
+		return 0
+	}
+	doubled := total * 2
+	return doubled + 1
+}
+
+func test() {
+	if sumOrZero(lisette.MakeOptionSome(3)) != 19 || sumOrZero(lisette.MakeOptionNone[int]()) != 0 {
+		panic("sum_or_zero")
+	}
+}

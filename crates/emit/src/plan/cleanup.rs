@@ -6,7 +6,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::names::go_name;
 use crate::plan::bodies::{
-    AssignForm, CompoundKind, Definition, ElseArm, IfPlan, LoopTransfer, LoweredBlock,
+    AssignForm, CompoundKind, Definition, ElseArm, IfOrigin, IfPlan, LoopTransfer, LoweredBlock,
     LoweredStatement, SelectArmPlan, Statement, SwitchKind, for_each_statements_mut,
 };
 use crate::plan::evaluation::Effects;
@@ -395,7 +395,7 @@ fn flips_to_early_exit(plan: &IfPlan) -> bool {
     else {
         return false;
     };
-    plan.initializer.is_some()
+    (plan.initializer.is_some() || matches!(plan.origin, IfOrigin::Match { .. }))
         && !plan.then_body.ends_with_diverge()
         && !plan.then_body.renders_empty()
         && body.ends_with_diverge()
@@ -403,7 +403,25 @@ fn flips_to_early_exit(plan: &IfPlan) -> bool {
 }
 
 fn flip_branches(plan: &mut IfPlan) {
-    let condition = negated(plan.condition.node()).expect("a flipped condition negates");
+    let else_label = match &mut plan.origin {
+        IfOrigin::Match { else_label } => else_label.take(),
+        IfOrigin::User => None,
+    };
+    let condition = match (else_label, plan.condition.node()) {
+        (
+            Some(label),
+            GoExpressionNode::Binary {
+                operator: BinaryOp::Eq,
+                left,
+                ..
+            },
+        ) => GoExpressionNode::Binary {
+            operator: BinaryOp::Eq,
+            left: left.clone(),
+            right: Box::new(label.node().clone()),
+        },
+        _ => negated(plan.condition.node()).expect("a flipped condition negates"),
+    };
     plan.condition = GoExpression::from_node(condition);
     let ElseArm::Else { body, .. } = &mut plan.else_arm else {
         unreachable!("a flipped if has an else");
@@ -1044,7 +1062,9 @@ fn discarded_name(statement: &LoweredStatement) -> Option<&GoIdentifier> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plan::bodies::{IfPlan, LoopHeader, LoopKind, LoopPlan, assign, define, discard};
+    use crate::plan::bodies::{
+        IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, assign, define, discard,
+    };
     use crate::plan::go_expression::FunctionLiteralLayout;
     use crate::plan::local::LocalId;
     use crate::plan::visit::identify_body_locals;
@@ -1081,6 +1101,7 @@ mod tests {
                 },
                 inline: false,
             },
+            origin: IfOrigin::User,
         })
         .into()
     }

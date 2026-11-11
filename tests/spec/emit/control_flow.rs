@@ -4742,3 +4742,148 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn a_none_arm_that_returns_comes_first_and_the_some_arm_dedents() {
+    let input = r#"
+fn first_or_zero(opt: Option<int>) -> int {
+  let n = match opt {
+    Some(x) => x,
+    None => return 0,
+  }
+  n + 1
+}
+
+fn square_or_zero(opt: Option<int>) -> int {
+  let mut total = 0
+  match opt {
+    Some(x) => total = x * x,
+    None => return 0,
+  }
+  total + 1
+}
+
+fn if_let_or_zero(opt: Option<int>) -> int {
+  let mut total = 0
+  if let Some(x) = opt {
+    total = x
+  } else {
+    return 0
+  }
+  total + 1
+}
+
+fn test() {
+  if first_or_zero(Some(4)) != 5 || first_or_zero(None) != 0 { panic("first_or_zero") }
+  if square_or_zero(Some(3)) != 10 || square_or_zero(None) != 0 { panic("square_or_zero") }
+  if if_let_or_zero(Some(4)) != 5 || if_let_or_zero(None) != 0 { panic("if_let_or_zero") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn a_second_arm_that_overlaps_the_first_keeps_the_negated_test() {
+    let input = r#"
+enum Shape {
+  Circle(int),
+  Square(int),
+  Dot,
+}
+
+fn choose(opt: Option<bool>) -> int {
+  let mut total = 0
+  match opt {
+    Some(true) => total = 1,
+    Some(_) | None => return 0,
+  }
+  total + 1
+}
+
+fn round_or_zero(shape: Shape) -> int {
+  let mut total = 0
+  match shape {
+    Circle(_) | Square(_) => total = 1,
+    Dot => return 0,
+  }
+  total + 1
+}
+
+fn test() {
+  if choose(Some(true)) != 2 || choose(Some(false)) != 0 || choose(None) != 0 { panic("choose") }
+  if round_or_zero(Shape.Circle(3)) != 2 || round_or_zero(Shape.Square(2)) != 2 || round_or_zero(Shape.Dot) != 0 { panic("round_or_zero") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn a_call_subject_moves_into_the_flipped_header() {
+    let input = r#"
+enum Choice {
+  A,
+  B,
+}
+
+fn choice(first: bool) -> Choice {
+  if first { Choice.A } else { Choice.B }
+}
+
+fn choose(first: bool) -> int {
+  let mut total = 0
+  match choice(first) {
+    A => total = 1,
+    B => return 0,
+  }
+  total + 1
+}
+
+fn test() {
+  if choose(true) != 2 || choose(false) != 0 { panic("choose") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn a_match_keeps_its_arms_when_dedenting_would_shadow_a_later_name() {
+    let input = r#"
+fn sum_or_zero(opt: Option<int>) -> int {
+  let mut total = 0
+  match opt {
+    Some(x) => {
+      let doubled = x * 2
+      total = doubled + x
+    },
+    None => return 0,
+  }
+  let doubled = total * 2
+  doubled + 1
+}
+
+fn test() {
+  if sum_or_zero(Some(3)) != 19 || sum_or_zero(None) != 0 { panic("sum_or_zero") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn an_if_the_user_writes_keeps_its_branch_order() {
+    let input = r#"
+fn keep_or_zero(keep: bool, n: int) -> int {
+  let mut total = 0
+  if keep {
+    total = n
+  } else {
+    return 0
+  }
+  total + 1
+}
+
+fn test() {
+  if keep_or_zero(true, 4) != 5 || keep_or_zero(false, 4) != 0 { panic("keep_or_zero") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
