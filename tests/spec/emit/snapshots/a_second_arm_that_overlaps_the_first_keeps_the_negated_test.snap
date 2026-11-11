@@ -1,0 +1,90 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  enum Shape {
+    Circle(int),
+    Square(int),
+    Dot,
+  }
+  
+  fn choose(opt: Option<bool>) -> int {
+    let mut total = 0
+    match opt {
+      Some(true) => total = 1,
+      Some(_) | None => return 0,
+    }
+    total + 1
+  }
+  
+  fn round_or_zero(shape: Shape) -> int {
+    let mut total = 0
+    match shape {
+      Circle(_) | Square(_) => total = 1,
+      Dot => return 0,
+    }
+    total + 1
+  }
+  
+  fn test() {
+    if choose(Some(true)) != 2 || choose(Some(false)) != 0 || choose(None) != 0 { panic("choose") }
+    if round_or_zero(Shape.Circle(3)) != 2 || round_or_zero(Shape.Square(2)) != 2 || round_or_zero(Shape.Dot) != 0 { panic("round_or_zero") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func MakeShapeCircle(arg0 int) Shape {
+	return Shape{Tag: ShapeCircle, Circle: arg0}
+}
+
+func MakeShapeSquare(arg0 int) Shape {
+	return Shape{Tag: ShapeSquare, Square: arg0}
+}
+
+func MakeShapeDot() Shape {
+	return Shape{Tag: ShapeDot}
+}
+
+type ShapeTag uint8
+
+const (
+	ShapeCircle ShapeTag = iota
+	ShapeSquare
+	ShapeDot
+)
+
+type Shape struct {
+	Tag    ShapeTag
+	Circle int
+	Square int
+}
+
+func choose(opt lisette.Option[bool]) int {
+	total := 0
+	if opt.Tag == lisette.OptionSome && opt.SomeVal {
+		total = 1
+	} else {
+		return 0
+	}
+	return total + 1
+}
+
+func roundOrZero(shape Shape) int {
+	total := 0
+	if shape.Tag != ShapeCircle && shape.Tag != ShapeSquare {
+		return 0
+	}
+	total = 1
+	return total + 1
+}
+
+func test() {
+	if choose(lisette.MakeOptionSome(true)) != 2 || choose(lisette.MakeOptionSome(false)) != 0 || choose(lisette.MakeOptionNone[bool]()) != 0 {
+		panic("choose")
+	}
+	if roundOrZero(MakeShapeCircle(3)) != 2 || roundOrZero(MakeShapeSquare(2)) != 2 || roundOrZero(MakeShapeDot()) != 0 {
+		panic("round_or_zero")
+	}
+}

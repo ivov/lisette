@@ -1,0 +1,80 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn first_or_zero(opt: Option<int>) -> int {
+    let n = match opt {
+      Some(x) => x,
+      None => return 0,
+    }
+    n + 1
+  }
+  
+  fn square_or_zero(opt: Option<int>) -> int {
+    let mut total = 0
+    match opt {
+      Some(x) => total = x * x,
+      None => return 0,
+    }
+    total + 1
+  }
+  
+  fn if_let_or_zero(opt: Option<int>) -> int {
+    let mut total = 0
+    if let Some(x) = opt {
+      total = x
+    } else {
+      return 0
+    }
+    total + 1
+  }
+  
+  fn test() {
+    if first_or_zero(Some(4)) != 5 || first_or_zero(None) != 0 { panic("first_or_zero") }
+    if square_or_zero(Some(3)) != 10 || square_or_zero(None) != 0 { panic("square_or_zero") }
+    if if_let_or_zero(Some(4)) != 5 || if_let_or_zero(None) != 0 { panic("if_let_or_zero") }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func firstOrZero(opt lisette.Option[int]) int {
+	var n int
+	if opt.Tag == lisette.OptionNone {
+		return 0
+	}
+	n = opt.SomeVal
+	return n + 1
+}
+
+func squareOrZero(opt lisette.Option[int]) int {
+	total := 0
+	if opt.Tag == lisette.OptionNone {
+		return 0
+	}
+	x := opt.SomeVal
+	total = x * x
+	return total + 1
+}
+
+func ifLetOrZero(opt lisette.Option[int]) int {
+	total := 0
+	if opt.Tag != lisette.OptionSome {
+		return 0
+	}
+	total = opt.SomeVal
+	return total + 1
+}
+
+func test() {
+	if firstOrZero(lisette.MakeOptionSome(4)) != 5 || firstOrZero(lisette.MakeOptionNone[int]()) != 0 {
+		panic("first_or_zero")
+	}
+	if squareOrZero(lisette.MakeOptionSome(3)) != 10 || squareOrZero(lisette.MakeOptionNone[int]()) != 0 {
+		panic("square_or_zero")
+	}
+	if ifLetOrZero(lisette.MakeOptionSome(4)) != 5 || ifLetOrZero(lisette.MakeOptionNone[int]()) != 0 {
+		panic("if_let_or_zero")
+	}
+}

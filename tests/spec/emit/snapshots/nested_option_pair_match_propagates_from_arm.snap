@@ -64,12 +64,11 @@ func run(n int) lisette.Result[int, string] {
 
 func test() {
 	subject := run(3)
-	if subject.Tag == lisette.ResultOk {
-		if subject.OkVal != 3 {
-			panic("wrong value")
-		}
-	} else {
+	if subject.Tag == lisette.ResultErr {
 		panic("unexpected error")
+	}
+	if subject.OkVal != 3 {
+		panic("wrong value")
 	}
 	subject2 := run(0)
 	if subject2.Tag == lisette.ResultOk {

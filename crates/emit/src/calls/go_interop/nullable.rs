@@ -11,8 +11,8 @@ use crate::control_flow::fallible::{Fallible, OPTION_SOME_TAG, prelude_call};
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement,
-    assign, define_many,
+    ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement,
+    Statement, assign, define_many,
 };
 use crate::plan::go_expression::{BinaryOp, UnaryOp};
 use crate::plan::values::{GoExpression, ValuePlan};
@@ -621,6 +621,7 @@ impl Planner<'_> {
                         ),
                         then_body: LoweredBlock { statements: body },
                         else_arm: ElseArm::None,
+                        origin: IfOrigin::User,
                     })
                     .into(),
                 );

@@ -15,8 +15,8 @@ use crate::patterns::decision_tree::{
     boolean_literal, compile_match_arms, render_condition, tree_has_unguarded_terminal,
 };
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
-    PlacePlan, Statement, SwitchCasePlan, SwitchKind, SwitchStatementPlan,
+    ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
+    LoweredStatement, PlacePlan, Statement, SwitchCasePlan, SwitchKind, SwitchStatementPlan,
 };
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
 use crate::plan::local::GoIdentifier;
@@ -738,21 +738,28 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     .expect("Bool shape requires a false-labeled branch");
                 self.walk_condition_branch(
                     statements,
-                    rendered_path,
+                    BranchTest {
+                        condition: rendered_path,
+                        else_label: None,
+                    },
                     &true_branch.decision,
                     &false_branch.decision,
                     ctx,
                 );
             }
             SwitchShape::Binary => {
-                let condition = GoExpression::binary(
-                    render_switch_expression(rendered_path, kind),
-                    BinaryOp::Eq,
-                    branches[0].label.clone(),
-                );
+                let subject = render_switch_expression(rendered_path, kind);
+                let test = BranchTest {
+                    condition: GoExpression::binary(
+                        subject,
+                        BinaryOp::Eq,
+                        branches[0].label.clone(),
+                    ),
+                    else_label: Some(branches[1].label.clone()),
+                };
                 self.walk_condition_branch(
                     statements,
-                    condition,
+                    test,
                     &branches[0].decision,
                     &branches[1].decision,
                     ctx,
@@ -773,7 +780,16 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     BinaryOp::Eq,
                     branch.label.clone(),
                 );
-                self.walk_condition_branch(statements, condition, &branch.decision, fallback, ctx);
+                self.walk_condition_branch(
+                    statements,
+                    BranchTest {
+                        condition,
+                        else_label: None,
+                    },
+                    &branch.decision,
+                    fallback,
+                    ctx,
+                );
             }
             SwitchShape::Multi => {
                 let expr = render_switch_expression(rendered_path, kind);
@@ -787,14 +803,16 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn walk_condition_branch(
         &mut self,
         statements: &mut Vec<Statement>,
-        condition: GoExpression,
+        test: BranchTest,
         then_branch: &Decision,
         else_branch: &Decision,
         ctx: &WalkCtx,
     ) {
         let inner = WalkCtx::switch_case(ctx.arm_place);
         let then_statements = self.with_scope(|this| {
-            this.planner.scope.establish_condition(condition.clone());
+            this.planner
+                .scope
+                .establish_condition(test.condition.clone());
             let mut then_statements: Vec<Statement> = Vec::new();
             this.walk(&mut then_statements, then_branch, &inner);
             then_statements
@@ -804,7 +822,15 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         };
         let then_diverges = then_body.ends_with_diverge();
         let else_arm = self.lower_else_or_flat(else_branch, &inner, then_diverges);
-        let plan = IfPlan::plain(condition, then_body, else_arm);
+        let plan = IfPlan {
+            initializer: None,
+            condition: test.condition,
+            then_body,
+            else_arm,
+            origin: IfOrigin::Match {
+                else_label: test.else_label,
+            },
+        };
         let body_diverges = capture_diverge(vec![LoweredStatement::If(plan).into()], statements);
         apply_leaf_terminator(statements, ctx, body_diverges);
     }
@@ -856,13 +882,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 };
                 guard_statements.extend(condition_setup);
                 guard_statements.push(
-                    LoweredStatement::If(IfPlan {
-                        initializer: None,
-                        condition,
-                        then_body,
-                        else_arm,
-                    })
-                    .into(),
+                    LoweredStatement::If(IfPlan::for_match(condition, then_body, else_arm)).into(),
                 );
             }
             guard_statements
@@ -1126,7 +1146,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let first_condition = &conditions[indices[0]];
         match first_condition {
             Some(condition) => statements.push(
-                LoweredStatement::If(IfPlan::plain(condition.clone(), body, ElseArm::None)).into(),
+                LoweredStatement::If(IfPlan::for_match(condition.clone(), body, ElseArm::None))
+                    .into(),
             ),
             None => statements.push(LoweredStatement::Block(body).into()),
         }
@@ -1199,14 +1220,13 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                         });
                         statements.extend(condition_setup);
                         statements.push(
-                            LoweredStatement::If(IfPlan {
-                                initializer: None,
+                            LoweredStatement::If(IfPlan::for_match(
                                 condition,
-                                then_body: LoweredBlock {
+                                LoweredBlock {
                                     statements: then_body,
                                 },
-                                else_arm: ElseArm::None,
-                            })
+                                ElseArm::None,
+                            ))
                             .into(),
                         );
                     }
@@ -1438,6 +1458,11 @@ struct ChainBranch {
     body: LoweredBlock,
 }
 
+struct BranchTest {
+    condition: GoExpression,
+    else_label: Option<GoExpression>,
+}
+
 /// Assemble pattern-chain branches into a nested `if`/`else if` plan, with
 /// `trailing` as the innermost `else` arm. `branches` must be non-empty.
 fn build_chain_plan(branches: Vec<ChainBranch>, trailing: ElseArm) -> IfPlan {
@@ -1445,13 +1470,13 @@ fn build_chain_plan(branches: Vec<ChainBranch>, trailing: ElseArm) -> IfPlan {
     let head = branches.remove(0);
     let mut else_arm = trailing;
     for branch in branches.into_iter().rev() {
-        else_arm = ElseArm::ElseIf(Box::new(IfPlan::plain(
+        else_arm = ElseArm::ElseIf(Box::new(IfPlan::for_match(
             branch.condition,
             branch.body,
             else_arm,
         )));
     }
-    IfPlan::plain(head.condition, head.body, else_arm)
+    IfPlan::for_match(head.condition, head.body, else_arm)
 }
 
 /// The switch, then an unreachable panic when the place needs a tail return

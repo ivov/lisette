@@ -1,0 +1,68 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  enum Choice {
+    A,
+    B,
+  }
+  
+  fn choice(first: bool) -> Choice {
+    if first { Choice.A } else { Choice.B }
+  }
+  
+  fn choose(first: bool) -> int {
+    let mut total = 0
+    match choice(first) {
+      A => total = 1,
+      B => return 0,
+    }
+    total + 1
+  }
+  
+  fn test() {
+    if choose(true) != 2 || choose(false) != 0 { panic("choose") }
+  }
+---
+package main
+
+func MakeChoiceA() Choice {
+	return Choice{Tag: ChoiceA}
+}
+
+func MakeChoiceB() Choice {
+	return Choice{Tag: ChoiceB}
+}
+
+type ChoiceTag uint8
+
+const (
+	ChoiceA ChoiceTag = iota
+	ChoiceB
+)
+
+type Choice struct {
+	Tag ChoiceTag
+}
+
+func choice(first bool) Choice {
+	if first {
+		return MakeChoiceA()
+	}
+	return MakeChoiceB()
+}
+
+func choose(first bool) int {
+	total := 0
+	if choice(first).Tag == ChoiceB {
+		return 0
+	}
+	total = 1
+	return total + 1
+}
+
+func test() {
+	if choose(true) != 2 || choose(false) != 0 {
+		panic("choose")
+	}
+}

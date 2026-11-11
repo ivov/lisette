@@ -29,12 +29,11 @@ func inspect(input Maybe[lisette.Option[int]]) {
 			return lisette.OptionFromCommaOk[int](source())
 		})
 	})
-	if restored.Tag == lisette.OptionSome {
-		if restored.SomeVal().UnwrapOr(0) != 43 {
-			panic("or_else callback payload")
-		}
-	} else {
+	if restored.Tag == lisette.OptionNone {
 		panic("or_else missing callback")
+	}
+	if restored.SomeVal().UnwrapOr(0) != 43 {
+		panic("or_else callback payload")
 	}
 }
 

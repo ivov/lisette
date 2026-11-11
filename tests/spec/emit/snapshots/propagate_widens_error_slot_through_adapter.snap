@@ -72,12 +72,11 @@ func main() {
 		panic("expected error")
 	}
 	subject := f.get()
-	if subject.Tag == lisette.ResultOk {
-		if subject.OkVal != 1 {
-			panic("wrong adapted value")
-		}
-	} else {
+	if subject.Tag == lisette.ResultErr {
 		panic("expected ok from get")
+	}
+	if subject.OkVal != 1 {
+		panic("wrong adapted value")
 	}
 }
 

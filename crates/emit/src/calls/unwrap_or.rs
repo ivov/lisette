@@ -7,7 +7,7 @@ use crate::patterns::matching::{
     FusedName, OptionArms, OptionFusePlan, ResultFusePlan, field_binding,
 };
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, assign, define,
+    ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, assign, define,
 };
 use crate::plan::local::GoIdentifier;
 use crate::plan::placement::collapse_declared_temp;
@@ -253,6 +253,7 @@ impl Planner<'_> {
                     )],
                 },
                 else_arm: ElseArm::None,
+                origin: IfOrigin::User,
             })
             .into(),
         );
@@ -308,6 +309,7 @@ impl Planner<'_> {
                     )],
                 },
                 else_arm: ElseArm::None,
+                origin: IfOrigin::User,
             })
             .into(),
         );

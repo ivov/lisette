@@ -490,6 +490,13 @@ pub(crate) struct IfPlan {
     pub(crate) condition: GoExpression,
     pub(crate) then_body: LoweredBlock,
     pub(crate) else_arm: ElseArm,
+    pub(crate) origin: IfOrigin,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum IfOrigin {
+    User,
+    Match { else_label: Option<GoExpression> },
 }
 
 impl IfPlan {
@@ -503,6 +510,21 @@ impl IfPlan {
             condition,
             then_body,
             else_arm,
+            origin: IfOrigin::User,
+        }
+    }
+
+    pub(crate) fn for_match(
+        condition: GoExpression,
+        then_body: LoweredBlock,
+        else_arm: ElseArm,
+    ) -> Self {
+        Self {
+            initializer: None,
+            condition,
+            then_body,
+            else_arm,
+            origin: IfOrigin::Match { else_label: None },
         }
     }
 }
