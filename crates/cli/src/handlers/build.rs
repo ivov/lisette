@@ -379,6 +379,7 @@ impl BuildPurpose {
 pub(super) struct BuildArtifacts {
     pub test_index: TestIndex,
     pub sources: Sources,
+    pub sourcemap_base: Option<PathBuf>,
 }
 
 fn remove_stale_test_outputs(
@@ -404,7 +405,7 @@ pub(super) fn build_locked(
 ) -> Result<BuildArtifacts, i32> {
     let prep = &project.prep;
     let mode = purpose.compile_mode();
-    let sourcemap = matches!(mode, CompileMode::Emit { sourcemap: true });
+    let sourcemap = mode.sourcemap();
     let emit_tests = mode == CompileMode::Test;
     let start = Instant::now();
 
@@ -438,6 +439,7 @@ pub(super) fn build_locked(
     Ok(BuildArtifacts {
         test_index: result.test_index,
         sources: result.sources,
+        sourcemap_base: result.sourcemap_base,
     })
 }
 

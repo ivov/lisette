@@ -1,5 +1,6 @@
 use std::env;
 use std::mem;
+use std::path::PathBuf;
 use std::thread;
 
 use rustc_hash::FxHashMap as HashMap;
@@ -60,11 +61,15 @@ impl CompileMode {
                 emit_tests: false,
             }),
             Self::Test => Some(EmitOptions {
-                sourcemap: false,
-                sourcemap_base: None,
+                sourcemap: true,
+                sourcemap_base: env::current_dir().ok(),
                 emit_tests: true,
             }),
         }
+    }
+
+    pub fn sourcemap(self) -> bool {
+        matches!(self, Self::Emit { sourcemap: true } | Self::Test)
     }
 
     fn disables_cache(self) -> bool {
@@ -92,6 +97,7 @@ pub struct CompileResult {
     pub live_packages: Vec<String>,
     pub emit_stamps: Vec<EmitStamp>,
     pub test_index: TestIndex,
+    pub sourcemap_base: Option<PathBuf>,
 }
 
 impl CompileResult {
@@ -134,9 +140,13 @@ pub fn compile(
     };
 
     let disable_cache = mode.disables_cache();
-    let emit_tests = mode
-        .emit_options()
+    let emit_options = mode.emit_options();
+    let emit_tests = emit_options
+        .as_ref()
         .is_some_and(|options| options.emit_tests);
+    let sourcemap_base = emit_options
+        .as_ref()
+        .and_then(|options| options.sourcemap_base.clone());
 
     let mut analysis = analyze(AnalyzeInput {
         load_siblings: !matches!(&scope, CompileScope::Script { .. }),
@@ -151,7 +161,7 @@ pub fn compile(
         recover_target: RecoverTarget::None,
     });
     let failed = analysis.failed();
-    let emit_result = match mode.emit_options() {
+    let emit_result = match emit_options {
         Some(options) if !failed => Some(Planner::emit(
             &analysis.emit_input,
             go_module,
@@ -219,6 +229,7 @@ pub fn compile(
         live_packages,
         emit_stamps,
         test_index,
+        sourcemap_base,
     }
 }
 
