@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::Path;
 use std::time::Duration;
 
 use owo_colors::OwoColorize;
@@ -223,6 +224,48 @@ pub struct FailureRecord {
     message: String,
     #[serde(default)]
     operands: Vec<Operand>,
+    #[serde(default)]
+    frame: Option<PanicFrame>,
+}
+
+#[derive(Deserialize, Clone)]
+struct PanicFrame {
+    path: String,
+    line: usize,
+}
+
+impl FailureRecord {
+    fn anchor_at_frame(&mut self, sources: &Sources, sourcemap_base: &Path) {
+        let Some(frame) = self.frame.take() else {
+            return;
+        };
+        let mut matches = sources.iter().filter(|(_, info)| {
+            sourcemap_base.join(&info.filename).display().to_string() == frame.path
+        });
+        let (Some((file, info)), None) = (matches.next(), matches.next()) else {
+            return;
+        };
+        let Some((lo, hi)) = line_text_span(&info.source, frame.line) else {
+            return;
+        };
+        self.file = *file;
+        self.lo = lo;
+        self.hi = hi;
+    }
+}
+
+fn line_text_span(source: &str, line: usize) -> Option<(u32, u32)> {
+    let mut start = 0;
+    for (index, text) in source.split_inclusive('\n').enumerate() {
+        if index + 1 == line {
+            let text = text.trim_end_matches(['\n', '\r']);
+            let lo = start + (text.len() - text.trim_start().len());
+            let hi = start + text.len();
+            return (hi > lo).then_some((lo as u32, hi as u32));
+        }
+        start += text.len();
+    }
+    None
 }
 
 #[derive(Deserialize, Clone)]
@@ -262,6 +305,19 @@ impl TestRow {
         self.outcome.skip_reason()
     }
 
+    fn anchor_panics_at_frames(&mut self, sources: &Sources, sourcemap_base: &Path) {
+        if let TestOutcome::Failed {
+            failure: Some(record),
+            ..
+        } = &mut self.outcome
+        {
+            record.anchor_at_frame(sources, sourcemap_base);
+        }
+        for child in &mut self.children {
+            child.anchor_panics_at_frames(sources, sourcemap_base);
+        }
+    }
+
     #[cfg(test)]
     pub(super) fn with_status(package: &str, go_name: &str, status: Status) -> Self {
         let outcome = match status {
@@ -297,6 +353,14 @@ pub struct Report {
     packages: HashMap<String, PackageEvents>,
     go_module: String,
     pub test_elapsed: f64,
+}
+
+impl Report {
+    pub fn anchor_panics_at_frames(&mut self, sources: &Sources, sourcemap_base: &Path) {
+        for row in &mut self.rows {
+            row.anchor_panics_at_frames(sources, sourcemap_base);
+        }
+    }
 }
 
 fn name_or_title_contains(fn_name: &str, title: Option<&str>, pattern: &str) -> bool {
@@ -2724,5 +2788,95 @@ mod tests {
             "case-sensitive: `Trims` must not match the lowercase title term"
         );
         assert!(matching_tests(&index, "demo", "zzz").is_empty());
+    }
+
+    fn panic_sources() -> Sources {
+        let mut sources = no_sources();
+        sources.insert(
+            1,
+            SourceInfo {
+                source: "fn check(n: int) {\n  if n > 1 {\n    panic(\"helper panic\")\n  }\n}\n"
+                    .to_string(),
+                filename: "src/main.lis".to_string(),
+            },
+        );
+        sources.insert(
+            2,
+            SourceInfo {
+                source: "#[test]\nfn boom() {\n  check(5)\n}\n".to_string(),
+                filename: "src/main.test.lis".to_string(),
+            },
+        );
+        sources
+    }
+
+    fn rendered_panic(sources: &Sources, frame_path: &str, frame_line: usize) -> String {
+        let index = index(&[(ENTRY_PACKAGE_ID, "boom")]);
+        let inner = serde_json::json!({
+            "file": 2,
+            "lo": 11,
+            "hi": 15,
+            "kind": "panic",
+            "message": "panic: helper panic",
+            "frame": {"path": frame_path, "line": frame_line},
+        })
+        .to_string();
+        let events = vec![
+            attr_event("demo", "TestBoom", &fail_value(&inner)),
+            event("fail", "demo", Some("TestBoom"), None),
+        ];
+        let mut report = build_report(&index, &events, "demo");
+        report.anchor_panics_at_frames(sources, Path::new("/root"));
+        render(
+            &report,
+            sources,
+            false,
+            Duration::from_millis(1),
+            TEST_WIDTH,
+        )
+    }
+
+    fn frame_path(filename: &str) -> String {
+        Path::new("/root").join(filename).display().to_string()
+    }
+
+    #[test]
+    fn a_panic_is_anchored_at_its_innermost_lis_frame() {
+        let text = rendered_panic(&panic_sources(), &frame_path("src/main.lis"), 3);
+
+        assert!(text.contains("src/main.lis:3:5]"), "got:\n{text}");
+        assert!(text.contains("panic(\"helper panic\")"), "got:\n{text}");
+        assert!(text.contains("panic: helper panic"), "got:\n{text}");
+    }
+
+    #[test]
+    fn a_panic_frame_outside_the_sources_keeps_the_test_header() {
+        let text = rendered_panic(&panic_sources(), "/root/target/main.go", 9);
+
+        assert!(text.contains("src/main.test.lis:2:4]"), "got:\n{text}");
+    }
+
+    #[test]
+    fn a_panic_frame_that_names_two_sources_keeps_the_test_header() {
+        let mut sources = panic_sources();
+        for file in [1, 3] {
+            sources.insert(
+                file,
+                SourceInfo {
+                    source: "fn touch() {\n  panic(\"shared\")\n}\n".to_string(),
+                    filename: "shared.lis".to_string(),
+                },
+            );
+        }
+        let text = rendered_panic(&sources, &frame_path("shared.lis"), 2);
+
+        assert!(text.contains("src/main.test.lis:2:4]"), "got:\n{text}");
+    }
+
+    #[test]
+    fn a_panic_frame_past_the_end_of_the_file_keeps_the_test_header() {
+        let text = rendered_panic(&panic_sources(), &frame_path("src/main.lis"), 40);
+
+        assert!(text.contains("src/main.test.lis:2:4]"), "got:\n{text}");
     }
 }
