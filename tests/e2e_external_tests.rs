@@ -99,6 +99,33 @@ fn external_tests_run_and_report_with_internal_tests() {
 }
 
 #[test]
+fn subtests_run_and_report_under_their_parent() {
+    if !go_available() {
+        eprintln!("skipping: `go` not found");
+        return;
+    }
+    let (_dir, project) = scaffold("extsub");
+    fs::write(project.join("src/main.lis"), "fn main() {}\n").unwrap();
+    fs::write(
+        project.join("src/main.test.lis"),
+        "#[test]\nfn cases(t) {\n  t.run(\"small\", |s| {\n    assert 1 == 1\n  })\n  t.run(\"large\", |s| {\n    assert 1 == 2\n  })\n}\n",
+    )
+    .unwrap();
+
+    let test = lis(&project, &["test"]);
+    let out = combined(&test);
+    assert!(!test.status.success(), "expected failure: {out}");
+    assert!(
+        out.contains("✓ small") && out.contains("✕ large"),
+        "subtests must run and report under their parent: {out}"
+    );
+    assert!(
+        out.contains("cases › large"),
+        "the failure must name the subtest path: {out}"
+    );
+}
+
+#[test]
 fn build_never_emits_tests_and_cleans_leftovers() {
     if !go_available() {
         eprintln!("skipping: `go` not found");
