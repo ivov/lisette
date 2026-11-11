@@ -6,6 +6,8 @@ use syntax::types::Type;
 use super::native::NativeCallResult;
 use super::{NativeCallContext, NativeCallForm, NativeMethodCall};
 use crate::Planner;
+use crate::abi::is_closure_literal;
+use crate::abi::layout::SlotOrigin;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::prelude_call;
 use crate::escape_reserved;
@@ -13,8 +15,10 @@ use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, Statement, assign, define,
 };
+use crate::plan::go_expression::UnaryOp;
 use crate::plan::lower::is_conjunction;
-use crate::plan::values::{CaptureBoundary, GoExpression};
+use crate::plan::values::{CaptureBoundary, GoExpression, OperandForm, Stability, ValuePlan};
+use crate::statements::let_binding::needs_explicit_type_declaration;
 use crate::types::go_type::GoType;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -23,6 +27,7 @@ enum SliceLoop {
     Filter,
     Fold,
     Find,
+    All,
 }
 
 impl SliceLoop {
@@ -32,6 +37,7 @@ impl SliceLoop {
             "filter" => Some(Self::Filter),
             "fold" => Some(Self::Fold),
             "find" => Some(Self::Find),
+            "all" => Some(Self::All),
             _ => None,
         }
     }
@@ -83,10 +89,24 @@ fn identifier_of(param: &Binding) -> Option<&Pattern> {
     matches!(param.pattern, Pattern::Identifier { .. }).then_some(&param.pattern)
 }
 
+enum LoopCallback<'a> {
+    Lambda {
+        body: &'a Expression,
+        patterns: Vec<&'a Pattern>,
+    },
+    Value(&'a Expression),
+}
+
+#[derive(Clone, Copy)]
+enum LoweredCallback<'a> {
+    Body(&'a Expression),
+    Callee(&'a GoExpression),
+}
+
 #[derive(Clone, Copy)]
 struct SliceLoopBody<'a> {
     planned: &'a PlannedLoop<'a>,
-    body: &'a Expression,
+    callback: LoweredCallback<'a>,
     result_ty: &'a Type,
     element_ty: &'a Type,
     element_name: &'a GoIdentifier,
@@ -115,13 +135,16 @@ enum PlannedLoop<'a> {
     },
     Fold {
         result: GoIdentifier,
-        accumulator: &'a Pattern,
         init: GoExpression,
+        go_type: Option<GoType>,
     },
     Find {
         result: GoIdentifier,
     },
     FindInto(FoundSink<'a>),
+    All {
+        result: GoIdentifier,
+    },
 }
 
 impl PlannedLoop<'_> {
@@ -130,7 +153,8 @@ impl PlannedLoop<'_> {
             Self::Map { result, .. }
             | Self::Filter { result }
             | Self::Fold { result, .. }
-            | Self::Find { result } => Some(result),
+            | Self::Find { result }
+            | Self::All { result } => Some(result),
             Self::FindInto(sink) => sink.value,
         }
     }
@@ -163,8 +187,7 @@ fn peel_single_expression_block(body: &Expression) -> &Expression {
 
 struct SliceLoopShape<'a> {
     kind: SliceLoop,
-    body: &'a Expression,
-    patterns: Vec<&'a Pattern>,
+    callback: LoopCallback<'a>,
     result_ty: Type,
     element_ty: Type,
 }
@@ -177,8 +200,16 @@ fn name(text: &str) -> GoExpression {
     GoExpression::external_name(text.to_string())
 }
 
+fn callback_param<'a>(ctx: &NativeCallContext<'a>) -> (Option<&'a Type>, Option<&'a Type>) {
+    let param = ctx.abi.param(ctx.args.len() - 1);
+    (
+        param.and_then(|param| param.declared.as_ref()),
+        param.map(|param| &param.instantiated),
+    )
+}
+
 impl Planner<'_> {
-    /// The parts of a `map`, `filter`, `fold`, or `find` call that inline as a loop.
+    /// The parts of a slice method call that inline as a loop.
     fn slice_loop_shape<'a>(
         &self,
         ctx: &NativeCallContext<'_>,
@@ -189,21 +220,25 @@ impl Planner<'_> {
         if args.len() != kind.argument_count() || ctx.spread.is_some() {
             return None;
         }
-        let Expression::Lambda { params, body, .. } = args.last()?.unwrap_parens() else {
-            return None;
+        let callback = match args.last()?.unwrap_parens() {
+            Expression::Lambda { params, body, .. } => {
+                let body = peel_single_expression_block(body);
+                let patterns: Vec<&Pattern> = params.iter().filter_map(identifier_of).collect();
+                if patterns.len() != params.len() || !body_moves_into_a_loop(body) {
+                    return None;
+                }
+                let expects_accumulator = kind == SliceLoop::Fold;
+                if patterns.len() != 1 + expects_accumulator as usize {
+                    return None;
+                }
+                if expects_accumulator && body_captures_by_reference(body) {
+                    return None;
+                }
+                LoopCallback::Lambda { body, patterns }
+            }
+            callee if self.callback_calls_directly(ctx, callee) => LoopCallback::Value(callee),
+            _ => return None,
         };
-        let body = peel_single_expression_block(body);
-        let patterns: Vec<&Pattern> = params.iter().filter_map(identifier_of).collect();
-        if patterns.len() != params.len() || !body_moves_into_a_loop(body) {
-            return None;
-        }
-        let expects_accumulator = kind == SliceLoop::Fold;
-        if patterns.len() != 1 + expects_accumulator as usize {
-            return None;
-        }
-        if expects_accumulator && body_captures_by_reference(body) {
-            return None;
-        }
         let result_ty = ctx.call_ty?.clone();
         let element_ty = self
             .facts
@@ -213,11 +248,18 @@ impl Planner<'_> {
             .clone();
         Some(SliceLoopShape {
             kind,
-            body,
-            patterns,
+            callback,
             result_ty,
             element_ty,
         })
+    }
+
+    fn callback_calls_directly(&self, ctx: &NativeCallContext<'_>, callee: &Expression) -> bool {
+        if is_closure_literal(callee) {
+            return false;
+        }
+        let (declared, instantiated) = callback_param(ctx);
+        self.prelude_callback_stages_as_is(callee, declared, instantiated)
     }
 
     /// `let xs = ys.map(..)` fills `xs` as the loop's own result.
@@ -283,8 +325,7 @@ impl Planner<'_> {
     ) -> Option<NativeCallResult> {
         let SliceLoopShape {
             kind,
-            body,
-            patterns,
+            callback,
             result_ty,
             element_ty,
         } = self.slice_loop_shape(ctx, receiver, args)?;
@@ -299,19 +340,37 @@ impl Planner<'_> {
         }
         let mut stages = vec![source_staged];
         if kind == SliceLoop::Fold {
-            stages.push(self.plan_operand(&args[0], ExpressionContext::value()));
+            let origin = self.function_type_origin(&result_ty, SlotOrigin::Lisette);
+            let init = self.lower_composite_value(
+                &args[0],
+                ExpressionContext::value().with_function_slot_origin(origin),
+            );
+            // The accumulator is declared before the loop ranges over the source.
+            if !init.effects().can_move_across(stages[0].effects()) {
+                self.pin_staged(&mut stages[0], "src");
+            }
+            stages.push(init);
+        }
+        if let LoopCallback::Value(callee) = &callback {
+            stages.push(self.stage_loop_callee(ctx, callee));
         }
         let sequenced = self.sequence_values(stages, ctx.capture_boundary, "arg");
         let mut setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
         let source = values.next().expect("the source is staged first");
+        let init = (kind == SliceLoop::Fold).then(|| {
+            let value = values.next().expect("fold stages its initial value");
+            self.accumulator_init(&mut setup, &args[0], value, &result_ty)
+        });
+        let callee = matches!(callback, LoopCallback::Value(_))
+            .then(|| values.next().expect("a function value stages its callee"));
 
         let planned = match target {
             SliceLoopTarget::Found(sink) => PlannedLoop::FindInto(sink),
             target => {
-                let result = match target {
-                    SliceLoopTarget::Into(name) => name.clone(),
-                    _ if kind == SliceLoop::Fold => {
+                let result = match (target, &callback) {
+                    (SliceLoopTarget::Into(name), _) => name.clone(),
+                    (_, LoopCallback::Lambda { patterns, .. }) if kind == SliceLoop::Fold => {
                         self.accumulator_slot_name(patterns[0], receiver)
                     }
                     _ => self.fresh_local(Some("result")),
@@ -325,31 +384,38 @@ impl Planner<'_> {
                         PlannedLoop::Map { result, index }
                     }
                     SliceLoop::Filter => PlannedLoop::Filter { result },
-                    SliceLoop::Fold => PlannedLoop::Fold {
-                        result,
-                        accumulator: patterns[0],
-                        init: values.next().expect("fold stages its initial value"),
-                    },
+                    SliceLoop::Fold => {
+                        let (init, go_type) = init.expect("fold stages its initial value");
+                        PlannedLoop::Fold {
+                            result,
+                            init,
+                            go_type,
+                        }
+                    }
                     SliceLoop::Find => PlannedLoop::Find { result },
+                    SliceLoop::All => PlannedLoop::All { result },
                 }
             }
         };
         self.push_slice_loop_declaration(&mut setup, &planned, &result_ty, &element_ty, &source);
 
+        let lowered_callback = match &callback {
+            LoopCallback::Lambda { body, .. } => LoweredCallback::Body(body),
+            LoopCallback::Value(_) => LoweredCallback::Callee(
+                callee.as_ref().expect("a function value stages its callee"),
+            ),
+        };
         let lower_body = |planner: &mut Self| {
             planner.with_scope(|this| {
-                if let PlannedLoop::Fold {
-                    result,
-                    accumulator,
-                    ..
-                } = &planned
+                if let (PlannedLoop::Fold { result, .. }, LoopCallback::Lambda { patterns, .. }) =
+                    (&planned, &callback)
                 {
-                    this.bind_loop_callback_param(accumulator, Some(result.clone()));
+                    this.bind_loop_callback_param(patterns[0], Some(result.clone()));
                 }
-                let element_name = this.element_loop_name(kind, patterns[patterns.len() - 1]);
+                let element_name = this.element_loop_name(kind, &callback);
                 let statements = this.lower_slice_loop_body(&SliceLoopBody {
                     planned: &planned,
-                    body,
+                    callback: lowered_callback,
                     result_ty: &result_ty,
                     element_ty: &element_ty,
                     element_name: &element_name,
@@ -392,6 +458,37 @@ impl Planner<'_> {
         Some(NativeCallResult::new(setup, result))
     }
 
+    fn accumulator_init(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        init: &Expression,
+        value: GoExpression,
+        result_ty: &Type,
+    ) -> (GoExpression, Option<GoType>) {
+        let coercion = self.value_slot_coercion(init, result_ty);
+        let typed = (coercion.is_identity()
+            && self
+                .constant_needs_go_type(value.constant_kind(), result_ty)
+                .is_some())
+            || needs_explicit_type_declaration(self, init, result_ty);
+        let (coercion_setup, value) = coercion.lower(self, value);
+        setup.extend(coercion_setup);
+        (value, typed.then(|| self.go_type(result_ty)))
+    }
+
+    fn stage_loop_callee(&mut self, ctx: &NativeCallContext<'_>, callee: &Expression) -> ValuePlan {
+        let (declared, instantiated) = callback_param(ctx);
+        let mut staged = self.stage_prelude_arg(callee, declared, instantiated);
+        // The loop reads the callee once per element.
+        if !staged.effects().can_duplicate()
+            || self.place_read_stability(callee) == Stability::Observable
+            || staged.expression().syntax_form() != OperandForm::Name
+        {
+            self.pin_staged(&mut staged, "callee");
+        }
+        staged
+    }
+
     fn accumulator_slot_name(&mut self, pattern: &Pattern, receiver: &Expression) -> GoIdentifier {
         let Pattern::Identifier {
             identifier,
@@ -414,11 +511,15 @@ impl Planner<'_> {
         }
     }
 
-    /// `filter` and `find` read the element back whatever the body does.
-    fn element_loop_name(&mut self, kind: SliceLoop, pattern: &Pattern) -> GoIdentifier {
-        let name = self.bind_loop_callback_param(pattern, None);
-        if name.spelling() != "_" || matches!(kind, SliceLoop::Map | SliceLoop::Fold) {
-            return name;
+    /// `filter` and `find` read the element back whatever the callback does.
+    fn element_loop_name(&mut self, kind: SliceLoop, callback: &LoopCallback<'_>) -> GoIdentifier {
+        if let LoopCallback::Lambda { patterns, .. } = callback {
+            let name = self.bind_loop_callback_param(patterns[patterns.len() - 1], None);
+            if name.spelling() != "_"
+                || matches!(kind, SliceLoop::Map | SliceLoop::Fold | SliceLoop::All)
+            {
+                return name;
+            }
         }
         let name = self.fresh_local(Some("v"));
         self.declare(name.spelling());
@@ -480,7 +581,19 @@ impl Planner<'_> {
                 value: None,
             }
             .into(),
-            PlannedLoop::Fold { result, init, .. } => define(result.clone(), init.clone()),
+            PlannedLoop::Fold {
+                result,
+                init,
+                go_type,
+            } => match go_type {
+                Some(go_type) => LoweredStatement::VarDecl {
+                    name: result.clone(),
+                    go_type: go_type.clone(),
+                    value: Some(init.clone()),
+                }
+                .into(),
+                None => define(result.clone(), init.clone()),
+            },
             PlannedLoop::Find { result } => {
                 let payload = self.first_type_argument_go_type(result_ty);
                 define(
@@ -509,6 +622,9 @@ impl Planner<'_> {
                     GoExpression::literal("false".to_string()),
                 )
             }
+            PlannedLoop::All { result } => {
+                define(result.clone(), GoExpression::literal("true".to_string()))
+            }
         };
         setup.push(declaration);
     }
@@ -516,23 +632,42 @@ impl Planner<'_> {
     fn lower_slice_loop_body(&mut self, loop_body: &SliceLoopBody<'_>) -> Vec<Statement> {
         let SliceLoopBody {
             planned,
-            body,
+            callback,
             result_ty,
             element_ty,
             element_name,
         } = *loop_body;
 
         let then_body = match planned {
-            // Map and fold store their body's value, so it lowers into the slot.
+            // Map and fold store their callback's value, so it lowers into the slot.
             PlannedLoop::Map { result, index } => {
-                let element_ty = self
-                    .first_type_argument(result_ty)
-                    .expect("map returns a slice carrying its element type");
                 let slot = GoExpression::index(local(result), local(index));
-                return self.lower_body_into_slot(body, &slot, &element_ty);
+                return match callback {
+                    LoweredCallback::Body(body) => {
+                        let element_ty = self
+                            .first_type_argument(result_ty)
+                            .expect("map returns a slice carrying its element type");
+                        self.lower_body_into_slot(body, &slot, &element_ty)
+                    }
+                    LoweredCallback::Callee(callee) => vec![assign(
+                        slot,
+                        GoExpression::call(callee.clone(), vec![local(element_name)]),
+                    )],
+                };
             }
             PlannedLoop::Fold { result, .. } => {
-                return self.lower_body_into_slot(body, &local(result), result_ty);
+                return match callback {
+                    LoweredCallback::Body(body) => {
+                        self.lower_body_into_slot(body, &local(result), result_ty)
+                    }
+                    LoweredCallback::Callee(callee) => vec![assign(
+                        local(result),
+                        GoExpression::call(
+                            callee.clone(),
+                            vec![local(result), local(element_name)],
+                        ),
+                    )],
+                };
             }
             PlannedLoop::Filter { result } => vec![assign(
                 local(result),
@@ -564,16 +699,36 @@ impl Planner<'_> {
                 statements.push(LoweredStatement::Break(LoopTransfer::Unlabeled).into());
                 statements
             }
+            PlannedLoop::All { result } => vec![
+                assign(local(result), GoExpression::literal("false".to_string())),
+                LoweredStatement::Break(LoopTransfer::Unlabeled).into(),
+            ],
         };
 
         let then_body = LoweredBlock {
             statements: then_body,
         };
-        if is_conjunction(body) {
-            let guard = self.lower_conjunction_guard(body, |_| then_body);
-            return vec![guard.into_statement().into()];
-        }
-        let plan = self.lower_value(body, ExpressionContext::value());
+        let negated = matches!(planned, PlannedLoop::All { .. });
+        let plan = match callback {
+            LoweredCallback::Callee(callee) => {
+                let call = GoExpression::call(callee.clone(), vec![local(element_name)]);
+                if negated {
+                    ValuePlan::computed(Vec::new(), GoExpression::unary(UnaryOp::Not, call))
+                } else {
+                    ValuePlan::computed(Vec::new(), call)
+                }
+            }
+            LoweredCallback::Body(body) if negated => {
+                self.plan_unary_not(body, ExpressionContext::value())
+            }
+            LoweredCallback::Body(body) => {
+                if is_conjunction(body) {
+                    let guard = self.lower_conjunction_guard(body, |_| then_body);
+                    return vec![guard.into_statement().into()];
+                }
+                self.lower_value(body, ExpressionContext::value())
+            }
+        };
         let (mut statements, condition) = plan.into_parts();
         statements
             .push(LoweredStatement::If(IfPlan::plain(condition, then_body, ElseArm::None)).into());

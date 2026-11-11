@@ -12,14 +12,13 @@ description: |
 ---
 package main
 
-import (
-	"math"
-
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "math"
 
 func main() {
 	xs := []float64{1.0, 5.0}
-	biggest := lisette.SliceFold(xs, 0.0, math.Max)
+	biggest := 0.0
+	for _, v := range xs {
+		biggest = math.Max(biggest, v)
+	}
 	_ = biggest
 }

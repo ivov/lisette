@@ -1,0 +1,66 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn source(log: Channel<string>) -> Slice<int> {
+    log.send("source")
+    [1, 2]
+  }
+  
+  fn initial(log: Channel<string>) -> int {
+    log.send("init")
+    10
+  }
+  
+  fn add(acc: int, x: int) -> int { acc + x }
+  
+  fn total(log: Channel<string>) -> int {
+    source(log).fold(initial(log), add)
+  }
+  
+  fn test() {
+    let log = Channel.buffered<string>(8)
+    if total(log) != 13 {
+      panic("wrong total")
+    }
+    if log.receive() != Some("source") {
+      panic("initial value ran before the source")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func source(log chan string) []int {
+	lisette.ChannelSend(log, "source")
+	return []int{1, 2}
+}
+
+func initial(log chan string) int {
+	lisette.ChannelSend(log, "init")
+	return 10
+}
+
+func add(acc, x int) int {
+	return acc + x
+}
+
+func total(log chan string) int {
+	src := source(log)
+	result := initial(log)
+	for _, v := range src {
+		result = add(result, v)
+	}
+	return result
+}
+
+func test() {
+	log := make(chan string, 8)
+	if total(log) != 13 {
+		panic("wrong total")
+	}
+	if lisette.ChannelReceive(log) != lisette.MakeOptionSome("source") {
+		panic("initial value ran before the source")
+	}
+}

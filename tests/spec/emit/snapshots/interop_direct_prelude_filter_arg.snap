@@ -12,14 +12,15 @@ description: |
 ---
 package main
 
-import (
-	"unicode"
-
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "unicode"
 
 func main() {
 	cs := []rune{'a', '1'}
-	letters := lisette.SliceFilter(cs, unicode.IsLetter)
+	var letters []rune
+	for _, v := range cs {
+		if unicode.IsLetter(v) {
+			letters = append(letters, v)
+		}
+	}
 	_ = letters
 }

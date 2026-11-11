@@ -12,14 +12,13 @@ description: |
 ---
 package main
 
-import (
-	"strings"
-
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "strings"
 
 func main() {
 	xs := []string{"a"}
-	ys := lisette.SliceMap(xs, strings.ToUpper)
+	ys := make([]string, len(xs))
+	for i, v := range xs {
+		ys[i] = strings.ToUpper(v)
+	}
 	_ = ys
 }

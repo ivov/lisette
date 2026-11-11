@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn double(x: int) -> int { x * 2 }
+  
+  fn test(xs: Slice<int>) -> Slice<int> {
+    let ys = xs.map(double)
+    ys
+  }
+---
+package main
+
+func double(x int) int {
+	return x * 2
+}
+
+func test(xs []int) []int {
+	ys := make([]int, len(xs))
+	for i, v := range xs {
+		ys[i] = double(v)
+	}
+	return ys
+}

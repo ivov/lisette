@@ -15,12 +15,11 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func first[T any](xs []T, keep func(T) bool) (T, bool) {
-	v := lisette.SliceFind(xs, keep)
-	if v.Tag == lisette.OptionSome {
-		return v.SomeVal, true
+	for _, v := range xs {
+		if keep(v) {
+			return v, true
+		}
 	}
 	return *new(T), false
 }

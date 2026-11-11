@@ -1,0 +1,50 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  struct Ops { f: fn(int) -> int }
+  
+  fn test() {
+    let mut ops = Ops { f: |x| x }
+    ops.f = |x| {
+      ops.f = |y| y + 10
+      x + 1
+    }
+    let got = match ops {
+      Ops { f } => [0, 0].map(f)
+    }
+    if got[0] != 1 || got[1] != 1 {
+      panic("callee read per element")
+    }
+  }
+---
+package main
+
+type Ops struct {
+	f func(int) int
+}
+
+func test() {
+	ops := Ops{f: func(x int) int {
+		return x
+	}}
+	ops.f = func(x int) int {
+		ops.f = func(y int) int {
+			return y + 10
+		}
+		return x + 1
+	}
+	var got []int
+	{
+		src := []int{0, 0}
+		callee := ops.f
+		result := make([]int, len(src))
+		for i, v := range src {
+			result[i] = callee(v)
+		}
+		got = result
+	}
+	if got[0] != 1 || got[1] != 1 {
+		panic("callee read per element")
+	}
+}

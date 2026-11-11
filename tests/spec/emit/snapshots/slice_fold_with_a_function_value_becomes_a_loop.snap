@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn add(acc: int, x: int) -> int { acc + x }
+  
+  fn test(xs: Slice<int>) -> int {
+    xs.fold(0, add)
+  }
+---
+package main
+
+func add(acc, x int) int {
+	return acc + x
+}
+
+func test(xs []int) int {
+	result := 0
+	for _, v := range xs {
+		result = add(result, v)
+	}
+	return result
+}

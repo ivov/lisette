@@ -1,0 +1,76 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  import "go:strconv"
+  
+  interface Named {
+    fn name() -> string
+  }
+  
+  struct A {}
+  
+  impl A {
+    fn name(self) -> string { "a" }
+  }
+  
+  struct B { label: string }
+  
+  impl B {
+    fn name(self) -> string { self.label }
+  }
+  
+  fn step(acc: Named, x: int) -> Named {
+    B { label: acc.name() + strconv.Itoa(x) }
+  }
+  
+  fn with_lambda(xs: Slice<int>) -> Named {
+    xs.fold<Named>(A {}, |acc, x| step(acc, x + 1))
+  }
+  
+  fn test(xs: Slice<int>) -> string {
+    with_lambda(xs).name() + xs.fold<Named>(A {}, step).name()
+  }
+---
+package main
+
+import "strconv"
+
+type Named interface {
+	name() string
+}
+
+type A struct{}
+
+func (a A) name() string {
+	return "a"
+}
+
+type B struct {
+	label string
+}
+
+func (b B) name() string {
+	return b.label
+}
+
+func step(acc Named, x int) Named {
+	return B{label: acc.name() + strconv.Itoa(x)}
+}
+
+func withLambda(xs []int) Named {
+	var acc Named = A{}
+	for _, x := range xs {
+		acc = step(acc, x+1)
+	}
+	return acc
+}
+
+func test(xs []int) string {
+	left := withLambda(xs).name()
+	var result Named = A{}
+	for _, v := range xs {
+		result = step(result, v)
+	}
+	return left + result.name()
+}

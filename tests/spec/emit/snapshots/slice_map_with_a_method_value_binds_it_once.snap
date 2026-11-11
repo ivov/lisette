@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  struct Counter { n: int }
+  
+  impl Counter {
+    fn apply(self, x: int) -> int { self.n * x }
+  }
+  
+  fn through_reference(c: Ref<Counter>, xs: Slice<int>) -> Slice<int> {
+    xs.map(c.apply)
+  }
+  
+  fn test(c: Counter, xs: Slice<int>) -> Slice<int> {
+    xs.map(c.apply)
+  }
+---
+package main
+
+type Counter struct {
+	n int
+}
+
+func (c Counter) apply(x int) int {
+	return c.n * x
+}
+
+func throughReference(c *Counter, xs []int) []int {
+	callee := c.apply
+	result := make([]int, len(xs))
+	for i, v := range xs {
+		result[i] = callee(v)
+	}
+	return result
+}
+
+func test(c Counter, xs []int) []int {
+	callee := c.apply
+	result := make([]int, len(xs))
+	for i, v := range xs {
+		result[i] = callee(v)
+	}
+	return result
+}

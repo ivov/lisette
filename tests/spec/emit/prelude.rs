@@ -881,6 +881,300 @@ fn test(s: Slice<int>) -> Slice<int> {
 }
 
 #[test]
+fn slice_map_with_a_function_value_becomes_a_loop() {
+    let input = r#"
+fn double(x: int) -> int { x * 2 }
+
+fn test(xs: Slice<int>) -> Slice<int> {
+  let ys = xs.map(double)
+  ys
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_fold_with_a_function_value_becomes_a_loop() {
+    let input = r#"
+fn add(acc: int, x: int) -> int { acc + x }
+
+fn test(xs: Slice<int>) -> int {
+  xs.fold(0, add)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_all_lambda_becomes_a_loop() {
+    let input = r#"
+fn test(xs: Slice<int>) -> bool {
+  xs.all(|x| x > 0)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_all_with_a_function_value_becomes_a_loop() {
+    let input = r#"
+fn is_positive(x: int) -> bool { x > 0 }
+
+fn test(xs: Slice<int>) -> bool {
+  xs.all(is_positive)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_map_with_a_lowered_result_function_keeps_the_helper() {
+    let input = r#"
+import "go:strconv"
+
+fn parse(s: string) -> Result<int, error> {
+  strconv.Atoi(s)
+}
+
+fn test(xs: Slice<string>) -> Slice<Result<int, error>> {
+  xs.map(parse)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_map_with_a_field_callee_reads_it_once() {
+    let input = r#"
+struct Ops { f: fn(int) -> int }
+
+fn test(ops: Ref<Ops>, xs: Slice<int>) -> Slice<int> {
+  xs.map(ops.f)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_filter_with_a_call_callee_runs_it_once() {
+    let input = r#"
+fn source(seen: Channel<int>) -> Slice<int> {
+  seen.send(1)
+  [1, 2, 3]
+}
+
+fn make_keeper(seen: Channel<int>) -> fn(int) -> bool {
+  seen.send(2)
+  |x| x > 1
+}
+
+fn kept(seen: Channel<int>) -> Slice<int> {
+  source(seen).filter(make_keeper(seen))
+}
+
+fn test() {
+  let seen = Channel.buffered<int>(8)
+  let got = kept(seen)
+  if got.length() != 2 {
+    panic("wrong elements")
+  }
+  if seen.length() != 2 {
+    panic("callee ran once per element")
+  }
+  if seen.receive() != Some(1) {
+    panic("callee ran before the source")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_fold_runs_the_source_before_the_initial_value() {
+    let input = r#"
+fn source(log: Channel<string>) -> Slice<int> {
+  log.send("source")
+  [1, 2]
+}
+
+fn initial(log: Channel<string>) -> int {
+  log.send("init")
+  10
+}
+
+fn add(acc: int, x: int) -> int { acc + x }
+
+fn total(log: Channel<string>) -> int {
+  source(log).fold(initial(log), add)
+}
+
+fn test() {
+  let log = Channel.buffered<string>(8)
+  if total(log) != 13 {
+    panic("wrong total")
+  }
+  if log.receive() != Some("source") {
+    panic("initial value ran before the source")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_fold_with_an_untyped_constant_keeps_the_accumulator_type() {
+    let input = r#"
+fn add(acc: int64, x: int64) -> int64 { acc + x }
+
+fn with_lambda(xs: Slice<int64>) -> int64 {
+  xs.fold<int64>(0, |acc, x| acc + x)
+}
+
+fn test(xs: Slice<int64>) -> int64 {
+  with_lambda(xs) + xs.fold<int64>(0, add)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_fold_with_an_interface_accumulator_keeps_its_type() {
+    let input = r#"
+import "go:strconv"
+
+interface Named {
+  fn name() -> string
+}
+
+struct A {}
+
+impl A {
+  fn name(self) -> string { "a" }
+}
+
+struct B { label: string }
+
+impl B {
+  fn name(self) -> string { self.label }
+}
+
+fn step(acc: Named, x: int) -> Named {
+  B { label: acc.name() + strconv.Itoa(x) }
+}
+
+fn with_lambda(xs: Slice<int>) -> Named {
+  xs.fold<Named>(A {}, |acc, x| step(acc, x + 1))
+}
+
+fn test(xs: Slice<int>) -> string {
+  with_lambda(xs).name() + xs.fold<Named>(A {}, step).name()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_fold_with_a_go_function_initial_value_keeps_the_adapter() {
+    let input = r#"
+import "go:strings"
+
+type Search = fn(string, string) -> Option<int>
+
+fn keep(f: Search, x: int) -> Search {
+  let _ = x
+  f
+}
+
+fn with_lambda(xs: Slice<int>) -> Search {
+  xs.fold<Search>(strings.Index, |f, x| keep(f, x + 1))
+}
+
+fn test(xs: Slice<int>) -> bool {
+  with_lambda(xs)("abc", "c") == xs.fold<Search>(strings.Index, keep)("abc", "c")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_map_with_a_cast_callee_reads_it_once() {
+    let input = r#"
+type Callback = fn(int) -> int
+
+struct Ops { f: fn(int) -> int }
+
+fn test(ops: Ref<Ops>, xs: Slice<int>) -> Slice<int> {
+  xs.map(ops.f as Callback)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_map_with_a_method_value_binds_it_once() {
+    let input = r#"
+struct Counter { n: int }
+
+impl Counter {
+  fn apply(self, x: int) -> int { self.n * x }
+}
+
+fn through_reference(c: Ref<Counter>, xs: Slice<int>) -> Slice<int> {
+  xs.map(c.apply)
+}
+
+fn test(c: Counter, xs: Slice<int>) -> Slice<int> {
+  xs.map(c.apply)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_map_with_a_pattern_bound_callee_reads_it_once() {
+    let input = r#"
+struct Ops { f: fn(int) -> int }
+
+fn test() {
+  let mut ops = Ops { f: |x| x }
+  ops.f = |x| {
+    ops.f = |y| y + 10
+    x + 1
+  }
+  let got = match ops {
+    Ops { f } => [0, 0].map(f)
+  }
+  if got[0] != 1 || got[1] != 1 {
+    panic("callee read per element")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_fold_with_a_unit_initial_value_runs_it_first() {
+    let input = r#"
+fn initial(log: Channel<int>) {
+  log.send(0)
+}
+
+fn consume<T>(acc: T, x: int) -> T {
+  acc
+}
+
+fn test() {
+  let log = Channel.buffered<int>(1)
+  [1, 2].fold(initial(log), consume)
+  if log.receive() != Some(0) {
+    panic("initial value did not run")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_contains() {
     let input = r#"
 fn test(s: Slice<int>, v: int) -> bool {

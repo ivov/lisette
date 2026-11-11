@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(xs: Slice<int>) -> bool {
+    xs.all(|x| x > 0)
+  }
+---
+package main
+
+func test(xs []int) bool {
+	result := true
+	for _, x := range xs {
+		if x <= 0 {
+			result = false
+			break
+		}
+	}
+	return result
+}
