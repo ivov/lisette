@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn initial(log: Channel<int>) {
+    log.send(0)
+  }
+  
+  fn consume<T>(acc: T, x: int) -> T {
+    acc
+  }
+  
+  fn test() {
+    let log = Channel.buffered<int>(1)
+    [1, 2].fold(initial(log), consume)
+    if log.receive() != Some(0) {
+      panic("initial value did not run")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func initial(log chan int) {
+	lisette.ChannelSend(log, 0)
+}
+
+func consume[T any](acc T, _ int) T {
+	return acc
+}
+
+func test() {
+	log := make(chan int, 1)
+	initial(log)
+	result := struct{}{}
+	for _, v := range []int{1, 2} {
+		result = consume[struct{}](result, v)
+	}
+	_ = result
+	if lisette.ChannelReceive(log) != lisette.MakeOptionSome(0) {
+		panic("initial value did not run")
+	}
+}

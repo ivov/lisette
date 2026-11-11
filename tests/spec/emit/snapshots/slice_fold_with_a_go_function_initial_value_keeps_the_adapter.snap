@@ -1,0 +1,58 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  import "go:strings"
+  
+  type Search = fn(string, string) -> Option<int>
+  
+  fn keep(f: Search, x: int) -> Search {
+    let _ = x
+    f
+  }
+  
+  fn with_lambda(xs: Slice<int>) -> Search {
+    xs.fold<Search>(strings.Index, |f, x| keep(f, x + 1))
+  }
+  
+  fn test(xs: Slice<int>) -> bool {
+    with_lambda(xs)("abc", "c") == xs.fold<Search>(strings.Index, keep)("abc", "c")
+  }
+---
+package main
+
+import (
+	"strings"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Search = func(string, string) lisette.Option[int]
+
+func keep(f Search, x int) Search {
+	_ = x
+	return f
+}
+
+func withLambda(xs []int) Search {
+	var f Search = func(arg0, arg1 string) lisette.Option[int] {
+		ret := strings.Index(arg0, arg1)
+		return lisette.OptionFromCommaOk[int](ret, ret != -1)
+	}
+	for _, x := range xs {
+		f = keep(f, x+1)
+	}
+	return f
+}
+
+func test(xs []int) bool {
+	left := withLambda(xs)("abc", "c")
+	var result Search = func(arg0, arg1 string) lisette.Option[int] {
+		ret := strings.Index(arg0, arg1)
+		return lisette.OptionFromCommaOk[int](ret, ret != -1)
+	}
+	for _, v := range xs {
+		result = keep(result, v)
+	}
+	return left == result("abc", "c")
+}

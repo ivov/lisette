@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  type Callback = fn(int) -> int
+  
+  struct Ops { f: fn(int) -> int }
+  
+  fn test(ops: Ref<Ops>, xs: Slice<int>) -> Slice<int> {
+    xs.map(ops.f as Callback)
+  }
+---
+package main
+
+type Callback = func(int) int
+
+type Ops struct {
+	f func(int) int
+}
+
+func test(ops *Ops, xs []int) []int {
+	callee := Callback(ops.f)
+	result := make([]int, len(xs))
+	for i, v := range xs {
+		result[i] = callee(v)
+	}
+	return result
+}

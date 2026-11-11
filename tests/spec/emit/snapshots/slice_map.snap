@@ -8,8 +8,10 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func test(s []int, f func(int) string) []string {
-	return lisette.SliceMap(s, f)
+	result := make([]string, len(s))
+	for i, v := range s {
+		result[i] = f(v)
+	}
+	return result
 }

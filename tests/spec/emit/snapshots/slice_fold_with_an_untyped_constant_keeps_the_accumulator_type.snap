@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn add(acc: int64, x: int64) -> int64 { acc + x }
+  
+  fn with_lambda(xs: Slice<int64>) -> int64 {
+    xs.fold<int64>(0, |acc, x| acc + x)
+  }
+  
+  fn test(xs: Slice<int64>) -> int64 {
+    with_lambda(xs) + xs.fold<int64>(0, add)
+  }
+---
+package main
+
+func add(acc, x int64) int64 {
+	return acc + x
+}
+
+func withLambda(xs []int64) int64 {
+	var acc int64 = 0
+	for _, x := range xs {
+		acc += x
+	}
+	return acc
+}
+
+func test(xs []int64) int64 {
+	left := withLambda(xs)
+	var result int64 = 0
+	for _, v := range xs {
+		result = add(result, v)
+	}
+	return left + result
+}

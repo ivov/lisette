@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn parse(s: string) -> Result<int, error> {
+    strconv.Atoi(s)
+  }
+  
+  fn test(xs: Slice<string>) -> Slice<Result<int, error>> {
+    xs.map(parse)
+  }
+---
+package main
+
+import (
+	"strconv"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func parse(s string) (int, error) {
+	return strconv.Atoi(s)
+}
+
+func test(xs []string) []lisette.Result[int, error] {
+	cb := parse
+	tagged := func(arg0 string) lisette.Result[int, error] {
+		return lisette.ResultFromPair[int](cb(arg0))
+	}
+	return lisette.SliceMap(xs, tagged)
+}

@@ -1,0 +1,73 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn source(seen: Channel<int>) -> Slice<int> {
+    seen.send(1)
+    [1, 2, 3]
+  }
+  
+  fn make_keeper(seen: Channel<int>) -> fn(int) -> bool {
+    seen.send(2)
+    |x| x > 1
+  }
+  
+  fn kept(seen: Channel<int>) -> Slice<int> {
+    source(seen).filter(make_keeper(seen))
+  }
+  
+  fn test() {
+    let seen = Channel.buffered<int>(8)
+    let got = kept(seen)
+    if got.length() != 2 {
+      panic("wrong elements")
+    }
+    if seen.length() != 2 {
+      panic("callee ran once per element")
+    }
+    if seen.receive() != Some(1) {
+      panic("callee ran before the source")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func source(seen chan int) []int {
+	lisette.ChannelSend(seen, 1)
+	return []int{1, 2, 3}
+}
+
+func makeKeeper(seen chan int) func(int) bool {
+	lisette.ChannelSend(seen, 2)
+	return func(x int) bool {
+		return x > 1
+	}
+}
+
+func kept(seen chan int) []int {
+	arg := source(seen)
+	callee := makeKeeper(seen)
+	var result []int
+	for _, v := range arg {
+		if callee(v) {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+func test() {
+	seen := make(chan int, 8)
+	got := kept(seen)
+	if len(got) != 2 {
+		panic("wrong elements")
+	}
+	if len(seen) != 2 {
+		panic("callee ran once per element")
+	}
+	if lisette.ChannelReceive(seen) != lisette.MakeOptionSome(1) {
+		panic("callee ran before the source")
+	}
+}

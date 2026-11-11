@@ -75,6 +75,17 @@ impl LaterStages {
     }
 }
 
+fn prelude_arg_context<'a>(
+    declared_param: Option<&Type>,
+    param_ty: Option<&'a Type>,
+) -> (bool, ExpressionContext<'a>) {
+    let suppress = declared_param.is_some_and(|p| matches!(p.unwrap_forall(), Type::Function(_)));
+    let arg_ctx = ExpressionContext::value()
+        .with_forced_tagged_go_function(suppress)
+        .with_generic_result_slot(declared_param, param_ty);
+    (suppress, arg_ctx)
+}
+
 impl Planner<'_> {
     pub(crate) fn stage_or_capture(&mut self, expression: &Expression, prefix: &str) -> ValuePlan {
         if matches!(
@@ -249,11 +260,7 @@ impl Planner<'_> {
         declared_param: Option<&Type>,
         param_ty: Option<&Type>,
     ) -> ValuePlan {
-        let suppress =
-            declared_param.is_some_and(|p| matches!(p.unwrap_forall(), Type::Function(_)));
-        let arg_ctx = ExpressionContext::value()
-            .with_forced_tagged_go_function(suppress)
-            .with_generic_result_slot(declared_param, param_ty);
+        let (suppress, arg_ctx) = prelude_arg_context(declared_param, param_ty);
         let staged = self.lower_composite_value(expression, arg_ctx);
 
         if suppress && let Some(adapter) = self.detect_lower_arg_to_tagged(expression, param_ty) {
@@ -263,6 +270,25 @@ impl Planner<'_> {
         }
 
         staged
+    }
+
+    pub(crate) fn prelude_callback_stages_as_is(
+        &self,
+        callback: &Expression,
+        declared_param: Option<&Type>,
+        param_ty: Option<&Type>,
+    ) -> bool {
+        let (suppress, arg_ctx) = prelude_arg_context(declared_param, param_ty);
+        let returns_never = callback
+            .get_type()
+            .get_function_ret()
+            .is_some_and(Type::is_never);
+        suppress
+            && !(arg_ctx.result_fills_type_parameter() && returns_never)
+            && self.go_function_value_bridge(callback, arg_ctx).is_none()
+            && self
+                .detect_lower_arg_to_tagged(callback, param_ty)
+                .is_none()
     }
 
     /// Detect whether a tagged-Go lowering applies. Pure: no emission.

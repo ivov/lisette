@@ -6,7 +6,9 @@ use crate::expressions::access::struct_call::emit_struct_literal;
 use crate::plan::bodies::AsyncKind;
 use syntax::program::DefinitionBody;
 
-use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::callable::{
+    CallableAbi, CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout,
+};
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::{FunctionLayout, SlotOrigin, ValueLayout};
 use crate::abi::transition::{emit_lisette_callback_wrapper, emit_unit_result_adapter};
@@ -33,6 +35,11 @@ enum FunctionValueAdapter {
     Layout(Box<(FunctionLayout, FunctionLayout)>),
 }
 
+pub(crate) enum GoFunctionValueBridge {
+    Layout(CoercionPlan),
+    Result(CallableAbi),
+}
+
 impl Planner<'_> {
     pub(crate) fn lower_value(
         &mut self,
@@ -40,41 +47,23 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         let expression = self.peel_go_slot_alias_cast(expression, ctx);
-        if self.is_go_callable(expression)
-            && let Some(callee) = self.resolve_callable_value(expression)
-            && matches!(callee.origin, CallableOrigin::GoInterop)
-        {
-            let abi = &callee.abi.result;
-            let matches_slot = self.go_fn_slot_abi(expression, ctx).as_ref() == Some(abi);
-            let target_layout =
-                self.value_layout(&expression.get_type(), ctx.function_slot_origin());
-            let same_abi = matches_slot
-                && matches!(
-                    &target_layout,
-                    ValueLayout::Function { layout, .. } if layout.return_abi == *abi
-                );
-            if !ctx.is_callee() && same_abi {
-                let source_layout = ValueLayout::Function {
-                    function_type: expression.get_type(),
-                    layout: callee.abi.function_layout(self),
-                };
-                let layout_coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
-                if !layout_coercion.is_identity() {
-                    let value = self.plan_operand(expression, ctx);
-                    return value.map_expression(|setup, value| {
-                        let (bridge_setup, value) = layout_coercion.lower(self, value);
-                        setup.extend(bridge_setup);
-                        value
-                    });
-                }
+        match self.go_function_value_bridge(expression, ctx) {
+            Some(GoFunctionValueBridge::Layout(layout_coercion)) => {
+                let value = self.plan_operand(expression, ctx);
+                return value.map_expression(|setup, value| {
+                    let (bridge_setup, value) = layout_coercion.lower(self, value);
+                    setup.extend(bridge_setup);
+                    value
+                });
             }
-            if !matches_slot {
+            Some(GoFunctionValueBridge::Result(abi)) => {
                 let mut setup = Vec::new();
-                let value = if self.go_fn_needs_lowered_tuple_adapter(expression, abi, ctx) {
+                let value = if self.go_fn_needs_lowered_tuple_adapter(expression, &abi.result, ctx)
+                {
                     self.emit_go_fn_lowered_tuple_adapter(&mut setup, expression)
                 } else if let CallableReturnAbi::Lowered(LoweredReturnAbi::Option(
                     OptionReturnAbi::Sentinel(value),
-                )) = abi
+                )) = &abi.result
                     && matches!(
                         self.go_fn_slot_abi(expression, ctx),
                         Some(CallableReturnAbi::Lowered(LoweredReturnAbi::Option(
@@ -84,12 +73,13 @@ impl Planner<'_> {
                 {
                     self.emit_go_fn_sentinel_adapter(&mut setup, expression, *value)
                 } else {
-                    self.emit_go_fn_wrapper(&mut setup, expression, &callee.abi)
+                    self.emit_go_fn_wrapper(&mut setup, expression, &abi)
                 };
                 return ValuePlan::computed(setup, value).stable_across_calls_if(
                     self.identifier_immune_to_calls(expression.unwrap_parens()),
                 );
             }
+            None => {}
         }
 
         if let Some(adapter) = self.function_value_adapter(expression, ctx) {
@@ -113,6 +103,39 @@ impl Planner<'_> {
         }
 
         self.plan_operand(expression, ctx)
+    }
+
+    pub(crate) fn go_function_value_bridge(
+        &self,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> Option<GoFunctionValueBridge> {
+        if !self.is_go_callable(expression) {
+            return None;
+        }
+        let callee = self.resolve_callable_value(expression)?;
+        if !matches!(callee.origin, CallableOrigin::GoInterop) {
+            return None;
+        }
+        let abi = &callee.abi.result;
+        let matches_slot = self.go_fn_slot_abi(expression, ctx).as_ref() == Some(abi);
+        let target_layout = self.value_layout(&expression.get_type(), ctx.function_slot_origin());
+        let same_abi = matches_slot
+            && matches!(
+                &target_layout,
+                ValueLayout::Function { layout, .. } if layout.return_abi == *abi
+            );
+        if !ctx.is_callee() && same_abi {
+            let source_layout = ValueLayout::Function {
+                function_type: expression.get_type(),
+                layout: callee.abi.function_layout(self),
+            };
+            let layout_coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
+            if !layout_coercion.is_identity() {
+                return Some(GoFunctionValueBridge::Layout(layout_coercion));
+            }
+        }
+        (!matches_slot).then_some(GoFunctionValueBridge::Result(callee.abi))
     }
 
     /// Normalize the callable's physical declaration layout to its value slot.
