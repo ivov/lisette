@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794419029565,
+  "lastUpdate": 1794419820200,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -53748,6 +53748,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/4c33d8f1af33bb726c85de92df44c54eeafccccd"
         },
         "date": 1794419027084,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 155237,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 41553,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30314,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19585,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15880,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14141,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9267,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7484,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10906,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 958,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "345d282e84731aaf65992b518144171ba47efa54",
+          "message": "fix: restore `t.run` subtests (#1655)",
+          "timestamp": "2026-11-11T18:56:36+01:00",
+          "tree_id": "aef2873b99119ea2993fb77f078c673b55b63cdb",
+          "url": "https://github.com/ivov/lisette/commit/345d282e84731aaf65992b518144171ba47efa54"
+        },
+        "date": 1794419818343,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
