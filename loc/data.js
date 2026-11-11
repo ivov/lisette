@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794419820200,
+  "lastUpdate": 1794431922582,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -53902,6 +53902,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "prelude",
             "value": 958,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "07725168cefb08cbb87904dd1f0660d08fb5f819",
+          "message": "fix: align nil channel semantics with Go (#1656)",
+          "timestamp": "2026-11-11T22:18:12+01:00",
+          "tree_id": "3641b2935452a5cbaacd54e0a60c00812b245cf6",
+          "url": "https://github.com/ivov/lisette/commit/07725168cefb08cbb87904dd1f0660d08fb5f819"
+        },
+        "date": 1794431919743,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 155177,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 41513,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30314,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19585,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15880,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14141,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9267,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7484,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 294,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10906,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 938,
             "unit": "lines"
           }
         ]
