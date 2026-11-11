@@ -126,6 +126,33 @@ fn subtests_run_and_report_under_their_parent() {
 }
 
 #[test]
+fn a_panic_in_a_helper_is_reported_at_the_panic_line() {
+    if !go_available() {
+        eprintln!("skipping: `go` not found");
+        return;
+    }
+    let (_dir, project) = scaffold("extpanic");
+    fs::write(
+        project.join("src/main.lis"),
+        "fn check_value(n: int) {\n  if n > 1 {\n    panic(\"helper panic\")\n  }\n}\n\nfn main() {\n  check_value(1)\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.test.lis"),
+        "#[test]\nfn panic_in_helper() {\n  check_value(5)\n}\n",
+    )
+    .unwrap();
+
+    let test = lis(&project, &["test"]);
+    let out = combined(&test);
+    assert!(!test.status.success(), "expected failure: {out}");
+    assert!(
+        out.contains("[main.lis:3:5]") && out.contains("panic(\"helper panic\")"),
+        "the panic must be anchored at the `panic` call, not at the test header: {out}"
+    );
+}
+
+#[test]
 fn build_never_emits_tests_and_cleans_leftovers() {
     if !go_available() {
         eprintln!("skipping: `go` not found");
@@ -148,6 +175,11 @@ fn build_never_emits_tests_and_cleans_leftovers() {
     assert!(
         !project.join("target/tests").exists(),
         "build must remove the external test package"
+    );
+    let main_go = fs::read_to_string(project.join("target/main.go")).unwrap();
+    assert!(
+        !main_go.contains("//line "),
+        "build must re-emit without the test build's line directives:\n{main_go}"
     );
 }
 

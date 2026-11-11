@@ -4,8 +4,8 @@ use crate::patterns::binding_decls::pattern_has_bindings;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoopHeader, LoweredBlock, LoweredStatement, Statement, define, discard,
-    with_setup,
+    ElseArm, IfOrigin, IfPlan, LoopHeader, LoweredBlock, LoweredStatement, Statement, define,
+    discard, with_setup,
 };
 use crate::plan::go_expression::BinaryOp;
 use crate::plan::local::GoIdentifier;
@@ -278,6 +278,7 @@ impl Planner<'_> {
                     statements: vec![LoweredStatement::Loop(plan).into()],
                 },
                 else_arm: ElseArm::None,
+                origin: IfOrigin::User,
             }),
         )
     }

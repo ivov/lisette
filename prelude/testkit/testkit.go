@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -59,11 +61,11 @@ func (c TestContext) Log(file int, lo, hi uint32, value string) {
 	c.t.Attr("lisette-log", hex.EncodeToString(inner))
 }
 
-// Recover turns an uncaught panic into a Lisette failure anchored at the test, so it reports like an
-// assertion instead of dumping a Go stack. Test wrappers defer this.
+// Recover turns an uncaught panic into a Lisette failure at its innermost `.lis` frame,
+// so it reports like an assertion instead of dumping a Go stack. Test wrappers defer this.
 func Recover(t *testing.T, file int, lo, hi uint32) {
 	if r := recover(); r != nil {
-		Fail(t, file, lo, hi, "panic", fmt.Sprintf("panic: %v", r))
+		failAtPanic(t, file, lo, hi, r)
 	}
 }
 
@@ -71,7 +73,32 @@ func Recover(t *testing.T, file int, lo, hi uint32) {
 // `t.run` handle. recover() must stay in this method to catch the subtest's panic.
 func (c TestContext) Recover(file int, lo, hi uint32) {
 	if r := recover(); r != nil {
-		Fail(c.t, file, lo, hi, "panic", fmt.Sprintf("panic: %v", r))
+		failAtPanic(c.t, file, lo, hi, r)
+	}
+}
+
+func failAtPanic(t *testing.T, file int, lo, hi uint32, value any) {
+	report(t, failRecord{
+		File:    file,
+		Lo:      lo,
+		Hi:      hi,
+		Kind:    "panic",
+		Message: fmt.Sprintf("panic: %v", value),
+		Frame:   panicFrame(),
+	})
+}
+
+func panicFrame() *frameRecord {
+	pcs := make([]uintptr, 64)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(1, pcs)])
+	for {
+		frame, more := frames.Next()
+		if strings.HasSuffix(frame.File, ".lis") {
+			return &frameRecord{Path: frame.File, Line: frame.Line}
+		}
+		if !more {
+			return nil
+		}
 	}
 }
 
@@ -92,12 +119,18 @@ func ErrOperand(value any) Operand {
 }
 
 type failRecord struct {
-	File     int       `json:"file"`
-	Lo       uint32    `json:"lo"`
-	Hi       uint32    `json:"hi"`
-	Kind     string    `json:"kind"`
-	Message  string    `json:"message"`
-	Operands []Operand `json:"operands,omitempty"`
+	File     int          `json:"file"`
+	Lo       uint32       `json:"lo"`
+	Hi       uint32       `json:"hi"`
+	Kind     string       `json:"kind"`
+	Message  string       `json:"message"`
+	Operands []Operand    `json:"operands,omitempty"`
+	Frame    *frameRecord `json:"frame,omitempty"`
+}
+
+type frameRecord struct {
+	Path string `json:"path"`
+	Line int    `json:"line"`
 }
 
 // failEnvelope frames one chunk; `lis` orders by I and concatenates D over 0..N.
@@ -111,7 +144,11 @@ type failEnvelope struct {
 // (not raw JSON) so a chunk boundary never splits a UTF-8 rune and the chunk needs no
 // JSON escaping, keeping each attr line's length predictable.
 func Fail(t *testing.T, file int, lo, hi uint32, kind, message string, operands ...Operand) {
-	inner, err := json.Marshal(failRecord{file, lo, hi, kind, message, operands})
+	report(t, failRecord{File: file, Lo: lo, Hi: hi, Kind: kind, Message: message, Operands: operands})
+}
+
+func report(t *testing.T, record failRecord) {
+	inner, err := json.Marshal(record)
 	if err != nil {
 		t.Fatalf("lisette: failed to encode failure record: %v", err)
 		return

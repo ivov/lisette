@@ -61,12 +61,11 @@ func sumBeforeBump(n int) lisette.Result[int, string] {
 
 func test() {
 	subject := sumBeforeBump(1)
-	if subject.Tag == lisette.ResultOk {
-		value := subject.OkVal
-		if value != 200 {
-			panic(fmt.Sprintf("the operand read a later write: %d", value))
-		}
-	} else {
+	if subject.Tag == lisette.ResultErr {
 		panic("parsing failed")
+	}
+	value := subject.OkVal
+	if value != 200 {
+		panic(fmt.Sprintf("the operand read a later write: %d", value))
 	}
 }

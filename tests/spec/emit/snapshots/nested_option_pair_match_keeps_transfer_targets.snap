@@ -47,17 +47,16 @@ loop_1:
 	for _, n := range []int{-1, 0, 1, 2} {
 		var v int
 		ret, ok := item(n)
-		if ok {
-			switch ret.value {
-			case 0:
-				continue
-			case 2:
-				break loop_1
-			default:
-				v = ret.value
-			}
-		} else {
+		if !ok {
 			continue
+		}
+		switch ret.value {
+		case 0:
+			continue
+		case 2:
+			break loop_1
+		default:
+			v = ret.value
 		}
 		total += v
 	}

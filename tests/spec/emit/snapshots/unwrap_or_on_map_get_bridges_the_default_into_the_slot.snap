@@ -87,11 +87,10 @@ func main() {
 		}
 		adapted.SomeVal = adapted2
 	}
-	if adapted.Tag == lisette.OptionSome {
-		fmt.Println(adapted.SomeVal().UnwrapOr(0))
-	} else {
+	if adapted.Tag == lisette.OptionNone {
 		panic("wrong function type")
 	}
+	fmt.Println(adapted.SomeVal().UnwrapOr(0))
 	opts := make(map[string]Opt)
 	fallback := Holder[*Thing]{}
 	chosen, ok2 := opts["k"]

@@ -15,8 +15,8 @@ use crate::patterns::sites::DeferredSubject;
 use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
 use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
-    Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement, SwitchKind,
-    assign, define, discard, expression_statement,
+    Definition, ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement,
+    SwitchKind, assign, define, discard, expression_statement,
 };
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
@@ -467,6 +467,7 @@ impl Planner<'_> {
                 condition: condition.condition,
                 then_body,
                 else_arm,
+                origin: IfOrigin::Match { else_label: None },
             })
             .into(),
         );
@@ -1051,6 +1052,7 @@ impl Planner<'_> {
                 condition: is_nil(err()),
                 then_body: ok_body,
                 else_arm,
+                origin: IfOrigin::Match { else_label: None },
             })
             .into(),
         );
@@ -1158,6 +1160,7 @@ impl Planner<'_> {
                 condition,
                 then_body: selected,
                 else_arm: ElseArm::from_body(fallback, selected_diverges),
+                origin: IfOrigin::Match { else_label: None },
             })
             .into(),
         );
@@ -1403,6 +1406,7 @@ fn pair_if(test: PairCondition, then_body: LoweredBlock, else_arm: ElseArm) -> I
         condition: test.condition,
         then_body,
         else_arm,
+        origin: IfOrigin::Match { else_label: None },
     }
 }
 

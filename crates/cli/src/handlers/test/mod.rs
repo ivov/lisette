@@ -101,12 +101,15 @@ pub fn test(path: Option<String>, go_flags: Vec<String>, selection: TestSelectio
             }
         };
 
-        let report = build_report_filtered(
+        let mut report = build_report_filtered(
             &outcome.test_index,
             &run.events,
             go_module,
             selected.as_ref(),
         );
+        if let Some(base) = &outcome.sourcemap_base {
+            report.anchor_panics_at_frames(&outcome.sources, base);
+        }
         print!(
             "{}",
             render(

@@ -25,7 +25,7 @@ use crate::patterns::matching::{
     prelude_variant, some_pattern_field,
 };
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
+    ElseArm, IfOrigin, IfPlan, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
     Statement, define, discard, expression_statement,
 };
 use crate::plan::go_expression::CompositeLayout;
@@ -469,6 +469,7 @@ impl Planner<'_> {
                 condition: fail_condition.condition,
                 then_body: fail_body,
                 else_arm: ElseArm::None,
+                origin: IfOrigin::User,
             })
             .into(),
         );
@@ -595,6 +596,7 @@ impl Planner<'_> {
                     statements: vec![loop_break(self).into()],
                 },
                 else_arm: ElseArm::None,
+                origin: IfOrigin::User,
             })
             .into(),
         );

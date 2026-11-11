@@ -44,10 +44,9 @@ func letMatch() {
 	var n2 int
 	x, err := strconv.Atoi("2")
 	n()
-	if err == nil {
-		n2 = x
-	} else {
+	if err != nil {
 		return
 	}
+	n2 = x
 	fmt.Println(n2)
 }

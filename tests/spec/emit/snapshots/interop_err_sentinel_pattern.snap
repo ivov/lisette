@@ -42,14 +42,13 @@ func main() {
 		} else {
 			result = lisette.MakeResultOk[lisette.Tuple2[rune, int], error](tup)
 		}
-		if result.Tag == lisette.ResultOk {
-			r = result.OkVal.First
-		} else {
+		if result.Tag == lisette.ResultErr {
 			if result.ErrVal == io.EOF {
 				break
 			}
 			panic("error")
 		}
+		r = result.OkVal.First
 		fmt.Printf("%c", r)
 	}
 }

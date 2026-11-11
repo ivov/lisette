@@ -14,7 +14,7 @@ use crate::control_flow::propagation::plain_return;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{PartialVariant, PreludeVariant, prelude_constructor};
 use crate::plan::bodies::{
-    Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define,
+    Definition, ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, Statement, define,
     expression_statement,
 };
 use crate::plan::calls::TaggedArgumentAdapter;
@@ -51,6 +51,7 @@ pub(crate) fn tag_check_with_initializer(
         condition,
         then_body: LoweredBlock { statements },
         else_arm: ElseArm::None,
+        origin: IfOrigin::User,
     })
 }
 
