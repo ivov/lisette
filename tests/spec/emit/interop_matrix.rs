@@ -3004,6 +3004,30 @@ pub fn Events() -> Option<Channel<int>>
 }
 
 #[test]
+fn interop_zero_struct_channel_fields_keep_go_blocking() {
+    let input = r#"
+import "go:example.com/nilchan"
+
+fn main() {
+  let box = nilchan.Empty()
+  let _ = box.Tx.send(1)
+  let _ = box.Ch.receive()
+  for _ in box.Rx {}
+}
+"#;
+    let typedef = r#"
+pub fn Empty() -> Box
+
+pub struct Box {
+  pub Rx: Receiver<int>,
+  pub Tx: Sender<int>,
+  pub Ch: Channel<int>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/nilchan", typedef)]);
+}
+
+#[test]
 fn interop_comma_ok_map_return_keeps_bool() {
     let input = r#"
 import "go:example.com/reg"

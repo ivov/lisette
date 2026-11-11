@@ -18,10 +18,8 @@ type Inbox = chan int
 
 func drain(ch Inbox) int {
 	total := 0
-	if ch != nil {
-		for value := range ch {
-			total += value
-		}
+	for value := range ch {
+		total += value
 	}
 	return total
 }

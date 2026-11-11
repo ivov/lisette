@@ -17,9 +17,7 @@ func process(_ int) {}
 
 func test() {
 	ch := make(chan int)
-	if ch != nil {
-		for v := range ch {
-			process(v)
-		}
+	for v := range ch {
+		process(v)
 	}
 }

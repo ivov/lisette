@@ -35,10 +35,8 @@ func test() {
 	lisette.SenderSend(tx, 1)
 	lisette.SenderClose(tx)
 	total := 0
-	if rx != nil {
-		for value := range rx {
-			total += value
-		}
+	for value := range rx {
+		total += value
 	}
 	if total != 1 {
 		panic(fmt.Sprintf("expected 1, got %d", total))

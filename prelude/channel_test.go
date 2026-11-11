@@ -1,6 +1,10 @@
 package lisette
 
-import "testing"
+import (
+	"sync"
+	"testing"
+	"time"
+)
 
 func recoveredError(fn func()) (recovered error) {
 	defer func() {
@@ -83,47 +87,40 @@ func TestChannelSplitSendReceive(t *testing.T) {
 	}
 }
 
-func TestNilChannelReadsAsClosed(t *testing.T) {
+func TestNilChannelSendAndReceiveBlock(t *testing.T) {
 	var ch chan int
-	if ChannelReceive(ch).IsSome() {
-		t.Fatal("expected None receiving from a nil channel")
+	operations := []struct {
+		name string
+		call func()
+	}{
+		{"ChannelSend", func() { ChannelSend(ch, 42) }},
+		{"SenderSend", func() { SenderSend[int](ch, 42) }},
+		{"ChannelReceive", func() { ChannelReceive(ch) }},
+		{"ReceiverReceive", func() { ReceiverReceive[int](ch) }},
 	}
-	if ReceiverReceive[int](ch).IsSome() {
-		t.Fatal("expected None receiving from a nil receiver")
+	returned := make(chan string, len(operations))
+	var started sync.WaitGroup
+	started.Add(len(operations))
+	for _, operation := range operations {
+		go func() {
+			started.Done()
+			operation.call()
+			returned <- operation.name
+		}()
 	}
-	if ChannelSend(ch, 42) {
-		t.Fatal("expected send on a nil channel to return false")
+	started.Wait()
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case name := <-returned:
+		t.Fatalf("%s returned on a nil channel, Go blocks forever", name)
+	default:
 	}
-	if SenderSend[int](ch, 42) {
-		t.Fatal("expected send on a nil sender to return false")
-	}
+}
+
+func TestNilChannelCloseReturns(t *testing.T) {
+	var ch chan int
 	ChannelClose(ch)
 	SenderClose[int](ch)
-}
-
-func TestChannelRangeOverNilEndsImmediately(t *testing.T) {
-	var ch chan int
-	count := 0
-	for range ChannelRange[int](ch) {
-		count++
-	}
-	if count != 0 {
-		t.Fatalf("expected no iterations over a nil channel, got %d", count)
-	}
-}
-
-func TestChannelRangePassesLiveChannelThrough(t *testing.T) {
-	ch := make(chan int, 2)
-	ch <- 1
-	ch <- 2
-	close(ch)
-	var got []int
-	for v := range ChannelRange[int](ch) {
-		got = append(got, v)
-	}
-	if len(got) != 2 || got[0] != 1 || got[1] != 2 {
-		t.Fatalf("expected [1 2], got %v", got)
-	}
 }
 
 func TestSendOnClosedChannelPanicText(t *testing.T) {
