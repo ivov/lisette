@@ -892,7 +892,7 @@ fn print_test_topic() {
     print_test_code(
         "        #[test]
         fn groups_cases(t) {
-          let _ = t.run(\"small inputs\", |t| {
+          t.run(\"small inputs\", |t| {
             assert normalize(1) == 1
           })
         }",
