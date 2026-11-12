@@ -459,7 +459,7 @@ impl Planner<'_> {
                     setup.extend(value_setup);
                     if pin_value {
                         sent = GoExpression::identifier(
-                            self.hoist_tmp_value_statement(setup, "send_val", sent),
+                            self.hoist_tmp_value_statement(setup, "sendVal", sent),
                         );
                     }
                     PreparedChannelOperation::Send(channel_value, sent)

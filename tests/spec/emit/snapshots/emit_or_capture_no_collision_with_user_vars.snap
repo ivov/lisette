@@ -17,9 +17,9 @@ package main
 import "fmt"
 
 func main() {
-	bound_0 := 10
+	bound0 := 10
 	for i := range 1 + 2 {
 		fmt.Println(i)
 	}
-	fmt.Println(bound_0)
+	fmt.Println(bound0)
 }

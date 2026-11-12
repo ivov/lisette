@@ -44,7 +44,7 @@ type Node struct {
 
 func main() {
 	n := MakeNodeBranch(MakeNodeLeaf(1), MakeNodeLeaf(2))
-	ptr_1 := 3
+	ptr1 := 3
 	fmt.Println(n)
-	fmt.Println(ptr_1)
+	fmt.Println(ptr1)
 }

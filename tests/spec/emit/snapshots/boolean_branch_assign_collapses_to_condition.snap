@@ -14,8 +14,8 @@ package main
 
 func test(a, b int) bool {
 	direct := a > 0
-	and_arm := a > 0 && b > 1
-	or_arm := a > 0 || b > 1
+	andArm := a > 0 && b > 1
+	orArm := a > 0 || b > 1
 	negated := !(a > 0)
-	return direct && and_arm && or_arm && negated
+	return direct && andArm && orArm && negated
 }

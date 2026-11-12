@@ -352,6 +352,15 @@ impl ScopeState {
         }
     }
 
+    pub(crate) fn binds_go_name_for_other_source_name(
+        &self,
+        go_name: &str,
+        lisette_name: &str,
+    ) -> bool {
+        self.visible_bindings()
+            .any(|binding| binding.name != lisette_name && binding.value.mentions(go_name))
+    }
+
     pub(crate) fn has_other_binding_for_go_name(&self, go_name: &str, ids: &[BindingId]) -> bool {
         self.visible_bindings().any(|binding| {
             binding.value.mentions(go_name)

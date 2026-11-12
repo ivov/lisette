@@ -20,15 +20,15 @@ import "fmt"
 
 func main() {
 	ch := make(chan int, 1)
-	var to_send int
+	var toSend int
 	if true {
-		to_send = 1
+		toSend = 1
 	} else {
-		to_send = 2
+		toSend = 2
 	}
 	var result int
 	select {
-	case ch <- to_send:
+	case ch <- toSend:
 		result = 0
 	default:
 		result = 1

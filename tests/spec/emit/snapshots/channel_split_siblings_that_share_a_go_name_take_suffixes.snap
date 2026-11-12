@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  fn main() {
+    let ch = Channel.buffered<int>(1)
+    let (user_id, user_id_) = ch.split()
+    user_id.send(5)
+    match user_id_.receive() {
+      Some(value) => {
+        if value != 5 { panic("the receiver read the wrong value") }
+      },
+      None => panic("the channel closed"),
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	ch := make(chan int, 1)
+	var userId chan<- int = ch
+	var userId2 <-chan int = ch
+	lisette.SenderSend(userId, 5)
+	subject := lisette.ReceiverReceive(userId2)
+	if subject.Tag == lisette.OptionNone {
+		panic("the channel closed")
+	}
+	if subject.SomeVal != 5 {
+		panic("the receiver read the wrong value")
+	}
+}

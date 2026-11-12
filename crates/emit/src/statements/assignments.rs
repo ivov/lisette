@@ -397,7 +397,7 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<Statement>,
         expression: &Expression,
-        prefix: &str,
+        prefix: &'static str,
         ordering: PlaceOrdering,
     ) -> GoExpression {
         let plan = self.lower_composite_value(expression, ExpressionContext::value());

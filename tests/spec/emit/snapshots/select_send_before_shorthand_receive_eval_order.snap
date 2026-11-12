@@ -41,15 +41,15 @@ func choose(log chan int, tag int, ch chan int) chan int {
 
 func main() {
 	log := make(chan int, 8)
-	send_ch := make(chan int, 1)
-	recv_ch := make(chan int, 1)
-	lisette.ChannelSend(recv_ch, 42)
+	sendCh := make(chan int, 1)
+	recvCh := make(chan int, 1)
+	lisette.ChannelSend(recvCh, 42)
 	var tmp int
-	send_val := mark(log, 1)
-	ch := choose(log, 2, recv_ch)
+	sendVal := mark(log, 1)
+	ch := choose(log, 2, recvCh)
 	for {
 		select {
-		case send_ch <- send_val:
+		case sendCh <- sendVal:
 			tmp = 0
 		case v, ok := <-ch:
 			if ok {

@@ -15,7 +15,7 @@ package main
 import "fmt"
 
 func main() {
-	imag_part := 4.0
-	c := 3.0 + complex(0, imag_part*1)
+	imagPart := 4.0
+	c := 3.0 + complex(0, imagPart*1)
 	fmt.Printf("complex: %v\n", c)
 }

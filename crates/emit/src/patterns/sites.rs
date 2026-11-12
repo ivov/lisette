@@ -11,7 +11,7 @@ use crate::Planner;
 use crate::calls::bound_value::PairCondition;
 use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::context::expression::ExpressionContext;
-use crate::names::go_name::{self, GeneratedPackage};
+use crate::names::go_name::GeneratedPackage;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::binding_emit::{
     self, AssertedPattern, apply_refutable_root_assertion, apply_root_assertion,
@@ -54,7 +54,7 @@ pub(crate) enum PatternSubject<'a> {
     Expression {
         scrutinee: &'a Expression,
         pattern: &'a Pattern,
-        temp_hint: Option<&'a str>,
+        temp_hint: Option<&'static str>,
     },
 }
 
@@ -68,7 +68,7 @@ impl<'a> PatternSubject<'a> {
     pub(crate) fn expression(
         scrutinee: &'a Expression,
         pattern: &'a Pattern,
-        temp_hint: Option<&'a str>,
+        temp_hint: Option<&'static str>,
     ) -> Self {
         Self::Expression {
             scrutinee,
@@ -462,11 +462,16 @@ impl Planner<'_> {
         let name = field_binding(field)
             .flatten()
             .filter(|_| !self.facts.is_unused_binding(field))?;
-        let escaped = go_name::escape_reserved(name.name).into_owned();
-        let go_name = if self.shadows_declaration(&escaped) {
-            self.fresh_local(Some(name.name))
+        let source = name.go_name();
+        let preferred = source.preferred();
+        let go_name = if self.shadows_declaration(&preferred)
+            || self
+                .scope
+                .binds_go_name_for_other_source_name(&preferred, name.name)
+        {
+            self.fresh_source(&source)
         } else {
-            self.scope.new_local_identifier(escaped)
+            self.scope.new_local_identifier(preferred)
         };
         self.declare(&go_name);
         Some((name, go_name))
@@ -797,13 +802,13 @@ impl Planner<'_> {
                 }
                 BindingTarget::Named { go_name, ty } => (go_name, ty),
             };
-            let preferred = if failure_uses.is_some_and(|uses| uses.contains(go_name)) {
-                self.fresh_local(Some(&binding.lisette_name))
+            let go_name = if failure_uses.is_some_and(|uses| uses.contains(&go_name.preferred())) {
+                let fresh = self.fresh_declared_source(go_name);
+                self.scope
+                    .bind_source(&binding.lisette_name, &binding.binding_ids, fresh)
             } else {
-                GoIdentifier::from(go_name)
+                self.claim_declared_binding(&binding.lisette_name, &binding.binding_ids, go_name)
             };
-            let go_name =
-                self.claim_declared_binding(&binding.lisette_name, &binding.binding_ids, preferred);
             let go_type = self.go_type(ty);
             statements.push(
                 LoweredStatement::VarDecl {
@@ -1028,7 +1033,13 @@ impl Planner<'_> {
                 let Some(go_name) = self.go_name_for_binding(pattern) else {
                     return (GoIdentifier::external("_".to_string()), false);
                 };
-                if self.scope.resolve_identifier_binding(identifier).is_some() {
+                let preferred = go_name.preferred();
+                if self.scope.resolve_identifier_binding(identifier).is_some()
+                    || self
+                        .scope
+                        .binds_go_name_for_other_source_name(&preferred, identifier)
+                    || self.package.is_package_block_name(&preferred)
+                {
                     let name = self.fresh_local(Some("recv"));
                     return (name.clone(), true);
                 }

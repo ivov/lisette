@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::control_flow::fallible;
 use crate::names::go_name;
+use crate::names::source_name::SourceName;
 use crate::plan::values::GoExpression;
 use syntax::ast::{Generic, Pattern, RestPattern, StructFieldDefinition, StructFields};
 use syntax::go_names;
@@ -9,25 +10,25 @@ use syntax::types;
 use syntax::types::{Type, substitute};
 
 impl Planner<'_> {
-    pub(crate) fn go_name_for_binding(&self, pattern: &Pattern) -> Option<String> {
+    pub(crate) fn go_name_for_binding(&self, pattern: &Pattern) -> Option<SourceName> {
         let name = match pattern {
-            Pattern::Identifier { identifier, .. } => identifier.as_str(),
-            Pattern::AsBinding { name, .. } => name.as_str(),
+            Pattern::Identifier { identifier, .. } => identifier,
+            Pattern::AsBinding { name, .. } => name,
             _ => return None,
         };
         if self.facts.is_unused_binding(pattern) {
             None
         } else {
-            Some(name.to_string())
+            Some(SourceName::new(name))
         }
     }
 
-    pub(crate) fn go_name_for_rest_binding(&self, rest: &RestPattern) -> Option<String> {
+    pub(crate) fn go_name_for_rest_binding(&self, rest: &RestPattern) -> Option<SourceName> {
         if let RestPattern::Bind { name, .. } = rest {
             if self.facts.is_unused_rest_binding(rest) {
                 None
             } else {
-                Some(name.to_string())
+                Some(SourceName::new(name))
             }
         } else {
             None

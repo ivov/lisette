@@ -38,6 +38,6 @@ func test() int {
 		}
 		break
 	}
-	ch_1 := result + 1
-	return ch_1
+	ch1 := result + 1
+	return ch1
 }

@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  fn item() -> Option<int> {
+    Some(9)
+  }
+  
+  fn main() {
+    let mut total = 0
+    for user_id in 0..2 {
+      let Some(user_id_) = item() else { return }
+      total += user_id * 10 + user_id_
+    }
+    if total != 28 { panic("the binding read the wrong value") }
+  }
+---
+package main
+
+func item() (int, bool) {
+	return 9, true
+}
+
+func main() {
+	total := 0
+	for userId := range 2 {
+		userId2, ok := item()
+		if !ok {
+			return
+		}
+		total += userId*10 + userId2
+	}
+	if total != 28 {
+		panic("the binding read the wrong value")
+	}
+}

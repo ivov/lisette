@@ -40,9 +40,9 @@ func main() {
 	}
 	ret3, ret4 := pair(lisette.MakeOptionSome(&x))
 	tup2 := lisette.MakeTuple2(ret3, ret4)
-	direct_left := tup2.First
-	direct_right := tup2.Second
-	if direct_left.IsNone() || direct_right.IsNone() {
+	directLeft := tup2.First
+	directRight := tup2.Second
+	if directLeft.IsNone() || directRight.IsNone() {
 		panic("generic direct tuple")
 	}
 }

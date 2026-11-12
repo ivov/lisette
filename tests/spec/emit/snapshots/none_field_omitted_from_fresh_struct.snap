@@ -76,11 +76,11 @@ func test() {
 		panic("an update should leave the original alone")
 	}
 	log := make(chan int, 4)
-	looked_up := Person{
+	lookedUp := Person{
 		name:  "d",
 		email: lisette.OptionFromCommaOk[string](lookup(log)),
 	}
-	if !looked_up.email.IsNone() {
+	if !lookedUp.email.IsNone() {
 		panic("a looked-up email should be None")
 	}
 	if len(log) != 1 {

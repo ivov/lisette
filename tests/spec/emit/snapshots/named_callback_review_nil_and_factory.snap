@@ -45,12 +45,12 @@ func main() {
 	if !ok {
 		panic("nil callback type assertion failed")
 	}
-	nil_named := named(ast.Filter(zero))
-	if !reflect.ValueOf(nil_named).IsNil() {
+	nilNamed := named(ast.Filter(zero))
+	if !reflect.ValueOf(nilNamed).IsNil() {
 		panic("named conversion made nil nonnil")
 	}
-	nil_plain := plain(ast.Filter(zero))
-	if !reflect.ValueOf(nil_plain).IsNil() {
+	nilPlain := plain(ast.Filter(zero))
+	if !reflect.ValueOf(nilPlain).IsNil() {
 		panic("plain conversion made nil nonnil")
 	}
 	made := 0

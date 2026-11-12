@@ -28,6 +28,6 @@ func main() {
 	entry := m["a"]
 	entry.x = 2
 	m["a"] = entry
-	entry_1 := 3
-	fmt.Println(entry_1)
+	entry1 := 3
+	fmt.Println(entry1)
 }

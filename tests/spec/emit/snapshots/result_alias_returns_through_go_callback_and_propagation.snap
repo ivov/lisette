@@ -42,8 +42,8 @@ type SplitOut = lisette.Result[lisette.Tuple2[int, []byte], error]
 
 type Done = lisette.Result[struct{}, error]
 
-func split(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
-	ret, ret2, ret3 := bufio.ScanWords(data, at_eof)
+func split(data []byte, atEof bool) (lisette.Tuple2[int, []byte], error) {
+	ret, ret2, ret3 := bufio.ScanWords(data, atEof)
 	tup := lisette.MakeTuple2(ret, ret2)
 	var result lisette.Result[lisette.Tuple2[int, []byte], error]
 	if ret3 != nil {

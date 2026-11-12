@@ -86,14 +86,14 @@ func main() {
 	for _, extra := range [][]int{{}, {7}} {
 		holder := Holder{slc: []int{1, 2}}
 		calls := 0
-		make_extra := func() []int {
+		makeExtra := func() []int {
 			calls++
 			holder.slc = []int{3, 4}
 			return extra
 		}
 		var result []int
 		recv2 := holder.slc
-		added2 := make_extra()
+		added2 := makeExtra()
 		result = func() []int {
 			if len(added2) == 0 {
 				return slices.Clone(recv2)

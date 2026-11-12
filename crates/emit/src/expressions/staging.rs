@@ -87,7 +87,11 @@ fn prelude_arg_context<'a>(
 }
 
 impl Planner<'_> {
-    pub(crate) fn stage_or_capture(&mut self, expression: &Expression, prefix: &str) -> ValuePlan {
+    pub(crate) fn stage_or_capture(
+        &mut self,
+        expression: &Expression,
+        prefix: &'static str,
+    ) -> ValuePlan {
         if matches!(
             expression,
             Expression::Literal { .. } | Expression::Identifier { .. }
@@ -103,7 +107,7 @@ impl Planner<'_> {
 
     /// Pin a staged operand's value into a temp so it evaluates before any
     /// later sibling.
-    pub(crate) fn pin_staged(&mut self, staged: &mut ValuePlan, prefix: &str) {
+    pub(crate) fn pin_staged(&mut self, staged: &mut ValuePlan, prefix: &'static str) {
         staged.pin(|setup, value| self.hoist_tmp_value_statement(setup, prefix, value));
     }
 
@@ -111,7 +115,7 @@ impl Planner<'_> {
         &mut self,
         source: &Expression,
         mut value: ValuePlan,
-        prefix: &str,
+        prefix: &'static str,
     ) -> ValuePlan {
         if !value.can_delay()
             && value.expression().constant_kind().is_none()
@@ -130,7 +134,7 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<Statement>,
         expression: &Expression,
-        prefix: &str,
+        prefix: &'static str,
         boundary: CaptureBoundary,
     ) -> GoExpression {
         let plan = self.lower_composite_value(expression, ExpressionContext::value());
@@ -386,7 +390,7 @@ impl Planner<'_> {
         &mut self,
         stages: Vec<ValuePlan>,
         boundary: CaptureBoundary,
-        prefix: &str,
+        prefix: &'static str,
     ) -> SequencedValues {
         let eager = boundary.delays_reads();
         let mut later = LaterStages::default();

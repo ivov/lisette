@@ -307,7 +307,7 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
         plan: ValuePlan,
-        hint: &str,
+        hint: &'static str,
         temp_type: Option<GoType>,
         statements: &mut Vec<Statement>,
     ) -> AssertOperand {

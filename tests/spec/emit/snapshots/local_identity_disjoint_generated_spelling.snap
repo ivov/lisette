@@ -35,10 +35,10 @@ func main() {
 	total := 0
 	for {
 		if next.Tag == lisette.OptionSome {
-			value_1 := next.SomeVal
+			value1 := next.SomeVal
 			g := func() int {
-				value_1_2 := value_1 + 1
-				return value_1_2 + f()
+				value1_2 := value1 + 1
+				return value1_2 + f()
 			}
 			total += g()
 			next = lisette.MakeOptionNone[int]()
@@ -52,10 +52,10 @@ func main() {
 	var tmp int
 	for {
 		select {
-		case value_1, ok := <-ch:
+		case value1, ok := <-ch:
 			if ok {
 				g := func() int {
-					return value_1 + f()
+					return value1 + f()
 				}
 				tmp = g()
 			} else {

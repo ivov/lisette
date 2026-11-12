@@ -72,8 +72,8 @@ func parameter(getItems2 int) int {
 }
 
 func armInOtherArm() {
-	if len_2, err := strconv.Atoi("bad"); err == nil {
-		fmt.Println(len_2)
+	if len2, err := strconv.Atoi("bad"); err == nil {
+		fmt.Println(len2)
 	} else {
 		fmt.Println(len_())
 	}

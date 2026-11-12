@@ -10,7 +10,6 @@ use crate::abi::is_closure_literal;
 use crate::abi::layout::SlotOrigin;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::prelude_call;
-use crate::escape_reserved;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
     PlacePlan, Statement, assign, define,
@@ -448,23 +447,18 @@ impl Planner<'_> {
     }
 
     fn accumulator_slot_name(&mut self, pattern: &Pattern, receiver: &Expression) -> GoIdentifier {
-        let Pattern::Identifier {
-            identifier,
-            binding,
-            ..
-        } = pattern
-        else {
+        let Pattern::Identifier { binding, .. } = pattern else {
             return self.fresh_local(Some("result"));
         };
         match self.go_name_for_binding(pattern) {
             Some(name)
                 if self
                     .scope
-                    .expression_reads_go_name(receiver, &escape_reserved(&name)) =>
+                    .expression_reads_go_name(receiver, &name.preferred()) =>
             {
-                self.fresh_local(Some(identifier))
+                self.fresh_source(&name)
             }
-            Some(name) => self.claim_declared_go_name(identifier, binding.as_slice(), name),
+            Some(name) => self.claim_declared_go_name(binding.as_slice(), &name),
             None => self.fresh_local(Some("result")),
         }
     }
@@ -505,7 +499,7 @@ impl Planner<'_> {
                 name
             }
             None => match self.go_name_for_binding(pattern) {
-                Some(name) => self.claim_declared_binding(identifier, ids.as_slice(), name),
+                Some(name) => self.claim_declared_binding(identifier, ids.as_slice(), &name),
                 None => GoIdentifier::external("_".to_string()),
             },
         }

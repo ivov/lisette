@@ -536,7 +536,11 @@ impl Planner<'_> {
     /// `fallback` controls what happens when the pattern is unused or non-identifier:
     /// - `Some(hint)`: generate a fresh var (needed for C-style loops where `_` is invalid)
     /// - `None`: use `"_"` (valid in `for range` syntax)
-    fn bind_loop_pattern(&mut self, pattern: &Pattern, fallback: Option<&str>) -> GoIdentifier {
+    fn bind_loop_pattern(
+        &mut self,
+        pattern: &Pattern,
+        fallback: Option<&'static str>,
+    ) -> GoIdentifier {
         if let Pattern::Identifier {
             identifier,
             binding,
@@ -544,12 +548,13 @@ impl Planner<'_> {
         } = pattern
             && let Some(go_name) = self.go_name_for_binding(pattern)
         {
-            let go_name = if self.scope.has_binding_for_go_name(&go_name)
-                || self.scope.is_go_name_declared(&go_name)
+            let preferred = go_name.preferred();
+            let go_name = if self.scope.has_binding_for_go_name(&preferred)
+                || self.shadows_declaration(&preferred)
             {
-                self.fresh_local(Some(&go_name))
+                self.fresh_source(&go_name)
             } else {
-                self.scope.new_local_identifier(go_name)
+                self.scope.new_local_identifier(preferred)
             };
             return self
                 .scope

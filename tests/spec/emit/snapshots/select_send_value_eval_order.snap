@@ -18,13 +18,13 @@ func makeCh() chan int {
 }
 
 func main() {
-	var to_send int
+	var toSend int
 	if true {
-		to_send = 1
+		toSend = 1
 	} else {
-		to_send = 0
+		toSend = 0
 	}
 	select {
-	case makeCh() <- to_send:
+	case makeCh() <- toSend:
 	}
 }

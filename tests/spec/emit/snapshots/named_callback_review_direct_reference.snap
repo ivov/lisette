@@ -52,8 +52,8 @@ func main() {
 	if !original("after") {
 		panic("reference write detached")
 	}
-	returned_view := returned(&original)
-	replace(returned_view, func(s string) bool {
+	returnedView := returned(&original)
+	replace(returnedView, func(s string) bool {
 		hits += 100
 		return s == "last"
 	})

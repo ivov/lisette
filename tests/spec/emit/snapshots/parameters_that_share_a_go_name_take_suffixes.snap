@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  fn pick(x12: int, x_1: int, x1: int) -> int {
+    x12 + x_1 * 10 + x1 * 100
+  }
+  
+  fn main() {
+    if pick(1, 2, 3) != 321 { panic("a parameter read the wrong value") }
+  }
+---
+package main
+
+func pick(x12, x1, x1_2 int) int {
+	return x12 + x1*10 + x1_2*100
+}
+
+func main() {
+	if pick(1, 2, 3) != 321 {
+		panic("a parameter read the wrong value")
+	}
+}

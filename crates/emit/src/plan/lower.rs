@@ -6,6 +6,7 @@ use crate::calls::predicates::strip_negations;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::{ForwardedTail, plain_return};
 use crate::control_flow::targets::legalize_source_loop;
+use crate::definitions::toplevel::ConstPlacement;
 use crate::plan::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
     LoweredStatement, PlacePlan, Statement, directed_first, with_setup,
@@ -360,7 +361,7 @@ impl Planner<'_> {
                 let Some(value) = value.value() else {
                     return LoweredStatement::Block(LoweredBlock { statements: vec![] }).into();
                 };
-                let statement = self.lower_const(identifier, value, ty);
+                let statement = self.lower_const(identifier, value, ty, ConstPlacement::Local);
                 self.directed_at(expression, statement)
             }
             Expression::Return {

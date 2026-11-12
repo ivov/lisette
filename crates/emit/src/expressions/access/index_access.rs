@@ -66,7 +66,7 @@ impl Planner<'_> {
         base: &Expression,
         mut base_staged: ValuePlan,
         index: &Expression,
-        prefix: &str,
+        prefix: &'static str,
     ) -> ValuePlan {
         let index_staged = self.lower_composite_value(index, ExpressionContext::value());
         let index_effects = index_staged.effects();

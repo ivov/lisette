@@ -118,72 +118,72 @@ func pair(n int) (int, *int) {
 }
 
 func main() {
-	var passed_15 bool
+	var passed15 bool
 	if n, ok := optExplicit(4); ok {
-		passed_15 = n == 4
+		passed15 = n == 4
 	} else {
-		passed_15 = false
+		passed15 = false
 	}
-	check(passed_15)
-	var passed_16 bool
+	check(passed15)
+	var passed16 bool
 	if _, ok := optExplicit(0); ok {
-		passed_16 = false
+		passed16 = false
 	} else {
-		passed_16 = true
+		passed16 = true
 	}
-	check(passed_16)
-	var passed_17 bool
+	check(passed16)
+	var passed17 bool
 	if n, ok := optTry(4); ok {
-		passed_17 = n == 5
+		passed17 = n == 5
 	} else {
-		passed_17 = false
+		passed17 = false
 	}
-	check(passed_17)
-	var passed_18 bool
+	check(passed17)
+	var passed18 bool
 	if _, ok := optTry(0); ok {
-		passed_18 = false
+		passed18 = false
 	} else {
-		passed_18 = true
+		passed18 = true
 	}
-	check(passed_18)
-	var passed_19 bool
+	check(passed18)
+	var passed19 bool
 	if n, err := resTry(4); err == nil {
-		passed_19 = n == 5
+		passed19 = n == 5
 	} else {
-		passed_19 = false
+		passed19 = false
 	}
-	check(passed_19)
-	var passed_20 bool
+	check(passed19)
+	var passed20 bool
 	if _, err := resTry(0); err == nil {
-		passed_20 = false
+		passed20 = false
 	} else {
-		passed_20 = true
+		passed20 = true
 	}
-	check(passed_20)
-	passed_21 := partialForward(0).Tag == lisette.PartialErr
-	check(passed_21)
-	var passed_22 bool
+	check(passed20)
+	passed21 := partialForward(0).Tag == lisette.PartialErr
+	check(passed21)
+	var passed22 bool
 	subject := partialForward(1)
 	if subject.Tag == lisette.PartialOk {
-		passed_22 = subject.OkVal == 1
+		passed22 = subject.OkVal == 1
 	} else {
-		passed_22 = false
+		passed22 = false
 	}
-	check(passed_22)
-	var passed_23 bool
+	check(passed22)
+	var passed23 bool
 	subject3 := partialForward(2)
 	if subject3.Tag == lisette.PartialBoth {
-		passed_23 = subject3.OkVal == 2
+		passed23 = subject3.OkVal == 2
 	} else {
-		passed_23 = false
+		passed23 = false
 	}
-	check(passed_23)
+	check(passed23)
 	ret, ret2 := pair(8)
 	option := lisette.OptionFromNilable[*int](ret2, ret2 == nil)
 	tup := lisette.MakeTuple2(ret, option)
 	n := tup.First
 	m := tup.Second
 	check(n == 8)
-	passed_26 := m.Tag == lisette.OptionSome && *m.SomeVal == 9
-	check(passed_26)
+	passed26 := m.Tag == lisette.OptionSome && *m.SomeVal == 9
+	check(passed26)
 }

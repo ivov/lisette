@@ -25,8 +25,8 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func splitWords(data []byte, at_eof bool) (lisette.Tuple2[int, []byte], error) {
-	ret, ret2, ret3 := bufio.ScanWords(data, at_eof)
+func splitWords(data []byte, atEof bool) (lisette.Tuple2[int, []byte], error) {
+	ret, ret2, ret3 := bufio.ScanWords(data, atEof)
 	tup := lisette.MakeTuple2(ret, ret2)
 	var result lisette.Result[lisette.Tuple2[int, []byte], error]
 	if ret3 != nil {
@@ -46,8 +46,8 @@ func main() {
 		return ret.First, ret.Second, ret2
 	}
 	var forwarded bufio.SplitFunc = bufio.ScanWords
-	var literal bufio.SplitFunc = func(data []byte, at_eof bool) (int, []byte, error) {
-		return bufio.ScanWords(data, at_eof)
+	var literal bufio.SplitFunc = func(data []byte, atEof bool) (int, []byte, error) {
+		return bufio.ScanWords(data, atEof)
 	}
 	_ = annotated
 	_ = forwarded

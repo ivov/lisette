@@ -12,6 +12,6 @@ package main
 
 func test(measured float64) float64 {
 	promoted := max(1, 2.5)
-	from_operand := max(1, measured)
-	return promoted + from_operand
+	fromOperand := max(1, measured)
+	return promoted + fromOperand
 }

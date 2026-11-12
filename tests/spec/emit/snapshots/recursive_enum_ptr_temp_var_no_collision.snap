@@ -56,7 +56,7 @@ func main() {
 		Left:  &ptr,
 		Right: &ptr2,
 	}
-	ptr_1 := 3
+	ptr1 := 3
 	fmt.Println(n)
-	fmt.Println(ptr_1)
+	fmt.Println(ptr1)
 }
