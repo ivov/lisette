@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794523599615,
+  "lastUpdate": 1794526645546,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -54905,6 +54905,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/e91814b51fd51d506b92d5cfa506e86fc6d54f3e"
         },
         "date": 1794523597393,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 155472,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 41818,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30176,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19569,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15928,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14169,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9330,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7484,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10906,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 938,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8c421b3183700f106e35ccfe98be5438badd5099",
+          "message": "chore: remove unused `ecow` dependency from playground (#1668)",
+          "timestamp": "2026-11-13T00:36:59+01:00",
+          "tree_id": "bb071522ba9239aca4c026ec2f9c380731ed0c80",
+          "url": "https://github.com/ivov/lisette/commit/8c421b3183700f106e35ccfe98be5438badd5099"
+        },
+        "date": 1794526643069,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
