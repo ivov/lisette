@@ -5,7 +5,7 @@ use ecow::EcoString;
 use std::sync::Arc;
 use syntax::ast::CallTypeArguments;
 use syntax::ast::{Annotation, Expression, IdentifierResolution, Literal, Span, UnaryOperator};
-use syntax::program::{CallKind, NativeTypeKind};
+use syntax::program::{CallKind, DefinitionBody, NativeTypeKind};
 use syntax::types::{
     Bound, CompoundKind, FunctionParameter, SubstitutionMap, Symbol, Type, substitute,
     unqualified_name,
@@ -86,13 +86,38 @@ impl InferCtx<'_> {
             .get_var_name()
             .map(|name| name.chars().next().is_some_and(|c| c.is_uppercase()))
             .unwrap_or(false);
+        let variant_hint = callee_expression
+            .get_var_name()
+            .filter(|_| is_constructor)
+            .and_then(|name| self.local_enum_variant_with_arity(&name, args.len()));
         self.sink.push(diagnostics::infer::arity_mismatch(
             &expected,
             &actual,
             &generic_params,
             is_constructor,
+            variant_hint.as_deref(),
             *span,
         ));
+    }
+
+    fn local_enum_variant_with_arity(&self, name: &str, arity: usize) -> Option<String> {
+        let package = self.store.packages.get(self.cursor.package_id())?;
+        package
+            .definitions
+            .iter()
+            .find_map(|(qualified, definition)| {
+                let DefinitionBody::Enum { variants, .. } = &definition.body else {
+                    return None;
+                };
+                variants
+                    .iter()
+                    .any(|variant| {
+                        variant.name == name
+                            && variant.fields.len() == arity
+                            && !variant.fields.is_struct()
+                    })
+                    .then(|| format!("{}.{name}", unqualified_name(qualified)))
+            })
     }
 
     fn get_generic_param_names(&self, expression: &Expression) -> Vec<String> {

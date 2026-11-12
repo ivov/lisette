@@ -238,7 +238,7 @@ impl InferCtx<'_> {
                 span,
                 ..
             } if !self.some_enum_has_variant(identifier) => {
-                self.unresolved_struct_pattern(identifier, fields, span, kind)
+                self.unresolved_struct_pattern(identifier, fields, None, span, kind)
             }
             Pattern::EnumVariant { fields, span, .. } => {
                 for field in fields {
@@ -553,6 +553,7 @@ impl InferCtx<'_> {
                 &actual_types,
                 &[],
                 true,
+                None,
                 span,
             ));
         }
@@ -790,12 +791,15 @@ impl InferCtx<'_> {
         &mut self,
         identifier: &str,
         fields: &[StructFieldPattern],
+        expected_ty: Option<&Type>,
         span: Span,
         kind: BindingKind,
     ) -> Pattern {
         if !self.may_name_uninferred_export(self.store, identifier) {
-            self.sink
-                .push(diagnostics::infer::struct_not_found(identifier, span));
+            let diagnostic = self
+                .variant_shape_diagnostic(identifier, fields, expected_ty, span, kind)
+                .unwrap_or_else(|| diagnostics::infer::struct_not_found(identifier, span));
+            self.sink.push(diagnostic);
         }
 
         for field in fields {
@@ -806,6 +810,57 @@ impl InferCtx<'_> {
             self.infer_pattern_inner(field.value.clone(), Type::Error, kind, is_shorthand);
         }
         self.rejected_pattern(span)
+    }
+
+    fn variant_shape_diagnostic(
+        &self,
+        identifier: &str,
+        fields: &[StructFieldPattern],
+        expected_ty: Option<&Type>,
+        span: Span,
+        kind: BindingKind,
+    ) -> Option<diagnostics::LisetteDiagnostic> {
+        let expected_ty = expected_ty?;
+        let resolved = self.peel_to_enum(&expected_ty.resolve_in(&self.env))?;
+        let Type::Nominal { id, .. } = &resolved else {
+            return None;
+        };
+        let variant_name = unqualified_name(identifier);
+        let variant = self
+            .store
+            .variants_of(id.as_str())?
+            .iter()
+            .find(|variant| variant.name == variant_name)?;
+        let name_span = Span::new(span.file_id, span.byte_offset, identifier.len() as u32);
+        if variant.fields.is_struct() {
+            let enum_info = self.get_enum_variant_info(expected_ty);
+            return Some(diagnostics::infer::enum_variant_constructor_not_found(
+                name_span,
+                enum_info.as_ref().map(|(n, v)| (n.as_str(), v.as_slice())),
+                identifier,
+                kind.is_match_arm(),
+            ));
+        }
+        let arguments: Vec<&str> = (0..variant.fields.len())
+            .map(|index| {
+                fields
+                    .get(index)
+                    .filter(|field| {
+                        matches!(&field.value, Pattern::Identifier { identifier, .. } if identifier == &field.name)
+                    })
+                    .map_or("_", |field| field.name.as_str())
+            })
+            .collect();
+        let written = if arguments.is_empty() {
+            identifier.to_string()
+        } else {
+            format!("{identifier}({})", arguments.join(", "))
+        };
+        Some(diagnostics::infer::struct_pattern_on_tuple_variant(
+            variant_name,
+            &written,
+            name_span,
+        ))
     }
 
     fn rejected_pattern(&mut self, span: Span) -> Pattern {
@@ -856,7 +911,15 @@ impl InferCtx<'_> {
         let Some(qualified_name) = self.lookup_qualified_name(store, identifier) else {
             return self
                 .try_infer_enum_struct_variant(&pattern, &expected_ty, kind)
-                .unwrap_or_else(|| self.unresolved_struct_pattern(identifier, fields, span, kind));
+                .unwrap_or_else(|| {
+                    self.unresolved_struct_pattern(
+                        identifier,
+                        fields,
+                        Some(&expected_ty),
+                        span,
+                        kind,
+                    )
+                });
         };
         let qualified_name = store
             .peel_alias_name(&qualified_name)
@@ -873,7 +936,15 @@ impl InferCtx<'_> {
         else {
             return self
                 .try_infer_enum_struct_variant(&pattern, &expected_ty, kind)
-                .unwrap_or_else(|| self.unresolved_struct_pattern(identifier, fields, span, kind));
+                .unwrap_or_else(|| {
+                    self.unresolved_struct_pattern(
+                        identifier,
+                        fields,
+                        Some(&expected_ty),
+                        span,
+                        kind,
+                    )
+                });
         };
 
         let struct_forall_ty = struct_forall_ty.clone();

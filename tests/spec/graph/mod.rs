@@ -1237,3 +1237,18 @@ fn analysis_retains_transitive_dependencies_on_package_cache_hits() {
         assert!(analysis.dependencies().is_none());
     }
 }
+
+#[test]
+fn kahn_reports_cycle_when_two_imported_packages_are_missing() {
+    let mut edges = HashMap::default();
+    edges.insert(
+        "main".to_string(),
+        HashSet::from_iter(["a".to_string(), "x".to_string(), "y".to_string()]),
+    );
+    edges.insert("a".to_string(), HashSet::from_iter(["b".to_string()]));
+    edges.insert("b".to_string(), HashSet::from_iter(["a".to_string()]));
+
+    let (_, cycles) = topological_sort(&DependencyGraph::from(edges));
+
+    assert_eq!(cycles.len(), 1);
+}

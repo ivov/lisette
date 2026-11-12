@@ -550,6 +550,14 @@ impl InferCtx<'_> {
         let hop = self.write_hop(target)?;
         self.value_context(hop)
             .or_else(|| self.binding_context(&super::aliasing::place_root_name(target)?))
+            .or_else(|| self.writable_parameter_context(target))
+    }
+
+    fn writable_parameter_context(&self, target: &Expression) -> Option<WriteContext> {
+        let root = super::aliasing::place_root_name(target)?;
+        let binding_id = self.scopes.lookup_binding_id(&root)?;
+        let kind = self.facts.bindings.get(&binding_id)?.kind;
+        kind.is_param().then_some(WriteContext::Parameter(root))
     }
 
     pub(super) fn value_context(&self, value: &Expression) -> Option<WriteContext> {
@@ -568,14 +576,18 @@ impl InferCtx<'_> {
                 } else {
                     member.to_string()
                 };
-                if !self.store.peel_alias(&field.ty).is_writable() {
-                    Some(WriteContext::Field(name))
-                } else {
+                let field_ty = self.store.peel_alias(&field.ty);
+                if field_ty.is_writable() {
                     Some(WriteContext::ReadOnlyOwner {
                         owner: super::aliasing::render_place(owner.unwrap_parens()),
                         field: name,
                         origin: self.owner_origin(owner),
                     })
+                } else if matches!(&field_ty, Type::Compound { kind, .. } if kind.accepts_write_qualifier())
+                {
+                    Some(WriteContext::Field(name))
+                } else {
+                    None
                 }
             }
             identifier @ Expression::Identifier { .. } => {
@@ -737,11 +749,12 @@ impl InferCtx<'_> {
         let owner_ty = self
             .store
             .peel_alias(&owner.get_type().resolve_in(&self.env).strip_refs());
+        let tuple_name = member.parse::<usize>().ok().map(tuple_field_name);
         let field = self
             .store
             .fields_of(owner_ty.get_qualified_id()?)?
             .iter()
-            .find(|field| &field.name == member)?;
+            .find(|field| &field.name == member || tuple_name.as_ref() == Some(&field.name))?;
         let (element_index, index) = match container_ty.as_compound()? {
             (CompoundKind::Map, _) => (1, "k"),
             _ => (0, "i"),
@@ -761,13 +774,31 @@ impl InferCtx<'_> {
                 declared_end.saturating_sub(field.name_span.byte_offset),
             )
         });
+        let name = if tuple_name.is_some() {
+            format!(".{member}")
+        } else {
+            field.name.to_string()
+        };
         Some(diagnostics::infer::ElementDeclaration {
-            name: field.name.to_string(),
+            place: element_place(&name, container, element_base.unwrap_parens()),
+            name,
             replacement_type: replacement.to_string(),
-            place: element_place(&field.name, container, element_base.unwrap_parens()),
             index,
             declaration_span,
         })
+    }
+}
+
+fn writable_layers(ty: Type, layers: usize) -> Type {
+    match ty {
+        Type::Compound { kind, mut args, .. } if layers > 1 && kind.accepts_write_qualifier() => {
+            let index = if kind == CompoundKind::Map { 1 } else { 0 };
+            if let Some(element) = args.get_mut(index) {
+                *element = writable_layers(element.clone(), layers - 1);
+            }
+            Type::qualified_compound(kind, args, true)
+        }
+        other => other.make_writable(),
     }
 }
 
@@ -832,10 +863,15 @@ impl InferCtx<'_> {
             }
         } else if self.report_read_only_write(target) {
             let context = self.write_context(target);
+            let (root_type, required_type) = self.root_write_types(target, governing);
             self.sink.push(diagnostics::infer::write_through_read_only(
                 &super::aliasing::render_place(target),
                 &self.write_hop_place(target),
-                &governing.to_string(),
+                diagnostics::infer::WriteTypes {
+                    governing: &governing.to_string(),
+                    root: &root_type,
+                    required: &required_type,
+                },
                 span,
                 context,
             ));
@@ -844,6 +880,26 @@ impl InferCtx<'_> {
 }
 
 impl InferCtx<'_> {
+    fn root_write_types(&self, target: &Expression, governing: &Type) -> (String, String) {
+        let root_type = super::aliasing::place_root_name(target.unwrap_parens())
+            .and_then(|root| self.scopes.lookup_value(&root))
+            .map(|ty| self.store.peel_alias(&ty.resolve_in(&self.env)))
+            .unwrap_or_else(|| governing.clone());
+        let mut layers = 0;
+        let mut current = target.unwrap_parens();
+        while let Expression::IndexedAccess { expression, .. } = current {
+            layers += 1;
+            current = expression.unwrap_parens();
+        }
+        let layers = if matches!(current, Expression::Identifier { .. }) {
+            layers
+        } else {
+            1
+        };
+        let required = writable_layers(root_type.clone(), layers);
+        (root_type.to_string(), required.to_string())
+    }
+
     fn owner_origin(&self, owner: &Expression) -> Option<String> {
         let name = owner.unwrap_parens().get_var_name()?;
         let binding_id = self.scopes.lookup_binding_id(&name)?;

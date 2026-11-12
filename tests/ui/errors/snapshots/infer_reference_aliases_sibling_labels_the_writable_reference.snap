@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Reference may mutate a value read in the same expression
+    ╭─[test.lis:10:33]
+  9 │   let mut data = Data{ n: 1 }
+ 10 │   let triple = (inspect(&data), data, bump(&data))
+    ·                                 ──┬─       ──┬──
+    ·                                   │          ╰── may mutate `data`
+    ·                                   ╰── may see the mutated value
+ 11 │   let _ = triple
+    ╰────
+  help: Make evaluation order explicit: to read the value before `&data` runs, copy it first with `let before = data`, and to read the value after, bind the reference-taking operand to a variable first · code: [infer.reference_aliases_sibling]

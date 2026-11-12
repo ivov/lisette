@@ -6,7 +6,7 @@ use syntax::types::{SimpleKind, Type};
 use crate::checker::infer::InferCtx;
 
 impl InferCtx<'_> {
-    pub(super) fn infer_condition(&mut self, condition: Expression, span: &Span) -> Expression {
+    pub(super) fn infer_condition(&mut self, condition: Expression) -> Expression {
         let cond_ty = self.new_type_var();
         let inferred = self.infer_expression(condition, &cond_ty);
         if self
@@ -15,7 +15,7 @@ impl InferCtx<'_> {
             != Some(SimpleKind::Bool)
         {
             let bool_ty = self.type_bool();
-            self.unify(&bool_ty, &cond_ty, span);
+            self.unify(&bool_ty, &cond_ty, &inferred.get_span());
         }
         inferred
     }
@@ -125,7 +125,7 @@ impl InferCtx<'_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
-        let new_expression = self.infer_condition(*expression, &span);
+        let new_expression = self.infer_condition(*expression);
         if let Some(propagate_span) = Self::find_propagate(&new_expression) {
             self.sink
                 .push(diagnostics::infer::propagate_in_assert(propagate_span));

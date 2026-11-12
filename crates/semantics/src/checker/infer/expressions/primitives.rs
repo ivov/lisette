@@ -3,7 +3,7 @@ use crate::facts::StatementTailCheck;
 use crate::store::Store;
 use syntax::EcoString;
 use syntax::ast::DeadCodeCause;
-use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Span, UnaryOperator};
+use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, Span, UnaryOperator};
 use syntax::program::DefinitionBody;
 use syntax::types::CompoundKind;
 use syntax::types::Type;
@@ -58,6 +58,17 @@ fn contains_stored_reference_to(expression: &Expression, var_name: &str) -> bool
             };
             args.iter().any(check) || spread.as_deref().is_some_and(check)
         }
+        Expression::Literal {
+            literal: Literal::Slice(elements),
+            ..
+        }
+        | Expression::Tuple { elements, .. } => elements.iter().any(|element| {
+            if let Expression::Reference { expression, .. } = element {
+                expression.get_var_name().as_deref() == Some(var_name)
+            } else {
+                contains_stored_reference_to(element, var_name)
+            }
+        }),
         // Recurse but skip immediately-dereferenced contexts
         Expression::Binary { left, right, .. } => {
             contains_stored_reference_to(left, var_name)
@@ -688,6 +699,14 @@ impl InferCtx<'_> {
                 self.with_value_context(|s| s.infer_expression(element, expected))
             })
             .collect();
+
+        for (element, expected) in inferred_elements.iter().zip(expected_elements.iter()) {
+            if super::aliasing::place_root_name(element.unwrap_parens()).is_some()
+                && self.store.demotion_changes(&expected.resolve_in(&self.env))
+            {
+                self.mark_place_root_mutated(element);
+            }
+        }
 
         let element_types: Vec<Type> = inferred_elements.iter().map(|e| e.get_type()).collect();
 

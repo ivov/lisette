@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:6:16]
+ 5 │   let y: Option<(int, int, int)> = Some((1, 2, 3))
+ 6 │   let _ = take(y)
+   ·                ┬
+   ·                ╰── expected `Option<(int, int)>`, found `Option<(int, int, int)>`
+ 7 │ }
+   ╰────
+  help: The tuples must have the same number of elements: expected 2 elements, found 3 · code: [infer.type_mismatch]

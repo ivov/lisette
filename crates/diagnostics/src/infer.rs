@@ -905,13 +905,24 @@ pub fn read_only_construction(
     ))
 }
 
+pub struct WriteTypes<'a> {
+    pub governing: &'a str,
+    pub root: &'a str,
+    pub required: &'a str,
+}
+
 pub fn write_through_read_only(
     place: &str,
     hop: &str,
-    governing_type: &str,
+    types: WriteTypes<'_>,
     span: Span,
     context: Option<WriteContext>,
 ) -> LisetteDiagnostic {
+    let WriteTypes {
+        governing: governing_type,
+        root: root_type,
+        required: required_type,
+    } = types;
     let diagnostic = LisetteDiagnostic::error(format!("Cannot write to `{place}`"))
         .with_infer_code("write_through_read_only");
     let element = match context {
@@ -919,7 +930,7 @@ pub fn write_through_read_only(
         other => {
             let help = match other {
                 Some(WriteContext::Parameter(name)) => {
-                    format!("Declare the parameter `{name}` as `mut {governing_type}`")
+                    format!("Declare the parameter `{name}` as `{required_type}`")
                 }
                 Some(WriteContext::Field(name)) => {
                     format!("Declare the field `{name}` as `mut {governing_type}`")
@@ -944,8 +955,8 @@ pub fn write_through_read_only(
                      Make `{source}` writable, or write to a `.clone()` for an independent copy"
                 ),
                 Some(WriteContext::ReadOnlyAnnotation(binding)) => format!(
-                    "`{binding}` is declared as `{governing_type}`. \
-                     Declare it as `mut {governing_type}` to write through it"
+                    "`{binding}` is declared as `{root_type}`. \
+                     Declare it as `{required_type}` to write through it"
                 ),
                 Some(WriteContext::ReadOnlyOwner {
                     owner,
@@ -967,8 +978,8 @@ pub fn write_through_read_only(
                     go_field_copy_help(&place, index)
                 }
                 Some(WriteContext::CallResult(callee)) => format!(
-                    "`{callee}` returns `{governing_type}`. \
-                     Declare its return type `mut {governing_type}`, or bind the result and write to a `.clone()`"
+                    "`{callee}` returns `{root_type}`. \
+                     Declare its return type `{required_type}`, or bind the result and write to a `.clone()`"
                 ),
                 _ => format!(
                     "Make it `mut {governing_type}` where it is created, \
@@ -1237,6 +1248,7 @@ pub fn arity_mismatch(
     actual: &[Type],
     generic_params: &[String],
     is_constructor: bool,
+    variant_hint: Option<&str>,
     span: Span,
 ) -> LisetteDiagnostic {
     let expected_str = if !generic_params.is_empty() {
@@ -1275,7 +1287,7 @@ pub fn arity_mismatch(
             format!("expected `({})`, found `({})`", expected_str, actual_str),
         )
         .with_help(format!(
-            "This {} expects {} {} but received {} {}",
+            "This {} expects {} {} but received {} {}{}",
             if is_constructor {
                 "constructor"
             } else {
@@ -1284,7 +1296,10 @@ pub fn arity_mismatch(
             expected_count,
             expected_word,
             actual_count,
-            actual_word
+            actual_word,
+            variant_hint
+                .map(|variant| format!(". Did you mean `{variant}`?"))
+                .unwrap_or_default()
         ))
 }
 
@@ -1386,6 +1401,17 @@ pub fn tuple_arity_mismatch(
             ),
         )
         .with_help("Adjust the pattern to match the number of elements in the tuple.")
+}
+
+pub fn struct_pattern_on_tuple_variant(
+    variant: &str,
+    written: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Not a struct variant")
+        .with_infer_code("struct_pattern_on_tuple_variant")
+        .with_span_label(&span, format!("`{variant}` is a tuple variant"))
+        .with_help(format!("Match it with `{written}`"))
 }
 
 pub fn struct_not_found(identifier: &str, span: Span) -> LisetteDiagnostic {
@@ -2860,8 +2886,21 @@ pub struct MissingMethod {
 pub fn sealed_interface_not_satisfiable(
     interface_name: &str,
     type_name: &str,
+    is_go_type: bool,
     span: Span,
 ) -> LisetteDiagnostic {
+    let help = if is_go_type {
+        format!(
+            "`{type_name}` is a Go type, but Lisette cannot match its Go signatures to the method \
+             of `{interface_name}` that only Go code in its own module can declare. If Go accepts \
+             `{type_name}` here, Lisette does not support that pairing yet."
+        )
+    } else {
+        format!(
+            "`{interface_name}` has a method that only Go code in its own module can declare. Satisfy \
+             `{interface_name}` by embedding it, or by embedding a Go type that implements it."
+        )
+    };
     LisetteDiagnostic::error(format!(
         "`{type_name}` cannot implement the sealed interface `{interface_name}`"
     ))
@@ -2870,10 +2909,7 @@ pub fn sealed_interface_not_satisfiable(
         &span,
         format!("`{interface_name}` is sealed and cannot be implemented here"),
     )
-    .with_help(format!(
-        "`{interface_name}` has a method that only Go code in its own module can declare. Satisfy \
-         `{interface_name}` by embedding it, or by embedding a Go type that implements it."
-    ))
+    .with_help(help)
 }
 
 struct LabelledMethod<'a> {

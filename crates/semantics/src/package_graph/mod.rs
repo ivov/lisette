@@ -168,10 +168,6 @@ impl DependencyGraph {
             && uses.all(|usage| usage == ImportUse::LinkOnly)
     }
 
-    pub(crate) fn len(&self) -> usize {
-        self.edges.len()
-    }
-
     fn insert(&mut self, package_id: PackageId, dependencies: HashMap<PackageId, Dependency>) {
         self.edges.insert(package_id, dependencies);
     }

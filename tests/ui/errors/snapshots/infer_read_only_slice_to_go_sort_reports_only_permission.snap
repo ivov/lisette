@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing write permission
+   ╭─[test.lis:5:15]
+ 4 │ fn sort_ro(s: Slice<int>) {
+ 5 │   slices.Sort(s)
+   ·               ┬
+   ·               ╰── expected `mut Slice<int>`, found `Slice<int>`
+ 6 │ }
+   ╰────
+  help: `mut Slice<int>` permits writes, `Slice<int>` does not. Declare the parameter `s` as `mut Slice<int>` · code: [infer.needs_writable]

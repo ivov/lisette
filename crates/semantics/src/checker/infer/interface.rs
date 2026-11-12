@@ -299,6 +299,9 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::sealed_interface_not_satisfiable(
                     &sealed.interface_name,
                     &type_name,
+                    resolved
+                        .get_qualified_id()
+                        .is_some_and(|id| id.starts_with("go:")),
                     *span,
                 ));
             return Err(violations);
