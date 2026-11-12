@@ -49,6 +49,42 @@ pub(crate) struct PredeclaredPackage {
     files: Vec<RegistrationFile>,
 }
 
+/// Declarations in the current context, or a package whose files need their own contexts.
+enum RegistrationTarget<'a> {
+    Current {
+        items: &'a mut [Expression],
+        visibility: &'a Visibility,
+    },
+    Package(&'a mut PredeclaredPackage),
+}
+
+impl RegistrationTarget<'_> {
+    /// Complete a phase across every file before starting the next phase.
+    fn for_each(
+        &mut self,
+        state: &mut TaskState,
+        store: &mut Store,
+        mut phase: impl FnMut(&mut TaskState, &mut Store, &mut [Expression], &Visibility),
+    ) {
+        match self {
+            Self::Current { items, visibility } => phase(state, store, items, visibility),
+            Self::Package(package) => {
+                for file in &mut package.files {
+                    state.with_file_context_mut(
+                        store,
+                        FileContext::Standard {
+                            package_id: &package.id,
+                            file_id: file.id,
+                            imports: &file.imports,
+                        },
+                        |state, store| phase(state, store, &mut file.items, &Visibility::Private),
+                    );
+                }
+            }
+        }
+    }
+}
+
 #[must_use = "a registered package owns the ASTs that must be passed to inference"]
 pub struct RegisteredPackage {
     pub(crate) id: String,
@@ -56,6 +92,32 @@ pub struct RegisteredPackage {
 }
 
 impl TaskState {
+    /// Register declarations in dependency order, after all type names are available.
+    fn register_declarations(&mut self, store: &mut Store, mut target: RegistrationTarget<'_>) {
+        let package_id = match &target {
+            RegistrationTarget::Current { .. } => self.cursor.package_id().to_string(),
+            RegistrationTarget::Package(package) => package.id.clone(),
+        };
+        target.for_each(self, store, |this, store, items, visibility| {
+            this.register_constants(store, items, visibility);
+        });
+        target.for_each(self, store, |this, store, items, _| {
+            this.register_type_aliases(store, items);
+        });
+        target.for_each(self, store, |this, store, items, _| {
+            this.register_type_bodies(store, items);
+        });
+        normalize_registered_component_types(store, &package_id);
+        target.for_each(self, store, |this, store, items, _| {
+            this.derive_enum_constructor_values(store, items);
+        });
+        target.for_each(self, store, |this, store, items, visibility| {
+            this.check_type_generic_bounds(store, items);
+            this.register_impl_blocks(store, items);
+            this.register_non_const_values(store, items, visibility);
+        });
+    }
+
     /// Completes work that must wait until every package has been registered.
     pub fn finalize_registration(&mut self, store: &mut Store) {
         self.finalize_equality(store);
@@ -118,75 +180,10 @@ impl TaskState {
     pub(crate) fn register_predeclared_package(
         &mut self,
         store: &mut Store,
-        package: PredeclaredPackage,
+        mut package: PredeclaredPackage,
     ) -> RegisteredPackage {
-        let PredeclaredPackage { id, mut files } = package;
-
-        for file in &mut files {
-            self.with_file_context_mut(
-                store,
-                FileContext::Standard {
-                    package_id: &id,
-                    file_id: file.id,
-                    imports: &file.imports,
-                },
-                |this, store| this.register_constants(store, &file.items, &Visibility::Private),
-            );
-        }
-
-        for file in &mut files {
-            self.with_file_context_mut(
-                store,
-                FileContext::Standard {
-                    package_id: &id,
-                    file_id: file.id,
-                    imports: &file.imports,
-                },
-                |this, store| this.register_type_aliases(store, &mut file.items),
-            );
-        }
-
-        for file in &mut files {
-            self.with_file_context_mut(
-                store,
-                FileContext::Standard {
-                    package_id: &id,
-                    file_id: file.id,
-                    imports: &file.imports,
-                },
-                |this, store| this.register_type_bodies(store, &mut file.items),
-            );
-        }
-
-        normalize_registered_component_types(store, &id);
-
-        for file in &mut files {
-            self.with_file_context_mut(
-                store,
-                FileContext::Standard {
-                    package_id: &id,
-                    file_id: file.id,
-                    imports: &file.imports,
-                },
-                |this, store| this.derive_enum_constructor_values(store, &file.items),
-            );
-        }
-
-        for file in &mut files {
-            self.with_file_context_mut(
-                store,
-                FileContext::Standard {
-                    package_id: &id,
-                    file_id: file.id,
-                    imports: &file.imports,
-                },
-                |this, store| {
-                    this.check_type_generic_bounds(store, &file.items);
-                    this.register_impl_blocks(store, &mut file.items);
-                    this.register_non_const_values(store, &mut file.items, &Visibility::Private);
-                },
-            );
-        }
+        self.register_declarations(store, RegistrationTarget::Package(&mut package));
+        let PredeclaredPackage { id, files } = package;
 
         self.register_package_derived_attributes(store, &id, &files);
         self.validate_package_embeds(store, &id);

@@ -30,14 +30,12 @@ pub fn check_equatable_if_let(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let subject_ty = ctx.store.deep_resolve_alias(&scrutinee.get_type());
+    let subject_ty = ctx.store.peel_alias(&scrutinee.get_type());
 
     // A fieldless variant has no inner value to coerce, so its resolved type equals
     // the subject's only when the if-let type-checks; this keeps a checker-rejected
     // pattern (wrong enum, missing variant) from being rewritten.
-    let pattern_ty = pattern
-        .get_type()
-        .map(|ty| ctx.store.deep_resolve_alias(&ty));
+    let pattern_ty = pattern.get_type().map(|ty| ctx.store.peel_alias(&ty));
     if pattern_ty.as_ref() != Some(&subject_ty) {
         return;
     }

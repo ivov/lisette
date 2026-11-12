@@ -1,5 +1,22 @@
 use crate::store;
 use rustc_hash::FxHashMap as HashMap;
+use syntax::parse::ParseResult;
+
+/// Whether parser errors discard the file or preserve its valid partial AST.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseMode {
+    Strict,
+    Recover,
+}
+
+impl ParseMode {
+    pub(crate) fn parse(self, source: &str, file_id: u32) -> ParseResult {
+        match self {
+            Self::Strict => syntax::build_ast(source, file_id),
+            Self::Recover => syntax::build_ast_recovering(source, file_id),
+        }
+    }
+}
 
 /// Source content plus a cwd-relative display path for diagnostics.
 /// `display_path` matches `name` for loaders that have no notion of cwd

@@ -11,21 +11,19 @@ use super::permission::{ConstructionGrant, MissingSupply};
 use crate::checker::infer::InferCtx;
 use crate::store::Store;
 use crate::zero;
-use std::marker::PhantomData;
 use syntax::ast::EnumFieldDefinition;
 use syntax::go_names;
 use syntax::program::AliasKind;
 
 /// Inputs to `infer_structish_fields` shared between struct and enum-variant literals.
-struct StructishCtx<'a, 'b, F> {
-    field_assignments: &'b [StructFieldAssignment],
-    target_ty: &'b Type,
-    owner_name: &'b str,
-    spread: &'b StructSpread,
+struct StructishCtx<'a, F> {
+    field_assignments: &'a [StructFieldAssignment],
+    target_ty: &'a Type,
+    owner_name: &'a str,
+    spread: &'a StructSpread,
     span: Span,
     all_fields: F,
-    map: &'b SubstitutionMap,
-    _marker: PhantomData<&'a ()>,
+    map: &'a SubstitutionMap,
 }
 
 struct StructLiteral {
@@ -309,7 +307,7 @@ impl InferCtx<'_> {
             self.unify(&struct_call_ty, &underlying, &span);
         }
 
-        let peeled_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+        let peeled_expected = self.peel_resolved(expected_ty);
         if same_nominal(&peeled_expected, &struct_call_ty)
             && !store.contains_unknown(&peeled_expected)
         {
@@ -349,7 +347,6 @@ impl InferCtx<'_> {
                 span,
                 all_fields: struct_fields.iter().map(|f| (&f.name, &f.ty)),
                 map: &map,
-                _marker: PhantomData,
             },
             |checker, assignment| {
                 let def = struct_fields.iter().find(|f| f.name == assignment.name)?;
@@ -430,7 +427,7 @@ impl InferCtx<'_> {
             struct_call_ty
         };
 
-        let final_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+        let final_expected = self.peel_resolved(expected_ty);
         self.unify(&final_expected, &struct_call_ty, &span);
 
         self.register_construction_obligations_against(
@@ -527,7 +524,6 @@ impl InferCtx<'_> {
                 span,
                 all_fields: variant_fields.iter().map(|f| (&f.name, &f.ty)),
                 map: &map,
-                _marker: PhantomData,
             },
             |_checker, assignment| {
                 variant_fields
@@ -690,7 +686,7 @@ impl InferCtx<'_> {
 
     fn infer_structish_fields<'a, FindDef>(
         &mut self,
-        ctx: StructishCtx<'a, '_, impl Iterator<Item = (&'a EcoString, &'a Type)> + Clone>,
+        ctx: StructishCtx<'_, impl Iterator<Item = (&'a EcoString, &'a Type)> + Clone>,
         mut find_def: FindDef,
     ) -> (Vec<StructFieldAssignment>, HashSet<EcoString>)
     where

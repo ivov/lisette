@@ -1,6 +1,5 @@
 use super::NormalizedPattern;
 use super::types::INTERFACE_UNKNOWN_TAG;
-use syntax::ast::Literal;
 
 pub fn format_witness(pattern: &NormalizedPattern) -> String {
     match pattern {
@@ -57,7 +56,7 @@ pub fn format_pattern(pattern: &NormalizedPattern) -> String {
     match pattern {
         NormalizedPattern::Wildcard => "_".to_string(),
 
-        NormalizedPattern::Literal(lit) => format_literal(lit),
+        NormalizedPattern::Literal(lit) => lit.diagnostic_text(),
 
         NormalizedPattern::OpaqueConst(key) => strip_package_prefix(key),
 
@@ -154,20 +153,6 @@ fn array_tail_length(type_name: &str) -> u64 {
         })
         .and_then(|digits| digits.parse::<u64>().ok())
         .map_or(0, |length| length.saturating_sub(1))
-}
-
-fn format_literal(lit: &Literal) -> String {
-    match lit {
-        Literal::Integer { text, value } => text.as_ref().unwrap_or(&value.to_string()).clone(),
-        Literal::Float { text, value } => text.as_ref().unwrap_or(&value.to_string()).clone(),
-        Literal::Imaginary(val) => format!("{}i", val),
-        Literal::Boolean(b) => b.to_string(),
-        Literal::String { value, raw: true } => format!("r\"{}\"", value),
-        Literal::String { value, raw: false } => format!("\"{}\"", value),
-        Literal::Char(c) => format!("'{}'", c),
-        Literal::FormatString(_) => "f\"...\"".to_string(),
-        Literal::Slice(_) => "[...]".to_string(),
-    }
 }
 
 fn strip_package_prefix(tag: &str) -> String {

@@ -96,7 +96,7 @@ impl InferCtx<'_> {
             }
             this.mark_test_context_params_used(&new_params);
 
-            let unit_ty = this.type_unit();
+            let unit_ty = Type::unit();
             let return_ty =
                 this.infer_return_type(&return_annotation, &resolved_expected, &span, unit_ty);
 
@@ -264,7 +264,7 @@ impl InferCtx<'_> {
                 ));
             return Expression::Block {
                 items: vec![],
-                ty: self.type_unit(),
+                ty: Type::unit(),
                 span: *body_span,
             };
         }

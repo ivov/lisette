@@ -1,4 +1,4 @@
-//! Union-find-style binding table for `Type::Var` handles.
+//! Binding table for `Type::Var` handles.
 //!
 //! `Type::Var(TypeVarId)` is a handle; the binding (Unbound vs Bound-to-a-Type)
 //! lives here in `entries`, indexed by id. Cloning a `Type` clones just the
@@ -13,7 +13,7 @@ use std::num::NonZeroU32;
 use syntax::types::FunctionParameter;
 use syntax::types::{Bound, Type, TypeVarId};
 
-/// Zero means unbound; nonzero indices address the append-only bound-type pool.
+/// One-based index into the bound-type pool; `None` in `VarState` means unbound.
 #[derive(Debug, Clone, Copy)]
 struct BindingSlot(NonZeroU32);
 
@@ -88,21 +88,20 @@ impl TypeEnv {
     /// Follow a `Type::Var` chain one step at a time until we reach either
     /// an unbound variable or a non-Var type.
     pub(crate) fn shallow_resolve(&self, ty: &Type) -> Type {
-        let mut current = ty.clone();
-        loop {
-            match &current {
-                Type::Var { id, .. } => match self.binding(*id) {
-                    None => return current,
-                    Some(bound) => current = bound.clone(),
-                },
-                _ => return current,
-            }
+        self.chase(ty).clone()
+    }
+
+    fn chase<'a>(&'a self, mut ty: &'a Type) -> &'a Type {
+        while let Type::Var { id, .. } = ty
+            && let Some(bound) = self.binding(*id)
+        {
+            ty = bound;
         }
+        ty
     }
 
     /// Deep resolve: chase `Type::Var` chains, substitute every bound var with
     /// its chased value, and recurse into composites. Unbound vars are preserved as-is.
-    /// Used both during inference and as the post-inference freeze pass.
     pub(crate) fn resolve(&self, ty: &Type) -> Type {
         self.resolve_changed(ty).unwrap_or_else(|| ty.clone())
     }
@@ -122,21 +121,9 @@ impl TypeEnv {
     /// is reachable), allocating just the changed spine. `None` means unchanged.
     fn resolve_changed(&self, ty: &Type) -> Option<Type> {
         match ty {
-            Type::Var { id, .. } => match self.binding(*id) {
-                None => None,
-                Some(first) => {
-                    let mut cursor = first;
-                    loop {
-                        match cursor {
-                            Type::Var { id, .. } => match self.binding(*id) {
-                                None => return Some(cursor.clone()),
-                                Some(next) => cursor = next,
-                            },
-                            _ => return Some(self.resolve(cursor)),
-                        }
-                    }
-                }
-            },
+            Type::Var { id, .. } => self
+                .binding(*id)
+                .map(|bound| self.resolve(self.chase(bound))),
             Type::Nominal {
                 id,
                 params,
@@ -183,63 +170,29 @@ impl TypeEnv {
 
     /// [`resolve_changed`] over a slice; `Some` only if an element changed.
     fn resolve_slice(&self, items: &[Type]) -> Option<Vec<Type>> {
-        let mut out: Option<Vec<Type>> = None;
-        for (i, item) in items.iter().enumerate() {
-            match self.resolve_changed(item) {
-                Some(resolved) => {
-                    out.get_or_insert_with(|| items[..i].to_vec())
-                        .push(resolved);
-                }
-                None => {
-                    if let Some(v) = out.as_mut() {
-                        v.push(item.clone());
-                    }
-                }
-            }
-        }
-        out
+        map_changed(items, |item| self.resolve_changed(item))
     }
 
     fn resolve_function_params(
         &self,
         params: &[FunctionParameter],
     ) -> Option<Vec<FunctionParameter>> {
-        let mut out: Option<Vec<FunctionParameter>> = None;
-        for (index, param) in params.iter().enumerate() {
-            match self.resolve_changed(&param.ty) {
-                Some(resolved) => {
-                    out.get_or_insert_with(|| params[..index].to_vec())
-                        .push(param.with_type(resolved));
-                }
-                None => {
-                    if let Some(resolved) = out.as_mut() {
-                        resolved.push(param.clone());
-                    }
-                }
-            }
-        }
-        out
+        map_changed(params, |param| {
+            self.resolve_changed(&param.ty)
+                .map(|ty| param.with_type(ty))
+        })
     }
 
-    /// Bound-list variant of [`resolve_slice`].
     fn resolve_bounds(&self, bounds: &[Bound]) -> Option<Vec<Bound>> {
-        let mut out: Option<Vec<Bound>> = None;
-        for (i, b) in bounds.iter().enumerate() {
-            let new_generic = self.resolve_changed(&b.generic);
-            let new_ty = self.resolve_changed(&b.ty);
-            if new_generic.is_none() && new_ty.is_none() {
-                if let Some(v) = out.as_mut() {
-                    v.push(b.clone());
-                }
-                continue;
-            }
-            out.get_or_insert_with(|| bounds[..i].to_vec()).push(Bound {
-                param_name: b.param_name.clone(),
-                generic: new_generic.unwrap_or_else(|| b.generic.clone()),
-                ty: new_ty.unwrap_or_else(|| b.ty.clone()),
-            });
-        }
-        out
+        map_changed(bounds, |bound| {
+            let generic = self.resolve_changed(&bound.generic);
+            let ty = self.resolve_changed(&bound.ty);
+            (generic.is_some() || ty.is_some()).then(|| Bound {
+                param_name: bound.param_name.clone(),
+                generic: generic.unwrap_or_else(|| bound.generic.clone()),
+                ty: ty.unwrap_or_else(|| bound.ty.clone()),
+            })
+        })
     }
 
     /// Occurs check: does `id` appear anywhere inside `ty` (following Var
@@ -297,6 +250,21 @@ impl TypeEnv {
     }
 }
 
+/// Clone a slice only after the first element changes, preserving its unchanged prefix.
+fn map_changed<T: Clone>(items: &[T], mut f: impl FnMut(&T) -> Option<T>) -> Option<Vec<T>> {
+    let mut changed: Option<Vec<T>> = None;
+    for (index, item) in items.iter().enumerate() {
+        if let Some(value) = f(item) {
+            changed
+                .get_or_insert_with(|| items[..index].to_vec())
+                .push(value);
+        } else if let Some(changed) = &mut changed {
+            changed.push(item.clone());
+        }
+    }
+    changed
+}
+
 /// Extension trait for `Type` giving env-aware resolve convenience methods.
 /// Call-site sugar for `env.resolve(&ty)` written as `ty.resolve_in(&env)`.
 pub trait EnvResolve {
@@ -333,6 +301,10 @@ mod tests {
         }
         env.bind(ids[DEPTH - 1], Type::Simple(SimpleKind::Int));
 
+        assert_eq!(
+            env.shallow_resolve(&var(ids[0])),
+            Type::Simple(SimpleKind::Int)
+        );
         assert_eq!(env.resolve(&var(ids[0])), Type::Simple(SimpleKind::Int));
     }
 

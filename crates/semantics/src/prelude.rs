@@ -15,20 +15,19 @@ pub(crate) const TEST_PRELUDE_PACKAGE_ID: &str = "**test_prelude";
 pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
     let result = syntax::build_ast(LIS_PRELUDE_SOURCE, PRELUDE_FILE_ID);
 
-    sink.extend_parse_errors(result.errors);
-    let mut items = result.ast;
-
-    store.store_file(File {
-        id: PRELUDE_FILE_ID,
-        package_id: PRELUDE_PACKAGE_ID.to_string(),
-        parse_status: result.status,
-        name: "prelude.d.lis".to_string(),
-        display_path: "prelude.d.lis".to_string(),
-        source_path: deps::prelude_typedef_path(),
-        source: LIS_PRELUDE_SOURCE.to_string(),
-        items: items.clone(),
-        file_comment: None,
-    });
+    let (mut file, errors) = File::from_parse(
+        PRELUDE_FILE_ID,
+        PRELUDE_PACKAGE_ID,
+        "prelude.d.lis".to_string(),
+        "prelude.d.lis".to_string(),
+        LIS_PRELUDE_SOURCE.to_string(),
+        result,
+    );
+    sink.extend_parse_errors(errors);
+    let mut items = file.items.clone();
+    file.source_path = deps::prelude_typedef_path();
+    file.file_comment = None;
+    store.store_file(file);
 
     let mut checker = TaskState::for_package(PRELUDE_PACKAGE_ID);
     checker.with_file_context_mut(store, FileContext::Prelude, |checker, store| {
@@ -44,21 +43,19 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
     let file_id = store.new_file_id();
     let result = syntax::build_ast(LIS_TEST_PRELUDE_SOURCE, file_id);
 
-    sink.extend_parse_errors(result.errors);
-    let mut items = result.ast;
-
+    let (mut file, errors) = File::from_parse(
+        file_id,
+        TEST_PRELUDE_PACKAGE_ID,
+        "test_prelude.d.lis".to_string(),
+        "test_prelude.d.lis".to_string(),
+        LIS_TEST_PRELUDE_SOURCE.to_string(),
+        result,
+    );
+    sink.extend_parse_errors(errors);
+    let mut items = file.items.clone();
+    file.file_comment = None;
     store.add_package(TEST_PRELUDE_PACKAGE_ID);
-    store.store_file(File {
-        id: file_id,
-        package_id: TEST_PRELUDE_PACKAGE_ID.to_string(),
-        parse_status: result.status,
-        name: "test_prelude.d.lis".to_string(),
-        display_path: "test_prelude.d.lis".to_string(),
-        source_path: None,
-        source: LIS_TEST_PRELUDE_SOURCE.to_string(),
-        items: items.clone(),
-        file_comment: None,
-    });
+    store.store_file(file);
 
     let mut checker = TaskState::for_package(TEST_PRELUDE_PACKAGE_ID);
     checker.with_file_context_mut(

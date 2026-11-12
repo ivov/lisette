@@ -478,7 +478,7 @@ impl TaskState {
 
     fn validate_embed_target(&mut self, store: &Store, ty: &Type, span: Span) {
         let display = ty.to_string();
-        let resolved = store.deep_resolve_alias(ty);
+        let resolved = store.peel_alias(ty);
 
         if resolved.is_option() {
             self.sink.push(diagnostics::embed::option_target(span));
@@ -495,10 +495,7 @@ impl TaskState {
         }
 
         if resolved.is_ref() {
-            match resolved
-                .inner()
-                .map(|inner| store.deep_resolve_alias(&inner))
-            {
+            match resolved.inner().map(|inner| store.peel_alias(&inner)) {
                 Some(inner) if inner.is_ref() => {
                     self.sink
                         .push(diagnostics::embed::nested_ref(&display, span));
@@ -755,22 +752,17 @@ impl TaskState {
     }
 
     fn is_alias_body_circular(&self, store: &Store, body_ty: &Type, qualified_name: &str) -> bool {
-        if Self::type_contains_name(body_ty, qualified_name) {
-            return true;
-        }
-
-        let mut to_visit: Vec<String> = Vec::new();
+        let mut to_visit = Vec::new();
         Self::collect_type_refs(body_ty, &mut to_visit);
 
-        let mut seen: Vec<String> = Vec::new();
+        let mut seen = FxHashSet::default();
         while let Some(name) = to_visit.pop() {
             if name == qualified_name {
                 return true;
             }
-            if seen.contains(&name) {
+            if !seen.insert(name) {
                 continue;
             }
-            seen.push(name.clone());
 
             if let Some(Definition {
                 body:
@@ -779,11 +771,8 @@ impl TaskState {
                         ..
                     },
                 ..
-            }) = store.get_definition(&name)
+            }) = store.get_definition(name)
             {
-                if Self::type_contains_name(target, qualified_name) {
-                    return true;
-                }
                 Self::collect_type_refs(target, &mut to_visit);
             }
         }
@@ -791,20 +780,9 @@ impl TaskState {
         false
     }
 
-    fn type_contains_name(ty: &Type, name: &str) -> bool {
-        if let Type::Nominal { id, .. } = ty
-            && id.as_str() == name
-        {
-            return true;
-        }
-        ty.children()
-            .iter()
-            .any(|c| Self::type_contains_name(c, name))
-    }
-
-    fn collect_type_refs(ty: &Type, refs: &mut Vec<String>) {
+    fn collect_type_refs<'a>(ty: &'a Type, refs: &mut Vec<&'a str>) {
         if let Type::Nominal { id, .. } = ty {
-            refs.push(id.to_string());
+            refs.push(id.as_str());
         }
         for c in ty.children() {
             Self::collect_type_refs(c, refs);
@@ -825,7 +803,7 @@ fn is_faithful_imported_embed_target(store: &Store, ty: &Type) -> bool {
 }
 
 fn is_faithful_imported_graph(store: &Store, ty: &Type, seen: &mut FxHashSet<String>) -> bool {
-    let target = store.deep_resolve_alias(&embed_promotion_target(store, ty));
+    let target = store.peel_alias(&embed_promotion_target(store, ty));
     let Type::Nominal { id, .. } = &target else {
         return false;
     };
@@ -864,7 +842,7 @@ fn embed_promotion_target(store: &Store, ty: &Type) -> Type {
     let mut target = ty.clone();
     while target.is_option() || target.is_ref() {
         let Some(inner) = target.inner() else { break };
-        target = store.deep_resolve_alias(&inner);
+        target = store.peel_alias(&inner);
     }
     target
 }
@@ -906,7 +884,7 @@ fn has_selector_surface(store: &Store, ty: &Type) -> bool {
 fn is_pointer_backed_newtype(store: &Store, ty: &Type) -> bool {
     store
         .underlying_type(ty)
-        .is_some_and(|underlying| store.deep_resolve_alias(&underlying).is_ref())
+        .is_some_and(|underlying| store.peel_alias(&underlying).is_ref())
 }
 
 // Mirror the written type's own visibility: peel storage (`Option`/`Ref`), not aliases.

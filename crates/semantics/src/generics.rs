@@ -9,7 +9,6 @@ use crate::checker::infer::expressions::comparison;
 use crate::checker::infer::interface::interface_requires_methods;
 use crate::facts::GenericBoundOrigin;
 use crate::store::Store;
-use std::iter;
 use std::mem;
 
 #[derive(Debug, Clone)]
@@ -40,7 +39,7 @@ pub(crate) fn apply_bounds(generics: &[Generic], arguments: &[Type]) -> Vec<Appl
 
 /// Instantiate the bounds declared by a nominal type.
 pub fn type_obligations(store: &Store, ty: &Type) -> Vec<AppliedGenericBound> {
-    node_obligations(store, &store.deep_resolve_alias(ty))
+    node_obligations(store, &store.peel_alias(ty))
 }
 
 pub fn nested_type_obligations(store: &Store, ty: &Type) -> Vec<AppliedGenericBound> {
@@ -69,7 +68,7 @@ fn collect_nested_obligations(
         }
         return;
     }
-    let resolved = store.deep_resolve_alias(ty);
+    let resolved = store.peel_alias(ty);
     out.extend(node_obligations(store, &resolved));
     for child in type_argument_children(&resolved) {
         collect_nested_obligations(store, child, active_aliases, out);
@@ -104,17 +103,9 @@ fn node_obligations(store: &Store, resolved: &Type) -> Vec<AppliedGenericBound> 
 
 pub(crate) fn type_argument_children(ty: &Type) -> Vec<&Type> {
     match ty {
-        Type::Nominal { params, .. } => params.iter().collect(),
-        Type::Compound { args, .. } => args.iter().collect(),
-        Type::Array { element, .. } => vec![element],
-        Type::Tuple(elements) => elements.iter().collect(),
-        Type::Function(function) => function
-            .params
-            .iter()
-            .map(|param| &param.ty)
-            .chain(iter::once(function.return_type.as_ref()))
-            .collect(),
-        _ => Vec::new(),
+        // Bound checks visit instantiated types, not the body of a type scheme.
+        Type::Forall { .. } => Vec::new(),
+        _ => ty.children(),
     }
 }
 
@@ -123,14 +114,14 @@ pub fn bound_implied(store: &Store, available: &[Type], required: &Type) -> bool
 }
 
 pub fn bound_requires_evidence(store: &Store, bound: &Type) -> bool {
-    let resolved = store.deep_resolve_alias(bound);
+    let resolved = store.peel_alias(bound);
     resolved.get_qualified_id().is_some_and(|id| {
         BuiltinBound::from_qualified_id(id).is_some() || interface_requires_methods(store, id)
     })
 }
 
 pub fn bound_display_name(store: &Store, bound: &Type) -> EcoString {
-    let resolved = store.deep_resolve_alias(bound);
+    let resolved = store.peel_alias(bound);
     resolved.get_qualified_id().map_or_else(
         || resolved.to_string().into(),
         |id| unqualified_name(id).into(),
@@ -157,8 +148,8 @@ impl TaskState {
 
         for obligation in obligations {
             // Frozen facts may come from workers with different type-variable tables.
-            let argument = store.deep_resolve_alias(&obligation.argument);
-            let required = store.deep_resolve_alias(&obligation.required);
+            let argument = store.peel_alias(&obligation.argument);
+            let required = store.peel_alias(&obligation.required);
             let key = (obligation.span, argument.to_string(), required.to_string());
             let builtin = required
                 .get_qualified_id()

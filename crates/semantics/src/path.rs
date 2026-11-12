@@ -9,13 +9,7 @@ pub fn relative_to_cwd(path: &Path) -> Option<String> {
 
 /// Cwd-relative display paths under a fixed base dir, resolving prefixes once.
 pub struct DisplayPathBase {
-    resolution: DisplayPathResolution,
-}
-
-enum DisplayPathResolution {
-    Unknown,
-    Canonical { base: PathBuf, cwd: PathBuf },
-    Plain { base: PathBuf, cwd: PathBuf },
+    resolution: Option<(PathBuf, PathBuf)>,
 }
 
 impl DisplayPathBase {
@@ -25,9 +19,7 @@ impl DisplayPathBase {
 
     fn with_cwd(base_dir: &Path, cwd: Option<PathBuf>) -> Self {
         let Some(cwd) = cwd else {
-            return Self {
-                resolution: DisplayPathResolution::Unknown,
-            };
+            return Self { resolution: None };
         };
         let absolute_base = if base_dir.is_absolute() {
             base_dir.to_path_buf()
@@ -35,22 +27,17 @@ impl DisplayPathBase {
             cwd.join(base_dir)
         };
         let resolution = match (cwd.canonicalize(), absolute_base.canonicalize()) {
-            (Ok(cwd), Ok(base)) => DisplayPathResolution::Canonical { base, cwd },
-            _ => DisplayPathResolution::Plain {
-                base: absolute_base,
-                cwd,
-            },
+            (Ok(cwd), Ok(base)) => (base, cwd),
+            _ => (absolute_base, cwd),
         };
-        Self { resolution }
+        Self {
+            resolution: Some(resolution),
+        }
     }
 
     /// Mirrors `relative_to_cwd` on the base dir joined with `rel`.
     pub fn relative(&self, rel: &Path) -> Option<String> {
-        let (base, cwd) = match &self.resolution {
-            DisplayPathResolution::Canonical { base, cwd }
-            | DisplayPathResolution::Plain { base, cwd } => (base, cwd),
-            DisplayPathResolution::Unknown => return None,
-        };
+        let (base, cwd) = self.resolution.as_ref()?;
         relativize(base.join(rel).strip_prefix(cwd).ok()?)
     }
 }

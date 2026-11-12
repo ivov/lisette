@@ -1,6 +1,7 @@
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use rustc_hash::FxHashMap as HashMap;
 use semantics::loader::Loader;
+use semantics::loader::ParseMode;
 use semantics::{
     GoPackageSources,
     checker::TaskState,
@@ -89,7 +90,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
             let files = files
                 .into_iter()
                 .map(|file| {
-                    let (file, errors) = file.parse(&package_id, false);
+                    let (file, errors) = file.parse(&package_id, ParseMode::Strict);
                     sink.extend_parse_errors(errors);
                     file
                 })

@@ -36,7 +36,7 @@ impl InferCtx<'_> {
         let collection_expression =
             self.with_value_context(|s| s.infer_expression(*expression, &collection_ty_var));
 
-        let resolved_collection_ty = store.peel_alias(&collection_ty_var.resolve_in(&self.env));
+        let resolved_collection_ty = self.peel_resolved(&collection_ty_var);
 
         let index_expected_ty = match resolved_collection_ty.as_compound() {
             Some((CompoundKind::Map, args)) => {
@@ -95,7 +95,7 @@ impl InferCtx<'_> {
             }
             (Some(peeled), "Slice") => {
                 if let Some(bound_ty) = peeled.get_type_params().and_then(|p| p.first()) {
-                    let int_ty = self.type_int();
+                    let int_ty = Type::int();
                     self.unify(&int_ty, bound_ty, &span);
                 }
 
@@ -124,10 +124,10 @@ impl InferCtx<'_> {
         let element_ty = self.new_type_var();
 
         let (expected_index_ty, expected_collection_ty) = match type_name {
-            "Slice" => (self.type_int(), self.type_slice(element_ty.clone())),
+            "Slice" => (Type::int(), self.type_slice(element_ty.clone())),
             "Array" => {
                 let len = resolved_collection_ty.array_len().unwrap_or(0);
-                (self.type_int(), self.type_array(len, element_ty.clone()))
+                (Type::int(), self.type_array(len, element_ty.clone()))
             }
             "Map" => {
                 let Some(type_params) = resolved_collection_ty.get_type_params() else {
@@ -201,11 +201,10 @@ impl InferCtx<'_> {
         index: Box<Expression>,
         span: Span,
     ) -> Expression {
-        let store = self.store;
         let collection_ty_var = self.new_type_var();
         let collection_expression =
             self.with_value_context(|s| s.infer_expression(*expression, &collection_ty_var));
-        let resolved_collection_ty = store.peel_alias(&collection_ty_var.resolve_in(&self.env));
+        let resolved_collection_ty = self.peel_resolved(&collection_ty_var);
 
         let receiver = collection_expression.root_identifier().unwrap_or("s");
         let type_name = resolved_collection_ty.get_name();
@@ -233,7 +232,7 @@ impl InferCtx<'_> {
         let collection_ty_var = self.new_type_var();
         let collection_expression =
             self.with_value_context(|s| s.infer_expression(*expression, &collection_ty_var));
-        let resolved_collection_ty = store.peel_alias(&collection_ty_var.resolve_in(&self.env));
+        let resolved_collection_ty = self.peel_resolved(&collection_ty_var);
 
         if resolved_collection_ty.is_error() {
             self.unify(expected_ty, &Type::Error, &span);
@@ -295,7 +294,7 @@ impl InferCtx<'_> {
                 span: range_span,
                 ..
             } => {
-                let int_ty = self.type_int();
+                let int_ty = Type::int();
 
                 let (new_start, new_end) = self.with_value_context(|s| {
                     let start =
@@ -351,7 +350,7 @@ impl InferCtx<'_> {
                 span,
                 ..
             } => {
-                let int_ty = self.type_int();
+                let int_ty = Type::int();
                 let new_start = start.map(|s| Box::new(self.infer_expression(*s, &int_ty)));
                 let new_end = end.map(|e| Box::new(self.infer_expression(*e, &int_ty)));
 

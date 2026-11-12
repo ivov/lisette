@@ -37,14 +37,14 @@ impl InferCtx<'_> {
                 span,
             };
         }
-        let resolved_tried_ty = self.resolve_carrier(&new_expression.get_type());
+        let resolved_tried_ty = self.peel_resolved(&new_expression.get_type());
 
         if resolved_tried_ty.is_partial() {
             self.sink
                 .push(diagnostics::infer::propagate_on_partial(span));
         }
 
-        let try_block_types = if self.scopes.lookup_try_block_context().is_some() {
+        if let Some(ctx) = self.scopes.lookup_try_block_context_mut() {
             let is_result = resolved_tried_ty.is_result();
             let is_option = resolved_tried_ty.is_option();
             let observed = if is_result {
@@ -54,13 +54,10 @@ impl InferCtx<'_> {
             } else {
                 None
             };
-            let (ok_ty, err_ty, has_mismatch) = {
-                let ctx = self
-                    .scopes
-                    .lookup_try_block_context_mut()
-                    .expect("try block context was just found");
-                let has_mismatch = ctx.usage.observe(observed);
-                (ctx.ok_ty.clone(), ctx.err_ty.clone(), has_mismatch)
+            let has_mismatch = ctx.usage.observe(observed);
+            let try_types = TryBlockTypes {
+                ok: ctx.ok_ty.clone(),
+                error: ctx.err_ty.clone(),
             };
 
             if !is_result
@@ -76,15 +73,6 @@ impl InferCtx<'_> {
                     .push(diagnostics::infer::mixed_carriers_in_try_block(span));
             }
 
-            Some(TryBlockTypes {
-                ok: ok_ty,
-                error: err_ty,
-            })
-        } else {
-            None
-        };
-
-        if let Some(try_types) = try_block_types {
             return self.infer_propagate_in_block(
                 new_expression,
                 &resolved_tried_ty,
@@ -112,21 +100,16 @@ impl InferCtx<'_> {
     ) -> Expression {
         let ty = if tried_ty.is_error() {
             self.propagate_as_error(expected_ty, span)
-        } else if tried_ty.is_result() {
+        } else if tried_ty.is_result() || tried_ty.is_option() {
             let ok_ty = tried_ty.ok_type();
-            self.check_propagated_error(&try_types.error, &tried_ty.err_type(), &span);
+            if tried_ty.is_result() {
+                self.check_propagated_error(&try_types.error, &tried_ty.err_type(), &span);
+            }
             if ok_ty.resolve_in(&self.env).is_variable() {
                 self.unify(&try_types.ok, &ok_ty, &span);
             }
             self.unify(expected_ty, &ok_ty, &span);
             ok_ty
-        } else if tried_ty.is_option() {
-            let some_ty = tried_ty.ok_type();
-            if some_ty.resolve_in(&self.env).is_variable() {
-                self.unify(&try_types.ok, &some_ty, &span);
-            }
-            self.unify(expected_ty, &some_ty, &span);
-            some_ty
         } else {
             self.propagate_as_error(expected_ty, span)
         };
@@ -160,7 +143,7 @@ impl InferCtx<'_> {
             self.propagate_as_error(expected_ty, span)
         } else if tried_ty.is_result() {
             let ok_ty = tried_ty.ok_type();
-            let resolved_fn_return = self.resolve_carrier(&fn_return_ty);
+            let resolved_fn_return = self.peel_resolved(&fn_return_ty);
 
             if resolved_fn_return.is_result() {
                 self.check_propagated_error(
@@ -180,7 +163,7 @@ impl InferCtx<'_> {
             ok_ty
         } else if tried_ty.is_option() {
             let some_ty = tried_ty.ok_type();
-            let resolved_fn_return = self.resolve_carrier(&fn_return_ty);
+            let resolved_fn_return = self.peel_resolved(&fn_return_ty);
 
             if resolved_fn_return.is_option() {
                 let new_some = self.new_type_var();
@@ -211,10 +194,6 @@ impl InferCtx<'_> {
         }
     }
 
-    fn resolve_carrier(&self, ty: &Type) -> Type {
-        self.store.peel_alias(&ty.resolve_in(&self.env))
-    }
-
     fn check_propagated_error(&mut self, declared_err: &Type, operand_err: &Type, span: &Span) {
         match self.try_unify(declared_err, operand_err, span) {
             Ok(()) | Err(UnifyError::AlreadyReported) => {}
@@ -243,7 +222,7 @@ impl InferCtx<'_> {
         if items.is_empty() {
             self.sink
                 .push(diagnostics::infer::try_block_empty(try_keyword_span));
-            let unit_ty = self.type_unit();
+            let unit_ty = Type::unit();
             let err_ty = self.new_type_var();
             let block_ty = self.type_result(store, unit_ty, err_ty);
             self.unify(expected_ty, &block_ty, &span);
@@ -258,7 +237,7 @@ impl InferCtx<'_> {
         let ok_ty = self.new_type_var();
         let err_ty = self.new_type_var();
 
-        let expected_resolved = self.resolve_carrier(expected_ty);
+        let expected_resolved = self.peel_resolved(expected_ty);
         if expected_resolved.is_result() || expected_resolved.is_option() {
             self.unify(&ok_ty, &expected_resolved.ok_type(), &try_keyword_span);
         }
@@ -337,7 +316,7 @@ impl InferCtx<'_> {
             self.sink.push(diagnostics::infer::recover_block_empty(
                 recover_keyword_span,
             ));
-            let unit_ty = self.type_unit();
+            let unit_ty = Type::unit();
             let panic_value_ty = self.type_panic_value(store);
             let block_ty = self.type_result(store, unit_ty, panic_value_ty);
             self.unify(expected_ty, &block_ty, &span);
@@ -349,7 +328,7 @@ impl InferCtx<'_> {
             };
         }
 
-        let expected_resolved = self.resolve_carrier(expected_ty);
+        let expected_resolved = self.peel_resolved(expected_ty);
         if expected_resolved.is_result() {
             self.unify(
                 &inner_ty,
@@ -384,7 +363,7 @@ impl InferCtx<'_> {
 
     fn fill_statement_tail(&mut self, last_item: &Expression, ok_ty: &Type, span: &Span) {
         if last_item.get_type().is_ignored() {
-            let unit_ty = self.type_unit();
+            let unit_ty = Type::unit();
             let _ = self.try_unify(ok_ty, &unit_ty, span);
         }
     }

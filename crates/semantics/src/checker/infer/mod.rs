@@ -14,12 +14,13 @@ use rustc_hash::FxHashMap as HashMap;
 use super::freeze::FreezeFolder;
 use super::registration::{RegisteredPackage, RegistrationFile};
 use super::state::InferredFile;
-use super::{FileContext, TaskState};
+use super::{EnvResolve, FileContext, TaskState};
 use crate::loader;
 use crate::prelude;
 use crate::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::program::FileImport;
+use syntax::types::Type;
 
 impl TaskState {
     pub(crate) fn install_inferred_files(store: &mut Store, inferred_files: Vec<InferredFile>) {
@@ -69,6 +70,11 @@ impl TaskState {
 }
 
 impl InferCtx<'_> {
+    /// Resolve inference variables before following the outer alias chain.
+    fn peel_resolved(&self, ty: &Type) -> Type {
+        self.store.peel_alias(&ty.resolve_in(&self.env))
+    }
+
     fn infer_file(mut self, package_id: &str, file: RegistrationFile) -> InferredFile {
         let file_id = file.id;
         let imports = file.imports;

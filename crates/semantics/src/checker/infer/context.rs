@@ -473,35 +473,40 @@ impl<'a> InferCtx<'a> {
         &mut self,
         f: impl FnOnce(&mut Self) -> Result<T, E>,
     ) -> Result<T, E> {
-        let diagnostics_before = self.sink.checkpoint();
-        let bounds_before = self.facts.deferred.generic_bounds.len();
-        let speculation = self.env.begin_speculation();
-        match f(self) {
-            Ok(value) => {
-                self.env
-                    .end_speculation(speculation, SpeculationOutcome::Commit);
-                Ok(value)
-            }
-            Err(error) => {
-                self.env
-                    .end_speculation(speculation, SpeculationOutcome::Rollback);
-                self.sink.rollback(diagnostics_before);
-                self.facts.deferred.generic_bounds.truncate(bounds_before);
-                Err(error)
-            }
-        }
+        self.with_speculation(|this| {
+            let result = f(this);
+            let outcome = if result.is_ok() {
+                SpeculationOutcome::Commit
+            } else {
+                SpeculationOutcome::Rollback
+            };
+            (result, outcome)
+        })
     }
 
     /// Runs `f` and discards every unification and diagnostic it produced.
     pub(crate) fn probe<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        self.with_speculation(|this| (f(this), SpeculationOutcome::Rollback))
+    }
+
+    /// Keep type bindings, diagnostics, and deferred bounds in the same transaction.
+    fn with_speculation<T>(&mut self, f: impl FnOnce(&mut Self) -> (T, SpeculationOutcome)) -> T {
         let diagnostics_before = self.sink.checkpoint();
         let bounds_before = self.facts.deferred.generic_bounds.len();
         let speculation = self.env.begin_speculation();
-        let value = f(self);
-        self.env
-            .end_speculation(speculation, SpeculationOutcome::Rollback);
-        self.sink.rollback(diagnostics_before);
-        self.facts.deferred.generic_bounds.truncate(bounds_before);
+        let (value, outcome) = f(self);
+        match outcome {
+            SpeculationOutcome::Commit => {
+                self.env
+                    .end_speculation(speculation, SpeculationOutcome::Commit);
+            }
+            SpeculationOutcome::Rollback => {
+                self.env
+                    .end_speculation(speculation, SpeculationOutcome::Rollback);
+                self.sink.rollback(diagnostics_before);
+                self.facts.deferred.generic_bounds.truncate(bounds_before);
+            }
+        }
         value
     }
 
@@ -636,6 +641,36 @@ mod tests {
         let diagnostics = task.sink.into_diagnostics();
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].plain_message(), "before");
+    }
+
+    #[test]
+    fn probe_rolls_back_a_nested_commit_without_losing_outer_changes() {
+        let mut task = TaskState::for_package(store::ENTRY_PACKAGE_ID);
+        let store = Store::new();
+        let mut ctx = InferCtx::new(&mut task, &store);
+        let outer = ctx.new_type_var();
+        let inner = ctx.new_type_var();
+        let span = Span::dummy();
+
+        ctx.speculatively(|ctx| {
+            ctx.try_unify(&outer, &Type::int(), &span)?;
+            let observed = ctx.probe(|ctx| {
+                ctx.speculatively(|ctx| {
+                    ctx.try_unify(&inner, &Type::string(), &span)?;
+                    ctx.sink
+                        .push(diagnostics::LisetteDiagnostic::error("probe"));
+                    Ok::<_, UnifyError>(inner.resolve_in(&ctx.env))
+                })
+                .unwrap()
+            });
+            assert_eq!(observed, Type::string());
+            assert_eq!(inner.resolve_in(&ctx.env), inner);
+            Ok::<_, UnifyError>(())
+        })
+        .unwrap();
+
+        assert_eq!(outer.resolve_in(&ctx.env), Type::int());
+        assert!(task.sink.into_diagnostics().is_empty());
     }
 
     #[test]
