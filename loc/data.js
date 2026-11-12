@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794522175697,
+  "lastUpdate": 1794523599615,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -54826,6 +54826,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 41319,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30176,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19569,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15928,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14169,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9330,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7484,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10906,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 938,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e91814b51fd51d506b92d5cfa506e86fc6d54f3e",
+          "message": "fix: prevent sourcemap line drift for multiline Go output (#1667)",
+          "timestamp": "2026-11-12T23:46:14+01:00",
+          "tree_id": "74e9eee8ced8f1fd053fa877aab482a59eddfd88",
+          "url": "https://github.com/ivov/lisette/commit/e91814b51fd51d506b92d5cfa506e86fc6d54f3e"
+        },
+        "date": 1794523597393,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 155472,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 41818,
             "unit": "lines"
           },
           {
