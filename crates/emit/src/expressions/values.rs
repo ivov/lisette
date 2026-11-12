@@ -352,7 +352,8 @@ impl Planner<'_> {
                 }
                 None => ValuePlan::computed(Vec::new(), GoExpression::empty()),
             },
-            Expression::IfLet { ty, .. }
+            Expression::If { ty, .. }
+            | Expression::IfLet { ty, .. }
             | Expression::Match { ty, .. }
             | Expression::Select { ty, .. }
             | Expression::Block { ty, .. } => self.lower_to_operand_temp(expression, ty),
@@ -455,7 +456,7 @@ impl Planner<'_> {
         let element_expressions =
             self.coerce_elements_to_slots(&mut setup, elements, sequenced.values, &slot_types);
         let callee = self.make_tuple_callee(&slot_types, element_expressions.len());
-        ValuePlan::observable_call(setup, GoExpression::pure_call(callee, element_expressions))
+        ValuePlan::computed(setup, GoExpression::pure_call(callee, element_expressions))
     }
 
     /// Plan a `cast` expression. The interface-target path resolves through
@@ -620,7 +621,6 @@ impl Planner<'_> {
         &mut self,
         start: &Option<Box<Expression>>,
         end: &Option<Box<Expression>>,
-        _inclusive: bool,
         ty: &Type,
     ) -> ValuePlan {
         let type_string = self.go_type(ty);

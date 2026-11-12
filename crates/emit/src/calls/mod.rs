@@ -22,28 +22,17 @@ use syntax::ast::{Expression, ResolvedCallTypeArguments};
 use syntax::program::{CallKind, NativeTypeKind};
 use syntax::types::Type;
 
-pub(crate) struct NativeMethodCall<'a> {
-    pub kind: NativeTypeKind,
-    pub method: &'a str,
-    pub function: &'a Expression,
-    pub args: &'a [Expression],
-    pub spread: Option<&'a Expression>,
-    pub resolved_type_args: ResolvedCallTypeArguments<'a>,
-    pub abi: CallableAbi,
-    pub receiver: &'a Expression,
-    pub arguments: &'a [Expression],
-}
-
 impl Planner<'_> {
     pub(crate) fn native_method_call<'a>(
         &self,
         value: &'a Expression,
-    ) -> Option<NativeMethodCall<'a>> {
+    ) -> Option<NativeCallContext<'a>> {
         let Expression::Call {
             expression: callee,
             args,
             spread,
             type_arguments,
+            ty,
             ..
         } = value.unwrap_parens()
         else {
@@ -57,17 +46,20 @@ impl Planner<'_> {
             return None;
         };
         let function = callee.unwrap_parens();
-        let (receiver, arguments) = split_native_receiver(function, args)?;
-        Some(NativeMethodCall {
-            kind: *kind,
+        let form = NativeCallForm::method(function);
+        form.split(args)?;
+        Some(NativeCallContext {
+            native_type: *kind,
+            form,
             method: extract_native_method_name(function),
             function,
             args,
             spread: spread.as_deref(),
             resolved_type_args: type_arguments.resolved_types()?,
             abi: plan.resolved.abi,
-            receiver,
-            arguments,
+            call_ty: Some(ty),
+            capture_boundary: CaptureBoundary::SiblingSequence,
+            retired_receiver: None,
         })
     }
 }
@@ -110,22 +102,22 @@ pub(crate) fn split_native_receiver<'a>(
     NativeCallForm::method(function).split(args)
 }
 
-pub(super) struct NativeCallContext<'a> {
+pub(crate) struct NativeCallContext<'a> {
     pub function: &'a Expression,
     pub form: NativeCallForm<'a>,
     pub args: &'a [Expression],
     pub spread: Option<&'a Expression>,
     pub resolved_type_args: ResolvedCallTypeArguments<'a>,
-    pub abi: &'a CallableAbi,
+    pub abi: CallableAbi,
     pub call_ty: Option<&'a Type>,
-    pub native_type: &'a NativeTypeKind,
+    pub native_type: NativeTypeKind,
     pub method: &'a str,
     pub capture_boundary: CaptureBoundary,
     pub retired_receiver: Option<&'a Expression>,
 }
 
 impl<'a> NativeCallContext<'a> {
-    pub(super) fn receiver_and_arguments(&self) -> Option<(&'a Expression, &'a [Expression])> {
+    pub(crate) fn receiver_and_arguments(&self) -> Option<(&'a Expression, &'a [Expression])> {
         self.form.split(self.args)
     }
 }

@@ -14,6 +14,7 @@ use crate::classify_go_return_type;
 use crate::context::lowering::LineIndex;
 use crate::names::go_name;
 
+#[derive(Clone)]
 pub(crate) struct EmitFacts<'a> {
     input: &'a EmitInput,
     shared: &'a SharedEmitContext<'a>,
@@ -131,17 +132,6 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn strip_and_peel(&self, ty: &Type) -> Type {
         self.peel_alias(&ty.strip_refs())
-    }
-
-    pub(crate) fn resolve_embed_target(&self, ty: &Type) -> Type {
-        let mut current = ty.clone();
-        loop {
-            let next = self.peel_alias(&current.strip_refs());
-            if next == current {
-                return next;
-            }
-            current = next;
-        }
     }
 
     pub(crate) fn as_interface(&self, ty: &Type) -> Option<String> {

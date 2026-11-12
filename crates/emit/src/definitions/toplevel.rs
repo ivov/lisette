@@ -64,9 +64,7 @@ impl Planner<'_> {
         let go_name = if self.try_declare(&preferred) {
             self.scope.new_local_identifier(preferred)
         } else {
-            let fresh = self.fresh_local(Some(identifier));
-            self.declare(&fresh);
-            fresh
+            self.fresh_declared(identifier)
         };
         let is_const = self.is_go_constant_expression(expression);
         // An untyped string or bool constant also assigns to named types.

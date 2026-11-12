@@ -212,7 +212,7 @@ impl<'a> Planner<'a> {
             (NativeTypeKind::Channel, "new") => {
                 let element =
                     self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
-                Some(ValuePlan::observable_call(
+                Some(ValuePlan::computed(
                     Vec::new(),
                     GoExpression::call(
                         GoExpression::external_name("make".to_string()),
@@ -227,7 +227,7 @@ impl<'a> Planner<'a> {
                 let element =
                     self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
                 let (setup, capacity) = self.stage_size_argument(ctx);
-                Some(ValuePlan::observable_call(
+                Some(ValuePlan::computed(
                     setup,
                     GoExpression::call(
                         GoExpression::external_name("make".to_string()),
@@ -244,7 +244,7 @@ impl<'a> Planner<'a> {
             (NativeTypeKind::Map, "new") => {
                 let (key, val) =
                     self.resolve_map_types(ctx.function, ctx.resolved_type_args, ctx.call_ty);
-                Some(ValuePlan::observable_call(
+                Some(ValuePlan::computed(
                     Vec::new(),
                     GoExpression::call(
                         GoExpression::external_name("make".to_string()),
@@ -277,8 +277,8 @@ impl<'a> Planner<'a> {
                 } else {
                     let zero = self.lisette_zero(&element_ty);
                     let slice_type = GoType::slice_of(&element);
-                    let slice_name = self.scope.helper_local("s", &self.package);
-                    let index_name = self.scope.helper_local("i", &self.package);
+                    let slice_name = self.scope.helper_local("s", self.package);
+                    let index_name = self.scope.helper_local("i", self.package);
                     let slice = || GoExpression::identifier(slice_name.clone());
                     let index = || GoExpression::identifier(index_name.clone());
                     GoExpression::immediate_call(
@@ -313,7 +313,7 @@ impl<'a> Planner<'a> {
                         FunctionLiteralLayout::MultiLine,
                     )
                 };
-                Some(ValuePlan::observable_call(setup, value))
+                Some(ValuePlan::computed(setup, value))
             }
             (NativeTypeKind::Array, "new") => {
                 let peeled = ctx.call_ty.map(|t| self.facts.peel_alias(t));
@@ -353,7 +353,7 @@ impl<'a> Planner<'a> {
         let staged = self.plan_operand(argument, ExpressionContext::value());
         let (setup, source) = staged.into_parts();
 
-        let slice_name = self.scope.helper_local("s", &self.package);
+        let slice_name = self.scope.helper_local("s", self.package);
         let slice = || GoExpression::identifier(slice_name.clone());
         let literal = |text: String| GoExpression::literal(text);
         let value = GoExpression::call(
@@ -394,7 +394,7 @@ impl<'a> Planner<'a> {
             vec![source],
         );
 
-        Some(ValuePlan::observable_call(setup, value))
+        Some(ValuePlan::computed(setup, value))
     }
 
     fn try_lower_map_from_pairs(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
@@ -484,10 +484,7 @@ impl<'a> Planner<'a> {
         ))
     }
 
-    /// Emit `call_expression` in negated form when the underlying inline rule
-    /// has a `negated_template`. Used by unary-not to avoid a precedence bug
-    /// for comparison-emitting calls (`!s.is_empty()` → `len(s) != 0`, not
-    /// `!len(s) == 0` which Go parses as `(!len(s)) == 0`).
+    /// Emit `!is_empty()` as `len(receiver) != 0` using the native `IsEmpty` rule.
     pub(crate) fn try_emit_negated_call(
         &mut self,
         setup: &mut Vec<Statement>,
@@ -523,9 +520,9 @@ impl<'a> Planner<'a> {
             args,
             spread,
             resolved_type_args,
-            abi: &plan.resolved.abi,
+            abi: plan.resolved.abi,
             call_ty: None,
-            native_type: &kind,
+            native_type: kind,
             method,
             capture_boundary: CaptureBoundary::SiblingSequence,
             retired_receiver: None,
@@ -621,9 +618,9 @@ impl<'a> Planner<'a> {
                     args,
                     spread,
                     resolved_type_args,
-                    abi: &plan.resolved.abi,
+                    abi: plan.resolved.abi,
                     call_ty,
-                    native_type: kind,
+                    native_type: *kind,
                     method,
                     capture_boundary: ctx.capture_boundary(),
                     retired_receiver: ctx.retired_receiver(),
@@ -670,8 +667,8 @@ impl<'a> Planner<'a> {
         }
         let receiver_arity = split.map_or(0, |(_, arguments)| arguments.len());
         let plain_call = !is_constructor
-            && native_method_lowers_to_plain_call(ctx.native_type, ctx.method, receiver_arity);
-        let value = if !is_constructor && native_method_is_pure(ctx.native_type, ctx.method) {
+            && native_method_lowers_to_plain_call(&ctx.native_type, ctx.method, receiver_arity);
+        let value = if !is_constructor && native_method_is_pure(&ctx.native_type, ctx.method) {
             result.value.into_read_only_call()
         } else {
             result.value

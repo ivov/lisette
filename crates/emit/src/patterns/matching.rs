@@ -1,7 +1,7 @@
 use crate::Planner;
 use crate::abi::callable::PayloadLayout;
 use crate::abi::callable::{LoweredReturnAbi, OptionReturnAbi};
-use crate::calls::NativeMethodCall;
+use crate::calls::NativeCallContext;
 use crate::calls::bound_value::{BoundValue, PairCondition};
 use crate::calls::comma_ok::CommaOkSource;
 use crate::calls::comma_ok::{CommaOkValueSlot, PairKind};
@@ -11,7 +11,7 @@ use crate::calls::wrap_err::WrapMessage;
 use crate::context::expression::ExpressionContext;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::decision_tree;
-use crate::patterns::sites::DeferredSubject;
+use crate::patterns::sites::ResolvedSubject;
 use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
 use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
@@ -31,6 +31,24 @@ use syntax::ast::{
 use syntax::parse::TUPLE_FIELDS;
 use syntax::program::{self, NativeTypeKind};
 use syntax::types::{Type, unqualified_name};
+
+fn finish_nested_pair_arm(bound: &mut BoundValue, body: LoweredBlock) -> LoweredBlock {
+    let body = match body.statements.as_slice() {
+        [
+            Statement {
+                kind: LoweredStatement::Block(inner),
+                ..
+            },
+        ] => inner.clone(),
+        _ => body,
+    };
+    if let Some(name) = bound.payload_identifier()
+        && !GoUses::of(&body.statements).contains_identifier(name)
+    {
+        bound.discard_value();
+    }
+    body
+}
 
 pub(crate) struct ResultFusePlan<'a> {
     subject: &'a Expression,
@@ -58,11 +76,10 @@ pub(crate) enum OptionFusePlan<'a> {
     },
     /// `xs.get(i)` on a slice or array: a bounds test guards a direct index.
     Index {
-        call: NativeMethodCall<'a>,
+        call: NativeCallContext<'a>,
     },
     Found {
-        subject: &'a Expression,
-        call: NativeMethodCall<'a>,
+        call: NativeCallContext<'a>,
     },
 }
 
@@ -82,9 +99,9 @@ impl OptionFusePlan<'_> {
                     CommaOkValueSlot::Named(name) => (name, false),
                     CommaOkValueSlot::Arm(name) => (name, true),
                     CommaOkValueSlot::Temp | CommaOkValueSlot::Discarded => {
-                        (planner.fresh_pair_identifier(), false)
+                        (planner.fresh_declared("ret"), false)
                     }
-                    CommaOkValueSlot::Unused => (planner.fresh_pair_identifier(), true),
+                    CommaOkValueSlot::Unused => (planner.fresh_declared("ret"), true),
                 };
                 let initializer_call = if opens_if {
                     Some(call)
@@ -102,20 +119,18 @@ impl OptionFusePlan<'_> {
                 };
                 BoundValue::index(statements, index, target)
             }
-            Self::Found { subject, call } => {
+            Self::Found { call } => {
                 let value = match slot {
                     CommaOkValueSlot::Named(name) => Some(name),
                     CommaOkValueSlot::Arm(name) => {
                         let name = planner.declared_arm_value_name(&name);
                         Some(name)
                     }
-                    CommaOkValueSlot::Temp => Some(planner.fresh_pair_identifier()),
+                    CommaOkValueSlot::Temp => Some(planner.fresh_declared("ret")),
                     CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => None,
                 };
-                let flag = planner.fresh_local(Some("found"));
-                planner.declare(&flag);
+                let flag = planner.fresh_declared("found");
                 let statements = planner.lower_find_loop(
-                    subject,
                     &call,
                     FoundSink {
                         value: value.as_ref(),
@@ -306,16 +321,6 @@ struct SelectivePartialArms<'a> {
     error_binding: Option<FusedName<'a>>,
 }
 
-/// How to render the subject declaration line, based on body usage.
-enum SubjectDeclaration {
-    /// Identifier path: emit `_ = <var>` when unused, else nothing.
-    PlainDiscard {
-        var: GoIdentifier,
-    },
-    Deferred(DeferredSubject),
-    None,
-}
-
 impl Planner<'_> {
     pub(crate) fn lower_match_to_block(
         &mut self,
@@ -366,35 +371,16 @@ impl Planner<'_> {
         }
 
         let subject_ty = subject.get_type();
-        let (subject_var, declaration) =
-            self.lower_match_subject_var(&mut statements, subject, arms);
+        let resolved = self.lower_match_subject_var(&mut statements, subject, arms);
 
         let mut block =
-            self.lower_match_tree(arms, MatchSubject::Var(subject_var), subject_ty, place);
-        let declaration = match declaration {
-            SubjectDeclaration::Deferred(deferred)
-                if inline_subject_into_header(
-                    &mut block.statements,
-                    &deferred.name,
-                    &deferred.expression,
-                ) =>
-            {
-                SubjectDeclaration::None
-            }
-            declaration => declaration,
-        };
-        let used = GoUses::of(&block.statements);
-
-        match declaration {
-            SubjectDeclaration::PlainDiscard { var } => {
-                if !used.contains_identifier(&var) {
-                    statements.push(discard(GoExpression::identifier(var)));
-                }
-            }
-            SubjectDeclaration::Deferred(deferred) => {
-                deferred.settle(&mut statements, &block.statements);
-            }
-            SubjectDeclaration::None => {}
+            self.lower_match_tree(arms, MatchSubject::Var(resolved.var()), subject_ty, place);
+        match resolved {
+            ResolvedSubject::Deferred {
+                ref name,
+                ref expression,
+            } if inline_subject_into_header(&mut block.statements, name, expression) => {}
+            resolved => resolved.push_declaration(&mut statements, &block.statements),
         }
         statements.extend(block.statements);
 
@@ -445,20 +431,7 @@ impl Planner<'_> {
             payload_ty,
             place,
         );
-        let then_body = match then_body.statements.as_slice() {
-            [
-                Statement {
-                    kind: LoweredStatement::Block(inner),
-                    ..
-                },
-            ] => inner.clone(),
-            _ => then_body,
-        };
-        if let Some(name) = bound.payload_identifier()
-            && !GoUses::of(&then_body.statements).contains_identifier(name)
-        {
-            bound.discard_value();
-        }
+        let then_body = finish_nested_pair_arm(&mut bound, then_body);
         let else_body = self.lower_block_to_place(none_body, place);
         let else_arm = ElseArm::from_body(else_body, then_body.ends_with_diverge());
         bound.statements.push(
@@ -608,16 +581,19 @@ impl Planner<'_> {
             return Some(OptionFusePlan::CommaOk { subject, source });
         }
         if let Some(call) = self.native_method_call(subject) {
-            let indexes = matches!(call.kind, NativeTypeKind::Slice | NativeTypeKind::Array)
-                && call.method == "get"
-                && call.arguments.len() == 1
+            let (receiver, arguments) = call.receiver_and_arguments()?;
+            let indexes = matches!(
+                call.native_type,
+                NativeTypeKind::Slice | NativeTypeKind::Array
+            ) && call.method == "get"
+                && arguments.len() == 1
                 && call.spread.is_none()
-                && self.index_fuses(call.receiver, &call.arguments[0]);
+                && self.index_fuses(receiver, &arguments[0]);
             if indexes {
                 return Some(OptionFusePlan::Index { call });
             }
-            if self.find_loop_fuses(subject, &call) {
-                return Some(OptionFusePlan::Found { subject, call });
+            if self.find_loop_fuses(&call) {
+                return Some(OptionFusePlan::Found { call });
             }
         }
 
@@ -775,7 +751,7 @@ impl Planner<'_> {
                 ArmBinding::copy_at(ok_name, Some(&unit))
             };
             let (body, uses) = self.lower_fused_arm(&[ok_binding], &ok.arm.expression, place);
-            (body, uses.first().copied().unwrap_or(false))
+            (body, uses[0])
         });
         let arm_place = if destination.is_some() {
             &PlacePlan::Statement
@@ -924,20 +900,7 @@ impl Planner<'_> {
         let value = GoExpression::identifier(bound.payload_identifier()?.clone());
         let then_body =
             self.lower_match_tree(&ok_arms, MatchSubject::Var(value), payload_ty, place);
-        let then_body = match then_body.statements.as_slice() {
-            [
-                Statement {
-                    kind: LoweredStatement::Block(inner),
-                    ..
-                },
-            ] => inner.clone(),
-            _ => then_body,
-        };
-        if let Some(name) = bound.payload_identifier()
-            && !GoUses::of(&then_body.statements).contains_identifier(name)
-        {
-            bound.discard_value();
-        }
+        let then_body = finish_nested_pair_arm(&mut bound, then_body);
         let err_binding = ArmBinding::alias_at(err_name, Some(bound.status_identifier()));
         let (mut else_body, err_used) =
             self.lower_fused_arm(&[err_binding], &err_arm.expression, place);
@@ -1125,7 +1088,7 @@ impl Planner<'_> {
             return Some(statements);
         }
 
-        let value_is_used = binding_uses.first().copied().unwrap_or(false);
+        let value_is_used = binding_uses[0];
         let value_slot = (condition_needs_value || value_is_used)
             .then(|| value.as_ref().expect("value use allocates a result slot"));
         let bound_value = match value_slot {
@@ -1200,7 +1163,7 @@ impl Planner<'_> {
         };
         let (then_body, some_uses) = self.lower_fused_arm(&[some_binding], arms.some_body, place);
         let (else_body, _) = self.lower_fused_arm(&[], arms.none_body, place);
-        if !some_uses.first().copied().unwrap_or(false) {
+        if !some_uses[0] {
             bound.discard_value();
         }
 
@@ -1220,47 +1183,41 @@ impl Planner<'_> {
         statements
     }
 
-    pub(super) fn lower_fused_arm(
+    pub(super) fn lower_fused_arm<const N: usize>(
         &mut self,
-        bindings: &[Option<ArmBinding<'_>>],
+        bindings: &[Option<ArmBinding<'_>>; N],
         body: &Expression,
         place: &PlacePlan,
-    ) -> (LoweredBlock, Vec<bool>) {
+    ) -> (LoweredBlock, [bool; N]) {
         self.with_binding_frame(|this| {
-            let bound: Vec<Option<(GoIdentifier, Option<GoExpression>)>> = bindings
-                .iter()
-                .map(|binding| {
-                    binding.as_ref().map(|binding| match binding {
-                        ArmBinding::Alias { name, go_name } => {
-                            this.scope.bind_identifier(
-                                name.name,
-                                name.binding.as_slice(),
-                                go_name.clone(),
-                            );
-                            (go_name.clone(), None)
-                        }
-                        ArmBinding::Copy { name, value } => {
-                            let go_name = this.arm_value_name(name.name);
-                            this.declare(&go_name);
-                            let go_name =
-                                this.scope
-                                    .bind_source(name.name, name.binding.as_slice(), go_name);
-                            (go_name, Some((*value).clone()))
-                        }
-                    })
+            let bound = bindings.each_ref().map(|binding| {
+                binding.as_ref().map(|binding| match binding {
+                    ArmBinding::Alias { name, go_name } => {
+                        this.scope.bind_identifier(
+                            name.name,
+                            name.binding.as_slice(),
+                            go_name.clone(),
+                        );
+                        (go_name.clone(), None)
+                    }
+                    ArmBinding::Copy { name, value } => {
+                        let go_name = this.arm_value_name(name.name);
+                        this.declare(&go_name);
+                        let go_name =
+                            this.scope
+                                .bind_source(name.name, name.binding.as_slice(), go_name);
+                        (go_name, Some((*value).clone()))
+                    }
                 })
-                .collect();
+            });
             let body_block = this.lower_block_to_place(body, place);
             let used = GoUses::of(&body_block.statements);
             let mut statements = Vec::new();
-            let binding_uses = bound
-                .iter()
-                .map(|binding| {
-                    binding
-                        .as_ref()
-                        .is_some_and(|(go_name, _)| used.contains_identifier(go_name))
-                })
-                .collect::<Vec<_>>();
+            let binding_uses = bound.each_ref().map(|binding| {
+                binding
+                    .as_ref()
+                    .is_some_and(|(go_name, _)| used.contains_identifier(go_name))
+            });
             for (binding, is_used) in bound.iter().zip(&binding_uses) {
                 let Some((go_name, Some(value))) = binding else {
                     continue;
@@ -1280,7 +1237,7 @@ impl Planner<'_> {
         setup: &mut Vec<Statement>,
         subject: &Expression,
         arms: &[MatchArm],
-    ) -> (GoExpression, SubjectDeclaration) {
+    ) -> ResolvedSubject {
         let any_guard = arms.iter().any(|arm| arm.has_guard());
         if let Expression::Identifier {
             value, resolution, ..
@@ -1293,21 +1250,21 @@ impl Planner<'_> {
                 .any(|arm| pattern_binds_name(&arm.pattern, &name));
             if self.can_reuse_subject_identifier(&name, resolution, has_collision) {
                 let identifier = self.reference_go_identifier(&name, resolution);
-                let declaration = if identifier.id().is_some() {
-                    SubjectDeclaration::PlainDiscard {
-                        var: identifier.clone(),
+                return if identifier.id().is_some() {
+                    ResolvedSubject::Materialized {
+                        subject: GoExpression::identifier(identifier.clone()),
+                        local: identifier,
                     }
                 } else {
-                    SubjectDeclaration::None
+                    ResolvedSubject::Existing(GoExpression::identifier(identifier))
                 };
-                return (GoExpression::identifier(identifier), declaration);
             }
         }
         if matches!(subject, Expression::Literal { .. }) {
             let staged = self.plan_operand(subject, ExpressionContext::value());
             let (subject_setup, value) = staged.into_parts();
             setup.extend(subject_setup);
-            return (value, SubjectDeclaration::None);
+            return ResolvedSubject::Existing(value);
         }
         let staged = self.lower_composite_value(subject, ExpressionContext::value());
         let rests_in_stable_name = self.plan_rests_in_stable_name(&staged);
@@ -1319,25 +1276,23 @@ impl Planner<'_> {
                     .any(|arm| pattern_binds_name(&arm.pattern, root))
             });
         if !any_guard && reads_in_place {
-            return (value, SubjectDeclaration::None);
+            return ResolvedSubject::Existing(value);
         }
         if any_guard
             && rests_in_stable_name
             && let GoExpressionNode::Identifier(var) = value.node()
             && var.id().is_some()
         {
-            let var = var.clone();
-            return (value, SubjectDeclaration::PlainDiscard { var });
+            return ResolvedSubject::Materialized {
+                local: var.clone(),
+                subject: value,
+            };
         }
-        let var = self.fresh_local(Some("subject"));
-        self.declare(&var);
-        let name = var.clone();
-        let subject = GoExpression::identifier(name.clone());
-        let declaration = SubjectDeclaration::Deferred(DeferredSubject {
-            name,
+        let var = self.fresh_declared("subject");
+        ResolvedSubject::Deferred {
+            name: var,
             expression: value,
-        });
-        (subject, declaration)
+        }
     }
 }
 

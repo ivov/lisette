@@ -620,8 +620,8 @@ impl Planner<'_> {
             return GoExpression::empty_composite(array_type);
         }
         let zero = self.lisette_zero(elem);
-        let array_name = self.scope.helper_local("arr", &self.package);
-        let index_name = self.scope.helper_local("i", &self.package);
+        let array_name = self.scope.helper_local("arr", self.package);
+        let index_name = self.scope.helper_local("i", self.package);
         let arr = || GoExpression::identifier(array_name.clone());
         let index = || GoExpression::identifier(index_name.clone());
         // Go has no syntax to repeat a value across all N slots, so fill each index.

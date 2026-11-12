@@ -114,6 +114,25 @@ fn main() { via_interface(FailingWriter {}) }
     assert_eq!(stdout.trim(), "WRITE\nELSE");
 }
 
+#[test]
+fn lowered_partial_both_preserves_argument_order() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let source = scratch.path().join("partial_order.lis");
+    fs::write(
+        &source,
+        include_str!("fixtures/emit/partial_both_order.lis"),
+    )
+    .unwrap();
+    let output = lis(&source, "run");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    assert_eq!(stdout.trim(), "first\nsecond");
+}
+
 const STRENGTHENED_IMPL_BOX: &str = r#"
 pub struct Box<T: Comparable> { pub items: Slice<T> }
 

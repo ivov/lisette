@@ -22,7 +22,6 @@ pub(crate) use names::go_name;
 pub(crate) use names::go_name::escape_reserved;
 pub(crate) use output::OutputCollector;
 pub(crate) use render::Renderer;
-pub(crate) use types::prelude::PreludeType;
 pub(crate) use utils::is_order_sensitive;
 pub(crate) use utils::write_line;
 
@@ -56,7 +55,7 @@ use syntax::ast::{BindingId, Expression, Span};
 use syntax::program;
 use syntax::program::{Definition, DefinitionBody, EmitInput, File, interface_requirements};
 use syntax::types::{Symbol, Type, peel_alias};
-use types::go_type::GoType;
+use types::go_type::{GoType, is_prelude_type};
 
 #[derive(Clone, Debug)]
 pub struct EmitOptions {
@@ -256,10 +255,10 @@ fn sentinel_hint(hints: &[String]) -> Option<i64> {
 
 pub struct Planner<'a> {
     facts: EmitFacts<'a>,
-    package: PackageState,
+    package: &'a mut PackageState,
     scope: ScopeState,
-    adapter_registry: AdapterRegistry,
-    namespace: FileNamespace,
+    adapter_registry: &'a mut AdapterRegistry,
+    namespace: &'a mut FileNamespace,
 }
 
 impl Planner<'_> {
@@ -305,16 +304,14 @@ impl Planner<'_> {
     }
 
     fn collect_imports(&mut self, statements: &[Statement]) {
-        let mut collector = ImportCollector(&mut self.namespace);
+        let mut collector = ImportCollector(self.namespace);
         for statement in statements {
             statement.kind.walk(&mut collector);
         }
     }
 
     fn render_expression(&mut self, expression: &GoExpression) -> String {
-        expression
-            .node()
-            .walk(&mut ImportCollector(&mut self.namespace));
+        expression.node().walk(&mut ImportCollector(self.namespace));
         expression.rendered()
     }
 }
@@ -354,13 +351,6 @@ impl<'a> Planner<'a> {
         match self.classify_slot_emission(&peeled, origin) {
             Some(shape) => ReturnContext::Lowered { return_ty, shape },
             None => ReturnContext::Tagged(return_ty),
-        }
-    }
-
-    /// Append this file's newly-synthesized adapter declarations to `source`.
-    fn drain_file_emission_into(&mut self, source: &mut OutputCollector) {
-        for adapter_declaration in self.adapter_registry.drain_declarations() {
-            source.collect_with_blank(adapter_declaration);
         }
     }
 }
@@ -441,13 +431,18 @@ impl<'a> Planner<'a> {
         }
     }
 
-    fn new(facts: EmitFacts<'a>) -> Self {
+    fn new(
+        facts: EmitFacts<'a>,
+        package: &'a mut PackageState,
+        adapter_registry: &'a mut AdapterRegistry,
+        namespace: &'a mut FileNamespace,
+    ) -> Self {
         Self {
             facts,
-            package: PackageState::default(),
+            package,
             scope: ScopeState::new(),
-            adapter_registry: AdapterRegistry::default(),
-            namespace: FileNamespace::default(),
+            adapter_registry,
+            namespace,
         }
     }
 
@@ -458,8 +453,8 @@ impl<'a> Planner<'a> {
         result_ty: Option<Type>,
         f: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        self.scope.push_loop(result.clone(), result_ty);
-        let result = self.with_assign_target(&result, f);
+        self.scope.push_loop(result, result_ty);
+        let result = f(self);
         self.scope.pop_loop();
         result
     }
@@ -546,9 +541,7 @@ impl<'a> Planner<'a> {
         let go_name = if self.shadows_declaration(&go_name)
             || self.scope.has_other_binding_for_go_name(&go_name, ids)
         {
-            let fresh = self
-                .scope
-                .fresh_binding_go_name(lisette_name, &self.package);
+            let fresh = self.scope.fresh_binding_go_name(lisette_name, self.package);
             self.scope.new_local_identifier(fresh)
         } else {
             go_name
@@ -577,8 +570,7 @@ impl<'a> Planner<'a> {
         hint: &str,
         value: GoExpression,
     ) -> GoIdentifier {
-        let tmp = self.fresh_local(Some(hint));
-        self.declare(&tmp);
+        let tmp = self.fresh_declared(hint);
         setup.push(define(tmp.clone(), value));
         tmp
     }
@@ -608,11 +600,14 @@ impl<'a> Planner<'a> {
         result
     }
 
-    fn with_declaration_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        let outer = self.scope.begin_declaration();
-        let result = f(self);
-        self.scope.end_declaration(outer);
-        result
+    fn with_declaration_scope<R>(&mut self, f: impl FnOnce(&mut Planner<'_>) -> R) -> R {
+        let mut declaration = Planner::new(
+            self.facts.clone(),
+            self.package,
+            self.adapter_registry,
+            self.namespace,
+        );
+        f(&mut declaration)
     }
 
     fn with_binding_frame<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
@@ -642,19 +637,24 @@ impl<'a> Planner<'a> {
             .as_identifier()
             .filter(|name| name.spelling() != "_")
             .cloned();
-        let pushed = name.is_some();
-        if let Some(name) = name {
-            self.scope.push_assign_target(name);
-        }
+        let Some(name) = name else {
+            return f(self);
+        };
+        self.scope.push_assign_target(name);
         let result = f(self);
-        if pushed {
-            self.scope.pop_assign_target();
-        }
+        self.scope.pop_assign_target();
         result
     }
 
+    /// Allocate and register a local whose declaration belongs to the current block.
+    fn fresh_declared(&mut self, hint: &str) -> GoIdentifier {
+        let name = self.fresh_local(Some(hint));
+        self.declare(&name);
+        name
+    }
+
     fn fresh_local(&mut self, hint: Option<&str>) -> GoIdentifier {
-        self.scope.fresh_go_name(hint, &self.package)
+        self.scope.fresh_go_name(hint, self.package)
     }
 
     fn maybe_line_directive(&self, span: &Span) -> Option<String> {
@@ -671,31 +671,29 @@ impl<'a> Planner<'a> {
         facts: EmitFacts<'a>,
         files: &[&File],
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
-        Self::new(facts).emit_files(files)
-    }
-
-    fn emit_files(mut self, files: &[&File]) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
-        let plan = self.build_package_plan(files);
-        self.render_package_plan(files, plan)
-    }
-
-    fn render_package_plan(
-        mut self,
-        files: &[&File],
-        plan: PackagePlan,
-    ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
+        let mut package = PackageState::default();
+        let mut adapters = AdapterRegistry::default();
+        let plan = Planner::new(
+            facts.clone(),
+            &mut package,
+            &mut adapters,
+            &mut FileNamespace::default(),
+        )
+        .build_package_plan(files);
         let PackagePlan {
             package_name,
             collision_diagnostics,
-            imports: import_plans,
+            files,
         } = plan;
         let mut output_files = Vec::new();
         let mut all_diagnostics = collision_diagnostics;
 
-        for (file, imports) in files.iter().zip(import_plans) {
-            self.namespace = FileNamespace::new(imports);
-            let source = self.render_file_source(file);
-            let (imports, mut diagnostics) = self.namespace.finish();
+        for plan in files {
+            let file = plan.file;
+            let mut namespace = FileNamespace::new(plan.imports);
+            let source = Planner::new(facts.clone(), &mut package, &mut adapters, &mut namespace)
+                .render_file_source(file);
+            let (imports, source, mut diagnostics) = namespace.finish(source);
             all_diagnostics.append(&mut diagnostics);
             output_files.push(OutputFile {
                 name: file.go_filename(),
@@ -709,19 +707,18 @@ impl<'a> Planner<'a> {
         if all_diagnostics.is_empty() {
             Ok(output_files)
         } else {
-            all_diagnostics.sort_by(LisetteDiagnostic::sort_key);
             Err(all_diagnostics)
         }
     }
 
-    fn render_file_source(&mut self, file: &File) -> String {
+    fn render_file_source(&mut self, file: &File) -> OutputCollector {
         let mut source = OutputCollector::new();
 
         for expression in &file.items {
             let Expression::Enum { name, variants, .. } = expression else {
                 continue;
             };
-            if PreludeType::from_name(name).is_some() {
+            if is_prelude_type(name) {
                 continue;
             }
             let enum_id = self.facts.qualified_current(name);
@@ -737,8 +734,7 @@ impl<'a> Planner<'a> {
             }
         }
 
-        self.drain_file_emission_into(&mut source);
-        source.render()
+        source
     }
 }
 
@@ -774,4 +770,99 @@ fn emit_package<'a>(
         }
         package_output
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn never_typed_if_operand_has_no_result_slot() {
+        use crate::context::expression::ExpressionContext;
+        use syntax::ast::Literal;
+        use syntax::types::SimpleKind;
+
+        let input = EmitInput::default();
+        let shared = SharedEmitContext {
+            go_module: "example.com/test",
+            entry_package_name: "main",
+            emit_tests: false,
+            line_indexes: None,
+            globals: GlobalEmitData::default(),
+        };
+        let facts = EmitFacts::new(&input, &shared, "test".into());
+        let mut package = PackageState::default();
+        let mut adapters = AdapterRegistry::default();
+        let mut namespace = FileNamespace::default();
+        let mut planner = Planner::new(facts, &mut package, &mut adapters, &mut namespace);
+        let span = Span::dummy();
+        let diverging = Expression::Loop {
+            body: Box::new(Expression::Block {
+                items: vec![],
+                ty: Type::unit(),
+                span,
+            }),
+            ty: Type::Never,
+            span,
+        };
+        let expression = Expression::If {
+            condition: Box::new(Expression::Literal {
+                literal: Literal::Boolean(true),
+                ty: Type::Simple(SimpleKind::Bool),
+                span,
+            }),
+            consequence: Box::new(diverging.clone()),
+            alternative: Some(Box::new(diverging)),
+            ty: Type::Never,
+            span,
+        };
+        let plan = planner.plan_operand(&expression, ExpressionContext::value());
+        assert!(
+            plan.expression().is_empty(),
+            "a diverging operand has no result"
+        );
+        let (statements, _) = plan.into_parts();
+        assert!(LoweredBlock { statements }.ends_with_diverge());
+    }
+
+    #[test]
+    fn nested_declarations_own_locals_and_share_file_requirements() {
+        let input = EmitInput::default();
+        let shared = SharedEmitContext {
+            go_module: "example.com/test",
+            entry_package_name: "main",
+            emit_tests: false,
+            line_indexes: None,
+            globals: GlobalEmitData::default(),
+        };
+        let facts = EmitFacts::new(&input, &shared, "test".into());
+        let mut package = PackageState::default();
+        let mut adapters = AdapterRegistry::default();
+        let mut namespace = FileNamespace::default();
+        let mut planner = Planner::new(facts, &mut package, &mut adapters, &mut namespace);
+        planner.scope.bind_source("outer", &[], "outer");
+        let outer = planner.fresh_local(Some("value"));
+        planner.with_declaration_scope(|declaration| {
+            assert!(declaration.scope.bound_go_identifier("outer").is_none());
+            assert_eq!(declaration.fresh_local(Some("value")).spelling(), "value");
+            declaration.require_fmt();
+            declaration.with_declaration_scope(|nested| {
+                assert_eq!(nested.fresh_local(Some("value")).spelling(), "value");
+                nested.require_errors();
+            });
+            assert_eq!(declaration.fresh_local(Some("value")).spelling(), "value2");
+        });
+        assert_eq!(outer.spelling(), "value");
+        assert_eq!(planner.fresh_local(Some("value")).spelling(), "value2");
+        assert!(planner.scope.bound_go_identifier("outer").is_some());
+        let (imports, _, diagnostics) = namespace.finish(OutputCollector::new());
+        assert!(diagnostics.is_empty());
+        assert_eq!(
+            imports
+                .iter()
+                .map(|import| import.path.as_str())
+                .collect::<Vec<_>>(),
+            ["errors", "fmt"]
+        );
+    }
 }

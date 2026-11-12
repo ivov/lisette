@@ -5,12 +5,27 @@ use crate::names::go_name;
 use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::plan::values::GoExpression;
 use crate::types::native;
-use crate::types::prelude::PreludeType;
-use std::slice;
+use std::{fmt::Display, slice};
 use syntax::ast::ResolvedCallTypeArguments;
 use syntax::program::DefinitionBody;
 use syntax::program::NativeTypeKind;
 use syntax::types::{CompoundKind, FunctionParameter, SimpleKind, SubstitutionMap, Type};
+
+/// Types whose Go definitions come from the Lisette prelude.
+pub(crate) fn is_prelude_type(name: &str) -> bool {
+    matches!(
+        name,
+        "Option"
+            | "Result"
+            | "Partial"
+            | "Range"
+            | "RangeInclusive"
+            | "RangeFrom"
+            | "RangeTo"
+            | "RangeToInclusive"
+            | "PanicValue"
+    )
+}
 
 /// Whether `return_ty` has no Go result (Unit or Never).
 pub(crate) fn returns_go_void(return_ty: &Type) -> bool {
@@ -110,6 +125,21 @@ impl GoType {
     pub(crate) fn pointer_to(pointee: &GoType) -> Self {
         Self::with_dependencies(format!("*{}", pointee.code), [pointee])
     }
+
+    pub(crate) fn array_of(length: impl Display, element: &GoType) -> Self {
+        Self::with_dependencies(format!("[{length}]{}", element.code), [element])
+    }
+
+    pub(crate) fn prelude(name: &str, arguments: &[GoType]) -> Self {
+        let arguments = Self::type_arguments(arguments);
+        let mut result = Self::stdlib(format!(
+            "{}.{name}{}",
+            go_name::GO_STDLIB_PKG,
+            arguments.code
+        ));
+        result.merge(&arguments);
+        result
+    }
 }
 
 impl Planner<'_> {
@@ -131,12 +161,7 @@ impl Planner<'_> {
             Type::Never => GoType::new("struct{}"),
             Type::Error => unreachable!("Type::Error should not reach the emitter"),
             Type::Tuple(elements) => self.emit_tuple_type(elements),
-            Type::Array { length, element } => {
-                let inner = self.go_type(element);
-                let mut result = GoType::new(format!("[{}]{}", length, inner.code));
-                result.merge(&inner);
-                result
-            }
+            Type::Array { length, element } => GoType::array_of(length, &self.go_type(element)),
             Type::ImportNamespace(_) => {
                 unreachable!("Type::ImportNamespace should not reach the emitter's go_type")
             }
@@ -144,23 +169,16 @@ impl Planner<'_> {
         }
     }
 
-    fn emit_ref_type(&self, inner: &Type) -> GoType {
-        let inner_type = self.go_type(inner);
-        let mut result = GoType::new(format!("*{}", inner_type.code));
-        result.merge(&inner_type);
-        result
-    }
-
     fn emit_compound(&self, kind: CompoundKind, args: &[Type], ty: &Type) -> GoType {
         use syntax::types::CompoundKind;
 
         match kind {
-            CompoundKind::Ref => {
-                self.emit_ref_type(args.first().expect("a reference has a pointee type"))
-            }
+            CompoundKind::Ref => GoType::pointer_to(
+                &self.go_type(args.first().expect("a reference has a pointee type")),
+            ),
             CompoundKind::VarArgs => {
                 let element = self.go_type(args.first().expect("varargs have an element type"));
-                build_param_typed(format!("...{}", element.code), slice::from_ref(&element))
+                GoType::with_dependencies(format!("...{}", element.code), [&element])
             }
             _ => {
                 let native = NativeTypeKind::from_type(ty)
@@ -207,19 +225,13 @@ impl Planner<'_> {
             .and_then(|s| s.strip_suffix('>'))
         {
             let element = self.go_type(mapping.get(elem.trim())?);
-            return Some(GoType::with_dependencies(
-                format!("[]{}", element.code),
-                [&element],
-            ));
+            return Some(GoType::slice_of(&element));
         }
         if let Some(inner) = entry.strip_prefix("Map<").and_then(|s| s.strip_suffix('>')) {
             let (key, value) = inner.split_once(',')?;
             let key = self.go_type(mapping.get(key.trim())?);
             let value = self.go_type(mapping.get(value.trim())?);
-            return Some(GoType::with_dependencies(
-                format!("map[{}]{}", key.code, value.code),
-                [&key, &value],
-            ));
+            return Some(GoType::map_of(&key, &value));
         }
         if let Some(inner) = entry
             .strip_prefix("Array<")
@@ -227,30 +239,14 @@ impl Planner<'_> {
         {
             let (elem, length) = inner.rsplit_once(',')?;
             let element = self.go_type(mapping.get(elem.trim())?);
-            return Some(GoType::with_dependencies(
-                format!("[{}]{}", length.trim(), element.code),
-                [&element],
-            ));
+            return Some(GoType::array_of(length.trim(), &element));
         }
         Some(self.go_type(mapping.get(entry)?))
     }
 
     fn emit_tuple_type(&self, elements: &[Type]) -> GoType {
-        let arity = elements.len();
         let element_types: Vec<GoType> = elements.iter().map(|e| self.go_type(e)).collect();
-
-        let mut result = GoType::stdlib(format!(
-            "{}.Tuple{}[{}]",
-            go_name::GO_STDLIB_PKG,
-            arity,
-            element_types
-                .iter()
-                .map(|t| t.code.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        ));
-        result.merge_all(&element_types);
-        result
+        GoType::prelude(&format!("Tuple{}", elements.len()), &element_types)
     }
 
     fn emit_constructor(&self, qualified_name: &str, params: &[Type], ty: &Type) -> GoType {
@@ -271,34 +267,21 @@ impl Planner<'_> {
         }
 
         let param_types: Vec<GoType> = params.iter().map(|p| self.go_type(p)).collect();
-        let type_args = param_types
-            .iter()
-            .map(|t| t.code.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
+        let type_args = GoType::type_arguments(&param_types);
 
         if let Some(package) = package {
-            let code = if params.is_empty() {
-                name.clone()
-            } else {
-                format!("{}[{}]", name, type_args)
-            };
-            return build_go_import_typed(code, package, &param_types);
-        }
-
-        if let Some(name) = qualified_name.strip_prefix(go_name::PRELUDE_PREFIX)
-            && let Some(prelude) = PreludeType::from_name(name)
-        {
-            let type_arg_vec: Vec<String> = param_types.iter().map(|t| t.code.clone()).collect();
-            let mut result = GoType::stdlib(prelude.emit_type(&type_arg_vec));
-            result.merge_all(&param_types);
+            let mut result = GoType::with_package(format!("{name}{}", type_args.code), package);
+            result.merge(&type_args);
             return result;
         }
 
-        if params.is_empty() {
-            return GoType::new(name);
+        if let Some(name) = qualified_name.strip_prefix(go_name::PRELUDE_PREFIX)
+            && is_prelude_type(name)
+        {
+            return GoType::prelude(name, &param_types);
         }
-        build_param_typed(format!("{}[{}]", name, type_args), &param_types)
+
+        GoType::with_dependencies(format!("{name}{}", type_args.code), [&type_args])
     }
 
     fn emit_native_type(&self, kind: NativeTypeKind, ty: &Type) -> GoType {
@@ -314,7 +297,7 @@ impl Planner<'_> {
         let arg_types: Vec<GoType> = args.iter().map(|a| self.go_type(a)).collect();
         let type_args: Vec<String> = arg_types.iter().map(|t| t.code.clone()).collect();
 
-        build_param_typed(native::emit_type_syntax(kind, &type_args), &arg_types)
+        GoType::with_dependencies(native::emit_type_syntax(kind, &type_args), &arg_types)
     }
 
     fn emit_function_type(&self, params: &[FunctionParameter], return_ty: &Type) -> GoType {
@@ -496,18 +479,6 @@ impl Planner<'_> {
         };
         Some(result)
     }
-}
-
-fn build_param_typed(code: String, param_types: &[GoType]) -> GoType {
-    let mut result = GoType::new(code);
-    result.merge_all(param_types);
-    result
-}
-
-fn build_go_import_typed(code: String, package: PackageUse, param_types: &[GoType]) -> GoType {
-    let mut result = GoType::with_package(code, package);
-    result.merge_all(param_types);
-    result
 }
 
 /// Split a recipe like `Map<K, V>, K, V` on commas outside angle brackets, so a

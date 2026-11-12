@@ -1,9 +1,9 @@
 mod names;
 
+use std::ptr;
+
 use names::LocalNames;
 use rustc_hash::FxHashSet as HashSet;
-use std::mem;
-use syntax::collections::FlatMap;
 
 use crate::ReturnContext;
 use crate::context::lowering::LoopContext;
@@ -24,15 +24,16 @@ pub(crate) struct ScopeState {
     type_params: Vec<TypeParam>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct BindingSlot(u32);
-
-const _: () = assert!(size_of::<BindingSlot>() == 4);
+/// One binding can be read by source spelling and by several pattern alternatives.
+/// Later records shadow earlier ones independently for each of those keys.
+struct Binding {
+    name: String,
+    ids: Vec<BindingId>,
+    value: BindingValue,
+}
 
 struct ScopeFrame {
-    bindings: FlatMap<String, BindingSlot>,
-    binding_ids: FlatMap<BindingId, BindingSlot>,
-    binding_values: Vec<BindingValue>,
+    bindings: Vec<Binding>,
     declarations: DeclarationScope,
     /// Conditions the branch being lowered has already tested in this scope.
     established: Vec<GoExpression>,
@@ -86,9 +87,7 @@ pub(crate) enum PairStatusKind {
 impl ScopeFrame {
     fn new(declarations: DeclarationScope) -> Self {
         Self {
-            bindings: FlatMap::default(),
-            binding_ids: FlatMap::default(),
-            binding_values: Vec::new(),
+            bindings: Vec::new(),
             declarations,
             established: Vec::new(),
         }
@@ -106,14 +105,6 @@ impl ScopeState {
             ))],
             type_params: Vec::new(),
         }
-    }
-
-    pub(crate) fn begin_declaration(&mut self) -> ScopeState {
-        mem::replace(self, Self::new())
-    }
-
-    pub(crate) fn end_declaration(&mut self, outer: ScopeState) {
-        *self = outer;
     }
 
     pub(crate) fn set_type_params(&mut self, type_params: Vec<TypeParam>) {
@@ -249,12 +240,22 @@ impl ScopeState {
     }
 
     pub(crate) fn resolve_identifier_binding(&self, lisette_name: &str) -> Option<&BindingValue> {
-        self.frames.iter().rev().find_map(|frame| {
-            frame
-                .bindings
-                .get(lisette_name)
-                .and_then(|slot| frame.binding_values.get(slot.0 as usize))
-        })
+        self.bindings()
+            .find(|binding| binding.name == lisette_name)
+            .map(|binding| &binding.value)
+    }
+
+    fn bindings(&self) -> impl Iterator<Item = &Binding> {
+        self.frames
+            .iter()
+            .rev()
+            .flat_map(|frame| frame.bindings.iter().rev())
+    }
+
+    fn visible_bindings(&self) -> impl Iterator<Item = &Binding> {
+        let mut seen = HashSet::default();
+        self.bindings()
+            .filter(move |binding| seen.insert(binding.name.as_str()))
     }
 
     pub(crate) fn bound_go_identifier(&self, lisette_name: &str) -> Option<&GoIdentifier> {
@@ -265,27 +266,39 @@ impl ScopeState {
     }
 
     pub(crate) fn resolve_binding_id(&self, id: BindingId) -> Option<&BindingValue> {
-        self.frames.iter().rev().find_map(|frame| {
-            frame
-                .binding_ids
-                .get(&id)
-                .and_then(|slot| frame.binding_values.get(slot.0 as usize))
-        })
+        self.bindings()
+            .find(|binding| binding.ids.contains(&id))
+            .map(|binding| &binding.value)
+    }
+
+    fn id_resolves_to(&self, id: BindingId, binding: &Binding) -> bool {
+        self.resolve_binding_id(id)
+            .is_some_and(|value| ptr::eq(value, &binding.value))
+    }
+
+    fn is_reachable(&self, binding: &Binding) -> bool {
+        self.resolve_identifier_binding(&binding.name)
+            .is_some_and(|value| ptr::eq(value, &binding.value))
+            || binding
+                .ids
+                .iter()
+                .any(|id| self.id_resolves_to(*id, binding))
     }
 
     /// Find the source binding for this local, including captured locals hidden by a spelling.
     pub(crate) fn source_binding_for_local(&self, local: &GoIdentifier) -> Option<BindingId> {
         let local_id = local.id()?;
-        self.frames.iter().rev().find_map(|frame| {
-            frame
-                .binding_ids
+        self.bindings().find_map(|binding| {
+            if !matches!(&binding.value, BindingValue::GoName(name) if name.id() == Some(local_id))
+            {
+                return None;
+            }
+            binding
+                .ids
                 .iter()
-                .filter(|(_, slot)| {
-                    matches!(frame.binding_values.get(slot.0 as usize),
-                    Some(BindingValue::GoName(name)) if name.id() == Some(local_id))
-                })
-                .max_by_key(|(id, slot)| (**slot, **id))
-                .map(|(id, _)| *id)
+                .copied()
+                .filter(|id| self.id_resolves_to(*id, binding))
+                .max()
         })
     }
 
@@ -303,34 +316,24 @@ impl ScopeState {
         }
     }
 
+    /// A local stays bound through either a visible spelling or a captured binding ID.
     pub(crate) fn has_binding_for_local(&self, local: &GoIdentifier) -> bool {
         let Some(id) = local.id() else {
             return false;
         };
-        self.current_function()
-            .assign_targets
-            .iter()
+        self.active_assign_targets()
             .any(|target| target.id() == Some(id))
-            || self.frames.iter().any(|frame| {
-                frame
-                    .bindings
-                    .values()
-                    .any(|slot| frame.binding_values[slot.0 as usize].mentions_local(local))
-            })
+            || self
+                .bindings()
+                .any(|binding| binding.value.mentions_local(local) && self.is_reachable(binding))
     }
 
     /// Whether a visible binding or an active assign target uses `go_name`.
     pub(crate) fn has_binding_for_go_name(&self, go_name: &str) -> bool {
         self.is_active_assign_target(go_name)
-            || self.frames.iter().any(|frame| {
-                frame.bindings.iter().any(|(source_name, slot)| {
-                    let value = &frame.binding_values[slot.0 as usize];
-                    value.mentions(go_name)
-                        && self
-                            .resolve_identifier_binding(source_name)
-                            .is_some_and(|visible| visible.mentions(go_name))
-                })
-            })
+            || self
+                .visible_bindings()
+                .any(|binding| binding.value.mentions(go_name))
     }
 
     /// Whether `expression` reads a visible binding that `go_name` spells,
@@ -350,15 +353,9 @@ impl ScopeState {
     }
 
     pub(crate) fn has_other_binding_for_go_name(&self, go_name: &str, ids: &[BindingId]) -> bool {
-        self.frames.iter().any(|frame| {
-            frame.bindings.iter().any(|(source_name, slot)| {
-                let value = &frame.binding_values[slot.0 as usize];
-                !ids.iter().any(|id| frame.binding_ids.get(id) == Some(slot))
-                    && value.mentions(go_name)
-                    && self
-                        .resolve_identifier_binding(source_name)
-                        .is_some_and(|visible| visible.mentions(go_name))
-            })
+        self.visible_bindings().any(|binding| {
+            binding.value.mentions(go_name)
+                && !ids.iter().any(|id| self.id_resolves_to(*id, binding))
         })
     }
 
@@ -531,10 +528,19 @@ impl ScopeState {
     }
 
     pub(crate) fn is_active_assign_target(&self, var: &str) -> bool {
-        self.current_function()
-            .assign_targets
-            .iter()
+        self.active_assign_targets()
             .any(|target| target.spelling() == var)
+    }
+
+    fn active_assign_targets(&self) -> impl Iterator<Item = &GoIdentifier> {
+        let function = self.current_function();
+        function.assign_targets.iter().chain(
+            function
+                .loops
+                .iter()
+                .filter_map(|context| context.result.as_identifier())
+                .filter(|name| name.spelling() != "_"),
+        )
     }
 
     fn current_function(&self) -> &FunctionScope {
@@ -581,15 +587,11 @@ impl ScopeState {
     }
 
     fn set_binding(&mut self, name: String, ids: &[BindingId], value: BindingValue) {
-        let frame = self.current_frame_mut();
-        let slot = BindingSlot(
-            u32::try_from(frame.binding_values.len()).expect("too many scope bindings"),
-        );
-        frame.binding_values.push(value);
-        frame.bindings.insert(name, slot);
-        for id in ids {
-            frame.binding_ids.insert(*id, slot);
-        }
+        self.current_frame_mut().bindings.push(Binding {
+            name,
+            ids: ids.to_vec(),
+            value,
+        });
     }
 
     fn current_declarations(&self) -> &Declarations {
@@ -637,9 +639,9 @@ mod tests {
     #[test]
     fn isolated_functions_hide_enclosing_loops_and_assign_targets() {
         let mut scope = ScopeState::new();
-        scope.push_loop(GoExpression::name("result".to_string()), None);
         let result = scope.new_local_identifier("result");
-        scope.push_assign_target(result);
+        scope.push_loop(GoExpression::identifier(result.clone()), None);
+        assert!(scope.has_binding_for_local(&result));
         let outer_loop = scope.current_loop_id();
 
         scope.enter_isolated_function(ReturnContext::None);
@@ -651,6 +653,9 @@ mod tests {
         assert_eq!(scope.current_loop_id(), outer_loop);
         assert!(scope.is_active_assign_target("result"));
         assert!(scope.has_binding_for_go_name("result"));
+        scope.pop_loop();
+        assert!(!scope.is_active_assign_target("result"));
+        assert!(!scope.has_binding_for_local(&result));
     }
 
     #[test]
@@ -791,6 +796,40 @@ mod tests {
         scope.exit_block();
         assert_eq!(scope.source_binding_for_local(&outer), Some(outer_id));
         assert_eq!(scope.source_binding_for_local(&inner), None);
+    }
+
+    #[test]
+    fn captured_binding_remains_active_after_same_frame_shadowing() {
+        let mut scope = ScopeState::new();
+        let captured = scope.bind_source("value", &[BindingId::new(1)], "value");
+        scope.bind_source("value", &[BindingId::new(2)], "replacement");
+        assert!(scope.has_binding_for_local(&captured));
+        assert!(!scope.has_binding_for_go_name("value"));
+    }
+
+    #[test]
+    fn rebinding_one_alternative_leaves_the_other_on_its_original_value() {
+        let mut scope = ScopeState::new();
+        let first = BindingId::new(1);
+        let second = BindingId::new(2);
+        let original = scope.bind_source("value", &[first, second], "original");
+        let rebound = scope.bind_source("value", &[second], "rebound");
+        assert_eq!(scope.source_binding_for_local(&original), Some(first));
+        assert_eq!(scope.source_binding_for_local(&rebound), Some(second));
+        scope.bind_source("value", &[first], "latest");
+        assert_eq!(scope.source_binding_for_local(&original), None);
+        assert!(!scope.has_binding_for_local(&original));
+        assert!(scope.has_binding_for_local(&rebound));
+    }
+
+    #[test]
+    fn a_rebound_id_does_not_exempt_a_different_visible_name_from_collisions() {
+        let mut scope = ScopeState::new();
+        let id = BindingId::new(1);
+        scope.bind_source("first", &[id], "original");
+        scope.bind_source("second", &[id], "rebound");
+        assert!(scope.has_other_binding_for_go_name("original", &[id]));
+        assert!(!scope.has_other_binding_for_go_name("rebound", &[id]));
     }
 
     #[test]

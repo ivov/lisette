@@ -159,7 +159,7 @@ impl BoundValue {
     /// The payload expression, valid once the some-condition holds.
     pub(crate) fn payload(&self) -> Option<GoExpression> {
         match &self.source {
-            BoundSource::Index { index, .. } => Some(index.element.clone()),
+            BoundSource::Index { index, .. } => Some(index.element()),
             _ => self
                 .payload_identifier()
                 .cloned()
@@ -181,7 +181,7 @@ impl BoundValue {
             && pair.borrowed
             && let Some(shared) = pair.value.name()
         {
-            let copy = planner.fresh_pair_identifier();
+            let copy = planner.fresh_declared("ret");
             let shared = GoExpression::identifier(shared.clone());
             self.statements.push(define(copy.clone(), shared));
             pair.value = PairValue::Named {
@@ -216,7 +216,7 @@ impl BoundValue {
         else {
             return None;
         };
-        Some(define(target.clone(), index.element.clone()))
+        Some(define(target.clone(), index.element()))
     }
 
     pub(crate) fn discard_value(&mut self) {
@@ -276,8 +276,7 @@ impl BoundValue {
                     condition: test,
                 }
             }
-            BoundSource::Index { index, .. } if success => plain(index.in_bounds.clone()),
-            BoundSource::Index { index, .. } => plain(index.out_of_bounds.clone()),
+            BoundSource::Index { index, .. } => plain(index.condition(success)),
             BoundSource::Found { flag, .. } if success => {
                 plain(GoExpression::identifier(flag.clone()))
             }

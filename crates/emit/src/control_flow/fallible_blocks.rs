@@ -240,8 +240,7 @@ impl Planner<'_> {
         let fallible = Fallible::from_type(&effective_ty)
             .expect("recover block type must be Result<T, PanicValue>");
 
-        let result_var = self.fresh_local(Some("recoverResult"));
-        self.declare(&result_var);
+        let result_var = self.fresh_declared("recoverResult");
         let inner_ty_str = self.go_type(fallible.ok_ty());
 
         let body_return_ctx = if fallible.ok_ty().is_unit() {

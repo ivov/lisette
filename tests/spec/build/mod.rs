@@ -6835,6 +6835,45 @@ fn main() {
 }
 
 #[test]
+fn adapter_reuse_across_files_keeps_one_declaration_with_its_imports() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "types.lis",
+        r#"
+struct Entry { value: int }
+interface Cache {
+  #[go(comma_ok)]
+  fn get() -> Option<Ref<Entry>>
+}
+struct Store {}
+impl Store {
+  fn get(self) -> Option<Ref<Entry>> { None }
+}
+fn consume(cache: Cache) -> bool { cache.get().is_none() }
+"#,
+    );
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "first.lis",
+        r#"
+fn first() -> bool { consume(Store {} as Cache) }
+"#,
+    );
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  if !first() { panic("first adaptation failed") }
+  if !consume(Store {} as Cache) { panic("reused adaptation failed") }
+}
+"#,
+    );
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn inherited_comma_ok_hint_propagates_to_child_iface_cast() {
     let mut fs = MockFileSystem::new();
 
@@ -10439,6 +10478,17 @@ fn main() {
   fmt.Println(time, ds.length())
 }
 "#,
+    );
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn lowered_partial_both_preserves_argument_order() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        include_str!("../../fixtures/emit/partial_both_order.lis"),
     );
     assert_build_snapshot!(fs, "github.com/user/myproject");
 }

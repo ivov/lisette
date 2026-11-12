@@ -3,8 +3,8 @@ use syntax::ast::{Binding, Expression, Pattern};
 use syntax::program::NativeTypeKind;
 use syntax::types::Type;
 
+use super::NativeCallContext;
 use super::native::NativeCallResult;
-use super::{NativeCallContext, NativeCallForm, NativeMethodCall};
 use crate::Planner;
 use crate::abi::is_closure_literal;
 use crate::abi::layout::SlotOrigin;
@@ -17,7 +17,7 @@ use crate::plan::bodies::{
 };
 use crate::plan::go_expression::UnaryOp;
 use crate::plan::lower::is_conjunction;
-use crate::plan::values::{CaptureBoundary, GoExpression, OperandForm, Stability, ValuePlan};
+use crate::plan::values::{GoExpression, OperandForm, Stability, ValuePlan};
 use crate::statements::let_binding::needs_explicit_type_declaration;
 use crate::types::go_type::GoType;
 
@@ -160,22 +160,6 @@ impl PlannedLoop<'_> {
     }
 }
 
-fn loop_context<'a>(call: &'a NativeMethodCall<'a>, call_ty: &'a Type) -> NativeCallContext<'a> {
-    NativeCallContext {
-        function: call.function,
-        form: NativeCallForm::method(call.function),
-        args: call.args,
-        spread: call.spread,
-        resolved_type_args: call.resolved_type_args,
-        abi: &call.abi,
-        call_ty: Some(call_ty),
-        native_type: &NativeTypeKind::Slice,
-        method: call.method,
-        capture_boundary: CaptureBoundary::SiblingSequence,
-        retired_receiver: None,
-    }
-}
-
 fn peel_single_expression_block(body: &Expression) -> &Expression {
     match body {
         Expression::Block { items, .. } if items.len() == 1 => {
@@ -200,7 +184,7 @@ fn name(text: &str) -> GoExpression {
     GoExpression::external_name(text.to_string())
 }
 
-fn callback_param<'a>(ctx: &NativeCallContext<'a>) -> (Option<&'a Type>, Option<&'a Type>) {
+fn callback_param<'a>(ctx: &'a NativeCallContext<'_>) -> (Option<&'a Type>, Option<&'a Type>) {
     let param = ctx.abi.param(ctx.args.len() - 1);
     (
         param.and_then(|param| param.declared.as_ref()),
@@ -210,12 +194,8 @@ fn callback_param<'a>(ctx: &NativeCallContext<'a>) -> (Option<&'a Type>, Option<
 
 impl Planner<'_> {
     /// The parts of a slice method call that inline as a loop.
-    fn slice_loop_shape<'a>(
-        &self,
-        ctx: &NativeCallContext<'_>,
-        receiver: &Expression,
-        args: &'a [Expression],
-    ) -> Option<SliceLoopShape<'a>> {
+    fn slice_loop_shape<'a>(&self, ctx: &NativeCallContext<'a>) -> Option<SliceLoopShape<'a>> {
+        let (receiver, args) = ctx.receiver_and_arguments()?;
         let kind = SliceLoop::from_method(ctx.method)?;
         if args.len() != kind.argument_count() || ctx.spread.is_some() {
             return None;
@@ -269,49 +249,28 @@ impl Planner<'_> {
         go_name: &GoIdentifier,
     ) -> Option<Vec<Statement>> {
         let call = self.native_method_call(value)?;
-        if !matches!(call.kind, NativeTypeKind::Slice) {
+        if !matches!(call.native_type, NativeTypeKind::Slice) {
             return None;
         }
-        let ty = value.get_type();
-        let ctx = loop_context(&call, &ty);
-        self.try_lower_slice_loop(
-            &ctx,
-            call.receiver,
-            call.arguments,
-            SliceLoopTarget::Into(go_name),
-        )
-        .map(|result| result.setup)
+        self.try_lower_slice_loop(&call, SliceLoopTarget::Into(go_name))
+            .map(|result| result.setup)
     }
 
-    pub(crate) fn find_loop_fuses(
-        &self,
-        subject: &Expression,
-        call: &NativeMethodCall<'_>,
-    ) -> bool {
-        if !matches!(call.kind, NativeTypeKind::Slice) || call.method != "find" {
+    pub(crate) fn find_loop_fuses(&self, call: &NativeCallContext<'_>) -> bool {
+        if !matches!(call.native_type, NativeTypeKind::Slice) || call.method != "find" {
             return false;
         }
-        let ty = subject.get_type();
-        self.slice_loop_shape(&loop_context(call, &ty), call.receiver, call.arguments)
-            .is_some()
+        self.slice_loop_shape(call).is_some()
     }
 
     pub(crate) fn lower_find_loop(
         &mut self,
-        subject: &Expression,
-        call: &NativeMethodCall<'_>,
+        call: &NativeCallContext<'_>,
         sink: FoundSink<'_>,
     ) -> Vec<Statement> {
-        let ty = subject.get_type();
-        let ctx = loop_context(call, &ty);
-        self.try_lower_slice_loop(
-            &ctx,
-            call.receiver,
-            call.arguments,
-            SliceLoopTarget::Found(sink),
-        )
-        .expect("find_loop_fuses accepted this call")
-        .setup
+        self.try_lower_slice_loop(call, SliceLoopTarget::Found(sink))
+            .expect("find_loop_fuses accepted this call")
+            .setup
     }
 
     /// Lower `xs.map(|x| ...)` and its siblings to the loop the prelude helper
@@ -319,16 +278,15 @@ impl Planner<'_> {
     pub(super) fn try_lower_slice_loop(
         &mut self,
         ctx: &NativeCallContext,
-        receiver: &Expression,
-        args: &[Expression],
         target: SliceLoopTarget<'_>,
     ) -> Option<NativeCallResult> {
+        let (receiver, args) = ctx.receiver_and_arguments()?;
         let SliceLoopShape {
             kind,
             callback,
             result_ty,
             element_ty,
-        } = self.slice_loop_shape(ctx, receiver, args)?;
+        } = self.slice_loop_shape(ctx)?;
         if matches!(target, SliceLoopTarget::Found(_)) && kind != SliceLoop::Find {
             return None;
         }

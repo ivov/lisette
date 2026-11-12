@@ -2,7 +2,6 @@ use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::transition;
 use crate::control_flow::propagation::plain_return;
-use crate::names::go_name;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::plan::bodies::Statement;
@@ -235,15 +234,12 @@ impl Planner<'_> {
     }
 
     pub(crate) fn fallible_go_type(&self, fallible: &Fallible) -> GoType {
-        let type_args = self.fallible_type_args(fallible.ok_ty(), fallible.err_ty());
-        let mut go_type = GoType::stdlib(format!(
-            "{}.{}{}",
-            go_name::GO_STDLIB_PKG,
-            fallible.struct_name(),
-            type_args.code
-        ));
-        go_type.merge(&type_args);
-        go_type
+        let arguments: Vec<_> = [Some(fallible.ok_ty()), fallible.err_ty()]
+            .into_iter()
+            .flatten()
+            .map(|ty| self.go_type(ty))
+            .collect();
+        GoType::prelude(fallible.struct_name(), &arguments)
     }
 
     pub(crate) fn fallible_call(

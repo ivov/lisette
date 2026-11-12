@@ -1,0 +1,19 @@
+import "go:fmt"
+import "go:io"
+
+fn first() -> int {
+  let _ = fmt.Println("first")
+  1
+}
+
+fn second(_printed: int) -> error { io.EOF }
+
+struct OrderedWriter {}
+impl OrderedWriter {
+  fn Write(self, _data: Slice<byte>) -> Partial<int, error> {
+    Partial.Both(first(), second(fmt.Println("second").unwrap_or(0)))
+  }
+}
+
+fn use_writer(writer: io.Writer) { let _ = writer.Write([1]) }
+fn main() { use_writer(OrderedWriter {}) }

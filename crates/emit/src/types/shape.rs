@@ -12,6 +12,19 @@ pub(crate) enum RangeShape {
     RangeToInclusive,
 }
 
+impl RangeShape {
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "Range" => Some(Self::Range),
+            "RangeInclusive" => Some(Self::RangeInclusive),
+            "RangeFrom" => Some(Self::RangeFrom),
+            "RangeTo" => Some(Self::RangeTo),
+            "RangeToInclusive" => Some(Self::RangeToInclusive),
+            _ => None,
+        }
+    }
+}
+
 impl Planner<'_> {
     /// Normalize a type for emit decisions by walking aliases and reference
     /// wrappers to a fixed point. Only peels real type aliases (not newtypes).
@@ -46,13 +59,6 @@ impl Planner<'_> {
         let Type::Nominal { id, .. } = resolved else {
             return None;
         };
-        match id.as_str() {
-            "prelude.Range" => Some(RangeShape::Range),
-            "prelude.RangeInclusive" => Some(RangeShape::RangeInclusive),
-            "prelude.RangeFrom" => Some(RangeShape::RangeFrom),
-            "prelude.RangeTo" => Some(RangeShape::RangeTo),
-            "prelude.RangeToInclusive" => Some(RangeShape::RangeToInclusive),
-            _ => None,
-        }
+        RangeShape::from_name(id.strip_prefix("prelude.")?)
     }
 }

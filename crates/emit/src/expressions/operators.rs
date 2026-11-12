@@ -17,6 +17,20 @@ struct NumericBinaryEmitInfo {
     cast_right_to: Option<Type>,
 }
 
+fn imaginary_product(value: GoExpression, coefficient: f64) -> GoExpression {
+    GoExpression::call(
+        GoExpression::external_name("complex".to_string()),
+        vec![
+            GoExpression::literal("0".to_string()),
+            GoExpression::binary(
+                value,
+                BinaryOp::Mul,
+                GoExpression::literal(coefficient.to_string()),
+            ),
+        ],
+    )
+}
+
 pub(crate) struct BinaryOperand {
     pub(crate) ty: Type,
     pub(crate) is_literal: bool,
@@ -66,19 +80,7 @@ impl Planner<'_> {
                 && !left_ty.is_complex()
             {
                 let staged = self.plan_operand(left_expression, ctx);
-                return staged.map_expression(|_, value| {
-                    GoExpression::call(
-                        GoExpression::external_name("complex".to_string()),
-                        vec![
-                            GoExpression::literal("0".to_string()),
-                            GoExpression::binary(
-                                value,
-                                BinaryOp::Mul,
-                                GoExpression::literal(imag_coef.to_string()),
-                            ),
-                        ],
-                    )
-                });
+                return staged.map_expression(|_, value| imaginary_product(value, *imag_coef));
             }
             if let Expression::Literal {
                 literal: Literal::Imaginary(imag_coef),
@@ -88,19 +90,7 @@ impl Planner<'_> {
                 && !right_ty.is_complex()
             {
                 let staged = self.plan_operand(right_expression, ctx);
-                return staged.map_expression(|_, value| {
-                    GoExpression::call(
-                        GoExpression::external_name("complex".to_string()),
-                        vec![
-                            GoExpression::literal("0".to_string()),
-                            GoExpression::binary(
-                                value,
-                                BinaryOp::Mul,
-                                GoExpression::literal(imag_coef.to_string()),
-                            ),
-                        ],
-                    )
-                });
+                return staged.map_expression(|_, value| imaginary_product(value, *imag_coef));
             }
         }
 

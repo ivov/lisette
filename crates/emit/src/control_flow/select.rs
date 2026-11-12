@@ -2,7 +2,7 @@ use crate::OuterBindings;
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::patterns::sites::{
-    self, AnnotatedPattern, PatternSubject, TypedSubject, is_some_pattern, unwrap_some_pattern,
+    self, PatternSubject, TypedSubject, is_some_pattern, unwrap_some_pattern,
 };
 use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
@@ -26,7 +26,6 @@ struct SelectReceiveContext<'a> {
     channel: &'a GoExpression,
     body: &'a Expression,
     default_body: Option<&'a Expression>,
-    retry_var: Option<&'a GoExpression>,
     element_ty: Type,
     place: &'a PlacePlan<'a>,
 }
@@ -125,7 +124,6 @@ impl Planner<'_> {
                         channel: &channel,
                         body,
                         default_body,
-                        retry_var: is_some_pattern(binding).then_some(&channel),
                         element_ty,
                         place,
                     };
@@ -254,44 +252,20 @@ impl Planner<'_> {
         // IR is structurally non-empty.
         let body_block = self.lower_block_to_place(ctx.body, ctx.place);
         let body_empty = body_block.renders_empty();
-        let else_block = self.build_ok_else_block(ctx);
-        let has_else = else_block.is_some();
-
-        if body_empty && !has_else {
-            return Vec::new();
-        }
+        let else_block = retry_closed_channel(ctx.channel);
 
         let ok = GoExpression::identifier(ok_var.clone());
         let plan = if body_empty {
             IfPlan::plain(
                 GoExpression::unary(UnaryOp::Not, ok),
-                else_block.expect("body_empty && has_else"),
+                else_block,
                 ElseArm::None,
             )
         } else {
-            let else_arm = match else_block {
-                Some(body) => ElseArm::from_body(body, false),
-                None => ElseArm::None,
-            };
+            let else_arm = ElseArm::from_body(else_block, false);
             IfPlan::plain(ok, body_block, else_arm)
         };
         vec![LoweredStatement::If(plan).into()]
-    }
-
-    /// Else branch for an ok-check: retry (`v = nil; continue`) or default
-    /// body. `None` when neither applies or the default lowers empty.
-    fn build_ok_else_block(&mut self, ctx: &SelectReceiveContext) -> Option<LoweredBlock> {
-        if let Some(retry_var) = ctx.retry_var {
-            return Some(LoweredBlock {
-                statements: vec![
-                    assign(retry_var.clone(), GoExpression::nil()),
-                    LoweredStatement::Continue(LoopTransfer::Unlabeled).into(),
-                ],
-            });
-        }
-        let default_body = ctx.default_body?;
-        let block = self.lower_block_to_place(default_body, ctx.place);
-        (!block.is_empty()).then_some(block)
     }
 
     /// `case v, ok := <-ch:` plus an `if ok { ... } else { ... }` body.
@@ -314,7 +288,7 @@ impl Planner<'_> {
                         var: &receiver_subject,
                         ty: &ctx.element_ty,
                     },
-                    AnnotatedPattern { pattern },
+                    pattern,
                     ctx.body,
                     ctx.default_body,
                     ctx.place,
@@ -330,10 +304,7 @@ impl Planner<'_> {
             (receiver_var, ok_var, then_statements)
         });
 
-        let else_arm = match self.build_ok_else_block(ctx) {
-            Some(body) => ElseArm::from_body(body, false),
-            None => ElseArm::None,
-        };
+        let else_arm = ElseArm::from_body(retry_closed_channel(ctx.channel), false);
         let receive_vars = vec![receiver_var, ok_var.clone()];
         let if_plan = IfPlan::plain(
             GoExpression::identifier(ok_var),
@@ -616,15 +587,23 @@ impl Planner<'_> {
             LoweredBlock {
                 statements: this.lower_select_match_receive_some_site(
                     subject,
-                    AnnotatedPattern {
-                        pattern: &fields[0],
-                    },
+                    &fields[0],
                     &some_arm.expression,
                     match_arms,
                     place,
                 ),
             }
         })
+    }
+}
+
+/// Disable a closed channel before retrying the remaining select arms.
+fn retry_closed_channel(channel: &GoExpression) -> LoweredBlock {
+    LoweredBlock {
+        statements: vec![
+            assign(channel.clone(), GoExpression::nil()),
+            LoweredStatement::Continue(LoopTransfer::Unlabeled).into(),
+        ],
     }
 }
 

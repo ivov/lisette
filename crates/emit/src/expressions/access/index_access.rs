@@ -1,3 +1,4 @@
+use crate::types::shape::RangeShape;
 use syntax::ast::Expression;
 use syntax::program::NativeTypeKind;
 use syntax::types::peel_to_range_type;
@@ -38,7 +39,7 @@ impl Planner<'_> {
         // or `r: Prefix` where `type Prefix = RangeTo<int>`).
         let index_ty = index.get_type();
         if let Some(range_kind) = peel_to_range_type(&index_ty, |id| self.facts.definition(id))
-            .and_then(|ty| ty.get_name().map(str::to_owned))
+            .and_then(|ty| RangeShape::from_name(ty.get_name()?))
         {
             let needs_cap = self.is_native_shape(&expression.get_type(), NativeTypeKind::Slice);
             if !base_staged.effects().can_duplicate() {
@@ -53,7 +54,7 @@ impl Planner<'_> {
             let mut values = sequenced.values.into_iter();
             let base = values.next().expect("range index has a base");
             let range = values.next().expect("range index has a range");
-            let value = range_var_slice(base, &range, &range_kind, needs_cap);
+            let value = range_var_slice(base, &range, range_kind, needs_cap);
             return ValuePlan::computed(sequenced.setup, value);
         }
 
@@ -234,19 +235,18 @@ impl Planner<'_> {
 /// The `[start:end]` bounds a range-typed value denotes, by range kind.
 pub(crate) fn range_var_bounds(
     range: &GoExpression,
-    range_kind: &str,
+    range_kind: RangeShape,
 ) -> (Option<GoExpression>, Option<GoExpression>) {
     let start = || GoExpression::selector(range.clone(), "Start".to_string());
     let end = || GoExpression::selector(range.clone(), "End".to_string());
     let end_inclusive =
         || GoExpression::binary(end(), BinaryOp::Add, GoExpression::literal("1".to_string()));
     match range_kind {
-        "Range" => (Some(start()), Some(end())),
-        "RangeInclusive" => (Some(start()), Some(end_inclusive())),
-        "RangeFrom" => (Some(start()), None),
-        "RangeTo" => (None, Some(end())),
-        "RangeToInclusive" => (None, Some(end_inclusive())),
-        _ => unreachable!("unexpected range kind: {}", range_kind),
+        RangeShape::Range => (Some(start()), Some(end())),
+        RangeShape::RangeInclusive => (Some(start()), Some(end_inclusive())),
+        RangeShape::RangeFrom => (Some(start()), None),
+        RangeShape::RangeTo => (None, Some(end())),
+        RangeShape::RangeToInclusive => (None, Some(end_inclusive())),
     }
 }
 
@@ -257,7 +257,7 @@ pub(crate) fn range_var_bounds(
 fn range_var_slice(
     base: GoExpression,
     range: &GoExpression,
-    range_kind: &str,
+    range_kind: RangeShape,
     needs_cap: bool,
 ) -> GoExpression {
     let (start, end) = range_var_bounds(range, range_kind);

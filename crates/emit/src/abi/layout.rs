@@ -5,7 +5,6 @@ use syntax::types::{CompoundKind, Symbol, Type};
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi};
 use crate::abi::{go_result_list, is_prelude_container_type, tuple_element_types};
-use crate::names::go_name;
 use crate::types::go_type::GoType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -339,23 +338,20 @@ impl ValueLayout {
     pub(crate) fn go_type(&self, planner: &Planner<'_>) -> GoType {
         match self {
             Self::NullableOption { payload, .. } => payload.go_type(planner),
-            Self::PointerOption { payload, .. } => derived_go_type("*", payload.go_type(planner)),
-            Self::Reference { pointee, .. } => derived_go_type("*", pointee.go_type(planner)),
-            Self::Slice { element, .. } => derived_go_type("[]", element.go_type(planner)),
+            Self::PointerOption { payload, .. } => GoType::pointer_to(&payload.go_type(planner)),
+            Self::Reference { pointee, .. } => GoType::pointer_to(&pointee.go_type(planner)),
+            Self::Slice { element, .. } => GoType::slice_of(&element.go_type(planner)),
             Self::Map { key, value, .. } => {
                 let key = key.go_type(planner);
                 let value = value.go_type(planner);
-                GoType::with_dependencies(
-                    format!("map[{}]{}", key.code, value.code),
-                    [&key, &value],
-                )
+                GoType::map_of(&key, &value)
             }
             Self::Array {
                 length, element, ..
-            } => derived_go_type(&format!("[{length}]"), element.go_type(planner)),
+            } => GoType::array_of(length, &element.go_type(planner)),
             Self::Function { layout, .. } => layout.go_type(planner),
             Self::TaggedOption { payload, .. } => {
-                container_go_type("Option", &[payload.go_type(planner)])
+                GoType::prelude("Option", &[payload.go_type(planner)])
             }
             Self::Fallible {
                 fallible_type,
@@ -367,35 +363,18 @@ impl ValueLayout {
                 } else {
                     "Result"
                 };
-                container_go_type(name, &[payload.go_type(planner), error.go_type(planner)])
+                GoType::prelude(name, &[payload.go_type(planner), error.go_type(planner)])
             }
             Self::Tuple { elements, .. } => {
                 let types: Vec<_> = elements
                     .iter()
                     .map(|element| element.go_type(planner))
                     .collect();
-                container_go_type(&format!("Tuple{}", elements.len()), &types)
+                GoType::prelude(&format!("Tuple{}", elements.len()), &types)
             }
             Self::Plain(ty) | Self::Named { named_type: ty, .. } => planner.go_type(ty),
         }
     }
-}
-
-fn container_go_type(name: &str, elements: &[GoType]) -> GoType {
-    let arguments = elements
-        .iter()
-        .map(|element| element.code.as_str())
-        .collect::<Vec<_>>()
-        .join(", ");
-    let mut ty = GoType::stdlib(format!("{}.{name}[{arguments}]", go_name::GO_STDLIB_PKG));
-    for element in elements {
-        ty.merge(element);
-    }
-    ty
-}
-
-fn derived_go_type(prefix: &str, inner: GoType) -> GoType {
-    GoType::with_dependencies(format!("{prefix}{}", inner.code), [&inner])
 }
 
 impl Planner<'_> {

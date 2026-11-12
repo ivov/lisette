@@ -207,33 +207,6 @@ mod tests {
     }
 
     #[test]
-    fn declaration_scope_isolates_locals_and_restores_outer_scope() {
-        let mut scope = ScopeState::new();
-        let no_package = PackageState::default();
-        scope.reserve_go_name("value");
-
-        let outer = scope.begin_declaration();
-        assert_eq!(
-            scope.fresh_go_name(Some("value"), &no_package).spelling(),
-            "value"
-        );
-        assert_eq!(
-            scope.fresh_go_name(Some("tmp"), &no_package).spelling(),
-            "tmp"
-        );
-        scope.end_declaration(outer);
-
-        assert_eq!(
-            scope.fresh_go_name(Some("value"), &no_package).spelling(),
-            "value2"
-        );
-        assert_eq!(
-            scope.fresh_go_name(Some("tmp"), &no_package).spelling(),
-            "tmp"
-        );
-    }
-
-    #[test]
     fn retired_generated_local_does_not_free_a_distinct_source_local() {
         let mut scope = ScopeState::new();
         let package = PackageState::default();

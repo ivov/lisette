@@ -204,8 +204,7 @@ impl Planner<'_> {
     ) -> GoExpression {
         let source = self.stable_source(statements, "src", value);
         let go_type = self.go_type(array_type);
-        let output = self.fresh_local(Some("boxed"));
-        self.declare(&output);
+        let output = self.fresh_declared("boxed");
         statements.push(
             LoweredStatement::VarDecl {
                 name: output.clone(),
@@ -215,8 +214,7 @@ impl Planner<'_> {
             .into(),
         );
 
-        let index = self.fresh_local(Some("i"));
-        self.declare(&index);
+        let index = self.fresh_declared("i");
         let element_read =
             GoExpression::index(source.clone(), GoExpression::identifier(index.clone()));
         let (mut body, coerced) = element.lower(self, element_read);

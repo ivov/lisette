@@ -101,8 +101,7 @@ impl Planner<'_> {
                 return value;
             };
             let go_type = pointee.go_type(self);
-            let copy = self.fresh_local(Some("ptr"));
-            self.declare(&copy);
+            let copy = self.fresh_declared("ptr");
             setup.push(
                 LoweredStatement::VarDecl {
                     name: copy.clone(),
@@ -227,8 +226,7 @@ impl Planner<'_> {
         } else {
             self.create_temp_vars("ret", 1)
         };
-        let ok_var = self.fresh_local(Some("ret"));
-        self.declare(&ok_var);
+        let ok_var = self.fresh_declared("ret");
 
         let mut all_vars = val_vars.clone();
         all_vars.push(ok_var.clone());
@@ -319,8 +317,7 @@ impl Planner<'_> {
         address: bool,
     ) -> GoExpression {
         let option = self.stable_source(statements, "opt", option_value);
-        let slot = self.fresh_local(Some(if address { "ptr" } else { "unwrap" }));
-        self.declare(&slot);
+        let slot = self.fresh_declared(if address { "ptr" } else { "unwrap" });
         statements.push(
             LoweredStatement::VarDecl {
                 name: slot.clone(),
@@ -506,8 +503,7 @@ impl Planner<'_> {
                     _ => unreachable!("nilable payload bridges require a nilable option layout"),
                 };
                 let source = self.stable_source(statements, "raw", value);
-                let output = self.fresh_local(Some("adapted"));
-                self.declare(&output);
+                let output = self.fresh_declared("adapted");
                 let go_type = target.go_type(self);
                 statements.push(
                     LoweredStatement::VarDecl {
@@ -559,8 +555,7 @@ impl Planner<'_> {
     ) -> GoExpression {
         let source = self.stable_source(statements, "src", value);
         let go_type = target.go_type(self);
-        let output = self.fresh_local(Some("adapted"));
-        self.declare(&output);
+        let output = self.fresh_declared("adapted");
         statements.push(
             LoweredStatement::VarDecl {
                 name: output.clone(),
@@ -643,8 +638,7 @@ impl Planner<'_> {
         let source = self.stable_source(statements, "raw", raw_value);
         let option_type = target.go_type(self);
         let option_type_string = option_type;
-        let option = self.fresh_local(Some("option"));
-        self.declare(&option);
+        let option = self.fresh_declared("option");
         statements.push(
             LoweredStatement::VarDecl {
                 name: option.clone(),
@@ -696,8 +690,7 @@ impl Planner<'_> {
         };
         let target_type = target_layout.go_type(self);
         let output = if matches!(target_layout, ValueLayout::Array { .. }) {
-            let output = self.fresh_local(Some(output_hint));
-            self.declare(&output);
+            let output = self.fresh_declared(output_hint);
             statements.push(
                 LoweredStatement::VarDecl {
                     name: output.clone(),
@@ -720,10 +713,8 @@ impl Planner<'_> {
             );
             self.hoist_tmp_value_statement(statements, output_hint, make)
         };
-        let index = self.fresh_local(Some("i"));
-        self.declare(&index);
-        let element = self.fresh_local(Some("v"));
-        self.declare(&element);
+        let index = self.fresh_declared("i");
+        let element = self.fresh_declared("v");
         let mut key_statements = Vec::new();
         let output_index = match key_bridge {
             Some(bridge) => self.plan_layout_bridge(

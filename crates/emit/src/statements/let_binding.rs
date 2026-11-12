@@ -13,7 +13,7 @@ use crate::escape_reserved;
 use crate::names::go_name;
 use crate::patterns::decision_tree::collect_pattern_info;
 use crate::patterns::matching::ResultFusePlan;
-use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
+use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::{
     LoweredBlock, LoweredStatement, Statement, define, define_many, effect_statement,
 };
@@ -297,9 +297,7 @@ impl Planner<'_> {
                 if !is_read(index) {
                     return GoIdentifier::external("_".to_string());
                 }
-                let name = self.fresh_local(Some(&format!("{identifier}{index}")));
-                self.declare(&name);
-                name
+                self.fresh_declared(&format!("{identifier}{index}"))
             })
             .collect();
         let (setup, call) = self
@@ -384,8 +382,7 @@ impl Planner<'_> {
         };
         let escaped = escape_reserved(raw_go_name);
         let go_identifier = if self.shadows_declaration(&escaped) {
-            let fresh = self.fresh_local(Some(identifier));
-            self.declare(&fresh);
+            let fresh = self.fresh_declared(identifier);
             self.scope.bind_source(identifier, ids, &fresh);
             fresh
         } else {
@@ -639,9 +636,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             return LoweredBlock { statements };
         }
 
-        let pattern = AnnotatedPattern {
-            pattern: &self.binding.pattern,
-        };
+        let pattern = &self.binding.pattern;
         match self.mode {
             LetMode::Plain => {}
             LetMode::Assert | LetMode::InvalidAssertElse { .. } => {
@@ -708,14 +703,15 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
     fn lower_channel_split(&mut self, elements: &[Pattern]) -> Option<LoweredBlock> {
         let slot_types = self.channel_split_slot_types(elements)?;
         let call = self.planner.native_method_call(self.value)?;
-        if call.kind != NativeTypeKind::Channel || call.method != "split" {
+        if call.native_type != NativeTypeKind::Channel || call.method != "split" {
             return None;
         }
+        let (source, _) = call.receiver_and_arguments()?;
         let (mut statements, receiver) = self
             .planner
-            .lower_value(call.receiver, ExpressionContext::value())
+            .lower_value(source, ExpressionContext::value())
             .into_parts();
-        let receiver = if call.receiver.get_type().is_ref() {
+        let receiver = if source.get_type().is_ref() {
             GoExpression::dereference(receiver)
         } else {
             receiver

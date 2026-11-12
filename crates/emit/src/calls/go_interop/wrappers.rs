@@ -162,7 +162,7 @@ impl Planner<'_> {
         for (index, target) in target.parameters.iter().enumerate() {
             let name = self
                 .scope
-                .helper_local(&format!("arg{index}"), &self.package);
+                .helper_local(&format!("arg{index}"), self.package);
             let target_type = target.go_type(self);
             parameters.push(GoParameter::new(name.clone(), target_type));
             names.push(GoExpression::identifier(name));
@@ -180,8 +180,7 @@ impl Planner<'_> {
         if never_nil {
             return callback;
         }
-        let adapted = self.fresh_local(Some("adapted"));
-        self.declare(&adapted);
+        let adapted = self.fresh_declared("adapted");
         let go_type = target.go_type(self);
         statements.push(
             LoweredStatement::VarDecl {
@@ -517,8 +516,7 @@ impl Planner<'_> {
     ) -> (ResolvedSink, WrapperOutcome) {
         match target {
             WrapperTarget::FreshSlot => {
-                let var = self.fresh_local(Some(name_hint));
-                self.declare(&var);
+                let var = self.fresh_declared(name_hint);
                 statements.push(
                     LoweredStatement::VarDecl {
                         name: var.clone(),
@@ -566,10 +564,8 @@ impl Planner<'_> {
             let tuple = self.plan_tuple_from_vars(statements, names(&temp_vars[..tuple_arity]));
             (temp_vars.last().unwrap().clone(), tuple)
         } else {
-            let val_var = self.fresh_local(Some("ret"));
-            self.declare(&val_var);
-            let err_var = self.fresh_local(Some("ret"));
-            self.declare(&err_var);
+            let val_var = self.fresh_declared("ret");
+            let err_var = self.fresh_declared("ret");
             statements.push(define_many(vec![val_var.clone(), err_var.clone()], call));
             (err_var, GoExpression::identifier(val_var))
         }
@@ -624,13 +620,9 @@ impl Planner<'_> {
         let val = || val_value.clone();
         let nil_check = self.partial_ok_nil_check(ok_ty, val());
 
-        let type_params = GoType::type_arguments(&[ok_ty_str, err_ty_str]);
-        let mut result_ty_str = GoType::stdlib(format!(
-            "{}.Partial{}",
-            go_name::GO_STDLIB_PKG,
-            type_params.code
-        ));
-        result_ty_str.merge(&type_params);
+        let type_params = [ok_ty_str, err_ty_str];
+        let result_ty_str = GoType::prelude("Partial", &type_params);
+        let type_params = GoType::type_arguments(&type_params);
         let (sink, outcome) =
             self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
 
@@ -946,7 +938,7 @@ impl Planner<'_> {
         let mut arguments = Vec::new();
         let last_index = params.len().saturating_sub(1);
         for (i, param) in params.iter().enumerate() {
-            let name = self.scope.helper_local(&format!("arg{}", i), &self.package);
+            let name = self.scope.helper_local(&format!("arg{}", i), self.package);
             param_strs.push(GoParameter::new(name.clone(), self.go_type(&param.ty)));
             let argument = GoExpression::identifier(name);
             if i == last_index && param.ty.get_name() == Some("VarArgs") {
@@ -1043,8 +1035,7 @@ impl Planner<'_> {
         if is_declaration {
             return callback;
         }
-        let adapted = self.fresh_local(Some("adapted"));
-        self.declare(&adapted);
+        let adapted = self.fresh_declared("adapted");
         let go_type = target.go_type(self);
         setup.push(
             LoweredStatement::VarDecl {
@@ -1115,8 +1106,7 @@ impl Planner<'_> {
             .expect("expected function type");
 
         let inner_ty_str = self.go_type(&return_type.ok_type());
-        let ret_var = self.fresh_local(Some("ret"));
-        self.declare(&ret_var);
+        let ret_var = self.fresh_declared("ret");
         let ret = || GoExpression::identifier(ret_var.clone());
 
         let statements = vec![

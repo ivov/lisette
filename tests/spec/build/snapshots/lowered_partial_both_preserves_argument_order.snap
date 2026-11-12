@@ -1,0 +1,38 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"io"
+)
+
+func first() int {
+	fmt.Println("first")
+	return 1
+}
+
+func second(_ int) error {
+	return io.EOF
+}
+
+type OrderedWriter struct{}
+
+func (o OrderedWriter) Write(_ []byte) (int, error) {
+	ret2 := first()
+	ret, err := fmt.Println("second")
+	if err != nil {
+		ret = 0
+	}
+	return ret2, second(ret)
+}
+
+func useWriter(writer io.Writer) {
+	writer.Write([]byte{1})
+}
+
+func main() {
+	useWriter(OrderedWriter{})
+}

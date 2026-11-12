@@ -196,7 +196,10 @@ impl Planner<'_> {
         let (format_string, args) = self.sprintf_pieces(parts, values, has_interpolation);
 
         if args.is_empty() {
-            return ValuePlan::evaluated_literal(setup, format!("\"{}\"", format_string));
+            return ValuePlan::computed(
+                setup,
+                GoExpression::literal(format!("\"{}\"", format_string)),
+            );
         }
 
         // Solo-expression f-strings round-trip through fmt.Sprint, which skips

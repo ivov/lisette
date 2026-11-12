@@ -1,5 +1,3 @@
-use rustc_hash::FxHashMap as HashMap;
-
 use crate::Planner;
 use crate::definitions::structs::{StringFormat, is_raw_function_type};
 use crate::names::go_name::{self, GeneratedPackage};
@@ -17,9 +15,7 @@ pub(crate) use syntax::go_names::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD,
 #[derive(Debug, Clone)]
 pub(crate) struct EnumLayout {
     pub(crate) enum_name: String,
-    tag_type: String,
     pub(crate) variants: Vec<VariantLayout>,
-    variant_indexes: HashMap<String, usize>,
     pub(crate) generics: Vec<Generic>,
     /// Index of the `#[default]` variant, which takes tag `0`.
     default_variant: Option<usize>,
@@ -31,7 +27,6 @@ pub(crate) struct VariantLayout {
     pub(crate) tag_constant: String,
     is_struct_variant: bool,
     pub(crate) fields: Vec<FieldLayout>,
-    field_indexes: HashMap<String, usize>,
     doc: Option<String>,
 }
 
@@ -70,7 +65,6 @@ impl EnumLayout {
         definition: impl Fn(&str) -> Option<&'d Definition> + Copy,
     ) -> Self {
         let enum_name = go_name::unqualified_name(enum_id).to_string();
-        let tag_type = format!("{}Tag", enum_name);
 
         let slots = go_names::enum_field_slots(&enum_name, variants);
         let variants: Vec<_> = variants
@@ -78,16 +72,9 @@ impl EnumLayout {
             .enumerate()
             .map(|(vi, v)| Self::compute_variant_layout(vi, v, enum_id, &slots[vi], definition))
             .collect();
-        let mut variant_indexes = HashMap::default();
-        for (index, variant) in variants.iter().enumerate() {
-            variant_indexes.entry(variant.name.clone()).or_insert(index);
-        }
-
         Self {
             enum_name,
-            tag_type,
             variants,
-            variant_indexes,
             generics: generics.to_vec(),
             default_variant,
         }
@@ -167,35 +154,25 @@ impl EnumLayout {
                 }
             })
             .collect();
-        let mut field_indexes = HashMap::default();
-        for (index, field) in fields.iter().enumerate() {
-            field_indexes
-                .entry(field.source_name.clone())
-                .or_insert(index);
-        }
-
         VariantLayout {
             name: variant.name.to_string(),
             tag_constant,
             is_struct_variant: field_shape == EnumFieldShape::Struct,
             fields,
-            field_indexes,
             doc: variant.doc.clone(),
         }
     }
 
     pub(crate) fn get_variant(&self, name: &str) -> Option<&VariantLayout> {
-        self.variant_indexes
-            .get(name)
-            .and_then(|index| self.variants.get(*index))
+        self.variants.iter().find(|variant| variant.name == name)
     }
 
     pub(crate) fn struct_field_name(&self, variant_name: &str, field_name: &str) -> Option<String> {
         let variant = self.get_variant(variant_name)?;
         variant
-            .field_indexes
-            .get(field_name)
-            .and_then(|index| variant.fields.get(*index))
+            .fields
+            .iter()
+            .find(|field| field.source_name == field_name)
             .map(|field| field.go_name.clone())
     }
 
@@ -207,8 +184,9 @@ impl EnumLayout {
     /// Call from the declaring file, which owns the import aliases.
     pub(crate) fn emit_definition(&self, planner: &mut Planner, generics_string: &str) -> String {
         let mut output = Vec::new();
+        let tag_type = format!("{}Tag", self.enum_name);
 
-        output.push(format!("type {} {}", self.tag_type, self.tag_go_type()));
+        output.push(format!("type {} {}", tag_type, self.tag_go_type()));
         if !self.variants.is_empty() {
             output.push("const (".to_string());
 
@@ -225,10 +203,10 @@ impl EnumLayout {
                 if renumbered {
                     output.push(format!(
                         "{} {} = {}",
-                        variant.tag_constant, self.tag_type, values[i]
+                        variant.tag_constant, tag_type, values[i]
                     ));
                 } else if i == 0 {
-                    output.push(format!("{} {} = iota", variant.tag_constant, self.tag_type));
+                    output.push(format!("{} {} = iota", variant.tag_constant, tag_type));
                 } else {
                     output.push(variant.tag_constant.clone());
                 }
@@ -242,7 +220,7 @@ impl EnumLayout {
             "type {}{} struct {{",
             go_type_name, generics_string
         ));
-        output.push(format!("Tag {}", self.tag_type));
+        output.push(format!("Tag {}", tag_type));
 
         let mut seen_fields = rustc_hash::FxHashMap::default();
         for variant in &self.variants {

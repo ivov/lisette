@@ -2,17 +2,14 @@ use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::layout::{FunctionLayout, SlotOrigin, ValueLayout};
 use crate::control_flow::propagation::plain_return;
+use crate::definitions::functions::BodyOrigin;
 use crate::names::go_name;
 use crate::names::go_name::GO_IMPORT_PREFIX;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define_many, expression_statement,
 };
-use crate::plan::cleanup::clean_up;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
-#[cfg(debug_assertions)]
-use crate::plan::verify::{verify_final_function_body, verify_local_scopes};
-use crate::plan::visit::identify_body_locals;
 use crate::types::go_type::GoType;
 use crate::utils::fresh_receiver_name;
 use crate::write_line;
@@ -51,28 +48,13 @@ pub(crate) struct AdapterMethod {
     source: FunctionLayout,
     /// The interface's Go slots.
     target: FunctionLayout,
-    ret: AdapterReturn,
-}
-
-#[derive(Debug, Clone)]
-enum AdapterReturn {
-    Discard { user_returns_value: bool },
-    ZeroFill,
-    Forward,
-    Bridge,
 }
 
 impl AdapterMethod {
     fn changes_signature(&self) -> bool {
-        let return_changes = match self.ret {
-            AdapterReturn::Discard { user_returns_value } => user_returns_value,
-            AdapterReturn::ZeroFill | AdapterReturn::Bridge => true,
-            AdapterReturn::Forward => false,
-        };
         self.alternate.is_some()
-            || return_changes
             || self.go_name != self.source_go_name
-            || !self.source.same_parameter_representation(&self.target)
+            || !self.source.same_representation(&self.target)
     }
 }
 
@@ -199,13 +181,6 @@ impl Planner<'_> {
             CallableReturnAbi::Value,
             Some(return_ty),
         );
-        let ret = if source.return_abi == CallableReturnAbi::Void {
-            AdapterReturn::ZeroFill
-        } else if source.same_result_representation(&target) {
-            AdapterReturn::Forward
-        } else {
-            AdapterReturn::Bridge
-        };
         let twin = AdapterMethod {
             go_name: go_name::tagged_twin(go_name),
             source_name: method.name.clone(),
@@ -213,7 +188,6 @@ impl Planner<'_> {
             alternate: None,
             source,
             target,
-            ret,
         };
         let mut declaration = String::new();
         self.emit_adapter_method(
@@ -378,7 +352,6 @@ impl Planner<'_> {
                 source: local,
                 alternate: Some(foreign),
                 target,
-                ret: AdapterReturn::Bridge,
             });
         }
         Some(AdapterPlan {
@@ -734,7 +707,6 @@ impl Planner<'_> {
                 ),
             None => self.interface_method_return_abi(&requirement.name, &requirement.method),
         };
-        let interface_returns_void = interface_abi == CallableReturnAbi::Void;
         let parameters = self.interface_parameter_layouts(go_method.as_deref(), &param_types, 0);
         let target = if abi_matches_type(&interface_abi, &peeled_return) {
             let result = self.interface_result_layout(go_method.as_deref(), &peeled_return);
@@ -746,17 +718,6 @@ impl Planner<'_> {
                 source.return_abi.clone(),
                 Some(&f.return_type),
             )
-        };
-
-        let user_returns_value = source.return_abi != CallableReturnAbi::Void;
-        let ret = if interface_returns_void {
-            AdapterReturn::Discard { user_returns_value }
-        } else if !user_returns_value {
-            AdapterReturn::ZeroFill
-        } else if source.same_result_representation(&target) {
-            AdapterReturn::Forward
-        } else {
-            AdapterReturn::Bridge
         };
 
         let source_go_name = match source_requirement {
@@ -775,7 +736,6 @@ impl Planner<'_> {
             alternate: None,
             source,
             target,
-            ret,
         })
     }
 
@@ -840,11 +800,16 @@ impl Planner<'_> {
             return name.to_string();
         }
 
-        let index = self.adapter_registry.allocate_index();
-        let mut base_name = adapter_type_name(&plan, index);
-        while self.is_declared(&base_name) {
-            base_name.push('_');
-        }
+        let scope = &self.scope;
+        let base_name = self
+            .adapter_registry
+            .register(cacheable.then_some(key), |index| {
+                let mut name = adapter_type_name(&plan, index);
+                while scope.is_go_name_declared(&name) {
+                    name.push('_');
+                }
+                name
+            });
         let (generics_decl, generics_use) = self.adapter_generics(&plan);
         let adapter_type = format!("{}{}", base_name, generics_use);
 
@@ -866,12 +831,7 @@ impl Planner<'_> {
             declaration.push('\n');
         }
 
-        if cacheable {
-            self.adapter_registry
-                .insert(key, adapter_type.clone(), declaration);
-        } else {
-            self.adapter_registry.push_declaration(declaration);
-        }
+        self.namespace.collect_adapter(declaration);
         adapter_type
     }
 
@@ -945,9 +905,7 @@ impl Planner<'_> {
         if self.try_declare(&preferred) {
             return GoIdentifier::local(preferred, self.scope.new_local_id());
         }
-        let name = self.fresh_local(Some(&preferred));
-        self.declare(&name);
-        name
+        self.fresh_declared(&preferred)
     }
 
     fn build_adapter_body(
@@ -956,21 +914,13 @@ impl Planner<'_> {
         wraps_inner: bool,
         parameters: &[GoIdentifier],
     ) -> (String, String) {
-        let (go_ret, mut statements) = self.plan_adapter_body(method, wraps_inner, parameters);
-        let shadowing = identify_body_locals(&mut statements, parameters, &mut self.scope);
-        clean_up(&mut statements, &shadowing, parameters, &self.scope);
-        let mut body = LoweredBlock { statements };
-        if !go_ret.is_empty() {
-            body.ensure_go_termination();
-        }
-        #[cfg(debug_assertions)]
-        {
-            verify_final_function_body(&mut body, !go_ret.is_empty())
-                .unwrap_or_else(|error| panic!("{error}"));
-            verify_local_scopes(&mut body.statements, &parameters.iter().collect::<Vec<_>>())
-                .unwrap_or_else(|error| panic!("{error}"));
-        }
-        self.collect_imports(&body.statements);
+        let (go_ret, statements) = self.plan_adapter_body(method, wraps_inner, parameters);
+        let body = self.finish_function_body(
+            LoweredBlock { statements },
+            parameters,
+            !go_ret.is_empty(),
+            BodyOrigin::Adapter,
+        );
         (go_ret, crate::Renderer.render_setup(&body.statements))
     }
 
@@ -1015,26 +965,27 @@ impl Planner<'_> {
         );
 
         let return_type = &method.source.result_type;
-        // A unit result still fills the interface's generic result slot.
-        let go_ret = match (&method.ret, method.target.result_go_type(self)) {
-            (AdapterReturn::Discard { .. }, _) => String::new(),
-            (_, Some(go_type)) => self.use_rendered_go_type(go_type),
-            (_, None) => self.use_go_type(return_type),
-        };
-        match method.ret {
-            AdapterReturn::Discard { .. } => statements.push(expression_statement(inner_call)),
-            AdapterReturn::ZeroFill => {
-                let zero = self.zero_value(return_type);
-                statements.push(expression_statement(inner_call));
-                statements.push(plain_return(zero));
-            }
-            AdapterReturn::Forward => statements.push(plain_return(inner_call)),
-            AdapterReturn::Bridge => self.plan_function_result_bridge(
+        let go_ret = method
+            .target
+            .result_go_type(self)
+            .map(|ty| self.use_rendered_go_type(ty))
+            .unwrap_or_default();
+        if method.target.return_abi == CallableReturnAbi::Void {
+            statements.push(expression_statement(inner_call));
+        } else if method.source.return_abi == CallableReturnAbi::Void {
+            // A unit result still fills the interface's generic result slot.
+            let zero = self.zero_value(return_type);
+            statements.push(expression_statement(inner_call));
+            statements.push(plain_return(zero));
+        } else if method.source.same_result_representation(&method.target) {
+            statements.push(plain_return(inner_call));
+        } else {
+            self.plan_function_result_bridge(
                 &mut statements,
                 inner_call,
                 &method.source,
                 &method.target,
-            ),
+            );
         }
         (go_ret, statements)
     }

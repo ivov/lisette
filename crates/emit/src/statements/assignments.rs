@@ -212,8 +212,7 @@ impl Planner<'_> {
         }
         let (mut target_capture, target_place) = self.capture_assignment_target(target, ordering);
         let pinned_left = needs_left_pin.then(|| {
-            let tmp = self.fresh_local(Some("left"));
-            self.declare(&tmp);
+            let tmp = self.fresh_declared("left");
             target_capture.push(define(tmp.clone(), target_place.clone()));
             GoExpression::identifier(tmp)
         });

@@ -118,7 +118,7 @@ fn verify_values(statements: &mut Vec<Statement>) -> Result<(), BodyError> {
 
 pub(crate) fn verify_local_scopes(
     statements: &mut Vec<Statement>,
-    bindings: &[&GoIdentifier],
+    bindings: &[GoIdentifier],
 ) -> Result<(), BodyError> {
     struct Check {
         frames: Vec<HashMap<String, LocalId>>,
@@ -207,7 +207,7 @@ pub(crate) fn verify_local_scopes(
         error: None,
     };
     for name in bindings {
-        check.local_binding(&mut (*name).clone());
+        check.local_binding(&mut name.clone());
     }
     visit_statements_mut(statements, &mut check);
     check.error.map_or(Ok(()), |kind| Err(BodyError { kind }))

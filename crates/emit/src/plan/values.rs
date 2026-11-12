@@ -607,14 +607,6 @@ impl ValuePlan {
         )
     }
 
-    pub(crate) fn evaluated_literal(setup: Vec<Statement>, rendered: String) -> Self {
-        Self::new(
-            setup,
-            GoExpression::literal(rendered),
-            Stability::Observable,
-        )
-    }
-
     /// A name the setup just bound, or which nothing can rebind.
     pub(crate) fn captured(setup: Vec<Statement>, name: GoIdentifier) -> Self {
         Self::new(setup, GoExpression::identifier(name), Stability::Fixed)
@@ -652,12 +644,8 @@ impl ValuePlan {
         Self::new(setup, expression, stability)
     }
 
-    pub(crate) fn observable_call(setup: Vec<Statement>, expression: GoExpression) -> Self {
-        Self::new(setup, expression, Stability::Observable)
-    }
-
     pub(crate) fn verbatim(source: String) -> Self {
-        Self::observable_call(Vec::new(), GoExpression::verbatim(source))
+        Self::computed(Vec::new(), GoExpression::verbatim(source))
     }
 
     /// Represent the same value differently. The transform must not add an
@@ -692,11 +680,6 @@ impl ValuePlan {
         if stable_across_calls {
             self.stability = Stability::StableAcrossCalls;
         }
-        self
-    }
-
-    pub(crate) fn into_addressed_location(mut self) -> Self {
-        self.stability = Stability::StableAcrossCalls;
         self
     }
 
@@ -820,13 +803,7 @@ impl Planner<'_> {
                 ..
             } => self.plan_unary(operator, expression, ctx),
             Expression::Tuple { elements, ty, .. } => self.plan_tuple_value(elements, ty, false),
-            Expression::Range {
-                start,
-                end,
-                inclusive,
-                ty,
-                ..
-            } => self.plan_range_value(start, end, *inclusive, ty),
+            Expression::Range { start, end, ty, .. } => self.plan_range_value(start, end, ty),
             Expression::StructCall {
                 name,
                 field_assignments,
@@ -853,16 +830,15 @@ impl Planner<'_> {
                 let stability = self.path_read_stability(&value);
                 ValuePlan::built_from(setup, value, stability)
             }
-            Expression::If { ty, .. } => self.plan_branching_as_operand_temp(expression, ty),
             Expression::Loop { ty, .. } => self.plan_loop_as_operand_temp(expression, ty),
-            Expression::IfLet { ty, .. }
+            Expression::If { ty, .. }
+            | Expression::IfLet { ty, .. }
             | Expression::Match { ty, .. }
             | Expression::Select { ty, .. }
                 if !ty.is_never() =>
             {
                 self.plan_branching_as_operand_temp(expression, ty)
             }
-            Expression::Call { ty, .. } => self.lower_call_value(expression, ty, ctx),
             _ => self.plan_operand_leaf(expression, ctx),
         }
     }

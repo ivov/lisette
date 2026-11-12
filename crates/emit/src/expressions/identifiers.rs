@@ -120,9 +120,8 @@ impl Planner<'_> {
     }
 
     /// Type args for a constructor function reference (e.g. `MakeFoo[T]` used as a value).
-    /// Skips type args when the callee position already supplies them or when they can be
-    /// inferred from the parameter types.
-    fn constructor_fn_type_args(
+    /// Omits them only for a direct call whose parameters support inference.
+    pub(super) fn constructor_fn_type_args(
         &mut self,
         fn_params: &[FunctionParameter],
         ret_params: &[Type],

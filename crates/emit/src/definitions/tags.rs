@@ -146,42 +146,22 @@ fn interpret_struct_attribute(attribute: &Attribute) -> Option<TagConfig> {
         return None;
     }
 
-    let key = &attribute.name;
-    if key == "tag" {
-        return interpret_struct_tag_attribute(attribute);
-    }
-
-    let mut config = TagConfig::structured(key.clone());
-
-    for arg in &attribute.args {
-        let _ = config
-            .settings_mut()
-            .expect("structured tag config")
-            .apply_common_arg(arg);
-    }
-
-    Some(config)
-}
-
-fn interpret_struct_tag_attribute(attribute: &Attribute) -> Option<TagConfig> {
-    if attribute.args.is_empty() {
-        return None;
-    }
-
-    let AttributeArg::String(key) = &attribute.args[0] else {
-        return None;
+    let (key, args) = if attribute.name == "tag" {
+        let (AttributeArg::String(key), args) = attribute.args.split_first()? else {
+            return None;
+        };
+        (key, args)
+    } else {
+        (&attribute.name, attribute.args.as_slice())
     };
-
-    let mut config = TagConfig::structured(key.clone());
-
-    for arg in attribute.args.iter().skip(1) {
-        let _ = config
-            .settings_mut()
-            .expect("structured tag config")
-            .apply_common_arg(arg);
+    let mut settings = StructuredTag::default();
+    for arg in args {
+        settings.apply_common_arg(arg);
     }
-
-    Some(config)
+    Some(TagConfig {
+        key: key.clone(),
+        value: TagValue::Structured(settings),
+    })
 }
 
 fn interpret_field_attribute(
