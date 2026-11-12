@@ -20,6 +20,7 @@ use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::calls::go_interop::NilGuard;
 use crate::control_flow::propagation::plain_return;
 use crate::names::generics;
+use crate::names::source_name::SourceName;
 use crate::patterns::binding_decls::emit_pattern_literal;
 use crate::plan::bodies::{LoweredBlock, define_many};
 use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, GoExpressionNode, UnaryOp};
@@ -455,18 +456,18 @@ pub(crate) struct PatternBinding {
 pub(crate) enum BindingTarget {
     Unused,
     Unit,
-    Named { go_name: String, ty: Type },
+    Named { go_name: SourceName, ty: Type },
 }
 
 impl BindingTarget {
-    fn from_go_name(go_name: Option<String>, ty: &Type) -> Self {
+    fn from_go_name(go_name: Option<SourceName>, ty: &Type) -> Self {
         go_name.map_or(Self::Unused, |go_name| Self::Named {
             go_name,
             ty: ty.clone(),
         })
     }
 
-    pub(crate) fn go_name(&self) -> Option<&str> {
+    pub(crate) fn go_name(&self) -> Option<&SourceName> {
         match self {
             Self::Named { go_name, .. } => Some(go_name),
             Self::Unused | Self::Unit => None,
@@ -1863,6 +1864,7 @@ mod tests {
         try_build_switch,
     };
     use crate::abi::coercion::CoercionPlan;
+    use crate::names::source_name::SourceName;
     use syntax::ast::{BindingId, Literal};
     use syntax::types::Type;
 
@@ -1879,7 +1881,7 @@ mod tests {
     #[test]
     fn alternatives_share_unused_targets_and_union_ids() {
         let named = |go_name: &str| BindingTarget::Named {
-            go_name: go_name.into(),
+            go_name: SourceName::new(&go_name.into()),
             ty: Type::int(),
         };
         let mut first = vec![binding("x", 1, named("x")), binding("y", 2, named("y"))];

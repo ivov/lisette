@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  fn pair_of(seed: int) -> (int, int) {
+    (seed, seed * 2)
+  }
+  
+  fn main() {
+    let user_pair = pair_of(3)
+    if user_pair.0 + user_pair.1 != 9 { panic("a component read the wrong value") }
+  }
+---
+package main
+
+func pairOf(seed int) (int, int) {
+	return seed, seed * 2
+}
+
+func main() {
+	userPair0, userPair1 := pairOf(3)
+	if userPair0+userPair1 != 9 {
+		panic("a component read the wrong value")
+	}
+}

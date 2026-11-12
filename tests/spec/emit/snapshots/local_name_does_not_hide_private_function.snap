@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  fn load_data() -> int {
+    1
+  }
+  
+  fn main() {
+    let load_data_ = 5
+    if load_data_ + load_data() != 6 { panic("the local hid the function") }
+  }
+---
+package main
+
+func loadData() int {
+	return 1
+}
+
+func main() {
+	loadData2 := 5
+	if loadData2+loadData() != 6 {
+		panic("the local hid the function")
+	}
+}

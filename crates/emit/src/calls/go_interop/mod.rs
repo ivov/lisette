@@ -326,7 +326,11 @@ impl Planner<'_> {
         Some(call)
     }
 
-    pub(crate) fn create_temp_vars(&mut self, hint: &str, count: usize) -> Vec<GoIdentifier> {
+    pub(crate) fn create_temp_vars(
+        &mut self,
+        hint: &'static str,
+        count: usize,
+    ) -> Vec<GoIdentifier> {
         (0..count).map(|_| self.fresh_declared(hint)).collect()
     }
 

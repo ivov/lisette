@@ -703,7 +703,7 @@ impl Planner<'_> {
                 .bind_inline_expr(param.name, ids, InlineExpr::new(error.clone(), stability));
             return;
         }
-        let name = self.hoist_tmp_value_statement(setup, param.name, error.clone());
+        let name = self.hoist_source_value(setup, &param.go_name(), error.clone());
         self.scope.bind_identifier(param.name, ids, name);
     }
 

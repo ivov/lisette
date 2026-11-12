@@ -8,6 +8,7 @@ mod imports;
 mod interop_matrix;
 mod line_directives;
 mod literals;
+mod local_names;
 mod opaque_handle;
 mod partial;
 mod patterns;

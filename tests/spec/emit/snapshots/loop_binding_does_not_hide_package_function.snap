@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  fn load_data() -> int {
+    7
+  }
+  
+  fn main() {
+    let mut total = 0
+    for load_data_ in 0..2 {
+      total += load_data_ + load_data()
+    }
+    if total != 15 { panic("the loop read the wrong value") }
+  }
+---
+package main
+
+func loadData() int {
+	return 7
+}
+
+func main() {
+	total := 0
+	for loadData2 := range 2 {
+		total += loadData2 + loadData()
+	}
+	if total != 15 {
+		panic("the loop read the wrong value")
+	}
+}

@@ -36,21 +36,21 @@ func position(calls *int, i int) int {
 }
 
 func test() {
-	base_calls := 0
-	index_calls := 0
-	recv := counted(&base_calls, []int{1, 2})
-	idx := position(&index_calls, 1)
+	baseCalls := 0
+	indexCalls := 0
+	recv := counted(&baseCalls, []int{1, 2})
+	idx := position(&indexCalls, 1)
 	if idx < 0 || idx >= len(recv) {
 		panic("the element was missing")
 	}
 	v := recv[idx]
-	if v != 2 || base_calls != 1 || index_calls != 1 {
+	if v != 2 || baseCalls != 1 || indexCalls != 1 {
 		panic("get evaluated an operand twice")
 	}
-	base := counted(&base_calls, []int{1, 2, 3})
+	base := counted(&baseCalls, []int{1, 2, 3})
 	len2 := len(base)
 	tail := base[1:len2:len2]
-	if len(tail) != 2 || base_calls != 2 {
+	if len(tail) != 2 || baseCalls != 2 {
 		panic("slicing evaluated its base twice")
 	}
 }

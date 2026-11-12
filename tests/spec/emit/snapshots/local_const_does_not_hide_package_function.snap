@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  pub fn max_size() -> int {
+    10
+  }
+  
+  fn main() {
+    const MAX_SIZE = 1
+    if MAX_SIZE + max_size() != 11 { panic("the const hid the function") }
+  }
+---
+package main
+
+func MaxSize() int {
+	return 10
+}
+
+func main() {
+	const MaxSize2 int = 1
+	if MaxSize2+MaxSize() != 11 {
+		panic("the const hid the function")
+	}
+}

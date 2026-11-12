@@ -33,7 +33,7 @@ func primeCache(bar Bar[int]) {
 }
 
 func cachedCollision(bar Bar[int]) {
-	consume(_lisAdapter_Bar_Box_2{inner: bar})
+	consume(_lisAdapter_Bar_Box_1{inner: bar})
 }
 
 func main() {
@@ -55,13 +55,5 @@ type _lisAdapter_Bar_Box_1 struct {
 }
 
 func (a _lisAdapter_Bar_Box_1) get() lisette.Option[int] {
-	return lisette.OptionFromCommaOk[int](a.inner.get())
-}
-
-type _lisAdapter_Bar_Box_2 struct {
-	inner Bar[int]
-}
-
-func (a _lisAdapter_Bar_Box_2) get() lisette.Option[int] {
 	return lisette.OptionFromCommaOk[int](a.inner.get())
 }

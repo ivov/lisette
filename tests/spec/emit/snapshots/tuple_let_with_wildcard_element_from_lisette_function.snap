@@ -25,6 +25,6 @@ func pair(flag bool) (string, bool) {
 }
 
 func main() {
-	_, only_flag := pair(false)
-	fmt.Println(only_flag)
+	_, onlyFlag := pair(false)
+	fmt.Println(onlyFlag)
 }

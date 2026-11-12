@@ -41,10 +41,10 @@ func test() {
 	log := make(chan int, 8)
 	closed := make(chan int)
 	lisette.ChannelClose(closed)
-	out_ch := make(chan int)
+	outCh := make(chan int)
 	var result int
 	ch := closed
-	send_val := mark(log, 1)
+	sendVal := mark(log, 1)
 	for {
 		select {
 		case v, ok := <-ch:
@@ -54,13 +54,13 @@ func test() {
 				ch = nil
 				continue
 			}
-		case out_ch <- send_val:
+		case outCh <- sendVal:
 			result = 0
 		default:
 			result = -1
 		}
 		break
 	}
-	send_val_2 := result + 1
-	fmt.Println(send_val_2)
+	sendVal2 := result + 1
+	fmt.Println(sendVal2)
 }

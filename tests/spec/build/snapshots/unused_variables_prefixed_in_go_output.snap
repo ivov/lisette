@@ -4,9 +4,9 @@ source: tests/spec/build/mod.rs
 // === main.go ===
 package main
 
-func process(_, used_param int) int {
-	used_var := used_param * 2
-	return used_var
+func process(_, usedParam int) int {
+	usedVar := usedParam * 2
+	return usedVar
 }
 
 func main() {

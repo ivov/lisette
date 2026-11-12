@@ -28,6 +28,6 @@ func main() {
 			return struct{}{}
 		}
 	}
-	set_mode := adapted
-	set_mode(&header, fs.FileMode(0o644))
+	setMode := adapted
+	setMode(&header, fs.FileMode(0o644))
 }

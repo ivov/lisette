@@ -905,7 +905,9 @@ impl Planner<'_> {
         if self.try_declare(&preferred) {
             return GoIdentifier::local(preferred, self.scope.new_local_id());
         }
-        self.fresh_declared(&preferred)
+        let name = self.fresh_like(&GoIdentifier::name(preferred));
+        self.declare(&name);
+        name
     }
 
     fn build_adapter_body(

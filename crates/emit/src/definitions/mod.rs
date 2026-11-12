@@ -6,4 +6,4 @@ pub(crate) mod interface_adapter;
 mod interfaces;
 pub(crate) mod structs;
 mod tags;
-mod toplevel;
+pub(crate) mod toplevel;

@@ -26,8 +26,8 @@ func makeRange() lisette.Range[int] {
 func main() {
 	sum := 0
 	range2 := makeRange()
-	for range_1 := range2.Start; range_1 < range2.End; range_1++ {
-		sum += range_1
+	for range1 := range2.Start; range1 < range2.End; range1++ {
+		sum += range1
 	}
 	_ = sum
 }

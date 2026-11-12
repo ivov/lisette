@@ -22,15 +22,15 @@ func (l Label) Show() string {
 func main() {
 	l1 := Label{text: "x"}
 	l2 := Label{text: "y"}
-	inner_pair := types.Pair[Label, Label]{
+	innerPair := types.Pair[Label, Label]{
 		First:  l1,
 		Second: l2,
 	}
-	tagged_pair := types.Tagged[types.Pair[Label, Label]]{
-		Value: inner_pair,
+	taggedPair := types.Tagged[types.Pair[Label, Label]]{
+		Value: innerPair,
 		Label: "coords",
 	}
-	fmt.Println(ops.DescribeTaggedPair(tagged_pair))
+	fmt.Println(ops.DescribeTaggedPair(taggedPair))
 }
 
 

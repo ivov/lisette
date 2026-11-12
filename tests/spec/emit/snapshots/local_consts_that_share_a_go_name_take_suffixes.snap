@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  fn main() {
+    const MAX_SIZE = 1
+    const MAX_SIZE_ = 2
+    if MAX_SIZE * 10 + MAX_SIZE_ != 12 { panic("a const read the wrong value") }
+  }
+---
+package main
+
+func main() {
+	const MaxSize int = 1
+	const MaxSize2 int = 2
+	if MaxSize*10+MaxSize2 != 12 {
+		panic("a const read the wrong value")
+	}
+}

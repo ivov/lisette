@@ -18,12 +18,12 @@ type Config struct {
 }
 
 func test() Config {
-	default_config := Config{
+	defaultConfig := Config{
 		host:    "localhost",
 		port:    8080,
 		timeout: 30,
 	}
-	default_config.port = 9000
-	default_config.timeout = 60
-	return default_config
+	defaultConfig.port = 9000
+	defaultConfig.timeout = 60
+	return defaultConfig
 }

@@ -2,14 +2,21 @@ use crate::Planner;
 use crate::Renderer;
 use crate::abi::layout::SlotOrigin;
 use crate::context::expression::ExpressionContext;
-use crate::escape_reserved;
 use crate::names::go_name;
+use crate::names::source_name::SourceName;
 use crate::plan::bodies::{ConstPlan, LoweredStatement, Statement};
 use crate::plan::values::GoExpression;
 use crate::types::go_type::GoType;
 use std::slice;
+use syntax::EcoString;
 use syntax::ast::{Expression, Generic};
 use syntax::types::{SimpleKind, Type};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConstPlacement {
+    Package,
+    Local,
+}
 
 impl Planner<'_> {
     pub(crate) fn emit_type_alias(
@@ -55,16 +62,19 @@ impl Planner<'_> {
 
     pub(crate) fn lower_const(
         &mut self,
-        identifier: &str,
+        identifier: &EcoString,
         expression: &Expression,
         ty: &Type,
+        placement: ConstPlacement,
     ) -> LoweredStatement {
-        let target_name = go_name::screaming_snake_to_camel(identifier);
-        let preferred = escape_reserved(&target_name).into_owned();
-        let go_name = if self.try_declare(&preferred) {
+        let name = SourceName::constant(identifier);
+        let preferred = name.preferred();
+        let hides_package_name =
+            placement == ConstPlacement::Local && self.package.is_package_block_name(&preferred);
+        let go_name = if !hides_package_name && self.try_declare(&preferred) {
             self.scope.new_local_identifier(preferred)
         } else {
-            self.fresh_declared(identifier)
+            self.fresh_declared_source(&name)
         };
         let is_const = self.is_go_constant_expression(expression);
         // An untyped string or bool constant also assigns to named types.
@@ -97,11 +107,13 @@ impl Planner<'_> {
 
     pub(crate) fn emit_const(
         &mut self,
-        identifier: &str,
+        identifier: &EcoString,
         expression: &Expression,
         ty: &Type,
     ) -> String {
-        let statement: Statement = self.lower_const(identifier, expression, ty).into();
+        let statement: Statement = self
+            .lower_const(identifier, expression, ty, ConstPlacement::Package)
+            .into();
         self.collect_imports(slice::from_ref(&statement));
         let out = Renderer.render_setup(slice::from_ref(&statement));
         out.trim_end_matches('\n').to_string()

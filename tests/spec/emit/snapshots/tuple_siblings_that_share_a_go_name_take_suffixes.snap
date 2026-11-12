@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  fn pair() -> (int, int) {
+    (1, 2)
+  }
+  
+  fn main() {
+    let (user_id, user_id_) = pair()
+    if user_id * 10 + user_id_ != 12 { panic("a sibling read the wrong value") }
+  }
+---
+package main
+
+func pair() (int, int) {
+	return 1, 2
+}
+
+func main() {
+	userId, userId2 := pair()
+	if userId*10+userId2 != 12 {
+		panic("a sibling read the wrong value")
+	}
+}

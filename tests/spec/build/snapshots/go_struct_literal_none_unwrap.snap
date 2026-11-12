@@ -10,11 +10,11 @@ import (
 )
 
 func main() {
-	mod_ := debug.Module{
+	mod := debug.Module{
 		Path:    "example.com/mod",
 		Version: "v1.0.0",
 		Sum:     "",
 		Replace: nil,
 	}
-	fmt.Print(mod_.Path)
+	fmt.Print(mod.Path)
 }

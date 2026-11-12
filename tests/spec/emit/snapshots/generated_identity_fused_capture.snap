@@ -49,9 +49,9 @@ func main() {
 	total := 0
 	for {
 		if next.Tag == lisette.OptionSome {
-			found_1 := next.SomeVal
+			found1 := next.SomeVal
 			read := func() int {
-				return found_1 + f()
+				return found1 + f()
 			}
 			total += read()
 			next = lisette.MakeOptionNone[int]()

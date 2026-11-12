@@ -5,6 +5,7 @@ use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
+use crate::names::source_name::SourceName;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::AsyncKind;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement, Statement, rename_generated_locals};
@@ -105,10 +106,10 @@ impl Planner<'_> {
     }
 
     fn reserve_source_binder_names(&mut self, body: &Expression) {
-        let mut names: Vec<String> = Vec::new();
+        let mut names: Vec<SourceName> = Vec::new();
         collect_binder_names(body, &mut names);
         for name in names {
-            self.scope.reserve_go_name(&name);
+            self.scope.reserve_go_name(&name.preferred());
         }
     }
 
@@ -537,11 +538,22 @@ impl Planner<'_> {
             let name = match &param.pattern {
                 Pattern::Identifier {
                     identifier,
+                    binding: None,
+                    ..
+                } if identifier == go_name::TEST_CTX_PARAM => {
+                    let name = self.scope.new_local_identifier(go_name::TEST_CTX_PARAM);
+                    self.declare(&name);
+                    let name = self.scope.bind_source(identifier.as_str(), &[], name);
+                    lowered.test_handle.get_or_insert_with(|| name.clone());
+                    name
+                }
+                Pattern::Identifier {
+                    identifier,
                     binding: id,
                     ..
                 } => {
                     if let Some(go_name) = self.go_name_for_binding(&param.pattern) {
-                        let name = self.claim_declared_binding(identifier, id.as_slice(), go_name);
+                        let name = self.claim_declared_binding(identifier, id.as_slice(), &go_name);
                         lowered.test_handle = lowered
                             .test_handle
                             .take()
@@ -592,7 +604,7 @@ pub(crate) fn is_go_never(expression: &Expression) -> bool {
     }
 }
 
-fn collect_binder_names(expression: &Expression, out: &mut Vec<String>) {
+fn collect_binder_names(expression: &Expression, out: &mut Vec<SourceName>) {
     match expression {
         Expression::Let { binding, .. } => push_binder_names(&binding.pattern, out),
         Expression::Lambda { params, .. } => {
@@ -614,10 +626,10 @@ fn collect_binder_names(expression: &Expression, out: &mut Vec<String>) {
     }
 }
 
-fn push_binder_names(pattern: &Pattern, out: &mut Vec<String>) {
+fn push_binder_names(pattern: &Pattern, out: &mut Vec<SourceName>) {
     out.extend(
         collect_pattern_bindings(pattern)
             .into_iter()
-            .map(|(name, _)| name),
+            .map(|(name, _)| SourceName::new(&name.into())),
     );
 }

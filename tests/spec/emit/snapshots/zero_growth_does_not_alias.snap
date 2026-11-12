@@ -64,9 +64,9 @@ func main() {
 		}
 		return slices.Grow(slices.Clip(a), added)
 	}())
-	var from_block []int
-	from_block = slices.Clone(a)
-	check(a, from_block)
+	var fromBlock []int
+	fromBlock = slices.Clone(a)
+	check(a, fromBlock)
 	var tmp []int
 	added2 := []int{}
 	tmp = func() []int {
@@ -75,8 +75,8 @@ func main() {
 		}
 		return append(slices.Clip(a), added2...)
 	}()
-	from_block = tmp
-	check(a, from_block)
+	fromBlock = tmp
+	check(a, fromBlock)
 	var tmp2 []int
 	added3 := 1 - 1
 	tmp2 = func() []int {
@@ -85,8 +85,8 @@ func main() {
 		}
 		return slices.Grow(slices.Clip(a), added3)
 	}()
-	from_block = tmp2
-	check(a, from_block)
+	fromBlock = tmp2
+	check(a, fromBlock)
 	check(a, slices.Clone(a))
 	added4 := []int{}
 	check(a, func() []int {

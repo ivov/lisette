@@ -35,9 +35,9 @@ func main() {
 	m := make(map[string]Pair)
 	m["a"] = Pair{x: 0}
 	k := "a"
-	captured_key := k
-	entry := m[captured_key]
+	capturedKey := k
+	entry := m[capturedKey]
 	entry.x = setKey(&k)
-	m[captured_key] = entry
+	m[capturedKey] = entry
 	_ = m
 }

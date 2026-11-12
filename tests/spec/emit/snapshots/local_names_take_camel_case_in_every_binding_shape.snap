@@ -1,0 +1,126 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  import "go:fmt"
+  import "go:os"
+  import "go:strconv"
+  
+  enum Wrap {
+    Inner(int),
+    Empty,
+  }
+  
+  fn parse_num(raw_text: string) -> Result<int, error> {
+    let parsed_value = strconv.Atoi(raw_text)?
+    Ok(parsed_value)
+  }
+  
+  fn main() {
+    let item_list = [1, 2, 3]
+    let mut item_total = 0
+    for (item_index, item_value) in item_list.enumerate() {
+      item_total += item_index * item_value
+    }
+    match item_list {
+      [first_item, ..rest_items] => fmt.Println(first_item, rest_items),
+      [] => fmt.Println("none"),
+    }
+    let mut stack_items = [5]
+    while let Some(top_item) = stack_items.get(0) {
+      fmt.Println(top_item)
+      stack_items = []
+    }
+    match Wrap.Inner(9) {
+      Wrap.Inner(inner_num) as whole_value => fmt.Println(inner_num, whole_value),
+      Wrap.Empty => fmt.Println("empty"),
+    }
+    if let Some(first_arg) = os.Args.get(0) {
+      fmt.Println(first_arg.length() > 0)
+    }
+    match parse_num("12") {
+      Ok(good_value) => fmt.Println(good_value),
+      Err(parse_err) => fmt.Println(parse_err),
+    }
+    let add_one = |input_value: int| input_value + 1
+    if item_total != 8 || add_one(1) != 2 { panic("wrong total") }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func MakeWrapInner(arg0 int) Wrap {
+	return Wrap{Tag: WrapInner, Inner: arg0}
+}
+
+func MakeWrapEmpty() Wrap {
+	return Wrap{Tag: WrapEmpty}
+}
+
+type WrapTag uint8
+
+const (
+	WrapInner WrapTag = iota
+	WrapEmpty
+)
+
+type Wrap struct {
+	Tag   WrapTag
+	Inner int
+}
+
+func parseNum(rawText string) (int, error) {
+	parsedValue, err := strconv.Atoi(rawText)
+	if err != nil {
+		return 0, err
+	}
+	return parsedValue, nil
+}
+
+func main() {
+	itemList := []int{1, 2, 3}
+	itemTotal := 0
+	for itemIndex, itemValue := range itemList {
+		itemTotal += itemIndex * itemValue
+	}
+	if len(itemList) >= 1 {
+		fmt.Println(itemList[0], itemList[1:])
+	} else {
+		fmt.Println("none")
+	}
+	stackItems := []int{5}
+	for {
+		if len(stackItems) == 0 {
+			break
+		}
+		topItem := stackItems[0]
+		fmt.Println(topItem)
+		stackItems = []int{}
+	}
+	subject := MakeWrapInner(9)
+	if subject.Tag == WrapInner {
+		fmt.Println(subject.Inner, subject)
+	} else {
+		fmt.Println("empty")
+	}
+	if len(os.Args) > 0 {
+		firstArg := os.Args[0]
+		fmt.Println(len(firstArg) > 0)
+	}
+	if goodValue, parseErr := parseNum("12"); parseErr == nil {
+		fmt.Println(goodValue)
+	} else {
+		fmt.Println(parseErr)
+	}
+	addOne := func(inputValue int) int {
+		return inputValue + 1
+	}
+	if itemTotal != 8 || addOne(1) != 2 {
+		panic("wrong total")
+	}
+}

@@ -32,12 +32,12 @@ func main() {
 	generic.StoreAll(options)
 	generic.StoreMany(option, option)
 	loaded := generic.Load(option)
-	loaded_all := generic.LoadAll(options)
+	loadedAll := generic.LoadAll(options)
 	bag := generic.Bag[lisette.Option[int]]{
 		Value:  option,
 		Values: options,
 	}
 	generic.Store(bag.Value)
 	generic.Store(loaded)
-	generic.StoreAll(loaded_all)
+	generic.StoreAll(loadedAll)
 }

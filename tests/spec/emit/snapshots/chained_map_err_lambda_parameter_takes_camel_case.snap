@@ -1,0 +1,55 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  fn load() -> Result<int, string> {
+    Err("bad")
+  }
+  
+  fn wrap_error(message: string) -> string {
+    "[" + message + "]"
+  }
+  
+  fn run() -> Result<int, string> {
+    let value = load().map_err(wrap_error).map_err(|error_value| error_value + error_value)?
+    Ok(value)
+  }
+  
+  fn main() {
+    match run() {
+      Ok(_) => panic("the load should fail"),
+      Err(message) => if message != "[bad][bad]" { panic("the error was mapped wrong") },
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func load() lisette.Result[int, string] {
+	return lisette.MakeResultErr[int, string]("bad")
+}
+
+func wrapError(message string) string {
+	return "[" + message + "]"
+}
+
+func run() lisette.Result[int, string] {
+	check := load()
+	if check.Tag != lisette.ResultOk {
+		errorValue := wrapError(check.ErrVal)
+		return lisette.MakeResultErr[int, string](errorValue + errorValue)
+	}
+	value := check.OkVal
+	return lisette.MakeResultOk[int, string](value)
+}
+
+func main() {
+	subject := run()
+	if subject.Tag == lisette.ResultOk {
+		panic("the load should fail")
+	}
+	if subject.ErrVal != "[bad][bad]" {
+		panic("the error was mapped wrong")
+	}
+}

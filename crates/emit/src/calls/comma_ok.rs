@@ -4,8 +4,8 @@ use crate::calls::bound_value::{BoundValue, LoweredPair, PairValue};
 use crate::calls::dispatch::extract_native_method_name;
 use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
-use crate::escape_reserved;
 use crate::names::go_name::GeneratedPackage;
+use crate::names::source_name::SourceName;
 use crate::plan::bodies::{Statement, define, define_many};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::local::GoIdentifier;
@@ -213,7 +213,7 @@ impl Planner<'_> {
         expression: GoExpression,
         slot: CommaOkValueSlot,
         kind: PairKind,
-        status_hint: Option<&str>,
+        status_hint: Option<&SourceName>,
     ) -> BoundValue {
         let status_kind = match kind {
             PairKind::CommaOk { .. } => PairStatusKind::Ok,
@@ -240,7 +240,7 @@ impl Planner<'_> {
         let mut status = self.pair_status(status_hint, status_kind, opens_if);
         if opens_if && value.name().map(GoIdentifier::spelling) == Some(status.spelling()) {
             self.scope.reserve_go_name(&status);
-            status = self.fresh_local(Some(&status));
+            status = self.fresh_like(&status);
         }
         let mut statements = statements;
         let mut pair = LoweredPair {
@@ -258,21 +258,21 @@ impl Planner<'_> {
         BoundValue::pair(statements, pair)
     }
 
-    pub(crate) fn arm_value_name(&mut self, name: &str) -> GoIdentifier {
-        let candidate = escape_reserved(name);
+    pub(crate) fn arm_value_name(&mut self, name: &SourceName) -> GoIdentifier {
+        let candidate = name.preferred();
         if self.scope.has_binding_for_go_name(&candidate)
             || self.package.is_package_block_name(&candidate)
         {
-            self.fresh_local(Some(&candidate))
+            self.fresh_source(name)
         } else {
-            self.scope.new_local_identifier(candidate.as_ref())
+            self.scope.new_local_identifier(candidate)
         }
     }
 
     pub(crate) fn declared_arm_value_name(&mut self, name: &GoIdentifier) -> GoIdentifier {
         let candidate = name.clone();
         let name = if self.is_declared(&candidate) {
-            self.fresh_local(Some(&candidate))
+            self.fresh_like(&candidate)
         } else {
             candidate
         };
@@ -283,21 +283,22 @@ impl Planner<'_> {
     /// Fresh within a Go block; nested blocks may shadow outer statuses.
     pub(crate) fn pair_status(
         &mut self,
-        hint: Option<&str>,
+        hint: Option<&SourceName>,
         kind: PairStatusKind,
         opens_if: bool,
     ) -> GoIdentifier {
-        let candidate = escape_reserved(hint.unwrap_or(match kind {
+        let default = match kind {
             PairStatusKind::Error => "err",
             PairStatusKind::Ok => "ok",
-        }));
+        };
+        let candidate = hint.map_or_else(|| default.to_string(), SourceName::preferred);
         let taken = (!opens_if && self.scope.current_block_declares(&candidate))
             || self.scope.has_binding_for_go_name(&candidate)
             || self.package.is_package_block_name(&candidate);
-        let name = if taken {
-            self.fresh_local(Some(&candidate))
-        } else {
-            self.scope.new_local_identifier(candidate.as_ref())
+        let name = match hint {
+            Some(hint) if taken => self.fresh_source(hint),
+            None if taken => self.fresh_local(Some(default)),
+            _ => self.scope.new_local_identifier(candidate),
         };
         if !opens_if {
             self.declare(&name);

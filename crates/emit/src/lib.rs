@@ -42,6 +42,7 @@ use context::lowering::LoopContext;
 use diagnostics::LisetteDiagnostic;
 use names::go_name::GeneratedPackage;
 use names::packages::{PackageRequirements, PackageUse};
+use names::source_name::SourceName;
 use plan::PackagePlan;
 use plan::bodies::{LoopId, LoweredBlock, LoweredStatement, Statement, define};
 use plan::go_expression::{GoExpressionNode, TreeVisitor};
@@ -499,9 +500,9 @@ impl<'a> Planner<'a> {
         &mut self,
         lisette_name: &str,
         ids: &[BindingId],
-        preferred: impl Into<GoIdentifier>,
+        preferred: &SourceName,
     ) -> GoIdentifier {
-        let go_name = self.claim_declared_go_name(lisette_name, ids, preferred);
+        let go_name = self.claim_declared_go_name(ids, preferred);
         self.scope.bind_source(lisette_name, ids, go_name)
     }
 
@@ -511,18 +512,34 @@ impl<'a> Planner<'a> {
         &mut self,
         lisette_name: &str,
         ids: &[BindingId],
-        preferred: impl Into<GoIdentifier>,
+        preferred: &SourceName,
+        outer: OuterBindings,
+    ) -> GoIdentifier {
+        self.claim_block_binding_as(lisette_name, ids, preferred.into(), preferred, outer)
+    }
+
+    fn claim_block_binding_as(
+        &mut self,
+        lisette_name: &str,
+        ids: &[BindingId],
+        preferred: GoIdentifier,
+        source: &SourceName,
         outer: OuterBindings,
     ) -> GoIdentifier {
         let go_name = self.scope.new_local_identifier(preferred);
         let hides = self.package.is_package_block_name(&go_name)
             || self.scope.current_block_declares(&go_name)
             || match outer {
-                OuterBindings::MayShadow => self.scope.is_active_assign_target(&go_name),
+                OuterBindings::MayShadow => {
+                    self.scope.is_active_assign_target(&go_name)
+                        || self
+                            .scope
+                            .binds_go_name_for_other_source_name(&go_name, lisette_name)
+                }
                 OuterBindings::StayVisible => self.scope.has_binding_for_go_name(&go_name),
             };
         let go_name = if hides {
-            self.fresh_local(Some(lisette_name))
+            self.fresh_source(source)
         } else {
             go_name
         };
@@ -530,18 +547,19 @@ impl<'a> Planner<'a> {
         self.scope.bind_source(lisette_name, ids, go_name)
     }
 
-    /// Declare `preferred` for `lisette_name`, or a fresh name if it would shadow. Binds nothing.
+    /// Declare `preferred`, or a fresh name if it would shadow. Binds nothing.
     fn claim_declared_go_name(
         &mut self,
-        lisette_name: &str,
         ids: &[BindingId],
-        preferred: impl Into<GoIdentifier>,
+        preferred: &SourceName,
     ) -> GoIdentifier {
         let go_name = self.scope.new_local_identifier(preferred);
         let go_name = if self.shadows_declaration(&go_name)
             || self.scope.has_other_binding_for_go_name(&go_name, ids)
         {
-            let fresh = self.scope.fresh_binding_go_name(lisette_name, self.package);
+            let fresh = self
+                .scope
+                .fresh_binding_go_name(preferred.base(), self.package);
             self.scope.new_local_identifier(fresh)
         } else {
             go_name
@@ -554,7 +572,7 @@ impl<'a> Planner<'a> {
     fn stable_source(
         &mut self,
         statements: &mut Vec<Statement>,
-        hint: &str,
+        hint: &'static str,
         value: GoExpression,
     ) -> GoExpression {
         if value.as_identifier().is_some() {
@@ -567,12 +585,23 @@ impl<'a> Planner<'a> {
     fn hoist_tmp_value_statement(
         &mut self,
         setup: &mut Vec<Statement>,
-        hint: &str,
+        hint: &'static str,
         value: GoExpression,
     ) -> GoIdentifier {
         let tmp = self.fresh_declared(hint);
         setup.push(define(tmp.clone(), value));
         tmp
+    }
+
+    fn hoist_source_value(
+        &mut self,
+        setup: &mut Vec<Statement>,
+        name: &SourceName,
+        value: GoExpression,
+    ) -> GoIdentifier {
+        let local = self.fresh_declared_source(name);
+        setup.push(define(local.clone(), value));
+        local
     }
 
     /// Run `f` inside a fresh scope to build a `LoweredBlock`, returning `None`
@@ -647,14 +676,29 @@ impl<'a> Planner<'a> {
     }
 
     /// Allocate and register a local whose declaration belongs to the current block.
-    fn fresh_declared(&mut self, hint: &str) -> GoIdentifier {
+    fn fresh_declared(&mut self, hint: &'static str) -> GoIdentifier {
         let name = self.fresh_local(Some(hint));
         self.declare(&name);
         name
     }
 
-    fn fresh_local(&mut self, hint: Option<&str>) -> GoIdentifier {
+    fn fresh_declared_source(&mut self, name: &SourceName) -> GoIdentifier {
+        let local = self.fresh_source(name);
+        self.declare(&local);
+        local
+    }
+
+    fn fresh_local(&mut self, hint: Option<&'static str>) -> GoIdentifier {
         self.scope.fresh_go_name(hint, self.package)
+    }
+
+    fn fresh_source(&mut self, name: &SourceName) -> GoIdentifier {
+        self.scope.fresh_go_name(Some(name.base()), self.package)
+    }
+
+    fn fresh_like(&mut self, name: &GoIdentifier) -> GoIdentifier {
+        self.scope
+            .fresh_go_name(Some(name.spelling()), self.package)
     }
 
     fn maybe_line_directive(&self, span: &Span) -> Option<String> {

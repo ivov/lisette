@@ -9,6 +9,7 @@ use crate::calls::go_interop::{NilGuard, is_nil, non_nil, unexpected_nil_error};
 use crate::calls::slice_loop::FoundSink;
 use crate::calls::wrap_err::WrapMessage;
 use crate::context::expression::ExpressionContext;
+use crate::names::source_name::SourceName;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::decision_tree;
 use crate::patterns::sites::ResolvedSubject;
@@ -25,6 +26,7 @@ use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::state::bindings::{ComponentBinding, ComponentKind};
 use crate::state::scope::PairStatusKind;
 use crate::types::go_type::GoType;
+use syntax::EcoString;
 use syntax::ast::{
     BindingId, ConstructorPatternResolution, Expression, Literal, MatchArm, Pattern,
 };
@@ -160,7 +162,7 @@ impl ResultFusePlan<'_> {
         self,
         planner: &mut Planner<'_>,
         slot: CommaOkValueSlot,
-        error_name: Option<&str>,
+        error_name: Option<&SourceName>,
     ) -> BoundValue {
         self.bind_wrapped(planner, slot, error_name, false).0
     }
@@ -169,7 +171,7 @@ impl ResultFusePlan<'_> {
         self,
         planner: &mut Planner<'_>,
         slot: CommaOkValueSlot,
-        error_name: Option<&str>,
+        error_name: Option<&SourceName>,
         read_error: bool,
     ) -> (BoundValue, Vec<WrapMessage>) {
         if let Some(components) = self.bound {
@@ -214,8 +216,14 @@ impl ResultFusePlan<'_> {
 
 #[derive(Clone, Copy)]
 pub(crate) struct FusedName<'a> {
-    pub(crate) name: &'a str,
+    pub(crate) name: &'a EcoString,
     pub(crate) binding: Option<BindingId>,
+}
+
+impl FusedName<'_> {
+    pub(crate) fn go_name(&self) -> SourceName {
+        SourceName::new(self.name)
+    }
 }
 
 #[derive(Clone)]
@@ -735,11 +743,12 @@ impl Planner<'_> {
         let carries_payload = fuse.carries_payload();
         let slot = match (destination, ok_name) {
             (Some(name), _) => CommaOkValueSlot::Named(name.clone()),
-            (None, Some(ok)) => CommaOkValueSlot::Arm(self.arm_value_name(ok.name)),
+            (None, Some(ok)) => CommaOkValueSlot::Arm(self.arm_value_name(&ok.go_name())),
             (None, None) => CommaOkValueSlot::Unused,
         };
-        let err_hint = err_name.map(|err| err.name);
-        let (mut bound, wraps) = fuse.bind_wrapped(self, slot, err_hint, err_hint.is_some());
+        let err_hint = err_name.map(|err| err.go_name());
+        let (mut bound, wraps) =
+            fuse.bind_wrapped(self, slot, err_hint.as_ref(), err_hint.is_some());
         let error = || GoExpression::identifier(bound.status_identifier().clone());
 
         let unit = unit_value();
@@ -885,7 +894,7 @@ impl Planner<'_> {
             .filter(|payload| !self.facts.is_unused_binding(payload))
             .and_then(field_binding)
             .flatten();
-        let err_hint = err_name.map(|err| err.name);
+        let err_hint = err_name.map(|err| err.go_name());
 
         let has_nil_guard = fuse.has_nil_guard();
         let (mut bound, wraps) = {
@@ -893,7 +902,7 @@ impl Planner<'_> {
             fuse.bind_wrapped(
                 self,
                 CommaOkValueSlot::Arm(value_name),
-                err_hint,
+                err_hint.as_ref(),
                 err_hint.is_some(),
             )
         };
@@ -956,13 +965,13 @@ impl Planner<'_> {
             .lower_call(subject, None, ExpressionContext::value())
             .into_parts();
         let val_var = match ok_name.or(both_val) {
-            Some(value) => Some(self.arm_value_name(value.name)),
+            Some(value) => Some(self.arm_value_name(&value.go_name())),
             None => nilable.then(|| self.fresh_local(Some("ret"))),
         };
-        let err_hint = both_err.or(err_name).map(|err| err.name);
-        let mut err_var = self.pair_status(err_hint, PairStatusKind::Error, true);
+        let err_hint = both_err.or(err_name).map(|err| err.go_name());
+        let mut err_var = self.pair_status(err_hint.as_ref(), PairStatusKind::Error, true);
         if val_var.as_deref() == Some(err_var.spelling()) {
-            err_var = self.fresh_local(Some(&err_var));
+            err_var = self.fresh_like(&err_var);
         }
         let err = || GoExpression::identifier(err_var.clone());
 
@@ -1063,13 +1072,13 @@ impl Planner<'_> {
         let condition_needs_value = nil_guard.is_some()
             && matches!(arms.variant, PartialVariant::Both | PartialVariant::Err);
         let value = match value_binding {
-            Some(value) => Some(self.arm_value_name(value.name)),
+            Some(value) => Some(self.arm_value_name(&value.go_name())),
             None => condition_needs_value.then(|| self.fresh_local(Some("ret"))),
         };
-        let error_hint = error_binding.map(|error| error.name);
-        let mut error = self.pair_status(error_hint, PairStatusKind::Error, true);
+        let error_hint = error_binding.map(|error| error.go_name());
+        let mut error = self.pair_status(error_hint.as_ref(), PairStatusKind::Error, true);
         if value.as_deref() == Some(error.spelling()) {
-            error = self.fresh_local(Some(&error));
+            error = self.fresh_like(&error);
         }
         let (selected, binding_uses) = self.lower_fused_arm(
             &[
@@ -1150,7 +1159,7 @@ impl Planner<'_> {
         place: &PlacePlan,
     ) -> Vec<Statement> {
         let slot = match arms.some_binding {
-            Some(some) => CommaOkValueSlot::Arm(self.arm_value_name(some.name)),
+            Some(some) => CommaOkValueSlot::Arm(self.arm_value_name(&some.go_name())),
             None => CommaOkValueSlot::Unused,
         };
         let mut bound = fuse.bind(self, slot);
@@ -1201,7 +1210,7 @@ impl Planner<'_> {
                         (go_name.clone(), None)
                     }
                     ArmBinding::Copy { name, value } => {
-                        let go_name = this.arm_value_name(name.name);
+                        let go_name = this.arm_value_name(&name.go_name());
                         this.declare(&go_name);
                         let go_name =
                             this.scope
@@ -1551,7 +1560,7 @@ pub(crate) fn field_binding(pattern: &Pattern) -> Option<Option<FusedName<'_>>> 
             binding,
             ..
         } => Some(Some(FusedName {
-            name: identifier.as_str(),
+            name: identifier,
             binding: *binding,
         })),
         Pattern::WildCard { .. } => Some(None),

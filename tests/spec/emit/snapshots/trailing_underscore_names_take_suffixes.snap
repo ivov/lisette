@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  fn pick(foo_bar: int, foo_bar_: int) -> int {
+    foo_bar * 10 + foo_bar_
+  }
+  
+  fn main() {
+    let foo_bar = 1
+    let foo_bar_ = 2
+    if pick(foo_bar, foo_bar_) != 12 { panic("a local read the wrong value") }
+  }
+---
+package main
+
+func pick(fooBar, fooBar2 int) int {
+	return fooBar*10 + fooBar2
+}
+
+func main() {
+	fooBar := 1
+	fooBar2 := 2
+	if pick(fooBar, fooBar2) != 12 {
+		panic("a local read the wrong value")
+	}
+}

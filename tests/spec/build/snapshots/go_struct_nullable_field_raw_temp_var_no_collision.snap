@@ -12,15 +12,15 @@ import (
 )
 
 func main() {
-	mod_ := debug.Module{
+	mod := debug.Module{
 		Path:    "example.com/mod",
 		Version: "v1.0.0",
 		Sum:     "",
 		Replace: nil,
 	}
-	raw := mod_.Replace
+	raw := mod.Replace
 	r := lisette.OptionFromNilable[*debug.Module](raw, raw == nil)
-	raw_1 := 3
+	raw1 := 3
 	fmt.Println(r)
-	fmt.Println(raw_1)
+	fmt.Println(raw1)
 }

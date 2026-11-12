@@ -183,7 +183,7 @@ fn lowered_payload_zeros(
 pub(crate) fn emit_lowered_result_return(
     planner: &mut Planner,
     result_value: GoExpression,
-    hint: &str,
+    hint: &'static str,
     return_ty: &Type,
     shape: &LoweredReturnAbi,
 ) -> Vec<Statement> {
