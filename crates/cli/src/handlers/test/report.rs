@@ -605,7 +605,8 @@ fn decode_hex_utf8(value: &str) -> Option<String> {
 }
 
 fn decode_hex(hex: &str) -> Option<Vec<u8>> {
-    if !hex.len().is_multiple_of(2) {
+    let (pairs, remainder) = hex.as_bytes().as_chunks::<2>();
+    if !remainder.is_empty() {
         return None;
     }
     let nibble = |b: u8| match b {
@@ -614,9 +615,9 @@ fn decode_hex(hex: &str) -> Option<Vec<u8>> {
         b'A'..=b'F' => Some(b - b'A' + 10),
         _ => None,
     };
-    hex.as_bytes()
-        .chunks_exact(2)
-        .map(|pair| Some((nibble(pair[0])? << 4) | nibble(pair[1])?))
+    pairs
+        .iter()
+        .map(|&[high, low]| Some((nibble(high)? << 4) | nibble(low)?))
         .collect()
 }
 
