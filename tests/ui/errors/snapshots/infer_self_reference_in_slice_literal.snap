@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot reassign variable while taking its reference
+   ╭─[test.lis:6:3]
+ 5 │   let mut a = Node { kids: [], next: None }
+ 6 │   a = Node { kids: [&a], next: None }
+   ·   ─────────────────┬─────────────────
+   ·                    ╰── disallowed
+ 7 │   let _ = a
+   ╰────
+  help: Separate the reassignment from reference taking, or use a different variable · code: [infer.self_reference_in_assignment]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Not a struct variant
+   ╭─[test.lis:5:5]
+ 4 │   match s {
+ 5 │     Shape.Circle { r } => r,
+   ·     ──────┬─────
+   ·           ╰── `Circle` is a tuple variant
+ 6 │     Shape.Rect { w, h } => w * h,
+   ╰────
+  help: Match it with `Shape.Circle(r)` · code: [infer.struct_pattern_on_tuple_variant]

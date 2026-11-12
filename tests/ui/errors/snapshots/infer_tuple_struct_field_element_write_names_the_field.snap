@@ -1,0 +1,36 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot write to `g.0[0][0]`
+   ╭─[test.lis:2:13]
+ 1 │ 
+ 2 │ struct Grid(mut Slice<Slice<int>>, int)
+   ·             ──────────┬──────────
+   ·                       ╰── `mut` makes `.0` writable, but `.0[i]` is still read-only
+ 3 │ struct Named { rows: mut Slice<Slice<int>>, n: int }
+   ╰────
+   ╭─[test.lis:6:3]
+ 5 │ fn f(g: mut Ref<Grid>, h: mut Ref<Named>) {
+ 6 │   g.0[0][0] = 9
+   ·   ──────┬──────
+   ·         ╰── this write goes through `.0[0]`
+ 7 │   h.rows[0][0] = 9
+   ╰────
+  help: Declare `.0` as `mut Slice<mut Slice<int>>` to make both `.0` and `.0[i]` writable · code: [infer.write_through_read_only]
+
+  ✕ Cannot write to `h.rows[0][0]`
+   ╭─[test.lis:3:16]
+ 2 │ struct Grid(mut Slice<Slice<int>>, int)
+ 3 │ struct Named { rows: mut Slice<Slice<int>>, n: int }
+   ·                ─────────────┬─────────────
+   ·                             ╰── `mut` makes `rows` writable, but `rows[i]` is still read-only
+ 4 │ 
+   ╰────
+   ╭─[test.lis:7:3]
+ 6 │   g.0[0][0] = 9
+ 7 │   h.rows[0][0] = 9
+   ·   ────────┬───────
+   ·           ╰── this write goes through `rows[0]`
+ 8 │ }
+   ╰────
+  help: Declare `rows` as `mut Slice<mut Slice<int>>` to make both `rows` and `rows[i]` writable · code: [infer.write_through_read_only]

@@ -88,7 +88,7 @@ impl InferCtx<'_> {
     ) -> Expression {
         self.unify_statement_loop(expected_ty, &span, "while");
 
-        let new_condition = self.infer_condition(*condition, &span);
+        let new_condition = self.infer_condition(*condition);
         if let Some(span) = Self::find_propagate(&new_condition) {
             self.sink
                 .push(diagnostics::infer::propagate_in_condition(span));
@@ -118,17 +118,13 @@ impl InferCtx<'_> {
         let scrutinee_ty = self.new_type_var();
         let new_scrutinee = self.infer_expression(*scrutinee, &scrutinee_ty);
 
-        self.ensure_subject_matchable(
-            &scrutinee_ty.resolve_in(&self.env),
-            &new_scrutinee.get_span(),
-        );
+        let resolved_scrutinee_ty = scrutinee_ty.resolve_in(&self.env);
+        self.ensure_subject_matchable(&resolved_scrutinee_ty, &new_scrutinee.get_span());
+        self.mark_scrutinee_grant(&new_scrutinee, &resolved_scrutinee_ty);
 
         let (new_pattern, new_body) = self.with_scope(|this| {
-            let new_pattern = this.infer_pattern(
-                pattern,
-                scrutinee_ty.resolve_in(&this.env),
-                BindingKind::WhileLet,
-            );
+            let new_pattern =
+                this.infer_pattern(pattern, resolved_scrutinee_ty, BindingKind::WhileLet);
             let new_body = this.with_loop(LoopContext::Statement, |s| {
                 s.infer_expression(*body, &Type::ignored())
             });

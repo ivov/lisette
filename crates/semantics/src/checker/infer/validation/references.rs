@@ -105,6 +105,10 @@ impl InferCtx<'_> {
                         continue; // only a `&v` before the read can affect it
                     }
                     if let Some(ref_span) = find_ref_span(other, var) {
+                        let ref_span = siblings
+                            .iter()
+                            .find_map(|sibling| self.find_granting_ref_span(sibling, var, false))
+                            .unwrap_or(ref_span);
                         self.sink
                             .push(diagnostics::infer::reference_aliases_sibling(
                                 ref_span, read_span, var,
@@ -157,6 +161,57 @@ impl InferCtx<'_> {
                     self.collect_ref_targets(child, out, granted);
                 }
             }
+        }
+    }
+
+    fn find_granting_ref_span(
+        &self,
+        expression: &Expression,
+        var_name: &str,
+        granted: bool,
+    ) -> Option<Span> {
+        match expression.unwrap_parens() {
+            Expression::Reference {
+                expression: inner,
+                span,
+                ..
+            } => {
+                if granted
+                    && let Expression::Identifier { value, .. } = inner.unwrap_parens()
+                    && value.as_str() == var_name
+                {
+                    return Some(*span);
+                }
+                self.find_granting_ref_span(inner, var_name, granted)
+            }
+            Expression::Call {
+                expression: callee,
+                args,
+                spread,
+                ..
+            } => {
+                let resolved = callee.get_type().resolve_in(&self.env);
+                let function = self
+                    .store
+                    .resolve_to_function_type(&resolved)
+                    .unwrap_or(resolved);
+                self.find_granting_ref_span(callee, var_name, false)
+                    .or_else(|| {
+                        args.iter().enumerate().find_map(|(index, arg)| {
+                            let grants = self.argument_position_grants(&function, index);
+                            self.find_granting_ref_span(arg, var_name, grants)
+                        })
+                    })
+                    .or_else(|| {
+                        let spread = spread.as_deref()?;
+                        let grants = self.argument_position_grants(&function, args.len());
+                        self.find_granting_ref_span(spread, var_name, grants)
+                    })
+            }
+            other => other
+                .children()
+                .into_iter()
+                .find_map(|child| self.find_granting_ref_span(child, var_name, granted)),
         }
     }
 

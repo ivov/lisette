@@ -16789,3 +16789,273 @@ fn test() -> bool {
 "#;
     assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn infer_nested_field_write_through_read_only_parameter() {
+    let input = r#"
+struct Inner {
+  x: int,
+}
+
+struct Outer {
+  inner: Inner,
+}
+
+fn nested_ro(o: Ref<Outer>) {
+  o.inner.x = 1
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_two_level_write_names_the_parameter_type() {
+    let input = r#"
+fn f(rows: Slice<Slice<int>>) {
+  rows[0][0] = 9
+}
+
+fn g(rows: mut Slice<Slice<int>>) {
+  rows[0][0] = 9
+}
+
+fn main() {
+  f([[1]])
+  g([[1]])
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_two_level_write_names_the_call_result_type() {
+    let input = r#"
+struct Grid { rows: mut Slice<Slice<int>> }
+
+fn make() -> Grid { Grid { rows: [[1]] } }
+
+fn main() {
+  let mut g = make()
+  g.rows[0][0] = 9
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_tuple_struct_field_element_write_names_the_field() {
+    let input = r#"
+struct Grid(mut Slice<Slice<int>>, int)
+struct Named { rows: mut Slice<Slice<int>>, n: int }
+
+fn f(g: mut Ref<Grid>, h: mut Ref<Named>) {
+  g.0[0][0] = 9
+  h.rows[0][0] = 9
+}
+
+fn main() {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_two_nested_mut_differences_need_write_permission() {
+    let input = r#"
+fn take(t: (mut Slice<int>, mut Slice<int>)) -> int { t.0.length() }
+fn main() {
+  let a: Slice<int> = [1]
+  let b: Slice<int> = [2]
+  let p = (a, b)
+  let _ = take(p)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_read_only_slice_to_go_sort_reports_only_permission() {
+    let input = r#"
+import "go:slices"
+
+fn sort_ro(s: Slice<int>) {
+  slices.Sort(s)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_map_from_writable_values_names_map_new() {
+    let input = r#"
+fn main() {
+  let mut a = [1, 2]
+  let m: mut Map<string, mut Slice<int>> = Map.from([("k", a)])
+  let _ = m
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_self_reference_in_slice_literal() {
+    let input = r#"
+struct Node { kids: Slice<Ref<Node>>, next: Option<Ref<Node>> }
+
+fn main() {
+  let mut a = Node { kids: [], next: None }
+  a = Node { kids: [&a], next: None }
+  let _ = a
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_reference_aliases_sibling_labels_the_writable_reference() {
+    let input = r#"
+struct Data { n: int }
+fn inspect(value: Ref<Data>) -> int { value.n }
+fn bump(value: mut Ref<Data>) -> int {
+  value.n += 1
+  value.n
+}
+fn main() {
+  let mut data = Data{ n: 1 }
+  let triple = (inspect(&data), data, bump(&data))
+  let _ = triple
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_nested_tuple_length_mismatch_in_slice() {
+    let input = r#"
+fn take(xs: Slice<(int, int)>) -> int { xs.length() }
+
+fn main() {
+  let ys: Slice<(int, int, int)> = [(1, 2, 3)]
+  let _ = take(ys)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_nested_tuple_length_mismatch_in_option() {
+    let input = r#"
+fn take(o: Option<(int, int)>) -> bool { o.is_some() }
+
+fn main() {
+  let y: Option<(int, int, int)> = Some((1, 2, 3))
+  let _ = take(y)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_tuple_value_length_mismatch_names_the_tuple() {
+    let input = r#"
+fn main() {
+  let xs: Slice<(int, int)> = [(1, 2, 3)]
+  let _ = xs
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_non_bool_if_condition_labels_the_condition() {
+    let input = r#"
+fn main() {
+  let n = 1
+  if n {
+    let _ = 2
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_non_bool_while_condition_labels_the_condition() {
+    let input = r#"
+fn main() {
+  let n = 1
+  while n {
+    break
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_non_bool_match_guard_labels_the_guard() {
+    let input = r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  match o {
+    Some(x) if x => (),
+    _ => (),
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_bare_variant_arity_mismatch_suggests_user_enum() {
+    let input = r#"
+enum DecodeResult { Ok(int, string), Err(string) }
+
+fn main() {
+  let a = Ok(7, "tail")
+  let _ = a
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_struct_pattern_on_tuple_variant() {
+    let input = r#"
+enum Shape { Circle(int), Rect { w: int, h: int } }
+fn area(s: Shape) -> int {
+  match s {
+    Shape.Circle { r } => r,
+    Shape.Rect { w, h } => w * h,
+  }
+}
+fn main() { let _ = area(Shape.Circle(1)) }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_bare_struct_variant_pattern_in_if_let() {
+    let input = r#"
+enum Shape { Circle(int), Rect { w: int, h: int } }
+fn g(s: Shape) -> int {
+  if let Rect { w, h } = s { return w * h }
+  0
+}
+fn main() { let _ = g(Shape.Rect { w: 1, h: 2 }) }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_parenthesized_local_shadowing_import_reports_only_the_shadow() {
+    let input = r#"
+import "go:strings"
+
+fn main() {
+  let strings = "abc"
+  let n = (strings).length()
+  let _ = n
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}

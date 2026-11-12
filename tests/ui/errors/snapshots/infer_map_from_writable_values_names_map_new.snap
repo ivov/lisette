@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing write permission
+   ╭─[test.lis:4:53]
+ 3 │   let mut a = [1, 2]
+ 4 │   let m: mut Map<string, mut Slice<int>> = Map.from([("k", a)])
+   ·                                                     ─────┬────
+   ·                                                          ╰── `pairs` is read-only
+ 5 │   let _ = m
+   ╰────
+  help: `Map.from()` takes `pairs` as read-only, so it cannot build a result with writable contents. Create the map with `Map.new()` and assign each entry with an index write · code: [infer.needs_writable]

@@ -1,0 +1,22 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot write to `rows[0][0]`
+   ╭─[test.lis:3:3]
+ 2 │ fn f(rows: Slice<Slice<int>>) {
+ 3 │   rows[0][0] = 9
+   ·   ───────┬──────
+   ·          ╰── `rows[0]` is read-only
+ 4 │ }
+   ╰────
+  help: Declare the parameter `rows` as `mut Slice<mut Slice<int>>` · code: [infer.write_through_read_only]
+
+  ✕ Cannot write to `rows[0][0]`
+   ╭─[test.lis:7:3]
+ 6 │ fn g(rows: mut Slice<Slice<int>>) {
+ 7 │   rows[0][0] = 9
+   ·   ───────┬──────
+   ·          ╰── `rows[0]` is read-only
+ 8 │ }
+   ╰────
+  help: Declare the parameter `rows` as `mut Slice<mut Slice<int>>` · code: [infer.write_through_read_only]

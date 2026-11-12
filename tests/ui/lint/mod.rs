@@ -29506,3 +29506,34 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn while_let_scrutinee_grant_keeps_mut() {
+    assert_no_lint_warnings!(
+        r#"
+enum Holder { Tags { items: mut Slice<string> }, Empty }
+fn main() {
+  let mut h = Holder.Tags { items: ["x"] }
+  while let Holder.Tags { items } = h {
+    items[0] = "y"
+    if items.length() > 5 { break }
+  }
+  let _ = Holder.Empty
+}
+"#
+    );
+}
+
+#[test]
+fn tuple_element_with_writable_type_keeps_mut() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut a = [1, 2]
+  let p: (mut Slice<int>, int) = (a, 1)
+  let _ = a
+  let _ = p
+}
+"#
+    );
+}
