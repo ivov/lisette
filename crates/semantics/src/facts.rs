@@ -262,6 +262,17 @@ impl Facts {
         }
     }
 
+    pub(crate) fn mark_written_through(&mut self, id: BindingId) {
+        if let Some(fact) = self.bindings.get_mut(&id) {
+            fact.mutation = Some(
+                fact.mutation
+                    .map_or(BindingMutation::ThroughReference, |mutation| {
+                        mutation.merged_with(BindingMutation::ThroughReference)
+                    }),
+            );
+        }
+    }
+
     /// The binding is mutated through an alias (address taken, mutable
     /// capture, mut argument or receiver), so a call can rebind it.
     pub(crate) fn mark_alias_mutated(&mut self, id: BindingId) {
@@ -543,6 +554,27 @@ mod tests {
             facts.bindings[&id].mutation,
             Some(BindingMutation::ThroughAlias)
         );
+    }
+
+    #[test]
+    fn write_through_reference_does_not_downgrade_rebind() {
+        let allocator = Arc::new(BindingIdAllocator::new());
+        let mut facts = Facts::new(allocator);
+        let id = facts.add_binding(
+            "ctx".into(),
+            span(0),
+            BindingKind::Let { mutable: true },
+            BindingOrigin::Name {
+                in_typedef: false,
+                shorthand_field: false,
+            },
+            None,
+        );
+
+        facts.mark_mutated(id);
+        facts.mark_written_through(id);
+
+        assert_eq!(facts.bindings[&id].mutation, Some(BindingMutation::Direct));
     }
 
     #[test]

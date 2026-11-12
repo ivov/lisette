@@ -317,7 +317,11 @@ impl InferCtx<'_> {
             {
                 // The callee gets a copy of a named argument and cannot rebind the name.
                 if matches!(arg.unwrap_parens(), Expression::Identifier { .. }) {
-                    self.facts.mark_mutated(binding_id);
+                    if self.peel_resolved(&arg.get_type()).is_ref() {
+                        self.facts.mark_written_through(binding_id);
+                    } else {
+                        self.facts.mark_mutated(binding_id);
+                    }
                 } else {
                     self.facts.mark_alias_mutated(binding_id);
                 }

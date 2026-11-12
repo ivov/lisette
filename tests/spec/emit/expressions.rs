@@ -5502,6 +5502,76 @@ fn run() -> int {
 }
 
 #[test]
+fn reference_field_assignment_not_pinned_when_never_rebound() {
+    let input = r#"
+struct Ctx { n: Option<int> }
+
+fn parse() -> Result<int, error> { Ok(7) }
+
+fn step(ctx: mut Ref<Ctx>) -> Result<int, error> {
+  ctx.n = None
+  Ok(7)
+}
+
+fn run(ctx: mut Ref<Ctx>) -> Result<(), error> {
+  ctx.n = Some(parse()?)
+  Ok(())
+}
+
+fn run_step(ctx: mut Ref<Ctx>) -> Result<(), error> {
+  ctx.n = Some(step(ctx)?)
+  Ok(())
+}
+
+impl Ctx {
+  fn load(self: mut Ref<Ctx>) -> Result<(), error> {
+    self.n = Some(parse()?)
+    Ok(())
+  }
+}
+
+fn from_pattern(slot: Option<mut Ref<Ctx>>) -> Result<(), error> {
+  if let Some(c) = slot {
+    c.n = Some(parse()?)
+  }
+  Ok(())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn range_bound_through_reference_captured_before_loop() {
+    let input = r#"
+fn count(xs: mut Ref<mut Slice<int>>) -> int {
+  let mut iterations = 0
+  for _i in 1..xs.length() {
+    iterations += 1
+    xs.* = []
+  }
+  iterations
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn reference_field_assignment_pinned_when_rebound_directly_and_in_closure() {
+    let input = r#"
+struct Ctx { n: int }
+
+fn run(a: mut Ref<Ctx>, b: mut Ref<Ctx>) -> int {
+  let mut r = a
+  r.n = 1
+  let swap = || -> int { r = b; 5 }
+  r.n = swap()
+  a.n
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn struct_literal_field_read_not_pinned_before_append() {
     let input = r#"
 struct Suite { name: string, cases: Slice<string> }

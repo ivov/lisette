@@ -656,7 +656,10 @@ impl<'a> Planner<'a> {
                 ctx.native_type,
                 NativeTypeKind::Channel | NativeTypeKind::Sender | NativeTypeKind::Receiver
             )
-            && split.is_some_and(|(receiver, _)| self.is_unmutated_identifier(receiver));
+            && split.is_some_and(|(receiver, _)| {
+                self.is_unmutated_identifier(receiver)
+                    && !self.facts.peel_alias(&receiver.get_type()).is_ref()
+            });
         if let GoExpressionNode::Identifier(name) = result.value.node()
             && result
                 .setup

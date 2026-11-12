@@ -105,9 +105,8 @@ func (s *Stack) pop() (int, bool) {
 		return 0, false
 	}
 	last := s.items[len(s.items)-1]
-	ref := s
 	end := len(s.items) - 1
-	ref.items = s.items[:end:end]
+	s.items = s.items[:end:end]
 	return last, true
 }
 

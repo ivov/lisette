@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn count(xs: mut Ref<mut Slice<int>>) -> int {
+    let mut iterations = 0
+    for _i in 1..xs.length() {
+      iterations += 1
+      xs.* = []
+    }
+    iterations
+  }
+---
+package main
+
+func count(xs *[]int) int {
+	iterations := 0
+	bound := len(*xs)
+	for i := 1; i < bound; i++ {
+		iterations++
+		*xs = []int{}
+	}
+	return iterations
+}

@@ -1,0 +1,92 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Ctx { n: Option<int> }
+  
+  fn parse() -> Result<int, error> { Ok(7) }
+  
+  fn step(ctx: mut Ref<Ctx>) -> Result<int, error> {
+    ctx.n = None
+    Ok(7)
+  }
+  
+  fn run(ctx: mut Ref<Ctx>) -> Result<(), error> {
+    ctx.n = Some(parse()?)
+    Ok(())
+  }
+  
+  fn run_step(ctx: mut Ref<Ctx>) -> Result<(), error> {
+    ctx.n = Some(step(ctx)?)
+    Ok(())
+  }
+  
+  impl Ctx {
+    fn load(self: mut Ref<Ctx>) -> Result<(), error> {
+      self.n = Some(parse()?)
+      Ok(())
+    }
+  }
+  
+  fn from_pattern(slot: Option<mut Ref<Ctx>>) -> Result<(), error> {
+    if let Some(c) = slot {
+      c.n = Some(parse()?)
+    }
+    Ok(())
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Ctx struct {
+	n lisette.Option[int]
+}
+
+func parse() (int, error) {
+	return 7, nil
+}
+
+func step(ctx *Ctx) (int, error) {
+	ctx.n = lisette.MakeOptionNone[int]()
+	return 7, nil
+}
+
+func run(ctx *Ctx) error {
+	ret, err := parse()
+	if err != nil {
+		return err
+	}
+	ctx.n = lisette.MakeOptionSome(ret)
+	return nil
+}
+
+func runStep(ctx *Ctx) error {
+	ret, err := step(ctx)
+	if err != nil {
+		return err
+	}
+	ctx.n = lisette.MakeOptionSome(ret)
+	return nil
+}
+
+func (c *Ctx) load() error {
+	ret, err := parse()
+	if err != nil {
+		return err
+	}
+	c.n = lisette.MakeOptionSome(ret)
+	return nil
+}
+
+func fromPattern(slot lisette.Option[*Ctx]) error {
+	if slot.Tag == lisette.OptionSome {
+		c := slot.SomeVal
+		ret, err := parse()
+		if err != nil {
+			return err
+		}
+		c.n = lisette.MakeOptionSome(ret)
+	}
+	return nil
+}

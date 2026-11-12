@@ -133,6 +133,101 @@ fn lowered_partial_both_preserves_argument_order() {
     assert_eq!(stdout.trim(), "first\nsecond");
 }
 
+#[test]
+fn reference_field_assignment_keeps_order_with_writes_and_rebinds() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let source = scratch.path().join("reference_assignment.lis");
+    fs::write(
+        &source,
+        r#"import "go:fmt"
+
+struct Ctx { n: int, log: Slice<string> }
+
+fn touch(ctx: mut Ref<Ctx>) -> int {
+  ctx.log = ctx.log.append("touch")
+  ctx.n = 1
+  2
+}
+
+fn writes_in_call(ctx: mut Ref<Ctx>) {
+  ctx.n = touch(ctx)
+}
+
+fn closure_rebinds(a: mut Ref<Ctx>, b: mut Ref<Ctx>) {
+  let mut r = a
+  let swap = || -> int { r = b; 3 }
+  r.n = swap()
+}
+
+fn main() {
+  let mut e = Ctx { n: 0, log: [] }
+  writes_in_call(&e)
+  fmt.Println(e.n, e.log)
+  let mut x = Ctx { n: 0, log: [] }
+  let mut y = Ctx { n: 0, log: [] }
+  closure_rebinds(&x, &y)
+  fmt.Println(x.n, y.n)
+}
+"#,
+    )
+    .unwrap();
+    let output = lis(&source, "run");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    assert_eq!(stdout.trim(), "2 [touch]\n3 0");
+}
+
+#[test]
+fn range_bound_through_reference_reads_length_once() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let source = scratch.path().join("range_bound.lis");
+    fs::write(
+        &source,
+        r#"import "go:fmt"
+
+fn count(xs: mut Ref<mut Slice<int>>) -> int {
+  let mut iterations = 0
+  for _i in 1..xs.length() {
+    iterations += 1
+    xs.* = []
+  }
+  iterations
+}
+
+fn count_alias() -> int {
+  let mut s = [1, 2, 3, 4]
+  let p = &s
+  let clear = || { s = [] }
+  let mut iterations = 0
+  for _i in 1..p.length() {
+    iterations += 1
+    clear()
+  }
+  iterations
+}
+
+fn main() {
+  let mut s = [1, 2, 3, 4]
+  fmt.Println(count(&s))
+  fmt.Println(count_alias())
+}
+"#,
+    )
+    .unwrap();
+    let output = lis(&source, "run");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    assert_eq!(stdout.trim(), "3\n3");
+}
+
 const STRENGTHENED_IMPL_BOX: &str = r#"
 pub struct Box<T: Comparable> { pub items: Slice<T> }
 
