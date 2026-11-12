@@ -451,8 +451,7 @@ impl Planner<'_> {
         {
             // The end bound's capture inserted statements after the start value;
             // hoist start into its own temp before them so it evaluates first.
-            let var = self.fresh_local(Some("start"));
-            self.declare(&var);
+            let var = self.fresh_declared("start");
             prologue.insert(checkpoint, define(var.clone(), start_expression));
             start_expression = GoExpression::identifier(var);
         }

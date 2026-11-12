@@ -94,7 +94,7 @@ impl Planner<'_> {
     }
 
     fn stringer_kind(&self, ty: &Type, visited: &mut FxHashSet<String>) -> Option<StringerKind> {
-        let Type::Nominal { id, .. } = &self.facts.resolve_embed_target(ty) else {
+        let Type::Nominal { id, .. } = &self.emit_shape_ty(ty) else {
             return None;
         };
         if !visited.insert(id.to_string()) {
@@ -283,22 +283,7 @@ impl Planner<'_> {
     /// methods (UFCS-emitted free functions do not satisfy Go interfaces, so
     /// they don't count). Drives which stringers the compiler synthesizes.
     pub(crate) fn stringer_overrides(&self, name: &str) -> (bool, bool) {
-        let qualified = self.facts.qualified_current(name);
-        let methods = self
-            .facts
-            .definition(qualified.as_str())
-            .and_then(type_methods);
-
-        let is_user_stringer = |method_name: &str| {
-            methods.is_some_and(|methods| {
-                methods.get(method_name).is_some_and(|method| {
-                    method
-                        .ty
-                        .is_stringer_signature(|ty| self.facts.peel_alias(ty))
-                })
-            }) && !self.facts.is_ufcs_method(&qualified, method_name)
-        };
-
+        let is_user_stringer = |method_name| self.has_stringer_signature(name, method_name);
         let has_stringer = is_user_stringer("string") || is_user_stringer(ENUM_STRINGER_METHOD);
         let has_go_stringer =
             is_user_stringer("goString") || is_user_stringer(ENUM_GO_STRINGER_METHOD);
@@ -306,22 +291,23 @@ impl Planner<'_> {
     }
 
     pub(crate) fn debug_string_override(&self, name: &str) -> bool {
+        (self.method_needs_export("debug_string")
+            && self.has_stringer_signature(name, "debug_string"))
+            || self.has_stringer_signature(name, DEBUG_STRING_METHOD)
+    }
+
+    fn has_stringer_signature(&self, name: &str, method_name: &str) -> bool {
         let qualified = self.facts.qualified_current(name);
-        let methods = self
-            .facts
+        self.facts
             .definition(qualified.as_str())
-            .and_then(type_methods);
-        let has_signature = |method_name: &str| {
-            methods.is_some_and(|methods| {
-                methods.get(method_name).is_some_and(|method| {
-                    method
-                        .ty
-                        .is_stringer_signature(|ty| self.facts.peel_alias(ty))
-                })
-            }) && !self.facts.is_ufcs_method(&qualified, method_name)
-        };
-        (self.method_needs_export("debug_string") && has_signature("debug_string"))
-            || has_signature(DEBUG_STRING_METHOD)
+            .and_then(type_methods)
+            .and_then(|methods| methods.get(method_name))
+            .is_some_and(|method| {
+                method
+                    .ty
+                    .is_stringer_signature(|ty| self.facts.peel_alias(ty))
+            })
+            && !self.facts.is_ufcs_method(&qualified, method_name)
     }
 
     pub(crate) fn synthesizes_debug_string(&self, name: &str) -> bool {

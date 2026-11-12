@@ -321,8 +321,7 @@ impl Planner<'_> {
             };
         };
         let (_, value) = plan.into_parts();
-        let name = self.fresh_local(Some(hint));
-        self.declare(&name);
+        let name = self.fresh_declared(hint);
         // An untyped integer can overflow if `:=` infers `int`.
         let constant_needs_type = self
             .constant_needs_go_type(constant, &expression.get_type())

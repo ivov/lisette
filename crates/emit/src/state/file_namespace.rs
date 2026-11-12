@@ -1,12 +1,13 @@
 use crate::names::packages::{PackageRequirements, PackageUse};
-use crate::output::OutputImport;
 use crate::output::imports::ImportPlan;
+use crate::output::{OutputCollector, OutputImport};
 use diagnostics::LisetteDiagnostic;
 
 #[derive(Default)]
 pub(crate) struct FileNamespace {
     imports: ImportPlan,
     requirements: PackageRequirements,
+    adapter_declarations: Vec<String>,
 }
 
 impl FileNamespace {
@@ -14,6 +15,7 @@ impl FileNamespace {
         Self {
             imports,
             requirements: PackageRequirements::default(),
+            adapter_declarations: Vec::new(),
         }
     }
 
@@ -33,7 +35,18 @@ impl FileNamespace {
         self.requirements.extend(requirements);
     }
 
-    pub(crate) fn finish(self) -> (Vec<OutputImport>, Vec<LisetteDiagnostic>) {
-        self.imports.finish(&self.requirements)
+    pub(crate) fn collect_adapter(&mut self, declaration: String) {
+        self.adapter_declarations.push(declaration);
+    }
+
+    pub(crate) fn finish(
+        self,
+        mut source: OutputCollector,
+    ) -> (Vec<OutputImport>, String, Vec<LisetteDiagnostic>) {
+        for declaration in self.adapter_declarations {
+            source.collect_with_blank(declaration);
+        }
+        let (imports, diagnostics) = self.imports.finish(&self.requirements);
+        (imports, source.render(), diagnostics)
     }
 }

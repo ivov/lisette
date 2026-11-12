@@ -42,6 +42,11 @@ struct LoweredParams<'a> {
     test_handle: Option<GoIdentifier>,
 }
 
+pub(super) enum BodyOrigin {
+    Source,
+    Adapter,
+}
+
 pub(crate) struct LambdaReturnInfo {
     signature: Option<GoType>,
     ctx: ReturnContext,
@@ -70,22 +75,33 @@ impl Planner<'_> {
         let mut lowered = self.lower_function_body(body, should_return);
         prefix.append(&mut lowered.statements);
         lowered.statements = prefix;
-        let shadowing = identify_body_locals(&mut lowered.statements, parameters, &mut self.scope);
-        clean_up(&mut lowered.statements, &shadowing, parameters, &self.scope);
-        if should_return {
-            lowered.ensure_go_termination();
-        }
-        self.settle_generated_names(&mut lowered.statements);
-        #[cfg(debug_assertions)]
-        verify_final_function_body(&mut lowered, should_return)
-            .unwrap_or_else(|error| panic!("{error}"));
-        verify_local_scopes(
-            &mut lowered.statements,
-            &parameters.iter().collect::<Vec<_>>(),
-        )
-        .unwrap_or_else(|error| panic!("{error}"));
-        self.collect_imports(&lowered.statements);
+        let lowered =
+            self.finish_function_body(lowered, parameters, should_return, BodyOrigin::Source);
         Renderer.render_lowered_block(output, &lowered);
+    }
+
+    /// Resolve locals, clean the body, and verify it before collecting its imports.
+    pub(super) fn finish_function_body(
+        &mut self,
+        mut body: LoweredBlock,
+        parameters: &[GoIdentifier],
+        has_result: bool,
+        origin: BodyOrigin,
+    ) -> LoweredBlock {
+        let shadowing = identify_body_locals(&mut body.statements, parameters, &mut self.scope);
+        clean_up(&mut body.statements, &shadowing, parameters, &self.scope);
+        if has_result {
+            body.ensure_go_termination();
+        }
+        if matches!(origin, BodyOrigin::Source) {
+            self.settle_generated_names(&mut body.statements);
+        }
+        #[cfg(debug_assertions)]
+        verify_final_function_body(&mut body, has_result).unwrap_or_else(|error| panic!("{error}"));
+        verify_local_scopes(&mut body.statements, parameters)
+            .unwrap_or_else(|error| panic!("{error}"));
+        self.collect_imports(&body.statements);
+        body
     }
 
     fn reserve_source_binder_names(&mut self, body: &Expression) {
@@ -130,7 +146,7 @@ impl Planner<'_> {
         visit_statements_mut(statements, &mut names);
         let by_id = self
             .scope
-            .settle_generated_names(&names.present, &names.pinned, &self.package);
+            .settle_generated_names(&names.present, &names.pinned, self.package);
         if by_id.is_empty() {
             return;
         }
@@ -159,8 +175,7 @@ impl Planner<'_> {
                     .iter()
                     .position(|param| is_test_context_ty(&param.ty))
                     .filter(|&index| param_pairs[index].0.spelling() == "_")?;
-                let name = this.fresh_local(Some("lisetteSub"));
-                this.declare(&name);
+                let name = this.fresh_declared("lisetteSub");
                 let handle = name.clone();
                 param_pairs[index].0 = handle.clone();
                 Some(handle)
@@ -541,8 +556,7 @@ impl Planner<'_> {
                 }
                 Pattern::WildCard { .. } => GoIdentifier::external("_".to_string()),
                 _ => {
-                    let var = self.fresh_local(Some("arg"));
-                    self.declare(&var);
+                    let var = self.fresh_declared("arg");
                     lowered
                         .destructures
                         .push((var.clone(), &param.pattern, &param.ty));

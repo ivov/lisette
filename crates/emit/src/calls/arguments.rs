@@ -269,11 +269,10 @@ impl Planner<'_> {
 
         let target_element_ty = target_layout.go_type(self);
 
-        let adapted = self.fresh_local(Some("adapted"));
-        self.declare(&adapted);
+        let adapted = self.fresh_declared("adapted");
         let loop_cb = self.fresh_local(Some("cb"));
 
-        let index = self.scope.helper_local("i", &self.package);
+        let index = self.scope.helper_local("i", self.package);
         let mut body = Vec::new();
         let closure = self.plan_function_layout_bridge(
             &mut body,

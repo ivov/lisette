@@ -1,4 +1,4 @@
-use super::NativeMethodCall;
+use super::NativeCallContext;
 use crate::Planner;
 use crate::abi::layout::SlotOrigin;
 use crate::calls::comma_ok::CommaOkValueSlot;
@@ -263,7 +263,7 @@ impl Planner<'_> {
     /// `x := default` then `if i >= 0 && i < len(xs) { x = xs[i] }`.
     fn lower_defaulted_index_into_slot(
         &mut self,
-        call: &NativeMethodCall<'_>,
+        call: &NativeCallContext<'_>,
         default: &Expression,
         ty: &Type,
         slot: CommaOkValueSlot,
@@ -271,7 +271,7 @@ impl Planner<'_> {
         let (mut statements, index) = self.lower_bounds_checked_index(call);
         let value = match slot {
             CommaOkValueSlot::Named(name) => name,
-            _ => self.fresh_pair_identifier(),
+            _ => self.fresh_declared("ret"),
         };
         let origin = self.function_type_origin(ty, SlotOrigin::Lisette);
         let plan = self.lower_value(
@@ -301,11 +301,11 @@ impl Planner<'_> {
         statements.push(
             LoweredStatement::If(IfPlan {
                 initializer: None,
-                condition: index.in_bounds,
+                condition: index.condition(true),
                 then_body: LoweredBlock {
                     statements: vec![assign(
                         GoExpression::identifier(value.clone()),
-                        index.element,
+                        index.element(),
                     )],
                 },
                 else_arm: ElseArm::None,

@@ -519,8 +519,7 @@ pub(crate) fn lower_arg_to_tagged(
         "tagged adapter returns its result directly"
     );
 
-    let tagged_var = planner.fresh_local(Some("tagged"));
-    planner.declare(&tagged_var);
+    let tagged_var = planner.fresh_declared("tagged");
     prelude.push(define(
         tagged_var.clone(),
         GoExpression::function_literal(
@@ -665,15 +664,14 @@ fn emit_lowered_partial_tail(planner: &mut Planner, expression: &Expression) -> 
                 multi_value_return(vec![planner.zero_value(&ok_ty), e])
             }
             PartialVariant::Both => {
-                let (setup_v, v) = planner
-                    .lower_composite_value(&args[0], ExpressionContext::value())
-                    .into_parts();
-                statements.extend(setup_v);
-                let (setup_e, e) = planner
-                    .lower_composite_value(&args[1], ExpressionContext::value())
-                    .into_parts();
-                statements.extend(setup_e);
-                multi_value_return(vec![v, e])
+                let stages = args
+                    .iter()
+                    .map(|arg| planner.lower_composite_value(arg, ExpressionContext::value()))
+                    .collect();
+                let sequenced =
+                    planner.sequence_values(stages, CaptureBoundary::SiblingSequence, "ret");
+                statements.extend(sequenced.setup);
+                multi_value_return(sequenced.values)
             }
         };
         statements.push(ret);

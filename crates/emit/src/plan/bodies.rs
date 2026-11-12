@@ -687,11 +687,6 @@ impl LoweredBlock {
         !FlowSummary::statements(&self.statements).go_falls_through
     }
 
-    /// Whether the block has no statements.
-    pub(crate) fn is_empty(&self) -> bool {
-        self.statements.is_empty()
-    }
-
     pub(crate) fn renders_empty(&self) -> bool {
         self.statements
             .iter()

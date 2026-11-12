@@ -1,23 +1,12 @@
-use syntax::ast::{
-    BindingId, Expression, FormatStringPart, IdentifierResolution, Literal, SelectArm,
-};
+use std::slice;
+
+use syntax::ast::{BindingId, Expression, FormatStringPart, Literal, SelectArm};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InlineDecision {
     Inline,
     Unused,
     Keep,
-}
-
-pub(crate) fn analyze_inline_candidate(
-    binding_id: BindingId,
-    consumers: &[&Expression],
-) -> InlineDecision {
-    let mut walker = Walker::new(binding_id);
-    for consumer in consumers {
-        walker.walk(consumer, AccessRole::Read);
-    }
-    walker.decide()
 }
 
 pub(crate) fn analyze_inline_candidate_ids(
@@ -27,15 +16,11 @@ pub(crate) fn analyze_inline_candidate_ids(
     if binding_ids.is_empty() {
         return InlineDecision::Keep;
     }
-    if binding_ids.len() <= 1 {
-        return analyze_inline_candidate(binding_ids[0], consumers);
-    }
-    let mut walker = Walker::new(binding_ids[0]);
-    walker.alternative_ids.extend_from_slice(&binding_ids[1..]);
+    let mut walker = Walker::new(binding_ids);
     for consumer in consumers {
         walker.walk(consumer, AccessRole::Read);
     }
-    walker.decide()
+    walker.decision
 }
 
 pub(crate) fn region_blocks_inline<'a, I>(trees: I, binding_id: Option<BindingId>) -> bool
@@ -45,25 +30,17 @@ where
     let Some(binding_id) = binding_id else {
         return true;
     };
-    let mut walker = Walker::new(binding_id);
+    let mut walker = Walker::new(slice::from_ref(&binding_id));
     for tree in trees {
         walker.walk(tree, AccessRole::Read);
     }
-    walker.any_use_or_opacity()
+    walker.decision != InlineDecision::Unused
 }
 
-struct Walker {
-    binding_id: BindingId,
-    alternative_ids: Vec<BindingId>,
+struct Walker<'a> {
+    binding_ids: &'a [BindingId],
     crossed_barrier: bool,
-    uses: Vec<Access>,
-    opaque_raw_go_in_region: bool,
-}
-
-#[derive(Clone, Copy)]
-struct Access {
-    role: AccessRole,
-    after_barrier: bool,
+    decision: InlineDecision,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -75,51 +52,28 @@ enum AccessRole {
     Capture,
 }
 
-impl Walker {
-    fn new(binding_id: BindingId) -> Self {
+impl<'a> Walker<'a> {
+    fn new(binding_ids: &'a [BindingId]) -> Self {
         Self {
-            binding_id,
-            alternative_ids: Vec::new(),
+            binding_ids,
             crossed_barrier: false,
-            uses: Vec::new(),
-            opaque_raw_go_in_region: false,
-        }
-    }
-
-    fn any_use_or_opacity(&self) -> bool {
-        !self.uses.is_empty() || self.opaque_raw_go_in_region
-    }
-
-    fn decide(self) -> InlineDecision {
-        match (self.opaque_raw_go_in_region, self.uses.as_slice()) {
-            (false, []) => InlineDecision::Unused,
-            (
-                false,
-                [
-                    Access {
-                        role: AccessRole::Read,
-                        after_barrier: false,
-                    },
-                ],
-            ) => InlineDecision::Inline,
-            _ => InlineDecision::Keep,
+            decision: InlineDecision::Unused,
         }
     }
 
     fn record_use(&mut self, role: AccessRole) {
-        self.uses.push(Access {
-            role,
-            after_barrier: self.crossed_barrier,
-        });
+        self.decision = match (self.decision, role, self.crossed_barrier) {
+            (InlineDecision::Unused, AccessRole::Read, false) => InlineDecision::Inline,
+            _ => InlineDecision::Keep,
+        };
     }
 
     fn walk(&mut self, expression: &Expression, role: AccessRole) {
         match expression {
             Expression::Identifier { resolution, .. } => {
-                let names_local = *resolution == IdentifierResolution::Binding(self.binding_id)
-                    || resolution
-                        .binding_id()
-                        .is_some_and(|id| self.alternative_ids.contains(&id));
+                let names_local = resolution
+                    .binding_id()
+                    .is_some_and(|id| self.binding_ids.contains(&id));
                 if names_local {
                     self.record_use(role);
                 }
@@ -227,7 +181,7 @@ impl Walker {
                 self.crossed_barrier = true;
             }
             Expression::RawGo { .. } => {
-                self.opaque_raw_go_in_region = true;
+                self.decision = InlineDecision::Keep;
                 self.crossed_barrier = true;
             }
 
@@ -286,6 +240,8 @@ impl Walker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use syntax::ast::{IdentifierResolution, Span};
+    use syntax::types::Type;
 
     fn mark_uses(expression: &mut Expression, selected: &[usize], seen: &mut usize) {
         match expression {
@@ -355,7 +311,65 @@ mod tests {
         };
         let body = body.definition_mut().unwrap();
         mark_uses(body, selected, &mut 0);
-        analyze_inline_candidate(BindingId::new(1), &[body])
+        analyze_inline_candidate_ids(&[BindingId::new(1)], &[body])
+    }
+
+    #[test]
+    fn a_second_read_keeps_the_binding_even_before_any_barrier() {
+        assert_eq!(
+            inline_decision("(value, value)", &[0, 1]),
+            InlineDecision::Keep
+        );
+    }
+
+    #[test]
+    fn a_barrier_after_the_only_read_does_not_prevent_inlining() {
+        assert_eq!(
+            inline_decision("value; later()", &[0]),
+            InlineDecision::Inline
+        );
+        assert_eq!(inline_decision("later()", &[]), InlineDecision::Unused);
+    }
+
+    #[test]
+    fn alternative_ids_share_one_use_count() {
+        let local = |id| Expression::Identifier {
+            value: "value".into(),
+            ty: Type::unit(),
+            span: Span::dummy(),
+            resolution: IdentifierResolution::Binding(BindingId::new(id)),
+        };
+        let first = local(1);
+        let second = local(2);
+        let ids = [BindingId::new(1), BindingId::new(2)];
+        assert_eq!(
+            analyze_inline_candidate_ids(&ids, &[&first]),
+            InlineDecision::Inline
+        );
+        assert_eq!(
+            analyze_inline_candidate_ids(&ids, &[&second]),
+            InlineDecision::Inline
+        );
+        assert_eq!(
+            analyze_inline_candidate_ids(&ids, &[&first, &second]),
+            InlineDecision::Keep
+        );
+        assert_eq!(
+            analyze_inline_candidate_ids(&[], &[&first]),
+            InlineDecision::Keep
+        );
+    }
+
+    #[test]
+    fn raw_go_keeps_even_an_unread_binding() {
+        let raw = Expression::RawGo {
+            text: "use(value)".to_string(),
+        };
+        assert_eq!(
+            analyze_inline_candidate_ids(&[BindingId::new(1)], &[&raw]),
+            InlineDecision::Keep
+        );
+        assert!(region_blocks_inline([&raw], Some(BindingId::new(1))));
     }
 
     #[test]

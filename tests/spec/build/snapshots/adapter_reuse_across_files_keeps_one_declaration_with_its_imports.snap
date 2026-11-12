@@ -1,0 +1,60 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === first.go ===
+package main
+
+func first() bool {
+	return consume(_lisAdapter_Store_Cache_0{inner: Store{}})
+}
+
+
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	if !first() {
+		panic("first adaptation failed")
+	}
+	if !consume(_lisAdapter_Store_Cache_0{inner: Store{}}) {
+		panic("reused adaptation failed")
+	}
+}
+
+type _lisAdapter_Store_Cache_0 struct {
+	inner Store
+}
+
+func (a _lisAdapter_Store_Cache_0) get() (*Entry, bool) {
+	raw := a.inner.get()
+	option := lisette.OptionFromNilable[*Entry](raw, raw == nil)
+	if option.Tag == lisette.OptionSome {
+		return option.SomeVal, true
+	}
+	return nil, false
+}
+
+
+// === types.go ===
+package main
+
+type Entry struct {
+	value int
+}
+
+type Cache interface {
+	get() (*Entry, bool)
+}
+
+type Store struct{}
+
+func (s Store) get() *Entry {
+	return nil
+}
+
+func consume(cache Cache) bool {
+	ret, ok := cache.get()
+	return !ok || ret == nil
+}

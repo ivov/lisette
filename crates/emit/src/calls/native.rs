@@ -15,6 +15,7 @@ use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::statements::assignments::lvalues_match;
 use crate::types::go_type::GoType;
 use crate::types::native;
+use crate::types::shape::RangeShape;
 use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
 use syntax::program::{CallKind, DotAccessResolution, NativeTypeKind};
 use syntax::types::{CompoundKind, Type, peel_to_range_type};
@@ -695,12 +696,7 @@ impl Planner<'_> {
         }
 
         if matches!(ctx.native_type, NativeTypeKind::Slice)
-            && let Some(result) = self.try_lower_slice_loop(
-                ctx,
-                receiver_expression,
-                arguments,
-                SliceLoopTarget::Fresh,
-            )
+            && let Some(result) = self.try_lower_slice_loop(ctx, SliceLoopTarget::Fresh)
         {
             return result;
         }
@@ -727,7 +723,7 @@ impl Planner<'_> {
         }
 
         if let Some(inlined) = try_inline_native_method(
-            ctx.native_type,
+            &ctx.native_type,
             ctx.method,
             &staged.receiver,
             &staged.arguments,
@@ -740,7 +736,7 @@ impl Planner<'_> {
             GeneratedPackage::Prelude,
             format!(
                 "{}{}",
-                native::method_prefix(*ctx.native_type),
+                native::method_prefix(ctx.native_type),
                 go_name::snake_to_camel(ctx.method)
             ),
         );
@@ -847,12 +843,12 @@ impl Planner<'_> {
         ctx: &NativeCallContext,
     ) -> Option<GoExpression> {
         let (_, arguments) = ctx.receiver_and_arguments()?;
-        if !has_inline_negation(ctx.native_type, ctx.method, arguments.len()) {
+        if !has_inline_negation(&ctx.native_type, ctx.method, arguments.len()) {
             return None;
         }
         let staged = self.stage_native_method(ctx);
         let inlined = try_inline_native_method(
-            ctx.native_type,
+            &ctx.native_type,
             ctx.method,
             &staged.receiver,
             &staged.arguments,
@@ -926,7 +922,7 @@ impl Planner<'_> {
             Some(view) => vec![view],
         };
         let first_unstaged = if is_dot { 0 } else { stages.len() };
-        stages.extend(self.stage_native_method_args_from(ctx.abi, ctx.args, first_unstaged));
+        stages.extend(self.stage_native_method_args_from(&ctx.abi, ctx.args, first_unstaged));
         let spread_stage = ctx.spread.map(|spread| {
             if matches!(ctx.native_type, NativeTypeKind::Slice) && ctx.method == "append" {
                 self.plan_copied_spread(spread)
@@ -991,9 +987,9 @@ impl Planner<'_> {
             args,
             spread: None,
             resolved_type_args,
-            abi: &plan.resolved.abi,
+            abi: plan.resolved.abi,
             call_ty: None,
-            native_type: &native_type,
+            native_type,
             method: "get",
             capture_boundary: CaptureBoundary::SiblingSequence,
             retired_receiver: None,
@@ -1056,7 +1052,7 @@ impl Planner<'_> {
 
         let arg_ty = arg.get_type();
         let range_kind = peel_to_range_type(&arg_ty, |id| self.facts.definition(id))
-            .and_then(|ty| ty.get_name().map(str::to_owned))
+            .and_then(|ty| RangeShape::from_name(ty.get_name()?))
             .expect("substring arg should resolve to a known range type");
         let receiver_staged = self.plan_operand(receiver_expr, ExpressionContext::value());
         let range_staged = self.stage_or_capture(arg, "range");
@@ -1065,7 +1061,7 @@ impl Planner<'_> {
         let mut values = sequenced.values.into_iter();
         let receiver = values.next().expect("substring has a receiver");
         let range = values.next().expect("substring has a range");
-        let (start, end) = range_var_bounds(&range, &range_kind);
+        let (start, end) = range_var_bounds(&range, range_kind);
         NativeCallResult::new(sequenced.setup, substring_call(deref(receiver), start, end))
     }
 

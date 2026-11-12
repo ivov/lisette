@@ -35,11 +35,6 @@ use crate::state::bindings::BindingValue;
 use crate::statements::testing::{test_context_call, testkit_operand_type};
 
 #[derive(Clone, Copy)]
-pub(crate) struct AnnotatedPattern<'a> {
-    pub(crate) pattern: &'a Pattern,
-}
-
-#[derive(Clone, Copy)]
 pub(crate) struct TypedSubject<'a> {
     pub(crate) var: &'a GoExpression,
     pub(crate) ty: &'a Type,
@@ -83,57 +78,42 @@ impl<'a> PatternSubject<'a> {
     }
 }
 
-/// For composite scrutinees, the declaration is deferred so the caller can
-/// pick `var := expr` vs `_ = expr` based on body usage.
-struct ResolvedSubject {
-    subject: GoExpression,
-    storage: SubjectStorage,
-}
-
-enum SubjectStorage {
-    Existing,
-    Materialized(GoIdentifier),
-    Deferred(DeferredSubject),
-}
-
-/// A subject temp declared only if the body reads it.
-pub(crate) struct DeferredSubject {
-    pub(crate) name: GoIdentifier,
-    pub(crate) expression: GoExpression,
-}
-
-impl DeferredSubject {
-    /// `name := expression` when `body` reads the temp, else `_ = expression`.
-    pub(crate) fn settle(self, statements: &mut Vec<Statement>, body: &[Statement]) {
-        if GoUses::of(body).contains_identifier(&self.name) {
-            statements.push(define(self.name, self.expression));
-        } else {
-            statements.push(discard(self.expression));
-        }
-    }
+/// A pattern subject and the declaration or discard needed to keep it valid.
+pub(super) enum ResolvedSubject {
+    Existing(GoExpression),
+    Materialized {
+        subject: GoExpression,
+        local: GoIdentifier,
+    },
+    Deferred {
+        name: GoIdentifier,
+        expression: GoExpression,
+    },
 }
 
 impl ResolvedSubject {
-    fn existing(subject: GoExpression) -> Self {
-        Self {
-            subject,
-            storage: SubjectStorage::Existing,
+    pub(super) fn var(&self) -> GoExpression {
+        match self {
+            Self::Existing(subject) | Self::Materialized { subject, .. } => subject.clone(),
+            Self::Deferred { name, .. } => GoExpression::identifier(name.clone()),
         }
     }
 
-    fn var(&self) -> &GoExpression {
-        &self.subject
-    }
-
-    fn push_declaration(self, statements: &mut Vec<Statement>, body: &[Statement]) {
-        match self.storage {
-            SubjectStorage::Existing => {}
-            SubjectStorage::Materialized(local) => {
+    pub(super) fn push_declaration(self, statements: &mut Vec<Statement>, body: &[Statement]) {
+        match self {
+            Self::Existing(_) => {}
+            Self::Materialized { subject, local } => {
                 if !GoUses::of(body).contains_identifier(&local) {
-                    statements.push(discard(self.subject));
+                    statements.push(discard(subject));
                 }
             }
-            SubjectStorage::Deferred(pending) => pending.settle(statements, body),
+            Self::Deferred { name, expression } => {
+                if GoUses::of(body).contains_identifier(&name) {
+                    statements.push(define(name, expression));
+                } else {
+                    statements.push(discard(expression));
+                }
+            }
         }
     }
 }
@@ -212,7 +192,7 @@ impl Planner<'_> {
         subject: PatternSubject<'_>,
     ) -> ResolvedSubject {
         match subject {
-            PatternSubject::Existing { var } => ResolvedSubject::existing(var),
+            PatternSubject::Existing { var } => ResolvedSubject::Existing(var),
             PatternSubject::Expression {
                 scrutinee,
                 pattern,
@@ -227,7 +207,7 @@ impl Planner<'_> {
                         pattern_binds_name(pattern, value),
                     )
                 {
-                    return ResolvedSubject::existing(GoExpression::identifier(
+                    return ResolvedSubject::Existing(GoExpression::identifier(
                         self.reference_go_identifier(value, resolution),
                     ));
                 }
@@ -255,22 +235,17 @@ impl Planner<'_> {
                         pattern_binds_name(pattern, root)
                     })
                 {
-                    return ResolvedSubject {
-                        subject: expression,
-                        storage: materialized
-                            .map_or(SubjectStorage::Existing, SubjectStorage::Materialized),
+                    return match materialized {
+                        Some(local) => ResolvedSubject::Materialized {
+                            subject: expression,
+                            local,
+                        },
+                        None => ResolvedSubject::Existing(expression),
                     };
                 }
                 let name = self.fresh_local(temp_hint);
                 self.declare(&name);
-                let identifier = name.clone();
-                ResolvedSubject {
-                    subject: GoExpression::identifier(identifier.clone()),
-                    storage: SubjectStorage::Deferred(DeferredSubject {
-                        name: identifier,
-                        expression,
-                    }),
-                }
+                ResolvedSubject::Deferred { name, expression }
             }
         }
     }
@@ -288,7 +263,7 @@ impl Planner<'_> {
         let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
 
         let mut body = Vec::new();
-        let asserted = apply_root_assertion(self, &mut body, info, resolved.var());
+        let asserted = apply_root_assertion(self, &mut body, info, &resolved.var());
         tree_binding_statements(
             self,
             &mut body,
@@ -304,36 +279,36 @@ impl Planner<'_> {
 
     pub(crate) fn lower_let_else_pattern_site(
         &mut self,
-        ap: AnnotatedPattern,
+        pattern: &Pattern,
         scrutinee: &Expression,
         else_block: &Expression,
     ) -> Vec<Statement> {
-        self.lower_refutable_let_site(ap, scrutinee, RefutableFail::ElseBlock(else_block))
+        self.lower_refutable_let_site(pattern, scrutinee, RefutableFail::ElseBlock(else_block))
     }
 
     pub(crate) fn lower_let_assert_pattern_site(
         &mut self,
-        ap: AnnotatedPattern,
+        pattern: &Pattern,
         scrutinee: &Expression,
         pattern_span: Span,
     ) -> Vec<Statement> {
-        self.lower_refutable_let_site(ap, scrutinee, RefutableFail::AssertFail(pattern_span))
+        self.lower_refutable_let_site(pattern, scrutinee, RefutableFail::AssertFail(pattern_span))
     }
 
     fn lower_refutable_let_site(
         &mut self,
-        ap: AnnotatedPattern,
+        pattern: &Pattern,
         scrutinee: &Expression,
         fail: RefutableFail,
     ) -> Vec<Statement> {
         if let RefutableFail::ElseBlock(else_block) = fail {
             if let Some(statements) =
-                self.lower_fused_option_let_else(ap.pattern, scrutinee, else_block)
+                self.lower_fused_option_let_else(pattern, scrutinee, else_block)
             {
                 return statements;
             }
             if let Some(statements) =
-                self.lower_fused_result_let_else(ap.pattern, scrutinee, else_block)
+                self.lower_fused_result_let_else(pattern, scrutinee, else_block)
             {
                 return statements;
             }
@@ -343,18 +318,18 @@ impl Planner<'_> {
         let mut statements = Vec::new();
         let resolved = self.resolve_pattern_subject(
             &mut statements,
-            PatternSubject::expression(scrutinee, ap.pattern, Some("subject")),
+            PatternSubject::expression(scrutinee, pattern, Some("subject")),
         );
         let subject = TypedSubject {
-            var: resolved.var(),
+            var: &resolved.var(),
             ty: &value_ty,
         };
 
         let subject_is_fixed = self.is_unmutated_identifier(scrutinee);
-        let body = if matches!(ap.pattern, Pattern::Or { .. }) {
-            self.lower_let_else_or_pattern(ap, subject, fail)
+        let body = if matches!(pattern, Pattern::Or { .. }) {
+            self.lower_let_else_or_pattern(pattern, subject, fail)
         } else {
-            self.lower_let_else_single_pattern(ap, subject, fail, subject_is_fixed)
+            self.lower_let_else_single_pattern(pattern, subject, fail, subject_is_fixed)
         };
 
         resolved.push_declaration(&mut statements, &body);
@@ -665,12 +640,11 @@ impl Planner<'_> {
 
     fn lower_let_else_single_pattern(
         &mut self,
-        ap: AnnotatedPattern,
+        pattern: &Pattern,
         subject: TypedSubject,
         fail: RefutableFail,
         subject_is_fixed: bool,
     ) -> Vec<Statement> {
-        let AnnotatedPattern { pattern } = ap;
         let TypedSubject {
             var: subject_var,
             ty: subject_ty,
@@ -744,11 +718,10 @@ impl Planner<'_> {
 
     fn lower_let_else_or_pattern(
         &mut self,
-        ap: AnnotatedPattern,
+        pattern: &Pattern,
         subject: TypedSubject,
         fail: RefutableFail,
     ) -> Vec<Statement> {
-        let AnnotatedPattern { pattern } = ap;
         let TypedSubject {
             var: subject_var,
             ty: subject_ty,
@@ -907,12 +880,12 @@ impl Planner<'_> {
     pub(crate) fn lower_select_receive_pattern_site(
         &mut self,
         subject: TypedSubject,
-        ap: AnnotatedPattern,
+        pattern: &Pattern,
         body: &Expression,
         default_body: Option<&Expression>,
         place: &PlacePlan,
     ) -> Vec<Statement> {
-        self.lower_refutable_arm(subject, ap, body, place, |this| {
+        self.lower_refutable_arm(subject, pattern, body, place, |this| {
             default_body.map(|default| this.lower_block_to_place(default, place))
         })
     }
@@ -920,12 +893,12 @@ impl Planner<'_> {
     pub(crate) fn lower_select_match_receive_some_site(
         &mut self,
         subject: TypedSubject,
-        ap: AnnotatedPattern,
+        pattern: &Pattern,
         some_body: &Expression,
         match_arms: &[MatchArm],
         place: &PlacePlan,
     ) -> Vec<Statement> {
-        self.lower_refutable_arm(subject, ap, some_body, place, |this| {
+        self.lower_refutable_arm(subject, pattern, some_body, place, |this| {
             Some(lower_none_arm_body(this, match_arms, place))
         })
     }
@@ -936,12 +909,11 @@ impl Planner<'_> {
     fn lower_refutable_arm(
         &mut self,
         subject: TypedSubject,
-        ap: AnnotatedPattern,
+        pattern: &Pattern,
         body: &Expression,
         place: &PlacePlan,
         failure: impl FnOnce(&mut Planner) -> Option<LoweredBlock>,
     ) -> Vec<Statement> {
-        let AnnotatedPattern { pattern } = ap;
         let TypedSubject {
             var: subject_var,
             ty: subject_ty,

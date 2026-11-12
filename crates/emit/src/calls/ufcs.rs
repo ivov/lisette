@@ -11,18 +11,12 @@ use crate::expressions::staging::SpreadSequenceOptions;
 use crate::plan::bodies::Statement;
 use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::go_expression::GoExpressionNode;
-use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
+use crate::plan::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::program::ReceiverCoercion;
 use syntax::program::{NativeTypeKind, resolved_instantiation};
 use syntax::types::Type;
-
-#[derive(Clone, Copy)]
-struct UfcsCallSite<'e, 'c> {
-    function: &'e Expression,
-    plan: &'e CallPlan<'c>,
-}
 
 impl Planner<'_> {
     fn ufcs_type_args(
@@ -77,10 +71,6 @@ impl Planner<'_> {
 
         let mut coercion = resolution.receiver_coercion();
         let receiver_ty = self.facts.strip_and_peel(&receiver.get_type());
-        let site = UfcsCallSite {
-            function,
-            plan: call_plan,
-        };
         let type_args_string = self
             .ufcs_type_args(
                 function,
@@ -119,19 +109,21 @@ impl Planner<'_> {
             // Read the receiver value before sequencing arguments that can
             // mutate its pointee; capturing only the pointer is insufficient.
             receiver_stage = receiver_stage.dereference();
-            coercion = None;
         }
-        let (setup, receiver_arg, emitted_args) = self.lower_ufcs_call_args(
-            site,
-            receiver_stage,
-            args,
+        let args_ctx = CallArgsContext {
+            plan: call_plan,
             spread,
-            !type_args_string.is_empty(),
-        );
-        let receiver_arg = match coercion {
-            Some(ReceiverCoercion::AutoDeref) => GoExpression::dereference(receiver_arg),
-            Some(ReceiverCoercion::AutoAddress) | None => receiver_arg,
+            wrap_spread_to_any: false,
+            capture_boundary: CaptureBoundary::SiblingSequence,
+            retired_receiver: None,
+            callee_is_builtin: false,
+            callee_pins_type_args: !type_args_string.is_empty(),
+            receiver_binding: (!call_plan.resolved.is_prelude_dispatch)
+                .then(|| receiver_type_binding(function, &call_plan.resolved))
+                .flatten(),
         };
+        let (setup, receiver_arg, emitted_args) =
+            self.lower_ufcs_call_args(&args_ctx, receiver_stage, args);
 
         if let Some(inlined) =
             try_inline_native_ufcs(receiver, member, &receiver_arg, &emitted_args)
@@ -158,7 +150,7 @@ impl Planner<'_> {
         );
         let expression = GoExpression::call(callee, new_args);
         if self.callee_lowers_to_type_construction(function) {
-            ValuePlan::observable_call(setup, expression)
+            ValuePlan::computed(setup, expression)
         } else {
             ValuePlan::plain_call(setup, expression)
         }
@@ -166,14 +158,12 @@ impl Planner<'_> {
 
     fn lower_ufcs_call_args(
         &mut self,
-        site: UfcsCallSite<'_, '_>,
+        ctx: &CallArgsContext<'_, '_>,
         receiver_stage: ValuePlan,
         args: &[Expression],
-        spread: Option<&Expression>,
-        pins_type_args: bool,
     ) -> (Vec<Statement>, GoExpression, Vec<GoExpression>) {
-        let UfcsCallSite { function, plan } = site;
-        let callee = &plan.resolved;
+        let callee = &ctx.plan.resolved;
+        let spread = ctx.spread;
         let sequenced = if callee.is_prelude_dispatch {
             // The DotAccess function type curries `self` out, so its params line
             // up 1:1 with the user args. Pair each so a function-typed param
@@ -201,17 +191,7 @@ impl Planner<'_> {
                 },
             )
         } else {
-            let args_ctx = CallArgsContext {
-                plan,
-                spread,
-                wrap_spread_to_any: false,
-                capture_boundary: CaptureBoundary::SiblingSequence,
-                retired_receiver: None,
-                callee_is_builtin: false,
-                callee_pins_type_args: pins_type_args,
-                receiver_binding: receiver_type_binding(function, callee),
-            };
-            self.emit_call_args(args, &args_ctx, Some(receiver_stage))
+            self.emit_call_args(args, ctx, Some(receiver_stage))
         };
         let mut all_values = sequenced.values;
         let receiver_arg = all_values.remove(0);
@@ -252,10 +232,10 @@ impl Planner<'_> {
                     let temp = self.hoist_tmp_value_statement(setup, "ref", value);
                     GoExpression::address_of(GoExpression::identifier(temp))
                 })
-                .into_addressed_location(),
+                .with_stability(Stability::StableAcrossCalls),
             Expression::Identifier { .. } => stage
                 .map_expression(|_, value| GoExpression::address_of(value))
-                .into_addressed_location(),
+                .with_stability(Stability::StableAcrossCalls),
             _ if stage.setup().is_empty() => {
                 stage.map_observable_expression(|_, value| GoExpression::address_of(value))
             }
@@ -302,7 +282,7 @@ impl Planner<'_> {
             None => receiver,
         };
 
-        ValuePlan::observable_call(
+        ValuePlan::computed(
             sequenced.setup,
             GoExpression::call(GoExpression::selector(receiver, go_method), emitted_all),
         )

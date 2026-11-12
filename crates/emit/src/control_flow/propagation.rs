@@ -331,11 +331,8 @@ impl Planner<'_> {
         } else {
             None
         };
-        let value_var = (has_value_slot && (want_value || nil_guard.is_some())).then(|| {
-            named
-                .cloned()
-                .unwrap_or_else(|| self.fresh_pair_identifier())
-        });
+        let value_var = (has_value_slot && (want_value || nil_guard.is_some()))
+            .then(|| named.cloned().unwrap_or_else(|| self.fresh_declared("ret")));
         let (message_setup, wraps) = self.prepare_wrap_messages(&wraps, true);
         let opens_if = value_var.is_none() && message_setup.is_empty();
         let outcome_var = self.pair_status(None, PairStatusKind::Error, opens_if);

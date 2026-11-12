@@ -903,6 +903,12 @@ impl Planner<'_> {
             }
             return ValuePlan::captured(statements, result_var);
         }
+        if ty.is_never() {
+            return ValuePlan::computed(
+                vec![self.lower_statement(expression)],
+                GoExpression::empty(),
+            );
+        }
         if let Expression::Loop { .. } = expression {
             return self.plan_loop_as_operand_temp(expression, ty);
         }

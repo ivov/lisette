@@ -383,7 +383,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let label = self
             .planner
             .scope
-            .fresh_binding_go_name("match", &self.planner.package);
+            .fresh_binding_go_name("match", self.planner.package);
         let ctx = WalkCtx::retry_loop(place, Some(label.as_str()));
         let mut body: Vec<Statement> = Vec::new();
         self.walk(&mut body, tree, &ctx);

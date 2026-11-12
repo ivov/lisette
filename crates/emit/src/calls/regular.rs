@@ -283,7 +283,7 @@ impl<'a> Planner<'a> {
                 GoExpression::call(callee, sequenced.values)
             };
             return if self.callee_lowers_to_type_construction(function) {
-                ValuePlan::observable_call(sequenced.setup, expression)
+                ValuePlan::computed(sequenced.setup, expression)
             } else {
                 ValuePlan::plain_call(sequenced.setup, expression)
             };

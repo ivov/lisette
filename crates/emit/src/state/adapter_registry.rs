@@ -1,40 +1,36 @@
 use ecow::EcoString;
-use rustc_hash::FxHashMap as HashMap;
-use std::mem;
 
 #[derive(Default)]
 pub(crate) struct AdapterRegistry {
-    synthesized: HashMap<(EcoString, EcoString), String>,
-    pending_declarations: Vec<String>,
-    next_index: usize,
+    adapters: Vec<Adapter>,
+}
+
+struct Adapter {
+    /// Generic adapters depend on their declaration's type parameters and are not reused.
+    key: Option<(EcoString, EcoString)>,
+    name: String,
 }
 
 impl AdapterRegistry {
     pub(crate) fn lookup(&self, key: &(EcoString, EcoString)) -> Option<&str> {
-        self.synthesized.get(key).map(String::as_str)
+        self.adapters
+            .iter()
+            .rev()
+            .find(|adapter| adapter.key.as_ref() == Some(key))
+            .map(|adapter| adapter.name.as_str())
     }
 
-    pub(crate) fn allocate_index(&mut self) -> usize {
-        let index = self.next_index;
-        self.next_index += 1;
-        index
-    }
-
-    pub(crate) fn insert(
+    /// Reserve the name before emitting methods, which may themselves need adapters.
+    pub(crate) fn register(
         &mut self,
-        key: (EcoString, EcoString),
-        name: String,
-        declaration: String,
-    ) {
-        self.synthesized.insert(key, name);
-        self.pending_declarations.push(declaration);
-    }
-
-    pub(crate) fn push_declaration(&mut self, declaration: String) {
-        self.pending_declarations.push(declaration);
-    }
-
-    pub(crate) fn drain_declarations(&mut self) -> Vec<String> {
-        mem::take(&mut self.pending_declarations)
+        key: Option<(EcoString, EcoString)>,
+        name: impl FnOnce(usize) -> String,
+    ) -> String {
+        let name = name(self.adapters.len());
+        self.adapters.push(Adapter {
+            key,
+            name: name.clone(),
+        });
+        name
     }
 }

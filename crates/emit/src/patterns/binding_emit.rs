@@ -98,14 +98,11 @@ pub(crate) fn apply_refutable_root_assertion(
     let (subject, ok_test) = match go_types.as_slice() {
         [go_type] => {
             let asserted_lhs = if needs_asserted {
-                let v = planner.fresh_local(Some("asserted"));
-                planner.declare(&v);
-                v
+                planner.fresh_declared("asserted")
             } else {
                 GoIdentifier::external("_".to_string())
             };
-            let ok = planner.fresh_local(Some("ok"));
-            planner.declare(&ok);
+            let ok = planner.fresh_declared("ok");
             statements.push(define_many(
                 vec![asserted_lhs.clone(), ok.clone()],
                 assertion_of(go_type),
@@ -123,8 +120,7 @@ pub(crate) fn apply_refutable_root_assertion(
             let oks = multiple
                 .iter()
                 .map(|t| {
-                    let ok = planner.fresh_local(Some("ok"));
-                    planner.declare(&ok);
+                    let ok = planner.fresh_declared("ok");
                     statements.push(define_many(
                         vec![GoIdentifier::external("_".to_string()), ok.clone()],
                         assertion_of(t),

@@ -200,7 +200,7 @@ impl Planner<'_> {
     ) -> Option<GoExpression> {
         match resolution {
             DotAccessResolution::EnumVariant { definition, .. } => {
-                self.emit_enum_variant_dot(definition, result_ty)
+                self.emit_enum_variant_dot(definition, result_ty, ctx)
             }
             DotAccessResolution::StaticMethod { definition, .. } => {
                 Some(self.emit_static_method_dot(definition, resolution, ctx))

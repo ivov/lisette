@@ -3,7 +3,6 @@ use crate::context::expression::ExpressionContext;
 use crate::expressions::identifiers::method_expression;
 use crate::names::go_name;
 use crate::plan::values::GoExpression;
-use crate::types::go_type::GoType;
 use syntax::program::DotAccessResolution;
 use syntax::types::Type;
 
@@ -13,6 +12,7 @@ impl Planner<'_> {
         &mut self,
         definition: &str,
         result_ty: &Type,
+        ctx: ExpressionContext<'_>,
     ) -> Option<GoExpression> {
         let make_fn_name = self.facts.variant_make_function(definition)?;
         let enum_package = self.facts.package_for_qualified_name(definition)?;
@@ -32,11 +32,7 @@ impl Planner<'_> {
                 else {
                     return None;
                 };
-                let type_args = if ret_params.len() > f.params.len() {
-                    self.format_type_args(ret_params)
-                } else {
-                    GoType::default()
-                };
+                let type_args = self.constructor_fn_type_args(&f.params, ret_params, ctx);
                 Some(GoExpression::instantiation(make_fn, type_args))
             }
             Type::Nominal { params, .. } => {

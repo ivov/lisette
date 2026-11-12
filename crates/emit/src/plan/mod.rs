@@ -18,26 +18,39 @@ use diagnostics::LisetteDiagnostic;
 use syntax::ast::Span;
 use syntax::program::File;
 
-pub(crate) struct PackagePlan {
+pub(crate) struct PackagePlan<'a> {
     pub(crate) package_name: String,
     pub(crate) collision_diagnostics: Vec<LisetteDiagnostic>,
-    pub(crate) imports: Vec<ImportPlan>,
+    pub(crate) files: Vec<FilePlan<'a>>,
+}
+
+pub(crate) struct FilePlan<'a> {
+    pub(crate) file: &'a File,
+    pub(crate) imports: ImportPlan,
 }
 
 impl Planner<'_> {
     /// Resolve package-wide names and collisions before any item is rendered.
-    pub(crate) fn build_package_plan(&mut self, files: &[&File]) -> PackagePlan {
+    pub(crate) fn build_package_plan<'f>(&mut self, files: &[&'f File]) -> PackagePlan<'f> {
         self.collect_escape_remap(files);
         let collected = self.collect_names(files);
-        let imports: Vec<ImportPlan> = files
+        let file_plans: Vec<_> = files
             .iter()
-            .map(|file| {
-                ImportPlan::build(file, self.facts.go_module(), self.facts.go_package_names())
+            .map(|file| FilePlan {
+                file,
+                imports: ImportPlan::build(
+                    file,
+                    self.facts.go_module(),
+                    self.facts.go_package_names(),
+                ),
             })
             .collect();
-        let import_qualifiers: Vec<(String, Span)> = imports
+        let import_qualifiers: Vec<(String, Span)> = file_plans
             .iter()
-            .flat_map(|plan| plan.used_qualifiers(|span| self.facts.is_unused(span)))
+            .flat_map(|plan| {
+                plan.imports
+                    .used_qualifiers(|span| self.facts.is_unused(span))
+            })
             .collect();
         self.package.record_package_block_names(
             collected.declared_names(),
@@ -59,7 +72,7 @@ impl Planner<'_> {
         PackagePlan {
             package_name,
             collision_diagnostics,
-            imports,
+            files: file_plans,
         }
     }
 }

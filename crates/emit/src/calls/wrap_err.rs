@@ -31,31 +31,13 @@ impl Planner<'_> {
         &self,
         expression: &'a Expression,
     ) -> Option<(&'a Expression, &'a Expression)> {
-        let Expression::Call {
-            expression: callee,
-            args,
-            spread,
-            ..
-        } = expression
-        else {
+        let (receiver, [message]) = self.prelude_method_call(expression, "wrap_err")? else {
             return None;
         };
-        let [message] = args.as_slice() else {
-            return None;
-        };
-        if spread.is_some() || !self.plan_call(expression)?.resolved.is_prelude_dispatch {
-            return None;
-        }
-        let Expression::DotAccess {
-            expression: receiver,
-            member,
-            ..
-        } = callee.unwrap_parens()
-        else {
-            return None;
-        };
-        let wraps = member == "wrap_err" && self.facts.peel_alias(&receiver.get_type()).is_result();
-        wraps.then_some((receiver.as_ref(), message))
+        self.facts
+            .peel_alias(&receiver.get_type())
+            .is_result()
+            .then_some((receiver, message))
     }
 
     /// Messages, including custom String calls, must run even on success.

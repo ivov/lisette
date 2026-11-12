@@ -226,9 +226,9 @@ impl Planner<'_> {
                 let name = match slot {
                     CommaOkValueSlot::Named(name) => Some(name),
                     CommaOkValueSlot::Arm(name) => Some(name),
-                    CommaOkValueSlot::Temp => Some(self.fresh_pair_identifier()),
+                    CommaOkValueSlot::Temp => Some(self.fresh_declared("ret")),
                     CommaOkValueSlot::Unused | CommaOkValueSlot::Discarded => {
-                        nil_guard.map(|_| self.fresh_pair_identifier())
+                        nil_guard.map(|_| self.fresh_declared("ret"))
                     }
                 };
                 match name {
@@ -256,12 +256,6 @@ impl Planner<'_> {
             statements.push(define_many(pair.binding(), expression));
         }
         BoundValue::pair(statements, pair)
-    }
-
-    pub(crate) fn fresh_pair_identifier(&mut self) -> GoIdentifier {
-        let v = self.fresh_local(Some("ret"));
-        self.declare(&v);
-        v
     }
 
     pub(crate) fn arm_value_name(&mut self, name: &str) -> GoIdentifier {

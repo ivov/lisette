@@ -327,13 +327,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn create_temp_vars(&mut self, hint: &str, count: usize) -> Vec<GoIdentifier> {
-        (0..count)
-            .map(|_| {
-                let v = self.fresh_local(Some(hint));
-                self.declare(&v);
-                v
-            })
-            .collect()
+        (0..count).map(|_| self.fresh_declared(hint)).collect()
     }
 
     pub(crate) fn plan_tuple_from_vars(

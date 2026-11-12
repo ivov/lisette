@@ -880,16 +880,6 @@ fn replace_identifier(node: &mut GoExpressionNode, from: &GoIdentifier, to: &GoI
     }
 }
 
-fn mentions_local(node: &GoExpressionNode, local: &GoIdentifier) -> bool {
-    let mut found = false;
-    node.visit(&mut |child| {
-        if let GoExpressionNode::Identifier(name) = child {
-            found |= name.refers_to_same(local);
-        }
-    });
-    found
-}
-
 struct Analysis {
     reads: usize,
     works: bool,
@@ -928,10 +918,10 @@ fn analyze(node: &GoExpressionNode, temp: &GoIdentifier) -> Analysis {
     }
     let identity_read = match node {
         GoExpressionNode::AddressOf(operand) | GoExpressionNode::Slice { base: operand, .. } => {
-            mentions_local(operand, temp)
+            operand.mentions_local(temp)
         }
         GoExpressionNode::Call { callee, .. } => {
-            matches!(callee.as_ref(), GoExpressionNode::Selector { base, .. } if mentions_local(base, temp))
+            matches!(callee.as_ref(), GoExpressionNode::Selector { base, .. } if base.mentions_local(temp))
         }
         _ => false,
     };
