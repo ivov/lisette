@@ -52,11 +52,16 @@ impl TypedefIndex {
                         .insert(*package, sources[*filename]);
                 }
                 ["targets", package, targets @ ..] => {
-                    let targets = targets.chunks_exact(2);
-                    assert!(targets.remainder().is_empty(), "embedded targets are pairs");
+                    let (pairs, remainder) = targets.as_chunks::<2>();
+                    assert!(remainder.is_empty(), "embedded targets are pairs");
                     index.package_targets.insert(
                         *package,
-                        targets.map(|target| (target[0], target[1])).collect(),
+                        pairs
+                            .iter()
+                            .map(|[operating_system, architecture]| {
+                                (*operating_system, *architecture)
+                            })
+                            .collect(),
                     );
                 }
                 _ => panic!("invalid embedded typedef metadata"),

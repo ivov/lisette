@@ -18,7 +18,7 @@ members = [
 [workspace.package]
 version = "0.13.0"
 edition = "2024"
-rust-version = "1.97"
+rust-version = "1.99"
 license = "MIT"
 authors = ["Iván Ovejero <ivov.src@gmail.com>"]
 repository = "https://github.com/ivov/lisette"
