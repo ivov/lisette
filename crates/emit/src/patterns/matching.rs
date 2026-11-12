@@ -448,6 +448,7 @@ impl Planner<'_> {
                 condition: condition.condition,
                 then_body,
                 else_arm,
+                else_if_line: None,
                 origin: IfOrigin::Match { else_label: None },
             })
             .into(),
@@ -1024,6 +1025,7 @@ impl Planner<'_> {
                 condition: is_nil(err()),
                 then_body: ok_body,
                 else_arm,
+                else_if_line: None,
                 origin: IfOrigin::Match { else_label: None },
             })
             .into(),
@@ -1132,6 +1134,7 @@ impl Planner<'_> {
                 condition,
                 then_body: selected,
                 else_arm: ElseArm::from_body(fallback, selected_diverges),
+                else_if_line: None,
                 origin: IfOrigin::Match { else_label: None },
             })
             .into(),
@@ -1370,6 +1373,7 @@ fn pair_if(test: PairCondition, then_body: LoweredBlock, else_arm: ElseArm) -> I
         condition: test.condition,
         then_body,
         else_arm,
+        else_if_line: None,
         origin: IfOrigin::Match { else_label: None },
     }
 }

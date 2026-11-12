@@ -444,6 +444,7 @@ impl Planner<'_> {
                 condition: fail_condition.condition,
                 then_body: fail_body,
                 else_arm: ElseArm::None,
+                else_if_line: None,
                 origin: IfOrigin::User,
             })
             .into(),
@@ -576,6 +577,7 @@ impl Planner<'_> {
                     statements: vec![loop_break(self).into()],
                 },
                 else_arm: ElseArm::None,
+                else_if_line: None,
                 origin: IfOrigin::User,
             })
             .into(),

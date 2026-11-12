@@ -616,6 +616,7 @@ impl Planner<'_> {
                         ),
                         then_body: LoweredBlock { statements: body },
                         else_arm: ElseArm::None,
+                        else_if_line: None,
                         origin: IfOrigin::User,
                     })
                     .into(),

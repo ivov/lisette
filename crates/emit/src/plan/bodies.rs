@@ -4,6 +4,7 @@
 use crate::plan::go_expression::{BinaryOp, Expressions, GoExpressionNode, TreeVisitor};
 use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::values::GoExpression;
+use crate::plan::visit::VisitorMut;
 use crate::types::go_type::GoType;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::types::Type;
@@ -175,12 +176,157 @@ pub(crate) fn directed_first(
     line: Option<String>,
     mut statements: Vec<Statement>,
 ) -> Vec<Statement> {
+    direct_first(&mut statements, line);
+    statements
+}
+
+pub(crate) fn direct_first(statements: &mut [Statement], line: Option<String>) {
     if let Some(first) = statements.first_mut()
         && first.line.is_none()
     {
         first.line = line;
     }
-    statements
+}
+
+/// Give each statement without a directive the one before it, or the enclosing one.
+pub(crate) fn inherit_line_directives(statements: &mut [Statement], enclosing: Option<&String>) {
+    let mut previous = enclosing.cloned();
+    for statement in statements {
+        if statement.line.is_none() {
+            statement.line = previous.clone();
+        }
+        let line = statement.line.as_ref();
+        match &mut statement.kind {
+            LoweredStatement::If(plan) => inherit_into_if(plan, line),
+            LoweredStatement::Loop(plan) => {
+                match &mut plan.header {
+                    LoopHeader::Infinite => {}
+                    LoopHeader::While(condition) => inherit_into_expression(condition, line),
+                    LoopHeader::Range { iterable, .. } => inherit_into_expression(iterable, line),
+                    LoopHeader::Counted {
+                        start, condition, ..
+                    } => {
+                        inherit_into_expression(start, line);
+                        if let Some(condition) = condition {
+                            inherit_into_expression(condition, line);
+                        }
+                    }
+                }
+                inherit_line_directives(&mut plan.body.statements, line);
+            }
+            LoweredStatement::Block(body) | LoweredStatement::Body(body) => {
+                inherit_line_directives(&mut body.statements, line)
+            }
+            LoweredStatement::Select(plan) => {
+                for arm in &mut plan.arms {
+                    let arm_line = arm.line.as_ref().or(line);
+                    match &mut arm.kind {
+                        SelectArmKind::Receive { channel, .. } => {
+                            inherit_into_expression(channel, arm_line)
+                        }
+                        SelectArmKind::Send { channel, value, .. } => {
+                            inherit_into_expression(channel, arm_line);
+                            inherit_into_expression(value, arm_line);
+                        }
+                        SelectArmKind::Default { .. } => {}
+                    }
+                    inherit_line_directives(&mut arm.kind.body_mut().statements, arm_line);
+                    inherit_header(&mut arm.line, arm.kind.body(), line);
+                }
+            }
+            LoweredStatement::Switch(plan) => {
+                match &mut plan.kind {
+                    SwitchKind::Conditional => {}
+                    SwitchKind::Value { subject } | SwitchKind::Type { subject, .. } => {
+                        inherit_into_expression(subject, line)
+                    }
+                }
+                for case in &mut plan.cases {
+                    let case_line = case.line.as_ref().or(line);
+                    for label in &mut case.labels {
+                        inherit_into_expression(label, case_line);
+                    }
+                    inherit_line_directives(&mut case.body.statements, case_line);
+                    inherit_header(&mut case.line, &case.body, line);
+                }
+                if let Some(default) = &mut plan.default {
+                    let default_line = plan.default_line.as_ref().or(line);
+                    inherit_line_directives(&mut default.statements, default_line);
+                    inherit_header(&mut plan.default_line, default, line);
+                }
+            }
+            LoweredStatement::Return(values) => {
+                for value in values {
+                    inherit_into_expression(value, line);
+                }
+            }
+            LoweredStatement::Assign(AssignForm::Compound { target, kind }) => {
+                inherit_into_expression(target, line);
+                if let CompoundKind::OpAssign { rhs, .. } = kind {
+                    inherit_into_expression(rhs, line);
+                }
+            }
+            LoweredStatement::Assign(AssignForm::Simple { target, value }) => {
+                inherit_into_expression(target, line);
+                inherit_into_expression(value, line);
+            }
+            LoweredStatement::Const(ConstPlan { value, .. })
+            | LoweredStatement::Define(Definition { value, .. })
+            | LoweredStatement::VarDecl {
+                value: Some(value), ..
+            }
+            | LoweredStatement::Async { call: value, .. }
+            | LoweredStatement::Discard { value, .. }
+            | LoweredStatement::ExpressionStatement {
+                expression: value, ..
+            } => inherit_into_expression(value, line),
+            LoweredStatement::VarDecl { value: None, .. }
+            | LoweredStatement::Break(_)
+            | LoweredStatement::Continue(_)
+            | LoweredStatement::UnreachablePanic => {}
+        }
+        previous = statement.line.clone();
+    }
+}
+
+fn inherit_into_if(plan: &mut IfPlan, line: Option<&String>) {
+    if let Some(initializer) = &mut plan.initializer {
+        inherit_into_expression(&mut initializer.value, line);
+    }
+    inherit_into_expression(&mut plan.condition, line);
+    inherit_line_directives(&mut plan.then_body.statements, line);
+    match &mut plan.else_arm {
+        ElseArm::None => {}
+        ElseArm::ElseIf(plan) => {
+            let else_if_line = plan.else_if_line.clone().or_else(|| line.cloned());
+            inherit_into_if(plan, else_if_line.as_ref());
+            inherit_header(&mut plan.else_if_line, &plan.then_body, line);
+        }
+        ElseArm::Else { body, .. } => inherit_line_directives(&mut body.statements, line),
+    }
+}
+
+/// Go counts a `case`, `default:` or `} else if` line forward from the previous branch.
+fn inherit_header(header: &mut Option<String>, body: &LoweredBlock, enclosing: Option<&String>) {
+    if header.is_none() {
+        *header = body
+            .statements
+            .first()
+            .and_then(|statement| statement.line.as_ref())
+            .or(enclosing)
+            .cloned();
+    }
+}
+
+fn inherit_into_expression(expression: &mut GoExpression, line: Option<&String>) {
+    fn walk(node: &mut GoExpressionNode, line: Option<&String>) {
+        if let GoExpressionNode::FunctionLiteral { body, .. } = node {
+            inherit_line_directives(&mut body.statements, line);
+        } else {
+            node.visit_children_mut(&mut |child| walk(child, line));
+        }
+    }
+    walk(expression.node_mut(), line);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -305,6 +451,7 @@ pub(crate) struct SwitchStatementPlan {
     pub(crate) kind: SwitchKind,
     pub(crate) cases: Vec<SwitchCasePlan>,
     pub(crate) default: Option<LoweredBlock>,
+    pub(crate) default_line: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -327,6 +474,7 @@ pub(crate) enum SwitchKind {
 pub(crate) struct SwitchCasePlan {
     pub(crate) labels: Vec<GoExpression>,
     pub(crate) body: LoweredBlock,
+    pub(crate) line: Option<String>,
 }
 
 impl SwitchStatementPlan {
@@ -361,7 +509,13 @@ pub(crate) struct SelectStatementPlan {
 
 /// A single `select` arm: a `case`/`default:` header plus its body block.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum SelectArmPlan {
+pub(crate) struct SelectArmPlan {
+    pub(crate) kind: SelectArmKind,
+    pub(crate) line: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SelectArmKind {
     /// `case <receive_vars> := <-<channel>:`, or `case <-<channel>:` when
     /// `receive_vars` is empty.
     Receive {
@@ -396,18 +550,28 @@ impl SelectStatementPlan {
 
 impl SelectArmPlan {
     pub(crate) fn body(&self) -> &LoweredBlock {
+        self.kind.body()
+    }
+
+    pub(crate) fn body_mut(&mut self) -> &mut LoweredBlock {
+        self.kind.body_mut()
+    }
+}
+
+impl SelectArmKind {
+    pub(crate) fn body(&self) -> &LoweredBlock {
         match self {
-            SelectArmPlan::Receive { body, .. }
-            | SelectArmPlan::Send { body, .. }
-            | SelectArmPlan::Default { body } => body,
+            SelectArmKind::Receive { body, .. }
+            | SelectArmKind::Send { body, .. }
+            | SelectArmKind::Default { body } => body,
         }
     }
 
     pub(crate) fn body_mut(&mut self) -> &mut LoweredBlock {
         match self {
-            SelectArmPlan::Receive { body, .. }
-            | SelectArmPlan::Send { body, .. }
-            | SelectArmPlan::Default { body } => body,
+            SelectArmKind::Receive { body, .. }
+            | SelectArmKind::Send { body, .. }
+            | SelectArmKind::Default { body } => body,
         }
     }
 }
@@ -490,6 +654,7 @@ pub(crate) struct IfPlan {
     pub(crate) condition: GoExpression,
     pub(crate) then_body: LoweredBlock,
     pub(crate) else_arm: ElseArm,
+    pub(crate) else_if_line: Option<String>,
     pub(crate) origin: IfOrigin,
 }
 
@@ -510,6 +675,7 @@ impl IfPlan {
             condition,
             then_body,
             else_arm,
+            else_if_line: None,
             origin: IfOrigin::User,
         }
     }
@@ -524,6 +690,7 @@ impl IfPlan {
             condition,
             then_body,
             else_arm,
+            else_if_line: None,
             origin: IfOrigin::Match { else_label: None },
         }
     }
@@ -572,7 +739,7 @@ pub(crate) fn rename_generated_locals(
 ) {
     struct Rename<'a>(&'a rustc_hash::FxHashMap<LocalId, String>);
 
-    impl super::visit::VisitorMut for Rename<'_> {
+    impl VisitorMut for Rename<'_> {
         fn expression(&mut self, node: &mut GoExpressionNode) {
             if let GoExpressionNode::Identifier(name) = node
                 && let Some(final_name) = name.id().and_then(|id| self.0.get(&id))
@@ -598,7 +765,7 @@ pub(crate) fn for_each_statements_mut(
 ) {
     struct Lists<'f, F>(&'f mut F);
 
-    impl<F: FnMut(&mut Vec<Statement>)> super::visit::VisitorMut for Lists<'_, F> {
+    impl<F: FnMut(&mut Vec<Statement>)> VisitorMut for Lists<'_, F> {
         fn expression(&mut self, _node: &mut GoExpressionNode) {}
 
         fn statements(&mut self, statements: &mut Vec<Statement>) {
@@ -779,12 +946,12 @@ impl LoweredStatement {
             LoweredStatement::Async { call, .. } => call.node().walk(visit),
             LoweredStatement::Select(plan) => {
                 for arm in &plan.arms {
-                    match arm {
-                        SelectArmPlan::Receive { channel, body, .. } => {
+                    match &arm.kind {
+                        SelectArmKind::Receive { channel, body, .. } => {
                             channel.node().walk(visit);
                             body.walk(visit);
                         }
-                        SelectArmPlan::Send {
+                        SelectArmKind::Send {
                             channel,
                             value,
                             body,
@@ -793,7 +960,7 @@ impl LoweredStatement {
                             value.node().walk(visit);
                             body.walk(visit);
                         }
-                        SelectArmPlan::Default { body } => body.walk(visit),
+                        SelectArmKind::Default { body } => body.walk(visit),
                     }
                 }
             }
@@ -1129,8 +1296,10 @@ mod flow_tests {
                 body: block(vec![
                     LoweredStatement::Break(LoopTransfer::Unlabeled).into(),
                 ]),
+                line: None,
             }],
             default: Some(block(vec![LoweredStatement::Return(vec![]).into()])),
+            default_line: None,
         });
         let body = block(vec![infinite(vec![switch.into()]).into()]);
         assert!(body.go_terminates());
@@ -1145,10 +1314,12 @@ mod flow_tests {
                 body: block(vec![
                     LoweredStatement::Break(LoopTransfer::Labeled("outer".into())).into(),
                 ]),
+                line: None,
             }],
             default: Some(block(vec![
                 LoweredStatement::Continue(LoopTransfer::Labeled("outer".into())).into(),
             ])),
+            default_line: None,
         });
         let body = block(vec![
             LoweredStatement::Loop(LoopPlan {

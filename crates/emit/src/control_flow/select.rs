@@ -7,13 +7,14 @@ use crate::patterns::sites::{
 use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
-    PlacePlan, SelectArmPlan, SelectStatementPlan, Statement, assign, discard,
+    PlacePlan, SelectArmKind, SelectArmPlan, SelectStatementPlan, Statement, assign, direct_first,
+    discard,
 };
 use crate::plan::go_expression::{GoExpressionNode, UnaryOp};
 use crate::plan::local::GoIdentifier;
 use crate::plan::placement::unreachable_panic_if_needed;
 use crate::plan::values::{GoExpression, ValuePlan};
-use syntax::ast::{Expression, MatchArm, Pattern, SelectArm};
+use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, Span};
 use syntax::program::{ChannelOperation, channel_operation};
 use syntax::types::Type;
 
@@ -40,23 +41,39 @@ enum PreparedSelectArm<'a> {
     Send {
         body: &'a Expression,
         operation: PreparedChannelOperation,
+        span: Span,
     },
     MatchReceive {
         arms: &'a [MatchArm],
         channel: GoExpression,
         element_ty: Type,
+        span: Span,
     },
     Default {
         body: &'a Expression,
+        span: Span,
     },
+}
+
+impl PreparedSelectArm<'_> {
+    fn span(&self) -> Span {
+        match self {
+            PreparedSelectArm::Receive { binding, .. } => binding.get_span(),
+            PreparedSelectArm::Send { span, .. }
+            | PreparedSelectArm::MatchReceive { span, .. }
+            | PreparedSelectArm::Default { span, .. } => *span,
+        }
+    }
 }
 
 impl Planner<'_> {
     pub(crate) fn lower_select(
         &mut self,
         arms: &[SelectArm],
+        span: &Span,
         place: &PlacePlan,
     ) -> LoweredStatement {
+        let line = self.maybe_line_directive(span);
         let needs_retry_loop = arms.iter().any(
             |arm| matches!(arm, SelectArm::Receive { binding, .. } if is_some_pattern(binding)),
         );
@@ -90,12 +107,15 @@ impl Planner<'_> {
                 body: LoweredBlock { statements: body },
             };
             let mut statements = setup;
-            statements.push(LoweredStatement::Loop(loop_plan).into());
+            statements.push(Statement {
+                line,
+                kind: LoweredStatement::Loop(loop_plan),
+            });
             statements.extend(postlude);
             LoweredStatement::Body(LoweredBlock { statements })
         } else {
             let mut statements = setup;
-            statements.push(select.into());
+            statements.push(Statement { line, kind: select });
             statements.extend(postlude);
             LoweredStatement::Body(LoweredBlock { statements })
         }
@@ -107,13 +127,14 @@ impl Planner<'_> {
         place: &PlacePlan,
     ) -> Vec<SelectArmPlan> {
         let default_body = arms.iter().find_map(|arm| match arm {
-            PreparedSelectArm::Default { body } => Some(*body),
+            PreparedSelectArm::Default { body, .. } => Some(*body),
             _ => None,
         });
 
         let mut arm_plans = Vec::with_capacity(arms.len());
         for arm in arms {
-            let plan = match arm {
+            let line = self.maybe_line_directive(&arm.span());
+            let kind = match arm {
                 PreparedSelectArm::Receive {
                     binding,
                     body,
@@ -129,19 +150,20 @@ impl Planner<'_> {
                     };
                     self.lower_receive_arm(binding, &receiver_ctx)
                 }
-                PreparedSelectArm::Send { body, operation } => {
-                    self.lower_send_arm(&operation, body, place)
-                }
+                PreparedSelectArm::Send {
+                    body, operation, ..
+                } => self.lower_send_arm(&operation, body, place),
                 PreparedSelectArm::MatchReceive {
                     arms,
                     channel,
                     element_ty,
+                    ..
                 } => self.lower_match_receive_arm(arms, &channel, &element_ty, place),
-                PreparedSelectArm::Default { body } => SelectArmPlan::Default {
+                PreparedSelectArm::Default { body, .. } => SelectArmKind::Default {
                     body: self.lower_block_to_place(body, place),
                 },
             };
-            arm_plans.push(plan);
+            arm_plans.push(SelectArmPlan { kind, line });
         }
         arm_plans
     }
@@ -157,6 +179,7 @@ impl Planner<'_> {
         let mut prepared = Vec::with_capacity(arms.len());
 
         for arm in arms {
+            let start = setup.len();
             let prepared_arm = match arm {
                 SelectArm::Send {
                     send_expression,
@@ -164,6 +187,7 @@ impl Planner<'_> {
                 } => PreparedSelectArm::Send {
                     body,
                     operation: self.prepare_send_arm(setup, send_expression, needs_retry_loop),
+                    span: send_expression.get_span(),
                 },
                 SelectArm::Receive {
                     receive_expression,
@@ -212,10 +236,17 @@ impl Planner<'_> {
                         arms,
                         channel,
                         element_ty: receive_expression.get_type().ok_type(),
+                        span: receive_expression.get_span(),
                     }
                 }
-                SelectArm::WildCard { body, .. } => PreparedSelectArm::Default { body },
+                SelectArm::WildCard { span, body } => {
+                    PreparedSelectArm::Default { body, span: *span }
+                }
             };
+            direct_first(
+                &mut setup[start..],
+                self.maybe_line_directive(&prepared_arm.span()),
+            );
             prepared.push(prepared_arm);
         }
 
@@ -274,7 +305,7 @@ impl Planner<'_> {
         prepare_receiver: F,
         inner_pattern: Option<&Pattern>,
         ctx: &SelectReceiveContext,
-    ) -> SelectArmPlan
+    ) -> SelectArmKind
     where
         F: FnOnce(&mut Self) -> GoIdentifier,
     {
@@ -313,7 +344,7 @@ impl Planner<'_> {
             },
             else_arm,
         );
-        SelectArmPlan::Receive {
+        SelectArmKind::Receive {
             receive_vars,
             channel: ctx.channel.clone(),
             body: LoweredBlock {
@@ -326,7 +357,7 @@ impl Planner<'_> {
         &mut self,
         binding: &Pattern,
         ctx: &SelectReceiveContext,
-    ) -> SelectArmPlan {
+    ) -> SelectArmKind {
         let effective_pattern = unwrap_some_pattern(binding);
 
         if is_some_pattern(binding) {
@@ -341,7 +372,7 @@ impl Planner<'_> {
         &mut self,
         effective_pattern: &Pattern,
         ctx: &SelectReceiveContext,
-    ) -> SelectArmPlan {
+    ) -> SelectArmKind {
         if let Pattern::Identifier {
             identifier,
             binding,
@@ -371,7 +402,7 @@ impl Planner<'_> {
                 let body = this.lower_ok_check(&ok_var, ctx);
                 (ok_var, body)
             });
-            return SelectArmPlan::Receive {
+            return SelectArmKind::Receive {
                 receive_vars: vec![GoIdentifier::external("_".to_string()), ok_var],
                 channel: ctx.channel.clone(),
                 body: LoweredBlock { statements: body },
@@ -386,7 +417,7 @@ impl Planner<'_> {
         &mut self,
         effective_pattern: &Pattern,
         ctx: &SelectReceiveContext,
-    ) -> SelectArmPlan {
+    ) -> SelectArmKind {
         self.with_binding_frame(|this| {
             let mut body_statements: Vec<Statement> = Vec::new();
             let receive_vars = if let Pattern::Identifier {
@@ -418,7 +449,7 @@ impl Planner<'_> {
             };
             let block = this.lower_block_to_place(ctx.body, ctx.place);
             body_statements.extend(block.statements);
-            SelectArmPlan::Receive {
+            SelectArmKind::Receive {
                 receive_vars,
                 channel: ctx.channel.clone(),
                 body: LoweredBlock {
@@ -493,15 +524,15 @@ impl Planner<'_> {
         operation: &PreparedChannelOperation,
         body: &Expression,
         place: &PlacePlan,
-    ) -> SelectArmPlan {
+    ) -> SelectArmKind {
         let block = self.lower_block_to_place(body, place);
         match operation {
-            PreparedChannelOperation::Send(ch, val) => SelectArmPlan::Send {
+            PreparedChannelOperation::Send(ch, val) => SelectArmKind::Send {
                 channel: ch.clone(),
                 value: val.clone(),
                 body: block,
             },
-            PreparedChannelOperation::Receive(ch) => SelectArmPlan::Receive {
+            PreparedChannelOperation::Receive(ch) => SelectArmKind::Receive {
                 receive_vars: Vec::new(),
                 channel: ch.clone(),
                 body: block,
@@ -515,7 +546,7 @@ impl Planner<'_> {
         channel: &GoExpression,
         element_ty: &Type,
         place: &PlacePlan,
-    ) -> SelectArmPlan {
+    ) -> SelectArmKind {
         self.with_binding_frame(|this| {
             let (receiver_var_pattern, some_arm) = match_arms
                 .iter()
@@ -557,7 +588,7 @@ impl Planner<'_> {
             if let Some(plan) = arms_plan {
                 body_statements.push(LoweredStatement::If(plan).into());
             }
-            SelectArmPlan::Receive {
+            SelectArmKind::Receive {
                 receive_vars: vec![case_var, ok_var],
                 channel: channel.clone(),
                 body: LoweredBlock {

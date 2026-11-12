@@ -12,7 +12,7 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::prelude_call;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement,
-    PlacePlan, Statement, assign, define,
+    PlacePlan, Statement, assign, define, directed_first,
 };
 use crate::plan::go_expression::UnaryOp;
 use crate::plan::lower::is_conjunction;
@@ -582,6 +582,15 @@ impl Planner<'_> {
     }
 
     fn lower_slice_loop_body(&mut self, loop_body: &SliceLoopBody<'_>) -> Vec<Statement> {
+        let line = match loop_body.callback {
+            LoweredCallback::Body(body) => self.maybe_line_directive(&body.get_span()),
+            LoweredCallback::Callee(_) => None,
+        };
+        let statements = self.lower_slice_loop_statements(loop_body);
+        directed_first(line, statements)
+    }
+
+    fn lower_slice_loop_statements(&mut self, loop_body: &SliceLoopBody<'_>) -> Vec<Statement> {
         let SliceLoopBody {
             planned,
             callback,

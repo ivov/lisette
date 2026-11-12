@@ -544,6 +544,30 @@ pub(crate) enum Decision {
     Unreachable,
 }
 
+impl Decision {
+    pub(crate) fn first_arm(&self) -> Option<usize> {
+        match self {
+            Decision::Success(leaf) => Some(leaf.arm_index),
+            Decision::Guard(guard) => Some(guard.leaf.arm_index),
+            Decision::Chain { tests, tail } => match (tests.first(), tail) {
+                (Some(test), _) => Some(test.arm.leaf().arm_index),
+                (None, ChainTail::Catchall(catchall)) => Some(catchall.arm_index),
+                (None, ChainTail::LastTest | ChainTail::Open) => None,
+            },
+            Decision::Switch(switch) => switch
+                .branches
+                .first()
+                .and_then(|branch| branch.decision.first_arm())
+                .or_else(|| switch.fallback.as_ref()?.first_arm()),
+            Decision::TypeSwitch { branches, fallback } => branches
+                .first()
+                .and_then(|branch| branch.decision.first_arm())
+                .or_else(|| fallback.as_ref()?.first_arm()),
+            Decision::Unreachable => None,
+        }
+    }
+}
+
 /// What runs when no test of a chain matches.
 #[derive(Debug)]
 pub(crate) enum ChainTail {

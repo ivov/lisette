@@ -17,6 +17,7 @@ use crate::patterns::decision_tree::{
 use crate::plan::bodies::{
     ElseArm, IfOrigin, IfPlan, LoopHeader, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
     LoweredStatement, PlacePlan, Statement, SwitchCasePlan, SwitchKind, SwitchStatementPlan,
+    direct_first, directed_first,
 };
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
 use crate::plan::local::GoIdentifier;
@@ -33,6 +34,14 @@ struct FlatCase<'d> {
 enum FlatCaseBody<'d> {
     Leaf(&'d ArmLeaf),
     Guard(&'d ArmLeaf),
+}
+
+impl FlatCaseBody<'_> {
+    fn arm_index(&self) -> usize {
+        match self {
+            FlatCaseBody::Leaf(leaf) | FlatCaseBody::Guard(leaf) => leaf.arm_index,
+        }
+    }
 }
 
 fn guard_renders_inline(guard: &Expression) -> bool {
@@ -315,15 +324,22 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             });
             let body = LoweredBlock { statements: body };
             all_diverge &= body.ends_with_diverge();
-            branches.push(ChainBranch { condition, body });
+            let line = self.arm_line(test.arm.leaf().arm_index);
+            branches.push(ChainBranch {
+                condition,
+                body,
+                line,
+            });
         }
 
         let trailing = match tail {
             ChainTail::LastTest => match &tests[regular_len].arm {
                 ChainArm::Leaf(leaf) => self.lower_leaf_else_or_flat(leaf, &chain_ctx, all_diverge),
-                ChainArm::Guard(guard) => self.lower_else_body(all_diverge, |this, body| {
-                    this.walk_guard(body, guard, &chain_ctx)
-                }),
+                ChainArm::Guard(guard) => {
+                    self.lower_else_body(all_diverge, Some(guard.leaf.arm_index), |this, body| {
+                        this.walk_guard(body, guard, &chain_ctx)
+                    })
+                }
             },
             ChainTail::Catchall(catchall) => {
                 self.lower_leaf_else_or_flat(catchall, &chain_ctx, all_diverge)
@@ -340,6 +356,17 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             return;
         }
         statements.push(LoweredStatement::If(build_chain_plan(branches, trailing)).into());
+    }
+
+    fn arm_line(&self, arm_index: usize) -> Option<String> {
+        self.planner
+            .maybe_line_directive(&self.arms[arm_index].pattern.get_span())
+    }
+
+    fn decision_line(&self, decision: Option<&Decision>) -> Option<String> {
+        decision
+            .and_then(Decision::first_arm)
+            .and_then(|arm_index| self.arm_line(arm_index))
     }
 
     fn render_retry_loop(
@@ -454,8 +481,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             .map(|case| SwitchCasePlan {
                 labels: vec![join_and(case.conditions.clone())],
                 body: self.lower_flat_case_body(&case, place),
+                line: self.arm_line(case.body.arm_index()),
             })
             .collect::<Vec<_>>();
+        let default_line = default_case
+            .as_ref()
+            .and_then(|case| self.arm_line(case.body.arm_index()));
         let default = default_case
             .map(|case| self.lower_flat_case_body(&case, place))
             .filter(|body| !body.renders_empty());
@@ -472,6 +503,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 kind: SwitchKind::Conditional,
                 cases,
                 default,
+                default_line,
             })
             .into(),
         );
@@ -827,6 +859,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             condition: test.condition,
             then_body,
             else_arm,
+            else_if_line: None,
             origin: IfOrigin::Match {
                 else_label: test.else_label,
             },
@@ -880,10 +913,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 } else {
                     ElseArm::None
                 };
-                guard_statements.extend(condition_setup);
-                guard_statements.push(
+                let mut guarded = condition_setup;
+                guarded.push(
                     LoweredStatement::If(IfPlan::for_match(condition, then_body, else_arm)).into(),
                 );
+                guard_statements.extend(directed_first(this.arm_line(arm_index), guarded));
             }
             guard_statements
         });
@@ -914,7 +948,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     ) -> ElseArm {
         match decision {
             Decision::Success(leaf) => self.lower_leaf_else_or_flat(leaf, ctx, preceding_diverges),
-            _ => self.lower_else_body(preceding_diverges, |this, body| {
+            _ => self.lower_else_body(preceding_diverges, decision.first_arm(), |this, body| {
                 this.walk(body, decision, ctx)
             }),
         }
@@ -930,7 +964,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         {
             return ElseArm::None;
         }
-        self.lower_else_body(preceding_diverges, |this, body| {
+        self.lower_else_body(preceding_diverges, Some(leaf.arm_index), |this, body| {
             this.walk_leaf(body, leaf, ctx)
         })
     }
@@ -938,19 +972,23 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn lower_else_body(
         &mut self,
         preceding_diverges: bool,
+        arm_index: Option<usize>,
         lower: impl FnOnce(&mut Self, &mut Vec<Statement>),
     ) -> ElseArm {
+        let line = arm_index.and_then(|arm_index| self.arm_line(arm_index));
         if preceding_diverges {
             let mut body: Vec<Statement> = Vec::new();
             lower(self, &mut body);
-            return ElseArm::from_body(LoweredBlock { statements: body }, true);
+            let statements = directed_first(line, body);
+            return ElseArm::from_body(LoweredBlock { statements }, true);
         }
         let body = self.with_scope(|this| {
             let mut body: Vec<Statement> = Vec::new();
             lower(this, &mut body);
             body
         });
-        ElseArm::from_body(LoweredBlock { statements: body }, false)
+        let statements = directed_first(line, body);
+        ElseArm::from_body(LoweredBlock { statements }, false)
     }
 
     fn lower_value_switch(
@@ -980,6 +1018,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 kind: SwitchKind::Value { subject },
                 cases: case_plans,
                 default: default_block,
+                default_line: self.decision_line(default),
             },
             place,
             default.is_some(),
@@ -1043,6 +1082,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 kind: SwitchKind::Type { subject, binding },
                 cases: case_plans,
                 default: default_block,
+                default_line: self.decision_line(default),
             },
             place,
             default.is_some(),
@@ -1067,6 +1107,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         SwitchCasePlan {
             labels,
             body: LoweredBlock { statements: body },
+            line: self.decision_line(Some(decision)),
         }
     }
 
@@ -1100,6 +1141,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let group_count = groups.len();
 
         for (g, (_condition, indices)) in groups.iter().enumerate() {
+            let start = statements.len();
             let is_last_group = g == group_count - 1;
             let collapse_as_catchall = is_last_group && matches!(tail, ChainTail::LastTest);
             self.emit_chain_group(
@@ -1112,6 +1154,10 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 &inner_ctx,
                 collapse_as_catchall,
             );
+            if g > 0 {
+                let line = self.arm_line(tests[indices[0]].arm.leaf().arm_index);
+                direct_first(&mut statements[start..], line);
+            }
         }
 
         if let ChainTail::Catchall(catchall) = tail {
@@ -1218,8 +1264,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                             this.emit_arm_leaf(&mut then_body, arm_index, ctx);
                             then_body
                         });
-                        statements.extend(condition_setup);
-                        statements.push(
+                        let mut guarded = condition_setup;
+                        guarded.push(
                             LoweredStatement::If(IfPlan::for_match(
                                 condition,
                                 LoweredBlock {
@@ -1229,6 +1275,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                             ))
                             .into(),
                         );
+                        statements.extend(directed_first(self.arm_line(arm_index), guarded));
                     }
                 }
             }
@@ -1280,6 +1327,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     ) -> R {
         self.with_binding_frame(|this| {
             if !bindings.is_empty() {
+                let start = statements.len();
                 tree_binding_statements(
                     this.planner,
                     statements,
@@ -1287,6 +1335,10 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     this.subject.root(),
                     consumers,
                 );
+                let line = consumers
+                    .first()
+                    .and_then(|consumer| this.planner.maybe_line_directive(&consumer.get_span()));
+                direct_first(&mut statements[start..], line);
             }
             f(this, statements)
         })
@@ -1456,6 +1508,7 @@ fn group_chain_tests_by_condition(
 struct ChainBranch {
     condition: GoExpression,
     body: LoweredBlock,
+    line: Option<String>,
 }
 
 struct BranchTest {
@@ -1470,11 +1523,9 @@ fn build_chain_plan(branches: Vec<ChainBranch>, trailing: ElseArm) -> IfPlan {
     let head = branches.remove(0);
     let mut else_arm = trailing;
     for branch in branches.into_iter().rev() {
-        else_arm = ElseArm::ElseIf(Box::new(IfPlan::for_match(
-            branch.condition,
-            branch.body,
-            else_arm,
-        )));
+        let mut plan = IfPlan::for_match(branch.condition, branch.body, else_arm);
+        plan.else_if_line = branch.line;
+        else_arm = ElseArm::ElseIf(Box::new(plan));
     }
     IfPlan::for_match(head.condition, head.body, else_arm)
 }

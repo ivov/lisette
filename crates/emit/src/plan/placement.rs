@@ -9,7 +9,7 @@ use crate::patterns::binding_decls::pattern_binds_name;
 use crate::plan::bodies::with_setup;
 use crate::plan::bodies::{
     AssignForm, Definition, ElseArm, LoopHeader, LoopTransfer, LoweredBlock, LoweredStatement,
-    PlacePlan, Statement, assign, discard, effect_statement, expression_statement,
+    PlacePlan, Statement, assign, directed_first, discard, effect_statement, expression_statement,
 };
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
@@ -576,17 +576,13 @@ impl Planner<'_> {
             return self.lower_plain_assign(target, expression);
         };
 
-        let actual_expression = if let Expression::Block { items, .. } = expression {
-            if items.len() == 1 {
-                &items[0]
-            } else {
-                expression
-            }
-        } else {
-            expression
+        let actual_expression = match expression {
+            Expression::Block { items, .. } if items.len() == 1 => &items[0],
+            _ => expression,
         };
+        let line = self.maybe_line_directive(&actual_expression.get_span());
 
-        match actual_expression {
+        let statements = match actual_expression {
             Expression::Call {
                 expression: callee,
                 args,
@@ -604,7 +600,7 @@ impl Planner<'_> {
                     ),
                     Some(ConstructorKind::Failure) => (fallible.err_constructor(), None),
                     None => {
-                        return self.lower_plain_assign(target, expression);
+                        return directed_first(line, self.lower_plain_assign(target, expression));
                     }
                 };
                 if let Some(constructor_arg) = constructor_arg {
@@ -631,7 +627,8 @@ impl Planner<'_> {
                 }
             }
             _ => self.lower_block_to_var(expression, target, None, false),
-        }
+        };
+        directed_first(line, statements)
     }
 
     /// Lower a block (or single expression) that assigns its tail into `target`.
@@ -660,7 +657,9 @@ impl Planner<'_> {
                 for (index, item) in rest.iter().enumerate() {
                     statements.push(this.lower_block_item(item, &items[index + 1..]));
                 }
-                statements.extend(this.lower_assign_tail(last, target, target_ty));
+                let line = this.maybe_line_directive(&last.get_span());
+                let tail = this.lower_assign_tail(last, target, target_ty);
+                statements.extend(directed_first(line, tail));
                 statements
             })
         })

@@ -1,6 +1,6 @@
 use super::bodies::{
     AssignForm, CompoundKind, Definition, ElseArm, IfPlan, LoopHeader, LoweredStatement,
-    SelectArmPlan, Statement, SwitchCasePlan, SwitchKind,
+    SelectArmKind, Statement, SwitchCasePlan, SwitchKind,
 };
 use super::go_expression::GoExpressionNode;
 use super::local::GoIdentifier;
@@ -174,8 +174,8 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
         LoweredStatement::Async { call, .. } => visit_expression(call.node_mut(), visitor),
         LoweredStatement::Select(plan) => {
             for arm in &mut plan.arms {
-                match arm {
-                    SelectArmPlan::Receive {
+                match &mut arm.kind {
+                    SelectArmKind::Receive {
                         receive_vars,
                         channel,
                         body,
@@ -188,7 +188,7 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
                         visit_statements_mut(&mut body.statements, visitor);
                         visitor.exit_scope();
                     }
-                    SelectArmPlan::Send {
+                    SelectArmKind::Send {
                         channel,
                         value,
                         body,
@@ -199,7 +199,7 @@ fn visit_statement(statement: &mut LoweredStatement, visitor: &mut impl VisitorM
                         visit_statements_mut(&mut body.statements, visitor);
                         visitor.exit_scope();
                     }
-                    SelectArmPlan::Default { body } => {
+                    SelectArmKind::Default { body } => {
                         visitor.enter_scope();
                         visit_statements_mut(&mut body.statements, visitor);
                         visitor.exit_scope();
@@ -652,8 +652,10 @@ mod tests {
                         statements: Vec::new(),
                     },
                     else_arm: ElseArm::None,
+                    else_if_line: None,
                     origin: IfOrigin::User,
                 })),
+                else_if_line: None,
                 origin: IfOrigin::User,
             })
             .into(),

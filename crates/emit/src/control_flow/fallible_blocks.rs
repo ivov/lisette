@@ -9,7 +9,7 @@ use crate::calls::comma_ok::{CommaOkValueSlot, PairKind};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible};
 use crate::names::go_name::GeneratedPackage;
-use crate::plan::bodies::{LoweredBlock, Statement, define};
+use crate::plan::bodies::{LoweredBlock, Statement, define, directed_first};
 use crate::plan::go_expression::FunctionLiteralLayout;
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::{GoExpression, ValuePlan};
@@ -143,7 +143,9 @@ impl Planner<'_> {
             .enumerate()
             .map(|(index, item)| self.lower_block_item(item, &items[index + 1..]))
             .collect();
-        statements.extend(self.lower_try_tail(last, fallible));
+        let line = self.maybe_line_directive(&last.get_span());
+        let tail = self.lower_try_tail(last, fallible);
+        statements.extend(directed_first(line, tail));
         statements
     }
 
