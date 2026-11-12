@@ -1202,21 +1202,12 @@ fn comparison_sentence(message: &str, values: &[String], term_width: usize) -> O
 }
 
 fn stacked_operand_label(operands: &[Operand], values: &[String]) -> String {
-    let label_width = operands
-        .iter()
-        .map(|operand| operand.label.chars().count())
-        .max()
-        .unwrap_or(0)
-        + 1;
-    operands
+    let rows: Vec<(&str, &str)> = operands
         .iter()
         .zip(values)
-        .map(|(operand, value)| {
-            let token = format!("{}:", operand.label);
-            format!("{token:<label_width$} `{value}`")
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+        .map(|(operand, value)| (operand.label.as_str(), value.as_str()))
+        .collect();
+    diagnostics::stacked_rows(&rows)
 }
 
 fn count_status(rows: &[TestRow], status: Status) -> usize {

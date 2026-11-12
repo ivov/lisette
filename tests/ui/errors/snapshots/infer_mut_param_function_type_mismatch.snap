@@ -6,7 +6,8 @@ source: tests/ui/errors/mod.rs
  12 │   let buf = Slice.make<byte>(3)
  13 │   let _ = apply(advance, buf)
     ·                 ───┬───
-    ·                    ╰── expected `fn (Slice<byte>) -> int`, found `fn (mut Slice<byte>) -> int`
+    ·                    ╰─┤ expected: `fn (Slice<byte>) -> int`
+    ·                      │ found:    `fn (mut Slice<byte>) -> int`
  14 │ }
     ╰────
   help: A function value may demand less permission than its type promises, never more. Match `mut` on each differing parameter, or expect `fn (mut Slice<byte>) -> int` instead · code: [infer.needs_writable]

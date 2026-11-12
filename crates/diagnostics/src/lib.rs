@@ -12,7 +12,7 @@ pub mod package_graph;
 pub mod pattern;
 pub mod render;
 
-pub use diagnostic::{IndexedSource, LisetteDiagnostic};
+pub use diagnostic::{IndexedSource, LisetteDiagnostic, stacked_rows};
 pub use fix::{Edit, Fix, FixApplicationOutcome, apply_fixes};
 pub use sink::{DiagnosticCheckpoint, LocalSink};
 

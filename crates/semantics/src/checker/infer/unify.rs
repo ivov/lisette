@@ -708,10 +708,7 @@ impl InferCtx<'_> {
 
                 LisetteDiagnostic::error("Type mismatch")
                     .with_infer_code("type_mismatch")
-                    .with_span_label(
-                        span,
-                        format!("expected `{}`, found `{}`", expected_name, actual_name),
-                    )
+                    .with_expected_found_label(span, &expected_name, &actual_name)
                     .with_help("The function types must have the same number of parameters")
             }
 
@@ -729,10 +726,7 @@ impl InferCtx<'_> {
                 }
                 let diagnostic = LisetteDiagnostic::error("Missing write permission")
                     .with_infer_code("needs_writable")
-                    .with_span_label(
-                        span,
-                        format!("expected `{}`, found `{}`", expected_name, actual_name),
-                    );
+                    .with_expected_found_label(span, &expected_name, &actual_name);
                 if matches!(actual.unwrap_forall(), Function(_)) {
                     diagnostic.with_help(format!(
                         "A function value may demand less permission than its type \
@@ -764,10 +758,7 @@ impl InferCtx<'_> {
 
                 let mut diagnostic = LisetteDiagnostic::error("Type mismatch")
                     .with_infer_code("type_mismatch")
-                    .with_span_label(
-                        span,
-                        format!("expected `{}`, found `{}`", expected_name, actual_name),
-                    )
+                    .with_expected_found_label(span, &expected_name, &actual_name)
                     .with_help(help);
                 if let Some(Expectation {
                     role:
