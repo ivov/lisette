@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Ctx { n: int }
+  
+  fn run(a: mut Ref<Ctx>, b: mut Ref<Ctx>) -> int {
+    let mut r = a
+    r.n = 1
+    let swap = || -> int { r = b; 5 }
+    r.n = swap()
+    a.n
+  }
+---
+package main
+
+type Ctx struct {
+	n int
+}
+
+func run(a, b *Ctx) int {
+	r := a
+	r.n = 1
+	swap := func() int {
+		r = b
+		return 5
+	}
+	ref := r
+	ref.n = swap()
+	return a.n
+}

@@ -54,7 +54,9 @@ impl EmitBindings {
     }
 
     pub fn is_mutated(&self, id: AstBindingId) -> bool {
-        self.mutations.contains_key(&id)
+        self.mutations
+            .get(&id)
+            .is_some_and(|mutation| *mutation != BindingMutation::ThroughReference)
     }
 
     pub fn is_alias_mutated(&self, id: AstBindingId) -> bool {
@@ -211,6 +213,7 @@ impl EqualityIndex {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BindingMutation {
+    ThroughReference,
     Direct,
     ThroughAlias,
 }
@@ -219,7 +222,8 @@ impl BindingMutation {
     pub fn merged_with(self, other: Self) -> Self {
         match (self, other) {
             (Self::ThroughAlias, _) | (_, Self::ThroughAlias) => Self::ThroughAlias,
-            (Self::Direct, Self::Direct) => Self::Direct,
+            (Self::Direct, _) | (_, Self::Direct) => Self::Direct,
+            (Self::ThroughReference, Self::ThroughReference) => Self::ThroughReference,
         }
     }
 }

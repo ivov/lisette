@@ -426,6 +426,23 @@ impl InferCtx<'_> {
             .then_some(qualified)
     }
 
+    fn writes_through_reference(&self, target: &Expression) -> bool {
+        match target {
+            Expression::Paren { expression, .. } => self.writes_through_reference(expression),
+            Expression::DotAccess { expression, .. }
+            | Expression::IndexedAccess { expression, .. }
+            | Expression::Unary {
+                operator: UnaryOperator::Deref,
+                expression,
+                ..
+            } => {
+                self.peel_resolved(&expression.get_type()).is_ref()
+                    || self.writes_through_reference(expression)
+            }
+            _ => false,
+        }
+    }
+
     pub(super) fn infer_assignment(
         &mut self,
         target: Box<Expression>,
@@ -495,7 +512,9 @@ impl InferCtx<'_> {
                 if compound_operator.is_some() {
                     self.facts.mark_used(binding_id);
                 }
-                if self.scopes.binding_crosses_function_boundary(&var_name) {
+                if self.writes_through_reference(&new_target) {
+                    self.facts.mark_written_through(binding_id);
+                } else if self.scopes.binding_crosses_function_boundary(&var_name) {
                     self.facts.mark_alias_mutated(binding_id);
                 } else {
                     self.facts.mark_mutated(binding_id);
