@@ -50,14 +50,14 @@ func (b Bar) get() *Thing {
 
 type Holder struct{}
 
-func Holder_take[U any](_ Holder, b Box[lisette.Option[*Thing]], u U) U {
+func holderTake[U any](_ Holder, b Box[lisette.Option[*Thing]], u U) U {
 	_ = b
 	return u
 }
 
 func main() {
 	h := Holder{}
-	Holder_take(h, _lisAdapter_Bar_Box_0{inner: Bar{}}, 1)
+	holderTake(h, _lisAdapter_Bar_Box_0{inner: Bar{}}, 1)
 }
 
 type _lisAdapter_Bar_Box_0 struct {

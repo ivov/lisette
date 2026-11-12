@@ -22,7 +22,7 @@ type PublicPhase struct {
 	Tag PublicPhaseTag
 }
 
-func PublicPhase_Variants() []PublicPhase {
+func PublicPhaseVariants() []PublicPhase {
 	return []PublicPhase{
 		{Tag: PublicPhaseBuild},
 	}
@@ -38,13 +38,13 @@ type LocalPhase struct {
 	Tag LocalPhaseTag
 }
 
-func LocalPhase_Variants() []LocalPhase {
+func localPhaseVariants() []LocalPhase {
 	return []LocalPhase{
 		{Tag: LocalPhaseCheck},
 	}
 }
 
 func main() {
-	LocalPhase_Variants()
-	PublicPhase_Variants()
+	localPhaseVariants()
+	PublicPhaseVariants()
 }

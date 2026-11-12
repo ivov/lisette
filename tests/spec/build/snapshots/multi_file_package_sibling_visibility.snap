@@ -5,7 +5,7 @@ source: tests/spec/build/mod.rs
 package main
 
 func main() {
-	p := Point_new(3.0, 4.0)
+	p := newPoint(3.0, 4.0)
 	_ = p.x + p.y
 }
 
@@ -18,7 +18,7 @@ type Point struct {
 	y float64
 }
 
-func Point_new(x, y float64) Point {
+func newPoint(x, y float64) Point {
 	return Point{
 		x: x,
 		y: y,

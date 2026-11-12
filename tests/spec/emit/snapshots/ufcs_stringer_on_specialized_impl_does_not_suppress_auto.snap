@@ -20,7 +20,7 @@ type Box[T any] struct {
 	v T
 }
 
-func Box_String(_ Box[int]) string {
+func boxString(_ Box[int]) string {
 	return "int_box"
 }
 

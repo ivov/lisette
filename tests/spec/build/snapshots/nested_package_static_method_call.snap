@@ -7,7 +7,7 @@ package main
 import "github.com/user/myproject/models/user"
 
 func main() {
-	user.User_New("Alice", "alice@test.com")
+	user.NewUser("Alice", "alice@test.com")
 }
 
 
@@ -19,7 +19,7 @@ type User struct {
 	Email string
 }
 
-func User_New(name, email string) User {
+func NewUser(name, email string) User {
 	return User{
 		Name:  name,
 		Email: email,

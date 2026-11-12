@@ -20,12 +20,12 @@ type Box[T any] struct {
 	value T
 }
 
-func Box_make[T any, U any](_ Box[T]) U {
+func boxMake[T any, U any](_ Box[T]) U {
 	panic("boom")
 }
 
 func main() {
 	b := Box[int]{value: 1}
-	x := Box_make[int, string](b)
+	x := boxMake[int, string](b)
 	_ = x
 }

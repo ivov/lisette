@@ -19,11 +19,11 @@ type Box[T any] struct {
 	value T
 }
 
-func Box_tag[U any](_ Box[int]) int {
+func boxTag[U any](_ Box[int]) int {
 	return 1
 }
 
 func test() int {
 	b := Box[int]{value: 1}
-	return Box_tag[string](b)
+	return boxTag[string](b)
 }

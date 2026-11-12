@@ -15,7 +15,7 @@ func Resultant(arg int) (int, Face) {
 
 type Holder struct{}
 
-func Holder_Resolve[R any, E any](_ Holder, default_ R, _ ...func(int) lisette.Result[R, E]) lisette.Result[R, E] {
+func HolderResolve[R any, E any](_ Holder, default_ R, _ ...func(int) lisette.Result[R, E]) lisette.Result[R, E] {
 	return lisette.MakeResultOk[R, E](default_)
 }
 
@@ -27,6 +27,6 @@ func main() {
 		}
 		return lisette.MakeResultOk[int, Face](ret)
 	}}
-	rez := Holder_Resolve[int, Face](Holder{}, 0, fns...)
+	rez := HolderResolve[int, Face](Holder{}, 0, fns...)
 	_ = rez
 }

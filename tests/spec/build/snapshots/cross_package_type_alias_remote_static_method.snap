@@ -8,7 +8,7 @@ type Box struct {
 	X int
 }
 
-func Box_New(x int) Box {
+func NewBox(x int) Box {
 	return Box{X: x}
 }
 
@@ -21,6 +21,6 @@ package main
 import "github.com/user/myproject/lib"
 
 func main() {
-	b := lib.Box_New(1)
+	b := lib.NewBox(1)
 	_ = b.X
 }

@@ -28,7 +28,7 @@ type Box[T any] struct {
 	value T
 }
 
-func Box_map[T any, U any](self Box[T], f func(T) U) Box[U] {
+func boxMap[T any, U any](self Box[T], f func(T) U) Box[U] {
 	return Box[U]{value: f(self.value)}
 }
 
@@ -39,7 +39,7 @@ func (b Box[T]) same() Box[T] {
 func run() {
 	b := Box[int]{value: 1}
 	b.same()
-	Box_map(b, func(n int) bool {
+	boxMap(b, func(n int) bool {
 		return n == 1
 	})
 }

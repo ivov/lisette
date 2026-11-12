@@ -7,7 +7,7 @@ package main
 import "github.com/user/myproject/shapes"
 
 func main() {
-	p := shapes.Point_New(3, 4)
+	p := shapes.NewPoint(3, 4)
 	p.SquaredDistance()
 }
 
@@ -20,7 +20,7 @@ type Point struct {
 	Y int
 }
 
-func Point_New(x, y int) Point {
+func NewPoint(x, y int) Point {
 	return Point{
 		X: x,
 		Y: y,

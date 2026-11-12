@@ -9,7 +9,7 @@ type Point struct {
 	Y int
 }
 
-func Point_New(x, y int) Point {
+func NewPoint(x, y int) Point {
 	return Point{
 		X: x,
 		Y: y,
@@ -23,5 +23,5 @@ package main
 import L "github.com/user/myproject/lib"
 
 func main() {
-	L.Point_New(3, 4)
+	L.NewPoint(3, 4)
 }

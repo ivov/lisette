@@ -19,11 +19,11 @@ type Box struct {
 	x int
 }
 
-func Box_new(x int) Box {
+func newBox(x int) Box {
 	return Box{x: x}
 }
 
 func main() {
-	f := Box_new
+	f := newBox
 	f(1)
 }

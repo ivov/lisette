@@ -23,11 +23,11 @@ type Box[T any] struct {
 	item T
 }
 
-func Box_unwrap(self Box[int]) int {
+func boxUnwrap(self Box[int]) int {
 	return self.item
 }
 
 func test() int {
 	b := Box[int]{item: 42}
-	return Box_unwrap(b)
+	return boxUnwrap(b)
 }

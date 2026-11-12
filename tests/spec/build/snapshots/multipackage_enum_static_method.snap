@@ -7,7 +7,7 @@ package main
 import "github.com/user/myproject/shapes"
 
 func main() {
-	c := shapes.Color_Default()
+	c := shapes.ColorDefault()
 	_ = c
 }
 
@@ -39,6 +39,6 @@ type Color struct {
 	Tag ColorTag
 }
 
-func Color_Default() Color {
+func ColorDefault() Color {
 	return MakeColorRed()
 }

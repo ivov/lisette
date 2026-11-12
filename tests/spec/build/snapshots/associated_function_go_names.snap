@@ -1,0 +1,105 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === env/mod.go ===
+package env
+
+type Release struct {
+	Version int
+}
+
+func ReleaseMinimum() Release {
+	return Release{Version: 1}
+}
+
+func NewRelease(version int) Release {
+	return Release{Version: version}
+}
+
+func ReleaseMapVersion[U any](self Release, f func(int) U) U {
+	return f(self.Version)
+}
+
+type Host struct {
+	name string
+}
+
+func hostDetect() Host {
+	return newHost("local")
+}
+
+func newHost(name string) Host {
+	return Host{name: name}
+}
+
+type URLParser struct {
+	base string
+}
+
+func urlParserFromBase(base string) URLParser {
+	return URLParser{base: base}
+}
+
+type G struct{}
+
+func gO() int {
+	return 1
+}
+
+type URL struct{}
+
+func urlX() int {
+	return 2
+}
+
+type İtem struct{}
+
+func İtemDetect() int {
+	return 3
+}
+
+func HostName() string {
+	return hostDetect().name + urlParserFromBase("b").base
+}
+
+type Len struct{}
+
+func len__() int {
+	return 4
+}
+
+type Pub struct{}
+
+func Pub__() int {
+	return 5
+}
+
+type Foo struct{}
+
+func foo__() int {
+	return 6
+}
+
+func foo() int {
+	return 7
+}
+
+func Sum() int {
+	return gO() + urlX() + İtemDetect() + len__() + Pub__() + foo__() + foo()
+}
+
+
+// === main.go ===
+package main
+
+import "github.com/user/myproject/env"
+
+func main() {
+	release := env.NewRelease(2)
+	env.ReleaseMinimum()
+	env.ReleaseMapVersion(release, func(v int) int {
+		return v + 1
+	})
+	env.HostName()
+	env.Sum()
+}

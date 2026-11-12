@@ -91,25 +91,44 @@ pub fn go_test_function_name(fn_name: &str) -> String {
     format!("Test{}", snake_to_camel(fn_name))
 }
 
-pub(crate) fn iterate_variants_fn_name(enum_name: &str, exported: bool) -> String {
-    let method_segment = if exported {
-        snake_to_camel("variants")
+pub(crate) fn associated_function_go_name(
+    type_name: &str,
+    function: &str,
+    exported: bool,
+) -> String {
+    let camel = snake_to_camel(function);
+    let suffix = if camel.is_empty() { function } else { &camel };
+    match (function == "new", exported) {
+        (true, true) => format!("New{type_name}"),
+        (true, false) => format!("new{type_name}"),
+        (false, true) => format!("{type_name}{suffix}"),
+        (false, false) => format!("{}{suffix}", lowercase_first_word(type_name)),
+    }
+}
+
+fn lowercase_first_word(type_name: &str) -> String {
+    let chars: Vec<char> = type_name.chars().collect();
+    let run = chars.iter().take_while(|c| c.is_uppercase()).count();
+    let lowered = if run > 1 && chars.get(run).is_some_and(|c| c.is_lowercase()) {
+        run - 1
     } else {
-        "variants".to_string()
+        run
     };
-    format!("{}_{}", enum_name, method_segment)
+    chars
+        .iter()
+        .enumerate()
+        .map(|(index, &c)| {
+            let mut lower = c.to_lowercase();
+            match (lower.next(), lower.next()) {
+                (Some(single), None) if index < lowered => single,
+                _ => c,
+            }
+        })
+        .collect()
 }
 
 pub(crate) fn go_package_name(package: &str) -> &str {
     package.rsplit('/').next().unwrap_or(package)
-}
-
-pub(crate) fn free_method_part(method: &str, exported: bool) -> String {
-    if exported {
-        snake_to_camel(method)
-    } else {
-        snake_to_lower_camel(method)
-    }
 }
 
 pub(crate) fn fresh_suffixed(base: &str, taken: impl Fn(&str) -> bool) -> String {

@@ -20,7 +20,7 @@ type Pair[A any, B any] struct {
 	b B
 }
 
-func Pair_pick[X any, T any](_ Pair[T, T], x X) X {
+func pairPick[X any, T any](_ Pair[T, T], x X) X {
 	return x
 }
 
@@ -29,5 +29,5 @@ func test() bool {
 		a: 1,
 		b: 2,
 	}
-	return Pair_pick[bool, int](p, true)
+	return pairPick[bool, int](p, true)
 }

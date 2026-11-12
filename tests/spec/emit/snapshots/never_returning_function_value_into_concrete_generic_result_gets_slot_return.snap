@@ -50,7 +50,7 @@ type Box struct {
 	n int
 }
 
-func Box_Run[T any](_ Box, f func() T) T {
+func boxRun[T any](_ Box, f func() T) T {
 	return f()
 }
 
@@ -74,7 +74,7 @@ func ufcs(b Box) int {
 		die()
 		panic("unreachable")
 	}
-	return Box_Run(b, func() int {
+	return boxRun(b, func() int {
 		cb()
 		panic("unreachable")
 	})

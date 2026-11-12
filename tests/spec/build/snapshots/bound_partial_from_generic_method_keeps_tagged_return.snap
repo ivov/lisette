@@ -17,11 +17,11 @@ type Holder[T any] struct {
 	Val T
 }
 
-func Holder_Resolve[T any, R any, E any](self Holder[T], f func(T) lisette.Partial[R, E]) lisette.Partial[R, E] {
+func HolderResolve[T any, R any, E any](self Holder[T], f func(T) lisette.Partial[R, E]) lisette.Partial[R, E] {
 	return f(self.Val)
 }
 
 func main() {
-	rez := Holder_Resolve(Holder[int]{Val: 4}, Fallible)
+	rez := HolderResolve(Holder[int]{Val: 4}, Fallible)
 	_ = rez
 }

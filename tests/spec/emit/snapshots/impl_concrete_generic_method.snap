@@ -50,7 +50,7 @@ type Either[L any, R any] struct {
 	Right R
 }
 
-func Either_describe(self Either[MyInt, MyString]) MyString {
+func eitherDescribe(self Either[MyInt, MyString]) MyString {
 	if self.Tag == EitherLeft {
 		return fmt.Sprintf("int(%d)", self.Left)
 	}

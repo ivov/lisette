@@ -23,7 +23,7 @@ type map_ struct {
 	Tag mapTag
 }
 
-func map_variants() []map_ {
+func mapVariants() []map_ {
 	return []map_{
 		{Tag: mapA},
 		{Tag: mapB},
@@ -31,5 +31,5 @@ func map_variants() []map_ {
 }
 
 func main() {
-	map_variants()
+	mapVariants()
 }

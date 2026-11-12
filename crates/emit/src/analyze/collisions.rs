@@ -249,7 +249,11 @@ impl Planner<'_> {
             .iter()
             .any(|attribute| attribute.name == "iterate")
         {
-            let variants_fn = self.variants_go_name(name, matches!(visibility, Visibility::Public));
+            let variants_fn = go_name::associated_function_go_name(
+                name,
+                "variants",
+                matches!(visibility, Visibility::Public),
+            );
             package_block
                 .entry(variants_fn)
                 .or_default()
@@ -411,8 +415,7 @@ impl Planner<'_> {
                     .push(*name_span);
                 continue;
             } else {
-                let base = self.free_method_base_name(receiver_name, name, is_public);
-                self.free_function_go_name(&base, false)
+                go_name::associated_function_go_name(receiver_name, name, is_public)
             };
             self.check_reserved_prefix(name, name_span, diagnostics);
             self.check_reserved_prefix(&go, name_span, diagnostics);

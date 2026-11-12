@@ -8,7 +8,7 @@ import "github.com/user/myproject/phases"
 
 func main() {
 	total := 0
-	for range phases.BuildPhase_Variants() {
+	for range phases.BuildPhaseVariants() {
 		total++
 	}
 	_ = total
@@ -42,7 +42,7 @@ type BuildPhase struct {
 	Tag BuildPhaseTag
 }
 
-func BuildPhase_Variants() []BuildPhase {
+func BuildPhaseVariants() []BuildPhase {
 	return []BuildPhase{
 		{Tag: BuildPhaseValidate},
 		{Tag: BuildPhaseParse},

@@ -33,7 +33,7 @@ type Pair[A any, B any] struct {
 	b B
 }
 
-func Pair_left[B any](self Pair[User, B]) User {
+func pairLeft[B any](self Pair[User, B]) User {
 	return self.a
 }
 
@@ -42,5 +42,5 @@ func test() string {
 		a: User{name: "x"},
 		b: 1,
 	}
-	return Pair_left(p).name
+	return pairLeft(p).name
 }

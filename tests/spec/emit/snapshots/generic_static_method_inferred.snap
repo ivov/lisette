@@ -21,11 +21,11 @@ type Box[T any] struct {
 	value T
 }
 
-func Box_new[T any](value T) Box[T] {
+func newBox[T any](value T) Box[T] {
 	return Box[T]{value: value}
 }
 
 func main() int {
-	b := Box_new(42)
+	b := newBox(42)
 	return b.value
 }

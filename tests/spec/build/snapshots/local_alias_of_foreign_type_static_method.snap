@@ -9,8 +9,8 @@ import s "github.com/user/myproject/shapes"
 type P = s.Point
 
 func main() {
-	a := s.Point_New(1)
-	f := s.Point_New
+	a := s.NewPoint(1)
+	f := s.NewPoint
 	_ = a.X + f(2).X
 }
 
@@ -22,6 +22,6 @@ type Point struct {
 	X int
 }
 
-func Point_New(x int) Point {
+func NewPoint(x int) Point {
 	return Point{X: x}
 }

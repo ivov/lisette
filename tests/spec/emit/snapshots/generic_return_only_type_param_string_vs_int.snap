@@ -51,7 +51,7 @@ type ValidationResult[T any] struct {
 	fieldName string
 }
 
-func ValidationResult_newInvalid[T any](field, msg string) ValidationResult[T] {
+func validationResultNewInvalid[T any](field, msg string) ValidationResult[T] {
 	return ValidationResult[T]{
 		value:     MakeValidatedInvalid[T](msg),
 		fieldName: field,
@@ -59,9 +59,9 @@ func ValidationResult_newInvalid[T any](field, msg string) ValidationResult[T] {
 }
 
 func validatePositive(field string, _ int) ValidationResult[int] {
-	return ValidationResult_newInvalid[int](field, "must be positive")
+	return validationResultNewInvalid[int](field, "must be positive")
 }
 
 func validateNonEmpty(field, _ string) ValidationResult[string] {
-	return ValidationResult_newInvalid[string](field, "must not be empty")
+	return validationResultNewInvalid[string](field, "must not be empty")
 }

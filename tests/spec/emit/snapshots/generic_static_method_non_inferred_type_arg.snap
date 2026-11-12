@@ -25,7 +25,7 @@ type Container[T any] struct {
 	label string
 }
 
-func Container_new[T any](label string) Container[T] {
+func newContainer[T any](label string) Container[T] {
 	return Container[T]{
 		items: []T{},
 		label: label,
@@ -33,6 +33,6 @@ func Container_new[T any](label string) Container[T] {
 }
 
 func test() string {
-	c := Container_new[int]("numbers")
+	c := newContainer[int]("numbers")
 	return c.label
 }

@@ -9,7 +9,7 @@ type Point struct {
 	Y float64
 }
 
-func Point_New(x, y float64) Point {
+func NewPoint(x, y float64) Point {
 	return Point{
 		X: x,
 		Y: y,
@@ -30,7 +30,7 @@ package main
 import "github.com/user/myproject/geometry"
 
 func main() {
-	p := geometry.Point_New(3.0, 4.0)
+	p := geometry.NewPoint(3.0, 4.0)
 	p2 := p.Translate(1.0, 1.0)
 	_ = p2.X
 }

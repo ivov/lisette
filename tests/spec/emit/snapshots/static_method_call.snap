@@ -22,7 +22,7 @@ type Point struct {
 	y int
 }
 
-func Point_new(x, y int) Point {
+func newPoint(x, y int) Point {
 	return Point{
 		x: x,
 		y: y,
@@ -30,6 +30,6 @@ func Point_new(x, y int) Point {
 }
 
 func main() int {
-	p := Point_new(1, 2)
+	p := newPoint(1, 2)
 	return p.x
 }

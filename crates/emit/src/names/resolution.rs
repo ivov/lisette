@@ -25,11 +25,13 @@ impl Planner<'_> {
         let name = &symbol[package.len() + 1..];
         if let Some((owner, method)) = name.rsplit_once('.') {
             let owner_id = self.peel_alias_id(&format!("{package}.{owner}"));
-            let is_public = self
-                .facts
-                .method(&owner_id, method)
-                .is_some_and(|method| method.visibility.is_public())
-                || self.method_needs_export(method);
+            let is_public = match self.facts.method(&owner_id, method) {
+                Some(method) => method.visibility.is_public(),
+                None => self
+                    .facts
+                    .definition(&format!("{owner_id}.{method}"))
+                    .is_some_and(|definition| definition.visibility.is_public()),
+            };
             let mut expression = self.qualify_method_call(&owner_id, method, is_public);
             if let GoExpressionNode::Identifier(identifier) = expression.node_mut() {
                 *identifier = GoIdentifier::external(identifier.spelling().to_string());
@@ -141,13 +143,11 @@ impl Planner<'_> {
                 ResolvedName::stdlib(format!("{}{}", type_name, go_name::snake_to_camel(method)))
             }
             Some(package) if self.facts.is_foreign_package(package) => ResolvedName::foreign(
-                format!("{}_{}", type_name, go_name::snake_to_camel(method)),
+                go_name::associated_function_go_name(type_name, method, true),
                 self.package_use_for_package(package),
             ),
-            _ => ResolvedName::local(format!(
-                "{}_{}",
-                type_name,
-                go_name::free_method_part(method, is_public)
+            _ => ResolvedName::local(go_name::associated_function_go_name(
+                type_name, method, is_public,
             )),
         };
         resolved.into_expression()

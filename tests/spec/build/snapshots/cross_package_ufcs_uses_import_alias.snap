@@ -8,7 +8,7 @@ type Box[T any] struct {
 	Value T
 }
 
-func Box_Map[T any, U any](self Box[T], f func(T) U) Box[U] {
+func BoxMap[T any, U any](self Box[T], f func(T) U) Box[U] {
 	return Box[U]{Value: f(self.Value)}
 }
 
@@ -24,7 +24,7 @@ import (
 
 func main() {
 	b := L.Box[int]{Value: 1}
-	c := L.Box_Map(b, func(x int) int {
+	c := L.BoxMap(b, func(x int) int {
 		return x + 1
 	})
 	fmt.Println(c.Value)

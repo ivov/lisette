@@ -284,7 +284,7 @@ impl Planner<'_> {
         &mut self,
         function_definition: FunctionDefinitionView<'_>,
         receiver_ty: Option<&Type>,
-        is_public: bool,
+        go_name: &str,
         free_function_owner: Option<&Type>,
     ) -> String {
         if function_definition.body.is_none() {
@@ -339,9 +339,7 @@ impl Planner<'_> {
             parts.push(self.emit_receiver_part(params_to_process, self_param));
         }
 
-        let go_name =
-            self.pick_go_function_name(function_definition, receiver_ty.is_some(), is_public);
-        parts.push(go_name.clone());
+        parts.push(go_name.to_string());
 
         let generics_str = self.resolved_generics_to_string(&signature_generics);
         if !generics_str.is_empty() {
@@ -387,7 +385,7 @@ impl Planner<'_> {
         {
             let twin = self.emit_tagged_twin(
                 function_definition,
-                &go_name,
+                go_name,
                 &generic_context[..signature_generics_start],
             );
             function.push_str("\n\n");

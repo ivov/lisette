@@ -20,7 +20,7 @@ type Pair[A any, B any] struct {
 	b B
 }
 
-func Pair_tag[T any, U any](_ Pair[T, T]) int {
+func pairTag[T any, U any](_ Pair[T, T]) int {
 	return 1
 }
 
@@ -29,5 +29,5 @@ func test() int {
 		a: 1,
 		b: 2,
 	}
-	return Pair_tag[int, string](p)
+	return pairTag[int, string](p)
 }

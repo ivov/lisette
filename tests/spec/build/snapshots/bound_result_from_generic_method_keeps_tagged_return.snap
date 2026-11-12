@@ -17,12 +17,12 @@ type Holder struct {
 	N int
 }
 
-func Holder_Resolve[R any, E any](self Holder, f func(int) lisette.Result[R, E]) lisette.Result[R, E] {
+func HolderResolve[R any, E any](self Holder, f func(int) lisette.Result[R, E]) lisette.Result[R, E] {
 	return f(self.N)
 }
 
 func main() {
-	rez := Holder_Resolve(Holder{N: 4}, func(arg0 int) lisette.Result[int, Face] {
+	rez := HolderResolve(Holder{N: 4}, func(arg0 int) lisette.Result[int, Face] {
 		ret, ret2 := Resultant(arg0)
 		if ret2 != nil {
 			return lisette.MakeResultErr[int, Face](ret2)

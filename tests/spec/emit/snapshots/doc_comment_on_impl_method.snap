@@ -18,6 +18,6 @@ type Counter struct {
 }
 
 // Creates a new counter starting at zero.
-func Counter_new() Counter {
+func newCounter() Counter {
 	return Counter{count: 0}
 }
