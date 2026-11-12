@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Wrong argument count
+   ╭─[test.lis:5:11]
+ 4 │ fn main() {
+ 5 │   let a = Ok(7, "tail")
+   ·           ──────┬──────
+   ·                 ╰── expected `(int)`, found `(int, string)`
+ 6 │   let _ = a
+   ╰────
+  help: This constructor expects 1 argument but received 2 arguments. Did you mean `DecodeResult.Ok`? · code: [infer.arg_count_mismatch]

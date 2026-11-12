@@ -35,8 +35,9 @@ impl InferCtx<'_> {
             if !ptr::eq(inner, &*expression)
                 && let Some(path) = inner.as_dotted_path()
                 && inner.root_identifier().is_some_and(|root| {
-                    self.lookup_qualified_name(store, root).is_some()
-                        || self.imports.namespace(root).is_some()
+                    self.scopes.lookup_binding_id(root).is_none()
+                        && (self.lookup_qualified_name(store, root).is_some()
+                            || self.imports.namespace(root).is_some())
                 })
             {
                 self.sink.push(diagnostics::infer::parenthesized_qualifier(

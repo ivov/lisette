@@ -44,7 +44,7 @@ pub fn topological_sort(edges: &DependencyGraph) -> (Vec<PackageId>, Vec<Cycle>)
         }
     }
 
-    let cycles = if order.len() < edges.len() {
+    let cycles = if order.len() < in_degree.len() {
         find_cycles(edges, &order)
     } else {
         vec![]

@@ -258,7 +258,7 @@ impl InferCtx<'_> {
             consequence_ty
         };
 
-        let new_condition = self.infer_condition(*condition, &span);
+        let new_condition = self.infer_condition(*condition);
         if let Some(span) = Self::find_propagate(&new_condition) {
             self.sink
                 .push(diagnostics::infer::propagate_in_condition(span));
@@ -408,9 +408,7 @@ impl InferCtx<'_> {
                     let pattern_ty = subject_ty.resolve_in(&this.env);
                     let new_pattern = this.infer_pattern(a.pattern, pattern_ty, arm_kind);
 
-                    let new_guard = a
-                        .guard
-                        .map(|guard| Box::new(this.infer_condition(*guard, &span)));
+                    let new_guard = a.guard.map(|guard| Box::new(this.infer_condition(*guard)));
 
                     let independent_ty;
                     let arm_expected = if arms_independent || needs_reconciliation {

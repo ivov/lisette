@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Variant not found
+   ╭─[test.lis:4:10]
+ 3 │ fn g(s: Shape) -> int {
+ 4 │   if let Rect { w, h } = s { return w * h }
+   ·          ──┬─
+   ·            ╰── bare variants work only in match arms
+ 5 │   0
+   ╰────
+  help: Use `Shape.Rect` to match this variant · code: [resolve.variant_not_found]

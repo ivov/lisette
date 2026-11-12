@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing write permission
+   ╭─[test.lis:7:16]
+ 6 │   let p = (a, b)
+ 7 │   let _ = take(p)
+   ·                ┬
+   ·                ╰── expected `(mut Slice<int>, mut Slice<int>)`, found `(Slice<int>, Slice<int>)`
+ 8 │ }
+   ╰────
+  help: `(mut Slice<int>, mut Slice<int>)` and `(Slice<int>, Slice<int>)` differ in a nested `mut`. A container is invariant in its element, so the element permission must match exactly · code: [infer.needs_writable]

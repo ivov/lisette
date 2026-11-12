@@ -253,9 +253,17 @@ impl InferCtx<'_> {
                 // Compound type arguments are invariant (same rule as generic
                 // user types). Track depth so that interface coercion is
                 // rejected inside generic positions.
-                let expected_writable = self.check_qualifier(*w1, *w2)?;
                 let a1 = a1.clone();
                 let a2 = a2.clone();
+                let expected_writable = match self.check_qualifier(*w1, *w2) {
+                    Ok(expected_writable) => expected_writable,
+                    Err(error) => {
+                        let _ = self.in_invariant_position(|this| {
+                            this.unify_pairs(a1.iter().zip(a2.iter()), span)
+                        });
+                        return Err(error);
+                    }
+                };
                 self.in_invariant_position(|this| {
                     this.in_qualifier_invariant(expected_writable, |this| {
                         this.unify_pairs(a1.iter().zip(a2.iter()), span)
@@ -551,6 +559,11 @@ impl InferCtx<'_> {
                 .into_iter()
                 .next()
                 .expect("single-element vec has first element"))
+        } else if errors
+            .iter()
+            .all(|error| *error == UnifyError::QualifierMismatch)
+        {
+            Err(UnifyError::QualifierMismatch)
         } else {
             Err(UnifyError::Multiple(Box::new(errors)))
         }
@@ -599,6 +612,9 @@ impl InferCtx<'_> {
             (Ok(()), Ok(())) => Ok(()),
             (Err(e1), Ok(())) => Err(e1),
             (Ok(()), Err(e2)) => Err(e2),
+            (Err(UnifyError::QualifierMismatch), Err(UnifyError::QualifierMismatch)) => {
+                Err(UnifyError::QualifierMismatch)
+            }
             (Err(e1), Err(e2)) => Err(UnifyError::Multiple(Box::new(vec![e1, e2]))),
         }
     }
@@ -677,8 +693,13 @@ impl InferCtx<'_> {
                 .with_span_label(span, "infinite type detected here"),
 
             UnifyError::ArityMismatch => {
+                let (differing_expected, differing_actual) =
+                    arity_difference(expected, actual).unwrap_or((expected, actual));
+                let is_nested = differing_expected != expected;
+
                 if let (Some(expected_len), Some(actual_len)) =
-                    (expected.array_len(), actual.array_len())
+                    (differing_expected.array_len(), differing_actual.array_len())
+                    && !is_nested
                 {
                     return diagnostics::infer::array_length_mismatch(
                         expected_len,
@@ -687,32 +708,63 @@ impl InferCtx<'_> {
                     );
                 }
 
-                if let (Some(expected_arity), Some(actual_arity)) =
-                    (expected.tuple_arity(), actual.tuple_arity())
-                {
-                    return LisetteDiagnostic::error("Tuple arity mismatch")
-                        .with_infer_code("tuple_element_count_mismatch")
+                if let (Some(expected_arity), Some(actual_arity)) = (
+                    differing_expected.tuple_arity(),
+                    differing_actual.tuple_arity(),
+                ) {
+                    let element_word =
+                        |count: usize| if count == 1 { "element" } else { "elements" };
+                    if !is_nested {
+                        return LisetteDiagnostic::error("Tuple arity mismatch")
+                            .with_infer_code("tuple_element_count_mismatch")
+                            .with_span_label(
+                                span,
+                                format!(
+                                    "expected {} {}, found {} {}",
+                                    expected_arity,
+                                    element_word(expected_arity),
+                                    actual_arity,
+                                    element_word(actual_arity)
+                                ),
+                            )
+                            .with_help(format!(
+                                "Give the tuple {} {}",
+                                expected_arity,
+                                element_word(expected_arity)
+                            ));
+                    }
+                    let (expected_name, actual_name) = Type::stringify_pair(expected, actual);
+                    return LisetteDiagnostic::error("Type mismatch")
+                        .with_infer_code("type_mismatch")
                         .with_span_label(
                             span,
-                            format!(
-                                "expected {} elements, found {} elements",
-                                expected_arity, actual_arity
-                            ),
+                            format!("expected `{}`, found `{}`", expected_name, actual_name),
                         )
-                        .with_help(
-                            "Adjust the pattern to match the number of elements in the tuple.",
-                        );
+                        .with_help(format!(
+                            "The tuples must have the same number of elements: expected {} {}, found {}",
+                            expected_arity,
+                            element_word(expected_arity),
+                            actual_arity
+                        ));
                 }
 
                 let (expected_name, actual_name) = Type::stringify_pair(expected, actual);
-
-                LisetteDiagnostic::error("Type mismatch")
+                let diagnostic = LisetteDiagnostic::error("Type mismatch")
                     .with_infer_code("type_mismatch")
                     .with_span_label(
                         span,
                         format!("expected `{}`, found `{}`", expected_name, actual_name),
-                    )
-                    .with_help("The function types must have the same number of parameters")
+                    );
+                if let (Some(expected_len), Some(actual_len)) =
+                    (differing_expected.array_len(), differing_actual.array_len())
+                {
+                    diagnostic.with_help(format!(
+                        "The arrays must have the same length: expected {expected_len}, found {actual_len}"
+                    ))
+                } else {
+                    diagnostic
+                        .with_help("The function types must have the same number of parameters")
+                }
             }
 
             UnifyError::QualifierMismatch => {
@@ -726,6 +778,10 @@ impl InferCtx<'_> {
                         actual.is_ref(),
                         components,
                     );
+                }
+                if let Some(diagnostic) = self.read_only_generic_argument(span, &concrete_expected)
+                {
+                    return diagnostic;
                 }
                 let diagnostic = LisetteDiagnostic::error("Missing write permission")
                     .with_infer_code("needs_writable")
@@ -789,6 +845,46 @@ impl InferCtx<'_> {
                 unreachable!("AlreadyReported should be filtered before creating diagnostic")
             }
         }
+    }
+
+    fn read_only_generic_argument(
+        &self,
+        span: &Span,
+        expected: &Type,
+    ) -> Option<LisetteDiagnostic> {
+        let expectation = self.expectation_at(span)?;
+        let ExpectationRole::CallArgument {
+            callee_label,
+            parameter_name: Some(parameter_name),
+            ..
+        } = &expectation.role
+        else {
+            return None;
+        };
+        let read_only_container = matches!(
+            expected,
+            Type::Compound {
+                writable: false,
+                ..
+            }
+        );
+        if !read_only_container || !contains_type_variable(&expectation.expected_ty) {
+            return None;
+        }
+        let remedy = if callee_label == "`Map.from()`" {
+            "Create the map with `Map.new()` and assign each entry with an index write"
+        } else {
+            "Create the value with a function that takes writable input, or fill it in place after creating it"
+        };
+        Some(
+            LisetteDiagnostic::error("Missing write permission")
+                .with_infer_code("needs_writable")
+                .with_span_label(span, format!("`{parameter_name}` is read-only"))
+                .with_help(format!(
+                    "{callee_label} takes `{parameter_name}` as read-only, so it cannot build a \
+                     result with writable contents. {remedy}"
+                )),
+        )
     }
 
     fn site_expectation(&self, span: &Span, expected_resolved: &Type) -> Option<&Expectation> {
@@ -1156,4 +1252,25 @@ fn simple_kinds_are_go_aliases(a: SimpleKind, b: SimpleKind) -> bool {
 pub(super) enum BoundSite<'a> {
     Call { callee_name: Option<&'a str> },
     FunctionValue,
+}
+
+fn arity_difference<'a>(expected: &'a Type, actual: &'a Type) -> Option<(&'a Type, &'a Type)> {
+    let differs = match (expected, actual) {
+        (Type::Tuple(a), Type::Tuple(b)) => a.len() != b.len(),
+        (Type::Array { length: a, .. }, Type::Array { length: b, .. }) => a != b,
+        (Function(a), Function(b)) => a.params.len() != b.params.len(),
+        _ => false,
+    };
+    if differs {
+        return Some((expected, actual));
+    }
+    expected
+        .children()
+        .into_iter()
+        .zip(actual.children())
+        .find_map(|(e, a)| arity_difference(e, a))
+}
+
+fn contains_type_variable(ty: &Type) -> bool {
+    matches!(ty, Type::Var { .. }) || ty.children().into_iter().any(contains_type_variable)
 }

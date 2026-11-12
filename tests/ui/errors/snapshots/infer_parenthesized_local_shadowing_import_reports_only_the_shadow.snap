@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Name shadows import
+   ╭─[test.lis:5:7]
+ 4 │ fn main() {
+ 5 │   let strings = "abc"
+   ·       ───┬───
+   ·          ╰── conflicts with `go:strings`
+ 6 │   let n = (strings).length()
+   ╰────
+  help: `strings` shadows the package alias `go:strings`. Rename `strings` or re-alias the package, e.g. `import strings_pkg "go:strings"` · code: [resolve.name_shadows_import]

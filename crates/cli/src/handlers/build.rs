@@ -414,6 +414,7 @@ pub(super) fn build_locked(
     clear_stamps_from_another_target(prep)?;
     let locator = workspace_locator(prep);
     let entry = EntryPoint::resolve(prep)?;
+    warn_ignored_go_sources(&prep.project_path);
 
     let result = compile_project(prep, mode, &entry, &locator);
     let counts = render_diagnostics(&result);
@@ -441,6 +442,43 @@ pub(super) fn build_locked(
         sources: result.sources,
         sourcemap_base: result.sourcemap_base,
     })
+}
+
+fn warn_ignored_go_sources(project_path: &Path) {
+    let source_root = project_path.join("src");
+    let mut ignored = Vec::new();
+    collect_go_sources(&source_root, &mut ignored);
+    ignored.sort();
+    let Some(first) = ignored.first() else {
+        return;
+    };
+    let shown = first
+        .strip_prefix(project_path)
+        .unwrap_or(first)
+        .display()
+        .to_string();
+    let subject = match ignored.len() {
+        1 => format!("`{shown}` is ignored"),
+        count => format!("`{shown}` and {} other `.go` files are ignored", count - 1),
+    };
+    print_warning(&format!(
+        "{subject}. Lisette compiles only `.lis` files in `src/`. \
+         To use Go code, put it in a separate Go module and add it with `lis add --path <dir>`"
+    ));
+}
+
+fn collect_go_sources(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if entry.file_type().is_ok_and(|file_type| file_type.is_dir()) {
+            collect_go_sources(&path, out);
+        } else if path.extension().is_some_and(|extension| extension == "go") {
+            out.push(path);
+        }
+    }
 }
 
 enum EntryPoint {
