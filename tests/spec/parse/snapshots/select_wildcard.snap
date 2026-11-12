@@ -31,6 +31,11 @@ description: |
                     Select {
                         arms: [
                             WildCard {
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 28,
+                                    byte_length: 1,
+                                },
                                 body: Call {
                                     expression: Identifier {
                                         value: "print",

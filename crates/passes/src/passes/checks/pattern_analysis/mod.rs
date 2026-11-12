@@ -311,7 +311,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
                             check(&match_arm.expression, ctx);
                         }
                     }
-                    SelectArm::WildCard { body } => {
+                    SelectArm::WildCard { body, .. } => {
                         check(body.as_ref(), ctx);
                     }
                 }

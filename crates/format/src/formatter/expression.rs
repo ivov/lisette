@@ -1040,7 +1040,7 @@ impl<'a> Formatter<'a> {
             SelectArm::MatchReceive {
                 receive_expression, ..
             } => receive_expression.get_span().byte_offset,
-            SelectArm::WildCard { body } => body.get_span().byte_offset,
+            SelectArm::WildCard { body, .. } => body.get_span().byte_offset,
         }
     }
 
@@ -1084,7 +1084,7 @@ impl<'a> Formatter<'a> {
                 let body = self.join_sibling_body(entries, body_end);
                 Self::braced_body(header, body).append(",")
             }
-            SelectArm::WildCard { body } => Document::str("_")
+            SelectArm::WildCard { body, .. } => Document::str("_")
                 .append(" => ")
                 .append(self.expression(body))
                 .append(","),

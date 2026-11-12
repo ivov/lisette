@@ -201,7 +201,7 @@ fn visit_expression(
                         );
                         visit_match_arms(arms, tail_use, package_id, store, facts);
                     }
-                    SelectArm::WildCard { body } => {
+                    SelectArm::WildCard { body, .. } => {
                         visit_expression(body, tail_use, package_id, store, facts);
                     }
                 }
@@ -477,7 +477,7 @@ fn descend_discarded(
                 match arm {
                     SelectArm::Receive { body, .. }
                     | SelectArm::Send { body, .. }
-                    | SelectArm::WildCard { body } => {
+                    | SelectArm::WildCard { body, .. } => {
                         descend_discarded(body, mode, package_id, store, facts);
                     }
                     SelectArm::MatchReceive {

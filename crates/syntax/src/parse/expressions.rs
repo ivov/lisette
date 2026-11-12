@@ -1656,10 +1656,11 @@ impl<'source> Parser<'source> {
                 }
             }
             Identifier if self.current_token().text == "_" => {
+                let span = self.span_from_token(self.current_token());
                 self.next();
                 self.ensure(ArrowDouble);
                 let body = Box::new(self.parse_expression());
-                SelectArm::WildCard { body }
+                SelectArm::WildCard { span, body }
             }
             _ => {
                 let send_expression = Box::new(self.parse_expression());

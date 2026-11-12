@@ -12,7 +12,7 @@ fn select_arm_body_span(pattern: &SelectArm) -> Span {
     match pattern {
         SelectArm::Receive { body, .. }
         | SelectArm::Send { body, .. }
-        | SelectArm::WildCard { body } => body.get_span(),
+        | SelectArm::WildCard { body, .. } => body.get_span(),
         SelectArm::MatchReceive {
             receive_expression, ..
         } => receive_expression.get_span(),
@@ -100,8 +100,8 @@ impl InferCtx<'_> {
                             value_position,
                         ),
 
-                        SelectArm::WildCard { body } => {
-                            this.infer_select_wildcard(body, arm_target)
+                        SelectArm::WildCard { span, body } => {
+                            this.infer_select_wildcard(span, body, arm_target)
                         }
                     };
 
@@ -346,9 +346,15 @@ impl InferCtx<'_> {
         }
     }
 
-    fn infer_select_wildcard(&mut self, body: Box<Expression>, result_ty: &Type) -> SelectArm {
+    fn infer_select_wildcard(
+        &mut self,
+        span: Span,
+        body: Box<Expression>,
+        result_ty: &Type,
+    ) -> SelectArm {
         let new_body = self.infer_root_expression(*body, result_ty);
         SelectArm::WildCard {
+            span,
             body: Box::new(new_body),
         }
     }

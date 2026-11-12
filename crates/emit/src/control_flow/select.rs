@@ -214,7 +214,7 @@ impl Planner<'_> {
                         element_ty: receive_expression.get_type().ok_type(),
                     }
                 }
-                SelectArm::WildCard { body } => PreparedSelectArm::Default { body },
+                SelectArm::WildCard { body, .. } => PreparedSelectArm::Default { body },
             };
             prepared.push(prepared_arm);
         }

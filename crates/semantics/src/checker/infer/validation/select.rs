@@ -162,7 +162,7 @@ impl InferCtx<'_> {
         let mut first_default_span: Option<Span> = None;
 
         for arm in arms {
-            if let SelectArm::WildCard { body } = arm {
+            if let SelectArm::WildCard { body, .. } = arm {
                 if let Some(first_span) = first_default_span {
                     self.sink.push(diagnostics::infer::duplicate_select_default(
                         first_span,

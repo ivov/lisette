@@ -318,6 +318,7 @@ pub enum SelectArm {
         arms: Vec<MatchArm>,
     },
     WildCard {
+        span: Span,
         body: Box<Expression>,
     },
 }
@@ -1798,7 +1799,7 @@ impl Expression {
                 SelectArm::MatchReceive { arms, .. } => {
                     arms.iter().any(|a| a.expression.contains_break())
                 }
-                SelectArm::WildCard { body } => body.contains_break(),
+                SelectArm::WildCard { body, .. } => body.contains_break(),
             }),
 
             Expression::Cast { expression, .. } => expression.contains_break(),
@@ -2043,7 +2044,7 @@ impl Expression {
                                 c.push(&ma.expression);
                             }
                         }
-                        SelectArm::WildCard { body } => {
+                        SelectArm::WildCard { body, .. } => {
                             c.push(body.as_ref());
                         }
                     }

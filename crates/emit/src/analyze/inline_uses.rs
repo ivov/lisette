@@ -230,7 +230,7 @@ impl<'a> Walker<'a> {
                     self.walk(&arm.expression, role);
                 }
             }
-            SelectArm::WildCard { body } => {
+            SelectArm::WildCard { body, .. } => {
                 self.walk(body, AccessRole::Capture);
             }
         }
