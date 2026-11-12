@@ -10,7 +10,7 @@ pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
 fn visit_expression(expression: &Expression, in_loop: bool, sink: &LocalSink) {
     if in_loop && let Expression::Select { arms, .. } = expression {
         for arm in arms {
-            if let SelectArm::WildCard { body } = arm
+            if let SelectArm::WildCard { body, .. } = arm
                 && is_empty_body(body)
             {
                 sink.push(diagnostics::infer::empty_select_default(&body.get_span()));

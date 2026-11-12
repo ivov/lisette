@@ -355,7 +355,7 @@ impl<'a> FreezeFolder<'a> {
                     }
                 }
             }
-            SelectArm::WildCard { body } => {
+            SelectArm::WildCard { body, .. } => {
                 self.freeze_expr(body.as_mut());
             }
         }

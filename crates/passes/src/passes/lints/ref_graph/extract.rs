@@ -546,7 +546,7 @@ fn walk_select(
                     walk_expression(package, &match_arm.expression, graph, alias_map, ctx);
                 }
             }
-            SelectArm::WildCard { body } => {
+            SelectArm::WildCard { body, .. } => {
                 walk_expression(package, body, graph, alias_map, ctx);
             }
         }
