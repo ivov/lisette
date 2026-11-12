@@ -44,7 +44,7 @@ pub(super) fn struct_field_names(
 }
 
 pub(super) fn is_float_operand(store: &Store, expression: &Expression) -> bool {
-    let resolved = store.deep_resolve_alias(&expression.get_type());
+    let resolved = store.peel_alias(&expression.get_type());
     store
         .underlying_simple_kind(&resolved)
         .is_some_and(SimpleKind::is_float)

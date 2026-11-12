@@ -542,6 +542,13 @@ pub struct StructFieldPattern {
     pub value: Pattern,
 }
 
+impl StructFieldPattern {
+    /// Whether this field binds its own name without a separate value pattern.
+    pub fn is_shorthand(&self) -> bool {
+        matches!(&self.value, Pattern::Identifier { identifier, .. } if identifier == &self.name)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct FunctionDefinitionView<'a> {
     pub name: &'a EcoString,
@@ -2442,6 +2449,23 @@ pub enum Literal {
     FormatString(Vec<FormatStringPart>),
     Char(String),
     Slice(Vec<Expression>),
+}
+
+impl Literal {
+    /// Render a literal for diagnostics, abbreviating collections and format strings.
+    pub fn diagnostic_text(&self) -> String {
+        match self {
+            Literal::Integer { text, value } => text.as_ref().unwrap_or(&value.to_string()).clone(),
+            Literal::Float { text, value } => text.as_ref().unwrap_or(&value.to_string()).clone(),
+            Literal::Imaginary(v) => format!("{}i", v),
+            Literal::Boolean(b) => b.to_string(),
+            Literal::String { value, raw: true } => format!("r\"{}\"", value),
+            Literal::String { value, raw: false } => format!("\"{}\"", value),
+            Literal::Char(c) => format!("'{}'", c),
+            Literal::FormatString(_) => "f\"...\"".to_string(),
+            Literal::Slice(_) => "[...]".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

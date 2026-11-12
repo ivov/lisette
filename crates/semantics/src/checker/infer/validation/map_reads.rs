@@ -4,7 +4,6 @@ use syntax::ast::{Expression, Span};
 use syntax::program::DefinitionBody;
 use syntax::types::{CompoundKind, Type};
 
-use crate::checker::EnvResolve;
 use crate::checker::infer::InferCtx;
 use crate::zero::{self, MapZero, NoZeroReason};
 
@@ -101,7 +100,7 @@ impl InferCtx<'_> {
         bounds: &[(EcoString, Vec<Type>)],
     ) {
         let store = self.store;
-        let collection_ty = store.peel_alias(&collection.get_type().resolve_in(&self.env));
+        let collection_ty = self.peel_resolved(&collection.get_type());
         let Some((CompoundKind::Map, args)) = collection_ty.as_compound() else {
             return;
         };

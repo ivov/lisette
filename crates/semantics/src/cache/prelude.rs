@@ -74,17 +74,15 @@ pub(crate) fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
     // Register the prelude file for file_id → package_id mapping (needed by diagnostics).
     // Items are empty since we're loading definitions from cache.
     use syntax::program::File;
-    store.store_file(File {
-        id: PRELUDE_FILE_ID,
-        package_id: PRELUDE_PACKAGE_ID.to_string(),
-        parse_status: syntax::FileParseStatus::Clean,
-        name: "prelude.d.lis".to_string(),
-        display_path: "prelude.d.lis".to_string(),
-        source_path: deps::prelude_typedef_path(),
-        source: stdlib::LIS_PRELUDE_SOURCE.to_string(),
-        items: vec![],
-        file_comment: None,
-    });
+    let mut file = File::new_cached(
+        PRELUDE_PACKAGE_ID,
+        "prelude.d.lis",
+        "prelude.d.lis",
+        stdlib::LIS_PRELUDE_SOURCE,
+        PRELUDE_FILE_ID,
+    );
+    file.source_path = deps::prelude_typedef_path();
+    store.store_file(file);
 
     let file_ids: &[u32] = &[PRELUDE_FILE_ID];
     let package = store

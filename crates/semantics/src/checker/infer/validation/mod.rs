@@ -6,4 +6,5 @@ mod numeric;
 mod references;
 mod select;
 
+pub(super) use control_flow::LoopExit;
 pub(crate) use references::always_fails;

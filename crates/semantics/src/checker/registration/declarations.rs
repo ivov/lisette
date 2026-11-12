@@ -57,13 +57,7 @@ impl TaskState {
     ) {
         let package_id = self.cursor.package_id().to_string();
         self.register_type_names(store, items, visibility);
-        self.register_constants(store, items, visibility);
-        self.register_type_definitions(store, items);
-        normalize_registered_component_types(store, &package_id);
-        self.derive_enum_constructor_values(store, items);
-        self.check_type_generic_bounds(store, items);
-        self.register_impl_blocks(store, items);
-        self.register_non_const_values(store, items, visibility);
+        self.register_declarations(store, RegistrationTarget::Current { items, visibility });
         self.register_item_derived_attributes(store, items);
         self.validate_package_embeds(store, &package_id);
         self.check_package_recursive_types(store, &package_id);
@@ -175,7 +169,7 @@ impl TaskState {
                 Visibility::Local => Visibility::Local,
                 // A Go unexported type stays package-private even in a typedef,
                 // mirroring Go's lexical export rule.
-                _ if has_unexported_attribute(attributes) => Visibility::Private,
+                _ if has_go_flag(attributes, "unexported") => Visibility::Private,
                 _ => {
                     if syntactic_visibility == SyntacticVisibility::Public || is_typedef {
                         Visibility::Public
@@ -242,15 +236,6 @@ impl TaskState {
                 _ => {}
             }
         }
-    }
-
-    pub(crate) fn register_type_definitions(
-        &mut self,
-        store: &mut Store,
-        items: &mut [Expression],
-    ) {
-        self.register_type_aliases(store, items);
-        self.register_type_bodies(store, items);
     }
 
     fn reject_reserved_type_names(&mut self, items: &[Expression]) {

@@ -213,7 +213,7 @@ impl InferCtx<'_> {
             && !is_go_method
             && (matches!(deref_ty, Type::Nominal { id, .. }
                     if self.store.is_ufcs_method(id.as_str(), args.member_name))
-                || matches!(store.deep_resolve_alias(deref_ty), Type::Nominal { id, .. }
+                || matches!(store.peel_alias(deref_ty), Type::Nominal { id, .. }
                     if self.store.is_ufcs_method(id.as_str(), args.member_name))
                 || matches!(method_ty, Type::Forall { vars, .. }
                     if vars.len() > self.get_receiver_generics_count(deref_ty)))
@@ -250,7 +250,7 @@ impl InferCtx<'_> {
             }
         }
 
-        let resolved = store.deep_resolve_alias(receiver_type);
+        let resolved = store.peel_alias(receiver_type);
         let owner = match resolved.strip_refs() {
             Type::Nominal { id, .. } => id,
             Type::Simple(kind) => Symbol::from_parts("prelude", kind.leaf_name()),

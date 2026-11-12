@@ -1,6 +1,5 @@
 use super::*;
 use syntax::ParseError;
-use syntax::ast::Expression;
 
 pub(super) struct EntryRegistration {
     filename: Option<String>,
@@ -17,13 +16,6 @@ impl EntryRegistration {
     }
 }
 
-struct ParsedEntry {
-    ast: Vec<Expression>,
-    file_comment: Option<String>,
-    status: FileParseStatus,
-    errors: Vec<ParseError>,
-}
-
 /// Parses and registers the entry file (`main.lis`, or the library root).
 pub(super) fn register_entry_file(
     store: &mut Store,
@@ -38,14 +30,9 @@ pub(super) fn register_entry_file(
         };
     };
 
-    let ParsedEntry {
-        ast,
-        file_comment,
-        status,
-        errors,
-    } = parse_entry_file(&entry.source, entry.parse_mode);
+    let result = entry.parse_mode.parse(&entry.source, ENTRY_FILE_ID);
 
-    if status != FileParseStatus::Failed {
+    if result.status != FileParseStatus::Failed {
         if entry.filename.ends_with("_test.lis") {
             sink.push(diagnostics::package_graph::wrong_test_file_suffix(
                 &entry.display_path,
@@ -57,34 +44,19 @@ pub(super) fn register_entry_file(
         }
     }
 
-    store.store_file(File {
-        id: ENTRY_FILE_ID,
-        package_id: ENTRY_PACKAGE_ID.to_string(),
-        parse_status: status,
-        name: entry.filename.clone(),
-        display_path: entry.display_path,
-        source_path: None,
-        source: entry.source,
-        items: ast,
-        file_comment,
-    });
+    let (file, errors) = File::from_parse(
+        ENTRY_FILE_ID,
+        ENTRY_PACKAGE_ID,
+        entry.filename.clone(),
+        entry.display_path,
+        entry.source,
+        result,
+    );
+    store.store_file(file);
 
     EntryRegistration {
         filename: Some(entry.filename),
         errors,
-    }
-}
-
-fn parse_entry_file(source: &str, mode: EntryParseMode) -> ParsedEntry {
-    let result = match mode {
-        EntryParseMode::Strict => syntax::build_ast(source, ENTRY_FILE_ID),
-        EntryParseMode::Recover => syntax::build_ast_recovering(source, ENTRY_FILE_ID),
-    };
-    ParsedEntry {
-        ast: result.ast,
-        file_comment: result.file_comment,
-        status: result.status,
-        errors: result.errors,
     }
 }
 
@@ -95,7 +67,7 @@ pub(super) fn load_sibling_files(
     loader: &dyn Loader,
     entry_filename: Option<&str>,
     include_tests: bool,
-    recover: bool,
+    mode: ParseMode,
 ) {
     for (filename, content) in loader.scan_folder(ENTRY_PACKAGE_ID) {
         if Some(filename.as_str()) == entry_filename {
@@ -114,23 +86,17 @@ pub(super) fn load_sibling_files(
             continue;
         }
         let file_id = store.new_file_id();
-        let result = if recover {
-            syntax::build_ast_recovering(&content.source, file_id)
-        } else {
-            syntax::build_ast(&content.source, file_id)
-        };
-        sink.extend_parse_errors(result.errors);
-        store.store_file(File {
-            id: file_id,
-            package_id: ENTRY_PACKAGE_ID.to_string(),
-            parse_status: result.status,
-            name: filename,
-            display_path: content.display_path,
-            source_path: None,
-            source: content.source,
-            items: result.ast,
-            file_comment: result.file_comment,
-        });
+        let result = mode.parse(&content.source, file_id);
+        let (file, errors) = File::from_parse(
+            file_id,
+            ENTRY_PACKAGE_ID,
+            filename,
+            content.display_path,
+            content.source,
+            result,
+        );
+        sink.extend_parse_errors(errors);
+        store.store_file(file);
     }
 }
 
@@ -203,21 +169,21 @@ mod tests {
 
     #[test]
     fn strict_entry_parsing_rejects_partial_ast() {
-        let parsed = parse_entry_file("fn valid() {}\nfn incomplete(", EntryParseMode::Strict);
+        let parsed = ParseMode::Strict.parse("fn valid() {}\nfn incomplete(", ENTRY_FILE_ID);
 
         assert!(parsed.ast.is_empty() && parsed.status == FileParseStatus::Failed);
     }
 
     #[test]
     fn recovering_entry_parsing_keeps_partial_ast() {
-        let parsed = parse_entry_file("fn valid() {}\nfn incomplete(", EntryParseMode::Recover);
+        let parsed = ParseMode::Recover.parse("fn valid() {}\nfn incomplete(", ENTRY_FILE_ID);
 
         assert!(!parsed.ast.is_empty() && parsed.status == FileParseStatus::Recovered);
     }
 
     #[test]
     fn recovering_entry_parsing_still_rejects_lex_errors() {
-        let parsed = parse_entry_file("fn main() { \"unterminated }", EntryParseMode::Recover);
+        let parsed = ParseMode::Recover.parse("fn main() { \"unterminated }", ENTRY_FILE_ID);
 
         assert!(
             parsed.status == FileParseStatus::Failed

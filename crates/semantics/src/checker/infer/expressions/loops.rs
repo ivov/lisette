@@ -7,6 +7,7 @@ use syntax::ast::{Binding, BindingId, Expression, Pattern, Span};
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
+use crate::checker::infer::validation::LoopExit;
 
 fn collect_nested_loop_and_lambda_spans(
     expression: &Expression,
@@ -64,7 +65,7 @@ impl InferCtx<'_> {
         let loop_type = if new_body.contains_break() {
             break_ty.clone()
         } else {
-            self.type_never()
+            Type::Never
         };
 
         if !expected_ty.is_ignored() {
@@ -152,7 +153,7 @@ impl InferCtx<'_> {
         let iterable_ty = self.new_type_var();
         let new_iterable = self.infer_expression(*iterable, &iterable_ty);
 
-        let (element_ty, iterable_ty_name, iter_seq) =
+        let (element_ty, requires_tuple_destructuring) =
             self.for_element_type(&iterable_ty, &new_iterable);
 
         if let Some(annotation) = &binding.annotation {
@@ -210,9 +211,6 @@ impl InferCtx<'_> {
                 mut_span: binding.mut_span,
             };
 
-            let requires_tuple_destructuring =
-                matches!(iterable_ty_name.as_str(), "Map" | "EnumeratedSlice")
-                    || matches!(iter_seq, Some(IterSeqKind::Seq2));
             if requires_tuple_destructuring && element_ty.is_tuple() {
                 match &new_binding.pattern {
                     Pattern::Tuple { .. } => (),
@@ -291,12 +289,8 @@ impl InferCtx<'_> {
         }
     }
 
-    /// Derives a for-loop's element type, name, and `iter.Seq` kind from its iterable type.
-    fn for_element_type(
-        &mut self,
-        iterable_ty: &Type,
-        iterable_expr: &Expression,
-    ) -> (Type, String, Option<IterSeqKind>) {
+    /// Derive the element type and whether the loop must destructure its tuple elements.
+    fn for_element_type(&mut self, iterable_ty: &Type, iterable_expr: &Expression) -> (Type, bool) {
         let store = self.store;
 
         let resolved_unpeeled = iterable_ty.resolve_in(&self.env).strip_refs();
@@ -350,7 +344,7 @@ impl InferCtx<'_> {
                 if !iterable_ty_args.is_empty() =>
             {
                 if iterable_ty_name == "EnumeratedSlice" {
-                    Type::Tuple(vec![self.type_int(), iterable_ty_args[0].clone()])
+                    Type::Tuple(vec![Type::int(), iterable_ty_args[0].clone()])
                 } else {
                     iterable_ty_args[0].clone()
                 }
@@ -410,7 +404,9 @@ impl InferCtx<'_> {
             }
         };
 
-        (element_ty, iterable_ty_name.to_string(), iter_seq)
+        let requires_tuple_destructuring = matches!(iterable_ty_name, "Map" | "EnumeratedSlice")
+            || matches!(iter_seq, Some(IterSeqKind::Seq2));
+        (element_ty, requires_tuple_destructuring)
     }
 
     pub(super) fn infer_break(
@@ -425,10 +421,7 @@ impl InferCtx<'_> {
                     "break", span,
                 ));
         }
-        self.check_break_outside_loop(span);
-        self.check_break_in_try_block(span);
-        self.check_break_in_recover_block(span);
-        self.check_break_in_defer_block(span);
+        self.check_loop_exit(span, LoopExit::Break);
 
         let new_value = if let Some(val) = value {
             if self.loop_break_type().is_none() && self.is_inside_loop() {
@@ -440,7 +433,7 @@ impl InferCtx<'_> {
             Some(Box::new(inferred))
         } else {
             if let Some(break_ty) = self.loop_break_type().cloned() {
-                let unit = self.type_unit();
+                let unit = Type::unit();
                 self.unify(&break_ty, &unit, &span);
             }
             None
@@ -459,10 +452,7 @@ impl InferCtx<'_> {
                     "continue", span,
                 ));
         }
-        self.check_continue_outside_loop(span);
-        self.check_continue_in_try_block(span);
-        self.check_continue_in_recover_block(span);
-        self.check_continue_in_defer_block(span);
+        self.check_loop_exit(span, LoopExit::Continue);
 
         Expression::Continue { span }
     }

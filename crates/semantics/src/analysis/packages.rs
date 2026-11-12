@@ -37,11 +37,11 @@ impl UnparsedPackage {
         } = self;
 
         let package_id = pending.package_id();
-        let recover = recover_target.covers(package_id);
+        let mode = recover_target.parse_mode(package_id);
         let mut files = Vec::with_capacity(scanned.len());
         let mut errors = Vec::new();
         for scanned_file in scanned {
-            let (mut file, file_errors) = scanned_file.parse(package_id, recover);
+            let (mut file, file_errors) = scanned_file.parse(package_id, mode);
             if rewrite_root_import {
                 file.rewrite_import(loader::ROOT_IMPORT, ENTRY_PACKAGE_ID);
             }
@@ -380,11 +380,11 @@ fn store_uninferred_packages(
         if scanned.is_empty() {
             continue;
         }
-        let recover = recover_target.covers(&package_id);
+        let mode = recover_target.parse_mode(&package_id);
         let mut files = Vec::with_capacity(scanned.len());
         let mut all_files_clean = true;
         for scanned_file in scanned {
-            let (file, errors) = scanned_file.parse(&package_id, recover);
+            let (file, errors) = scanned_file.parse(&package_id, mode);
             all_files_clean &= file.parse_status == FileParseStatus::Clean;
             checker.sink.extend_parse_errors(errors);
             files.push(file);

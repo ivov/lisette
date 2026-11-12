@@ -110,7 +110,7 @@ impl TaskState {
             if required.get_qualified_id() == Some(referenced_id) || required.contains_error() {
                 continue;
             }
-            let resolved_required = store.deep_resolve_alias(&required);
+            let resolved_required = store.peel_alias(&required);
             if let Some(required_id) = resolved_required.get_qualified_id()
                 && store.get_interface(required_id).is_some()
                 && !interface_requires_methods(store, required_id)
@@ -125,7 +125,7 @@ impl TaskState {
             {
                 continue;
             }
-            let argument = store.deep_resolve_alias(&applied.argument.resolve_in(&self.env));
+            let argument = store.peel_alias(&applied.argument.resolve_in(&self.env));
             if let Type::Parameter(parameter_name) = &argument {
                 let Some(parameter_bounds) = self.parameter_bounds(parameter_name, own_generics)
                 else {

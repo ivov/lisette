@@ -63,18 +63,14 @@ impl InferCtx<'_> {
                 expression: base,
                 ..
             } => {
-                let base_ty = self
-                    .store
-                    .peel_alias(&base.get_type().resolve_in(&self.env));
+                let base_ty = self.peel_resolved(&base.get_type());
                 WriteTarget::Through { governing: base_ty }
             }
             Expression::DotAccess {
                 expression: base, ..
             } => {
                 // Field access auto-derefs, so the innermost `Ref` governs.
-                let base_ty = self
-                    .store
-                    .peel_alias(&base.get_type().resolve_in(&self.env));
+                let base_ty = self.peel_resolved(&base.get_type());
                 if base_ty.is_ref() {
                     WriteTarget::Through {
                         governing: self.innermost_ref(base_ty),
@@ -89,9 +85,7 @@ impl InferCtx<'_> {
 
     /// The base's type when indexing it writes into shared storage.
     fn governing_index_type(&self, base: &Expression) -> Option<Type> {
-        let base_ty = self
-            .store
-            .peel_alias(&base.get_type().resolve_in(&self.env));
+        let base_ty = self.peel_resolved(&base.get_type());
         match &base_ty {
             Type::Compound {
                 kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice | CompoundKind::Map,
@@ -106,7 +100,7 @@ impl InferCtx<'_> {
         let mut current = ref_ty;
         loop {
             let inner = match current.inner() {
-                Some(inner) => self.store.peel_alias(&inner.resolve_in(&self.env)),
+                Some(inner) => self.peel_resolved(&inner),
                 None => return current,
             };
             if inner.is_ref() {
@@ -120,7 +114,7 @@ impl InferCtx<'_> {
     /// Whether fields read from a value of this type keep their `mut`.
     /// A read-only value hands out everything read-only.
     pub(super) fn owner_grants_write(&self, receiver_ty: &Type) -> bool {
-        let resolved = self.store.peel_alias(&receiver_ty.resolve_in(&self.env));
+        let resolved = self.peel_resolved(receiver_ty);
         match &resolved {
             Type::Compound {
                 kind: CompoundKind::Ref,
@@ -131,7 +125,7 @@ impl InferCtx<'_> {
                     return false;
                 }
                 match innermost.inner() {
-                    Some(inner) => match self.store.peel_alias(&inner.resolve_in(&self.env)) {
+                    Some(inner) => match self.peel_resolved(&inner) {
                         Type::Nominal { writable, .. } => writable,
                         _ => true,
                     },
@@ -473,11 +467,11 @@ impl InferCtx<'_> {
         declared: &Type,
         value: &Type,
     ) -> bool {
-        let declared = self.store.peel_alias(&declared.resolve_in(&self.env));
+        let declared = self.peel_resolved(declared);
         if !self.store.demotion_changes(&declared) {
             return true;
         }
-        let value = self.store.peel_alias(&value.resolve_in(&self.env));
+        let value = self.peel_resolved(value);
         if value.is_error() || matches!(value, Type::Never) {
             return true;
         }
@@ -635,11 +629,10 @@ impl InferCtx<'_> {
         let inference = self.binding_inference.get(&binding_id)?.as_let()?;
         match inference.source.as_ref()? {
             ValueSource::Place(source) => {
-                let source_writable = self.scopes.lookup_value(source).is_some_and(|ty| {
-                    self.store
-                        .peel_alias(&ty.resolve_in(&self.env))
-                        .is_writable()
-                });
+                let source_writable = self
+                    .scopes
+                    .lookup_value(source)
+                    .is_some_and(|ty| self.peel_resolved(ty).is_writable());
                 if inference.annotated && source_writable {
                     return Some(WriteContext::ReadOnlyAnnotation(name.to_string()));
                 }
@@ -732,9 +725,7 @@ impl InferCtx<'_> {
         else {
             return None;
         };
-        let container_ty = self
-            .store
-            .peel_alias(&container.get_type().resolve_in(&self.env));
+        let container_ty = self.peel_resolved(&container.get_type());
         if !container_ty.is_writable() {
             return None;
         }
@@ -839,7 +830,7 @@ impl InferCtx<'_> {
         let receiver_needs_mut = root.as_deref() == Some("self")
             && !self
                 .lookup_type(store, "self")
-                .map(|ty| store.peel_alias(&ty.resolve_in(&self.env)))
+                .map(|ty| self.peel_resolved(&ty))
                 .is_some_and(|ty| ty.is_ref() && ty.is_writable());
         if receiver_needs_mut {
             self.report_disallowed_mutation(store, "self", span, false, None);

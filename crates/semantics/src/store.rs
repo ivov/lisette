@@ -260,7 +260,7 @@ impl Store {
     }
 
     pub fn deep_struct_kind(&self, ty: &Type) -> Option<StructKind> {
-        self.struct_kind(self.deep_resolve_alias(ty).get_qualified_id()?)
+        self.struct_kind(self.peel_alias(ty).get_qualified_id()?)
     }
 
     pub(crate) fn get_type(&self, qualified_name: &str) -> Option<&Type> {
@@ -541,10 +541,6 @@ impl Store {
             other => other,
         };
         self.get_definition(self.peel_alias(ty).get_qualified_id()?)
-    }
-
-    pub fn deep_resolve_alias(&self, ty: &Type) -> Type {
-        self.peel_alias(ty)
     }
 
     pub(crate) fn peel_alias_deep(&self, ty: &Type) -> Type {

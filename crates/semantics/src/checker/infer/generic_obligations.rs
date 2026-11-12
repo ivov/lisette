@@ -37,8 +37,8 @@ impl InferCtx<'_> {
         span: Span,
     ) {
         if let Some(declared) = declared_ty {
-            let declared = self.store.deep_resolve_alias(declared);
-            let constructed = self.store.deep_resolve_alias(constructed_ty);
+            let declared = self.store.peel_alias(declared);
+            let constructed = self.store.peel_alias(constructed_ty);
             if declared.get_qualified_id().is_some()
                 && declared.get_qualified_id() == constructed.get_qualified_id()
                 && !declared.has_unbound_variables()

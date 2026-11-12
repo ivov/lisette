@@ -4,6 +4,12 @@ use syntax::types::Type;
 use crate::checker::infer::InferCtx;
 use crate::checker::scopes::FallibleBlockKind;
 
+#[derive(Clone, Copy)]
+pub(crate) enum LoopExit {
+    Break,
+    Continue,
+}
+
 fn is_sync_lock_type(ty: &Type) -> bool {
     matches!(
         ty.strip_refs(),
@@ -64,52 +70,46 @@ impl InferCtx<'_> {
         }
     }
 
+    /// Check loop exits in diagnostic order, preserving the nearest block boundaries.
+    pub(crate) fn check_loop_exit(&self, span: Span, exit: LoopExit) {
+        if !self.is_inside_loop()
+            && self.scopes.lookup_try_block_context().is_none()
+            && self.scopes.lookup_recover_block_context().is_none()
+            && !self.is_inside_defer_block()
+        {
+            self.sink.push(match exit {
+                LoopExit::Break => diagnostics::infer::break_outside_loop(span),
+                LoopExit::Continue => diagnostics::infer::continue_outside_loop(span),
+            });
+        }
+        if let Some(context) = self.scopes.lookup_try_block_context()
+            && self.loop_depth() == context.entry_loop_depth
+        {
+            self.sink.push(match exit {
+                LoopExit::Break => diagnostics::infer::break_in_try_block(span),
+                LoopExit::Continue => diagnostics::infer::continue_in_try_block(span),
+            });
+        }
+        if let Some(context) = self.scopes.lookup_recover_block_context()
+            && self.loop_depth() == context.entry_loop_depth
+        {
+            self.sink.push(match exit {
+                LoopExit::Break => diagnostics::infer::break_in_recover_block(span),
+                LoopExit::Continue => diagnostics::infer::continue_in_recover_block(span),
+            });
+        }
+        if self.is_inside_defer_block() && self.loop_depth() == 0 {
+            self.sink.push(match exit {
+                LoopExit::Break => diagnostics::infer::break_in_defer_block(span),
+                LoopExit::Continue => diagnostics::infer::continue_in_defer_block(span),
+            });
+        }
+    }
+
     pub(crate) fn check_return_in_try_block(&mut self, span: Span) {
         if self.scopes.lookup_try_block_context().is_some() {
             self.sink
                 .push(diagnostics::infer::return_in_try_block(span));
-        }
-    }
-
-    pub(crate) fn check_break_outside_loop(&mut self, span: Span) {
-        // Only emit the generic "break outside loop" error when not in a
-        // try/recover/defer block, since those have their own more specific errors.
-        if !self.is_inside_loop()
-            && self.scopes.lookup_try_block_context().is_none()
-            && self.scopes.lookup_recover_block_context().is_none()
-            && !self.is_inside_defer_block()
-        {
-            self.sink.push(diagnostics::infer::break_outside_loop(span));
-        }
-    }
-
-    pub(crate) fn check_continue_outside_loop(&mut self, span: Span) {
-        // Only emit the generic "continue outside loop" error when not in a
-        // try/recover/defer block, since those have their own more specific errors.
-        if !self.is_inside_loop()
-            && self.scopes.lookup_try_block_context().is_none()
-            && self.scopes.lookup_recover_block_context().is_none()
-            && !self.is_inside_defer_block()
-        {
-            self.sink
-                .push(diagnostics::infer::continue_outside_loop(span));
-        }
-    }
-
-    pub(crate) fn check_break_in_try_block(&mut self, span: Span) {
-        if let Some(ctx) = self.scopes.lookup_try_block_context()
-            && self.loop_depth() == ctx.entry_loop_depth
-        {
-            self.sink.push(diagnostics::infer::break_in_try_block(span));
-        }
-    }
-
-    pub(crate) fn check_continue_in_try_block(&mut self, span: Span) {
-        if let Some(ctx) = self.scopes.lookup_try_block_context()
-            && self.loop_depth() == ctx.entry_loop_depth
-        {
-            self.sink
-                .push(diagnostics::infer::continue_in_try_block(span));
         }
     }
 
@@ -120,42 +120,10 @@ impl InferCtx<'_> {
         }
     }
 
-    pub(crate) fn check_break_in_recover_block(&mut self, span: Span) {
-        if let Some(ctx) = self.scopes.lookup_recover_block_context()
-            && self.loop_depth() == ctx.entry_loop_depth
-        {
-            self.sink
-                .push(diagnostics::infer::break_in_recover_block(span));
-        }
-    }
-
-    pub(crate) fn check_continue_in_recover_block(&mut self, span: Span) {
-        if let Some(ctx) = self.scopes.lookup_recover_block_context()
-            && self.loop_depth() == ctx.entry_loop_depth
-        {
-            self.sink
-                .push(diagnostics::infer::continue_in_recover_block(span));
-        }
-    }
-
     pub(crate) fn check_return_in_defer_block(&mut self, span: Span) {
         if self.is_inside_defer_block() {
             self.sink
                 .push(diagnostics::infer::return_in_defer_block(span));
-        }
-    }
-
-    pub(crate) fn check_break_in_defer_block(&mut self, span: Span) {
-        if self.is_inside_defer_block() && self.loop_depth() == 0 {
-            self.sink
-                .push(diagnostics::infer::break_in_defer_block(span));
-        }
-    }
-
-    pub(crate) fn check_continue_in_defer_block(&mut self, span: Span) {
-        if self.is_inside_defer_block() && self.loop_depth() == 0 {
-            self.sink
-                .push(diagnostics::infer::continue_in_defer_block(span));
         }
     }
 }

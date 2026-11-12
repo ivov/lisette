@@ -33,19 +33,6 @@ struct BinaryOperands<'a> {
     right: BinaryOperand<'a>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum NumericCompat {
-    SameAliased,
-    DifferentCompatible,
-    Neither,
-}
-
-impl NumericCompat {
-    fn is_compatible(self) -> bool {
-        !matches!(self, NumericCompat::Neither)
-    }
-}
-
 impl InferCtx<'_> {
     pub(super) fn adapts_as_constant(&self, expression: &Expression, expected_ty: &Type) -> bool {
         let is_operation = match expression {
@@ -179,7 +166,7 @@ impl InferCtx<'_> {
                 {
                     operand_expected_ty.clone()
                 } else {
-                    let bool_ty = self.type_bool();
+                    let bool_ty = Type::bool();
                     self.unify(&bool_ty, &operand_expected_ty, &span);
                     bool_ty
                 }
@@ -303,7 +290,7 @@ impl InferCtx<'_> {
         if literal_can_adapt_to(&literal_kind, &resolved, self.store) {
             return Some(resolved);
         }
-        (kind == LiteralArithmeticKind::Imaginary).then(|| self.type_complex128())
+        (kind == LiteralArithmeticKind::Imaginary).then(|| Type::Simple(SimpleKind::Complex128))
     }
 
     fn infer_literal_arithmetic(
@@ -514,8 +501,7 @@ impl InferCtx<'_> {
                     &resolved_right_operand,
                     span,
                 ) && !self
-                    .numeric_compat(&resolved_left_operand, &resolved_right_operand)
-                    .is_compatible()
+                    .numerically_compatible(&resolved_left_operand, &resolved_right_operand)
                 {
                     self.unify_binary_operands(operator, left_operand_ty, right_operand_ty, &span);
                 }
@@ -524,7 +510,7 @@ impl InferCtx<'_> {
                 if self.ensure_comparable(left_operand_ty, left_span, operands_match) {
                     self.ensure_comparable(right_operand_ty, right_span, operands_match);
                 }
-                self.type_bool()
+                Type::bool()
             }
 
             And | Or => {
@@ -542,7 +528,7 @@ impl InferCtx<'_> {
                     self.unify_binary_operands(operator, left_operand_ty, right_operand_ty, &span);
                     left_operand_ty.clone()
                 } else {
-                    let bool_ty = self.type_bool();
+                    let bool_ty = Type::bool();
                     self.unify(left_operand_ty, &bool_ty, &span);
                     self.unify(right_operand_ty, &bool_ty, &span);
                     bool_ty
@@ -555,16 +541,14 @@ impl InferCtx<'_> {
                     &resolved_right_operand,
                     span,
                 ) {
-                    return self.type_bool();
+                    return Type::bool();
                 }
 
-                if self
-                    .numeric_compat(&resolved_left_operand, &resolved_right_operand)
-                    .is_compatible()
+                if self.numerically_compatible(&resolved_left_operand, &resolved_right_operand)
                     && self.store.is_orderable(&resolved_left_operand)
                     && self.store.is_orderable(&resolved_right_operand)
                 {
-                    self.type_bool()
+                    Type::bool()
                 } else {
                     let (_, mismatched) = self.tracking_diagnostics(|this| {
                         this.unify_binary_operands(
@@ -577,7 +561,7 @@ impl InferCtx<'_> {
                     if !mismatched {
                         self.ensure_orderable(left_operand_ty, left_span);
                     }
-                    self.type_bool()
+                    Type::bool()
                 }
             }
 
@@ -718,18 +702,14 @@ impl InferCtx<'_> {
         }
     }
 
-    /// Classifies whether two resolved operand types are numerically compatible.
-    fn numeric_compat(&self, left: &Type, right: &Type) -> NumericCompat {
-        if left == right && self.store.is_aliased_numeric_type(left) {
-            NumericCompat::SameAliased
-        } else if left != right
-            && self.store.is_numeric_compatible_with(left, right)
-            && (self.store.is_aliased_numeric_type(left)
-                ^ self.store.is_aliased_numeric_type(right))
-        {
-            NumericCompat::DifferentCompatible
+    /// Whether resolved operands can share an aliased numeric type.
+    fn numerically_compatible(&self, left: &Type, right: &Type) -> bool {
+        if left == right {
+            self.store.is_aliased_numeric_type(left)
         } else {
-            NumericCompat::Neither
+            self.store.is_numeric_compatible_with(left, right)
+                && (self.store.is_aliased_numeric_type(left)
+                    ^ self.store.is_aliased_numeric_type(right))
         }
     }
 
@@ -837,7 +817,7 @@ impl InferCtx<'_> {
 
     fn report_named_type_boundary(&mut self, left: &Type, right: &Type, span: Span) -> bool {
         let store = self.store;
-        if left == right || store.deep_resolve_alias(left) == store.deep_resolve_alias(right) {
+        if left == right || store.peel_alias(left) == store.peel_alias(right) {
             return false;
         }
         let left_is_defined_type = is_nominal_defined_type(left, store);
@@ -909,7 +889,7 @@ impl InferCtx<'_> {
 
             (true, true)
                 if left_ty == right_ty
-                    || store.deep_resolve_alias(left_ty) == store.deep_resolve_alias(right_ty) =>
+                    || store.peel_alias(left_ty) == store.peel_alias(right_ty) =>
             {
                 Some(left_ty.clone())
             }
@@ -1407,7 +1387,7 @@ fn literal_can_adapt_to(kind: &LiteralKind, target: &Type, store: &Store) -> boo
 }
 
 fn is_nominal_defined_type(ty: &Type, store: &Store) -> bool {
-    matches!(store.deep_resolve_alias(ty), Type::Nominal { id, .. } if store.is_nominal_defined_type(id.as_str()))
+    matches!(store.peel_alias(ty), Type::Nominal { id, .. } if store.is_nominal_defined_type(id.as_str()))
 }
 
 fn is_plain_numeric_primitive(ty: &Type, store: &Store) -> bool {

@@ -274,7 +274,7 @@ impl TaskState {
                 // For function type annotations, omitted return type means Unit (`()`),
                 // not a type variable. This ensures `fn(T)` is `fn(T) -> ()`.
                 let new_return_type = if matches!(return_type.as_ref(), Annotation::Unknown) {
-                    self.type_unit()
+                    Type::unit()
                 } else {
                     self.convert_to_type_mode(store, return_type, span, mode.nested())
                 };
@@ -1067,14 +1067,14 @@ impl TaskState {
         if required.contains_error() {
             return;
         }
-        let resolved_required = store.deep_resolve_alias(required);
+        let resolved_required = store.peel_alias(required);
         let Some(required_id) = resolved_required.get_qualified_id() else {
             return;
         };
         if store.get_interface(required_id).is_none() {
             return;
         }
-        let argument = store.deep_resolve_alias(&argument.resolve_in(&self.env));
+        let argument = store.peel_alias(&argument.resolve_in(&self.env));
         if argument.is_variable()
             || matches!(argument, Type::Parameter(_))
             || argument.contains_error()
@@ -1095,7 +1095,7 @@ impl TaskState {
         span: Span,
         equals_hint: Option<diagnostics::infer::EquatableFieldHint<'_>>,
     ) {
-        let resolved = store.deep_resolve_alias(&argument.resolve_in(&self.env));
+        let resolved = store.peel_alias(&argument.resolve_in(&self.env));
         // A bound error on an unresolved type would bury its own diagnostic.
         if resolved.is_variable() || resolved.contains_error() {
             return;

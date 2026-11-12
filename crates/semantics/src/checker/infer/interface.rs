@@ -56,7 +56,7 @@ struct ConformanceSite<'a> {
 impl InferCtx<'_> {
     fn method_in_value_method_set(&self, receiver: &Type, method: &str) -> bool {
         let store = self.store;
-        let resolved = store.deep_resolve_alias(&receiver.strip_refs().resolve_in(&self.env));
+        let resolved = self.peel_resolved(&receiver.strip_refs());
         let Some(id) = resolved.get_qualified_id() else {
             return false;
         };
@@ -90,12 +90,12 @@ impl InferCtx<'_> {
         span: &Span,
         parameter_hint: Option<diagnostics::infer::BoundParameterHint<'_>>,
     ) {
-        let bound = self.store.deep_resolve_alias(bound);
+        let bound = self.store.peel_alias(bound);
         if !self.store.is_interface(&bound) {
             return;
         }
         let store = self.store;
-        let resolved = store.peel_alias(&ty.resolve_in(&self.env));
+        let resolved = self.peel_resolved(ty);
         if resolved.contains_error() || bound.contains_error() {
             return;
         }
@@ -122,7 +122,7 @@ impl InferCtx<'_> {
     /// A type argument gets no adapter, so its methods need the Go shapes the bound requires.
     fn check_bound_method_shapes(&mut self, ty: &Type, bound: &Type, span: &Span) {
         let store = self.store;
-        let receiver = store.deep_resolve_alias(&ty.strip_refs().resolve_in(&self.env));
+        let receiver = self.peel_resolved(&ty.strip_refs());
         let Some(receiver_id) = receiver.get_qualified_id() else {
             return;
         };
@@ -221,7 +221,7 @@ impl InferCtx<'_> {
         span: &Span,
         methods: &Methods,
     ) -> Result<(), Vec<InterfaceViolation>> {
-        let interface_ty = self.store.deep_resolve_alias(interface_ty);
+        let interface_ty = self.store.peel_alias(interface_ty);
         let Type::Nominal {
             id: interface_qualified_id,
             ..
@@ -381,9 +381,7 @@ impl InferCtx<'_> {
     }
 
     fn is_builtin_receiver(&self, ty: &Type) -> bool {
-        let resolved = self
-            .store
-            .deep_resolve_alias(&ty.strip_refs().resolve_in(&self.env));
+        let resolved = self.peel_resolved(&ty.strip_refs());
         match resolved.strip_refs() {
             Type::Simple(_) | Type::Compound { .. } | Type::Array { .. } => true,
             Type::Nominal { id, .. } => {
@@ -407,7 +405,7 @@ impl InferCtx<'_> {
         if value_is_ref && peeled.is_writable() {
             return Ok(());
         }
-        let interface_ty = store.deep_resolve_alias(interface_ty);
+        let interface_ty = store.peel_alias(interface_ty);
         let Some(interface_qualified_id) = interface_ty.get_qualified_id() else {
             return Ok(());
         };
@@ -423,7 +421,7 @@ impl InferCtx<'_> {
 
         let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
         let diagnostic = if value_is_ref {
-            let pointee = store.deep_resolve_alias(&ty.strip_refs().resolve_in(&self.env));
+            let pointee = self.peel_resolved(&ty.strip_refs());
             let pointee_name = pointee
                 .get_name()
                 .map_or_else(|| pointee.to_string(), str::to_owned);
@@ -501,7 +499,7 @@ impl InferCtx<'_> {
         if !store.peel_alias(ty).is_ref() {
             return false;
         }
-        let interface_ty = store.deep_resolve_alias(interface_ty);
+        let interface_ty = store.peel_alias(interface_ty);
         if interface_ty.get_qualified_id().is_none() {
             return false;
         }
@@ -511,9 +509,7 @@ impl InferCtx<'_> {
     }
 
     fn conformance_candidate(&self, receiver: &Type, method: &str) -> ConformanceCandidate {
-        let resolved = self
-            .store
-            .deep_resolve_alias(&receiver.strip_refs().resolve_in(&self.env));
+        let resolved = self.peel_resolved(&receiver.strip_refs());
         self.own_candidate(&resolved, method)
             .or_else(|| self.promoted_candidate(&resolved, method))
             .or_else(|| self.bound_candidate(&resolved, method))
@@ -567,7 +563,7 @@ impl InferCtx<'_> {
         };
         let qualified = self.qualify_name(name);
         self.scopes.bounds_on_param(name).iter().find_map(|bound| {
-            let interface_ty = self.store.deep_resolve_alias(bound);
+            let interface_ty = self.store.peel_alias(bound);
             interface_ty.get_qualified_id()?;
             self.store.get_method_for_type(&interface_ty, method)?;
             Some(ConformanceCandidate::Resolved {
@@ -581,7 +577,7 @@ impl InferCtx<'_> {
     /// Mirror of emit's `needs_adapter` precondition.
     fn adapter_capable_receiver(&self, ty: &Type, interface_qualified_id: &str) -> bool {
         let store = self.store;
-        let resolved = store.deep_resolve_alias(&ty.strip_refs().resolve_in(&self.env));
+        let resolved = self.peel_resolved(&ty.strip_refs());
         let Some(id) = resolved.get_qualified_id() else {
             return false;
         };
@@ -644,7 +640,7 @@ impl InferCtx<'_> {
         let store = self.store;
         let ty = check.receiver;
         let span = check.span;
-        let resolved_receiver = store.deep_resolve_alias(&ty.strip_refs().resolve_in(&self.env));
+        let resolved_receiver = self.peel_resolved(&ty.strip_refs());
         let receiver_id = match &resolved_receiver {
             Type::Nominal { id, .. } => Some(id.clone()),
             _ => None,

@@ -2,6 +2,14 @@ use super::*;
 use crate::loader;
 use std::iter;
 
+/// Where member lookup reads a type's method set.
+enum MethodSource<'a> {
+    Bounds(&'a [Type]),
+    Direct(Type),
+    Promoted(Type),
+    None,
+}
+
 #[derive(Debug, Default)]
 pub(super) struct ImportState {
     pub(super) prefixed: HashMap<String, PrefixedImport>,
@@ -347,61 +355,50 @@ impl TaskState {
         Some((qualified_name, ty))
     }
 
-    pub(super) fn get_all_methods(&mut self, store: &Store, ty: &Type) -> Methods {
-        if let Type::Parameter(name) = ty {
-            return self
-                .scopes
-                .bounds_on_param(name)
+    pub(super) fn get_all_methods(&self, store: &Store, ty: &Type) -> Methods {
+        match self.method_source(store, ty) {
+            MethodSource::Bounds(bounds) => bounds
                 .iter()
                 .flat_map(|bound| store.get_all_methods(bound))
-                .collect();
-        }
-
-        let resolved = ty.strip_refs().resolve_in(&self.env);
-        match &resolved {
-            Type::Nominal { .. } | Type::Compound { .. } | Type::Simple(_) | Type::Array { .. } => {
-            }
-            _ => return Methods::default(),
-        }
-
-        let peeled = store.peel_alias(&resolved);
-        if let Type::Nominal { id, .. } = &peeled
-            && store.get_interface(id).is_some()
-        {
-            store.get_all_methods(&peeled)
-        } else if promotion::has_direct_embed(store, &resolved) {
-            promotion::promoted_method_set(store, &resolved)
-        } else {
-            store.get_all_methods(&resolved)
+                .collect(),
+            MethodSource::Direct(ty) => store.get_all_methods(&ty),
+            MethodSource::Promoted(ty) => promotion::promoted_method_set(store, &ty),
+            MethodSource::None => Methods::default(),
         }
     }
 
     pub(super) fn method_of_type(&self, store: &Store, ty: &Type, name: &str) -> Option<Method> {
-        if let Type::Parameter(parameter) = ty {
-            return self
-                .scopes
-                .bounds_on_param(parameter)
+        match self.method_source(store, ty) {
+            MethodSource::Bounds(bounds) => bounds
                 .iter()
                 .rev()
-                .find_map(|bound| store.get_method_for_type(bound, name));
+                .find_map(|bound| store.get_method_for_type(bound, name)),
+            MethodSource::Direct(ty) => store.get_method_for_type(&ty, name),
+            MethodSource::Promoted(ty) => promotion::promoted_method(store, &ty, name),
+            MethodSource::None => None,
         }
+    }
 
+    fn method_source(&self, store: &Store, ty: &Type) -> MethodSource<'_> {
+        if let Type::Parameter(name) = ty {
+            return MethodSource::Bounds(self.scopes.bounds_on_param(name));
+        }
         let resolved = ty.strip_refs().resolve_in(&self.env);
-        match &resolved {
-            Type::Nominal { .. } | Type::Compound { .. } | Type::Simple(_) | Type::Array { .. } => {
-            }
-            _ => return None,
+        if !matches!(
+            resolved,
+            Type::Nominal { .. } | Type::Compound { .. } | Type::Simple(_) | Type::Array { .. }
+        ) {
+            return MethodSource::None;
         }
-
         let peeled = store.peel_alias(&resolved);
         if let Type::Nominal { id, .. } = &peeled
             && store.get_interface(id).is_some()
         {
-            store.get_method_for_type(&peeled, name)
+            MethodSource::Direct(peeled)
         } else if promotion::has_direct_embed(store, &resolved) {
-            promotion::promoted_method(store, &resolved, name)
+            MethodSource::Promoted(resolved)
         } else {
-            store.get_method_for_type(&resolved, name)
+            MethodSource::Direct(resolved)
         }
     }
 

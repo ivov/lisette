@@ -391,58 +391,56 @@ impl Scopes {
             .unwrap_or_default()
     }
 
+    /// Include the nearest function frame, but never inspect its enclosing scopes.
+    fn propagation_scope_start(&self) -> usize {
+        self.stack
+            .iter()
+            .rposition(|scope| scope.is_function_boundary())
+            .unwrap_or(0)
+    }
+
     /// Look up the enclosing try block context, stopping at function boundaries.
     pub(crate) fn lookup_try_block_context(&self) -> Option<&TryBlockContext> {
-        for scope in self.stack.iter().rev() {
-            if let PropagationContext::Try(context) = &scope.propagation_context {
-                return Some(context);
-            }
-            if scope.is_function_boundary() {
-                return None;
-            }
-        }
-        None
+        self.stack[self.propagation_scope_start()..]
+            .iter()
+            .rev()
+            .find_map(|scope| match &scope.propagation_context {
+                PropagationContext::Try(context) => Some(context),
+                PropagationContext::None | PropagationContext::Recover(_) => None,
+            })
     }
 
     pub(crate) fn lookup_try_block_context_mut(&mut self) -> Option<&mut TryBlockContext> {
-        for scope in self.stack.iter_mut().rev() {
-            let is_function_boundary = scope.is_function_boundary();
-            if let PropagationContext::Try(context) = &mut scope.propagation_context {
-                return Some(context);
+        let start = self.propagation_scope_start();
+        self.stack[start..].iter_mut().rev().find_map(|scope| {
+            match &mut scope.propagation_context {
+                PropagationContext::Try(context) => Some(context),
+                PropagationContext::None | PropagationContext::Recover(_) => None,
             }
-            if is_function_boundary {
-                return None;
-            }
-        }
-        None
+        })
     }
 
     /// Look up the enclosing recover block context, stopping at function boundaries.
     pub(crate) fn lookup_recover_block_context(&self) -> Option<&RecoverBlockContext> {
-        for scope in self.stack.iter().rev() {
-            if let PropagationContext::Recover(context) = &scope.propagation_context {
-                return Some(context);
-            }
-            if scope.is_function_boundary() {
-                return None;
-            }
-        }
-        None
+        self.stack[self.propagation_scope_start()..]
+            .iter()
+            .rev()
+            .find_map(|scope| match &scope.propagation_context {
+                PropagationContext::Recover(context) => Some(context),
+                PropagationContext::None | PropagationContext::Try(_) => None,
+            })
     }
 
     /// Look up the innermost `try` or `recover` block, stopping at function boundaries.
     pub(crate) fn lookup_fallible_block_kind(&self) -> Option<FallibleBlockKind> {
-        for scope in self.stack.iter().rev() {
-            match &scope.propagation_context {
-                PropagationContext::Try(_) => return Some(FallibleBlockKind::Try),
-                PropagationContext::Recover(_) => return Some(FallibleBlockKind::Recover),
-                PropagationContext::None => {}
-            }
-            if scope.is_function_boundary() {
-                return None;
-            }
-        }
-        None
+        self.stack[self.propagation_scope_start()..]
+            .iter()
+            .rev()
+            .find_map(|scope| match scope.propagation_context {
+                PropagationContext::Try(_) => Some(FallibleBlockKind::Try),
+                PropagationContext::Recover(_) => Some(FallibleBlockKind::Recover),
+                PropagationContext::None => None,
+            })
     }
 
     pub(crate) fn set_try_block_context(&mut self, context: TryBlockContext) {
@@ -659,6 +657,22 @@ mod tests {
                 .lookup_recover_block_context()
                 .map(|ctx| ctx.entry_loop_depth),
             Some(2)
+        );
+
+        scopes.mark_lambda_scope();
+        assert!(scopes.lookup_try_block_context().is_some());
+        scopes.set_fn_return_type(Type::unit());
+        assert!(scopes.lookup_try_block_context().is_none());
+        assert!(scopes.lookup_try_block_context_mut().is_none());
+        assert!(scopes.lookup_recover_block_context().is_some());
+        assert_eq!(
+            scopes.lookup_fallible_block_kind(),
+            Some(FallibleBlockKind::Recover)
+        );
+        scopes.pop();
+        assert_eq!(
+            scopes.lookup_fallible_block_kind(),
+            Some(FallibleBlockKind::Try)
         );
     }
 

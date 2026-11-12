@@ -6,10 +6,10 @@ use deps::TypedefLocator;
 use syntax::ast::{ImportAlias, Span};
 use syntax::program::File;
 
-use crate::analysis::{AnalysisScope, ProjectKind};
+use crate::analysis::{AnalysisScope, PARALLEL_THRESHOLD, ProjectKind};
 use crate::diagnostics::{GoImportSite, emit_for_declaration_status, emit_for_locator_result};
 use crate::loader as semantics_loader;
-use crate::loader::Loader;
+use crate::loader::{Loader, ParseMode};
 use crate::store::{ENTRY_PACKAGE_ID, Store};
 use diagnostics::LocalSink;
 use std::hash::Hash;
@@ -27,36 +27,17 @@ pub fn root_import_target(name: &str, importer: &str, kind: ProjectKind) -> Opti
     .then_some(ENTRY_PACKAGE_ID)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Production imports take precedence when the same package is also used by tests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum DependencyKind {
-    Production,
     TestOnly,
+    Production,
 }
 
-impl DependencyKind {
-    fn merge(self, other: Self) -> Self {
-        if self == Self::Production || other == Self::Production {
-            Self::Production
-        } else {
-            Self::TestOnly
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum ImportUse {
     LinkOnly,
     Referenced,
-}
-
-impl ImportUse {
-    fn merge(self, other: Self) -> Self {
-        if self == Self::Referenced || other == Self::Referenced {
-            Self::Referenced
-        } else {
-            Self::LinkOnly
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -68,8 +49,8 @@ struct Dependency {
 
 impl Dependency {
     fn merge(&mut self, other: Self) {
-        self.kind = self.kind.merge(other.kind);
-        self.usage = self.usage.merge(other.usage);
+        self.kind = self.kind.max(other.kind);
+        self.usage = self.usage.max(other.usage);
     }
 }
 
@@ -221,24 +202,16 @@ impl ScannedFile {
         program::is_test_file(&self.name)
     }
 
-    pub fn parse(self, package_id: &str, recover: bool) -> (File, Vec<syntax::ParseError>) {
-        let result = if recover {
-            syntax::build_ast_recovering(&self.source, self.file_id)
-        } else {
-            syntax::build_ast(&self.source, self.file_id)
-        };
-        let file = File {
-            id: self.file_id,
-            package_id: package_id.to_string(),
-            parse_status: result.status,
-            name: self.name,
-            display_path: self.display_path,
-            source_path: None,
-            source: self.source,
-            items: result.ast,
-            file_comment: result.file_comment,
-        };
-        (file, result.errors)
+    pub fn parse(self, package_id: &str, mode: ParseMode) -> (File, Vec<syntax::ParseError>) {
+        let result = mode.parse(&self.source, self.file_id);
+        File::from_parse(
+            self.file_id,
+            package_id,
+            self.name,
+            self.display_path,
+            self.source,
+            result,
+        )
     }
 }
 
@@ -521,8 +494,6 @@ fn batch_scan_packages(
     let Some(fs) = loader else {
         return HashMap::default();
     };
-
-    const PARALLEL_THRESHOLD: usize = 4;
 
     let to_read: Vec<&PackageId> = packages.iter().filter(|m| !store.has(m)).collect();
     let folders: Vec<(&PackageId, Vec<(String, semantics_loader::FileContent)>)> =

@@ -17,6 +17,8 @@ use syntax::program::{File, Package};
 
 use deps::TypedefLocator;
 
+use crate::loader::ParseMode;
+
 use crate::cache::{
     CompiledPackage, PackageInterface, build_cached_package, compute_emit_artifact_hash,
     compute_package_hash, get_dependency_package_hashes,
@@ -101,7 +103,7 @@ pub struct EntryFile {
     source: String,
     filename: String,
     display_path: String,
-    parse_mode: EntryParseMode,
+    parse_mode: ParseMode,
 }
 
 impl EntryFile {
@@ -111,7 +113,7 @@ impl EntryFile {
             source,
             filename,
             display_path,
-            parse_mode: EntryParseMode::Strict,
+            parse_mode: ParseMode::Strict,
         }
     }
 
@@ -122,15 +124,9 @@ impl EntryFile {
             source,
             filename,
             display_path,
-            parse_mode: EntryParseMode::Recover,
+            parse_mode: ParseMode::Recover,
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum EntryParseMode {
-    Strict,
-    Recover,
 }
 
 pub struct AnalyzeInput<'a> {
@@ -163,6 +159,14 @@ pub enum RecoverTarget {
 }
 
 impl RecoverTarget {
+    fn parse_mode(&self, package_id: &str) -> ParseMode {
+        if self.covers(package_id) {
+            ParseMode::Recover
+        } else {
+            ParseMode::Strict
+        }
+    }
+
     pub(crate) fn covers(&self, package_id: &str) -> bool {
         match self {
             Self::None => false,
@@ -373,7 +377,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             input.loader,
             entry.filename(),
             include_tests,
-            input.recover_target.covers(ENTRY_PACKAGE_ID),
+            input.recover_target.parse_mode(ENTRY_PACKAGE_ID),
         );
     }
 

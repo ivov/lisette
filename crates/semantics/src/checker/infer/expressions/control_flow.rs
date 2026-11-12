@@ -14,7 +14,7 @@ impl InferCtx<'_> {
             .underlying_simple_kind(&cond_ty.resolve_in(&self.env))
             != Some(SimpleKind::Bool)
         {
-            let bool_ty = self.type_bool();
+            let bool_ty = Type::bool();
             self.unify(&bool_ty, &cond_ty, &inferred.get_span());
         }
         inferred
@@ -71,7 +71,7 @@ impl InferCtx<'_> {
 
         Expression::Return {
             expression: new_expression.into(),
-            ty: self.type_never(),
+            ty: Type::Never,
             span,
         }
     }
@@ -93,7 +93,7 @@ impl InferCtx<'_> {
 
         self.check_defer_in_fallible_block(span);
 
-        let unit_ty = self.type_unit();
+        let unit_ty = Type::unit();
         self.unify(expected_ty, &unit_ty, &span);
 
         let is_block = matches!(*expression, Expression::Block { .. });
@@ -114,7 +114,7 @@ impl InferCtx<'_> {
 
         Expression::Defer {
             expression: new_expression.into(),
-            ty: self.type_unit(),
+            ty: Type::unit(),
             span,
         }
     }
@@ -134,7 +134,7 @@ impl InferCtx<'_> {
             self.sink
                 .push(diagnostics::infer::assert_without_test_context(span));
         }
-        let unit_ty = self.type_unit();
+        let unit_ty = Type::unit();
         self.unify(expected_ty, &unit_ty, &span);
 
         Expression::Assert {
@@ -178,7 +178,7 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::task_in_expression_position(span));
         }
 
-        let unit_ty = self.type_unit();
+        let unit_ty = Type::unit();
         self.unify(expected_ty, &unit_ty, &span);
 
         // task spawns a new goroutine, enclosing loop context doesn't apply
@@ -186,7 +186,7 @@ impl InferCtx<'_> {
         let store = self.store;
         let new_expression = self.without_enclosing_loop(|this| {
             this.with_scope(|this| {
-                let task_unit = this.type_unit();
+                let task_unit = Type::unit();
                 this.scopes.mark_lambda_scope();
                 this.scopes.set_fn_return_type(task_unit);
                 let new_expression = this.infer_expression(*expression, &task_ty);
@@ -199,7 +199,7 @@ impl InferCtx<'_> {
 
         Expression::Task {
             expression: new_expression.into(),
-            ty: self.type_unit(),
+            ty: Type::unit(),
             span,
         }
     }

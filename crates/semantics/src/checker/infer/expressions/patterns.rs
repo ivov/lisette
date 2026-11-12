@@ -3,9 +3,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::Arc;
 use syntax::ast::{BindingId, BindingKind};
 use syntax::ast::{
-    ConstructorPatternResolution, EnumFieldDefinition, Expression, Literal, Pattern,
-    RecordPatternResolution, RestPattern, SequencePatternResolution, Span, StructFieldPattern,
-    collect_pattern_bindings,
+    ConstructorPatternResolution, Expression, Pattern, RecordPatternResolution, RestPattern,
+    SequencePatternResolution, Span, StructFieldPattern, collect_pattern_bindings,
 };
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{CompoundKind, Type, substitute, unqualified_name};
@@ -81,7 +80,7 @@ impl InferCtx<'_> {
             }
 
             Pattern::Tuple { elements, span } => {
-                let peeled = self.store.peel_alias(&expected_ty.resolve_in(&self.env));
+                let peeled = self.peel_resolved(&expected_ty);
                 let element_types: Vec<Type> = match &peeled {
                     Type::Tuple(types) if types.len() == elements.len() => types.clone(),
                     Type::Tuple(types) => {
@@ -124,13 +123,13 @@ impl InferCtx<'_> {
             Pattern::WildCard { span } => Pattern::WildCard { span },
 
             Pattern::Unit { span, .. } => {
-                let unit_ty = self.type_unit();
+                let unit_ty = Type::unit();
                 self.unify(&expected_ty, &unit_ty, &span);
                 Pattern::Unit { ty: unit_ty, span }
             }
 
             pattern @ Pattern::Slice { .. } => {
-                let resolved_ty = store.peel_alias(&expected_ty.resolve_in(&self.env));
+                let resolved_ty = self.peel_resolved(&expected_ty);
                 if let Type::Array { length, element } = &resolved_ty {
                     let (length, element_ty) = (*length, element.as_ref().clone());
                     self.infer_array_pattern(pattern, length, element_ty, kind)
@@ -166,7 +165,7 @@ impl InferCtx<'_> {
                     }
                     Pattern::Literal { literal, .. } => {
                         self.sink.push(diagnostics::infer::redundant_as_literal(
-                            &format_literal(literal),
+                            &literal.diagnostic_text(),
                             &name,
                             span,
                         ));
@@ -248,10 +247,7 @@ impl InferCtx<'_> {
             }
             Pattern::Struct { fields, span, .. } => {
                 for field in fields {
-                    let is_shorthand = matches!(
-                        &field.value,
-                        Pattern::Identifier { identifier, .. } if identifier == &field.name
-                    );
+                    let is_shorthand = field.is_shorthand();
                     self.infer_pattern_inner(field.value, Type::Error, kind, is_shorthand);
                 }
                 self.rejected_pattern(span)
@@ -527,7 +523,7 @@ impl InferCtx<'_> {
             other => (other, vec![]),
         };
 
-        let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+        let unify_expected = self.peel_resolved(&expected_ty);
         self.unify(&unify_expected.shallow_demoted(), &pattern_ty, &span);
 
         let new_fields: Vec<_> = fields
@@ -608,7 +604,7 @@ impl InferCtx<'_> {
 
     fn scrutinee_is_interface(&self, expected_ty: &Type) -> bool {
         let store = self.store;
-        let resolved = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+        let resolved = self.peel_resolved(expected_ty);
         store.is_interface(&resolved)
     }
 
@@ -772,7 +768,7 @@ impl InferCtx<'_> {
             expected_ty.clone()
         } else {
             let (const_ty, _) = self.instantiate(definition_ty);
-            let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+            let unify_expected = self.peel_resolved(expected_ty);
             self.unify(&unify_expected, &const_ty, &span);
             const_ty.resolve_in(&self.env)
         };
@@ -803,10 +799,7 @@ impl InferCtx<'_> {
         }
 
         for field in fields {
-            let is_shorthand = matches!(
-                &field.value,
-                Pattern::Identifier { identifier, .. } if identifier == &field.name
-            );
+            let is_shorthand = field.is_shorthand();
             self.infer_pattern_inner(field.value.clone(), Type::Error, kind, is_shorthand);
         }
         self.rejected_pattern(span)
@@ -880,6 +873,64 @@ impl InferCtx<'_> {
         })
     }
 
+    /// Infer record fields and report unknown or omitted names in source order.
+    fn infer_record_pattern_fields(
+        &mut self,
+        pattern: &Pattern,
+        available: &[String],
+        owner_ty: &Type,
+        kind: BindingKind,
+        mut field_type: impl FnMut(&mut Self, &StructFieldPattern) -> Option<Type>,
+    ) -> Vec<StructFieldPattern> {
+        let Pattern::Struct {
+            fields, rest, span, ..
+        } = pattern
+        else {
+            unreachable!("record field inference requires a record pattern");
+        };
+        let inferred = fields
+            .iter()
+            .map(|field| {
+                let ty = field_type(self, field).unwrap_or_else(|| {
+                    self.sink.push(diagnostics::infer::member_not_found(
+                        owner_ty,
+                        &field.name,
+                        *span,
+                        Some(available),
+                        None,
+                        false,
+                    ));
+                    Type::Error
+                });
+                StructFieldPattern {
+                    name: field.name.clone(),
+                    value: self.infer_pattern_inner(
+                        field.value.clone(),
+                        ty,
+                        kind,
+                        field.is_shorthand(),
+                    ),
+                }
+            })
+            .collect();
+        if !rest {
+            let missing: Vec<String> = available
+                .iter()
+                .filter(|name| {
+                    !fields
+                        .iter()
+                        .any(|field| field.name.as_str() == name.as_str())
+                })
+                .cloned()
+                .collect();
+            if !missing.is_empty() {
+                self.sink
+                    .push(diagnostics::infer::pattern_missing_fields(&missing, *span));
+            }
+        }
+        inferred
+    }
+
     fn infer_struct_pattern(
         &mut self,
         pattern: Pattern,
@@ -928,7 +979,7 @@ impl InferCtx<'_> {
             ty: struct_forall_ty,
             body:
                 DefinitionBody::Struct {
-                    fields: definition_struct_fields,
+                    fields: struct_fields,
                     ..
                 },
             ..
@@ -947,12 +998,9 @@ impl InferCtx<'_> {
                 });
         };
 
-        let struct_forall_ty = struct_forall_ty.clone();
-        let struct_fields = definition_struct_fields.clone();
-
         self.track_name_usage(store, &qualified_name, &span, identifier.len() as u32);
 
-        let (struct_ty, map) = self.instantiate(&struct_forall_ty);
+        let (struct_ty, map) = self.instantiate(struct_forall_ty);
 
         self.unify(
             &expected_ty.resolve_in(&self.env).shallow_demoted(),
@@ -969,72 +1017,33 @@ impl InferCtx<'_> {
 
         let available: Vec<String> = struct_fields.iter().map(|f| f.name.to_string()).collect();
 
-        let new_fields: Vec<_> = fields
-            .iter()
-            .map(|field| {
-                let field_definition = struct_fields.iter().find(|x| x.name == field.name);
-
-                let field_ty = match field_definition {
-                    Some(field_definition) => {
-                        if is_cross_package && !field_definition.visibility.is_public() {
-                            self.sink.push(diagnostics::infer::private_field_access(
-                                &field.name,
-                                &qualified_name,
-                                struct_package,
-                                field.value.get_span(),
-                            ));
-                        }
-                        if scrutinee_is_error {
-                            Type::Error
-                        } else {
-                            substitute(
-                                &self.granted_field_type(
-                                    &qualified_name,
-                                    &field_definition.ty,
-                                    &expected_ty,
-                                ),
-                                &map,
-                            )
-                        }
-                    }
-                    None => {
-                        self.sink.push(diagnostics::infer::member_not_found(
-                            &struct_ty,
-                            &field.name,
-                            span,
-                            Some(&available),
-                            None,
-                            false,
-                        ));
-                        Type::Error
-                    }
-                };
-
-                let is_shorthand = matches!(
-                    &field.value,
-                    Pattern::Identifier { identifier, .. } if identifier == &field.name
-                );
-                let inferred_value =
-                    self.infer_pattern_inner(field.value.clone(), field_ty, kind, is_shorthand);
-                StructFieldPattern {
-                    name: field.name.clone(),
-                    value: inferred_value,
+        let new_fields = self.infer_record_pattern_fields(
+            &pattern,
+            &available,
+            &struct_ty,
+            kind,
+            |this, field| {
+                let definition = struct_fields
+                    .iter()
+                    .find(|declared| declared.name == field.name)?;
+                if is_cross_package && !definition.visibility.is_public() {
+                    this.sink.push(diagnostics::infer::private_field_access(
+                        &field.name,
+                        &qualified_name,
+                        struct_package,
+                        field.value.get_span(),
+                    ));
                 }
-            })
-            .collect();
-
-        if !rest {
-            let pattern_field_names: Vec<&str> = fields.iter().map(|f| f.name.as_str()).collect();
-            let missing: Vec<String> = struct_fields
-                .iter()
-                .filter(|sf| !pattern_field_names.contains(&sf.name.as_str()))
-                .map(|sf| sf.name.to_string())
-                .collect();
-            if !missing.is_empty() {
-                self.sink
-                    .push(diagnostics::infer::pattern_missing_fields(&missing, span));
-            }
-        }
+                Some(if scrutinee_is_error {
+                    Type::Error
+                } else {
+                    substitute(
+                        &this.granted_field_type(&qualified_name, &definition.ty, &expected_ty),
+                        &map,
+                    )
+                })
+            },
+        );
 
         let resolved_ty = struct_ty.resolve_in(&self.env);
         let resolution = match &resolved_ty {
@@ -1247,7 +1256,7 @@ impl InferCtx<'_> {
 
     fn peel_to_enum(&self, ty: &Type) -> Option<Type> {
         let store = self.store;
-        let resolved = store.deep_resolve_alias(&ty.resolve_in(&self.env));
+        let resolved = self.peel_resolved(ty);
         match &resolved {
             Type::Nominal { id, .. } if store.variants_of(id.as_str()).is_some() => Some(resolved),
             _ => None,
@@ -1283,7 +1292,6 @@ impl InferCtx<'_> {
     ) -> Option<Pattern> {
         let Pattern::Struct {
             identifier,
-            fields,
             rest,
             span,
             ..
@@ -1321,7 +1329,7 @@ impl InferCtx<'_> {
             _ => return None,
         };
 
-        let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+        let unify_expected = self.peel_resolved(expected_ty);
         self.unify(&unify_expected.shallow_demoted(), &pattern_ty, span);
 
         let resolved_ty = pattern_ty.resolve_in(&self.env);
@@ -1335,72 +1343,32 @@ impl InferCtx<'_> {
             return None;
         }
 
-        let variant_fields: Vec<EnumFieldDefinition> = variant.fields.iter().cloned().collect();
+        let variant_fields = &variant.fields;
         let available: Vec<String> = variant_fields.iter().map(|f| f.name.to_string()).collect();
 
-        let new_fields: Vec<_> = fields
-            .iter()
-            .map(|field| {
-                let field_definition = variant_fields.iter().find(|x| x.name == field.name);
-                let field_ty = match field_definition {
-                    Some(field_definition) => substitute(
-                        &self.granted_component_type(&field_definition.ty, &unify_expected),
-                        &map,
-                    ),
-                    None => {
-                        self.sink.push(diagnostics::infer::member_not_found(
-                            &pattern_ty,
-                            &field.name,
-                            *span,
-                            Some(&available),
-                            None,
-                            false,
-                        ));
-                        Type::Error
-                    }
-                };
+        let new_fields = self.infer_record_pattern_fields(
+            pattern,
+            &available,
+            &pattern_ty,
+            kind,
+            |this, field| {
+                let definition = variant_fields
+                    .iter()
+                    .find(|declared| declared.name == field.name)?;
+                Some(substitute(
+                    &this.granted_component_type(&definition.ty, &unify_expected),
+                    &map,
+                ))
+            },
+        );
 
-                let is_shorthand = matches!(
-                    &field.value,
-                    Pattern::Identifier { identifier, .. } if identifier == &field.name
-                );
-                let inferred_value =
-                    self.infer_pattern_inner(field.value.clone(), field_ty, kind, is_shorthand);
-                StructFieldPattern {
-                    name: field.name.clone(),
-                    value: inferred_value,
-                }
-            })
-            .collect();
-
-        if !rest {
-            let pattern_field_names: Vec<&str> = fields.iter().map(|f| f.name.as_str()).collect();
-            let missing: Vec<String> = variant_fields
-                .iter()
-                .filter(|vf| !pattern_field_names.contains(&vf.name.as_str()))
-                .map(|vf| vf.name.to_string())
-                .collect();
-            if !missing.is_empty() {
-                self.sink
-                    .push(diagnostics::infer::pattern_missing_fields(&missing, *span));
-            }
+        let variant_qualified = id.with_segment(&variant_name);
+        if let Some(definition_span) = self.get_definition_name_span(store, &variant_qualified) {
+            self.facts.add_usage(*span, definition_span);
         }
-
-        let resolution = match &resolved_ty {
-            Type::Nominal { id, .. } => {
-                let variant_qualified = id.with_segment(&variant_name);
-                if let Some(definition_span) =
-                    self.get_definition_name_span(store, &variant_qualified)
-                {
-                    self.facts.add_usage(*span, definition_span);
-                }
-
-                RecordPatternResolution::EnumVariant {
-                    enum_name: id.into(),
-                    variant_name: identifier.into(),
-                }
-            }
-            _ => return None,
+        let resolution = RecordPatternResolution::EnumVariant {
+            enum_name: id.into(),
+            variant_name: identifier.into(),
         };
 
         Some(Pattern::Struct {
@@ -1465,18 +1433,4 @@ fn or_pattern_error_span(
 
 fn is_bare_constructor_name(identifier: &str, fields: &[Pattern], kind: BindingKind) -> bool {
     fields.is_empty() && !identifier.contains('.') && !kind.is_pattern_position()
-}
-
-fn format_literal(lit: &Literal) -> String {
-    match lit {
-        Literal::Integer { text, value } => text.as_ref().unwrap_or(&value.to_string()).clone(),
-        Literal::Float { text, value } => text.as_ref().unwrap_or(&value.to_string()).clone(),
-        Literal::Imaginary(v) => format!("{}i", v),
-        Literal::Boolean(b) => b.to_string(),
-        Literal::String { value, raw: true } => format!("r\"{}\"", value),
-        Literal::String { value, raw: false } => format!("\"{}\"", value),
-        Literal::Char(c) => format!("'{}'", c),
-        Literal::FormatString(_) => "f\"...\"".to_string(),
-        Literal::Slice(_) => "[...]".to_string(),
-    }
 }

@@ -70,58 +70,12 @@ pub(super) fn has_display_attribute(attributes: &[Attribute]) -> bool {
     attributes.iter().any(|a| a.name == "display")
 }
 
-pub(super) fn has_closed_domain_attribute(attributes: &[Attribute]) -> bool {
-    extract_attribute_flags(attributes, "go")
+pub(super) fn has_go_flag(attributes: &[Attribute], flag: &str) -> bool {
+    attributes
         .iter()
-        .any(|flag| flag == "closed_domain")
-}
-
-pub(super) fn has_anon_struct_attribute(attributes: &[Attribute]) -> bool {
-    extract_attribute_flags(attributes, "go")
-        .iter()
-        .any(|flag| flag == "anon_struct")
-}
-
-pub(super) fn has_hidden_embed_attribute(attributes: &[Attribute]) -> bool {
-    extract_attribute_flags(attributes, "go")
-        .iter()
-        .any(|flag| flag == "hidden_embed")
-}
-
-pub(super) fn has_zero_safe_attribute(attributes: &[Attribute]) -> bool {
-    extract_attribute_flags(attributes, "go")
-        .iter()
-        .any(|flag| flag == "zero_safe")
-}
-
-pub(super) fn has_zero_unsafe_attribute(attributes: &[Attribute]) -> bool {
-    extract_attribute_flags(attributes, "go")
-        .iter()
-        .any(|flag| flag == "zero_unsafe")
-}
-
-pub(super) fn has_hidden_fields_attribute(attributes: &[Attribute]) -> bool {
-    extract_attribute_flags(attributes, "go")
-        .iter()
-        .any(|flag| flag == "hidden_fields")
-}
-
-pub(super) fn has_incomparable_attribute(attributes: &[Attribute]) -> bool {
-    extract_attribute_flags(attributes, "go")
-        .iter()
-        .any(|flag| flag == "incomparable")
-}
-
-pub(super) fn has_constraint_attribute(attributes: &[Attribute]) -> bool {
-    extract_attribute_flags(attributes, "go")
-        .iter()
-        .any(|flag| flag == "constraint")
-}
-
-pub(super) fn has_unexported_attribute(attributes: &[Attribute]) -> bool {
-    extract_attribute_flags(attributes, "go")
-        .iter()
-        .any(|flag| flag == "unexported")
+        .filter(|attribute| attribute.name == "go")
+        .flat_map(|attribute| &attribute.args)
+        .any(|argument| matches!(argument, AttributeArg::Flag(name) if name == flag))
 }
 
 pub(super) fn has_serialization_attribute(attributes: &[Attribute]) -> bool {
@@ -130,7 +84,7 @@ pub(super) fn has_serialization_attribute(attributes: &[Attribute]) -> bool {
 
 pub(super) fn collect_interface_attributes(attributes: &[Attribute]) -> Attributes {
     let mut map = Attributes::default();
-    if has_constraint_attribute(attributes) {
+    if has_go_flag(attributes, "constraint") {
         map.insert(TypeAttribute::Constraint);
     }
     map
@@ -159,32 +113,22 @@ pub(super) fn collect_struct_attributes(
     if has_display_attribute(attributes) {
         map.insert(TypeAttribute::Display);
     }
-    if has_closed_domain_attribute(attributes) {
-        map.insert(TypeAttribute::ClosedDomain);
-    }
-    if has_anon_struct_attribute(attributes) {
-        map.insert(TypeAttribute::AnonStruct);
-    }
-    if has_hidden_embed_attribute(attributes) {
-        map.insert(TypeAttribute::HiddenEmbed);
-    }
     if has_serialization_attribute(attributes) {
         map.insert(TypeAttribute::Serialized);
     }
-    if has_zero_safe_attribute(attributes) {
-        map.insert(TypeAttribute::ZeroSafe);
-    }
-    if has_zero_unsafe_attribute(attributes) {
-        map.insert(TypeAttribute::ZeroUnsafe);
-    }
-    if has_hidden_fields_attribute(attributes) {
-        map.insert(TypeAttribute::HiddenFields);
-    }
-    if has_incomparable_attribute(attributes) {
-        map.insert(TypeAttribute::Incomparable);
-    }
-    if has_constraint_attribute(attributes) {
-        map.insert(TypeAttribute::Constraint);
+    for flag in extract_attribute_flags(attributes, "go") {
+        let attribute = match flag.as_str() {
+            "closed_domain" => TypeAttribute::ClosedDomain,
+            "anon_struct" => TypeAttribute::AnonStruct,
+            "hidden_embed" => TypeAttribute::HiddenEmbed,
+            "zero_safe" => TypeAttribute::ZeroSafe,
+            "zero_unsafe" => TypeAttribute::ZeroUnsafe,
+            "hidden_fields" => TypeAttribute::HiddenFields,
+            "incomparable" => TypeAttribute::Incomparable,
+            "constraint" => TypeAttribute::Constraint,
+            _ => continue,
+        };
+        map.insert(attribute);
     }
     map
 }

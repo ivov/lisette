@@ -4,6 +4,7 @@ use crate::analysis::ProjectKind;
 use crate::analysis::ScriptUnit;
 use crate::store;
 use syntax::program::TestFunction;
+use syntax::types::SimpleKind;
 
 #[derive(Debug, Clone)]
 pub struct Cursor {
@@ -245,11 +246,11 @@ impl TaskState {
         use syntax::ast::{Expression, Literal};
         match expression {
             Expression::Literal { literal, .. } => match literal {
-                Literal::Integer { .. } => Some(self.type_int()),
-                Literal::Float { .. } => Some(self.type_float()),
-                Literal::Boolean(_) => Some(self.type_bool()),
-                Literal::String { .. } => Some(self.type_string()),
-                Literal::Char(_) => Some(self.type_char()),
+                Literal::Integer { .. } => Some(Type::int()),
+                Literal::Float { .. } => Some(Type::Simple(SimpleKind::Float64)),
+                Literal::Boolean(_) => Some(Type::bool()),
+                Literal::String { .. } => Some(Type::string()),
+                Literal::Char(_) => Some(Type::Simple(SimpleKind::Rune)),
                 _ => None,
             },
             Expression::Unary { expression, .. } => self.type_from_literal_expression(expression),
