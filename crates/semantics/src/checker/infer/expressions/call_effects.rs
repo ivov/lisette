@@ -44,7 +44,7 @@ impl InferCtx<'_> {
                 ..
             } => {
                 let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
-                let peeled = store.deep_resolve_alias(&receiver_ty);
+                let peeled = store.peel_alias(&receiver_ty);
 
                 let is_ufcs_member = |ty: &Type| {
                     matches!(ty, Type::Nominal { id, .. }
@@ -376,7 +376,7 @@ impl InferCtx<'_> {
         let store = self.store;
         let arg_ty = arg.get_type().resolve_in(&self.env);
         let arg_span = arg.get_span();
-        let int_ty = self.type_int();
+        let int_ty = Type::int();
 
         if let Some(peeled) = peel_to_range_type(&arg_ty, |id| self.store.get_definition(id)) {
             if let Some(inner) = peeled.get_type_params().and_then(|p| p.first()) {

@@ -300,7 +300,7 @@ impl InferCtx<'_> {
                         BindingKind::MatchArm,
                     );
 
-                    let bool_ty = this.type_bool();
+                    let bool_ty = Type::bool();
                     let new_guard = match_arm.guard.map(|guard| {
                         let guard_expression = this.infer_expression(*guard, &bool_ty);
                         Box::new(guard_expression)

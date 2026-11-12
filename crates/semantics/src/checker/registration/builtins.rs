@@ -1,5 +1,5 @@
 use crate::checker::EnvResolve;
-use syntax::types::{CompoundKind, SimpleKind, Symbol, Type};
+use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::checker::TaskState;
 use crate::store::Store;
@@ -9,38 +9,6 @@ impl TaskState {
         self.lookup_qualified_name(store, type_name)
             .map(Symbol::from)
             .unwrap_or_else(|| panic!("Builtin type {type_name} not found in store"))
-    }
-
-    pub(crate) fn type_unit(&self) -> Type {
-        Type::unit()
-    }
-
-    pub(crate) fn type_never(&self) -> Type {
-        Type::Never
-    }
-
-    pub(crate) fn type_int(&mut self) -> Type {
-        Type::Simple(SimpleKind::Int)
-    }
-
-    pub(crate) fn type_float(&mut self) -> Type {
-        Type::Simple(SimpleKind::Float64)
-    }
-
-    pub(crate) fn type_string(&mut self) -> Type {
-        Type::Simple(SimpleKind::String)
-    }
-
-    pub(crate) fn type_char(&mut self) -> Type {
-        Type::Simple(SimpleKind::Rune)
-    }
-
-    pub(crate) fn type_bool(&mut self) -> Type {
-        Type::Simple(SimpleKind::Bool)
-    }
-
-    pub(crate) fn type_complex128(&mut self) -> Type {
-        Type::Simple(SimpleKind::Complex128)
     }
 
     pub(crate) fn type_slice(&mut self, element_type: Type) -> Type {

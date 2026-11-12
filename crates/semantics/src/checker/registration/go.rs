@@ -47,17 +47,15 @@ impl TaskState {
                 ));
         }
 
-        let file = File {
-            id: file_id,
-            package_id: package_id.to_string(),
-            parse_status: build_result.status,
-            name: filename.clone(),
-            display_path: filename,
-            source_path: cache_path,
-            source: source.to_string(),
-            items: build_result.ast,
-            file_comment: build_result.file_comment,
-        };
+        let (mut file, _) = File::from_parse(
+            file_id,
+            package_id,
+            filename.clone(),
+            filename,
+            source.to_string(),
+            build_result,
+        );
+        file.source_path = cache_path;
 
         let imports = file.imports();
 

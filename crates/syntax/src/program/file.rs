@@ -6,6 +6,7 @@ use ecow::{EcoString, eco_format};
 
 use crate::FileParseStatus;
 use crate::ast::{Expression, ImportAlias, Span};
+use crate::parse::{ParseError, ParseResult};
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -85,6 +86,29 @@ fn is_major_version_segment(segment: &str) -> bool {
 }
 
 impl File {
+    /// Keep the parsed AST, status, and file comment together while returning its diagnostics.
+    pub fn from_parse(
+        id: u32,
+        package_id: &str,
+        name: String,
+        display_path: String,
+        source: String,
+        result: ParseResult,
+    ) -> (Self, Vec<ParseError>) {
+        let file = Self {
+            id,
+            package_id: package_id.to_string(),
+            name,
+            display_path,
+            source_path: None,
+            source,
+            parse_status: result.status,
+            items: result.ast,
+            file_comment: result.file_comment,
+        };
+        (file, result.errors)
+    }
+
     pub fn new_cached(
         package_id: &str,
         name: &str,

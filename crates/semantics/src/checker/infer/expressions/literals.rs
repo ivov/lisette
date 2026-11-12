@@ -15,27 +15,23 @@ impl InferCtx<'_> {
         span: Span,
     ) -> Expression {
         let store = self.store;
-        match literal {
+        let (literal, ty) = match literal {
             Literal::Boolean(boolean) => {
                 let resolved = expected_ty.resolve_in(&self.env);
                 let ty = if adapts_to_named_type(&resolved, store, SimpleKind::Bool) {
                     resolved.clone()
                 } else {
-                    let bool_ty = self.type_bool();
+                    let bool_ty = Type::bool();
                     self.unify(expected_ty, &bool_ty, &span);
                     bool_ty
                 };
 
-                Expression::Literal {
-                    literal: Literal::Boolean(boolean),
-                    ty,
-                    span,
-                }
+                (Literal::Boolean(boolean), ty)
             }
 
             Literal::Integer { value, text } => {
                 let resolved = expected_ty.resolve_in(&self.env);
-                let ty = if let Some(numeric) = numeric_adapt_target(&resolved, store) {
+                let ty = if let Some(numeric) = store.literal_adaptation_target(&resolved) {
                     let is_pre_negated = text.as_deref().is_some_and(|t| t.starts_with('-'));
                     if !self.is_inside_constant_expression() {
                         if is_pre_negated {
@@ -50,56 +46,44 @@ impl InferCtx<'_> {
                     }
                     resolved.clone()
                 } else {
-                    let int_ty = self.type_int();
+                    let int_ty = Type::int();
                     self.unify(expected_ty, &int_ty, &span);
                     int_ty
                 };
 
-                Expression::Literal {
-                    literal: Literal::Integer { value, text },
-                    ty,
-                    span,
-                }
+                (Literal::Integer { value, text }, ty)
             }
 
             Literal::Float { value, text } => {
                 let resolved = expected_ty.resolve_in(&self.env);
-                let ty = if let Some(numeric) = numeric_adapt_target(&resolved, store)
+                let ty = if let Some(numeric) = store.literal_adaptation_target(&resolved)
                     && (numeric.is_float() || numeric.is_complex())
                 {
                     self.check_float_literal_overflow(value, &numeric, span);
                     resolved.clone()
                 } else {
-                    let float_ty = self.type_float();
+                    let float_ty = Type::Simple(SimpleKind::Float64);
                     self.unify(expected_ty, &float_ty, &span);
                     float_ty
                 };
 
-                Expression::Literal {
-                    literal: Literal::Float { value, text },
-                    ty,
-                    span,
-                }
+                (Literal::Float { value, text }, ty)
             }
 
             Literal::Imaginary(coef) => {
                 let resolved = expected_ty.resolve_in(&self.env);
-                let ty = if let Some(numeric) = numeric_adapt_target(&resolved, store)
+                let ty = if let Some(numeric) = store.literal_adaptation_target(&resolved)
                     && numeric.is_complex()
                 {
                     self.check_float_literal_overflow(coef, &numeric, span);
                     resolved.clone()
                 } else {
-                    let complex_ty = self.type_complex128();
+                    let complex_ty = Type::Simple(SimpleKind::Complex128);
                     self.unify(expected_ty, &complex_ty, &span);
                     complex_ty
                 };
 
-                Expression::Literal {
-                    literal: Literal::Imaginary(coef),
-                    ty,
-                    span,
-                }
+                (Literal::Imaginary(coef), ty)
             }
 
             Literal::String { value, raw } => {
@@ -107,7 +91,7 @@ impl InferCtx<'_> {
                 let ty = if adapts_to_named_type(&resolved, store, SimpleKind::String) {
                     resolved.clone()
                 } else {
-                    let string_ty = self.type_string();
+                    let string_ty = Type::string();
                     self.unify(expected_ty, &string_ty, &span);
                     string_ty
                 };
@@ -121,16 +105,12 @@ impl InferCtx<'_> {
                         .add_unprefixed_fstring(span, names[0].to_string());
                 }
 
-                Expression::Literal {
-                    literal: Literal::String { value, raw },
-                    ty,
-                    span,
-                }
+                (Literal::String { value, raw }, ty)
             }
 
             Literal::Char(char) => {
                 let resolved = expected_ty.resolve_in(&self.env);
-                let ty = if let Some(numeric) = numeric_adapt_target(&resolved, store) {
+                let ty = if let Some(numeric) = store.literal_adaptation_target(&resolved) {
                     if !self.is_inside_constant_expression()
                         && let Some(codepoint) = rune_codepoint(&char)
                     {
@@ -138,51 +118,27 @@ impl InferCtx<'_> {
                     }
                     resolved.clone()
                 } else {
-                    let char_ty = self.type_char();
+                    let char_ty = Type::Simple(SimpleKind::Rune);
                     self.unify(expected_ty, &char_ty, &span);
                     char_ty
                 };
 
-                Expression::Literal {
-                    literal: Literal::Char(char),
-                    ty,
-                    span,
-                }
+                (Literal::Char(char), ty)
             }
 
             Literal::Slice(elements) => {
-                // Peel so an alias over Array/Slice takes the branch below.
-                let resolved = store.peel_alias(&expected_ty.resolve_in(&self.env));
-
-                if let Type::Array { length, element } = &resolved {
-                    let expected_length = *length;
-                    let elem_expected_ty = element.as_ref().clone();
-                    if elements.len() as u64 != expected_length {
+                let resolved = self.peel_resolved(expected_ty);
+                let element_expected_ty = if let Type::Array { length, element } = &resolved {
+                    if elements.len() as u64 != *length {
                         self.sink
                             .push(diagnostics::infer::array_literal_length_mismatch(
-                                expected_length,
+                                *length,
                                 elements.len(),
                                 span,
                             ));
                     }
-                    let new_elements: Vec<Expression> = elements
-                        .into_iter()
-                        .map(|e| {
-                            self.with_value_context(|s| s.infer_expression(e, &elem_expected_ty))
-                        })
-                        .collect();
-                    let array_ty = self.type_array(expected_length, elem_expected_ty);
-                    self.unify(expected_ty, &array_ty, &span);
-                    return Expression::Literal {
-                        literal: Literal::Slice(new_elements),
-                        ty: array_ty,
-                        span,
-                    };
-                }
-
-                // If expected type is Slice<T>, propagate T to element inference
-                // so literals can adapt (e.g., `let x: Slice<int8> = [1, 2, 3]` works)
-                let element_expected_ty = if resolved.get_name() == Some("Slice") {
+                    element.as_ref().clone()
+                } else if resolved.get_name() == Some("Slice") {
                     resolved
                         .inner()
                         .unwrap_or_else(|| self.new_type_var_with_hint("T"))
@@ -192,30 +148,28 @@ impl InferCtx<'_> {
 
                 let new_elements: Vec<Expression> = elements
                     .into_iter()
-                    .map(|e| {
-                        self.with_value_context(|s| s.infer_expression(e, &element_expected_ty))
+                    .map(|element| {
+                        self.with_value_context(|this| {
+                            this.infer_expression(element, &element_expected_ty)
+                        })
                     })
                     .collect();
-
-                // A literal is fresh storage, so it yields the writable form.
-                let slice_ty =
-                    Type::qualified_compound(CompoundKind::Slice, vec![element_expected_ty], true);
-                let unified = self.unify(expected_ty, &slice_ty, &span);
-
-                if new_elements.is_empty() && unified {
+                let ty = if let Type::Array { length, .. } = &resolved {
+                    self.type_array(*length, element_expected_ty)
+                } else {
+                    // A slice literal is fresh storage and grants write permission.
+                    Type::qualified_compound(CompoundKind::Slice, vec![element_expected_ty], true)
+                };
+                let unified = self.unify(expected_ty, &ty, &span);
+                if !matches!(resolved, Type::Array { .. }) && new_elements.is_empty() && unified {
                     let package_id = self.cursor.package_id().to_string();
                     self.facts.deferred.empty_literals.push(EmptyLiteralCheck {
-                        ty: slice_ty.clone(),
+                        ty: ty.clone(),
                         span,
                         package_id,
                     });
                 }
-
-                Expression::Literal {
-                    literal: Literal::Slice(new_elements),
-                    ty: slice_ty,
-                    span,
-                }
+                (Literal::Slice(new_elements), ty)
             }
 
             Literal::FormatString(parts) => {
@@ -242,16 +196,13 @@ impl InferCtx<'_> {
                         .add_expression_only_fstring(span, fstring_inner_needs_parens(expression));
                 }
 
-                let string_ty = self.type_string();
+                let string_ty = Type::string();
                 self.unify(expected_ty, &string_ty, &span);
 
-                Expression::Literal {
-                    literal: Literal::FormatString(new_parts),
-                    ty: string_ty,
-                    span,
-                }
+                (Literal::FormatString(new_parts), string_ty)
             }
-        }
+        };
+        Expression::Literal { literal, ty, span }
     }
 
     fn hole_would_interpolate(&self, name: &str) -> bool {
@@ -269,7 +220,7 @@ impl InferCtx<'_> {
         }
 
         let new_ty = self.new_type_var();
-        let unit_ty = self.type_unit();
+        let unit_ty = Type::unit();
         self.unify(&new_ty, &unit_ty, &span);
         self.unify(expected_ty, &new_ty, &span);
         Expression::Unit { ty: new_ty, span }
@@ -291,12 +242,8 @@ fn fstring_inner_needs_parens(expression: &Expression) -> bool {
     }
 }
 
-fn numeric_adapt_target(ty: &Type, store: &Store) -> Option<Type> {
-    store.literal_adaptation_target(ty)
-}
-
 fn adapts_to_named_type(ty: &Type, store: &Store, kind: SimpleKind) -> bool {
-    let peeled = store.deep_resolve_alias(ty);
+    let peeled = store.peel_alias(ty);
     matches!(&peeled, Type::Nominal { id, .. }
         if store.is_nominal_defined_type(id.as_str())
             && store.underlying_simple_kind(&peeled) == Some(kind))

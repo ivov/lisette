@@ -82,7 +82,7 @@ fn check_not_comparable_impl(
     definite_only: bool,
     comparable_parameter: &mut dyn FnMut(&str) -> bool,
 ) -> Option<&'static str> {
-    let resolved = store.deep_resolve_alias(ty);
+    let resolved = store.peel_alias(ty);
     let ty = &resolved;
 
     if let Some(definition) = store.resolved_definition(ty) {
@@ -301,7 +301,7 @@ fn reaches_definition(
     if depth > REACHES_DEPTH_LIMIT {
         return false;
     }
-    let resolved = store.deep_resolve_alias(ty);
+    let resolved = store.peel_alias(ty);
     match &resolved {
         Type::Nominal { id, params, .. } => {
             if id.as_str() == target {
@@ -377,12 +377,12 @@ fn is_opaque_go_handle(store: &Store, ty: &Type) -> bool {
 }
 
 fn is_interface_or_unknown(store: &Store, ty: &Type) -> bool {
-    let resolved = store.deep_resolve_alias(ty);
+    let resolved = store.peel_alias(ty);
     resolved.is_unknown() || store.is_interface(&resolved)
 }
 
 fn type_has_usable_equals(store: &Store, ty: &Type, current_package: &str) -> bool {
-    let resolved = store.deep_resolve_alias(ty);
+    let resolved = store.peel_alias(ty);
     let Some(qualified) = resolved.get_qualified_id() else {
         return false;
     };
@@ -397,7 +397,7 @@ pub(crate) fn check_not_equatable(
     equatable_param: &dyn Fn(&str) -> bool,
     comparable_param: &dyn Fn(&str) -> bool,
 ) -> Option<&'static str> {
-    let resolved = store.deep_resolve_alias(&ty.resolve_in(env));
+    let resolved = store.peel_alias(&ty.resolve_in(env));
 
     if let Type::Parameter(name) = &resolved
         && equatable_param(name)
@@ -448,7 +448,7 @@ fn map_key_not_comparable(
     key: &Type,
     comparable_param: &dyn Fn(&str) -> bool,
 ) -> bool {
-    let resolved = store.deep_resolve_alias(&key.resolve_in(env));
+    let resolved = store.peel_alias(&key.resolve_in(env));
     check_not_comparable_with_bounds(env, store, &resolved, &mut |parameter| {
         comparable_param(parameter)
     })
@@ -474,7 +474,7 @@ pub(crate) fn bound_implied(store: &Store, type_bounds: &[Type], method_bound: &
 }
 
 fn bound_satisfies(store: &Store, start: &Type, target: &Type) -> bool {
-    let target = store.deep_resolve_alias(target);
+    let target = store.peel_alias(target);
     interface_instances(start, |id| store.get_definition(id))
         .into_iter()
         .any(|current| current.ty == target)
@@ -619,10 +619,7 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::not_comparable_value_use_equals(
                     &resolved, *span,
                 ));
-        } else if operands_match
-            && self.is_struct_or_enum(&resolved)
-            && self.is_equality_derivable(&resolved)
-        {
+        } else if operands_match && self.is_equality_derivable(&resolved) {
             self.sink
                 .push(diagnostics::infer::not_comparable_derive_equality(
                     &resolved, *span,
@@ -648,20 +645,9 @@ impl InferCtx<'_> {
         )
     }
 
-    fn is_struct_or_enum(&self, ty: &Type) -> bool {
-        let resolved = self.store.deep_resolve_alias(ty);
-        let Some(name) = resolved.get_qualified_id() else {
-            return false;
-        };
-        matches!(
-            self.store.get_definition(name).map(|d| &d.body),
-            Some(DefinitionBody::Struct { .. } | DefinitionBody::Enum { .. })
-        )
-    }
-
     /// Whether the `==` diagnostic may suggest `#[equality]` for this struct or enum.
     fn is_equality_derivable(&self, ty: &Type) -> bool {
-        let resolved = self.store.deep_resolve_alias(ty);
+        let resolved = self.store.peel_alias(ty);
         let Some(name) = resolved.get_qualified_id() else {
             return false;
         };
@@ -698,27 +684,16 @@ impl InferCtx<'_> {
             .collect();
         field_types.iter().all(|field_ty| {
             let substituted = substitute(&field_ty.resolve_in(&self.env), &sub_map);
-            let field_resolved = self.store.deep_resolve_alias(&substituted);
+            let field_resolved = self.store.peel_alias(&substituted);
             if field_resolved.get_qualified_id() == Some(name) {
                 return true;
             }
-            let is_comparable = |name: &str| {
-                self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Comparable)
-            };
-            check_not_equatable(
-                &self.env,
-                self.store,
-                &substituted,
-                self.cursor.package_id(),
-                &is_comparable,
-                &is_comparable,
-            )
-            .is_none()
+            self.not_equatable_reason(&substituted).is_none()
         })
     }
 
     pub(super) fn gate_container_equals(&mut self, receiver_ty: &Type, span: Span) {
-        let receiver = self.store.deep_resolve_alias(receiver_ty);
+        let receiver = self.store.peel_alias(receiver_ty);
         if !receiver.is_slice() && !receiver.is_map() {
             return;
         }
@@ -737,7 +712,7 @@ impl InferCtx<'_> {
     }
 
     fn container_equals_element(&self, ty: &Type) -> Option<Type> {
-        let resolved = self.store.deep_resolve_alias(&ty.resolve_in(&self.env));
+        let resolved = self.peel_resolved(ty);
         match resolved.as_compound() {
             Some((CompoundKind::Slice, args)) => args.first().cloned(),
             Some((CompoundKind::Map, args)) => args.get(1).cloned(),

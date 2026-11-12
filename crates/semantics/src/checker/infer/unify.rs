@@ -53,12 +53,6 @@ pub enum UnifyError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Dispatched {
-    Handled,
-    Fallthrough,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ClosureAdapter {
     Widens,
     Narrows,
@@ -136,7 +130,7 @@ impl InferCtx<'_> {
     }
 
     pub(super) fn unify_statement_loop(&mut self, expected_ty: &Type, span: &Span, keyword: &str) {
-        let unit_ty = self.type_unit();
+        let unit_ty = Type::unit();
         if let Err(unify_error) = self.try_unify(expected_ty, &unit_ty, span) {
             if unify_error == UnifyError::AlreadyReported {
                 return;
@@ -637,9 +631,7 @@ impl InferCtx<'_> {
         site: BoundSite<'_>,
         parameter_hint: Option<diagnostics::infer::BoundParameterHint<'_>>,
     ) {
-        let resolved_ty = self
-            .store
-            .deep_resolve_alias(&bound.generic.resolve_in(&self.env));
+        let resolved_ty = self.peel_resolved(&bound.generic);
         if resolved_ty.is_variable() {
             match site {
                 BoundSite::Call { callee_name } => {
@@ -649,36 +641,21 @@ impl InferCtx<'_> {
             }
             return;
         }
-        let required = self
-            .store
-            .deep_resolve_alias(&bound.ty.resolve_in(&self.env));
+        let required = self.peel_resolved(&bound.ty);
         if resolved_ty.contains_error() || required.contains_error() {
             return;
         }
         let checkpoint = self.sink.checkpoint();
-        if self.dispatch_builtin_bound(&required, &resolved_ty, span) != Dispatched::Handled {
+        if let Some(builtin) = required
+            .get_qualified_id()
+            .and_then(BuiltinBound::from_qualified_id)
+        {
+            let store = self.store;
+            self.check_builtin_bound_argument(store, &resolved_ty, builtin, *span, None);
+        } else {
             self.check_concrete_bound_with_hint(&resolved_ty, &required, span, parameter_hint);
         }
         self.sink.drop_reports_repeated_since(checkpoint);
-    }
-
-    /// Built-in bound recognition; falls through to the interface path on miss.
-    pub(super) fn dispatch_builtin_bound(
-        &mut self,
-        required: &Type,
-        resolved_generic: &Type,
-        span: &Span,
-    ) -> Dispatched {
-        let store = self.store;
-        let Some(builtin) = required
-            .get_qualified_id()
-            .and_then(BuiltinBound::from_qualified_id)
-        else {
-            return Dispatched::Fallthrough;
-        };
-
-        self.check_builtin_bound_argument(store, resolved_generic, builtin, *span, None);
-        Dispatched::Handled
     }
 
     fn unification_diagnostic(

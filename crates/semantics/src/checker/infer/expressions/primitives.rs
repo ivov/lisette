@@ -121,7 +121,7 @@ impl InferCtx<'_> {
         expected_ty: &Type,
     ) -> Expression {
         if items.is_empty() {
-            let unit_ty = self.type_unit();
+            let unit_ty = Type::unit();
             let resolved = expected_ty.resolve_in(&self.env);
             if let Some((CompoundKind::Map, args)) = resolved.as_compound()
                 && args.len() == 2
@@ -451,7 +451,7 @@ impl InferCtx<'_> {
             && !self.scopes.lookup_mutable(&var_name)
             && self.imports.namespace(&var_name).is_none()
         {
-            let peeled = store.peel_alias(&target_ty.resolve_in(&self.env));
+            let peeled = self.peel_resolved(&target_ty);
             if peeled.is_ref() && peeled.is_writable() {
                 self.report_disallowed_mutation(store, &var_name, span, false, None);
                 if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
@@ -508,7 +508,7 @@ impl InferCtx<'_> {
             }
             super::permission::WriteTarget::Binding { name } => {
                 if !self.scopes.lookup_mutable(&name) && self.imports.namespace(&name).is_none() {
-                    let rhs_is_ref = store.peel_alias(&value_ty.resolve_in(&self.env)).is_ref();
+                    let rhs_is_ref = self.peel_resolved(&value_ty).is_ref();
                     self.report_disallowed_mutation(store, &name, span, rhs_is_ref, None);
                 } else {
                     self.record_loop_copy_write(&name, span);
@@ -635,7 +635,7 @@ impl InferCtx<'_> {
         let pointer_type = (!rhs_is_ref && var_name != "self" && !is_const)
             .then(|| self.lookup_type(store, var_name))
             .flatten()
-            .map(|ty| store.peel_alias(&ty.resolve_in(&self.env)))
+            .map(|ty| self.peel_resolved(&ty))
             .filter(|ty| ty.is_ref() && ty.is_writable())
             .map(|ty| ty.to_string());
         let mut diagnostic = diagnostics::infer::disallowed_mutation(

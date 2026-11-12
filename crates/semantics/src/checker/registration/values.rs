@@ -360,7 +360,7 @@ impl TaskState {
                     .collect();
 
                 let return_ty = match return_annotation {
-                    Annotation::Unknown => this.type_unit(),
+                    Annotation::Unknown => Type::unit(),
                     _ => this.convert_to_type(store, return_annotation, span),
                 };
                 (param_types, return_ty)

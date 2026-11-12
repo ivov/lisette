@@ -218,7 +218,7 @@ impl InferCtx<'_> {
                 && (self.is_enum_type(store, &return_ty.resolve_in(&self.env))
                     || !store.contains_unknown(&resolved_expected))
             {
-                let peeled = store.deep_resolve_alias(&resolved_expected);
+                let peeled = store.peel_alias(&resolved_expected);
                 let _ = self.speculatively(|this| this.try_unify(&peeled, &return_ty, &span));
             }
         }
@@ -269,13 +269,7 @@ impl InferCtx<'_> {
             .is_error();
 
         let new_spread = spread.map(|spread_expr| {
-            self.infer_spread_argument(
-                spread_expr,
-                variadic.as_ref(),
-                &callee_expression,
-                callee_is_unresolved,
-                span,
-            )
+            self.infer_spread_argument(spread_expr, variadic.as_ref(), callee_is_unresolved, span)
         });
 
         let return_ty = if call_kind == CallKind::TupleStructConstructor {
@@ -295,7 +289,7 @@ impl InferCtx<'_> {
             return_ty
         };
 
-        let resolved_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+        let resolved_expected = self.peel_resolved(expected_ty);
         let expected_is_map = matches!(
             resolved_expected.as_compound(),
             Some((CompoundKind::Map, _))
@@ -309,7 +303,7 @@ impl InferCtx<'_> {
             &span,
         );
 
-        let resolved_return = store.deep_resolve_alias(&return_ty.resolve_in(&self.env));
+        let resolved_return = self.peel_resolved(&return_ty);
         if call_kind == CallKind::TupleStructConstructor
             && let Type::Nominal { id, .. } = &resolved_return
         {
@@ -492,9 +486,7 @@ impl InferCtx<'_> {
             }
             _ => return None,
         };
-        let receiver_ty = self
-            .store
-            .peel_alias(&receiver.get_type().resolve_in(&self.env));
+        let receiver_ty = self.peel_resolved(&receiver.get_type());
         Some(receiver_ty.writable_clone_result())
     }
 
@@ -529,7 +521,6 @@ impl InferCtx<'_> {
         &mut self,
         spread_expr: Box<Expression>,
         variadic: Option<&VariadicParameter>,
-        _callee_expression: &Expression,
         callee_is_unresolved: bool,
         span: Span,
     ) -> Expression {
@@ -549,17 +540,11 @@ impl InferCtx<'_> {
                 }
                 let param_ty = variadic.parameter.ty.resolve_in(&self.env);
                 if !variadic.writable && param_ty.is_writable() {
-                    let actual = self
-                        .store
-                        .peel_alias(&inferred.get_type().resolve_in(&self.env));
+                    let actual = self.peel_resolved(&inferred.get_type());
                     let element_writable = actual
                         .get_type_params()
                         .and_then(|params| params.first().cloned())
-                        .is_some_and(|element| {
-                            self.store
-                                .peel_alias(&element.resolve_in(&self.env))
-                                .is_writable()
-                        });
+                        .is_some_and(|element| self.peel_resolved(&element).is_writable());
                     if !element_writable && !actual.is_error() {
                         self.sink.push(diagnostics::infer::spread_needs_writable(
                             &param_ty.to_string(),
@@ -658,7 +643,7 @@ impl InferCtx<'_> {
 
         // Resolve (element, length) from the turbofish, else the expected type.
         let resolved = if type_args.is_empty() {
-            let peeled = store.peel_alias(&expected_ty.resolve_in(&self.env));
+            let peeled = self.peel_resolved(expected_ty);
             match peeled {
                 Type::Array { length, element } => Some((element.as_ref().clone(), length)),
                 _ => {
@@ -816,13 +801,12 @@ impl InferCtx<'_> {
 
     /// The `(element, length)` an expected `Option<Array<T, N>>` asks for.
     fn expected_array_shape(&self, expected_ty: &Type) -> Option<(Type, u64)> {
-        let store = self.store;
-        let peeled = store.peel_alias(&expected_ty.resolve_in(&self.env));
+        let peeled = self.peel_resolved(expected_ty);
         if !peeled.is_option() {
             return None;
         }
         let inner = peeled.get_type_params()?.first()?;
-        match store.peel_alias(&inner.resolve_in(&self.env)) {
+        match self.peel_resolved(inner) {
             Type::Array { length, element } => Some((element.as_ref().clone(), length)),
             _ => None,
         }
@@ -1227,7 +1211,7 @@ impl InferCtx<'_> {
                 if variadic_start.is_some_and(|start| i >= start) {
                     return self.with_value_context(|s| s.infer_expression(arg, &expected_ty));
                 }
-                let resolved_expected = self.store.peel_alias(&expected_ty.resolve_in(&self.env));
+                let resolved_expected = self.peel_resolved(&expected_ty);
                 if resolved_expected.is_writable()
                     && let Some(name) = arg.get_var_name()
                     && self
@@ -1373,7 +1357,7 @@ impl InferCtx<'_> {
                 .unwrap_or_else(|| *fallback_span);
             let parameter_hint = signature.as_function_type().and_then(|function| {
                 function.params.iter().find_map(|parameter| {
-                    let ty = self.store.deep_resolve_alias(&parameter.ty);
+                    let ty = self.store.peel_alias(&parameter.ty);
                     matches!(
                         ty.as_compound(),
                         Some((CompoundKind::Ref, [Type::Parameter(name)]))

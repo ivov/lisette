@@ -65,7 +65,7 @@ fn report_bad_map_key(
             .iter()
             .any(|child| report_bad_map_key(store, child, span, sink, expanding));
     }
-    let resolved = store.deep_resolve_alias(ty);
+    let resolved = store.peel_alias(ty);
     let found = if let Some((CompoundKind::Map, args)) = resolved.as_compound()
         && let Some(key_ty) = args.first()
         && let Some(reason) = check_never_comparable(&TypeEnv::default(), store, key_ty)

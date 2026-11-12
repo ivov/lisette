@@ -4,23 +4,18 @@ use syntax::program::{Definition, DefinitionBody};
 use crate::checker::infer::InferCtx;
 
 impl InferCtx<'_> {
-    pub(super) fn infer_struct_definition(&mut self, expression: Expression) -> Expression {
-        let store = self.store;
+    pub(super) fn infer_struct_definition(&self, mut expression: Expression) -> Expression {
         let Expression::Struct {
-            doc,
-            attributes,
             name,
             name_span,
             generics,
             fields,
-            visibility,
-            span,
-        } = expression
+            ..
+        } = &mut expression
         else {
             unreachable!()
         };
-
-        let qualified_name = self.qualify_name(&name);
+        let qualified_name = self.qualify_name(name);
         if let Some(Definition {
             name_span: definition_name_span,
             body:
@@ -30,55 +25,27 @@ impl InferCtx<'_> {
                     ..
                 },
             ..
-        }) = store.get_definition(&qualified_name)
+        }) = self.store.get_definition(&qualified_name)
         {
-            let definition_name_span =
-                definition_name_span.expect("struct definition has a name span");
-            let definition_generics = definition_generics.clone();
-            let definition_fields = definition_fields.clone();
-
-            Expression::Struct {
-                doc,
-                attributes,
-                name,
-                name_span: definition_name_span,
-                generics: definition_generics,
-                fields: definition_fields,
-                visibility,
-                span,
-            }
-        } else {
-            Expression::Struct {
-                doc,
-                attributes,
-                name,
-                name_span,
-                generics,
-                fields,
-                visibility,
-                span,
-            }
+            *name_span = definition_name_span.expect("struct definition has a name span");
+            *generics = definition_generics.clone();
+            *fields = definition_fields.clone();
         }
+        expression
     }
 
-    pub(super) fn infer_type_alias_definition(&mut self, expression: Expression) -> Expression {
-        let store = self.store;
+    pub(super) fn infer_type_alias_definition(&self, mut expression: Expression) -> Expression {
         let Expression::TypeAlias {
-            doc,
-            attributes,
             name,
-            name_span,
             generics,
             annotation,
             ty,
-            visibility,
-            span,
-        } = expression
+            ..
+        } = &mut expression
         else {
             unreachable!()
         };
-
-        let qualified_name = self.qualify_name(&name);
+        let qualified_name = self.qualify_name(name);
         if let Some(Definition {
             ty: definition_ty,
             body:
@@ -88,31 +55,12 @@ impl InferCtx<'_> {
                     ..
                 },
             ..
-        }) = store.get_definition(&qualified_name)
+        }) = self.store.get_definition(&qualified_name)
         {
-            Expression::TypeAlias {
-                doc,
-                attributes,
-                name,
-                name_span,
-                generics: definition_generics.clone(),
-                annotation: alias.annotation().clone(),
-                ty: definition_ty.clone(),
-                visibility,
-                span,
-            }
-        } else {
-            Expression::TypeAlias {
-                doc,
-                attributes,
-                name,
-                name_span,
-                generics,
-                annotation,
-                ty,
-                visibility,
-                span,
-            }
+            *generics = definition_generics.clone();
+            *annotation = alias.annotation().clone();
+            *ty = definition_ty.clone();
         }
+        expression
     }
 }

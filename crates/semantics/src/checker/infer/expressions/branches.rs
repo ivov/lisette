@@ -225,7 +225,7 @@ impl InferCtx<'_> {
             // An `if` without `else` always has type () (unit), like Rust.
             // The consequence body can produce any type, it's discarded.
             if is_expression {
-                let unit_ty = self.type_unit();
+                let unit_ty = Type::unit();
                 self.unify(expected_ty, &unit_ty, &span);
             }
         } else if is_expression
@@ -251,7 +251,7 @@ impl InferCtx<'_> {
         }
 
         let result_ty = if has_no_else {
-            self.type_unit()
+            Type::unit()
         } else if is_expression && !expected_is_concrete {
             expected_ty.resolve_in(&self.env)
         } else {
@@ -387,7 +387,7 @@ impl InferCtx<'_> {
 
         if !is_statement {
             if is_if_let_without_else {
-                let unit = self.type_unit();
+                let unit = Type::unit();
                 self.unify(expected_ty, &unit, &span);
                 let _ = self.try_unify(&result_ty, &unit, &span);
             } else {

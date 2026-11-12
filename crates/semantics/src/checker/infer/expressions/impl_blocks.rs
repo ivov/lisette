@@ -30,7 +30,13 @@ impl InferCtx<'_> {
                 this.register_receiver_type_bounds(store, &receiver_qualified, &generics);
             }
 
-            let receiver_ty = if generics.is_empty() {
+            let receiver_ty = if let Type::Nominal { id, .. } = &impl_ty
+                && let Some(ctor_ty) = store
+                    .get_definition(id)
+                    .and_then(Definition::constructor_type)
+            {
+                ctor_ty
+            } else if generics.is_empty() {
                 impl_ty.clone()
             } else {
                 Type::Forall {
@@ -38,19 +44,9 @@ impl InferCtx<'_> {
                     body: Box::new(impl_ty.clone()),
                 }
             };
-
-            let scope = this.scopes.current_mut();
-            scope.insert_value(receiver_name.to_string(), receiver_ty);
-
-            if let Type::Nominal { id, .. } = &impl_ty
-                && let Some(ctor_ty) = store
-                    .get_definition(id)
-                    .and_then(Definition::constructor_type)
-            {
-                this.scopes
-                    .current_mut()
-                    .insert_value(receiver_name.to_string(), ctor_ty);
-            }
+            this.scopes
+                .current_mut()
+                .insert_value(receiver_name.to_string(), receiver_ty);
 
             this.scopes.set_impl_receiver_type(impl_ty.clone());
 

@@ -164,7 +164,7 @@ impl InferCtx<'_> {
                 self.sink
                     .push(diagnostics::infer::let_else_must_diverge(else_span));
             }
-            let never_ty = self.type_never();
+            let never_ty = Type::Never;
             self.unify(&else_ty, &never_ty, &span);
 
             new_else
@@ -274,14 +274,14 @@ impl InferCtx<'_> {
             }
         }
 
-        let unit_ty = self.type_unit();
+        let unit_ty = Type::unit();
         self.unify(expected_ty, &unit_ty, &span);
 
         Expression::Let {
             binding: Box::new(new_binding),
             value: new_value.into(),
             mode: new_mode,
-            ty: self.type_unit(),
+            ty: Type::unit(),
             span,
         }
     }
