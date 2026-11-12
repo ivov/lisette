@@ -630,6 +630,23 @@ mod tests {
     }
 
     #[test]
+    fn long_expected_found_label_stays_on_one_line() {
+        let span = Span::new(0, 0, 1);
+        let diagnostic = convert_diagnostic(
+            &LisetteDiagnostic::error("Type mismatch").with_expected_found_label(
+                &span,
+                "(mut Slice<int>, mut Slice<int>)",
+                "(Slice<int>, Slice<int>)",
+            ),
+            &LineIndex::new("x"),
+        );
+        assert_eq!(
+            diagnostic.message,
+            "Expected `(mut Slice<int>, mut Slice<int>)`, found `(Slice<int>, Slice<int>)`"
+        );
+    }
+
+    #[test]
     fn multi_label_diagnostic_leads_with_the_message_and_reports_related_locations() {
         let index = LineIndex::new("fn write() {}\nfn call() {}\n");
         let uri = Url::parse("file:///x.lis").unwrap();

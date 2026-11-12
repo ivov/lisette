@@ -1282,9 +1282,10 @@ pub fn arity_mismatch(
 
     LisetteDiagnostic::error("Wrong argument count")
         .with_infer_code("arg_count_mismatch")
-        .with_span_label(
+        .with_expected_found_label(
             &span,
-            format!("expected `({})`, found `({})`", expected_str, actual_str),
+            &format!("({expected_str})"),
+            &format!("({actual_str})"),
         )
         .with_help(format!(
             "This {} expects {} {} but received {} {}{}",
@@ -2327,10 +2328,7 @@ pub fn or_pattern_binding_mismatch(
 pub fn or_pattern_type_mismatch(span: Span, first_ty: &str, alt_ty: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid or-pattern")
         .with_infer_code("or_pattern_type_mismatch")
-        .with_span_label(
-            &span,
-            format!("expected `{}`, found `{}`", first_ty, alt_ty),
-        )
+        .with_expected_found_label(&span, first_ty, alt_ty)
         .with_help(
             "Use a wildcard `_` instead of a binding, or use separate match arms for each variant",
         )
@@ -3218,7 +3216,7 @@ pub fn interface_not_implemented(
 pub fn cannot_propagate_error(declared: &str, operand: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot propagate error")
         .with_infer_code("cannot_propagate_error")
-        .with_span_label(&span, format!("expected `{declared}`, found `{operand}`"))
+        .with_expected_found_label(&span, declared, operand)
         .with_help(propagation_framing_help(declared, operand))
 }
 

@@ -81,6 +81,28 @@ struct Label {
     span: Span,
     text: String,
     primary: bool,
+    /// Terminal form of a long label, with one row per value.
+    stacked: Option<String>,
+}
+
+/// Inline labels longer than this are stacked in the terminal.
+const STACK_LABEL_AT: usize = 60;
+
+/// Lay out one `name: value` row per entry, with the values aligned.
+pub fn stacked_rows(rows: &[(&str, &str)]) -> String {
+    let width = rows
+        .iter()
+        .map(|(name, _)| name.chars().count())
+        .max()
+        .unwrap_or(0)
+        + 1;
+    rows.iter()
+        .map(|(name, value)| {
+            let token = format!("{name}:");
+            format!("{token:<width$} `{value}`")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 impl From<ParseError> for LisetteDiagnostic {
@@ -273,11 +295,26 @@ impl LisetteDiagnostic {
         self
     }
 
+    /// Label an expected and a found value, stacked in the terminal when the line is long.
+    pub fn with_expected_found_label(mut self, span: &Span, expected: &str, found: &str) -> Self {
+        let text = format!("expected `{expected}`, found `{found}`");
+        let stacked = (text.chars().count() > STACK_LABEL_AT)
+            .then(|| stacked_rows(&[("expected", expected), ("found", found)]));
+        self.labels.push(Label {
+            span: *span,
+            text,
+            primary: false,
+            stacked,
+        });
+        self
+    }
+
     fn push_label(&mut self, span: &Span, text: String, primary: bool) {
         self.labels.push(Label {
             span: *span,
             text,
             primary,
+            stacked: None,
         });
     }
 
@@ -417,15 +454,16 @@ impl LisetteDiagnostic {
             .iter()
             .filter(|label| label.span.file_id == file_id)
             .map(|label| {
+                let text = label.stacked.as_ref().unwrap_or(&label.text);
                 let formatted = if use_color {
                     let style = |s: &str| match self.severity {
                         Severity::Error => format!("{}", s.red()),
                         Severity::Warning => format!("{}", s.yellow()),
                         Severity::Advice => format!("{}", s.blue()),
                     };
-                    format_with_backticks(&label.text, true, style)
+                    format_with_backticks(text, true, style)
                 } else {
-                    label.text.clone()
+                    text.clone()
                 };
                 FrameLabel::new(
                     label.span.byte_offset as usize,
@@ -572,6 +610,27 @@ mod tests {
         let _ = LisetteDiagnostic::error("invalid")
             .with_span_label(&Span::new(0, 0, 1), "label")
             .with_fix(fix);
+    }
+
+    #[test]
+    fn expected_found_label_stacks_only_when_long() {
+        let span = Span::new(0, 0, 1);
+        let short =
+            LisetteDiagnostic::error("short").with_expected_found_label(&span, "int", "string");
+        let long = LisetteDiagnostic::error("long").with_expected_found_label(
+            &span,
+            "(mut Slice<int>, mut Slice<int>)",
+            "(Slice<int>, Slice<int>)",
+        );
+
+        let frame = |text: &str| vec![FrameLabel::new(0, 1, text.to_string(), false)];
+        assert!(short.frame_labels(0, false) == frame("expected `int`, found `string`"));
+        assert!(
+            long.frame_labels(0, false)
+                == frame(
+                    "expected: `(mut Slice<int>, mut Slice<int>)`\nfound:    `(Slice<int>, Slice<int>)`"
+                )
+        );
     }
 
     #[test]

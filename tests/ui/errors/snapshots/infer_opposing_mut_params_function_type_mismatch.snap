@@ -6,7 +6,8 @@ source: tests/ui/errors/mod.rs
  13 │   let mut b = [2]
  14 │   let _ = apply(advance, a, b)
     ·                 ───┬───
-    ·                    ╰── expected `fn (Slice<int>, mut Slice<int>) -> int`, found `fn (mut Slice<int>, Slice<int>) -> int`
+    ·                    ╰─┤ expected: `fn (Slice<int>, mut Slice<int>) -> int`
+    ·                      │ found:    `fn (mut Slice<int>, Slice<int>) -> int`
  15 │ }
     ╰────
   help: A function value may demand less permission than its type promises, never more. Match `mut` on each differing parameter, or expect `fn (mut Slice<int>, Slice<int>) -> int` instead · code: [infer.needs_writable]

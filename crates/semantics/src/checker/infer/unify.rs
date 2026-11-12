@@ -736,10 +736,7 @@ impl InferCtx<'_> {
                     let (expected_name, actual_name) = Type::stringify_pair(expected, actual);
                     return LisetteDiagnostic::error("Type mismatch")
                         .with_infer_code("type_mismatch")
-                        .with_span_label(
-                            span,
-                            format!("expected `{}`, found `{}`", expected_name, actual_name),
-                        )
+                        .with_expected_found_label(span, &expected_name, &actual_name)
                         .with_help(format!(
                             "The tuples must have the same number of elements: expected {} {}, found {}",
                             expected_arity,
@@ -751,10 +748,7 @@ impl InferCtx<'_> {
                 let (expected_name, actual_name) = Type::stringify_pair(expected, actual);
                 let diagnostic = LisetteDiagnostic::error("Type mismatch")
                     .with_infer_code("type_mismatch")
-                    .with_span_label(
-                        span,
-                        format!("expected `{}`, found `{}`", expected_name, actual_name),
-                    );
+                    .with_expected_found_label(span, &expected_name, &actual_name);
                 if let (Some(expected_len), Some(actual_len)) =
                     (differing_expected.array_len(), differing_actual.array_len())
                 {
@@ -785,10 +779,7 @@ impl InferCtx<'_> {
                 }
                 let diagnostic = LisetteDiagnostic::error("Missing write permission")
                     .with_infer_code("needs_writable")
-                    .with_span_label(
-                        span,
-                        format!("expected `{}`, found `{}`", expected_name, actual_name),
-                    );
+                    .with_expected_found_label(span, &expected_name, &actual_name);
                 if matches!(actual.unwrap_forall(), Function(_)) {
                     diagnostic.with_help(format!(
                         "A function value may demand less permission than its type \
@@ -820,10 +811,7 @@ impl InferCtx<'_> {
 
                 let mut diagnostic = LisetteDiagnostic::error("Type mismatch")
                     .with_infer_code("type_mismatch")
-                    .with_span_label(
-                        span,
-                        format!("expected `{}`, found `{}`", expected_name, actual_name),
-                    )
+                    .with_expected_found_label(span, &expected_name, &actual_name)
                     .with_help(help);
                 if let Some(Expectation {
                     role:
