@@ -10,20 +10,6 @@ impl Planner<'_> {
         }
     }
 
-    pub(crate) fn free_method_base_name(
-        &self,
-        receiver_name: &str,
-        method: &str,
-        is_public: bool,
-    ) -> String {
-        let exported = is_public || self.method_needs_export(method);
-        format!(
-            "{}_{}",
-            receiver_name,
-            go_name::free_method_part(method, exported)
-        )
-    }
-
     pub(crate) fn free_function_go_name(&self, name: &str, is_public: bool) -> String {
         if is_public {
             go_name::snake_to_camel(name)

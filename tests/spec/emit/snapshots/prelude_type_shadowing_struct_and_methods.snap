@@ -33,7 +33,7 @@ type Span struct {
 	end   int
 }
 
-func Span_new(start, end int) Span {
+func newSpan(start, end int) Span {
 	return Span{
 		start: start,
 		end:   end,
@@ -49,6 +49,6 @@ func (s Span) len() int {
 }
 
 func test() int {
-	r := Span_new(0, 10)
+	r := newSpan(0, 10)
 	return r.len()
 }

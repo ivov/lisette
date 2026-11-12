@@ -21,13 +21,13 @@ type Box struct {
 	v int
 }
 
-func Box_new(v int) Box {
+func newBox(v int) Box {
 	return Box{v: v}
 }
 
 type Alias = Box
 
 func main() {
-	b := Box_new(1)
+	b := newBox(1)
 	_ = b
 }

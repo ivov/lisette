@@ -214,8 +214,7 @@ impl Planner<'_> {
         let is_public = callee
             .declaration
             .map(|declaration| declaration.visibility().is_public())
-            .unwrap_or(false)
-            || self.method_needs_export(member);
+            .unwrap_or(false);
 
         let qualified_method_name = self.qualify_method_call(qualified_name, member, is_public);
         GoExpression::instantiation(qualified_method_name, type_args_string)

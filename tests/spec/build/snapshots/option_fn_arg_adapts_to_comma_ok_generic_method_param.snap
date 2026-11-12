@@ -17,7 +17,7 @@ type Holder struct {
 	N int
 }
 
-func Holder_Resolve[R any](self Holder, f func(int) lisette.Option[R]) (R, bool) {
+func HolderResolve[R any](self Holder, f func(int) lisette.Option[R]) (R, bool) {
 	v := f(self.N)
 	if v.Tag == lisette.OptionSome {
 		return v.SomeVal, true
@@ -26,7 +26,7 @@ func Holder_Resolve[R any](self Holder, f func(int) lisette.Option[R]) (R, bool)
 }
 
 func main() {
-	ret, ret2 := Holder_Resolve(Holder{N: 4}, func(arg0 int) lisette.Option[Face] {
+	ret, ret2 := HolderResolve(Holder{N: 4}, func(arg0 int) lisette.Option[Face] {
 		raw := Lookup(arg0)
 		option := lisette.OptionFromNilable[Face](raw, lisette.IsNilInterface(raw))
 		return option

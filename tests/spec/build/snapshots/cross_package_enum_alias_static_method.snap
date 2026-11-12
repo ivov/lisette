@@ -9,7 +9,7 @@ import p "github.com/user/myproject/palette"
 type C = p.Color
 
 func main() {
-	p.Color_Fallback()
+	p.ColorFallback()
 }
 
 
@@ -36,6 +36,6 @@ type Color struct {
 	Green int
 }
 
-func Color_Fallback() Color {
+func ColorFallback() Color {
 	return MakeColorRed()
 }

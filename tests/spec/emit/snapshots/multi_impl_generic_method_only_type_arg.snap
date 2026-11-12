@@ -20,7 +20,7 @@ type Pair[A any, B any] struct {
 	b B
 }
 
-func Pair_snd[A any, B any, U any](_ Pair[A, B], u U) U {
+func pairSnd[A any, B any, U any](_ Pair[A, B], u U) U {
 	return u
 }
 
@@ -29,5 +29,5 @@ func test() bool {
 		a: 1,
 		b: "x",
 	}
-	return Pair_snd[int, string, bool](p, true)
+	return pairSnd[int, string, bool](p, true)
 }

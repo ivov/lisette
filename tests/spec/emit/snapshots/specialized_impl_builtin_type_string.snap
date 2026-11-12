@@ -23,11 +23,11 @@ type Wrapper[T any] struct {
 	value T
 }
 
-func Wrapper_greet(_ Wrapper[string]) string {
+func wrapperGreet(_ Wrapper[string]) string {
 	return "hello"
 }
 
 func test() string {
 	w := Wrapper[string]{value: "world"}
-	return Wrapper_greet(w)
+	return wrapperGreet(w)
 }

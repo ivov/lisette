@@ -29,17 +29,17 @@ type Foo struct {
 	count int
 }
 
-func Foo_add[T any](self *Foo, _ Bar) {
+func fooAdd[T any](self *Foo, _ Bar) {
 	self.count++
 }
 
 type Bar struct{}
 
-func Bar_new() Bar {
+func newBar() Bar {
 	return Bar{}
 }
 
 func run() {
 	foo := Foo{count: 0}
-	Foo_add[int](&foo, Bar_new())
+	fooAdd[int](&foo, newBar())
 }

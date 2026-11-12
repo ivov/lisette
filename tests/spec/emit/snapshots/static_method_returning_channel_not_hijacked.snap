@@ -20,10 +20,10 @@ type Foo struct {
 	ch chan int
 }
 
-func Foo_new() chan int {
+func newFoo() chan int {
 	return make(chan int)
 }
 
 func test() chan int {
-	return Foo_new()
+	return newFoo()
 }

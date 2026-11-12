@@ -26,7 +26,7 @@ type Cell struct {
 	v int
 }
 
-func Cell_add[T any](self *Cell, delta int) {
+func cellAdd[T any](self *Cell, delta int) {
 	self.v += delta
 }
 
@@ -38,5 +38,5 @@ func bump(i *int) int {
 func run() {
 	i := 0
 	arg := &Cell{v: i}
-	Cell_add[int](arg, bump(&i))
+	cellAdd[int](arg, bump(&i))
 }

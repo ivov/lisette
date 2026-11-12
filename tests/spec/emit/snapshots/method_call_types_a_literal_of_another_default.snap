@@ -21,13 +21,13 @@ type Box struct {
 	label string
 }
 
-func Box_scale[T any](_ Box, v T) T {
+func boxScale[T any](_ Box, v T) T {
 	return v
 }
 
 func test() byte {
 	b := Box{label: "x"}
-	widened := Box_scale(b, float32(1))
-	letter := Box_scale(b, byte('a'))
+	widened := boxScale(b, float32(1))
+	letter := boxScale(b, byte('a'))
 	return letter + byte(widened)
 }

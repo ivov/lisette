@@ -16,7 +16,7 @@ type Foo struct {
 	Value int
 }
 
-func Foo_New(v int) Foo {
+func NewFoo(v int) Foo {
 	return Foo{Value: v}
 }
 
@@ -40,7 +40,7 @@ import (
 )
 
 func main() {
-	f := foo.Foo_New(42)
+	f := foo.NewFoo(42)
 	types.MakeMyEnumSingle(f)
 	fmt.Println("OK")
 }
@@ -96,5 +96,5 @@ package types
 import "github.com/user/myproject/foo"
 
 func MakeSomething() foo.Foo {
-	return foo.Foo_New(99)
+	return foo.NewFoo(99)
 }

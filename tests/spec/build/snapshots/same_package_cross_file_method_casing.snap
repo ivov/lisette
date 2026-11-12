@@ -19,7 +19,7 @@ type Point struct {
 	Y float64
 }
 
-func Point_New(x, y float64) Point {
+func NewPoint(x, y float64) Point {
 	return Point{
 		X: x,
 		Y: y,
@@ -31,7 +31,7 @@ type Builder struct {
 	Y float64
 }
 
-func Builder_New() Builder {
+func NewBuilder() Builder {
 	return Builder{
 		X: 0.0,
 		Y: 0.0,
@@ -50,7 +50,7 @@ func (b Builder) WithX(x float64) Builder {
 package shapes
 
 func TestLocalStatic() float64 {
-	p := Point_New(1.0, 2.0)
-	b := Builder_New().WithX(5.0)
+	p := NewPoint(1.0, 2.0)
+	b := NewBuilder().WithX(5.0)
 	return p.X + b.X
 }

@@ -18,8 +18,8 @@ type Counter struct {
 	count int
 }
 
-// Counter_newCounter builds a counter at zero.
-func Counter_newCounter() Counter {
+// counterNewCounter builds a counter at zero.
+func counterNewCounter() Counter {
 	return Counter{count: 0}
 }
 

@@ -22,7 +22,7 @@ type Pair[A any, B any] struct {
 	b B
 }
 
-func Pair_first[T any](self Pair[T, T]) T {
+func pairFirst[T any](self Pair[T, T]) T {
 	return self.a
 }
 
@@ -33,5 +33,5 @@ func test() int {
 		a: 1,
 		b: 2,
 	}
-	return Pair_first(p)
+	return pairFirst(p)
 }

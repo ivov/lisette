@@ -19,11 +19,11 @@ type Box[T any] struct {
 	value T
 }
 
-func Box_keep[U any](_ Box[int], x U) U {
+func boxKeep[U any](_ Box[int], x U) U {
 	return x
 }
 
 func test() string {
 	b := Box[int]{value: 1}
-	return Box_keep[string](b, "ok")
+	return boxKeep[string](b, "ok")
 }

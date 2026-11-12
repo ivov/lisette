@@ -18,10 +18,10 @@ package main
 
 type Factory struct{}
 
-func Factory_Make[T any]() []T {
+func FactoryMake[T any]() []T {
 	return []T{}
 }
 
 func test() []int {
-	return Factory_Make[int]()
+	return FactoryMake[int]()
 }

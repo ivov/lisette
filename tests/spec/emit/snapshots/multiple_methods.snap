@@ -21,7 +21,7 @@ type Point struct {
 	y int
 }
 
-func Point_new(x, y int) Point {
+func newPoint(x, y int) Point {
 	return Point{
 		x: x,
 		y: y,

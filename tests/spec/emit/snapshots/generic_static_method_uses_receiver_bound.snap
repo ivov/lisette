@@ -21,11 +21,11 @@ type Box[T comparable] struct {
 	value T
 }
 
-func Box_new[U comparable](value U) Box[U] {
+func newBox[U comparable](value U) Box[U] {
 	return Box[U]{value: value}
 }
 
 func main() int {
-	b := Box_new(42)
+	b := newBox(42)
 	return b.value
 }

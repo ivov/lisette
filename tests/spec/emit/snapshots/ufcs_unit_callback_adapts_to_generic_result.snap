@@ -21,7 +21,7 @@ package main
 
 type Holder struct{}
 
-func Holder_Run[U any](_ Holder, f func() U) U {
+func holderRun[U any](_ Holder, f func() U) U {
 	return f()
 }
 
@@ -29,7 +29,7 @@ func noop() {}
 
 func main() {
 	h := Holder{}
-	Holder_Run(h, func() struct{} {
+	holderRun(h, func() struct{} {
 		noop()
 		return struct{}{}
 	})

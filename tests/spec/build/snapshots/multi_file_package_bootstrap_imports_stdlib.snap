@@ -8,7 +8,7 @@ type Foo struct {
 	Value int
 }
 
-func Foo_New(v int) Foo {
+func NewFoo(v int) Foo {
 	return Foo{Value: v}
 }
 
@@ -25,7 +25,7 @@ import (
 )
 
 func main() {
-	f := foo.Foo_New(42)
+	f := foo.NewFoo(42)
 	types.MakeMyEnumMaybe(lisette.MakeOptionSome(f))
 	fmt.Println("OK")
 }

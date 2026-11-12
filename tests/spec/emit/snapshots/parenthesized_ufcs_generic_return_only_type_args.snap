@@ -19,11 +19,11 @@ package main
 
 type Factory struct{}
 
-func Factory_make[T any](_ Factory) []T {
+func factoryMake[T any](_ Factory) []T {
 	return []T{}
 }
 
 func test() []int {
 	f := Factory{}
-	return Factory_make[int](f)
+	return factoryMake[int](f)
 }

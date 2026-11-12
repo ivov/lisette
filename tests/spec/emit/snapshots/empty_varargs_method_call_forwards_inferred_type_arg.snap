@@ -20,13 +20,13 @@ package main
 
 type Box struct{}
 
-func Box_first[T any](_ Box, _ ...T) (T, bool) {
+func boxFirst[T any](_ Box, _ ...T) (T, bool) {
 	return *new(T), false
 }
 
 func test() {
 	b := Box{}
-	r, ok := Box_first[int](b)
+	r, ok := boxFirst[int](b)
 	if !ok {
 		r = 7
 	}

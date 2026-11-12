@@ -60,7 +60,7 @@ impl Planner<'_> {
                 .facts
                 .definition(enum_id.as_str())
                 .is_some_and(|definition| definition.visibility.is_public());
-            let fn_name = self.variants_go_name(name, is_public);
+            let fn_name = go_name::associated_function_go_name(name, "variants", is_public);
             result.push_str("\n\n");
             result.push_str(&layout.emit_variants_function(&fn_name));
         }
@@ -152,16 +152,6 @@ impl Planner<'_> {
         }
         method.push_str("default:\nreturn true\n}\n}");
         Some(method)
-    }
-
-    /// Export-aware Go name for an `#[iterate]` enum's synthesized `variants`
-    /// function. Matches the static-method call-site naming so the definition
-    /// and its calls agree.
-    pub(crate) fn variants_go_name(&self, enum_name: &str, is_public: bool) -> String {
-        go_name::iterate_variants_fn_name(
-            enum_name,
-            is_public || self.method_needs_export("variants"),
-        )
     }
 
     pub(crate) fn create_make_function_code(

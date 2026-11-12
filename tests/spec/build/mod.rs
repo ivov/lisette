@@ -573,6 +573,193 @@ fn main() {
 }
 
 #[test]
+fn associated_function_go_names() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "env",
+        "mod.lis",
+        r#"
+pub struct Release {
+  pub version: int,
+}
+
+impl Release {
+  pub fn minimum() -> Release {
+    Release { version: 1 }
+  }
+
+  pub fn new(version: int) -> Release {
+    Release { version }
+  }
+
+  pub fn map_version<U>(self, f: fn(int) -> U) -> U {
+    f(self.version)
+  }
+}
+
+struct Host {
+  name: string,
+}
+
+impl Host {
+  fn detect() -> Host {
+    Host.new("local")
+  }
+
+  fn new(name: string) -> Host {
+    Host { name }
+  }
+}
+
+struct URLParser {
+  base: string,
+}
+
+impl URLParser {
+  fn from_base(base: string) -> URLParser {
+    URLParser { base }
+  }
+}
+
+struct G {}
+
+impl G {
+  fn o() -> int { 1 }
+}
+
+struct URL {}
+
+impl URL {
+  fn x() -> int { 2 }
+}
+
+struct İtem {}
+
+impl İtem {
+  fn detect() -> int { 3 }
+}
+
+pub fn host_name() -> string {
+  Host.detect().name + URLParser.from_base("b").base
+}
+
+struct Len {}
+
+impl Len {
+  fn __() -> int { 4 }
+}
+
+pub struct Pub {}
+
+impl Pub {
+  pub fn __() -> int { 5 }
+}
+
+struct Foo {}
+
+impl Foo {
+  fn __() -> int { 6 }
+}
+
+fn foo__() -> int { 7 }
+
+pub fn sum() -> int {
+  G.o() + URL.x() + İtem.detect() + Len.__() + Pub.__() + Foo.__() + foo__()
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "env"
+
+fn main() {
+  let release = env.Release.new(2)
+  let _ = env.Release.minimum()
+  let _ = release.map_version(|v| v + 1)
+  let _ = env.host_name()
+  let _ = env.sum()
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn go_name_collision_constructor_and_new_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+pub struct Host {
+  pub name: string,
+}
+
+impl Host {
+  pub fn new(name: string) -> Host {
+    Host { name }
+  }
+}
+
+pub fn new_host() -> Host {
+  Host.new("local")
+}
+
+fn main() {
+  let _ = new_host()
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "`Host.new` and `new_host` both become `NewHost` in Go; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_associated_functions_of_two_types() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+pub struct Host {}
+
+impl Host {
+  pub fn name_x() -> int {
+    1
+  }
+}
+
+pub struct HostName {}
+
+impl HostName {
+  pub fn x() -> int {
+    2
+  }
+}
+
+fn main() {
+  let _ = Host.name_x() + HostName.x()
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "`Host.name_x` and `HostName.x` both become `HostNameX` in Go; got: {codes:?}"
+    );
+}
+
+#[test]
 fn embedded_display_beside_string_field_needs_no_shadow() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
@@ -7872,13 +8059,13 @@ impl Foo {
   }
 }
 
-fn Foo_make() -> int {
+fn fooMake() -> int {
   99
 }
 
 fn main() {
   let _ = Foo.make()
-  let _ = Foo_make()
+  let _ = fooMake()
 }
 "#,
     );
@@ -7886,7 +8073,7 @@ fn main() {
     let codes = emit_diagnostic_codes(fs);
     assert!(
         codes.iter().any(|code| code == "emit.go_name_collision"),
-        "a self-less impl method becomes Foo_make and collides with the free function; got: {codes:?}"
+        "a self-less impl method becomes fooMake and collides with the free function; got: {codes:?}"
     );
 }
 
@@ -8239,8 +8426,8 @@ fn main() {
     let files = compile_project_files(fs, "github.com/user/myproject", false);
     let go: String = files.iter().map(|f| f.to_go()).collect();
     assert!(
-        go.contains("Box_Map("),
-        "UFCS method must lower to a free-function call (Box_Map) even on the \
+        go.contains("BoxMap("),
+        "UFCS method must lower to a free-function call (BoxMap) even on the \
          parallel inference path; got:\n{go}"
     );
 }

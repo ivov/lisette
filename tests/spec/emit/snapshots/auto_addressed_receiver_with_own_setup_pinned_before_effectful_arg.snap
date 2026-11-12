@@ -32,7 +32,7 @@ type Cell struct {
 	b int
 }
 
-func Cell_add[T any](self *Cell, delta int) {
+func cellAdd[T any](self *Cell, delta int) {
 	self.b += delta
 }
 
@@ -59,6 +59,6 @@ func run() error {
 	if err2 != nil {
 		return err2
 	}
-	Cell_add[int](ref, ret2)
+	cellAdd[int](ref, ret2)
 	return nil
 }

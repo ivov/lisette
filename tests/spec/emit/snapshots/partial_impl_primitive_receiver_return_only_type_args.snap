@@ -21,7 +21,7 @@ type Pair[A any, B any] struct {
 	b B
 }
 
-func Pair_make[B any, U any](_ Pair[int, B]) U {
+func pairMake[B any, U any](_ Pair[int, B]) U {
 	panic("boom")
 }
 
@@ -30,6 +30,6 @@ func test() {
 		a: 1,
 		b: true,
 	}
-	x := Pair_make[bool, string](p)
+	x := pairMake[bool, string](p)
 	_ = x
 }

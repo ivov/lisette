@@ -26,7 +26,7 @@ impl Planner<'_> {
                 if self.facts.is_test(&qualified_name) {
                     self.emit_test_function(name, function, is_public, &doc_comment)
                 } else {
-                    let code = self.emit_function(function, None, is_public, None);
+                    let code = self.emit_function(function, None, &go_name, None);
                     format!("{}{}", doc_comment, code)
                 }
             }
@@ -142,7 +142,7 @@ impl Planner<'_> {
         let callee = self.pick_go_function_name(function, false, is_public);
         let test_name = go_name::go_test_function_name(name);
         let handle = go_name::TEST_T_PARAM;
-        let code = self.emit_function(function, None, is_public, None);
+        let code = self.emit_function(function, None, &callee, None);
 
         let span = function.name_span;
         let recover = format!(

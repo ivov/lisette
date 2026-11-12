@@ -20,10 +20,10 @@ type Stack[T any] struct {
 	items []T
 }
 
-func Stack_new[T any]() Stack[T] {
+func newStack[T any]() Stack[T] {
 	return Stack[T]{items: []T{}}
 }
 
 func test() {
-	Stack_new[int]()
+	newStack[int]()
 }

@@ -32,7 +32,7 @@ type Outer[T any] struct {
 	Value T
 }
 
-func Outer_id(_ Outer[int]) int {
+func outerId(_ Outer[int]) int {
 	return 0
 }
 

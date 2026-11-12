@@ -20,7 +20,7 @@ type Pair[A any, B any] struct {
 	b B
 }
 
-func Pair_keep[T any, U any](_ Pair[T, T], x U) U {
+func pairKeep[T any, U any](_ Pair[T, T], x U) U {
 	return x
 }
 
@@ -29,5 +29,5 @@ func test() string {
 		a: 1,
 		b: 2,
 	}
-	return Pair_keep[int, string](p, "ok")
+	return pairKeep[int, string](p, "ok")
 }

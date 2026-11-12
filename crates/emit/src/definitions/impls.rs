@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::expressions::top_items::emit_item_doc;
+use crate::names::go_name;
 use syntax::ast::{Expression, FunctionDefinitionView, Generic, Pattern, Visibility};
 use syntax::types::{Type, type_args_match_params};
 
@@ -62,9 +63,9 @@ impl Planner<'_> {
         let is_free_function = !has_self || is_ufcs;
 
         let (go_name, code) = if is_free_function {
-            let free_name = self
-                .free_method_base_name(ctx.receiver_name, function.name, is_public)
-                .into();
+            let free_name =
+                go_name::associated_function_go_name(ctx.receiver_name, function.name, is_public)
+                    .into();
             let mut combined_generics = ctx.generics.to_vec();
             combined_generics.extend(function.generics.iter().cloned());
             let (generics, owner) = if self.impl_generics_match_receiver(ctx) {
@@ -77,15 +78,12 @@ impl Planner<'_> {
                 generics,
                 ..function
             };
-            (
-                self.pick_go_function_name(free_function, false, false),
-                self.emit_function(free_function, None, false, owner),
-            )
+            let code = self.emit_function(free_function, None, &free_name, owner);
+            (free_name.to_string(), code)
         } else {
-            (
-                self.pick_go_function_name(function, true, should_export),
-                self.emit_function(function, Some(ctx.ty), should_export, None),
-            )
+            let go_name = self.pick_go_function_name(function, true, should_export);
+            let code = self.emit_function(function, Some(ctx.ty), &go_name, None);
+            (go_name, code)
         };
 
         if code.is_empty() {
