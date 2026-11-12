@@ -8,7 +8,9 @@ use crate::names::go_name;
 use crate::names::source_name::SourceName;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::AsyncKind;
-use crate::plan::bodies::{LoweredBlock, LoweredStatement, Statement, rename_generated_locals};
+use crate::plan::bodies::{
+    LoweredBlock, LoweredStatement, Statement, inherit_line_directives, rename_generated_locals,
+};
 use crate::plan::cleanup::clean_up;
 use crate::plan::go_expression::{
     FunctionLiteralLayout, GoExpressionNode, GoParameter, verbatim_identifiers,
@@ -89,10 +91,18 @@ impl Planner<'_> {
         has_result: bool,
         origin: BodyOrigin,
     ) -> LoweredBlock {
+        let sourcemap = self.facts.sourcemap();
+        // Cleanup moves statements out of the context they would inherit from.
+        if sourcemap {
+            inherit_line_directives(&mut body.statements, None);
+        }
         let shadowing = identify_body_locals(&mut body.statements, parameters, &mut self.scope);
         clean_up(&mut body.statements, &shadowing, parameters, &self.scope);
         if has_result {
             body.ensure_go_termination();
+        }
+        if sourcemap {
+            inherit_line_directives(&mut body.statements, None);
         }
         if matches!(origin, BodyOrigin::Source) {
             self.settle_generated_names(&mut body.statements);

@@ -6,7 +6,8 @@ use crate::definitions::functions::BodyOrigin;
 use crate::names::go_name;
 use crate::names::go_name::GO_IMPORT_PREFIX;
 use crate::plan::bodies::{
-    ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define_many, expression_statement,
+    ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, define_many, directed_first,
+    expression_statement,
 };
 use crate::plan::local::GoIdentifier;
 use crate::plan::values::GoExpression;
@@ -189,12 +190,14 @@ impl Planner<'_> {
             source,
             target,
         };
+        let line = self.maybe_line_directive(&method.name_span);
         let mut declaration = String::new();
         self.emit_adapter_method(
             &mut declaration,
             MethodReceiver::Itself(&receiver.ty),
             generic_context,
             &twin,
+            line.as_ref(),
         );
         declaration
     }
@@ -822,11 +825,13 @@ impl Planner<'_> {
         declaration.push('\n');
 
         for method in &plan.methods {
+            let line = self.adapter_method_line(&plan, method);
             self.emit_adapter_method(
                 &mut declaration,
                 MethodReceiver::Adapter(&adapter_type),
                 &plan.generic_context,
                 method,
+                line.as_ref(),
             );
             declaration.push('\n');
         }
@@ -850,12 +855,26 @@ impl Planner<'_> {
         (decl, use_str)
     }
 
+    fn adapter_method_line(&self, plan: &AdapterPlan, method: &AdapterMethod) -> Option<String> {
+        self.facts
+            .method(&plan.concrete_id, &method.source_name)
+            .and_then(|source| source.name_span.as_ref())
+            .and_then(|span| self.maybe_line_directive(span))
+            .or_else(|| {
+                self.facts
+                    .definition(&plan.interface_id)
+                    .and_then(|interface| interface.name_span.as_ref())
+                    .and_then(|span| self.maybe_line_directive(span))
+            })
+    }
+
     fn emit_adapter_method(
         &mut self,
         declaration: &mut String,
         receiver: MethodReceiver<'_>,
         generic_context: &[(EcoString, Vec<Type>)],
         method: &AdapterMethod,
+        line: Option<&String>,
     ) {
         self.with_declaration_scope(|this| {
             this.set_type_params(generic_context);
@@ -887,7 +906,10 @@ impl Planner<'_> {
             let mut bindings = Vec::with_capacity(param_names.len() + 1);
             bindings.push(receiver_name.clone());
             bindings.extend(param_names);
-            let (go_ret, body) = this.build_adapter_body(method, wraps_inner, &bindings);
+            let (go_ret, body) = this.build_adapter_body(method, wraps_inner, &bindings, line);
+            if let Some(line) = line {
+                declaration.push_str(line);
+            }
             write_method_header(
                 declaration,
                 receiver_name.spelling(),
@@ -915,8 +937,10 @@ impl Planner<'_> {
         method: &AdapterMethod,
         wraps_inner: bool,
         parameters: &[GoIdentifier],
+        line: Option<&String>,
     ) -> (String, String) {
         let (go_ret, statements) = self.plan_adapter_body(method, wraps_inner, parameters);
+        let statements = directed_first(line.cloned(), statements);
         let body = self.finish_function_body(
             LoweredBlock { statements },
             parameters,

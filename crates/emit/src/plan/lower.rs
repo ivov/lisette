@@ -64,6 +64,7 @@ impl Guard {
             condition: self.condition.condition,
             then_body: self.then_body,
             else_arm: ElseArm::None,
+            else_if_line: None,
             origin: IfOrigin::User,
         }
     }
@@ -405,8 +406,8 @@ impl Planner<'_> {
                 let body = self.lower_match_to_block(subject, arms, &PlacePlan::Statement);
                 self.directed_at(expression, LoweredStatement::Body(body))
             }
-            Expression::Select { arms, .. } => {
-                let statement = self.lower_select(arms, &PlacePlan::Statement);
+            Expression::Select { arms, span, .. } => {
+                let statement = self.lower_select(arms, span, &PlacePlan::Statement);
                 self.directed_at(expression, statement)
             }
             Expression::WhileLet { .. } => self.lower_while_let_statement(expression),
@@ -670,8 +671,8 @@ impl Planner<'_> {
             Expression::Match { subject, arms, .. } => {
                 self.lower_match_to_block(subject, arms, place)
             }
-            Expression::Select { arms, .. } => LoweredBlock {
-                statements: vec![self.lower_select(arms, place).into()],
+            Expression::Select { arms, span, .. } => LoweredBlock {
+                statements: vec![self.lower_select(arms, span, place).into()],
             },
             _ => unreachable!("lower_branching_to_block: expected if/if-let/match/select"),
         }
@@ -843,6 +844,7 @@ impl Planner<'_> {
                 condition: condition.condition,
                 then_body,
                 else_arm,
+                else_if_line: None,
                 origin: IfOrigin::User,
             }),
         )
@@ -865,17 +867,23 @@ impl Planner<'_> {
             ..
         } = alternative
         {
+            let line = self.maybe_line_directive(&alternative.get_span());
             if next_alternative.is_none() && is_conjunction(condition) {
                 return self.with_scope(|this| {
                     let guard = this.lower_conjunction_guard(condition, |this| {
                         this.with_scope(|this| this.lower_block_to_place(consequence, place))
                     });
                     if guard.setup.is_empty() {
-                        ElseArm::ElseIf(Box::new(guard.into_if()))
+                        let mut plan = guard.into_if();
+                        plan.else_if_line = line;
+                        ElseArm::ElseIf(Box::new(plan))
                     } else {
                         ElseArm::Else {
                             body: LoweredBlock {
-                                statements: vec![guard.into_statement().into()],
+                                statements: directed_first(
+                                    line,
+                                    vec![guard.into_statement().into()],
+                                ),
                             },
                             inline: false,
                         }
@@ -901,11 +909,14 @@ impl Planner<'_> {
                             condition: condition.condition,
                             then_body,
                             else_arm: inner,
+                            else_if_line: None,
                             origin: IfOrigin::User,
                         })
                         .into(),
                     );
-                    LoweredBlock { statements }
+                    LoweredBlock {
+                        statements: directed_first(line, statements),
+                    }
                 });
                 ElseArm::Else {
                     body,
@@ -924,6 +935,7 @@ impl Planner<'_> {
                     condition: condition.condition,
                     then_body,
                     else_arm: inner,
+                    else_if_line: line,
                     origin: IfOrigin::User,
                 }))
             }

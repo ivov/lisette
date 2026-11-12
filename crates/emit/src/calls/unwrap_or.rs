@@ -253,6 +253,7 @@ impl Planner<'_> {
                     )],
                 },
                 else_arm: ElseArm::None,
+                else_if_line: None,
                 origin: IfOrigin::User,
             })
             .into(),
@@ -309,6 +310,7 @@ impl Planner<'_> {
                     )],
                 },
                 else_arm: ElseArm::None,
+                else_if_line: None,
                 origin: IfOrigin::User,
             })
             .into(),

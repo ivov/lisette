@@ -382,6 +382,10 @@ impl<'a> EmitFacts<'a> {
         self.shared.emit_tests
     }
 
+    pub(crate) fn sourcemap(&self) -> bool {
+        self.shared.line_indexes.is_some()
+    }
+
     pub(crate) fn line_index(&self, file_id: u32) -> Option<&LineIndex> {
         self.shared.line_indexes.as_ref()?.get(&file_id)
     }

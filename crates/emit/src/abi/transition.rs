@@ -51,6 +51,7 @@ pub(crate) fn tag_check_with_initializer(
         condition,
         then_body: LoweredBlock { statements },
         else_arm: ElseArm::None,
+        else_if_line: None,
         origin: IfOrigin::User,
     })
 }

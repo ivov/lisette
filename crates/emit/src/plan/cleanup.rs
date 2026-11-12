@@ -7,7 +7,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use crate::names::go_name;
 use crate::plan::bodies::{
     AssignForm, CompoundKind, Definition, ElseArm, IfOrigin, IfPlan, LoopTransfer, LoweredBlock,
-    LoweredStatement, SelectArmPlan, Statement, SwitchKind, for_each_statements_mut,
+    LoweredStatement, SelectArmKind, Statement, SwitchKind, for_each_statements_mut,
 };
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp, verbatim_identifiers};
@@ -352,7 +352,7 @@ fn rewrite_nth_scoped_terminal_else(
                 && !shadows_a_type_param
                 && let Some(definition) = plan.initializer.take()
             {
-                let line = block[index].line.take();
+                let line = block[index].line.clone();
                 block.insert(
                     index,
                     Statement {
@@ -830,12 +830,12 @@ fn replace_only_read(
             let siblings = plan
                 .arms
                 .iter_mut()
-                .flat_map(|arm| match arm {
-                    SelectArmPlan::Receive { channel, .. } => vec![channel.node_mut()],
-                    SelectArmPlan::Send { channel, value, .. } => {
+                .flat_map(|arm| match &mut arm.kind {
+                    SelectArmKind::Receive { channel, .. } => vec![channel.node_mut()],
+                    SelectArmKind::Send { channel, value, .. } => {
                         vec![channel.node_mut(), value.node_mut()]
                     }
-                    SelectArmPlan::Default { .. } => Vec::new(),
+                    SelectArmKind::Default { .. } => Vec::new(),
                 })
                 .collect();
             rename_in(siblings, None, temp, source)
@@ -1091,6 +1091,7 @@ mod tests {
                 },
                 inline: false,
             },
+            else_if_line: None,
             origin: IfOrigin::User,
         })
         .into()

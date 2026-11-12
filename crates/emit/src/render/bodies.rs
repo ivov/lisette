@@ -1,6 +1,6 @@
 use crate::plan::bodies::{
     AssignForm, CompoundKind, ConstPlan, Definition, ElseArm, IfPlan, LoopHeader, LoopPlan,
-    LoopTransfer, LoweredBlock, LoweredStatement, SelectArmPlan, SelectStatementPlan, Statement,
+    LoopTransfer, LoweredBlock, LoweredStatement, SelectArmKind, SelectStatementPlan, Statement,
     SwitchKind, SwitchStatementPlan,
 };
 use crate::plan::values::GoExpression;
@@ -13,6 +13,14 @@ fn join_expressions(values: &[GoExpression]) -> String {
         .map(GoExpression::rendered)
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn write_header_line(output: &mut String, line: Option<&String>) {
+    if let Some(line) = line
+        && !output.ends_with(line.as_str())
+    {
+        output.push_str(line);
+    }
 }
 
 impl Renderer {
@@ -34,7 +42,8 @@ impl Renderer {
     fn render_select(&self, output: &mut String, plan: &SelectStatementPlan) {
         output.push_str("select {\n");
         for arm in &plan.arms {
-            self.render_select_arm(output, arm);
+            write_header_line(output, arm.line.as_ref());
+            self.render_select_arm(output, &arm.kind);
         }
         output.push_str("}\n");
     }
@@ -62,21 +71,23 @@ impl Renderer {
             } => write_line!(output, "switch {}.(type) {{", subject.print_header()),
         }
         for case in &plan.cases {
+            write_header_line(output, case.line.as_ref());
             write_line!(output, "case {}:", join_expressions(&case.labels));
             self.render_lowered_block(output, &case.body);
         }
         if let Some(default_body) = &plan.default
             && !default_body.renders_empty()
         {
+            write_header_line(output, plan.default_line.as_ref());
             output.push_str("default:\n");
             self.render_lowered_block(output, default_body);
         }
         output.push_str("}\n");
     }
 
-    fn render_select_arm(&self, output: &mut String, arm: &SelectArmPlan) {
+    fn render_select_arm(&self, output: &mut String, arm: &SelectArmKind) {
         match arm {
-            SelectArmPlan::Receive {
+            SelectArmKind::Receive {
                 receive_vars,
                 channel,
                 body,
@@ -97,7 +108,7 @@ impl Renderer {
                 }
                 self.render_lowered_block(output, body);
             }
-            SelectArmPlan::Send {
+            SelectArmKind::Send {
                 channel,
                 value,
                 body,
@@ -105,7 +116,7 @@ impl Renderer {
                 write_line!(output, "case {} <- {}:", channel, value);
                 self.render_lowered_block(output, body);
             }
-            SelectArmPlan::Default { body } => {
+            SelectArmKind::Default { body } => {
                 output.push_str("default:\n");
                 self.render_lowered_block(output, body);
             }
@@ -126,12 +137,16 @@ impl Renderer {
     }
 
     fn render_statement(&self, output: &mut String, statement: &Statement) {
-        if let Some(line) = &statement.line {
+        if let Some(line) = &statement.line
+            && !matches!(&statement.kind, LoweredStatement::Body(body)
+                if body.statements.first().is_some_and(|first| first.line.is_some()))
+            && !output.ends_with(line.as_str())
+        {
             output.push_str(line);
         }
         match &statement.kind {
             LoweredStatement::If(plan) => self.render_if(output, plan),
-            LoweredStatement::Loop(plan) => self.render_loop(output, plan),
+            LoweredStatement::Loop(plan) => self.render_loop(output, plan, statement.line.as_ref()),
             LoweredStatement::Block(body) => {
                 output.push_str("{\n");
                 self.render_lowered_block(output, body);
@@ -225,9 +240,12 @@ impl Renderer {
         }
     }
 
-    fn render_loop(&self, output: &mut String, plan: &LoopPlan) {
+    fn render_loop(&self, output: &mut String, plan: &LoopPlan, line: Option<&String>) {
         if let Some(label) = plan.kind.label() {
             write_line!(output, "{}:", label);
+            if let Some(line) = line {
+                output.push_str(line);
+            }
         }
         match &plan.header {
             LoopHeader::Infinite => output.push_str("for {\n"),
@@ -303,6 +321,9 @@ impl Renderer {
         match arm {
             ElseArm::None => output.push_str("}\n"),
             ElseArm::ElseIf(plan) => {
+                if let Some(line) = &plan.else_if_line {
+                    output.push_str(line);
+                }
                 output.push_str("} else ");
                 self.render_if_header(output, plan);
                 self.render_lowered_block(output, &plan.then_body);

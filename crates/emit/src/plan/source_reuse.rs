@@ -4,7 +4,7 @@ use std::mem;
 
 use crate::plan::bodies::{
     AssignForm, CompoundKind, ElseArm, IfPlan, LoopHeader, LoweredBlock, LoweredStatement,
-    SelectArmPlan, Statement, SwitchKind,
+    SelectArmKind, Statement, SwitchKind,
 };
 use crate::plan::go_expression::{GoExpressionNode, TreeVisitor, verbatim_identifiers};
 use crate::plan::local::GoIdentifier;
@@ -96,12 +96,12 @@ fn reuse_in_statement(statement: &mut LoweredStatement, scope: &ScopeState) {
         LoweredStatement::Async { call, .. } => reuse_in_expression(call.node_mut(), scope),
         LoweredStatement::Select(plan) => {
             for arm in &mut plan.arms {
-                let body = match arm {
-                    SelectArmPlan::Receive { channel, body, .. } => {
+                let body = match &mut arm.kind {
+                    SelectArmKind::Receive { channel, body, .. } => {
                         reuse_in_expression(channel.node_mut(), scope);
                         body
                     }
-                    SelectArmPlan::Send {
+                    SelectArmKind::Send {
                         channel,
                         value,
                         body,
@@ -110,7 +110,7 @@ fn reuse_in_statement(statement: &mut LoweredStatement, scope: &ScopeState) {
                         reuse_in_expression(value.node_mut(), scope);
                         body
                     }
-                    SelectArmPlan::Default { body } => body,
+                    SelectArmKind::Default { body } => body,
                 };
                 reuse_in_list(&mut body.statements, &[], scope);
             }
@@ -501,7 +501,7 @@ fn binds_spelling(statement: &LoweredStatement, spelling: &str) -> bool {
             LoopHeader::Infinite | LoopHeader::While(_) => false,
         },
         LoweredStatement::Select(plan) => plan.arms.iter().any(|arm| {
-            matches!(arm, SelectArmPlan::Receive { receive_vars, .. } if receive_vars.iter().any(named))
+            matches!(&arm.kind, SelectArmKind::Receive { receive_vars, .. } if receive_vars.iter().any(named))
         }),
         LoweredStatement::Switch(plan) => {
             matches!(&plan.kind, SwitchKind::Type { binding: Some(name), .. } if named(name))

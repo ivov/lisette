@@ -34,18 +34,21 @@ impl Planner<'_> {
                 doc,
                 attributes,
                 name,
+                name_span,
                 generics,
                 fields,
                 ..
             } => {
                 let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
                 let code = self.emit_struct_definition(name, generics, fields, attributes);
+                let code = self.direct_every_line(name_span, code);
                 format!("{}{}", doc_comment, code)
             }
             Expression::Enum {
                 doc,
                 attributes,
                 name,
+                name_span,
                 generics,
                 ..
             } => {
@@ -53,6 +56,7 @@ impl Planner<'_> {
                 let code = self
                     .emit_enum(name, generics, attributes)
                     .unwrap_or_default();
+                let code = self.direct_every_line(name_span, code);
                 format!("{}{}", doc_comment, code)
             }
             Expression::TypeAlias {

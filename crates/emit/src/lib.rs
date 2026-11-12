@@ -367,6 +367,7 @@ impl<'a> Planner<'a> {
             analysis
                 .files
                 .iter()
+                .filter(|(_, file)| !file.is_d_lis())
                 .map(|(file_id, file)| {
                     let path = match &options.sourcemap_base {
                         Some(base) => base.join(&file.display_path).display().to_string(),
@@ -711,6 +712,28 @@ impl<'a> Planner<'a> {
         Some(format!("//line {}:{}:{}\n", source.path, line, col))
     }
 
+    /// A line inside a raw string or a block comment gets no directive.
+    fn direct_every_line(&self, span: &Span, code: String) -> String {
+        let Some(line) = self.maybe_line_directive(span) else {
+            return code;
+        };
+        let mut directed = String::with_capacity(code.len());
+        let mut open = GoTextState::Code;
+        for text in code.split_inclusive('\n') {
+            let trimmed = text.trim();
+            if open == GoTextState::Code
+                && !trimmed.is_empty()
+                && !trimmed.starts_with("//")
+                && !trimmed.chars().all(|c| matches!(c, '}' | ')'))
+            {
+                directed.push_str(&line);
+            }
+            directed.push_str(text);
+            open = open.after_line(text);
+        }
+        directed
+    }
+
     fn emit_files_with_facts(
         facts: EmitFacts<'a>,
         files: &[&File],
@@ -767,7 +790,8 @@ impl<'a> Planner<'a> {
             }
             let enum_id = self.facts.qualified_current(name);
             for variant in variants {
-                source.collect_with_blank(self.create_make_function_code(&enum_id, &variant.name));
+                let code = self.create_make_function_code(&enum_id, &variant.name);
+                source.collect_with_blank(self.direct_every_line(&variant.name_span, code));
             }
         }
 
@@ -814,6 +838,50 @@ fn emit_package<'a>(
         }
         package_output
     })
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum GoTextState {
+    Code,
+    RawString,
+    BlockComment,
+}
+
+impl GoTextState {
+    fn after_line(self, text: &str) -> GoTextState {
+        let mut state = self;
+        let mut chars = text.chars().peekable();
+        while let Some(c) = chars.next() {
+            match state {
+                GoTextState::RawString => {
+                    if c == '`' {
+                        state = GoTextState::Code;
+                    }
+                }
+                GoTextState::BlockComment => {
+                    if c == '*' && chars.next_if_eq(&'/').is_some() {
+                        state = GoTextState::Code;
+                    }
+                }
+                GoTextState::Code => match c {
+                    '`' => state = GoTextState::RawString,
+                    '/' if chars.next_if_eq(&'/').is_some() => return GoTextState::Code,
+                    '/' if chars.next_if_eq(&'*').is_some() => state = GoTextState::BlockComment,
+                    '"' | '\'' => {
+                        while let Some(quoted) = chars.next() {
+                            if quoted == '\\' {
+                                chars.next();
+                            } else if quoted == c {
+                                break;
+                            }
+                        }
+                    }
+                    _ => {}
+                },
+            }
+        }
+        state
+    }
 }
 
 #[cfg(test)]
