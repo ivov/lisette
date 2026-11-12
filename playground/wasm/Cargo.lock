@@ -60,12 +60,6 @@ checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
 name = "ecow"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78e4f79b296fbaab6ce2e22d52cb4c7f010fe0ebe7a32e34fa25885fd797bd02"
-
-[[package]]
-name = "ecow"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dca6141d10838e13f9b166c190254a3f9b5d8379521f9b7510810061cef17a4"
@@ -109,7 +103,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "lisette-deps"
-version = "0.12.4"
+version = "0.13.0"
 dependencies = [
  "lisette-stdlib",
  "serde",
@@ -118,7 +112,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-diagnostics"
-version = "0.12.4"
+version = "0.13.0"
 dependencies = [
  "lisette-syntax",
  "owo-colors",
@@ -129,9 +123,9 @@ dependencies = [
 
 [[package]]
 name = "lisette-emit"
-version = "0.12.4"
+version = "0.13.0"
 dependencies = [
- "ecow 0.3.1",
+ "ecow",
  "lisette-diagnostics",
  "lisette-syntax",
  "rayon",
@@ -140,7 +134,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-format"
-version = "0.12.4"
+version = "0.13.0"
 dependencies = [
  "lisette-syntax",
  "unicode-width",
@@ -148,9 +142,9 @@ dependencies = [
 
 [[package]]
 name = "lisette-passes"
-version = "0.12.4"
+version = "0.13.0"
 dependencies = [
- "ecow 0.3.1",
+ "ecow",
  "lisette-diagnostics",
  "lisette-semantics",
  "lisette-syntax",
@@ -160,10 +154,10 @@ dependencies = [
 
 [[package]]
 name = "lisette-semantics"
-version = "0.12.4"
+version = "0.13.0"
 dependencies = [
  "bincode",
- "ecow 0.3.1",
+ "ecow",
  "lisette-deps",
  "lisette-diagnostics",
  "lisette-stdlib",
@@ -175,13 +169,13 @@ dependencies = [
 
 [[package]]
 name = "lisette-stdlib"
-version = "0.12.4"
+version = "0.13.0"
 
 [[package]]
 name = "lisette-syntax"
-version = "0.12.4"
+version = "0.13.0"
 dependencies = [
- "ecow 0.3.1",
+ "ecow",
  "rustc-hash",
  "serde",
 ]
@@ -191,7 +185,6 @@ name = "lisette-wasm"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
- "ecow 0.2.6",
  "lisette-deps",
  "lisette-diagnostics",
  "lisette-emit",
