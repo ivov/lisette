@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  fn shadow(x: int) -> int {
+    let x = x + 1
+    let x = x * 2
+    x
+  }
+  
+  fn main() {
+    if shadow(2) != 6 { panic("the shadows read the wrong value") }
+  }
+---
+package main
+
+func shadow(x int) int {
+	x++
+	x *= 2
+	return x
+}
+
+func main() {
+	if shadow(2) != 6 {
+		panic("the shadows read the wrong value")
+	}
+}

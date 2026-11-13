@@ -24,9 +24,9 @@ func run() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	d, err2 := double(ret)
-	if err2 != nil {
-		return 0, err2
+	d, err := double(ret)
+	if err != nil {
+		return 0, err
 	}
 	return d, nil
 }

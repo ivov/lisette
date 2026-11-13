@@ -1,0 +1,84 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  struct Point { x: int }
+  
+  impl Point {
+    fn get(self) -> int { self.x }
+    fn grab(self: Ref<Point>) -> Ref<Point> { self }
+  }
+  
+  fn by_reference() -> int {
+    let p = Point { x: 1 }
+    let r = &p
+    let p = Point { x: 2 }
+    r.x * 10 + p.x
+  }
+  
+  fn by_receiver() -> int {
+    let p = Point { x: 1 }
+    let r = p.grab()
+    let p = Point { x: 2 }
+    r.x * 10 + p.x
+  }
+  
+  fn by_method_value() -> int {
+    let p = Point { x: 1 }
+    let f = p.get
+    let p = Point { x: 2 }
+    f() * 10 + p.x
+  }
+  
+  fn main() {
+    if by_reference() != 12 { panic("the reference saw the new value") }
+    if by_receiver() != 12 { panic("the receiver saw the new value") }
+    if by_method_value() != 12 { panic("the method value saw the new value") }
+  }
+---
+package main
+
+type Point struct {
+	x int
+}
+
+func (p Point) get() int {
+	return p.x
+}
+
+func (p *Point) grab() *Point {
+	return p
+}
+
+func byReference() int {
+	p := Point{x: 1}
+	r := &p
+	p2 := Point{x: 2}
+	return r.x*10 + p2.x
+}
+
+func byReceiver() int {
+	p := Point{x: 1}
+	r := p.grab()
+	p2 := Point{x: 2}
+	return r.x*10 + p2.x
+}
+
+func byMethodValue() int {
+	p := Point{x: 1}
+	f := p.get
+	p2 := Point{x: 2}
+	return f()*10 + p2.x
+}
+
+func main() {
+	if byReference() != 12 {
+		panic("the reference saw the new value")
+	}
+	if byReceiver() != 12 {
+		panic("the receiver saw the new value")
+	}
+	if byMethodValue() != 12 {
+		panic("the method value saw the new value")
+	}
+}

@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  fn read() -> int {
+    let x = 1
+    let f = || x
+    let x = 2
+    f() * 10 + x
+  }
+  
+  fn main() {
+    if read() != 12 { panic("the closure saw the new value") }
+  }
+---
+package main
+
+func read() int {
+	x := 1
+	f := func() int {
+		return x
+	}
+	x2 := 2
+	return f()*10 + x2
+}
+
+func main() {
+	if read() != 12 {
+		panic("the closure saw the new value")
+	}
+}

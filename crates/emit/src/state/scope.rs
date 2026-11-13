@@ -6,6 +6,7 @@ use names::LocalNames;
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::ReturnContext;
+use crate::analyze::reusable_bindings::ReusableBindings;
 use crate::context::lowering::LoopContext;
 use crate::plan::bodies::LoopId;
 use crate::plan::local::{GoIdentifier, LocalId};
@@ -22,6 +23,7 @@ pub(crate) struct ScopeState {
     frames: Vec<ScopeFrame>,
     /// Type parameters of the declaration being emitted, receiver first.
     type_params: Vec<TypeParam>,
+    reusable_bindings: ReusableBindings,
 }
 
 /// One binding can be read by source spelling and by several pattern alternatives.
@@ -70,7 +72,29 @@ impl FunctionScope {
     }
 }
 
-type Declarations = HashSet<String>;
+#[derive(Default)]
+struct Declarations {
+    names: HashSet<String>,
+    /// Nothing reads the error variable of a `?` check after the check, so a
+    /// later check of the same type can reassign it.
+    spent_errors: Vec<(GoIdentifier, Type)>,
+}
+
+impl Declarations {
+    fn contains(&self, go_name: &str) -> bool {
+        self.names.contains(go_name)
+    }
+
+    fn insert(&mut self, go_name: &str) -> bool {
+        self.spent_errors
+            .retain(|(name, _)| name.spelling() != go_name);
+        self.names.insert(go_name.to_string())
+    }
+
+    fn is_empty(&self) -> bool {
+        self.names.is_empty()
+    }
+}
 
 pub(crate) struct TypeParam {
     pub(crate) name: EcoString,
@@ -101,9 +125,10 @@ impl ScopeState {
             next_local_id: 0,
             next_loop_id: 0,
             frames: vec![ScopeFrame::new(DeclarationScope::Function(
-                FunctionScope::new(HashSet::default(), ReturnContext::None),
+                FunctionScope::new(Declarations::default(), ReturnContext::None),
             ))],
             type_params: Vec::new(),
+            reusable_bindings: ReusableBindings::default(),
         }
     }
 
@@ -265,6 +290,19 @@ impl ScopeState {
         }
     }
 
+    pub(crate) fn set_reusable_bindings(&mut self, bindings: ReusableBindings) {
+        self.reusable_bindings = bindings;
+    }
+
+    pub(crate) fn reusable_binding(&self, id: BindingId) -> Option<GoIdentifier> {
+        let hidden = self.reusable_bindings.hidden_by(id)?;
+        let Some(BindingValue::GoName(name)) = self.resolve_binding_id(hidden) else {
+            return None;
+        };
+        (self.is_go_name_declared(name) && !self.is_active_assign_target(name))
+            .then(|| name.clone())
+    }
+
     pub(crate) fn resolve_binding_id(&self, id: BindingId) -> Option<&BindingValue> {
         self.bindings()
             .find(|binding| binding.ids.contains(&id))
@@ -384,12 +422,27 @@ impl ScopeState {
     }
 
     pub(crate) fn declare_go_name(&mut self, go_name: &str) {
-        self.current_declarations_mut().insert(go_name.to_string());
+        self.current_declarations_mut().insert(go_name);
+    }
+
+    pub(crate) fn declare_spent_error(&mut self, name: &GoIdentifier, error_ty: &Type) {
+        let declarations = self.current_declarations_mut();
+        declarations.insert(name);
+        declarations
+            .spent_errors
+            .push((name.clone(), error_ty.clone()));
+    }
+
+    pub(crate) fn spent_error(&self, error_ty: &Type) -> Option<GoIdentifier> {
+        self.current_declarations()
+            .spent_errors
+            .iter()
+            .find(|(_, ty)| ty == error_ty)
+            .map(|(name, _)| name.clone())
     }
 
     pub(crate) fn try_declare_go_name(&mut self, go_name: &str) -> bool {
-        !self.declares_type_param(go_name)
-            && self.current_declarations_mut().insert(go_name.to_string())
+        !self.declares_type_param(go_name) && self.current_declarations_mut().insert(go_name)
     }
 
     pub(crate) fn current_block_declares(&self, go_name: &str) -> bool {
@@ -418,7 +471,7 @@ impl ScopeState {
     }
 
     pub(crate) fn enter_block(&mut self) {
-        self.push_frame(DeclarationScope::Block(HashSet::default()));
+        self.push_frame(DeclarationScope::Block(Declarations::default()));
     }
 
     pub(crate) fn exit_block(&mut self) {
@@ -461,7 +514,7 @@ impl ScopeState {
 
     pub(crate) fn enter_isolated_function(&mut self, return_ctx: ReturnContext) {
         self.push_frame(DeclarationScope::Function(FunctionScope::new(
-            HashSet::default(),
+            Declarations::default(),
             return_ctx,
         )));
     }
