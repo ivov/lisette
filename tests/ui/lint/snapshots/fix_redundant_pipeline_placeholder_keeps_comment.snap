@@ -1,0 +1,20 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  let _ = 1 |> add(
+    _, // first
+    2,
+  )
+}
+
+fn add(a: int, b: int) -> int { a + b }
+=== fixed ===
+fn main() {
+  let _ = 1 |> add(
+    // first
+    2,
+  )
+}
+
+fn add(a: int, b: int) -> int { a + b }

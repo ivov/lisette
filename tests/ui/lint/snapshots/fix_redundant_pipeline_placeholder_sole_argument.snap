@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  let _ = 1 |> double(_)
+}
+
+fn double(n: int) -> int { n * 2 }
+=== fixed ===
+fn main() {
+  let _ = 1 |> double()
+}
+
+fn double(n: int) -> int { n * 2 }

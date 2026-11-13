@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  let _ = 1 |> wrap<int>(_)
+}
+
+fn wrap<T>(value: T) -> Option<T> { Some(value) }
+=== fixed ===
+fn main() {
+  let _ = 1 |> wrap<int>()
+}
+
+fn wrap<T>(value: T) -> Option<T> { Some(value) }

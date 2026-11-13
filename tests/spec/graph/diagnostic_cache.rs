@@ -121,6 +121,42 @@ fn cached_diagnostics_preserve_messages_labels_severity_help_and_fixes() {
 }
 
 #[test]
+fn cached_diagnostics_replay_redundant_pipeline_placeholder() {
+    let root = tempfile::tempdir().unwrap();
+    let mut loader = MemoryLoader::new();
+    loader.add_file(
+        "dependency",
+        "value.lis",
+        "pub fn value(input: int) -> int {\n  input |> add(_, 1)\n}\n\nfn add(a: int, b: int) -> int { a + b }\n",
+    );
+    let has_lint = |analysis: &Analysis| {
+        analysis.lints().iter().any(|diagnostic| {
+            diagnostic.code_str() == Some("lint.redundant_pipeline_placeholder")
+                && diagnostic.fix().is_some()
+        })
+    };
+    let cold = analyze_project(
+        root.path(),
+        &loader,
+        MAIN,
+        CompilePhase::Check,
+        RecoverTarget::None,
+    );
+    assert!(cold.errors().is_empty(), "{:?}", cold.errors());
+    assert!(has_lint(&cold), "{:?}", cold.lints());
+    let warm = analyze_project(
+        root.path(),
+        &loader,
+        MAIN,
+        CompilePhase::Check,
+        RecoverTarget::None,
+    );
+    assert!(warm.emit_input.cached_packages.contains("dependency"));
+    assert!(has_lint(&warm), "{:?}", warm.lints());
+    assert_eq!(diagnostics(&cold), diagnostics(&warm));
+}
+
+#[test]
 fn source_changes_and_allow_attributes_invalidate_cached_diagnostics() {
     let root = tempfile::tempdir().unwrap();
     let mut loader = MemoryLoader::new();

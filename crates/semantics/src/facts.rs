@@ -42,6 +42,7 @@ pub struct Facts {
     pub overused_references: Vec<OverusedReferenceFact>,
     pub always_failing_try_blocks: Vec<Span>,
     pub expression_only_fstrings: Vec<ExpressionOnlyFstringFact>,
+    pub redundant_pipeline_placeholders: Vec<Span>,
     pub unprefixed_fstrings: Vec<UnprefixedFstringFact>,
     pub interface_satisfied_methods: HashMap<String, HashMap<String, InterfaceSatisfactions>>,
 
@@ -202,6 +203,7 @@ impl Facts {
             overused_references: Vec::new(),
             always_failing_try_blocks: Vec::new(),
             expression_only_fstrings: Vec::new(),
+            redundant_pipeline_placeholders: Vec::new(),
             unprefixed_fstrings: Vec::new(),
             deferred: DeferredChecks::default(),
             pattern_error_spans: HashSet::default(),
@@ -316,6 +318,10 @@ impl Facts {
             .push(ExpressionOnlyFstringFact { span, needs_parens });
     }
 
+    pub(crate) fn add_redundant_pipeline_placeholder(&mut self, span: Span) {
+        self.redundant_pipeline_placeholders.push(span);
+    }
+
     pub(crate) fn add_unprefixed_fstring(&mut self, span: Span, name: String) {
         self.unprefixed_fstrings
             .push(UnprefixedFstringFact { span, name });
@@ -370,6 +376,7 @@ impl Facts {
             overused_references,
             always_failing_try_blocks,
             expression_only_fstrings,
+            redundant_pipeline_placeholders,
             unprefixed_fstrings,
             deferred,
             pattern_error_spans,
@@ -386,6 +393,8 @@ impl Facts {
             .extend(always_failing_try_blocks);
         self.expression_only_fstrings
             .extend(expression_only_fstrings);
+        self.redundant_pipeline_placeholders
+            .extend(redundant_pipeline_placeholders);
         self.unprefixed_fstrings.extend(unprefixed_fstrings);
         self.deferred.merge(deferred);
         self.pattern_error_spans.extend(pattern_error_spans);

@@ -1183,6 +1183,15 @@ pub fn expression_only_fstring(span: &Span) -> LisetteDiagnostic {
         .with_help("Use the expression directly. Wrapping it in an f-string adds no value")
 }
 
+pub fn redundant_pipeline_placeholder(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Redundant `_` in pipeline")
+        .with_lint_code("redundant_pipeline_placeholder")
+        .with_span_label(span, "already the first argument")
+        .with_help(
+            "`|>` passes the value as the first argument when a step has no `_`. Remove the `_`",
+        )
+}
+
 pub fn rest_only_pattern(span: &Span, help: impl Into<String>) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Ineffective pattern")
         .with_lint_code("rest_only_pattern")
