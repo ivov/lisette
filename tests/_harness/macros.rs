@@ -140,6 +140,7 @@ macro_rules! assert_emit_snapshot {
     ($input:expr) => {
         let emit_result = $crate::_harness::emit::emit($input);
         let go_code = emit_result.go_code();
+        $crate::_harness::emit::assert_sourcemap_only_adds_directives($input, &go_code);
 
         insta::with_settings!({
             description => $crate::_harness::snapshot_description($input),

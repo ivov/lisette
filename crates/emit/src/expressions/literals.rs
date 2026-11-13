@@ -133,11 +133,9 @@ impl Planner<'_> {
         }
 
         let layout = CompositeLayout::for_elements(wrapped.len(), widest);
-        ValuePlan::built_from(
-            setup,
-            GoExpression::composite(Some(go_type), wrapped, layout),
-            stability,
-        )
+        let value = GoExpression::composite(Some(go_type), wrapped, layout)
+            .position_elements(|index, _| self.source_position(&elements[index].get_span()));
+        ValuePlan::built_from(setup, value, stability)
     }
 
     fn emit_format_string(&mut self, parts: &[FormatStringPart]) -> ValuePlan {

@@ -5,13 +5,13 @@ use crate::plan::bodies::{
 };
 use crate::plan::values::GoExpression;
 use crate::render::Renderer;
+use crate::render::writer::GoWriter;
 use crate::write_line;
+use std::mem;
 
-fn write_header_line(output: &mut String, line: Option<&String>) {
-    if let Some(line) = line
-        && !output.ends_with(line.as_str())
-    {
-        output.push_str(line);
+fn write_header_line(output: &mut GoWriter, line: Option<&String>) {
+    if let Some(line) = line {
+        output.push_line_directive(line);
     }
 }
 
@@ -25,21 +25,27 @@ fn names<T: ToString>(names: &[T]) -> String {
 
 impl Renderer {
     /// Render a slice of setup statements to a fresh `String`.
-    pub(crate) fn render_setup(&self, setup: &[Statement]) -> String {
-        let mut buffer = String::new();
+    pub(crate) fn render_setup(&self, setup: &[Statement], directives: bool) -> String {
+        let mut output = GoWriter::new(directives);
         for statement in setup {
-            self.render_statement(&mut buffer, statement);
+            self.render_statement(&mut output, statement);
         }
-        buffer
+        output.into_text()
     }
 
-    pub(crate) fn render_lowered_block(&self, output: &mut String, block: &LoweredBlock) {
+    pub(crate) fn render_body(&self, output: &mut String, block: &LoweredBlock) {
+        let mut writer = GoWriter::continuing(mem::take(output), true);
+        self.render_lowered_block(&mut writer, block);
+        *output = writer.into_text();
+    }
+
+    pub(crate) fn render_lowered_block(&self, output: &mut GoWriter, block: &LoweredBlock) {
         for statement in &block.statements {
             self.render_statement(output, statement);
         }
     }
 
-    fn render_select(&self, output: &mut String, plan: &SelectStatementPlan) {
+    fn render_select(&self, output: &mut GoWriter, plan: &SelectStatementPlan) {
         output.push_str("select {\n");
         for arm in &plan.arms {
             write_header_line(output, arm.line.as_ref());
@@ -50,7 +56,7 @@ impl Renderer {
 
     /// Render a `switch` statement: the value/type-switch header, each
     /// `case`/`default:` plus body, and the closing brace.
-    fn render_switch(&self, output: &mut String, plan: &SwitchStatementPlan) {
+    fn render_switch(&self, output: &mut GoWriter, plan: &SwitchStatementPlan) {
         match &plan.kind {
             SwitchKind::Conditional => output.push_str("switch {\n"),
             SwitchKind::Value { subject } => {
@@ -85,7 +91,7 @@ impl Renderer {
         output.push_str("}\n");
     }
 
-    fn render_select_arm(&self, output: &mut String, arm: &SelectArmKind) {
+    fn render_select_arm(&self, output: &mut GoWriter, arm: &SelectArmKind) {
         match arm {
             SelectArmKind::Receive {
                 receive_vars,
@@ -121,19 +127,19 @@ impl Renderer {
         }
     }
 
-    fn render_definition(&self, output: &mut String, definition: &Definition) {
+    fn render_definition(&self, output: &mut GoWriter, definition: &Definition) {
         output.push_str(&names(&definition.names));
         output.push_str(" := ");
         definition.value.write(output);
     }
 
-    fn render_statement(&self, output: &mut String, statement: &Statement) {
+    fn render_statement(&self, output: &mut GoWriter, statement: &Statement) {
         if let Some(line) = &statement.line
+            && statement.kind.emits_output()
             && !matches!(&statement.kind, LoweredStatement::Body(body)
                 if body.statements.first().is_some_and(|first| first.line.is_some()))
-            && !output.ends_with(line.as_str())
         {
-            output.push_str(line);
+            output.push_line_directive(line);
         }
         match &statement.kind {
             LoweredStatement::If(plan) => self.render_if(output, plan),
@@ -200,7 +206,7 @@ impl Renderer {
         }
     }
 
-    fn render_assign_statement(&self, output: &mut String, plan: &AssignForm) {
+    fn render_assign_statement(&self, output: &mut GoWriter, plan: &AssignForm) {
         match plan {
             AssignForm::Compound { target, kind } => {
                 target.write(output);
@@ -222,7 +228,7 @@ impl Renderer {
         output.push('\n');
     }
 
-    fn render_transfer(&self, output: &mut String, keyword: &str, target: &LoopTransfer) {
+    fn render_transfer(&self, output: &mut GoWriter, keyword: &str, target: &LoopTransfer) {
         match target {
             LoopTransfer::Unlabeled => write_line!(output, "{}", keyword),
             LoopTransfer::Labeled(label) => write_line!(output, "{} {}", keyword, label),
@@ -234,7 +240,7 @@ impl Renderer {
         }
     }
 
-    fn render_const_declaration(&self, output: &mut String, plan: &ConstPlan) {
+    fn render_const_declaration(&self, output: &mut GoWriter, plan: &ConstPlan) {
         output.push_str("const ");
         output.push_str(&plan.name);
         if let Some(go_type) = &plan.go_type {
@@ -246,12 +252,10 @@ impl Renderer {
         output.push('\n');
     }
 
-    fn render_loop(&self, output: &mut String, plan: &LoopPlan, line: Option<&String>) {
+    fn render_loop(&self, output: &mut GoWriter, plan: &LoopPlan, line: Option<&String>) {
         if let Some(label) = plan.kind.label() {
             write_line!(output, "{}:", label);
-            if let Some(line) = line {
-                output.push_str(line);
-            }
+            write_header_line(output, line);
         }
         match &plan.header {
             LoopHeader::Infinite => output.push_str("for {\n"),
@@ -295,7 +299,7 @@ impl Renderer {
         output.push_str("}\n");
     }
 
-    fn render_if_header(&self, output: &mut String, plan: &IfPlan) {
+    fn render_if_header(&self, output: &mut GoWriter, plan: &IfPlan) {
         debug_assert!(!plan.condition.is_empty(), "if condition must not be empty");
         output.push_str("if ");
         if let Some(initializer) = &plan.initializer {
@@ -308,19 +312,17 @@ impl Renderer {
         output.push_str(" {\n");
     }
 
-    fn render_if(&self, output: &mut String, plan: &IfPlan) {
+    fn render_if(&self, output: &mut GoWriter, plan: &IfPlan) {
         self.render_if_header(output, plan);
         self.render_lowered_block(output, &plan.then_body);
         self.render_else_arm(output, &plan.else_arm);
     }
 
-    fn render_else_arm(&self, output: &mut String, arm: &ElseArm) {
+    fn render_else_arm(&self, output: &mut GoWriter, arm: &ElseArm) {
         match arm {
             ElseArm::None => output.push_str("}\n"),
             ElseArm::ElseIf(plan) => {
-                if let Some(line) = &plan.else_if_line {
-                    output.push_str(line);
-                }
+                write_header_line(output, plan.else_if_line.as_ref());
                 output.push_str("} else ");
                 self.render_if_header(output, plan);
                 self.render_lowered_block(output, &plan.then_body);

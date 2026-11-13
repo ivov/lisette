@@ -10,7 +10,9 @@ use crate::plan::bodies::{
     LoweredStatement, SelectArmKind, Statement, SwitchKind, for_each_statements_mut,
 };
 use crate::plan::evaluation::Effects;
-use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp, verbatim_identifiers};
+use crate::plan::go_expression::{
+    BinaryOp, GoExpressionNode, Operand, UnaryOp, verbatim_identifiers,
+};
 use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::source_reuse::reuse_dead_copy_sources;
 use crate::plan::values::GoExpression;
@@ -133,7 +135,8 @@ fn dereferenced_new_type(node: &GoExpressionNode) -> Option<GoType> {
         && let GoExpressionNode::Identifier(name) = callee.as_ref()
         && name.id().is_none()
         && name.spelling() == "new"
-        && let [GoExpressionNode::Type(go_type)] = arguments.as_slice()
+        && let [argument] = arguments.as_slice()
+        && let GoExpressionNode::Type(go_type) = argument.as_ref()
     {
         return Some(go_type.clone());
     }
@@ -512,7 +515,7 @@ fn flip_branches(plan: &mut IfPlan) {
         IfOrigin::Match { else_label } => else_label.take(),
         IfOrigin::User => None,
     };
-    let condition = match (else_label, plan.condition.node()) {
+    plan.condition = match (else_label, plan.condition.node()) {
         (
             Some(label),
             GoExpressionNode::Binary {
@@ -520,52 +523,70 @@ fn flip_branches(plan: &mut IfPlan) {
                 left,
                 ..
             },
-        ) => GoExpressionNode::Binary {
+        ) => plan.condition.with_node(GoExpressionNode::Binary {
             operator: BinaryOp::Eq,
             left: left.clone(),
-            right: Box::new(label.node().clone()),
-        },
-        _ => negated(plan.condition.node()).expect("a flipped condition negates"),
+            right: label.into_operand(),
+        }),
+        _ => plan
+            .condition
+            .peeled(&negated(plan.condition.node()).expect("a flipped condition negates")),
     };
-    plan.condition = GoExpression::from_node(condition);
     let ElseArm::Else { body, .. } = &mut plan.else_arm else {
         unreachable!("a flipped if has an else");
     };
     mem::swap(&mut plan.then_body, body);
 }
 
-fn negated(node: &GoExpressionNode) -> Option<GoExpressionNode> {
-    match node {
+fn negated(node: &GoExpressionNode) -> Option<Operand> {
+    let negation = match node {
         GoExpressionNode::Binary {
             operator,
             left,
             right,
         } => {
             let (operator, left, right) = match operator {
-                BinaryOp::Eq => (BinaryOp::Ne, (**left).clone(), (**right).clone()),
-                BinaryOp::Ne => (BinaryOp::Eq, (**left).clone(), (**right).clone()),
-                BinaryOp::And => (BinaryOp::Or, negated(left)?, negated(right)?),
-                BinaryOp::Or => (BinaryOp::And, negated(left)?, negated(right)?),
+                BinaryOp::Eq => (BinaryOp::Ne, left.clone(), right.clone()),
+                BinaryOp::Ne => (BinaryOp::Eq, left.clone(), right.clone()),
+                BinaryOp::And => (
+                    BinaryOp::Or,
+                    negated_in_place(left)?,
+                    negated_in_place(right)?,
+                ),
+                BinaryOp::Or => (
+                    BinaryOp::And,
+                    negated_in_place(left)?,
+                    negated_in_place(right)?,
+                ),
                 _ => return None,
             };
-            Some(GoExpressionNode::Binary {
+            GoExpressionNode::Binary {
                 operator,
-                left: Box::new(left),
-                right: Box::new(right),
-            })
+                left,
+                right,
+            }
         }
         GoExpressionNode::Unary {
             operator: UnaryOp::Not,
             operand,
-        } => Some((**operand).clone()),
+        } => return Some(operand.clone()),
         GoExpressionNode::Identifier(_) | GoExpressionNode::Call { .. } => {
-            Some(GoExpressionNode::Unary {
+            GoExpressionNode::Unary {
                 operator: UnaryOp::Not,
-                operand: Box::new(node.clone()),
-            })
+                operand: node.clone().into(),
+            }
         }
-        _ => None,
+        _ => return None,
+    };
+    Some(negation.into())
+}
+
+fn negated_in_place(operand: &Operand) -> Option<Operand> {
+    let mut negation = negated(operand)?;
+    if !negation.position().is_set() {
+        *negation.position_mut() = operand.position().clone();
     }
+    Some(negation)
 }
 
 fn inline_terminal_else(plan: &mut IfPlan) {
@@ -746,7 +767,7 @@ fn folded_compound_assignment(statement: &LoweredStatement) -> Option<LoweredSta
         (BinaryOp::Sub, GoExpressionNode::Literal(one)) if one == "1" => CompoundKind::Decrement,
         _ => CompoundKind::OpAssign {
             operator: *operator,
-            rhs: GoExpression::from_node(right.as_ref().clone()),
+            rhs: GoExpression::from_operand(right.clone()),
         },
     };
     Some(LoweredStatement::Assign(AssignForm::Compound {
@@ -1347,10 +1368,7 @@ mod tests {
     fn alias_replacement_keeps_the_sources_local_id() {
         let source = GoIdentifier::local("source".to_string(), LocalId(7));
         let mut statements = vec![
-            define(
-                "temp".to_string(),
-                GoExpression::from_node(GoExpressionNode::Identifier(source.clone())),
-            ),
+            define("temp".to_string(), GoExpression::identifier(source.clone())),
             returned(name("temp")),
         ];
         inline_name_aliases(&mut statements);
@@ -1370,12 +1388,8 @@ mod tests {
     fn alias_inlining_counts_function_literal_bindings_by_their_own_local() {
         use crate::plan::go_expression::{FunctionLiteralLayout, GoParameter};
 
-        let outer = |id| {
-            GoExpression::from_node(GoExpressionNode::Identifier(GoIdentifier::local(
-                "temp".to_string(),
-                LocalId(id),
-            )))
-        };
+        let outer =
+            |id| GoExpression::identifier(GoIdentifier::local("temp".to_string(), LocalId(id)));
         let mut parameter = GoParameter::new("temp", GoType::new("int"));
         parameter.name.identify(LocalId(2));
         let closure = GoExpression::function_literal(

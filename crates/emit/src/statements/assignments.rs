@@ -386,7 +386,7 @@ impl Planner<'_> {
         let pinned = if !matches!(self.emit_shape_ty(&base.get_type()), Type::Array { .. }) {
             expression
         } else if let GoExpressionNode::Dereference(pointer) = expression.node() {
-            GoExpression::from_node(pointer.as_ref().clone())
+            expression.peeled(pointer)
         } else {
             GoExpression::address_of(expression)
         };

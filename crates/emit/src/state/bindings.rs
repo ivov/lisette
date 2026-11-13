@@ -12,7 +12,7 @@ pub(crate) struct InlineExpr {
 impl InlineExpr {
     pub(crate) fn new(expression: GoExpression, stability: Stability) -> Self {
         Self {
-            expression,
+            expression: expression.without_positions(),
             stability,
         }
     }

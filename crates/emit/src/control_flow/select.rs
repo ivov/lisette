@@ -639,13 +639,9 @@ fn retry_closed_channel(channel: &GoExpression) -> LoweredBlock {
 
 /// `*&x` is `x`. Any other pointer gets dereferenced.
 fn cancel_deref_of_address(channel: GoExpression) -> GoExpression {
-    let addressed = match channel.node() {
-        GoExpressionNode::AddressOf(inner) => Some(inner.as_ref()),
-        _ => None,
-    };
-    match addressed {
-        Some(inner) => GoExpression::from_node(inner.clone()),
-        None => GoExpression::dereference(channel),
+    match channel.node() {
+        GoExpressionNode::AddressOf(inner) => channel.peeled(inner),
+        _ => GoExpression::dereference(channel),
     }
 }
 

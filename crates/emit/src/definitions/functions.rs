@@ -81,7 +81,7 @@ impl Planner<'_> {
         lowered.statements = prefix;
         let lowered =
             self.finish_function_body(lowered, parameters, should_return, BodyOrigin::Source);
-        Renderer.render_lowered_block(output, &lowered);
+        Renderer.render_body(output, &lowered);
     }
 
     /// Resolve locals, clean the body, and verify it before collecting its imports.

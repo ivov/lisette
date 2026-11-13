@@ -2,7 +2,6 @@ use crate::expressions::access::struct_call::emit_struct_literal;
 use std::borrow::Cow;
 
 use super::{NativeCallContext, NativeCallForm};
-use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
 use crate::abi::is_prelude_container_type;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
@@ -22,6 +21,7 @@ use crate::plan::go_expression::{
 };
 use crate::plan::values::{CaptureBoundary, GoExpression, Stability, ValuePlan};
 use crate::types::go_type::GoType;
+use crate::{Planner, written_span};
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments, StructFields};
 use syntax::program::NativeTypeKind;
@@ -478,10 +478,9 @@ impl<'a> Planner<'a> {
         }
 
         let layout = CompositeLayout::for_elements(lowered.len(), widest);
-        Some(ValuePlan::computed(
-            setup,
-            GoExpression::composite(Some(map_ty), lowered, layout),
-        ))
+        let value = GoExpression::composite(Some(map_ty), lowered, layout)
+            .position_elements(|index, _| self.source_position(&entries[index].get_span()));
+        Some(ValuePlan::computed(setup, value))
     }
 
     /// Emit `!is_empty()` as `len(receiver) != 0` using the native `IsEmpty` rule.
@@ -545,6 +544,17 @@ impl<'a> Planner<'a> {
 
     /// Lower a call whose plan the caller already built.
     pub(crate) fn lower_call_with_plan(
+        &mut self,
+        call_expression: &Expression,
+        call_ty: Option<&Type>,
+        ctx: ExpressionContext<'_>,
+        plan: CallPlan<'a>,
+    ) -> ValuePlan {
+        let lowered = self.lower_unpositioned_call(call_expression, call_ty, ctx, plan);
+        self.with_source_positions(&written_span(call_expression), lowered)
+    }
+
+    fn lower_unpositioned_call(
         &mut self,
         call_expression: &Expression,
         call_ty: Option<&Type>,
@@ -774,10 +784,12 @@ impl<'a> Planner<'a> {
             field_pairs.push((format!("F{}", i), coerced));
         }
 
-        Some(ValuePlan::computed(
-            setup,
-            emit_struct_literal(&target.go_ty, field_pairs),
-        ))
+        let value =
+            emit_struct_literal(&target.go_ty, field_pairs).position_elements(|index, _| {
+                args.get(index)
+                    .and_then(|argument| self.source_position(&argument.get_span()))
+            });
+        Some(ValuePlan::computed(setup, value))
     }
 
     /// Drill the function's return type into a tuple-struct definition,

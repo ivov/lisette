@@ -8,6 +8,78 @@ pub fn emit_with_sourcemap(raw_source: &str) -> EmitResult {
     emit_inner(raw_source, Some(raw_source), &[])
 }
 
+pub fn assert_sourcemap_only_adds_directives(input: &str, plain: &str) {
+    let mapped = emit_with_sourcemap(input).go_code();
+    assert_eq!(
+        code_lines(&strip_line_directives(&mapped)),
+        code_lines(plain),
+        "sourcemap output differs beyond its directives:\n{mapped}"
+    );
+}
+
+/// gofmt separates a directive from the doc comment above it with a `//` line.
+fn strip_line_directives(go_code: &str) -> String {
+    let lines: Vec<&str> = go_code.lines().collect();
+    let mut stripped = String::new();
+    let mut in_raw_string = false;
+    for (index, line) in lines.iter().enumerate() {
+        let directive_follows = lines
+            .get(index + 1)
+            .is_some_and(|next| next.starts_with("//line "));
+        if !in_raw_string
+            && (line.starts_with("//line ") || (line.trim() == "//" && directive_follows))
+        {
+            continue;
+        }
+        in_raw_string = strip_inline_directives(line, in_raw_string, &mut stripped);
+        stripped.push('\n');
+    }
+    stripped
+}
+
+fn strip_inline_directives(line: &str, mut in_raw_string: bool, out: &mut String) -> bool {
+    let mut rest = line;
+    while let Some(c) = rest.chars().next() {
+        if in_raw_string {
+            in_raw_string = c != '`';
+        } else if rest.starts_with("//") {
+            out.push_str(rest);
+            return false;
+        } else if let Some(directive) = rest.strip_prefix("/*line ") {
+            let end = directive.find("*/").expect("a directive closes") + "*/".len();
+            rest = &directive[end..];
+            rest = rest.strip_prefix(' ').unwrap_or(rest);
+            continue;
+        } else if c == '`' {
+            in_raw_string = true;
+        } else if c == '"' || c == '\'' {
+            let mut escaped = false;
+            let close = rest[1..]
+                .find(|quoted| {
+                    let closes = !escaped && quoted == c;
+                    escaped = !escaped && quoted == '\\';
+                    closes
+                })
+                .map_or(rest.len(), |at| at + 2);
+            out.push_str(&rest[..close]);
+            rest = &rest[close..];
+            continue;
+        }
+        out.push(c);
+        rest = &rest[c.len_utf8()..];
+    }
+    in_raw_string
+}
+
+/// gofmt spaces comments differently.
+fn code_lines(go_code: &str) -> Vec<String> {
+    go_code
+        .lines()
+        .map(|line| line.split_whitespace().collect::<String>())
+        .filter(|line| !line.is_empty())
+        .collect()
+}
+
 pub fn emit(raw_source: &str) -> EmitResult {
     emit_inner(raw_source, None, &[])
 }

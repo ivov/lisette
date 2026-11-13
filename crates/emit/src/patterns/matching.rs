@@ -532,7 +532,7 @@ impl Planner<'_> {
             if !tested && !is_inert_value(element, value) {
                 statements.push(discard(value.clone()));
             }
-            roots.push(value.clone());
+            roots.push(value.clone().without_positions());
         }
 
         let block = self.lower_match_tree(arms, MatchSubject::Elements(roots), subject_ty, place);
@@ -1462,6 +1462,9 @@ fn inline_subject_into_header(
         return false;
     };
     *read = expression.node().clone();
+    if let Some(position) = expression.position() {
+        *header = header.clone().positioned(position.clone());
+    }
     let used = GoUses::of(statements);
     if !used.contains_identifier(var) {
         return true;
