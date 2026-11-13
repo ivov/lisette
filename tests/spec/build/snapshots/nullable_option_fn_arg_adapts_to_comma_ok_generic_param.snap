@@ -18,7 +18,8 @@ func Resolve[T any, R any](a T, f func(T) lisette.Option[R]) (R, bool) {
 	if v.Tag == lisette.OptionSome {
 		return v.SomeVal, true
 	}
-	return *new(R), false
+	var zero R
+	return zero, false
 }
 
 func main() {

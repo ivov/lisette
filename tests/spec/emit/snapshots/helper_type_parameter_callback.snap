@@ -24,7 +24,8 @@ func adapt[arg0 any](seed arg0) (arg0, bool) {
 	if v.Tag == lisette.OptionSome {
 		return v.SomeVal, true
 	}
-	return *new(arg0), false
+	var zero arg0
+	return zero, false
 }
 
 func main() {

@@ -14,7 +14,8 @@ description: |
 package main
 
 func first[T any](_ ...T) (T, bool) {
-	return *new(T), false
+	var zero T
+	return zero, false
 }
 
 func test() {

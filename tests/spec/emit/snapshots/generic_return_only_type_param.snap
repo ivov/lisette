@@ -13,7 +13,8 @@ description: |
 package main
 
 func defaultValue[T any]() (T, bool) {
-	return *new(T), false
+	var zero T
+	return zero, false
 }
 
 func test() (int, bool) {

@@ -31,7 +31,8 @@ func handler(client *promoted.Client) (promoted.Handler, error) {
 	if v.Tag == lisette.ResultOk {
 		return v.OkVal, nil
 	}
-	return *new(promoted.Handler), v.ErrVal
+	var zero promoted.Handler
+	return zero, v.ErrVal
 }
 
 func group(client *promoted.Client) (*promoted.Group, error) {

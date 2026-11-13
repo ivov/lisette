@@ -36,7 +36,8 @@ func (b Bar[S]) get() (S, bool) {
 	if v.Tag == lisette.OptionSome {
 		return v.SomeVal, true
 	}
-	return *new(S), false
+	var zero S
+	return zero, false
 }
 
 func (b Bar[S]) get_() lisette.Option[S] {

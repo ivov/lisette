@@ -29,7 +29,8 @@ type Counter struct {
 
 func (c *Counter) Run() U {
 	*c.n++
-	return *new(U)
+	var zero U
+	return zero
 }
 
 func apply[T any](f func() T) T {

@@ -64,7 +64,8 @@ func intResult(n int) (int, error) {
 
 func makeR(n int) (F[lisette.Option[int]], error) {
 	if _, err := intResult(n); err != nil {
-		return *new(F[lisette.Option[int]]), err
+		var zero F[lisette.Option[int]]
+		return zero, err
 	}
 	return func(arg0 int) lisette.Option[int] {
 		return lisette.OptionFromCommaOk[int](source(arg0))
@@ -82,7 +83,8 @@ func makeO(n int) F[lisette.Option[int]] {
 
 func tryR(n int) (F[lisette.Option[int]], error) {
 	if _, err := intResult(n); err != nil {
-		return *new(F[lisette.Option[int]]), err
+		var zero F[lisette.Option[int]]
+		return zero, err
 	}
 	return func(arg0 int) lisette.Option[int] {
 		return lisette.OptionFromCommaOk[int](source(arg0))

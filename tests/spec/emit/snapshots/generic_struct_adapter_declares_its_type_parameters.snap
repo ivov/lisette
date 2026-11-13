@@ -47,7 +47,8 @@ func (b Bar[T]) get() (T, bool) {
 	if v.Tag == lisette.OptionSome {
 		return v.SomeVal, true
 	}
-	return *new(T), false
+	var zero T
+	return zero, false
 }
 
 func consume[T any](box Box[lisette.Option[T]]) {

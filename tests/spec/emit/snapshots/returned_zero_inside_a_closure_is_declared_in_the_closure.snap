@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn maker<T: Zeroable>() -> fn() -> T {
+    || zero<T>()
+  }
+---
+package main
+
+func maker[T any]() func() T {
+	return func() T {
+		var zero T
+		return zero
+	}
+}

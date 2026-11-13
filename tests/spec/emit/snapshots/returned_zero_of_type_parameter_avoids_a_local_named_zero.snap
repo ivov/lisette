@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn first<T: Zeroable>(items: Slice<T>) -> T {
+    if items.length() > 0 {
+      let zero = items[0]
+      return zero
+    }
+    zero<T>()
+  }
+---
+package main
+
+func first[T any](items []T) T {
+	if len(items) > 0 {
+		zero := items[0]
+		return zero
+	}
+	var zero2 T
+	return zero2
+}

@@ -9,5 +9,6 @@ description: |
 package main
 
 func pair[T any](value T) (T, T) {
-	return value, *new(T)
+	var zero T
+	return value, zero
 }
