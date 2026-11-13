@@ -740,6 +740,21 @@ impl InferCtx<'_> {
         }
     }
 
+    pub fn resolve_statement_tails(&mut self) {
+        let tails: Vec<(Type, Span)> = self
+            .facts
+            .deferred
+            .statement_tails
+            .iter()
+            .map(|check| (check.expected_ty.clone(), check.span))
+            .collect();
+        for (expected_ty, span) in tails {
+            if expected_ty.resolve_in(&self.env).is_variable() {
+                self.unify(&expected_ty, &Type::unit(), &span);
+            }
+        }
+    }
+
     pub(super) fn infer_block_items(
         &mut self,
         items: Vec<Expression>,

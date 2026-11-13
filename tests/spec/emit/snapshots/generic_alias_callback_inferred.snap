@@ -45,7 +45,7 @@ func wrap[T any](f Callback[T]) Event[T] {
 
 func main() {
 	n := 0
-	value := wrap(func() any {
+	value := wrap(func() struct{} {
 		n++
 		return struct{}{}
 	})
