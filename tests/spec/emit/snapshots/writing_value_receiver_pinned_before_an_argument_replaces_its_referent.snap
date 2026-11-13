@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Server { name: string, hits: mut Slice<int> }
+  
+  impl Server {
+    fn greet(self: mut Server, suffix: string) -> string {
+      self.hits[0] += 1
+      self.name + suffix
+    }
+  }
+  
+  fn swap(s: mut Ref<mut Server>, other: mut Server) -> string {
+    s.* = other
+    "!"
+  }
+  
+  fn test(s: mut Ref<mut Server>, other: mut Server) -> string {
+    s.greet(swap(s, other))
+  }
+---
+package main
+
+type Server struct {
+	name string
+	hits []int
+}
+
+func (s Server) greet(suffix string) string {
+	s.hits[0]++
+	return s.name + suffix
+}
+
+func swap(s *Server, other Server) string {
+	*s = other
+	return "!"
+}
+
+func test(s *Server, other Server) string {
+	callee := s.greet
+	return callee(swap(s, other))
+}

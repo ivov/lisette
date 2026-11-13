@@ -19,8 +19,7 @@ func run() int {
 		y = 10
 		return 4
 	}
-	left2 := x
 	left := y
-	x = left2 * (left + bump())
+	x *= left + bump()
 	return x
 }

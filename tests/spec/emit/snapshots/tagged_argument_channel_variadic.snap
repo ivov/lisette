@@ -41,21 +41,19 @@ func label(n int) (string, bool) {
 }
 
 func main() {
-	arg := lisette.MakeOptionSome(0)
 	cb := channel
 	tagged := func(arg0 int) lisette.Option[<-chan time.Time] {
 		raw := cb(arg0)
 		return lisette.OptionFromNilable[<-chan time.Time](raw, raw == nil)
 	}
-	if lisette.OptionAndThen(arg, tagged).IsSome() {
+	if lisette.OptionAndThen(lisette.MakeOptionSome(0), tagged).IsSome() {
 		panic("nil channel")
 	}
-	arg2 := lisette.MakeOptionSome(7)
 	cb2 := label
 	tagged2 := func(arg0 int) lisette.Option[string] {
 		return lisette.OptionFromCommaOk[string](cb2(arg0))
 	}
-	value := lisette.OptionAndThen(arg2, tagged2)
+	value := lisette.OptionAndThen(lisette.MakeOptionSome(7), tagged2)
 	absent := lisette.MakeOptionNone[string]()
 	rendered := fmt.Sprint(value, absent)
 	if value.UnwrapOr("bad") != "7" || rendered == "" {

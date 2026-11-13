@@ -4,7 +4,7 @@ use crate::abi::transition::lower_arg_to_tagged;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::prelude_constructor;
-use crate::plan::bodies::Statement;
+use crate::plan::bodies::{Definition, LoweredStatement, Statement};
 use crate::plan::calls::{CallableOrigin, TaggedArgumentAdapter};
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::CompositeLayout;
@@ -41,11 +41,7 @@ pub(crate) struct LaterStages {
 impl LaterStages {
     pub(crate) fn sequenced(setup: &[Statement], inline: Effects) -> Self {
         Self {
-            before: if setup.is_empty() {
-                Effects::default()
-            } else {
-                Effects::anything()
-            },
+            before: setup_effects(setup),
             inline,
         }
     }
@@ -63,9 +59,7 @@ impl LaterStages {
     pub(crate) fn prepend(&mut self, stage: &ValuePlan) -> bool {
         let effects = stage.effects();
         let pinned = !self.can_follow(effects);
-        if !stage.setup().is_empty() {
-            self.before = self.before.union(Effects::anything());
-        }
+        self.before = self.before.union(setup_effects(stage.setup()));
         if pinned {
             self.before = self.before.union(effects);
         } else {
@@ -73,6 +67,26 @@ impl LaterStages {
         }
         pinned
     }
+}
+
+fn setup_effects(setup: &[Statement]) -> Effects {
+    setup
+        .iter()
+        .try_fold(Effects::default(), |effects, statement| {
+            match &statement.kind {
+                LoweredStatement::Define(Definition { value, .. }) => {
+                    let value = value.effects();
+                    let reads = if value.reads() == Stability::Fixed {
+                        Stability::Fixed
+                    } else {
+                        Stability::Observable
+                    };
+                    Some(effects.union(value).union(Effects::read_of(reads)))
+                }
+                _ => None,
+            }
+        })
+        .unwrap_or_else(Effects::anything)
 }
 
 fn prelude_arg_context<'a>(

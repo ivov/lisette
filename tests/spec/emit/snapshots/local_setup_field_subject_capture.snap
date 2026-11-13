@@ -50,9 +50,8 @@ func main() {
 	total := 0
 	for {
 		if pending.Tag == lisette.OptionSome {
-			left2 := total
 			left := pending.SomeVal
-			total = left2 + (left + f())
+			total += left + f()
 			pending = lisette.MakeOptionNone[int]()
 		} else {
 			break
@@ -60,7 +59,7 @@ func main() {
 	}
 	ch := make(chan int, 1)
 	lisette.ChannelSend(ch, 3)
-	left3 := total
+	left2 := total
 	var tmp int
 	for {
 		select {
@@ -76,7 +75,7 @@ func main() {
 		}
 		break
 	}
-	total = left3 + tmp
+	total = left2 + tmp
 	if total != 21 || subject != 7 {
 		panic("subject temp identity")
 	}

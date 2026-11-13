@@ -39,7 +39,6 @@ import (
 
 func main() {
 	forwarded := bufio.NewScanner(strings.NewReader("one two three"))
-	callee := forwarded.Split
 	cb := func(data []byte, atEof bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
 		ret, ret2, ret3 := bufio.ScanWords(data, atEof)
 		tup := lisette.MakeTuple2(ret, ret2)
@@ -48,7 +47,7 @@ func main() {
 		}
 		return lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](tup)
 	}
-	callee(func(arg0 []byte, arg1 bool) (int, []byte, error) {
+	forwarded.Split(func(arg0 []byte, arg1 bool) (int, []byte, error) {
 		res := cb(arg0, arg1)
 		if res.Tag == lisette.ResultOk {
 			tup2 := res.OkVal
@@ -62,7 +61,6 @@ func main() {
 	}
 	fmt.Println(count)
 	rebuilt := bufio.NewScanner(strings.NewReader("four five"))
-	callee2 := rebuilt.Split
 	cb2 := func(data []byte, atEof bool) lisette.Result[lisette.Tuple2[int, []byte], error] {
 		ret4, ret5, ret6 := bufio.ScanWords(data, atEof)
 		tup3 := lisette.MakeTuple2(ret4, ret5)
@@ -80,7 +78,7 @@ func main() {
 		token := check.OkVal.Second
 		return lisette.MakeResultOk[lisette.Tuple2[int, []byte], error](lisette.MakeTuple2[int, []byte](advance, token))
 	}
-	callee2(func(arg0 []byte, arg1 bool) (int, []byte, error) {
+	rebuilt.Split(func(arg0 []byte, arg1 bool) (int, []byte, error) {
 		res2 := cb2(arg0, arg1)
 		if res2.Tag == lisette.ResultOk {
 			tup4 := res2.OkVal
