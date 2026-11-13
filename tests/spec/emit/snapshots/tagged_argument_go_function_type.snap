@@ -61,12 +61,11 @@ func count(n int) (int, bool) {
 }
 
 func main() {
-	arg := lisette.MakeOptionSome(3)
 	cb := count
 	tagged := func(arg0 int) lisette.Option[int] {
 		return lisette.OptionFromCommaOk[int](cb(arg0))
 	}
-	if lisette.OptionAndThen(arg, tagged).UnwrapOr(-1) != 5 {
+	if lisette.OptionAndThen(lisette.MakeOptionSome(3), tagged).UnwrapOr(-1) != 5 {
 		panic("Go function type")
 	}
 }

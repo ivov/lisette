@@ -17,12 +17,11 @@ func okay[T any](x T) (T, error) {
 }
 
 func main() {
-	arg := lisette.MakeOptionSome(struct{}{})
 	cb := okay[struct{}]
 	tagged := func(arg0 struct{}) lisette.Result[struct{}, error] {
 		return lisette.ResultFromPair[struct{}](cb(arg0))
 	}
-	result := lisette.OptionMap(arg, tagged)
+	result := lisette.OptionMap(lisette.MakeOptionSome(struct{}{}), tagged)
 	if !(result.Tag == lisette.OptionSome && result.SomeVal.Tag == lisette.ResultOk) {
 		panic("generic unit result")
 	}

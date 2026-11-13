@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Server { name: string }
+  
+  impl Server {
+    fn greet(self: mut Ref<Server>, suffix: string) -> string {
+      self.name += suffix
+      self.name
+    }
+  }
+  
+  struct Outer { embed mut Ref<Server> }
+  
+  fn swap(o: mut Ref<Outer>, other: mut Ref<Server>) -> string {
+    o.Server = other
+    "!"
+  }
+  
+  fn test(o: mut Ref<Outer>, other: mut Ref<Server>) -> string {
+    o.greet(swap(o, other))
+  }
+---
+package main
+
+type Server struct {
+	name string
+}
+
+func (s *Server) greet(suffix string) string {
+	s.name += suffix
+	return s.name
+}
+
+type Outer struct {
+	*Server
+}
+
+func swap(o *Outer, other *Server) string {
+	o.Server = other
+	return "!"
+}
+
+func test(o *Outer, other *Server) string {
+	callee := o.greet
+	return callee(swap(o, other))
+}

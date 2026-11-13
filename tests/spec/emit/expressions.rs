@@ -5690,6 +5690,116 @@ fn run() -> int {
 }
 
 #[test]
+fn writing_method_on_a_reference_parameter_is_not_pinned() {
+    let input = r#"
+struct Server { name: string }
+
+impl Server {
+  fn greet(self: mut Ref<Server>, suffix: string) -> string {
+    self.name += suffix
+    self.name
+  }
+}
+
+fn suffix() -> string { "!" }
+
+fn stop(s: mut Ref<Server>) -> string {
+  s.greet(suffix())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn writing_method_pinned_when_a_closure_reassigns_its_reference() {
+    let input = r#"
+struct Server { name: string }
+
+impl Server {
+  fn greet(self: mut Ref<Server>, suffix: string) -> string {
+    self.name += suffix
+    self.name
+  }
+}
+
+fn swapped(s: mut Ref<Server>, other: mut Ref<Server>) -> string {
+  let mut current = s
+  let swap = || -> string {
+    current = other
+    "?"
+  }
+  current.greet(swap())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn promoted_writing_method_pinned_before_an_argument_replaces_its_embed() {
+    let input = r#"
+struct Server { name: string }
+
+impl Server {
+  fn greet(self: mut Ref<Server>, suffix: string) -> string {
+    self.name += suffix
+    self.name
+  }
+}
+
+struct Outer { embed mut Ref<Server> }
+
+fn swap(o: mut Ref<Outer>, other: mut Ref<Server>) -> string {
+  o.Server = other
+  "!"
+}
+
+fn test(o: mut Ref<Outer>, other: mut Ref<Server>) -> string {
+  o.greet(swap(o, other))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn writing_value_receiver_pinned_before_an_argument_replaces_its_referent() {
+    let input = r#"
+struct Server { name: string, hits: mut Slice<int> }
+
+impl Server {
+  fn greet(self: mut Server, suffix: string) -> string {
+    self.hits[0] += 1
+    self.name + suffix
+  }
+}
+
+fn swap(s: mut Ref<mut Server>, other: mut Server) -> string {
+  s.* = other
+  "!"
+}
+
+fn test(s: mut Ref<mut Server>, other: mut Server) -> string {
+  s.greet(swap(s, other))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn setup_read_of_a_closure_mutated_local_keeps_an_earlier_call_first() {
+    let input = r#"
+fn run() -> int {
+  let mut x = 0
+  let bump = || -> int {
+    x += 1
+    0
+  }
+  bump() + (x + bump())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn value_struct_compound_field_assignment_reads_field_in_place() {
     let input = r#"
 struct Counter { total: int }

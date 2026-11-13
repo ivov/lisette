@@ -22,14 +22,13 @@ func pair[T any](x T) (T, T) {
 
 func main() {
 	x := 3
-	arg := lisette.MakeOptionSome(lisette.MakeOptionSome(&x))
 	cb := pair[lisette.Option[*int]]
 	tagged := func(arg0 lisette.Option[*int]) lisette.Tuple2[lisette.Option[*int], lisette.Option[*int]] {
 		ret, ret2 := cb(arg0)
 		tup := lisette.MakeTuple2(ret, ret2)
 		return tup
 	}
-	result := lisette.OptionMap(arg, tagged)
+	result := lisette.OptionMap(lisette.MakeOptionSome(lisette.MakeOptionSome(&x)), tagged)
 	if !(result.Tag == lisette.OptionSome && result.SomeVal.First.Tag == lisette.OptionSome && result.SomeVal.Second.Tag == lisette.OptionSome) {
 		panic("generic tuple options")
 	}

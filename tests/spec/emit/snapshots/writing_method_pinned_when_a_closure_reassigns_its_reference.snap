@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Server { name: string }
+  
+  impl Server {
+    fn greet(self: mut Ref<Server>, suffix: string) -> string {
+      self.name += suffix
+      self.name
+    }
+  }
+  
+  fn swapped(s: mut Ref<Server>, other: mut Ref<Server>) -> string {
+    let mut current = s
+    let swap = || -> string {
+      current = other
+      "?"
+    }
+    current.greet(swap())
+  }
+---
+package main
+
+type Server struct {
+	name string
+}
+
+func (s *Server) greet(suffix string) string {
+	s.name += suffix
+	return s.name
+}
+
+func swapped(s, other *Server) string {
+	current := s
+	swap := func() string {
+		current = other
+		return "?"
+	}
+	callee := current.greet
+	return callee(swap())
+}
