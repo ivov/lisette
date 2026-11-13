@@ -101,6 +101,7 @@ impl InferCtx<'_> {
                 ctx.check_map_bracket_reads(&inferred_items);
                 ctx.resolve_branch_subsumptions();
                 ctx.resolve_select_exhaustiveness();
+                ctx.resolve_statement_tails();
 
                 let frozen_items = {
                     let store = ctx.store;

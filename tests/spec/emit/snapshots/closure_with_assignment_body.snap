@@ -12,7 +12,7 @@ package main
 
 func test() {
 	count := 0
-	inc := func() any {
+	inc := func() struct{} {
 		count++
 		return struct{}{}
 	}
