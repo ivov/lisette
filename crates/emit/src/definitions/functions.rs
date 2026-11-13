@@ -26,7 +26,9 @@ use crate::types::go_type::GoType;
 use crate::utils::{fresh_receiver_name, group_params};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::EcoString;
-use syntax::ast::{Binding, Expression, FunctionDefinitionView, Pattern, collect_pattern_bindings};
+use syntax::ast::{
+    Binding, Expression, FunctionDefinitionView, Pattern, SelectArm, collect_pattern_bindings,
+};
 use syntax::types::{Type, build_substitution_map, substitute};
 
 pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
@@ -74,7 +76,6 @@ impl Planner<'_> {
         mut prefix: Vec<Statement>,
         parameters: &mut [GoIdentifier],
     ) {
-        self.reserve_source_binder_names(body);
         let mut lowered = self.lower_function_body(body, should_return);
         prefix.append(&mut lowered.statements);
         lowered.statements = prefix;
@@ -364,6 +365,9 @@ impl Planner<'_> {
 
         self.set_type_params(&generic_context);
         self.scope.enter_isolated_function(return_ctx.clone());
+        if let Some(body) = function_definition.body {
+            self.reserve_source_binder_names(body);
+        }
 
         let mut parts = vec!["func".to_string()];
 
@@ -581,7 +585,8 @@ impl Planner<'_> {
                     binding: None,
                     ..
                 } if identifier == go_name::TEST_CTX_PARAM => {
-                    let name = self.scope.new_local_identifier(go_name::TEST_CTX_PARAM);
+                    let go_name = self.scope.fresh_binding_go_name("ctx", self.package);
+                    let name = self.scope.new_local_identifier(go_name);
                     self.declare(&name);
                     let name = self.scope.bind_source(identifier.as_str(), &[], name);
                     lowered.test_handle.get_or_insert_with(|| name.clone());
@@ -652,7 +657,22 @@ fn collect_binder_names(expression: &Expression, out: &mut Vec<SourceName>) {
                 push_binder_names(&param.pattern, out);
             }
         }
-        Expression::IfLet { pattern, .. } => push_binder_names(pattern, out),
+        Expression::IfLet { pattern, .. } | Expression::WhileLet { pattern, .. } => {
+            push_binder_names(pattern, out)
+        }
+        Expression::Select { arms, .. } => {
+            for arm in arms {
+                match arm {
+                    SelectArm::Receive { binding, .. } => push_binder_names(binding, out),
+                    SelectArm::MatchReceive { arms, .. } => {
+                        for arm in arms {
+                            push_binder_names(&arm.pattern, out);
+                        }
+                    }
+                    SelectArm::Send { .. } | SelectArm::WildCard { .. } => {}
+                }
+            }
+        }
         Expression::Match { arms, .. } => {
             for arm in arms {
                 push_binder_names(&arm.pattern, out);

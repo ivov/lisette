@@ -9342,7 +9342,7 @@ fn test_with_context_emits_testkit_wrapper() {
     let go = test_file.to_go();
 
     assert!(
-        go.contains("testkit.New(_lisTest_t)"),
+        go.contains("testkit.New(t)"),
         "wrapper must construct the context, got:\n{go}"
     );
     assert!(
@@ -9372,7 +9372,7 @@ fn test_emit_produces_go_test_function() {
 
     let go = test_file.to_go();
     assert!(
-        go.contains("func TestAddition(_lisTest_t *testing.T)"),
+        go.contains("func TestAddition(t *testing.T)"),
         "expected a Go test function, got:\n{go}"
     );
     assert!(
@@ -9408,8 +9408,8 @@ fn test_wrapper_handle_does_not_shadow_function_named_t() {
         "the wrapper's *testing.T handle must not be named `t`, or it shadows `func t`, got:\n{go}"
     );
     assert!(
-        go.contains("t(testkit.New(_lisTest_t))"),
-        "the wrapper must call the package function `t`, passing the reserved handle, got:\n{go}"
+        go.contains("t(testkit.New(t2))"),
+        "the wrapper must call the package function `t`, passing a renamed handle, got:\n{go}"
     );
 }
 
@@ -9429,7 +9429,7 @@ fn synthesized_test_handle_does_not_shadow_user_function() {
     fs.add_file(
         "math",
         "core.test.lis",
-        "fn lisetteTestCtx() -> int { 1 }\n\n#[test]\nfn checks() {\n  assert lisetteTestCtx() == 1\n}",
+        "fn ctx() -> int { 1 }\n\n#[test]\nfn checks() {\n  assert ctx() == 1\n}",
     );
 
     let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
@@ -9440,12 +9440,49 @@ fn synthesized_test_handle_does_not_shadow_user_function() {
         .to_go();
 
     assert!(
-        go.contains("func checks(_lisTest_ctx testkit.TestContext)"),
-        "the synthesized handle must use a reserved name user code cannot produce, got:\n{go}"
+        go.contains("func checks(ctx2 testkit.TestContext)"),
+        "the synthesized handle must not take the name of a package function, got:\n{go}"
     );
     assert!(
-        go.contains("= lisetteTestCtx()"),
+        go.contains("= ctx()"),
         "the test body must call the package function, not the synthesized handle, got:\n{go}"
+    );
+}
+
+#[test]
+fn synthesized_test_handle_leaves_its_name_to_a_body_local() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn checks() {\n  let ctx = add(1, 2)\n  assert ctx == 3\n}\n\n#[test]\nfn receives() {\n  let ch = Channel.buffered<int>(1)\n  ch.send(1)\n  select {\n    let Some(ctx) = ch.receive() => { assert ctx == 1 },\n    _ => {},\n  }\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+
+    assert!(
+        go.contains("func checks(ctx2 testkit.TestContext)") && go.contains("ctx := Add(1, 2)"),
+        "the body local must keep `ctx` and the synthesized handle must take a fresh name, got:\n{go}"
+    );
+    assert!(
+        go.contains("func receives(ctx2 testkit.TestContext)")
+            && go.contains("case ctx, ok := <-ch:"),
+        "a `select` binding must keep `ctx` and the synthesized handle must take a fresh name, got:\n{go}"
     );
 }
 
@@ -9517,7 +9554,7 @@ fn assert_lowers_to_decomposed_failure_call() {
         .to_go();
 
     assert!(
-        go.contains("testkit.TestContext") && go.contains("testkit.New(_lisTest_t)"),
+        go.contains("testkit.TestContext") && go.contains("testkit.New(t)"),
         "a no-arg test with `assert` must carry a test handle, got:\n{go}"
     );
     assert!(
@@ -10050,7 +10087,7 @@ fn assert_with_discarded_test_param_emits_synthesized_handle() {
         .expect("expected a core_test.go output")
         .to_go();
     assert!(
-        go.contains("testkit.New(_lisTest_t)") && go.contains(".FailAssert("),
+        go.contains("testkit.New(t)") && go.contains(".FailAssert("),
         "a discarded test param must still yield a usable handle, got:\n{go}"
     );
 }

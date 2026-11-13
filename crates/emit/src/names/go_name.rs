@@ -25,8 +25,6 @@ pub(crate) const ADAPTER_TYPE_PREFIX: &str = "_lisAdapter_";
 
 const TEST_HANDLE_PREFIX: &str = "_lisTest_";
 
-pub(crate) const TEST_T_PARAM: &str = "_lisTest_t";
-
 pub(crate) const TEST_CTX_PARAM: &str = "_lisTest_ctx";
 
 const RESERVED_GO_PREFIXES: &[&str] = &[ADAPTER_TYPE_PREFIX, TEST_HANDLE_PREFIX];

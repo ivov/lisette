@@ -145,7 +145,9 @@ impl Planner<'_> {
 
         let callee = self.pick_go_function_name(function, false, is_public);
         let test_name = go_name::go_test_function_name(name);
-        let handle = go_name::TEST_T_PARAM;
+        let handle = go_name::fresh_suffixed("t", |name| {
+            name == callee || name == test_kit || name == testing
+        });
         let code = self.emit_function(function, None, &callee, None);
 
         let span = function.name_span;
