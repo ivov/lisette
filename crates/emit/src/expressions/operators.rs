@@ -2,12 +2,13 @@ use crate::Planner;
 use crate::analyze::facts::EmitFacts;
 use crate::calls::predicates::strip_negations;
 use crate::context::expression::ExpressionContext;
-use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
-use crate::plan::bodies::{LoweredBlock, Statement};
-use crate::plan::go_expression::{BinaryOp, FunctionLiteralLayout, UnaryOp};
+use crate::plan::bodies::{
+    Definition, ElseArm, IfPlan, LoweredBlock, LoweredStatement, Statement, assign, define,
+};
+use crate::plan::go_expression::{BinaryOp, GoExpressionNode, UnaryOp};
+use crate::plan::local::GoIdentifier;
 use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
-use crate::types::go_type::GoType;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Literal, UnaryOperator};
 use syntax::program::DefinitionBody;
 use syntax::types::Type;
@@ -158,27 +159,38 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         let left_staged = self.lower_composite_value(left_expression, ctx);
-
-        // Wrap RHS setup in an IIFE so it runs only when control reaches the
-        // RHS. Hoisting it before the operator would defeat short-circuit.
         let right_staged = self.lower_composite_value(right_expression, ctx);
-        let (mut statements, right_value) = right_staged.into_parts();
-        let right_value = if statements.is_empty() {
-            right_value
-        } else {
-            statements.push(plain_return(right_value));
-            GoExpression::immediate_call(
-                GoType::new("bool"),
-                LoweredBlock { statements },
-                FunctionLiteralLayout::MultiLine,
-            )
-        };
+        let (mut setup, left_value) = left_staged.into_parts();
+        let (mut statements, mut right_value) = right_staged.into_parts();
+        if let Some(inlined) = inline_single_read(&statements, &right_value) {
+            statements.clear();
+            right_value = inlined;
+        }
+        if statements.is_empty() {
+            return ValuePlan::computed(
+                setup,
+                GoExpression::binary(left_value, operator.into(), right_value),
+            );
+        }
 
-        let (left_setup, left_value) = left_staged.into_parts();
-        ValuePlan::computed(
-            left_setup,
-            GoExpression::binary(left_value, operator.into(), right_value),
-        )
+        // The right setup runs only when control reaches the right operand.
+        let result = self.fresh_declared("cond");
+        let read = GoExpression::identifier(result.clone());
+        let reaches_right = match operator {
+            BinaryOperator::And => read.clone(),
+            _ => GoExpression::unary(UnaryOp::Not, read.clone()),
+        };
+        statements.push(assign(read, right_value));
+        setup.push(define(result.clone(), left_value));
+        setup.push(
+            LoweredStatement::If(IfPlan::plain(
+                reaches_right,
+                LoweredBlock { statements },
+                ElseArm::None,
+            ))
+            .into(),
+        );
+        ValuePlan::captured(setup, result)
     }
 
     pub(crate) fn plan_unary(
@@ -473,5 +485,51 @@ fn is_casting_needed(
             cast_right_to: None,
         }),
         _ => None,
+    }
+}
+
+/// `name := value` followed by a pure read of `name` folds into one
+/// expression, because nothing else in the read runs code.
+fn inline_single_read(statements: &[Statement], read: &GoExpression) -> Option<GoExpression> {
+    let [statement] = statements else {
+        return None;
+    };
+    let LoweredStatement::Define(Definition { names, value }) = &statement.kind else {
+        return None;
+    };
+    let [name] = names.as_slice() else {
+        return None;
+    };
+    let mut inlined = read.node().clone();
+    let mut reads = 0;
+    (fold_read(&mut inlined, name, value.node(), &mut reads) && reads == 1)
+        .then(|| GoExpression::from_node(inlined))
+}
+
+fn fold_read(
+    node: &mut GoExpressionNode,
+    name: &GoIdentifier,
+    value: &GoExpressionNode,
+    reads: &mut usize,
+) -> bool {
+    match node {
+        GoExpressionNode::Identifier(read) if read.refers_to_same(name) => {
+            *reads += 1;
+            *node = value.clone();
+            true
+        }
+        GoExpressionNode::Literal(_) => true,
+        GoExpressionNode::Selector { base, .. } => fold_read(base, name, value, reads),
+        GoExpressionNode::Unary { operand, .. } => fold_read(operand, name, value, reads),
+        GoExpressionNode::Binary {
+            operator,
+            left,
+            right,
+        } => {
+            !matches!(operator, BinaryOp::And | BinaryOp::Or)
+                && fold_read(left, name, value, reads)
+                && fold_read(right, name, value, reads)
+        }
+        _ => false,
     }
 }

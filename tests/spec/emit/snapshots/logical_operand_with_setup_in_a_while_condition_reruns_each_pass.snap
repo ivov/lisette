@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn count(xs: Slice<string>) -> int {
+    let mut i = 0
+    while i < xs.length() && xs[i].runes().all(|r| r >= '0' && r <= '9') {
+      i += 1
+    }
+    i
+  }
+---
+package main
+
+func count(xs []string) int {
+	i := 0
+	for {
+		cond := i < len(xs)
+		if cond {
+			result := true
+			for _, r := range []rune(xs[i]) {
+				if !(r >= '0' && r <= '9') {
+					result = false
+					break
+				}
+			}
+			cond = result
+		}
+		if !cond {
+			break
+		}
+		i++
+	}
+	return i
+}

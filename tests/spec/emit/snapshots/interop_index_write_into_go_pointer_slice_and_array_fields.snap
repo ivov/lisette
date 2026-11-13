@@ -66,7 +66,8 @@ func main() {
 			wrapped[i2] = lisette.MakeOptionNone[*os.File]()
 		}
 	}
-	if wrapped[0].IsSome() || func() bool {
+	cond := wrapped[0].IsSome()
+	if !cond {
 		raw2 := attr.Files
 		wrapped2 := make([]lisette.Option[*os.File], len(raw2))
 		for i3, v3 := range raw2 {
@@ -76,8 +77,9 @@ func main() {
 				wrapped2[i3] = lisette.MakeOptionNone[*os.File]()
 			}
 		}
-		return wrapped2[1].IsNone()
-	}() {
+		cond = wrapped2[1].IsNone()
+	}
+	if cond {
 		panic("slice field write lost")
 	}
 	raw3 := re.Sub0

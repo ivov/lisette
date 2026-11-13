@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  import "go:encoding/json"
+  import "go:net/url"
+  
+  fn has_user(u: Ref<url.URL>) -> bool {
+    u.Host == "" || u.User.is_some()
+  }
+  
+  fn decodes(text: string, items: mut Ref<Slice<int>>) -> bool {
+    text.starts_with("[") && json.Unmarshal(text as Slice<byte>, items).is_ok()
+  }
+---
+package main
+
+import (
+	"encoding/json"
+	"net/url"
+	"strings"
+)
+
+func hasUser(u *url.URL) bool {
+	return u.Host == "" || u.User != nil
+}
+
+func decodes(text string, items *[]int) bool {
+	return strings.HasPrefix(text, "[") && json.Unmarshal(([]byte)(text), items) == nil
+}
