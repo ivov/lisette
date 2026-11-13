@@ -33,13 +33,17 @@ pub(crate) fn returns_go_void(return_ty: &Type) -> bool {
 }
 
 pub(crate) fn render_conversion(go_type: &str, value: &str) -> String {
+    format!("{}{})", conversion_prefix(go_type), value)
+}
+
+pub(crate) fn conversion_prefix(go_type: &str) -> String {
     let is_plain_name = go_type
         .chars()
         .all(|character| character.is_alphanumeric() || character == '_' || character == '.');
     if is_plain_name {
-        format!("{}({})", go_type, value)
+        format!("{}(", go_type)
     } else {
-        format!("({})({})", go_type, value)
+        format!("({})(", go_type)
     }
 }
 

@@ -428,8 +428,21 @@ impl GoExpression {
         self.node.print()
     }
 
-    pub(crate) fn print_header(&self) -> String {
-        self.node.print_header()
+    pub(crate) fn write(&self, output: &mut String) {
+        self.node.write_into(output);
+    }
+
+    pub(crate) fn write_header(&self, output: &mut String) {
+        self.node.write_header_into(output);
+    }
+
+    pub(crate) fn write_list(values: &[GoExpression], output: &mut String) {
+        for (index, value) in values.iter().enumerate() {
+            if index > 0 {
+                output.push_str(", ");
+            }
+            value.write(output);
+        }
     }
 
     pub(crate) fn as_identifier(&self) -> Option<&GoIdentifier> {

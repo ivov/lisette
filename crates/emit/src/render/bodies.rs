@@ -7,20 +7,20 @@ use crate::plan::values::GoExpression;
 use crate::render::Renderer;
 use crate::write_line;
 
-fn join_expressions(values: &[GoExpression]) -> String {
-    values
-        .iter()
-        .map(GoExpression::rendered)
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
 fn write_header_line(output: &mut String, line: Option<&String>) {
     if let Some(line) = line
         && !output.ends_with(line.as_str())
     {
         output.push_str(line);
     }
+}
+
+fn names<T: ToString>(names: &[T]) -> String {
+    names
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 impl Renderer {
@@ -54,25 +54,25 @@ impl Renderer {
         match &plan.kind {
             SwitchKind::Conditional => output.push_str("switch {\n"),
             SwitchKind::Value { subject } => {
-                write_line!(output, "switch {} {{", subject.print_header())
+                output.push_str("switch ");
+                subject.write_header(output);
+                output.push_str(" {\n");
             }
-            SwitchKind::Type {
-                subject,
-                binding: Some(binding),
-            } => write_line!(
-                output,
-                "switch {} := {}.(type) {{",
-                binding,
-                subject.print_header()
-            ),
-            SwitchKind::Type {
-                subject,
-                binding: None,
-            } => write_line!(output, "switch {}.(type) {{", subject.print_header()),
+            SwitchKind::Type { subject, binding } => {
+                output.push_str("switch ");
+                if let Some(binding) = binding {
+                    output.push_str(binding);
+                    output.push_str(" := ");
+                }
+                subject.write_header(output);
+                output.push_str(".(type) {\n");
+            }
         }
         for case in &plan.cases {
             write_header_line(output, case.line.as_ref());
-            write_line!(output, "case {}:", join_expressions(&case.labels));
+            output.push_str("case ");
+            GoExpression::write_list(&case.labels, output);
+            output.push_str(":\n");
             self.render_lowered_block(output, &case.body);
         }
         if let Some(default_body) = &plan.default
@@ -92,20 +92,14 @@ impl Renderer {
                 channel,
                 body,
             } => {
-                if receive_vars.is_empty() {
-                    write_line!(output, "case <-{}:", channel);
-                } else {
-                    write_line!(
-                        output,
-                        "case {} := <-{}:",
-                        receive_vars
-                            .iter()
-                            .map(ToString::to_string)
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                        channel
-                    );
+                output.push_str("case ");
+                if !receive_vars.is_empty() {
+                    output.push_str(&names(receive_vars));
+                    output.push_str(" := ");
                 }
+                output.push_str("<-");
+                channel.write(output);
+                output.push_str(":\n");
                 self.render_lowered_block(output, body);
             }
             SelectArmKind::Send {
@@ -113,7 +107,11 @@ impl Renderer {
                 value,
                 body,
             } => {
-                write_line!(output, "case {} <- {}:", channel, value);
+                output.push_str("case ");
+                channel.write(output);
+                output.push_str(" <- ");
+                value.write(output);
+                output.push_str(":\n");
                 self.render_lowered_block(output, body);
             }
             SelectArmKind::Default { body } => {
@@ -124,16 +122,9 @@ impl Renderer {
     }
 
     fn render_definition(&self, output: &mut String, definition: &Definition) {
-        output.push_str(
-            &definition
-                .names
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(", "),
-        );
+        output.push_str(&names(&definition.names));
         output.push_str(" := ");
-        output.push_str(&definition.value.rendered());
+        definition.value.write(output);
     }
 
     fn render_statement(&self, output: &mut String, statement: &Statement) {
@@ -162,7 +153,7 @@ impl Renderer {
                 output.push_str("return");
                 if !values.is_empty() {
                     output.push(' ');
-                    output.push_str(&join_expressions(values));
+                    GoExpression::write_list(values, output);
                 }
                 output.push('\n');
             }
@@ -170,7 +161,10 @@ impl Renderer {
                 self.render_assign_statement(output, plan);
             }
             LoweredStatement::Async { kind, call } => {
-                write_line!(output, "{} {}", kind.keyword(), call);
+                output.push_str(kind.keyword());
+                output.push(' ');
+                call.write(output);
+                output.push('\n');
             }
             LoweredStatement::Select(plan) => self.render_select(output, plan),
             LoweredStatement::Switch(plan) => self.render_switch(output, plan),
@@ -183,15 +177,23 @@ impl Renderer {
                 go_type,
                 value,
             } => match value {
-                Some(value) => write_line!(output, "var {} {} = {}", name, go_type.code, value),
+                Some(value) => {
+                    output.push_str(&format!("var {} {} = ", name, go_type.code));
+                    value.write(output);
+                    output.push('\n');
+                }
                 None => write_line!(output, "var {} {}", name, go_type.code),
             },
             LoweredStatement::Discard { arity, value } => {
-                write_line!(output, "{} = {}", vec!["_"; *arity].join(", "), value)
+                output.push_str(&vec!["_"; *arity].join(", "));
+                output.push_str(" = ");
+                value.write(output);
+                output.push('\n');
             }
             LoweredStatement::ExpressionStatement { expression, .. } => {
                 if !expression.is_empty() {
-                    write_line!(output, "{}", expression);
+                    expression.write(output);
+                    output.push('\n');
                 }
             }
             LoweredStatement::UnreachablePanic => output.push_str("panic(\"unreachable\")\n"),
@@ -200,17 +202,24 @@ impl Renderer {
 
     fn render_assign_statement(&self, output: &mut String, plan: &AssignForm) {
         match plan {
-            AssignForm::Compound { target, kind } => match kind {
-                CompoundKind::Increment => write_line!(output, "{}++", target),
-                CompoundKind::Decrement => write_line!(output, "{}--", target),
-                CompoundKind::OpAssign { operator, rhs } => {
-                    write_line!(output, "{} {}= {}", target, operator.symbol(), rhs)
+            AssignForm::Compound { target, kind } => {
+                target.write(output);
+                match kind {
+                    CompoundKind::Increment => output.push_str("++"),
+                    CompoundKind::Decrement => output.push_str("--"),
+                    CompoundKind::OpAssign { operator, rhs } => {
+                        output.push_str(&format!(" {}= ", operator.symbol()));
+                        rhs.write(output);
+                    }
                 }
-            },
+            }
             AssignForm::Simple { target, value } => {
-                write_line!(output, "{} = {}", target, value);
+                target.write(output);
+                output.push_str(" = ");
+                value.write(output);
             }
         }
+        output.push('\n');
     }
 
     fn render_transfer(&self, output: &mut String, keyword: &str, target: &LoopTransfer) {
@@ -226,18 +235,15 @@ impl Renderer {
     }
 
     fn render_const_declaration(&self, output: &mut String, plan: &ConstPlan) {
-        match &plan.go_type {
-            Some(go_type) => {
-                write_line!(
-                    output,
-                    "const {} {} = {}",
-                    plan.name,
-                    go_type.code,
-                    plan.value
-                )
-            }
-            None => write_line!(output, "const {} = {}", plan.name, plan.value),
+        output.push_str("const ");
+        output.push_str(&plan.name);
+        if let Some(go_type) = &plan.go_type {
+            output.push(' ');
+            output.push_str(&go_type.code);
         }
+        output.push_str(" = ");
+        plan.value.write(output);
+        output.push('\n');
     }
 
     fn render_loop(&self, output: &mut String, plan: &LoopPlan, line: Option<&String>) {
@@ -250,42 +256,40 @@ impl Renderer {
         match &plan.header {
             LoopHeader::Infinite => output.push_str("for {\n"),
             LoopHeader::While(condition) => {
-                write_line!(output, "for {} {{", condition.print_header())
+                output.push_str("for ");
+                condition.write_header(output);
+                output.push_str(" {\n");
             }
             LoopHeader::Range {
                 key,
                 value,
                 iterable,
-            } => match (key, value) {
-                (None, None) => write_line!(output, "for range {} {{", iterable.print_header()),
-                (Some(key), None) => write_line!(
-                    output,
-                    "for {} := range {} {{",
-                    key,
-                    iterable.print_header()
-                ),
-                (key, Some(value)) => write_line!(
-                    output,
-                    "for {}, {} := range {} {{",
-                    key.as_deref().unwrap_or("_"),
-                    value,
-                    iterable.print_header()
-                ),
-            },
+            } => {
+                match (key, value) {
+                    (None, None) => output.push_str("for range "),
+                    (Some(key), None) => output.push_str(&format!("for {} := range ", key)),
+                    (key, Some(value)) => output.push_str(&format!(
+                        "for {}, {} := range ",
+                        key.as_deref().unwrap_or("_"),
+                        value
+                    )),
+                }
+                iterable.write_header(output);
+                output.push_str(" {\n");
+            }
             LoopHeader::Counted {
                 variable,
                 start,
                 condition,
-            } => write_line!(
-                output,
-                "for {} := {}; {}; {}++ {{",
-                variable,
-                start.print_header(),
-                condition
-                    .as_ref()
-                    .map_or(String::new(), GoExpression::print_header),
-                variable
-            ),
+            } => {
+                output.push_str(&format!("for {} := ", variable));
+                start.write_header(output);
+                output.push_str("; ");
+                if let Some(condition) = condition {
+                    condition.write_header(output);
+                }
+                output.push_str(&format!("; {}++ {{\n", variable));
+            }
         }
         self.render_lowered_block(output, &plan.body);
         output.push_str("}\n");
@@ -295,19 +299,12 @@ impl Renderer {
         debug_assert!(!plan.condition.is_empty(), "if condition must not be empty");
         output.push_str("if ");
         if let Some(initializer) = &plan.initializer {
-            output.push_str(
-                &initializer
-                    .names
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            );
+            output.push_str(&names(&initializer.names));
             output.push_str(" := ");
-            output.push_str(&initializer.value.print_header());
+            initializer.value.write_header(output);
             output.push_str("; ");
         }
-        output.push_str(&plan.condition.print_header());
+        plan.condition.write_header(output);
         output.push_str(" {\n");
     }
 
