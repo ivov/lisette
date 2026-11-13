@@ -149,6 +149,12 @@ impl AccessPath {
         result
     }
 
+    pub(crate) fn reads_element(&self) -> bool {
+        self.segments
+            .iter()
+            .any(|segment| matches!(segment, PathSegment::Index(_)))
+    }
+
     pub(crate) fn contains_deferred_evaluation(&self) -> bool {
         self.segments.iter().any(|segment| {
             matches!(

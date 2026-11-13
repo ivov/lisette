@@ -2,6 +2,7 @@ use std::iter;
 
 use crate::plan::bodies::GoUses;
 use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, UnaryOperator};
+use syntax::program::DotAccessResolution;
 use syntax::types::Type;
 
 use crate::Planner;
@@ -79,8 +80,39 @@ fn guard_renders_inline(guard: &Expression) -> bool {
                 && guard_renders_inline(left)
                 && guard_renders_inline(right)
         }
+        Expression::Call {
+            expression,
+            args,
+            spread: None,
+            ty,
+            ..
+        } => {
+            ty.as_simple().is_some()
+                && callee_renders_inline(expression)
+                && args.iter().all(guard_renders_inline)
+        }
         _ => false,
     }
+}
+
+fn callee_renders_inline(callee: &Expression) -> bool {
+    match callee.unwrap_parens() {
+        Expression::Identifier { .. } => true,
+        Expression::DotAccess {
+            expression,
+            resolution,
+            ..
+        } => {
+            matches!(resolution, DotAccessResolution::PackageMember { .. })
+                || guard_renders_inline(expression)
+        }
+        _ => false,
+    }
+}
+
+fn contains_call(expression: &Expression) -> bool {
+    matches!(expression, Expression::Call { .. })
+        || expression.children().into_iter().any(contains_call)
 }
 
 fn join_and(conditions: Vec<GoExpression>) -> GoExpression {
@@ -450,15 +482,15 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     }
 
     fn guarded_leaf_flattens(&self, guard: &GuardedLeaf) -> bool {
-        self.arms[guard.leaf.arm_index]
-            .guard
-            .as_deref()
-            .is_some_and(guard_renders_inline)
-            && guard
-                .leaf
-                .bindings
-                .iter()
-                .all(|binding| !binding.path.contains_deferred_evaluation())
+        let Some(condition) = self.arms[guard.leaf.arm_index].guard.as_deref() else {
+            return false;
+        };
+        let calls = contains_call(condition);
+        guard_renders_inline(condition)
+            && guard.leaf.bindings.iter().all(|binding| {
+                !binding.path.contains_deferred_evaluation()
+                    && !(calls && binding.path.reads_element())
+            })
             && self.guarded_tree_flattens(&guard.failure)
     }
 

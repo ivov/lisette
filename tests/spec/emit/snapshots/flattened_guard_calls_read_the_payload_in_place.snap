@@ -1,0 +1,46 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:strings"
+  
+  fn is_admin(name: string) -> bool { name == "root" }
+  
+  fn test(user: Option<string>) -> string {
+    let mut out = "none"
+    match user {
+      Some(n) if n.starts_with("bot-") => { out = "bot" },
+      Some(n) if is_admin(n) => { out = "admin" },
+      Some(n) if strings.Contains(n, "@") => { out = "email" },
+      Some(_) => { out = "user" },
+      None => (),
+    }
+    out
+  }
+---
+package main
+
+import (
+	"strings"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func isAdmin(name string) bool {
+	return name == "root"
+}
+
+func test(user lisette.Option[string]) string {
+	out := "none"
+	switch {
+	case user.Tag == lisette.OptionSome && strings.HasPrefix(user.SomeVal, "bot-"):
+		out = "bot"
+	case user.Tag == lisette.OptionSome && isAdmin(user.SomeVal):
+		out = "admin"
+	case user.Tag == lisette.OptionSome && strings.Contains(user.SomeVal, "@"):
+		out = "email"
+	case user.Tag == lisette.OptionSome:
+		out = "user"
+	}
+	return out
+}

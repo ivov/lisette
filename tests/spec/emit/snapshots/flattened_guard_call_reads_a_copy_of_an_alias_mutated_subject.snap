@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn test() -> string {
+    let mut o = Some("bot-a")
+    let clear = || -> bool {
+      o = None
+      true
+    }
+    let mut out = "none"
+    match o {
+      Some(n) if clear() => { out = n },
+      _ => (),
+    }
+    out
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() string {
+	o := lisette.MakeOptionSome("bot-a")
+	clear := func() bool {
+		o = lisette.MakeOptionNone[string]()
+		return true
+	}
+	out := "none"
+	subject := o
+	switch {
+	case subject.Tag == lisette.OptionSome && clear():
+		out = subject.SomeVal
+	}
+	return out
+}

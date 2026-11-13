@@ -1715,6 +1715,68 @@ fn test(opt: Option<int>) {
 }
 
 #[test]
+fn flattened_guard_calls_read_the_payload_in_place() {
+    let input = r#"
+import "go:strings"
+
+fn is_admin(name: string) -> bool { name == "root" }
+
+fn test(user: Option<string>) -> string {
+  let mut out = "none"
+  match user {
+    Some(n) if n.starts_with("bot-") => { out = "bot" },
+    Some(n) if is_admin(n) => { out = "admin" },
+    Some(n) if strings.Contains(n, "@") => { out = "email" },
+    Some(_) => { out = "user" },
+    None => (),
+  }
+  out
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn flattened_guard_call_reads_a_copy_of_an_alias_mutated_subject() {
+    let input = r#"
+fn test() -> string {
+  let mut o = Some("bot-a")
+  let clear = || -> bool {
+    o = None
+    true
+  }
+  let mut out = "none"
+  match o {
+    Some(n) if clear() => { out = n },
+    _ => (),
+  }
+  out
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn guard_call_keeps_the_loop_for_a_slice_element_binding() {
+    let input = r#"
+fn test() -> int {
+  let mut xs = [1]
+  let change = || -> bool {
+    xs[0] = 2
+    true
+  }
+  let mut out = 0
+  match xs {
+    [n] if change() => { out = n },
+    _ => (),
+  }
+  out
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn guard_needing_statement_lowering_keeps_the_jump_target() {
     let input = r#"
 fn check(n: int) -> Result<bool, string> { Ok(n > 0) }
