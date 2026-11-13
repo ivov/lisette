@@ -53,9 +53,9 @@ func main() {
 		var adapted func([]byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte]
 		if cb3 != nil {
 			adapted = func(arg0 []byte) lisette.Tuple2[lisette.Option[*pem.Block], []byte] {
-				ret, ret2 := cb3(arg0)
-				option := lisette.OptionFromNilable[*pem.Block](ret, ret == nil)
-				tup := lisette.MakeTuple2(option, ret2)
+				ret2, ret3 := cb3(arg0)
+				option := lisette.OptionFromNilable[*pem.Block](ret2, ret2 == nil)
+				tup := lisette.MakeTuple2(option, ret3)
 				return tup
 			}
 		}
