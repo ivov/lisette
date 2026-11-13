@@ -17,7 +17,6 @@ package main
 func main() {
 	ch := make(chan int)
 	select {
-	case _, ok := <-ch:
-		_ = ok
+	case <-ch:
 	}
 }
