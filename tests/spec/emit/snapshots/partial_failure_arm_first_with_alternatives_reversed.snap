@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/partial.rs
+description: |
+  
+  import "go:io"
+  import "go:strings"
+  
+  fn read(s: string) -> Result<string, error> {
+    let body = match io.ReadAll(strings.NewReader(s)) {
+      Partial.Err(e) | Partial.Both(_, e) => return Err(e),
+      Partial.Ok(b) => b,
+    }
+    Ok(body as string)
+  }
+---
+package main
+
+import (
+	"io"
+	"strings"
+)
+
+func read(s string) (string, error) {
+	body, e := io.ReadAll(strings.NewReader(s))
+	if e != nil {
+		return "", e
+	}
+	return string(body), nil
+}

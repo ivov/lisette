@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/partial.rs
+description: |
+  
+  import "go:io"
+  import "go:strings"
+  
+  fn sizes(items: Slice<string>) -> int {
+    let mut total = 0
+    for s in items {
+      let body = match io.ReadAll(strings.NewReader(s)) {
+        Partial.Ok(b) => b,
+        _ => continue,
+      }
+      total += body.length()
+    }
+    total
+  }
+---
+package main
+
+import (
+	"io"
+	"strings"
+)
+
+func sizes(items []string) int {
+	total := 0
+	for _, s := range items {
+		body, err := io.ReadAll(strings.NewReader(s))
+		if err != nil {
+			continue
+		}
+		total += len(body)
+	}
+	return total
+}

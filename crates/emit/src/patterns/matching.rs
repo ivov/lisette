@@ -17,7 +17,7 @@ use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
 use crate::plan::bodies::GoUses;
 use crate::plan::bodies::{
     Definition, ElseArm, IfOrigin, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, Statement,
-    SwitchKind, assign, define, discard, expression_statement,
+    SwitchKind, assign, define, define_many, discard, expression_statement,
 };
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::go_expression::{BinaryOp, GoExpressionNode};
@@ -236,6 +236,11 @@ pub(super) enum ArmBinding<'a> {
         name: FusedName<'a>,
         value: &'a GoExpression,
     },
+    AliasEach {
+        name: &'a EcoString,
+        ids: Vec<BindingId>,
+        go_name: GoIdentifier,
+    },
 }
 
 impl<'a> ArmBinding<'a> {
@@ -321,8 +326,23 @@ pub(crate) fn prelude_constructor(expression: &Expression) -> Option<PreludeVari
     PreludeVariant::from_resolution(enum_name, variant_name)
 }
 
+struct PartialOutcomeArms<'a> {
+    ok: &'a MatchArm,
+    failure: &'a MatchArm,
+    value_binding: Option<FusedName<'a>>,
+    error_binding: Option<(&'a EcoString, Vec<BindingId>)>,
+}
+
+impl PartialOutcomeArms<'_> {
+    fn error_hint(&self) -> Option<SourceName> {
+        self.error_binding
+            .as_ref()
+            .map(|(name, _)| SourceName::new(name))
+    }
+}
+
 struct SelectivePartialArms<'a> {
-    variant: PartialVariant,
+    selects_both: bool,
     selected: &'a MatchArm,
     fallback: &'a MatchArm,
     value_binding: Option<FusedName<'a>>,
@@ -349,6 +369,11 @@ impl Planner<'_> {
         }
 
         if let Some(fused) = self.lower_fused_partial_match(subject, arms, place) {
+            statements.extend(fused);
+            return LoweredBlock { statements };
+        }
+
+        if let Some(fused) = self.lower_fused_partial_outcome_match(subject, arms, place) {
             statements.extend(fused);
             return LoweredBlock { statements };
         }
@@ -665,6 +690,38 @@ impl Planner<'_> {
         statements
             .push(LoweredStatement::If(pair_if(none_condition, fail_body, ElseArm::None)).into());
         statements.extend(late_binding);
+        Some(statements)
+    }
+
+    pub(crate) fn lower_fused_partial_match_into(
+        &mut self,
+        value: &Expression,
+        go_name: &GoIdentifier,
+    ) -> Option<Vec<Statement>> {
+        let Expression::Match { subject, arms, .. } = value.unwrap_parens() else {
+            return None;
+        };
+        let arms = self.partial_outcome_arms(subject, arms)?;
+        let ok_value = arms.value_binding?;
+        if self.facts.peel_alias(&subject.get_type()).ok_type() != value.get_type()
+            || !arms.failure.expression.get_type().is_never()
+            || arm_body_is_identifier(&arms.ok.expression) != Some(ok_value.name)
+        {
+            return None;
+        }
+
+        let (mut statements, call) = self
+            .lower_call(subject, None, ExpressionContext::value())
+            .into_parts();
+        self.declare(go_name.spelling());
+        let error_hint = arms.error_hint();
+        let error = self.pair_status(error_hint.as_ref(), PairStatusKind::Error, false);
+        let failure_body = self.lower_partial_failure_arm(arms, &error, &PlacePlan::Statement);
+        statements.push(define_many(vec![go_name.clone(), error.clone()], call));
+        let condition = non_nil(GoExpression::identifier(error));
+        statements.push(
+            LoweredStatement::If(IfPlan::plain(condition, failure_body, ElseArm::None)).into(),
+        );
         Some(statements)
     }
 
@@ -1033,8 +1090,91 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    /// Fuse a single explicit `Partial` variant plus a wildcard directly
-    /// against the physical `(value, error)` result of the call.
+    fn partial_outcome_arms<'a>(
+        &mut self,
+        subject: &Expression,
+        arms: &'a [MatchArm],
+    ) -> Option<PartialOutcomeArms<'a>> {
+        let plan = self.plan_call(subject)?;
+        if !self.fusable_partial(subject, &plan) {
+            return None;
+        }
+        classify_partial_outcome_arms(arms)
+    }
+
+    fn lower_partial_failure_arm(
+        &mut self,
+        arms: PartialOutcomeArms<'_>,
+        error: &GoIdentifier,
+        place: &PlacePlan,
+    ) -> LoweredBlock {
+        let binding = arms.error_binding.map(|(name, ids)| ArmBinding::AliasEach {
+            name,
+            ids,
+            go_name: error.clone(),
+        });
+        self.lower_fused_arm(&[binding], &arms.failure.expression, place)
+            .0
+    }
+
+    fn lower_fused_partial_outcome_match(
+        &mut self,
+        subject: &Expression,
+        arms: &[MatchArm],
+        place: &PlacePlan,
+    ) -> Option<Vec<Statement>> {
+        let arms = self.partial_outcome_arms(subject, arms)?;
+        let (mut statements, call) = self
+            .lower_call(subject, None, ExpressionContext::value())
+            .into_parts();
+        let value = arms
+            .value_binding
+            .map(|value| self.arm_value_name(&value.go_name()));
+        let error_hint = arms.error_hint();
+        let mut error = self.pair_status(error_hint.as_ref(), PairStatusKind::Error, true);
+        if value.as_deref() == Some(error.spelling()) {
+            error = self.fresh_like(&error);
+        }
+
+        let ok_binding = ArmBinding::alias_at(arms.value_binding, value.as_ref());
+        let (ok_body, [value_used]) =
+            self.lower_fused_arm(&[ok_binding], &arms.ok.expression, place);
+        let failure_body = self.lower_partial_failure_arm(arms, &error, place);
+        if ok_body.renders_empty() && failure_body.renders_empty() {
+            statements.push(expression_statement(call));
+            return Some(statements);
+        }
+
+        let err = GoExpression::identifier(error.clone());
+        let failure_first = ok_body.renders_empty()
+            || (failure_body.ends_with_diverge() && ok_body.ends_with_diverge());
+        let (condition, then_body, else_body) = if failure_first {
+            (non_nil(err), failure_body, ok_body)
+        } else {
+            (is_nil(err), ok_body, failure_body)
+        };
+        let bound_value = value
+            .filter(|_| value_used)
+            .unwrap_or_else(|| GoIdentifier::external("_".to_string()));
+        statements.push(
+            LoweredStatement::If(IfPlan {
+                initializer: Some(Definition {
+                    names: vec![bound_value, error],
+                    value: call,
+                }),
+                condition,
+                then_body,
+                else_arm: ElseArm::from_body(else_body, false),
+                else_if_line: None,
+                origin: IfOrigin::Match { else_label: None },
+            })
+            .into(),
+        );
+        Some(statements)
+    }
+
+    /// Fuse a single `Partial.Both` or `Partial.Err` arm plus a wildcard
+    /// directly against the physical `(value, error)` result of the call.
     fn lower_fused_selective_partial_match(
         &mut self,
         subject: &Expression,
@@ -1062,7 +1202,7 @@ impl Planner<'_> {
 
         // A non-nilable value is always present, so its physical ABI has no
         // distinct Err state. The wildcard arm is therefore unconditional.
-        if matches!(arms.variant, PartialVariant::Err) && nil_guard.is_none() {
+        if !arms.selects_both && nil_guard.is_none() {
             statements.push(expression_statement(call));
             let fallback = self
                 .lower_fused_arm(&[], &arms.fallback.expression, place)
@@ -1071,8 +1211,7 @@ impl Planner<'_> {
             return Some(statements);
         }
 
-        let condition_needs_value = nil_guard.is_some()
-            && matches!(arms.variant, PartialVariant::Both | PartialVariant::Err);
+        let condition_needs_value = nil_guard.is_some();
         let value = match value_binding {
             Some(value) => Some(self.arm_value_name(&value.go_name())),
             None => condition_needs_value.then(|| self.fresh_local(Some("ret"))),
@@ -1109,18 +1248,15 @@ impl Planner<'_> {
         let err = || GoExpression::identifier(error.clone());
         let guarded_value =
             || GoExpression::identifier(value.clone().expect("nil guard captures the value"));
-        let condition = match arms.variant {
-            PartialVariant::Ok => is_nil(err()),
-            PartialVariant::Both => match nil_guard {
-                Some(guard) => GoExpression::binary(
-                    non_nil(err()),
-                    BinaryOp::And,
-                    guard.non_nil(guarded_value()),
-                ),
-                None => non_nil(err()),
-            },
-            PartialVariant::Err => {
-                let guard = nil_guard.expect("non-nilable Err returned above");
+        let condition = match (arms.selects_both, nil_guard) {
+            (true, Some(guard)) => GoExpression::binary(
+                non_nil(err()),
+                BinaryOp::And,
+                guard.non_nil(guarded_value()),
+            ),
+            (true, None) => non_nil(err()),
+            (false, guard) => {
+                let guard = guard.expect("non-nilable Err returned above");
                 GoExpression::binary(non_nil(err()), BinaryOp::And, guard.is_nil(guarded_value()))
             }
         };
@@ -1210,6 +1346,10 @@ impl Planner<'_> {
                             name.binding.as_slice(),
                             go_name.clone(),
                         );
+                        (go_name.clone(), None)
+                    }
+                    ArmBinding::AliasEach { name, ids, go_name } => {
+                        this.scope.bind_identifier(*name, ids, go_name.clone());
                         (go_name.clone(), None)
                     }
                     ArmBinding::Copy { name, value } => {
@@ -1450,19 +1590,78 @@ fn classify_selective_partial_arms(arms: &[MatchArm]) -> Option<SelectivePartial
     let (PreludeVariant::Partial(variant), fields) = prelude_variant(&selected.pattern)? else {
         return None;
     };
-    let (value_binding, error_binding) = match (variant, fields) {
-        (PartialVariant::Ok, [value]) => (field_binding(value)?, None),
-        (PartialVariant::Both, [value, error]) => (field_binding(value)?, field_binding(error)?),
-        (PartialVariant::Err, [error]) => (None, field_binding(error)?),
+    let (selects_both, value_binding, error_binding) = match (variant, fields) {
+        (PartialVariant::Both, [value, error]) => {
+            (true, field_binding(value)?, field_binding(error)?)
+        }
+        (PartialVariant::Err, [error]) => (false, None, field_binding(error)?),
         _ => return None,
     };
     Some(SelectivePartialArms {
-        variant,
+        selects_both,
         selected,
         fallback,
         value_binding,
         error_binding,
     })
+}
+
+fn classify_partial_outcome_arms(arms: &[MatchArm]) -> Option<PartialOutcomeArms<'_>> {
+    if arms.len() != 2 || arms.iter().any(MatchArm::has_guard) {
+        return None;
+    }
+    fn ok_binding(arm: &MatchArm) -> Option<Option<FusedName<'_>>> {
+        match prelude_variant(&arm.pattern)? {
+            (PreludeVariant::Partial(PartialVariant::Ok), [value]) => field_binding(value),
+            _ => None,
+        }
+    }
+    let (ok, failure, value_binding) = match (ok_binding(&arms[0]), ok_binding(&arms[1])) {
+        (Some(binding), None) => (&arms[0], &arms[1], binding),
+        (None, Some(binding)) => (&arms[1], &arms[0], binding),
+        _ => return None,
+    };
+    let error_binding = match &failure.pattern {
+        Pattern::WildCard { .. } => None,
+        Pattern::Or { patterns, .. } => partial_failure_error_binding(patterns)?,
+        _ => return None,
+    };
+    Some(PartialOutcomeArms {
+        ok,
+        failure,
+        value_binding,
+        error_binding,
+    })
+}
+
+fn partial_failure_error_binding(
+    alternatives: &[Pattern],
+) -> Option<Option<(&EcoString, Vec<BindingId>)>> {
+    let [first, second] = alternatives else {
+        return None;
+    };
+    let error_field = |pattern| match prelude_variant(pattern)? {
+        (PreludeVariant::Partial(PartialVariant::Both), [Pattern::WildCard { .. }, error]) => {
+            Some((PartialVariant::Both, field_binding(error)?))
+        }
+        (PreludeVariant::Partial(PartialVariant::Err), [error]) => {
+            Some((PartialVariant::Err, field_binding(error)?))
+        }
+        _ => None,
+    };
+    let (first_variant, first_error) = error_field(first)?;
+    let (second_variant, second_error) = error_field(second)?;
+    if first_variant == second_variant {
+        return None;
+    }
+    match (first_error, second_error) {
+        (None, None) => Some(None),
+        (Some(first), Some(second)) if first.name == second.name => {
+            let ids = first.binding.into_iter().chain(second.binding).collect();
+            Some(Some((first.name, ids)))
+        }
+        _ => None,
+    }
 }
 
 pub(crate) struct OptionArms<'a> {
@@ -1612,8 +1811,8 @@ fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &LoweredReturnAbi) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        PartialVariant, PreludeVariant, classify_selective_partial_arms, prelude_constructor,
-        prelude_variant,
+        PartialVariant, PreludeVariant, classify_partial_outcome_arms,
+        classify_selective_partial_arms, prelude_constructor, prelude_variant,
     };
     use syntax::ast::{
         ConstructorPatternResolution, Expression, IdentifierResolution, MatchArm, Pattern, Span,
@@ -1712,7 +1911,7 @@ mod tests {
     #[test]
     fn selective_partial_classifier_rejects_nested_payload_pattern() {
         let simple = [
-            arm(variant("prelude.Partial", "Partial.Ok", vec![name("n")])),
+            arm(variant("prelude.Partial", "Partial.Err", vec![name("e")])),
             wildcard_arm(),
         ];
         assert!(classify_selective_partial_arms(&simple).is_some());
@@ -1720,11 +1919,41 @@ mod tests {
         let nested = [
             arm(variant(
                 "prelude.Partial",
-                "Partial.Ok",
-                vec![variant("prelude.Option", "Some", vec![name("n")])],
+                "Partial.Err",
+                vec![variant("prelude.Option", "Some", vec![name("e")])],
             )),
             wildcard_arm(),
         ];
         assert!(classify_selective_partial_arms(&nested).is_none());
+    }
+
+    #[test]
+    fn partial_outcome_classifier_needs_both_failures_in_one_arm() {
+        let or = |alternatives| {
+            arm(Pattern::Or {
+                patterns: alternatives,
+                span: Span::dummy(),
+            })
+        };
+        let ok = || arm(variant("prelude.Partial", "Partial.Ok", vec![name("b")]));
+        let both = || {
+            variant(
+                "prelude.Partial",
+                "Partial.Both",
+                vec![
+                    Pattern::WildCard {
+                        span: Span::dummy(),
+                    },
+                    name("e"),
+                ],
+            )
+        };
+        let err = || variant("prelude.Partial", "Partial.Err", vec![name("e")]);
+
+        assert!(classify_partial_outcome_arms(&[ok(), or(vec![both(), err()])]).is_some());
+        assert!(classify_partial_outcome_arms(&[or(vec![err(), both()]), ok()]).is_some());
+        assert!(classify_partial_outcome_arms(&[ok(), wildcard_arm()]).is_some());
+        assert!(classify_partial_outcome_arms(&[ok(), or(vec![err(), err()])]).is_none());
+        assert!(classify_partial_outcome_arms(&[ok(), arm(err())]).is_none());
     }
 }

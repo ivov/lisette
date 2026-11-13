@@ -73,10 +73,11 @@ func encode[M json.Marshaler](m M) ([]byte, error) {
 }
 
 func push[W Sized](w W) int {
-	if n, err := w.Write(([]byte)("hello")); err == nil {
-		return n + w.size()
+	n, err := w.Write(([]byte)("hello"))
+	if err != nil {
+		return -1
 	}
-	return -1
+	return n + w.size()
 }
 
 func main() {

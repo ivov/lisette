@@ -268,3 +268,151 @@ pub fn tail(b: bool, p: Partial<int, error>) -> Partial<int, error> {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn partial_failure_or_pattern_binds_value_into_let_name() {
+    let input = r#"
+import "go:io"
+import "go:strings"
+
+fn read(s: string) -> Result<string, error> {
+  let body = match io.ReadAll(strings.NewReader(s)) {
+    Partial.Ok(b) => b,
+    Partial.Both(_, e) | Partial.Err(e) => return Err(e),
+  }
+  Ok(body as string)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_failure_arm_first_with_alternatives_reversed() {
+    let input = r#"
+import "go:io"
+import "go:strings"
+
+fn read(s: string) -> Result<string, error> {
+  let body = match io.ReadAll(strings.NewReader(s)) {
+    Partial.Err(e) | Partial.Both(_, e) => return Err(e),
+    Partial.Ok(b) => b,
+  }
+  Ok(body as string)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_ok_and_wildcard_binds_value_into_let_name() {
+    let input = r#"
+import "go:io"
+import "go:strings"
+
+fn sizes(items: Slice<string>) -> int {
+  let mut total = 0
+  for s in items {
+    let body = match io.ReadAll(strings.NewReader(s)) {
+      Partial.Ok(b) => b,
+      _ => continue,
+    }
+    total += body.length()
+  }
+  total
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_failure_or_pattern_in_statement_match() {
+    let input = r#"
+import "go:fmt"
+import "go:io"
+import "go:strings"
+
+fn print_size(s: string) {
+  match io.ReadAll(strings.NewReader(s)) {
+    Partial.Ok(b) => fmt.Println(b.length()),
+    Partial.Both(_, e) | Partial.Err(e) => fmt.Println("error:", e),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_failure_or_pattern_with_unbound_ok_tests_error_only() {
+    let input = r#"
+import "go:fmt"
+import "go:io"
+import "go:strings"
+
+fn status(s: string) -> int {
+  match io.ReadAll(strings.NewReader(s)) {
+    Partial.Ok(_) => 1,
+    Partial.Err(e) | Partial.Both(_, e) => {
+      fmt.Println(e)
+      2
+    },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_failure_arm_after_diverging_ok_arm_keeps_its_error_in_scope() {
+    let input = r#"
+import "go:fmt"
+import "go:io"
+import "go:strings"
+
+fn report(s: string) {
+  match io.ReadAll(strings.NewReader(s)) {
+    Partial.Ok(_) => return (),
+    Partial.Both(_, e) | Partial.Err(e) => fmt.Println(e),
+  }
+  fmt.Println("done")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_value_and_error_with_same_name_get_distinct_go_names() {
+    let input = r#"
+import "go:fmt"
+import "go:io"
+import "go:strings"
+
+fn size(s: string) -> int {
+  match io.ReadAll(strings.NewReader(s)) {
+    Partial.Ok(e) => e.length(),
+    Partial.Both(_, e) | Partial.Err(e) => {
+      fmt.Println(e)
+      0
+    },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn partial_let_shadowing_a_name_read_by_the_call_gets_fresh_name() {
+    let input = r#"
+import "go:io"
+import "go:strings"
+
+fn read(s: string) -> Result<int, error> {
+  let body = s
+  let body = match io.ReadAll(strings.NewReader(body)) {
+    Partial.Ok(b) => b,
+    Partial.Both(_, e) | Partial.Err(e) => return Err(e),
+  }
+  Ok(body.length())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
