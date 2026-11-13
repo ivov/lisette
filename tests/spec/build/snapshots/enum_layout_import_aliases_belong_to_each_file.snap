@@ -15,7 +15,8 @@ func second(event Event) (timer.Time, bool) {
 	if event.Tag == EventAt {
 		return event.At, true
 	}
-	return *new(timer.Time), false
+	var zero timer.Time
+	return zero, false
 }
 
 func main() {
@@ -53,5 +54,6 @@ func first(event Event) (clock.Time, bool) {
 	if event.Tag == EventAt {
 		return event.At, true
 	}
-	return *new(clock.Time), false
+	var zero clock.Time
+	return zero, false
 }

@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn choose<T>(value: T) -> Option<T> { Some(value) }
+  
+  fn pick<T: Zeroable>() -> int {
+    if let Some(value) = choose(zero<T>()) {
+      let _ = value
+      return 1
+    }
+    0
+  }
+---
+package main
+
+func choose[T any](value T) (T, bool) {
+	return value, true
+}
+
+func pick[T any]() int {
+	var zero T
+	if value, ok := choose(zero); ok {
+		_ = value
+		return 1
+	}
+	return 0
+}

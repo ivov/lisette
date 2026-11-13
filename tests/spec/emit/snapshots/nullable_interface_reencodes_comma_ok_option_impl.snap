@@ -52,7 +52,8 @@ func (b Bar[T]) find() (T, bool) {
 	if v.Tag == lisette.OptionSome {
 		return v.SomeVal, true
 	}
-	return *new(T), false
+	var zero T
+	return zero, false
 }
 
 func useOpt(o Opt) {

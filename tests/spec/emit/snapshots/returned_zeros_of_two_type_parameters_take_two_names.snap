@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/zero.rs
+description: |
+  
+  fn empty_pair<K: Zeroable, V: Zeroable>() -> (K, V) {
+    (zero<K>(), zero<V>())
+  }
+---
+package main
+
+func emptyPair[K any, V any]() (K, V) {
+	var ret K
+	var zero V
+	return ret, zero
+}

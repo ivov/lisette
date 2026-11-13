@@ -15,5 +15,6 @@ type Speaker interface {
 }
 
 func greet[T Speaker]() string {
-	return (*new(T)).Speak()
+	var zero T
+	return zero.Speak()
 }

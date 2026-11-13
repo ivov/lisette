@@ -21,7 +21,8 @@ func first[T any](xs []T, keep func(T) bool) (T, bool) {
 			return v, true
 		}
 	}
-	return *new(T), false
+	var zero T
+	return zero, false
 }
 
 func test() {

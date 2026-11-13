@@ -61,7 +61,8 @@ func (w Worker) perform() Completion {
 		return struct{}{}
 	}
 	fmt.Print("tail,")
-	return *new(Completion)
+	var zero Completion
+	return zero
 }
 
 func (w Worker) perform_() Completion {
@@ -70,12 +71,14 @@ func (w Worker) perform_() Completion {
 
 func throughInterface(a Plain) Completion {
 	a.perform_()
-	return *new(Completion)
+	var zero Completion
+	return zero
 }
 
 func throughCallback(f func() Completion) Completion {
 	f()
-	return *new(Completion)
+	var zero Completion
+	return zero
 }
 
 func main() {

@@ -14,7 +14,8 @@ description: |
 package main
 
 func g[T any](_ int, _ ...T) (T, bool) {
-	return *new(T), false
+	var zero T
+	return zero, false
 }
 
 func test() {

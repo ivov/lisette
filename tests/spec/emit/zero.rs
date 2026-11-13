@@ -344,3 +344,53 @@ fn f() -> (EnumeratedSlice<int>, EnumeratedSlice<int>) {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn returned_zero_of_type_parameter_avoids_a_local_named_zero() {
+    let input = r#"
+fn first<T: Zeroable>(items: Slice<T>) -> T {
+  if items.length() > 0 {
+    let zero = items[0]
+    return zero
+  }
+  zero<T>()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn returned_zeros_of_two_type_parameters_take_two_names() {
+    let input = r#"
+fn empty_pair<K: Zeroable, V: Zeroable>() -> (K, V) {
+  (zero<K>(), zero<V>())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn zero_in_an_if_let_initializer_is_declared_before_the_if() {
+    let input = r#"
+fn choose<T>(value: T) -> Option<T> { Some(value) }
+
+fn pick<T: Zeroable>() -> int {
+  if let Some(value) = choose(zero<T>()) {
+    let _ = value
+    return 1
+  }
+  0
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn returned_zero_inside_a_closure_is_declared_in_the_closure() {
+    let input = r#"
+fn maker<T: Zeroable>() -> fn() -> T {
+  || zero<T>()
+}
+"#;
+    assert_emit_snapshot!(input);
+}

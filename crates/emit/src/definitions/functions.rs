@@ -11,7 +11,7 @@ use crate::plan::bodies::AsyncKind;
 use crate::plan::bodies::{
     LoweredBlock, LoweredStatement, Statement, inherit_line_directives, rename_generated_locals,
 };
-use crate::plan::cleanup::clean_up;
+use crate::plan::cleanup::{clean_up, declare_zero_values};
 use crate::plan::go_expression::{
     FunctionLiteralLayout, GoExpressionNode, GoParameter, verbatim_identifiers,
 };
@@ -101,6 +101,7 @@ impl Planner<'_> {
         if has_result {
             body.ensure_go_termination();
         }
+        declare_zero_values(&mut body.statements, &mut self.scope, self.package);
         if sourcemap {
             inherit_line_directives(&mut body.statements, None);
         }

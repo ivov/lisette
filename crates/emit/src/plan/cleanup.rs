@@ -15,7 +15,9 @@ use crate::plan::local::{GoIdentifier, LocalId};
 use crate::plan::source_reuse::reuse_dead_copy_sources;
 use crate::plan::values::GoExpression;
 use crate::plan::visit::{VisitorMut, visit_statements_mut};
+use crate::state::package_state::PackageState;
 use crate::state::scope::{ScopeState, TypeParam};
+use crate::types::go_type::GoType;
 
 pub(crate) fn clean_up(
     statements: &mut Vec<Statement>,
@@ -33,6 +35,109 @@ pub(crate) fn clean_up(
     // Declaration removal and return rewriting can make an else safe to inline.
     unwrap_terminal_else(statements);
     unwrap_scoped_terminal_else(statements, parameters, scope);
+}
+
+/// `x := *new(T)` becomes `var x T`. Any other `*new(T)` in a definition, an `if`
+/// initializer or a return becomes `zero`, declared by `var zero T` before the statement.
+pub(crate) fn declare_zero_values(
+    statements: &mut Vec<Statement>,
+    scope: &mut ScopeState,
+    package: &PackageState,
+) {
+    for_each_statements_mut(statements, &mut |block| {
+        for mut statement in mem::take(block) {
+            if let LoweredStatement::Define(Definition { names, value }) = &statement.kind
+                && let [name] = names.as_slice()
+                && let Some(go_type) = dereferenced_new_type(value.node())
+            {
+                statement.kind = LoweredStatement::VarDecl {
+                    name: name.clone(),
+                    go_type,
+                    value: None,
+                };
+            }
+            let values: Vec<&mut GoExpression> = match &mut statement.kind {
+                LoweredStatement::Return(values) => values.iter_mut().collect(),
+                LoweredStatement::Define(definition) => vec![&mut definition.value],
+                LoweredStatement::If(plan) => if_initializer_values(plan),
+                _ => Vec::new(),
+            };
+            let mut zeros: Vec<(GoType, GoIdentifier)> = Vec::new();
+            for value in values {
+                name_zero_values(value.node_mut(), &mut zeros, scope, package);
+            }
+            for (go_type, name) in zeros {
+                block.push(Statement {
+                    line: statement.line.clone(),
+                    kind: LoweredStatement::VarDecl {
+                        name,
+                        go_type,
+                        value: None,
+                    },
+                });
+            }
+            block.push(statement);
+        }
+    });
+}
+
+fn if_initializer_values(plan: &mut IfPlan) -> Vec<&mut GoExpression> {
+    let mut values = Vec::new();
+    let mut link = Some(plan);
+    while let Some(IfPlan {
+        initializer,
+        else_arm,
+        ..
+    }) = link
+    {
+        if let Some(initializer) = initializer {
+            values.push(&mut initializer.value);
+        }
+        link = match else_arm {
+            ElseArm::ElseIf(next) => Some(next.as_mut()),
+            _ => None,
+        };
+    }
+    values
+}
+
+fn name_zero_values(
+    node: &mut GoExpressionNode,
+    zeros: &mut Vec<(GoType, GoIdentifier)>,
+    scope: &mut ScopeState,
+    package: &PackageState,
+) {
+    if let Some(go_type) = dereferenced_new_type(node) {
+        let name = match zeros.iter().find(|(declared, _)| *declared == go_type) {
+            Some((_, name)) => name.clone(),
+            None => {
+                let name = scope.fresh_go_name(Some("zero"), package);
+                zeros.push((go_type, name.clone()));
+                name
+            }
+        };
+        *node = GoExpressionNode::Identifier(name);
+        return;
+    }
+    if matches!(node, GoExpressionNode::FunctionLiteral { .. }) {
+        return;
+    }
+    node.visit_children_mut(&mut |child| name_zero_values(child, zeros, scope, package));
+}
+
+fn dereferenced_new_type(node: &GoExpressionNode) -> Option<GoType> {
+    if let GoExpressionNode::Dereference(operand) = node
+        && let GoExpressionNode::Call {
+            callee, arguments, ..
+        } = operand.as_ref()
+        && let GoExpressionNode::Identifier(name) = callee.as_ref()
+        && name.id().is_none()
+        && name.spelling() == "new"
+        && let [GoExpressionNode::Type(go_type)] = arguments.as_slice()
+    {
+        return Some(go_type.clone());
+    }
+    None
 }
 
 fn return_found_elements_directly(statements: &mut Vec<Statement>) {

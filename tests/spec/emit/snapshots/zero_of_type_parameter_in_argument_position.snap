@@ -15,5 +15,6 @@ func take[T any](value T) T {
 }
 
 func f[T any]() T {
-	return take[T](*new(T))
+	var zero T
+	return take[T](zero)
 }
