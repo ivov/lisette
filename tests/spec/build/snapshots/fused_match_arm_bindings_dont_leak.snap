@@ -13,11 +13,11 @@ func parse() (int, error) {
 func main() {
 	x := 100
 	fmt.Println(x)
-	x2 := 200
-	if x, err := parse(); err == nil {
-		fmt.Println(x)
+	x = 200
+	if x2, err := parse(); err == nil {
+		fmt.Println(x2)
 	} else {
 		fmt.Println("err")
 	}
-	fmt.Println(x2)
+	fmt.Println(x)
 }

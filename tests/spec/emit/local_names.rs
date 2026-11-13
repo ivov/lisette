@@ -273,3 +273,126 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn propagated_error_variable_is_reused_for_the_same_error_type() {
+    let input = r#"
+import "go:strconv"
+
+fn sum(a: string, b: string) -> Result<int, error> {
+  let x = strconv.Atoi(a)?
+  let y = strconv.Atoi(b)?
+  Ok(x + y)
+}
+
+fn main() {
+  if sum("1", "2").unwrap_or(0) != 3 { panic("the sum is wrong") }
+  if sum("1", "x").is_ok() { panic("the second error was lost") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn shadowing_let_reassigns_the_hidden_variable() {
+    let input = r#"
+fn shadow(x: int) -> int {
+  let x = x + 1
+  let x = x * 2
+  x
+}
+
+fn main() {
+  if shadow(2) != 6 { panic("the shadows read the wrong value") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn shadowing_let_keeps_a_new_name_when_a_closure_reads_the_hidden_binding() {
+    let input = r#"
+fn read() -> int {
+  let x = 1
+  let f = || x
+  let x = 2
+  f() * 10 + x
+}
+
+fn main() {
+  if read() != 12 { panic("the closure saw the new value") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn shadowing_let_keeps_a_new_name_when_storage_is_shared() {
+    let input = r#"
+struct Point { x: int }
+
+impl Point {
+  fn get(self) -> int { self.x }
+  fn grab(self: Ref<Point>) -> Ref<Point> { self }
+}
+
+fn by_reference() -> int {
+  let p = Point { x: 1 }
+  let r = &p
+  let p = Point { x: 2 }
+  r.x * 10 + p.x
+}
+
+fn by_receiver() -> int {
+  let p = Point { x: 1 }
+  let r = p.grab()
+  let p = Point { x: 2 }
+  r.x * 10 + p.x
+}
+
+fn by_method_value() -> int {
+  let p = Point { x: 1 }
+  let f = p.get
+  let p = Point { x: 2 }
+  f() * 10 + p.x
+}
+
+fn main() {
+  if by_reference() != 12 { panic("the reference saw the new value") }
+  if by_receiver() != 12 { panic("the receiver saw the new value") }
+  if by_method_value() != 12 { panic("the method value saw the new value") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_in_an_inner_block_keeps_a_new_name() {
+    let input = r#"
+fn diverging(c: bool) -> int {
+  let count = 10
+  if c {
+    return 0
+  } else {
+    let count = 5
+    let _ = count
+  }
+  count
+}
+
+fn else_block(after: Option<int>) -> string {
+  let Some(h) = after else {
+    let holder = "early"
+    return holder
+  }
+  let holder = f"late {h}"
+  holder
+}
+
+fn main() {
+  if diverging(false) != 10 { panic("the else block changed the outer binding") }
+  if else_block(Some(1)) != "late 1" { panic("the late binding is wrong") }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

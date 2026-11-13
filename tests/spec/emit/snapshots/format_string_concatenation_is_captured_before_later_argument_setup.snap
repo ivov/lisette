@@ -36,9 +36,9 @@ func run() (string, error) {
 		return "", err
 	}
 	arg := ret + log("two")
-	ret2, err2 := next("three")
-	if err2 != nil {
-		return "", err2
+	ret2, err := next("three")
+	if err != nil {
+		return "", err
 	}
 	return show(arg, ret2), nil
 }

@@ -16,7 +16,7 @@ use crate::patterns::decision_tree::collect_pattern_info;
 use crate::patterns::matching::ResultFusePlan;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::{
-    LoweredBlock, LoweredStatement, Statement, define, define_many, effect_statement,
+    LoweredBlock, LoweredStatement, Statement, assign, define, define_many, effect_statement,
 };
 use crate::plan::local::GoIdentifier;
 use crate::plan::placement::{
@@ -166,6 +166,56 @@ impl Planner<'_> {
             return self.lower_let_temp(&bound, value, binding_ty);
         }
         self.lower_let_direct(let_spec, raw_go_name)
+    }
+
+    fn reassignable_shadow(&self, let_spec: LetSpec) -> Option<GoIdentifier> {
+        let LetSpec {
+            binding_id,
+            value,
+            binding_ty,
+            ..
+        } = let_spec;
+        let peeled = self.facts.peel_alias(binding_ty);
+        // These types have their own binding lowerings, which write into a new name.
+        if peeled.is_unit()
+            || peeled.is_result()
+            || peeled.is_option()
+            || peeled.is_partial()
+            || peeled.tuple_arity().is_some()
+            || matches!(value, Expression::Propagate { .. })
+            || requires_temp_var(value)
+            || self.facts.is_interface_or_unknown(binding_ty)
+            || self.facts.resolve_to_function_type(binding_ty).is_some()
+        {
+            return None;
+        }
+        self.scope.reusable_binding(binding_id?)
+    }
+
+    fn lower_let_reassign(&mut self, let_spec: LetSpec, target: GoIdentifier) -> Vec<Statement> {
+        let LetSpec {
+            identifier,
+            binding_id,
+            value,
+            binding_ty,
+            ..
+        } = let_spec;
+        let (mut statements, plan_value) = self
+            .lower_value(value, ExpressionContext::value())
+            .into_parts();
+        let (coercion_setup, value_expression) = self
+            .value_slot_coercion(value, binding_ty)
+            .lower(self, plan_value);
+        statements.extend(coercion_setup);
+        if value_expression.as_identifier() != Some(&target) {
+            statements.push(assign(
+                GoExpression::identifier(target.clone()),
+                value_expression,
+            ));
+        }
+        self.scope
+            .bind_identifier(identifier, binding_id.as_slice(), target);
+        statements
     }
 
     fn lower_let_as_components(
@@ -819,6 +869,20 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         identifier: &EcoString,
         binding_id: Option<BindingId>,
     ) -> LoweredBlock {
+        let let_spec = LetSpec {
+            identifier,
+            binding_id,
+            value: self.value,
+            binding_ty: &self.binding.ty,
+            mutable: self.binding.is_mutable(),
+        };
+        if !self.planner.facts.is_unused_binding(&self.binding.pattern)
+            && let Some(target) = self.planner.reassignable_shadow(let_spec)
+        {
+            return LoweredBlock {
+                statements: self.planner.lower_let_reassign(let_spec, target),
+            };
+        }
         let mut raw_go_name = self
             .planner
             .go_name_for_binding(&self.binding.pattern)
@@ -831,13 +895,6 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         {
             raw_go_name = Some(self.planner.fresh_source(&SourceName::new(identifier)));
         }
-        let let_spec = LetSpec {
-            identifier,
-            binding_id,
-            value: self.value,
-            binding_ty: &self.binding.ty,
-            mutable: self.binding.is_mutable(),
-        };
         let statements = if matches!(self.value, Expression::Propagate { .. }) {
             self.planner
                 .lower_let_propagate(let_spec, raw_go_name.as_ref())

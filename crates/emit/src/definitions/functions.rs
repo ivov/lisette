@@ -2,6 +2,7 @@ use crate::Planner;
 use crate::Renderer;
 use crate::ReturnContext;
 use crate::abi::callable::{CallableReturnAbi, LoweredReturnAbi};
+use crate::analyze::reusable_bindings::ReusableBindings;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::names::go_name;
@@ -367,6 +368,11 @@ impl Planner<'_> {
         self.scope.enter_isolated_function(return_ctx.clone());
         if let Some(body) = function_definition.body {
             self.reserve_source_binder_names(body);
+            self.scope
+                .set_reusable_bindings(ReusableBindings::of_function(
+                    function_definition.params,
+                    body,
+                ));
         }
 
         let mut parts = vec!["func".to_string()];
