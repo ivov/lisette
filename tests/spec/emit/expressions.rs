@@ -185,6 +185,47 @@ fn test() {
 }
 
 #[test]
+fn logical_operand_with_one_temp_folds_into_the_expression() {
+    let input = r#"
+import "go:encoding/json"
+import "go:net/url"
+
+fn has_user(u: Ref<url.URL>) -> bool {
+  u.Host == "" || u.User.is_some()
+}
+
+fn decodes(text: string, items: mut Ref<Slice<int>>) -> bool {
+  text.starts_with("[") && json.Unmarshal(text as Slice<byte>, items).is_ok()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_logical_operands_with_setup_nest_their_ifs() {
+    let input = r#"
+fn both(m: Map<string, int>, a: string, b: string) -> bool {
+  m.get(a).is_some() || (b != "" && m.get(b).is_some())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn logical_operand_with_setup_in_a_while_condition_reruns_each_pass() {
+    let input = r#"
+fn count(xs: Slice<string>) -> int {
+  let mut i = 0
+  while i < xs.length() && xs[i].runes().all(|r| r >= '0' && r <= '9') {
+    i += 1
+  }
+  i
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn unary_negation() {
     let input = r#"
 fn test() -> int {

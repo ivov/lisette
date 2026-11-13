@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn both(m: Map<string, int>, a: string, b: string) -> bool {
+    m.get(a).is_some() || (b != "" && m.get(b).is_some())
+  }
+---
+package main
+
+func both(m map[string]int, a, b string) bool {
+	_, ok := m[a]
+	cond2 := ok
+	if !cond2 {
+		cond := b != ""
+		if cond {
+			_, ok2 := m[b]
+			cond = ok2
+		}
+		cond2 = cond
+	}
+	return cond2
+}
