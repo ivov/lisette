@@ -4,7 +4,7 @@ use crate::names::packages::PackageUse;
 use crate::plan::bodies::{LoweredBlock, LoweredStatement};
 use crate::plan::local::GoIdentifier;
 use crate::render::Renderer;
-use crate::types::go_type::{GoType, render_conversion};
+use crate::types::go_type::{GoType, conversion_prefix};
 use crate::utils::group_params;
 use std::slice;
 use syntax::ast::BinaryOperator;
@@ -506,14 +506,16 @@ impl GoExpressionNode {
 
     pub(crate) fn print(&self) -> String {
         let mut output = String::new();
-        self.write(&mut output, Slot::FREE);
+        self.write_into(&mut output);
         output
     }
 
-    pub(crate) fn print_header(&self) -> String {
-        let mut output = String::new();
-        self.write(&mut output, Slot::HEADER);
-        output
+    pub(crate) fn write_into(&self, output: &mut String) {
+        self.write(output, Slot::FREE);
+    }
+
+    pub(crate) fn write_header_into(&self, output: &mut String) {
+        self.write(output, Slot::HEADER);
     }
 
     fn binding(&self) -> Binding {
@@ -716,7 +718,9 @@ impl GoExpressionNode {
                 Self::write_child(right, slot.with(SlotKind::Right(level)), output);
             }
             Self::Conversion { go_type, operand } => {
-                output.push_str(&render_conversion(&go_type.code, &operand.print()));
+                output.push_str(&conversion_prefix(&go_type.code));
+                operand.write(output, Slot::FREE);
+                output.push(')');
             }
             Self::Spread(operand) => {
                 Self::write_child(operand, slot.with(SlotKind::Postfix), output);
@@ -844,6 +848,12 @@ mod tests {
         }
     }
 
+    fn header(node: &GoExpressionNode) -> String {
+        let mut output = String::new();
+        node.write_header_into(&mut output);
+        output
+    }
+
     fn literal_struct(go_type: &str) -> GoExpressionNode {
         GoExpressionNode::CompositeLiteral {
             go_type: Some(GoType::new(go_type)),
@@ -955,12 +965,12 @@ mod tests {
     fn composite_literal_takes_parentheses_in_a_header() {
         let compared = binary(name("x"), BinaryOp::Eq, literal_struct("Point"));
         assert_eq!(compared.print(), "x == Point{}");
-        assert_eq!(compared.print_header(), "x == (Point{})");
+        assert_eq!(header(&compared), "x == (Point{})");
         let called = GoExpressionNode::Call {
             callee: Box::new(name("f")),
             arguments: vec![literal_struct("Point")],
             purity: CallPurity::Effectful,
         };
-        assert_eq!(called.print_header(), "f(Point{})");
+        assert_eq!(header(&called), "f(Point{})");
     }
 }
