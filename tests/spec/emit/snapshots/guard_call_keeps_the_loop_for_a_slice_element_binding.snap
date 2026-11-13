@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn test() -> int {
+    let mut xs = [1]
+    let change = || -> bool {
+      xs[0] = 2
+      true
+    }
+    let mut out = 0
+    match xs {
+      [n] if change() => { out = n },
+      _ => (),
+    }
+    out
+  }
+---
+package main
+
+func test() int {
+	xs := []int{1}
+	change := func() bool {
+		xs[0] = 2
+		return true
+	}
+	out := 0
+	subject := xs
+match:
+	for {
+		if len(subject) == 1 {
+			n := subject[0]
+			if change() {
+				out = n
+				break match
+			}
+		}
+		break match
+	}
+	return out
+}
