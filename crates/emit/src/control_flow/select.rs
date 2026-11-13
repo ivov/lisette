@@ -570,24 +570,23 @@ impl Planner<'_> {
             );
             let none_block = this
                 .capture_scoped_block(|this| sites::lower_none_arm_body(this, match_arms, place));
-            let arms_plan = build_receive_arms_plan(&ok_var, some_block, none_block);
+            let Some(arms_plan) = build_receive_arms_plan(&ok_var, some_block, none_block) else {
+                return SelectArmKind::Receive {
+                    receive_vars: Vec::new(),
+                    channel: channel.clone(),
+                    body: LoweredBlock {
+                        statements: Vec::new(),
+                    },
+                };
+            };
             let mut used = GoUses::default();
-            if let Some(plan) = &arms_plan {
-                used.extend_if(plan);
-            }
+            used.extend_if(&arms_plan);
 
-            // Per-var discards (emitted when the body does not reference the var)
-            // precede the structured body inside the `case x, ok := <-ch:` arm.
             let mut body_statements: Vec<Statement> = Vec::new();
-            if !used.contains_identifier(&ok_var) {
-                body_statements.push(discard(GoExpression::identifier(ok_var.clone())));
-            }
             if case_var.spelling() != "_" && !used.contains_identifier(&case_var) {
                 body_statements.push(discard(GoExpression::identifier(case_var.clone())));
             }
-            if let Some(plan) = arms_plan {
-                body_statements.push(LoweredStatement::If(plan).into());
-            }
+            body_statements.push(LoweredStatement::If(arms_plan).into());
             SelectArmKind::Receive {
                 receive_vars: vec![case_var, ok_var],
                 channel: channel.clone(),
