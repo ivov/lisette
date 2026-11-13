@@ -10,6 +10,6 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func test(r *string, range_ lisette.Range[int]) string {
-	return lisette.Substring(*r, range_.Start, range_.End)
+func test(r *string, rng lisette.Range[int]) string {
+	return lisette.Substring(*r, rng.Start, rng.End)
 }

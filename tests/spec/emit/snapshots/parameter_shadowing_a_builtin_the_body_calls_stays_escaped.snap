@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn test(cap: int, xs: Slice<int>) -> int {
+    cap + xs.capacity()
+  }
+---
+package main
+
+func test(cap_ int, xs []int) int {
+	return cap_ + cap(xs)
+}

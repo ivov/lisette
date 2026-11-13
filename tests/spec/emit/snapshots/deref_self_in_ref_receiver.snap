@@ -18,6 +18,6 @@ type Foo struct {
 }
 
 func (f *Foo) copyOut() Foo {
-	copy_ := *f
-	return Foo{x: copy_.x}
+	copy := *f
+	return Foo{x: copy.x}
 }

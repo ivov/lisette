@@ -352,3 +352,39 @@ pub(crate) fn escape_reserved(name: &str) -> Cow<'_, str> {
         Cow::Borrowed(name)
     }
 }
+
+const KEYWORD_LOCAL_NAMES: &[(&str, &str)] = &[
+    ("case", "c"),
+    ("chan", "ch"),
+    ("default", "def"),
+    ("func", "fn"),
+    ("map", "m"),
+    ("package", "pkg"),
+    ("range", "rng"),
+    ("switch", "sw"),
+];
+
+pub(crate) fn keyword_local_name(name: &str) -> Option<&'static str> {
+    KEYWORD_LOCAL_NAMES
+        .iter()
+        .find(|(keyword, _)| *keyword == name)
+        .map(|(_, short)| *short)
+}
+
+pub(crate) fn escape_local(name: &str) -> Cow<'_, str> {
+    match keyword_local_name(name) {
+        Some(short) => Cow::Borrowed(short),
+        None => escape_reserved(name),
+    }
+}
+
+const SHADOWABLE_BUILTINS: &[&str] = &[
+    "append", "cap", "clear", "close", "complex", "copy", "delete", "imag", "init", "len", "make",
+    "max", "min", "new", "panic", "print", "println", "real", "recover",
+];
+
+pub(crate) fn escaped_shadowable_builtin(spelling: &str) -> Option<&str> {
+    spelling
+        .strip_suffix('_')
+        .filter(|name| SHADOWABLE_BUILTINS.contains(name))
+}

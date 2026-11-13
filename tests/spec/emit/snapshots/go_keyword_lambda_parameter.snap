@@ -10,8 +10,8 @@ description: |
 package main
 
 func test() int {
-	f := func(map_, range_ int) int {
-		return map_ + range_
+	f := func(m, rng int) int {
+		return m + rng
 	}
 	return f(10, 20)
 }

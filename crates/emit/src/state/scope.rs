@@ -169,7 +169,7 @@ impl ScopeState {
         go_name: impl Into<GoIdentifier>,
     ) -> GoIdentifier {
         let mut name = go_name.into();
-        *name.spelling_mut() = crate::escape_reserved(name.spelling()).into_owned();
+        *name.spelling_mut() = crate::escape_local(name.spelling()).into_owned();
         if name.id().is_none() {
             name.identify(self.new_local_id());
         }

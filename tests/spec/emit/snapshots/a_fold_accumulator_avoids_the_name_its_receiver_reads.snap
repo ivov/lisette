@@ -33,15 +33,15 @@ func test() {
 	if f() != 15 {
 		panic("the receiver should read the captured x")
 	}
-	range_ := 7
+	rng := 7
 	g := func() int {
-		var range2 int
-		range3 := 0
-		for _, y := range []int{range_, range_ + 1} {
-			range3 += y
+		var rng2 int
+		rng3 := 0
+		for _, y := range []int{rng, rng + 1} {
+			rng3 += y
 		}
-		range2 = range3
-		return range2
+		rng2 = rng3
+		return rng2
 	}
 	if g() != 15 {
 		panic("the receiver should read the captured range")

@@ -101,6 +101,41 @@ impl ScopeState {
         settled
     }
 
+    pub(crate) fn restore_builtin_names(
+        &self,
+        present: &HashMap<LocalId, String>,
+        pinned: &HashSet<String>,
+        settled: &mut HashMap<LocalId, String>,
+        package: &PackageState,
+    ) {
+        let mut taken: HashSet<String> = pinned
+            .iter()
+            .chain(present.values())
+            .chain(settled.values())
+            .cloned()
+            .collect();
+        let mut locals: Vec<_> = present
+            .iter()
+            .filter(|(id, _)| !settled.contains_key(id))
+            .collect();
+        locals.sort_by_key(|(id, _)| id.0);
+        for (id, spelling) in locals {
+            let Some(builtin) = go_name::escaped_shadowable_builtin(spelling) else {
+                continue;
+            };
+            if pinned.contains(spelling)
+                || taken.contains(builtin)
+                || self.declares_type_param(builtin)
+                || package.is_package_block_name(builtin)
+                || package.is_import_qualifier(builtin)
+            {
+                continue;
+            }
+            taken.insert(builtin.to_string());
+            settled.insert(*id, builtin.to_string());
+        }
+    }
+
     fn is_go_name_taken(&self, go_name: &str, package: &PackageState) -> bool {
         is_go_reserved_word(go_name)
             || self.names.issued.contains(go_name)

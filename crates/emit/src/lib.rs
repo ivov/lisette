@@ -19,7 +19,7 @@ pub(crate) use analyze::facts::EmitFacts;
 pub(crate) use context::lowering::{LineIndex, ReturnContext};
 pub(crate) use definitions::enum_layout::EnumLayout;
 pub(crate) use names::go_name;
-pub(crate) use names::go_name::escape_reserved;
+pub(crate) use names::go_name::escape_local;
 pub(crate) use output::OutputCollector;
 pub(crate) use render::Renderer;
 pub(crate) use utils::is_order_sensitive;

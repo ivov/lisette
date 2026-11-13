@@ -978,6 +978,61 @@ fn test() -> int {
 }
 
 #[test]
+fn go_keyword_local_next_to_its_short_name_gets_fresh_name() {
+    let input = r#"
+fn test() -> int {
+  let pkg = 1
+  let package = 2
+  pkg + package
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn local_shadowing_a_builtin_the_body_calls_stays_escaped() {
+    let input = r#"
+fn test(xs: Slice<int>) -> int {
+  let len = 3
+  xs.length() + len
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn local_shadowing_a_builtin_a_closure_calls_stays_escaped() {
+    let input = r#"
+fn test(xs: Slice<int>) -> int {
+  let len = 10
+  let f = |ys: Slice<int>| ys.length()
+  f(xs) + len
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn parameter_shadowing_a_builtin_the_body_calls_stays_escaped() {
+    let input = r#"
+fn test(cap: int, xs: Slice<int>) -> int {
+  cap + xs.capacity()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn parameter_named_panic_stays_escaped_before_an_unreachable_panic() {
+    let input = r#"
+fn fail(msg: string) -> Never { panic(msg) }
+
+fn test(panic_: string) -> string { fail(panic_) }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn go_keyword_function_parameter() {
     let input = r#"
 fn use_map(map: int, range: int) -> int {

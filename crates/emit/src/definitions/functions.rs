@@ -72,7 +72,7 @@ impl Planner<'_> {
         body: &Expression,
         should_return: bool,
         mut prefix: Vec<Statement>,
-        parameters: &[GoIdentifier],
+        parameters: &mut [GoIdentifier],
     ) {
         self.reserve_source_binder_names(body);
         let mut lowered = self.lower_function_body(body, should_return);
@@ -87,7 +87,7 @@ impl Planner<'_> {
     pub(super) fn finish_function_body(
         &mut self,
         mut body: LoweredBlock,
-        parameters: &[GoIdentifier],
+        parameters: &mut [GoIdentifier],
         has_result: bool,
         origin: BodyOrigin,
     ) -> LoweredBlock {
@@ -105,7 +105,7 @@ impl Planner<'_> {
             inherit_line_directives(&mut body.statements, None);
         }
         if matches!(origin, BodyOrigin::Source) {
-            self.settle_generated_names(&mut body.statements);
+            self.settle_generated_names(&mut body.statements, parameters);
         }
         #[cfg(debug_assertions)]
         verify_final_function_body(&mut body, has_result).unwrap_or_else(|error| panic!("{error}"));
@@ -123,7 +123,11 @@ impl Planner<'_> {
         }
     }
 
-    fn settle_generated_names(&mut self, statements: &mut Vec<Statement>) {
+    fn settle_generated_names(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        parameters: &mut [GoIdentifier],
+    ) {
         #[derive(Default)]
         struct Names {
             present: HashMap<LocalId, String>,
@@ -151,17 +155,33 @@ impl Planner<'_> {
                     self.pinned.insert(name.to_string());
                 }
             }
+
+            fn statements(&mut self, statements: &mut Vec<Statement>) {
+                if statements
+                    .iter()
+                    .any(|statement| matches!(statement.kind, LoweredStatement::UnreachablePanic))
+                {
+                    self.pinned.insert("panic".to_string());
+                }
+            }
         }
 
         let mut names = Names::default();
         visit_statements_mut(statements, &mut names);
-        let by_id = self
-            .scope
-            .settle_generated_names(&names.present, &names.pinned, self.package);
+        let mut by_id =
+            self.scope
+                .settle_generated_names(&names.present, &names.pinned, self.package);
+        self.scope
+            .restore_builtin_names(&names.present, &names.pinned, &mut by_id, self.package);
         if by_id.is_empty() {
             return;
         }
         rename_generated_locals(statements, &by_id);
+        for parameter in parameters {
+            if let Some(name) = parameter.id().and_then(|id| by_id.get(&id)) {
+                *parameter.spelling_mut() = name.clone();
+            }
+        }
     }
 
     pub(crate) fn emit_lambda(
@@ -358,17 +378,13 @@ impl Planner<'_> {
         }
 
         let mut body = String::new();
-        let (params_string, return_ty, deferred_patterns, mut parameters) = self
-            .build_signature_tail(
-                function_definition,
-                params_to_process,
-                return_shape.as_ref(),
-            );
-        parts.push(params_string);
-        if !return_ty.is_empty() {
-            parts.push(return_ty);
-        }
-        let signature = parts.join(" ");
+        let (params, deferred_patterns) = self.lower_signature_params(params_to_process);
+        let return_ty = self.render_return_ty(function_definition, return_shape.as_ref());
+        let mut parameters: Vec<GoIdentifier> = params
+            .iter()
+            .map(|(name, _)| name.clone())
+            .filter(|name| name.spelling() != "_")
+            .collect();
 
         if let Some(receiver) = self.scope.bound_go_identifier("self") {
             parameters.push(receiver.clone());
@@ -378,9 +394,25 @@ impl Planner<'_> {
             &mut body,
             function_definition,
             &deferred_patterns,
-            &parameters,
+            &mut parameters,
         );
         self.scope.exit_isolated_function();
+
+        let rendered: Vec<(String, String)> = params
+            .into_iter()
+            .map(|(name, go_type)| {
+                let settled = parameters
+                    .iter()
+                    .find(|parameter| parameter.id().is_some() && parameter.id() == name.id())
+                    .unwrap_or(&name);
+                (settled.to_string(), go_type)
+            })
+            .collect();
+        parts.push(format!("({})", group_params(&rendered)));
+        if !return_ty.is_empty() {
+            parts.push(return_ty);
+        }
+        let signature = parts.join(" ");
 
         let trimmed_body = body.trim_end();
         let mut function = if trimmed_body.is_empty() {
@@ -418,12 +450,10 @@ impl Planner<'_> {
         }
     }
 
-    fn build_signature_tail<'a>(
+    fn lower_signature_params<'a>(
         &mut self,
-        function_definition: FunctionDefinitionView<'_>,
         params_to_process: &'a [Binding],
-        return_shape: Option<&LoweredReturnAbi>,
-    ) -> (String, String, Vec<ParamDestructure<'a>>, Vec<GoIdentifier>) {
+    ) -> (Vec<(GoIdentifier, String)>, Vec<ParamDestructure<'a>>) {
         let LoweredParams {
             pairs,
             destructures,
@@ -432,18 +462,19 @@ impl Planner<'_> {
         if let Some(handle) = test_handle {
             self.scope.set_test_handle(handle);
         }
-        let identifiers = pairs
-            .iter()
-            .map(|(name, _)| name.clone())
-            .filter(|name| name.spelling() != "_")
-            .collect();
-        let rendered: Vec<(String, String)> = pairs
+        let params = pairs
             .into_iter()
-            .map(|(name, go_type)| (name.to_string(), self.use_rendered_go_type(go_type)))
+            .map(|(name, go_type)| (name, self.use_rendered_go_type(go_type)))
             .collect();
-        let params_string = format!("({})", group_params(&rendered));
+        (params, destructures)
+    }
 
-        let return_ty = if matches!(self.return_ctx(), ReturnContext::Void(_)) {
+    fn render_return_ty(
+        &mut self,
+        function_definition: FunctionDefinitionView<'_>,
+        return_shape: Option<&LoweredReturnAbi>,
+    ) -> String {
+        if matches!(self.return_ctx(), ReturnContext::Void(_)) {
             String::new()
         } else if let Some(shape) = return_shape {
             self.render_callable_return_ty(
@@ -452,9 +483,7 @@ impl Planner<'_> {
             )
         } else {
             self.use_go_type(function_definition.return_type)
-        };
-
-        (params_string, return_ty, destructures, identifiers)
+        }
     }
 
     fn emit_function_body_with_deferred_patterns(
@@ -462,7 +491,7 @@ impl Planner<'_> {
         body: &mut String,
         function_definition: FunctionDefinitionView<'_>,
         deferred_patterns: &[ParamDestructure<'_>],
-        parameters: &[GoIdentifier],
+        parameters: &mut [GoIdentifier],
     ) {
         let should_return = !matches!(self.return_ctx(), ReturnContext::Void(_));
         let prefix = self.lower_param_destructures(deferred_patterns);

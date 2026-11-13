@@ -11,7 +11,7 @@ description: |
 package main
 
 func test() int {
-	map_ := 42
-	range_ := 10
-	return map_ + range_
+	m := 42
+	rng := 10
+	return m + rng
 }

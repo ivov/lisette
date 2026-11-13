@@ -13,8 +13,8 @@ const BelowMax uint64 = uint64(math.MaxUint64) - 1
 
 func main() {
 	big := uint64(math.MaxUint64)
-	max_ := uint(math.MaxUint)
+	max := uint(math.MaxUint)
 	complement := ^uint64(math.MaxUint64)
 	negative := math.MinInt64 - 1 + 1
-	fmt.Println(big, max_, complement, complement == 0, negative, BelowMax)
+	fmt.Println(big, max, complement, complement == 0, negative, BelowMax)
 }

@@ -8,7 +8,11 @@ pub(crate) struct SourceName(String);
 
 impl SourceName {
     pub(crate) fn new(source: &EcoString) -> Self {
-        Self(go_name::snake_to_lower_camel(source))
+        let name = go_name::snake_to_lower_camel(source);
+        match go_name::keyword_local_name(&name) {
+            Some(short) => Self(short.to_string()),
+            None => Self(name),
+        }
     }
 
     pub(crate) fn constant(source: &EcoString) -> Self {
@@ -24,7 +28,7 @@ impl SourceName {
     }
 
     pub(crate) fn preferred(&self) -> String {
-        go_name::escape_reserved(&self.0).into_owned()
+        go_name::escape_local(&self.0).into_owned()
     }
 }
 

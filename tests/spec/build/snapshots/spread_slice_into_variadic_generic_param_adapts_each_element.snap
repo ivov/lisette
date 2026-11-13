@@ -13,8 +13,8 @@ func Resultant(arg int) (int, Face) {
 	return arg, nil
 }
 
-func Resolve[R any, E any](default_ R, _ ...func(int) lisette.Result[R, E]) lisette.Result[R, E] {
-	return lisette.MakeResultOk[R, E](default_)
+func Resolve[R any, E any](def R, _ ...func(int) lisette.Result[R, E]) lisette.Result[R, E] {
+	return lisette.MakeResultOk[R, E](def)
 }
 
 func main() {
