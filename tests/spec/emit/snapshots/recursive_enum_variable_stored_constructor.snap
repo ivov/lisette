@@ -37,7 +37,7 @@ type List struct {
 }
 
 func main() {
-	make_ := MakeListCons
-	xs := make_(1, MakeListNil())
+	make := MakeListCons
+	xs := make(1, MakeListNil())
 	_ = xs
 }

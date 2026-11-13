@@ -12,8 +12,8 @@ description: |
 ---
 package main
 
-func useMap(map_, range_ int) int {
-	return map_ + range_
+func useMap(m, rng int) int {
+	return m + rng
 }
 
 func test() int {

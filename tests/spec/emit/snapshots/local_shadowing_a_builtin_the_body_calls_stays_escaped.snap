@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn test(xs: Slice<int>) -> int {
+    let len = 3
+    xs.length() + len
+  }
+---
+package main
+
+func test(xs []int) int {
+	len_ := 3
+	return len(xs) + len_
+}

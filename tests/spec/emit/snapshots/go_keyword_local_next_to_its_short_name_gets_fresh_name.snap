@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn test() -> int {
+    let pkg = 1
+    let package = 2
+    pkg + package
+  }
+---
+package main
+
+func test() int {
+	pkg := 1
+	pkg2 := 2
+	return pkg + pkg2
+}

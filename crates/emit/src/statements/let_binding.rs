@@ -9,7 +9,7 @@ use crate::calls::go_interop::WrapperTarget;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::Fallible;
 use crate::control_flow::fallible_blocks::TryBlockPairPlan;
-use crate::escape_reserved;
+use crate::escape_local;
 use crate::names::go_name;
 use crate::names::source_name::SourceName;
 use crate::patterns::decision_tree::collect_pattern_info;
@@ -83,7 +83,7 @@ impl Planner<'_> {
         raw_go_name: &GoIdentifier,
         force_fresh: bool,
     ) -> GoIdentifier {
-        let escaped = escape_reserved(raw_go_name);
+        let escaped = escape_local(raw_go_name);
         if force_fresh
             || self.shadows_declaration(&escaped)
             || self.scope.has_other_binding_for_go_name(&escaped, ids)
@@ -383,7 +383,7 @@ impl Planner<'_> {
         let Some(raw_go_name) = raw_go_name else {
             return statements;
         };
-        let escaped = escape_reserved(raw_go_name);
+        let escaped = escape_local(raw_go_name);
         let go_identifier = if self.shadows_declaration(&escaped) {
             let fresh = self.fresh_declared_source(&SourceName::new(identifier));
             self.scope.bind_source(identifier, ids, &fresh);
@@ -827,7 +827,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             && self
                 .planner
                 .scope
-                .has_other_binding_for_go_name(&escape_reserved(raw), binding_id.as_slice())
+                .has_other_binding_for_go_name(&escape_local(raw), binding_id.as_slice())
         {
             raw_go_name = Some(self.planner.fresh_source(&SourceName::new(identifier)));
         }

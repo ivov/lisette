@@ -14,8 +14,8 @@ package main
 
 func test() int {
 	total := 0
-	for _, range_ := range []int{1, 2, 3} {
-		total += range_
+	for _, rng := range []int{1, 2, 3} {
+		total += rng
 	}
 	return total
 }

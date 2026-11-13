@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn fail(msg: string) -> Never { panic(msg) }
+  
+  fn test(panic_: string) -> string { fail(panic_) }
+---
+package main
+
+func fail(msg string) {
+	panic(msg)
+}
+
+func test(panic_ string) string {
+	fail(panic_)
+	panic("unreachable")
+}

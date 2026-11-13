@@ -76,8 +76,8 @@ func (p Pair[T]) boxed() (Pair[T], bool) {
 }
 
 func (p Pair[T]) local() T {
-	copy_ := p
-	return copy_.first
+	copy := p
+	return copy.first
 }
 
 func run() {

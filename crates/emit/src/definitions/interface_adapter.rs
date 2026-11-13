@@ -943,7 +943,7 @@ impl Planner<'_> {
         let statements = directed_first(line.cloned(), statements);
         let body = self.finish_function_body(
             LoweredBlock { statements },
-            parameters,
+            &mut parameters.to_vec(),
             !go_ret.is_empty(),
             BodyOrigin::Adapter,
         );

@@ -16,6 +16,6 @@ func mk() int {
 }
 
 func test() int {
-	new_ := mk
-	return new_()
+	new := mk
+	return new()
 }

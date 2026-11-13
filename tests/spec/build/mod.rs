@@ -9481,11 +9481,11 @@ fn renamed_test_handle_param_is_the_assert_target() {
         "a handle renamed away from a package function must be the assert target, got:\n{go}"
     );
     assert!(
-        go.contains("func reserved(chan_ testkit.TestContext)") && go.contains("chan_.FailAssert("),
+        go.contains("func reserved(ch testkit.TestContext)") && go.contains("ch.FailAssert("),
         "a handle escaped from a reserved word must be the assert target, got:\n{go}"
     );
     assert!(
-        go.contains("defer range_.Recover(") && go.contains("range_.FailAssert("),
+        go.contains("defer rng.Recover(") && go.contains("rng.FailAssert("),
         "a lambda handle escaped from a reserved word must be the assert target, got:\n{go}"
     );
 }

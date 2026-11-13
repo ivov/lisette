@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn test(xs: Slice<int>) -> int {
+    let len = 10
+    let f = |ys: Slice<int>| ys.length()
+    f(xs) + len
+  }
+---
+package main
+
+func test(xs []int) int {
+	len_ := 10
+	f := func(ys []int) int {
+		return len(ys)
+	}
+	return f(xs) + len_
+}

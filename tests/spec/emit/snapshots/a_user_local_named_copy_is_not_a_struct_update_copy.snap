@@ -32,8 +32,8 @@ type P struct {
 	b int
 }
 
-func bump(copy_ int, o P) P {
-	step := copy_
+func bump(copy int, o P) P {
+	step := copy
 	copy2 := o
 	copy2.a = step
 	return copy2

@@ -15,8 +15,8 @@ func Resultant(arg int) (int, Face) {
 
 type Holder struct{}
 
-func HolderResolve[R any, E any](_ Holder, default_ R, _ ...func(int) lisette.Result[R, E]) lisette.Result[R, E] {
-	return lisette.MakeResultOk[R, E](default_)
+func HolderResolve[R any, E any](_ Holder, def R, _ ...func(int) lisette.Result[R, E]) lisette.Result[R, E] {
+	return lisette.MakeResultOk[R, E](def)
 }
 
 func main() {

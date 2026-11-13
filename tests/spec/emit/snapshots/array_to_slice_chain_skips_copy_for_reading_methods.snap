@@ -36,7 +36,7 @@ func reads(arr [3]int) (bool, bool, lisette.Option[int], int, bool) {
 }
 
 func copies(arr [3]int, names [2]string) ([]int, string) {
-	copy_ := slices.Clone(arr[:])
+	copy := slices.Clone(arr[:])
 	line := strings.Join(names[:], "-")
-	return copy_, line
+	return copy, line
 }

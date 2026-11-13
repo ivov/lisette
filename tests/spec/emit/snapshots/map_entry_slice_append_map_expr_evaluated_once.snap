@@ -34,8 +34,8 @@ func getMap(m map[string]Box) map[string]Box {
 func main() {
 	m := make(map[string]Box)
 	m["a"] = Box{items: []int{}}
-	map_ := getMap(m)
-	entry := Box{items: slices.Clone(map_["a"].items)}
+	m2 := getMap(m)
+	entry := Box{items: slices.Clone(m2["a"].items)}
 	entry.items = append(entry.items, 1)
-	map_["a"] = entry
+	m2["a"] = entry
 }
