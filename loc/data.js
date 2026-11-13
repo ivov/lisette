@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794600005253,
+  "lastUpdate": 1794600788228,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -55805,6 +55805,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 42268,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30203,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19606,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15928,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14169,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9338,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7484,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10906,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 938,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c303f00aa9d3770e0f6c2b9114aae4e23c019506",
+          "message": "feat: idiomatic Go for short-circuit right operands (#1678)",
+          "timestamp": "2026-11-13T21:12:43+01:00",
+          "tree_id": "65eb4925324eac04c9a7c41869ab723dd616f1b2",
+          "url": "https://github.com/ivov/lisette/commit/c303f00aa9d3770e0f6c2b9114aae4e23c019506"
+        },
+        "date": 1794600786279,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 156050,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 42324,
             "unit": "lines"
           },
           {
