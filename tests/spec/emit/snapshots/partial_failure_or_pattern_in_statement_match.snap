@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/partial.rs
+description: |
+  
+  import "go:fmt"
+  import "go:io"
+  import "go:strings"
+  
+  fn print_size(s: string) {
+    match io.ReadAll(strings.NewReader(s)) {
+      Partial.Ok(b) => fmt.Println(b.length()),
+      Partial.Both(_, e) | Partial.Err(e) => fmt.Println("error:", e),
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"io"
+	"strings"
+)
+
+func printSize(s string) {
+	if b, e := io.ReadAll(strings.NewReader(s)); e == nil {
+		fmt.Println(len(b))
+	} else {
+		fmt.Println("error:", e)
+	}
+}

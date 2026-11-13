@@ -132,6 +132,7 @@ impl Planner<'_> {
             let into = self
                 .lower_fused_result_match_into(value, &local)
                 .or_else(|| self.lower_fused_option_match_into(value, &local))
+                .or_else(|| self.lower_fused_partial_match_into(value, &local))
                 .or_else(|| self.lower_defaulted_call_into(value, &local))
                 .or_else(|| self.lower_slice_loop_into(value, &local));
             if let Some(statements) = into {

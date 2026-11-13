@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/partial.rs
+description: |
+  
+  import "go:fmt"
+  import "go:io"
+  import "go:strings"
+  
+  fn report(s: string) {
+    match io.ReadAll(strings.NewReader(s)) {
+      Partial.Ok(_) => return (),
+      Partial.Both(_, e) | Partial.Err(e) => fmt.Println(e),
+    }
+    fmt.Println("done")
+  }
+---
+package main
+
+import (
+	"fmt"
+	"io"
+	"strings"
+)
+
+func report(s string) {
+	_, e := io.ReadAll(strings.NewReader(s))
+	if e == nil {
+		return
+	}
+	fmt.Println(e)
+	fmt.Println("done")
+}
