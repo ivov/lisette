@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ● Redundant `_` in pipeline
+   ╭─[test.lis:3:23]
+ 2 │ fn main() {
+ 3 │   let _ = 1 |> double(_)
+   ·                       ┬
+   ·                       ╰── already the first argument
+ 4 │ }
+   ╰────
+  help: `|>` passes the value as the first argument when a step has no `_`. Remove the `_` · code: [lint.redundant_pipeline_placeholder]

@@ -443,8 +443,12 @@ impl InferCtx<'_> {
                 }
                 if !has_placeholder {
                     args.insert(0, left);
-                } else if let Some(slot) = args.iter_mut().find(|arg| is_placeholder(arg)) {
-                    *slot = left;
+                } else if let Some(index) = args.iter().position(is_placeholder) {
+                    if index == 0 {
+                        self.facts
+                            .add_redundant_pipeline_placeholder(args[0].get_span());
+                    }
+                    args[index] = left;
                 } else {
                     spread = Some(Box::new(left));
                 }

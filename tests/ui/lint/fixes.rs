@@ -533,6 +533,104 @@ fn main() {
 }
 
 #[test]
+fn fix_redundant_pipeline_placeholder_first_of_many() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let _ = 1 |> add(_, 2)
+}
+
+fn add(a: int, b: int) -> int { a + b }
+"#
+    );
+}
+
+#[test]
+fn fix_redundant_pipeline_placeholder_sole_argument() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let _ = 1 |> double(_)
+}
+
+fn double(n: int) -> int { n * 2 }
+"#
+    );
+}
+
+#[test]
+fn fix_redundant_pipeline_placeholder_keeps_type_arguments() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let _ = 1 |> wrap<int>(_)
+}
+
+fn wrap<T>(value: T) -> Option<T> { Some(value) }
+"#
+    );
+}
+
+#[test]
+fn fix_redundant_pipeline_placeholder_trailing_comma() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let _ = 1 |> double(_,)
+}
+
+fn double(n: int) -> int { n * 2 }
+"#
+    );
+}
+
+#[test]
+fn fix_redundant_pipeline_placeholder_keeps_comment() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let _ = 1 |> add(
+    _, // first
+    2,
+  )
+}
+
+fn add(a: int, b: int) -> int { a + b }
+"#
+    );
+}
+
+#[test]
+fn fix_redundant_pipeline_placeholder_multiline() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let _ = 1 |> add(
+    _,
+    2,
+  )
+}
+
+fn add(a: int, b: int) -> int { a + b }
+"#
+    );
+}
+
+#[test]
+fn fix_redundant_pipeline_placeholder_before_spread() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let rest = [2, 3]
+  let _ = 1 |> total(_, rest...)
+}
+
+fn total(first: int, rest: VarArgs<int>) -> int { first + rest.length() }
+"#
+    );
+}
+
+#[test]
 fn fix_expression_only_fstring_parenthesizes_binary() {
     assert_fix_snapshot!(
         r#"

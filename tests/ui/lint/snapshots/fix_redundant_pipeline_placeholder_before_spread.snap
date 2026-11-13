@@ -1,0 +1,16 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  let rest = [2, 3]
+  let _ = 1 |> total(_, rest...)
+}
+
+fn total(first: int, rest: VarArgs<int>) -> int { first + rest.length() }
+=== fixed ===
+fn main() {
+  let rest = [2, 3]
+  let _ = 1 |> total(rest...)
+}
+
+fn total(first: int, rest: VarArgs<int>) -> int { first + rest.length() }

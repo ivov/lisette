@@ -305,6 +305,7 @@ fn cacheable_lint(diagnostic: &LisetteDiagnostic) -> bool {
                     | "lint.uninterpolated_fstring"
                     | "lint.unprefixed_fstring"
                     | "lint.expression_only_fstring"
+                    | "lint.redundant_pipeline_placeholder"
                     | "lint.unnecessary_raw_string"
             )
         )

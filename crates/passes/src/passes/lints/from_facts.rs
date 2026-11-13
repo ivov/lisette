@@ -73,6 +73,7 @@ pub(crate) fn run(
     collect_overused_references(facts, &mut diagnostics);
     collect_always_failing_try_blocks(facts, &mut diagnostics);
     collect_expression_only_fstrings(store, facts, &mut diagnostics);
+    collect_redundant_pipeline_placeholders(store, facts, &mut diagnostics);
     collect_unprefixed_fstrings(store, facts, &mut diagnostics);
 
     diagnostics.sort_by(LisetteDiagnostic::sort_key);
@@ -103,6 +104,45 @@ fn fstring_inner(store: &Store, span: Span) -> Option<&str> {
     let text = source.get(span.byte_offset as usize..span.end() as usize)?;
     let inner = text.strip_prefix("f\"")?.strip_suffix('"')?.trim();
     Some(inner.strip_prefix('{')?.strip_suffix('}')?.trim())
+}
+
+fn collect_redundant_pipeline_placeholders(
+    store: &Store,
+    facts: &Facts,
+    out: &mut Vec<LisetteDiagnostic>,
+) {
+    let produced: Vec<LisetteDiagnostic> = facts
+        .redundant_pipeline_placeholders
+        .iter()
+        .map(|placeholder| {
+            let diagnostic = diagnostics::lint::redundant_pipeline_placeholder(placeholder);
+            match placeholder_removal(store, *placeholder) {
+                Some(removal) => {
+                    diagnostic.with_fix(Fix::new("Remove the `_`", Edit::deletion(removal)))
+                }
+                None => diagnostic,
+            }
+        })
+        .collect();
+    push_suppressible(store, produced, out);
+}
+
+fn placeholder_removal(store: &Store, placeholder: Span) -> Option<Span> {
+    let source = &store.get_file(placeholder.file_id)?.source;
+    let after = source.get(placeholder.end() as usize..)?;
+    let rest = after.trim_start().strip_prefix(',').unwrap_or(after);
+    let next_token = rest.trim_start();
+    let rest = if next_token.starts_with("//") {
+        rest.trim_start_matches([' ', '\t'])
+    } else {
+        next_token
+    };
+    let end = (source.len() - rest.len()) as u32;
+    Some(Span::new(
+        placeholder.file_id,
+        placeholder.byte_offset,
+        end - placeholder.byte_offset,
+    ))
 }
 
 fn collect_unprefixed_fstrings(store: &Store, facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {

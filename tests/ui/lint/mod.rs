@@ -10729,6 +10729,112 @@ fn main() {
 }
 
 #[test]
+fn redundant_pipeline_placeholder_sole_argument() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = 1 |> double(_)
+}
+
+fn double(n: int) -> int { n * 2 }
+"#
+    );
+}
+
+#[test]
+fn redundant_pipeline_placeholder_first_of_many() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = 1 |> add(_, 2)
+}
+
+fn add(a: int, b: int) -> int { a + b }
+"#
+    );
+}
+
+#[test]
+fn redundant_pipeline_placeholder_one_step_of_chain() {
+    let source = r#"
+fn main() {
+  let _ = 1 |> add(2) |> add(_, 3) |> sub(4, _)
+}
+
+fn add(a: int, b: int) -> int { a + b }
+fn sub(a: int, b: int) -> int { a - b }
+"#;
+    assert_diagnostic_count!(source, 1);
+    assert_lint_snapshot!(source);
+}
+
+#[test]
+fn pipeline_placeholder_not_first_no_lint() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = 1 |> sub(2, _)
+}
+
+fn sub(a: int, b: int) -> int { a - b }
+"#
+    );
+}
+
+#[test]
+fn pipeline_placeholder_spread_no_lint() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = [1, 2] |> total(_...)
+}
+
+fn total(items: VarArgs<int>) -> int { items.length() }
+"#
+    );
+}
+
+#[test]
+fn repeated_pipeline_placeholder_no_lint() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = 1 |> add(_, _)
+}
+
+fn add(a: int, b: int) -> int { a + b }
+"#
+    );
+}
+
+#[test]
+fn nested_pipeline_placeholder_no_lint() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = 1 |> double(double(_))
+}
+
+fn double(n: int) -> int { n * 2 }
+"#
+    );
+}
+
+#[test]
+fn redundant_pipeline_placeholder_suppressed_by_allow() {
+    assert_no_lint_warnings!(
+        r#"
+#[allow(redundant_pipeline_placeholder)]
+fn main() {
+  let _ = 1 |> add(_, 2)
+}
+
+fn add(a: int, b: int) -> int { a + b }
+"#
+    );
+}
+
+#[test]
 fn fstring_with_text_and_interpolation_no_warning() {
     assert_no_lint_warnings!(
         r#"
