@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794599370749,
+  "lastUpdate": 1794600005253,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -55716,6 +55716,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 42254,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30203,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19606,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15928,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14169,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9338,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7484,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10906,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 938,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "964c92b25059fbc68945270c4546a2d37506d2a6",
+          "message": "refactor: render statements without intermediate expression strings (#1677)",
+          "timestamp": "2026-11-13T20:59:42+01:00",
+          "tree_id": "9c758ee36eccbae273b9d9216711c57c503c1a4c",
+          "url": "https://github.com/ivov/lisette/commit/964c92b25059fbc68945270c4546a2d37506d2a6"
+        },
+        "date": 1794600002070,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 155994,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 42268,
             "unit": "lines"
           },
           {
