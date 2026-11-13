@@ -50,14 +50,16 @@ func test() {
 		lisette.MakeTuple2[Boom, int](Boom{}, 1),
 		lisette.MakeTuple2[Boom, int](Boom{}, 2),
 	}
-	if pair.First.Error() != "boom" || func() bool {
+	cond := pair.First.Error() != "boom"
+	if !cond {
 		var boxed Rows
 		for i := range concrete {
 			tup2 := concrete[i]
 			boxed[i] = lisette.MakeTuple2[error, int](tup2.First, tup2.Second)
 		}
-		return first(boxed) != "boom"
-	}() {
+		cond = first(boxed) != "boom"
+	}
+	if cond {
 		panic("aliased tuple lost its interface elements")
 	}
 }

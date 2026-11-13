@@ -185,6 +185,47 @@ fn test() {
 }
 
 #[test]
+fn logical_operand_with_one_temp_folds_into_the_expression() {
+    let input = r#"
+import "go:encoding/json"
+import "go:net/url"
+
+fn has_user(u: Ref<url.URL>) -> bool {
+  u.Host == "" || u.User.is_some()
+}
+
+fn decodes(text: string, items: mut Ref<Slice<int>>) -> bool {
+  text.starts_with("[") && json.Unmarshal(text as Slice<byte>, items).is_ok()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_logical_operands_with_setup_nest_their_ifs() {
+    let input = r#"
+fn both(m: Map<string, int>, a: string, b: string) -> bool {
+  m.get(a).is_some() || (b != "" && m.get(b).is_some())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn logical_operand_with_setup_in_a_while_condition_reruns_each_pass() {
+    let input = r#"
+fn count(xs: Slice<string>) -> int {
+  let mut i = 0
+  while i < xs.length() && xs[i].runes().all(|r| r >= '0' && r <= '9') {
+    i += 1
+  }
+  i
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn unary_negation() {
     let input = r#"
 fn test() -> int {
@@ -5643,6 +5684,116 @@ fn run() -> int {
   let mut h = Handler { f: f0 }
   let swap = || -> int { h = Handler { f: f1 }; 7 }
   h.f(swap())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn writing_method_on_a_reference_parameter_is_not_pinned() {
+    let input = r#"
+struct Server { name: string }
+
+impl Server {
+  fn greet(self: mut Ref<Server>, suffix: string) -> string {
+    self.name += suffix
+    self.name
+  }
+}
+
+fn suffix() -> string { "!" }
+
+fn stop(s: mut Ref<Server>) -> string {
+  s.greet(suffix())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn writing_method_pinned_when_a_closure_reassigns_its_reference() {
+    let input = r#"
+struct Server { name: string }
+
+impl Server {
+  fn greet(self: mut Ref<Server>, suffix: string) -> string {
+    self.name += suffix
+    self.name
+  }
+}
+
+fn swapped(s: mut Ref<Server>, other: mut Ref<Server>) -> string {
+  let mut current = s
+  let swap = || -> string {
+    current = other
+    "?"
+  }
+  current.greet(swap())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn promoted_writing_method_pinned_before_an_argument_replaces_its_embed() {
+    let input = r#"
+struct Server { name: string }
+
+impl Server {
+  fn greet(self: mut Ref<Server>, suffix: string) -> string {
+    self.name += suffix
+    self.name
+  }
+}
+
+struct Outer { embed mut Ref<Server> }
+
+fn swap(o: mut Ref<Outer>, other: mut Ref<Server>) -> string {
+  o.Server = other
+  "!"
+}
+
+fn test(o: mut Ref<Outer>, other: mut Ref<Server>) -> string {
+  o.greet(swap(o, other))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn writing_value_receiver_pinned_before_an_argument_replaces_its_referent() {
+    let input = r#"
+struct Server { name: string, hits: mut Slice<int> }
+
+impl Server {
+  fn greet(self: mut Server, suffix: string) -> string {
+    self.hits[0] += 1
+    self.name + suffix
+  }
+}
+
+fn swap(s: mut Ref<mut Server>, other: mut Server) -> string {
+  s.* = other
+  "!"
+}
+
+fn test(s: mut Ref<mut Server>, other: mut Server) -> string {
+  s.greet(swap(s, other))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn setup_read_of_a_closure_mutated_local_keeps_an_earlier_call_first() {
+    let input = r#"
+fn run() -> int {
+  let mut x = 0
+  let bump = || -> int {
+    x += 1
+    0
+  }
+  bump() + (x + bump())
 }
 "#;
     assert_emit_snapshot!(input);

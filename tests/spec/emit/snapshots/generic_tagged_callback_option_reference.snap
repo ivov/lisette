@@ -20,7 +20,6 @@ func some[T any](x T) (T, bool) {
 
 func main() {
 	x := 3
-	arg := lisette.MakeOptionSome(&x)
 	cb := some[*int]
 	tagged := func(arg0 *int) lisette.Option[*int] {
 		ret, ret2 := cb(arg0)
@@ -29,7 +28,7 @@ func main() {
 		}
 		return lisette.MakeOptionNone[*int]()
 	}
-	got := lisette.OptionAndThen(arg, tagged)
+	got := lisette.OptionAndThen(lisette.MakeOptionSome(&x), tagged)
 	if got.Tag != lisette.OptionSome {
 		panic("generic option reference")
 	}

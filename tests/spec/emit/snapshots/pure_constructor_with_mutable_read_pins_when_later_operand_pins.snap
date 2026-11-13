@@ -19,10 +19,9 @@ func run() int {
 		x = 20
 		return 2
 	}
-	v := lisette.MakeOptionSome(x)
 	left := x
 	elems := []lisette.Option[int]{
-		v,
+		lisette.MakeOptionSome(x),
 		lisette.MakeOptionSome(left + bump()),
 		lisette.MakeOptionSome(x),
 	}

@@ -1,0 +1,63 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  fn diverging(c: bool) -> int {
+    let count = 10
+    if c {
+      return 0
+    } else {
+      let count = 5
+      let _ = count
+    }
+    count
+  }
+  
+  fn else_block(after: Option<int>) -> string {
+    let Some(h) = after else {
+      let holder = "early"
+      return holder
+    }
+    let holder = f"late {h}"
+    holder
+  }
+  
+  fn main() {
+    if diverging(false) != 10 { panic("the else block changed the outer binding") }
+    if else_block(Some(1)) != "late 1" { panic("the late binding is wrong") }
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func diverging(c bool) int {
+	count := 10
+	if c {
+		return 0
+	}
+	return count
+}
+
+func elseBlock(after lisette.Option[int]) string {
+	if after.Tag != lisette.OptionSome {
+		holder := "early"
+		return holder
+	}
+	h := after.SomeVal
+	holder2 := fmt.Sprintf("late %d", h)
+	return holder2
+}
+
+func main() {
+	if diverging(false) != 10 {
+		panic("the else block changed the outer binding")
+	}
+	if elseBlock(lisette.MakeOptionSome(1)) != "late 1" {
+		panic("the late binding is wrong")
+	}
+}

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::checker::EnvResolve;
-use syntax::ast::{Expression, Span};
+use syntax::ast::{BindingId, Expression, Span};
 use syntax::program::{Definition, DefinitionBody, DotAccessResolution, ReceiverCoercion};
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute, unqualified_name};
 
@@ -84,6 +84,14 @@ impl InferCtx<'_> {
         let receiver_ty = f.remove_receiver();
         let actual_ty = args.expression_ty;
 
+        let receiver = receiver_ty.resolve_in(&self.env);
+        if self.store.parameter_grants_write(&receiver) {
+            match self.reference_receiver_binding(&receiver, actual_ty, args) {
+                Some(binding_id) => self.facts.mark_written_through(binding_id),
+                None => self.mark_place_root_mutated(args.expression),
+            }
+        }
+
         let receiver_coercion = self.unify_receiver_with_coercion(
             &receiver_ty,
             actual_ty,
@@ -103,6 +111,29 @@ impl InferCtx<'_> {
                 instantiation,
             },
         ))
+    }
+
+    /// The binding whose reference a writing method writes through, leaving
+    /// the binding itself unchanged. This holds when:
+    /// - the method declares a `Ref` receiver,
+    /// - the receiver is a binding of `Ref` type, and
+    /// - the method is not promoted from an embed the binding can replace.
+    fn reference_receiver_binding(
+        &self,
+        receiver: &Type,
+        actual_ty: &Type,
+        args: &DotAccessResolutionArgs,
+    ) -> Option<BindingId> {
+        if !receiver.is_ref()
+            || !actual_ty.resolve_in(&self.env).is_ref()
+            || self.method_is_promoted(&args.deref_ty, args.member_name)
+        {
+            return None;
+        }
+        let Expression::Identifier { value, .. } = args.expression.unwrap_parens() else {
+            return None;
+        };
+        self.scopes.lookup_binding_id(value)
     }
 
     fn as_promoted_method_expression(
@@ -328,10 +359,6 @@ impl InferCtx<'_> {
 
         let mut coercion = None;
         let mut reported_mutation = false;
-
-        if self.store.parameter_grants_write(&receiver_ty) {
-            self.mark_place_root_mutated(receiver_expression);
-        }
 
         match (receiver_is_ref, actual_is_ref) {
             (true, false) => {

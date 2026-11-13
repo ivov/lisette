@@ -36,12 +36,11 @@ func next(arg0 int) (int, bool) {
 func main() {
 	arg0 := 7
 	cb := func() int {
-		arg := lisette.MakeOptionSome(arg0)
 		cb2 := next
 		tagged := func(arg0 int) lisette.Option[int] {
 			return lisette.OptionFromCommaOk[int](cb2(arg0))
 		}
-		arg0_2 := lisette.OptionAndThen(arg, tagged).UnwrapOr(0)
+		arg0_2 := lisette.OptionAndThen(lisette.MakeOptionSome(arg0), tagged).UnwrapOr(0)
 		read := func() int {
 			return arg0_2
 		}
@@ -51,9 +50,8 @@ func main() {
 	total := 0
 	for {
 		if pending.Tag == lisette.OptionSome {
-			left2 := total
 			left := pending.SomeVal
-			total = left2 + (left + cb())
+			total += left + cb()
 			pending = lisette.MakeOptionNone[int]()
 		} else {
 			break
@@ -61,7 +59,7 @@ func main() {
 	}
 	ch := make(chan int, 1)
 	lisette.ChannelSend(ch, 3)
-	left3 := total
+	left2 := total
 	var tmp int
 	for {
 		select {
@@ -77,7 +75,7 @@ func main() {
 		}
 		break
 	}
-	total = left3 + tmp
+	total = left2 + tmp
 	if total != 21 || arg0 != 7 {
 		panic("callback parameter identity")
 	}

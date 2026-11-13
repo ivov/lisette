@@ -18,8 +18,8 @@ func test() int {
 	var tmp int
 	{
 		x2 := x * 2
-		x := x2 + 100
-		tmp = x
+		x2 += 100
+		tmp = x2
 	}
 	return tmp
 }

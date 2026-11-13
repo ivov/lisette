@@ -56,10 +56,12 @@ func missing(fields []Field, values map[string]string) []string {
 }
 
 func label(values map[string]string, strict bool) string {
-	if strict && func() bool {
+	cond := strict
+	if cond {
 		_, ok := values["mode"]
-		return ok
-	}() {
+		cond = ok
+	}
+	if cond {
 		return "set"
 	}
 	return "unset"

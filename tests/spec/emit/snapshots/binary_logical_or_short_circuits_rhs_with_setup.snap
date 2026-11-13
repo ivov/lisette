@@ -27,10 +27,12 @@ func track(flag *bool) (int, error) {
 
 func test() {
 	ran := false
-	if true || func() bool {
+	cond := true
+	if !cond {
 		_, err := track(&ran)
-		return err == nil
-	}() {
+		cond = err == nil
+	}
+	if cond {
 		if ran {
 			panic("rhs evaluated despite short-circuit")
 		}

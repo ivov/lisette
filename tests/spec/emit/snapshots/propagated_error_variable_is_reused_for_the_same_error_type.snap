@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/local_names.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn sum(a: string, b: string) -> Result<int, error> {
+    let x = strconv.Atoi(a)?
+    let y = strconv.Atoi(b)?
+    Ok(x + y)
+  }
+  
+  fn main() {
+    if sum("1", "2").unwrap_or(0) != 3 { panic("the sum is wrong") }
+    if sum("1", "x").is_ok() { panic("the second error was lost") }
+  }
+---
+package main
+
+import "strconv"
+
+func sum(a, b string) (int, error) {
+	x, err := strconv.Atoi(a)
+	if err != nil {
+		return 0, err
+	}
+	y, err := strconv.Atoi(b)
+	if err != nil {
+		return 0, err
+	}
+	return x + y, nil
+}
+
+func main() {
+	ret, err := sum("1", "2")
+	if err != nil {
+		ret = 0
+	}
+	if ret != 3 {
+		panic("the sum is wrong")
+	}
+	if _, err := sum("1", "x"); err == nil {
+		panic("the second error was lost")
+	}
+}

@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  struct Server { name: string }
+  
+  impl Server {
+    fn greet(self: mut Ref<Server>, suffix: string) -> string {
+      self.name += suffix
+      self.name
+    }
+  }
+  
+  fn suffix() -> string { "!" }
+  
+  fn stop(s: mut Ref<Server>) -> string {
+    s.greet(suffix())
+  }
+---
+package main
+
+type Server struct {
+	name string
+}
+
+func (s *Server) greet(suffix2 string) string {
+	s.name += suffix2
+	return s.name
+}
+
+func suffix() string {
+	return "!"
+}
+
+func stop(s *Server) string {
+	return s.greet(suffix())
+}
