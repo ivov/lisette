@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794594553123,
+  "lastUpdate": 1794596494459,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -55360,6 +55360,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 42101,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30188,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19606,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15928,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14169,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9338,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7484,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10906,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 938,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6bce745f5a0d6c087526e59da5f24a1340731705",
+          "message": "feat: idiomatic Go for `*new(T)` zero values (#1673)",
+          "timestamp": "2026-11-13T20:01:09+01:00",
+          "tree_id": "e7d520fe1f4b83673acae4b117b22b84cd258c2e",
+          "url": "https://github.com/ivov/lisette/commit/6bce745f5a0d6c087526e59da5f24a1340731705"
+        },
+        "date": 1794596491706,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 155909,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 42198,
             "unit": "lines"
           },
           {
