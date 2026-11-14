@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794667764337,
+  "lastUpdate": 1794674594526,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -56606,6 +56606,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 43061,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30322,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19606,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15954,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14191,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9349,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7486,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11016,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 938,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "409e5493552ea220c88fc8ef0255a1aaa9b21991",
+          "message": "fix: treat nullable Go package vars like nullable Go fields (#1687)",
+          "timestamp": "2026-11-14T17:42:51+01:00",
+          "tree_id": "d446abfc730fb9ee392485dbd629a4c8121a2dd9",
+          "url": "https://github.com/ivov/lisette/commit/409e5493552ea220c88fc8ef0255a1aaa9b21991"
+        },
+        "date": 1794674592601,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 157170,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43154,
             "unit": "lines"
           },
           {
