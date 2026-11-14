@@ -9,14 +9,14 @@ pub type chest
 /// Direct consumer: eligible.
 pub fn NewMenu(submittable: Option<Submittable>, name: string, c: chest) -> Menu
 
-// SKIPPED: TakesCallback - opaque-unexported-struct
-// underlying type "chest" is unexported
+#[go(skipped, "underlying type `chest` is unexported")]
+pub var TakesCallback: Unknown
 
-// SKIPPED: UseAll - opaque-unexported-struct
-// underlying type "chest" is unexported
+#[go(skipped, "underlying type `chest` is unexported")]
+pub var UseAll: Unknown
 
-// SKIPPED: UseLump - opaque-unexported-struct
-// underlying type "lump" is unexported
+#[go(skipped, "underlying type `lump` is unexported")]
+pub var UseLump: Unknown
 
 pub struct Menu {
   pub Title: string,
@@ -31,7 +31,7 @@ pub interface Submittable {
 
 pub var LargeChest: chest
 
-// SKIPPED: Lumps - opaque-unexported-struct
-// underlying type "lump" is unexported
+#[go(skipped, "underlying type `lump` is unexported")]
+pub var Lumps: Unknown
 
 pub var SmallChest: chest

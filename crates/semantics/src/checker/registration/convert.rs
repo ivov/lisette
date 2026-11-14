@@ -431,6 +431,10 @@ impl TaskState {
                     annotation_span,
                     help,
                 ));
+            } else if let Some(error) =
+                self.unsupported_go_name_error(store, type_name, annotation_span)
+            {
+                self.sink.push(error);
             } else if !self.may_name_uninferred_export(store, type_name) {
                 self.sink.push(diagnostics::infer::type_not_found(
                     type_name,
@@ -682,8 +686,10 @@ impl TaskState {
         }
 
         let Some(qualified_name) = self.lookup_qualified_name(store, name) else {
-            self.sink
-                .push(diagnostics::infer::array_size_unknown_constant(name, span));
+            let error = self
+                .unsupported_go_name_error(store, name, span)
+                .unwrap_or_else(|| diagnostics::infer::array_size_unknown_constant(name, span));
+            self.sink.push(error);
             return None;
         };
         let Some(definition) = store.get_definition(&qualified_name) else {

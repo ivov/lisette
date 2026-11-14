@@ -154,6 +154,14 @@ impl Store {
             .is_some_and(|exports| exports.may_contain(member))
     }
 
+    pub(crate) fn unsupported_go_symbol(&self, package_id: &str, member: &str) -> Option<&str> {
+        self.packages
+            .get(package_id)?
+            .unsupported_go_symbols
+            .get(member)
+            .map(String::as_str)
+    }
+
     pub fn add_package(&mut self, package_id: &str) {
         if self.packages.contains_key(package_id) {
             return;

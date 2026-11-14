@@ -3,11 +3,11 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-// SKIPPED: Lookup - constraint:interface-method
-// type constraint K cannot be represented
+#[go(skipped, "type constraint K cannot be represented")]
+pub var Lookup: Unknown
 
-// SKIPPED: Show - constraint:interface-method
-// type constraint T cannot be represented
+#[go(skipped, "type constraint T cannot be represented")]
+pub var Show: Unknown
 
 pub fn Sum<T: Ordered>(values: Slice<T>) -> T
 

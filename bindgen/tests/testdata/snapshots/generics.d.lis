@@ -17,8 +17,8 @@ pub fn DrainAll<K: Sink<Slice<E>>, E>(k: K, s: Slice<E>)
 #[go(collapsed_type_params, "Array<E, 4>, E")]
 pub fn Echo4<E>(x: Array<E, 4>) -> Array<E, 4>
 
-// SKIPPED: Either - constraint:union
-// type constraint T cannot be represented
+#[go(skipped, "type constraint T cannot be represented")]
+pub var Either: Unknown
 
 /// Bound by the predeclared error interface; the bare-T return must stay T.
 pub fn FirstError<T: error>(errs: Slice<T>) -> T

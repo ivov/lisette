@@ -27,6 +27,20 @@ fn test() -> int {
 }
 
 #[test]
+fn resolve_unsupported_go_symbol() {
+    let input = r#"
+import "go:errors"
+import "go:os"
+
+fn check(err: error) -> bool {
+  let mut target: Option<Ref<os.PathError>> = None
+  errors.As(err, &target)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn resolve_underscore_assignment() {
     let input = r#"
 fn f() -> int { 1 }

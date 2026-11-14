@@ -92,6 +92,7 @@ const HEADER_LENGTH_SIZE: usize = size_of::<u64>();
 #[derive(Serialize, Deserialize)]
 pub struct GoPackageCache {
     pub definitions: HashMap<String, CachedDefinition>,
+    unsupported_go_symbols: HashMap<String, String>,
     /// Go package imports (e.g., `["go:io", "go:sync"]`).
     go_imports: Vec<String>,
 }
@@ -142,10 +143,17 @@ pub(crate) fn save_go_stdlib_cache(
             })
             .collect();
 
+        let unsupported_go_symbols = package
+            .unsupported_go_symbols
+            .iter()
+            .map(|(name, reason)| (name.to_string(), reason.clone()))
+            .collect();
+
         let go_imports = get_go_imports_from_source(package_id, target);
 
         let Ok(block) = bincode::serialize(&GoPackageCache {
             definitions,
+            unsupported_go_symbols,
             go_imports,
         }) else {
             return;
@@ -234,6 +242,12 @@ fn register_cached_go_package(
     for (qualified_name, cached_definition) in &cached.definitions {
         cached_definition.install_into(package, qualified_name.clone().into(), file_ids);
     }
+    package.unsupported_go_symbols.extend(
+        cached
+            .unsupported_go_symbols
+            .iter()
+            .map(|(name, reason)| (name.into(), reason.clone())),
+    );
 }
 
 /// Extract Go imports from a package's `.d.lis` source without parsing.
@@ -269,6 +283,7 @@ mod tests {
     fn package_presence_terminates_cached_import_cycles() {
         let package = |import: &str| GoPackageCache {
             definitions: Default::default(),
+            unsupported_go_symbols: Default::default(),
             go_imports: vec![import.to_string()],
         };
         let a = bincode::serialize(&package("go:example/b")).unwrap();
@@ -285,5 +300,27 @@ mod tests {
 
         assert!(store.has("go:example/a"));
         assert!(store.has("go:example/b"));
+    }
+
+    #[test]
+    fn unsupported_go_symbols_come_back_from_the_cache() {
+        let package = GoPackageCache {
+            definitions: Default::default(),
+            unsupported_go_symbols: [("As".to_string(), "Use `AsType`".to_string())]
+                .into_iter()
+                .collect(),
+            go_imports: Vec::new(),
+        };
+        let block = bincode::serialize(&package).unwrap();
+        let bytes = GoStdlibCache::encode(&[("go:example/errors", block.as_slice())]).unwrap();
+        let cache = GoStdlibCache::from_bytes(bytes).unwrap();
+        let mut store = Store::new();
+
+        load_cached_go_package(&mut store, "go:example/errors", &cache, Target::host());
+
+        assert_eq!(
+            store.unsupported_go_symbol("go:example/errors", "As"),
+            Some("Use `AsType`")
+        );
     }
 }

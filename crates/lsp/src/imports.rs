@@ -6,6 +6,7 @@ use rustc_hash::FxHashSet as HashSet;
 
 use deps::{ImportablePackage, TypedefLocator};
 use syntax::ast::Expression;
+use syntax::attributes::unsupported_go_symbol;
 use syntax::program::{File, FileImport, go_import_default_name};
 
 use crate::position::LineIndex;
@@ -160,6 +161,7 @@ pub(crate) fn member_completions(
     syntax::build_ast(&source, 0)
         .ast
         .iter()
+        .filter(|item| unsupported_go_symbol(item).is_none())
         .filter_map(|item| {
             let (name, kind) = public_member(item)?;
             Some(with_import(

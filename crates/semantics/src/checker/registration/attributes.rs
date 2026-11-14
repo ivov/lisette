@@ -14,6 +14,7 @@ const KNOWN_GO_HINTS: &[&str] = &[
     "incomparable",
     "read_only",
     "sentinel_minus_one",
+    "skipped",
     "superseded_by",
     "unexported",
     "value_method_set",

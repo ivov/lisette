@@ -4,7 +4,9 @@ use syntax::ast::{
     Expression, IdentifierResolution, Span, StructFields, StructKind, tuple_field_name,
 };
 use syntax::go_names;
-use syntax::program::{Definition, DefinitionBody, DotAccessResolution, NativeTypeKind};
+use syntax::program::{
+    Definition, DefinitionBody, DotAccessResolution, NativeTypeKind, go_import_default_name,
+};
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
 use super::calls::phantom_type_params;
@@ -542,6 +544,14 @@ impl InferCtx<'_> {
         else {
             if store.uninferred_package_may_export(&package_id, args.member_name) {
                 self.unify(args.expected_ty, &Type::Error, args.span);
+            } else if let Some(reason) = store.unsupported_go_symbol(&package_id, args.member_name)
+            {
+                self.sink.push(diagnostics::infer::unsupported_go_symbol(
+                    args.member_name,
+                    go_import_default_name(&package_id),
+                    reason,
+                    *args.span,
+                ));
             } else {
                 self.sink
                     .push(diagnostics::infer::function_or_value_not_found_in_package(

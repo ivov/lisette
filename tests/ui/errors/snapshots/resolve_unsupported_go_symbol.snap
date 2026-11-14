@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Unsupported Go symbol
+   ╭─[test.lis:7:3]
+ 6 │   let mut target: Option<Ref<os.PathError>> = None
+ 7 │   errors.As(err, &target)
+   ·   ────┬────
+   ·       ╰── Lisette cannot use `errors.As`
+ 8 │ }
+   ╰────
+  help: Lisette cannot write the targets that `errors.As` needs. Use `errors.AsType<E>(err)`, which returns `Option<E>` · code: [resolve.unsupported_go_symbol]

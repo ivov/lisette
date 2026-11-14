@@ -79,6 +79,8 @@ pub struct Package {
     pub files: HashMap<u32, File>,
     /// qualified name -> definition
     pub definitions: DenseMap<Symbol, Definition>,
+    /// Go symbol name -> reason Lisette cannot support it, from `#[go(skipped, "...")]`
+    pub unsupported_go_symbols: HashMap<EcoString, String>,
     /// Set when an import cycle keeps the package out of inference: nothing
     /// registers its files, so its exports are read from syntax.
     pub uninferred_exports: Option<UninferredExports>,
@@ -107,6 +109,7 @@ impl Package {
             id: id.to_string(),
             files: Default::default(),
             definitions: Default::default(),
+            unsupported_go_symbols: Default::default(),
             uninferred_exports: None,
         }
     }

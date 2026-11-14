@@ -3,8 +3,8 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-// SKIPPED: OrphanSibling - anonymous-struct
-// anonymous struct types are not supported
+#[go(skipped, "anonymous struct types are not supported")]
+pub var OrphanSibling: Unknown
 
 // SKIPPED returns-with: anonymous-struct
 // anonymous struct types are not supported
@@ -13,8 +13,8 @@
 /// bound.
 pub fn PartlyExported() -> Unknown
 
-// SKIPPED: TaggedParam - anonymous-struct
-// anonymous struct types are not supported
+#[go(skipped, "anonymous struct types are not supported")]
+pub var TaggedParam: Unknown
 
 // SKIPPED returns-with: anonymous-struct
 // anonymous struct types are not supported

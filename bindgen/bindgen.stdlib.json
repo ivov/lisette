@@ -69,6 +69,11 @@
       "uint_constant": {
         "math": ["MaxUint"]
       },
+      "skip": {
+        "errors": {
+          "As": "Lisette cannot write the targets that `errors.As` needs. Use `errors.AsType<E>(err)`, which returns `Option<E>`"
+        }
+      },
       "superseded_by": {
         "sort": {
           "Float64s": "slices.Sort",

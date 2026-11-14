@@ -1561,8 +1561,8 @@ pub var ErrUseLastResponse: error
 /// Errors used by the HTTP server.
 pub var ErrWriteAfterFlush: error
 
-// SKIPPED: LocalAddrContextKey - opaque-unexported-struct
-// underlying type "contextKey" is unexported
+#[go(skipped, "underlying type `contextKey` is unexported")]
+pub var LocalAddrContextKey: Unknown
 
 /// NoBody is an [io.ReadCloser] with no bytes. Read always returns EOF
 /// and Close always returns nil. It can be used in an outgoing client
@@ -1571,8 +1571,8 @@ pub var ErrWriteAfterFlush: error
 #[go(read_only)]
 pub var NoBody: io.ReadCloser
 
-// SKIPPED: ServerContextKey - opaque-unexported-struct
-// underlying type "contextKey" is unexported
+#[go(skipped, "underlying type `contextKey` is unexported")]
+pub var ServerContextKey: Unknown
 
 impl Client {
   /// CloseIdleConnections closes any connections on its [Transport] which

@@ -13766,6 +13766,31 @@ fn import_edits(item: &CompletionItem) -> &[TextEdit] {
 }
 
 #[test]
+fn completion_leaves_out_unsupported_go_symbols() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    for source in [
+        "import \"go:errors\"\n\nfn main() {\n  errors.~\n}\n",
+        "fn main() {\n  errors.~\n}\n",
+    ] {
+        let (source, line, character) = cursor(source);
+        client.open(TEST_URI, &source);
+
+        let response = client.completion(TEST_URI, line, character).unwrap();
+        let labels: Vec<&str> = completion_items(&response)
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
+
+        assert!(labels.contains(&"AsType"), "{labels:?}");
+        assert!(!labels.contains(&"As"), "{labels:?}");
+    }
+
+    client.shutdown();
+}
+
+#[test]
 fn completion_after_unimported_go_package_offers_its_members_and_import() {
     let mut client = TestClient::new();
     client.initialize();

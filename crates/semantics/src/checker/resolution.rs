@@ -1,6 +1,7 @@
 use super::*;
 use crate::loader;
 use std::iter;
+use syntax::program::go_import_default_name;
 
 /// Where member lookup reads a type's method set.
 enum MethodSource<'a> {
@@ -80,6 +81,23 @@ impl TaskState {
         self.imports
             .package_id(prefix)
             .is_some_and(|package_id| store.uninferred_package_may_export(package_id, member))
+    }
+
+    pub(super) fn unsupported_go_name_error(
+        &self,
+        store: &Store,
+        name: &str,
+        span: Span,
+    ) -> Option<diagnostics::LisetteDiagnostic> {
+        let (prefix, member) = name.split_once('.')?;
+        let package_id = self.imports.package_id(prefix)?;
+        let reason = store.unsupported_go_symbol(package_id, member)?;
+        Some(diagnostics::infer::unsupported_go_symbol(
+            member,
+            go_import_default_name(package_id),
+            reason,
+            span,
+        ))
     }
 
     /// Resolve a simple name (e.g., "Sunday") to a public definition in an imported package.

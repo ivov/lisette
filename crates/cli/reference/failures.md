@@ -60,7 +60,7 @@ fn read_config(path: string) -> Result<Config, error> {
 }
 ```
 
-An `Ok` passes through unchanged. An `Err` keeps the original error inside, so `errors.Is` and `errors.As` still match it:
+An `Ok` passes through unchanged. An `Err` keeps the original error inside, so `errors.Is` and `errors.AsType` still match it:
 
 ```lisette
 fn start() {

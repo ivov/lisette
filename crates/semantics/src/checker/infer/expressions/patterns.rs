@@ -663,6 +663,10 @@ impl InferCtx<'_> {
         if self.may_name_uninferred_export(self.store, identifier) {
             return self.rejected_pattern(span);
         }
+        if let Some(error) = self.unsupported_go_name_error(self.store, identifier, span) {
+            self.sink.push(error);
+            return self.rejected_pattern(span);
+        }
 
         let resolved_ty = expected_ty.resolve_in(&self.env);
         if matches!(identifier, "Some" | "None") && resolved_ty.is_value_and_bool() {
@@ -791,7 +795,9 @@ impl InferCtx<'_> {
         span: Span,
         kind: BindingKind,
     ) -> Pattern {
-        if !self.may_name_uninferred_export(self.store, identifier) {
+        if let Some(error) = self.unsupported_go_name_error(self.store, identifier, span) {
+            self.sink.push(error);
+        } else if !self.may_name_uninferred_export(self.store, identifier) {
             let diagnostic = self
                 .variant_shape_diagnostic(identifier, fields, expected_ty, span, kind)
                 .unwrap_or_else(|| diagnostics::infer::struct_not_found(identifier, span));

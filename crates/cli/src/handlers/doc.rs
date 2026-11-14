@@ -9,6 +9,7 @@ use stdlib::{
 };
 use syntax::ast::EnumVariant;
 use syntax::ast::{Annotation, Binding, Expression, Generic, Pattern, StructFields, VariantFields};
+use syntax::attributes::unsupported_go_symbol;
 use syntax::display::annotation_to_string;
 use syntax::doc::{dedent, drop_callout_lines, split_example};
 use syntax::program::DefinitionBody;
@@ -70,6 +71,7 @@ struct GoPackageIndex {
     functions: Vec<FunctionInfo>,
     constants: Vec<ConstInfo>,
     variables: Vec<VarInfo>,
+    unsupported: Vec<(String, String)>,
 }
 
 fn generics_to_string(generics: &[Generic]) -> String {
@@ -286,6 +288,7 @@ struct SourceIndex {
     functions: Vec<FunctionInfo>,
     constants: Vec<ConstInfo>,
     variables: Vec<VarInfo>,
+    unsupported: Vec<(String, String)>,
 }
 
 fn type_entry(
@@ -313,9 +316,16 @@ fn index_source(source: &str, style: IndexStyle) -> SourceIndex {
         functions: Vec::new(),
         constants: Vec::new(),
         variables: Vec::new(),
+        unsupported: Vec::new(),
     };
 
     for expression in &parse_result.ast {
+        if let Some((name, reason)) = unsupported_go_symbol(expression) {
+            index
+                .unsupported
+                .push((name.to_string(), reason.to_string()));
+            continue;
+        }
         match expression {
             Expression::TypeAlias {
                 doc,
@@ -597,6 +607,7 @@ fn build_go_package_index(source: &str, package: &str) -> GoPackageIndex {
         functions: index.functions,
         constants: index.constants,
         variables: index.variables,
+        unsupported: index.unsupported,
     }
 }
 
@@ -1482,6 +1493,19 @@ fn doc_go_package(query: &str) -> i32 {
                 return 0;
             }
 
+            if let Some((name, reason)) = index
+                .unsupported
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case(item))
+            {
+                cli_error!(
+                    format!("`go:{}.{}` is not supported", package, name),
+                    reason,
+                    format!("Run `lis doc go:{}` to see available items", package)
+                );
+                return 1;
+            }
+
             let help = if let Some(s) = suggest_go_item(item, &index) {
                 format!("Did you mean `lis doc go:{}.{}`?", package, s)
             } else {
@@ -2009,6 +2033,34 @@ mod tests {
         assert_eq!(
             min.signature,
             "fn min<T: Ordered>(x: T, rest: VarArgs<T>) -> T"
+        );
+    }
+
+    #[test]
+    fn go_package_index_keeps_unsupported_symbols_apart() {
+        let source = r#"
+#[go(skipped, "Use `AsType` instead")]
+pub var As: Unknown
+
+#[go(skipped, "Go expands this builtin at compile time")]
+pub type Sizeof
+
+pub fn Is(err: error, target: error) -> bool
+"#;
+        let index = build_go_package_index(source, "errors");
+
+        assert!(index.variables.is_empty());
+        assert!(index.types.is_empty());
+        assert_eq!(index.functions.len(), 1);
+        assert_eq!(
+            index.unsupported,
+            [
+                ("As".to_string(), "Use `AsType` instead".to_string()),
+                (
+                    "Sizeof".to_string(),
+                    "Go expands this builtin at compile time".to_string()
+                ),
+            ]
         );
     }
 
