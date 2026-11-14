@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794666359984,
+  "lastUpdate": 1794666689951,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -56478,6 +56478,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "bindgen",
             "value": 10991,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 938,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "dbc5669be1f47d64a261396a60b13ea49db614b9",
+          "message": "perf: reduce memory of write analysis in Go bindings (#1685)",
+          "timestamp": "2026-11-14T15:31:04+01:00",
+          "tree_id": "2c5680c5fbf6e0263c8561df2c712738dfce27ad",
+          "url": "https://github.com/ivov/lisette/commit/dbc5669be1f47d64a261396a60b13ea49db614b9"
+        },
+        "date": 1794666687384,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 157077,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43061,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30322,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19606,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15954,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14191,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9349,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7486,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11016,
             "unit": "lines"
           },
           {
