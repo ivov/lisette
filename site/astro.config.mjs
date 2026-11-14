@@ -16,6 +16,8 @@ export default defineConfig({
       title: "Lisette",
       description: "Little language inspired by Rust that compiles to Go.",
       titleDelimiter: "·",
+      markdown: { processedDirs: ["./src/content/changelog-older/"] },
+      routeMiddleware: "./src/route-data.ts",
       customCss: [
         "@fontsource-variable/inter",
         "@fontsource/lexend/latin-600.css",

@@ -25,10 +25,12 @@ const segments = headingSegments(entry.body);
 <script>
   const CURRENT = "aria-current";
 
-  for (const toc of document.querySelectorAll("starlight-toc, mobile-starlight-toc")) {
+  const markLastAtBottom = (toc: Element) => {
     const links = [...toc.querySelectorAll("a")];
-    const last = links.at(-1);
-    if (!last) continue;
+    const last = links
+      .filter((link) => document.getElementById(decodeURIComponent(link.hash.slice(1))))
+      .at(-1);
+    if (!last) return;
 
     let displaced: HTMLAnchorElement | null = null;
     const label = toc.querySelector(".display-current");
@@ -64,5 +66,87 @@ const segments = headingSegments(entry.body);
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
     schedule();
+    return () => {
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+    };
+  };
+
+  const teardowns = new Map<Element, () => void>();
+  const markAll = () => {
+    for (const toc of document.querySelectorAll("starlight-toc, mobile-starlight-toc")) {
+      const teardown = markLastAtBottom(toc);
+      if (teardown) teardowns.set(toc, teardown);
+    }
+  };
+  markAll();
+
+  const holder = document.getElementById("changelog-older");
+  if (holder) {
+    let loading: Promise<void> | undefined;
+
+    const offerRetry = () => {
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.textContent = "Could not load older releases. Try again.";
+      retry.addEventListener("click", () => loadOlder());
+      holder.replaceChildren(retry);
+    };
+
+    const loadOlder = () =>
+      (loading ??= (async () => {
+        nearEnd.disconnect();
+        holder.replaceChildren();
+        try {
+          const response = await fetch(holder.dataset.src!);
+          if (!response.ok) throw new Error(String(response.status));
+          const range = document.createRange();
+          range.selectNode(holder);
+          holder.replaceWith(range.createContextualFragment(await response.text()));
+        } catch {
+          loading = undefined;
+          offerRetry();
+          return;
+        }
+        // Starlight's scroll-spy reads the headings only once.
+        for (const [toc, teardown] of teardowns) {
+          teardown();
+          toc.replaceWith(toc.cloneNode(true));
+        }
+        teardowns.clear();
+        markAll();
+      })());
+
+    const reveal = async (hash: string) => {
+      const id = decodeURIComponent(hash.slice(1));
+      if (!id || document.getElementById(id)) return;
+      await loadOlder();
+      document.getElementById(id)?.scrollIntoView();
+    };
+
+    const nearEnd = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadOlder();
+      },
+      { rootMargin: "0px 0px 100% 0px" },
+    );
+    nearEnd.observe(holder);
+
+    document.addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") loadOlder();
+    });
+
+    document.addEventListener("click", (event) => {
+      const link = (event.target as Element).closest?.("a[href^='#']");
+      if (!link) return;
+      const hash = link.getAttribute("href")!;
+      if (document.getElementById(decodeURIComponent(hash.slice(1)))) return;
+      event.preventDefault();
+      history.pushState(null, "", hash);
+      reveal(hash);
+    });
+
+    if (location.hash) reveal(location.hash);
+    window.addEventListener("hashchange", () => reveal(location.hash));
   }
 </script>

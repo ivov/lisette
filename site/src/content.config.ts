@@ -1,4 +1,5 @@
 import { defineCollection } from "astro:content";
+import { glob } from "astro/loaders";
 import { docsLoader, i18nLoader } from "@astrojs/starlight/loaders";
 import { docsSchema, i18nSchema } from "@astrojs/starlight/schema";
 import { topicSchema } from "starlight-sidebar-topics/schema";
@@ -10,6 +11,9 @@ export const collections = {
   docs: defineCollection({
     loader: docsLoader({ generateId: withDocsPrefix }),
     schema: docsSchema({ extend: topicSchema }),
+  }),
+  changelogOlder: defineCollection({
+    loader: glob({ pattern: "changelog.md", base: "./src/content/changelog-older" }),
   }),
   // Carries the one string overridden in `src/content/i18n/en.json`.
   i18n: defineCollection({ loader: i18nLoader(), schema: i18nSchema() }),
