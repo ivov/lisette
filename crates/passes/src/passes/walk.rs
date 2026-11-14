@@ -1,6 +1,6 @@
 use diagnostics::LocalSink;
 use rustc_hash::FxHashSet as HashSet;
-use syntax::ast::{Expression, Pattern, SelectArm, Span};
+use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, Span};
 use syntax::program::{File, Package};
 
 use semantics::facts::Facts;
@@ -75,6 +75,15 @@ pub enum PatternRole {
     Parameter,
     #[default]
     Binding,
+    GuardedArm,
+}
+
+fn arm_role(arm: &MatchArm) -> PatternRole {
+    if arm.has_guard() {
+        PatternRole::GuardedArm
+    } else {
+        PatternRole::Binding
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -223,7 +232,7 @@ fn visit_node<'a, C, E, P, X>(
         }
         Expression::Match { arms, .. } => {
             for arm in arms {
-                visit_pattern(&arm.pattern, PatternRole::Binding, ctx, pattern_visitor);
+                visit_pattern(&arm.pattern, arm_role(arm), ctx, pattern_visitor);
             }
         }
         Expression::Select { arms, .. } => {
@@ -238,7 +247,7 @@ fn visit_node<'a, C, E, P, X>(
                         for match_arm in match_arms {
                             visit_pattern(
                                 &match_arm.pattern,
-                                PatternRole::Binding,
+                                arm_role(match_arm),
                                 ctx,
                                 pattern_visitor,
                             );

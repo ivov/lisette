@@ -2121,6 +2121,31 @@ fn test(e: E) -> int {
 }
 
 #[test]
+fn or_pattern_with_bindings_on_tuple_subject_evaluates_each_element_once() {
+    let input = r#"
+import "go:fmt"
+
+fn first() -> Option<int> {
+  fmt.Println("first")
+  None
+}
+
+fn second() -> Option<int> {
+  fmt.Println("second")
+  Some(4)
+}
+
+fn pick() -> int {
+  match (first(), second()) {
+    (Some(x), _) | (_, Some(x)) => x,
+    _ => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn or_pattern_strings() {
     let input = r#"
 fn test(s: string) -> int {

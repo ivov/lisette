@@ -761,6 +761,71 @@ fn code_action_absent_away_from_diagnostic() {
     client.shutdown();
 }
 
+fn edited_columns(edit: Option<WorkspaceEdit>) -> Vec<(u32, u32)> {
+    let changes = edit.expect("rename should succeed").changes.unwrap();
+    let mut columns: Vec<(u32, u32)> = changes
+        .get(&Url::parse(TEST_URI).unwrap())
+        .unwrap()
+        .iter()
+        .map(|edit| (edit.range.start.line, edit.range.start.character))
+        .collect();
+    columns.sort();
+    columns
+}
+
+#[test]
+fn rename_or_pattern_binding_edits_every_alternative() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+enum Event { KeyDown(int), KeyUp(int), Click }
+fn code(e: Event) -> int {
+  match e {
+    Event.KeyDown(c) | Event.KeyUp(c) => c + 1,
+    Event.Click => 0,
+  }
+}",
+    );
+
+    let from_body = edited_columns(client.rename(TEST_URI, 3, 41, "key"));
+    assert_eq!(from_body, vec![(3, 18), (3, 35), (3, 41)]);
+
+    let from_second_alternative = edited_columns(client.rename(TEST_URI, 3, 35, "key"));
+    assert_eq!(from_second_alternative, vec![(3, 18), (3, 35), (3, 41)]);
+
+    client.shutdown();
+}
+
+#[test]
+fn rename_from_later_or_pattern_alias_and_rest_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
+fn f(o: int, s: Slice<int>) -> int {
+  match o {
+    1 as x | 2 as x => x,
+    _ => 0,
+  }
+  match s {
+    [1, ..xs] | [2, ..xs] => xs.length(),
+    _ => 0,
+  }
+}",
+    );
+
+    let alias = edited_columns(client.rename(TEST_URI, 2, 18, "y"));
+    assert_eq!(alias, vec![(2, 9), (2, 18), (2, 23)]);
+
+    let rest = edited_columns(client.rename(TEST_URI, 6, 22, "ys"));
+    assert_eq!(rest, vec![(6, 10), (6, 22), (6, 29)]);
+
+    client.shutdown();
+}
+
 #[test]
 fn rename_rejects_keywords() {
     let mut client = TestClient::new();

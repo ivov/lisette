@@ -5064,6 +5064,25 @@ fn test() {
 }
 
 #[test]
+fn match_or_alternatives_in_guarded_arm_are_not_redundant() {
+    let input = r#"
+fn test(n: int, retry: fn() -> bool) -> int {
+  match n {
+    _ | 0 if retry() => 1,
+    1 | 1 if retry() => 2,
+    _ => 0,
+  }
+}
+"#;
+    let result = infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "a failed guard retries a later alternative, so it is reachable, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn infer_tuple_size_mismatch() {
     let input = r#"
 fn test() {
