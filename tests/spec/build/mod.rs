@@ -9528,6 +9528,45 @@ fn renamed_test_handle_param_is_the_assert_target() {
 }
 
 #[test]
+fn assert_and_log_take_their_own_line_directive() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file(
+        "math",
+        "core.test.lis",
+        "#[test]\nfn checks(t: TestContext) {\n  let n = add(1, 2)\n  assert n == 3\n  t.log(n)\n  let xs = [n]\n  assert xs.equals([3])\n}",
+    );
+
+    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", true, true);
+    let go = outputs
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go();
+
+    for expected in [
+        "//line core.test.lis:4:3\n\tif n != 3 {\n//line core.test.lis:4:3\n\t\tt.FailAssert(",
+        "//line core.test.lis:5:3\n\t{\n//line core.test.lis:5:3\n\t\tt.Log(",
+        "//line core.test.lis:7:3\n\t{\n//line core.test.lis:7:3\n\t\tassertLeft := xs\n",
+        "//line core.test.lis:7:3\n\t\t\tt.FailAssert(",
+    ] {
+        assert!(
+            go.contains(expected),
+            "an `assert` or `t.log` must carry its own line, expected:\n{expected}\ngot:\n{go}"
+        );
+    }
+}
+
+#[test]
 fn assert_lowers_to_decomposed_failure_call() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
