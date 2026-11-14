@@ -356,6 +356,139 @@ fn close_body(resp: Ref<http.Response>) {
     assert_emit_snapshot!(input);
 }
 
+const NULLABLE_VARS_TYPEDEF: &str = r#"
+import "go:io"
+
+pub struct E { pub Msg: string }
+
+pub var Output: Option<io.Writer>
+pub var Target: Option<mut Ref<E>>
+
+pub fn Use(w: Option<io.Writer>)
+pub fn Inspect(e: Option<mut Ref<E>>)
+pub fn Bump(n: Option<int>)
+pub fn Scan(w: Option<Ref<Slice<Option<io.Writer>>>>)
+
+pub struct Holder {
+  pub Next: Option<mut Ref<E>>,
+  pub Count: Option<int>,
+  pub Writers: Option<Ref<Slice<Option<io.Writer>>>>,
+}
+"#;
+
+#[test]
+fn go_nullable_var_reads_bridge_to_option() {
+    let input = r#"
+import "go:example.com/vars"
+
+fn has_output() -> bool {
+  vars.Output.is_some()
+}
+
+fn message() -> string {
+  match vars.Target {
+    Some(e) => e.Msg,
+    None => "none",
+  }
+}
+
+fn has_target() -> bool {
+  let target = vars.Target
+  target.is_some()
+}
+
+fn parenthesized() -> bool {
+  match (vars.Target) {
+    Some(_) => true,
+    None => false,
+  }
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(
+        input,
+        &[("go:example.com/vars", NULLABLE_VARS_TYPEDEF)]
+    );
+}
+
+#[test]
+fn go_nullable_var_read_imports_its_package() {
+    let input = r#"
+import "go:example.com/vars"
+
+fn has_output() -> bool {
+  let output = vars.Output
+  output.is_some()
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(
+        input,
+        &[("go:example.com/vars", NULLABLE_VARS_TYPEDEF)]
+    );
+}
+
+#[test]
+fn go_nullable_var_writes_unwrap_option() {
+    let input = r#"
+import "go:example.com/vars"
+
+fn clear() {
+  vars.Output = None
+}
+
+fn set(e: mut Ref<vars.E>) {
+  vars.Target = Some(e)
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(
+        input,
+        &[("go:example.com/vars", NULLABLE_VARS_TYPEDEF)]
+    );
+}
+
+#[test]
+fn go_nullable_slots_pass_to_go_parameters() {
+    let input = r#"
+import "go:example.com/vars"
+import "go:io"
+
+fn forward() {
+  vars.Inspect(vars.Target)
+}
+
+fn forward_parenthesized() {
+  vars.Inspect((vars.Target))
+}
+
+fn forward_field(h: mut Ref<vars.Holder>) {
+  vars.Inspect(h.Next)
+}
+
+fn forward_pointer_to_value(h: mut Ref<vars.Holder>) {
+  vars.Bump(h.Count)
+}
+
+fn forward_nested_interface(h: Ref<vars.Holder>) {
+  vars.Scan(h.Writers)
+}
+
+fn forward_interface() {
+  vars.Use(vars.Output)
+}
+
+fn takes(w: Option<io.Writer>) -> bool {
+  w.is_some()
+}
+
+fn forward_to_lisette() -> bool {
+  takes(vars.Output)
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(
+        input,
+        &[("go:example.com/vars", NULLABLE_VARS_TYPEDEF)]
+    );
+}
+
 #[test]
 fn go_struct_autofill_writes_omitted_named_map_field() {
     let input = r#"

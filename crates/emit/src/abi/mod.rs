@@ -121,11 +121,12 @@ impl Planner<'_> {
                 layout,
             };
         }
-        let origin = if self.is_go_callable(value) {
-            slot_origin
-        } else {
-            SlotOrigin::Lisette
-        };
+        let origin =
+            if self.is_go_callable(value) && self.facts.resolve_to_function_type(&ty).is_some() {
+                slot_origin
+            } else {
+                SlotOrigin::Lisette
+            };
         let layout = self.value_layout(&ty, origin);
         let closure = is_closure_literal(value);
         if !closure && !ctx.result_fills_type_parameter() {

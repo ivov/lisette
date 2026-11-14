@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:example.com/vars"
+  
+  fn clear() {
+    vars.Output = None
+  }
+  
+  fn set(e: mut Ref<vars.E>) {
+    vars.Target = Some(e)
+  }
+---
+package main
+
+import "example.com/vars"
+
+func clear_() {
+	vars.Output = nil
+}
+
+func set(e *vars.E) {
+	vars.Target = e
+}

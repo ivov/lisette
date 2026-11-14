@@ -547,6 +547,11 @@ impl Planner<'_> {
         {
             return elements.get(index).cloned();
         }
+        if let Some(package) = owner_type.as_import_namespace()
+            && let Some(layout) = self.go_variable_layout(package, field, value_type)
+        {
+            return Some(layout);
+        }
         let owner = match declaring_type {
             Some(declaring) => declaring.clone(),
             None => self.resolve_nominal(owner_type)?.id,
@@ -570,6 +575,18 @@ impl Planner<'_> {
             &declaration,
         );
         Some(layout)
+    }
+
+    fn go_variable_layout(
+        &self,
+        package: &str,
+        member: &str,
+        value_type: &Type,
+    ) -> Option<ValueLayout> {
+        let slot = self
+            .facts
+            .go_variable(Symbol::from_parts(package, member).as_str())?;
+        Some(self.value_layout_with_declaration(value_type, slot.origin, &slot.declared_type))
     }
 
     pub(crate) fn is_go_abi_type(&self, ty: &Type) -> bool {

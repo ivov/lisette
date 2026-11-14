@@ -1,0 +1,60 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:example.com/vars"
+  
+  fn has_output() -> bool {
+    vars.Output.is_some()
+  }
+  
+  fn message() -> string {
+    match vars.Target {
+      Some(e) => e.Msg,
+      None => "none",
+    }
+  }
+  
+  fn has_target() -> bool {
+    let target = vars.Target
+    target.is_some()
+  }
+  
+  fn parenthesized() -> bool {
+    match (vars.Target) {
+      Some(_) => true,
+      None => false,
+    }
+  }
+---
+package main
+
+import (
+	"example.com/vars"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func hasOutput() bool {
+	ret := vars.Output
+	return !lisette.IsNilInterface(ret)
+}
+
+func message() string {
+	if e := vars.Target; e != nil {
+		return e.Msg
+	}
+	return "none"
+}
+
+func hasTarget() bool {
+	raw := vars.Target
+	target := lisette.OptionFromNilable[*vars.E](raw, raw == nil)
+	return target.IsSome()
+}
+
+func parenthesized() bool {
+	if ret := vars.Target; ret != nil {
+		return true
+	}
+	return false
+}

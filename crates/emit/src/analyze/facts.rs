@@ -371,6 +371,10 @@ impl<'a> EmitFacts<'a> {
         self.shared.globals.go_abi_catalog.field(owner, field)
     }
 
+    pub(crate) fn go_variable(&self, qualified_name: &str) -> Option<&GoSlotDescriptor> {
+        self.shared.globals.go_abi_catalog.variable(qualified_name)
+    }
+
     pub(crate) fn is_go_imported_type(&self, qualified_name: &str) -> bool {
         self.shared
             .globals
@@ -410,7 +414,10 @@ fn as_interface(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Option<
     .then(|| id.to_string())
 }
 
-fn resolve_to_function_type(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Option<Type> {
+pub(crate) fn resolve_to_function_type(
+    definitions: &HashMap<Symbol, Definition>,
+    ty: &Type,
+) -> Option<Type> {
     let resolved = peel_alias(definitions, ty);
     if matches!(resolved, Type::Function(_)) {
         return Some(resolved);
