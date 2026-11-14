@@ -1,0 +1,14 @@
+{
+  "overrides": {
+    "types": {
+      "skip": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/skip_override": {
+          "Box": "Use FindAll instead",
+          "Find": "Use FindAll instead",
+          "Limit": "Use FindAll instead",
+          "Target": "Use FindAll instead"
+        }
+      }
+    }
+  }
+}

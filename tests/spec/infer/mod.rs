@@ -18,5 +18,6 @@ mod recover;
 mod refutability;
 mod r#try;
 mod types;
+mod unsupported_go_symbol;
 mod write_permission;
 mod zero;

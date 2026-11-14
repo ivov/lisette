@@ -322,6 +322,14 @@ func (c *Converter) convert(symbolExport extract.SymbolExport) ConvertResult {
 		Doc:  symbolExport.Doc,
 	}
 
+	switch symbolExport.Kind {
+	case extract.ExportFunction, extract.ExportVariable, extract.ExportConstant:
+		if reason, ok := c.cfg.SkipReason(c.currentPkgPath, symbolExport.Name); ok {
+			result.SkipReason = &SkipReason{Code: "skip-override", Message: reason}
+			return result
+		}
+	}
+
 	synthCheckpoint := c.synthMark()
 	c.symbolKey = symbolExport.Name
 

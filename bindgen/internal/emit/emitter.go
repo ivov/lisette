@@ -285,14 +285,26 @@ func (e *Emitter) EmitUnloadableNote(firstError string) {
 	e.buf.WriteString("\n")
 }
 
-func (e *Emitter) EmitSkipped(result convert.ConvertResult) {
-	fmt.Fprintf(&e.buf, "// SKIPPED: %s - %s\n", result.Name, result.SkipReason.Code)
-	fmt.Fprintf(&e.buf, "// %s\n", result.SkipReason.Message)
+// The checker reads attribute strings without decoding escapes, so a quoted Go name becomes code.
+func skippedReason(reason *convert.SkipReason) string {
+	return strings.ReplaceAll(reason.Message, `"`, "`")
+}
 
-	if result.SkipReason.EmitOpaqueType {
+func (e *Emitter) EmitSkipped(result convert.ConvertResult) {
+	switch {
+	case result.SkipReason.EmitOpaqueType:
+		fmt.Fprintf(&e.buf, "// SKIPPED: %s - %s\n", result.Name, result.SkipReason.Code)
+		fmt.Fprintf(&e.buf, "// %s\n", result.SkipReason.Message)
 		e.buf.WriteString(restrictionMarkers(result, false))
 		fmt.Fprintf(&e.buf, "pub type %s%s\n", result.Name, result.TypeParams.DeclBlock())
 		e.stats.types++
+	case result.Kind == extract.ExportMethod:
+		fmt.Fprintf(&e.buf, "// SKIPPED: %s - %s\n", result.Name, result.SkipReason.Code)
+		fmt.Fprintf(&e.buf, "// %s\n", result.SkipReason.Message)
+	case result.Kind == extract.ExportType:
+		fmt.Fprintf(&e.buf, "#[go(skipped, \"%s\")]\npub type %s\n", skippedReason(result.SkipReason), result.Name)
+	default:
+		fmt.Fprintf(&e.buf, "#[go(skipped, \"%s\")]\npub var %s: Unknown\n", skippedReason(result.SkipReason), result.Name)
 	}
 
 	e.buf.WriteString("\n")

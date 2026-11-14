@@ -3,28 +3,8 @@
 // Go: 1.26.7
 // Lisette: 0.13.0
 
-/// As finds the first error in err's tree that matches target, and if one is found, sets
-/// target to that error value and returns true. Otherwise, it returns false.
-/// 
-/// For most uses, prefer [AsType]. As is equivalent to [AsType] but sets its target
-/// argument rather than returning the matching error and doesn't require its target
-/// argument to implement error.
-/// 
-/// The tree consists of err itself, followed by the errors obtained by repeatedly
-/// calling its Unwrap() error or Unwrap() []error method. When err wraps multiple
-/// errors, As examines err followed by a depth-first traversal of its children.
-/// 
-/// An error matches target if the error's concrete value is assignable to the value
-/// pointed to by target, or if the error has a method As(any) bool such that
-/// As(target) returns true. In the latter case, the As method is responsible for
-/// setting target.
-/// 
-/// An error type might provide an As method so it can be treated as if it were a
-/// different error type.
-/// 
-/// As panics if target is not a non-nil pointer to either a type that implements
-/// error, or to any interface type.
-pub fn As(err: error, target: mut Unknown) -> bool
+#[go(skipped, "Lisette cannot write the targets that `errors.As` needs. Use `errors.AsType<E>(err)`, which returns `Option<E>`")]
+pub var As: Unknown
 
 /// AsType finds the first error in err's tree that matches the type E, and
 /// if one is found, returns that error value and true. Otherwise, it

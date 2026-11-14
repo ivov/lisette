@@ -1,8 +1,11 @@
 use super::*;
 use crate::analysis::GoPackageSources;
 use crate::diagnostics::ReplaceImporter;
+use ecow::EcoString;
+use rustc_hash::FxHashMap as HashMap;
 use std::mem;
 use syntax::ast::ImportAlias;
+use syntax::attributes::unsupported_go_symbol;
 
 impl TaskState {
     /// Register a Go package (stdlib or third-party). Unlike regular packages,
@@ -109,6 +112,11 @@ impl TaskState {
             }
         }
 
+        let unsupported_go_symbols = take_unsupported_go_symbols(&mut file.items);
+        store
+            .get_package_mut(package_id)
+            .expect("package was added above")
+            .unsupported_go_symbols = unsupported_go_symbols;
         store.store_file(file);
 
         self.with_file_context_mut(
@@ -129,4 +137,16 @@ impl TaskState {
             },
         );
     }
+}
+
+fn take_unsupported_go_symbols(items: &mut Vec<Expression>) -> HashMap<EcoString, String> {
+    let mut symbols = HashMap::default();
+    items.retain(|item| {
+        let Some((name, reason)) = unsupported_go_symbol(item) else {
+            return true;
+        };
+        symbols.insert(name.clone(), reason.to_string());
+        false
+    });
+    symbols
 }

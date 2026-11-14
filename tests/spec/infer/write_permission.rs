@@ -2791,13 +2791,13 @@ fn main() {
 }
 
 #[test]
-fn go_errors_as_into_read_only_target_refused() {
+fn go_asn1_unmarshal_into_read_only_target_refused() {
     infer(
-        r#"import "go:errors"
+        r#"import "go:encoding/asn1"
 import "go:os"
-fn check(err: error) -> bool {
+fn decode(bytes: Slice<byte>, err: error) {
   let target: Ref<os.PathError> = &os.PathError { Op: "", Path: "", Err: err }
-  errors.As(err, &target)
+  let _ = asn1.Unmarshal(bytes, &target)
 }"#,
     )
     .assert_infer_code_once("needs_writable");

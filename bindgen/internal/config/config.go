@@ -81,6 +81,8 @@ type TypeOverrides struct {
 	ClosedDomain map[string][]string `json:"closed_domain"`
 	// SupersededBy maps each superseded symbol to its successor as "pkg.Name". Curated, never derived.
 	SupersededBy map[string]map[string]string `json:"superseded_by"`
+	// Skip maps each function, var or constant that Lisette cannot support to the reason given to the user. Curated, never derived.
+	Skip map[string]map[string]string `json:"skip"`
 	// UintConstant types an untyped constant above MaxInt64 as `uint`, not `uint64`.
 	UintConstant map[string][]string `json:"uint_constant"`
 	// Curated per type from Go's docs, never derived from field shape.
@@ -427,6 +429,14 @@ func (c *Config) SupersededBy(pkg, name string) (string, bool) {
 	}
 	successor, ok := c.Overrides.Types.SupersededBy[pkg][name]
 	return successor, ok
+}
+
+func (c *Config) SkipReason(pkg, name string) (string, bool) {
+	if c == nil {
+		return "", false
+	}
+	reason, ok := c.Overrides.Types.Skip[pkg][name]
+	return reason, ok
 }
 
 func (c *Config) IsUintConstant(pkg, name string) bool {

@@ -3,6 +3,9 @@
 
 use crate::ast::Attribute;
 use crate::ast::AttributeArg;
+use crate::ast::Expression;
+use ecow::EcoString;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttributeTarget {
     Struct,
@@ -164,4 +167,28 @@ pub fn test_attribute(attributes: &[Attribute]) -> Option<&Attribute> {
 
 pub fn has_test_attribute(attributes: &[Attribute]) -> bool {
     test_attribute(attributes).is_some()
+}
+
+/// The name and reason of a typedef placeholder marked `#[go(skipped, "<reason>")]`.
+pub fn unsupported_go_symbol(item: &Expression) -> Option<(&EcoString, &str)> {
+    let (Expression::VariableDeclaration {
+        name, attributes, ..
+    }
+    | Expression::TypeAlias {
+        name, attributes, ..
+    }) = item
+    else {
+        return None;
+    };
+    let marker = attributes.iter().find(|attribute| {
+        attribute.name == "go"
+            && attribute
+                .args
+                .iter()
+                .any(|arg| matches!(arg, AttributeArg::Flag(flag) if flag == "skipped"))
+    })?;
+    marker.args.iter().find_map(|arg| match arg {
+        AttributeArg::String(reason) => Some((name, reason.as_str())),
+        _ => None,
+    })
 }

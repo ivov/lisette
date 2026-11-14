@@ -113,8 +113,40 @@ func TestNilConfigAccessorsDoNotPanic(t *testing.T) {
 	if _, ok := cfg.SupersededBy("io", "Foo"); ok {
 		t.Error("SupersededBy")
 	}
+	if _, ok := cfg.SkipReason("io", "Foo"); ok {
+		t.Error("SkipReason")
+	}
 	if cfg.IsUintConstant("io", "Foo") {
 		t.Error("IsUintConstant")
+	}
+}
+
+func TestSkipReason(t *testing.T) {
+	cfg := &Config{
+		Overrides: Overrides{
+			Types: TypeOverrides{
+				Skip: map[string]map[string]string{
+					"errors": {"As": "Use errors.AsType"},
+				},
+			},
+		},
+	}
+
+	cases := []struct {
+		pkg  string
+		name string
+		want string
+		ok   bool
+	}{
+		{"errors", "As", "Use errors.AsType", true},
+		{"errors", "Is", "", false},
+		{"io", "As", "", false},
+	}
+	for _, c := range cases {
+		got, ok := cfg.SkipReason(c.pkg, c.name)
+		if got != c.want || ok != c.ok {
+			t.Errorf("SkipReason(%q, %q) = %q, %v; want %q, %v", c.pkg, c.name, got, ok, c.want, c.ok)
+		}
 	}
 }
 

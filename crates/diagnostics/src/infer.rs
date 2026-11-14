@@ -507,6 +507,18 @@ pub fn function_or_value_not_found_in_package(
         .with_help("Ensure the name is exported and spelled correctly")
 }
 
+pub fn unsupported_go_symbol(
+    name: &str,
+    package: &str,
+    reason: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Unsupported Go symbol")
+        .with_resolve_code("unsupported_go_symbol")
+        .with_span_label(&span, format!("Lisette cannot use `{}.{}`", package, name))
+        .with_help(reason)
+}
+
 pub fn receiver_type_mismatch(
     impl_type: &str,
     receiver_type: &str,
