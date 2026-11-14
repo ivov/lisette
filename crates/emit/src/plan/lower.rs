@@ -411,7 +411,10 @@ impl Planner<'_> {
                 self.directed_at(expression, statement)
             }
             Expression::WhileLet { .. } => self.lower_while_let_statement(expression),
-            Expression::Assert { .. } => self.lower_assert_statement(expression).into(),
+            Expression::Assert { .. } => {
+                let statement = self.lower_assert_statement(expression);
+                self.directed_at(expression, statement)
+            }
             Expression::Struct { .. }
             | Expression::Enum { .. }
             | Expression::TypeAlias { .. }
@@ -420,7 +423,8 @@ impl Planner<'_> {
                 unreachable!("the parser rejects item definitions inside function bodies")
             }
             Expression::Call { .. } if self.is_test_log_call(expression) => {
-                self.lower_test_log_statement(expression).into()
+                let statement = self.lower_test_log_statement(expression);
+                self.directed_at(expression, statement)
             }
             _ => self.lower_expression_statement(expression),
         }
