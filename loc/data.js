@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794675295922,
+  "lastUpdate": 1794677344512,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -56774,6 +56774,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/3e2c06db9a67bc9c92042a0252efa9b45be6a7ce"
         },
         "date": 1794675291948,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 157170,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43154,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30322,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19606,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15954,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14191,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9349,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7486,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11016,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 938,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4d2181a00c7a82e6a34d588e873c169eb2a0880c",
+          "message": "chore: mark more third-party Go lib vars as non-nilable (#1689)",
+          "timestamp": "2026-11-14T18:28:43+01:00",
+          "tree_id": "3a9a44014480ab660297648cf574ea54c8deb99b",
+          "url": "https://github.com/ivov/lisette/commit/4d2181a00c7a82e6a34d588e873c169eb2a0880c"
+        },
+        "date": 1794677342960,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
