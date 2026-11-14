@@ -10,7 +10,7 @@ use toml_edit::de;
 #[derive(Debug)]
 pub struct DependencyTable {
     entries: BTreeMap<String, DependencyEntry>,
-    document: toml_edit::ImDocument<String>,
+    document: toml_edit::Document<String>,
 }
 
 #[derive(Debug)]
@@ -60,7 +60,7 @@ const TABLE: &str = "dependencies";
 const GO: &str = "go";
 
 pub fn parse_dependency_table(text: &str) -> Result<DependencyTable, TableError> {
-    let document = toml_edit::ImDocument::parse(text.to_owned()).map_err(|error| TableError {
+    let document = toml_edit::Document::parse(text.to_owned()).map_err(|error| TableError {
         message: error.message().to_string(),
         range: error.span(),
     })?;

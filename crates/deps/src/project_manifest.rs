@@ -967,6 +967,21 @@ version = "0.1.0"
     }
 
     #[test]
+    fn parses_multi_line_inline_table_with_trailing_comma() {
+        let dir = replacement_manifest(
+            "\"github.com/df-mc/dragonfly\" = {\n  version = \"v1.2.0\",\n  via = [\"github.com/x/y\"],\n}",
+        );
+        let manifest = parse_manifest(dir.path()).unwrap();
+        match &manifest.go_deps()["github.com/df-mc/dragonfly"] {
+            GoDependency::Remote { version, via } => {
+                assert_eq!(version, "v1.2.0");
+                assert_eq!(via.as_deref(), Some(&["github.com/x/y".to_string()][..]));
+            }
+            other => panic!("expected Remote, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn parses_replacement_with_via() {
         let dir = replacement_manifest(
             r#""github.com/df-mc/dragonfly" = { replacement = "github.com/fork/dragonfly@v0.0.0-20260101000000-abcdef123456", via = ["github.com/x/y"] }"#,
