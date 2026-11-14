@@ -158,7 +158,7 @@ pub fn check_pattern_naming(pattern: &Pattern, ctx: &NodeCtx, role: PatternRole)
     };
     let code = match role {
         PatternRole::Parameter => "non_snake_case_parameter",
-        PatternRole::Binding => "non_snake_case_variable",
+        PatternRole::Binding | PatternRole::GuardedArm => "non_snake_case_variable",
     };
     check_snake_case(name, span, code, ctx.sink);
 }

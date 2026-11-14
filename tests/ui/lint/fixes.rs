@@ -420,6 +420,20 @@ pub fn test(n: int) -> int {
 }
 
 #[test]
+fn wildcard_in_or_pattern_in_guarded_arm_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn test(n: int, retry: fn() -> bool) -> int {
+  match n {
+    0 | _ if retry() => 1,
+    _ => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
 fn fix_needless_question_mark() {
     assert_fix_snapshot!(
         r#"

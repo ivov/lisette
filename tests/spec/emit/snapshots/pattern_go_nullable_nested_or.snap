@@ -7,17 +7,21 @@ description: |
 ---
 package main
 
-import "runtime/debug"
+import (
+	"runtime/debug"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
 
 func main() {
 	child := debug.Module{Path: "child"}
 	h := debug.Module{Replace: &child}
 	var out string
-	_ = h
-	if h.Replace != nil && 7 == 0 {
-		out = h.Replace.Path
-	} else if h.Replace != nil && 7 == 7 {
-		out = h.Replace.Path
+	subject := lisette.MakeTuple2[debug.Module, int](h, 7)
+	if subject.First.Replace != nil && subject.Second == 0 {
+		out = subject.First.Replace.Path
+	} else if subject.First.Replace != nil && subject.Second == 7 {
+		out = subject.First.Replace.Path
 	} else {
 		out = "none"
 	}

@@ -1145,6 +1145,11 @@ impl InferCtx<'_> {
                 })
             });
             let mut alt = alt;
+            for (name, alt_span) in collect_pattern_bindings(&alt) {
+                if let Some((_, first_span)) = first_bindings.iter().find(|(n, _)| *n == name) {
+                    self.facts.add_usage(alt_span, *first_span);
+                }
+            }
             clear_bindings(&mut alt);
             inferred.push(alt);
         }

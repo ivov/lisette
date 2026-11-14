@@ -254,10 +254,12 @@ fn run_pattern_checks(pattern: &Pattern, ctx: &mut NodeCtx<'_>, role: PatternRol
         pattern,
         ctx,
         (check_rest_only_pattern, &[Slice, Or],),
-        (check_wildcard_in_or_patterns, &[Or]),
         (check_unnecessary_raw_string_pattern, &[Literal],),
         (check_invisible_in_string_pattern, &[Literal]),
     );
+    if role != PatternRole::GuardedArm {
+        check_wildcard_in_or_patterns(pattern, ctx);
+    }
     if matches!(
         pattern,
         Pattern::Identifier { .. } | Pattern::AsBinding { .. } | Pattern::Slice { .. }

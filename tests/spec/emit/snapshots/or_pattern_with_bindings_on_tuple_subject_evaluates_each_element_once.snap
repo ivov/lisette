@@ -1,0 +1,50 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn first() -> Option<int> {
+    fmt.Println("first")
+    None
+  }
+  
+  fn second() -> Option<int> {
+    fmt.Println("second")
+    Some(4)
+  }
+  
+  fn pick() -> int {
+    match (first(), second()) {
+      (Some(x), _) | (_, Some(x)) => x,
+      _ => 0,
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func first() (int, bool) {
+	fmt.Println("first")
+	return 0, false
+}
+
+func second() (int, bool) {
+	fmt.Println("second")
+	return 4, true
+}
+
+func pick() int {
+	subject := lisette.MakeTuple2[lisette.Option[int], lisette.Option[int]](lisette.OptionFromCommaOk[int](first()), lisette.OptionFromCommaOk[int](second()))
+	if subject.First.Tag == lisette.OptionSome {
+		return subject.First.SomeVal
+	} else if subject.Second.Tag == lisette.OptionSome {
+		return subject.Second.SomeVal
+	}
+	return 0
+}

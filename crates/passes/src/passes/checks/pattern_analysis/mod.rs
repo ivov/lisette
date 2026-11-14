@@ -409,7 +409,9 @@ fn check_redundancy_with_guards(
                 found_redundant = true;
             }
 
-            current_arm_rows.push(current_row.clone());
+            if !arm.has_guard() {
+                current_arm_rows.push(current_row.clone());
+            }
         }
 
         let whole_arm_redundant = !has_rejected_alternative

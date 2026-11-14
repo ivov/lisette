@@ -1,7 +1,8 @@
 //! Cursor resolution shared by definition, references, and rename.
 
 use syntax::ast::{
-    Annotation, Binding, Expression, Generic, IdentifierResolution, Pattern, SelectArm, Span,
+    Annotation, Binding, Expression, Generic, IdentifierResolution, Pattern, RestPattern,
+    SelectArm, Span,
 };
 use syntax::program::File;
 
@@ -361,16 +362,42 @@ impl SymbolResolver<'_> {
             | Pattern::Or {
                 patterns: elements, ..
             } => elements.iter().find_map(|pattern| self.pattern(pattern)),
-            Pattern::Slice { prefix, .. } => {
-                prefix.iter().find_map(|pattern| self.pattern(pattern))
-            }
-            Pattern::AsBinding { pattern, .. } => self.pattern(pattern),
+            Pattern::Slice { prefix, rest, .. } => prefix
+                .iter()
+                .find_map(|pattern| self.pattern(pattern))
+                .or_else(|| match rest {
+                    RestPattern::Bind { span, .. } => self.later_alternative_binding(*span),
+                    _ => None,
+                }),
+            Pattern::AsBinding {
+                pattern, name_span, ..
+            } => self
+                .pattern(pattern)
+                .or_else(|| self.later_alternative_binding(*name_span)),
             Pattern::Identifier { .. } => self
                 .snapshot
                 .binding_at(span.file_id, self.offset)
-                .and_then(|binding| self.declaration(binding.span)),
+                .and_then(|binding| self.declaration(binding.span))
+                .or_else(|| self.later_alternative_binding(span)),
             Pattern::Literal { .. } | Pattern::Unit { .. } | Pattern::WildCard { .. } => None,
         }
+    }
+
+    fn later_alternative_binding(&self, span: Span) -> Option<ResolvedSymbol> {
+        if !offset_in_span(self.offset, &span) {
+            return None;
+        }
+        let usage = self
+            .snapshot
+            .usages()
+            .in_file(span.file_id)
+            .iter()
+            .find(|usage| usage.usage_span == span)?;
+        Some(ResolvedSymbol {
+            kind: OccurrenceKind::Reference,
+            occurrence_span: span,
+            definition_span: usage.definition_span,
+        })
     }
 
     /// Source text only locates segments of a name supplied by the AST.

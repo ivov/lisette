@@ -10,7 +10,7 @@ use crate::calls::slice_loop::FoundSink;
 use crate::calls::wrap_err::WrapMessage;
 use crate::context::expression::ExpressionContext;
 use crate::names::source_name::SourceName;
-use crate::patterns::binding_decls::pattern_binds_name;
+use crate::patterns::binding_decls::{pattern_binds_name, pattern_has_bindings};
 use crate::patterns::decision_tree;
 use crate::patterns::sites::ResolvedSubject;
 use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
@@ -499,7 +499,7 @@ impl Planner<'_> {
         for arm in arms {
             let info = decision_tree::collect_pattern_info(self, &arm.pattern, &subject_ty);
             if info.has_root_assertion()
-                || !info.bindings.is_empty()
+                || pattern_has_bindings(&arm.pattern)
                 || info.requires_materialized_subject
             {
                 return None;

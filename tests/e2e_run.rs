@@ -3569,6 +3569,52 @@ fn an_executable_script_runs_through_its_shebang() {
     }
 }
 
+#[test]
+fn failed_guard_retries_each_matching_or_pattern_alternative() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let source = scratch.path().join("guard_retry.lis");
+    fs::write(
+        &source,
+        r#"import "go:fmt"
+
+fn pick(n: int, retry: fn() -> bool) -> int {
+  match n {
+    _ | 0 if retry() => 7,
+    _ => -1,
+  }
+}
+
+fn pick_pair(t: (int, int), retry: fn() -> bool) -> int {
+  match t {
+    (0, _) | (_, 0) if retry() => 7,
+    _ => -1,
+  }
+}
+
+fn main() {
+  let mut calls = 0
+  let second_call = || {
+    calls += 1
+    calls % 2 == 0
+  }
+  let single = pick(0, second_call)
+  let single_calls = calls
+  let pair = pick_pair((0, 0), second_call)
+  fmt.Println(single, single_calls, pair, calls)
+}
+"#,
+    )
+    .unwrap();
+    let output = lis(&source, "run");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stdout}\n{stderr}");
+    assert_eq!(stdout.trim(), "7 2 7 4");
+}
+
 #[cfg(unix)]
 #[test]
 fn a_shebang_survives_check_format_emit_and_build() {

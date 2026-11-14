@@ -1741,7 +1741,7 @@ fn expand_interface_or_checks(arm_infos: Vec<ArmInfo>) -> Vec<ArmInfo> {
     result
 }
 
-/// Or-patterns without bindings are handled inline by the condition collector.
+/// Or-patterns without bindings in unguarded arms are handled inline by the condition collector.
 pub(super) fn compile_match_arms(
     planner: &mut Planner,
     arms: &[MatchArm],
@@ -1750,7 +1750,9 @@ pub(super) fn compile_match_arms(
     let mut arm_infos = Vec::new();
     for (arm_index, arm) in arms.iter().enumerate() {
         let alternatives = match &arm.pattern {
-            Pattern::Or { patterns, .. } if pattern_has_bindings(&arm.pattern) => {
+            Pattern::Or { patterns, .. }
+                if arm.has_guard() || pattern_has_bindings(&arm.pattern) =>
+            {
                 patterns.as_slice()
             }
             pattern => slice::from_ref(pattern),
