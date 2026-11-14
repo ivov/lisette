@@ -116,7 +116,7 @@ Examples:
         "run" | "r" => print_help(
             "`lis run` {[target]} {[--flags]:b}
 
-Compile a Lisette project to a binary at `target/bin/` and run the binary.
+Compile a Lisette project to a binary at `target/.lisette/bin/` and run the binary.
 
 Arguments:
     {target:g} {(optional):d}                        Project dir or file (default: current dir)
@@ -157,7 +157,7 @@ Examples:
 Lint and typecheck a Lisette project.
 
 Arguments:
-    {path:g} {(optional):d}                   Path to dir (default: current dir)
+    {path:g} {(optional):d}                   Path to file or dir (default: current dir)
 
 Flags:
     {--errors-only:b}                     Show only errors
@@ -185,7 +185,7 @@ Arguments:
     {path:g} {(optional):d}                    Path to dir (default: current dir)
 
 Flags:
-    {-f:b}, {--filter:b} {<pattern>:g}             Run only tests whose name contains pattern
+    {-f:b}, {--filter:b} {<pattern>:g}             Run only tests matching pattern
     {--failed:b}                           Rerun the tests that failed last time
     {--go-flags:b} {\"<flags>\":g}               Pass flags through to `go test`
 

@@ -37,7 +37,7 @@ a + b |> f
 
 ### Arithmetic
 
-`+`, `*`, `/`, `%` require both operands to be the same numeric type. Unary `-` negates a number. An untyped numeric literal adapts to the other operand.
+`+`, `-`, `*`, `/`, `%` require both operands to be the same numeric type. Unary `-` negates a number. An untyped numeric literal adapts to the other operand.
 
 ```lisette
 let size: int64 = 4
@@ -218,7 +218,7 @@ The `?` operator [propagates](/docs/failures/) a failure.
 
 ### Type conversion
 
-The `as` operator [converts](/docs/types/#type-conversion) between numeric types.
+The `as` operator [converts](/docs/types/#type-conversion) between numeric types, and between strings and byte or rune slices.
 
 ## Assignment operators
 

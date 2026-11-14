@@ -29,7 +29,9 @@ const recent = releases.slice(0, RECENT_RELEASES);
 const older = releases.slice(RECENT_RELEASES);
 
 const olderHolder =
-  older.length > 0 ? `\n<div id="changelog-older" data-src="/docs/changelog/older/"></div>\n` : "";
+  older.length > 0
+    ? `\n<div id="changelog-older" data-src="/docs/changelog/older/"><noscript><p>Older releases are in <a href="https://github.com/ivov/lisette/blob/main/CHANGELOG.md">CHANGELOG.md</a> on GitHub.</p></noscript></div>\n`
+    : "";
 
 const page = `---
 title: "Changelog"

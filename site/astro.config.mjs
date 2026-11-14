@@ -1,5 +1,6 @@
 // @ts-check
 import { defineConfig } from "astro/config";
+import sitemap from "@astrojs/sitemap";
 import starlight from "@astrojs/starlight";
 import catppuccin from "@catppuccin/starlight";
 import starlightSidebarTopics from "starlight-sidebar-topics";
@@ -188,5 +189,6 @@ export default defineConfig({
         ]),
       ],
     }),
+    sitemap({ filter: (page) => !page.endsWith("/docs/changelog/older/") }),
   ],
 });

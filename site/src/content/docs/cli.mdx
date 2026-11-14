@@ -41,7 +41,7 @@ Create a new Lisette project in the current directory.
 lis run [target] [--flags]
 ```
 
-Compile a Lisette project to a binary at `target/bin/` and run the binary.
+Compile a Lisette project to a binary at `target/.lisette/bin/` and run the binary.
 
 | Argument | Does |
 | --- | --- |
@@ -125,7 +125,7 @@ Lint and typecheck a Lisette project.
 
 | Argument | Does |
 | --- | --- |
-| `path` (optional) | Path to dir (default: current dir) |
+| `path` (optional) | Path to file or dir (default: current dir) |
 
 | Flag | Does |
 | --- | --- |
@@ -182,7 +182,7 @@ Run tests in a Lisette project.
 
 | Flag | Does |
 | --- | --- |
-| `-f, --filter <pattern>` | Run only tests whose name contains pattern |
+| `-f, --filter <pattern>` | Run only tests matching pattern |
 | `--failed` | Rerun the tests that failed last time |
 | `--go-flags "<flags>"` | Pass flags through to `go test` |
 

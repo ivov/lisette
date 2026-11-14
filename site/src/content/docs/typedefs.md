@@ -38,18 +38,18 @@ Typedefs describe many Go types identically in Lisette:
 
 Other Go types are described differently:
 
-| Go                         | Lisette                      |
-| -------------------------- | ---------------------------- |
-| `(T, error)`               | `Result<T, error>`           |
-| `error` as the only return | `Result<(), error>`          |
-| `(T, bool)`                | `Option<T>` or `(T, bool)`   |
-| `*T`                       | `Ref<T>` or `Option<Ref<T>>` |
-| `any`, `interface{}`       | `Unknown`                    |
-| `[]T`                      | `Slice<T>`                   |
-| `[N]T`                     | `Array<T, N>`                |
-| `map[K]V`                  | `Map<K, V>`                  |
-| `...T`                     | `VarArgs<T>`                 |
-| `chan T`                   | `Channel<T>`                 |
-| `type X int64`             | `pub struct X(int64)`        |
+| Go                         | Lisette                            |
+| -------------------------- | ---------------------------------- |
+| `(T, error)`               | `Result<T, error>`                 |
+| `error` as the only return | `Result<(), error>`                |
+| `(T, bool)`                | `Option<T>` or `(T, bool)`         |
+| `*T`                       | `Ref<T>` or `Option<Ref<T>>`       |
+| `any`, `interface{}`       | `Unknown`                          |
+| `[]T`                      | `Slice<T>`                         |
+| `[N]T`                     | `Array<T, N>`                      |
+| `map[K]V`                  | `Map<K, V>` or `Option<Map<K, V>>` |
+| `...T`                     | `VarArgs<T>`                       |
+| `chan T`                   | `Channel<T>`                       |
+| `type X int64`             | `pub struct X(int64)`              |
 
 🐙 See the [bindings generator](https://github.com/ivov/lisette/tree/main/bindgen#bindgen) for the complete list.

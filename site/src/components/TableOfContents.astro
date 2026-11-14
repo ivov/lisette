@@ -96,7 +96,10 @@ const segments = headingSegments(entry.body);
     const loadOlder = () =>
       (loading ??= (async () => {
         nearEnd.disconnect();
-        holder.replaceChildren();
+        const status = document.createElement("p");
+        status.role = "status";
+        status.textContent = "Loading older releases…";
+        holder.replaceChildren(status);
         try {
           const response = await fetch(holder.dataset.src!);
           if (!response.ok) throw new Error(String(response.status));

@@ -169,7 +169,7 @@ _lis() {
                     ;;
                 test)
                     _arguments \
-                        {-f,--filter}'[Run only tests whose name contains the pattern]:pattern' \
+                        {-f,--filter}'[Run only tests matching the pattern]:pattern' \
                         '--failed[Rerun the tests that failed last time]' \
                         '--go-flags[Flags passed through to go test]:flags'
                     ;;
@@ -245,7 +245,7 @@ complete -c lis -n '__fish_seen_subcommand_from emit' -s o -l output -r -F -d 'W
 complete -c lis -n '__fish_seen_subcommand_from emit' -l target -r -a '@TARGETS@' -d 'Emit for another platform'
 complete -c lis -n '__fish_seen_subcommand_from run' -l sourcemap -d 'Include line directives for stack traces'
 complete -c lis -n '__fish_seen_subcommand_from run' -l go-flags -r -d 'Flags passed through to go build'
-complete -c lis -n '__fish_seen_subcommand_from test' -s f -l filter -r -d 'Run only tests whose name contains the pattern'
+complete -c lis -n '__fish_seen_subcommand_from test' -s f -l filter -r -d 'Run only tests matching the pattern'
 complete -c lis -n '__fish_seen_subcommand_from test' -l failed -d 'Rerun the tests that failed last time'
 complete -c lis -n '__fish_seen_subcommand_from test' -l go-flags -r -d 'Flags passed through to go test'
 complete -c lis -n '__fish_seen_subcommand_from format' -l check -d 'Check formatting without modifying'

@@ -63,16 +63,16 @@ struct Config {
 Struct-level options apply to all fields. A field-level option overrides them, and an explicit name overrides both:
 
 ```lisette
-#[json(snake_case)]
+#[json(camel_case)]
 struct UserProfile {
-  // !callout-right `"user_name"` from `snake_case`
-  userName: string,
+  // !callout-right `"userName"` from `camel_case`
+  user_name: string,
 
-  // !callout-right `"created_at"` from `snake_case`
-  createdAt: int,
+  // !callout-right `"createdAt"` from `camel_case`
+  created_at: int,
 
   #[json("userID")]
-  // !callout-right `"userID"`, `snake_case` overridden
+  // !callout-right `"userID"`, `camel_case` overridden
   id: int,
 }
 ```
@@ -129,7 +129,7 @@ For more complex tags, use a backticked string:
 
 ```lisette
 #[json]
-struct User {
+struct Account {
   #[tag(`validate:"required,email" gorm:"unique"`)]
   email: string,
 }
@@ -137,8 +137,8 @@ struct User {
 
 Generated Go:
 
-```go file="user.go"
-type User struct {
+```go file="account.go"
+type Account struct {
   Email string `json:"email" validate:"required,email" gorm:"unique"`
 }
 ```
@@ -150,6 +150,7 @@ type User struct {
 `#[iterate]` gives an enum an [associated function](/docs/methods/#associated-functions) `variants()`, which returns a `Slice` of all variants in declaration order:
 
 ```lisette
+#[display]
 #[iterate]
 enum Direction {
   North,
@@ -395,7 +396,7 @@ fn describe(ready: bool) -> string {
 }
 ```
 
-For unused-value lints (`unused_result`, `unused_option`, `unused_literal`, `unused_value`), place `#[allow]` on the function whose result is ignored, so every call to it stops warning. An `#[allow]` on the calling function has no effect.
+For unused-value lints (`unused_result`, `unused_option`, `unused_partial`, `unused_value`), place `#[allow]` on the function whose result is ignored, so every call to it stops warning. An `#[allow]` on the calling function has no effect.
 
 ```lisette
 import "go:os"
