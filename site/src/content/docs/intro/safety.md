@@ -33,22 +33,20 @@ Lisette defines nil out of existence and encodes absence in the type system.
 
 ### Nil pointers
 
-Go's pointer type may or may not be nil. In Lisette, a pointer type is guaranteed non-nil, and a potentially absent one is typed as optional.
+A Go pointer may be nil, and dereferencing a nil pointer panics. In Lisette, a pointer is never nil, and Lisette wraps a Go pointer that may be nil in an `Option` type.
 
-```go file="find.go"
-// func find(id int) *Person
-
-p := find(1)
-if p != nil {
-    fmt.Println(p.Name)
-}
+```go file="person.go"
+// !callout-center[/\*Person/] nilable pointer
+func FindPerson(id int) *Person
 ```
 
-```lisette file="find.lis"
-// fn find(id: int) -> Option<Ref<Person>>
+```lisette file="person.d.lis"
+pub fn FindPerson(id: int) -> Option<Ref<Person>>
+```
 
-match find(1) {
-  Some(person) => fmt.Println(person.name),
+```lisette file="main.lis" separate
+match FindPerson(person_id) {
+  Some(person) => fmt.Println(person.Name),
   None => fmt.Println("no person"),
 }
 ```
@@ -57,12 +55,18 @@ match find(1) {
 
 ### Nil maps
 
-A Go map may be nil, which panics on write. Lisette reflects this optionality in the incoming type.
+A Go map may be nil, and writing to a nil map panics. When a Go function can return a nil map, Lisette wraps the result in an `Option` type.
 
-```lisette file="users.lis"
-// Go:  func (h Header) Clone() Header
-// Lis: fn Clone(self) -> Option<Header>
+```go file="header.go"
+// !callout[/Header$/] nilable map
+func (h Header) Clone() Header
+```
 
+```lisette file="http.d.lis"
+fn Clone(self) -> Option<mut Header>
+```
+
+```lisette file="users.lis" separate
 match request.Header.Clone() {
   Some(headers) => forward(headers),
   None => fmt.Println("no headers to forward"),
@@ -88,16 +92,22 @@ var p *MyHandler = nil
 var h http.Handler = p
 // !callout-right+17 `true`, the interface has a type
 h != nil
-// !callout-error-right+12 panic: the value inside is `nil`
-h.ServeHTTP()
+// !callout-error-right+8 panic: the value inside is `nil`
+h.ServeHTTP(w, r)
 ```
 
-Lisette wraps a Go interface in `Option` when it crosses the interop boundary in a position where it could be nil. Both a nil interface and a typed nil interface become `None`.
+When a Go function can return a nil interface, Lisette wraps the result in an `Option` type. Both a nil interface and a typed nil interface become `None`.
 
-```lisette file="handler.lis"
-// Go:  func FindHandler(name string) http.Handler
-// Lis: fn FindHandler(name: string) -> Option<http.Handler>
+```go file="handler.go"
+// !callout-center[/Handler$/] nilable interface
+func FindHandler(name string) http.Handler
+```
 
+```lisette file="handler.d.lis"
+pub fn FindHandler(name: string) -> Option<http.Handler>
+```
+
+```lisette file="handler.lis" separate
 match FindHandler("api") {
   Some(h) => router.Handle("/api", h),
   None => fmt.Println("no handler"),

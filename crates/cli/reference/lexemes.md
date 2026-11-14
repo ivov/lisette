@@ -71,7 +71,7 @@ foo
 Point
 // !callout-right constant
 MAX_SIZE
-// !callout-right discarded
+// !callout-right unused
 _count
 ```
 

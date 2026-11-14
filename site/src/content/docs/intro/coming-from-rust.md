@@ -9,7 +9,7 @@ Every section below is a place where Lisette reads like Rust and behaves differe
 ```rust file="bindings.rs"
 let s1 = String::from("hello");
 let s2 = s1;
-// !callout-error-right error: value moved
+// !callout-error-right error: borrow of moved value
 println!("{}", s1);
 ```
 

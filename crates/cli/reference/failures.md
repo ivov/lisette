@@ -74,7 +74,7 @@ fn start() {
 
 ## `try` blocks
 
-A `try` block groups fallible calls and evaluates to a `Result`. Inside it, `?` returns from the block rather than from the function:
+A `try` block groups fallible calls and evaluates to a `Result` or an `Option`. Inside it, `?` returns from the block rather than from the function:
 
 ```lisette
 fn load_config(path: string) -> Config {
@@ -130,7 +130,7 @@ fn process(input: Input) -> Result<Input, error> {
 
 ## Partial results
 
-Where a Go function returns a value alongside an error, the result is a [`Partial<T, E>`](/docs/prelude/partial/). Handle its three cases with `match`:
+Where a Go function can return a value and an error at the same time, such as `io.Reader.Read`, the result is a [`Partial<T, E>`](/docs/prelude/partial/). Handle its three cases with `match`:
 
 ```lisette
 fn count_bytes(reader: io.Reader) -> Result<int, error> {
@@ -167,17 +167,15 @@ Lisette omits Rust's [`unwrap()`](https://doc.rust-lang.org/std/result/enum.Resu
 To catch panics at runtime, Go uses [`recover()`](https://go.dev/blog/defer-panic-and-recover) in a deferred anonymous function:
 
 ```go file="recover.go"
-go func() {
-    defer func() {
-        if r := recover(); r != nil {
-            log.Println(r)
-        }
-    }()
-    handleConnection(conn)
+defer func() {
+    if r := recover(); r != nil {
+        log.Println(r)
+    }
 }()
+handleConnection(conn)
 ```
 
-Lisette's `recover` block serves the same purpose, yielding a [`PanicValue`](/docs/prelude/types/#panicvalue) that carries what the panic passed:
+Lisette's `recover` block serves the same purpose. It yields a `Result`, and its `Err` holds a [`PanicValue`](/docs/prelude/types/#panicvalue) that carries what the panic passed:
 
 ```lisette file="recover.lis"
 let result = recover {

@@ -73,7 +73,7 @@ let message = if let Some(age) = ages.get("Bob") {
 Iterates over a collection or range.
 
 ```lisette
-// !callout-above[/item/] immutable copy of each element
+// !callout-above[/item/] read-only copy of each element
 for item in items {
   fmt.Println(item)
 }

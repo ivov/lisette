@@ -28,7 +28,7 @@ A Lisette project is made up of packages. A package is a directory, and its name
 To import a package from your project:
 
 ```lisette
-// !callout-right package path, relative to project root
+// !callout-right package path, relative to `src/`
 import "models"
 // !callout-right nested package path
 import "routes/admin"
@@ -39,8 +39,7 @@ Imported packages are namespaces:
 ```lisette
 import "models"
 
-fn main() {
-  let user = models.User { name: "Alice" }
+fn handle(user: models.User) -> Result<(), error> {
   models.save(user)
 }
 ```
@@ -50,8 +49,7 @@ To alias an imported package:
 ```lisette
 import m "models"
 
-fn main() {
-  let user = m.User { name: "Alice" }
+fn handle(user: m.User) -> Result<(), error> {
   m.save(user)
 }
 ```
@@ -62,7 +60,7 @@ Circular imports are disallowed.
 
 Definitions are visible to all other files in the same package. Use `pub` to expose them to other packages.
 
-```lisette file="models/user.lis"
+```lisette file="models/store.lis"
 // !callout-above[/save/] public
 pub fn save(user: User) -> Result<(), error> {
   if !validate(user) {

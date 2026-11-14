@@ -90,7 +90,7 @@ pub fn build(
 
     if reject_project_output(
         output.as_deref(),
-        "links into `target/bin/`. Use `--go-flags \"-o <path>\"` to choose the location",
+        "links into `target/.lisette/bin/`. Use `--go-flags \"-o <path>\"` to choose the location",
     )
     .is_err()
     {

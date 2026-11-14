@@ -6,6 +6,7 @@ import { callout } from "./src/plugins/callout.mjs";
 import { copyButton } from "./src/plugins/copy-button.mjs";
 import { cornerFile } from "./src/plugins/corner-file.mjs";
 import { searchIgnore } from "./src/plugins/search-ignore.mjs";
+import { separate } from "./src/plugins/separate.mjs";
 import { pluginFramesTexts } from "@expressive-code/plugin-frames";
 import tomlGrammar from "@shikijs/langs/toml";
 
@@ -56,7 +57,7 @@ pluginFramesTexts.overrideTexts(undefined, { copyButtonCopied: "Copied" });
 
 export default defineEcConfig({
   shiki: { langs: [lisette, ...tomlGrammar.map((g) => namedQuotedKeys(structuredClone(g)))] },
-  plugins: [copyButton(), callout(), cornerFile(), searchIgnore()],
+  plugins: [copyButton(), callout(), cornerFile(), searchIgnore(), separate()],
   // Off because the heuristic reads any early comment as a file name, which swallowed the license line of the `//!` example into a tab.
   frames: { extractFileNameFromCode: false },
   styleOverrides: {

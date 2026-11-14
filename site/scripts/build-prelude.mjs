@@ -487,7 +487,7 @@ const INLINE_ARRAY_CONSTRUCTORS = [
     name: "new",
     signature: "fn new() -> Array<T, N>",
     doc: {
-      text: "Creates an array of `N` zero values.",
+      text: "Creates an `Array` of `N` zero values.",
       example: ["// !callout-right `[0, 0, 0]`", "let scores = Array.new<int, 3>()"].join("\n"),
     },
   },

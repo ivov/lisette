@@ -162,7 +162,7 @@ enum Severity { Low, High, Critical }
 
 A `match` on an enum must cover every variant.
 
-```go file="severity.go"
+```go file="alert.go"
 switch s {
 case Low, High:
     fmt.Println("ignore")
@@ -171,7 +171,7 @@ case Critical:
 }
 ```
 
-```lisette file="severity.lis"
+```lisette file="alert.lis"
 match s {
   Low | High => fmt.Println("ignore"),
   Critical => fmt.Println("alert"),
@@ -266,7 +266,7 @@ let bytes = os.ReadFile(path)?
 parse_config(bytes)
 ```
 
-The `?` operator unwraps `Ok` or returns early with `Err`. Functions returning `(T, error)` in Go become `Result<T, error>` in Lisette.
+The `?` operator unwraps `Ok` or returns early with `Err`. Most functions returning `(T, error)` in Go become `Result<T, error>` in Lisette. Where the value and the error can both be meaningful, as with `Read` above, they become `Partial<T, error>`.
 
 📚 See [Failures](/docs/failures/)
 
@@ -274,7 +274,7 @@ The `?` operator unwraps `Ok` or returns early with `Err`. Functions returning `
 
 ```go file="lookup.go"
 // !callout-right pointer can be `nil`
-var user *User
+user := getUser(id)
 if user != nil {
     fmt.Println(user.Name)
 }
@@ -288,7 +288,7 @@ if let Some(u) = user {
 }
 ```
 
-`Ref<T>` is guaranteed non-nil. Nilable pointers become `Option<Ref<T>>`.
+`Ref<T>` is never nil. Nilable pointers become `Option<Ref<T>>`.
 
 📚 See [Option](/docs/prelude/option/) and [Safety](/docs/intro/safety/#absent-values)
 

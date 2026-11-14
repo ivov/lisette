@@ -14,7 +14,7 @@ fn main() {
     |> strings.ToLower
     |> strings.ReplaceAll(" ", "-")
 
-  // !callout-right prints `"hello-world"`
+  // !callout-right prints `hello-world`
   fmt.Println(slug)
 }
 ```

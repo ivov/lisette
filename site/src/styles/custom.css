@@ -216,12 +216,15 @@ starlight-file-tree {
   font-weight: 400;
 }
 
-#changelog-older button {
+#changelog-older :is(p, button) {
   margin-block-start: 2.5rem;
+  color: var(--sl-color-gray-2);
+}
+
+#changelog-older button {
   border: none;
   padding: 0;
   background: none;
-  color: var(--sl-color-gray-2);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -288,13 +291,13 @@ body:has(a[aria-current="page"][href*="/prelude/"])
 body:has(a[aria-current="page"]:is([href*="/prelude/"], [href*="/typedefs"], [href*="/intro/safety"], [href*="/attributes"], [href*="/enums"], [href*="/functions"], [href*="/interfaces"]))
   .sl-markdown-content
   .expressive-code
-  + .expressive-code {
+  + .expressive-code:not(:has(> figure[data-separate])) {
   margin-top: 0;
 }
 
 body:has(a[aria-current="page"]:is([href*="/prelude/"], [href*="/typedefs"], [href*="/intro/safety"], [href*="/attributes"], [href*="/enums"], [href*="/functions"], [href*="/interfaces"]))
   .sl-markdown-content
-  .expressive-code:has(+ .expressive-code)
+  .expressive-code:has(+ .expressive-code > figure:not([data-separate]))
   pre {
   border-end-start-radius: 0;
   border-end-end-radius: 0;
@@ -303,7 +306,7 @@ body:has(a[aria-current="page"]:is([href*="/prelude/"], [href*="/typedefs"], [hr
 body:has(a[aria-current="page"]:is([href*="/prelude/"], [href*="/typedefs"], [href*="/intro/safety"], [href*="/attributes"], [href*="/enums"], [href*="/functions"], [href*="/interfaces"]))
   .sl-markdown-content
   .expressive-code
-  + .expressive-code
+  + .expressive-code:not(:has(> figure[data-separate]))
   pre {
   border-start-start-radius: 0;
   border-start-end-radius: 0;

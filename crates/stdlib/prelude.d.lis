@@ -23,7 +23,7 @@ type int32
 /// 64-bit signed integer.
 type int64
 
-/// A Unicode code point.
+/// Alias for `int32`, for a Unicode code point.
 type rune
 
 /// Unsigned integer (platform-dependent size).
@@ -44,7 +44,7 @@ type uint64
 /// Unsigned integer large enough to hold a pointer.
 type uintptr
 
-/// Alias for `uint8`, used for raw byte data.
+/// Alias for `uint8`, for raw byte data.
 type byte
 
 /// 32-bit floating-point number.
@@ -232,7 +232,7 @@ impl<T> Option<T> {
   ///   let name = users.get(id).or_else(|| Some("stranger"))
   fn or_else(self, f: fn() -> Option<T>) -> Option<T>
 
-  /// Returns `Option` if `f` returns `true`, or `None` otherwise.
+  /// Returns the `Option` if it is `Some` and `f` returns `true`, otherwise `None`.
   ///
   /// Example:
   ///   // !callout[/filter/] drops an empty name
@@ -265,7 +265,7 @@ impl<T> Option<T> {
   ///   let result = users.get(id).ok_or_else(|| missing_user(id))
   fn ok_or_else<E>(self, f: fn() -> E) -> Result<T, E>
 
-  /// Pairs two of `Option` into one `Option` of a tuple.
+  /// Pairs two `Option` values into one `Option` of a tuple.
   /// Returns `Some((a, b))` if both are `Some`, otherwise `None`.
   ///
   /// Example:
@@ -478,8 +478,8 @@ impl<T, E> Partial<T, E> {
   /// unchanged.
   ///
   /// Example:
-  ///   // !callout[/map/] `Ok(3)`, the room left in the buffer
-  ///   let remaining = outcome.map(|count| buffer.length() - count)
+  ///   // !callout[/map/] `Ok(40)`, the byte count in bits
+  ///   let bits = outcome.map(|count| count * 8)
   fn map<U>(self, f: fn(T) -> U) -> Partial<U, E>
 
   /// Applies `f` to the error of an `Err` or a `Both`, leaving `Ok` unchanged.
@@ -591,8 +591,8 @@ impl<T> Slice<T> {
   ///   scores = scores.reserve(100)
   fn reserve(self, additional: int) -> mut Slice<T>
 
-  /// Returns the element at `index`, or `None` if out of bounds. An index out of
-  /// range panics, so use `get()` for an unchecked index.
+  /// Returns the element at `index`, or `None` if out of bounds. Indexing out of
+  /// range with `[]` panics, so use `get()` for a checked index.
   ///
   /// Example:
   ///   let scores = [90, 75, 88]
@@ -925,7 +925,7 @@ impl<T> Channel<T> {
   ///   let idle = jobs.is_empty()
   fn is_empty(self) -> bool
 
-  /// Returns how many values the `Channel` buffer can hold.
+  /// Returns the number of values the `Channel` buffer can hold.
   ///
   /// Example:
   ///   let jobs = Channel.buffered<int>(4)
@@ -976,7 +976,7 @@ impl<T> Sender<T> {
   ///   let idle = sender.is_empty()
   fn is_empty(self) -> bool
 
-  /// Returns how many values the `Channel` buffer can hold.
+  /// Returns the number of values the `Channel` buffer can hold.
   ///
   /// Example:
   ///   let (sender, _) = Channel.buffered<int>(4).split()
@@ -1029,7 +1029,7 @@ impl<T> Receiver<T> {
   ///   let idle = receiver.is_empty()
   fn is_empty(self) -> bool
 
-  /// Returns how many values the `Channel` buffer can hold.
+  /// Returns the number of values the `Channel` buffer can hold.
   ///
   /// Example:
   ///   let (_, receiver) = Channel.buffered<int>(4).split()
@@ -1282,7 +1282,7 @@ interface error {
 /// Example:
 ///   let value: Unknown = get_unknown_value()
 ///   // !callout-right `Some(n)` if the expected type, else `None`
-///   let n = assert_type<int>(value)?
+///   let n = assert_type<int>(value)
 fn assert_type<T>(value: Unknown) -> Option<T>
 
 /// Returns the [zero value](/docs/types/#types-with-zero-values) of `T` if
@@ -1320,7 +1320,8 @@ fn real(c: complex128) -> float64
 #[go("imag")]
 fn imaginary(c: complex128) -> float64
 
-/// Terminates the program with the given value.
+/// Panics with the given value. The program ends, unless a
+/// [`recover`](/docs/failures/#panic-recovery) block catches the panic.
 ///
 /// Example:
 ///   panic("something went wrong")

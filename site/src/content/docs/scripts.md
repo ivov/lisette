@@ -81,7 +81,7 @@ To reconcile the comment block against the script's imports:
 lis sync --script greet.lis
 ```
 
-To remove a dependency, delete its entry from the block and run `lis sync`.
+To remove a dependency, delete its entry from the block and run `lis sync --script greet.lis`.
 
 ## Limitations
 
