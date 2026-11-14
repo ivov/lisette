@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794656737189,
+  "lastUpdate": 1794658260314,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -56161,6 +56161,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 43057,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30223,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19606,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 15928,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14169,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9338,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7484,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 10906,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 938,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b03a96dd21e588cd2cee712d51d46c447475dd70",
+          "message": "fix: anchor `assert` statements at their own line (#1682)",
+          "timestamp": "2026-11-14T13:10:34+01:00",
+          "tree_id": "c35d927de35aac35e438d6046de14ba47ee1526d",
+          "url": "https://github.com/ivov/lisette/commit/b03a96dd21e588cd2cee712d51d46c447475dd70"
+        },
+        "date": 1794658258517,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 156807,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43061,
             "unit": "lines"
           },
           {
