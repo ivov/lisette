@@ -216,6 +216,21 @@ starlight-file-tree {
   font-weight: 400;
 }
 
+#changelog-older button {
+  margin-block-start: 2.5rem;
+  border: none;
+  padding: 0;
+  background: none;
+  color: var(--sl-color-gray-2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#changelog-older button:hover {
+  color: var(--sl-color-white);
+}
+
 .social-icons::after {
   content: none;
 }

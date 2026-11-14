@@ -6,9 +6,12 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const RECENT_RELEASES = 10;
+
 const SITE = dirname(dirname(fileURLToPath(import.meta.url)));
 const SOURCE = join(SITE, "..", "CHANGELOG.md");
 const TARGET = join(SITE, "src", "content", "docs", "changelog.md");
+const OLDER_TARGET = join(SITE, "src", "content", "changelog-older", "changelog.md");
 
 const source = readFileSync(SOURCE, "utf8");
 
@@ -21,16 +24,26 @@ const body = stripped.replace(
   '## [v$1]($2) <span class="release-date">($3)</span>',
 );
 
+const [intro, ...releases] = body.split(/^(?=## )/m);
+const recent = releases.slice(0, RECENT_RELEASES);
+const older = releases.slice(RECENT_RELEASES);
+
+const olderHolder =
+  older.length > 0 ? `\n<div id="changelog-older" data-src="/docs/changelog/older/"></div>\n` : "";
+
 const page = `---
 title: "Changelog"
 description: "Release history for the Lisette compiler"
 pagefind: false
 ---
 
-${body.trimStart()}`;
+${(intro + recent.join("")).trimStart()}${olderHolder}`;
 
 mkdirSync(dirname(TARGET), { recursive: true });
 writeFileSync(TARGET, page);
+mkdirSync(dirname(OLDER_TARGET), { recursive: true });
+writeFileSync(OLDER_TARGET, older.join(""));
 
-const releases = (body.match(/^## /gm) ?? []).length;
-console.log(`changelog: wrote ${releases} releases to src/content/docs/changelog.md`);
+console.log(
+  `changelog: wrote ${recent.length} releases to src/content/docs/changelog.md and ${older.length} to src/content/changelog-older/changelog.md`,
+);

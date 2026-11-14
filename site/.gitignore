@@ -5,6 +5,7 @@ dist/
 
 # Generated from the repository's CHANGELOG.md by `npm run changelog`.
 src/content/docs/changelog.md
+src/content/changelog-older/
 
 # Generated from crates/stdlib/prelude.d.lis by `npm run prelude`.
 src/content/docs/prelude/
