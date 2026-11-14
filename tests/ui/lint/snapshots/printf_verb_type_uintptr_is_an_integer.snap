@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                             ╰── `uintptr` argument for `%s`
  7 │ }
    ╰────
-  help: `fmt.Printf` formats `%s`, which needs a string, but the argument has type `uintptr`. Use `%d`, or convert the argument · code: [lint.printf_verb_mismatch]
+  help: Use `%d`, or convert the argument. `fmt.Printf` formats `%s`, which needs a string, but the argument has type `uintptr` · code: [lint.printf_verb_mismatch]

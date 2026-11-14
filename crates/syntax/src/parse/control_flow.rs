@@ -46,8 +46,10 @@ impl<'source> Parser<'source> {
 
     fn parse_match_arm(&mut self) -> Option<MatchArm> {
         if self.is(Imaginary) {
-            self.track_error(
-                "not allowed",
+            self.track_coded_error(
+                "Unsupported literal pattern",
+                "unsupported_literal_pattern",
+                "not allowed in a pattern",
                 "Imaginary literals are not supported in patterns",
             );
             self.next();
@@ -192,8 +194,10 @@ impl<'source> Parser<'source> {
         }
 
         if elements.len() == 1 {
-            self.track_error_at(
+            self.track_coded_error_at(
                 self.span_from_token(comma),
+                "Trailing comma after return value",
+                "return_trailing_comma",
                 "unexpected trailing comma",
                 "Remove the trailing comma after the return value.",
             );

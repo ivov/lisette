@@ -5,7 +5,6 @@ pub struct ParseError {
     pub message: String,
     pub labels: Vec<(Span, String)>,
     pub help: Option<String>,
-    pub note: Option<String>,
     pub code: String,
 }
 
@@ -15,7 +14,6 @@ impl ParseError {
             message: message.into(),
             labels: vec![(span, label.into())],
             help: None,
-            note: None,
             code: String::new(),
         }
     }
@@ -27,11 +25,6 @@ impl ParseError {
 
     pub(crate) fn with_help(mut self, help: impl Into<String>) -> Self {
         self.help = Some(help.into());
-        self
-    }
-
-    pub(crate) fn with_note(mut self, note: impl Into<String>) -> Self {
-        self.note = Some(note.into());
         self
     }
 

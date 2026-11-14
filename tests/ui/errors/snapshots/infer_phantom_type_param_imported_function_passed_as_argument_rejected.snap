@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                    ╰── cannot infer `T` for `util.weird` used as a value
  8 │ }
    ╰────
-  help: A generic function used as a value cannot have its type arguments inferred. Give `util.weird` a signature that uses `T`, or remove the unused type parameter · code: [infer.uninferable_generic_reference]
+  help: Give `util.weird` a signature that uses `T`, or remove the unused type parameter. A generic function used as a value cannot have its type arguments inferred · code: [infer.uninferable_generic_reference]

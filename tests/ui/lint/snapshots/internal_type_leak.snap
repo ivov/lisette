@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                                 ╰── exposed by `leaky_function`
  7 │   PrivateData { _value: 42 }
    ╰────
-  help: `PrivateData` is private but exposed by `leaky_function`, which is public. Add `pub` to the private type or remove it from the public API · code: [lint.internal_type_leak]
+  help: Add `pub` to the private type or remove it from the public API. `PrivateData` is private but exposed by `leaky_function`, which is public · code: [lint.internal_type_leak]

@@ -436,10 +436,16 @@ impl TaskState {
             {
                 self.sink.push(error);
             } else if !self.may_name_uninferred_export(store, type_name) {
-                self.sink.push(diagnostics::infer::type_not_found(
-                    type_name,
-                    annotation_span,
-                ));
+                let prefix = type_name.split_once('.').map(|(prefix, _)| prefix);
+                if !prefix.is_some_and(|prefix| self.imports.may_name_failed_import(prefix)) {
+                    let prefix_is_package =
+                        prefix.is_some_and(|prefix| self.imports.package_id(prefix).is_some());
+                    self.sink.push(diagnostics::infer::type_not_found(
+                        type_name,
+                        annotation_span,
+                        prefix_is_package,
+                    ));
+                }
             }
             return Type::Error;
         };

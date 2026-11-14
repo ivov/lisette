@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                ╰── 1 verb, 3 arguments
  6 │ }
    ╰────
-  help: `fmt.Printf` has 1 verb but 3 arguments, so the extra arguments print as `%!(EXTRA ...)` at the end of the output. Add verbs for them or remove them · code: [lint.printf_verb_mismatch]
+  help: Add verbs for them or remove them. `fmt.Printf` has 1 verb but 3 arguments, so the extra arguments print as `%!(EXTRA ...)` at the end of the output · code: [lint.printf_verb_mismatch]

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·           ╰── has public methods, but interface is private
  8 │   radius: float64
    ╰────
-  help: `Circle` implements public methods for the private interface `Shape`. Either make the interface `pub`, or remove `pub` from the struct methods · code: [infer.non_pub_interface_pub_impl]
+  help: Make the interface `pub`, or remove `pub` from the struct methods. `Circle` implements public methods for the private interface `Shape` · code: [infer.non_pub_interface_pub_impl]

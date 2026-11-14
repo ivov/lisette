@@ -10,4 +10,4 @@ source: tests/ui/lint/mod.rs
    · ╰──── can be simpler
  9 │       let _ = out
    ╰────
-  help: `strings.TrimPrefix` already returns the string unchanged when the prefix is absent. Replace the `if` with `out = strings.TrimPrefix(out, "www.")` · code: [lint.redundant_trim_guard]
+  help: Replace the `if` with `out = strings.TrimPrefix(out, "www.")`. `strings.TrimPrefix` already returns the string unchanged when the prefix is absent · code: [lint.redundant_trim_guard]

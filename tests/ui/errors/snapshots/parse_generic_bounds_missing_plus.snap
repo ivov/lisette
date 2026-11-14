@@ -1,11 +1,11 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Syntax error
+  ✕ Missing `+` between bounds
    ╭─[test.lis:4:17]
  3 │ interface Clone {}
  4 │ fn f<T: Display Clone>() {}
    ·                 ──┬──
-   ·                   ╰── missing `+` between bounds
+   ·                   ╰── expected `+`
    ╰────
-  help: Use `+` to separate multiple bounds · code: [parse.syntax_error]
+  help: Use `+` to separate multiple bounds · code: [parse.missing_bound_separator]

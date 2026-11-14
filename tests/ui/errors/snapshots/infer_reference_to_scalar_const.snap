@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·         ╰── not addressable
  10 │ }
     ╰────
-  help: `const` bindings are not addressable. Copy the value into a local `let` first if you need a reference · code: [infer.non_addressable_const]
+  help: Copy the value into a local `let` first if you need a reference. `const` bindings are not addressable · code: [infer.non_addressable_const]

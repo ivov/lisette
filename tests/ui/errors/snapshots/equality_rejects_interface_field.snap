@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·     ╰── `shape` cannot be compared
  9 │ }
    ╰────
-  help: `#[equality]` cannot compare interface values. Give `Widget` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field · code: [attribute.cannot_derive_equality]
+  help: Give `Widget` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field. `#[equality]` cannot compare interface values · code: [attribute.cannot_derive_equality]

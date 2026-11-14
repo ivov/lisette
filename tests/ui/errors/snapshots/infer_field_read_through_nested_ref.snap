@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                                    ╰── `a` is behind more than one reference
  7 │ 
    ╰────
-  help: Go follows only one reference to reach a field. Dereference the extra references first: `x.*.a` · code: [infer.field_through_nested_ref]
+  help: Dereference the extra references first: `x.*.a`. Go follows only one reference to reach a field · code: [infer.field_through_nested_ref]

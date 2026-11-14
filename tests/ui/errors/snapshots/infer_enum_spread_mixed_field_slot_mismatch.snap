@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·                    ╰── may hold any `E` variant
  10 │ }
     ╰────
-  help: Every `E` variant has `tag` and `w`, but they cannot share one slot across variants, so each variant stores them separately and a spread cannot fill them. Assign fields `tag` and `w` explicitly · code: [infer.enum_spread_missing_fields]
+  help: Assign fields `tag` and `w` explicitly. Every `E` variant has `tag` and `w`, but they cannot share one slot across variants, so each variant stores them separately and a spread cannot fill them · code: [infer.enum_spread_missing_fields]

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·       ╰── enum variants cannot have assigned values
  4 │   Post = "POST",
    ╰────
-  help: Lisette enums are sum types, not Go const groups. To model a Go defined primitive type, use a named primitive type such as `pub struct Weekday(int)` with package-level constants · code: [parse.enum_assigned_variant]
+  help: To model a Go defined primitive type, use a named primitive type, e.g. `pub struct Weekday(int)`, with package-level constants. A Lisette enum is not a group of Go constants, so its variants take no values · code: [parse.enum_assigned_variant]

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·          ╰── `data` was declared without `mut`
  9 │ }
    ╰────
-  help: `sort()` writes to `data`. Declare using `let mut data` to mark the variable mutable · code: [infer.immutable]
+  help: Declare using `let mut data` to mark the variable mutable. `sort()` writes to `data` · code: [infer.immutable]

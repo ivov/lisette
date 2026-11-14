@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·           ╰── `counter` was declared without `mut`
  12 │ }
     ╰────
-  help: Parameters are immutable. Rebind with `let mut counter = counter` to mutate a local copy · code: [infer.immutable]
+  help: Rebind with `let mut counter = counter` to mutate a local copy. Parameters are immutable · code: [infer.immutable]

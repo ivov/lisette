@@ -247,13 +247,13 @@ impl<'source> Parser<'source> {
             match self.current_token().kind {
                 Impl => self.error_misplaced_pub(
                     span,
-                    "syntax_error",
+                    "pub_impl",
                     "Place `pub` on individual methods inside the `impl` block instead",
                 ),
                 Import => self.error_misplaced_pub(
                     span,
                     "pub_import",
-                    "An import is always private to the file that declares it. Remove `pub`",
+                    "Remove `pub`. An import is always private to the file that declares it",
                 ),
                 _ => {}
             }
@@ -320,43 +320,55 @@ impl<'source> Parser<'source> {
     fn parse_block_item(&mut self) -> ast::Expression {
         match self.current_token().kind {
             Enum => {
-                self.track_error(
-                    "misplaced",
+                self.track_coded_error(
+                    "Nested definition",
+                    "nested_definition",
+                    "must be at the top level",
                     "Move this enum definition to the top level of the file.",
                 );
                 self.parse_enum_definition(None, vec![])
             }
             Struct => {
-                self.track_error(
-                    "misplaced",
+                self.track_coded_error(
+                    "Nested definition",
+                    "nested_definition",
+                    "must be at the top level",
                     "Move this struct definition to the top level of the file.",
                 );
                 self.parse_struct_definition(None, vec![])
             }
             Type => {
-                self.track_error(
-                    "misplaced",
+                self.track_coded_error(
+                    "Nested definition",
+                    "nested_definition",
+                    "must be at the top level",
                     "Move this type alias to the top level of the file.",
                 );
                 self.parse_type_alias_with_doc(None, vec![])
             }
             Import => {
-                self.track_error(
-                    "misplaced",
+                self.track_coded_error(
+                    "Nested definition",
+                    "nested_definition",
+                    "must be at the top level",
                     "Move this import to the top level of the file.",
                 );
                 self.parse_import()
             }
             Impl => {
-                self.track_error(
-                    "misplaced",
+                self.track_coded_error(
+                    "Nested definition",
+                    "nested_definition",
+                    "must be at the top level",
                     "Move this `impl` block to the top level of the file.",
                 );
                 self.parse_impl_block()
             }
             Interface => {
-                self.track_error(
-                    "misplaced",
+                self.track_coded_error(
+                    "Nested definition",
+                    "nested_definition",
+                    "must be at the top level",
                     "Move this interface definition to the top level of the file.",
                 );
                 self.parse_interface_definition(None, vec![])
@@ -779,7 +791,13 @@ impl<'source> Parser<'source> {
         let previous_depth = self.depth;
         if self.depth >= MAX_DEPTH {
             let span = self.span_from_token(self.current_token());
-            self.track_error_at(span, "too deeply nested", "Reduce nesting depth");
+            self.track_coded_error_at(
+                span,
+                "Nesting too deep",
+                "nesting_too_deep",
+                "too deeply nested",
+                "Reduce nesting depth",
+            );
             self.next();
             return None;
         }
@@ -793,7 +811,13 @@ impl<'source> Parser<'source> {
     fn deepen(&mut self) -> bool {
         if self.depth >= MAX_DEPTH {
             let span = self.span_from_token(self.current_token());
-            self.track_error_at(span, "too deeply nested", "Reduce nesting depth");
+            self.track_coded_error_at(
+                span,
+                "Nesting too deep",
+                "nesting_too_deep",
+                "too deeply nested",
+                "Reduce nesting depth",
+            );
             return false;
         }
         self.depth += 1;
@@ -902,11 +926,34 @@ impl<'source> Parser<'source> {
         label: impl Into<string::String>,
         help: impl Into<string::String>,
     ) {
+        self.track_coded_error_at(span, "Syntax error", "syntax_error", label, help);
+    }
+
+    fn track_coded_error(
+        &mut self,
+        title: impl Into<string::String>,
+        code: &str,
+        label: impl Into<string::String>,
+        help: impl Into<string::String>,
+    ) {
+        let current = self.current_token();
+        let span = Span::new(self.file_id, current.byte_offset, current.byte_length);
+        self.track_coded_error_at(span, title, code, label, help);
+    }
+
+    fn track_coded_error_at(
+        &mut self,
+        span: Span,
+        title: impl Into<string::String>,
+        code: &str,
+        label: impl Into<string::String>,
+        help: impl Into<string::String>,
+    ) {
         if self.too_many_errors() {
             return;
         }
-        let error = ParseError::new("Syntax error", span, label.into())
-            .with_parse_code("syntax_error")
+        let error = ParseError::new(title, span, label)
+            .with_parse_code(code)
             .with_help(help.into());
 
         self.errors.push(error);
@@ -916,9 +963,13 @@ impl<'source> Parser<'source> {
         if self.too_many_errors() {
             return;
         }
-        let error = ParseError::new("Syntax error", span, "use `<...>` for type args")
-            .with_parse_code("angle_brackets_for_generics")
-            .with_help(help.into());
+        let error = ParseError::new(
+            "Wrong brackets for type arguments",
+            span,
+            "use `<...>` for type args",
+        )
+        .with_parse_code("angle_brackets_for_generics")
+        .with_help(help.into());
 
         self.errors.push(error);
     }
@@ -927,10 +978,10 @@ impl<'source> Parser<'source> {
         if self.too_many_errors() {
             return;
         }
-        let error = ParseError::new("Syntax error", span, "not allowed")
+        let error = ParseError::new("Unsupported `var` declaration", span, "not allowed")
             .with_parse_code("var_not_allowed")
             .with_help(
-                "Use `const` for a primitive, or a function that returns the value e.g. `fn origin() -> Point { ... }` for a composite",
+                "Use `const` for a primitive, or a function that returns the value, e.g. `fn origin() -> Point { ... }` for a composite",
             );
 
         self.errors.push(error);
@@ -940,11 +991,15 @@ impl<'source> Parser<'source> {
         if self.too_many_errors() {
             return;
         }
-        let error = ParseError::new("Syntax error", span, "import alias goes before the path")
-            .with_parse_code("import_alias_position")
-            .with_help(format!(
-                "Use Go-style alias syntax: `import {alias} \"{path}\"`"
-            ));
+        let error = ParseError::new(
+            "Misplaced import alias",
+            span,
+            "import alias goes before the path",
+        )
+        .with_parse_code("import_alias_position")
+        .with_help(format!(
+            "Use Go-style alias syntax: `import {alias} \"{path}\"`"
+        ));
 
         self.errors.push(error);
     }
@@ -970,7 +1025,7 @@ impl<'source> Parser<'source> {
         if self.too_many_errors() {
             return;
         }
-        let error = ParseError::new("Syntax error", span, "missing comma after match arm")
+        let error = ParseError::new("Missing comma after match arm", span, "expected `,`")
             .with_parse_code("match_arm_missing_comma")
             .with_help("Match arms must be separated by commas, even when the body is a block.");
 
@@ -1053,7 +1108,7 @@ impl<'source> Parser<'source> {
         } else if arity == 1 {
             "Use the type directly without wrapping in a tuple".to_string()
         } else {
-            "For >5 elements, use a struct with named fields".to_string()
+            "For more than 5 elements, use a struct with named fields".to_string()
         };
 
         let error = ParseError::new(
@@ -1101,7 +1156,7 @@ impl<'source> Parser<'source> {
             "write `embed` here",
         )
         .with_parse_code("impl_interface_embed")
-        .with_help("Interfaces embed other interfaces with `embed`. Replace `impl` with `embed`");
+        .with_help("Replace `impl` with `embed`. Interfaces embed other interfaces with `embed`");
 
         self.errors.push(error);
     }
@@ -1226,7 +1281,7 @@ impl<'source> Parser<'source> {
         let error = ParseError::new("Misplaced import", span, "not allowed here")
             .with_parse_code("import_after_item")
             .with_help(
-                "Imports must come before every other top-level item. Move this import to the top of the file, or run `lis format` to hoist it",
+                "Move this import to the top of the file, or run `lis format` to hoist it. Imports must come before every other top-level item",
             );
 
         self.errors.push(error);
@@ -1292,7 +1347,9 @@ impl<'source> Parser<'source> {
 
         let (n, is_decimal) = if clean.starts_with("0x") || clean.starts_with("0X") {
             let value = u64::from_str_radix(&clean[2..], 16).unwrap_or_else(|_| {
-                self.track_error(
+                self.track_coded_error(
+                    "Literal out of range",
+                    "literal_out_of_range",
                     format!("hex literal '{text}' is too large"),
                     "Maximum value is `0xFFFFFFFFFFFFFFFF`.",
                 );
@@ -1301,7 +1358,9 @@ impl<'source> Parser<'source> {
             (value, false)
         } else if clean.starts_with("0o") || clean.starts_with("0O") {
             let value = u64::from_str_radix(&clean[2..], 8).unwrap_or_else(|_| {
-                self.track_error(
+                self.track_coded_error(
+                    "Literal out of range",
+                    "literal_out_of_range",
                     format!("octal literal '{text}' is too large"),
                     "Maximum value is `0o1777777777777777777777`.",
                 );
@@ -1310,7 +1369,9 @@ impl<'source> Parser<'source> {
             (value, false)
         } else if clean.starts_with("0b") || clean.starts_with("0B") {
             let value = u64::from_str_radix(&clean[2..], 2).unwrap_or_else(|_| {
-                self.track_error(
+                self.track_coded_error(
+                    "Literal out of range",
+                    "literal_out_of_range",
                     format!("binary literal '{text}' is too large"),
                     "Value must fit in 64 bits.",
                 );
@@ -1322,7 +1383,9 @@ impl<'source> Parser<'source> {
             (clean.parse().unwrap_or(0), false)
         } else {
             let value = clean.parse().unwrap_or_else(|_| {
-                self.track_error(
+                self.track_coded_error(
+                    "Literal out of range",
+                    "literal_out_of_range",
                     format!("integer literal '{text}' is too large"),
                     "Maximum value is `18446744073709551615`.",
                 );
@@ -1357,48 +1420,55 @@ impl<'source> Parser<'source> {
             "expr" => (
                 format!("expected expression, found {}", token_descriptor),
                 "expected_expression",
-                "Check your syntax.",
+                None,
             ),
             "pattern" => (
                 format!("unexpected {} in pattern", token_descriptor),
                 "invalid_pattern",
-                "Patterns include literals, variables, and destructuring.",
+                Some("Patterns include literals, variables, and destructuring."),
             ),
             "literal" => (
                 format!("expected literal, found {}", token_descriptor),
                 "expected_literal",
-                "Literals include numbers, strings, characters, and booleans.",
+                Some("Literals include numbers, strings, characters, and booleans."),
             ),
             "top_item" if token.text == "trait" => (
                 format!("unexpected {}", token_descriptor),
                 "trait_unsupported",
-                "Lisette uses `interface` with Go-style structural typing. Types automatically satisfy interfaces if they have the required methods.",
+                Some(
+                    "Lisette uses `interface` in place of `trait`. Types automatically satisfy interfaces if they have the required methods.",
+                ),
             ),
             "top_item" if token.text == "use" => (
                 "unexpected syntax for import".to_string(),
                 "use_unsupported",
-                "Use `import` instead of `use` for imports: `import \"package/path\"`",
+                Some("Use `import` instead of `use` for imports: `import \"package/path\"`"),
             ),
             "top_item" if token.kind == Let => (
                 "`let` is not allowed at the top level".to_string(),
                 "top_level_let",
-                "Use `const` for a primitive, or a function that returns the value e.g. `fn origin() -> Point { ... }` for a composite",
+                Some(
+                    "Use `const` for a primitive, or a function that returns the value, e.g. `fn origin() -> Point { ... }` for a composite",
+                ),
             ),
             "top_item" => (
                 "expected declaration".to_string(),
                 "expected_declaration",
-                "At the top level of a file, Lisette expects `fn`, `struct`, `enum`, `interface`, `impl`, `const`, `import`, or `type`.",
+                Some(
+                    "At the top level of a file, Lisette expects `fn`, `struct`, `enum`, `interface`, `impl`, `const`, `import`, or `type`.",
+                ),
             ),
             _ => (
                 format!("unexpected {}", token_descriptor),
                 "unexpected_token",
-                "Check your syntax.",
+                None,
             ),
         };
 
-        let error = ParseError::new("Syntax error", span, label)
-            .with_parse_code(error_code)
-            .with_help(help);
+        let mut error = ParseError::new("Syntax error", span, label).with_parse_code(error_code);
+        if let Some(help) = help {
+            error = error.with_help(help);
+        }
 
         if !self.too_many_errors() {
             self.errors.push(error);
@@ -1612,7 +1682,7 @@ mod import_order_tests {
     #[test]
     fn an_import_inside_a_block_keeps_its_own_error() {
         let source = "fn f() {\n  import \"go:fmt\"\n}";
-        assert_eq!(codes(source), ["parse.syntax_error"]);
+        assert_eq!(codes(source), ["parse.nested_definition"]);
     }
 
     #[test]

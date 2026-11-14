@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·      ╰── would synthesize an `equals` of its own
  5 │ struct Foo { value: int }
    ╰────
-  help: `#[equality]` needs a plain `fn equals(self, other: Self) -> bool`. Write `equals` in that form, or remove `#[equality]` · code: [attribute.equality_conflicting_equals]
+  help: Write `equals` as a plain `fn equals(self, other: Self) -> bool`, or remove `#[equality]` · code: [attribute.equality_conflicting_equals]

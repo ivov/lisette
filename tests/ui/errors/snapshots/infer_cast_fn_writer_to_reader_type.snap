@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·                         ╰── expected `Handler`, found `fn (mut Ref<Node>) -> ()`
  10 │   let node = Node { value: 1 }
     ╰────
-  help: A function value may demand less permission than its type promises, never more. Match `mut` on each differing parameter, or expect `fn (mut Ref<Node>) -> ()` instead · code: [infer.needs_writable]
+  help: Match `mut` on each differing parameter, or expect `fn (mut Ref<Node>) -> ()` instead. A function value may demand less permission than its type promises, never more · code: [infer.needs_writable]

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·     ╰── `x` was declared without `mut`
  4 │   x + y
    ╰────
-  help: Parameters are immutable. Rebind with `let mut x = x` to mutate a local copy · code: [infer.immutable]
+  help: Rebind with `let mut x = x` to mutate a local copy. Parameters are immutable · code: [infer.immutable]

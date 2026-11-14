@@ -9,7 +9,7 @@ source: tests/ui/errors/mod.rs
    ·          ╰── `Some` is an `Option` variant, but the value is `(int, bool)`
  7 │     None => -1,
    ╰────
-  help: A value and a `bool` form a tuple, not an `Option`. Destructure it with `let (value, ok) = ...` · code: [resolve.variant_not_found]
+  help: Destructure the tuple with `let (value, ok) = ...`. A value and a `bool` form a tuple, not an `Option` · code: [resolve.variant_not_found]
 
   ✕ Variant not found
    ╭─[test.lis:7:5]
@@ -19,4 +19,4 @@ source: tests/ui/errors/mod.rs
    ·       ╰── `None` is an `Option` variant, but the value is `(int, bool)`
  8 │   }
    ╰────
-  help: A value and a `bool` form a tuple, not an `Option`. Destructure it with `let (value, ok) = ...` · code: [resolve.variant_not_found]
+  help: Destructure the tuple with `let (value, ok) = ...`. A value and a `bool` form a tuple, not an `Option` · code: [resolve.variant_not_found]

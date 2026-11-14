@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Syntax error
+  ✕ `::` in a path
    ╭─[test.lis:6:10]
  5 │   match s {
  6 │     Shape::Circle(r) => r,
    ·          ─┬
-   ·           ╰── invalid syntax
+   ·           ╰── Rust-style path
  7 │     _ => 0,
    ╰────
-  help: Use `.` instead of `::` for enum variant access, e.g. `Shape.Circle` · code: [parse.syntax_error]
+  help: Use `.` instead of `::` for enum variant access, e.g. `Shape.Circle` · code: [parse.double_colon_path]

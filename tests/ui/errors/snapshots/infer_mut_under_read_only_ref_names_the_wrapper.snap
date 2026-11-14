@@ -10,4 +10,4 @@ source: tests/ui/errors/mod.rs
    ·           ╰── read-only
  5 │   let _ = r
    ╰────
-  help: A read-only container makes its contents read-only. Write `mut` before `Ref`, or remove the inner `mut` · code: [infer.mut_without_effect]
+  help: Write `mut` before `Ref`, or remove the inner `mut`. A read-only container makes its contents read-only · code: [infer.mut_without_effect]

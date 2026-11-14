@@ -154,7 +154,7 @@ pub fn validate_script_entry(module_path: &str, dep: &GoDependency) -> Result<()
 
     if !crate::is_exact_version(version) {
         return Err(format!(
-            "`{}` is pinned to `{}`, which is not an exact version. Write a full version such as `v1.2.3`",
+            "Write a full version, e.g. `v1.2.3`. `{}` is pinned to `{}`, which is not an exact version",
             module_path, version
         ));
     }

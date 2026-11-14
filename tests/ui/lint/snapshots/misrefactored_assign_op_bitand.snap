@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·        ╰── uses `a` twice
  5 │   let _ = a
    ╰────
-  help: The `&=` operator already includes `a`, so naming `a` again on the right applies it twice. To apply `b` once, write `a &= b` · code: [lint.misrefactored_assign_op]
+  help: To apply `b` once, write `a &= b`. The `&=` operator already includes `a`, so naming `a` again on the right applies it twice · code: [lint.misrefactored_assign_op]

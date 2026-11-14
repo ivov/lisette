@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·      ╰── `on_done` cannot be compared
  5 │ }
    ╰────
-  help: `#[equality]` cannot compare functions. Give `Handler` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field · code: [attribute.cannot_derive_equality]
+  help: Give `Handler` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field. `#[equality]` cannot compare functions · code: [attribute.cannot_derive_equality]

@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                  ╰── always `true`
  5 │ }
    ╰────
-  help: Every value satisfies at least one side, so this `||` is always `true`. Check the bounds, or did you mean `&&`? · code: [infer.always_true_disjunction]
+  help: Check the bounds, or did you mean `&&`? Every value satisfies at least one side, so this `||` is always `true` · code: [infer.always_true_disjunction]

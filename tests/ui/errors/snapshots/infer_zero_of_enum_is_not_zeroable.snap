@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                 ╰── `Color` does not satisfy `Zeroable`
  6 │ }
    ╰────
-  help: `Color` is an enum with no variant marked `#[default]`, so it has no zero value. Mark the variant that should be the zero, or build the value explicitly · code: [infer.not_zeroable_bound]
+  help: Mark the variant that should be the zero with `#[default]`, or build the value explicitly. `Color` is an enum with no variant marked `#[default]`, so it has no zero value · code: [infer.not_zeroable_bound]

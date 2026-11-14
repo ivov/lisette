@@ -16,4 +16,4 @@ source: tests/ui/lint/mod.rs
     ·                        ╰── `port` will not be serialized
  12 │   let _ = c.port
     ╰────
-  help: Only `pub` fields are written to JSON. Add `#[json]` to `Config`, or mark `port` as `pub` · code: [lint.json_skipped_field]
+  help: Add `#[json]` to `Config`, or mark `port` as `pub`. Only `pub` fields are written to JSON · code: [lint.json_skipped_field]

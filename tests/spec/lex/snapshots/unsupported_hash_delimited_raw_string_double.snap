@@ -13,7 +13,7 @@ LexResult {
     ],
     errors: [
         ParseError {
-            message: "Hash-delimited raw strings are not supported",
+            message: "Hash-delimited raw strings are not supported yet",
             labels: [
                 (
                     Span {
@@ -21,13 +21,12 @@ LexResult {
                         byte_offset: 0,
                         byte_length: 10,
                     },
-                    "not yet implemented",
+                    "not supported yet",
                 ),
             ],
             help: Some(
-                "Hash-delimited raw strings (`r#\"...\"#`) are not yet implemented. For now, use a regular string with escaped quotes",
+                "Use a regular string with escaped quotes for now",
             ),
-            note: None,
             code: "lex.unsupported_hash_delimited_raw_string",
         },
     ],

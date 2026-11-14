@@ -12,4 +12,4 @@ source: tests/ui/errors/mod.rs
    · ╰──── `Widget` is defined in package `ext`
  9 │     
    ╰────
-  help: Methods can only be defined on types in the same package. Use a standalone function instead: `fn my_method(w: Widget) { ... }` · code: [infer.impl_on_foreign_type]
+  help: Use a standalone function: `fn my_method(w: Widget) { ... }`. Methods can only be defined on types in the same package · code: [infer.impl_on_foreign_type]

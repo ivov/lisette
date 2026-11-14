@@ -13,7 +13,7 @@ LexResult {
     ],
     errors: [
         ParseError {
-            message: "Raw format strings are currently not supported",
+            message: "Raw format strings are not supported yet",
             labels: [
                 (
                     Span {
@@ -21,13 +21,12 @@ LexResult {
                         byte_offset: 0,
                         byte_length: 7,
                     },
-                    "not yet implemented",
+                    "not supported yet",
                 ),
             ],
             help: Some(
-                "Raw format strings are not yet implemented. When supported, the canonical spelling will be `rf\"...\"`. For now, use a regular f-string with escaped backslashes",
+                "Use a regular f-string with escaped backslashes for now. When supported, the spelling will be `rf\"...\"`",
             ),
-            note: None,
             code: "lex.unsupported_raw_format_string",
         },
     ],

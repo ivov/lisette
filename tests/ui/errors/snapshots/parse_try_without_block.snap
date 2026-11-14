@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·    ╰── requires a block
  5 │ }
    ╰────
-  help: Use `try { expression }` instead of `try expression` · code: [parse.syntax_error]
+  help: Use `try { expression }` instead of `try expression` · code: [parse.try_without_block]

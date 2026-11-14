@@ -139,6 +139,14 @@ impl DependencyGraph {
             })
     }
 
+    pub(crate) fn import_span(&self, package_id: &str) -> Option<Span> {
+        self.edges
+            .values()
+            .filter_map(|dependencies| dependencies.get(package_id))
+            .map(|dependency| dependency.span)
+            .min_by_key(|span| (span.file_id, span.byte_offset))
+    }
+
     pub(crate) fn is_link_only_package(&self, package_id: &str) -> bool {
         let mut uses = self
             .edges

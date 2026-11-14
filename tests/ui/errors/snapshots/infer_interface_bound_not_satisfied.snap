@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·               ╰── `int` cannot implement `Writer`
  12 │ }
     ╰────
-  help: Built-in types have no Go methods, so they cannot satisfy interfaces. Wrap the value in a struct that implements `Writer` · code: [infer.interface_not_implemented]
+  help: Wrap the value in a struct that implements `Writer`. Built-in types have no Go methods, so they cannot satisfy interfaces · code: [infer.interface_not_implemented]

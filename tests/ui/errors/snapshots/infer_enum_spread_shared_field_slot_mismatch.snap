@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·                          ╰── may hold any `E` variant
  10 │ }
     ╰────
-  help: Every `E` variant has `tag`, but the name collides with a built-in enum member, so each variant stores it separately and a spread cannot fill it. Assign field `tag` explicitly · code: [infer.enum_spread_missing_fields]
+  help: Assign field `tag` explicitly. Every `E` variant has `tag`, but the name collides with a built-in enum member, so each variant stores it separately and a spread cannot fill it · code: [infer.enum_spread_missing_fields]

@@ -1,6 +1,8 @@
+use std::borrow::Cow;
 use std::fmt;
 
 use crate::ast::Annotation;
+use crate::program::go_import_default_name;
 use crate::program::is_internal_package_id;
 use crate::types::SimpleKind;
 use crate::types::{GO_IMPORT_PREFIX, Symbol, Type};
@@ -77,7 +79,7 @@ impl Type {
                 let name = qualified_name(id, qualifier);
 
                 if args.is_empty() {
-                    return name.to_string();
+                    return name.into_owned();
                 }
 
                 format!("{}<{}>", name, args_formatted)
@@ -160,23 +162,45 @@ impl Type {
     }
 }
 
-fn qualified_name(id: &Symbol, qualifier: Qualifier) -> &str {
+fn qualified_name(id: &Symbol, qualifier: Qualifier) -> Cow<'_, str> {
     if let Some(path) = id.as_str().strip_prefix(GO_IMPORT_PREFIX) {
-        return path;
+        if qualifier == Qualifier::Package
+            && let Some(short) = go_package_qualified_name(path, id.last_segment())
+        {
+            return Cow::Owned(short);
+        }
+        return Cow::Borrowed(path);
     }
 
     if qualifier == Qualifier::Package {
-        return id.last_segment();
+        return Cow::Borrowed(id.last_segment());
     }
 
     match id.as_str().split_once('.') {
         Some((package, _))
             if package != crate::ENTRY_PACKAGE_ID && !is_internal_package_id(package) =>
         {
-            id.as_str()
+            Cow::Borrowed(id.as_str())
         }
-        _ => id.last_segment(),
+        _ => Cow::Borrowed(id.last_segment()),
     }
+}
+
+pub fn type_display_name(id: &Symbol) -> String {
+    qualified_name(id, Qualifier::Package).into_owned()
+}
+
+fn go_package_qualified_name(path: &str, leaf: &str) -> Option<String> {
+    let package_path = path.strip_suffix(leaf)?.strip_suffix('.')?;
+    let package = go_import_default_name(package_path);
+    let is_identifier = package
+        .chars()
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+        && package
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_');
+    is_identifier.then(|| format!("{package}.{leaf}"))
 }
 
 impl fmt::Display for Type {
@@ -246,5 +270,34 @@ pub fn annotation_to_string(ann: &Annotation) -> String {
         }
         Annotation::Unknown => "Unknown".to_string(),
         Annotation::Opaque { .. } => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::go_package_qualified_name;
+
+    #[test]
+    fn a_go_type_takes_the_name_of_an_unaliased_import() {
+        assert_eq!(
+            go_package_qualified_name("net/http.Request", "Request").as_deref(),
+            Some("http.Request")
+        );
+        assert_eq!(
+            go_package_qualified_name("github.com/jackc/pgx/v5.Conn", "Conn").as_deref(),
+            Some("pgx.Conn")
+        );
+    }
+
+    #[test]
+    fn a_package_name_that_is_not_an_identifier_keeps_the_path() {
+        assert_eq!(
+            go_package_qualified_name("gopkg.in/yaml.v3.Node", "Node"),
+            None
+        );
+        assert_eq!(
+            go_package_qualified_name("github.com/google/go-github.Client", "Client"),
+            None
+        );
     }
 }

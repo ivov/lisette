@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Syntax error
+  ✕ Invalid assignment target
    ╭─[test.lis:3:9]
  2 │ fn main() {
  3 │   { 1 } -= 2;
    ·         ─┬
-   ·          ╰── invalid assignment target
+   ·          ╰── not assignable
  4 │ }
    ╰────
-  help: Only variables, fields, and indices can be assigned to · code: [parse.syntax_error]
+  help: Only variables, fields, and indices can be assigned to · code: [parse.invalid_assignment_target]

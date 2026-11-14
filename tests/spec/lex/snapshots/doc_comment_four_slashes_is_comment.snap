@@ -33,7 +33,6 @@ LexResult {
             help: Some(
                 "Use `//` for regular comments or `///` for doc comments",
             ),
-            note: None,
             code: "lex.excess_slashes_in_comment",
         },
     ],

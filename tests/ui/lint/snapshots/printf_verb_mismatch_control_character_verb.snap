@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·            ╰── 1 verb, 0 arguments
  6 │ }
    ╰────
-  help: `fmt.Printf` has 1 verb but 0 arguments, so `%\n` prints as `%!\n(MISSING)`. Add the missing argument, remove the verb, or write `%%` for a literal percent sign · code: [lint.printf_verb_mismatch]
+  help: Add the missing argument, remove the verb, or write `%%` for a literal percent sign. `fmt.Printf` has 1 verb but 0 arguments, so `%\n` prints as `%!\n(MISSING)` · code: [lint.printf_verb_mismatch]

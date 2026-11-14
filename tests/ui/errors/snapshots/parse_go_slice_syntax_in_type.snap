@@ -1,11 +1,11 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Syntax error
+  ✕ Go-style slice type
    ╭─[test.lis:2:14]
  1 │ 
  2 │ fn test(arr: []int) {}
    ·              ──┬──
-   ·                ╰── invalid syntax for `Slice`
+   ·                ╰── `[]T` is Go syntax
    ╰────
-  help: Use `Slice<int>` instead of `[]int` · code: [parse.syntax_error]
+  help: Use `Slice<int>` instead of `[]int` · code: [parse.go_slice_type]

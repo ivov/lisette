@@ -209,7 +209,7 @@ fn unix_renders_a_zero_length_span_at_its_position() {
 }
 
 #[test]
-fn unix_carries_the_note_alongside_the_help() {
+fn unix_drops_the_final_period_of_the_help() {
     let source = "let x = 1";
     let span = Span {
         file_id: 0,
@@ -218,15 +218,13 @@ fn unix_carries_the_note_alongside_the_help() {
     };
     let diagnostic = LisetteDiagnostic::error("Invalid or-pattern")
         .with_span_label(&span, "here")
-        .with_resolve_code("or_pattern")
-        .with_help("Use a single binding")
-        .with_note("Or-patterns can only be used in `match`, `if let`, and `while let`.");
+        .with_help("Use a single binding. Or-patterns can only be used in `match`, `if let`, and `while let`.");
 
     let output = format_diagnostic_unix(&diagnostic, source, "src/main.lis");
 
     assert_eq!(
         output,
-        "src/main.lis:1:5: error: Invalid or-pattern: here · Use a single binding Or-patterns can only be used in `match`, `if let`, and `while let` [resolve.or_pattern]"
+        "src/main.lis:1:5: error: Invalid or-pattern: here · Use a single binding. Or-patterns can only be used in `match`, `if let`, and `while let`"
     );
 }
 

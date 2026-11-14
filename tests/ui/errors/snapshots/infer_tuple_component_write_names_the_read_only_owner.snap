@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·        ╰── `p.0` is read-only
  6 │ }
    ╰────
-  help: `.0` is declared writable, but `p` is read-only, so its fields are too. Make `p` writable where it is created · code: [infer.write_through_read_only]
+  help: Make `p` writable where it is created. `.0` is declared writable, but `p` is read-only, so its fields are too · code: [infer.write_through_read_only]

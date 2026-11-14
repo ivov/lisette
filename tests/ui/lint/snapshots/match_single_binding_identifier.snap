@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·     ╰── should be `let`
  4 │     y => y + 1,
    ╰────
-  help: A match with a single binding is ineffective. Use `let y = value` instead · code: [lint.match_single_binding]
+  help: Use `let y = value`. A match with a single binding is ineffective · code: [lint.match_single_binding]

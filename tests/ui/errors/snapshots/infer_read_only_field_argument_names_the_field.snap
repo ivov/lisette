@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                     ╰── expected `mut Slice<string>`, found `Slice<string>`
  9 │ }
    ╰────
-  help: `mut Slice<string>` permits writes, `Slice<string>` does not. Declare the field `order` as `mut Slice<string>` · code: [infer.needs_writable]
+  help: Declare the field `order` as `mut Slice<string>`. `mut Slice<string>` permits writes, `Slice<string>` does not · code: [infer.needs_writable]

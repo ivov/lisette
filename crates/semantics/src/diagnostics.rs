@@ -180,7 +180,16 @@ fn emit_undeclared(
     transitive_importer: Option<&str>,
     sink: &LocalSink,
 ) {
-    if let (Some(_), Some(importer)) = (script, transitive_importer) {
+    if is_prelude_go_package(go_pkg) {
+        let importer = match replace_importer {
+            Some(ReplaceImporter::Module(module) | ReplaceImporter::Local(module)) => Some(module),
+            None => transitive_importer,
+        };
+        sink.push(match importer {
+            Some(importer) => diagnostics::package_graph::prelude_in_go_api(importer, span),
+            None => diagnostics::package_graph::cannot_import_prelude(span),
+        });
+    } else if let (Some(_), Some(importer)) = (script, transitive_importer) {
         sink.push(diagnostics::package_graph::script_transitive_go_dependency(
             go_pkg, importer, span,
         ));
@@ -207,4 +216,12 @@ fn emit_undeclared(
             go_pkg, span,
         ));
     }
+}
+
+const PRELUDE_GO_MODULE: &str = "github.com/ivov/lisette/prelude";
+
+fn is_prelude_go_package(go_pkg: &str) -> bool {
+    go_pkg
+        .strip_prefix(PRELUDE_GO_MODULE)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
 }

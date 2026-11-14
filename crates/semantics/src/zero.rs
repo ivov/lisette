@@ -4,6 +4,7 @@
 use ecow::EcoString;
 use syntax::ast::StructFieldDefinition;
 use syntax::ast::StructFields;
+use syntax::display::type_display_name;
 use syntax::program::AliasKind;
 use syntax::program::Definition;
 use syntax::program::DefinitionBody;
@@ -290,7 +291,7 @@ impl ZeroWalk<'_> {
                     return Err(NoZero {
                         chain: vec![],
                         reason: NoZeroReason::HiddenGoState {
-                            go_type: go_display_name(id),
+                            go_type: type_display_name(id).into(),
                         },
                         leaf_ty: Box::new(original_ty.clone()),
                     });
@@ -340,7 +341,7 @@ impl ZeroWalk<'_> {
                     }
                     let reason = if id.as_str().starts_with(types::GO_IMPORT_PREFIX) {
                         NoZeroReason::HiddenGoState {
-                            go_type: go_display_name(id),
+                            go_type: type_display_name(id).into(),
                         }
                     } else {
                         NoZeroReason::NoZeroForType
@@ -383,13 +384,6 @@ fn type_node_count(ty: &Type) -> usize {
 }
 
 /// `go:archive/zip.File` as `archive/zip.File`, so diagnostics name the package.
-fn go_display_name(id: &Symbol) -> EcoString {
-    id.as_str()
-        .strip_prefix(types::GO_IMPORT_PREFIX)
-        .unwrap_or(id.as_str())
-        .into()
-}
-
 /// Zero-construction verdict for a Go-imported struct. A struct with visible
 /// fields is designed for literal construction, so its hidden state is
 /// presumed zero-safe (matching Go's own struct literals) unless curated

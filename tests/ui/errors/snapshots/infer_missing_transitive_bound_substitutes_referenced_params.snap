@@ -8,4 +8,4 @@ source: tests/ui/errors/mod.rs
    ·                                  ───────┬──────
    ·                                         ╰── must satisfy `Parent<string>`
    ╰────
-  help: `Bar` requires its type argument to satisfy `Parent<string>`. Add the bound: `E: Parent<string>` · code: [infer.missing_transitive_bound]
+  help: Add the bound: `E: Parent<string>`. `Bar` requires its type argument to satisfy `Parent<string>` · code: [infer.missing_transitive_bound]

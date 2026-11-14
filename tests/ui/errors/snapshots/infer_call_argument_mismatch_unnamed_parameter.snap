@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·      ╰── expected `int`, found `string`
  4 │ }
    ╰────
-  help: `f()` expects `int` for its first argument. Convert the value to `int` · code: [infer.type_mismatch]
+  help: Convert the value to `int`. `f()` expects `int` for its first argument · code: [infer.type_mismatch]

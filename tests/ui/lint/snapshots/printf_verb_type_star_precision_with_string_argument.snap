@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                             ╰── `string` argument for the `*` precision
  6 │ }
    ╰────
-  help: `fmt.Printf` takes the `*` precision from an argument of type `string`, but a precision must be an integer. Use a fixed precision, or convert the argument · code: [lint.printf_verb_mismatch]
+  help: Use a fixed precision, or convert the argument. `fmt.Printf` takes the `*` precision from an argument of type `string`, but a precision must be an integer · code: [lint.printf_verb_mismatch]

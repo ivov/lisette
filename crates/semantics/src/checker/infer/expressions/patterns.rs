@@ -685,6 +685,7 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::enum_variant_constructor_not_found(
                     span,
                     enum_info.as_ref().map(|(n, v)| (n.as_str(), v.as_slice())),
+                    &resolved_ty,
                     identifier,
                     kind.is_match_arm(),
                 ));
@@ -836,6 +837,7 @@ impl InferCtx<'_> {
             return Some(diagnostics::infer::enum_variant_constructor_not_found(
                 name_span,
                 enum_info.as_ref().map(|(n, v)| (n.as_str(), v.as_slice())),
+                &resolved,
                 identifier,
                 kind.is_match_arm(),
             ));

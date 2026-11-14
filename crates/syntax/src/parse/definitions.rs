@@ -69,7 +69,7 @@ impl<'source> Parser<'source> {
         if !self.is(Identifier) {
             self.track_error(
                 "expected attribute name",
-                "Add an attribute name like `json` or `db`",
+                "Add an attribute name, e.g. `json` or `db`",
             );
             while self.is_not(RightSquareBracket) && !self.at_eof() {
                 self.next();
@@ -128,7 +128,7 @@ impl<'source> Parser<'source> {
             } else {
                 self.track_error(
                     "expected identifier after `!`",
-                    "Add an identifier like `omitempty` after `!`",
+                    "Add an identifier after `!`, e.g. `omitempty`",
                 );
                 return None;
             }
@@ -195,7 +195,7 @@ impl<'source> Parser<'source> {
             )
             .with_parse_code("enum_underlying_type")
             .with_help(
-                "Remove the `: type` annotation. To model a Go defined primitive type, use a named primitive type such as `pub struct Weekday(int)` with package-level constants.",
+                "Remove the `: type` annotation. To model a Go defined primitive type, use a named primitive type, e.g. `pub struct Weekday(int)`, with package-level constants.",
             );
             self.errors.push(error);
         }
@@ -282,7 +282,7 @@ impl<'source> Parser<'source> {
             )
             .with_parse_code("enum_assigned_variant")
             .with_help(
-                "Lisette enums are sum types, not Go const groups. To model a Go defined primitive type, use a named primitive type such as `pub struct Weekday(int)` with package-level constants.",
+                "To model a Go defined primitive type, use a named primitive type, e.g. `pub struct Weekday(int)`, with package-level constants. A Lisette enum is not a group of Go constants, so its variants take no values.",
             );
             self.errors.push(error);
             self.next(); // consume `=`
@@ -527,10 +527,17 @@ impl<'source> Parser<'source> {
         };
 
         if self.is(Mut) {
-            self.track_error(
-                "`mut` goes on the field's type",
-                "Place the permission right before the type, as in `items: mut Slice<int>`.",
-            );
+            let current = self.current_token();
+            let span = Span::new(self.file_id, current.byte_offset, current.byte_length);
+            if !self.too_many_errors() {
+                self.errors.push(
+                    ParseError::new("Misplaced `mut`", span, "`mut` goes on the field's type")
+                        .with_parse_code("misplaced_mut")
+                        .with_help(
+                            "Place the permission right before the type, e.g. `items: mut Slice<int>`.",
+                        ),
+                );
+            }
             self.next();
         }
 
@@ -540,10 +547,7 @@ impl<'source> Parser<'source> {
             && self.stream.peek_ahead(1).kind != Colon
         {
             if visibility.is_public() {
-                self.track_error(
-                    "embedded field cannot be `pub`",
-                    "An embedded field takes no `pub`; its visibility derives from the embedded type.",
-                );
+                self.track_coded_error("Invalid embedded field", "invalid_embedded_field", "embedded field cannot be `pub`", "An embedded field takes no `pub`; its visibility derives from the embedded type.");
             }
             return self.parse_embedded_field(doc, attributes);
         }
@@ -586,8 +590,10 @@ impl<'source> Parser<'source> {
         let span = self.span_from_offset(start.byte_offset);
 
         let Some(name) = Self::embedded_field_name(&annotation) else {
-            self.track_error_at(
+            self.track_coded_error_at(
                 span,
+                "Invalid embedded field",
+                "invalid_embedded_field",
                 "expected a named type after `embed`",
                 "`embed` requires a named type; a function or tuple type cannot be embedded.",
             );
@@ -595,11 +601,7 @@ impl<'source> Parser<'source> {
         };
 
         if let Some(attribute) = attributes.first() {
-            self.track_error_at(
-                attribute.span,
-                "embedded field cannot have attributes",
-                "An embedded field takes no attributes; its serialization follows Go's anonymous-field inlining.",
-            );
+            self.track_coded_error_at(attribute.span, "Invalid embedded field", "invalid_embedded_field", "embedded field cannot have attributes", "An embedded field takes no attributes; its serialization follows Go's anonymous-field inlining.");
         }
 
         Some(StructFieldDefinition {
@@ -728,10 +730,7 @@ impl<'source> Parser<'source> {
         };
 
         if self.is(For) {
-            self.track_error(
-                "invalid syntax",
-                "Lisette types satisfy interfaces automatically by having the required methods. Use `impl Type { ... }` to add methods.",
-            );
+            self.track_coded_error("Unsupported `impl ... for`", "impl_for", "interfaces need no `impl`", "Use `impl Type { ... }` to add methods. Lisette types satisfy interfaces automatically by having the required methods.");
             self.next();
             self.parse_annotation();
         }
@@ -766,7 +765,9 @@ impl<'source> Parser<'source> {
                 if let Some((_, span)) = method_doc {
                     self.error_detached_doc_comment(span);
                 }
-                self.track_error(
+                self.track_coded_error(
+                    "Invalid `impl` item",
+                    "invalid_impl_item",
                     "expected `fn` in impl block",
                     "Only functions are allowed in `impl` blocks.",
                 );
@@ -860,10 +861,7 @@ impl<'source> Parser<'source> {
                     if let Some((_, span)) = item_doc {
                         self.error_detached_doc_comment(span);
                     }
-                    self.track_error(
-                        "expected `fn` or `embed`",
-                        "Only method signatures (`fn`) and embeddings (`embed`) are allowed in interfaces.",
-                    );
+                    self.track_coded_error("Invalid interface item", "invalid_interface_item", "expected `fn` or `embed`", "Only method signatures (`fn`) and embeddings (`embed`) are allowed in interfaces.");
                     self.next();
                 }
             }

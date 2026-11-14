@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                   ╰── waits on a single operation
  7 │     match ch.receive() {
    ╰────
-  help: A `select` with one arm makes no choice between channel operations. Use `match ch.receive() { ... }` directly · code: [lint.single_arm_select]
+  help: Use `match ch.receive() { ... }` directly. A `select` with one arm makes no choice between channel operations · code: [lint.single_arm_select]

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·        ╰── same as field
  10 │     f"Dog:{self.name}"
     ╰────
-  help: `Dog` has a field `name` and a method `name`. Rename either the field or the method · code: [infer.method_shadows_field]
+  help: Rename either the field or the method. `Dog` has a field `name` and a method `name` · code: [infer.method_shadows_field]

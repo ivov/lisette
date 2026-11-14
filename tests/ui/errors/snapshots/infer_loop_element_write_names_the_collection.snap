@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·          ╰── `row` is read-only
  6 │   }
    ╰────
-  help: `row` binds elements of `grid`, which is read-only. Declare `let mut grid` · code: [infer.write_through_read_only]
+  help: Declare `let mut grid`. `row` binds elements of `grid`, which is read-only · code: [infer.write_through_read_only]

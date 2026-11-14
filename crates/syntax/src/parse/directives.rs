@@ -10,7 +10,12 @@ impl<'source> Parser<'source> {
         match directive_name {
             "rawgo" => self.parse_rawgo_directive(),
             _ => {
-                self.track_error("unknown directive", "There is no such directive.");
+                self.track_coded_error(
+                    "Unknown directive",
+                    "unknown_directive",
+                    "no such directive",
+                    "`@rawgo` is the only directive",
+                );
                 self.next();
                 if self.is(LeftParen) {
                     self.collect_delimited_expressions(LeftParen, RightParen);
@@ -32,7 +37,12 @@ impl<'source> Parser<'source> {
             }) => value,
 
             _ => {
-                self.track_error("invalid call to rawgo", "Use `@rawgo(\"go code\")`.");
+                self.track_coded_error(
+                    "Invalid `@rawgo` call",
+                    "invalid_rawgo",
+                    "invalid call to rawgo",
+                    "Use `@rawgo(\"go code\")`.",
+                );
                 "?".to_string()
             }
         };

@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·         ╰── redundant in tail position
  5 │   } else {
    ╰────
-  help: The final expression of a function is its return value. Drop `return` and keep the value · code: [lint.unnecessary_return]
+  help: Drop `return` and keep the value. The final expression of a function is its return value · code: [lint.unnecessary_return]

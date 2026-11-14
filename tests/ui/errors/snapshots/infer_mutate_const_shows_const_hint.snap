@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·      ╰── cannot mutate a `const`
  6 │ }
    ╰────
-  help: `const` bindings are immutable. Rebind with `let mut N = N` to mutate a local copy · code: [infer.immutable]
+  help: Rebind with `let mut N = N` to mutate a local copy. `const` bindings are immutable · code: [infer.immutable]

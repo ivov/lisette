@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·      ╰── not a Lisette builtin
  4 │ }
    ╰────
-  help: Lisette has no `print` builtin. Use `fmt.Println`, `fmt.Printf`, etc. after `import "go:fmt"` · code: [resolve.name_not_found]
+  help: Use `fmt.Println`, `fmt.Printf`, etc. after `import "go:fmt"`. Lisette has no `print` builtin · code: [resolve.name_not_found]

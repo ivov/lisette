@@ -44,7 +44,7 @@ pub fn mismatched_tail_value(
 }
 
 pub fn blank_import_non_go(blank_span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Invalid import")
+    LisetteDiagnostic::error("Blank import of a Lisette package")
         .with_resolve_code("blank_import_non_go")
         .with_span_label(&blank_span, "only allowed for Go packages")
         .with_help(
@@ -66,9 +66,9 @@ pub fn import_conflict(
             format!("conflicts with prior import `{}`", alias),
         )
         .with_help(format!(
-            "`{}` and `{}` resolve to the same name. Add an alias to at least one of them: \
-             `import my_{} \"{}\"`",
-            path1, path2, alias, path2
+            "Add an alias to at least one of the imports: `import my_{} \"{}\"`. \
+             `{}` and `{}` resolve to the same name",
+            alias, path2, path1, path2
         ))
 }
 
@@ -77,8 +77,8 @@ pub fn reserved_import_alias(alias: &str, alias_span: Span) -> LisetteDiagnostic
         .with_resolve_code("reserved_import_alias")
         .with_span_label(&alias_span, "reserved name")
         .with_help(format!(
-            "`{}` is a reserved name and cannot be used as an import alias. \
-             Choose a different alias, e.g. `import my_{} \"...\"`",
+            "Choose a different alias, e.g. `import my_{} \"...\"`. \
+             `{}` is a reserved name and cannot be used as an import alias",
             alias, alias
         ))
 }
@@ -88,7 +88,7 @@ pub fn duplicate_import_path(path: &str, name_span: Span) -> LisetteDiagnostic {
         .with_resolve_code("duplicate_import")
         .with_span_label(&name_span, "already imported above")
         .with_help(format!(
-            "Package `{}` is already imported. Remove the duplicate import.",
+            "Remove the duplicate import. Package `{}` is already imported.",
             path
         ))
 }
@@ -98,12 +98,12 @@ pub fn name_shadows_import(name: &str, import_path: &str, name_span: Span) -> Li
         .with_resolve_code("name_shadows_import")
         .with_span_label(&name_span, format!("conflicts with `{}`", import_path))
         .with_help(format!(
-            "`{}` shadows the package alias `{}`. \
-             Rename `{}` or re-alias the package, e.g. `import {} \"{}\"`.",
-            name,
-            import_path,
+            "Rename `{}` or re-alias the package, e.g. `import {} \"{}\"`. \
+             `{}` shadows the package alias `{}`.",
             name,
             suggested_import_alias(import_path, name),
+            import_path,
+            name,
             import_path
         ))
 }
@@ -146,11 +146,7 @@ pub fn statement_as_tail(span: Span, expected: &Type) -> LisetteDiagnostic {
         )
     };
 
-    let help = format!(
-        "This block is of type `()` because its last expression produces `()`, \
-         but the block was expected to be of type `{}`. {}",
-        expected, fix
-    );
+    let help = format!("{} The block must produce `{}`.", fix, expected);
 
     LisetteDiagnostic::error("Missing value at end of block")
         .with_infer_code("statement_as_tail")
@@ -174,9 +170,9 @@ pub fn self_type_not_supported(span: Span) -> LisetteDiagnostic {
         .with_resolve_code("self_type_not_supported")
         .with_span_label(&name_span, "disallowed")
         .with_help(
-            "`Self` is only allowed inside an `impl` block. \
-             Use a type parameter instead, e.g. \
-             `interface Ranked<T> { fn compare(other: T) -> int }`",
+            "Use a type parameter, e.g. \
+             `interface Ranked<T> { fn compare(other: T) -> int }`. \
+             `Self` is only allowed inside an `impl` block",
         )
 }
 
@@ -211,7 +207,11 @@ pub fn self_in_interface_method(span: Span) -> LisetteDiagnostic {
         .with_help("Remove `self` from the signature. Interface methods declare no receiver")
 }
 
-pub fn type_not_found(type_name: &str, annotation_span: Span) -> LisetteDiagnostic {
+pub fn type_not_found(
+    type_name: &str,
+    annotation_span: Span,
+    prefix_is_package: bool,
+) -> LisetteDiagnostic {
     let simple_name = type_name.rsplit('.').next().unwrap_or(type_name);
     let qualifier_offset = (type_name.len() - simple_name.len()) as u32;
     let name_span = Span::new(
@@ -243,13 +243,33 @@ pub fn type_not_found(type_name: &str, annotation_span: Span) -> LisetteDiagnost
             ));
     }
 
-    let diagnostic = LisetteDiagnostic::error("Type not found")
-        .with_resolve_code("type_not_found")
-        .with_span_label(&name_span, "not declared or imported");
+    let diagnostic = LisetteDiagnostic::error("Type not found").with_resolve_code("type_not_found");
 
+    if let Some((prefix, _)) = type_name.split_once('.') {
+        if prefix_is_package {
+            return diagnostic
+                .with_span_label(
+                    &name_span,
+                    format!("`{simple_name}` not found in package `{prefix}`"),
+                )
+                .with_help("Ensure the type is exported and spelled correctly");
+        }
+        let prefix_span = Span::new(
+            annotation_span.file_id,
+            annotation_span.byte_offset,
+            prefix.len() as u32,
+        );
+        return diagnostic
+            .with_span_label(&prefix_span, "not declared or imported")
+            .with_help(format!("Import the `{prefix}` package"));
+    }
+
+    let diagnostic = diagnostic.with_span_label(&name_span, "not declared or imported");
     match foreign_type_alias(simple_name) {
         Some(suggestion) => diagnostic.with_help(format!("Did you mean `{}`?", suggestion)),
-        None => diagnostic.with_help("Define or import this type"),
+        None => diagnostic.with_help(format!(
+            "Define `{simple_name}`, or qualify it with the package that declares it"
+        )),
     }
 }
 
@@ -362,7 +382,7 @@ pub fn const_disallows_composite(span: Span) -> LisetteDiagnostic {
         .with_infer_code("const_disallows_composite")
         .with_span_label(&span, "not allowed")
         .with_help(
-            "`const` only accepts primitive values: `bool`, `int`, `float`, and `string`. Use a function that returns the value instead",
+            "Use a function that returns the value. `const` only accepts primitive values: `bool`, `int`, `float`, and `string`",
         )
 }
 
@@ -406,7 +426,7 @@ pub fn name_not_found(
             .with_resolve_code("underscore_read")
             .with_span_label(&span, "`_` discards a value")
             .with_help(
-                "`_` binds nothing, so it cannot be read. Bind the value to a name to use it",
+                "Bind the value to a name to use it. `_` binds nothing, so it cannot be read",
             );
     }
 
@@ -558,7 +578,7 @@ pub fn stringer_signature_mismatch(method_name: &str, span: Span) -> LisetteDiag
             format!("`{}` must have signature `(self) -> string`", method_name),
         )
         .with_help(format!(
-            "`{}` is reserved for the Go `fmt.Stringer` (or `fmt.GoStringer`) interface and is auto-emitted by Lisette. Either change the signature to `(self) -> string`, or rename the method",
+            "Change the signature to `(self) -> string`, or rename the method. `{}` is reserved for the Go `fmt.Stringer` (or `fmt.GoStringer`) interface and is auto-emitted by Lisette",
             method_name
         ))
 }
@@ -571,20 +591,22 @@ pub fn json_method_override(method_name: &str, span: Span) -> LisetteDiagnostic 
             format!("`{}` collides with the method generated by `#[json]`", method_name),
         )
         .with_help(
-            "`#[json]` already generates `MarshalJSON` and `UnmarshalJSON`. Remove this method, or drop `#[json]` and write both yourself",
+            "Remove this method, or drop `#[json]` and write both yourself. `#[json]` already generates `MarshalJSON` and `UnmarshalJSON`",
         )
 }
 
 pub fn json_non_serializable_field(span: &Span, kind: &str, skippable: bool) -> LisetteDiagnostic {
     let fix = if skippable {
-        " Drop the field, or exclude it with `#[json(skip)]`."
+        "Drop the field, or exclude it with `#[json(skip)]`."
     } else {
-        " Remove it from the variant."
+        "Remove it from the variant."
     };
     LisetteDiagnostic::error("Non-serializable field in a `#[json]` type")
         .with_infer_code("json_non_serializable_field")
         .with_span_label(span, format!("a {kind} cannot be JSON-encoded"))
-        .with_help(format!("Go's `encoding/json` cannot marshal {kind}s.{fix}"))
+        .with_help(format!(
+            "{fix} Go's `encoding/json` cannot marshal {kind}s."
+        ))
 }
 
 pub fn cast_grants_permission(source: &str, target: &str, span: Span) -> LisetteDiagnostic {
@@ -595,8 +617,8 @@ pub fn cast_grants_permission(source: &str, target: &str, span: Span) -> Lisette
             format!("cannot convert `{source}` to the more permissive `{target}`"),
         )
         .with_help(
-            "A cast may drop `mut`, never restore it. Keep the value writable \
-             where it is created, or cast a `.clone()`",
+            "Keep the value writable where it is created, or cast a `.clone()`. \
+             A cast may drop `mut`, never restore it",
         )
 }
 
@@ -628,9 +650,9 @@ pub fn loop_copy_write(
 ) -> LisetteDiagnostic {
     let help = match collection {
         Some(collection) => format!(
-            "`{variable_name}` is a copy of the element, and the loop body does not read it \
-             after this write, so the collection keeps its old value. \
-             Write through `{collection}[i]` to update it"
+            "Write through `{collection}[i]` to update the collection. \
+             `{variable_name}` is a copy of the element, and the loop body does not read it \
+             after this write, so the collection keeps its old value"
         ),
         None => format!(
             "`{variable_name}` is a copy of the element, and the loop body does not read it \
@@ -667,7 +689,7 @@ pub fn mut_on_impl_target(target: &str, span: Span) -> LisetteDiagnostic {
         .with_span_label(&span, "invalid")
         .with_help(format!(
             "Remove `mut`. An `impl` block names the type being implemented, \
-             and each method decides its own receiver, as in `self: mut Ref<{target}>`"
+             and each method decides its own receiver, e.g. `self: mut Ref<{target}>`"
         ))
 }
 
@@ -681,8 +703,8 @@ pub fn mut_under_read_only_wrapper(
         .with_span_label(&wrapper_span, "read-only")
         .with_span_label(&contents_span, "`mut` has no effect")
         .with_help(format!(
-            "A read-only container makes its contents read-only. \
-             Write `mut` before `{wrapper}`, or remove the inner `mut`"
+            "Write `mut` before `{wrapper}`, or remove the inner `mut`. \
+             A read-only container makes its contents read-only"
         ))
 }
 
@@ -691,8 +713,8 @@ pub fn assert_type_needs_concrete(target: &str, span: Span) -> LisetteDiagnostic
         .with_infer_code("needs_writable")
         .with_span_label(&span, format!("`{target}` is not a concrete type"))
         .with_help(
-            "A type parameter could stand for a writable type, and an assertion \
-             from `Unknown` never grants permission. Assert to a concrete read-only type",
+            "Assert to a concrete read-only type. A type parameter could stand for a \
+             writable type, and an assertion from `Unknown` never grants permission",
         )
 }
 
@@ -704,8 +726,8 @@ pub fn assert_type_grants_permission(target: &str, span: Span) -> LisetteDiagnos
             format!("cannot assert to the more permissive `{target}`"),
         )
         .with_help(
-            "An assertion may narrow `Unknown` to a read-only type, never a writable \
-             one. Assert to the read-only type, then write to a `.clone()`",
+            "Assert to the read-only type, then write to a `.clone()`. An assertion may \
+             narrow `Unknown` to a read-only type, never a writable one",
         )
 }
 
@@ -717,9 +739,9 @@ pub fn spread_needs_writable(element_ty: &str, actual_ty: &str, span: Span) -> L
             format!("spreads read-only elements where `{element_ty}` is expected"),
         )
         .with_help(format!(
-            "Each spread element becomes a `{element_ty}` argument, and `{actual_ty}` \
-             holds read-only elements. Keep the elements writable where they are \
-             created, or pass clones"
+            "Keep the elements writable where they are created, or pass clones. \
+             Each spread element becomes a `{element_ty}` argument, and `{actual_ty}` \
+             holds read-only elements"
         ))
 }
 
@@ -731,8 +753,8 @@ pub fn aliased_writable_argument(place: &str, span: Span) -> LisetteDiagnostic {
             format!("`{place}` is passed writably and again in the same call"),
         )
         .with_help(format!(
-            "The callee's other view of `{place}` would change under it. \
-             Pass `{place}.clone()` in one position"
+            "Pass `{place}.clone()` in one position. \
+             The callee's other view of `{place}` would change under it"
         ))
 }
 
@@ -794,9 +816,12 @@ pub struct ElementDeclaration {
     pub declaration_span: Option<Span>,
 }
 
+const WRITABLE_AT_CREATION: &str =
+    "Make the value writable where it is created, or pass a `.clone()`";
+
 pub fn needs_writable_help(expected: &str, actual: &str, context: Option<WriteContext>) -> String {
     let remedy = needs_writable_remedy(expected, actual, context);
-    format!("`{expected}` permits writes, `{actual}` does not. {remedy}")
+    format!("{remedy}. `{expected}` permits writes, `{actual}` does not")
 }
 
 pub fn needs_writable_remedy(
@@ -811,18 +836,18 @@ pub fn needs_writable_remedy(
         }
         Some(WriteContext::Field(name)) => format!("Declare the field `{name}` as `{expected}`"),
         Some(WriteContext::ReadOnlyOwner { owner, field, .. }) => format!(
-            "`{field}` is declared writable, but `{owner}` is read-only, so its fields are too. \
-             Make `{owner}` writable where it is created"
+            "Make `{owner}` writable where it is created. \
+             `{field}` is declared writable, but `{owner}` is read-only, so its fields are too"
         ),
         Some(WriteContext::AliasOf { binding, source }) => format!(
-            "`{binding}` shares storage with `{source}`, which is read-only. \
-             Make `{source}` writable, or pass a `.clone()`"
+            "Make `{source}` writable, or pass a `.clone()`. \
+             `{binding}` shares storage with `{source}`, which is read-only"
         ),
         Some(WriteContext::ReadOnlyAnnotation(binding)) => {
-            format!("`{binding}` is declared as `{actual}`. Declare it as `{expected}`")
+            format!("Declare `{binding}` as `{expected}`. It is declared as `{actual}`")
         }
         Some(WriteContext::CallResult(callee)) => {
-            format!("`{callee}` returns `{actual}`. Declare its return type `{expected}`")
+            format!("Declare the return type of `{callee}` as `{expected}`. It returns `{actual}`")
         }
         Some(WriteContext::GoFieldCopy { place, index }) => go_field_copy_help(&place, index),
         Some(WriteContext::LoopElement {
@@ -830,8 +855,8 @@ pub fn needs_writable_remedy(
             collection,
         }) => match collection {
             Some(collection) => format!(
-                "`{binding}` binds elements of `{collection}`, which is read-only. \
-                 Declare `let mut {collection}`"
+                "Declare `let mut {collection}`. \
+                 `{binding}` binds elements of `{collection}`, which is read-only"
             ),
             None => format!("`{binding}` binds read-only elements"),
         },
@@ -840,22 +865,26 @@ pub fn needs_writable_remedy(
             collection,
         }) => match collection {
             Some(collection) => format!(
-                "`{binding}` binds a copy of each element. Bind with `for mut {binding}` \
-                 to write to the copy, or write through `{collection}[i]` to update the collection"
+                "Bind with `for mut {binding}` to write to the copy, or write through \
+                 `{collection}[i]` to update the collection. `{binding}` binds a copy of each element"
             ),
             None => format!(
-                "`{binding}` binds a copy of each element. Bind with `for mut {binding}` \
-                 to write to the copy"
+                "Bind with `for mut {binding}` to write to the copy. \
+                 `{binding}` binds a copy of each element"
             ),
         },
-        _ => "Make the value writable where it is created, or pass a `.clone()`".to_string(),
+        _ => WRITABLE_AT_CREATION.to_string(),
     }
+}
+
+pub fn needs_writable_argument_help(actual: &str, requirement: &str) -> String {
+    format!("{WRITABLE_AT_CREATION}. {requirement}, and `{actual}` does not permit writes")
 }
 
 fn go_field_copy_help(place: &str, index: &str) -> String {
     format!(
-        "Each read of `{place}` copies it out of a Go field, so a write to the copy \
-         does not reach the field. Write to `{place}[{index}]` directly"
+        "Write to `{place}[{index}]` directly. Each read of `{place}` copies it out of \
+         a Go field, so a write to the copy does not reach the field"
     )
 }
 
@@ -912,7 +941,7 @@ pub fn read_only_construction(
         format!("so the new `{constructed}` is read-only where `{expected}` is expected.")
     };
     diagnostic.with_help(format!(
-        "{subject} received less `mut` than declared, {outcome} {}",
+        "{}. {subject} received less `mut` than declared, {outcome}",
         remedies.join(". ")
     ))
 }
@@ -951,47 +980,47 @@ pub fn write_through_read_only(
                     binding,
                     collection: Some(collection),
                 }) => format!(
-                    "`{binding}` binds elements of `{collection}`, which is read-only. \
-                     Declare `let mut {collection}`"
+                    "Declare `let mut {collection}`. \
+                     `{binding}` binds elements of `{collection}`, which is read-only"
                 ),
                 Some(WriteContext::LoopElement { binding, .. }) => format!(
-                    "`{binding}` binds read-only elements. \
-                     Declare the collection with `let mut`"
+                    "Declare the collection with `let mut`. \
+                     `{binding}` binds read-only elements"
                 ),
                 Some(WriteContext::LoopCopy { binding, .. }) => format!(
-                    "`{binding}` binds a copy of each element. Bind with `for mut {binding}` \
-                     to write to the copy"
+                    "Bind with `for mut {binding}` to write to the copy. \
+                     `{binding}` binds a copy of each element"
                 ),
                 Some(WriteContext::AliasOf { binding, source }) => format!(
-                    "`{binding}` shares storage with `{source}`, which is read-only. \
-                     Make `{source}` writable, or write to a `.clone()` for an independent copy"
+                    "Make `{source}` writable, or write to a `.clone()` for an independent copy. \
+                     `{binding}` shares storage with `{source}`, which is read-only"
                 ),
                 Some(WriteContext::ReadOnlyAnnotation(binding)) => format!(
-                    "`{binding}` is declared as `{root_type}`. \
-                     Declare it as `{required_type}` to write through it"
+                    "Declare `{binding}` as `{required_type}` to write through it. \
+                     It is declared as `{root_type}`"
                 ),
                 Some(WriteContext::ReadOnlyOwner {
                     owner,
                     field,
                     origin,
                 }) => {
-                    let source = match origin {
+                    let action = match origin {
                         Some(callee) => format!(
-                            "`{owner}` comes from `{callee}`, so declare that function's return type `mut`"
+                            "Declare the return type of `{callee}` with `mut`, because `{owner}` comes from it"
                         ),
                         None => format!("Make `{owner}` writable where it is created"),
                     };
                     format!(
-                        "`{field}` is declared writable, but `{owner}` is read-only, \
-                         so its fields are too. {source}"
+                        "{action}. `{field}` is declared writable, but `{owner}` is read-only, \
+                         so its fields are too"
                     )
                 }
                 Some(WriteContext::GoFieldCopy { place, index }) => {
                     go_field_copy_help(&place, index)
                 }
                 Some(WriteContext::CallResult(callee)) => format!(
-                    "`{callee}` returns `{root_type}`. \
-                     Declare its return type `{required_type}`, or bind the result and write to a `.clone()`"
+                    "Declare the return type of `{callee}` as `{required_type}`, or bind the \
+                     result and write to a `.clone()`. It returns `{root_type}`"
                 ),
                 _ => format!(
                     "Make it `mut {governing_type}` where it is created, \
@@ -1024,7 +1053,7 @@ pub fn write_through_read_only(
             diagnostic = diagnostic.with_span_label(&declaration_span, &rule);
             remedy
         }
-        None => format!("{rule}. {remedy}"),
+        None => format!("{remedy}. {rule}"),
     };
     diagnostic.with_help(help)
 }
@@ -1084,7 +1113,7 @@ pub fn disallowed_mutation(
             .with_infer_code("immutable")
             .with_span_label(&span, "cannot mutate a `const`")
             .with_help(format!(
-                "`const` bindings are immutable. Rebind with `let mut {variable_name} = {variable_name}` to mutate a local copy"
+                "Rebind with `let mut {variable_name} = {variable_name}` to mutate a local copy. `const` bindings are immutable"
             ))
     } else if binding_kind.is_some_and(|kind| kind.is_pattern_position()) {
         LisetteDiagnostic::error("Immutable variable")
@@ -1096,12 +1125,12 @@ pub fn disallowed_mutation(
     } else {
         let help = if binding_kind.is_some_and(|kind| kind.is_param()) {
             format!(
-                "Parameters are immutable. Rebind with `let mut {variable_name} = {variable_name}` to mutate a local copy"
+                "Rebind with `let mut {variable_name} = {variable_name}` to mutate a local copy. Parameters are immutable"
             )
         } else if let Some(MutationHint::WritingCallee(callee)) = hint {
             format!(
-                "{callee} writes to `{variable_name}`. \
-                 Declare using `let mut {variable_name}` to mark the variable mutable"
+                "Declare using `let mut {variable_name}` to mark the variable mutable. \
+                 {callee} writes to `{variable_name}`"
             )
         } else {
             format!("Declare using `let mut {variable_name}` to mark the variable mutable")
@@ -1133,6 +1162,7 @@ pub fn uppercase_binding(span: Span, name: &str) -> LisetteDiagnostic {
 pub fn enum_variant_constructor_not_found(
     span: Span,
     enum_info: Option<(&str, &[String])>,
+    value_ty: &Type,
     written_path: &str,
     bare_allowed: bool,
 ) -> LisetteDiagnostic {
@@ -1193,10 +1223,18 @@ pub fn enum_variant_constructor_not_found(
             };
             (label, help)
         }
-    } else {
+    } else if value_ty.is_variable() || value_ty.is_error() || value_ty.is_never() {
         (
             "not a variant of any enum in scope".to_string(),
-            "Check that the variant is defined in the enum and spelled correctly".to_string(),
+            "Check that an enum declares this variant, and check its spelling".to_string(),
+        )
+    } else {
+        (
+            format!("the value is `{}`, not an enum", value_ty),
+            format!(
+                "Use a pattern that matches `{}`, e.g. a binding or `_`",
+                value_ty
+            ),
         )
     };
 
@@ -1206,8 +1244,8 @@ pub fn enum_variant_constructor_not_found(
         .with_help(help)
 }
 
-const VALUE_AND_BOOL_HELP: &str = "A value and a `bool` form a tuple, not an `Option`. \
-                                   Destructure it with `let (value, ok) = ...`";
+const VALUE_AND_BOOL_HELP: &str = "Destructure the tuple with `let (value, ok) = ...`. \
+                                   A value and a `bool` form a tuple, not an `Option`";
 
 pub fn option_pattern_on_value_and_bool(ty: &Type, variant: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Variant not found")
@@ -1250,7 +1288,7 @@ pub fn const_pattern_outside_match_arm(name: &str, span: Span) -> LisetteDiagnos
         .with_infer_code("const_pattern_outside_match_arm")
         .with_span_label(&span, "const patterns are only allowed in match arms")
         .with_help(format!(
-            "`{}` is a constant, so this pattern is refutable. Match on it inside a `match` expression, or compare with `==` in a `let` or function parameter.",
+            "Match on `{0}` inside a `match` expression, or compare with `==` in a `let` or function parameter. `{0}` is a constant, so this pattern can fail to match.",
             name
         ))
 }
@@ -1404,7 +1442,7 @@ pub fn tuple_arity_mismatch(
     } else {
         "elements"
     };
-    LisetteDiagnostic::error("Tuple arity mismatch")
+    LisetteDiagnostic::error("Tuple size mismatch")
         .with_infer_code("tuple_element_count_mismatch")
         .with_span_label(
             &span,
@@ -1492,7 +1530,7 @@ pub fn private_field_access(
         .with_resolve_code("private_field_access")
         .with_span_label(&span, format!("private to `{}`", owning_package))
         .with_help(format!(
-            "Cannot access private field `{}` of struct `{}`. Mark the field as `pub`",
+            "Mark the field as `pub`. Field `{}` of struct `{}` is private",
             field_name, struct_name
         ))
 }
@@ -1507,7 +1545,7 @@ pub fn private_method_access(
         .with_resolve_code("private_method_access")
         .with_span_label(&span, format!("private to `{}`", owning_package))
         .with_help(format!(
-            "Cannot access private method `{}` of type `{}`. Mark the method as `pub`",
+            "Mark the method as `pub`. Method `{}` of type `{}` is private",
             method_name, type_name
         ))
 }
@@ -1525,7 +1563,7 @@ pub fn private_field_in_spread(
             format!("`{}` is private to `{}`", field_name, owning_package),
         )
         .with_help(format!(
-            "Cannot spread `{}` because field `{}` is private. Mark the field as `pub`",
+            "Mark the field as `pub`. `{}` cannot be spread because field `{}` is private",
             struct_name, field_name
         ))
 }
@@ -1543,10 +1581,10 @@ pub fn private_field_in_autofill(
             format!("`{}` is private to `{}`", field_name, owning_package),
         )
         .with_help(format!(
-            "`{}` of `{}` cannot be autofilled because `{}` is private to package `{}`. \
-             Provide an explicit value, or have `{}` expose `{}` as `pub` or offer a \
-             constructor.",
-            field_name, struct_name, field_name, owning_package, owning_package, field_name
+            "Provide an explicit value, or have `{}` expose `{}` as `pub` or offer a \
+             constructor. `{}` of `{}` cannot be autofilled because `{}` is private to \
+             package `{}`.",
+            owning_package, field_name, field_name, struct_name, field_name, owning_package
         ))
 }
 
@@ -1583,44 +1621,44 @@ pub fn field_no_zero(
             field: priv_field,
             owning_package: priv_package,
         } => format!(
-            "`{}` of `{}` cannot be autofilled because `{}.{}` is private to package `{}`. \
-             Provide an explicit value for `{}`, or have `{}` expose `{}` as `pub`.",
+            "Provide an explicit value for `{}`, or have `{}` expose `{}` as `pub`. \
+             `{}` of `{}` cannot be autofilled because `{}.{}` is private to package `{}`.",
+            field_name,
+            priv_package,
+            priv_field,
             field_name,
             struct_name,
             priv_struct,
             priv_field,
-            priv_package,
-            field_name,
-            priv_package,
-            priv_field
+            priv_package
         ),
         FieldNoZeroCause::HiddenGoState { go_type } => format!(
-            "Field `{}` is `{}`, which has Go-side state hidden from Lisette, so it has no \
-             zero value. Obtain one from its documented Go constructor and pass it explicitly, \
-             or wrap the field type in `Option<T>`.",
-            path, go_type
+            "Obtain a `{}` from its documented Go constructor and pass it explicitly, \
+             or wrap the field type in `Option<T>`. Field `{}` is `{}`, which has Go-side \
+             state hidden from Lisette, so it has no zero value.",
+            go_type, path, go_type
         ),
         FieldNoZeroCause::TypeParameterUnbounded => format!(
-            "Field `{}` is the type parameter `{}`, which has no zero value unless it is \
-             bounded. Add the bound `<{}: Zeroable>`, provide an explicit value, or wrap the \
-             field type in `Option<T>`.",
-            path, field_ty, field_ty
+            "Add the bound `<{}: Zeroable>`, provide an explicit value, or wrap the \
+             field type in `Option<T>`. Field `{}` is the type parameter `{}`, which has \
+             no zero value unless it is bounded.",
+            field_ty, path, field_ty
         ),
         FieldNoZeroCause::EnumWithoutDefault => format!(
-            "Field `{}` is the enum `{}`, which has no zero value because no variant is \
-             marked `#[default]`. Mark one, provide an explicit value, or wrap the field \
-             type in `Option<T>`.",
-            path, field_ty
+            "Mark one variant of `{}` as `#[default]`, provide an explicit value, or wrap \
+             the field type in `Option<T>`. Field `{}` is the enum `{}`, which has no zero \
+             value.",
+            field_ty, path, field_ty
         ),
         FieldNoZeroCause::Type if chain.is_empty() => format!(
-            "Field `{}` of type `{}` has no zero value. Provide an explicit value, \
-             or wrap the field type in `Option<T>`.",
+            "Provide an explicit value, or wrap the field type in `Option<T>`. \
+             Field `{}` of type `{}` has no zero value.",
             field_name, field_ty
         ),
         FieldNoZeroCause::Type => format!(
-            "Field `{}` of type `{}` has no zero value. Provide an explicit value for \
-             `{}`, or wrap the field type in `Option<T>`.",
-            path, field_ty, field_name
+            "Provide an explicit value for `{}`, or wrap the field type in `Option<T>`. \
+             Field `{}` of type `{}` has no zero value.",
+            field_name, path, field_ty
         ),
     };
     LisetteDiagnostic::error("Field has no zero value")
@@ -1646,37 +1684,37 @@ pub fn map_read_no_zero(
             "Nil map for missing key",
             format!("`{value_ty}` is nil when the key is missing"),
             format!(
-                "Bracket reads return a zero value when the key is missing, and the zero value \
-                 of `{value_ty}` is a nil map, which panics on write, so this bracket read is \
-                 disallowed. Use `{receiver}.get(key)` instead"
+                "Use `{receiver}.get(key)`. Bracket reads return a zero value when the key is \
+                 missing, and the zero value of `{value_ty}` is a nil map, which panics on write, \
+                 so this bracket read is disallowed"
             ),
         ),
         MapReadNoZeroCause::ContainsNilMap(leaf_ty) => (
             "Nil map for missing key",
             format!("`{value_ty}` contains `{leaf_ty}`, which is nil when the key is missing"),
             format!(
-                "Bracket reads return a zero value when the key is missing, and the zero value \
-                 of `{value_ty}` contains a nil `{leaf_ty}`, which panics on write, so this \
-                 bracket read is disallowed. Use `{receiver}.get(key)` instead"
+                "Use `{receiver}.get(key)`. Bracket reads return a zero value when the key is \
+                 missing, and the zero value of `{value_ty}` contains a nil `{leaf_ty}`, which \
+                 panics on write, so this bracket read is disallowed"
             ),
         ),
         MapReadNoZeroCause::NoZero if matches!(value_ty, Type::Parameter(_)) => (
             "No zero value for missing key",
             format!("`{value_ty}` is not guaranteed to have a zero value"),
             format!(
-                "Bracket reads can return a zero value when the key is missing, but the type \
+                "Add the bound `<{value_ty}: Zeroable>`, or use `{receiver}.get(key)`. \
+                 Bracket reads can return a zero value when the key is missing, but the type \
                  parameter `{value_ty}` can be instantiated with a type that has no zero value, \
-                 such as `Ref<T>`, so this bracket read is disallowed. Add the bound \
-                 `<{value_ty}: Zeroable>`, or use `{receiver}.get(key)`"
+                 e.g. `Ref<T>`, so this bracket read is disallowed"
             ),
         ),
         MapReadNoZeroCause::NoZero => (
             "No zero value for missing key",
             format!("`{value_ty}` has no zero value"),
             format!(
-                "Bracket reads can return a zero value when the key is missing, but \
-                 `{value_ty}` has no zero value, so this bracket read is disallowed. Use \
-                 `{receiver}.get(key)` instead"
+                "Use `{receiver}.get(key)`. Bracket reads can return a zero value when the key \
+                 is missing, but `{value_ty}` has no zero value, so this bracket read is \
+                 disallowed"
             ),
         ),
     };
@@ -1718,24 +1756,24 @@ pub fn member_not_found(
     {
         let help = if ty.is_option() {
             format!(
-                "Lisette does not provide `{}()`. Use `?` to propagate, `match` to handle both \
-                 cases (e.g. `match <expr> {{ Some(x) => x, None => ... }}`), `let else` for \
-                 early exit, or `unwrap_or(default)` for a fallback.",
+                "Use `?` to propagate, `match` to handle both cases (e.g. `match <expr> \
+                 {{ Some(x) => x, None => ... }}`), `let else` for early exit, or \
+                 `unwrap_or(default)` for a fallback. Lisette does not provide `{}()`.",
                 field
             )
         } else if ty.is_result() {
             format!(
-                "Lisette does not provide `{}()`. Use `?` to propagate, `match` to handle both \
-                 cases (e.g. `match <expr> {{ Ok(x) => x, Err(e) => ... }}`), `let else` for \
-                 early exit, or `unwrap_or(default)` for a fallback.",
+                "Use `?` to propagate, `match` to handle both cases (e.g. `match <expr> \
+                 {{ Ok(x) => x, Err(e) => ... }}`), `let else` for early exit, or \
+                 `unwrap_or(default)` for a fallback. Lisette does not provide `{}()`.",
                 field
             )
         } else {
             format!(
-                "Lisette does not provide `{}()`. The `?` operator is not supported on \
-                 `Partial`; use `match` to handle all three cases (e.g. `match <expr> \
+                "Use `match` to handle all three cases (e.g. `match <expr> \
                  {{ Ok(x) => ..., Err(e) => ..., Both(x, e) => ... }}`) or `unwrap_or(default)` \
-                 for a fallback.",
+                 for a fallback. Lisette does not provide `{}()`, and the `?` operator is not \
+                 supported on `Partial`.",
                 field
             )
         };
@@ -1812,9 +1850,9 @@ pub fn ambiguous_selector(
             format!("`{}` is promoted from more than one embed", member),
         )
         .with_help(format!(
-            "`{}` is promoted into `{}` from `{}`, so the selection is ambiguous. \
-             Reach it through the embedded field that declares the one you want.",
-            member, ty, from
+            "Reach `{}` through the embedded field that declares the one you want. \
+             `{}` is promoted into `{}` from `{}`, so the selection is ambiguous.",
+            member, member, ty, from
         ))
 }
 
@@ -1908,8 +1946,8 @@ pub fn param_needs_ordered_bound(param: &str, span: Span) -> LisetteDiagnostic {
         .with_infer_code("type_mismatch")
         .with_span_label(&span, format!("expected orderable, found `{}`", param))
         .with_help(format!(
-            "`{param}` is an unconstrained type parameter. Add the bound where `{param}` is \
-             declared: `<{param}: Ordered>`"
+            "Add the bound where `{param}` is declared: `<{param}: Ordered>`. \
+             `{param}` is an unconstrained type parameter"
         ))
 }
 
@@ -1943,8 +1981,8 @@ pub fn not_comparable_interface(ty: &Type, span: Span) -> LisetteDiagnostic {
         .with_infer_code("type_mismatch")
         .with_span_label(&span, format!("`{}` cannot be compared with `==`", ty))
         .with_help(
-            "An interface value's comparability depends on its runtime type, so `==` and `!=` \
-             are not allowed here. Compare the concrete values instead",
+            "Compare the concrete values. An interface value's comparability depends on its \
+             runtime type, so `==` and `!=` are not allowed here",
         )
 }
 
@@ -2040,8 +2078,8 @@ pub fn not_orderable_bound(span: Span) -> LisetteDiagnostic {
         .with_infer_code("not_orderable_bound")
         .with_span_label(&span, "does not satisfy `cmp.Ordered`")
         .with_help(
-            "The type parameter must be `cmp.Ordered` but the argument is not orderable. \
-             Relax the bound or pass an argument that satisfies it",
+            "Relax the bound or pass an orderable argument. The type parameter must be \
+             `cmp.Ordered` but the argument is not orderable",
         )
 }
 
@@ -2060,14 +2098,13 @@ pub fn not_comparable_bound(
             type_name,
             param_name,
         }) => format!(
-            "`Comparable` requires `==`, and {reason} cannot be compared with `==` in Go. \
-             `{type_name}` already has its own `equals`, so declare `{param_name}`'s bound as an \
-             interface holding `fn equals(other: {param_name}) -> bool`"
+            "Declare `{param_name}`'s bound as an interface holding \
+             `fn equals(other: {param_name}) -> bool`, because `{type_name}` already has its own \
+             `equals`. `Comparable` requires `==`, and {reason} cannot be compared with `==` in Go"
         ),
         None => format!(
-            "`Comparable` requires `==`, and {reason} cannot be compared with `==` in Go. \
-             If you own this bound, relax it, or accept the comparison as an explicit argument \
-             instead"
+            "If you own this bound, relax it, or accept the comparison as an explicit argument \
+             instead. `Comparable` requires `==`, and {reason} cannot be compared with `==` in Go"
         ),
     };
     LisetteDiagnostic::error("Bound not satisfied")
@@ -2096,9 +2133,9 @@ pub fn missing_bound_on_param(
         .with_infer_code("missing_bound_on_param")
         .with_span_label(&span, format!("does not satisfy `{}`", short))
         .with_help(format!(
-            "The parameter must be `{}` but the argument is unbounded. \
-             Add this bound to the enclosing function: `<{}: {}>`",
-            required_bound, param_name, required_bound
+            "Add this bound to the enclosing function: `<{}: {}>`. \
+             The parameter must be `{}` but the argument is unbounded",
+            param_name, required_bound, required_bound
         ))
 }
 
@@ -2112,8 +2149,8 @@ pub fn missing_transitive_bound(
         .with_infer_code("missing_transitive_bound")
         .with_span_label(&span, format!("must satisfy `{required_bound}`"))
         .with_help(format!(
-            "`{}` requires its type argument to satisfy `{}`. Add the bound: `{}: {}`",
-            referenced_type, required_bound, param_name, required_bound
+            "Add the bound: `{}: {}`. `{}` requires its type argument to satisfy `{}`",
+            param_name, required_bound, referenced_type, required_bound
         ))
 }
 
@@ -2237,7 +2274,7 @@ pub fn cannot_match_on_unknown(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot match on Unknown")
         .with_infer_code("cannot_match_on_unknown")
         .with_span_label(&span, "is type `Unknown`")
-        .with_help("Use `assert_type` to narrow this value into a concrete type before matching. Example: `let value = assert_type<MyType>(x)?`")
+        .with_help("Use `assert_type` to narrow this value into a concrete type before matching, e.g. `let value = assert_type<MyType>(x)?`")
 }
 
 pub fn cannot_match_on_unconstrained_type(span: Span) -> LisetteDiagnostic {
@@ -2313,8 +2350,7 @@ pub fn or_pattern_in_irrefutable_context(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid or-pattern")
         .with_infer_code("or_pattern_in_irrefutable")
         .with_span_label(&span, "or-patterns are not allowed here")
-        .with_help("Use a `match` expression instead.")
-        .with_note("Or-patterns can only be used in `match`, `if let`, and `while let`.")
+        .with_help("Use a `match` expression. Or-patterns can only be used in `match`, `if let`, and `while let`")
 }
 
 pub fn or_pattern_binding_mismatch(
@@ -2332,7 +2368,7 @@ pub fn or_pattern_binding_mismatch(
         .with_infer_code("or_pattern_binding_mismatch")
         .with_span_label(&span, "only bound here")
         .with_help(format!(
-            "Variable {} is not bound in all alternatives. Use a wildcard `_` instead of a binding, or ensure all alternatives bind the same variable",
+            "Use a wildcard `_` instead of a binding, or ensure all alternatives bind the same variable. Variable {} is not bound in all alternatives",
             missing
         ))
 }
@@ -2374,9 +2410,9 @@ pub fn propagate_on_partial(span: Span) -> LisetteDiagnostic {
         .with_infer_code("propagate_on_partial")
         .with_span_label(&span, "`Partial` requires explicit `match`")
         .with_help(
-            "The `?` operator is incompatible with `Partial` because it has \
-             three variants. Use `match` to handle `Ok`, `Err`, and `Both` \
-             explicitly.",
+            "Use `match` to handle `Ok`, `Err`, and `Both` explicitly. \
+             The `?` operator is incompatible with `Partial` because it has \
+             three variants.",
         )
 }
 
@@ -2580,14 +2616,14 @@ pub fn select_match_missing_some_arm(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid select match")
         .with_infer_code("select_match_missing_some_arm")
         .with_span_label(&span, "missing `Some` arm")
-        .with_help("`None` only handles channel close. Add a `Some(v) => ...` arm to handle received values")
+        .with_help("Add a `Some(v) => ...` arm to handle received values. `None` only handles channel close")
 }
 
 pub fn select_match_missing_none_arm(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid select match")
         .with_infer_code("select_match_missing_none_arm")
         .with_span_label(&span, "missing `None` arm")
-        .with_help("Matching on `ch.receive()` requires handling channel close. Add a `None => ...` arm to handle channel close, or simplify to `let Some(v) = ch.receive() => ...`")
+        .with_help("Add a `None => ...` arm to handle channel close, or simplify to `let Some(v) = ch.receive() => ...`. Matching on `ch.receive()` requires handling channel close")
 }
 
 pub fn select_match_duplicate_some_arm(span: Span) -> LisetteDiagnostic {
@@ -2612,7 +2648,7 @@ pub fn select_match_guard_not_allowed(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid select match")
         .with_infer_code("select_match_guard_not_allowed")
         .with_span_label(&span, "not supported")
-        .with_help("Match arms inside `select` do not support guards. Move the condition inside the arm body: `Some(v) => { if condition { ... } }`")
+        .with_help("Move the condition inside the arm body: `Some(v) => { if condition { ... } }`. Match arms inside `select` do not support guards")
 }
 
 pub fn select_match_invalid_pattern(span: Span) -> LisetteDiagnostic {
@@ -2623,12 +2659,12 @@ pub fn select_match_invalid_pattern(span: Span) -> LisetteDiagnostic {
 }
 
 pub fn select_receive_refutable_pattern(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Refutable pattern in select receive")
+    LisetteDiagnostic::error("Pattern in select receive might not match")
         .with_infer_code("select_receive_refutable_pattern")
         .with_span_label(&span, "may not match all received values")
         .with_help(
-            "Select receive requires an irrefutable binding like `Some(v)` or `Some(_)`. \
-             Use a regular `match` inside the arm body to filter values",
+            "Use a regular `match` inside the arm body to filter values. \
+             Select receive requires a binding that always matches, e.g. `Some(v)` or `Some(_)`",
         )
 }
 
@@ -2637,7 +2673,7 @@ pub fn multiple_select_receives(first_span: Span, second_span: Span) -> LisetteD
         .with_infer_code("multiple_select_receives")
         .with_span_label(&first_span, "first receive arm")
         .with_span_label(&second_span, "second receive arm")
-        .with_help("Multiple shorthand receive arms can lead to unexpected behavior when a channel closes. Use `match ch.receive() { Some(v) => ..., None => ... }` to handle closes explicitly")
+        .with_help("Use `match ch.receive() { Some(v) => ..., None => ... }` to handle closes explicitly. Multiple shorthand receive arms can lead to unexpected behavior when a channel closes")
 }
 
 pub fn duplicate_map_keys(first_span: Span, duplicate_span: Span) -> LisetteDiagnostic {
@@ -2645,7 +2681,7 @@ pub fn duplicate_map_keys(first_span: Span, duplicate_span: Span) -> LisetteDiag
         .with_infer_code("duplicate_map_keys")
         .with_span_label(&first_span, "key for first entry")
         .with_span_label(&duplicate_span, "overwrites first")
-        .with_help("`Map.from` keeps the last entry for a key, so the earlier entry never reaches the map. Remove one of the two entries")
+        .with_help("Remove one of the two entries. `Map.from` keeps the last entry for a key, so the earlier entry never reaches the map")
 }
 
 pub fn duplicate_select_default(first_span: Span, second_span: Span) -> LisetteDiagnostic {
@@ -2654,7 +2690,7 @@ pub fn duplicate_select_default(first_span: Span, second_span: Span) -> LisetteD
         .with_span_label(&first_span, "first default arm")
         .with_span_label(&second_span, "duplicate default arm")
         .with_help(
-            "A select block can have at most one default arm (`_ => ...`). Remove the duplicate.",
+            "Remove the duplicate. A select block can have at most one default arm (`_ => ...`).",
         )
 }
 
@@ -2697,8 +2733,8 @@ pub fn unconstrained_type_param(
         (
             format!("`{param_name}` is not used in a parameter or return type"),
             format!(
-                "`{param_name}` can never be inferred from a call. Use it in a parameter or \
-                 return type, or supply it explicitly: `{example}`"
+                "Use `{param_name}` in a parameter or return type, or supply it explicitly: \
+                 `{example}`. `{param_name}` can never be inferred from a call"
             ),
         )
     };
@@ -2724,7 +2760,7 @@ pub fn instantiation_cycle(
             ),
         )
         .with_help(format!(
-            "Each recursive call would need a new version of `{}` at a larger type, so compilation would never finish. Keep type arguments fixed across recursive calls",
+            "Keep type arguments fixed across recursive calls. Each recursive call would need a new version of `{}` at a larger type, so compilation would never finish",
             target_fn_name
         ))
 }
@@ -2807,7 +2843,7 @@ pub fn test_function_not_callable(span: Span, name: &str) -> LisetteDiagnostic {
         .with_infer_code("test_function_not_callable")
         .with_span_label(&span, "a `#[test]` function cannot be called or used as a value")
         .with_help(
-            "A `#[test]` function is an entry point run by `lis test`. Move shared logic into a separate function",
+            "Move shared logic into a separate function. A `#[test]` function is an entry point run by `lis test`",
         )
 }
 
@@ -2907,8 +2943,8 @@ pub fn sealed_interface_not_satisfiable(
         )
     } else {
         format!(
-            "`{interface_name}` has a method that only Go code in its own module can declare. Satisfy \
-             `{interface_name}` by embedding it, or by embedding a Go type that implements it."
+            "Satisfy `{interface_name}` by embedding it, or by embedding a Go type that implements \
+             it. `{interface_name}` has a method that only Go code in its own module can declare."
         )
     };
     LisetteDiagnostic::error(format!(
@@ -3233,7 +3269,9 @@ pub fn cannot_propagate_error(declared: &str, operand: &str, span: Span) -> Lise
 }
 
 fn propagation_framing_help(declared: &str, operand: &str) -> String {
-    format!("cannot propagate `{operand}` as `{declared}`. Convert with `.map_err(...)`")
+    format!(
+        "Convert the error to `{declared}` with `.map_err(...)`. `?` cannot propagate `{operand}` as `{declared}`"
+    )
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -3275,8 +3313,8 @@ pub fn builtin_type_cannot_implement_interface(
             format!("`{type_name}` cannot implement `{interface_name}`"),
         )
         .with_help(format!(
-            "Built-in types have no Go methods, so they cannot satisfy interfaces. Wrap the \
-             value in a struct that implements `{interface_name}`."
+            "Wrap the value in a struct that implements `{interface_name}`. Built-in types \
+             have no Go methods, so they cannot satisfy interfaces."
         ))
 }
 
@@ -3343,7 +3381,7 @@ pub fn pointer_receiver_interface_mismatch(
             generic,
             parameter: Some(parameter),
         }) => format!(
-            "`{generic}: {interface_name}` requires `{generic}` itself to implement `{interface_name}`. For a helper that only calls interface methods, change `{name}: {ty}` to `{name}: {generic}` so `{generic}` can be `{reference}` and keep passing the reference.",
+            "For a helper that only calls interface methods, change `{name}: {ty}` to `{name}: {generic}` so `{generic}` can be `{reference}` and keep passing the reference. `{generic}: {interface_name}` requires `{generic}` itself to implement `{interface_name}`.",
             name = parameter.name.as_deref().unwrap_or("_"),
             ty = parameter.ty,
         ),
@@ -3351,10 +3389,10 @@ pub fn pointer_receiver_interface_mismatch(
             generic,
             parameter: None,
         }) => format!(
-            "`{generic}: {interface_name}` requires `{generic}` itself to implement `{interface_name}`. To use the reference implementation, `{generic}` must be `{reference}`. For a helper that only calls interface methods, change a `Ref<{generic}>` or `mut Ref<{generic}>` parameter to `{generic}` and pass the reference."
+            "For a helper that only calls interface methods, change a `Ref<{generic}>` or `mut Ref<{generic}>` parameter to `{generic}` and pass the reference. `{generic}: {interface_name}` requires `{generic}` itself to implement `{interface_name}`, so to use the reference implementation, `{generic}` must be `{reference}`."
         ),
         None => format!(
-            "{takes}, so `{interface_name}` is satisfied by a `{reference}`, not a value. Take a reference with `&` (for example `&{type_name} {{ ... }}`).",
+            "Take a reference with `&` (for example `&{type_name} {{ ... }}`). {takes}, so `{interface_name}` is satisfied by a `{reference}`, not a value.",
         ),
     };
     LisetteDiagnostic::error("Interface not implemented")
@@ -3398,8 +3436,8 @@ pub fn interface_needs_writable_receiver(
             ),
         )
         .with_help(format!(
-            "{}, so `{}` needs a writable reference. Make the value writable where it is created, \
-             or take the reference from a `let mut` binding",
+            "Make the value writable where it is created, or take the reference from a \
+             `let mut` binding. {}, so `{}` needs a writable reference",
             writes, interface_name
         ))
 }
@@ -3422,32 +3460,30 @@ pub fn unknown_as_map_key(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`Unknown` cannot be used as a map key")
         .with_infer_code("unknown_as_map_key")
         .with_span_label(&span, "key resolves to `any`")
-        .with_help("Use a concrete comparable key type.")
-        .with_note("Go's `map[any]V` admits non-comparable runtime values that panic on insertion.")
+        .with_help("Use a concrete comparable key type. Go's `map[any]V` admits non-comparable runtime values that panic on insertion")
 }
 
 pub fn opaque_type_outside_typedef(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Undefined type")
         .with_infer_code("undefined_type_outside_typedef")
         .with_span_label(&span, "needs a definition")
-        .with_help("Use `type Point = ...` to define the type.")
-        .with_note("Opaque declarations are only allowed in `.d.lis` files.")
+        .with_help("Use `type Point = ...` to define the type. Opaque declarations are only allowed in `.d.lis` files")
 }
 
 pub fn bodyless_function_outside_typedef(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Missing function body")
         .with_infer_code("bodyless_function_outside_typedef")
         .with_span_label(&span, "needs a body")
-        .with_help("Add a body: `fn greet() { ... }`.")
-        .with_note("Bodyless declarations are only allowed in `.d.lis` files.")
+        .with_help("Add a body: `fn greet() { ... }`. Bodyless declarations are only allowed in `.d.lis` files")
 }
 
 pub fn valueless_const_outside_typedef(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Missing const value")
         .with_infer_code("valueless_const_outside_typedef")
         .with_span_label(&span, "needs a value")
-        .with_help("Ensure the constant has a value: `const MAX_SIZE: int = 100`.")
-        .with_note("Valueless const declarations are only allowed in `.d.lis` files.")
+        .with_help(
+            "Ensure the constant has a value: `const MAX_SIZE: int = 100`. Valueless const declarations are only allowed in `.d.lis` files",
+        )
 }
 
 pub fn valueless_const_missing_annotation(span: Span) -> LisetteDiagnostic {
@@ -3470,7 +3506,7 @@ pub fn range_full_not_valid_expression(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid expression")
         .with_infer_code("range_full_not_expression")
         .with_span_label(&span, "`..` can only be used in slice indexing")
-        .with_help("Use `arr[..]` to get a full slice, or provide bounds like `0..10`")
+        .with_help("Use `arr[..]` to get a full slice, or provide bounds, e.g. `0..10`")
 }
 
 pub fn range_not_iterable(range_type: &str, span: Span) -> LisetteDiagnostic {
@@ -3485,7 +3521,7 @@ pub fn taking_value_of_ufcs_method(span: Span) -> LisetteDiagnostic {
         .with_infer_code("taking_value_of_ufcs_method")
         .with_span_label(&span, "taking value not allowed")
         .with_help(
-            "This method cannot be taken as a value. Call the method directly: `obj.method(...)`",
+            "Call the method directly: `obj.method(...)`. This method cannot be taken as a value",
         )
 }
 
@@ -3494,7 +3530,7 @@ pub fn duplicate_definition(kind: &str, name: &str, span: Span) -> LisetteDiagno
         .with_infer_code("duplicate_definition")
         .with_span_label(&span, "already defined")
         .with_help(format!(
-            "`{}` is already defined in this package. Rename or remove this definition.",
+            "Rename or remove this definition. `{}` is already defined in this package.",
             name
         ))
 }
@@ -3504,7 +3540,7 @@ pub fn duplicate_impl_item(item_name: &str, type_name: &str, span: Span) -> Lise
         .with_infer_code("duplicate_impl_item")
         .with_span_label(&span, "method name already taken")
         .with_help(format!(
-            "Method `{}` is already defined for type `{}`. Rename one of the methods.",
+            "Rename one of the methods. Method `{}` is already defined for type `{}`.",
             item_name, type_name
         ))
 }
@@ -3520,8 +3556,8 @@ pub fn duplicate_method_across_specialized_impls(
         .with_infer_code("duplicate_method_across_specialized_impls")
         .with_span_label(&span, "already defined in another specialization")
         .with_help(format!(
-            "Specialized `impl` blocks for `{type_name}` share a method namespace. \
-             Use different method names, or move `{method_name}` to a generic `impl<{params}> {type_name}<{params}> {{}}` block."
+            "Use different method names, or move `{method_name}` to a generic `impl<{params}> {type_name}<{params}> {{}}` block. \
+             Specialized `impl` blocks for `{type_name}` share a method namespace."
         ))
 }
 
@@ -3530,7 +3566,7 @@ pub fn method_shadows_field(type_name: &str, field_name: &str, span: Span) -> Li
         .with_infer_code("method_shadows_field")
         .with_span_label(&span, "same as field")
         .with_help(format!(
-            "`{}` has a field `{}` and a method `{}`. Rename either the field or the method",
+            "Rename either the field or the method. `{}` has a field `{}` and a method `{}`",
             type_name, field_name, field_name
         ))
 }
@@ -3566,8 +3602,9 @@ pub fn empty_body_return_mismatch(expected_ty: &Type, span: Span) -> LisetteDiag
             &span,
             format!("promises `{}`, but returns `()`", expected_ty),
         )
-        .with_help("Return a value or change the return type annotation to `()`.")
-        .with_note("An empty function body implicitly returns `()`.")
+        .with_help(
+            "Return a value or change the return type annotation to `()`. An empty function body implicitly returns `()`",
+        )
 }
 
 pub fn propagate_in_pipeline(span: Span) -> LisetteDiagnostic {
@@ -3589,7 +3626,7 @@ pub fn repeated_pipeline_placeholder(span: Span) -> LisetteDiagnostic {
         .with_parse_code("repeated_pipeline_placeholder")
         .with_span_label(&span, "second `_`")
         .with_help(
-            "A pipeline passes one value, so `_` can appear only once. To use the value more than once, bind it with `let`",
+            "To use the value more than once, bind it with `let`. A pipeline passes one value, so `_` can appear only once",
         )
 }
 
@@ -3598,7 +3635,7 @@ pub fn misplaced_pipeline_placeholder(span: Span) -> LisetteDiagnostic {
         .with_parse_code("misplaced_pipeline_placeholder")
         .with_span_label(&span, "not a direct argument")
         .with_help(
-            "`_` marks where the piped value goes, so it must be a direct argument of the call after `|>`, as in `x |> f(a, _)`",
+            "`_` marks where the piped value goes, so it must be a direct argument of the call after `|>`, e.g. `x |> f(a, _)`",
         )
 }
 
@@ -3676,7 +3713,7 @@ pub fn non_addressable_const(span: Span) -> LisetteDiagnostic {
         .with_infer_code("non_addressable_const")
         .with_span_label(&span, "not addressable")
         .with_help(
-            "`const` bindings are not addressable. Copy the value into a local `let` first if you need a reference",
+            "Copy the value into a local `let` first if you need a reference. `const` bindings are not addressable",
         )
 }
 
@@ -3685,8 +3722,8 @@ pub fn non_addressable_assignment(expression_kind: &str, span: Span) -> LisetteD
         expression_kind,
         "map index expression" | "sub-slice expression"
     ) {
-        "Indexing yields a copy of the element. Modify a local copy, then \
-         assign it back into the collection"
+        "Modify a local copy, then assign it back into the collection. \
+         Indexing yields a copy of the element"
     } else {
         "Assign the value to a variable first, then modify it"
     };
@@ -3747,7 +3784,7 @@ pub fn field_read_through_nested_ref(
         .with_infer_code("field_through_nested_ref")
         .with_span_label(&span, format!("`{member}` is behind more than one reference"))
         .with_help(format!(
-            "Go follows only one reference to reach a field. Dereference the extra references first: `{receiver}{derefs}.{member}`"
+            "Dereference the extra references first: `{receiver}{derefs}.{member}`. Go follows only one reference to reach a field"
         ))
 }
 
@@ -3772,7 +3809,7 @@ pub fn enum_field_type_conflict(
         .with_infer_code("enum_field_type_conflict")
         .with_span_label(&span, "field type mismatch")
         .with_help(format!(
-            "`{loc_a}` is `{type_a}` but `{loc_b}` is `{type_b}`, and both become `{slot}` in Go. Rename one of the fields",
+            "Rename one of the fields. `{loc_a}` is `{type_a}` but `{loc_b}` is `{type_b}`, and both become `{slot}` in Go",
         ))
 }
 
@@ -3803,14 +3840,14 @@ pub fn enum_spread_missing_fields(
         Some((lacking_variant, lacked_field)) => (
             format!("may be `{enum_name}.{lacking_variant}`, which has no field `{lacked_field}`"),
             format!(
-                "A spread can only fill fields that exist in every `{enum_name}` variant. Assign {noun} {fields_fmt} explicitly, or bind {pronoun} first when the source is known to be `{enum_name}.{target_variant}`: `let {enum_name}.{target_variant} {{ {pattern}, .. }} = source else {{ ... }}`",
+                "Assign {noun} {fields_fmt} explicitly, or bind {pronoun} first when the source is known to be `{enum_name}.{target_variant}`: `let {enum_name}.{target_variant} {{ {pattern}, .. }} = source else {{ ... }}`. A spread can only fill fields that exist in every `{enum_name}` variant",
                 pattern = missing.join(", "),
             ),
         ),
         None => (
             format!("may hold any `{enum_name}` variant"),
             format!(
-                "Every `{enum_name}` variant has {fields_fmt}, but {cause}, so each variant stores {pronoun} separately and a spread cannot fill {pronoun}. Assign {noun} {fields_fmt} explicitly",
+                "Assign {noun} {fields_fmt} explicitly. Every `{enum_name}` variant has {fields_fmt}, but {cause}, so each variant stores {pronoun} separately and a spread cannot fill {pronoun}",
                 cause = match (reason, missing.len()) {
                     (SeparateSlotReason::BuiltinMember, 1) =>
                         "the name collides with a built-in enum member",
@@ -3866,7 +3903,7 @@ pub fn break_value_in_non_loop(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`break` with value in non-`loop` loop")
         .with_infer_code("break_value_in_non_loop")
         .with_span_label(&span, "`break` with value only allowed in `loop`")
-        .with_help("`break` with a value is only meaningful in `loop` expressions, which can return the value. In `for` and `while` loops, use `break` without a value.")
+        .with_help("In `for` and `while` loops, use `break` without a value. `break` with a value is only meaningful in `loop` expressions, which can return the value.")
 }
 
 pub fn loop_produces_no_value(span: &Span, keyword: &str, expected_ty: &str) -> LisetteDiagnostic {
@@ -3878,7 +3915,7 @@ pub fn loop_produces_no_value(span: &Span, keyword: &str, expected_ty: &str) -> 
             format!("evaluates to `()`, but expected `{expected_ty}` here"),
         )
         .with_help(format!(
-            "`{keyword}` loops are for side effects and always evaluate to `()`. Use `loop` with `break <value>` to produce a value during iteration."
+            "Use `loop` with `break <value>` to produce a value during iteration. `{keyword}` loops are for side effects and always evaluate to `()`."
         ))
 }
 
@@ -3901,7 +3938,7 @@ pub fn decimal_file_mode(span: &Span, value: u64) -> LisetteDiagnostic {
         .with_infer_code("decimal_file_mode")
         .with_span_label(span, format!("decimal {value} is octal 0o{value:o}"))
         .with_help(
-            "File permissions are conventionally written in octal. Use a `0o` prefix (for example `0o644`) so the bits line up with the rwx triples.",
+            "Use a `0o` prefix (for example `0o644`) so the bits line up with the rwx triples. File permissions are conventionally written in octal.",
         )
 }
 
@@ -3910,7 +3947,7 @@ pub fn empty_infinite_loop(span: &Span) -> LisetteDiagnostic {
         .with_infer_code("empty_infinite_loop")
         .with_span_label(span, "busy-spins")
         .with_help(
-            "An empty `loop` spins forever at 100% CPU. Block on a channel, call `time.Sleep`, or add a `break`.",
+            "Block on a channel, call `time.Sleep`, or add a `break`. An empty `loop` spins forever at 100% CPU.",
         )
 }
 
@@ -3973,7 +4010,7 @@ pub fn negative_shift(span: &Span, shift_amount: i128) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Negative shift amount")
         .with_infer_code("negative_shift")
         .with_span_label(span, format!("shifts by {shift_amount}"))
-        .with_help("A shift amount must be zero or greater. Shift the other way instead")
+        .with_help("Shift the other way. A shift amount must be zero or greater")
 }
 
 pub fn shift_amount_too_large(span: &Span, shift_amount: i128) -> LisetteDiagnostic {
@@ -3991,7 +4028,7 @@ pub fn impossible_comparison(span: &Span) -> LisetteDiagnostic {
         .with_infer_code("impossible_comparison")
         .with_span_label(span, "always `false`")
         .with_help(
-            "No value satisfies both sides, so this `&&` is always `false`. Check the bounds, or did you mean `||`?",
+            "Check the bounds, or did you mean `||`? No value satisfies both sides, so this `&&` is always `false`.",
         )
 }
 
@@ -4000,7 +4037,7 @@ pub fn always_true_disjunction(span: &Span) -> LisetteDiagnostic {
         .with_infer_code("always_true_disjunction")
         .with_span_label(span, "always `true`")
         .with_help(
-            "Every value satisfies at least one side, so this `||` is always `true`. Check the bounds, or did you mean `&&`?",
+            "Check the bounds, or did you mean `&&`? Every value satisfies at least one side, so this `||` is always `true`.",
         )
 }
 
@@ -4011,7 +4048,7 @@ pub fn nan_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
         .with_infer_code("nan_comparison")
         .with_span_label(span, format!("always {result}"))
         .with_help(
-            "NaN is unequal to every value including itself. Use `math.IsNaN(x)` to test for NaN.",
+            "Use `math.IsNaN(x)` to test for NaN. NaN is unequal to every value including itself.",
         )
 }
 
@@ -4020,7 +4057,7 @@ pub fn cast_nan_to_int(span: &Span, target: &str) -> LisetteDiagnostic {
         .with_infer_code("convert_nan_to_int")
         .with_span_label(span, format!("`NaN` has no `{target}` value"))
         .with_help(
-            "In Go, converting `NaN` to an integer produces an arbitrary, implementation-specific value rather than a meaningful one. Guard with `math.IsNaN(...)` before converting, or keep the value as a float.",
+            "Guard with `math.IsNaN(...)` before converting, or keep the value as a float. In Go, converting `NaN` to an integer produces an arbitrary, implementation-specific value rather than a meaningful one.",
         )
 }
 
@@ -4060,7 +4097,7 @@ pub fn propagate_in_defer(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid `?` in `defer`")
         .with_infer_code("propagate_in_defer")
         .with_span_label(&span, "`?` not allowed here")
-        .with_help("`defer` in combination with `?` is not allowed due to confusing semantics. Handle the error inside a `defer` block: `defer { if let Err(e) = file.close() { log(e); } }`")
+        .with_help("Handle the error inside a `defer` block: `defer { if let Err(e) = file.close() { log(e); } }`. `defer` in combination with `?` is not allowed due to confusing semantics")
 }
 
 pub fn return_in_defer_block(span: Span) -> LisetteDiagnostic {
@@ -4110,13 +4147,13 @@ pub fn invalid_cast(
             target_ty,
         )
     } else if source_ty.is_string() {
-        "Strings cannot be converted to numbers and require explicit parsing. Use `strconv.Atoi()` to parse.".into()
+        "Use `strconv.Atoi()` to parse. Strings cannot be converted to numbers and require explicit parsing.".into()
     } else if kind == InvalidCastKind::Complex {
-        "Complex numbers cannot be converted directly. Use `real(c)` or `imaginary(c)` to extract components.".into()
+        "Use `real(c)` or `imaginary(c)` to extract components. Complex numbers cannot be converted directly.".into()
     } else if kind == InvalidCastKind::RuneToByte {
-        "rune (int32) is wider than byte (uint8) and may not fit. Use an intermediate variable to convert via int first: `let n = r as int; n as byte`".into()
+        "Use an intermediate variable to convert via int first: `let n = r as int; n as byte`. A rune (int32) is wider than a byte (uint8) and may not fit".into()
     } else if kind == InvalidCastKind::ByteToString {
-        "A byte has two readings as a string. Use `[b] as string` to preserve the byte (may be invalid UTF-8), or convert through a rune to encode as a codepoint: `let r = b as rune; r as string`".into()
+        "Use `[b] as string` to preserve the byte (may be invalid UTF-8), or convert through a rune to encode as a codepoint: `let r = b as rune; r as string`. A byte has two readings as a string".into()
     } else {
         "Conversions are supported between numeric types, between string and byte/rune slices, from rune to string, and from concrete types to interfaces.".into()
     };
@@ -4226,20 +4263,20 @@ pub fn cannot_negate_unsigned(target_ty: &str, span: Span) -> LisetteDiagnostic 
 
 fn go_builtin_hint(name: &str) -> Option<&'static str> {
     match name {
-        "len" => Some("Lisette has no `len` builtin. Use `items.length()`"),
-        "cap" => Some("Lisette has no `cap` builtin. Use `items.capacity()`"),
+        "len" => Some("Use `items.length()`. Lisette has no `len` builtin"),
+        "cap" => Some("Use `items.capacity()`. Lisette has no `cap` builtin"),
         "make" => Some(
-            "Lisette has no `make` builtin. Use `Slice.new<T>()`, `Map.new<K, V>()`, or `Channel.new<T>()`",
+            "Use `Slice.new<T>()`, `Map.new<K, V>()`, or `Channel.new<T>()`. Lisette has no `make` builtin",
         ),
-        "append" => Some("Lisette has no `append` builtin. Use `items.append(1)`"),
-        "close" => Some("Lisette has no `close` builtin. Use `ch.close()`"),
-        "copy" => Some("Lisette has no `copy` builtin. Use `dst.copy_from(src)`"),
-        "delete" => Some("Lisette has no `delete` builtin. Use `map.delete(key)`"),
+        "append" => Some("Use `items.append(1)`. Lisette has no `append` builtin"),
+        "close" => Some("Use `ch.close()`. Lisette has no `close` builtin"),
+        "copy" => Some("Use `dst.copy_from(src)`. Lisette has no `copy` builtin"),
+        "delete" => Some("Use `map.delete(key)`. Lisette has no `delete` builtin"),
         "new" => {
-            Some("Lisette has no `new` builtin. Use `MyStruct { field: value }` or `MyType.new()`")
+            Some("Use `MyStruct { field: value }` or `MyType.new()`. Lisette has no `new` builtin")
         }
         "print" | "println" | "printf" => Some(
-            "Lisette has no `print` builtin. Use `fmt.Println`, `fmt.Printf`, etc. after `import \"go:fmt\"`",
+            "Use `fmt.Println`, `fmt.Printf`, etc. after `import \"go:fmt\"`. Lisette has no `print` builtin",
         ),
         _ => None,
     }
@@ -4331,7 +4368,7 @@ pub fn uninferable_generic_reference(
             format!("cannot infer {joined} for `{function}` used as a value"),
         )
         .with_help(format!(
-            "A generic function used as a value cannot have its type arguments inferred. Give `{function}` a signature that uses {joined}, or remove the unused {noun}."
+            "Give `{function}` a signature that uses {joined}, or remove the unused {noun}. A generic function used as a value cannot have its type arguments inferred."
         ))
 }
 
@@ -4367,7 +4404,7 @@ pub fn cannot_infer_bounded_function_reference(
             ),
         )
         .with_help(format!(
-            "The type argument would default to `any`, which does not satisfy `{bound}`. Use `{function_name}` in a way that determines `{param_name}`, or call it directly."
+            "Use `{function_name}` in a way that determines `{param_name}`, or call it directly. The type argument would default to `any`, which does not satisfy `{bound}`."
         ))
 }
 
@@ -4409,8 +4446,8 @@ pub fn recursive_generic_instantiation(type_name: &str, span: Span) -> LisetteDi
         .with_infer_code("recursive_instantiation")
         .with_span_label(&span, format!("`{}` is nested within itself", type_name))
         .with_help(format!(
-            "Go does not allow recursive type instantiation (e.g., `{0}<{0}<T>>`). \
-             Use a wrapper type or a different design.",
+            "Use a wrapper type or a different design. \
+             Go does not allow recursive type instantiation (e.g. `{0}<{0}<T>>`).",
             type_name
         ))
 }
@@ -4433,8 +4470,8 @@ pub fn missing_map_key_bound(parameter: &str, span: Span) -> LisetteDiagnostic {
             format!("`{parameter}` reaches this map key without `Comparable`"),
         )
         .with_help(format!(
-            "Map keys must be comparable. Add the bound where `{parameter}` is declared: \
-             `<{parameter}: Comparable>`"
+            "Add the bound where `{parameter}` is declared: `<{parameter}: Comparable>`. \
+             Map keys must be comparable"
         ))
 }
 
@@ -4472,7 +4509,7 @@ pub fn ref_to_interface_does_not_implement(
             format!("`{ref_ty}` does not implement `{interface_name}`"),
         )
         .with_help(
-            "A reference to an interface does not implement the interface. Dereference with `.*` until reaching the interface value.",
+            "Dereference with `.*` until reaching the interface value. A reference to an interface does not implement the interface.",
         )
 }
 
@@ -4506,7 +4543,7 @@ pub fn interface_self_embedding(interface_name: &str, span: Span) -> LisetteDiag
     LisetteDiagnostic::error("Recursive interface embedding")
         .with_infer_code("interface_cycle")
         .with_span_label(&span, format!("`{}` embeds itself", interface_name))
-        .with_help("An interface cannot embed itself. Remove the self-referencing `impl`.")
+        .with_help("Remove the self-referencing `impl`. An interface cannot embed itself.")
 }
 
 pub fn interface_embedding_cycle(cycle: &[String], span: Span) -> LisetteDiagnostic {
@@ -4515,7 +4552,7 @@ pub fn interface_embedding_cycle(cycle: &[String], span: Span) -> LisetteDiagnos
         .with_infer_code("interface_cycle")
         .with_span_label(&span, "creates a cycle")
         .with_help(format!(
-            "Interface embedding cycle detected: {}. Break the cycle by removing one of the embeddings.",
+            "Break the cycle by removing one of the embeddings. Interface embedding cycle detected: {}.",
             cycle_str
         ))
 }
@@ -4531,8 +4568,8 @@ pub fn interface_method_conflict(
         .with_infer_code("interface_method_conflict")
         .with_span_label(&span, format!("duplicate method `{}`", method_name))
         .with_help(format!(
-            "Interface `{}` inherits conflicting definitions of `{}` from `{}` and `{}`. \
-             Rename one of the methods or remove one of the embeddings.",
+            "Rename one of the methods or remove one of the embeddings. \
+             Interface `{}` inherits conflicting definitions of `{}` from `{}` and `{}`.",
             interface_name, method_name, parent1, parent2
         ))
 }
@@ -4545,8 +4582,8 @@ pub fn impl_on_foreign_type(type_name: &str, package_name: &str, span: Span) -> 
             format!("`{}` is defined in package `{}`", type_name, package_name),
         )
         .with_help(format!(
-            "Methods can only be defined on types in the same package. \
-             Use a standalone function instead: `fn my_method(w: {}) {{ ... }}`",
+            "Use a standalone function: `fn my_method(w: {}) {{ ... }}`. \
+             Methods can only be defined on types in the same package",
             type_name
         ))
 }
@@ -4568,8 +4605,8 @@ pub fn impl_on_type_alias(_type_name: &str, span: Span) -> LisetteDiagnostic {
         .with_infer_code("impl_on_type_alias")
         .with_span_label(&span, "not a distinct type")
         .with_help(
-            "A type alias cannot carry its own methods. Either add methods to the underlying \
-             type directly or define a tuple struct instead",
+            "Add methods to the underlying type directly, or define a tuple struct. \
+             A type alias cannot carry its own methods",
         )
 }
 
@@ -4581,8 +4618,8 @@ pub fn test_impl_on_production_type(type_name: &str, span: Span) -> LisetteDiagn
             format!("`{}` is not declared in a test file", type_name),
         )
         .with_help(
-            "A test file may only add methods to types it declares. Move the method onto the \
-             production type, or define a test-only type to carry it",
+            "Move the method onto the production type, or define a test-only type to carry \
+             it. A test file may only add methods to types it declares",
         )
 }
 
@@ -4611,7 +4648,7 @@ pub fn pub_type_not_exportable(name: &str, suggested: &str, span: Span) -> Liset
         .with_infer_code("pub_type_not_exportable")
         .with_span_label(&span, format!("`{}` cannot be exported from Go", name))
         .with_help(format!(
-            "Public types become exported Go identifiers, which must start with an uppercase letter. Rename to `{}`",
+            "Rename to `{}`. Public types become exported Go identifiers, which must start with an uppercase letter",
             suggested
         ))
 }
@@ -4628,7 +4665,7 @@ pub fn non_pub_interface_with_pub_impl(
             "has public methods, but interface is private",
         )
         .with_help(format!(
-            "`{}` implements public methods for the private interface `{}`. Either make the interface `pub`, or remove `pub` from the struct methods",
+            "Make the interface `pub`, or remove `pub` from the struct methods. `{}` implements public methods for the private interface `{}`",
             struct_name, interface_name
         ))
 }
@@ -4678,8 +4715,8 @@ pub fn specialized_impl_cannot_satisfy_interface(
             ),
         )
         .with_help(format!(
-            "Methods in specialized `impl` blocks cannot satisfy interfaces. \
-             Move `{}` to a generic `impl` block: `impl<{params}> {}<{params}> {{}}`",
+            "Move `{}` to a generic `impl` block: `impl<{params}> {}<{params}> {{}}`. \
+             Methods in specialized `impl` blocks cannot satisfy interfaces",
             method_name, struct_name
         ))
 }
@@ -4844,7 +4881,7 @@ pub fn type_alias_as_qualifier(
             format!("`{}` aliases `{}`", alias, underlying),
         )
         .with_help(format!(
-            "Aliases for types with generic parameters are not supported as qualifiers. Use the original type directly: `{}.{}`",
+            "Use the original type directly: `{}.{}`. Aliases for types with generic parameters are not supported as qualifiers",
             underlying, member
         ))
 }
@@ -4864,8 +4901,8 @@ pub fn unknown_native_static(type_name: &str, member: &str, span: Span) -> Liset
             format!("no static method `{member}` on `{type_name}`"),
         )
         .with_help(format!(
-            "A native type offers only its own constructors and methods. \
-             Run `lis doc {type_name}` to list them"
+            "Run `lis doc {type_name}` to list its constructors and methods. \
+             A native type offers only its own constructors and methods"
         ))
 }
 
@@ -5091,8 +5128,9 @@ pub fn slice_make_no_zero(
 ) -> LisetteDiagnostic {
     let help = match hidden_go_state {
         Some(go_type) => format!(
-            "`{go_type}` has Go-side state hidden from Lisette, so it has no zero value. Build \
-             the slice from a list literal of values obtained from its documented Go constructor."
+            "Build the slice from a list literal of values obtained from the documented Go \
+             constructor of `{go_type}`. `{go_type}` has Go-side state hidden from Lisette, so it \
+             has no zero value."
         ),
         None if unbounded_parameter => format!(
             "Add the bound `<{element}: Zeroable>`, or build the slice from a list literal."
@@ -5152,30 +5190,31 @@ pub fn not_zeroable_bound(
     };
     let help = match cause {
         NotZeroableCause::HiddenGoState { go_type } => format!(
-            "`{go_type}`{at} keeps its state in fields that Lisette cannot see, so there is no \
-             safe empty value. Create it with a constructor function from its Go package."
+            "Create `{go_type}`{at} with a constructor function from its Go package. It keeps \
+             its state in fields that Lisette cannot see, so there is no safe empty value."
         ),
         NotZeroableCause::NilMapField { struct_name } => format!(
             "`{leaf}`{at} is a map, whose Go zero is nil. `{struct_name} {{ .. }}` creates the \
              map, but generic code cannot, so `{struct_name}` is not `Zeroable`."
         ),
         NotZeroableCause::EnumWithoutDefault => format!(
-            "`{leaf}`{at} is an enum with no variant marked `#[default]`, so it has no zero \
-             value. Mark the variant that should be the zero, or build the value explicitly."
+            "Mark the variant that should be the zero with `#[default]`, or build the value \
+             explicitly. `{leaf}`{at} is an enum with no variant marked `#[default]`, so it has \
+             no zero value."
         ),
         NotZeroableCause::PrivateField {
             struct_name,
             field,
             owning_package,
         } => format!(
-            "`{struct_name}.{field}` is private to package `{owning_package}`, so Lisette \
-             cannot produce a zero for it. Build the value through a constructor that \
-             `{owning_package}` exposes."
+            "Build the value through a constructor that `{owning_package}` exposes. \
+             `{struct_name}.{field}` is private to package `{owning_package}`, so Lisette \
+             cannot produce a zero for it."
         ),
         NotZeroableCause::Type => format!(
-            "`Zeroable` admits only types whose zero value Lisette can produce, and \
-             `{leaf}`{at} has none. Build this value explicitly instead, e.g. \
-             `Map.new<K, V>()` for a map or `Channel.new<T>()` for a channel"
+            "Build this value explicitly, e.g. `Map.new<K, V>()` for a map or \
+             `Channel.new<T>()` for a channel. `Zeroable` admits only types whose zero value \
+             Lisette can produce, and `{leaf}`{at} has none"
         ),
     };
     // The leaf of a private field has a zero, so name the struct instead.
@@ -5194,8 +5233,8 @@ pub fn hidden_state_no_zero(type_name: &dyn Display, span: Span) -> LisetteDiagn
         .with_infer_code("hidden_state_no_zero")
         .with_span_label(&span, "no zero available")
         .with_help(format!(
-            "`{type_name}` has Go-side state hidden from Lisette whose zero value is not safe \
-             to use directly. Construct it through its documented Go constructor instead."
+            "Construct it through its documented Go constructor. `{type_name}` has Go-side \
+             state hidden from Lisette whose zero value is not safe to use directly."
         ))
 }
 

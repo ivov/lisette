@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                        ╰── 2 verbs, 1 argument
  6 │ }
    ╰────
-  help: `fmt.Errorf` has 2 verbs but 1 argument, so `%w` prints as `%!w(MISSING)`. Add the missing argument, remove the verb, or write `%%` for a literal percent sign · code: [lint.printf_verb_mismatch]
+  help: Add the missing argument, remove the verb, or write `%%` for a literal percent sign. `fmt.Errorf` has 2 verbs but 1 argument, so `%w` prints as `%!w(MISSING)` · code: [lint.printf_verb_mismatch]

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Syntax error
+  ✕ Unsupported `var` declaration
    ╭─[test.lis:7:1]
  6 │ 
  7 │ var conf = Config {
@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·  ╰── not allowed
  8 │   gravity: 0.03,
    ╰────
-  help: Use `const` for a primitive, or a function that returns the value e.g. `fn origin() -> Point { ... }` for a composite · code: [parse.var_not_allowed]
+  help: Use `const` for a primitive, or a function that returns the value, e.g. `fn origin() -> Point { ... }` for a composite · code: [parse.var_not_allowed]

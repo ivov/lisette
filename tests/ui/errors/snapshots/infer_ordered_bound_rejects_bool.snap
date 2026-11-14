@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                      ╰── does not satisfy `cmp.Ordered`
  8 │ }
    ╰────
-  help: The type parameter must be `cmp.Ordered` but the argument is not orderable. Relax the bound or pass an argument that satisfies it · code: [infer.not_orderable_bound]
+  help: Relax the bound or pass an orderable argument. The type parameter must be `cmp.Ordered` but the argument is not orderable · code: [infer.not_orderable_bound]

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                 ╰── `Map<string, string>` does not satisfy `Zeroable`
  6 │ }
    ╰────
-  help: `Zeroable` admits only types whose zero value Lisette can produce, and `Map<string, string>` at `_0` has none. Build this value explicitly instead, e.g. `Map.new<K, V>()` for a map or `Channel.new<T>()` for a channel · code: [infer.not_zeroable_bound]
+  help: Build this value explicitly, e.g. `Map.new<K, V>()` for a map or `Channel.new<T>()` for a channel. `Zeroable` admits only types whose zero value Lisette can produce, and `Map<string, string>` at `_0` has none · code: [infer.not_zeroable_bound]

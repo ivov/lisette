@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                          ╰── can use `strings.ReplaceAll`
  7 │ }
    ╰────
-  help: `mystr.Replace(s, "o", "0", -1)` replaces every occurrence. Use `mystr.ReplaceAll(s, "o", "0")` · code: [lint.manual_replace_all]
+  help: Use `mystr.ReplaceAll(s, "o", "0")`. `mystr.Replace(s, "o", "0", -1)` replaces every occurrence · code: [lint.manual_replace_all]

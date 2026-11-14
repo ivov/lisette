@@ -715,7 +715,7 @@ impl InferCtx<'_> {
                     let element_word =
                         |count: usize| if count == 1 { "element" } else { "elements" };
                     if !is_nested {
-                        return LisetteDiagnostic::error("Tuple arity mismatch")
+                        return LisetteDiagnostic::error("Tuple size mismatch")
                             .with_infer_code("tuple_element_count_mismatch")
                             .with_span_label(
                                 span,
@@ -782,25 +782,34 @@ impl InferCtx<'_> {
                     .with_expected_found_label(span, &expected_name, &actual_name);
                 if matches!(actual.unwrap_forall(), Function(_)) {
                     diagnostic.with_help(format!(
-                        "A function value may demand less permission than its type \
-                         promises, never more. Match `mut` on each differing parameter, \
-                         or expect `{actual_name}` instead"
+                        "Match `mut` on each differing parameter, or expect \
+                         `{actual_name}` instead. A function value may demand less \
+                         permission than its type promises, never more"
                     ))
                 } else if concrete_expected.is_writable() == actual.is_writable() {
                     diagnostic.with_help(format!(
                         "`{expected_name}` and `{actual_name}` differ in a nested `mut`. \
-                         A container is invariant in its element, so the element \
-                         permission must match exactly"
+                         The element permission of a container must match exactly"
                     ))
                 } else {
-                    let context = self
-                        .expectation_at(span)
-                        .and_then(|expectation| expectation.value_context.clone());
-                    diagnostic.with_help(diagnostics::infer::needs_writable_help(
-                        &expected_name,
-                        &actual_name,
-                        context,
-                    ))
+                    let expectation = self.expectation_at(span);
+                    let context = expectation.and_then(|e| e.value_context.clone());
+                    let requirement =
+                        expectation.and_then(|e| e.argument_requirement(&expected_name));
+                    let help = match (context, requirement) {
+                        (None, Some(requirement)) => {
+                            diagnostics::infer::needs_writable_argument_help(
+                                &actual_name,
+                                &requirement,
+                            )
+                        }
+                        (context, _) => diagnostics::infer::needs_writable_help(
+                            &expected_name,
+                            &actual_name,
+                            context,
+                        ),
+                    };
+                    diagnostic.with_help(help)
                 }
             }
 
@@ -869,8 +878,8 @@ impl InferCtx<'_> {
                 .with_infer_code("needs_writable")
                 .with_span_label(span, format!("`{parameter_name}` is read-only"))
                 .with_help(format!(
-                    "{callee_label} takes `{parameter_name}` as read-only, so it cannot build a \
-                     result with writable contents. {remedy}"
+                    "{remedy}. {callee_label} takes `{parameter_name}` as read-only, so it \
+                     cannot build a result with writable contents"
                 )),
         )
     }
@@ -891,14 +900,14 @@ impl InferCtx<'_> {
     ) -> String {
         if actual.is_unknown() {
             return format!(
-                "The `Unknown` type cannot be used directly. Use `assert_type` to narrow it down to a concrete type. Example: `let value = assert_type<{}>(...)?`",
+                "Use `assert_type` to narrow the value to a concrete type, e.g. `let value = assert_type<{}>(...)?`. The `Unknown` type cannot be used directly.",
                 expected_name
             );
         }
 
         if expected.is_unknown() {
             return format!(
-                "The `Unknown` type cannot be used directly. Use `assert_type` to narrow it down to a concrete type.  Example: `let value = assert_type<{}>(...)?`",
+                "Use `assert_type` to narrow the value to a concrete type, e.g. `let value = assert_type<{}>(...)?`. The `Unknown` type cannot be used directly.",
                 actual_name
             );
         }
@@ -973,17 +982,17 @@ impl InferCtx<'_> {
                 _ if self.store.resolve_to_function_type(expected).is_some()
                     && self.store.resolve_to_function_type(actual).is_some() =>
                 {
-                    "Function types must match exactly, and `Unknown` matches only `Unknown`. Declare the function with the expected signature and narrow with `assert_type` inside, or wrap it in a closure that narrows at the call site".to_string()
+                    "Declare the function with the expected signature and narrow with `assert_type` inside, or wrap it in a closure that narrows at the call site. Function types must match exactly, and `Unknown` matches only `Unknown`".to_string()
                 }
                 _ => format!(
-                    "`Unknown` matches only `Unknown`, never a concrete type. Build `{expected_name}` from a value already annotated as `Unknown`, e.g. `let value: Unknown = ...`, or change the expected type to `{actual_name}`"
+                    "Build `{expected_name}` from a value already annotated as `Unknown`, e.g. `let value: Unknown = ...`, or change the expected type to `{actual_name}`. `Unknown` matches only `Unknown`, never a concrete type"
                 ),
             };
         }
 
         if self.store.is_interface(actual) && !self.store.is_interface(expected) {
             return format!(
-                "An interface value does not carry its concrete type. Narrow it with `assert_type`, e.g. `let value = assert_type<{}>(value)?`",
+                "Narrow the interface value with `assert_type`, e.g. `let value = assert_type<{}>(value)?`. An interface value does not carry its concrete type",
                 expected_name
             );
         }
@@ -1000,10 +1009,10 @@ impl InferCtx<'_> {
 
         match self.closure_adapter(expected, actual) {
             Some(ClosureAdapter::Widens) => {
-                return "Function types must match exactly. Wrap the value in a closure to convert at the call site, e.g. `|value| callee(value)`".to_string();
+                return "Wrap the value in a closure to convert at the call site, e.g. `|value| callee(value)`. Function types must match exactly".to_string();
             }
             Some(ClosureAdapter::Narrows) => {
-                return "Function types must match exactly. Wrap the value in a closure that narrows the interface value with `assert_type`, or change the signature to match".to_string();
+                return "Wrap the value in a closure that narrows the interface value with `assert_type`, or change the signature to match. Function types must match exactly".to_string();
             }
             None => {}
         }

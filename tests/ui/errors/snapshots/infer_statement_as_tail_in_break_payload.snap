@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                 ╰── produces `()`
  5 │   }
    ╰────
-  help: This block is of type `()` because its last expression produces `()`, but the block was expected to be of type `int`. End the block with an expression that produces `int` · code: [infer.statement_as_tail]
+  help: End the block with an expression that produces `int`. The block must produce `int` · code: [infer.statement_as_tail]

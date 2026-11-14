@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                      ╰── `int` argument for `%p`
  6 │ }
    ╰────
-  help: `fmt.Printf` formats `%p`, which needs a pointer, but the argument has type `int`. Use `%d`, or convert the argument · code: [lint.printf_verb_mismatch]
+  help: Use `%d`, or convert the argument. `fmt.Printf` formats `%p`, which needs a pointer, but the argument has type `int` · code: [lint.printf_verb_mismatch]

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                      ╰── `T` becomes `mut Slice<T>` in this recursive call
  4 │ }
    ╰────
-  help: Each recursive call would need a new version of `depth` at a larger type, so compilation would never finish. Keep type arguments fixed across recursive calls · code: [infer.instantiation_cycle]
+  help: Keep type arguments fixed across recursive calls. Each recursive call would need a new version of `depth` at a larger type, so compilation would never finish · code: [infer.instantiation_cycle]

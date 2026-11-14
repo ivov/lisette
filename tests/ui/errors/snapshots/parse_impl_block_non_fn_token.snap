@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Syntax error
+  ✕ Invalid `impl` item
    ╭─[test.lis:5:3]
  4 │ impl Num {
  5 │   x
@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·   ╰── expected `fn` in impl block
  6 │ }
    ╰────
-  help: Only functions are allowed in `impl` blocks · code: [parse.syntax_error]
+  help: Only functions are allowed in `impl` blocks · code: [parse.invalid_impl_item]

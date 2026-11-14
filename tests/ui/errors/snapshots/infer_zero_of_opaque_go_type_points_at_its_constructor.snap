@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                      ╰── `regexp.Regexp` does not satisfy `Zeroable`
  6 │ }
    ╰────
-  help: `regexp.Regexp` keeps its state in fields that Lisette cannot see, so there is no safe empty value. Create it with a constructor function from its Go package · code: [infer.not_zeroable_bound]
+  help: Create `regexp.Regexp` with a constructor function from its Go package. It keeps its state in fields that Lisette cannot see, so there is no safe empty value · code: [infer.not_zeroable_bound]

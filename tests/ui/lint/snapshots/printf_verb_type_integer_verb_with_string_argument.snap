@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                        ╰── `string` argument for `%d`
  7 │ }
    ╰────
-  help: `fmt.Printf` formats `%d`, which needs an integer, but the argument has type `string`. Use `%s`, or convert the argument · code: [lint.printf_verb_mismatch]
+  help: Use `%s`, or convert the argument. `fmt.Printf` formats `%d`, which needs an integer, but the argument has type `string` · code: [lint.printf_verb_mismatch]

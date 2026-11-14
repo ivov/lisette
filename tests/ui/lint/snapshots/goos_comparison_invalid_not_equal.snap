@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                       ╰── `runtime.GOOS` never holds this value
  5 │ }
    ╰────
-  help: `runtime.GOOS` only ever holds a known operating system, and this is not one. Did you mean a valid value such as `linux`, `darwin`, or `windows`? · code: [lint.goos_goarch_comparison]
+  help: `runtime.GOOS` only ever holds a known operating system, and this is not one. Did you mean a valid value, e.g. `linux`, `darwin`, or `windows`? · code: [lint.goos_goarch_comparison]

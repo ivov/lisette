@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·     ╰── write `embed` here
  7 │   fn write(s: string);
    ╰────
-  help: Interfaces embed other interfaces with `embed`. Replace `impl` with `embed` · code: [parse.impl_interface_embed]
+  help: Replace `impl` with `embed`. Interfaces embed other interfaces with `embed` · code: [parse.impl_interface_embed]

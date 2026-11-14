@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                                                          ╰── `pairs` is read-only
  5 │   let _ = m
    ╰────
-  help: `Map.from()` takes `pairs` as read-only, so it cannot build a result with writable contents. Create the map with `Map.new()` and assign each entry with an index write · code: [infer.needs_writable]
+  help: Create the map with `Map.new()` and assign each entry with an index write. `Map.from()` takes `pairs` as read-only, so it cannot build a result with writable contents · code: [infer.needs_writable]

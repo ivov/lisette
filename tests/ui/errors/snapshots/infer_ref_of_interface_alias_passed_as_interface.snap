@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·       ╰── `P` does not implement `Foo`
  26 │ }
     ╰────
-  help: A reference to an interface does not implement the interface. Dereference with `.*` until reaching the interface value · code: [infer.ref_of_interface]
+  help: Dereference with `.*` until reaching the interface value. A reference to an interface does not implement the interface · code: [infer.ref_of_interface]

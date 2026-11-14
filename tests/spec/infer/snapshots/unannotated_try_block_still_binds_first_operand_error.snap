@@ -9,4 +9,4 @@ source: tests/spec/infer/try.rs
     ·                    ╰── expected `AError`, found `BError`
  21 │         a + b
     ╰────
-  help: cannot propagate `BError` as `AError`. Convert with `.map_err(...)` · code: [infer.cannot_propagate_error]
+  help: Convert the error to `AError` with `.map_err(...)`. `?` cannot propagate `BError` as `AError` · code: [infer.cannot_propagate_error]

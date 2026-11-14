@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                 ╰── shifts by -1
  5 │ }
    ╰────
-  help: A shift amount must be zero or greater. Shift the other way instead · code: [infer.negative_shift]
+  help: Shift the other way. A shift amount must be zero or greater · code: [infer.negative_shift]

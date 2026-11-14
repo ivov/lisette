@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·         ╰── `rocks` is declared `mut Ref<mut Slice<mut Ref<Rock>>>`, but receives `mut Ref<Slice<Ref<Rock>>>`
  13 │       hits: 0,
     ╰────
-  help: `rocks` received less `mut` than declared, so the new `Beam` is read-only. A reference to it is `mut Ref<Beam>` where `mut Ref<mut Beam>` is expected. Declare the parameter `rocks` as `mut Ref<mut Slice<mut Ref<Rock>>>` · code: [infer.needs_writable]
+  help: Declare the parameter `rocks` as `mut Ref<mut Slice<mut Ref<Rock>>>`. `rocks` received less `mut` than declared, so the new `Beam` is read-only. A reference to it is `mut Ref<Beam>` where `mut Ref<mut Beam>` is expected · code: [infer.needs_writable]

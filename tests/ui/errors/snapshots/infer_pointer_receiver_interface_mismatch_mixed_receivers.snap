@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·                    ╰── `Cache` does not implement `Store`
  18 │ }
     ╰────
-  help: `Cache.clear` takes `self: mut Ref<Cache>`, `Cache.size` takes `self: Ref<Cache>`, so `Store` is satisfied by a `mut Ref<Cache>`, not a value. Take a reference with `&` (for example `&Cache { ... }`) · code: [infer.interface_not_implemented]
+  help: Take a reference with `&` (for example `&Cache { ... }`). `Cache.clear` takes `self: mut Ref<Cache>`, `Cache.size` takes `self: Ref<Cache>`, so `Store` is satisfied by a `mut Ref<Cache>`, not a value · code: [infer.interface_not_implemented]

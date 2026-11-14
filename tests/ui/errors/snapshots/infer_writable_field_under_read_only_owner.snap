@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·            ╰── `boxed.items` is read-only
  8 │ }
    ╰────
-  help: `items` is declared writable, but `boxed` is read-only, so its fields are too. Make `boxed` writable where it is created · code: [infer.write_through_read_only]
+  help: Make `boxed` writable where it is created. `items` is declared writable, but `boxed` is read-only, so its fields are too · code: [infer.write_through_read_only]

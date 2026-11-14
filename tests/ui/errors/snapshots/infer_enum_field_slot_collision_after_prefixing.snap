@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                      ╰── field type mismatch
  6 │ }
    ╰────
-  help: `Shape.Rect.w` is `float64` but `Shape.Third.rect_w` is `string`, and both become `RectW` in Go. Rename one of the fields · code: [infer.enum_field_type_conflict]
+  help: Rename one of the fields. `Shape.Rect.w` is `float64` but `Shape.Third.rect_w` is `string`, and both become `RectW` in Go · code: [infer.enum_field_type_conflict]

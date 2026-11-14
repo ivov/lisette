@@ -8,4 +8,4 @@ source: tests/ui/errors/mod.rs
    ·                          ┬
    ·                          ╰── must satisfy `Shower`
    ╰────
-  help: `Bar` requires its type argument to satisfy `Shower`. Add the bound: `E: Shower` · code: [infer.missing_transitive_bound]
+  help: Add the bound: `E: Shower`. `Bar` requires its type argument to satisfy `Shower` · code: [infer.missing_transitive_bound]

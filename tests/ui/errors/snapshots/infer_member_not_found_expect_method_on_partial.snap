@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·       ╰── no member `expect` on type `Partial<int, error>`
  4 │ }
    ╰────
-  help: Lisette does not provide `expect()`. The `?` operator is not supported on `Partial`; use `match` to handle all three cases (e.g. `match <expr> { Ok(x) => ..., Err(e) => ..., Both(x, e) => ... }`) or `unwrap_or(default)` for a fallback · code: [infer.member_not_found]
+  help: Use `match` to handle all three cases (e.g. `match <expr> { Ok(x) => ..., Err(e) => ..., Both(x, e) => ... }`) or `unwrap_or(default)` for a fallback. Lisette does not provide `expect()`, and the `?` operator is not supported on `Partial` · code: [infer.member_not_found]

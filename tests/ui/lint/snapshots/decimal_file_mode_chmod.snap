@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                                 ╰── decimal 644 is octal 0o1204
  6 │ }
    ╰────
-  help: File permissions are conventionally written in octal. Use a `0o` prefix (for example `0o644`) so the bits line up with the rwx triples · code: [infer.decimal_file_mode]
+  help: Use a `0o` prefix (for example `0o644`) so the bits line up with the rwx triples. File permissions are conventionally written in octal · code: [infer.decimal_file_mode]

@@ -9,7 +9,7 @@ source: tests/ui/errors/mod.rs
    ·                       ╰── expected `mut Slice<string>`, found `Slice<string>`
  6 │   if let Holder.Tags(tags) = h {
    ╰────
-  help: `mut Slice<string>` permits writes, `Slice<string>` does not. Declare the parameter `a` as `mut Slice<string>` · code: [infer.needs_writable]
+  help: Declare the parameter `a` as `mut Slice<string>`. `mut Slice<string>` permits writes, `Slice<string>` does not · code: [infer.needs_writable]
 
   ✕ Cannot write to `tags[0]`
    ╭─[test.lis:7:5]

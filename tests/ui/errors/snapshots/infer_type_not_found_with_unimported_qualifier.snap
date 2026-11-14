@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type not found
+   ╭─[test.lis:2:12]
+ 1 │ 
+ 2 │ fn test(x: strings.Builder) {}
+   ·            ───┬───
+   ·               ╰── not declared or imported
+   ╰────
+  help: Import the `strings` package · code: [resolve.type_not_found]

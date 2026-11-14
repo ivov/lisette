@@ -16,6 +16,7 @@ pub(super) struct ImportState {
     pub(super) prefixed: HashMap<String, PrefixedImport>,
     /// Packages whose exports are available without prefix (current package and prelude)
     pub(super) unprefixed_imports: HashSet<String>,
+    pub(super) has_unnamed_failure: bool,
 }
 
 #[derive(Debug)]
@@ -70,6 +71,14 @@ impl ImportState {
 
     pub(super) fn is_failed(&self, prefix: &str) -> bool {
         matches!(self.prefixed.get(prefix), Some(PrefixedImport::Failed))
+    }
+
+    /// A failed import with an unknown Go package name can bind any qualifier.
+    pub(super) fn may_name_failed_import(&self, prefix: &str) -> bool {
+        match self.prefixed.get(prefix) {
+            Some(import) => matches!(import, PrefixedImport::Failed),
+            None => self.has_unnamed_failure,
+        }
     }
 }
 
@@ -492,6 +501,12 @@ impl TaskState {
 
             let package = store.get_package(&import.name);
             if package.is_none() || package.is_some_and(Package::is_empty_stub) {
+                if import.alias.is_none()
+                    && import.name.starts_with("go:")
+                    && !store.go_package_names.contains_key(import.name.as_str())
+                {
+                    self.imports.has_unnamed_failure = true;
+                }
                 self.imports
                     .prefixed
                     .insert(effective, PrefixedImport::Failed);

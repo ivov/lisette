@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                                        ╰── `Sealed` is sealed and cannot be implemented here
  7 │ fn main() {}
    ╰────
-  help: `Sealed` has a method that only Go code in its own module can declare. Satisfy `Sealed` by embedding it, or by embedding a Go type that implements it · code: [infer.sealed_interface]
+  help: Satisfy `Sealed` by embedding it, or by embedding a Go type that implements it. `Sealed` has a method that only Go code in its own module can declare · code: [infer.sealed_interface]

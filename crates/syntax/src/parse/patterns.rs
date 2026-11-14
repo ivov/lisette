@@ -39,7 +39,9 @@ impl<'source> Parser<'source> {
                 if !parser.is(Identifier) {
                     parser.track_error("expected identifier after `as`", "Use `as <name>`");
                 } else if parser.current_token().text == "_" {
-                    parser.track_error(
+                    parser.track_coded_error(
+                        "Invalid `as` binding",
+                        "invalid_as_binding",
                         "`_` is not a valid `as` alias",
                         "Use a named binding, or omit `as _`",
                     );
@@ -121,8 +123,10 @@ impl<'source> Parser<'source> {
             Char => self.parse_char_pattern(),
 
             Imaginary => {
-                self.track_error(
-                    "not allowed",
+                self.track_coded_error(
+                    "Unsupported literal pattern",
+                    "unsupported_literal_pattern",
+                    "not allowed in a pattern",
                     "Imaginary literals are not supported in patterns",
                 );
                 self.next();
@@ -164,10 +168,12 @@ impl<'source> Parser<'source> {
                 };
                 let span = self.span_from_offset(start.byte_offset);
                 if value > i64::MIN.unsigned_abs() {
-                    self.track_error_at(
+                    self.track_coded_error_at(
                         span,
+                        "Literal out of range",
+                        "literal_out_of_range",
                         "negative integer out of range",
-                        "Negative integer must be ≥ -9223372036854775808 (i64 minimum).",
+                        "Negative integer must be ≥ -9223372036854775808 (the `int64` minimum).",
                     );
                     return Pattern::WildCard { span };
                 }
@@ -186,9 +192,11 @@ impl<'source> Parser<'source> {
             }
             Float => {
                 let span = self.span_from_offset(start.byte_offset);
-                self.track_error_at(
+                self.track_coded_error_at(
                     span,
-                    "not allowed",
+                    "Unsupported literal pattern",
+                    "unsupported_literal_pattern",
+                    "not allowed in a pattern",
                     "Float literals are not supported in patterns",
                 );
                 self.next();
@@ -199,7 +207,7 @@ impl<'source> Parser<'source> {
             _ => {
                 self.track_error(
                     "expected number after `-`",
-                    "Negative patterns require a number, e.g., `-5`",
+                    "Negative patterns require a number, e.g. `-5`",
                 );
                 Pattern::WildCard {
                     span: self.span_from_offset(start.byte_offset),
@@ -374,8 +382,10 @@ impl<'source> Parser<'source> {
         while self.is_not(RightSquareBracket) {
             if let Some(parsed_rest) = self.try_parse_rest() {
                 if rest.is_present() {
-                    self.track_error(
-                        "multiple rest patterns in slice pattern",
+                    self.track_coded_error(
+                        "Multiple rest patterns",
+                        "multiple_rest_patterns",
+                        "second rest pattern",
                         "Only one `..` or `..rest` is allowed.",
                     );
                 } else {
@@ -391,8 +401,9 @@ impl<'source> Parser<'source> {
                 let suffix_span = self.span_from_offset(suffix_start.byte_offset);
                 let error = ParseError::new("Invalid pattern", suffix_span, "not supported")
                     .with_parse_code("suffix_slice_pattern")
-                    .with_help("Use `[first, ..rest]` instead of `[..rest, last]`.")
-                    .with_note("Elements after rest pattern are not supported.");
+                    .with_help(
+                        "Use `[first, ..rest]` instead of `[..rest, last]`. Elements after rest pattern are not supported",
+                    );
                 self.errors.push(error);
                 self.expect_comma_or(RightSquareBracket);
                 continue;
@@ -429,9 +440,11 @@ impl<'source> Parser<'source> {
             } else {
                 format!("{}.<variant>", name)
             };
-            self.track_error_at(
+            self.track_coded_error_at(
                 span,
-                "invalid syntax",
+                "`::` in a path",
+                "double_colon_path",
+                "Rust-style path",
                 format!(
                     "Use `.` instead of `::` for enum variant access, e.g. `{}`",
                     example
@@ -506,9 +519,11 @@ impl<'source> Parser<'source> {
                     self.next();
                 }
                 if self.advance_if(Comma) && self.is_not(RightCurlyBrace) {
-                    self.track_error(
-                        "cannot be last",
-                        "Move the spread expression `..rest` to the last position in the struct",
+                    self.track_coded_error(
+                        "Misplaced rest pattern",
+                        "misplaced_rest_pattern",
+                        "field after the rest pattern",
+                        "Move `..` to the end of the struct pattern",
                     );
                 }
                 break;
@@ -668,7 +683,13 @@ impl<'source> Parser<'source> {
                     "A read-only receiver is `self: Ref<T>`, where `T` is the type \
                      this `impl` targets. For a copy, use `self`."
                 };
-                self.track_error_at(span, "invalid syntax", help);
+                self.track_coded_error_at(
+                    span,
+                    "Rust-style receiver",
+                    "rust_style_receiver",
+                    "not a receiver form",
+                    help,
+                );
                 self.next();
                 if is_mut_self {
                     self.next();
@@ -741,16 +762,20 @@ impl<'source> Parser<'source> {
             _ => false,
         };
         let error = if refuses_permission {
-            ParseError::new("Syntax error", span, "parameters are immutable")
-                .with_parse_code("syntax_error")
+            ParseError::new("Misplaced `mut`", span, "parameters are immutable")
+                .with_parse_code("misplaced_mut")
                 .with_help("Rebind with `let mut` inside the body to mutate a local copy.")
         } else {
-            ParseError::new("Syntax error", span, "`mut` goes on the parameter's type")
-                .with_parse_code("syntax_error")
-                .with_help(
-                    "Place the permission right before the type, as in `items: mut Slice<int>`, \
+            ParseError::new(
+                "Misplaced `mut`",
+                span,
+                "`mut` goes on the parameter's type",
+            )
+            .with_parse_code("misplaced_mut")
+            .with_help(
+                "Place the permission right before the type, e.g. `items: mut Slice<int>`, \
                      or rebind with `let mut` inside the body for a local copy.",
-                )
+            )
         };
         if !self.too_many_errors() {
             self.errors.push(error);
@@ -759,8 +784,8 @@ impl<'source> Parser<'source> {
 
     fn reject_self_marker(&mut self, marker_span: Option<Span>) {
         let Some(span) = marker_span else { return };
-        let error = ParseError::new("Syntax error", span, "`mut` goes on the receiver's type")
-            .with_parse_code("syntax_error")
+        let error = ParseError::new("Misplaced `mut`", span, "`mut` goes on the receiver's type")
+            .with_parse_code("misplaced_mut")
             .with_help(
                 "A writable receiver is `self: mut Ref<T>`, where `T` is the type \
                  this `impl` targets.",

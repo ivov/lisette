@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·            ╰── expected expression, found `)`
  4 │ }
    ╰────
-  help: Check your syntax · code: [parse.expected_expression]
+  code: [parse.expected_expression]

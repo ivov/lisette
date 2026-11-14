@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·             ╰── a channel cannot be JSON-encoded
  5 │ }
    ╰────
-  help: Go's `encoding/json` cannot marshal channels. Drop the field, or exclude it with `#[json(skip)]` · code: [infer.json_non_serializable_field]
+  help: Drop the field, or exclude it with `#[json(skip)]`. Go's `encoding/json` cannot marshal channels · code: [infer.json_non_serializable_field]

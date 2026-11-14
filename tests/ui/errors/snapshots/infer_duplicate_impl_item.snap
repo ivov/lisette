@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·       ╰── method name already taken
  10 │ }
     ╰────
-  help: Method `bar` is already defined for type `Foo`. Rename one of the methods · code: [infer.duplicate_impl_item]
+  help: Rename one of the methods. Method `bar` is already defined for type `Foo` · code: [infer.duplicate_impl_item]

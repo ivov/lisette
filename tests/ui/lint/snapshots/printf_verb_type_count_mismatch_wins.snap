@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                ╰── 2 verbs, 1 argument
  6 │ }
    ╰────
-  help: `fmt.Printf` has 2 verbs but 1 argument, so `%d` prints as `%!d(MISSING)`. Add the missing argument, remove the verb, or write `%%` for a literal percent sign · code: [lint.printf_verb_mismatch]
+  help: Add the missing argument, remove the verb, or write `%%` for a literal percent sign. `fmt.Printf` has 2 verbs but 1 argument, so `%d` prints as `%!d(MISSING)` · code: [lint.printf_verb_mismatch]

@@ -8,4 +8,4 @@ source: tests/ui/errors/mod.rs
    ·                 ──┬─
    ·                   ╰── `item` cannot be compared
    ╰────
-  help: `#[equality]` cannot compare a struct containing non-comparable fields. Give `Holder` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field · code: [attribute.cannot_derive_equality]
+  help: Give `Holder` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field. `#[equality]` cannot compare a struct containing non-comparable fields · code: [attribute.cannot_derive_equality]

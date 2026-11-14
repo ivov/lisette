@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                              ╰── `O` aliases `Option`
  5 │   let _ = f
    ╰────
-  help: Aliases for types with generic parameters are not supported as qualifiers. Use the original type directly: `Option.Some` · code: [infer.type_alias_as_qualifier]
+  help: Use the original type directly: `Option.Some`. Aliases for types with generic parameters are not supported as qualifiers · code: [infer.type_alias_as_qualifier]

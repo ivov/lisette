@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·        ╰── exits before `defer` can run
  9 │ }
    ╰────
-  help: `os.Exit` will terminate the process without running deferred calls. Run the cleanup before exiting instead of deferring it · code: [lint.exit_after_defer]
+  help: Run the cleanup before exiting instead of deferring it. `os.Exit` will terminate the process without running deferred calls · code: [lint.exit_after_defer]

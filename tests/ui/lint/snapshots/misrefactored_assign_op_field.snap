@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·              ╰── uses `c.count` twice
  7 │   let _ = c.count
    ╰────
-  help: The `&=` operator already includes `c.count`, so naming `c.count` again on the right applies it twice. To apply `1` once, write `c.count &= 1` · code: [lint.misrefactored_assign_op]
+  help: To apply `1` once, write `c.count &= 1`. The `&=` operator already includes `c.count`, so naming `c.count` again on the right applies it twice · code: [lint.misrefactored_assign_op]

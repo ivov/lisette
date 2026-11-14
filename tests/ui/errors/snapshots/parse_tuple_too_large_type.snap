@@ -8,4 +8,4 @@ source: tests/ui/errors/mod.rs
    ·            ───────────────┬──────────────
    ·                           ╰── 6-element tuple not allowed
    ╰────
-  help: For >5 elements, use a struct with named fields · code: [parse.tuple_element_count]
+  help: For more than 5 elements, use a struct with named fields · code: [parse.tuple_element_count]

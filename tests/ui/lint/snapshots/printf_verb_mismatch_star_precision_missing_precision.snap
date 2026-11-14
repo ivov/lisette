@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·              ╰── 2 operands, 0 arguments
  6 │ }
    ╰────
-  help: `fmt.Printf` has 2 operands but 0 arguments, so the `*` precision prints as `%!(BADPREC)`. Add the missing precision argument or write a fixed precision · code: [lint.printf_verb_mismatch]
+  help: Add the missing precision argument or write a fixed precision. `fmt.Printf` has 2 operands but 0 arguments, so the `*` precision prints as `%!(BADPREC)` · code: [lint.printf_verb_mismatch]

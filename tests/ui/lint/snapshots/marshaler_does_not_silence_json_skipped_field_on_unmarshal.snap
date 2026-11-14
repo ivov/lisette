@@ -16,4 +16,4 @@ source: tests/ui/lint/mod.rs
     ·                                                  ╰── `port` will keep its current value
  18 │   let _ = parsed.port
     ╰────
-  help: Only `pub` fields are filled from JSON. Add `#[json]` to `Config`, or mark `port` as `pub` · code: [lint.json_skipped_field]
+  help: Add `#[json]` to `Config`, or mark `port` as `pub`. Only `pub` fields are filled from JSON · code: [lint.json_skipped_field]

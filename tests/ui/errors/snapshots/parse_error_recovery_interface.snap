@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Syntax error
+  ✕ Invalid interface item
    ╭─[test.lis:3:3]
  2 │ interface Foo {
  3 │   ^
@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·   ╰── expected `fn` or `embed`
  4 │   fn bar();
    ╰────
-  help: Only method signatures (`fn`) and embeddings (`embed`) are allowed in interfaces · code: [parse.syntax_error]
+  help: Only method signatures (`fn`) and embeddings (`embed`) are allowed in interfaces · code: [parse.invalid_interface_item]

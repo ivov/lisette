@@ -8,6 +8,7 @@ use crate::path::DisplayPathBase;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap as HashMap;
 use syntax::ParseError;
+use syntax::ast::Span;
 use syntax::program::UninferredExports;
 
 struct CacheCandidate {
@@ -175,6 +176,7 @@ pub(super) fn infer_all_packages(
                 &mut checker,
                 store,
                 &package_id,
+                dependencies.import_span(&package_id),
                 input.scope.script_unit(),
                 &mut GoPackageSources {
                     locator: input.locator,
@@ -409,6 +411,7 @@ fn register_go_package(
     checker: &mut TaskState,
     store: &mut Store,
     package_id: &str,
+    user_import: Option<Span>,
     script: Option<ScriptUnit>,
     sources: &mut GoPackageSources,
 ) {
@@ -423,8 +426,11 @@ fn register_go_package(
             checker.parse_and_register_go_package(
                 store,
                 package_id,
-                content.as_ref(),
-                origin.into_cache_path(),
+                GoTypedef {
+                    source: content.as_ref(),
+                    cache_path: origin.into_cache_path(),
+                },
+                user_import,
                 sources,
             );
         }
