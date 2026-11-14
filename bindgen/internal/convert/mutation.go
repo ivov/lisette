@@ -115,7 +115,8 @@ type MutationAnalysis struct {
 	summaries  map[*ssa.Function]*mutationSummary
 	inProgress map[*ssa.Function]bool
 	// sawCycle: a summary was read before it was finished, so settle must run.
-	sawCycle bool
+	sawCycle   bool
+	localWalks map[ssa.Value]*localWalk
 }
 
 // mutationSummary is keyed by SSA parameter index (a receiver is 0), and by
@@ -354,6 +355,7 @@ func NewMutationAnalysis(nilness *NilnessAnalysis, roots []*packages.Package) (a
 		views:      make(map[*types.Func]FunctionViews),
 		summaries:  make(map[*ssa.Function]*mutationSummary),
 		inProgress: make(map[*ssa.Function]bool),
+		localWalks: make(map[ssa.Value]*localWalk),
 	}
 
 	wellTyped := make([]*packages.Package, 0, len(roots))
@@ -1552,9 +1554,68 @@ type localStore struct {
 // graph, is a collected write, is a silent read, or counts as written out
 // of sight, including any unlisted use.
 func (a *MutationAnalysis) localStores(base ssa.Value) ([]localStore, bool, bool) {
-	var out []localStore
-	helperWritten := false
+	walk, ok := a.localWalks[base]
+	if !ok {
+		walk = walkLocalStorage(base)
+		a.localWalks[base] = walk
+	}
+	helperWritten := walk.helperWritten
+	if !walk.hasClosure {
+		for _, step := range walk.calls {
+			if a.calleeWritesArgument(step.call, step.value) {
+				helperWritten = true
+			}
+		}
+		return walk.stores, helperWritten, false
+	}
+	out := make([]localStore, 0, len(walk.steps))
 	sharesGlobal := false
+	for _, step := range walk.steps {
+		switch {
+		case step.closure != nil:
+			a.collectClosureStores(step.closure, step.value, step.path, &out, &helperWritten, &sharesGlobal)
+		case step.call != nil:
+			if a.calleeWritesArgument(step.call, step.value) {
+				helperWritten = true
+			}
+		default:
+			out = append(out, localStore{value: step.value, path: step.path})
+		}
+	}
+	return out, helperWritten, sharesGlobal
+}
+
+// localWalk is the SSA-only part of localStores, where only closure steps add stores from summaries.
+type localWalk struct {
+	steps         []localWalkStep
+	stores        []localStore
+	calls         []localWalkStep
+	helperWritten bool
+	hasClosure    bool
+}
+
+type localWalkStep struct {
+	value   ssa.Value
+	path    []pathStep
+	closure *ssa.MakeClosure
+	call    *ssa.CallCommon
+}
+
+func (w *localWalk) addStore(value ssa.Value, path []pathStep) {
+	w.steps = append(w.steps, localWalkStep{value: value, path: path})
+}
+
+func (w *localWalk) addCall(value ssa.Value, call *ssa.CallCommon) {
+	w.steps = append(w.steps, localWalkStep{value: value, call: call})
+}
+
+func (w *localWalk) addClosure(value ssa.Value, path []pathStep, closure *ssa.MakeClosure) {
+	w.steps = append(w.steps, localWalkStep{value: value, path: path, closure: closure})
+	w.hasClosure = true
+}
+
+func walkLocalStorage(base ssa.Value) *localWalk {
+	walk := &localWalk{}
 	seen := map[ssa.Value]bool{}
 	var visit func(v ssa.Value, path []pathStep, shifted bool)
 	visit = func(v ssa.Value, path []pathStep, shifted bool) {
@@ -1570,7 +1631,7 @@ func (a *MutationAnalysis) localStores(base ssa.Value) ([]localStore, bool, bool
 			switch typed := ref.(type) {
 			case *ssa.Store:
 				if typed.Addr == v {
-					out = append(out, localStore{value: typed.Val, path: path})
+					walk.addStore(typed.Val, path)
 					continue
 				}
 				// a non-local destination is written out of sight
@@ -1579,7 +1640,7 @@ func (a *MutationAnalysis) localStores(base ssa.Value) ([]localStore, bool, bool
 				case *ssa.Alloc, *ssa.MakeSlice, *ssa.MakeMap, *ssa.FreeVar:
 					visit(typed.Addr, path, true)
 				default:
-					helperWritten = true
+					walk.helperWritten = true
 				}
 			case *ssa.FieldAddr:
 				if typed.X == v {
@@ -1593,9 +1654,9 @@ func (a *MutationAnalysis) localStores(base ssa.Value) ([]localStore, bool, bool
 				// only the value is content, since keys are outside the fact
 				switch {
 				case typed.Map == v:
-					out = append(out, localStore{value: typed.Value, path: append(slices.Clone(path), keyStep(typed.Key))})
+					walk.addStore(typed.Value, append(slices.Clone(path), keyStep(typed.Key)))
 				case typed.Value == v || typed.Key == v:
-					helperWritten = true
+					walk.helperWritten = true
 				}
 			case *ssa.Slice:
 				if typed.X == v {
@@ -1628,45 +1689,49 @@ func (a *MutationAnalysis) localStores(base ssa.Value) ([]localStore, bool, bool
 					visit(typed, path, shifted)
 				}
 			case *ssa.MakeClosure:
-				a.collectClosureStores(typed, v, path, &out, &helperWritten, &sharesGlobal)
+				walk.addClosure(v, path, typed)
 			case *ssa.Call:
-				a.collectCallStores(typed, v, path, shifted, &out, &helperWritten, visit)
+				collectCallStores(typed, v, path, shifted, walk, visit)
 			case *ssa.Defer:
-				if a.calleeWritesArgument(typed.Common(), v) {
-					helperWritten = true
-				}
+				walk.addCall(v, typed.Common())
 			case *ssa.Go:
-				if a.calleeWritesArgument(typed.Common(), v) {
-					helperWritten = true
-				}
+				walk.addCall(v, typed.Common())
 			case *ssa.Convert:
 				if isUnsafePointerType(typed.Type()) {
-					helperWritten = true
+					walk.helperWritten = true
 				}
 			case *ssa.Lookup, *ssa.Range, *ssa.Field, *ssa.Index,
 				*ssa.BinOp, *ssa.Return, *ssa.DebugRef:
 			default:
-				helperWritten = true
+				walk.helperWritten = true
 			}
 		}
 	}
 	visit(base, nil, false)
-	return out, helperWritten, sharesGlobal
+	if !walk.hasClosure {
+		for _, step := range walk.steps {
+			if step.call != nil {
+				walk.calls = append(walk.calls, step)
+			} else {
+				walk.stores = append(walk.stores, localStore{value: step.value, path: step.path})
+			}
+		}
+		walk.steps = nil
+	}
+	return walk
 }
 
-func (a *MutationAnalysis) collectCallStores(call *ssa.Call, v ssa.Value, path []pathStep, shifted bool, out *[]localStore, helperWritten *bool, visit func(ssa.Value, []pathStep, bool)) {
+func collectCallStores(call *ssa.Call, v ssa.Value, path []pathStep, shifted bool, walk *localWalk, visit func(ssa.Value, []pathStep, bool)) {
 	common := call.Common()
 	builtin, ok := common.Value.(*ssa.Builtin)
 	if !ok {
-		if a.calleeWritesArgument(common, v) {
-			*helperWritten = true
-		}
+		walk.addCall(v, common)
 		return
 	}
 	// copy places the source's element values, like a spread append
 	if builtin.Name() == "copy" && len(common.Args) == 2 && common.Args[0] == v {
 		if spreadCarriesStorage(common.Args[1].Type()) {
-			*out = append(*out, localStore{value: common.Args[1], path: append(slices.Clone(path), unknownStep)})
+			walk.addStore(common.Args[1], append(slices.Clone(path), unknownStep))
 		}
 		return
 	}
@@ -1682,7 +1747,7 @@ func (a *MutationAnalysis) collectCallStores(call *ssa.Call, v ssa.Value, path [
 			case *ssa.Alloc, *ssa.MakeSlice, *ssa.MakeMap:
 			default:
 				if spreadCarriesStorage(added.Type()) {
-					*out = append(*out, localStore{value: added, path: append(slices.Clone(path), unknownStep)})
+					walk.addStore(added, append(slices.Clone(path), unknownStep))
 				}
 			}
 		}
