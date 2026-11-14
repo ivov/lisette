@@ -1555,6 +1555,10 @@
         "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1": [
           "SchemeBuilder"
         ],
+        "github.com/fatih/color": [
+          "Error",
+          "Output"
+        ],
         "github.com/georgysavva/scany/v2/dbscan": [
           "DefaultAPI"
         ],
@@ -1563,6 +1567,10 @@
         ],
         "github.com/gin-contrib/httpsign": [
           "*"
+        ],
+        "github.com/gin-gonic/gin": [
+          "DefaultErrorWriter",
+          "DefaultWriter"
         ],
         "github.com/goccy/go-graphviz": [
           "Directed",
@@ -1612,6 +1620,9 @@
           "ErrUnimplemented",
           "LastOutputStringError"
         ],
+        "github.com/hashicorp/go-hclog": [
+          "DefaultOutput"
+        ],
         "github.com/leanovate/gopter": [
           "MinGenParams"
         ],
@@ -1627,6 +1638,13 @@
         "github.com/ory/fosite/handler/openid": [
           "ErrNoSessionFound"
         ],
+        "github.com/prometheus/client_golang/prometheus": [
+          "CounterMetricTypePtr",
+          "DefaultGatherer",
+          "DefaultRegisterer",
+          "GaugeMetricTypePtr",
+          "UntypedMetricTypePtr"
+        ],
         "github.com/redis/rueidis/rueidiscompat": [
           "Nil"
         ],
@@ -1635,6 +1653,12 @@
         ],
         "github.com/thanos-io/thanos/pkg/store": [
           "DefaultSelector"
+        ],
+        "github.com/urfave/cli/v2": [
+          "ErrWriter"
+        ],
+        "github.com/urfave/cli/v3": [
+          "ErrWriter"
         ],
         "github.com/valkey-io/valkey-go/valkeycompat": [
           "Nil"
