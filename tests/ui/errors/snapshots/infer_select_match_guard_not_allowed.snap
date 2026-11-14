@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                   ╰── not supported
  7 │       None => 0,
    ╰────
-  help: Match arms inside `select` do not support guards. Move the condition inside the arm body: `Some(v) => { if condition { ... } }` · code: [infer.select_match_guard_not_allowed]
+  help: Move the condition inside the arm body: `Some(v) => { if condition { ... } }`. Match arms inside `select` do not support guards · code: [infer.select_match_guard_not_allowed]

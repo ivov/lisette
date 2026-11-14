@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·       ╰── contains U+200B (zero-width space)
  6 │     _ => 0,
    ╰────
-  help: Invisible characters in strings can hide bugs and silently shift meaning. Remove the character, or replace it with the visible character you meant · code: [lint.invisible_in_string]
+  help: Remove the character, or replace it with the visible character you meant. Invisible characters in strings can hide bugs and silently shift meaning · code: [lint.invisible_in_string]

@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·       ╰── can be just `_`
  5 │   }
    ╰────
-  help: The `_` alternative already matches everything. Replace the whole pattern with `_` · code: [lint.wildcard_in_or_patterns]
+  help: Replace the whole pattern with `_`. The `_` alternative already matches everything · code: [lint.wildcard_in_or_patterns]

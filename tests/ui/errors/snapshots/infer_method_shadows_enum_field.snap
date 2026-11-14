@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·       ╰── same as field
  12 │     match self {
     ╰────
-  help: `Event` has a field `id` and a method `id`. Rename either the field or the method · code: [infer.method_shadows_field]
+  help: Rename either the field or the method. `Event` has a field `id` and a method `id` · code: [infer.method_shadows_field]

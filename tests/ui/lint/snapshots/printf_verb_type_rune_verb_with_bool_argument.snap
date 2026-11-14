@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                        ╰── `bool` argument for `%c`
  6 │ }
    ╰────
-  help: `fmt.Printf` formats `%c`, which needs an integer, but the argument has type `bool`. Use `%t`, or convert the argument · code: [lint.printf_verb_mismatch]
+  help: Use `%t`, or convert the argument. `fmt.Printf` formats `%c`, which needs an integer, but the argument has type `bool` · code: [lint.printf_verb_mismatch]

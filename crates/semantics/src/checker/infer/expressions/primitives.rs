@@ -842,7 +842,12 @@ impl InferCtx<'_> {
 
     fn error_name_not_found(&mut self, variable_name: &str, span: Span, expected_ty: &Type) {
         let store = self.store;
-        if self.imports.is_failed(variable_name) {
+        let failed_import = if self.is_dot_access_base() {
+            self.imports.may_name_failed_import(variable_name)
+        } else {
+            self.imports.is_failed(variable_name)
+        };
+        if failed_import {
             return;
         }
 

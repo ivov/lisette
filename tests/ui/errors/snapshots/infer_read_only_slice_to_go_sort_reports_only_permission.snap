@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·               ╰── expected `mut Slice<int>`, found `Slice<int>`
  6 │ }
    ╰────
-  help: `mut Slice<int>` permits writes, `Slice<int>` does not. Declare the parameter `s` as `mut Slice<int>` · code: [infer.needs_writable]
+  help: Declare the parameter `s` as `mut Slice<int>`. `mut Slice<int>` permits writes, `Slice<int>` does not · code: [infer.needs_writable]

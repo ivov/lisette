@@ -641,6 +641,9 @@ impl InferCtx<'_> {
                     source: source.clone(),
                 })
             }
+            ValueSource::Call(_) if inference.annotated => {
+                Some(WriteContext::ReadOnlyAnnotation(name.to_string()))
+            }
             ValueSource::Call(callee) => Some(WriteContext::CallResult(callee.clone())),
             ValueSource::GoFieldCopy(copy) => Some(copy.clone()),
         }

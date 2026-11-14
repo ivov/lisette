@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                          ╰── splits with no limit
  7 │ }
    ╰────
-  help: `strings.SplitAfterN(s, ",", -1)` splits with no limit. Use `strings.SplitAfter(s, ",")` · code: [lint.needless_splitn]
+  help: Use `strings.SplitAfter(s, ",")`. `strings.SplitAfterN(s, ",", -1)` splits with no limit · code: [lint.needless_splitn]

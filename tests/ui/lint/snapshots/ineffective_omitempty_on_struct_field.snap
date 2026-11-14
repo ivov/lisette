@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·            ╰── has no effect
  9 │   pub address: Address,
    ╰────
-  help: Go omits an `omitempty` field only when it is empty, and a struct never is. Use `omitzero` to omit the zero value · code: [lint.ineffective_omitempty]
+  help: Use `omitzero` to omit the zero value. Go omits an `omitempty` field only when it is empty, and a struct never is · code: [lint.ineffective_omitempty]

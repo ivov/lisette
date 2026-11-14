@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·         ╰── `?` not allowed here
  8 │   };
    ╰────
-  help: `defer` in combination with `?` is not allowed due to confusing semantics. Handle the error inside a `defer` block: `defer { if let Err(e) = file.close() { log(e); } }` · code: [infer.propagate_in_defer]
+  help: Handle the error inside a `defer` block: `defer { if let Err(e) = file.close() { log(e); } }`. `defer` in combination with `?` is not allowed due to confusing semantics · code: [infer.propagate_in_defer]

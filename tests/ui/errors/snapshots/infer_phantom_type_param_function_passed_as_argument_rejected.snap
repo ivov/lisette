@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                 ╰── cannot infer `T` for `foo_f` used as a value
  8 │ }
    ╰────
-  help: A generic function used as a value cannot have its type arguments inferred. Give `foo_f` a signature that uses `T`, or remove the unused type parameter · code: [infer.uninferable_generic_reference]
+  help: Give `foo_f` a signature that uses `T`, or remove the unused type parameter. A generic function used as a value cannot have its type arguments inferred · code: [infer.uninferable_generic_reference]

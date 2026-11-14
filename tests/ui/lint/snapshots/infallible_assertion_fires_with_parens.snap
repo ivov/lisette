@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·         ╰── never fails
  4 │ }
    ╰────
-  help: This assertion cannot catch a regression. Write a useful assertion · code: [lint.infallible_assertion]
+  help: Write a useful assertion. This assertion cannot catch a regression · code: [lint.infallible_assertion]

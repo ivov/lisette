@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap as HashMap;
 use semantics::loader::Loader;
 use semantics::loader::ParseMode;
 use semantics::{
-    GoPackageSources,
+    GoPackageSources, GoTypedef,
     checker::TaskState,
     package_graph::Roots,
     package_graph::{PackageGraphOptions, build_package_graph},
@@ -115,7 +115,10 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
                     checker.parse_and_register_go_package(
                         &mut store,
                         &package_id,
-                        typedef,
+                        GoTypedef {
+                            source: typedef,
+                            cache_path: None,
+                        },
                         None,
                         &mut GoPackageSources::new(&locator),
                     );

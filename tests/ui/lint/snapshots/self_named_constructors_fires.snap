@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·        ╰── repeats the type name
  6 │     Point { x }
    ╰────
-  help: Calling this as `Point.point()` repeats the type name. Rename it to `new`, the conventional constructor name · code: [lint.self_named_constructors]
+  help: Rename it to `new`, the conventional constructor name. Calling this as `Point.point()` repeats the type name · code: [lint.self_named_constructors]

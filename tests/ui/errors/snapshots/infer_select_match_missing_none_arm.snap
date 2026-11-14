@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·          ╰── missing `None` arm
  7 │     },
    ╰────
-  help: Matching on `ch.receive()` requires handling channel close. Add a `None => ...` arm to handle channel close, or simplify to `let Some(v) = ch.receive() => ...` · code: [infer.select_match_missing_none_arm]
+  help: Add a `None => ...` arm to handle channel close, or simplify to `let Some(v) = ch.receive() => ...`. Matching on `ch.receive()` requires handling channel close · code: [infer.select_match_missing_none_arm]

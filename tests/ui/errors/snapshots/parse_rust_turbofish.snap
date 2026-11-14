@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Syntax error
+  ✕ `::<T>` type arguments
    ╭─[test.lis:5:19]
  4 │ fn test() {
  5 │   let x = identity::<int>(5);
    ·                   ─┬
-   ·                    ╰── invalid syntax
+   ·                    ╰── Rust-style type arguments
  6 │ }
    ╰────
-  help: Lisette does not use turbofish syntax. Use `identity<T>(...)` instead · code: [parse.syntax_error]
+  help: Use `identity<T>(...)`. Lisette does not use `::<T>` · code: [parse.turbofish]

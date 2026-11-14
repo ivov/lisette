@@ -35,7 +35,6 @@ LexResult {
             help: Some(
                 "Add a closing double quote",
             ),
-            note: None,
             code: "lex.unterminated_raw_string",
         },
     ],

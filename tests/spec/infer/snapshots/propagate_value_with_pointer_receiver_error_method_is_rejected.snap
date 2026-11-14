@@ -9,4 +9,4 @@ source: tests/spec/infer/try.rs
     ·                     ╰── `FileError` does not implement `error`
  12 │       Ok(n)
     ╰────
-  help: `FileError.Error` takes `self: Ref<FileError>`, so `error` is satisfied by a `Ref<FileError>`, not a value. Take a reference with `&` (for example `&FileError { ... }`) · code: [infer.interface_not_implemented]
+  help: Take a reference with `&` (for example `&FileError { ... }`). `FileError.Error` takes `self: Ref<FileError>`, so `error` is satisfied by a `Ref<FileError>`, not a value · code: [infer.interface_not_implemented]

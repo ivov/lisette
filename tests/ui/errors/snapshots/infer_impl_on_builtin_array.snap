@@ -12,4 +12,4 @@ source: tests/ui/errors/mod.rs
    · ╰──── `Array` is defined in package `prelude`
  7 │     
    ╰────
-  help: Methods can only be defined on types in the same package. Use a standalone function instead: `fn my_method(w: Array) { ... }` · code: [infer.impl_on_foreign_type]
+  help: Use a standalone function: `fn my_method(w: Array) { ... }`. Methods can only be defined on types in the same package · code: [infer.impl_on_foreign_type]

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                     ╰── no zero available
  6 │ }
    ╰────
-  help: Field `t.1` of type `Channel<int>` has no zero value. Provide an explicit value for `t`, or wrap the field type in `Option<T>` · code: [infer.field_no_zero]
+  help: Provide an explicit value for `t`, or wrap the field type in `Option<T>`. Field `t.1` of type `Channel<int>` has no zero value · code: [infer.field_no_zero]

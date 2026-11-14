@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                   ╰── difference is not wrapped in `math.Abs`
  6 │ }
    ╰────
-  help: Because `a - b` is signed, this is also `true` whenever `a` is far below `b`, not only when `a` and `b` are close, so it wrongly accepts values that are nowhere near equal. Compare the magnitude instead: `math.Abs(a - b) < c` · code: [lint.float_equality_without_abs]
+  help: Compare the magnitude: `math.Abs(a - b) < c`. `a - b` is negative whenever `a` is below `b`, so this is also `true` when `a` is far below `b` · code: [lint.float_equality_without_abs]

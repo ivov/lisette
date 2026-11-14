@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·            ╰── has no effect
  5 │   pub samples: Array<int, 3>,
    ╰────
-  help: Go omits an `omitempty` field only when it is empty, and a fixed-size array never is. Use `omitzero` to omit the zero value · code: [lint.ineffective_omitempty]
+  help: Use `omitzero` to omit the zero value. Go omits an `omitempty` field only when it is empty, and a fixed-size array never is · code: [lint.ineffective_omitempty]

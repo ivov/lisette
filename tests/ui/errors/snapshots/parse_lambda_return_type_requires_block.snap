@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Syntax error
+  ✕ Lambda return type without a block
    ╭─[test.lis:3:27]
  2 │ fn test() {
  3 │   let f = |x: int| -> int x * 2;
    ·                           ┬
-   ·                           ╰── not allowed
+   ·                           ╰── needs a block body
  4 │ }
    ╰────
-  help: A lambda with a return type requires a block body · code: [parse.syntax_error]
+  help: A lambda with a return type requires a block body · code: [parse.lambda_return_type_without_block]

@@ -200,39 +200,56 @@ impl Expectation {
                 index,
                 parameter_name: Some(parameter_name),
             } => format!(
-                "{} expects `{}` for its {} argument `{}`. Convert the value to `{}`, or change the parameter type.",
+                "Convert the value to `{}`, or change the parameter type. {} expects `{}` for its {} argument `{}`.",
+                expected_name,
                 callee_label,
                 expected_name,
                 ordinal(*index),
                 parameter_name,
-                expected_name,
             ),
             ExpectationRole::CallArgument {
                 callee_label,
                 index,
                 parameter_name: None,
             } => format!(
-                "{} expects `{}` for its {} argument. Convert the value to `{}`.",
+                "Convert the value to `{}`. {} expects `{}` for its {} argument.",
+                expected_name,
                 callee_label,
                 expected_name,
                 ordinal(*index),
-                expected_name,
             ),
             ExpectationRole::TailReturn { function_name, .. } => format!(
-                "`{}` declares return type `{}`, but this tail expression has type `{}`. Change the value, or declare `-> {}`.",
-                function_name, expected_name, actual_name, actual_name,
+                "Change the value, or declare `-> {}`. `{}` declares return type `{}`, but this tail expression has type `{}`.",
+                actual_name, function_name, expected_name, actual_name,
             ),
-            ExpectationRole::MatchArm => format!(
-                "Every `match` arm must produce the same type. This arm produces `{}`, but the `match` is expected to produce `{}`.",
-                actual_name, expected_name,
-            ),
+            ExpectationRole::MatchArm => {
+                "Every `match` arm must produce the same type.".to_string()
+            }
             ExpectationRole::FallibleBlockTail { keyword } => format!(
-                "The last expression of a `{}` block is its success value. It must have type `{}`, but it has type `{}`.",
-                keyword, expected_name, actual_name,
+                "The last expression of a `{}` block is its success value.",
+                keyword,
             ),
             ExpectationRole::Receiver => return None,
         };
         Some(help)
+    }
+
+    pub(super) fn argument_requirement(&self, expected_name: &str) -> Option<String> {
+        let ExpectationRole::CallArgument {
+            callee_label,
+            index,
+            parameter_name,
+        } = &self.role
+        else {
+            return None;
+        };
+        let argument = match parameter_name {
+            Some(name) => format!("{} argument `{}`", ordinal(*index), name),
+            None => format!("{} argument", ordinal(*index)),
+        };
+        Some(format!(
+            "{callee_label} expects `{expected_name}` for its {argument}"
+        ))
     }
 }
 

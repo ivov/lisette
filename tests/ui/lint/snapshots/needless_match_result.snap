@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·             ╰── unnecessary
  5 │     Ok(x) => Ok(x),
    ╰────
-  help: Every arm rebuilds the subject unchanged. Replace this `match` with `r` · code: [lint.needless_match]
+  help: Replace this `match` with `r`. Every arm rebuilds the subject unchanged · code: [lint.needless_match]

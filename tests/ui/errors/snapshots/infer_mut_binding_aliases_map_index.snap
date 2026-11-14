@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·       ╰── `s` is read-only
  5 │ }
    ╰────
-  help: `s` shares storage with `m`, which is read-only. Make `m` writable, or write to a `.clone()` for an independent copy · code: [infer.write_through_read_only]
+  help: Make `m` writable, or write to a `.clone()` for an independent copy. `s` shares storage with `m`, which is read-only · code: [infer.write_through_read_only]

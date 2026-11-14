@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·         ╰── reserved name
  3 │ 
    ╰────
-  help: `map` is a reserved name and cannot be used as an import alias. Choose a different alias, e.g. `import my_map "..."` · code: [resolve.reserved_import_alias]
+  help: Choose a different alias, e.g. `import my_map "..."`. `map` is a reserved name and cannot be used as an import alias · code: [resolve.reserved_import_alias]

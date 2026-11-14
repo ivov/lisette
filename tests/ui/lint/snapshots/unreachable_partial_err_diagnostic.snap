@@ -9,4 +9,4 @@ source: tests/ui/lint/unreachable_partial_err.rs
    ·                  ╰── never matches
  5 │     panic(err.Error())
    ╰────
-  help: Go's `Write` reports failure as `Partial.Both`. To handle any error, check `.err()` · code: [lint.unreachable_partial_err]
+  help: To handle any error, check `.err()`. Go's `Write` reports failure as `Partial.Both` · code: [lint.unreachable_partial_err]

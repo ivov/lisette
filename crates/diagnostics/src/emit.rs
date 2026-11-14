@@ -19,8 +19,8 @@ pub fn go_name_collision(
         };
     }
     let mut help = format!(
-        "These declarations all become `{}` in generated Go, but Go requires \
-         package-level names to be distinct. Rename all but one.",
+        "Rename all but one. These declarations all become `{}` in generated Go, \
+         but Go requires package-level names to be distinct.",
         go_name
     );
     if let Some(detail) = detail {
@@ -37,8 +37,8 @@ pub fn reserved_go_prefix(name: &str, prefix: &str, span: &Span) -> LisetteDiagn
         .with_emit_code("reserved_go_prefix")
         .with_span_primary_label(span, "uses a reserved prefix")
         .with_help(format!(
-            "`{}` starts with `{}`, which is reserved for compiler-generated \
-             code. Rename the declaration.",
+            "Rename the declaration. `{}` starts with `{}`, which is reserved for \
+             compiler-generated code.",
             name, prefix
         ))
 }
@@ -48,8 +48,8 @@ pub fn reserved_go_qualifier(name: &str, span: &Span) -> LisetteDiagnostic {
         .with_emit_code("reserved_go_qualifier")
         .with_span_primary_label(span, "reserved for generated imports")
         .with_help(format!(
-            "`{}` is the qualifier of a Go package that generated code may \
-             import implicitly. Rename the type.",
+            "Rename the type. `{}` is the qualifier of a Go package that generated \
+             code may import implicitly.",
             name
         ))
 }
@@ -70,14 +70,14 @@ pub fn go_import_collision(
     LisetteDiagnostic::error("Go import collision")
         .with_emit_code("go_import_collision")
         .with_help(format!(
-            "{} {} default to `{}` in generated code. \
-             Add an alias to at least one of them in your source: \
+            "Add an alias to at least one of {} in your source: \
              `import my_{} \"go:{}\"`. \
+             Otherwise they {} default to `{}` in generated code. \
              One of these may have been pulled in transitively by a typedef.",
             pattern::join_and(&packages),
-            if packages.len() == 2 { "both" } else { "all" },
-            alias,
             alias,
             suggestion_target,
+            if packages.len() == 2 { "both" } else { "all" },
+            alias,
         ))
 }

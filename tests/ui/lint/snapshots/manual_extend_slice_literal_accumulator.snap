@@ -10,4 +10,4 @@ source: tests/ui/lint/mod.rs
    · ╰──── can be one append
  8 │       let _ = out
    ╰────
-  help: This loop appends one element per iteration, growing the slice each time. Spread the iterated slice to append all of it at once: `out = out.append(b...)` · code: [lint.manual_extend]
+  help: Spread the iterated slice to append all of it at once: `out = out.append(b...)`. This loop appends one element per iteration, growing the slice each time · code: [lint.manual_extend]

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·    ╰── not a Lisette builtin
  4 │ }
    ╰────
-  help: Lisette has no `cap` builtin. Use `items.capacity()` · code: [resolve.name_not_found]
+  help: Use `items.capacity()`. Lisette has no `cap` builtin · code: [resolve.name_not_found]

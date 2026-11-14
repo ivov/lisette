@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·               ╰── second `_`
  6 │ }
    ╰────
-  help: A pipeline passes one value, so `_` can appear only once. To use the value more than once, bind it with `let` · code: [parse.repeated_pipeline_placeholder]
+  help: To use the value more than once, bind it with `let`. A pipeline passes one value, so `_` can appear only once · code: [parse.repeated_pipeline_placeholder]

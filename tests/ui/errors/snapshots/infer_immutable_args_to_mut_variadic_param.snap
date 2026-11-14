@@ -9,7 +9,7 @@ source: tests/ui/errors/mod.rs
     ·                    ╰── expected `mut Slice<int>`, found `Slice<int>`
  12 │ }
     ╰────
-  help: `mut Slice<int>` permits writes, `Slice<int>` does not. Make the value writable where it is created, or pass a `.clone()` · code: [infer.needs_writable]
+  help: Make the value writable where it is created, or pass a `.clone()`. `mut Slice<int>` permits writes, `Slice<int>` does not · code: [infer.needs_writable]
 
   ✕ Missing write permission
     ╭─[test.lis:11:23]
@@ -19,4 +19,4 @@ source: tests/ui/errors/mod.rs
     ·                       ╰── expected `mut Slice<int>`, found `Slice<int>`
  12 │ }
     ╰────
-  help: `mut Slice<int>` permits writes, `Slice<int>` does not. Make the value writable where it is created, or pass a `.clone()` · code: [infer.needs_writable]
+  help: Make the value writable where it is created, or pass a `.clone()`. `mut Slice<int>` permits writes, `Slice<int>` does not · code: [infer.needs_writable]

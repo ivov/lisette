@@ -12,4 +12,4 @@ source: tests/ui/errors/mod.rs
    ·            ╰── second receive arm
  8 │     _ => 0,
    ╰────
-  help: Multiple shorthand receive arms can lead to unexpected behavior when a channel closes. Use `match ch.receive() { Some(v) => ..., None => ... }` to handle closes explicitly · code: [infer.multiple_select_receives]
+  help: Use `match ch.receive() { Some(v) => ..., None => ... }` to handle closes explicitly. Multiple shorthand receive arms can lead to unexpected behavior when a channel closes · code: [infer.multiple_select_receives]

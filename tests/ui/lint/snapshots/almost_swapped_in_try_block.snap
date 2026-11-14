@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
     · ╰──── does not swap values
  12 │         a + b
     ╰────
-  help: `a = b` overwrites `a`, so `b = a` writes `b`'s own value back and the original `a` is lost. Save one value in a temporary variable first · code: [lint.almost_swapped]
+  help: Save one value in a temporary variable first. `a = b` overwrites `a`, so `b = a` writes `b`'s own value back and the original `a` is lost · code: [lint.almost_swapped]

@@ -579,13 +579,9 @@ pub(crate) fn convert_diagnostic_in(
             {
                 msg.replace_range(0..1, &first.to_ascii_uppercase().to_string());
             }
-            if let Some(help) = d.plain_help() {
+            if let Some(help) = d.rendered_help() {
                 msg.push_str(" · ");
                 msg.push_str(help);
-            }
-            if let Some(note) = d.plain_note() {
-                msg.push_str(" · ");
-                msg.push_str(note);
             }
             msg
         },

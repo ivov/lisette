@@ -146,14 +146,14 @@ impl<'source> Lexer<'source> {
     ) {
         let span = self.span(offset as u32, length as u32);
         let help = if prefix == "fr" {
-            "Raw format strings are not yet implemented. When supported, the canonical spelling will be `rf\"...\"`. For now, use a regular f-string with escaped backslashes"
+            "Use a regular f-string with escaped backslashes for now. When supported, the spelling will be `rf\"...\"`"
         } else {
-            "Raw format strings are not yet implemented. For now, use a regular f-string with escaped backslashes"
+            "Use a regular f-string with escaped backslashes for now"
         };
         let error = ParseError::new(
-            "Raw format strings are currently not supported",
+            "Raw format strings are not supported yet",
             span,
-            "not yet implemented",
+            "not supported yet",
         )
         .with_lex_code("unsupported_raw_format_string")
         .with_help(help);
@@ -167,14 +167,12 @@ impl<'source> Lexer<'source> {
     ) {
         let span = self.span(offset as u32, length as u32);
         let error = ParseError::new(
-            "Hash-delimited raw strings are not supported",
+            "Hash-delimited raw strings are not supported yet",
             span,
-            "not yet implemented",
+            "not supported yet",
         )
         .with_lex_code("unsupported_hash_delimited_raw_string")
-        .with_help(
-            "Hash-delimited raw strings (`r#\"...\"#`) are not yet implemented. For now, use a regular string with escaped quotes",
-        );
+        .with_help("Use a regular string with escaped quotes for now");
         self.errors.push(error);
     }
 
@@ -183,7 +181,7 @@ impl<'source> Lexer<'source> {
         let (label, help) = match byte {
             0 => (
                 "NUL byte is not allowed in string literals",
-                "Go source cannot contain NUL. Remove this byte",
+                "Remove this byte. Go source cannot contain NUL",
             ),
             _ => (
                 "byte is not allowed in raw string content",
@@ -331,7 +329,9 @@ impl<'source> Lexer<'source> {
             "codepoint exceeds U+10FFFF or is a surrogate (U+D800-U+DFFF)",
         )
         .with_lex_code("unicode_escape_out_of_range")
-        .with_help("Unicode escapes must be valid scalar values: 0..=0xD7FF or 0xE000..=0x10FFFF");
+        .with_help(
+            "Unicode escapes must be in the range `0` to `0xD7FF` or `0xE000` to `0x10FFFF`",
+        );
         self.errors.push(error);
     }
 

@@ -66,9 +66,11 @@ impl<'source> Parser<'source> {
                         start.byte_offset,
                         span_end - start.byte_offset,
                     );
-                    self.track_error_at(
+                    self.track_coded_error_at(
                         error_span,
-                        "invalid syntax for `Slice`",
+                        "Go-style slice type",
+                        "go_slice_type",
+                        "`[]T` is Go syntax",
                         format!("Use `Slice<{}>` instead of `[]{}`", type_name, type_name),
                     );
                     if self.current_token().kind == Identifier {
@@ -83,7 +85,12 @@ impl<'source> Parser<'source> {
                     };
                 }
                 let span = self.span_from_offset(start.byte_offset);
-                self.track_error("unexpected `[` in type", "Use `Slice<T>` for slice types.");
+                self.track_coded_error(
+                    "Go-style slice type",
+                    "go_slice_type",
+                    "unexpected `[` in type",
+                    "Use `Slice<T>` for slice types.",
+                );
                 Annotation::Constructor {
                     name: "".into(),
                     params: vec![],
@@ -113,7 +120,12 @@ impl<'source> Parser<'source> {
         let mut_span = Span::new(self.file_id, mut_token.byte_offset, mut_token.byte_length);
         self.next();
         while self.is(Mut) {
-            self.track_error("duplicate `mut` qualifier", "Write `mut` once.");
+            self.track_coded_error(
+                "Duplicate `mut`",
+                "duplicate_mut",
+                "duplicate `mut` qualifier",
+                "Write `mut` once.",
+            );
             self.next();
         }
         let inner = self.parse_annotation_inner();
@@ -132,10 +144,12 @@ impl<'source> Parser<'source> {
                 span,
             },
             other => {
-                self.track_error_at(
+                self.track_coded_error_at(
                     mut_span,
+                    "Misplaced `mut`",
+                    "misplaced_mut",
                     "`mut` does not apply to this type",
-                    "Write `mut` on the reference type it protects, as in `mut Slice<int>`. \
+                    "Write `mut` on the reference type it protects, e.g. `mut Slice<int>`. \
                      A tuple or function type cannot carry it.",
                 );
                 other
@@ -278,9 +292,11 @@ impl<'source> Parser<'source> {
         {
             self.next();
         }
-        self.track_error_at(
+        self.track_coded_error_at(
             self.span_from_offset(start.byte_offset),
-            "Array size must be an integer literal",
+            "Invalid array size",
+            "invalid_array_size",
+            "not a whole number",
             "Array sizes are whole numbers, e.g. `Array<string, 3>`",
         );
         Annotation::Unknown
@@ -391,7 +407,7 @@ impl<'source> Parser<'source> {
         if self.is_right_angle_like() || self.is(Comma) {
             self.track_error(
                 "expected bound after `:`",
-                "Provide a bound like `T: Display`.",
+                "Provide a bound, e.g. `T: Display`.",
             );
             return vec![];
         }
@@ -404,8 +420,10 @@ impl<'source> Parser<'source> {
                 break;
             }
             if !self.advance_if(Plus) {
-                self.track_error(
-                    "missing `+` between bounds",
+                self.track_coded_error(
+                    "Missing `+` between bounds",
+                    "missing_bound_separator",
+                    "expected `+`",
                     "Use `+` to separate multiple bounds.",
                 );
                 break;

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                  ╰── `Ref<int>` has no zero value
  5 │ }
    ╰────
-  help: Bracket reads can return a zero value when the key is missing, but `Ref<int>` has no zero value, so this bracket read is disallowed. Use `m.get(key)` instead · code: [infer.map_read_no_zero]
+  help: Use `m.get(key)`. Bracket reads can return a zero value when the key is missing, but `Ref<int>` has no zero value, so this bracket read is disallowed · code: [infer.map_read_no_zero]

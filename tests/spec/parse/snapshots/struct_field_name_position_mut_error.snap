@@ -1,10 +1,10 @@
 ---
 source: tests/spec/parse/mod.rs
 ---
-  ✕ Syntax error
+  ✕ Misplaced `mut`
    ╭─[test.lis:1:12]
  1 │ struct S { mut items: Slice<int> }
    ·            ─┬─
    ·             ╰── `mut` goes on the field's type
    ╰────
-  help: Place the permission right before the type, as in `items: mut Slice<int>` · code: [parse.syntax_error]
+  help: Place the permission right before the type, e.g. `items: mut Slice<int>` · code: [parse.misplaced_mut]

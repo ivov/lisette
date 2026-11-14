@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                   ╰── can be simpler
  6 │     total += xs[i]
    ╰────
-  help: This loop exposes the index only to access elements of `xs`. Iterate directly over the elements with `for value in xs` · code: [lint.unnecessary_range_loop]
+  help: Iterate directly over the elements with `for value in xs`. This loop exposes the index only to access elements of `xs` · code: [lint.unnecessary_range_loop]

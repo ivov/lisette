@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                  ╰── belongs on `new`
  4 │ }
    ╰────
-  help: Set the type argument on the method: `Slice.new<int>()` · code: [parse.syntax_error]
+  help: Set the type argument on the method: `Slice.new<int>()` · code: [parse.misplaced_type_arguments]

@@ -68,7 +68,6 @@ LexResult {
             help: Some(
                 "Extract the expression into a `let` binding and interpolate the variable",
             ),
-            note: None,
             code: "lex.format_string_multiline_interpolation",
         },
     ],

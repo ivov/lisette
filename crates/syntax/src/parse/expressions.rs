@@ -78,9 +78,11 @@ impl<'source> Parser<'source> {
             {
                 let start = self.current_token();
                 let span = Span::new(self.file_id, start.byte_offset, start.byte_length + 1);
-                self.track_error_at(
+                self.track_coded_error_at(
                     span,
-                    "invalid syntax for channel receive",
+                    "Go-style channel receive",
+                    "go_channel_receive",
+                    "`<-` is not an operator",
                     "Use `select { let v = ch.receive() => ... }` to receive from a channel",
                 );
                 self.resync_on_error();
@@ -100,7 +102,12 @@ impl<'source> Parser<'source> {
         context: ExpressionContext,
     ) -> Expression {
         if matches!(start.as_deref(), Some(Expression::Range { .. })) {
-            self.track_error("not allowed", "Chained range operators are not supported");
+            self.track_coded_error(
+                "Chained range",
+                "chained_range",
+                "a range cannot start a range",
+                "Chained range operators are not supported",
+            );
         }
 
         let inclusive = self.is(DotDotEqual);
@@ -154,7 +161,9 @@ impl<'source> Parser<'source> {
                 let raw = self.current_token().text;
                 let cleaned = raw.replace('_', "");
                 let f: f64 = cleaned.parse().unwrap_or_else(|_| {
-                    self.track_error(
+                    self.track_coded_error(
+                        "Literal out of range",
+                        "literal_out_of_range",
                         format!("float literal '{}' is out of range", raw),
                         "Value must be a valid 64-bit floating point number.",
                     );
@@ -174,7 +183,9 @@ impl<'source> Parser<'source> {
                     .replace('_', "")
                     .parse()
                     .unwrap_or_else(|_| {
-                        self.track_error(
+                        self.track_coded_error(
+                            "Literal out of range",
+                            "literal_out_of_range",
                             format!("imaginary literal '{}' is out of range", text),
                             "Value must be a valid 64-bit floating point number.",
                         );
@@ -263,8 +274,10 @@ impl<'source> Parser<'source> {
         if text == "go" {
             let next = self.stream.peek_ahead(1).kind;
             if next == LeftCurlyBrace || next == Identifier {
-                self.track_error(
-                    "invalid syntax",
+                self.track_coded_error(
+                    "Go-style `go` statement",
+                    "go_statement",
+                    "`go` is not a keyword",
                     "Use `task { ... }` or `task my_function()` to spawn a concurrent task.",
                 );
             }
@@ -310,12 +323,12 @@ impl<'source> Parser<'source> {
             "panic" => "Call the `panic` function, e.g. `panic(\"something went wrong\")`",
             "assert" => "Remove the `!`. `assert` is a statement, e.g. `assert a == b`",
             "assert_eq" | "assert_ne" => "Use the `assert` statement, e.g. `assert a == b`",
-            _ => "Lisette has no macros. Call a function instead",
+            _ => "Call a function. Lisette has no macros",
         };
         let span = Span::new(self.file_id, start_offset, bang.end_offset() - start_offset);
         if !self.too_many_errors() {
             self.errors.push(
-                ParseError::new("Syntax error", span, "Lisette has no macros")
+                ParseError::new("Unsupported macro call", span, "Lisette has no macros")
                     .with_parse_code("macro_call")
                     .with_help(help),
             );
@@ -341,7 +354,9 @@ impl<'source> Parser<'source> {
         while self.is_not(RightCurlyBrace) {
             if self.is(DotDot) {
                 if spread.is_some() {
-                    self.track_error(
+                    self.track_coded_error(
+                        "Misplaced spread",
+                        "misplaced_spread",
                         "spread must be last",
                         "Move the `..spread` to the end of the struct.",
                     );
@@ -363,10 +378,7 @@ impl<'source> Parser<'source> {
             }
 
             if spread.is_some() {
-                self.track_error(
-                    "field after spread",
-                    "The `..spread` must be the last element in a struct expression. Move explicit fields before the spread.",
-                );
+                self.track_coded_error("Misplaced spread", "misplaced_spread", "field after spread", "Move explicit fields before the spread. The `..spread` must be the last element in a struct expression.");
                 break;
             }
 
@@ -500,9 +512,9 @@ impl<'source> Parser<'source> {
             };
 
             self.errors.push(
-                ParseError::new("Missing call parens", span, label)
+                ParseError::new("Missing call parentheses", span, label)
                     .with_parse_code("call_missing_parens")
-                    .with_help(format!("Add parens to call it: `{called}()`")),
+                    .with_help(format!("Add parentheses to call it: `{called}()`")),
             );
         }
 
@@ -533,9 +545,13 @@ impl<'source> Parser<'source> {
         let span = callee.get_span();
         if !self.too_many_errors() {
             self.errors.push(
-                ParseError::new("Syntax error", span, "Lisette has no `make` builtin")
-                    .with_parse_code("go_make_builtin")
-                    .with_help(help),
+                ParseError::new(
+                    "Unsupported `make` call",
+                    span,
+                    "Lisette has no `make` builtin",
+                )
+                .with_parse_code("go_make_builtin")
+                .with_help(help),
             );
         }
 
@@ -654,7 +670,9 @@ impl<'source> Parser<'source> {
                 self.next();
                 self.expect_comma_or(RightParen);
                 if !self.is(RightParen) && !self.at_eof() {
-                    self.track_error(
+                    self.track_coded_error(
+                        "Misplaced spread",
+                        "misplaced_spread",
                         "argument after spread",
                         "The `spread...` must be the last argument in the call.",
                     );
@@ -710,7 +728,7 @@ impl<'source> Parser<'source> {
     fn track_fn_as_lambda_error(&mut self) -> Span {
         let start = self.current_token();
         let span = Span::new(self.file_id, start.byte_offset, start.byte_length + 1);
-        let error = ParseError::new("Syntax error", span, "expected a lambda")
+        let error = ParseError::new("`fn` used as a lambda", span, "expected a lambda")
             .with_parse_code("fn_as_lambda")
             .with_help("Use a lambda instead: `|x| x * 2`");
         self.errors.push(error);
@@ -852,8 +870,10 @@ impl<'source> Parser<'source> {
         };
 
         if has_return_type && self.current_token().kind != LeftCurlyBrace {
-            self.track_error(
-                "not allowed",
+            self.track_coded_error(
+                "Lambda return type without a block",
+                "lambda_return_type_without_block",
+                "needs a block body",
                 "A lambda with a return type requires a block body",
             );
         }
@@ -1017,7 +1037,9 @@ impl<'source> Parser<'source> {
         if self.is(Integer) {
             let text = self.current_token().text;
             let index: u32 = text.parse().unwrap_or_else(|_| {
-                self.track_error(
+                self.track_coded_error(
+                    "Literal out of range",
+                    "literal_out_of_range",
                     format!("tuple index '{}' is too large", text),
                     "Maximum index is `4294967295`.",
                 );
@@ -1134,10 +1156,12 @@ impl<'source> Parser<'source> {
         let mut_span = self.parse_mut_span();
 
         if assert && let Some(span) = mut_span {
-            self.track_error_at(
+            self.track_coded_error_at(
                 span,
+                "Invalid `let assert`",
+                "invalid_let_assert",
                 "`let assert` cannot be combined with `mut`",
-                "`let assert` binds a refutable pattern. Remove `mut`",
+                "Remove `mut`. `let assert` binds a pattern that can fail to match",
             );
         }
 
@@ -1205,10 +1229,12 @@ impl<'source> Parser<'source> {
             (true, None) => LetMode::Assert,
             (false, Some((block, else_span))) => LetMode::Else { block, else_span },
             (true, Some((block, else_span))) => {
-                self.track_error_at(
+                self.track_coded_error_at(
                     else_span,
+                    "Invalid `let assert`",
+                    "invalid_let_assert",
                     "`let assert` cannot have an `else` block",
-                    "`let assert` already fails the test on mismatch. Remove the `else`",
+                    "Remove the `else`. `let assert` already fails the test on mismatch",
                 );
                 LetMode::InvalidAssertElse { block, else_span }
             }
@@ -1253,11 +1279,13 @@ impl<'source> Parser<'source> {
         let name_token = self.current_token();
 
         if name_token.kind != String {
-            let (label, help) = if name_token.kind == Identifier
+            let (title, code, label, help) = if name_token.kind == Identifier
                 && self.stream.peek_ahead(1).kind == Colon
             {
                 let package_name = name_token.text;
                 (
+                    "Unquoted import path",
+                    "unquoted_import_path",
                     "expected double quotes".to_string(),
                     format!(
                         "Wrap the import path in double quotes: `import \"{0}:...\"`",
@@ -1266,21 +1294,27 @@ impl<'source> Parser<'source> {
                 )
             } else if name_token.kind == Identifier {
                 let package_name = name_token.text;
+                let help = if matches!(self.stream.peek_ahead(1).kind, Dot | Slash) {
+                    "Wrap the import path in double quotes, e.g. `import \"go:os\"`".to_string()
+                } else {
+                    format!("Wrap the import path in double quotes: `import \"{package_name}\"`")
+                };
                 (
+                    "Unquoted import path",
+                    "unquoted_import_path",
                     "expected double quotes".to_string(),
-                    format!(
-                        "Wrap the import path in double quotes: `import \"{}\"`",
-                        package_name
-                    ),
+                    help,
                 )
             } else {
                 (
+                    "Syntax error",
+                    "syntax_error",
                     "expected package path".to_string(),
                     "Wrap the import path in double quotes, e.g. `import \"go:os\"`".to_string(),
                 )
             };
 
-            self.track_error(label, help);
+            self.track_coded_error(title, code, label, help);
             self.resync_on_error();
             return Self::error_expression(self.span_from_offset(start.byte_offset));
         }
@@ -1344,8 +1378,10 @@ impl<'source> Parser<'source> {
 
         if let Some(operator) = compound_operator {
             if !self.is_valid_assignment_target(&lhs) {
-                self.track_error(
-                    "invalid assignment target",
+                self.track_coded_error(
+                    "Invalid assignment target",
+                    "invalid_assignment_target",
+                    "not assignable",
                     "Only variables, fields, and indices can be assigned to.",
                 );
                 self.next();
@@ -1364,9 +1400,11 @@ impl<'source> Parser<'source> {
 
         if self.current_token().kind == Colon && self.stream.peek_ahead(1).kind == Equal {
             let span = Span::new(self.file_id, self.current_token().byte_offset, 2);
-            self.track_error_at(
+            self.track_coded_error_at(
                 span,
                 "Go-style short declaration",
+                "go_short_declaration",
+                "Lisette has no `:=`",
                 "Use `let x = ...` instead of `:=` for variable declarations",
             );
             self.next();
@@ -1380,8 +1418,10 @@ impl<'source> Parser<'source> {
         }
 
         if !self.is_valid_assignment_target(&lhs) {
-            self.track_error(
-                "invalid assignment target",
+            self.track_coded_error(
+                "Invalid assignment target",
+                "invalid_assignment_target",
+                "not assignable",
                 "Only variables, fields, and indices can be assigned to.",
             );
         }
@@ -1488,7 +1528,7 @@ impl<'source> Parser<'source> {
             let span = expression.get_span();
             let error = ParseError::new("Invalid `task`", span, "expected `()`")
                 .with_parse_code("task_missing_parens")
-                .with_help("Add parens to call the function");
+                .with_help("Add parentheses to call the function");
 
             self.errors.push(error);
         }
@@ -1518,7 +1558,7 @@ impl<'source> Parser<'source> {
             let span = expression.get_span();
             let error = ParseError::new("Invalid `defer`", span, "expected `()`")
                 .with_parse_code("defer_missing_parens")
-                .with_help("Add parens to call the function");
+                .with_help("Add parentheses to call the function");
 
             self.errors.push(error);
         }
@@ -1539,7 +1579,7 @@ impl<'source> Parser<'source> {
         if !self.is(LeftCurlyBrace) {
             let span = self.span_from_offset(start.byte_offset);
             let error = ParseError::new("Invalid `try`", span, "requires a block")
-                .with_parse_code("syntax_error")
+                .with_parse_code("try_without_block")
                 .with_help("Use `try { expression }` instead of `try expression`");
             self.errors.push(error);
             let expression = self.parse_expression();
@@ -1572,7 +1612,7 @@ impl<'source> Parser<'source> {
         if !self.is(LeftCurlyBrace) {
             let span = self.span_from_offset(start.byte_offset);
             let error = ParseError::new("Invalid `recover`", span, "requires a block")
-                .with_parse_code("syntax_error")
+                .with_parse_code("recover_without_block")
                 .with_help("Use `recover { expression }` instead of `recover expression`");
             self.errors.push(error);
             let expression = self.parse_expression();
@@ -1738,7 +1778,7 @@ impl<'source> Parser<'source> {
         let keyword = token.text.to_string();
         let span = self.span_from_token(token);
         let error = if token.kind == Var {
-            ParseError::new("Syntax error", span, "expected `let`")
+            ParseError::new("Missing `let`", span, "expected `let`")
                 .with_parse_code("expected_let")
                 .with_help("Use `let` to declare a variable: `let x = 0`")
         } else {

@@ -51,7 +51,6 @@ LexResult {
             help: Some(
                 "Extract the raw string into a `let` binding above the f-string",
             ),
-            note: None,
             code: "lex.raw_string_in_interpolation",
         },
     ],

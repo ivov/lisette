@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                   ╰── `items` is declared `mut Slice<int>`, but receives `Slice<int>`
  7 │ }
    ╰────
-  help: `items` received less `mut` than declared, so the new `Holder` is read-only where `mut Holder` is expected. Declare `let mut a` · code: [infer.needs_writable]
+  help: Declare `let mut a`. `items` received less `mut` than declared, so the new `Holder` is read-only where `mut Holder` is expected · code: [infer.needs_writable]

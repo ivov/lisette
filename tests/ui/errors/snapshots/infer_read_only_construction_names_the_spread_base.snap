@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                           ╰── `items` comes from a read-only `Holder`
  9 │ }
    ╰────
-  help: `items` received less `mut` than declared, so the new `Holder` is read-only where `mut Holder` is expected. Declare the parameter `base` as `mut Holder` · code: [infer.needs_writable]
+  help: Declare the parameter `base` as `mut Holder`. `items` received less `mut` than declared, so the new `Holder` is read-only where `mut Holder` is expected · code: [infer.needs_writable]

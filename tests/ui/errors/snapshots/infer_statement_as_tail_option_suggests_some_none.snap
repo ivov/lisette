@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·      ╰── produces `()`
  5 │ }
    ╰────
-  help: This block is of type `()` because its last expression produces `()`, but the block was expected to be of type `Option<int>`. End the block with `Some(value)` or `None` · code: [infer.statement_as_tail]
+  help: End the block with `Some(value)` or `None`. The block must produce `Option<int>` · code: [infer.statement_as_tail]

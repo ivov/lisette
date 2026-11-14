@@ -7405,7 +7405,7 @@ fn let_assert_mut_rejected() {
     );
     let result = infer_package("_entry_", fs);
     assert!(
-        has_code(&result, "syntax_error"),
+        has_code(&result, "invalid_let_assert"),
         "`let assert mut` must be rejected, got: {:?}",
         result.errors
     );
@@ -16498,6 +16498,40 @@ fn main() {
 }
 
 #[test]
+fn infer_go_type_mismatch_uses_the_package_name() {
+    let input = r#"
+import "go:net/http"
+import "go:net/url"
+
+fn take(r: http.Request) -> http.Request {
+  r
+}
+
+fn test(u: url.URL) {
+  let _ = take(u)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_go_type_mismatch_widens_same_package_names() {
+    let input = r#"
+import html "go:html/template"
+import text "go:text/template"
+
+fn take(t: html.Template) -> html.Template {
+  t
+}
+
+fn test(t: text.Template) {
+  let _ = take(t)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_write_through_call_result_names_the_callee() {
     let input = r#"
 fn get() -> Slice<int> {
@@ -16562,6 +16596,43 @@ fn test() {
   scores[0] = 100
   let view: Slice<int> = scores
   view[0] = 1
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_read_only_annotation_over_writable_map_call() {
+    let input = r#"
+fn test() {
+  let mut seen: Map<string, bool> = Map.new()
+  seen["x"] = true
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_read_only_annotation_over_writable_slice_call() {
+    let input = r#"
+fn test() {
+  let mut items: Slice<int> = Slice.new()
+  items[0] = 2
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_read_only_annotation_over_read_only_call() {
+    let input = r#"
+fn get() -> Slice<int> {
+  [1, 2]
+}
+
+fn test() {
+  let mut items: Slice<int> = get()
+  items[0] = 9
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -17069,6 +17140,54 @@ fn main() {
   let strings = "abc"
   let n = (strings).length()
   let _ = n
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_not_found_in_imported_package() {
+    let input = r#"
+import "go:fmt"
+
+fn test(x: fmt.Nope) {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_not_found_with_unimported_qualifier() {
+    let input = r#"
+fn test(x: strings.Builder) {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_enum_variant_pattern_on_non_enum_value() {
+    let input = r#"
+enum Shape { Circle(int), Square(int) }
+
+fn test(n: int) -> int {
+  match n {
+    Circle(r) => r,
+    _ => 0,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_needs_writable_argument_names_the_call() {
+    let input = r#"
+fn fill(xs: mut Slice<int>) {
+  xs[0] = 1
+}
+
+fn test() {
+  let nested: Slice<Slice<int>> = [[1]]
+  fill(nested[0])
 }
 "#;
     assert_infer_error_snapshot!(input);

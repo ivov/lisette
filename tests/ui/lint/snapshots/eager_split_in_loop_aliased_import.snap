@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                        ╰── only this loop reads it
  7 │     n += part.length()
    ╰────
-  help: `mystr.Split(s, ",")` allocates a slice that only this loop reads. Use `mystr.SplitSeq(s, ",")`, which returns the same parts one at a time · code: [lint.eager_split_in_loop]
+  help: Use `mystr.SplitSeq(s, ",")`, which returns the same parts one at a time. `mystr.Split(s, ",")` allocates a slice that only this loop reads · code: [lint.eager_split_in_loop]

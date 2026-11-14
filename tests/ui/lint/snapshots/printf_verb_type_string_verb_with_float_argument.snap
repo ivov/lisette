@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                        ╰── `float64` argument for `%s`
  7 │ }
    ╰────
-  help: `fmt.Printf` formats `%s`, which needs a string, but the argument has type `float64`. Use `%f`, or convert the argument · code: [lint.printf_verb_mismatch]
+  help: Use `%f`, or convert the argument. `fmt.Printf` formats `%s`, which needs a string, but the argument has type `float64` · code: [lint.printf_verb_mismatch]

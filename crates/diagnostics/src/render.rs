@@ -380,9 +380,9 @@ pub fn unix_line(diagnostic: &LisetteDiagnostic, source: Option<(&IndexedSource,
         line.push_str(&flatten_to_one_line(label));
     }
 
-    if let Some(help) = diagnostic.help_and_note() {
+    if let Some(help) = diagnostic.rendered_help() {
         line.push_str(" · ");
-        line.push_str(&flatten_to_one_line(&help));
+        line.push_str(&flatten_to_one_line(help));
     }
 
     if let Some(code) = diagnostic.code_str() {

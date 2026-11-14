@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·     ╰── `Node` cannot be compared
  6 │ }
    ╰────
-  help: `#[equality]` cannot compare recursive types. Give `Tree` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field · code: [attribute.cannot_derive_equality]
+  help: Give `Tree` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field. `#[equality]` cannot compare recursive types · code: [attribute.cannot_derive_equality]

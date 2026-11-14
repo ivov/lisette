@@ -8,4 +8,4 @@ source: tests/ui/errors/mod.rs
    ·        ┬
    ·        ╰── expected bound after `:`
    ╰────
-  help: Provide a bound like `T: Display` · code: [parse.syntax_error]
+  help: Provide a bound, e.g. `T: Display` · code: [parse.syntax_error]

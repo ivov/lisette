@@ -223,6 +223,7 @@ fn import_of_tests_namespace_is_rejected() {
     let out = combined(&check);
     assert!(!check.status.success(), "expected failure: {out}");
     assert!(out.contains("reserved package name"), "got: {out}");
+    assert!(out.contains("Unimportable `tests` package"), "got: {out}");
 }
 
 #[test]
@@ -290,6 +291,11 @@ fn subpackage_only_library_rejects_root_import() {
     let out = combined(&check);
     assert!(!check.status.success(), "expected failure: {out}");
     assert!(out.contains("no root package"), "got: {out}");
+    assert!(
+        out.contains("resolve.cannot_import_root_without_source"),
+        "got: {out}"
+    );
+    assert!(out.contains("Missing root package"), "got: {out}");
 }
 
 #[test]
@@ -526,6 +532,11 @@ fn root_import_from_src_is_rejected() {
         out.contains("only from external tests"),
         "src imports of root are steered away: {out}"
     );
+    assert!(
+        out.contains("resolve.cannot_import_root_from_src"),
+        "got: {out}"
+    );
+    assert!(out.contains("`root` import outside tests"), "got: {out}");
 }
 
 #[test]
@@ -546,6 +557,11 @@ fn root_import_in_binary_is_rejected() {
         out.contains("A binary has no importable root"),
         "binary roots are not importable: {out}"
     );
+    assert!(
+        out.contains("resolve.cannot_import_root_in_binary"),
+        "got: {out}"
+    );
+    assert!(out.contains("`root` import in a binary"), "got: {out}");
 }
 
 #[test]

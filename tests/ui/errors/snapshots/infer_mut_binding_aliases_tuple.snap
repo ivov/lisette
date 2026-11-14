@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·         ╰── `t2.0` is read-only
  5 │ }
    ╰────
-  help: `t2` shares storage with `t1`, which is read-only. Make `t1` writable, or write to a `.clone()` for an independent copy · code: [infer.write_through_read_only]
+  help: Make `t1` writable, or write to a `.clone()` for an independent copy. `t2` shares storage with `t1`, which is read-only · code: [infer.write_through_read_only]

@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                  ╰── always true
  6 │ }
    ╰────
-  help: NaN is unequal to every value including itself. Use `math.IsNaN(x)` to test for NaN · code: [infer.nan_comparison]
+  help: Use `math.IsNaN(x)` to test for NaN. NaN is unequal to every value including itself · code: [infer.nan_comparison]

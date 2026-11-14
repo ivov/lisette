@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·          ╰── `.0` is declared `mut Slice<int>`, but receives `Slice<int>`
  6 │ }
    ╰────
-  help: `.0` received less `mut` than declared, so the new `Pair` is read-only where `mut Pair` is expected. Declare the parameter `view` as `mut Slice<int>` · code: [infer.needs_writable]
+  help: Declare the parameter `view` as `mut Slice<int>`. `.0` received less `mut` than declared, so the new `Pair` is read-only where `mut Pair` is expected · code: [infer.needs_writable]

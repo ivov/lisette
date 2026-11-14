@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·        ╰── `t` is read-only
  7 │ }
    ╰────
-  help: `t` shares storage with `d`, which is read-only. Make `d` writable, or write to a `.clone()` for an independent copy · code: [infer.write_through_read_only]
+  help: Make `d` writable, or write to a `.clone()` for an independent copy. `t` shares storage with `d`, which is read-only · code: [infer.write_through_read_only]

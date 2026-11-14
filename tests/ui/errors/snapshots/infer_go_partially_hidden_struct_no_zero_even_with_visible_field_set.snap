@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ `archive/zip.File` has no zero value
+  ✕ `zip.File` has no zero value
    ╭─[test.lis:5:11]
  4 │     fn test() {
  5 │ ╭─▶   let f = zip.File {
@@ -10,4 +10,4 @@ source: tests/ui/errors/mod.rs
    · ╰──── no zero available
  8 │     }
    ╰────
-  help: `archive/zip.File` has Go-side state hidden from Lisette whose zero value is not safe to use directly. Construct it through its documented Go constructor instead · code: [infer.hidden_state_no_zero]
+  help: Construct it through its documented Go constructor. `zip.File` has Go-side state hidden from Lisette whose zero value is not safe to use directly · code: [infer.hidden_state_no_zero]

@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Syntax error
+  ✕ Unsupported `++` operator
    ╭─[test.lis:4:7]
  3 │   let mut a = [1, 2, 3]
  4 │   a[0]++
@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·        ╰── Lisette has no `++` operator
  5 │ }
    ╰────
-  help: Use `a[0] += 1` instead · code: [parse.syntax_error]
+  help: Use `a[0] += 1` instead · code: [parse.increment_operator]

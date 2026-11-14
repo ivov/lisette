@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Syntax error
+  ✕ `::<T>` type arguments
    ╭─[test.lis:3:17]
  2 │ fn test() {
  3 │   let xs = Slice::<int>::new()
    ·                 ─┬
-   ·                  ╰── invalid syntax
+   ·                  ╰── Rust-style type arguments
  4 │ }
    ╰────
-  help: Lisette does not use turbofish syntax. Use `Slice.new<int>()` instead · code: [parse.syntax_error]
+  help: Use `Slice.new<int>()`. Lisette does not use `::<T>` · code: [parse.turbofish]

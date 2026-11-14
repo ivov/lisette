@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·          ╰── only bound here
  5 │   }
    ╰────
-  help: Variable x is not bound in all alternatives. Use a wildcard `_` instead of a binding, or ensure all alternatives bind the same variable · code: [infer.or_pattern_binding_mismatch]
+  help: Use a wildcard `_` instead of a binding, or ensure all alternatives bind the same variable. Variable x is not bound in all alternatives · code: [infer.or_pattern_binding_mismatch]

@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·             ╰── 2 operands, 0 arguments
  6 │ }
    ╰────
-  help: `fmt.Printf` has 2 operands but 0 arguments, so the `*` width prints as `%!(BADWIDTH)`. Add the missing width argument or write a fixed width · code: [lint.printf_verb_mismatch]
+  help: Add the missing width argument or write a fixed width. `fmt.Printf` has 2 operands but 0 arguments, so the `*` width prints as `%!(BADWIDTH)` · code: [lint.printf_verb_mismatch]

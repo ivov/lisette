@@ -33,7 +33,6 @@ LexResult {
             help: Some(
                 "Valid escapes are `\\a`, `\\b`, `\\f`, `\\n`, `\\r`, `\\t`, `\\v`, `\\\\`, `\\\"`, `\\xHH` (hex), `\\ooo` (octal), and `\\u{HEX}` or `\\UHHHHHHHH` (unicode)",
             ),
-            note: None,
             code: "lex.invalid_escape_sequence",
         },
     ],

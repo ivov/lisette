@@ -12,4 +12,4 @@ source: tests/ui/errors/mod.rs
    ·      ╰── expected `int`, found `string`
  4 │ }
    ╰────
-  help: `returns` declares return type `int`, but this tail expression has type `string`. Change the value, or declare `-> string` · code: [infer.type_mismatch]
+  help: Change the value, or declare `-> string`. `returns` declares return type `int`, but this tail expression has type `string` · code: [infer.type_mismatch]

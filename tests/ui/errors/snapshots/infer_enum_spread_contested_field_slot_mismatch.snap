@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·                    ╰── may hold any `E` variant
  10 │ }
     ╰────
-  help: Every `E` variant has `w`, but the variants give it conflicting types, so each variant stores it separately and a spread cannot fill it. Assign field `w` explicitly · code: [infer.enum_spread_missing_fields]
+  help: Assign field `w` explicitly. Every `E` variant has `w`, but the variants give it conflicting types, so each variant stores it separately and a spread cannot fill it · code: [infer.enum_spread_missing_fields]

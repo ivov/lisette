@@ -1,11 +1,11 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Syntax error
+  ✕ Unquoted import path
    ╭─[test.lis:2:8]
  1 │ 
  2 │ import foo.bar;
    ·        ─┬─
    ·         ╰── expected double quotes
    ╰────
-  help: Wrap the import path in double quotes: `import "foo"` · code: [parse.syntax_error]
+  help: Wrap the import path in double quotes, e.g. `import "go:os"` · code: [parse.unquoted_import_path]

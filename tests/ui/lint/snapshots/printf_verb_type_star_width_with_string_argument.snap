@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                            ╰── `string` argument for the `*` width
  6 │ }
    ╰────
-  help: `fmt.Printf` takes the `*` width from an argument of type `string`, but a width must be an integer. Use a fixed width, or convert the argument · code: [lint.printf_verb_mismatch]
+  help: Use a fixed width, or convert the argument. `fmt.Printf` takes the `*` width from an argument of type `string`, but a width must be an integer · code: [lint.printf_verb_mismatch]

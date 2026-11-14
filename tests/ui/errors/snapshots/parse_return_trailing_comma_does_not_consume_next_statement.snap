@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Syntax error
+  ✕ Trailing comma after return value
    ╭─[test.lis:3:11]
  2 │ fn f() -> int {
  3 │   return 1,
@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·           ╰── unexpected trailing comma
  4 │   return 2
    ╰────
-  help: Remove the trailing comma after the return value · code: [parse.syntax_error]
+  help: Remove the trailing comma after the return value · code: [parse.return_trailing_comma]

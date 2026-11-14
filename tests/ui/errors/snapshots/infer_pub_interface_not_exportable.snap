@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                  ╰── `reader` cannot be exported from Go
  3 │   fn read() -> int
    ╰────
-  help: Public types become exported Go identifiers, which must start with an uppercase letter. Rename to `Reader` · code: [infer.pub_type_not_exportable]
+  help: Rename to `Reader`. Public types become exported Go identifiers, which must start with an uppercase letter · code: [infer.pub_type_not_exportable]

@@ -216,6 +216,12 @@ impl LazyGoStdlibCache {
     }
 }
 
+pub struct GoTypedef<'a> {
+    pub source: &'a str,
+    /// `None` for an embedded stdlib typedef.
+    pub cache_path: Option<PathBuf>,
+}
+
 pub struct GoPackageSources<'a> {
     pub(crate) locator: &'a TypedefLocator,
     stdlib_cache: Option<&'a mut LazyGoStdlibCache>,

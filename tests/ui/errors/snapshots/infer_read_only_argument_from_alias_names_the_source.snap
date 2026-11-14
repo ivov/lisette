@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                  ╰── expected `mut Slice<string>`, found `Slice<string>`
  8 │ }
    ╰────
-  help: `mut Slice<string>` permits writes, `Slice<string>` does not. `copy` shares storage with `source`, which is read-only. Make `source` writable, or pass a `.clone()` · code: [infer.needs_writable]
+  help: Make `source` writable, or pass a `.clone()`. `copy` shares storage with `source`, which is read-only. `mut Slice<string>` permits writes, `Slice<string>` does not · code: [infer.needs_writable]

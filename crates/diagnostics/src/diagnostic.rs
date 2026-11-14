@@ -58,23 +58,6 @@ impl IndexedSource {
     }
 }
 
-fn strip_period(s: &str, strip: bool) -> &str {
-    if strip {
-        s.strip_suffix('.').unwrap_or(s)
-    } else {
-        s
-    }
-}
-
-fn combine_help_and_note(help: Option<&str>, note: Option<&str>, has_code: bool) -> Option<String> {
-    match (help, note) {
-        (Some(help), Some(note)) => Some(format!("{} {}", help, strip_period(note, has_code))),
-        (Some(help), None) => Some(strip_period(help, has_code).to_string()),
-        (None, Some(note)) => Some(strip_period(note, has_code).to_string()),
-        (None, None) => None,
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct Label {
@@ -115,10 +98,6 @@ impl From<ParseError> for LisetteDiagnostic {
 
         if let Some(help) = err.help {
             diagnostic = diagnostic.with_help(help);
-        }
-
-        if let Some(note) = err.note {
-            diagnostic = diagnostic.with_note(note);
         }
 
         if !err.code.is_empty() {
@@ -179,7 +158,6 @@ pub struct LisetteDiagnostic {
     message: String,
     labels: Vec<Label>,
     help: Option<String>,
-    note: Option<String>,
     severity: Severity,
     code: Option<String>,
     fix: Option<crate::Fix>,
@@ -248,16 +226,9 @@ impl LisetteDiagnostic {
         self.help.as_deref()
     }
 
-    pub fn plain_note(&self) -> Option<&str> {
-        self.note.as_deref()
-    }
-
-    pub fn help_and_note(&self) -> Option<String> {
-        combine_help_and_note(
-            self.help.as_deref(),
-            self.note.as_deref(),
-            self.code.is_some(),
-        )
+    pub fn rendered_help(&self) -> Option<&str> {
+        let help = self.help.as_deref()?;
+        Some(help.strip_suffix('.').unwrap_or(help))
     }
 
     fn new(message: impl Into<String>, severity: Severity) -> Self {
@@ -265,7 +236,6 @@ impl LisetteDiagnostic {
             message: message.into(),
             labels: Vec::new(),
             help: None,
-            note: None,
             severity,
             code: None,
             fix: None,
@@ -295,6 +265,19 @@ impl LisetteDiagnostic {
         self
     }
 
+    pub fn with_leading_label(mut self, span: &Span, text: impl Into<String>) -> Self {
+        self.labels.insert(
+            0,
+            Label {
+                span: *span,
+                text: text.into(),
+                primary: true,
+                stacked: None,
+            },
+        );
+        self
+    }
+
     /// Label an expected and a found value, stacked in the terminal when the line is long.
     pub fn with_expected_found_label(mut self, span: &Span, expected: &str, found: &str) -> Self {
         let text = format!("expected `{expected}`, found `{found}`");
@@ -320,11 +303,6 @@ impl LisetteDiagnostic {
 
     pub fn with_help(mut self, help: impl Into<String>) -> Self {
         self.help = Some(help.into());
-        self
-    }
-
-    pub fn with_note(mut self, note: impl Into<String>) -> Self {
-        self.note = Some(note.into());
         self
     }
 
@@ -401,12 +379,10 @@ impl LisetteDiagnostic {
     }
 
     pub(crate) fn styled_help_parts(&self, use_color: bool) -> (Option<String>, Option<String>) {
-        let combined = combine_help_and_note(
-            self.help.as_deref(),
-            self.note.as_deref(),
-            self.code.is_some(),
-        )
-        .filter(|text| !text.is_empty());
+        let combined = self
+            .rendered_help()
+            .filter(|text| !text.is_empty())
+            .map(str::to_string);
         let code = self.code.as_deref();
 
         match (combined, code) {

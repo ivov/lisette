@@ -20,19 +20,19 @@ pub fn package_not_found(
             stripped
         ),
         MissingPackageReason::GoStandardLibrary => format!(
-            "No `{}` package found in your local project. Did you mean `import \"go:{}\"` from Go's stdlib?",
+            "No `{}` package found in your local project. Did you mean `import \"go:{}\"` from Go's standard library?",
             package_name, package_name
         ),
         MissingPackageReason::Script {
             inside_project: false,
         } => {
-            "A file compiled on its own has no packages beside it, only the Go ones it imports. Use `lis new` to create a project."
+            "Use `lis new` to create a project. A file compiled on its own has no packages beside it, only the Go ones it imports."
                 .to_string()
         }
         MissingPackageReason::Script {
             inside_project: true,
         } => {
-            "A file compiled on its own has no packages beside it, only the Go ones it imports. This file sits inside a project but outside its `src/`, so it is not part of it. Move it under `src/` to import the project's packages."
+            "Move this file under `src/` to import the project's packages. This file sits inside a project but outside its `src/`, so it is not part of it."
                 .to_string()
         }
         MissingPackageReason::NotFound => {
@@ -66,12 +66,12 @@ pub fn invalid_package_path(
         let blank = if is_blank { "_ " } else { "" };
         if script {
             format!(
-                "Go packages are imported with the `go:` prefix: `import {}\"go:{}\"`, with the module that provides it declared in the `[dependencies.go]` table",
+                "Import the package with the `go:` prefix, `import {}\"go:{}\"`, and declare the module that provides it in the `[dependencies.go]` table",
                 blank, package_name
             )
         } else {
             format!(
-                "Go packages are imported with the `go:` prefix: `import {}\"go:{}\"`. Add it first with `lis add {}`",
+                "Import the package with the `go:` prefix, `import {}\"go:{}\"`, after you add it with `lis add {}`",
                 blank,
                 package_name,
                 package_name
@@ -80,7 +80,7 @@ pub fn invalid_package_path(
             )
         }
     } else {
-        "Project imports use bare folder names like `import \"util\"` or `import \"nested/deep/package\"`. Relative-path syntax (`./sub`, `../sub`) is not supported.".to_string()
+        "Project imports use bare folder names, e.g. `import \"util\"` or `import \"nested/deep/package\"`. Relative-path syntax (`./sub`, `../sub`) is not supported.".to_string()
     };
 
     LisetteDiagnostic::error(format!("Invalid package path `{}`", package_name))
@@ -93,7 +93,7 @@ pub fn dotted_package_directory(package_id: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!("Dotted package directory `{}`", package_id))
         .with_resolve_code("dotted_package_directory")
         .with_help(
-            "Rename the directory. `.` separates a package path from the name it qualifies, as in `v1.VConf`, so a package path cannot contain one.",
+            "Rename the directory. `.` separates a package path from the name it qualifies, e.g. `v1.VConf`, so a package path cannot contain one.",
         )
 }
 
@@ -103,7 +103,7 @@ pub fn missing_go_prefix(package_name: &str, span: Span, is_blank: bool) -> Lise
     } else {
         format!("import \"go:{}\"", package_name)
     };
-    LisetteDiagnostic::error(format!("Invalid package path `{}`", package_name))
+    LisetteDiagnostic::error("Missing `go:` prefix")
         .with_resolve_code("missing_go_prefix")
         .with_span_label(&span, "Go imports require the `go:` prefix")
         .with_help(format!(
@@ -113,58 +113,67 @@ pub fn missing_go_prefix(package_name: &str, span: Span, is_blank: bool) -> Lise
 }
 
 pub fn cannot_import_prelude(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Invalid import")
+    LisetteDiagnostic::error("Unnecessary prelude import")
         .with_resolve_code("cannot_import_prelude")
         .with_span_label(&span, "prelude is automatically available")
         .with_help("Remove this import. Use e.g. `Option` or `prelude.Option` directly.")
 }
 
+pub fn prelude_in_go_api(importer: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Unsupported Go dependency")
+        .with_resolve_code("prelude_in_go_api")
+        .with_span_label(&span, "not supported yet")
+        .with_help(format!(
+            "`{importer}` uses Lisette's `Option` and `Result` types in its Go API, and Lisette cannot use such an API yet"
+        ))
+}
+
 pub fn reserved_package_import(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Invalid import")
+    LisetteDiagnostic::error("Reserved package path")
         .with_resolve_code("reserved_package_import")
         .with_span_label(&span, "the `**` prefix is reserved for the compiler")
         .with_help("Rename the package so its import path does not begin with `**`.")
 }
 
 pub fn cannot_import_external_tests(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Invalid import")
+    LisetteDiagnostic::error("Unimportable `tests` package")
         .with_resolve_code("cannot_import_external_tests")
         .with_span_label(&span, "reserved package name")
         .with_help("The `tests` package at project root is reserved for external tests")
 }
 
 pub fn cannot_import_entry(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Invalid import")
-        .with_resolve_code("cannot_import_root")
+    LisetteDiagnostic::error("Unimportable internal package")
+        .with_resolve_code("cannot_import_entry")
         .with_span_label(&span, "reserved package name")
-        .with_help("`_entry_` is an internal package. Import a library's root package with `root`")
+        .with_help("Import a library's root package with `root`. `_entry_` is an internal package")
 }
 
 pub fn cannot_import_root_from_src(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Invalid import")
-        .with_resolve_code("cannot_import_root")
+    LisetteDiagnostic::error("`root` import outside tests")
+        .with_resolve_code("cannot_import_root_from_src")
         .with_span_label(&span, "reserved package name")
         .with_help("`root` names the library's root package and is importable only from external tests under `tests/`")
 }
 
 pub fn cannot_import_root_in_binary(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Invalid import")
-        .with_resolve_code("cannot_import_root")
+    LisetteDiagnostic::error("`root` import in a binary")
+        .with_resolve_code("cannot_import_root_in_binary")
         .with_span_label(&span, "reserved package name")
-        .with_help("A binary has no importable root. Move testable code into a sub-package under `src/`, or make the project a library")
+        .with_help("Move testable code into a sub-package under `src/`, or make the project a library. A binary has no importable root")
 }
 
 pub fn cannot_import_root_without_source(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Invalid import")
-        .with_resolve_code("cannot_import_root")
+    LisetteDiagnostic::error("Missing root package")
+        .with_resolve_code("cannot_import_root_without_source")
         .with_span_label(&span, "no root package")
-        .with_help("This library has no root package because `src/` holds no source files directly. Import a sub-package by name, or add a source file under `src/`")
+        .with_help("Import a sub-package by name, or add a source file under `src/`. This library has no root package because `src/` holds no source files directly")
 }
 
 pub fn wrong_test_file_suffix(display_path: &str) -> LisetteDiagnostic {
     let help = match display_path.strip_suffix("_test.lis") {
         Some(stem) => format!(
-            "Lisette test files use the `.test.lis` suffix. Rename this file to `{}.test.lis`.",
+            "Rename this file to `{}.test.lis`. Lisette test files use the `.test.lis` suffix.",
             stem
         ),
         None => "Lisette test files use the `.test.lis` suffix.".to_string(),
@@ -183,7 +192,7 @@ pub fn non_test_file_under_tests(display_path: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!("`{}` is not a test file", display_path))
         .with_resolve_code("non_test_file_under_tests")
         .with_file_location(display_path)
-        .with_help("Files under `tests/` must use the `.test.lis` suffix. Rename this file or move it into `src/`")
+        .with_help("Rename this file or move it into `src/`. Files under `tests/` must use the `.test.lis` suffix")
 }
 
 pub fn cannot_emit_test_file(display_path: &str) -> LisetteDiagnostic {
@@ -193,7 +202,7 @@ pub fn cannot_emit_test_file(display_path: &str) -> LisetteDiagnostic {
     ))
     .with_resolve_code("cannot_emit_test_file")
     .with_file_location(display_path)
-    .with_help("Test files are not entry points. Use `lis check` to type-check this file.")
+    .with_help("Use `lis check` to type-check this file. Test files are not entry points.")
 }
 
 pub fn go_stdlib_unavailable_on_target(
@@ -204,9 +213,9 @@ pub fn go_stdlib_unavailable_on_target(
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!("`go:{}` is not available on `{}`", go_pkg, target))
         .with_resolve_code("go_stdlib_unavailable_on_target")
-        .with_span_label(&span, "stdlib package not available on this target")
+        .with_span_label(&span, "standard library package not available on this target")
         .with_help(format!(
-            "This Go stdlib package exists, but its surface differs across platforms. Available on: {}",
+            "This Go standard library package exists, but its surface differs across platforms. Available on: {}",
             available
         ))
 }
@@ -238,7 +247,7 @@ pub fn invalid_go_package_path(go_pkg: &str, span: Span) -> LisetteDiagnostic {
         .with_resolve_code("invalid_go_package_path")
         .with_span_label(&span, "not a path Go can resolve")
         .with_help(
-            "Write the path as Go does, with no empty, `.`, or `..` segments, such as `github.com/google/uuid`",
+            "Write the path as Go does, with no empty, `.`, or `..` segments, e.g. `github.com/google/uuid`",
         )
 }
 
@@ -264,7 +273,7 @@ pub fn dependency_table_in_project(span: Span) -> LisetteDiagnostic {
         .with_resolve_code("dependency_table_in_project")
         .with_span_label(&span, "not read here")
         .with_help(
-            "A project records dependencies in `lisette.toml`. Move these entries there, where `lis add` and `lis sync` maintain them",
+            "Move these entries to `lisette.toml`, where `lis add` and `lis sync` maintain them. A project records dependencies in `lisette.toml`",
         )
 }
 
@@ -308,8 +317,8 @@ pub fn undeclared_go_import_via_replace(
         .with_resolve_code("undeclared_go_import")
         .with_span_label(&span, "not in lisette.toml")
         .with_help(format!(
-            "`{}` is a dependency of the replaced module `{}`. Run `lis sync` to reconcile the replacement's dependencies, or `lis add {}` to add it directly",
-            go_pkg, replaced_module, go_pkg
+            "Run `lis sync` to reconcile the replacement's dependencies, or `lis add {}` to add it directly. `{}` is a dependency of the replaced module `{}`",
+            go_pkg, go_pkg, replaced_module
         ))
 }
 
@@ -322,8 +331,8 @@ pub fn undeclared_go_import_via_local(
         .with_resolve_code("undeclared_go_import")
         .with_span_label(&span, "not in lisette.toml")
         .with_help(format!(
-            "`{}` is a dependency of the local module `{}`. Run `lis sync` if it is published, or `lis add --path <dir>` if `{}` resolves it from a local directory",
-            go_pkg, local_package, local_package
+            "Run `lis sync` if `{}` is published, or `lis add --path <dir>` if `{}` resolves it from a local directory. `{}` is a dependency of the local module `{}`",
+            go_pkg, local_package, go_pkg, local_package
         ))
 }
 
@@ -332,8 +341,8 @@ pub fn internal_go_package(go_pkg: &str, module: &str, span: Span) -> LisetteDia
         .with_resolve_code("internal_go_package")
         .with_span_label(&span, "not importable outside its module")
         .with_help(format!(
-            "`{}` is an `internal` package of `{}`. Go forbids importing internal packages across module boundaries. Use the module's public API instead",
-            go_pkg, module
+            "Use the public API of `{}`. `{}` is an `internal` package of that module, and Go forbids importing internal packages across module boundaries",
+            module, go_pkg
         ))
 }
 
@@ -342,7 +351,7 @@ pub fn missing_local_go_typedef(module: &str, span: Span) -> LisetteDiagnostic {
         .with_resolve_code("missing_go_typedef")
         .with_span_label(&span, "no .d.lis file found")
         .with_help(format!(
-            "Module `{}` is sourced from a local directory but has no typedef. Run `lis sync` to regenerate it.",
+            "Run `lis sync` to regenerate the typedef. Module `{}` is sourced from a local directory but has no typedef.",
             module
         ))
 }
@@ -357,23 +366,23 @@ pub fn missing_go_typedef(
 ) -> LisetteDiagnostic {
     let help = if let Some(replacement_path) = replacement_path {
         format!(
-            "Module `{}` is sourced via `replace` from `{}@{}` but has no typedef. Run `lis sync` to regenerate it.",
+            "Run `lis sync` to regenerate the typedef. Module `{}` is sourced via `replace` from `{}@{}` but has no typedef.",
             module, replacement_path, version
         )
     } else if script {
         format!(
-            "Module `{}` {} resolved but its typedef is missing. Run `lis run` or `lis build` on this file to generate it.",
+            "Run `lis run` or `lis build` on this file to generate the typedef. Module `{}` {} resolved but its typedef is missing.",
             module, version
         )
     } else if go_pkg == module {
         format!(
-            "Module `{}` {} is declared but no typedef was found. Run `lis check` to regenerate all typedefs, or `lis add {}@{}` to regenerate this one.",
+            "Run `lis check` to regenerate all typedefs, or `lis add {}@{}` to regenerate this one. Module `{}` {} is declared but no typedef was found.",
             module, version, module, version
         )
     } else {
         format!(
-            "Subpackage `{}` of module `{}` {} has no typedef. Run `lis add {}@{}` to regenerate the module's typedefs, including any subpackages.",
-            go_pkg, module, version, module, version
+            "Run `lis add {}@{}` to regenerate the module's typedefs, including any subpackages. Subpackage `{}` of module `{}` {} has no typedef.",
+            module, version, go_pkg, module, version
         )
     };
 
@@ -390,7 +399,7 @@ pub fn corrupt_go_typedef(go_pkg: &str, discarded: bool, script: bool) -> Lisett
         "Run `lis sync` to regenerate it"
     };
     let help = if discarded {
-        format!("The cached typedef has been discarded. {}", regenerate)
+        format!("{}. The cached typedef has been discarded.", regenerate)
     } else {
         format!("Delete the cached typedef. {}", regenerate)
     };
@@ -484,7 +493,7 @@ pub fn bindgen_failed(details: BindgenFailureDetails<'_>, span: Span) -> Lisette
 pub fn unreachable_package(package_id: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::warn(format!("Unreachable package: `{}`", package_id))
         .with_resolve_code("unreachable_package")
-        .with_help("This package is never imported. Use or remove it.")
+        .with_help("Use or remove this package. It is never imported.")
 }
 
 pub struct CycleHop<'a> {

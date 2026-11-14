@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·        ╰── `Array` cannot implement `Sized`
  6 │ }
    ╰────
-  help: Built-in types have no Go methods, so they cannot satisfy interfaces. Wrap the value in a struct that implements `Sized` · code: [infer.interface_not_implemented]
+  help: Wrap the value in a struct that implements `Sized`. Built-in types have no Go methods, so they cannot satisfy interfaces · code: [infer.interface_not_implemented]

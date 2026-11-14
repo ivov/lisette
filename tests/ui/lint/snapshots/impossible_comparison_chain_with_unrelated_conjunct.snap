@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                      ╰── always `false`
  6 │ }
    ╰────
-  help: No value satisfies both sides, so this `&&` is always `false`. Check the bounds, or did you mean `||`? · code: [infer.impossible_comparison]
+  help: Check the bounds, or did you mean `||`? No value satisfies both sides, so this `&&` is always `false` · code: [infer.impossible_comparison]

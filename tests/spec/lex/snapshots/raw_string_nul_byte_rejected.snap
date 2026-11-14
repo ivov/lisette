@@ -31,9 +31,8 @@ LexResult {
                 ),
             ],
             help: Some(
-                "Go source cannot contain NUL. Remove this byte",
+                "Remove this byte. Go source cannot contain NUL",
             ),
-            note: None,
             code: "lex.disallowed_byte_in_raw_string",
         },
     ],

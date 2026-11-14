@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                      ╰── `complex64` argument for `%d`
  6 │ }
    ╰────
-  help: `fmt.Printf` formats `%d`, which needs an integer, but the argument has type `complex64`. Use `%f`, or convert the argument · code: [lint.printf_verb_mismatch]
+  help: Use `%f`, or convert the argument. `fmt.Printf` formats `%d`, which needs an integer, but the argument has type `complex64` · code: [lint.printf_verb_mismatch]

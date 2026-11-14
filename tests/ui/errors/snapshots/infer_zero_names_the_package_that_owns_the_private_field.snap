@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                     ╰── `Point` does not satisfy `Zeroable`
  6 │ }
    ╰────
-  help: `Point.x` is private to package `shapes`, so Lisette cannot produce a zero for it. Build the value through a constructor that `shapes` exposes · code: [infer.not_zeroable_bound]
+  help: Build the value through a constructor that `shapes` exposes. `Point.x` is private to package `shapes`, so Lisette cannot produce a zero for it · code: [infer.not_zeroable_bound]

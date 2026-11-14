@@ -6,7 +6,7 @@ pub fn unknown_go_hint(attribute_span: &Span, hint: &str) -> LisetteDiagnostic {
         .with_attribute_code("unknown")
         .with_span_label(attribute_span, "not one of the hints `lis add` emits")
         .with_help(
-            "The hint in this attribute is not recognized. Regenerate this typedef by re-running `lis add`",
+            "Regenerate this typedef by re-running `lis add`. The hint in this attribute is not recognized",
         )
 }
 
@@ -149,7 +149,7 @@ pub fn display_specialized_to_string(attribute_span: &Span) -> LisetteDiagnostic
         .with_attribute_code("display_specialized_to_string")
         .with_span_label(attribute_span, "adds a `to_string` of its own")
         .with_help(
-            "`#[display]` needs a plain `fn to_string(self) -> string` on the type. Write `to_string` in that form, or remove `#[display]`.",
+            "Write `to_string` as a plain `fn to_string(self) -> string` on the type, or remove `#[display]`.",
         )
 }
 
@@ -219,7 +219,7 @@ pub fn equality_specialized_equals(attribute_span: &Span) -> LisetteDiagnostic {
         .with_attribute_code("equality_specialized_equals")
         .with_span_label(attribute_span, "would synthesize an `equals` of its own")
         .with_help(
-            "`#[equality]` needs a plain `fn equals(self, other: Self) -> bool` over the whole type. An `equals` over a partial or concrete receiver (`impl Box<int>`, `impl<T> Pair<T, T>`), or one with extra type parameters (`fn equals<U>`, `impl<T, U> Box<T>`), is emitted as a free function and cannot satisfy `#[equality]`. Write `equals` in that form, or remove `#[equality]`.",
+            "Write `equals` as a plain `fn equals(self, other: Self) -> bool` over the whole type, or remove `#[equality]`. An `equals` over a partial or concrete receiver (`impl Box<int>`, `impl<T> Pair<T, T>`), or one with extra type parameters (`fn equals<U>`, `impl<T, U> Box<T>`), is emitted as a free function and cannot satisfy `#[equality]`.",
         )
 }
 
@@ -228,7 +228,7 @@ pub fn equality_conflicting_equals(attribute_span: &Span) -> LisetteDiagnostic {
         .with_attribute_code("equality_conflicting_equals")
         .with_span_label(attribute_span, "would synthesize an `equals` of its own")
         .with_help(
-            "`#[equality]` needs a plain `fn equals(self, other: Self) -> bool`. Write `equals` in that form, or remove `#[equality]`.",
+            "Write `equals` as a plain `fn equals(self, other: Self) -> bool`, or remove `#[equality]`.",
         )
 }
 
@@ -242,7 +242,7 @@ pub fn cannot_derive_equality(
         .with_attribute_code("cannot_derive_equality")
         .with_span_label(field_span, format!("`{field_name}` cannot be compared"))
         .with_help(format!(
-            "`#[equality]` cannot compare {reason}. Give `{type_name}` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field"
+            "Give `{type_name}` a hand-written `equals` method, mark the field's type `#[equality]`, or remove the field. `#[equality]` cannot compare {reason}"
         ))
 }
 
@@ -256,7 +256,7 @@ pub fn cannot_derive_equality_unbound(
         .with_attribute_code("cannot_derive_equality")
         .with_span_label(field_span, format!("`{field_name}` cannot be compared"))
         .with_help(format!(
-            "`{parameter}` has no bound that supports comparison. Bound `{parameter}` by `Comparable`, `Ordered`, or an interface that declares `equals`, or give `{type_name}` a hand-written `equals` method"
+            "Bound `{parameter}` by `Comparable`, `Ordered`, or an interface that declares `equals`, or give `{type_name}` a hand-written `equals` method. `{parameter}` has no bound that supports comparison"
         ))
 }
 

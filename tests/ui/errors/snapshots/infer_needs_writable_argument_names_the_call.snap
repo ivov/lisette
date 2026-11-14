@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing write permission
+   ╭─[test.lis:8:8]
+ 7 │   let nested: Slice<Slice<int>> = [[1]]
+ 8 │   fill(nested[0])
+   ·        ────┬────
+   ·            ╰── expected `mut Slice<int>`, found `Slice<int>`
+ 9 │ }
+   ╰────
+  help: Make the value writable where it is created, or pass a `.clone()`. `fill()` expects `mut Slice<int>` for its first argument `xs`, and `Slice<int>` does not permit writes · code: [infer.needs_writable]

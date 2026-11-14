@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·              ╰── const patterns are only allowed in match arms
  6 │ }
    ╰────
-  help: `weekday.Friday` is a constant, so this pattern is refutable. Match on it inside a `match` expression, or compare with `==` in a `let` or function parameter · code: [infer.const_pattern_outside_match_arm]
+  help: Match on `weekday.Friday` inside a `match` expression, or compare with `==` in a `let` or function parameter. `weekday.Friday` is a constant, so this pattern can fail to match · code: [infer.const_pattern_outside_match_arm]

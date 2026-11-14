@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                ╰── always `false`
  5 │ }
    ╰────
-  help: The mask makes this value unable to satisfy the comparison, so it is always `false`. Check the mask or the constant · code: [lint.bad_bit_mask]
+  help: Check the mask or the constant. The mask makes this value unable to satisfy the comparison, so it is always `false` · code: [lint.bad_bit_mask]

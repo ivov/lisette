@@ -1,11 +1,11 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Syntax error
+  ✕ Unknown directive
    ╭─[test.lis:2:13]
  1 │ 
  2 │ fn test() { @unknown(foo); }
    ·             ────┬───
-   ·                 ╰── unknown directive
+   ·                 ╰── no such directive
    ╰────
-  help: There is no such directive · code: [parse.syntax_error]
+  help: `@rawgo` is the only directive · code: [parse.unknown_directive]

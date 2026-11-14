@@ -1,25 +1,27 @@
 use super::*;
-use crate::analysis::GoPackageSources;
+use crate::analysis::{GoPackageSources, GoTypedef};
 use crate::diagnostics::ReplaceImporter;
+use diagnostics::LocalSink;
 use ecow::EcoString;
 use rustc_hash::FxHashMap as HashMap;
 use std::mem;
 use syntax::ast::ImportAlias;
+use syntax::ast::Span;
 use syntax::attributes::unsupported_go_symbol;
 
 impl TaskState {
     /// Register a Go package (stdlib or third-party). Unlike regular packages,
     /// Go packages export everything as public and do not put their own package
-    /// in scope (no self-references like `MyPackage.Type`). `cache_path` is the
-    /// on-disk typedef location, or `None` for embedded stdlib typedefs.
+    /// in scope (no self-references like `MyPackage.Type`).
     pub fn parse_and_register_go_package(
         &mut self,
         store: &mut Store,
         package_id: &str,
-        source: &str,
-        cache_path: Option<PathBuf>,
+        typedef: GoTypedef,
+        user_import: Option<Span>,
         sources: &mut GoPackageSources,
     ) {
+        let GoTypedef { source, cache_path } = typedef;
         let locator = sources.locator;
         if store.has(package_id) {
             return;
@@ -89,12 +91,16 @@ impl TaskState {
                         self.parse_and_register_go_package(
                             store,
                             &import_package_id,
-                            content.as_ref(),
-                            origin.into_cache_path(),
+                            GoTypedef {
+                                source: content.as_ref(),
+                                cache_path: origin.into_cache_path(),
+                            },
+                            user_import,
                             sources,
                         );
                     }
                     other => {
+                        let typedef_sink = LocalSink::new();
                         emit_for_locator_result(
                             &other,
                             &GoImportSite {
@@ -105,8 +111,18 @@ impl TaskState {
                                 replace_importer,
                                 transitive_importer: package_id.strip_prefix("go:"),
                             },
-                            &self.sink,
+                            &typedef_sink,
                         );
+                        let diagnostics = typedef_sink.into_diagnostics();
+                        self.sink.extend(diagnostics.into_iter().map(
+                            |diagnostic| match user_import {
+                                Some(span) => diagnostic.with_leading_label(
+                                    &span,
+                                    format!("this import needs `{go_pkg}`"),
+                                ),
+                                None => diagnostic,
+                            },
+                        ));
                     }
                 }
             }

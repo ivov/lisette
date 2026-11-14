@@ -756,6 +756,45 @@ fn graph_project_third_party_go_import_undeclared() {
 }
 
 #[test]
+fn graph_project_go_import_of_prelude_is_rejected_as_prelude() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"import "go:github.com/ivov/lisette/prelude""#,
+    );
+
+    let mut store = Store::new();
+
+    let sink = LocalSink::new();
+    let _result = build_package_graph(
+        &mut store,
+        roots("main"),
+        graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
+    );
+
+    assert!(has_diagnostic_code(&sink, "resolve.cannot_import_prelude"));
+    assert!(!has_diagnostic_code(&sink, "resolve.undeclared_go_import"));
+}
+
+#[test]
+fn graph_import_of_entry_package_is_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.lis", r#"import "_entry_""#);
+
+    let mut store = Store::new();
+
+    let sink = LocalSink::new();
+    let _result = build_package_graph(
+        &mut store,
+        roots("main"),
+        graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
+    );
+
+    assert!(has_diagnostic_code(&sink, "resolve.cannot_import_entry"));
+}
+
+#[test]
 fn graph_declared_dep_missing_typedef() {
     use BTreeMap;
 
@@ -1000,6 +1039,109 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
         }
         other => panic!("Subpackage: expected Found, got {:?}", other),
     }
+}
+
+#[test]
+fn typedef_import_error_leads_with_user_import() {
+    use passes::analyze;
+    use semantics::loader::MemoryLoader;
+    use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let project_root = tmp.path();
+    let cache_dir = host_module_cache_dir(project_root, "github.com/gorilla/mux@v1.8.0");
+    fs::create_dir_all(&cache_dir).unwrap();
+    fs::write(
+        cache_dir.join("mux.d.lis"),
+        "import \"go:github.com/ivov/lisette/prelude\"\n\npub fn new_router() -> int\n",
+    )
+    .unwrap();
+
+    let mut go_deps = BTreeMap::new();
+    go_deps.insert(
+        "github.com/gorilla/mux".to_string(),
+        deps::GoDependency::Remote {
+            version: "v1.8.0".to_string(),
+            via: None,
+        },
+    );
+    let resolver = deps::TypedefLocator::new(
+        go_deps,
+        Some(project_root.to_path_buf()),
+        stdlib::Target::host(),
+    );
+
+    let source =
+        "import \"go:github.com/gorilla/mux\"\n\nfn main() {\n    let _ = mux.new_router()\n}\n";
+    let no_loader = MemoryLoader::new();
+    let result = analyze(AnalyzeInput {
+        load_siblings: false,
+        scope: AnalysisScope::Directory,
+        loader: &no_loader,
+        entry: Some(EntryFile::new(
+            source.to_string(),
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
+        compile_phase: CompilePhase::Check,
+        project_kind: semantics::ProjectKind::Binary,
+        locator: &resolver,
+        go_module: "",
+        disable_cache: false,
+        recover_target: semantics::RecoverTarget::None,
+    });
+
+    let errors = result.errors();
+    let error = errors
+        .iter()
+        .find(|e| e.code_str() == Some("resolve.prelude_in_go_api"))
+        .unwrap_or_else(|| panic!("expected `resolve.prelude_in_go_api`, got {:?}", errors));
+
+    let (offset, length) = error.first_label_span().unwrap();
+    assert_eq!(
+        &source[offset..offset + length],
+        "\"go:github.com/gorilla/mux\""
+    );
+    assert_eq!(
+        error.located_label(),
+        Some("this import needs `github.com/ivov/lisette/prelude`")
+    );
+    let (typedef_span, _) = error.secondary_labels().next().unwrap();
+    assert_ne!(Some(typedef_span.file_id), error.file_id());
+}
+
+#[test]
+fn failed_import_with_unknown_package_name_reports_only_the_import() {
+    use passes::analyze;
+    use semantics::loader::MemoryLoader;
+    use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
+
+    let resolver = deps::TypedefLocator::new(BTreeMap::new(), None, stdlib::Target::host());
+    let source = "import \"go:gopkg.in/yaml.v3\"\n\nfn main() {\n    let _ = yaml.Marshal(1)\n}\n\nfn take(node: yaml.Node) {}\n";
+    let no_loader = MemoryLoader::new();
+    let result = analyze(AnalyzeInput {
+        load_siblings: false,
+        scope: AnalysisScope::Directory,
+        loader: &no_loader,
+        entry: Some(EntryFile::new(
+            source.to_string(),
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
+        compile_phase: CompilePhase::Check,
+        project_kind: semantics::ProjectKind::Binary,
+        locator: &resolver,
+        go_module: "",
+        disable_cache: false,
+        recover_target: semantics::RecoverTarget::None,
+    });
+
+    let codes: Vec<_> = result
+        .errors()
+        .iter()
+        .filter_map(|e| e.code_str())
+        .collect();
+    assert_eq!(codes, ["resolve.undeclared_go_import"]);
 }
 
 /// Impl block on a third-party Go struct must not be rejected as foreign.

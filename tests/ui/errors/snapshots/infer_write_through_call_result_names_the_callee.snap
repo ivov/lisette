@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·         ╰── `get()` is read-only
  8 │ }
    ╰────
-  help: `get` returns `Slice<int>`. Declare its return type `mut Slice<int>`, or bind the result and write to a `.clone()` · code: [infer.write_through_read_only]
+  help: Declare the return type of `get` as `mut Slice<int>`, or bind the result and write to a `.clone()`. It returns `Slice<int>` · code: [infer.write_through_read_only]

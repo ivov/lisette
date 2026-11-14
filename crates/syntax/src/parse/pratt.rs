@@ -212,10 +212,12 @@ impl<'source> Parser<'source> {
                         self.current_token().byte_offset + self.current_token().byte_length
                             - start.byte_offset,
                     );
-                    self.track_error_at(
+                    self.track_coded_error_at(
                         span,
-                        "invalid syntax",
-                        "Lisette has no mutable references. Use `&x` instead",
+                        "Unsupported `&mut`",
+                        "ampersand_mut",
+                        "Lisette has no mutable references",
+                        "Use `&x`",
                     );
                     self.next(); // consume `mut`
                 }
@@ -288,7 +290,7 @@ impl<'source> Parser<'source> {
                             .saturating_sub(first_span.byte_offset),
                     );
                     let error = ParseError::new(title, span, format!("belongs on `{}`", method))
-                        .with_parse_code("syntax_error")
+                        .with_parse_code("misplaced_type_arguments")
                         .with_help(help);
                     self.errors.push(error);
 
@@ -323,15 +325,17 @@ impl<'source> Parser<'source> {
                     }
 
                     let help = if !lhs_name.is_empty() {
-                        format!(
-                            "Lisette does not use turbofish syntax. Use `{}<T>(...)` instead",
-                            lhs_name
-                        )
+                        format!("Use `{}<T>(...)`. Lisette does not use `::<T>`", lhs_name)
                     } else {
-                        "Lisette does not use turbofish syntax. Use `func<T>(...)` instead"
-                            .to_string()
+                        "Use `func<T>(...)`. Lisette does not use `::<T>`".to_string()
                     };
-                    self.track_error_at(span, "invalid syntax", help);
+                    self.track_coded_error_at(
+                        span,
+                        "`::<T>` type arguments",
+                        "turbofish",
+                        "Rust-style type arguments",
+                        help,
+                    );
                     self.parse_function_call(lhs, type_args)
                 } else {
                     let help = if !lhs_name.is_empty() && after.kind == Identifier {
@@ -342,7 +346,13 @@ impl<'source> Parser<'source> {
                     } else {
                         "Use `.` instead of `::` for enum variant access".to_string()
                     };
-                    self.track_error_at(span, "invalid syntax", help);
+                    self.track_coded_error_at(
+                        span,
+                        "`::` in a path",
+                        "double_colon_path",
+                        "Rust-style path",
+                        help,
+                    );
                     self.recover_double_colon_access(lhs)
                 }
             }
@@ -379,10 +389,16 @@ impl<'source> Parser<'source> {
             .collect::<Vec<_>>()
             .join(", ");
         let help = format!(
-            "Lisette does not use turbofish syntax. Use `{}.{}<{}>()` instead",
+            "Use `{}.{}<{}>()`. Lisette does not use `::<T>`",
             lhs_name, method, args
         );
-        self.track_error_at(span, "invalid syntax", help);
+        self.track_coded_error_at(
+            span,
+            "`::<T>` type arguments",
+            "turbofish",
+            "Rust-style type arguments",
+            help,
+        );
 
         let dot_access = self.recover_double_colon_access(lhs);
 
@@ -428,9 +444,11 @@ impl<'source> Parser<'source> {
             self.current_token().byte_offset,
             self.current_token().byte_length + 1,
         );
-        self.track_error_at(
+        self.track_coded_error_at(
             span,
-            "invalid syntax",
+            "Go-style channel send",
+            "go_channel_send",
+            "`<-` is not an operator",
             "Use `ch.Send(value)` inside a `select` expression",
         );
         self.resync_on_error();
@@ -490,7 +508,13 @@ impl<'source> Parser<'source> {
         let span = ast::Span::new(self.file_id, current.byte_offset, 2);
         let target = self.source[start_offset as usize..current.byte_offset as usize].trim_end();
         let help = format!("Use `{target} {compound}` instead");
-        self.track_error_at(span, format!("Lisette has no `{operator}` operator"), help);
+        self.track_coded_error_at(
+            span,
+            format!("Unsupported `{operator}` operator"),
+            "increment_operator",
+            format!("Lisette has no `{operator}` operator"),
+            help,
+        );
         self.next();
         self.next();
         true

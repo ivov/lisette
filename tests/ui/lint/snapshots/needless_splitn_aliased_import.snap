@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                       ╰── splits with no limit
  7 │ }
    ╰────
-  help: `mystr.SplitN(s, ",", -1)` splits with no limit. Use `mystr.Split(s, ",")` · code: [lint.needless_splitn]
+  help: Use `mystr.Split(s, ",")`. `mystr.SplitN(s, ",", -1)` splits with no limit · code: [lint.needless_splitn]

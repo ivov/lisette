@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                    ╰── already the first argument
  4 │ }
    ╰────
-  help: `|>` passes the value as the first argument when a step has no `_`. Remove the `_` · code: [lint.redundant_pipeline_placeholder]
+  help: Remove the `_`. `|>` passes the value as the first argument when a step has no `_` · code: [lint.redundant_pipeline_placeholder]

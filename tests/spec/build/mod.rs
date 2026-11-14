@@ -5475,6 +5475,7 @@ fn main() {}
         result.errors()[0].code_str(),
         Some("resolve.missing_go_prefix")
     );
+    assert_eq!(result.errors()[0].plain_message(), "Missing `go:` prefix");
     let rendered = result.errors()[0].plain_help().unwrap_or_default();
     assert!(
         rendered.contains("import \"go:github.com/gin-gonic/gin\""),

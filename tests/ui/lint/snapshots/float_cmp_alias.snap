@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·              ╰── floats compared with `==`
  7 │ }
    ╰────
-  help: Floating-point results are rarely bit-exact, so `==` and `!=` may not behave as intended. Compare within a tolerance instead, e.g. `math.Abs(a - b) < c` · code: [lint.float_cmp]
+  help: Compare within a tolerance, e.g. `math.Abs(a - b) < c`. Floating-point results are rarely bit-exact, so `==` and `!=` may not behave as intended · code: [lint.float_cmp]

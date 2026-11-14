@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·             ╰── only one element
  5 │     total += x
    ╰────
-  help: The loop body runs once. Bind the element with `let` and remove the loop · code: [lint.single_element_loop]
+  help: Bind the element with `let` and remove the loop. The loop body runs once · code: [lint.single_element_loop]

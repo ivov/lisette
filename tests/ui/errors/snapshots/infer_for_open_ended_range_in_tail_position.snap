@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·    ╰── evaluates to `()`, but expected `string` here
  4 │     let _ = i
    ╰────
-  help: `for` loops are for side effects and always evaluate to `()`. Use `loop` with `break <value>` to produce a value during iteration · code: [infer.loop_produces_no_value]
+  help: Use `loop` with `break <value>` to produce a value during iteration. `for` loops are for side effects and always evaluate to `()` · code: [infer.loop_produces_no_value]

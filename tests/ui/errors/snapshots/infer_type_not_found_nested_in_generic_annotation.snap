@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                                  ╰── not declared or imported
  3 │ }
    ╰────
-  help: Define or import this type · code: [resolve.type_not_found]
+  help: Define `UnknownType`, or qualify it with the package that declares it · code: [resolve.type_not_found]

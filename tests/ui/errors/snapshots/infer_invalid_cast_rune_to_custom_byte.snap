@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·        ╰── cannot convert `rune` to `MyByte`
  7 │ }
    ╰────
-  help: rune (int32) is wider than byte (uint8) and may not fit. Use an intermediate variable to convert via int first: `let n = r as int; n as byte` · code: [infer.invalid_conversion]
+  help: Use an intermediate variable to convert via int first: `let n = r as int; n as byte`. A rune (int32) is wider than a byte (uint8) and may not fit · code: [infer.invalid_conversion]

@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                     ╰── returns its argument unchanged
  7 │ }
    ╰────
-  help: `fmt.Sprintf("%s", s)` formats a string as itself. Use `s` directly · code: [lint.redundant_sprintf]
+  help: Use `s` directly. `fmt.Sprintf("%s", s)` formats a string as itself · code: [lint.redundant_sprintf]

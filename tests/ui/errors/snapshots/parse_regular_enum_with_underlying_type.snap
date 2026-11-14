@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·            ╰── enums cannot have an underlying type
  3 │   Active,
    ╰────
-  help: Remove the `: type` annotation. To model a Go defined primitive type, use a named primitive type such as `pub struct Weekday(int)` with package-level constants · code: [parse.enum_underlying_type]
+  help: Remove the `: type` annotation. To model a Go defined primitive type, use a named primitive type, e.g. `pub struct Weekday(int)`, with package-level constants · code: [parse.enum_underlying_type]

@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type not found
+   ╭─[test.lis:4:16]
+ 3 │ 
+ 4 │ fn test(x: fmt.Nope) {}
+   ·                ──┬─
+   ·                  ╰── `Nope` not found in package `fmt`
+   ╰────
+  help: Ensure the type is exported and spelled correctly · code: [resolve.type_not_found]

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·                    ╰── `Slice` cannot implement `HasLength`
  12 │ }
     ╰────
-  help: Built-in types have no Go methods, so they cannot satisfy interfaces. Wrap the value in a struct that implements `HasLength` · code: [infer.interface_not_implemented]
+  help: Wrap the value in a struct that implements `HasLength`. Built-in types have no Go methods, so they cannot satisfy interfaces · code: [infer.interface_not_implemented]

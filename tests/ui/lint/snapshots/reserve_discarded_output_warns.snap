@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·           ╰── output is discarded
  5 │   let _ = ids
    ╰────
-  help: `reserve()` outputs a new slice, leaving the original slice intact. Assign the output back `let s = s.reserve(...)` or discard the output with `let _ = s.reserve(...)` · code: [lint.unused_value]
+  help: Assign the output back `let s = s.reserve(...)` or discard the output with `let _ = s.reserve(...)`. `reserve()` outputs a new slice, leaving the original slice intact · code: [lint.unused_value]

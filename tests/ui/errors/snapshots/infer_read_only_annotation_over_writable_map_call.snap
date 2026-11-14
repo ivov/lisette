@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot write to `seen["x"]`
+   ╭─[test.lis:4:3]
+ 3 │   let mut seen: Map<string, bool> = Map.new()
+ 4 │   seen["x"] = true
+   ·   ────────┬───────
+   ·           ╰── `seen` is read-only
+ 5 │ }
+   ╰────
+  help: Declare `seen` as `mut Map<string, bool>` to write through it. It is declared as `Map<string, bool>` · code: [infer.write_through_read_only]

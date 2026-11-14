@@ -144,7 +144,7 @@ pub fn unreachable_partial_err(span: &Span, callee: &str) -> LisetteDiagnostic {
         .with_lint_code("unreachable_partial_err")
         .with_span_label(span, "never matches")
         .with_help(format!(
-            "Go's `{callee}` reports failure as `Partial.Both`. To handle any error, check `.err()`"
+            "To handle any error, check `.err()`. Go's `{callee}` reports failure as `Partial.Both`"
         ))
 }
 
@@ -224,13 +224,13 @@ pub fn unused_expression(span: &Span, kind: UnusedExpressionKind) -> LisetteDiag
             "unused_value",
             "Unused `append()` output",
             "output is discarded",
-            "`append()` outputs a new slice, leaving the original slice intact. Assign the output back to grow it `let s = s.append(...)` or discard the output with `let _ = s.append(...)`",
+            "Assign the output back to grow the slice `let s = s.append(...)` or discard the output with `let _ = s.append(...)`. `append()` outputs a new slice, leaving the original slice intact",
         ),
         UnusedExpressionKind::SliceReserve => (
             "unused_value",
             "Unused `reserve()` output",
             "output is discarded",
-            "`reserve()` outputs a new slice, leaving the original slice intact. Assign the output back `let s = s.reserve(...)` or discard the output with `let _ = s.reserve(...)`",
+            "Assign the output back `let s = s.reserve(...)` or discard the output with `let _ = s.reserve(...)`. `reserve()` outputs a new slice, leaving the original slice intact",
         ),
         UnusedExpressionKind::Lambda => (
             "unused_value",
@@ -435,7 +435,7 @@ pub fn bad_bit_mask(span: &Span, always_true: bool) -> LisetteDiagnostic {
         .with_lint_code("bad_bit_mask")
         .with_span_label(span, format!("always `{result}`"))
         .with_help(format!(
-            "The mask makes this value {clause} the comparison, so it is always `{result}`. Check the mask or the constant."
+            "Check the mask or the constant. The mask makes this value {clause} the comparison, so it is always `{result}`."
         ))
 }
 
@@ -469,7 +469,7 @@ pub fn float_cmp(span: &Span, is_equal: bool) -> LisetteDiagnostic {
         .with_lint_code("float_cmp")
         .with_span_label(span, format!("floats compared with `{operator}`"))
         .with_help(
-            "Floating-point results are rarely bit-exact, so `==` and `!=` may not behave as intended. Compare within a tolerance instead, e.g. `math.Abs(a - b) < c`.",
+            "Compare within a tolerance, e.g. `math.Abs(a - b) < c`. Floating-point results are rarely bit-exact, so `==` and `!=` may not behave as intended.",
         )
 }
 
@@ -478,7 +478,7 @@ pub fn float_equality_without_abs(span: &Span) -> LisetteDiagnostic {
         .with_lint_code("float_equality_without_abs")
         .with_span_label(span, "difference is not wrapped in `math.Abs`")
         .with_help(
-            "Because `a - b` is signed, this is also `true` whenever `a` is far below `b`, not only when `a` and `b` are close, so it wrongly accepts values that are nowhere near equal. Compare the magnitude instead: `math.Abs(a - b) < c`.",
+            "Compare the magnitude: `math.Abs(a - b) < c`. `a - b` is negative whenever `a` is below `b`, so this is also `true` when `a` is far below `b`.",
         )
 }
 
@@ -506,7 +506,7 @@ pub fn goos_goarch_comparison(
         .with_lint_code("goos_goarch_comparison")
         .with_span_label(span, format!("`runtime.{const_name}` never holds this value"))
         .with_help(format!(
-            "`runtime.{const_name}` only ever holds a known {kind}, and this is not one. Did you mean a valid value such as {examples}?"
+            "`runtime.{const_name}` only ever holds a known {kind}, and this is not one. Did you mean a valid value, e.g. {examples}?"
         ))
 }
 
@@ -528,7 +528,7 @@ pub fn unnecessary_min_or_max(span: &Span, op: &str) -> LisetteDiagnostic {
         .with_lint_code("unnecessary_min_or_max")
         .with_span_label(span, "always returns the same operand")
         .with_help(format!(
-            "This `{op}` always evaluates to one of its operands, so it has no effect. Simplify it to that operand."
+            "Replace this `{op}` with the operand it always returns. The call has no effect."
         ))
 }
 
@@ -562,7 +562,7 @@ pub fn almost_swapped(span: &Span, first: &str, second: &str) -> LisetteDiagnost
         .with_lint_code("almost_swapped")
         .with_span_label(span, "does not swap values")
         .with_help(format!(
-            "`{first} = {second}` overwrites `{first}`, so `{second} = {first}` writes `{second}`'s own value back and the original `{first}` is lost. Save one value in a temporary variable first"
+            "Save one value in a temporary variable first. `{first} = {second}` overwrites `{first}`, so `{second} = {first}` writes `{second}`'s own value back and the original `{first}` is lost"
         ))
 }
 
@@ -590,7 +590,7 @@ pub fn misrefactored_assign_op(
         .with_lint_code("misrefactored_assign_op")
         .with_span_label(span, format!("uses `{target}` twice"))
         .with_help(format!(
-            "The `{compound}` operator already includes `{target}`, so naming `{target}` again on the right applies it twice. To apply `{other}` once, write `{target} {compound} {other}`."
+            "To apply `{other}` once, write `{target} {compound} {other}`. The `{compound}` operator already includes `{target}`, so naming `{target}` again on the right applies it twice."
         ))
 }
 
@@ -622,7 +622,7 @@ pub fn manual_find(span: &Span, receiver: &str, predicate: &str) -> LisetteDiagn
         .with_lint_code("manual_find")
         .with_span_label(span, "can use `find`")
         .with_help(format!(
-            "`filter(...).get(0)` builds the whole filtered slice. Use `{receiver}.find({predicate})` to return the first match directly"
+            "Use `{receiver}.find({predicate})` to return the first match directly. `filter(...).get(0)` builds the whole filtered slice"
         ))
 }
 
@@ -631,7 +631,7 @@ pub fn manual_extend(span: &Span, replacement: &str) -> LisetteDiagnostic {
         .with_lint_code("manual_extend")
         .with_span_label(span, "can be one append")
         .with_help(format!(
-            "This loop appends one element per iteration, growing the slice each time. Spread the iterated slice to append all of it at once: `{replacement}`"
+            "Spread the iterated slice to append all of it at once: `{replacement}`. This loop appends one element per iteration, growing the slice each time"
         ))
 }
 
@@ -698,7 +698,7 @@ pub fn loop_runs_once(span: &Span) -> LisetteDiagnostic {
         .with_lint_code("loop_runs_once")
         .with_span_label(span, "the body always exits before looping back")
         .with_help(
-            "The body always exits on the first iteration, so the loop never repeats. Make the exit conditional, or remove the loop.",
+            "Make the exit conditional, or remove the loop. The body always exits on the first iteration, so the loop never repeats.",
         )
 }
 
@@ -714,7 +714,7 @@ pub fn unconditional_recursion(span: &Span, name: &str) -> LisetteDiagnostic {
         .with_lint_code("unconditional_recursion")
         .with_span_label(span, "recurses on every path")
         .with_help(format!(
-            "`{name}` always calls itself, so it overflows the stack instead of returning. Add a base case that returns without recursing"
+            "Add a base case that returns without recursing. `{name}` always calls itself, so it overflows the stack instead of returning"
         ))
 }
 
@@ -722,7 +722,7 @@ pub fn unnecessary_return(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Unnecessary `return`")
         .with_lint_code("unnecessary_return")
         .with_span_label(span, "redundant in tail position")
-        .with_help("The final expression of a function is its return value. Drop `return` and keep the value")
+        .with_help("Drop `return` and keep the value. The final expression of a function is its return value")
 }
 
 pub fn identical_if_branches(span: &Span) -> LisetteDiagnostic {
@@ -760,7 +760,7 @@ pub fn redundant_else(span: &Span) -> LisetteDiagnostic {
         .with_lint_code("redundant_else")
         .with_span_label(span, "unnecessary")
         .with_help(
-            "The `if` branch always exits, so the `else` only adds nesting. Drop `else` and move its body to follow the `if`",
+            "Drop `else` and move its body to follow the `if`. The `if` branch always exits, so the `else` only adds nesting",
         )
 }
 
@@ -792,7 +792,7 @@ pub fn single_element_loop(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Loop over a single element")
         .with_lint_code("single_element_loop")
         .with_span_label(span, "only one element")
-        .with_help("The loop body runs once. Bind the element with `let` and remove the loop")
+        .with_help("Bind the element with `let` and remove the loop. The loop body runs once")
 }
 
 pub fn while_let_loop(span: &Span, pattern: &str, subject: &str) -> LisetteDiagnostic {
@@ -834,7 +834,7 @@ pub fn wildcard_in_or_patterns(span: &Span) -> LisetteDiagnostic {
         .with_lint_code("wildcard_in_or_patterns")
         .with_span_label(span, "can be just `_`")
         .with_help(
-            "The `_` alternative already matches everything. Replace the whole pattern with `_`",
+            "Replace the whole pattern with `_`. The `_` alternative already matches everything",
         )
 }
 
@@ -916,7 +916,7 @@ pub fn needless_match(span: &Span, subject: &str) -> LisetteDiagnostic {
         .with_lint_code("needless_match")
         .with_span_label(span, "unnecessary")
         .with_help(format!(
-            "Every arm rebuilds the subject unchanged. Replace this `match` with `{subject}`"
+            "Replace this `match` with `{subject}`. Every arm rebuilds the subject unchanged"
         ))
 }
 
@@ -1022,11 +1022,11 @@ pub fn empty_match_arm(span: &Span) -> LisetteDiagnostic {
 }
 
 pub fn unnecessary_parens(span: &Span, keyword: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::info("Unnecessary parens")
+    LisetteDiagnostic::info("Unnecessary parentheses")
         .with_lint_code("excess_parens_on_condition")
-        .with_span_label(span, "remove parens")
+        .with_span_label(span, "remove parentheses")
         .with_help(format!(
-            "Lisette does not require parens around `{}` conditions",
+            "Lisette does not require parentheses around `{}` conditions",
             keyword
         ))
 }
@@ -1064,7 +1064,7 @@ pub fn single_arm_select(span: &Span, receive: &str) -> LisetteDiagnostic {
         .with_lint_code("single_arm_select")
         .with_span_label(span, "waits on a single operation")
         .with_help(format!(
-            "A `select` with one arm makes no choice between channel operations. Use `match {receive} {{ ... }}` directly"
+            "Use `match {receive} {{ ... }}` directly. A `select` with one arm makes no choice between channel operations"
         ))
 }
 
@@ -1080,7 +1080,7 @@ pub fn match_single_binding(span: &Span, binding: &str) -> LisetteDiagnostic {
         .with_lint_code("match_single_binding")
         .with_span_label(span, "should be `let`")
         .with_help(format!(
-            "A match with a single binding is ineffective. Use `let {} = value` instead.",
+            "Use `let {} = value`. A match with a single binding is ineffective.",
             binding
         ))
 }
@@ -1161,13 +1161,13 @@ pub fn invisible_in_string(
         (
             "Bidirectional character in string",
             "bidi_in_string",
-            "Bidirectional control characters can reorder surrounding text and enable source-spoofing attacks. If intentional, write it as a `\\u` escape so it is visible in source. Otherwise remove it.",
+            "Remove the character, or if it is intentional, write it as a `\\u` escape so it is visible in source. Bidirectional control characters can reorder surrounding text and enable source-spoofing attacks.",
         )
     } else {
         (
             "Invisible character in string",
             "invisible_in_string",
-            "Invisible characters in strings can hide bugs and silently shift meaning. Remove the character, or replace it with the visible character you meant.",
+            "Remove the character, or replace it with the visible character you meant. Invisible characters in strings can hide bugs and silently shift meaning.",
         )
     };
     LisetteDiagnostic::warn(title)
@@ -1188,7 +1188,7 @@ pub fn redundant_pipeline_placeholder(span: &Span) -> LisetteDiagnostic {
         .with_lint_code("redundant_pipeline_placeholder")
         .with_span_label(span, "already the first argument")
         .with_help(
-            "`|>` passes the value as the first argument when a step has no `_`. Remove the `_`",
+            "Remove the `_`. `|>` passes the value as the first argument when a step has no `_`",
         )
 }
 
@@ -1245,7 +1245,7 @@ pub fn self_named_constructors(
         .with_lint_code("self_named_constructors")
         .with_span_label(span, "repeats the type name")
         .with_help(format!(
-            "Calling this as `{type_name}.{method_name}()` repeats the type name. Rename it to `new`, the conventional constructor name."
+            "Rename it to `new`, the conventional constructor name. Calling this as `{type_name}.{method_name}()` repeats the type name."
         ))
 }
 
@@ -1309,7 +1309,7 @@ pub fn private_type_in_public_api(
     ))
     .with_lint_code("internal_type_leak")
     .with_help(format!(
-        "`{}` is private but exposed by `{}`, which is public. Add `pub` to the private type or remove it from the public API",
+        "Add `pub` to the private type or remove it from the public API. `{}` is private but exposed by `{}`, which is public",
         private_type, public_definition
     ));
 
@@ -1396,9 +1396,9 @@ pub fn ineffective_omitempty(
             .with_span_label(set_by, "`omitempty` set here"),
     };
     diagnostic.with_help(format!(
-        "Go omits an `omitempty` field only when it is empty, and {} never is. {}",
-        never_empty.description(),
-        never_empty.advice()
+        "{}. Go omits an `omitempty` field only when it is empty, and {} never is",
+        never_empty.advice(),
+        never_empty.description()
     ))
 }
 
@@ -1458,7 +1458,7 @@ pub fn redundant_sprintf(span: &Span, namespace: &str, value: &str) -> LisetteDi
         .with_lint_code("redundant_sprintf")
         .with_span_label(span, "returns its argument unchanged")
         .with_help(format!(
-            "`{namespace}.Sprintf(\"%s\", {value})` formats a string as itself. Use `{value}` directly"
+            "Use `{value}` directly. `{namespace}.Sprintf(\"%s\", {value})` formats a string as itself"
         ))
 }
 
@@ -1551,7 +1551,7 @@ pub fn printf_verb_type_mismatch(
         .with_lint_code("printf_verb_mismatch")
         .with_span_label(span, format!("`{type_name}` argument for `%{verb}`"))
         .with_help(format!(
-            "`{display_package}.{function}` formats `%{verb}`, which needs {needs}, but the argument has type `{type_name}`. Use `%{suggestion}`, or convert the argument"
+            "Use `%{suggestion}`, or convert the argument. `{display_package}.{function}` formats `%{verb}`, which needs {needs}, but the argument has type `{type_name}`"
         ))
 }
 
@@ -1570,7 +1570,7 @@ pub fn printf_star_type_mismatch(
         .with_lint_code("printf_verb_mismatch")
         .with_span_label(span, format!("`{type_name}` argument for the `*` {part}"))
         .with_help(format!(
-            "`{display_package}.{function}` takes the `*` {part} from an argument of type `{type_name}`, but a {part} must be an integer. Use a fixed {part}, or convert the argument"
+            "Use a fixed {part}, or convert the argument. `{display_package}.{function}` takes the `*` {part} from an argument of type `{type_name}`, but a {part} must be an integer"
         ))
 }
 
@@ -1633,7 +1633,7 @@ pub fn printf_verb_mismatch(
                 .with_lint_code("printf_verb_mismatch")
                 .with_span_label(span, label)
                 .with_help(format!(
-                    "`{display_package}.{function}` has {counts}, so {corruption}. {repair}"
+                    "{repair}. `{display_package}.{function}` has {counts}, so {corruption}"
                 ))
         }
         None => {
@@ -1652,7 +1652,7 @@ pub fn printf_verb_mismatch(
                 .with_lint_code("printf_verb_mismatch")
                 .with_span_label(span, label)
                 .with_help(format!(
-                    "`{display_package}.{function}` has {counts}, so {extras} as `%!(EXTRA ...)` at the end of the output. {repair}"
+                    "{repair}. `{display_package}.{function}` has {counts}, so {extras} as `%!(EXTRA ...)` at the end of the output"
                 ))
         }
     }
@@ -1669,7 +1669,7 @@ pub fn manual_replace_all(
         .with_lint_code("manual_replace_all")
         .with_span_label(span, "can use `strings.ReplaceAll`")
         .with_help(format!(
-            "`{namespace}.Replace({s}, {old}, {new}, -1)` replaces every occurrence. Use `{namespace}.ReplaceAll({s}, {old}, {new})`"
+            "Use `{namespace}.ReplaceAll({s}, {old}, {new})`. `{namespace}.Replace({s}, {old}, {new}, -1)` replaces every occurrence"
         ))
 }
 
@@ -1688,7 +1688,7 @@ pub fn redundant_trim_guard(
         .with_lint_code("redundant_trim_guard")
         .with_span_label(span, "can be simpler")
         .with_help(format!(
-            "`{namespace}.{trim}` already returns the string unchanged when the {affix} is absent. Replace the `if` with `{replacement}`"
+            "Replace the `if` with `{replacement}`. `{namespace}.{trim}` already returns the string unchanged when the {affix} is absent"
         ))
 }
 
@@ -1703,7 +1703,7 @@ pub fn replace_count_zero(
         .with_lint_code("replace_count_zero")
         .with_span_label(span, "replaces nothing")
         .with_help(format!(
-            "`{namespace}.Replace` with a count of `0` replaces nothing and returns `{s}` unchanged. Use `{namespace}.ReplaceAll({s}, {old}, {new})` to replace every occurrence, or a positive count to replace that many"
+            "Use `{namespace}.ReplaceAll({s}, {old}, {new})` to replace every occurrence, or a positive count to replace that many. `{namespace}.Replace` with a count of `0` replaces nothing and returns `{s}` unchanged"
         ))
 }
 
@@ -1717,7 +1717,7 @@ pub fn needless_splitn(
         .with_lint_code("needless_splitn")
         .with_span_label(span, "splits with no limit")
         .with_help(format!(
-            "`{original}` splits with no limit. Use `{replacement}`"
+            "Use `{replacement}`. `{original}` splits with no limit"
         ))
 }
 
@@ -1726,7 +1726,7 @@ pub fn eager_split_in_loop(span: &Span, original: &str, replacement: &str) -> Li
         .with_lint_code("eager_split_in_loop")
         .with_span_label(span, "only this loop reads it")
         .with_help(format!(
-            "`{original}` allocates a slice that only this loop reads. Use `{replacement}`, which returns the same parts one at a time"
+            "Use `{replacement}`, which returns the same parts one at a time. `{original}` allocates a slice that only this loop reads"
         ))
 }
 
@@ -1762,7 +1762,7 @@ pub fn lost_query_mutation(span: &Span, method: &str) -> LisetteDiagnostic {
         .with_lint_code("lost_query_mutation")
         .with_span_label(span, "mutates a discarded copy")
         .with_help(format!(
-            "`URL.Query` returns a fresh copy, so this `{method}` has no effect. Bind it, mutate it, then assign `values.Encode()` to `RawQuery`"
+            "Bind the result of `URL.Query`, mutate it, then assign `values.Encode()` to `RawQuery`. `URL.Query` returns a fresh copy, so this `{method}` has no effect"
         ))
 }
 
@@ -1803,7 +1803,7 @@ pub fn json_skipped_field(
         .with_lint_code("json_skipped_field")
         .with_span_label(span, label)
         .with_help(format!(
-            "{rule}. Add `#[json]` to `{owner}`, or mark {names} as `pub`"
+            "Add `#[json]` to `{owner}`, or mark {names} as `pub`. {rule}"
         ));
     for (_, declared_at) in fields {
         diagnostic = diagnostic.with_span_label(declared_at, "declared without `pub`");
@@ -1876,7 +1876,7 @@ pub fn exit_after_defer(span: &Span) -> LisetteDiagnostic {
         .with_lint_code("exit_after_defer")
         .with_span_label(span, "exits before `defer` can run")
         .with_help(
-            "`os.Exit` will terminate the process without running deferred calls. Run the cleanup before exiting instead of deferring it",
+            "Run the cleanup before exiting instead of deferring it. `os.Exit` will terminate the process without running deferred calls",
         )
 }
 
@@ -1885,7 +1885,7 @@ pub fn unnecessary_range_loop(span: &Span, collection: &str) -> LisetteDiagnosti
         .with_lint_code("unnecessary_range_loop")
         .with_span_label(span, "can be simpler")
         .with_help(format!(
-            "This loop exposes the index only to access elements of `{collection}`. Iterate directly over the elements with `for value in {collection}`"
+            "Iterate directly over the elements with `for value in {collection}`. This loop exposes the index only to access elements of `{collection}`"
         ))
 }
 
@@ -1906,5 +1906,5 @@ pub fn infallible_assertion(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Infallible assertion")
         .with_lint_code("infallible_assertion")
         .with_span_label(span, "never fails")
-        .with_help("This assertion cannot catch a regression. Write a useful assertion")
+        .with_help("Write a useful assertion. This assertion cannot catch a regression")
 }

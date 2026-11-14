@@ -10,4 +10,4 @@ source: tests/ui/lint/mod.rs
    · ╰──── can be simpler
  9 │       let _ = out
    ╰────
-  help: `strings.TrimSuffix` already returns the string unchanged when the suffix is absent. Replace the `if` with `out = strings.TrimSuffix(out, "/")` · code: [lint.redundant_trim_guard]
+  help: Replace the `if` with `out = strings.TrimSuffix(out, "/")`. `strings.TrimSuffix` already returns the string unchanged when the suffix is absent · code: [lint.redundant_trim_guard]

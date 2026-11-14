@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·        ╰── expected `Box<Unknown>`, found `Box<int>`
  13 │ }
     ╰────
-  help: `Unknown` matches only `Unknown`, never a concrete type. Build `Box<Unknown>` from a value already annotated as `Unknown`, e.g. `let value: Unknown = ...`, or change the expected type to `Box<int>` · code: [infer.type_mismatch]
+  help: Build `Box<Unknown>` from a value already annotated as `Unknown`, e.g. `let value: Unknown = ...`, or change the expected type to `Box<int>`. `Unknown` matches only `Unknown`, never a concrete type · code: [infer.type_mismatch]

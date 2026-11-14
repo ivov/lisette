@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·      ╰── not a Lisette builtin
  4 │ }
    ╰────
-  help: Lisette has no `delete` builtin. Use `map.delete(key)` · code: [resolve.name_not_found]
+  help: Use `map.delete(key)`. Lisette has no `delete` builtin · code: [resolve.name_not_found]

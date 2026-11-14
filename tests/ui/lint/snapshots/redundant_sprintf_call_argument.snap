@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
     ·                        ╰── returns its argument unchanged
  10 │ }
     ╰────
-  help: `fmt.Sprintf("%s", greet())` formats a string as itself. Use `greet()` directly · code: [lint.redundant_sprintf]
+  help: Use `greet()` directly. `fmt.Sprintf("%s", greet())` formats a string as itself · code: [lint.redundant_sprintf]

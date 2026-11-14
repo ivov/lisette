@@ -1274,7 +1274,6 @@ mod tests {
         );
         let diagnostic = diagnostics::lint::unused_mut(&Span::new(91, 1, 2))
             .with_span_primary_label(&Span::new(37, 0, 2), "related declaration")
-            .with_note("additional note")
             .with_fix(Fix::multi(
                 "fix both places",
                 Edit::deletion(Span::new(91, 0, 1)),

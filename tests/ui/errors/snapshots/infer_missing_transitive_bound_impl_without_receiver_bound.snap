@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·                  ╰── must satisfy `error`
  10 │ }
     ╰────
-  help: `Bar` requires its type argument to satisfy `error`. Add the bound: `E: error` · code: [infer.missing_transitive_bound]
+  help: Add the bound: `E: error`. `Bar` requires its type argument to satisfy `error` · code: [infer.missing_transitive_bound]
