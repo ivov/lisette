@@ -1,11 +1,12 @@
 use crate::abi::callable::LoweredReturnAbi;
 use crate::plan::bodies::LoopId;
 use crate::plan::values::GoExpression;
+use std::sync::Arc;
 use syntax::types::Type;
 
 #[derive(Clone)]
 pub(crate) struct LineIndex {
-    pub(crate) path: String,
+    pub(crate) path: Arc<str>,
     line_offsets: Vec<u32>,
 }
 
@@ -17,7 +18,10 @@ impl LineIndex {
                 line_offsets.push((i + 1) as u32);
             }
         }
-        Self { path, line_offsets }
+        Self {
+            path: path.into(),
+            line_offsets,
+        }
     }
 
     pub(crate) fn line_for_offset(&self, byte_offset: u32) -> usize {

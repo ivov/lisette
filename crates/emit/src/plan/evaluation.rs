@@ -269,7 +269,9 @@ impl GoExpressionNode {
 mod tests {
     use super::*;
     use crate::plan::bodies::{LoweredBlock, expression_statement};
-    use crate::plan::go_expression::{CompositeLayout, FunctionLiteralLayout};
+    use crate::plan::go_expression::{
+        CompositeLayout, FunctionLiteralLayout, Operand, SourcePosition,
+    };
     use crate::plan::local::GoIdentifier;
     use crate::plan::values::GoExpression;
     use crate::types::go_type::GoType;
@@ -284,16 +286,17 @@ mod tests {
 
     fn call(callee: &str, arguments: Vec<GoExpressionNode>) -> GoExpressionNode {
         GoExpressionNode::Call {
-            callee: Box::new(name(callee)),
-            arguments,
+            callee: Operand::from(name(callee)),
+            arguments: arguments.into_iter().map(Operand::from).collect(),
             purity: CallPurity::Effectful,
+            paren: SourcePosition::default(),
         }
     }
 
     fn index() -> GoExpressionNode {
         GoExpressionNode::Index {
-            base: Box::new(name("xs")),
-            index: Box::new(name("i")),
+            base: Operand::from(name("xs")),
+            index: Operand::from(name("i")),
         }
     }
 
@@ -304,8 +307,8 @@ mod tests {
     ) -> GoExpressionNode {
         GoExpressionNode::Binary {
             operator,
-            left: Box::new(left),
-            right: Box::new(right),
+            left: Operand::from(left),
+            right: Operand::from(right),
         }
     }
 
@@ -341,9 +344,10 @@ mod tests {
     #[test]
     fn a_constructor_does_not_order_a_panicking_read() {
         let constructor = GoExpressionNode::Call {
-            callee: Box::new(name("MakeModeClean")),
+            callee: Operand::from(name("MakeModeClean")),
             arguments: Vec::new(),
             purity: CallPurity::Constructor,
+            paren: SourcePosition::default(),
         }
         .effects();
         let read = index().effects().without_go_order();
@@ -367,9 +371,10 @@ mod tests {
     #[test]
     fn a_read_only_call_does_not_order_a_panicking_read() {
         let read_only = GoExpressionNode::Call {
-            callee: Box::new(name("len")),
-            arguments: vec![name("xs")],
+            callee: Operand::from(name("len")),
+            arguments: vec![name("xs").into()],
             purity: CallPurity::ReadOnly,
+            paren: SourcePosition::default(),
         }
         .effects();
         assert!(!read_only.runs_effectful_code());
@@ -438,14 +443,14 @@ mod tests {
     fn a_function_literal_does_not_run_its_body() {
         let function = GoExpressionNode::FunctionLiteral {
             parameters: Vec::new(),
-            result: GoType::default(),
+            result: Box::default(),
             body: LoweredBlock {
-                statements: vec![expression_statement(GoExpression::from_node(call(
-                    "effect",
-                    Vec::new(),
-                )))],
+                statements: vec![expression_statement(GoExpression::from_operand(
+                    call("effect", Vec::new()).into(),
+                ))],
             },
             layout: FunctionLiteralLayout::Inline,
+            end: SourcePosition::default(),
         };
         assert!(function.effects().can_erase());
     }
@@ -453,20 +458,23 @@ mod tests {
     #[test]
     fn new_slices_and_pointers_cannot_repeat() {
         let slice = GoExpressionNode::CompositeLiteral {
-            go_type: Some(GoType::new("[]int")),
+            go_type: Some(Box::new(GoType::new("[]int"))),
             elements: Vec::new(),
             layout: CompositeLayout::Inline { padded: true },
+            end: SourcePosition::default(),
         };
         assert!(slice.effects().can_erase());
         assert!(!slice.effects().can_duplicate());
-        let pointer = GoExpressionNode::AddressOf(Box::new(GoExpressionNode::CompositeLiteral {
-            go_type: Some(GoType::new("Point")),
-            elements: Vec::new(),
-            layout: CompositeLayout::Inline { padded: true },
-        }));
+        let pointer =
+            GoExpressionNode::AddressOf(Operand::from(GoExpressionNode::CompositeLiteral {
+                go_type: Some(Box::new(GoType::new("Point"))),
+                elements: Vec::new(),
+                layout: CompositeLayout::Inline { padded: true },
+                end: SourcePosition::default(),
+            }));
         assert!(!pointer.effects().can_duplicate());
         assert!(
-            GoExpressionNode::AddressOf(Box::new(name("x")))
+            GoExpressionNode::AddressOf(Operand::from(name("x")))
                 .effects()
                 .can_duplicate()
         );

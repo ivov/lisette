@@ -1,4 +1,3 @@
-use crate::Planner;
 use crate::context::expression::ExpressionContext;
 #[cfg(test)]
 use crate::names::go_name;
@@ -9,15 +8,17 @@ use crate::plan::bodies::{LoweredBlock, Statement};
 use crate::plan::evaluation::Effects;
 use crate::plan::go_expression::{
     BinaryOp, CallPurity, CompositeElement, CompositeKey, CompositeLayout, FunctionLiteralLayout,
-    GoExpressionNode, GoParameter, UnaryOp,
+    GoExpressionNode, GoParameter, Operand, Position, SourcePosition, UnaryOp,
 };
 use crate::plan::local::GoIdentifier;
 #[cfg(debug_assertions)]
 use crate::plan::verify::verify_final_function_body;
+use crate::render::writer::GoWriter;
 use crate::types::go_type::GoType;
+use crate::{Planner, written_span};
 use std::fmt::{self, Display, Formatter};
 use std::mem;
-use syntax::ast::Expression;
+use syntax::ast::{Expression, Span};
 use syntax::types::SimpleKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,6 +103,7 @@ fn unary_constant(operator: UnaryOp, value: Option<ConstantKind>) -> Option<Cons
 pub(crate) struct GoExpression {
     node: GoExpressionNode,
     constant: Option<ConstantKind>,
+    position: SourcePosition,
 }
 
 impl GoExpression {
@@ -109,7 +111,28 @@ impl GoExpression {
         Self {
             node,
             constant: None,
+            position: SourcePosition::default(),
         }
+    }
+
+    pub(crate) fn into_operand(self) -> Operand {
+        Operand::new(self.position, self.node)
+    }
+
+    pub(crate) fn from_operand(operand: Operand) -> Self {
+        let (position, node) = operand.into_parts();
+        Self {
+            position,
+            ..Self::new(node)
+        }
+    }
+
+    pub(crate) fn peeled(&self, operand: &Operand) -> Self {
+        let mut peeled = Self::from_operand(operand.clone());
+        if !peeled.position.is_set() {
+            peeled.position = self.position.clone();
+        }
+        peeled
     }
 
     pub(crate) fn constant(rendered: String, kind: ConstantKind) -> Self {
@@ -184,15 +207,17 @@ impl GoExpression {
         layout: CompositeLayout,
     ) -> Self {
         let node = GoExpressionNode::CompositeLiteral {
-            go_type: go_type.map(Into::into),
+            go_type: go_type.map(|go_type| Box::new(go_type.into())),
             elements: elements
                 .into_iter()
                 .map(|(key, value)| CompositeElement {
-                    key: key.map(|key| CompositeKey::Value(key.node)),
-                    value: value.node,
+                    key: key.map(|key| CompositeKey::Value(key.into_operand())),
+                    value: value.into_operand(),
+                    position: SourcePosition::default(),
                 })
                 .collect(),
             layout,
+            end: SourcePosition::default(),
         };
         Self::new(node)
     }
@@ -204,15 +229,17 @@ impl GoExpression {
         layout: CompositeLayout,
     ) -> Self {
         let node = GoExpressionNode::CompositeLiteral {
-            go_type: Some(go_type.into()),
+            go_type: Some(Box::new(go_type.into())),
             elements: fields
                 .into_iter()
                 .map(|(name, value)| CompositeElement {
                     key: Some(CompositeKey::Field(name)),
-                    value: value.node,
+                    value: value.into_operand(),
+                    position: SourcePosition::default(),
                 })
                 .collect(),
             layout,
+            end: SourcePosition::default(),
         };
         Self::new(node)
     }
@@ -228,8 +255,8 @@ impl GoExpression {
 
     /// The callee without its type arguments, for a call site that re-instantiates.
     pub(crate) fn without_instantiation(self) -> Self {
-        match self.node {
-            GoExpressionNode::Instantiation { base, .. } => Self::new(*base),
+        match &self.node {
+            GoExpressionNode::Instantiation { base, .. } => self.peeled(base),
             _ => self,
         }
     }
@@ -250,7 +277,7 @@ impl GoExpression {
             return base;
         }
         let node = GoExpressionNode::Instantiation {
-            base: Box::new(base.node),
+            base: base.into_operand(),
             type_arguments,
         };
         Self::new(node)
@@ -258,22 +285,22 @@ impl GoExpression {
 
     pub(crate) fn type_assertion(base: GoExpression, go_type: impl Into<GoType>) -> Self {
         let node = GoExpressionNode::TypeAssertion {
-            base: Box::new(base.node),
+            base: base.into_operand(),
             go_type: go_type.into(),
         };
         Self::new(node)
     }
 
     pub(crate) fn address_of(operand: GoExpression) -> Self {
-        Self::new(GoExpressionNode::AddressOf(Box::new(operand.node)))
+        Self::new(GoExpressionNode::AddressOf(operand.into_operand()))
     }
 
     pub(crate) fn dereference(operand: GoExpression) -> Self {
-        Self::new(GoExpressionNode::Dereference(Box::new(operand.node)))
+        Self::new(GoExpressionNode::Dereference(operand.into_operand()))
     }
 
     pub(crate) fn spread(operand: GoExpression) -> Self {
-        Self::new(GoExpressionNode::Spread(Box::new(operand.node)))
+        Self::new(GoExpressionNode::Spread(operand.into_operand()))
     }
 
     pub(crate) fn function_literal(
@@ -291,9 +318,10 @@ impl GoExpression {
             .unwrap_or_else(|error| panic!("{error}"));
         Self::new(GoExpressionNode::FunctionLiteral {
             parameters,
-            result,
+            result: Box::new(result),
             body,
             layout,
+            end: SourcePosition::default(),
         })
     }
 
@@ -332,12 +360,13 @@ impl GoExpression {
 
     fn call_node(callee: GoExpression, arguments: Vec<GoExpression>, purity: CallPurity) -> Self {
         let node = GoExpressionNode::Call {
-            callee: Box::new(callee.node),
+            callee: callee.into_operand(),
             arguments: arguments
                 .into_iter()
-                .map(|argument| argument.node)
+                .map(GoExpression::into_operand)
                 .collect(),
             purity,
+            paren: SourcePosition::default(),
         };
         Self::new(node)
     }
@@ -346,15 +375,15 @@ impl GoExpression {
         let constant = binary_constant(left.constant, operator, right.constant);
         let node = GoExpressionNode::Binary {
             operator,
-            left: Box::new(left.node),
-            right: Box::new(right.node),
+            left: left.into_operand(),
+            right: right.into_operand(),
         };
         Self::new(node).with_constant(constant)
     }
 
     pub(crate) fn selector(base: GoExpression, field: String) -> Self {
         let node = GoExpressionNode::Selector {
-            base: Box::new(base.node),
+            base: base.into_operand(),
             field,
             may_panic: true,
         };
@@ -363,7 +392,7 @@ impl GoExpression {
 
     pub(crate) fn value_field(base: GoExpression, field: String) -> Self {
         let node = GoExpressionNode::Selector {
-            base: Box::new(base.node),
+            base: base.into_operand(),
             field,
             may_panic: false,
         };
@@ -372,8 +401,8 @@ impl GoExpression {
 
     pub(crate) fn index(base: GoExpression, index: GoExpression) -> Self {
         let node = GoExpressionNode::Index {
-            base: Box::new(base.node),
-            index: Box::new(index.node),
+            base: base.into_operand(),
+            index: index.into_operand(),
         };
         Self::new(node)
     }
@@ -381,7 +410,7 @@ impl GoExpression {
     pub(crate) fn conversion(go_type: impl Into<GoType>, value: GoExpression) -> Self {
         let node = GoExpressionNode::Conversion {
             go_type: go_type.into(),
-            operand: Box::new(value.node),
+            operand: value.into_operand(),
         };
         Self::new(node)
     }
@@ -390,7 +419,7 @@ impl GoExpression {
         let constant = unary_constant(operator, value.constant);
         let node = GoExpressionNode::Unary {
             operator,
-            operand: Box::new(value.node),
+            operand: value.into_operand(),
         };
         Self::new(node).with_constant(constant)
     }
@@ -401,9 +430,9 @@ impl GoExpression {
         end: Option<&GoExpression>,
         capacity: Option<&GoExpression>,
     ) -> Self {
-        let bound = |bound: Option<&GoExpression>| bound.map(|bound| Box::new(bound.node.clone()));
+        let bound = |bound: Option<&GoExpression>| bound.map(|bound| bound.clone().into_operand());
         let node = GoExpressionNode::Slice {
-            base: Box::new(base.node),
+            base: base.into_operand(),
             low: bound(start),
             high: bound(end),
             max: bound(capacity),
@@ -411,13 +440,49 @@ impl GoExpression {
         Self::new(node)
     }
 
-    /// Lift a subtree taken out of another expression.
-    pub(crate) fn from_node(node: GoExpressionNode) -> Self {
-        Self::new(node)
-    }
-
     pub(crate) fn node(&self) -> &GoExpressionNode {
         &self.node
+    }
+
+    pub(crate) fn with_node(&self, node: GoExpressionNode) -> Self {
+        Self {
+            position: self.position.clone(),
+            ..Self::new(node)
+        }
+    }
+
+    pub(crate) fn position_elements(
+        mut self,
+        mut position: impl FnMut(usize, &CompositeElement) -> Option<Position>,
+    ) -> Self {
+        if let GoExpressionNode::CompositeLiteral {
+            elements,
+            layout: CompositeLayout::MultiLine { .. },
+            ..
+        } = &mut self.node
+        {
+            for (index, element) in elements.iter_mut().enumerate() {
+                element.position.fill(position(index, element));
+            }
+        }
+        self
+    }
+
+    pub(crate) fn without_positions(mut self) -> Self {
+        self.node.drop_positions();
+        self.position.clear();
+        self
+    }
+
+    pub(crate) fn position(&self) -> Option<&Position> {
+        self.position.get()
+    }
+
+    pub(crate) fn positioned(mut self, position: Position) -> Self {
+        if !self.is_empty() {
+            self.position.fill(Some(position));
+        }
+        self
     }
 
     pub(crate) fn node_mut(&mut self) -> &mut GoExpressionNode {
@@ -428,15 +493,17 @@ impl GoExpression {
         self.node.print()
     }
 
-    pub(crate) fn write(&self, output: &mut String) {
+    pub(crate) fn write(&self, output: &mut GoWriter) {
+        output.push_position(&self.position);
         self.node.write_into(output);
     }
 
-    pub(crate) fn write_header(&self, output: &mut String) {
+    pub(crate) fn write_header(&self, output: &mut GoWriter) {
+        output.push_position(&self.position);
         self.node.write_header_into(output);
     }
 
-    pub(crate) fn write_list(values: &[GoExpression], output: &mut String) {
+    pub(crate) fn write_list(values: &[GoExpression], output: &mut GoWriter) {
         for (index, value) in values.iter().enumerate() {
             if index > 0 {
                 output.push_str(", ");
@@ -483,7 +550,7 @@ impl GoExpression {
         let GoExpressionNode::Call { callee, .. } = &self.node else {
             return false;
         };
-        match callee.as_ref() {
+        match &**callee {
             GoExpressionNode::Identifier(name) => !is_value_only_builtin(name),
             _ => true,
         }
@@ -790,6 +857,28 @@ impl Planner<'_> {
     /// Plan a value-position expression into a structured `ValuePlan`. Leaf
     /// kinds route through `plan_operand_leaf`.
     pub(crate) fn plan_operand(
+        &mut self,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> ValuePlan {
+        let plan = self.plan_unpositioned_operand(expression, ctx);
+        self.with_source_positions(&written_span(expression), plan)
+    }
+
+    pub(crate) fn with_source_positions(&self, span: &Span, plan: ValuePlan) -> ValuePlan {
+        if !self.facts.sourcemap() {
+            return plan;
+        }
+        let (Some(start), Some(end)) = (self.source_position(span), self.end_position(span)) else {
+            return plan;
+        };
+        plan.map_expression(|_, mut value| {
+            value.node_mut().fill_positions(&start, &end);
+            value.positioned(start.clone())
+        })
+    }
+
+    fn plan_unpositioned_operand(
         &mut self,
         expression: &Expression,
         ctx: ExpressionContext<'_>,

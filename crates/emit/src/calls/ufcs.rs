@@ -269,16 +269,13 @@ impl Planner<'_> {
         let receiver = emitted_all.remove(0);
 
         // The method call takes the value's own address, so `&x` unwraps.
-        let addressed = match receiver.node() {
-            GoExpressionNode::AddressOf(inner) => Some(GoExpression::from_node((**inner).clone())),
-            _ => None,
-        };
-        let receiver = match addressed {
-            Some(inner) if is_address_of_composite_literal(args.first()) => {
-                GoExpression::address_of(inner)
+        let receiver = match receiver.node() {
+            GoExpressionNode::AddressOf(inner)
+                if !is_address_of_composite_literal(args.first()) =>
+            {
+                receiver.peeled(inner)
             }
-            Some(inner) => inner,
-            None => receiver,
+            _ => receiver,
         };
 
         ValuePlan::computed(

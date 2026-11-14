@@ -564,14 +564,8 @@ mod tests {
 
         let mut statements = vec![
             LoweredStatement::Return(vec![
-                GoExpression::from_node(GoExpressionNode::Identifier(GoIdentifier::local(
-                    "tmp2".to_string(),
-                    LocalId(1),
-                ))),
-                GoExpression::from_node(GoExpressionNode::Identifier(GoIdentifier::local(
-                    "tmp2".to_string(),
-                    LocalId(2),
-                ))),
+                GoExpression::identifier(GoIdentifier::local("tmp2".to_string(), LocalId(1))),
+                GoExpression::identifier(GoIdentifier::local("tmp2".to_string(), LocalId(2))),
             ])
             .into(),
         ];

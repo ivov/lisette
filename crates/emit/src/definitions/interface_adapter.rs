@@ -947,7 +947,7 @@ impl Planner<'_> {
             !go_ret.is_empty(),
             BodyOrigin::Adapter,
         );
-        (go_ret, crate::Renderer.render_setup(&body.statements))
+        (go_ret, crate::Renderer.render_setup(&body.statements, true))
     }
 
     /// `bindings` holds the receiver, then one binding per parameter.

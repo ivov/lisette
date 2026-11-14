@@ -94,7 +94,9 @@ pub(super) enum ResolvedSubject {
 impl ResolvedSubject {
     pub(super) fn var(&self) -> GoExpression {
         match self {
-            Self::Existing(subject) | Self::Materialized { subject, .. } => subject.clone(),
+            Self::Existing(subject) | Self::Materialized { subject, .. } => {
+                subject.clone().without_positions()
+            }
             Self::Deferred { name, .. } => GoExpression::identifier(name.clone()),
         }
     }
@@ -141,7 +143,7 @@ fn field_path_go_root(expression: &GoExpression) -> Option<&GoIdentifier> {
     };
     let mut base = base.as_ref();
     while let GoExpressionNode::Selector { base: inner, .. } = base {
-        base = inner;
+        base = inner.as_ref();
     }
     match base {
         GoExpressionNode::Identifier(name) => Some(name),

@@ -569,7 +569,7 @@ impl Planner<'_> {
                 let GoExpressionNode::Spread(spread) = last.node() else {
                     return slice_growth_call(method, clipped, arguments);
                 };
-                GoExpression::from_node((**spread).clone())
+                last.peeled(spread)
             }
             "reserve" => {
                 let count = &arguments[0];

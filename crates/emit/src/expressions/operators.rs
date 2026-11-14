@@ -503,7 +503,7 @@ fn inline_single_read(statements: &[Statement], read: &GoExpression) -> Option<G
     let mut inlined = read.node().clone();
     let mut reads = 0;
     (fold_read(&mut inlined, name, value.node(), &mut reads) && reads == 1)
-        .then(|| GoExpression::from_node(inlined))
+        .then(|| read.with_node(inlined))
 }
 
 fn fold_read(

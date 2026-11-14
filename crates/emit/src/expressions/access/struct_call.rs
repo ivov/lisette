@@ -17,7 +17,7 @@ use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::plan::bodies::{
     LoopHeader, LoopKind, LoopPlan, LoweredBlock, LoweredStatement, Statement, assign, discard,
 };
-use crate::plan::go_expression::{CompositeLayout, FunctionLiteralLayout};
+use crate::plan::go_expression::{CompositeKey, CompositeLayout, FunctionLiteralLayout};
 use crate::plan::values::{CaptureBoundary, ConstantKind, GoExpression, ValuePlan};
 use crate::types::go_type::GoType;
 use crate::utils::is_order_sensitive;
@@ -130,6 +130,7 @@ impl Planner<'_> {
 
         let mut fields =
             Vec::with_capacity(kept_fields.len() + usize::from(ctx.enum_ctx.is_some()));
+        let mut positions = Vec::new();
         for (
             (((f, field_ty, field_layout), has_observable_evaluation), (mut value, source_layout)),
             literal_slot,
@@ -140,6 +141,9 @@ impl Planner<'_> {
             .zip(literal_slots)
         {
             let field_name = self.resolve_struct_call_field_name(&f.name, &ctx);
+            if let Some(position) = self.source_position(&f.name_span) {
+                positions.push((field_name.clone(), position));
+            }
             value = self.wrap_recursive_enum_field(&mut setup, value, f, &ctx);
             value = self.coerce_struct_field(
                 &mut setup,
@@ -216,6 +220,13 @@ impl Planner<'_> {
             }
         };
 
+        let value = value.position_elements(|_, element| match &element.key {
+            Some(CompositeKey::Field(key)) => positions
+                .iter()
+                .find(|(name, _)| name == key)
+                .map(|(_, position)| position.clone()),
+            _ => None,
+        });
         if built_from_fields {
             return ValuePlan::built_from(setup, value, fields_stability);
         }

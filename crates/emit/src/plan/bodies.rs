@@ -1021,7 +1021,7 @@ impl LoweredStatement {
         true
     }
 
-    fn emits_output(&self) -> bool {
+    pub(crate) fn emits_output(&self) -> bool {
         match self {
             LoweredStatement::If(_)
             | LoweredStatement::Loop(_)

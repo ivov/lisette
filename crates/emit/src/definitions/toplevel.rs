@@ -115,7 +115,7 @@ impl Planner<'_> {
             .lower_const(identifier, expression, ty, ConstPlacement::Package)
             .into();
         self.collect_imports(slice::from_ref(&statement));
-        let out = Renderer.render_setup(slice::from_ref(&statement));
+        let out = Renderer.render_setup(slice::from_ref(&statement), false);
         out.trim_end_matches('\n').to_string()
     }
 }

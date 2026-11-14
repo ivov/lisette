@@ -12,7 +12,7 @@ use crate::names::go_name::GeneratedPackage;
 use crate::patterns::matching::{PreludeVariant, prelude_constructor};
 use crate::plan::calls::{CallPlan, ResolvedCallee};
 use crate::plan::evaluation::Effects;
-use crate::plan::go_expression::GoExpressionNode;
+use crate::plan::go_expression::{GoExpressionNode, Operand};
 use crate::plan::values::{ConstantKind, GoExpression, SequencedValues, ValuePlan};
 use crate::types::go_type::GoType;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
@@ -167,10 +167,7 @@ impl FmtPrint {
 }
 
 /// The arguments of `callee(...)` when the expression is a call to that name.
-fn call_arguments_of<'n>(
-    expression: &'n GoExpressionNode,
-    callee: &str,
-) -> Option<&'n [GoExpressionNode]> {
+fn call_arguments_of<'n>(expression: &'n GoExpressionNode, callee: &str) -> Option<&'n [Operand]> {
     let GoExpressionNode::Call {
         callee: called,
         arguments,
@@ -200,7 +197,8 @@ fn collapse_fmt_print(
         FmtArgument::Sprintf => {
             let mut inner = call_arguments_of(argument.node(), "fmt.Sprintf")?.to_vec();
             if let FmtPrint::Println = print {
-                let Some(GoExpressionNode::Literal(format)) = inner.first_mut() else {
+                let Some(GoExpressionNode::Literal(format)) = inner.first_mut().map(AsMut::as_mut)
+                else {
                     return None;
                 };
                 let close_quote = find_go_string_literal_close(format)?;
@@ -208,14 +206,18 @@ fn collapse_fmt_print(
             }
             Some(GoExpression::call(
                 GoExpression::generated(GeneratedPackage::Fmt, "Printf"),
-                inner.into_iter().map(GoExpression::from_node).collect(),
+                inner.into_iter().map(GoExpression::from_operand).collect(),
             ))
         }
         FmtArgument::Sprint => {
             let inner = call_arguments_of(argument.node(), "fmt.Sprint")?;
             Some(GoExpression::call(
                 callee.clone(),
-                inner.iter().cloned().map(GoExpression::from_node).collect(),
+                inner
+                    .iter()
+                    .cloned()
+                    .map(GoExpression::from_operand)
+                    .collect(),
             ))
         }
     }
@@ -417,7 +419,7 @@ impl<'a> Planner<'a> {
                 arguments
                     .iter()
                     .cloned()
-                    .map(GoExpression::from_node)
+                    .map(GoExpression::from_operand)
                     .collect(),
             ),
             None => GoExpression::call(

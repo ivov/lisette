@@ -45,9 +45,10 @@ use names::packages::{PackageRequirements, PackageUse};
 use names::source_name::SourceName;
 use plan::PackagePlan;
 use plan::bodies::{LoopId, LoweredBlock, LoweredStatement, Statement, define};
-use plan::go_expression::{GoExpressionNode, TreeVisitor};
+use plan::go_expression::{GoExpressionNode, Position, TreeVisitor};
 use plan::local::GoIdentifier;
 use plan::values::GoExpression;
+use render::writer::GoWriter;
 use state::adapter_registry::AdapterRegistry;
 use state::file_namespace::FileNamespace;
 use state::package_state::PackageState;
@@ -313,7 +314,9 @@ impl Planner<'_> {
 
     fn render_expression(&mut self, expression: &GoExpression) -> String {
         expression.node().walk(&mut ImportCollector(self.namespace));
-        expression.rendered()
+        let mut output = GoWriter::new(true);
+        expression.write(&mut output);
+        output.into_text()
     }
 }
 
@@ -712,6 +715,26 @@ impl<'a> Planner<'a> {
         Some(format!("//line {}:{}:{}\n", source.path, line, col))
     }
 
+    fn source_position(&self, span: &Span) -> Option<Position> {
+        self.position_at(span, span.byte_offset)
+    }
+
+    fn end_position(&self, span: &Span) -> Option<Position> {
+        self.position_at(span, span.byte_offset + span.byte_length)
+    }
+
+    fn position_at(&self, span: &Span, byte_offset: u32) -> Option<Position> {
+        if span.is_dummy() {
+            return None;
+        }
+        let source = self.facts.line_index(span.file_id)?;
+        Some(Position {
+            path: source.path.clone(),
+            line: source.line_for_offset(byte_offset),
+            column: source.col_for_offset(byte_offset),
+        })
+    }
+
     /// A line inside a raw string or a block comment gets no directive.
     fn direct_every_line(&self, span: &Span, code: String) -> String {
         let Some(line) = self.maybe_line_directive(span) else {
@@ -882,6 +905,23 @@ impl GoTextState {
         }
         state
     }
+}
+
+/// A pipeline step's call span starts at the pipeline's first value, not at the step.
+pub(crate) fn written_span(expression: &Expression) -> Span {
+    let span = expression.get_span();
+    if let Expression::Call { expression, .. } = expression {
+        let callee = expression.get_span();
+        let end = span.byte_offset + span.byte_length;
+        if !callee.is_dummy()
+            && callee.file_id == span.file_id
+            && callee.byte_offset > span.byte_offset
+            && callee.byte_offset < end
+        {
+            return Span::new(span.file_id, callee.byte_offset, end - callee.byte_offset);
+        }
+    }
+    span
 }
 
 #[cfg(test)]

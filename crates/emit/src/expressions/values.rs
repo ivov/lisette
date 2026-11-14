@@ -656,7 +656,12 @@ impl Planner<'_> {
             fields.push(("End".to_string(), values.next().expect("range has an end")));
         }
 
-        let value = emit_struct_literal(&type_string, fields);
+        let bounds: Vec<_> = start.iter().chain(end).collect();
+        let value = emit_struct_literal(&type_string, fields).position_elements(|index, _| {
+            bounds
+                .get(index)
+                .and_then(|bound| self.source_position(&bound.get_span()))
+        });
         ValuePlan::computed(sequenced.setup, value)
     }
 
