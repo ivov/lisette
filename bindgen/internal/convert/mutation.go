@@ -1568,19 +1568,33 @@ func (a *MutationAnalysis) localStores(base ssa.Value) ([]localStore, bool, bool
 		}
 		return walk.stores, helperWritten, false
 	}
-	out := make([]localStore, 0, len(walk.steps))
+	var out, added []localStore
 	sharesGlobal := false
+	storeIndex := 0
 	for _, step := range walk.steps {
 		switch {
 		case step.closure != nil:
-			a.collectClosureStores(step.closure, step.value, step.path, &out, &helperWritten, &sharesGlobal)
+			added = added[:0]
+			a.collectClosureStores(step.closure, step.value, step.path, &added, &helperWritten, &sharesGlobal)
+			if len(added) > 0 {
+				if out == nil {
+					out = append(make([]localStore, 0, len(walk.stores)+len(added)), walk.stores[:storeIndex]...)
+				}
+				out = append(out, added...)
+			}
 		case step.call != nil:
 			if a.calleeWritesArgument(step.call, step.value) {
 				helperWritten = true
 			}
 		default:
-			out = append(out, localStore{value: step.value, path: step.path})
+			if out != nil {
+				out = append(out, walk.stores[storeIndex])
+			}
+			storeIndex++
 		}
+	}
+	if out == nil {
+		return walk.stores, helperWritten, sharesGlobal
 	}
 	return out, helperWritten, sharesGlobal
 }
@@ -1708,12 +1722,15 @@ func walkLocalStorage(base ssa.Value) *localWalk {
 		}
 	}
 	visit(base, nil, false)
+	for _, step := range walk.steps {
+		if step.closure == nil && step.call == nil {
+			walk.stores = append(walk.stores, localStore{value: step.value, path: step.path})
+		}
+	}
 	if !walk.hasClosure {
 		for _, step := range walk.steps {
 			if step.call != nil {
 				walk.calls = append(walk.calls, step)
-			} else {
-				walk.stores = append(walk.stores, localStore{value: step.value, path: step.path})
 			}
 		}
 		walk.steps = nil
@@ -1972,19 +1989,19 @@ func spreadCarriesStorage(t types.Type) bool {
 
 // containerBearing reports whether this type can expose a writable container.
 func containerBearing(t types.Type) bool {
-	return exposesContainer(t, true, make(map[types.Type]bool))
+	return exposesContainer(t, true, nil)
 }
 
 // recordableSource: a function value never records, only its captures share storage.
 func recordableSource(t types.Type) bool {
-	return exposesContainer(t, false, make(map[types.Type]bool))
+	return exposesContainer(t, false, nil)
 }
 
 func exposesContainer(t types.Type, funcsBear bool, seen map[types.Type]bool) bool {
 	if seen[t] {
 		return false
 	}
-	seen[t] = true
+	visited := t
 	if parameter, ok := t.(*types.TypeParam); ok {
 		core := coreType(parameter)
 		if core == nil {
@@ -2000,10 +2017,11 @@ func exposesContainer(t types.Type, funcsBear bool, seen map[types.Type]bool) bo
 	case *types.Signature:
 		return funcsBear
 	case *types.Pointer:
-		return exposesContainer(underlying.Elem(), funcsBear, seen)
+		return exposesContainer(underlying.Elem(), funcsBear, markSeen(seen, visited))
 	case *types.Array:
-		return exposesContainer(underlying.Elem(), funcsBear, seen)
+		return exposesContainer(underlying.Elem(), funcsBear, markSeen(seen, visited))
 	case *types.Struct:
+		seen = markSeen(seen, visited)
 		for i := range underlying.NumFields() {
 			if exposesContainer(underlying.Field(i).Type(), funcsBear, seen) {
 				return true
@@ -2012,6 +2030,15 @@ func exposesContainer(t types.Type, funcsBear bool, seen map[types.Type]bool) bo
 		return false
 	}
 	return false
+}
+
+// markSeen creates the set on the first descent, so a type with no element or field allocates nothing.
+func markSeen(seen map[types.Type]bool, t types.Type) map[types.Type]bool {
+	if seen == nil {
+		seen = make(map[types.Type]bool)
+	}
+	seen[t] = true
+	return seen
 }
 
 // ResolveViews layers overrides over the derived fact. Overrides only add,
