@@ -376,6 +376,15 @@ impl Planner<'_> {
         argument: &Expression,
         parameter: &CallableParamAbi,
     ) -> Option<ArgumentSlotBridge> {
+        if let Some(source) = self.raw_go_slot_layout(argument)
+            && source.same_representation(&parameter.layout)
+        {
+            return Some(ArgumentSlotBridge {
+                target: parameter.layout.clone(),
+                bridge: LayoutBridge::Identity,
+                source: ArgumentValueSource::GoSlot,
+            });
+        }
         let physical_source = self.go_physical_expression_layout(argument);
         if physical_source.is_none()
             && self
@@ -430,6 +439,7 @@ impl Planner<'_> {
                     self.plan_operand(argument, ExpressionContext::value())
                 }
             }
+            ArgumentValueSource::GoSlot => self.plan_raw_nullable_field(argument),
             ArgumentValueSource::Lisette => self.lower_value(argument, ExpressionContext::value()),
         };
         value.map_expression(|setup, value| {
@@ -438,6 +448,36 @@ impl Planner<'_> {
             setup.extend(coercion_setup);
             coerced
         })
+    }
+
+    /// A Go field or var that passes to a Go slot unchanged.
+    fn raw_go_slot_layout(&self, expression: &Expression) -> Option<ValueLayout> {
+        let Expression::DotAccess {
+            expression: base,
+            member,
+            ty,
+            resolution,
+            ..
+        } = expression.unwrap_parens()
+        else {
+            return None;
+        };
+        let raw = self.field_slot_layout(
+            &base.get_type(),
+            resolution.declaring_type(),
+            None,
+            member,
+            ty,
+        )?;
+        let ValueLayout::NullableOption { payload, .. } = raw.underlying() else {
+            return None;
+        };
+        let passes_unchanged = !self.is_interface_option(ty)
+            && self
+                .value_layout(ty, SlotOrigin::Lisette)
+                .payload()
+                .is_some_and(|lisette| lisette.same_representation(payload));
+        passes_unchanged.then_some(raw)
     }
 
     pub(crate) fn go_physical_expression_layout(

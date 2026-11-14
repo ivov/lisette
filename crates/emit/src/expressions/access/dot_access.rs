@@ -38,7 +38,11 @@ impl Planner<'_> {
 
     /// Read a nullable Go field as its raw Go value, without the `Option` wrap.
     pub(crate) fn plan_raw_nullable_field(&mut self, dot_access: &Expression) -> ValuePlan {
-        self.plan_dot_access_with(dot_access, ExpressionContext::value(), false)
+        self.plan_dot_access_with(
+            dot_access.unwrap_parens(),
+            ExpressionContext::value(),
+            false,
+        )
     }
 
     fn plan_dot_access_with(
@@ -149,11 +153,18 @@ impl Planner<'_> {
             field = go_name::tagged_twin(&field);
         }
 
+        let value_field =
+            resolution.is_field_read() && self.field_read_cannot_panic(&expression_ty);
+        let selector = match package {
+            Some(package) => GoExpression::qualified(package, field),
+            None if value_field => GoExpression::value_field(base, field),
+            None => GoExpression::selector(base, field),
+        };
         if wrap_nullable
             && let Some(wrapped) = self.plan_nullable_field_access(
                 &mut setup,
                 NullableFieldAccess {
-                    value: GoExpression::selector(base.clone(), field.clone()),
+                    value: selector.clone(),
                     member,
                     expression_ty: &expression_ty,
                     declaring_type: resolution.declaring_type(),
@@ -164,14 +175,6 @@ impl Planner<'_> {
         {
             return ValuePlan::computed(setup, wrapped);
         }
-
-        let value_field =
-            resolution.is_field_read() && self.field_read_cannot_panic(&expression_ty);
-        let selector = match package {
-            Some(package) => GoExpression::qualified(package, field),
-            None if value_field => GoExpression::value_field(base, field),
-            None => GoExpression::selector(base, field),
-        };
         let expression =
             self.append_cross_package_type_args(selector, &expression_ty, resolution, ctx);
         let expression = if let Some(package) = expression_ty.as_import_namespace()
@@ -326,9 +329,6 @@ impl Planner<'_> {
             return None;
         };
         let expression_ty = expression.get_type();
-        if expression_ty.as_import_namespace().is_some() {
-            return None;
-        }
         let source_layout = self.field_slot_layout(
             &expression_ty,
             resolution.declaring_type(),

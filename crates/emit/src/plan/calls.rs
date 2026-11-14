@@ -114,6 +114,7 @@ impl TaggedArgumentAdapter {
 pub(crate) enum ArgumentValueSource {
     Lisette,
     GoPhysical,
+    GoSlot,
 }
 
 #[derive(Debug, Clone)]

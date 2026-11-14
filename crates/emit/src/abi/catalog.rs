@@ -1,9 +1,10 @@
 use rustc_hash::FxHashMap as HashMap;
-use syntax::program::{Definition, DefinitionBody};
+use syntax::program::{Definition, DefinitionBody, ValueKind};
 use syntax::types::{Symbol, Type};
 
 use crate::abi::callable::LoweredReturnAbi;
 use crate::abi::layout::SlotOrigin;
+use crate::analyze::facts::resolve_to_function_type;
 use crate::classify_go_return_type;
 use crate::names::go_name;
 use syntax::types;
@@ -12,6 +13,7 @@ use syntax::types;
 pub(crate) struct GoAbiCatalog {
     callables: HashMap<String, GoCallableSlots>,
     fields: HashMap<String, HashMap<String, GoSlotDescriptor>>,
+    variables: HashMap<String, GoSlotDescriptor>,
 }
 
 #[derive(Debug)]
@@ -51,6 +53,7 @@ impl GoAbiCatalog {
                 }
             }
             catalog.register_fields(definitions, qualified_name, definition);
+            catalog.register_variable(definitions, qualified_name, definition);
         }
         catalog
     }
@@ -75,6 +78,10 @@ impl GoAbiCatalog {
 
     pub(crate) fn field(&self, owner: &str, field: &str) -> Option<&GoSlotDescriptor> {
         self.fields.get(owner)?.get(field)
+    }
+
+    pub(crate) fn variable(&self, qualified_name: &str) -> Option<&GoSlotDescriptor> {
+        self.variables.get(qualified_name)
     }
 
     pub(crate) fn is_imported_type(&self, qualified_name: &str) -> bool {
@@ -140,5 +147,32 @@ impl GoAbiCatalog {
                 },
             );
         }
+    }
+
+    fn register_variable(
+        &mut self,
+        definitions: &HashMap<Symbol, Definition>,
+        qualified_name: &str,
+        definition: &Definition,
+    ) {
+        let DefinitionBody::Value {
+            kind: ValueKind::Variable,
+            ..
+        } = definition.body
+        else {
+            return;
+        };
+        if resolve_to_function_type(definitions, &definition.ty).is_some() {
+            return;
+        }
+        self.variables.insert(
+            qualified_name.to_string(),
+            GoSlotDescriptor {
+                origin: SlotOrigin::go_field(types::resolves_to_unknown(&definition.ty, |id| {
+                    definitions.get(id)
+                })),
+                declared_type: definition.ty.clone(),
+            },
+        );
     }
 }
