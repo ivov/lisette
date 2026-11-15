@@ -4,7 +4,7 @@ use crate::handlers::ScriptResolveMode;
 use crate::lock;
 use crate::output;
 use crate::typedef_scan;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -371,97 +371,102 @@ impl<'a> GoWorkspace<'a> {
         Ok(extract_go_imports(&content))
     }
 
-    /// Return every third-party module any public subpackage of `module_path`
-    /// imports, plus any non-benign package errors `go list -e -json` reported.
-    pub fn find_third_party_modules(&self, module_path: &str) -> Result<ListedModules, String> {
-        let pattern = format!("{}/...", module_path);
-        let stdout = self.run_go(&["list", "-mod=mod", "-e", "-json", &pattern])?;
+    /// Return every module that the public packages matching `patterns` reach,
+    /// plus their non-benign package errors.
+    pub fn find_reachable_modules(&self, patterns: &[String]) -> Result<ReachableModules, String> {
+        let mut args = vec!["list", "-mod=mod", "-e", "-deps", "-json"];
+        args.extend(patterns.iter().map(String::as_str));
+        let stdout = self.run_go(&args)?;
 
-        let mut import_set: HashSet<String> = HashSet::new();
+        let mut packages: HashMap<String, ListedPackage> = HashMap::new();
+        let mut roots: Vec<String> = Vec::new();
         let mut package_errors: Vec<PackageError> = Vec::new();
 
-        let stream = serde_json::Deserializer::from_str(&stdout).into_iter::<serde_json::Value>();
+        let stream = serde_json::Deserializer::from_str(&stdout).into_iter::<ListedPackage>();
         for entry in stream {
-            let value = match entry {
-                Ok(v) => v,
-                Err(e) => {
-                    return Err(format!(
-                        "Failed to parse `go list -json {}/...` output: {}",
-                        module_path, e
-                    ));
-                }
-            };
+            let package = entry.map_err(|e| {
+                format!(
+                    "Failed to parse `go list -deps -json {}` output: {}",
+                    patterns.join(" "),
+                    e
+                )
+            })?;
 
-            let pkg_path = value["ImportPath"].as_str().unwrap_or("").to_string();
-            let relative = pkg_path.strip_prefix(module_path).unwrap_or(&pkg_path);
-            if relative.split('/').any(|seg| seg == "internal") {
-                continue;
-            }
+            let owner = package.module.as_ref().map_or("", |module| &module.path);
+            let relative = package
+                .import_path
+                .strip_prefix(owner)
+                .unwrap_or(&package.import_path);
+            let is_public_root =
+                !package.dep_only && !relative.split('/').any(|seg| seg == "internal");
 
-            if let Some(err) = value["Error"]["Err"].as_str()
-                && !is_benign_package_error(err)
-            {
-                package_errors.push(PackageError {
-                    package: pkg_path.clone(),
-                    message: err.to_string(),
-                });
-            }
-
-            if let Some(deps_errors) = value["DepsErrors"].as_array() {
-                for de in deps_errors {
-                    if let Some(err) = de["Err"].as_str()
-                        && !is_benign_package_error(err)
-                    {
+            if is_public_root {
+                for error in package.error.iter().chain(&package.deps_errors) {
+                    if !is_benign_package_error(&error.err) {
                         package_errors.push(PackageError {
-                            package: pkg_path.clone(),
-                            message: err.to_string(),
+                            package: package.import_path.clone(),
+                            message: error.err.clone(),
                         });
                     }
                 }
+                roots.push(package.import_path.clone());
             }
 
-            let Some(imports) = value["Imports"].as_array() else {
-                continue;
-            };
-            for imp in imports {
-                if let Some(s) = imp.as_str() {
-                    import_set.insert(s.to_string());
-                }
-            }
+            packages.insert(package.import_path.clone(), package);
         }
 
-        let mut third_party: Vec<String> = Vec::new();
-        let mut seen: HashSet<String> = HashSet::new();
-        let mut unresolved: Vec<UnresolvedTransitive> = Vec::new();
+        let mut modules: BTreeMap<String, ReachedModule> = BTreeMap::new();
+        let mut unresolved: BTreeMap<String, UnresolvedTransitive> = BTreeMap::new();
+        let mut visited: HashSet<&str> = HashSet::new();
+        let mut queue: Vec<&str> = roots.iter().map(String::as_str).collect();
 
-        for import in &import_set {
-            if !deps::is_third_party(import) {
+        while let Some(path) = queue.pop() {
+            if !visited.insert(path) {
                 continue;
             }
-            let containing = match self.find_containing_module(import) {
-                Ok(info) => info,
-                Err(message) => {
-                    unresolved.push(UnresolvedTransitive {
-                        import: import.clone(),
-                        message,
-                    });
+            let Some(package) = packages.get(path) else {
+                continue;
+            };
+            let Some(owner) = &package.module else {
+                continue;
+            };
+            let reached = modules
+                .entry(owner.path.clone())
+                .or_insert_with(|| ReachedModule {
+                    path: owner.path.clone(),
+                    version: owner.version.clone(),
+                    dependencies: BTreeSet::new(),
+                });
+
+            for import in &package.imports {
+                if !deps::is_third_party(import) {
                     continue;
                 }
-            };
-            if containing.path == module_path {
-                continue;
-            }
-            if seen.insert(containing.path.clone()) {
-                third_party.push(containing.path);
+                let imported = packages.get(import);
+                let Some(module) = imported.and_then(|p| p.module.as_ref()) else {
+                    let message = imported
+                        .and_then(|p| p.error.as_ref())
+                        .map(|e| e.err.clone())
+                        .unwrap_or_else(|| "no module provides this package".to_string());
+                    unresolved
+                        .entry(import.clone())
+                        .or_insert_with(|| UnresolvedTransitive {
+                            import: import.clone(),
+                            message,
+                        });
+                    continue;
+                };
+                if module.path != owner.path {
+                    reached.dependencies.insert(module.path.clone());
+                }
+                queue.push(import);
             }
         }
 
-        third_party.sort();
-        unresolved.sort_by(|a, b| a.import.cmp(&b.import));
-        Ok(ListedModules {
-            modules: third_party,
+        Ok(ReachableModules {
+            modules: modules.into_values().collect(),
             package_errors,
-            unresolved,
+            unresolved: unresolved.into_values().collect(),
         })
     }
 
@@ -506,10 +511,44 @@ pub struct GoModSummary {
     pub directory_replaces: Vec<(String, String)>,
 }
 
-pub struct ListedModules {
-    pub modules: Vec<String>,
+pub struct ReachableModules {
+    pub modules: Vec<ReachedModule>,
     pub package_errors: Vec<PackageError>,
     pub unresolved: Vec<UnresolvedTransitive>,
+}
+
+pub struct ReachedModule {
+    pub path: String,
+    pub version: String,
+    pub dependencies: BTreeSet<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct ListedPackage {
+    import_path: String,
+    #[serde(default)]
+    dep_only: bool,
+    module: Option<ListedModule>,
+    #[serde(default)]
+    imports: Vec<String>,
+    error: Option<ListedError>,
+    #[serde(default)]
+    deps_errors: Vec<ListedError>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct ListedModule {
+    path: String,
+    #[serde(default)]
+    version: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct ListedError {
+    err: String,
 }
 
 pub struct UnresolvedTransitive {

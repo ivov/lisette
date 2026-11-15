@@ -4,14 +4,20 @@ use rustc_hash::FxHashSet as HashSet;
 use crate::output::print_warning;
 use crate::workspace::extract_go_imports;
 
+pub struct PrewarmOutcome {
+    /// `Err(1)` if any declared import fails.
+    pub result: Result<(), i32>,
+    /// Packages that typedefs import but no declared module contains.
+    pub missing_transitive: Vec<String>,
+}
+
 /// Generate the typedef for every non-blank `go:` import in source, then
-/// recurse into each typedef's own `go:` imports. Returns `Err(1)` if any
-/// declared import fails; undeclared and unknown-stdlib imports are left
-/// to the type-checker.
+/// recurse into each typedef's own `go:` imports. Undeclared and
+/// unknown-stdlib imports are left to the type-checker.
 pub fn prewarm_typedef_cache(
     source_imports: &[String],
     locator: &TypedefLocator,
-) -> Result<(), i32> {
+) -> PrewarmOutcome {
     let mut visited: HashSet<String> = HashSet::default();
     let mut queue: Vec<String> = Vec::with_capacity(source_imports.len());
     for pkg in source_imports {
@@ -21,19 +27,23 @@ pub fn prewarm_typedef_cache(
     }
 
     let mut had_failure = false;
+    let mut undeclared: HashSet<String> = HashSet::default();
+    let mut typedef_imports: HashSet<String> = HashSet::default();
 
     while let Some(pkg) = queue.pop() {
         match locator.find_typedef_content(&pkg) {
             TypedefLocatorResult::Found { content, .. } => {
                 for imp in extract_go_imports(&content) {
+                    typedef_imports.insert(imp.clone());
                     if visited.insert(imp.clone()) {
                         queue.push(imp);
                     }
                 }
             }
-            TypedefLocatorResult::UnknownStdlib
-            | TypedefLocatorResult::UndeclaredImport
-            | TypedefLocatorResult::InternalPackage { .. } => {
+            TypedefLocatorResult::UndeclaredImport => {
+                undeclared.insert(pkg);
+            }
+            TypedefLocatorResult::UnknownStdlib | TypedefLocatorResult::InternalPackage { .. } => {
                 // Type-checker handles these.
             }
             TypedefLocatorResult::MissingTypedef {
@@ -82,7 +92,16 @@ pub fn prewarm_typedef_cache(
         }
     }
 
-    if had_failure { Err(1) } else { Ok(()) }
+    let mut missing_transitive: Vec<String> = undeclared
+        .into_iter()
+        .filter(|pkg| typedef_imports.contains(pkg))
+        .collect();
+    missing_transitive.sort();
+
+    PrewarmOutcome {
+        result: if had_failure { Err(1) } else { Ok(()) },
+        missing_transitive,
+    }
 }
 
 fn pkg_label(pkg: &str, module: &str, version: &str) -> String {
