@@ -308,6 +308,20 @@ pub fn undeclared_go_import(go_pkg: &str, span: Span) -> LisetteDiagnostic {
         ))
 }
 
+pub fn undeclared_transitive_go_import(
+    go_pkg: &str,
+    importer: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Undeclared Go dependency")
+        .with_resolve_code("undeclared_go_import")
+        .with_span_label(&span, "not in lisette.toml")
+        .with_help(format!(
+            "Run `lis sync` to declare the modules that `{}` needs, or `lis add {}` to add this dependency directly",
+            importer, go_pkg
+        ))
+}
+
 pub fn undeclared_go_import_via_replace(
     go_pkg: &str,
     replaced_module: &str,

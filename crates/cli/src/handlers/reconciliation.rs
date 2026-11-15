@@ -8,8 +8,8 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::go_cli;
-use crate::output::{DependencyGraph, print_progress, print_warning};
-use crate::workspace::{GoWorkspace, UnresolvedTransitive};
+use crate::output::{DependencyGraph, print_warning};
+use crate::workspace::{GoWorkspace, ReachedModule, UnresolvedTransitive};
 use crate::{cli_error, error};
 use deps::GoModule;
 use std::fs;
@@ -23,20 +23,21 @@ pub(crate) struct ResolvedDependency {
 
 #[derive(Default)]
 pub(crate) struct GraphResult {
-    modules: HashMap<String, ModuleState>,
+    modules: HashMap<String, ModuleNode>,
 }
 
-enum ModuleState {
-    /// Known through a typedef import, but not yet exhaustively scanned.
-    Discovered {
-        version: String,
-        known_dependencies: Dependencies,
-    },
-    /// Scanned at this version. An empty dependency list is a real leaf.
-    Expanded {
-        version: String,
-        dependencies: Dependencies,
-    },
+struct ModuleNode {
+    version: String,
+    dependencies: Dependencies,
+}
+
+impl ModuleNode {
+    fn new(version: String) -> Self {
+        Self {
+            version,
+            dependencies: Dependencies::default(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -58,69 +59,30 @@ impl Dependencies {
     }
 }
 
-impl ModuleState {
-    fn version(&self) -> &str {
-        match self {
-            Self::Discovered { version, .. } | Self::Expanded { version, .. } => version,
-        }
-    }
-
-    fn dependencies(&self) -> &[String] {
-        match self {
-            Self::Discovered {
-                known_dependencies, ..
-            } => &known_dependencies.ordered,
-            Self::Expanded { dependencies, .. } => &dependencies.ordered,
-        }
-    }
-
-    fn dependencies_mut(&mut self) -> &mut Dependencies {
-        match self {
-            Self::Discovered {
-                known_dependencies, ..
-            } => known_dependencies,
-            Self::Expanded { dependencies, .. } => dependencies,
-        }
-    }
-
-    fn is_expanded(&self) -> bool {
-        matches!(self, Self::Expanded { .. })
-    }
-}
-
 impl GraphResult {
     pub(crate) fn version(&self, module: &str) -> Option<&str> {
-        self.modules.get(module).map(ModuleState::version)
-    }
-
-    fn is_expanded(&self, module: &str) -> bool {
-        self.modules
-            .get(module)
-            .is_some_and(ModuleState::is_expanded)
+        self.modules.get(module).map(|node| node.version.as_str())
     }
 
     fn discover(&mut self, module: String, version: String) {
         self.modules
             .entry(module)
-            .or_insert_with(|| ModuleState::Discovered {
-                version,
-                known_dependencies: Dependencies::default(),
-            });
+            .or_insert_with(|| ModuleNode::new(version));
     }
 
+    /// Record a scan of `module`. Edges recorded at the same version stay.
     fn expand(&mut self, module: String, version: String, dependencies: Vec<String>) {
         let mut dependencies = Dependencies::from_ordered(dependencies);
-        if let Some(ModuleState::Discovered {
-            known_dependencies, ..
-        }) = self.modules.get(&module)
+        if let Some(previous) = self.modules.get(&module)
+            && previous.version == version
         {
-            for dependency in &known_dependencies.ordered {
+            for dependency in &previous.dependencies.ordered {
                 dependencies.insert(dependency.clone());
             }
         }
         self.modules.insert(
             module,
-            ModuleState::Expanded {
+            ModuleNode {
                 version,
                 dependencies,
             },
@@ -128,43 +90,28 @@ impl GraphResult {
     }
 
     fn rediscover(&mut self, module: String, version: String) {
-        self.modules.insert(
-            module,
-            ModuleState::Discovered {
-                version,
-                known_dependencies: Dependencies::default(),
-            },
-        );
+        self.modules.insert(module, ModuleNode::new(version));
     }
 
     fn record_dependency(&mut self, parent: String, version: String, dependency: String) {
-        let state = self
-            .modules
-            .entry(parent)
-            .or_insert_with(|| ModuleState::Discovered {
-                version,
-                known_dependencies: Dependencies::default(),
-            });
-        state.dependencies_mut().insert(dependency);
-    }
-
-    fn discovered_modules(&self) -> Vec<String> {
         self.modules
-            .iter()
-            .filter(|(_, state)| !state.is_expanded())
-            .map(|(module, _)| module.clone())
-            .collect()
+            .entry(parent)
+            .or_insert_with(|| ModuleNode::new(version))
+            .dependencies
+            .insert(dependency);
     }
 
     fn dependencies(&self, module: &str) -> Option<&[String]> {
-        self.modules.get(module).map(ModuleState::dependencies)
+        self.modules
+            .get(module)
+            .map(|node| node.dependencies.ordered.as_slice())
     }
 
     /// Invert `edges` into a `module → parents` map, excluding the added root.
     fn transitive_map(&self, added_module: &str) -> HashMap<String, Vec<String>> {
         let mut transitives: HashMap<String, BTreeSet<String>> = HashMap::new();
-        for (parent, state) in &self.modules {
-            for child in state.dependencies() {
+        for (parent, node) in &self.modules {
+            for child in &node.dependencies.ordered {
                 if child != added_module {
                     transitives
                         .entry(child.clone())
@@ -280,6 +227,72 @@ pub(crate) fn reconcile_declared_replacements(
     Ok(())
 }
 
+/// Declare the modules that source imports reach but the manifest lacks.
+pub(crate) fn declare_reached_modules(
+    project_root: &Path,
+    target_dir: &Path,
+    manifest: &deps::Manifest,
+    source_imports: &[String],
+) -> Result<Vec<String>, i32> {
+    let locator = deps::TypedefLocator::new(
+        manifest.go_deps().clone(),
+        Some(project_root.to_path_buf()),
+        Target::host(),
+    );
+    let declared_imports: Vec<String> = source_imports
+        .iter()
+        .filter(|pkg| locator.is_declared_go_dep(pkg))
+        .cloned()
+        .collect();
+    if declared_imports.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let typedef_cache_dir = deps::typedef_cache_dir(project_root);
+    let workspace = GoWorkspace::new(target_dir, &typedef_cache_dir, Target::host());
+    let listed = workspace
+        .find_reachable_modules(&declared_imports)
+        .map_err(|message| {
+            error!("failed to scan Go imports", message);
+            1
+        })?;
+    for err in &listed.package_errors {
+        print_warning(&format!(
+            "package error in `{}`: {}",
+            err.package, err.message
+        ));
+    }
+    let locals = declared_local_dirs(&declared_replacements(manifest), project_root);
+    report_unresolved_transitives(&workspace, "src", &listed.unresolved, &locals)?;
+
+    let mut graph = GraphResult::default();
+    record_reached_modules(&workspace, &mut graph, listed.modules);
+    let mut transitives: Vec<(String, Vec<String>)> =
+        graph.transitive_map("").into_iter().collect();
+    transitives.sort();
+
+    let mut document = open_manifest_document(project_root)?;
+    let mut added = Vec::new();
+    for (module, via) in transitives {
+        let Some(version) = graph.version(&module) else {
+            continue;
+        };
+        if manifest.go_deps().contains_key(&module) {
+            continue;
+        }
+        let dependency = deps::GoDependency::Remote {
+            version: version.to_string(),
+            via: Some(via),
+        };
+        write_dependency(&mut document.document, &module, &dependency)?;
+        added.push(module);
+    }
+    if !added.is_empty() {
+        save_manifest_document(&document)?;
+    }
+    Ok(added)
+}
+
 pub(crate) fn open_manifest_document(project_root: &Path) -> Result<deps::ManifestDocument, i32> {
     deps::ManifestDocument::open(project_root).map_err(|msg| {
         error!("failed to read manifest", msg);
@@ -305,8 +318,8 @@ fn import_compat_hint(go_error: &str) -> Option<&'static str> {
         )
 }
 
-/// Reconcile a root's full module graph: walk the manifest subgraph, build each
-/// package's typedefs, expand modules the walk did not reach, and rebuild any
+/// Reconcile a root's module graph: record the modules its packages reach,
+/// build each package's typedefs, rescan after MVS drift, and rebuild any
 /// cache entry MVS drift moved to a new version. Returns the resolved graph for
 /// `apply_graph_to_manifest`, shared by `lis add` and `lis sync`.
 pub(crate) fn reconcile_root(
@@ -315,9 +328,10 @@ pub(crate) fn reconcile_root(
     replacements: &HashMap<String, deps::ReplacementSource>,
     locals: &[(String, PathBuf)],
 ) -> Result<ReconciledRoot, i32> {
-    let mut graph = reconcile_module_graph(dep, workspace, locals)?;
+    let mut graph = GraphResult::default();
+    scan_reachable_modules(dep, workspace, &mut graph, locals)?;
     let (bindgenned, import_path) = walk_typedef_cache(dep, workspace, &mut graph, replacements)?;
-    expand_unwalked_modules(workspace, &mut graph, locals)?;
+    converge_mvs_drift(dep, workspace, &mut graph, locals)?;
     rebuild_drifted_cache_entries(workspace, &graph, &bindgenned, replacements);
     workspace.invalidate_warm_stamp();
     Ok(ReconciledRoot { graph, import_path })
@@ -329,142 +343,95 @@ pub(crate) struct ReconciledRoot {
     pub(crate) import_path: Option<String>,
 }
 
-fn handle_module_failure(
-    context: &str,
-    module_path: &str,
-    message: &str,
-    is_explicit: bool,
-    failed_transitives: &mut HashSet<String>,
-) -> Result<(), i32> {
-    if is_explicit {
-        match import_compat_hint(message) {
-            Some(hint) => cli_error!(context, message, hint),
-            None => error!(context, message),
-        }
-        return Err(1);
+fn root_failure(context: &str, message: &str) -> i32 {
+    match import_compat_hint(message) {
+        Some(hint) => cli_error!(context, message, hint),
+        None => error!(context, message),
     }
-    if failed_transitives.insert(module_path.to_string()) {
-        print_warning(&format!("skipping transitive {}: {}", module_path, message));
-    }
-    Ok(())
+    1
 }
 
-/// Manifest walk: BFS the third-party module subgraph from `dep.canonical_module`
-/// via `go list -json M/...`. Module-grained so the manifest declares every
-/// module a future subpackage import could reach; the outer loop converges
-/// MVS drift since MVS only moves upward.
-fn reconcile_module_graph(
+/// Manifest walk: record every module that the root's public packages reach.
+fn scan_reachable_modules(
     dep: &ResolvedDependency,
     workspace: &GoWorkspace,
+    graph: &mut GraphResult,
     locals: &[(String, PathBuf)],
-) -> Result<GraphResult, i32> {
+) -> Result<(), i32> {
     let canonical_module = dep.canonical_module.as_str();
 
-    let mut graph = GraphResult::default();
-    let mut failed_transitives: HashSet<String> = HashSet::new();
-    let mut queue: Vec<String> = vec![canonical_module.to_string()];
+    let listed = workspace
+        .find_reachable_modules(&[format!("{}/...", canonical_module)])
+        .map_err(|message| root_failure("failed to scan transitive modules", &message))?;
 
-    loop {
-        while let Some(module_path) = queue.pop() {
-            let is_explicit = module_path == canonical_module;
+    let root_version = workspace
+        .query_version(canonical_module)
+        .map_err(|message| root_failure("failed to resolve module version", &message))?;
 
-            let module_version = match workspace.query_version(&module_path) {
-                Ok(version) => version,
-                Err(message) => {
-                    handle_module_failure(
-                        "failed to resolve module version",
-                        &module_path,
-                        &message,
-                        is_explicit,
-                        &mut failed_transitives,
-                    )?;
-                    continue;
-                }
-            };
-
-            if graph.version(&module_path) == Some(&module_version) {
-                continue;
-            }
-
-            if !is_explicit && graph.version(&module_path).is_none() {
-                print_progress(&format!("Resolving transitive dep {}", module_path));
-            }
-
-            let listed = match workspace.find_third_party_modules(&module_path) {
-                Ok(listed) => listed,
-                Err(message) => {
-                    handle_module_failure(
-                        "failed to scan transitive modules",
-                        &module_path,
-                        &message,
-                        is_explicit,
-                        &mut failed_transitives,
-                    )?;
-                    continue;
-                }
-            };
-
-            if !listed.package_errors.is_empty() && is_explicit {
-                for err in &listed.package_errors {
-                    if let Some(hint) = local_child_hint_in_message(workspace, &err.message, locals)
-                    {
-                        return Err(undeclared_local_error(&format!("`{}`", err.package), &hint));
-                    }
-                }
-                let combined: String = listed
-                    .package_errors
-                    .iter()
-                    .map(|e| format!("\n  · {}: {}", e.package, e.message))
-                    .collect();
-                error!(
-                    "could not load all packages of dependency",
-                    format!(
-                        "`go list` reported errors in `{}`:{}",
-                        module_path, combined
-                    )
-                );
-                return Err(1);
-            }
-            for err in &listed.package_errors {
-                print_warning(&format!(
-                    "{}: package error in `{}`: {}",
-                    module_path, err.package, err.message
-                ));
-            }
-
-            report_unresolved_transitives(workspace, &module_path, &listed.unresolved, locals)?;
-
-            graph.expand(module_path, module_version, listed.modules.clone());
-
-            for next in listed.modules {
-                queue.push(next);
+    if !listed.package_errors.is_empty() {
+        for err in &listed.package_errors {
+            if let Some(hint) = local_child_hint_in_message(workspace, &err.message, locals) {
+                return Err(undeclared_local_error(&format!("`{}`", err.package), &hint));
             }
         }
-
-        let drift = detect_mvs_drift(workspace, &graph);
-        if let Some((module, msg)) = drift.errors.first() {
-            error!(
-                "failed to resolve module version",
-                format!("{}: {}", module, msg)
-            );
-            return Err(1);
-        }
-        if drift.upgraded.is_empty() {
-            break;
-        }
-        for (module, _) in drift.upgraded {
-            queue.push(module);
-        }
+        let combined: String = listed
+            .package_errors
+            .iter()
+            .map(|e| format!("\n  · {}: {}", e.package, e.message))
+            .collect();
+        error!(
+            "could not load all packages of dependency",
+            format!(
+                "`go list` reported errors in `{}`:{}",
+                canonical_module, combined
+            )
+        );
+        return Err(1);
     }
 
-    if !failed_transitives.is_empty() {
+    report_unresolved_transitives(workspace, canonical_module, &listed.unresolved, locals)?;
+
+    let skipped = record_reached_modules(workspace, graph, listed.modules);
+    graph.discover(canonical_module.to_string(), root_version);
+
+    if skipped > 0 {
         print_warning(&format!(
             "{} transitive dep(s) skipped; importing them later will fail until they are bindable",
-            failed_transitives.len()
+            skipped
         ));
     }
 
-    Ok(graph)
+    Ok(())
+}
+
+/// Record each module at the version `go list` reported, else a fresh query.
+/// Returns how many modules have no version.
+fn record_reached_modules(
+    workspace: &GoWorkspace,
+    graph: &mut GraphResult,
+    modules: Vec<ReachedModule>,
+) -> usize {
+    let mut skipped = 0;
+    for module in modules {
+        let version = if module.version.is_empty() {
+            match workspace.query_version(&module.path) {
+                Ok(version) => version,
+                Err(message) => {
+                    print_warning(&format!("skipping transitive {}: {}", module.path, message));
+                    skipped += 1;
+                    continue;
+                }
+            }
+        } else {
+            module.version
+        };
+        graph.expand(
+            module.path,
+            version,
+            module.dependencies.into_iter().collect(),
+        );
+    }
+    skipped
 }
 
 /// The `ReplacementTarget` a module's typedef cache is keyed by, if it is a declared replacement.
@@ -789,7 +756,7 @@ impl QueuedPackage {
 /// typedef's own `go:` imports. Sibling subpackages stay cache misses for
 /// the locator to handle on first access. Returns each bindgenned
 /// `(module, version, package)` so any later MVS drift in
-/// `expand_unwalked_modules` can re-reconcile at the new pin.
+/// `converge_mvs_drift` can re-reconcile at the new pin.
 fn walk_typedef_cache(
     dep: &ResolvedDependency,
     workspace: &GoWorkspace,
@@ -992,67 +959,16 @@ fn warn_stubbed(stubs: &[String]) {
     }
 }
 
-/// Exhaustively scan modules known only through typedef imports, until the
-/// graph is closed under MVS drift. Failures are warnings since these are all
-/// transitives.
-fn expand_unwalked_modules(
+/// Rescan until no pin moves, since the cache walk's `go get` can raise one.
+fn converge_mvs_drift(
+    dep: &ResolvedDependency,
     workspace: &GoWorkspace,
     graph: &mut GraphResult,
     locals: &[(String, PathBuf)],
 ) -> Result<(), i32> {
     let mut failed: HashSet<String> = HashSet::new();
 
-    let mut queue = graph.discovered_modules();
-
     loop {
-        while let Some(module_path) = queue.pop() {
-            if graph.is_expanded(&module_path) {
-                continue;
-            }
-
-            if graph.version(&module_path).is_none() {
-                match workspace.query_version(&module_path) {
-                    Ok(version) => graph.discover(module_path.clone(), version),
-                    Err(msg) => {
-                        if failed.insert(module_path.clone()) {
-                            print_warning(&format!("skipping transitive {}: {}", module_path, msg));
-                        }
-                        continue;
-                    }
-                }
-            }
-
-            let listed = match workspace.find_third_party_modules(&module_path) {
-                Ok(l) => l,
-                Err(msg) => {
-                    if failed.insert(module_path.clone()) {
-                        print_warning(&format!("skipping transitive {}: {}", module_path, msg));
-                    }
-                    continue;
-                }
-            };
-
-            for err in &listed.package_errors {
-                print_warning(&format!(
-                    "{}: package error in `{}`: {}",
-                    module_path, err.package, err.message
-                ));
-            }
-
-            report_unresolved_transitives(workspace, &module_path, &listed.unresolved, locals)?;
-
-            let Some(version) = graph.version(&module_path).map(str::to_string) else {
-                continue;
-            };
-            graph.expand(module_path, version, listed.modules.clone());
-
-            for next in listed.modules {
-                if !graph.is_expanded(&next) {
-                    queue.push(next);
-                }
-            }
-        }
-
         let drift = detect_mvs_drift(workspace, graph);
         for (module, msg) in drift.errors {
             if failed.insert(module.clone()) {
@@ -1064,18 +980,14 @@ fn expand_unwalked_modules(
         }
 
         if drift.upgraded.is_empty() {
-            break;
+            return Ok(());
         }
 
-        // Drifted module's outgoing edges may have changed; parent edges
-        // pointing at it still stand (parent still imports it).
         for (module, new_version) in drift.upgraded {
-            graph.rediscover(module.clone(), new_version);
-            queue.push(module);
+            graph.rediscover(module, new_version);
         }
+        scan_reachable_modules(dep, workspace, graph, locals)?;
     }
-
-    Ok(())
 }
 
 /// Seed the cache walk's queue. Falls back to enumerating subpackages when
@@ -1156,7 +1068,7 @@ fn detect_mvs_drift(workspace: &GoWorkspace, graph: &GraphResult) -> DriftReport
     let snapshot: Vec<(String, String)> = graph
         .modules
         .iter()
-        .map(|(module, state)| (module.clone(), state.version().to_string()))
+        .map(|(module, node)| (module.clone(), node.version.clone()))
         .collect();
     for (module, recorded) in snapshot {
         match workspace.query_version(&module) {
@@ -1472,13 +1384,31 @@ mod tests {
     }
 
     #[test]
-    fn expanded_leaf_is_not_left_pending() {
+    fn rescanning_keeps_typedef_edges_only_at_the_same_version() {
         let mut graph = GraphResult::default();
-        graph.discover("leaf".to_string(), "v1.0.0".to_string());
+        graph.expand("parent".to_string(), "v1.0.0".to_string(), Vec::new());
+        graph.record_dependency(
+            "parent".to_string(),
+            "v1.0.0".to_string(),
+            "typedef-child".to_string(),
+        );
 
-        graph.expand("leaf".to_string(), "v1.0.0".to_string(), Vec::new());
+        graph.expand(
+            "parent".to_string(),
+            "v1.0.0".to_string(),
+            vec!["go-child".to_string()],
+        );
+        assert_eq!(
+            graph.dependencies("parent").unwrap(),
+            ["go-child", "typedef-child"]
+        );
 
-        assert!(graph.discovered_modules().is_empty());
+        graph.expand(
+            "parent".to_string(),
+            "v1.1.0".to_string(),
+            vec!["go-child".to_string()],
+        );
+        assert_eq!(graph.dependencies("parent").unwrap(), ["go-child"]);
     }
 
     #[test]

@@ -55,6 +55,7 @@ pub(super) fn run(file: &Path) -> i32 {
 
     print_sync_summary(
         SUBJECT,
+        &[],
         &changes.trimmed,
         &changes.promoted,
         &changes.removed,

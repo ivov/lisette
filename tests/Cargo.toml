@@ -43,6 +43,10 @@ name = "e2e_library"
 path = "e2e_library.rs"
 
 [[test]]
+name = "e2e_go_dependencies"
+path = "e2e_go_dependencies.rs"
+
+[[test]]
 name = "e2e_external_tests"
 path = "e2e_external_tests.rs"
 

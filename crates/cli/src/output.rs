@@ -411,6 +411,7 @@ impl<G: DependencyGraph> TreePrinter<'_, G> {
 
 pub fn print_sync_summary(
     subject: &str,
+    added: &[String],
     trimmed: &[deps::TrimmedVia],
     promoted: &[String],
     removed: &[String],
@@ -420,12 +421,20 @@ pub fn print_sync_summary(
         eprintln!();
     }
 
-    if trimmed.is_empty() && promoted.is_empty() && removed.is_empty() {
+    if added.is_empty() && trimmed.is_empty() && promoted.is_empty() && removed.is_empty() {
         eprintln!("  ✓ {} already in sync", subject);
         return;
     }
 
     let colored = use_color();
+
+    for path in added {
+        if colored {
+            eprintln!("  + Added {}", path.green());
+        } else {
+            eprintln!("  + Added {}", path);
+        }
+    }
 
     let promoted_set: HashSet<&str> = promoted.iter().map(String::as_str).collect();
     let removed_set: HashSet<&str> = removed.iter().map(String::as_str).collect();

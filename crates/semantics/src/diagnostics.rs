@@ -211,6 +211,10 @@ fn emit_undeclared(
             local_package,
             span,
         ));
+    } else if let Some(importer) = transitive_importer {
+        sink.push(diagnostics::package_graph::undeclared_transitive_go_import(
+            go_pkg, importer, span,
+        ));
     } else {
         sink.push(diagnostics::package_graph::undeclared_go_import(
             go_pkg, span,
