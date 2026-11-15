@@ -19,7 +19,6 @@ func MakeStatusComplete() Status {
 	return Status{Tag: StatusComplete}
 }
 
-// Represents the status of a task.
 type StatusTag uint8
 
 const (
@@ -28,6 +27,7 @@ const (
 	StatusComplete
 )
 
+// Represents the status of a task.
 type Status struct {
 	Tag StatusTag
 }

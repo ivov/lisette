@@ -54,10 +54,9 @@ impl Planner<'_> {
             } => {
                 let doc_comment = emit_item_doc(doc, name, &go_name::escape_type_name(name));
                 let code = self
-                    .emit_enum(name, generics, attributes)
+                    .emit_enum(name, generics, attributes, &doc_comment)
                     .unwrap_or_default();
-                let code = self.direct_every_line(name_span, code);
-                format!("{}{}", doc_comment, code)
+                self.direct_every_line(name_span, code)
             }
             Expression::TypeAlias {
                 doc,

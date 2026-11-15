@@ -15,7 +15,6 @@ func Makecap_Large() cap_ {
 	return cap_{Tag: capLarge}
 }
 
-// cap_ is a size class.
 type capTag uint8
 
 const (
@@ -23,6 +22,7 @@ const (
 	capLarge
 )
 
+// cap_ is a size class.
 type cap_ struct {
 	Tag capTag
 }
