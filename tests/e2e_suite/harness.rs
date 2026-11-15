@@ -5,6 +5,10 @@ use std::process::Command;
 
 use emit::{EmitOptions, Planner};
 use rustc_hash::FxHashMap;
+use stdlib::{Target, get_go_stdlib_typedef};
+use syntax::ast::Expression;
+use syntax::lex::Lexer;
+use syntax::parse::Parser;
 use syntax::program::{EmitInput, File};
 
 use crate::_harness::pipeline::TestPipeline;
@@ -157,7 +161,7 @@ fn parse_import_line(s: &str) -> Option<String> {
     Some(after[..quote_end].to_string())
 }
 
-pub fn skip_reason_for_imports(go_code: &str) -> Option<String> {
+pub fn skip_reason_for_imports(input: &str, go_code: &str) -> Option<String> {
     for path in extract_imports(go_code) {
         if path == PRELUDE_IMPORT_PATH {
             continue;
@@ -167,7 +171,17 @@ pub fn skip_reason_for_imports(go_code: &str) -> Option<String> {
             return Some(format!("non-stdlib import: {path}"));
         }
     }
-    None
+    let lexed = Lexer::new(input, 0).lex();
+    let parsed = Parser::new(lexed.tokens, input).parse();
+    parsed.ast.iter().find_map(|item| {
+        let Expression::PackageImport { name, .. } = item else {
+            return None;
+        };
+        let path = name.strip_prefix("go:")?;
+        get_go_stdlib_typedef(path, Target::host())
+            .is_none()
+            .then(|| format!("non-stdlib import: {path}"))
+    })
 }
 
 pub struct HarvestedTest {

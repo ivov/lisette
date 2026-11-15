@@ -62,7 +62,7 @@ fn e2e_suite() {
                 if skip_list.contains(name) {
                     return Outcome::Denylist(name.clone());
                 }
-                if let Some(reason) = skip_reason_for_imports(snap_body) {
+                if let Some(reason) = skip_reason_for_imports(input, snap_body) {
                     return Outcome::SkippedImport(name.clone(), reason);
                 }
                 let EmittedTest { go_code, entry } =

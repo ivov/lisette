@@ -66,7 +66,7 @@ fn rewrite_suite() {
 
     let programs: Vec<(String, Vec<(Variant, Compiled)>)> = harvested
         .par_iter()
-        .filter(|test| skip_reason_for_imports(&test.snap_body).is_none())
+        .filter(|test| skip_reason_for_imports(&test.input, &test.snap_body).is_none())
         .filter_map(|test| {
             let source = wrap(&test.input);
             let Compiled::Written = compile(&target, &test.name, &source) else {
