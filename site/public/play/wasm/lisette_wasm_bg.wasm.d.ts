@@ -1,14 +1,13 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const __wbg_lspsession_free: (a: number, b: number) => void;
 export const check: (a: number, b: number) => [number, number];
 export const compile: (a: number, b: number) => [number, number];
-export const complete: (a: number, b: number, c: number) => [number, number];
 export const format: (a: number, b: number) => [number, number];
-export const goto_definition: (a: number, b: number, c: number) => [number, number];
-export const hover: (a: number, b: number, c: number) => [number, number];
 export const init: () => void;
-export const signature_help: (a: number, b: number, c: number) => [number, number];
+export const lspsession_handle: (a: number, b: number, c: number) => [number, number];
+export const lspsession_new: () => number;
 export const version: () => [number, number];
 export const __wbindgen_free: (a: number, b: number, c: number) => void;
 export const __wbindgen_malloc: (a: number, b: number) => number;

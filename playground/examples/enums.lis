@@ -20,6 +20,7 @@ fn main() {
     Message.Write("hello"),
     Message.Move { x: 3, y: 4 },
   ]
+
   for msg in messages {
     fmt.Println(handle(msg))
   }

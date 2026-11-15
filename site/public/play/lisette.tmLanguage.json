@@ -54,6 +54,10 @@
           "end": "\"",
           "patterns": [
             { "include": "#escape-sequences" },
+            {
+              "name": "constant.character.escape.lisette",
+              "match": "\\{\\{|\\}\\}"
+            },
             { "include": "#interpolation" }
           ]
         },
@@ -71,19 +75,7 @@
       "patterns": [
         {
           "name": "constant.character.escape.lisette",
-          "match": "\\\\[nrt0\\\\\"']"
-        },
-        {
-          "name": "constant.character.escape.lisette",
-          "match": "\\\\x[0-9a-fA-F]{2}"
-        },
-        {
-          "name": "constant.character.escape.lisette",
-          "match": "\\\\u[0-9a-fA-F]{4}"
-        },
-        {
-          "name": "constant.character.escape.lisette",
-          "match": "\\\\U[0-9a-fA-F]{8}"
+          "match": "\\\\(?:[0-7]{3}|x[0-9a-fA-F]{2}|u\\{[0-9a-fA-F]+\\}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|[abfnrtv0\\\\\"])"
         }
       ]
     },
@@ -105,7 +97,10 @@
       "patterns": [
         {
           "name": "constant.character.lisette",
-          "match": "'(\\\\[nrt0\\\\']|\\\\x[0-9a-fA-F]{2}|[^'\\\\])'"
+          "match": "'(?:(\\\\(?:[0-7]{3}|x[0-9a-fA-F]{2}|u\\{[0-9a-fA-F]+\\}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|[abfnrtv0\\\\']))|[^'\\\\])'",
+          "captures": {
+            "1": { "name": "constant.character.escape.lisette" }
+          }
         }
       ]
     },
