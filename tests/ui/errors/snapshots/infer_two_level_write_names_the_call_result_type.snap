@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·           ╰── `g.rows[0]` is read-only
  9 │ }
    ╰────
-  help: Declare the return type of `make()` as `mut Grid`, or bind the result and write to a `.clone()`. It returns `Grid` · code: [infer.write_through_read_only]
+  help: Declare the return type of `make` as `mut Grid`, or bind the result and write to a `.clone()`. It returns `Grid` · code: [infer.write_through_read_only]

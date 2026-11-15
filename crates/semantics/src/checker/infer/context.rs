@@ -104,7 +104,7 @@ struct TraversalContext {
 
 pub(super) enum ValueSource {
     Place(String),
-    Call(String),
+    Call { callee: Option<String>, span: Span },
     GoFieldCopy(diagnostics::infer::WriteContext),
 }
 

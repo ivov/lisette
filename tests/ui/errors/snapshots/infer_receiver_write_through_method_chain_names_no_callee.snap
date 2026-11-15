@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing write permission
+    ╭─[test.lis:11:3]
+ 10 │   let mut c = Counter.new().unwrap_or(Counter { hits: [] })
+ 11 │   c.add(1)
+    ·   ──┬──
+    ·     ╰── expected `mut Counter`, found `Counter`
+ 12 │ }
+    ╰────
+  help: Make the value writable where it is created, or pass a `.clone()`. `mut Counter` permits writes, `Counter` does not · code: [infer.needs_writable]

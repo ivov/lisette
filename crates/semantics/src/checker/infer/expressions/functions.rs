@@ -177,10 +177,15 @@ impl InferCtx<'_> {
             this.scopes.mark_lambda_scope();
             let resolved_expected = expected_ty.resolve_in(&this.env);
             let expected_function = store.resolve_to_function_type(&resolved_expected);
+            let error_params: Vec<FunctionParameter> = if resolved_expected.is_error() {
+                vec![FunctionParameter::new(Type::Error); params.len()]
+            } else {
+                Vec::new()
+            };
             let expected_params = expected_function
                 .as_ref()
                 .and_then(Type::get_function_params)
-                .unwrap_or_default();
+                .unwrap_or(&error_params);
             let new_params = this.infer_function_params(params, expected_params, false);
 
             if new_params

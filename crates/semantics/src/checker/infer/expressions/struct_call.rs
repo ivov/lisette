@@ -133,7 +133,29 @@ impl InferCtx<'_> {
             ));
         }
         self.unify(expected_ty, &Type::Error, &literal.span);
-        literal.with_type(Type::Error)
+        self.infer_unresolved_struct_values(literal)
+            .with_type(Type::Error)
+    }
+
+    fn infer_unresolved_struct_values(&mut self, literal: StructLiteral) -> StructLiteral {
+        let fields = literal
+            .fields
+            .into_iter()
+            .map(|field| {
+                let value =
+                    self.with_value_context(|s| s.infer_expression(*field.value, &Type::Error));
+                StructFieldAssignment {
+                    value: Box::new(value),
+                    ..field
+                }
+            })
+            .collect();
+        let spread = self.infer_struct_spread(literal.spread, &Type::Error);
+        StructLiteral {
+            fields,
+            spread,
+            ..literal
+        }
     }
 
     fn as_struct(&mut self, store: &Store, literal: &StructLiteral) -> Option<ResolvedStruct> {

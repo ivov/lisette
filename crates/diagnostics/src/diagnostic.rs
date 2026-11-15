@@ -279,14 +279,33 @@ impl LisetteDiagnostic {
     }
 
     /// Label an expected and a found value, stacked in the terminal when the line is long.
-    pub fn with_expected_found_label(mut self, span: &Span, expected: &str, found: &str) -> Self {
+    pub fn with_expected_found_label(self, span: &Span, expected: &str, found: &str) -> Self {
+        self.push_expected_found_label(span, expected, found, false)
+    }
+
+    pub fn with_primary_expected_found_label(
+        self,
+        span: &Span,
+        expected: &str,
+        found: &str,
+    ) -> Self {
+        self.push_expected_found_label(span, expected, found, true)
+    }
+
+    fn push_expected_found_label(
+        mut self,
+        span: &Span,
+        expected: &str,
+        found: &str,
+        primary: bool,
+    ) -> Self {
         let text = format!("expected `{expected}`, found `{found}`");
         let stacked = (text.chars().count() > STACK_LABEL_AT)
             .then(|| stacked_rows(&[("expected", expected), ("found", found)]));
         self.labels.push(Label {
             span: *span,
             text,
-            primary: false,
+            primary,
             stacked,
         });
         self

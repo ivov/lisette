@@ -405,10 +405,22 @@ pub fn const_cycle(cycle: &[String], span: Span) -> LisetteDiagnostic {
     diagnostic
 }
 
+pub fn name_not_found_suggestion(
+    variable_name: &str,
+    available_names: &[String],
+) -> Option<String> {
+    if matches!(variable_name, "nil" | "null" | "Nil" | "undefined" | "_")
+        || go_builtin_hint(variable_name).is_some()
+    {
+        return None;
+    }
+    closest_by_distance(variable_name, available_names).map(|(name, _)| name.clone())
+}
+
 pub fn name_not_found(
     variable_name: &str,
     span: Span,
-    available_names: &[String],
+    suggestion: Option<&str>,
     expected_ty: Option<&Type>,
     qualified: Option<&str>,
     test_fn_name: Option<&str>,
@@ -443,15 +455,6 @@ pub fn name_not_found(
             .with_span_label(&span, "not declared or imported")
             .with_help(format!("Did you mean `{qualified}`?"));
     }
-
-    let suggestion = available_names
-        .iter()
-        .filter_map(|c| {
-            let d = levenshtein_distance(variable_name, c);
-            (d <= 2).then_some((c, d))
-        })
-        .min_by_key(|(_, d)| *d)
-        .map(|(c, _)| c.clone());
 
     // `t` is the conventional name for the handle a `#[test]` receives, but it is an
     // ordinary parameter the test must declare, not an implicit binding. A close-name
@@ -776,7 +779,10 @@ pub enum WriteContext {
         source: String,
     },
     ReadOnlyAnnotation(String),
-    CallResult(String),
+    CallResult {
+        callee: String,
+        binding_source_span: Option<Span>,
+    },
     GoFieldCopy {
         place: String,
         /// `i` for a slice, `k` for a map.
@@ -846,7 +852,7 @@ pub fn needs_writable_remedy(
         Some(WriteContext::ReadOnlyAnnotation(binding)) => {
             format!("Declare `{binding}` as `{expected}`. It is declared as `{actual}`")
         }
-        Some(WriteContext::CallResult(callee)) => {
+        Some(WriteContext::CallResult { callee, .. }) => {
             format!("Declare the return type of `{callee}` as `{expected}`. It returns `{actual}`")
         }
         Some(WriteContext::GoFieldCopy { place, index }) => go_field_copy_help(&place, index),
@@ -1018,7 +1024,7 @@ pub fn write_through_read_only(
                 Some(WriteContext::GoFieldCopy { place, index }) => {
                     go_field_copy_help(&place, index)
                 }
-                Some(WriteContext::CallResult(callee)) => format!(
+                Some(WriteContext::CallResult { callee, .. }) => format!(
                     "Declare the return type of `{callee}` as `{required_type}`, or bind the \
                      result and write to a `.clone()`. It returns `{root_type}`"
                 ),
@@ -2698,7 +2704,9 @@ pub fn non_exhaustive_select_expression(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Non-exhaustive select expression")
         .with_infer_code("non_exhaustive_select_expression")
         .with_span_label(&span, "may not produce a value")
-        .with_help("Add a default arm `_ => ...` to handle closed channels")
+        .with_help(
+            "To wait for a value, use a `match` receive arm with a `None` case: `match ch.receive() { Some(v) => v, None => ... }`. A default arm `_ => ...` makes the `select` non-blocking",
+        )
 }
 
 pub fn type_must_be_known(span: Span) -> LisetteDiagnostic {
@@ -4307,16 +4315,20 @@ pub fn levenshtein_distance(a: &str, b: &str) -> usize {
     prev[b_len]
 }
 
-/// Uses Levenshtein distance (threshold <= 2) and prefix matching
-/// to catch abbreviations like `len` → `length`.
-pub fn find_similar_name(name: &str, candidates: &[String]) -> Option<String> {
-    let best_distance = candidates
+fn closest_by_distance<'a>(name: &str, candidates: &'a [String]) -> Option<(&'a String, usize)> {
+    candidates
         .iter()
         .filter_map(|c| {
             let d = levenshtein_distance(name, c);
             (d <= 2).then_some((c, d))
         })
-        .min_by_key(|(_, d)| *d);
+        .min_by_key(|(_, d)| *d)
+}
+
+/// Uses Levenshtein distance (threshold <= 2) and prefix matching
+/// to catch abbreviations like `len` → `length`.
+pub fn find_similar_name(name: &str, candidates: &[String]) -> Option<String> {
+    let best_distance = closest_by_distance(name, candidates);
 
     let by_prefix = if name.len() >= 2 {
         candidates

@@ -13,6 +13,7 @@ use std::io;
 use std::mem;
 use std::path::{Path, PathBuf};
 use syntax::ast::Span;
+use syntax::program::go_filename;
 
 use serde::{Deserialize, Serialize};
 use stdlib::Target;
@@ -326,8 +327,8 @@ fn all_go_outputs_exist(
             && !cached_file.name.ends_with(".d.lis")
             && !cached_file.name.ends_with(".test.lis")
         {
-            let go_name = cached_file.name.replace(".lis", ".go");
-            if !target_dir.join(&go_name).exists() {
+            let go_name = go_filename(&cached_file.name);
+            if !target_dir.join(go_name).exists() {
                 return false;
             }
         }
@@ -465,7 +466,7 @@ fn cached_file_display_path(
 ) -> String {
     if is_external_test_package(package_id) {
         return root_base
-            .relative(&Path::new(package_id).join(bare_name))
+            .display_path(&Path::new(package_id).join(bare_name))
             .unwrap_or_else(|| bare_name.to_string());
     }
     let rel = if package_id == ENTRY_PACKAGE_ID {
@@ -474,7 +475,7 @@ fn cached_file_display_path(
         Path::new(package_id).join(bare_name)
     };
     src_base
-        .relative(&rel)
+        .display_path(&rel)
         .unwrap_or_else(|| bare_name.to_string())
 }
 
@@ -1346,5 +1347,18 @@ mod tests {
         assert!(diagnostic_dependencies_tracked(&store));
         store.add_package("go:example.com/lib");
         assert!(!diagnostic_dependencies_tracked(&store));
+    }
+
+    #[test]
+    fn go_outputs_found_for_file_with_lis_inside_its_name() {
+        let root = tempfile::tempdir().unwrap();
+        let target_dir = root.path().join("target").join("sub");
+        fs::create_dir_all(&target_dir).unwrap();
+        fs::write(target_dir.join("util.lister.go"), "").unwrap();
+        let cached_files = [CachedFile {
+            name: "util.lister.lis".into(),
+            source: String::new(),
+        }];
+        assert!(all_go_outputs_exist("sub", &cached_files, root.path()));
     }
 }

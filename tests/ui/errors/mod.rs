@@ -541,6 +541,30 @@ fn lex_unterminated_char() {
 }
 
 #[test]
+fn lex_loop_label() {
+    let input = r#"
+fn main() {
+  'outer: for i in 0..3 {
+    break 'outer
+  }
+}
+"#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_loop_label_after_continue() {
+    let input = r#"
+fn main() {
+  for i in 0..3 {
+    continue 'outer
+  }
+}
+"#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
 fn lex_empty_char() {
     let input = r#"let x = ''"#;
     assert_lex_error_snapshot!(input);
@@ -17207,6 +17231,80 @@ fn fill(xs: mut Slice<int>) {
 fn test() {
   let nested: Slice<Slice<int>> = [[1]]
   fill(nested[0])
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_select_expression_without_default_arm() {
+    let input = r#"
+fn main() {
+  let (tx, rx) = Channel.new<string>().split()
+  task {
+    tx.send("ping")
+    tx.close()
+  }
+  let got = select {
+    let Some(v) = rx.receive() => v,
+  }
+  let _ = got
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_receiver_write_names_read_only_constructor() {
+    let input = r#"
+struct Counter { hits: mut Slice<int> }
+
+impl Counter {
+  fn new() -> Counter { Counter { hits: [] } }
+  fn add(self: mut Ref<Counter>, v: int) { self.hits = self.hits.append(v) }
+}
+
+fn main() {
+  let mut c = Counter.new()
+  c.add(1)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn unknown_struct_literal_values_give_no_follow_on_errors() {
+    let source = r#"
+fn main() {
+  let _ = Pont { x: |p| p.y, z: [] }
+  let _ = helpr(|p| p.y, [])
+}
+"#;
+    let codes: Vec<_> = infer(source)
+        .errors
+        .iter()
+        .filter_map(|error| error.code_str().map(str::to_string))
+        .collect();
+    assert_eq!(
+        codes,
+        ["resolve.struct_not_found", "resolve.name_not_found"],
+        "{codes:?}"
+    );
+}
+
+#[test]
+fn infer_receiver_write_through_method_chain_names_no_callee() {
+    let input = r#"
+struct Counter { hits: mut Slice<int> }
+
+impl Counter {
+  fn new() -> Option<Counter> { Some(Counter { hits: [] }) }
+  fn add(self: mut Ref<Counter>, v: int) { self.hits = self.hits.append(v) }
+}
+
+fn main() {
+  let mut c = Counter.new().unwrap_or(Counter { hits: [] })
+  c.add(1)
 }
 "#;
     assert_infer_error_snapshot!(input);

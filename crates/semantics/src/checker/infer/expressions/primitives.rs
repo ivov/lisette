@@ -873,11 +873,24 @@ impl InferCtx<'_> {
         };
 
         let qualified = self.qualified_name_suggestion(variable_name, expected_ty);
+        let suggestion = if qualified.is_none() {
+            diagnostics::infer::name_not_found_suggestion(variable_name, &available_names)
+        } else {
+            None
+        };
+        if let Some(suggested) = &suggestion {
+            match self.scopes.lookup_binding_id(suggested) {
+                Some(binding_id) => self.facts.mark_used(binding_id),
+                None => self
+                    .facts
+                    .add_suggested_name(package.id.clone(), suggested.clone()),
+            }
+        }
         let test_fn_name = self.scopes.test_fn_name().map(str::to_string);
         self.sink.push(diagnostics::infer::name_not_found(
             variable_name,
             span,
-            &available_names,
+            suggestion.as_deref(),
             hint_ty.as_ref(),
             qualified.as_deref(),
             test_fn_name.as_deref(),

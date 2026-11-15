@@ -182,7 +182,12 @@ impl EnumLayout {
     }
 
     /// Call from the declaring file, which owns the import aliases.
-    pub(crate) fn emit_definition(&self, planner: &mut Planner, generics_string: &str) -> String {
+    pub(crate) fn emit_definition(
+        &self,
+        planner: &mut Planner,
+        generics_string: &str,
+        doc_comment: &str,
+    ) -> String {
         let mut output = Vec::new();
         let tag_type = format!("{}Tag", self.enum_name);
 
@@ -216,6 +221,9 @@ impl EnumLayout {
         }
 
         let go_type_name = go_name::escape_type_name(&self.enum_name);
+        if !doc_comment.is_empty() {
+            output.push(doc_comment.trim_end_matches('\n').to_string());
+        }
         output.push(format!(
             "type {}{} struct {{",
             go_type_name, generics_string

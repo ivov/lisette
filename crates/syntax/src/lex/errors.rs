@@ -343,6 +343,16 @@ impl<'source> Lexer<'source> {
         self.errors.push(error);
     }
 
+    pub(super) fn error_loop_label(&mut self, offset: usize, length: usize) {
+        let span = self.span(offset as u32, length as u32);
+        let error = ParseError::new("Loop labels are not supported", span, "loop label")
+            .with_lex_code("loop_label")
+            .with_help(
+                "Remove the label. `break` and `continue` always apply to the innermost loop",
+            );
+        self.errors.push(error);
+    }
+
     pub(super) fn error_unterminated_backtick(&mut self, offset: usize, length: usize) {
         let span = self.span(offset as u32, length as u32);
         let error = ParseError::new(

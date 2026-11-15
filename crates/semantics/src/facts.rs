@@ -46,6 +46,8 @@ pub struct Facts {
     pub unprefixed_fstrings: Vec<UnprefixedFstringFact>,
     pub interface_satisfied_methods: HashMap<String, HashMap<String, InterfaceSatisfactions>>,
 
+    pub suggested_names: HashMap<String, HashSet<String>>,
+
     pub(crate) deferred: DeferredChecks,
 
     /// Patterns the checker rejected. Pattern checks skip them.
@@ -211,6 +213,7 @@ impl Facts {
             function_spans: Vec::new(),
             usages: UsageFacts::default(),
             interface_satisfied_methods: HashMap::default(),
+            suggested_names: HashMap::default(),
         }
     }
 
@@ -334,6 +337,13 @@ impl Facts {
         });
     }
 
+    pub(crate) fn add_suggested_name(&mut self, package_id: String, name: String) {
+        self.suggested_names
+            .entry(package_id)
+            .or_default()
+            .insert(name);
+    }
+
     pub(crate) fn mark_method_used_for_interface(
         &mut self,
         package_id: String,
@@ -384,6 +394,7 @@ impl Facts {
             function_spans,
             usages,
             interface_satisfied_methods,
+            suggested_names,
         } = other;
 
         self.bindings.extend(bindings);
@@ -414,6 +425,13 @@ impl Facts {
                     .or_default()
                     .merge(satisfactions);
             }
+        }
+
+        for (package_id, names) in suggested_names {
+            self.suggested_names
+                .entry(package_id)
+                .or_default()
+                .extend(names);
         }
     }
 }

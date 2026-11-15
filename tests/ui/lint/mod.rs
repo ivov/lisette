@@ -67,6 +67,83 @@ fn main() { let _ = 1 |> id? |> (2 |> add) }
 }
 
 #[test]
+fn unused_function_silent_when_suggested_for_unknown_name() {
+    let source = r#"
+struct Point { x: int }
+
+fn helper(p: Point) -> int {
+  p.x
+}
+
+fn main() {
+  let p = Point { x: 1 }
+  let _ = helpr(p)
+}
+"#;
+    let result = infer(source);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.code_str() == Some("resolve.name_not_found"))
+    );
+    assert_no_lint_warnings!(source);
+}
+
+#[test]
+fn unused_variable_silent_when_suggested_for_unknown_name() {
+    let source = r#"
+fn main() {
+  let counter = 1
+  let _ = countr
+}
+"#;
+    let result = infer(source);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.code_str() == Some("resolve.name_not_found"))
+    );
+    assert_no_lint_warnings!(source);
+}
+
+#[test]
+fn unused_variable_silent_inside_unknown_struct_literal() {
+    let source = r#"
+fn main() {
+  let count = 1
+  let _ = Pont { x: count }
+}
+"#;
+    let result = infer(source);
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.code_str() == Some("resolve.struct_not_found"))
+    );
+    assert_no_lint_warnings!(source);
+}
+
+#[test]
+fn unknown_names_without_suggestion_keep_unused_warnings() {
+    for (binding, read) in [
+        ("n", "let _: Option<int> = nil"),
+        ("lex", "let _ = len([1])"),
+    ] {
+        let source = format!("fn main() {{\n  let {binding} = 5\n  {read}\n}}\n");
+        let warnings = lint(&source);
+        assert!(
+            warnings
+                .iter()
+                .any(|warning| warning.code_str() == Some("lint.unused_variable")),
+            "`{binding}` must stay unused: {warnings:?}"
+        );
+    }
+}
+
+#[test]
 fn unused_function_silent_for_rejected_pipeline_steps() {
     for chain in [
         "1 |> id? |> twice |> add(1)",

@@ -14,6 +14,7 @@ impl Planner<'_> {
         name: &str,
         generics: &[Generic],
         attributes: &[Attribute],
+        doc_comment: &str,
     ) -> Option<String> {
         let enum_id = self.facts.qualified_current(name);
 
@@ -23,7 +24,7 @@ impl Planner<'_> {
         let receiver_generics = self.receiver_generics_string(generics);
         let has_iterate = attributes.iter().any(|a| a.name == "iterate");
 
-        let mut result = layout.emit_definition(self, &generics_string);
+        let mut result = layout.emit_definition(self, &generics_string, doc_comment);
         for method in self.enum_synthesized_methods(name, attributes) {
             let code = match method {
                 SynthesizedMethod::Format(format) => {

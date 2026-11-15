@@ -26,7 +26,6 @@ func MakeNetworkResultError(arg0 int) NetworkResult {
 	return NetworkResult{Tag: NetworkResultError, Error: arg0}
 }
 
-// Result of a network operation.
 type NetworkResultTag uint8
 
 const (
@@ -38,6 +37,7 @@ const (
 	NetworkResultError
 )
 
+// Result of a network operation.
 type NetworkResult struct {
 	Tag   NetworkResultTag
 	Error int

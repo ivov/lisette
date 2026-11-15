@@ -388,7 +388,16 @@ impl InferCtx<'_> {
                     } else {
                         inner
                     };
-                    self.unify(&inner, &actual_ty, span);
+                    let expectation = Expectation {
+                        role: ExpectationRole::Receiver,
+                        span: *span,
+                        expected_ty: inner.clone(),
+                        value_context: inner
+                            .is_writable()
+                            .then(|| self.initializer_context(receiver_expression))
+                            .flatten(),
+                    };
+                    self.with_expectation(expectation, |s| s.unify(&inner, &actual_ty, span));
                 }
             }
             (false, true) => {

@@ -41,6 +41,7 @@ pub struct Lexer<'source> {
     errors: Vec<ParseError>,
     blank_lines: Vec<u32>,
     last_newline_offset: Option<usize>,
+    loop_label_reported: bool,
 }
 
 impl<'source> Lexer<'source> {
@@ -52,6 +53,7 @@ impl<'source> Lexer<'source> {
             errors: vec![],
             blank_lines: Vec::new(),
             last_newline_offset: None,
+            loop_label_reported: false,
         }
     }
 
@@ -1217,6 +1219,20 @@ impl<'source> Lexer<'source> {
     fn lex_char(&mut self) -> Token<'source> {
         let start_offset = self.current_offset;
 
+        if let Some(label_end) = self.loop_label_end(start_offset) {
+            if !self.loop_label_reported {
+                self.loop_label_reported = true;
+                self.error_loop_label(start_offset, label_end - start_offset);
+            }
+            self.current_offset = label_end;
+            return Token {
+                kind: TokenKind::Error,
+                text: &self.input[start_offset..label_end],
+                byte_offset: start_offset as u32,
+                byte_length: (label_end - start_offset) as u32,
+            };
+        }
+
         self.next();
         self.scan_rune_body(start_offset);
 
@@ -1227,6 +1243,32 @@ impl<'source> Lexer<'source> {
             byte_offset: start_offset as u32,
             byte_length: (end_offset - start_offset) as u32,
         }
+    }
+
+    fn loop_label_end(&self, start_offset: usize) -> Option<usize> {
+        let rest = &self.input[start_offset + 1..];
+        let first = rest.chars().next()?;
+        if !(first.is_alphabetic() || first == '_') {
+            return None;
+        }
+        let name_length = rest
+            .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .unwrap_or(rest.len());
+        let after = &rest[name_length..];
+        if after.starts_with('\'') {
+            return None;
+        }
+        let before = self.input[..start_offset].trim_end();
+        let after_jump = ["break", "continue"].iter().any(|keyword| {
+            before.strip_suffix(keyword).is_some_and(|prefix| {
+                !prefix
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| c.is_alphanumeric() || c == '_')
+            })
+        });
+        let defines_label = after.trim_start_matches([' ', '\t']).starts_with(':');
+        (after_jump || defines_label).then_some(start_offset + 1 + name_length)
     }
 
     fn scan_rune_body(&mut self, start_offset: usize) {
