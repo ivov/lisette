@@ -540,6 +540,7 @@ impl Pattern {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructFieldPattern {
     pub name: EcoString,
+    pub name_span: Span,
     pub value: Pattern,
 }
 

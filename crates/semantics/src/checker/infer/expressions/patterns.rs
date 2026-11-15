@@ -912,6 +912,7 @@ impl InferCtx<'_> {
                 });
                 StructFieldPattern {
                     name: field.name.clone(),
+                    name_span: field.name_span,
                     value: self.infer_pattern_inner(
                         field.value.clone(),
                         ty,
@@ -1042,6 +1043,7 @@ impl InferCtx<'_> {
                         field.value.get_span(),
                     ));
                 }
+                this.facts.add_usage(field.name_span, definition.name_span);
                 Some(if scrutinee_is_error {
                     Type::Error
                 } else {
@@ -1368,6 +1370,7 @@ impl InferCtx<'_> {
                 let definition = variant_fields
                     .iter()
                     .find(|declared| declared.name == field.name)?;
+                this.facts.add_usage(field.name_span, definition.name_span);
                 Some(substitute(
                     &this.granted_component_type(&definition.ty, &unify_expected),
                     &map,

@@ -8,7 +8,7 @@ use syntax::program::File;
 
 use crate::analysis::{cursor_offset, find_package_by_alias, offset_in_span, type_name};
 use crate::definition::{
-    find_struct_field_span, is_shorthand_field, lookup_definition_span, record_pattern_field_span,
+    find_struct_field_span, lookup_definition_span, record_pattern_field_span,
     resolve_dot_access_definition, resolve_enum_in_pattern, resolve_import_span,
 };
 use crate::snapshot::{AnalysisSnapshot, SnapshotPosition};
@@ -337,7 +337,7 @@ impl SymbolResolver<'_> {
                 for field in fields {
                     let field_span = field.value.get_span();
                     if offset_in_span(self.offset, &field_span) {
-                        if is_shorthand_field(field, span, self.snapshot)
+                        if field.value.get_span() == field.name_span
                             && let Some(definition_span) =
                                 record_pattern_field_span(self.snapshot, resolution, &field.name)
                             && let Some(binding) =
@@ -392,7 +392,14 @@ impl SymbolResolver<'_> {
             .usages()
             .in_file(span.file_id)
             .iter()
-            .find(|usage| usage.usage_span == span)?;
+            .find(|usage| {
+                usage.usage_span == span
+                    && self
+                        .snapshot
+                        .bindings()
+                        .values()
+                        .any(|binding| binding.span == usage.definition_span)
+            })?;
         Some(ResolvedSymbol {
             kind: OccurrenceKind::Reference,
             occurrence_span: span,

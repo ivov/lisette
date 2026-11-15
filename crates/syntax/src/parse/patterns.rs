@@ -555,6 +555,7 @@ impl<'source> Parser<'source> {
             seen_fields.push((field_name.clone(), field_name_span));
             fields.push(StructFieldPattern {
                 name: field_name,
+                name_span: field_name_span,
                 value: field_pattern,
             });
 

@@ -33,6 +33,11 @@ description: |
                                 fields: [
                                     StructFieldPattern {
                                         name: "x",
+                                        name_span: Span {
+                                            file_id: 0,
+                                            byte_offset: 27,
+                                            byte_length: 1,
+                                        },
                                         value: Identifier {
                                             identifier: "x",
                                             span: Span {
@@ -45,6 +50,11 @@ description: |
                                     },
                                     StructFieldPattern {
                                         name: "y",
+                                        name_span: Span {
+                                            file_id: 0,
+                                            byte_offset: 30,
+                                            byte_length: 1,
+                                        },
                                         value: Identifier {
                                             identifier: "y_coord",
                                             span: Span {

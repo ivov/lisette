@@ -382,6 +382,7 @@ impl InferCtx<'_> {
                         assignment.name_span,
                     ));
                 }
+                checker.facts.add_usage(assignment.name_span, def.name_span);
                 Some(&def.ty)
             },
         );
@@ -549,11 +550,12 @@ impl InferCtx<'_> {
                 all_fields: variant_fields.iter().map(|f| (&f.name, &f.ty)),
                 map: &map,
             },
-            |_checker, assignment| {
-                variant_fields
-                    .iter()
-                    .find(|f| f.name == assignment.name)
-                    .map(|f| &f.ty)
+            |checker, assignment| {
+                let definition = variant_fields.iter().find(|f| f.name == assignment.name)?;
+                checker
+                    .facts
+                    .add_usage(assignment.name_span, definition.name_span);
+                Some(&definition.ty)
             },
         );
 
