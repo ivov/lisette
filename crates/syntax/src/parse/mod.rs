@@ -1408,10 +1408,10 @@ impl<'source> Parser<'source> {
 
     fn unexpected_token(&mut self, ctx: &str) -> ast::Expression {
         let token = self.current_token();
-        let token_descriptor = if token.text.is_empty() {
-            format!("{:?}", token.kind)
-        } else {
-            format!("`{}`", token.text)
+        let token_descriptor = match token.kind {
+            _ if !token.text.is_empty() => format!("`{}`", token.text),
+            Semicolon => "end of line".to_string(),
+            kind => kind.to_string(),
         };
 
         let span = Span::new(self.file_id, token.byte_offset, token.byte_length);
@@ -1689,6 +1689,29 @@ mod import_order_tests {
     fn comments_between_imports_do_not_count_as_items() {
         let source = "import \"go:fmt\"\n// note\n\n// another note\nimport \"go:os\"\nfn f() {}";
         assert!(codes(source).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod unexpected_token_tests {
+    use crate::build_ast;
+
+    #[test]
+    fn inserted_semicolon_reads_as_end_of_line() {
+        let source = "fn foo(a: int, b: int) -> int { a + b }\nfn main() {\n  let x = foo([]int(1), 2)\n  let y = 3\n}\n";
+        let labels: Vec<String> = build_ast(source, 0)
+            .errors
+            .into_iter()
+            .flat_map(|error| error.labels)
+            .map(|(_, label)| label)
+            .collect();
+        assert!(
+            labels
+                .iter()
+                .any(|label| label == "expected expression, found end of line"),
+            "{labels:?}"
+        );
+        assert!(!labels.iter().any(|label| label.contains("Semicolon")));
     }
 }
 
