@@ -541,6 +541,30 @@ fn lex_unterminated_char() {
 }
 
 #[test]
+fn lex_loop_label() {
+    let input = r#"
+fn main() {
+  'outer: for i in 0..3 {
+    break 'outer
+  }
+}
+"#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_loop_label_after_continue() {
+    let input = r#"
+fn main() {
+  for i in 0..3 {
+    continue 'outer
+  }
+}
+"#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
 fn lex_empty_char() {
     let input = r#"let x = ''"#;
     assert_lex_error_snapshot!(input);
