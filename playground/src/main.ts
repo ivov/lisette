@@ -57,7 +57,6 @@ const vimStatus      = document.getElementById("vim-status")!;
 const versionTag     = document.getElementById("brand-version")!;
 const statusEl       = document.getElementById("status-indicator")!;
 const outputText     = document.getElementById("output-text")!;
-const diagnosticList = document.getElementById("diagnostics-list")!;
 const outputPane     = document.getElementById("output-pane")!;
 const drawerToggle   = document.getElementById("drawer-toggle")!;
 const tabBtns        = document.querySelectorAll<HTMLButtonElement>(".tab-btn[data-tab]");
@@ -138,7 +137,7 @@ function showCounts(diags: Diagnostic[]) {
   const info = count("info");
   if (errors > 0) setStatus("error", `${errors} error${errors === 1 ? "" : "s"}`);
   else if (warnings > 0) setStatus("warning", `${warnings} warning${warnings === 1 ? "" : "s"}`);
-  else if (info > 0) setStatus("info", `${info} info`);
+  else if (info > 0) setStatus("info", `${info} ${info === 1 ? "advisory" : "advisories"}`);
   else statusEl.hidden = true;
 }
 
@@ -151,27 +150,6 @@ function setButtons(disabled: boolean) {
   btnRun.disabled = disabled;
   btnFormat.disabled = disabled;
   btnShare.disabled = disabled;
-}
-
-function renderDiagnostics(diags: Diagnostic[]) {
-  if (diags.length === 0) {
-    diagnosticList.innerHTML =
-      '<p class="diagnostics-empty">All checks passed.</p>';
-    return;
-  }
-  diagnosticList.innerHTML = diags
-    .map(
-      (d) => `
-      <div class="diagnostic-item diagnostic-${d.severity}" data-line="${d.line}" data-col="${d.col}">
-        <span class="diagnostic-icon">${d.severity === "error" ? "✕" : d.severity === "warning" ? "▲" : "●"}</span>
-        <div>
-          <div>${escapeHtml(d.message)}</div>
-          ${d.code ? `<div class="diagnostic-location">${escapeHtml(d.code)}</div>` : ""}
-          <div class="diagnostic-location">Line ${d.line}, column ${d.col}</div>
-        </div>
-      </div>`
-    )
-    .join("");
 }
 
 function fromLspDiagnostic(diagnostic: LspDiagnostic): Diagnostic {
@@ -254,14 +232,8 @@ async function main() {
   alignStrips();
   editorResult.mainEditor.onDidLayoutChange(alignStrips);
 
-  diagnosticList.addEventListener("click", (e) => {
-    const item = (e.target as HTMLElement).closest<HTMLElement>(".diagnostic-item");
-    if (!item) return;
-    const line = parseInt(item.dataset["line"] ?? "1", 10);
-    const col  = parseInt(item.dataset["col"] ?? "1", 10);
-    editorResult.mainEditor.revealLineInCenter(line);
-    editorResult.mainEditor.setPosition({ lineNumber: line, column: col });
-    editorResult.mainEditor.focus();
+  statusEl.addEventListener("click", () => {
+    if (/status-(error|warning|info)/.test(statusEl.className)) editorResult.showProblems();
   });
 
   let bridge = await (async () => {
@@ -302,7 +274,6 @@ async function main() {
   function showDiagnostics() {
     const diagnostics = currentDiagnostics();
     editorResult.addMarkers(diagnostics);
-    renderDiagnostics(diagnostics);
     if (!busy) showCounts(diagnostics);
   }
 
@@ -420,7 +391,8 @@ async function main() {
       settleGo(GO_PLACEHOLDER, mine);
       setOutput('<span class="output-hint">The code did not compile.</span>');
       showCounts(currentDiagnostics());
-      selectTab("diagnostics");
+      selectTab("output");
+      editorResult.showProblems();
       busy = false;
       setButtons(false);
       return;
