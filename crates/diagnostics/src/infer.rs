@@ -779,7 +779,10 @@ pub enum WriteContext {
         source: String,
     },
     ReadOnlyAnnotation(String),
-    CallResult(String),
+    CallResult {
+        callee: String,
+        binding_source_span: Option<Span>,
+    },
     GoFieldCopy {
         place: String,
         /// `i` for a slice, `k` for a map.
@@ -849,7 +852,7 @@ pub fn needs_writable_remedy(
         Some(WriteContext::ReadOnlyAnnotation(binding)) => {
             format!("Declare `{binding}` as `{expected}`. It is declared as `{actual}`")
         }
-        Some(WriteContext::CallResult(callee)) => {
+        Some(WriteContext::CallResult { callee, .. }) => {
             format!("Declare the return type of `{callee}` as `{expected}`. It returns `{actual}`")
         }
         Some(WriteContext::GoFieldCopy { place, index }) => go_field_copy_help(&place, index),
@@ -1021,7 +1024,7 @@ pub fn write_through_read_only(
                 Some(WriteContext::GoFieldCopy { place, index }) => {
                     go_field_copy_help(&place, index)
                 }
-                Some(WriteContext::CallResult(callee)) => format!(
+                Some(WriteContext::CallResult { callee, .. }) => format!(
                     "Declare the return type of `{callee}` as `{required_type}`, or bind the \
                      result and write to a `.clone()`. It returns `{root_type}`"
                 ),

@@ -779,7 +779,7 @@ impl InferCtx<'_> {
                 }
                 let diagnostic = LisetteDiagnostic::error("Missing write permission")
                     .with_infer_code("needs_writable")
-                    .with_expected_found_label(span, &expected_name, &actual_name);
+                    .with_primary_expected_found_label(span, &expected_name, &actual_name);
                 if matches!(actual.unwrap_forall(), Function(_)) {
                     diagnostic.with_help(format!(
                         "Match `mut` on each differing parameter, or expect \
@@ -796,6 +796,14 @@ impl InferCtx<'_> {
                     let context = expectation.and_then(|e| e.value_context.clone());
                     let requirement =
                         expectation.and_then(|e| e.argument_requirement(&expected_name));
+                    let diagnostic = match &context {
+                        Some(diagnostics::infer::WriteContext::CallResult {
+                            binding_source_span: Some(call_span),
+                            ..
+                        }) => diagnostic
+                            .with_span_label(call_span, format!("returns `{actual_name}`")),
+                        _ => diagnostic,
+                    };
                     let help = match (context, requirement) {
                         (None, Some(requirement)) => {
                             diagnostics::infer::needs_writable_argument_help(

@@ -17255,6 +17255,24 @@ fn main() {
 }
 
 #[test]
+fn infer_receiver_write_names_read_only_constructor() {
+    let input = r#"
+struct Counter { hits: mut Slice<int> }
+
+impl Counter {
+  fn new() -> Counter { Counter { hits: [] } }
+  fn add(self: mut Ref<Counter>, v: int) { self.hits = self.hits.append(v) }
+}
+
+fn main() {
+  let mut c = Counter.new()
+  c.add(1)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn unknown_struct_literal_values_give_no_follow_on_errors() {
     let source = r#"
 fn main() {
@@ -17272,4 +17290,22 @@ fn main() {
         ["resolve.struct_not_found", "resolve.name_not_found"],
         "{codes:?}"
     );
+}
+
+#[test]
+fn infer_receiver_write_through_method_chain_names_no_callee() {
+    let input = r#"
+struct Counter { hits: mut Slice<int> }
+
+impl Counter {
+  fn new() -> Option<Counter> { Some(Counter { hits: [] }) }
+  fn add(self: mut Ref<Counter>, v: int) { self.hits = self.hits.append(v) }
+}
+
+fn main() {
+  let mut c = Counter.new().unwrap_or(Counter { hits: [] })
+  c.add(1)
+}
+"#;
+    assert_infer_error_snapshot!(input);
 }

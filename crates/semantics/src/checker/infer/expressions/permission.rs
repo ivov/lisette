@@ -587,11 +587,10 @@ impl InferCtx<'_> {
             identifier @ Expression::Identifier { .. } => {
                 self.binding_context(&identifier.get_var_name()?)
             }
-            call @ Expression::Call { .. } => {
-                let callee = super::aliasing::render_place(call);
-                let callee = callee.strip_suffix("()")?;
-                Some(WriteContext::CallResult(callee.to_string()))
-            }
+            call @ Expression::Call { .. } => Some(WriteContext::CallResult {
+                callee: declared_callee(call)?,
+                binding_source_span: None,
+            }),
             Expression::Reference { expression, .. } => {
                 let name = expression.unwrap_parens().get_var_name()?;
                 let binding_id = self.scopes.lookup_binding_id(&name)?;
@@ -641,10 +640,13 @@ impl InferCtx<'_> {
                     source: source.clone(),
                 })
             }
-            ValueSource::Call(_) if inference.annotated => {
+            ValueSource::Call { .. } if inference.annotated => {
                 Some(WriteContext::ReadOnlyAnnotation(name.to_string()))
             }
-            ValueSource::Call(callee) => Some(WriteContext::CallResult(callee.clone())),
+            ValueSource::Call { callee, span } => Some(WriteContext::CallResult {
+                callee: callee.clone()?,
+                binding_source_span: Some(*span),
+            }),
             ValueSource::GoFieldCopy(copy) => Some(copy.clone()),
         }
     }
@@ -904,7 +906,7 @@ impl InferCtx<'_> {
             .source
             .as_ref()?
         {
-            ValueSource::Call(callee) => Some(callee.clone()),
+            ValueSource::Call { callee, .. } => callee.clone(),
             ValueSource::Place(_) | ValueSource::GoFieldCopy(_) => None,
         }
     }
@@ -914,13 +916,25 @@ impl InferCtx<'_> {
             return Some(ValueSource::GoFieldCopy(copy));
         }
         match value.unwrap_parens() {
-            call @ Expression::Call { .. } => {
-                let rendered = super::aliasing::render_place(call);
-                (!rendered.is_empty()).then_some(ValueSource::Call(rendered))
-            }
+            call @ Expression::Call { .. } => Some(ValueSource::Call {
+                callee: declared_callee(call),
+                span: call.get_span(),
+            }),
             place => super::aliasing::place_root_name(place)
                 .filter(|root| root != name)
                 .map(ValueSource::Place),
         }
     }
+}
+
+fn declared_callee(call: &Expression) -> Option<String> {
+    let Expression::Call { expression, .. } = call else {
+        return None;
+    };
+    let callee = super::aliasing::render_place(expression.unwrap_parens());
+    let is_path = !callee.is_empty()
+        && callee.split('.').all(|segment| {
+            !segment.is_empty() && segment.chars().all(|c| c.is_alphanumeric() || c == '_')
+        });
+    is_path.then_some(callee)
 }

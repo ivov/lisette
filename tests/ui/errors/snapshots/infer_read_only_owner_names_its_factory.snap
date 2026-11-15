@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·          ╰── `b.items` is read-only
  11 │ }
     ╰────
-  help: Declare the return type of `make()` with `mut`, because `b` comes from it. `items` is declared writable, but `b` is read-only, so its fields are too · code: [infer.write_through_read_only]
+  help: Declare the return type of `make` with `mut`, because `b` comes from it. `items` is declared writable, but `b` is read-only, so its fields are too · code: [infer.write_through_read_only]
