@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1794752730631,
+  "lastUpdate": 1794753974456,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -57462,6 +57462,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "prelude",
             "value": 938,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b6fa2bf54f6bc3208135db30dc61fe4607ee71ef",
+          "message": "fix: display unit as `()` instead of `{}` (#1698)",
+          "timestamp": "2026-11-15T15:45:46+01:00",
+          "tree_id": "64654a6681eeac8f47c24271fe7381f0b2ef0dbc",
+          "url": "https://github.com/ivov/lisette/commit/b6fa2bf54f6bc3208135db30dc61fe4607ee71ef"
+        },
+        "date": 1794753972724,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 157759,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 43200,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 30510,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19623,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 16210,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 14194,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 9400,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 7508,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2963,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1892,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 299,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 11016,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 944,
             "unit": "lines"
           }
         ]
