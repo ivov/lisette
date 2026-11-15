@@ -17211,3 +17211,23 @@ fn test() {
 "#;
     assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn unknown_struct_literal_values_give_no_follow_on_errors() {
+    let source = r#"
+fn main() {
+  let _ = Pont { x: |p| p.y, z: [] }
+  let _ = helpr(|p| p.y, [])
+}
+"#;
+    let codes: Vec<_> = infer(source)
+        .errors
+        .iter()
+        .filter_map(|error| error.code_str().map(str::to_string))
+        .collect();
+    assert_eq!(
+        codes,
+        ["resolve.struct_not_found", "resolve.name_not_found"],
+        "{codes:?}"
+    );
+}

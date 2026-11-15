@@ -405,10 +405,22 @@ pub fn const_cycle(cycle: &[String], span: Span) -> LisetteDiagnostic {
     diagnostic
 }
 
+pub fn name_not_found_suggestion(
+    variable_name: &str,
+    available_names: &[String],
+) -> Option<String> {
+    if matches!(variable_name, "nil" | "null" | "Nil" | "undefined" | "_")
+        || go_builtin_hint(variable_name).is_some()
+    {
+        return None;
+    }
+    closest_by_distance(variable_name, available_names).map(|(name, _)| name.clone())
+}
+
 pub fn name_not_found(
     variable_name: &str,
     span: Span,
-    available_names: &[String],
+    suggestion: Option<&str>,
     expected_ty: Option<&Type>,
     qualified: Option<&str>,
     test_fn_name: Option<&str>,
@@ -443,15 +455,6 @@ pub fn name_not_found(
             .with_span_label(&span, "not declared or imported")
             .with_help(format!("Did you mean `{qualified}`?"));
     }
-
-    let suggestion = available_names
-        .iter()
-        .filter_map(|c| {
-            let d = levenshtein_distance(variable_name, c);
-            (d <= 2).then_some((c, d))
-        })
-        .min_by_key(|(_, d)| *d)
-        .map(|(c, _)| c.clone());
 
     // `t` is the conventional name for the handle a `#[test]` receives, but it is an
     // ordinary parameter the test must declare, not an implicit binding. A close-name
@@ -4307,16 +4310,20 @@ pub fn levenshtein_distance(a: &str, b: &str) -> usize {
     prev[b_len]
 }
 
-/// Uses Levenshtein distance (threshold <= 2) and prefix matching
-/// to catch abbreviations like `len` → `length`.
-pub fn find_similar_name(name: &str, candidates: &[String]) -> Option<String> {
-    let best_distance = candidates
+fn closest_by_distance<'a>(name: &str, candidates: &'a [String]) -> Option<(&'a String, usize)> {
+    candidates
         .iter()
         .filter_map(|c| {
             let d = levenshtein_distance(name, c);
             (d <= 2).then_some((c, d))
         })
-        .min_by_key(|(_, d)| *d);
+        .min_by_key(|(_, d)| *d)
+}
+
+/// Uses Levenshtein distance (threshold <= 2) and prefix matching
+/// to catch abbreviations like `len` → `length`.
+pub fn find_similar_name(name: &str, candidates: &[String]) -> Option<String> {
+    let best_distance = closest_by_distance(name, candidates);
 
     let by_prefix = if name.len() >= 2 {
         candidates

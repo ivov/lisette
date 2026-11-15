@@ -158,6 +158,12 @@ fn run_ref_lints(
         }
     }
 
+    if let Some(names) = facts.suggested_names.get(&package.id) {
+        for name in names {
+            graph.mark_as_used(PackageItemId::new(name));
+        }
+    }
+
     let usage = graph.analyze();
     for (_, info) in usage.unreachable_items() {
         if matches!(info.kind, ItemKind::Import { .. }) {
